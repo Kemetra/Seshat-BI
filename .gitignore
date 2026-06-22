@@ -1,0 +1,24 @@
+# ── Power BI Project (PBIP) — Microsoft official baseline ──
+# Local workspace settings (can carry connection context) and local data cache.
+**/.pbi/localSettings.json
+**/.pbi/cache.abf
+
+# ── Secrets ──
+.env
+.env.*
+!.env.example
+
+# ── Python (future pipelines) ──
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# ── OS / editor junk ──
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
