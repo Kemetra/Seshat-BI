@@ -3,7 +3,8 @@
 ## SQL (warehouse/)
 
 - `snake_case` for all identifiers.
-- Schemas: `raw` (landing) and `marts` (reporting).
+- Schemas (medallion): `bronze` (raw landing), `silver` (typed/cleaned),
+  `gold` (reporting marts; Power BI reads `gold`). See `warehouse/README.md`.
 - Object prefixes: views `vw_`, fact tables `fct_`, dimension tables `dim_`.
 - Migrations: numbered `NNNN_description.sql`, applied in order, idempotent
   (`IF NOT EXISTS`, guarded `ALTER`).

@@ -4,17 +4,22 @@ SQL that defines the DigitalOcean PostgreSQL analytics database. Any reporting
 tool (Power BI today, others later) reads from here — nothing in this folder is
 Power BI-specific.
 
-## Schemas
+## Schemas (medallion: bronze → silver → gold)
 
-| Schema  | Purpose |
-|---------|---------|
-| `raw`   | Landing zone. Manual loads now; a future automated feed targets the same tables. |
-| `marts` | Reporting views/tables consumed by BI tools. |
+| Schema   | Role | Purpose |
+|----------|------|---------|
+| `bronze` | landing | Raw source data, faithful, all columns as TEXT + lineage (`_source_file`, `_loaded_at`). No cleaning. Loaded by `pipelines/`. |
+| `silver` | refined | Typed, deduplicated, standardized (e.g. quantities → numeric, dates parsed, trimmed text). Built from `bronze`. |
+| `gold`   | reporting | Curated marts (facts/dims, aggregates) consumed by BI tools. Built from `silver`. **Power BI reads `gold`.** |
+
+> Earlier drafts of this repo used `raw`/`marts` (a 2-layer model). The deployed
+> database uses the 3-layer medallion above: `bronze` = the old `raw` (landing),
+> `gold` = the old `marts` (reporting), with `silver` added for cleaning/typing.
 
 ## Folders
 
 - `schema/` — DDL: `CREATE SCHEMA`, table definitions.
-- `marts/` — reporting view/mart definitions (read by Power BI).
+- `marts/` — reporting view/mart definitions for the `gold` schema (read by Power BI).
 - `migrations/` — ordered, idempotent change scripts (`NNNN_description.sql`).
 
 ## Conventions
@@ -33,5 +38,5 @@ psql "host=$ANALYTICS_DB_HOST port=$ANALYTICS_DB_PORT dbname=$ANALYTICS_DB_NAME 
   user=$ANALYTICS_DB_USER sslmode=$ANALYTICS_DB_SSLMODE" -f warehouse/migrations/0001_init.sql
 \`\`\`
 
-> No live DB or real SQL content exists yet — this is the structure the first
-> mart and migration drop into.
+> `bronze` is populated (C086 sales, see `pipelines/`). `silver` and `gold` schemas
+> exist but are not yet built out — that's the next step.
