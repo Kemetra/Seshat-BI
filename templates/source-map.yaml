@@ -93,8 +93,9 @@ meta:
 # DEVIATES from. Record only the deviation summary here; the triggering data
 # fact for each deviation lives in templates/assumptions.md.
 #
-# NOTE: the ids below are ADR-0002 ids (RC1-RC16). They are NOT `retail check`
-# rule ids (also RC1-RC8). Same prefix, different namespace -- flagged, unresolved.
+# NOTE: the ids below are ADR-0002 cleaning defaults (RC1-RC16). The `retail check`
+# governance checker uses a SEPARATE namespace (D1-D8) for its TMDL/DAX rules --
+# distinct prefixes, no collision (disambiguated in feature 002). See lines ~44-49.
 # -----------------------------------------------------------------------------
 defaults:
   adopted:                            # ADR-0002 defaults taken as written
