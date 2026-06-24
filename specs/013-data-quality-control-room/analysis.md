@@ -58,7 +58,7 @@ criteria. Minor advisory notes are recorded below; none block drafting.
 - **Principle VII (C086 is an example)**: honored -- generic skill + template; T019
   greps for and forbids worked-example specifics.
 - **Principle VIII (Static-first, live deferred; no new validator)**: honored and
-  load-bearing -- adds NO rule (count stays 26), shows recorded live results and marks
+  load-bearing -- adds NO rule (count unchanged), shows recorded live results and marks
   stale ones rather than running them (FR-003, FR-010); SC-002 verifies the unchanged
   rule count + dependencies = [].
 - **Principle IX (secrets/encoding/paths)**: honored -- no DSN/.env read; ASCII +
