@@ -301,10 +301,12 @@ templates (FR-002) and to the playbook phases (FR-011).
   architecture doc, a constitution, this spec, and five generic templates -- no validator
   scripts, no `pbi-cli` integration, no CLI installer, no warehouse tables, no DB writes,
   and no implementation beyond these artifacts.
-- **Spec-Kit conventions are followed**: this file lives at
+- **Spec-Kit is initialized** (constitution v1.1.0 amendment, 2026-06-24): this file lives at
   `specs/001-retail-bi-agent-kit/spec.md` and matches the Spec-Kit spec template shape; the
-  constitution lives at `.specify/memory/constitution.md`. A full Spec-Kit init (extensions,
-  presets, bundles) is **not** scaffolded -- only the constitution under `.specify/memory/`.
+  constitution lives at `.specify/memory/constitution.md` (hand-authored, preserved unchanged by
+  the init). `specify init --here --integration claude --script ps` added `.specify/templates/`,
+  `.specify/scripts/powershell/`, and the `speckit-*` agent skills that back the
+  spec -> plan -> tasks chain. Presets and custom bundles remain out of scope.
 - The **existing governance core is the gate**: `retail check` (23 static rules in
   `src/retail/`) is authoritative and is referenced, not reimplemented. The medallion
   playbook is authoritative on *how to decide*; the templates are authoritative on *what to

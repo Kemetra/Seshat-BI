@@ -1,6 +1,22 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 1.0.0 -> 1.1.0 (amendment 2026-06-24)
+Amendment rationale (1.1.0, MINOR -- scope expansion, no compliance-posture
+                change to any principle): Spec-Kit was initialized into the
+                repo via `specify init --here --integration claude --script ps`,
+                adding `.specify/templates/`, `.specify/scripts/powershell/`,
+                `.specify/{integration,extensions}.*`, and the `speckit-*`
+                agent skills. This expands the Scope Boundaries clause that
+                previously said "the rest of a Spec-Kit init is NOT scaffolded."
+                The hand-authored constitution was preserved unchanged by the
+                init (verified byte-identical to commit 7a691e0). No principle
+                is added, removed, or redefined. Dependent artifacts updated:
+                Scope Boundaries clause (this file), spec Assumptions
+                (specs/001-retail-bi-agent-kit/spec.md). CLAUDE.md received an
+                additive SPECKIT pointer block from the init (not a constitution
+                edit).
+
 Version change: none -> 1.0.0 (initial ratification)
 Bump rationale: Initial ratification of the Tower BI Agent Kit Constitution.
                 This document does NOT make new decisions. It RATIFIES,
@@ -315,9 +331,14 @@ and templates (architecture doc, section 8). Out of scope for this slice:
   (Principle VIII).
 - NO `pbi-cli` integration or wiring. It is placed as the later adapter,
   not connected (Principle II).
-- NO CLI installer; NO Spec-Kit extension, preset, or bundle. Only this file
-  (`.specify/memory/constitution.md`) is created; the rest of a Spec-Kit init
-  is NOT scaffolded.
+- NO CLI installer. NO Spec-Kit preset or custom bundle.
+  **(Amended v1.1.0, 2026-06-24):** Spec-Kit IS now initialized into the repo
+  (`specify init --here --integration claude --script ps`): the canonical
+  `.specify/templates/`, `.specify/scripts/powershell/`, and the `speckit-*`
+  agent skills now back the spec -> plan -> tasks chain. The hand-authored
+  `.specify/memory/constitution.md` is preserved unchanged by the init and
+  remains the source of truth. Still out of scope: presets, custom bundles, and
+  the bring-your-own extensions surface beyond the default init.
 - NO new warehouse tables, NO database writes, NO moving of existing docs.
 - NO implementation beyond architecture, spec, and templates.
 
@@ -363,4 +384,4 @@ Phase 0/1 feature spec); `docs/superpowers/specs/2026-06-23-pbi-governance-layer
 
 ---
 
-**Version**: 1.0.0 | **Ratified**: 2026-06-24 | **Last Amended**: 2026-06-24
+**Version**: 1.1.0 | **Ratified**: 2026-06-24 | **Last Amended**: 2026-06-24

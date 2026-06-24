@@ -31,3 +31,8 @@ in `docs/conventions.md`.
 
 No live DB provisioning, no automated ingestion code, no orchestrator integration
 unless explicitly requested. Add the seam, not the implementation.
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+<!-- SPECKIT END -->
