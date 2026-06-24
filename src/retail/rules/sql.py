@@ -258,8 +258,11 @@ def s4b_guard_form(ctx: RuleContext) -> list[Finding]:
 
 # Float-ish SQL type keywords (money/qty should be exact NUMERIC, never float).
 _FLOAT_TYPES = frozenset({"float", "float4", "float8", "double", "real"})
-# Integer type keywords (a leading-zero id cast to int loses data).
-_INT_TYPES = frozenset({"int", "int2", "int4", "int8", "integer", "smallint", "bigint"})
+# Integer type keywords whose cast can DROP leading zeros from an id (data loss).
+# NOTE: smallint/int2 are intentionally EXCLUDED -- RC7 explicitly sanctions
+# "ordinal line numbers with no leading zeros -> small integer", so line_no::smallint
+# is correct, not a violation. Only the wider int types are the leading-zero risk.
+_INT_TYPES = frozenset({"int", "int4", "int8", "integer", "bigint"})
 # An identifier looks id-like (kept TEXT under RC7) if it ends in these suffixes.
 _ID_SUFFIXES = ("_id", "_no", "_code", "_ref")
 

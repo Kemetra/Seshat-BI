@@ -89,6 +89,34 @@ def test_s5_ignores_float_in_comment(tmp_path: Path) -> None:
     assert findings == [], "a 'float' word inside a comment must not trigger S5"
 
 
+def test_s5_clean_on_ordinal_line_no_to_smallint(tmp_path: Path) -> None:
+    # RC7 SANCTIONS "ordinal line numbers with no leading zeros -> small integer".
+    # So line_no::smallint is correct, not a violation -- S5 must NOT flag it.
+    # (Regression: S5 originally fired on C086's line_no::smallint in 0002_*.sql.)
+    rel = _write(
+        tmp_path,
+        "warehouse/migrations/0001_silver.sql",
+        "SELECT line_no::smallint, seq_no::int2 FROM bronze.b;",
+    )
+    findings = list(s5_type_discipline(_ctx(tmp_path, rel)))
+    assert findings == [], (
+        "ordinal _no columns cast to smallint/int2 are RC7-sanctioned; "
+        f"S5 must not flag them, got: {findings}"
+    )
+
+
+def test_s5_still_flags_id_cast_to_wide_int(tmp_path: Path) -> None:
+    # The data-loss case (leading zeros): a cast to int/integer/bigint -- still flagged.
+    rel = _write(
+        tmp_path,
+        "warehouse/migrations/0001_silver.sql",
+        "SELECT customer_id::int, product_id::bigint FROM bronze.b;",
+    )
+    findings = list(s5_type_discipline(_ctx(tmp_path, rel)))
+    assert len(findings) == 2, f"id cast to int/bigint must still flag, got: {findings}"
+    assert all(f.rule_id == "S5" and "RC7" in f.message for f in findings)
+
+
 def test_s5_exempts_test_fixtures(tmp_path: Path) -> None:
     rel = _write(
         tmp_path,

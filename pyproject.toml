@@ -36,5 +36,10 @@ line-length = 88
 [tool.pytest.ini_options]
 markers = ["unit", "integration"]
 testpaths = ["tests"]
-pythonpath = ["src"]
+# "src" lets tests import the `retail` package; "." puts the repo root on
+# sys.path so the shared helper import `from tests.unit._gitfix import ...`
+# resolves under a bare `pytest` invocation (CI) as well as `python -m pytest`
+# (which adds cwd implicitly). Without "." CI fails collection with
+# ModuleNotFoundError: No module named 'tests'.
+pythonpath = ["src", "."]
 addopts = "--cov=src --cov-report=term-missing"
