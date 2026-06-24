@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Report",
+    "displayName": "Retailgold"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "04f7fc91-9428-4ec8-803f-32c605cc2e0f"
+  }
+}

@@ -74,6 +74,43 @@ parameters — they are supplied as the gateway data-source credentials.
 > All values above are placeholders. Do not commit real host names, ports,
 > database names, or machine paths.
 
+## ⚠️ Parameterize the source BEFORE committing (the import trap)
+
+Power BI's **Get Data → PostgreSQL** bakes the **literal** host and database into
+every table's M partition, e.g.:
+
+```m
+Source = PostgreSQL.Database("realhost.db.ondigitalocean.com:25060", "ezaby_demo")
+```
+
+That literal is a committed connection string — `retail check` **C2** (secret scan)
+and **C1** (parameterized-connection rule) will both fail on it, and the real host
+ends up in git. This is not optional cleanup; it blocks the gate.
+
+**Required before the first commit of any PBIP model:**
+
+1. Define two M parameters (shared expressions) with **placeholder** defaults — the
+   real host/db are supplied at refresh (Desktop/gateway), never committed:
+   ```m
+   Server   = "<your-db-host>:5432" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+   Database = "<your-database>"      meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+   ```
+2. Repoint **every** table partition to use the identifiers, not literals:
+   ```m
+   Source = PostgreSQL.Database(Server, Database)
+   ```
+3. Re-run `retail check` — C1/C2 must clear (0 host literals on disk).
+
+The Power BI Modeling MCP can do steps 1-2 (`named_expression CreateParameter` +
+`partition Update`), but **Desktop's Save may re-emit the literal** if its UI state
+still holds the original Get-Data step — verify the on-disk TMDL after saving:
+`grep -r "ondigitalocean\|PostgreSQL.Database(\"" powerbi/` must return nothing.
+
+> The parameter names here (`Server`/`Database`) match the golden fixture
+> (`tests/fixtures/golden_pbip`). The `AnalyticsDb*` names in the table above are the
+> documented convention for a fuller parameter set; either is acceptable so long as
+> the partition uses **identifiers, not string literals**, and defaults are placeholders.
+
 ## Expected connection flow (later, when a report is built)
 
 1. In the PBIP semantic model, define the parameters above (names only; values
