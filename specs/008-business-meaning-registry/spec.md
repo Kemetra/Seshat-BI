@@ -283,7 +283,7 @@ status invented.
   pharmacy specifics (no real Arabic source terms, no `Z`-codes, no `PHARMA`, no real
   product/store/staff names); every reference to those is a citation to the worked example, not an inlined value
   (Principle VII; hard rule #7).
-- **SC-003**: `retail check` stays exit 0 (26 rules) and the full unit suite stays green
+- **SC-003**: `retail check` stays exit 0 (current rule count) and the full unit suite stays green
   with the new templates + doc + the additive `source-ready.md` edit; no new Python; no new
   dependency; no new `retail check` rule.
 - **SC-004**: A reviewer can trace a generic example mapping the registry/dictionary onto

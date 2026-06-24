@@ -184,7 +184,7 @@ gate-green.
       (FR-005; SC-002; Principle VII; hard rule #7)
 - [ ] T017 [P] [POLISH] ASCII + UTF-8-no-BOM scan over all four files (no BOM; no byte > 127;
       placeholder Arabic is the token `<arabic-term>`, not a real string). (SC-001)
-- [ ] T018 [POLISH] Run `retail check` -- assert exit 0 (26 rules) with the new/edited files;
+- [ ] T018 [POLISH] Run `retail check` -- assert exit 0 (current rule count) with the new/edited files;
       run the existing unit suite -- assert green; confirm no new Python and `dependencies = []`
       unchanged. (SC-003; FR-009)
 - [ ] T019 [P] [POLISH] No-score / discipline review: grep both templates for any

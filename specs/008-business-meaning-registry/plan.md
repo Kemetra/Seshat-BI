@@ -34,7 +34,7 @@ scan (no C086 specifics), an ASCII/no-BOM check, and `retail check` exit 0 + gre
 **Storage**: Tracked Markdown files under `templates/` and `docs/`. Filled instances (out
 of scope) would live under `mappings/<table>/`.
 
-**Testing**: No unit tests added (no code). Verification = `retail check` exit 0 (26 rules)
+**Testing**: No unit tests added (no code). Verification = `retail check` exit 0 (current rule count)
 + existing unit suite green + a leakage/ASCII/no-BOM scan over the new files. The "test"
 of a template is the Independent Test in each user story (a reviewer fills placeholders).
 
