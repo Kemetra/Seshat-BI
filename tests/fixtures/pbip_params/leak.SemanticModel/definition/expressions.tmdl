@@ -1,0 +1,9 @@
+expression Server = "db-pgsql-fra1-12345-do-user-00000000-0.x.db.example.com:25060" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+	lineageTag: 33333333-3333-3333-3333-333333333333
+
+	annotation PBI_ResultType = Text
+
+expression Database = "prod_demo" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+	lineageTag: 44444444-4444-4444-4444-444444444444
+
+	annotation PBI_ResultType = Text

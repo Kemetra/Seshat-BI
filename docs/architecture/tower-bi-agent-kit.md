@@ -48,7 +48,7 @@ to re-describe or re-decide them:
 
 | Existing artifact | What it is | Role in the kit |
 |-------------------|------------|-----------------|
-| **`retail check`** (`src/retail/`, 26 static rules) | The shippable governance core -- stdlib-only, CI-able, parses committed TMDL/PBIR/SQL/git text. No `pbi-cli`, no Desktop, no network. | **The enforced gate (Layer A, static surface).** Already on `main`. |
+| **`retail check`** (`src/retail/`, 27 static rules) | The shippable governance core -- stdlib-only, CI-able, parses committed TMDL/PBIR/SQL/git text. No `pbi-cli`, no Desktop, no network. | **The enforced gate (Layer A, static surface).** Already on `main`. |
 | **`docs/medallion-playbook.md`** (7 phases) | The interactive cleaning method: connect & profile -> grain-first cleaning decisions -> ruleset -> review gate -> build silver -> build gold -> data dictionary. | **The process the agent runs.** The source-mapping gate (Sec 5) formalizes its early phases. |
 | **`docs/decisions/0002-retail-cleaning-defaults.md`** (RC1-RC16) | The reusable cleaning/modeling defaults: grain, PII, types, returns, star schema, contiguous date dim, reconciliation. | **The default rulings** every new table starts from. The constitution ratifies their *spirit* as principles. |
 | **`docs/worked-examples/c086-pharmacy.md`** + `c086-adr0002-compliance.md` | The first validated medallion table: 16/16 ADR-default PASS after live DB validation across 246,916 silver rows. | **The first worked example** -- a *filled instance* of every template, cited, never the schema itself. |
@@ -82,7 +82,7 @@ is the foundation that already ships; D is the new primary surface this kit is n
                                  v
   A  GOVERNANCE CORE         +-- STATIC surface --------+-- LIVE surface --------+  <- FOUNDATION
      (the enforced gate --   | retail check             | retail validate        |    (already on main)
-      THE SHIPPED UNIT)      | 26 rules over committed  | wraps a live DB/Desktop |
+      THE SHIPPED UNIT)      | 27 rules over committed  | wraps a live DB/Desktop |
                              | TMDL / PBIR / SQL / git   | for PK/coverage/recon  |
                              | stdlib-only, CI-able      | [BUILT; live run later] |
                              +-----------+--------------+------------------------+
@@ -164,7 +164,7 @@ static-vs-live taxonomy already established in the worked example (Sec 7/Sec 8) 
 governance spec (Sec 4):
 
 - **STATIC validators** -- checkable from committed text alone, CI-able, the powerful
-  core that already exists as `retail check` (26 rules). The statically-checkable ADR
+  core that already exists as `retail check` (27 rules). The statically-checkable ADR
   defaults are now wired in (feature 003, after the namespace collision was resolved):
   **S5** enforces RC7 type discipline, **S6** enforces RC14 star-structure (`-1` member),
   **S7** enforces RC15 (`generate_series` date-dim). Each is a SQL-family rule that cites
