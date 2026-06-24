@@ -108,3 +108,5 @@ time. The defaults are opinionated, so a table whose data genuinely differs (e.g
 returns, pre-aggregated grain) must override explicitly rather than silently — the
 "override when" clauses make those forks visible. Pairs with `docs/medallion-playbook.md`
 (the process) and the `medallion-cleaning` skill (the interactive driver).
+
+See `docs/worked-examples/c086-pharmacy.md` for all 16 defaults applied and validated end-to-end.

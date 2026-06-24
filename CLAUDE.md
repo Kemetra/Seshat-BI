@@ -8,6 +8,8 @@ A **standalone analytics service** — NOT bound by the Retail Tower OS
 orchestrator / contract-boundary rules. Power BI primary; DigitalOcean Postgres
 source. Data flows `raw` → `marts` → Power BI.
 
+For new retail mart work, start from `docs/worked-examples/c086-pharmacy.md` and follow the medallion playbook.
+
 ## Hard rules
 
 - **Secrets:** credentials only in `.env` (git-ignored). Never write real values

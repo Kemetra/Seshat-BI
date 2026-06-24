@@ -1,5 +1,7 @@
 # C086 — ADR 0002 Compliance Matrix
 
+> Narrative wrapper: `docs/worked-examples/c086-pharmacy.md` (this matrix is its §4).
+
 > **Purpose:** validate the *existing* C086 warehouse (`warehouse/migrations/0001_*`,
 > `0002_*`) against the 16 retail cleaning/modeling defaults in
 > `docs/decisions/0002-retail-cleaning-defaults.md`, as preparation for formalizing

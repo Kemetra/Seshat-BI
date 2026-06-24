@@ -18,6 +18,8 @@ points as a live Q&A with the analyst; a human can run them as a checklist.
 medallion mechanics live in the `data-warehouse-pipeline` skill. This playbook adds
 the *interactive decision protocol* and the *retail trap-checklist* on top.
 
+**Worked example:** see `docs/worked-examples/c086-pharmacy.md` — the 7 phases fully instantiated on a real table.
+
 ---
 
 ## Interaction protocol (how to run the Q&A)

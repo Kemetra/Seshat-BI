@@ -4,6 +4,8 @@ Standalone analytics service for the Retail Tower ecosystem. Power BI is the
 primary reporting tool; the layout leaves room for other tools later. Data is
 served from a dedicated **PostgreSQL database on DigitalOcean**.
 
+Building a new retail mart? Copy the pattern in `docs/worked-examples/c086-pharmacy.md`.
+
 ## Layout
 
 | Folder | Purpose |
