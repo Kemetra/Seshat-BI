@@ -1,6 +1,8 @@
 # Source Profile -- `<table-id>`
 
-> **Template -- copy this file, fill every `<placeholder>` and blank cell, commit it.**
+> **Template -- copy this file to `mappings/<table>/source-profile.md`** (per
+> [ADR 0003](../docs/decisions/0003-mapping-artifact-location.md)), fill every
+> `<placeholder>` and blank cell, commit it.
 > This is the **first artifact of the source-mapping gate** (see
 > `docs/architecture/tower-bi-agent-kit.md` Sec 5). It formalizes **Phase 1
 > (Connect & profile)** of `docs/medallion-playbook.md` into a committed, reviewable

@@ -121,6 +121,10 @@ phases into committed, reviewable artifacts.** The mapping:
 | `templates/unresolved-questions.md` | **Phase 2 analyst decision points + Phase 4 review gate** | The open questions that block the build -- the things the agent cannot decide alone. |
 | `templates/reconciliation-report.md` | **Phase 5/6 validation gates** (the live acceptance checks) | The blank that the live DB run fills: PK uniqueness, date-dim coverage, 0 orphan FKs, penny-exact cross-layer measure reconciliation. C086 Sec 5 is a filled instance. |
 
+**Where filled copies live:** a table copies these five blanks into **`mappings/<table>/`**
+(one folder per table) and fills them -- per [ADR 0003](decisions/0003-mapping-artifact-location.md).
+`templates/` holds the generic blanks; `mappings/<table>/` holds the table's filled set.
+
 **Relationship to the playbook, stated to avoid a silent fork:** the playbook remains
 *the method* (the interactive Q&A and the trap-checklists). The mapping gate is the
 playbook's **Phase-1->Phase-4 output, elevated into mandatory committed artifacts** that
@@ -198,8 +202,9 @@ This Phase 0/1 foundation deliberately stops at architecture + spec + templates:
 1. **D-namespace collision** -- **RESOLVED (feature 002).** ADR cleaning defaults renamed to
    `RC1-RC16`; the checker keeps `D1-D8`. Distinct prefixes, no collision; the prerequisite
    for wiring any ADR default into `retail check` is now met.
-2. **Where the mapping artifacts live per table** -- a `mappings/<table>/` directory vs
-   alongside the migration vs in `docs/`. (Not decided in this slice.)
+2. **Where the mapping artifacts live per table** -- **RESOLVED (ADR 0003):**
+   `mappings/<table>/`, a top-level dir with one folder per table holding the five filled
+   artifacts. Keeps `warehouse/` SQL-only and `docs/` narrative-only.
 3. **Agent orchestration shape** (Layer D) -- which agent/skill drives the playbook, and
    how it self-heals against the gate. (Designed as a seam; the runtime is a later slice.)
 4. **`retail validate` live surface** -- **BUILT (feature 004).** The four checks +

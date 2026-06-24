@@ -1,6 +1,22 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 1.4.0 -> 1.5.0 (amendment 2026-06-24, ADR 0003)
+Amendment rationale (1.5.0, MINOR -- resolves a deferred open decision, no
+                principle redefined): per-table mapping artifacts now live in
+                `mappings/<table>/` -- a top-level directory, one folder per
+                source table holding the five filled gate artifacts
+                (source-profile, source-map, assumptions, unresolved-questions,
+                reconciliation-report). Resolves architecture open decision #2 /
+                research Q-2, which feature 001 deliberately left open. Rationale:
+                the artifacts are a cohesive per-table working set (inputs to a
+                build, parallel to warehouse/migrations/); a dedicated dir keeps
+                warehouse/ SQL-only and docs/ narrative-only. Decision owned by
+                ADR 0003. Dependent artifacts updated: ADR 0003 (new), the five
+                templates' destination references, architecture (open decision #2
+                -> RESOLVED + the gate section), README folder table, and the new
+                mappings/README.md. No code; docs-only. CI stays green.
+
 Version change: 1.3.0 -> 1.4.0 (amendment 2026-06-24, feature 004)
 Amendment rationale (1.4.0, MINOR -- new supporting surface, no principle
                 redefined): the `retail validate` LIVE-validator surface is now
@@ -120,12 +136,14 @@ Follow-up TODOs (recorded at v1.0.0):
     checker's TMDL/DAX rules D1-D8. RESOLVED in v1.2.0 (feature 002): the ADR
     namespace was renamed to RC1-RC16; the checker keeps D1-D8. This was the
     disambiguation required before any ADR default is wired into retail check.
-  - Where per-table mapping artifacts live (mappings/<table>/ vs alongside
-    the migration vs docs/) is undecided (architecture doc, Open decision 2).
+  - Where per-table mapping artifacts live. RESOLVED in v1.5.0 (ADR 0003):
+    mappings/<table>/, a top-level dir, one folder per table for the five filled
+    artifacts. Keeps warehouse/ SQL-only and docs/ narrative-only.
   - Layer D agent orchestration shape is a seam, not a runtime, in this slice
-    (architecture doc, Open decision 3).
-  - The retail validate live-validator surface needs its own spec before
-    implementation (architecture doc, Open decision 4; Principle VIII).
+    (architecture doc, Open decision 3). Still open.
+  - The retail validate live-validator surface. RESOLVED in v1.4.0 (feature 004):
+    surface built + fixture-tested; the live run against a real DB is the
+    remaining deferred step (Principle VIII).
 -->
 
 # Tower BI Agent Kit Constitution
@@ -458,4 +476,4 @@ Phase 0/1 feature spec); `docs/superpowers/specs/2026-06-23-pbi-governance-layer
 
 ---
 
-**Version**: 1.4.0 | **Ratified**: 2026-06-24 | **Last Amended**: 2026-06-24
+**Version**: 1.5.0 | **Ratified**: 2026-06-24 | **Last Amended**: 2026-06-24

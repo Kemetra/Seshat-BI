@@ -1,10 +1,11 @@
 # Unresolved questions -- `<table-id>`
 
-> **Template.** One per table being mapped. Copy to the table's mapping location
-> (see [architecture Sec 9 open decision #2](../docs/architecture/tower-bi-agent-kit.md)
-> on where per-table mapping artifacts live) and fill the placeholders. ASCII only.
-> **The `../docs/...` links below are written relative to `templates/`; when you copy
-> this file elsewhere, re-point them to the repo root for the new location.**
+> **Template.** One per table being mapped. Copy to `mappings/<table>/` (per
+> [ADR 0003](../docs/decisions/0003-mapping-artifact-location.md)) and fill the
+> placeholders. ASCII only.
+> **Note on links:** the `../docs/...` links below are relative to `templates/`
+> (one level deep). `mappings/<table>/` is **two** levels deep, so after copying,
+> change `../docs/...` to `../../docs/...`.
 >
 > **What this file is for.** The open questions that **block** the build -- the things
 > the agent (or analyst) **cannot decide alone**. It is the committed, reviewable form

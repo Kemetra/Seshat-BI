@@ -13,7 +13,9 @@ Building a new retail mart? Copy the pattern in `docs/worked-examples/c086-pharm
 | `warehouse/` | Tool-agnostic SQL: `raw` landing schema → `marts` reporting schema, plus migrations. |
 | `powerbi/` | Power BI projects in **PBIP** (plain-text) format — the only tool-specific folder. |
 | `pipelines/` | Data ingestion: manual now, automated feed later (same `raw` contract). |
-| `docs/` | Design specs, conventions, data dictionary. |
+| `templates/` | Generic source-mapping-gate blanks (profile, map, assumptions, questions, reconciliation). |
+| `mappings/` | Per-table **filled** mapping artifacts, one folder per table (`mappings/<table>/`). See [ADR 0003](docs/decisions/0003-mapping-artifact-location.md). |
+| `docs/` | Design specs, conventions, data dictionary, decisions (ADRs), worked examples. |
 
 ## Architecture
 

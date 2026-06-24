@@ -18,7 +18,7 @@
 | Author | `<name>` |
 | Source profile | `templates/source-profile.md` -> `<filled path>` (the profiled **evidence**) |
 | Source map | `templates/source-map.yaml` -> `<filled path>` (the keep/drop/type/grain/star **decisions**) |
-| Per-table ADR | `<path to this table's own ADR; location/numbering per architecture open decision #2 -- no settled convention yet>` |
+| Per-table ADR | `<this table's own ADR for deviations, e.g. docs/decisions/00NN-<table>-deviations.md>` |
 
 **Where this sits in the data flow:** `source-profile.md` (evidence) +
 `source-map.yaml` (decisions) `->` **`assumptions.md`** (which ADR defaults held, which
@@ -83,7 +83,7 @@ Fill one block per deviation (delete the placeholder block if there are none):
 | ADR id | `<Dn -- the ADR 0002 default being overridden>` |
 | What we did instead | `<the alternative ruling applied to this table>` |
 | Triggering data fact | `<the profiled evidence that forced it -- cite the figure/finding in source-profile.md>` |
-| Recorded in | `<the table's own ADR + section; ADR location/numbering per architecture open decision #2 -- no settled convention yet>` |
+| Recorded in | `<the table's own ADR + section, e.g. docs/decisions/00NN-<table>-deviations.md>` |
 
 > **No fabricated examples.** Do not invent a deviation to fill the shape. The first
 > worked example, **C086**, adopted **16/16 defaults with 0 deviations** after live DB
