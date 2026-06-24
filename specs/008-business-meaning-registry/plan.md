@@ -83,10 +83,10 @@ as an acceptance gate (SC-002).
 
 ```text
 specs/008-business-meaning-registry/
-├── spec.md              # Feature specification (done -- /speckit-specify)
-├── plan.md              # This file (/speckit-plan)
-├── tasks.md             # Task list (/speckit-tasks)
-└── analysis.md          # Cross-artifact analysis findings (/speckit-analyze)
+  spec.md              # Feature specification (done -- /speckit-specify)
+  plan.md              # This file (/speckit-plan)
+  tasks.md             # Task list (/speckit-tasks)
+  analysis.md          # Cross-artifact analysis findings (/speckit-analyze)
 ```
 
 No `research.md`, `data-model.md`, `quickstart.md`, or `contracts/` are produced: there
@@ -101,18 +101,18 @@ No source code. The deliverables are tracked text:
 
 ```text
 templates/
-├── business-meaning-registry.md     # NEW -- generic registry schema/template
-├── retail-term-dictionary.md        # NEW -- generic Arabic<->English dictionary schema/template
-├── source-profile.md                # existing -- conventions to mirror (unchanged)
-├── assumptions.md                   # existing -- bilingual-decision sibling (unchanged)
-└── unresolved-questions.md          # existing -- where rollup/PII/grain meanings route (unchanged)
+  business-meaning-registry.md     # NEW -- generic registry schema/template
+  retail-term-dictionary.md        # NEW -- generic Arabic<->English dictionary schema/template
+  source-profile.md                # existing -- conventions to mirror (unchanged)
+  assumptions.md                   # existing -- bilingual-decision sibling (unchanged)
+  unresolved-questions.md          # existing -- where rollup/PII/grain meanings route (unchanged)
 
 docs/
-├── source-intelligence.md           # NEW -- Layer-2 reference: how the two artifacts feed Source Ready evidence
-├── readiness/
-│   └── source-ready.md              # EDITED additively -- mention registry+dictionary as OPTIONAL strengthening artifacts
-├── data-dictionary.md               # existing -- the FILLED C086 instance the templates CITE (unchanged)
-└── roadmap/roadmap.md               # existing -- F007 row (unchanged; cited)
+  source-intelligence.md           # NEW -- Layer-2 reference: how the two artifacts feed Source Ready evidence
+  readiness/
+    source-ready.md                # EDITED additively -- mention registry+dictionary as OPTIONAL strengthening artifacts
+  data-dictionary.md               # existing -- the FILLED C086 instance the templates CITE (unchanged)
+  roadmap/roadmap.md               # existing -- F007 row (unchanged; cited)
 ```
 
 **Structure Decision**: Place the two templates in `templates/` alongside the five
