@@ -166,7 +166,7 @@ def test_s7_flags_select_distinct_date_dim(tmp_path: Path) -> None:
     rel = _write(
         tmp_path,
         "warehouse/migrations/0002_gold.sql",
-        "INSERT INTO gold.dim_date\n" "SELECT DISTINCT sale_date FROM silver.sales;\n",
+        "INSERT INTO gold.dim_date\nSELECT DISTINCT sale_date FROM silver.sales;\n",
     )
     findings = list(s7_contiguous_date_dim(_ctx(tmp_path, rel)))
     assert findings, "expected S7 to flag a SELECT DISTINCT date dim"
