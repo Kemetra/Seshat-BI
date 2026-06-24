@@ -255,8 +255,10 @@ collapse the gate.
   gate) -- the skill reads the readiness status to enforce ordering.
 - The committed RetailGold model is the available fixture for the read-only check;
   the F009-store-absent case is the primary acceptance scenario.
-- "F010 / on-disk 010" in the input names the model-CHECKING layer this spec defines;
-  it does not introduce a separate artifact from this feature (011 carries it).
+- Numbering: THIS checker is **on-disk 011** (roadmap F010). The metric-contract STORE
+  it consumes is **on-disk 010** (roadmap F009). The input's "F009 / on-disk 010"
+  refers to that store; this spec's own checking layer is on-disk 011 -- the two are
+  the producer (010) and consumer (011), not the same number.
 
 ## Deferred decisions (future specs / issues -- recorded, not built)
 
