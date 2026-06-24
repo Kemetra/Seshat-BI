@@ -215,9 +215,13 @@ one-shot run.
   table, an auto-append writer, a query/report CLI, or any wiring from `retail validate` into the
   ledger. Those are named, deferred follow-ups (see Deferred decisions). No runtime code, no DB
   writes (Scope Boundaries; hard rule #8; CLAUDE.md YAGNI).
-- **FR-012**: When a reconciliation **did not run** (deferred boundary, no DSN/`db` extra), the
-  ledger MUST have **no entry** for that occasion -- absence is honest; a fabricated pass/zero-
-  delta entry is forbidden (#9; gold-ready.md deferred-mode rule).
+- **FR-012**: When a reconciliation **did not run** (deferred boundary, no DSN/`db` extra), a
+  fabricated pass/zero-delta entry is forbidden (#9; gold-ready.md deferred-mode rule). HOW the
+  ledger represents "did not run" is an **OPEN HUMAN DECISION** (see Deferred decisions), not
+  settled here: (a) write **no entry** (the recommended default -- absence over fabrication), vs
+  (b) write an explicit **no-figures `blocked-deferred` entry** (so an append-only audit log
+  distinguishes "could not run" from "nobody tried"). Resolve this with the open ledger-grain
+  question before the template is authored; either way, no figures are invented.
 
 ### Key Entities
 
