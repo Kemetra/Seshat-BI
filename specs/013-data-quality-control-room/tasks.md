@@ -37,7 +37,7 @@ is independently demonstrable.
 **Purpose**: pick the name and stand up the two empty files in the right places.
 
 - [ ] T001 [SETUP] Choose the short skill name `<control-room-skill>` (target repo-relative path <= 200 chars, Principle IX) and record it at the top of `specs/013-data-quality-control-room/tasks.md`. Recommended default: `retail-control-room`.
-- [ ] T002 [P] [SETUP] Create `.claude/skills/<control-room-skill>/SKILL.md` with valid frontmatter (`name`, `description`), ASCII + UTF-8 no BOM (empty body for now).
+- [ ] T002 [P] [SETUP] Create `.claude/skills/<control-room-skill>/SKILL.md` with valid frontmatter (`name`, `description`), ASCII + UTF-8 no BOM (empty body for now) (FR-001).
 - [ ] T003 [P] [SETUP] Create `templates/data-quality-control-room.md` (empty placeholder for now), ASCII + UTF-8 no BOM.
 
 **Checkpoint**: both new files exist and are registered by the harness; no input touched.

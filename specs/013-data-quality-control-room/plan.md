@@ -85,10 +85,10 @@ multi-table acceptance replay. No code, no migrations, no schema change.
 
 ```text
 specs/013-data-quality-control-room/
-├── spec.md          # the feature spec (done)
-├── plan.md          # this file
-├── tasks.md         # the task breakdown (speckit-tasks)
-└── analysis.md      # cross-artifact analyze findings (speckit-analyze)
+  spec.md          # the feature spec (done)
+  plan.md          # this file
+  tasks.md         # the task breakdown (speckit-tasks)
+  analysis.md      # cross-artifact analyze findings (speckit-analyze)
 ```
 
 No `research.md` / `data-model.md` / `quickstart.md` / `contracts/`: there is no new
@@ -100,10 +100,10 @@ is a decision, not an omission.)
 
 ```text
 .claude/skills/<control-room-skill>/
-└── SKILL.md                         # NEW: the read-only aggregation verb (agent-procedure text)
+  SKILL.md                           # NEW: the read-only aggregation verb (agent-procedure text)
 
 templates/
-└── data-quality-control-room.md     # NEW: the generic consolidated roll-up shape
+  data-quality-control-room.md       # NEW: the generic consolidated roll-up shape
                                       #      (portfolio sibling of readiness-scorecard.md)
 
 # READ-ONLY INPUTS (existing, unchanged by this feature):
