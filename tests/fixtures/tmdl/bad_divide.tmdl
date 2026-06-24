@@ -1,0 +1,3 @@
+table Sales
+	measure Ratio = [Revenue] / [Cost]
+		displayFolder: KPIs

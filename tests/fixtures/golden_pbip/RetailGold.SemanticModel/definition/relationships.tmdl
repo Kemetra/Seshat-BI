@@ -1,0 +1,4 @@
+relationship cc11aa22-bb33-4cc4-dd55-ee66ff770088
+	fromColumn: Sales.Date
+	toColumn: Date.Date
+	crossFilteringBehavior: bothDirections

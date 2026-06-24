@@ -13,7 +13,7 @@
 
 - Save as PBIP (preview feature must be enabled in Power BI Desktop).
 - One semantic model per subject area; reports reference the model relatively.
-- Connect via parameters; read from `marts` only.
+- Connect via parameters; read from `gold` only.
 
 ## DAX
 

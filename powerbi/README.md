@@ -23,7 +23,7 @@ in **PBIP** (Power BI Project) format — plain-text TMDL/PBIR that git can diff
 
 - Connect to the analytics DB via **parameters**, never a baked-in connection
   string. Credentials live in the Power BI **gateway**, not in the model or `.env`.
-- Read from the `marts` schema, not `raw`.
+- Read from the `gold` schema, not `bronze`.
 - Measures `PascalCase` with display folders; one semantic model per subject area.
 
 ## Connection flow

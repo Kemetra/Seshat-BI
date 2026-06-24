@@ -18,7 +18,7 @@ These are distinct surfaces. Only the **gateway** is the data-refresh path; the
 |---|-------|------------|--------------------------|
 | 1 | **Power BI Desktop Bridge** (IPC Bridge) | A *local* named-pipe API (`pbi-desktop-bridge-${processId}`) hosted inside a running Power BI Desktop process, for automating/verifying Desktop authoring (read report definition, apply changes, screenshot). JSON-RPC over a pipe — **not** a cloud service, **not** REST. Preview feature. | ❌ No — it talks to Desktop, not to any database. |
 | 2 | **Power BI Gateway** | The cloud/Service refresh path. Holds the data-source credentials and bridges the Power BI Service to an on-network/managed database. | ✅ Yes — a successful gateway refresh is the real connectivity test. |
-| 3 | **DigitalOcean PostgreSQL** | The remote analytics database itself (`raw` → `marts`). The actual data source. | — it *is* the source. |
+| 3 | **DigitalOcean PostgreSQL** | The remote analytics database itself (`bronze` → `gold`). The actual data source. | — it *is* the source. |
 
 See [the Desktop Bridge section](#power-bi-desktop-bridge-optional-future-local-verification)
 below for how (and whether) this repo uses #1.
@@ -33,7 +33,7 @@ Power BI data gateway                 ← holds the real credentials
         │  TLS (sslmode=require)
         ▼
 DigitalOcean managed PostgreSQL
-        └─ reads the  marts  schema only (never raw)
+        └─ reads the  gold  schema only (never bronze)
 ```
 
 The model carries **parameters**; the gateway carries the **secret**. These never
@@ -65,7 +65,7 @@ documented environment variables so the two stay legible together:
 | `AnalyticsDbHost`  | Postgres host | `<your-db-host>.db.ondigitalocean.com` |
 | `AnalyticsDbPort`  | Postgres port | `<port>` |
 | `AnalyticsDbName`  | Database name | `<analytics-db-name>` |
-| `AnalyticsDbSchema`| Schema to read | `marts` |
+| `AnalyticsDbSchema`| Schema to read | `gold` |
 
 Parameters use `PascalCase` (Power BI convention); the matching env vars use
 `ANALYTICS_DB_*` (shell convention). User and password are **not** Power BI
@@ -78,8 +78,8 @@ parameters — they are supplied as the gateway data-source credentials.
 
 1. In the PBIP semantic model, define the parameters above (names only; values
    resolved at refresh time).
-2. Point the data source at PostgreSQL, selecting the **`marts`** schema. Apply
-   transformations in `warehouse/marts/`, not in Power Query.
+2. Point the data source at PostgreSQL, selecting the **`gold`** schema. Apply
+   transformations in `warehouse/gold/`, not in Power Query.
 3. Publish to the Power BI Service.
 4. In the Service, bind the dataset's data source to the **existing gateway**, and
    set the credentials **there** (TLS / `sslmode=require`).
@@ -131,6 +131,6 @@ Constraints for this repo:
 
 - No secrets in any committed file — ever.
 - Power BI model holds parameters; the gateway holds credentials.
-- Read `marts`, never `raw`.
+- Read `gold`, never `bronze`.
 - TLS is required for DigitalOcean managed Postgres.
 - The Desktop Bridge is local/optional and proves nothing about DB connectivity.

@@ -1,0 +1,2 @@
+table Sales
+	measure Revenue = SUM(Sales[Amount])

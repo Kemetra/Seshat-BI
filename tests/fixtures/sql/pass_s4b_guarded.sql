@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS gold.fct_sales (sale_id BIGINT);
+CREATE OR REPLACE VIEW gold.vw_returns AS SELECT 1;
+ALTER TABLE IF EXISTS gold.fct_sales ADD COLUMN qty INT;
+DROP TABLE IF EXISTS gold.tmp_load;

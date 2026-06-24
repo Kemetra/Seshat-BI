@@ -1,0 +1,9 @@
+table Date
+	measure YTD = TOTALYTD([Revenue], Date[Date])
+		displayFolder: Time
+
+	column Date
+		dataType: dateTime
+		summarizeBy: none
+
+	annotation PBI_DateTable = true

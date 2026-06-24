@@ -19,7 +19,7 @@ Power BI-specific.
 ## Folders
 
 - `schema/` — DDL: `CREATE SCHEMA`, table definitions.
-- `marts/` — reporting view/mart definitions for the `gold` schema (read by Power BI).
+- `gold/` — reporting view/mart definitions for the `gold` schema (read by Power BI).
 - `migrations/` — ordered, idempotent change scripts (`NNNN_description.sql`).
 
 ## Conventions

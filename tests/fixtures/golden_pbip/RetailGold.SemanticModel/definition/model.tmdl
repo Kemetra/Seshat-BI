@@ -1,0 +1,36 @@
+table Sales
+	column Amount
+		dataType: decimal
+		summarizeBy: sum
+		sourceColumn: amount
+
+	partition Sales = m
+		mode: import
+		source =
+				let
+					Source = PostgreSQL.Database(Server, Database),
+					gold_sales = Source{[Schema="gold", Item="fct_sales"]}[Data]
+				in
+					gold_sales
+
+	measure 'TotalSales' = SUM(Sales[Amount])
+		displayFolder: Sales
+		formatString: #,0
+
+table Date
+	annotation PBI_DateTable = true
+
+	column Date
+		dataType: dateTime
+		dataCategory: Time
+		summarizeBy: none
+		sourceColumn: date
+
+	partition Date = m
+		mode: import
+		source =
+				let
+					Source = PostgreSQL.Database(Server, Database),
+					gold_dim_date = Source{[Schema="gold", Item="dim_date"]}[Data]
+				in
+					gold_dim_date

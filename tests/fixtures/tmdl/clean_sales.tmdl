@@ -1,0 +1,22 @@
+table Sales
+	measure Revenue = SUM(Sales[Amount])
+		displayFolder: KPIs
+
+	measure Margin = DIVIDE([Revenue], [Cost])
+		displayFolder: KPIs
+
+	column Amount
+		dataType: decimal
+		summarizeBy: none
+
+	column ProductKey
+		dataType: int64
+		summarizeBy: none
+
+	partition Sales = m
+		source =
+			let
+				Src = PostgreSQL.Database(ServerParam, DbParam),
+				Data = Value.NativeQuery(Src, "SELECT * FROM gold.fct_sales")
+			in
+				Data

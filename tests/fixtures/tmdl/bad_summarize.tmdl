@@ -1,0 +1,4 @@
+table Sales
+	column Amount
+		dataType: decimal
+		summarizeBy: sum

@@ -1,0 +1,53 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: `retail check` runs git-metadata rules (P2 scans the
+          # commit-message BASE..HEAD range; C2/G1/G2 read git ls-files /
+          # check-ignore). A shallow clone would make those mis-scan or error.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install package
+        run: pip install -e ".[dev]"
+
+      - name: Ruff format check
+        run: ruff format --check src tests
+
+      - name: Ruff lint
+        run: ruff check src tests
+
+      - name: Unit tests
+        run: pytest -m unit
+
+      - name: Retail governance check
+        # Scope P2's commit-message check to THIS branch's commits, not an
+        # arbitrary HEAD~20 window: range = merge-base(origin/main, HEAD)..HEAD.
+        # This makes the gate STABLE regardless of HEAD position (aged-out history
+        # never re-enters the window). fetch-depth: 0 (above) provides origin/main
+        # for merge-base. If the base cannot be determined, fall back to a bare
+        # `retail check` so CI never hard-errors on a bad range.
+        #
+        # NOTE: on a feature branch this WILL flag any non-conforming historical
+        # subjects in range (e.g. grandfathered `test:` commits). That is correct
+        # and honest — they collapse into one conforming commit on squash-merge to
+        # main, at which point this gate is clean. We do not hide them.
+        run: |
+          git fetch origin main 2>/dev/null || true
+          BASE=$(git merge-base origin/main HEAD 2>/dev/null || echo "")
+          if [ -n "$BASE" ]; then
+            retail check --commit-range "$BASE..HEAD"
+          else
+            retail check
+          fi

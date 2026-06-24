@@ -1,0 +1,3 @@
+table Sales
+	measure YTD = TOTALYTD([Revenue], Sales[Date])
+		displayFolder: Time

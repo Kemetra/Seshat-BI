@@ -1,0 +1,12 @@
+# Pre-commit gate for Retail Tower Power BI governance.
+# The single hook runs the in-repo `retail check` static checker; a non-zero
+# exit (any ERROR-severity Finding) blocks the commit.
+repos:
+  - repo: local
+    hooks:
+      - id: retail-check
+        name: retail check (Power BI governance)
+        entry: retail check
+        language: system
+        pass_filenames: false
+        always_run: true

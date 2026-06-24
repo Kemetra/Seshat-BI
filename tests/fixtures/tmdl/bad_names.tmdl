@@ -1,0 +1,3 @@
+table Sales
+	measure total_revenue = SUM(Sales[Amount])
+		displayFolder: KPIs

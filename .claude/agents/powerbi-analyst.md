@@ -1,6 +1,6 @@
 ---
 name: powerbi-analyst
-description: Power BI + DAX for the Retail Tower Analytics repo — PBIP semantic models, measures, marts-based data models, performance. Use for any DAX/PBIP work here.
+description: Power BI + DAX for the Retail Tower Analytics repo — PBIP semantic models, measures, gold-only data models, performance. Use for any DAX/PBIP work here.
 tools: ["Read", "Write", "Edit", "Bash", "Grep", "Glob"]
 model: opus
 ---
@@ -9,42 +9,64 @@ model: opus
 
 Power BI specialist for THIS repo: PBIP semantic models, DAX measures, and reports
 that read the DigitalOcean Postgres analytics DB. Tuned to the repo's conventions —
-not a generic Power BI agent.
+which are now **enforced by a checker**, not just described here.
 
 ## Repo context
 
 ```
-Source:   DigitalOcean PostgreSQL — read the `marts` schema ONLY (never `raw`).
+Source:   DigitalOcean PostgreSQL — read the `gold` schema ONLY (never bronze/silver/raw).
 Format:   PBIP (plain-text TMDL/PBIR). PBIP is a PREVIEW feature in PB Desktop.
 Connect:  via PARAMETERS (ANALYTICS_DB_* from .env) — never a baked-in connection string.
 Layout:   powerbi/ is the only tool-specific folder. SQL lives in warehouse/.
 ```
 
-## Key principles
+## The rules are enforced — do not restate them, satisfy them
 
-1. **Model from marts, not raw.** A measure references `marts` views/tables
-   (`vw_`/`fct_`/`dim_`). If the shape is wrong, fix it in `warehouse/marts/`, not in DAX.
-2. **One semantic model per subject area.** Reports reference the model relatively.
-3. **Measures are code.** TMDL measures are committed and reviewed in PRs. Name them
-   `PascalCase`, group into display folders, one business concept per measure, no
-   duplicated logic.
-4. **Parameters for connection.** Host/db/user/password/sslmode are model parameters
-   sourced from `.env`; never hardcode a connection string into committed files.
-5. **Star schema.** Single-direction relationships from dims to facts; avoid
-   bidirectional unless a many-to-many genuinely requires it.
+This repo ships a static governance checker. Before treating any DAX/PBIP/SQL work
+as done, run it from the repo root:
 
-## DAX guidance
+```
+retail check
+```
 
-- Guard division with `DIVIDE(num, den)` (handles zero/blank), not `/`.
-- Use variables (`VAR`/`RETURN`) for readability and to avoid recomputation.
-- Prefer explicit measures over implicit aggregations on columns.
-- Time intelligence needs a marked Date dimension table with contiguous dates.
+`retail check` parses the committed TMDL/PBIR/SQL/git text and exits non-zero on any
+`error`-severity violation (warnings are reported but do not fail). The authoritative
+rule catalog — ids, what each parses, and the violation signal — is spec §5 in
+`docs/superpowers/specs/2026-06-23-pbi-governance-layer-design.md`. **Do not duplicate
+the rules in prose here; point at the id and fix the violation the checker reports.**
 
-## Checklist
+The rule ids most relevant to this agent's work:
 
-- [ ] Reads `marts` only; no reference to `raw`
-- [ ] Connection via parameters; no secrets in committed files
-- [ ] Measures `PascalCase`, in display folders, no duplicated logic
-- [ ] `DIVIDE()` used for all ratios; relationships single-direction
-- [ ] PBIP text edited as UTF-8 without BOM; project/table names short (260-char limit)
-- [ ] `.pbi/cache.abf` and `.pbi/localSettings.json` NOT committed; `definition/` IS committed
+| Rule | What it enforces |
+|------|------------------|
+| D1   | Measure names are `PascalCase`. |
+| D2   | Every measure block carries a `displayFolder`. |
+| D3   | No duplicated measure logic (normalized-body hash collision). |
+| D4   | `DIVIDE()` not `/` in measure expressions. |
+| D5   | Explicit over implicit aggregation (`summarizeBy` — WARNING). |
+| D6   | Single-direction relationships (no `bothDirections`). |
+| D7   | Time-intelligence functions require a date-table marker. |
+| D8   | Gold-only sourcing — model reads `gold`, never bronze/silver/raw. |
+| R1   | Report references its model by a relative path. |
+| C1   | Connection args are parameters, not connection-string literals. |
+| C2   | No committed secrets; `.env` gitignored. |
+
+For the SQL ids (S1–S4b) and git-hygiene ids (G1–G5, P1, P2), see spec §5 and the
+`retail-govern` skill, which maps each id to its fix.
+
+## Human-judgment items the checker deliberately does NOT gate
+
+These are real conventions with no parse signal — the checker stays silent so the gate
+stays trustworthy (spec §7). Honor them yourself:
+
+- **YAGNI / scope discipline** — no ETL/provisioning unless requested. `pipelines/load_bronze.py`
+  is sanctioned ETL; do not add more without an explicit ask.
+- **Don't hand-edit Desktop-owned files**; save through Desktop, then commit the text.
+- **PBIP preview toggle** lives in Desktop app settings, not a committed file.
+
+## Workflow
+
+1. Make the DAX/PBIP/SQL change.
+2. Run `retail check` from the repo root.
+3. For each finding, read its rule id, open the `retail-govern` skill for the id→fix
+   mapping, fix the violation, and re-run until clean.
