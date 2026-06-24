@@ -47,7 +47,7 @@ Phase A and Phase B stay consistent and generic.
       the forbidden-token list (real Arabic source terms, `Z`-style billing codes,
       `PHARMA`/segment values, real product/store/staff names, El Ezaby, C086 as a VALUE
       vs C086 as a CITATION). Derived from Principle VII + hard rule #7;
-      filled instance to CITE is `docs/data-dictionary.md` reference mappings.
+      filled instance to CITE is `docs/data-dictionary.md` reference mappings. (FR-005)
 
 **Checkpoint**: Convention recipe + forbidden-token list ready; authoring can begin.
 
@@ -92,8 +92,8 @@ no code written.
       RC defaults it relies on, `docs/readiness/source-ready.md`, and the filled instance
       it CITES (`docs/data-dictionary.md`, `docs/worked-examples/c086-pharmacy.md`). (FR-010)
 - [ ] T007 [US1] Leakage + ASCII + no-BOM self-check on `templates/business-meaning-registry.md`
-      against the T002 forbidden-token list (zero C086/ezaby/pharmacy VALUES; UTF-8 no BOM;
-      ASCII content). (SC-001, SC-002)
+      against the T002 forbidden-token list (zero C086/ezaby/pharmacy VALUES; cite-not-inline;
+      UTF-8 no BOM; ASCII content). (FR-005, SC-001, SC-002)
 
 **Checkpoint**: Business Meaning Registry template complete and passes its leakage/ASCII
 self-check -- MVP is usable on its own.
@@ -129,9 +129,9 @@ authoritative billing column (RC8), not a measure sign.
       (`docs/data-dictionary.md` billing_type/business_segment tables;
       `docs/worked-examples/c086-pharmacy.md`). (FR-010)
 - [ ] T012 [US2] Leakage + ASCII + no-BOM self-check on `templates/retail-term-dictionary.md`
-      (zero real Arabic source terms / `Z`-codes / segment values; UTF-8 no BOM; ASCII --
-      including the placeholder Arabic must be the literal token `<arabic-term>`, NOT a real
-      Arabic string). (SC-001, SC-002)
+      (zero real Arabic source terms / `Z`-codes / segment values; cite-not-inline; UTF-8 no
+      BOM; ASCII -- including the placeholder Arabic must be the literal token `<arabic-term>`,
+      NOT a real Arabic string). (FR-005, SC-001, SC-002)
 
 **Checkpoint**: Both P1 templates exist, are generic, and pass their self-checks.
 
@@ -181,7 +181,7 @@ gate-green.
       (`templates/business-meaning-registry.md`, `templates/retail-term-dictionary.md`,
       `docs/source-intelligence.md`, `docs/readiness/source-ready.md`): assert ZERO
       C086/ezaby/pharmacy VALUES; every such reference is a CITATION to the worked example.
-      (SC-002; Principle VII; hard rule #7)
+      (FR-005; SC-002; Principle VII; hard rule #7)
 - [ ] T017 [P] [POLISH] ASCII + UTF-8-no-BOM scan over all four files (no BOM; no byte > 127;
       placeholder Arabic is the token `<arabic-term>`, not a real string). (SC-001)
 - [ ] T018 [POLISH] Run `retail check` -- assert exit 0 (26 rules) with the new/edited files;
