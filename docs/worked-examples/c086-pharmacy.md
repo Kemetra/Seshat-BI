@@ -164,16 +164,17 @@ transaction — it's the sanctioned, S4b-clean idempotency pattern. *Watch:* **n
 `bronze.*`/landing object (S4b will ERROR and block); qualify your DDL targets (`silver.x`, not a
 bare `x` after `SET search_path`) or S4b fails closed to a WARNING.
 
-## 7. Which validations should become future STATIC checker rules
+## 7. Which validations are STATIC checker rules (now wired in)
 
-Statically checkable from committed text — candidates to wire into `retail check` later
-(the D-namespace collision is now **resolved** — feature 002 renamed these to `RC*`):
-- **RC7** — type discipline: money columns not cast to float/int; leading-zero IDs kept TEXT. *(Formerly collided with checker-D7; resolved by the RC* rename.)*
-- **RC13 / S4b** — idempotent migration *form* (already a checker rule; refine per §6's layer-aware policy).
-- **RC14** — star structure: each `gold.dim_*` has a `-1` unknown member; fact FKs `COALESCE` to `-1`.
-- **RC15 (pattern half)** — `dim_date` built from `generate_series`, not `SELECT DISTINCT date`.
+Statically checkable from committed text — these are now **wired into `retail check`**
+(feature 003, as SQL-family rules that cite the RC default they enforce):
+- **RC7 → S5** — type discipline: money/qty not cast to float; leading-zero ids not cast to int.
+- **RC13 / S4b** — idempotent migration *form* (already a checker rule; layer-aware per §6).
+- **RC14 → S6** — star structure: each `gold.dim_*` has a `-1` unknown member (static, partial).
+- **RC15 → S7** — `dim_date` built from `generate_series`, not `SELECT DISTINCT date`.
 
-These are *structural / textual* — parseable from the migration SQL without a database.
+These are *structural / textual* — parseable from the migration SQL without a database. The
+checker now reports **26 rules**; on C086 they all pass (the migrations satisfy the defaults).
 
 ## 8. Which validations require LIVE DB validation
 

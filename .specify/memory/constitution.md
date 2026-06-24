@@ -1,6 +1,24 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 1.2.0 -> 1.3.0 (amendment 2026-06-24, feature 003)
+Amendment rationale (1.3.0, MINOR -- new supporting rules, no principle
+                redefined): three SQL-family checker rules were added that
+                ENFORCE statically-checkable ADR cleaning defaults -- S5 (RC7
+                type discipline), S6 (RC14 gold -1 unknown member), S7 (RC15
+                contiguous date dim). The rule count rises 23 -> 26. Each rule
+                keeps a checker-namespace id (S*) and merely cites the RC default
+                it enforces -- it does NOT adopt the RC id (which would reintroduce
+                the namespace collision feature 002 resolved). Severity WARNING
+                (the RC defaults carry "override when" clauses -> surface for
+                review, not block). Dependent artifacts updated: Principle VIII
+                (count 23->26, id-list + S5/S6/S7), architecture Sec 3/4/7,
+                compliance matrix Sec 7 (these candidates are now DONE), worked
+                example. Verification: retail check reports 26 rules and still
+                exits 0 on the repo (C086 satisfies RC7/RC14/RC15); unit suite
+                200 green (187 + 13 new). Code added in src/retail/rules/sql.py
+                + tests/unit/test_rc_defaults.py only; no other rule changed.
+
 Version change: 1.1.0 -> 1.2.0 (amendment 2026-06-24, feature 002)
 Amendment rationale (1.2.0, MINOR -- terminology disambiguation, no principle
                 added/removed/redefined): the ADR 0002 cleaning/modeling defaults
@@ -283,13 +301,16 @@ North-Star #2.
 ### VIII. Static-First Governance, Live Deferred
 Ship the static core; defer live validation to a named later surface.
 
-- The shippable governance core is the STATIC checker: 23 rules over committed
+- The shippable governance core is the STATIC checker: 26 rules over committed
   TMDL / PBIR / SQL / git text, stdlib-only and CI-able, with NO dependency on
   pbi-cli, Power BI Desktop, or the network. It is the enforced gate that
   ships now (src/retail/; governance spec, static surface).
-- The 23 rules span the namespaces S1, S2, S3, S4a, S4b; D1-D8; R1; C1, C2;
-  G1-G5; P1, P2. (The checker's D1-D8 is a DISTINCT namespace from ADR 0002's
-  cleaning defaults, which are now RC1-RC16; see Principle VI.)
+- The 26 rules span the namespaces S1, S2, S3, S4a, S4b, S5, S6, S7; D1-D8; R1;
+  C1, C2; G1-G5; P1, P2. (The checker's D1-D8 is a DISTINCT namespace from ADR
+  0002's cleaning defaults, which are now RC1-RC16; see Principle VI.) S5/S6/S7
+  are SQL-family rules that ENFORCE the statically-checkable cleaning defaults
+  (S5 -> RC7 type discipline, S6 -> RC14 gold -1 unknown member, S7 -> RC15
+  contiguous date dim); they cite the RC default but keep a checker-namespace id.
 - LIVE validators (PK uniqueness on materialized rows, date-dim coverage, zero
   orphan FKs, penny-exact cross-layer measure reconciliation) are DEFERRED to a
   later `retail validate` surface (architecture North-Star correction #6,
@@ -405,4 +426,4 @@ Phase 0/1 feature spec); `docs/superpowers/specs/2026-06-23-pbi-governance-layer
 
 ---
 
-**Version**: 1.2.0 | **Ratified**: 2026-06-24 | **Last Amended**: 2026-06-24
+**Version**: 1.3.0 | **Ratified**: 2026-06-24 | **Last Amended**: 2026-06-24

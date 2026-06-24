@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import PurePosixPath
 
-from ..core import Finding, RuleContext, Severity
+from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
 from ..sql import (
     SqlToken,
@@ -240,6 +240,207 @@ def s4b_guard_form(ctx: RuleContext) -> list[Finding]:
                             f"S4b bare {upper}: target schema undetermined "
                             "(unqualified or search_path); use a qualified "
                             "name + guarded form, or wrap in BEGIN/COMMIT"
+                        ),
+                        locator=f"{rel}:{tok.line}",
+                    )
+                )
+    return findings
+
+
+# ---------------------------------------------------------------------------
+# S5/S6/S7 -- enforce statically-checkable ADR 0002 cleaning defaults
+# (RC7 type discipline, RC14 gold -1 unknown member, RC15 contiguous date dim).
+# The rule IDS stay in the checker S-family; each CITES the RC default it
+# enforces. Severity is WARNING (every RC default has an "override when" clause:
+# surface for review, do not block). These scan tracked warehouse SQL and use the
+# tokenize_sql lexer, so comments / string literals never trigger a finding.
+# ---------------------------------------------------------------------------
+
+# Float-ish SQL type keywords (money/qty should be exact NUMERIC, never float).
+_FLOAT_TYPES = frozenset({"float", "float4", "float8", "double", "real"})
+# Integer type keywords (a leading-zero id cast to int loses data).
+_INT_TYPES = frozenset({"int", "int2", "int4", "int8", "integer", "smallint", "bigint"})
+# An identifier looks id-like (kept TEXT under RC7) if it ends in these suffixes.
+_ID_SUFFIXES = ("_id", "_no", "_code", "_ref")
+
+
+def _is_id_like(name: str) -> bool:
+    low = name.lower()
+    # exclude surrogate keys (_sk) and ordinal line numbers handled by the caller
+    return any(low.endswith(s) for s in _ID_SUFFIXES)
+
+
+@register("S5", "type discipline (enforces ADR RC7)")
+def s5_type_discipline(ctx: RuleContext) -> list[Finding]:
+    """Flag money/qty cast to a float type, or an id-like column cast to integer.
+
+    Detection uses the lexer: a cast `col::float8` tokenizes to `[col, float8]`
+    (the `::` is dropped), and `CAST(col AS bigint)` to `[CAST, (, col, AS, bigint]`.
+    So a float/int TYPE token whose preceding identifier token is the cast source
+    is a cast to that type. WARNING (RC7 has an "override when"); ordinal line
+    numbers cast to int are an accepted false-positive the warning prompts review of.
+    """
+    findings: list[Finding] = []
+    for rel in iter_sql_files(ctx):
+        if is_test_path(rel):
+            continue
+        toks = [t for t in tokenize_sql(_read(ctx, rel)) if t.text]
+        for idx, tok in enumerate(toks):
+            low = tok.text.lower()
+            prev = toks[idx - 1].text if idx else ""
+            prev_up = prev.upper()
+            # The cast source is the identifier right before the type token,
+            # or (for CAST(x AS t)) the token two back, after an AS.
+            is_cast_position = bool(prev) and prev not in ("(", ",", ";", ")")
+            if prev_up == "AS":
+                src = toks[idx - 2].text if idx >= 2 else ""
+            else:
+                src = prev
+            if low in _FLOAT_TYPES and is_cast_position:
+                findings.append(
+                    Finding(
+                        rule_id="S5",
+                        severity=Severity.WARNING,
+                        message=(
+                            f"{src or 'value'} cast to {tok.text}; money/quantities "
+                            "must be exact NUMERIC, never float (enforces RC7)"
+                        ),
+                        locator=f"{rel}:{tok.line}",
+                    )
+                )
+            elif low in _INT_TYPES and is_cast_position and _is_id_like(src):
+                findings.append(
+                    Finding(
+                        rule_id="S5",
+                        severity=Severity.WARNING,
+                        message=(
+                            f"{src} cast to {tok.text}; id-like columns may have "
+                            "leading zeros and must stay TEXT (enforces RC7)"
+                        ),
+                        locator=f"{rel}:{tok.line}",
+                    )
+                )
+    return findings
+
+
+def _strip_sql_noise(text: str) -> str:
+    """Remove -- and /* */ comments and collapse string literals to ''.
+
+    The token lexer drops numeric literals entirely, so RC14's `-1` member can
+    only be detected from (noise-stripped) raw text. This strips comments and
+    string contents so a `-1` or `dim_` inside them never produces a match,
+    while preserving structure (and newlines) for line accounting.
+    """
+    out: list[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        if text.startswith("--", i):
+            j = text.find("\n", i)
+            i = n if j == -1 else j
+            continue
+        if text.startswith("/*", i):
+            j = text.find("*/", i)
+            seg = text[i : (n if j == -1 else j + 2)]
+            out.append("\n" * seg.count("\n"))  # keep line count
+            i = n if j == -1 else j + 2
+            continue
+        if text[i] in ("'", '"'):
+            q = text[i]
+            j = text.find(q, i + 1)
+            seg = text[i : (n if j == -1 else j + 1)]
+            out.append("''" + "\n" * seg.count("\n"))
+            i = n if j == -1 else j + 1
+            continue
+        out.append(text[i])
+        i += 1
+    return "".join(out)
+
+
+_CREATE_GOLD_DIM = re.compile(
+    r"\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?gold\.(dim_\w+)", re.IGNORECASE
+)
+# An INSERT INTO gold.dim_x whose statement (up to ';') contains a -1 literal.
+_INSERT_GOLD_DIM_MINUS1 = re.compile(
+    r"\bINSERT\s+INTO\s+gold\.(dim_\w+)\b[^;]*?(?<![\w.])-\s*1\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+@register("S6", "gold dim -1 unknown member (enforces ADR RC14)")
+def s6_gold_unknown_member(ctx: RuleContext) -> list[Finding]:
+    """Each `gold.dim_*` should carry a `-1` unknown member (RC14).
+
+    Static and PARTIAL (per the compliance matrix): proves a `-1`-valued INSERT
+    exists for each created `gold.dim_*`, not full referential correctness (that
+    is the live `retail validate` surface). Operates on noise-stripped raw text
+    (comments/strings removed) because the token lexer drops numeric literals, so
+    `-1` is invisible in token space. WARNING (reviewable; never blocks).
+    """
+    findings: list[Finding] = []
+    for rel in iter_sql_files(ctx):
+        if is_test_path(rel):
+            continue
+        clean = _strip_sql_noise(_read(ctx, rel))
+        # dims that receive a -1 member insert
+        with_member = {
+            m.group(1).lower() for m in _INSERT_GOLD_DIM_MINUS1.finditer(clean)
+        }
+        for m in _CREATE_GOLD_DIM.finditer(clean):
+            dim = m.group(1).lower()
+            if dim in with_member:
+                continue
+            line = clean.count("\n", 0, m.start()) + 1
+            findings.append(
+                Finding(
+                    rule_id="S6",
+                    severity=Severity.WARNING,
+                    message=(
+                        f"gold.{dim} has no -1 unknown-member INSERT; a Kimball dim "
+                        "should carry an unknown member at _sk = -1 (enforces RC14)"
+                    ),
+                    locator=f"{rel}:{line}",
+                )
+            )
+    return findings
+
+
+@register("S7", "contiguous date dim (enforces ADR RC15)")
+def s7_contiguous_date_dim(ctx: RuleContext) -> list[Finding]:
+    """A `dim_date` must be a contiguous generated calendar, not SELECT DISTINCT (RC15).
+
+    Flags an `INSERT INTO ... dim_date` whose statement uses `SELECT DISTINCT`
+    (gappy) rather than `generate_series` (contiguous). Statement-scoped so a
+    SELECT DISTINCT populating some other dim does not trigger. WARNING.
+    """
+    findings: list[Finding] = []
+    for rel in iter_sql_files(ctx):
+        if is_test_path(rel):
+            continue
+        toks = [t for t in tokenize_sql(_read(ctx, rel)) if t.text]
+        for idx, tok in enumerate(toks):
+            if tok.text.upper() != "INSERT":
+                continue
+            # collect this statement's tokens (up to next ';')
+            stmt: list[SqlToken] = []
+            for j in range(idx, len(toks)):
+                if toks[j].text == ";":
+                    break
+                stmt.append(toks[j])
+            up = [t.text.upper() for t in stmt]
+            targets_dim_date = any(t.text.lower().startswith("dim_date") for t in stmt)
+            if not targets_dim_date:
+                continue
+            has_distinct = "SELECT" in up and "DISTINCT" in up
+            has_genseries = any(t.text.lower() == "generate_series" for t in stmt)
+            if has_distinct and not has_genseries:
+                findings.append(
+                    Finding(
+                        rule_id="S7",
+                        severity=Severity.WARNING,
+                        message=(
+                            "dim_date built from SELECT DISTINCT; use a contiguous "
+                            "generate_series calendar over the full span (enforces "
+                            "RC15) -- missing days break time-intelligence"
                         ),
                         locator=f"{rel}:{tok.line}",
                     )
