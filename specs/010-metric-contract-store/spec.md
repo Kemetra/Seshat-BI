@@ -151,7 +151,8 @@ approver.
 **Acceptance Scenarios**:
 
 1. **Given** an unreviewed filled contract, **When** its status is recorded, **Then**
-   it is `draft`/`blocked` with the missing approval listed -- never `pass`.
+   it is `not_started` or `blocked` (one of the four spine statuses) with the missing
+   approval listed -- never `pass`. ("draft" is lifecycle prose, never a status value.)
 2. **Given** an owner-approved contract, **When** its status is recorded, **Then** it
    is `pass` with evidence = owner name + approval date, and no score field is emitted.
 3. **Given** any attempt to record a numeric confidence on a contract, **When** the
@@ -271,7 +272,7 @@ approver.
 - **Filled-contract storage location**: filled metric contracts live alongside the
   table working set under `mappings/<table>/metrics/` (parallel to the five mapping
   gate artifacts, per ADR 0003's "cohesive per-table working set" rationale), with the
-  reusable KPI-pack store under a top-level `metrics/` dir. This is the recommended
+  reusable KPI-pack store under `metrics/packs/` (top-level). This is the recommended
   default; the authoring guide records it and it is cheaply reversible (a path move).
   See open question O-1.
 - **Name convention**: contract `name` is PascalCase to match the existing DAX
