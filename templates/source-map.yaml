@@ -1,0 +1,258 @@
+# =============================================================================
+# source-map.yaml  --  the machine-readable SPINE of the source-mapping gate
+# =============================================================================
+# Tower BI Agent Kit  -  Phase 0/1 foundation (docs/templates only).
+# See: docs/architecture/tower-bi-agent-kit.md  (the kit; this is template 2 of 5).
+#
+# WHAT THIS IS
+#   A GENERIC, copy-me template. It maps EACH source column to (a) its silver
+#   column and (b) its placement in the gold Kimball star. It is the
+#   machine-readable half of the source-mapping gate: before any `silver.*` SQL
+#   is written, the source must be profiled and mapped into committed artifacts,
+#   and that map must be reviewed. Silver is downstream of an approved map.
+#
+# WHICH PLAYBOOK PHASES THIS FORMALIZES  (it invents no new method)
+#   docs/medallion-playbook.md
+#     Phase 2.0  grain-first (meta.grain, meta.primary_key)   <- decided FIRST
+#     Phase 2.1  column filter            (columns[].decision keep|drop)
+#     Phase 2.2  PII scan (EARLY)         (columns[].pii)
+#     Phase 2.3  renaming                 (columns[].rename_to, snake_case)
+#     Phase 2.4  missing-value handling   (columns[].missing_policy)
+#     Phase 2.5  data types               (columns[].silver_type)
+#     Phase 2.7  categorical std/rollups  (derived_columns, gold_placement dims)
+#     Phase 2.8  hierarchy modeling       (flat denorm dim attributes)
+#   (Phase 2.6 row filters and the build ORDER live in the migration, not here.)
+#
+# WHICH ADR-0002 DEFAULTS EACH FIELD INSTANTIATES  (cite, do not re-decide)
+#   docs/decisions/0002-retail-cleaning-defaults.md
+#     meta.grain / meta.primary_key ......... D1 (lowest grain), D2 (PK on data)
+#     columns[].decision: drop (no signal) .. D3
+#     columns[].pii: true -> dropped early .. D4
+#     columns[].missing_policy: null ........ D5 ('' -> NULL baseline)
+#     columns[].missing_policy: sentinel .... D6 (grouping dims ONLY)
+#     columns[].silver_type ................. D7 (money/qty NUMERIC; leading-zero
+#                                              IDs TEXT; ordinal -> smallint)
+#     derived_columns is_return ............. D8 (from AUTHORITATIVE column,
+#                                              never the measure sign)
+#     gold_star.fact.measures ............... D9 (keep independent money measures)
+#     gold_star (star structure) ............ D14 (_sk keys, -1 unknown member,
+#                                              FK COALESCE, degenerate dims)
+#     date_dimension ........................ D15 (CONTIGUOUS generate_series)
+#   (Reconciliation of the resulting totals is recorded separately --
+#    see templates/reconciliation-report.md, which instantiates D16.)
+#
+# !! D-NAMESPACE COLLISION (flagged, NOT resolved here -- do not rename) !!
+#   The "D" ids cited throughout THIS file are ADR-0002 cleaning defaults
+#   (D1-D16). The `retail check` governance checker uses an UNRELATED set of
+#   "D" ids (D1-D8) for its TMDL/DAX rules. Same prefix, two namespaces.
+#   Disambiguating them is a named later slice (see architecture doc Sec.9);
+#   this template only flags it.
+#
+# C086 IS A FILLED INSTANCE, NEVER THE UNIVERSAL SCHEMA
+#   The first table through this kit is C086 (El Ezaby pharmacy sales). Its
+#   filled map has grain (invoice_no + line_no) and a star of 1 fact + 6 dims.
+#   See docs/worked-examples/c086-pharmacy.md for that filled instance. Do NOT
+#   copy pharmacy specifics (billing codes, segment rollups, insurance PII) into
+#   this template -- the values below are deliberately obvious placeholders.
+#
+# SISTER ARTIFACTS IN THE MAPPING GATE  (a reviewer reads all 5 as a set)
+#   templates/source-profile.md ........... Phase 1 (the numbers this map rests on)
+#   templates/assumptions.md .............. ADR defaults adopted vs deviations
+#   templates/unresolved-questions.md ..... the decisions that block the build
+#   templates/reconciliation-report.md .... the live acceptance run (D16)
+#
+# AUTHORING NOTES
+#   - Keep this YAML valid: it is parsed by tooling, not just read. Quote any
+#     value containing ':' or quotes (see the quoted examples below).
+#   - Use snake_case for every silver name (rename_to). Keep names SHORT
+#     (Windows 260-char PBIP path limit; see repo CLAUDE.md).
+#   - `gold_placement` dim names MUST match a name under `gold_star.dimensions`.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# meta -- decided in Phase 2.0, BEFORE any column decision.
+# The grain fixes which columns are structural keys (and therefore non-droppable).
+# -----------------------------------------------------------------------------
+meta:
+  table_id: "<TABLE_ID>"              # short stable id, e.g. example_c091
+  source_system: "<source_system>"   # e.g. example_erp / example_pos
+  profiled_from: "templates/source-profile.md"   # Phase 1 evidence this map rests on
+  # GRAIN (Phase 2.0 / D1): what ONE ROW represents. Lowest grain the source
+  # provides -- roll up later in gold or DAX, never down.
+  grain: "<one row = one ...>"        # e.g. "one row = one invoice line item"
+  # PRIMARY KEY (Phase 2.0 / D2): verified unique ON THE DATA, and re-verified
+  # on the TRANSFORMED output. These columns are NON-DROPPABLE.
+  primary_key:
+    - "<key_col_a>"                   # e.g. invoice_no
+    - "<key_col_b>"                   # e.g. line_no
+  reviewed_by: "<analyst / reviewer>"
+  reviewed_on: "<YYYY-MM-DD>"         # quoted so it is not auto-typed as a date
+
+# -----------------------------------------------------------------------------
+# defaults -- which ADR-0002 defaults this table ADOPTS as-is, and which it
+# DEVIATES from. Record only the deviation summary here; the triggering data
+# fact for each deviation lives in templates/assumptions.md.
+#
+# NOTE: the ids below are ADR-0002 ids (D1-D16). They are NOT `retail check`
+# rule ids (also D1-D8). Same prefix, different namespace -- flagged, unresolved.
+# -----------------------------------------------------------------------------
+defaults:
+  adopted:                            # ADR-0002 defaults taken as written
+    - "D1"   # model at lowest grain
+    - "D2"   # verify PK on transformed data
+    - "D4"   # PII removed EARLY
+    - "D5"   # '' -> NULL baseline
+    - "D7"   # exact NUMERIC money/qty; leading-zero IDs stay TEXT
+    - "D8"   # is_return from authoritative column
+    - "D14"  # gold Kimball star (+ -1 member, FK COALESCE, degenerate dims)
+    - "D15"  # contiguous generate_series date dim
+  deviations:                         # defaults this table overrides (see assumptions.md)
+    - id: "<Dn>"                      # e.g. D6
+      reason: "<why the data forced an override>"
+      detail_in: "templates/assumptions.md"
+    # - id: "..."  (add one entry per deviation; empty list if none)
+
+# -----------------------------------------------------------------------------
+# columns -- one entry per SOURCE column (Phase 2.1-2.5). Every source column
+# must appear, even dropped ones (the reviewer needs the full inventory).
+#   decision      keep | drop | derive
+#   reason        the evidence (missingness %, cardinality, redundancy, PII)
+#   rename_to     snake_case silver name (null when dropped)
+#   silver_type   D7: money/qty -> numeric(p,s); date -> date;
+#                 leading-zero id -> text; ordinal -> smallint
+#   missing_policy  null  (D5 default)  |  "sentinel:'UNKNOWN'" (D6, grouping dims ONLY)
+#   pii           true|false. If true -> decision MUST be drop (D4, before BI layer).
+#   gold_placement  fact_measure | "dim:<dim_name>.<attr>" | degenerate_dim | dropped
+#                 (dim_name MUST match a name under gold_star.dimensions)
+#
+# The 4 placeholder columns below show the four shapes a column can take.
+# A real table has many more; these are obvious placeholders, NOT C086.
+# -----------------------------------------------------------------------------
+columns:
+
+  # (1) a measure kept onto the fact -- D7 exact numeric, D9 independent measure
+  - source_name: "<SRC_AMOUNT>"          # e.g. NET_AMT
+    decision: "keep"
+    reason: "core money measure; exact, not derivable from the others (D9)"
+    rename_to: "<measure_a>"             # matches gold_star.fact.measures
+    silver_type: "numeric(18,2)"         # D7: money -> exact NUMERIC, never float
+    missing_policy: "null"               # D5: genuine unknown stays NULL
+    pii: false
+    gold_placement: "fact_measure"
+
+  # (2) a dimension attribute -- grouping column, sentinel allowed (D6)
+  - source_name: "<SRC_CATEGORY>"        # e.g. PROD_CAT
+    decision: "keep"
+    reason: "grouping attribute for a dimension"
+    rename_to: "<entity_a>_attribute"
+    silver_type: "text"
+    missing_policy: "sentinel:'UNKNOWN'" # D6: sentinel ONLY for grouping dims;
+                                         #     verify it collides with no real value
+    pii: false
+    gold_placement: "dim:dim_<entity_a>.<entity_a>_attribute"   # name matches gold_star
+
+  # (3) a no-signal column dropped (D3)
+  - source_name: "<SRC_EMPTY_COL>"       # e.g. LEGACY_FLAG
+    decision: "drop"
+    reason: "100%-empty / single-value / verified duplicate -> no signal (D3)"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  # (4) PII dropped EARLY (D4) -- never reaches the BI layer
+  - source_name: "<SRC_PII_COL>"         # e.g. CUSTOMER_PHONE
+    decision: "drop"
+    reason: "personal/sensitive data; dropped before BI layer (D4, irreversible once cached)"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: true                            # pii:true REQUIRES decision: drop (unless governance sign-off)
+    gold_placement: "dropped"
+
+  # (5) a transaction identifier -> degenerate dimension on the fact (D14)
+  - source_name: "<SRC_TXN_ID>"          # e.g. an invoice/order id (often a PK part)
+    decision: "keep"
+    reason: "transaction identifier with no attributes -> degenerate dim (D14)"
+    rename_to: "<txn_id>"
+    silver_type: "text"                  # D7: leading-zero id stays TEXT
+    missing_policy: "null"
+    pii: false
+    gold_placement: "degenerate_dim"
+
+# -----------------------------------------------------------------------------
+# gold_star -- the Phase 6 target shape (D14). One fact at the silver grain +
+# conformed dimensions. Every dim gets a surrogate _sk and an unknown member at
+# _sk = -1; the fact's FKs COALESCE missing lookups to -1.
+#
+# The placeholders below show ONE fact + TWO dims. A real star has more; the
+# C086 filled instance is 1 fact + 6 dims (see worked example) -- do not copy
+# its pharmacy dims here.
+# -----------------------------------------------------------------------------
+gold_star:
+
+  fact:
+    name: "fct_<grain>"                  # placeholder; one fact per source grain
+    grain: "<= meta.grain>"              # MUST equal meta.grain (D1)
+    measures:                            # D9: keep independent money/qty measures
+      - "<measure_a>"                    # from columns[].gold_placement: fact_measure
+      # - "<measure_b>"
+      # - "<measure_c>"
+
+  dimensions:
+    - name: "dim_<entity_a>"             # placeholder; referenced by columns[].gold_placement
+      surrogate_key: "<entity_a>_sk"     # D14: _sk surrogate key
+      has_unknown_member: true           # D14: unknown member row at _sk = -1
+      attributes:                        # flat denormalized levels (Phase 2.8 / D12)
+        - "<entity_a>_id"                # natural key kept as an attribute
+        - "<entity_a>_attribute"
+        # - "<entity_a>_level_2"         # flat levels, not a snowflake
+
+    - name: "dim_<entity_b>"
+      surrogate_key: "<entity_b>_sk"
+      has_unknown_member: true           # D14
+      attributes:
+        - "<entity_b>_id"                # D7: leading-zero id stays TEXT
+        # - "<entity_b>_attribute"
+
+  # Transaction identifiers with no attributes -> degenerate dims ON the fact
+  # (D14). They are columns of the fact, not their own dimension table.
+  degenerate_dimensions:
+    - "<txn_id>"
+    - "<txn_line_no>"
+    # - "<original_txn_ref>"
+
+  # Date dimension is a CONTIGUOUS generated calendar over the full span (D15),
+  # NEVER SELECT DISTINCT date (missing days break time-intelligence).
+  date_dimension:
+    name: "dim_date"
+    surrogate_key: "date_sk"             # e.g. YYYYMMDD integer
+    method: "generate_series"            # D15: contiguous, one row per calendar day
+    contiguous: true
+    span:
+      from: "<YYYY-MM-DD>"               # earliest real fact date (quoted)
+      to: "<YYYY-MM-DD>"                 # latest real fact date (quoted)
+
+# -----------------------------------------------------------------------------
+# derived_columns -- columns NOT present in the source, computed in silver
+# (Phase 2.7, build step 7). Each must name the AUTHORITATIVE source column it
+# derives from, not a heuristic.
+# -----------------------------------------------------------------------------
+derived_columns:
+
+  # is_return (D8): from the AUTHORITATIVE transaction/billing-type column,
+  # NEVER from the measure sign (the sign misses zero-value and edge-case returns).
+  - name: "is_return"
+    type: "boolean"
+    derived_from: "<authoritative_type_col>"   # e.g. the billing/transaction-type column
+    rule: "<value(s) that mark a return> -> true, else false"
+    note: "D8: authoritative column, not measure sign. See assumptions.md for the value list."
+
+  # Optional business rollup (Phase 2.7 / D11): added ONLY from an analyst-supplied
+  # mapping -- never invented. Default unmapped values to 'UNMAPPED'.
+  # - name: "<business_rollup>"          # e.g. example_segment
+  #   type: "text"
+  #   derived_from: "<grouping_dim_col>"
+  #   mapping_source: "templates/assumptions.md"   # the analyst mapping lives there
+  #   unmapped_default: "UNMAPPED"
