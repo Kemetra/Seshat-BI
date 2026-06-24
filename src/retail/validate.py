@@ -300,6 +300,37 @@ LIVE_CHECKS = (
 )
 
 
+@dataclass(frozen=True)
+class ValidationTargets:
+    """The four live-check targets for one table.
+
+    Built per-table from a reviewed ``source-map.yaml`` by
+    ``retail.validate_targets.load_targets`` (that loader parses YAML and lives in
+    a separate module so THIS module's import path stays stdlib-only). Defined
+    here so ``run_live_checks`` can name it without importing the YAML loader.
+    """
+
+    pk: PkTarget
+    date_coverage: DateCoverageTarget
+    orphans: OrphanTarget
+    reconcile: ReconcileTarget
+
+
+def run_live_checks(runner: QueryRunner, targets: ValidationTargets) -> list[Finding]:
+    """Run all four live checks against ``runner`` and return the combined findings.
+
+    Pure + driver-free: the caller supplies any ``QueryRunner`` (a fake in tests,
+    the lazy psycopg2 runner in the CLI). Clean data -> empty list; each defect is
+    an ERROR Finding.
+    """
+    findings: list[Finding] = []
+    findings += check_pk_uniqueness(runner, targets.pk)
+    findings += check_date_coverage(runner, targets.date_coverage)
+    findings += check_orphan_fks(runner, targets.orphans)
+    findings += check_reconciliation(runner, targets.reconcile)
+    return findings
+
+
 def make_psycopg2_runner(dsn: str) -> QueryRunner:
     """Build a real QueryRunner over a Postgres DSN. LAZY: imports psycopg2 here,
     never at module scope, so the static core's import path stays driver-free.

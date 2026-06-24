@@ -1,0 +1,10 @@
+table Date
+	dataCategory: Time
+
+	column Date
+		dataType: dateTime
+		summarizeBy: none
+		sourceColumn: date
+
+	measure 'YTDSales' = TOTALYTD(SUM(Sales[Amount]), Date[Date])
+		displayFolder: TimeIntelligence

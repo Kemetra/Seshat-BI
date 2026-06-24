@@ -93,7 +93,7 @@ here so the boundary is explicit, and each is a candidate next feature spec:
 
 - **Phase 1 -> Phase 2 -> Phases 3/4/5**: setup and the keystone (architecture + constitution) precede the templates; the three user-story phases are otherwise independent of each other (US1/US2/US3 templates were authored in parallel).
 - **Phase 6** depends on Phases 1-5 (the plan documents the committed work).
-- **The only open task is T020** (commit the plan artifacts). Everything else is complete.
+- **All tasks complete** (T020 closed in commit `4bd7081`). The feature-001 foundation slice is fully delivered.
 
 ## Implementation strategy
 
@@ -104,7 +104,7 @@ orchestrate) is the future-slices list above.
 
 ## Summary
 
-- **Total tasks**: 22 | **Complete `[X]`**: 21 | **Open `[ ]`**: 1 (T020, commit the plan artifacts).
+- **Total tasks**: 22 | **Complete `[X]`**: 22 | **Open `[ ]`**: 0 (T020 closed in commit `4bd7081`).
 - **Per story**: US1 = 4 (T007-T010) | US2 = 3 (T011-T013) | US3 = 2 (T014-T015).
 - **Parallel opportunities**: the five templates (T008/T009/T011/T012/T014) were authored in parallel; plan artifacts (T017/T018) likewise.
 - **MVP**: US1 (the gate) -- delivered.

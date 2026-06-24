@@ -552,3 +552,28 @@ def test_c1_exempts_tests_prefix(tmp_path: Path) -> None:
     dest.write_text("\n".join(lines), encoding="utf-8")
     ctx = RuleContext(repo_root=tmp_path, tracked_files=(rel,))
     assert list(c1_parameterized_connection(ctx)) == []
+
+
+# ---------------------------------------------------------------------------
+# D7 broadening (#4): table-level `dataCategory: Time` + a column `isKey` is the
+# REAL "Mark as Date Table" marker and must satisfy D7 (in addition to the
+# annotation form). Column-level dataCategory alone / no isKey is NOT enough.
+# ---------------------------------------------------------------------------
+
+
+def test_d7_passes_with_datacategory_and_iskey(tmp_path: Path) -> None:
+    """TI + a Date table marked via `dataCategory: Time` + `isKey` -> no finding."""
+    ctx = _ctx(tmp_path, "clean_date_datacategory.tmdl")
+    assert list(d7_ti_needs_date_marker(ctx)) == []
+
+
+def test_d7_fires_when_datacategory_but_no_iskey(tmp_path: Path) -> None:
+    """`dataCategory: Time` WITHOUT an isKey column is not a valid marker -> D7 fires.
+
+    Honors the spec stance that the date-table marker requires the Key column,
+    not just the table data category.
+    """
+    ctx = _ctx(tmp_path, "bad_datacategory_no_key.tmdl")
+    findings = list(d7_ti_needs_date_marker(ctx))
+    assert len(findings) == 1
+    assert findings[0].rule_id == "D7"

@@ -20,18 +20,22 @@ their regexes to these. If a fixture edit drops one, tests/unit/test_tmdl.py fai
   - gold-only M source schema:  ``Schema="gold"``
   - parameterized M source:     ``PostgreSQL.Database(Server, Database)``  (identifiers)
   - date-table marker:          ``annotation PBI_DateTable = true``  (table-level)
-    *** PROVISIONAL ***  This is the table-level annotation form that M4.1's
-    ``DATE_TABLE_MARKER`` constant consumes, used here so M0 and M4 agree. The exact
-    "Mark as Date Table" TMDL literal is NOT yet confirmed against a real Power BI
-    capture (spec §5.2 D7 note / §13 flag it may differ). RE-VERIFY against the real
-    PBIP captured in Task M0.3 before M4 builds D7. If the captured real fixture shows
-    a different marker literal, update BOTH M0 and M4.1's DATE_TABLE_MARKER together.
+    NOTE: D7 also accepts the REAL "Mark as Date Table" marker -- table-level
+    ``dataCategory: Time`` PLUS a column flagged ``isKey`` (TOM
+    ``Table.DataCategory = "Time"`` + a key column; verified 2026-06 against the
+    TOM reference, Microsoft Learn, and Tabular Editor). The annotation literal
+    below is kept as an ALSO-accepted form (some models carry it) and as the M0
+    fixture's marker, but it is no longer the sole signal -- so D7 no longer hinges
+    on confirming that one literal against a captured PBIP. Capturing a real
+    "Mark as Date Table" PBIP (CAPTURE.md) is still nice-to-have to retire the
+    fixture's annotation form, but is no longer blocking.
 
 PUBLIC API (consumed by D1-D8 rules and by M4b):
   - TmdlMeasure(name, expression, display_folder, line)
-  - TmdlColumn(name, data_type, summarize_by, line)
+  - TmdlColumn(name, data_type, summarize_by, line, is_key)
   - TmdlRelationship(name, cross_filtering_behavior, line)
-  - TmdlTable(name, measures, columns, partition_sources, annotations, line)
+  - TmdlTable(name, measures, columns, partition_sources, annotations, line,
+    data_category)
   - TmdlModel(tables, relationships)
   - MSource(text, locator)
   - parse_tmdl(text: str) -> TmdlTable | None
@@ -54,11 +58,12 @@ from typing import Iterable
 from .core import RuleContext, is_test_path
 
 DATE_TABLE_MARKER = "annotation PBI_DateTable = true"
-# Pinned to the table-level marker literal M0 captured from a real
-# "Mark as Date Table" PBIP. M4 consumes this single constant; if M0's
-# observed literal differs, only this line changes (single source of truth,
-# per spec §9.0 / §13). Column-level `dataCategory: Time` alone is NOT the
-# marker (spec line 135).
+# One of TWO accepted date-table markers (see D7 in rules/dax.py). The
+# AUTHORITATIVE marker Power BI's "Mark as Date Table" writes is table-level
+# ``dataCategory: Time`` + a column flagged ``isKey`` (TmdlTable.data_category +
+# TmdlColumn.is_key); this annotation form is also accepted because some models
+# carry it and the M0 golden fixture uses it. Table-level ``dataCategory: Time``
+# alone (no key column) is NOT sufficient -- the key column is required.
 
 TI_TRIGGER_FUNCTIONS = frozenset(
     {
@@ -131,6 +136,9 @@ class TmdlColumn:
     data_type: str | None
     summarize_by: str | None
     line: int
+    # True if the column carries the bare ``isKey`` flag. Part of the real
+    # "Mark as Date Table" marker (table ``dataCategory: Time`` + a key column).
+    is_key: bool = False
 
 
 @dataclass(frozen=True)
@@ -167,6 +175,9 @@ class TmdlTable:
     partition_sources: tuple[str, ...]
     annotations: tuple[str, ...]
     line: int
+    # Value of the table-level ``dataCategory:`` property, or None. ``"Time"`` is
+    # half of the real "Mark as Date Table" marker (the other half is a key column).
+    data_category: str | None = None
 
 
 @dataclass(frozen=True)
@@ -239,6 +250,7 @@ def parse_tmdl(text: str) -> TmdlTable | None:
     columns: list[TmdlColumn] = []
     sources: list[str] = []
     annotations: list[str] = []
+    data_category: str | None = None
 
     n = len(lines)
     i = 0
@@ -282,6 +294,7 @@ def parse_tmdl(text: str) -> TmdlTable | None:
             name = cm.group("name").strip()
             dt: str | None = None
             sb: str | None = None
+            is_key = False
             j = i + 1
             while j < n and (not lines[j].strip() or _indent(lines[j]) > ind):
                 child = lines[j].strip()
@@ -291,9 +304,14 @@ def parse_tmdl(text: str) -> TmdlTable | None:
                     dt = d.group("v").strip()
                 if s:
                     sb = s.group("v").strip()
+                # ``isKey`` is a bare flag line (no value) in TMDL.
+                if child == "isKey":
+                    is_key = True
                 j += 1
             columns.append(
-                TmdlColumn(name=name, data_type=dt, summarize_by=sb, line=i + 1)
+                TmdlColumn(
+                    name=name, data_type=dt, summarize_by=sb, line=i + 1, is_key=is_key
+                )
             )
             i = j
             continue
@@ -313,6 +331,14 @@ def parse_tmdl(text: str) -> TmdlTable | None:
             i = j
             continue
 
+        # --- table-level dataCategory (e.g. ``dataCategory: Time`` for date tables) ---
+        # Only the TABLE-level property counts (ind == 1, outside any column block).
+        # Column-level ``dataCategory: Time`` alone is intentionally NOT the marker.
+        if ind == 1:
+            dcm = re.match(r"dataCategory:\s*(?P<v>.+)$", stripped)
+            if dcm:
+                data_category = dcm.group("v").strip()
+
         # --- annotation lines ---
         if re.match(r"annotation\s+.+", stripped) and ind <= 1:
             annotations.append(stripped)
@@ -326,6 +352,7 @@ def parse_tmdl(text: str) -> TmdlTable | None:
         partition_sources=tuple(sources),
         annotations=tuple(annotations),
         line=table_line,
+        data_category=data_category,
     )
 
 

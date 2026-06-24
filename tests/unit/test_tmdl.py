@@ -207,3 +207,53 @@ def test_parse_tmdl_does_not_capture_source_like_property() -> None:
     assert len(table.partition_sources) == 1
     assert "gold.fct_sales" in table.partition_sources[0]
     assert "legacy_value" not in table.partition_sources[0]
+
+
+# ---------------------------------------------------------------------------
+# Date-table marker broadening (#4): table-level dataCategory + column isKey.
+# The real Power BI "Mark as Date Table" writes table-level `dataCategory: Time`
+# plus a date column marked `isKey` -- not (only) `annotation PBI_DateTable`.
+# ---------------------------------------------------------------------------
+
+_DATACATEGORY_TABLE = (
+    "table Date\n"
+    "\tdataCategory: Time\n"
+    "\n"
+    "\tcolumn Date\n"
+    "\t\tdataType: dateTime\n"
+    "\t\tisKey\n"
+    "\t\tsummarizeBy: none\n"
+)
+
+
+@pytest.mark.unit
+def test_parse_tmdl_captures_table_data_category() -> None:
+    table = parse_tmdl(_DATACATEGORY_TABLE)
+    assert table is not None
+    assert table.data_category == "Time"
+
+
+@pytest.mark.unit
+def test_parse_tmdl_captures_column_is_key() -> None:
+    table = parse_tmdl(_DATACATEGORY_TABLE)
+    assert table is not None
+    date_col = next(c for c in table.columns if c.name == "Date")
+    assert date_col.is_key is True
+
+
+@pytest.mark.unit
+def test_parse_tmdl_column_is_key_defaults_false() -> None:
+    # A column with no `isKey` line has is_key == False (backward-compatible).
+    table = parse_tmdl(
+        "table Sales\n\tcolumn Amount\n\t\tdataType: decimal\n\t\tsummarizeBy: sum\n"
+    )
+    assert table is not None
+    amount = next(c for c in table.columns if c.name == "Amount")
+    assert amount.is_key is False
+
+
+@pytest.mark.unit
+def test_parse_tmdl_data_category_defaults_none() -> None:
+    table = parse_tmdl("table Sales\n\tcolumn Amount\n\t\tdataType: decimal\n")
+    assert table is not None
+    assert table.data_category is None

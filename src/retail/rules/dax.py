@@ -242,7 +242,12 @@ def d7_ti_needs_date_marker(ctx: RuleContext) -> Iterable[Finding]:
     Detection:
     - Strip comments and string literals from each measure expression, then
       tokenize identifiers, uppercase, and intersect with ``TI_TRIGGER_FUNCTIONS``.
-    - Separately check every table's ``annotations`` for ``DATE_TABLE_MARKER``.
+    - A table counts as a marked date table if EITHER:
+        (a) it carries the ``DATE_TABLE_MARKER`` annotation, OR
+        (b) it has table-level ``dataCategory: Time`` AND at least one column
+            flagged ``isKey`` -- the real "Mark as Date Table" marker Power BI
+            writes (TOM ``Table.DataCategory = "Time"`` + a key column). Table-
+            level ``dataCategory: Time`` WITHOUT a key column is not sufficient.
     """
     any_ti_use = False
     any_date_marker = False
@@ -252,10 +257,13 @@ def d7_ti_needs_date_marker(ctx: RuleContext) -> Iterable[Finding]:
         table = parse_tmdl(text)
         if table is None:
             continue
-        # Check for date-table marker in annotations
+        # (a) date-table marker via annotation
         for ann in table.annotations:
             if ann.strip() == DATE_TABLE_MARKER:
                 any_date_marker = True
+        # (b) the real marker: table dataCategory: Time + a key column
+        if table.data_category == "Time" and any(c.is_key for c in table.columns):
+            any_date_marker = True
 
         # Check for TI function usage in measures
         for m in table.measures:
@@ -271,8 +279,9 @@ def d7_ti_needs_date_marker(ctx: RuleContext) -> Iterable[Finding]:
             rule_id="D7",
             severity=Severity.ERROR,
             message=(
-                "Model uses time-intelligence functions but no table carries"
-                f" '{DATE_TABLE_MARKER}'"
+                "Model uses time-intelligence functions but no table is marked as a"
+                f" date table (via '{DATE_TABLE_MARKER}', or table-level"
+                " 'dataCategory: Time' with a column marked 'isKey')"
             ),
             locator=ti_locator,
         )

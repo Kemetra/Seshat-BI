@@ -1,0 +1,20 @@
+table Date
+	dataCategory: Time
+
+	column Date
+		dataType: dateTime
+		isKey
+		summarizeBy: none
+		sourceColumn: date
+
+	measure 'YTDSales' = TOTALYTD(SUM(Sales[Amount]), Date[Date])
+		displayFolder: TimeIntelligence
+
+	partition Date = m
+		mode: import
+		source =
+				let
+					Source = PostgreSQL.Database(Server, Database),
+					gold_dim_date = Source{[Schema="gold", Item="dim_date"]}[Data]
+				in
+					gold_dim_date

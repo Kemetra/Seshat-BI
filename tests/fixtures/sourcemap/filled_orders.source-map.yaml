@@ -1,0 +1,47 @@
+# Test fixture: a FILLED source-map.yaml (generic, NOT C086) used to test the
+# validate-target loader (feature 004 follow-up: source targets from source-map.yaml).
+# A minimal-but-complete instance: 1 fact + 2 conformed dims + a date dim, with
+# two money measures. Shapes mirror templates/source-map.yaml exactly.
+meta:
+  table_id: "demo_orders"
+  source_system: "demo_erp"
+  grain: "one row = one order line item"
+  primary_key:
+    - "order_no"
+    - "line_no"
+  reviewed_by: "fixture"
+  reviewed_on: "2026-06-24"
+
+gold_star:
+  fact:
+    name: "gold.fct_orders"
+    grain: "one row = one order line item"
+    measures:
+      - "net_amount"
+      - "tax_amount"
+  dimensions:
+    - name: "gold.dim_product"
+      surrogate_key: "product_sk"
+      has_unknown_member: true
+      attributes:
+        - "product_id"
+        - "product_name"
+    - name: "gold.dim_customer"
+      surrogate_key: "customer_sk"
+      has_unknown_member: true
+      attributes:
+        - "customer_id"
+  degenerate_dimensions:
+    - "order_no"
+    - "line_no"
+  date_dimension:
+    name: "gold.dim_date"
+    surrogate_key: "date_sk"
+    method: "generate_series"
+    contiguous: true
+    span:
+      from: "2023-01-01"
+      to: "2025-12-31"
+
+# The silver table the fact reconciles against (penny-exact, RC16). Sourced from
+# meta.table_id by convention: silver.<table_id>.

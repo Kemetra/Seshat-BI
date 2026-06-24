@@ -234,3 +234,93 @@ def test_main_commit_range_e2e_malformed_range_no_traceback(
     assert "P2" in out
     assert bad_range in out
     assert "Traceback" not in out
+
+
+# ---------------------------------------------------------------------------
+# validate --source-map: the live-run wiring (one command from creds). The DB
+# connection is monkeypatched so no real DB is touched.
+# ---------------------------------------------------------------------------
+
+
+def test_parser_validate_has_source_map_flag() -> None:
+    ns = _build_parser().parse_args(
+        ["validate", "--source-map", "mappings/x/source-map.yaml"]
+    )
+    assert ns.source_map == "mappings/x/source-map.yaml"
+
+
+def test_validate_no_source_map_stays_deferred(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # With a DSN + driver but NO --source-map, the handler keeps the deferred
+    # message (no targets to run) and returns 1.
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@h:5432/db")
+    monkeypatch.setattr("retail.cli._ensure_driver", lambda: True)
+    rc = main_under_test(["validate"])
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert "deferred" in err.lower()
+
+
+def test_validate_with_source_map_runs_live_checks(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # DSN present + driver present + a --source-map -> the handler loads targets,
+    # builds a runner (monkeypatched fake), runs the checks, prints findings, and
+    # returns 0 when clean. No real DB is touched.
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@h:5432/db")
+    monkeypatch.setattr("retail.cli._ensure_driver", lambda: True)
+
+    from retail.validate import (
+        DateCoverageTarget,
+        OrphanTarget,
+        PkTarget,
+        ReconcileTarget,
+        ValidationTargets,
+    )
+
+    fake_targets = ValidationTargets(
+        pk=PkTarget(table="silver.t", pk_columns=("a",)),
+        date_coverage=DateCoverageTarget(
+            fact="gold.f",
+            fact_date="date_sk",
+            date_dim="gold.dim_date",
+            dim_date="date_sk",
+        ),
+        orphans=OrphanTarget(fact="gold.f", fks=()),
+        reconcile=ReconcileTarget(silver="silver.t", gold="gold.f", measures=()),
+    )
+    monkeypatch.setattr("retail.cli._load_targets", lambda path: fake_targets)
+
+    captured_sql: list[str] = []
+
+    class FakeRunner:
+        def run(self, sql, params=()):
+            captured_sql.append(sql)
+            # pk: (count, distinct, null) all clean; coverage: 0 missing
+            if "DISTINCT (a)" in sql or "count(DISTINCT" in sql:
+                return [(5, 5, 0)]
+            return [(0,)]
+
+    monkeypatch.setattr("retail.cli._make_runner", lambda dsn: FakeRunner())
+
+    rc = main_under_test(["validate", "--source-map", "mappings/t/source-map.yaml"])
+    assert rc == 0  # all checks clean
+    assert captured_sql  # the runner was actually exercised
+
+
+def test_validate_source_map_no_creds_errors_clearly(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # --source-map but NO DSN -> clear actionable error, return 1, never a connect.
+    for var in ("DATABASE_URL", "ANALYTICS_DB_HOST"):
+        monkeypatch.delenv(var, raising=False)
+
+    def _boom(dsn):  # pragma: no cover - must never be called
+        raise AssertionError("must not build a runner without creds")
+
+    monkeypatch.setattr("retail.cli._make_runner", _boom)
+    rc = main_under_test(["validate", "--source-map", "mappings/t/source-map.yaml"])
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert "no database connection" in err.lower()

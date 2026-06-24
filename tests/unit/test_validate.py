@@ -260,3 +260,50 @@ def test_cli_imports_without_psycopg2() -> None:
         commands.update(a.choices.keys())
     assert "validate" in commands
     assert "check" in commands
+
+
+# ---------------------------------------------------------------------------
+# run_live_checks: the pure aggregator that runs all four checks against a
+# runner + a ValidationTargets bundle (driver-free; fake runner).
+# ---------------------------------------------------------------------------
+
+
+def _clean_targets():
+    return (
+        PkTarget(table="silver.t", pk_columns=("a", "b")),
+        DateCoverageTarget(
+            fact="gold.f",
+            fact_date="date_sk",
+            date_dim="gold.dim_date",
+            dim_date="date_sk",
+        ),
+        OrphanTarget(
+            fact="gold.f", fks=(("product_sk", "gold.dim_product", "product_sk"),)
+        ),
+        ReconcileTarget(silver="silver.t", gold="gold.f", measures=("amt",)),
+    )
+
+
+def test_run_live_checks_all_clean_returns_no_findings() -> None:
+    from retail.validate import ValidationTargets, run_live_checks
+
+    pk, dc, orph, rec = _clean_targets()
+    targets = ValidationTargets(pk=pk, date_coverage=dc, orphans=orph, reconcile=rec)
+    # FIFO: pk(count,distinct,null) -> coverage(missing) -> orphan(count) -> recon(s,g)
+    runner = FakeRunner([[(10, 10, 0)], [(0,)], [(0,)], [("5.00", "5.00")]])
+    findings = run_live_checks(runner, targets)
+    assert findings == []
+
+
+def test_run_live_checks_aggregates_findings_across_checks() -> None:
+    from retail.validate import ValidationTargets, run_live_checks
+
+    pk, dc, orph, rec = _clean_targets()
+    targets = ValidationTargets(pk=pk, date_coverage=dc, orphans=orph, reconcile=rec)
+    # a PK dup AND an orphan -> two ERROR findings from two different checks
+    runner = FakeRunner([[(10, 9, 0)], [(0,)], [(3,)], [("5.00", "5.00")]])
+    findings = run_live_checks(runner, targets)
+    assert len(findings) == 2
+    rule_ids = {f.rule_id for f in findings}
+    assert rule_ids == {"V-RC2", "V-RC16"}
+    assert all(f.severity == Severity.ERROR for f in findings)
