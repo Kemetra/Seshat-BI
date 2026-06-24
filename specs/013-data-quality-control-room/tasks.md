@@ -10,7 +10,7 @@ description: "Task list for the data quality control room (feature 013)"
 
 **Tests**: No new test framework is requested. The feature adds NO Python; acceptance
 is verified by (a) the existing unit suite staying green, (b) `retail check` staying
-exit 0 at the unchanged rule count (26), and (c) the multi-table measured-cell replay
+exit 0 at the unchanged rule count (current), and (c) the multi-table measured-cell replay
 (every numeric cell equals its underlying per-table source; `git status` shows zero
 modified per-table files). Those verification steps appear as explicit tasks below.
 
@@ -175,7 +175,7 @@ state-mutating gate run of its own and edited no per-table file.
 - [P] = different files, no dependency. The three user stories share `SKILL.md` and are
   therefore sequential within it.
 - The feature adds NO validator, NO gate, NO Python, NO CLI -- verification leans on
-  the unchanged rule count (26), unchanged `dependencies = []`, the green suite, and
+  the unchanged rule count (current), unchanged `dependencies = []`, the green suite, and
   the read-only measured-cell replay.
 - Every authored line must keep a finding's MEASURED NUMBER + its source path; an
   adjective or an untraceable number is a defect (hard rule #9, FR-008).

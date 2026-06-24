@@ -259,7 +259,7 @@ paths, citing the no-fake-confidence rule -- and that it issued no `retail check
 - **SC-001**: `.claude/skills/<control-room-skill>/SKILL.md` and
   `templates/data-quality-control-room.md` exist, ASCII + no BOM, frontmatter valid,
   skill registered by the harness; both generic (no worked-example specifics).
-- **SC-002**: `retail check` stays exit 0 at the unchanged rule count (26) with the new
+- **SC-002**: `retail check` stays exit 0 at the unchanged rule count (current) with the new
   skill + template; the full unit suite stays green; NO new Python; `dependencies = []`
   unchanged. (The feature adds NO rule and NO validator -- verified by the rule count
   and dependency set being unchanged.)

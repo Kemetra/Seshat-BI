@@ -35,7 +35,7 @@ readiness/issues/blockers files. Output: an on-demand consolidated view rendered
 `templates/data-quality-control-room.md`. No DB connection, no writes to inputs.
 
 **Testing**: The existing unit suite must stay green; `retail check` must stay exit 0
-at the unchanged rule count (26). Feature acceptance is a measured-cell-match replay:
+at the unchanged rule count (current). Feature acceptance is a measured-cell-match replay:
 given >= 2 tables with per-table evidence, every numeric cell in the view equals the
 count in its underlying source, ordering is worst-first, and `git status` shows zero
 modified per-table files (read-only proven). No new test framework.
