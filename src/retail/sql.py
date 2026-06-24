@@ -7,6 +7,34 @@ from .core import RuleContext
 
 _SCHEMA_TOKENS = ("raw", "marts", "bronze", "silver")
 
+# Zone tokens for schema_zone detection only.
+# NOTE: gold is intentionally NOT in _SCHEMA_TOKENS (it's the non-stale schema),
+# but schema_zone must recognize it as a distinct zone.
+_ZONE_TOKENS = ("bronze", "silver", "gold")
+
+# DDL verb modifier keywords that appear between verb and target name.
+# schema_zone skips these to find the first real target identifier.
+_DDL_MODIFIERS = frozenset(
+    {
+        "TABLE",
+        "VIEW",
+        "MATERIALIZED",
+        "INDEX",
+        "SEQUENCE",
+        "SCHEMA",
+        "OR",
+        "REPLACE",
+        "IF",
+        "NOT",
+        "EXISTS",
+        "TEMP",
+        "TEMPORARY",
+        "UNIQUE",
+        "CONCURRENTLY",
+        "ONLY",
+    }
+)
+
 
 @dataclass(frozen=True)
 class SqlToken:
@@ -84,3 +112,70 @@ def stale_schema_tokens(text: str) -> list[tuple[str, int]]:
         if after_create_schema or after_from_join or schema_qualifier:
             hits.append((low, tok.line))
     return hits
+
+
+def schema_zone(toks: list[SqlToken], stmt_start_idx: int) -> str:
+    """Return the schema zone of the DDL target object.
+
+    Given a token list and the index of the DDL verb (CREATE/ALTER/DROP),
+    locate the target object's schema qualifier and return one of:
+        "bronze" | "silver" | "gold" | "unknown"
+
+    Rules:
+    - Only inspects tokens up to the next ";" (statement boundary) to prevent
+      leakage from a preceding SET search_path statement.
+    - For CREATE/DROP INDEX, the target is the TABLE after the ON keyword,
+      not the index name itself.
+    - Only an explicitly detected <zone>.<name> pattern earns a zone.
+      An unqualified target, a search_path-only qualification, or anything
+      ambiguous returns "unknown" (fail-closed).
+    """
+    n = len(toks)
+    # Collect this statement's tokens up to (not including) the next ";".
+    stmt: list[SqlToken] = []
+    for i in range(stmt_start_idx, n):
+        if toks[i].text == ";":
+            break
+        stmt.append(toks[i])
+
+    if not stmt:
+        return "unknown"
+
+    verb = stmt[0].text.upper()
+    stmt_texts_upper = [t.text.upper() for t in stmt]
+
+    # Special case: CREATE INDEX / DROP INDEX -> zone is from the TABLE after ON.
+    # Detect: verb is CREATE/DROP and a modifier keyword INDEX is present before ON.
+    is_index_ddl = (
+        verb in ("CREATE", "DROP")
+        and "INDEX" in stmt_texts_upper
+        and "ON" in stmt_texts_upper
+    )
+    if is_index_ddl:
+        on_pos = stmt_texts_upper.index("ON")
+        # Token after ON should be <schema>.<name> or just <name>
+        if on_pos + 1 < len(stmt):
+            candidate = stmt[on_pos + 1].text.lower()
+            if candidate in _ZONE_TOKENS:
+                # Check for the dot after it
+                if on_pos + 2 < len(stmt) and stmt[on_pos + 2].text == ".":
+                    return candidate
+        return "unknown"
+
+    # General case: skip the verb and any modifier keywords to find the target.
+    # Walk forward from position 1 (skip verb), skip modifiers/keywords.
+    pos = 1
+    while pos < len(stmt) and stmt[pos].text.upper() in _DDL_MODIFIERS:
+        pos += 1
+
+    # At pos we should have the first "real" identifier.
+    if pos >= len(stmt):
+        return "unknown"
+
+    candidate = stmt[pos].text.lower()
+    if candidate in _ZONE_TOKENS:
+        # Must be followed by "." to be a schema qualifier.
+        if pos + 1 < len(stmt) and stmt[pos + 1].text == ".":
+            return candidate
+
+    return "unknown"

@@ -132,30 +132,36 @@ before declaring done — PK uniqueness, date coverage + contiguity, 0-orphans +
 cross-layer reconciliation. *Watch:* connect **read-only**; reconcile *every* measure, not a
 sample; count rows landing on each `-1` member as a data-quality signal.
 
-## 6. Known nuance — D13 / S4b policy
+## 6. D13 / S4b policy — RESOLVED (layer-aware S4b implemented)
 
 **What C086 did.** Both migrations are idempotent at the transaction level (DROP+CREATE inside
 one `BEGIN/COMMIT`, numbered `NNNN_`) and re-runnable after a bronze reload — satisfying ADR
-**D13's intent**. But they use **bare** `CREATE TABLE` / `ALTER TABLE` / `CREATE INDEX`, which
-trips the governance checker's **S4b** ("use `IF [NOT] EXISTS` / `OR REPLACE VIEW`") — the
-**22 S4b warnings** already observed on C086. Intent met; guarded-form letter not.
+**D13's intent**. They use **bare** `CREATE TABLE` / `ALTER TABLE` / `CREATE INDEX`, which is the
+*correct* idempotency for rebuildable marts (`CREATE TABLE IF NOT EXISTS` would wrongly preserve a
+stale schema). The original blanket S4b warned on this (22 warnings) — so the **rule** was wrong,
+not the SQL.
 
-**Rule it proves / the open decision.** This is the one item not closed — a **checker-policy
-decision**, not a build defect (S4b is a WARNING; it does not fail the gate).
+**Resolution (implemented, not just recommended).** S4b is now **layer-aware** (`src/retail/sql.py`
+`schema_zone()` + `src/retail/rules/sql.py`). The encoded policy:
+> **DROP+CREATE inside a `BEGIN/COMMIT` transaction is ALLOWED (no finding) for derived/rebuildable
+> `silver.*` / `gold.*` objects** — they regenerate from bronze, so a destructive rebuild is safe.
+> **A bare DROP/CREATE/ALTER on `bronze.*` (source-of-truth) is an ERROR** that blocks the build —
+> a blind DROP there risks destroying the only copy of source data. A bare silver/gold DDL **not**
+> in a transaction is a WARNING. **Fail-closed:** any target whose schema can't be detected
+> (unqualified name, `search_path`) is treated strictly (WARNING), never silently allowed.
 
-**Policy recommendation (layer-aware — record this):**
-> **DROP+CREATE inside a single `BEGIN/COMMIT` is an allowed idempotency pattern for
-> derived/rebuildable silver/gold analytics objects** (they can be regenerated from bronze, so a
-> destructive rebuild is safe and re-runnable). **It is not blindly accepted for bronze /
-> source-of-truth objects** — bronze is the faithful landing; a blind DROP+CREATE there risks
-> destroying the only copy of source data. A future S4b refinement should be **layer-aware**
-> (allow bare DROP+CREATE-in-transaction for `silver.*` / `gold.*`; require guarded forms or
-> extra scrutiny for `bronze.*`), rather than a blanket guarded-forms requirement.
+**Severity is now asymmetric by design:** bronze destructive op = ERROR (the catastrophe the gate
+exists to prevent); silver/gold non-idempotent-but-recoverable = WARNING; correct silver/gold
+rebuild-in-txn = pass. This makes S4b *stricter* where it matters and *quieter* where it doesn't.
+
+**Rule it proves.** ADR **D13** (idempotent rebuildable marts) + the governance layer's layer-aware
+enforcement. Verified: `retail check --repo .` now reports **0 S4b findings** on C086's silver/gold
+migrations (the 22 warnings resolved), with no new bronze ERROR (C086 has no bronze DROP).
 
 **Future tables — copy / watch.** *Copy:* keep silver/gold migrations as DROP+CREATE-in-one-
-transaction (idempotent, declares PKs/FKs cleanly). *Watch:* never blind-DROP a bronze/landing
-object; if S4b is later made layer-aware, silver/gold bare-DDL stops warning while bronze stays
-guarded.
+transaction — it's the sanctioned, S4b-clean idempotency pattern. *Watch:* **never** bare-DROP a
+`bronze.*`/landing object (S4b will ERROR and block); qualify your DDL targets (`silver.x`, not a
+bare `x` after `SET search_path`) or S4b fails closed to a WARNING.
 
 ## 7. Which validations should become future STATIC checker rules
 

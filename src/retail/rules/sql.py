@@ -7,7 +7,13 @@ from pathlib import PurePosixPath
 
 from ..core import Finding, RuleContext, Severity
 from ..registry import register
-from ..sql import SqlToken, iter_sql_files, stale_schema_tokens, tokenize_sql
+from ..sql import (
+    SqlToken,
+    iter_sql_files,
+    schema_zone,
+    stale_schema_tokens,
+    tokenize_sql,
+)
 
 _SNAKE = re.compile(r"^[a-z_][a-z0-9_]*$")
 # quoted/bracketed identifier in a declaration position
@@ -159,23 +165,83 @@ def _is_guarded(toks: list[SqlToken], idx: int) -> bool:
 
 @register("S4b", "migration guard form")
 def s4b_guard_form(ctx: RuleContext) -> list[Finding]:
+    """Layer-aware guard-form check.
+
+    Policy (per DDL statement):
+      - Any guarded form (IF [NOT] EXISTS / OR REPLACE VIEW) -> PASS regardless of zone.
+      - bronze bare DROP/CREATE/ALTER -> ERROR (blocks build).
+      - silver/gold bare + inside a BEGIN/COMMIT transaction -> PASS.
+      - silver/gold bare + NOT in a transaction -> WARNING.
+      - unknown/unqualified bare -> WARNING (fail-closed).
+    """
     findings: list[Finding] = []
+    _DDL_VERBS = frozenset({"CREATE", "ALTER", "DROP"})
+
     for rel in iter_sql_files(ctx):
         toks = [t for t in tokenize_sql(_read(ctx, rel)) if t.text]
+        in_txn = False  # stateful flag toggled by BEGIN / COMMIT / ROLLBACK
+
         for idx, tok in enumerate(toks):
-            if tok.text.upper() not in ("CREATE", "ALTER"):
+            upper = tok.text.upper()
+
+            # Track transaction boundaries.
+            if upper in ("BEGIN", "START"):
+                in_txn = True
                 continue
+            if upper in ("COMMIT", "ROLLBACK"):
+                in_txn = False
+                continue
+
+            if upper not in _DDL_VERBS:
+                continue
+
+            # Guarded forms pass unconditionally (any zone).
             if _is_guarded(toks, idx):
                 continue
-            findings.append(
-                Finding(
-                    rule_id="S4b",
-                    severity=Severity.WARNING,
-                    message=(
-                        f"bare {tok.text.upper()} is not an accepted guarded "
-                        "form (use IF [NOT] EXISTS / OR REPLACE VIEW)"
-                    ),
-                    locator=f"{rel}:{tok.line}",
+
+            zone = schema_zone(toks, idx)
+
+            if zone == "bronze":
+                findings.append(
+                    Finding(
+                        rule_id="S4b",
+                        severity=Severity.ERROR,
+                        message=(
+                            f"S4b bronze.* bare {upper} destroys/clobbers "
+                            "source-of-truth; use a guarded form "
+                            "(IF [NOT] EXISTS)"
+                        ),
+                        locator=f"{rel}:{tok.line}",
+                    )
                 )
-            )
+            elif zone in ("silver", "gold"):
+                if in_txn:
+                    # DROP+CREATE-in-transaction pattern: PASS (idempotent rebuild).
+                    continue
+                findings.append(
+                    Finding(
+                        rule_id="S4b",
+                        severity=Severity.WARNING,
+                        message=(
+                            f"S4b {zone}.* bare {upper} not in a transaction; "
+                            "wrap in BEGIN/COMMIT or use a guarded form "
+                            "(IF [NOT] EXISTS / OR REPLACE VIEW)"
+                        ),
+                        locator=f"{rel}:{tok.line}",
+                    )
+                )
+            else:
+                # unknown / unqualified -> fail-closed WARNING.
+                findings.append(
+                    Finding(
+                        rule_id="S4b",
+                        severity=Severity.WARNING,
+                        message=(
+                            f"S4b bare {upper}: target schema undetermined "
+                            "(unqualified or search_path); use a qualified "
+                            "name + guarded form, or wrap in BEGIN/COMMIT"
+                        ),
+                        locator=f"{rel}:{tok.line}",
+                    )
+                )
     return findings
