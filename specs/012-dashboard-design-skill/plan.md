@@ -77,10 +77,10 @@ rule 7 (generic) = FR-009; rule 8 (docs/templates first) = the whole skill-first
 
 ```text
 specs/012-dashboard-design-skill/
-├── spec.md       # the feature spec (committed)
-├── plan.md       # this file
-├── tasks.md      # the task list (speckit-tasks output)
-└── analysis.md   # cross-artifact consistency findings (speckit-analyze output)
+|-- spec.md       # the feature spec (committed)
+|-- plan.md       # this file
+|-- tasks.md      # the task list (speckit-tasks output)
+`-- analysis.md   # cross-artifact consistency findings (speckit-analyze output)
 ```
 
 No `research.md` / `data-model.md` / `contracts/` / `quickstart.md`: there is no
@@ -92,11 +92,11 @@ this feature consumes, owned by F009/F010), and no API contract (a skill, not a 
 
 ```text
 .claude/skills/dashboard-design/
-└── SKILL.md      # the design verb: gate-check -> author guidance -> stop at publish boundary
+`-- SKILL.md      # the design verb: gate-check -> author guidance -> stop at publish boundary
 
 templates/                              # OPTIONAL, generic scaffolds (no C086 values)
-├── dashboard-layout.md                 # blank layout-plan + visual-list scaffold
-└── visual-contract-binding-map.md      # blank visual->contract binding map scaffold
+|-- dashboard-layout.md                 # blank layout-plan + visual-list scaffold
+`-- visual-contract-binding-map.md      # blank visual->contract binding map scaffold
 ```
 
 **Structure Decision**: Pure skill at `.claude/skills/dashboard-design/SKILL.md`,
