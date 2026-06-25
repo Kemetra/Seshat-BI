@@ -6,6 +6,7 @@ This repository is not just a collection of SQL scripts or Power BI files. It is
 
 > Product: **Tower BI Agent Kit**  
 > Operating spine: **Tower BI Readiness System**  
+> Visual brand layer: **Seshat BI**  
 > Substrate: **DigitalOcean PostgreSQL** medallion warehouse  
 > BI target: **Power BI PBIP** reading from `gold` only
 
@@ -40,6 +41,22 @@ No gold goes to Power BI before validation.
 No dashboard is designed before metrics are defined.
 No Power BI execution adapter runs before semantic-model readiness.
 ```
+
+---
+
+## Visual identity
+
+The public-facing visual identity is **Seshat BI**: an Egyptian knowledge-and-measurement motif for a governed BI product.
+
+Core visual rules:
+
+- The Seshat star is always **seven-pointed**, never eight-pointed.
+- The Seshat figure should look like clean Egyptian-inspired writing/record-keeping line art.
+- Deep navy is the technical base, rich gold is the governance/knowledge accent, and teal is the modern data/BI accent.
+- Egyptian motifs are used as brand accents; dashboards still prioritize readability, metric contracts, and validation evidence.
+
+Brand guide: [`docs/brand/visual-identity.md`](docs/brand/visual-identity.md)  
+Reusable starter mark: [`assets/brand/seshat-seven-star.svg`](assets/brand/seshat-seven-star.svg)
 
 ---
 
@@ -112,6 +129,8 @@ The repo separates responsibilities clearly:
 |------|---------|
 | `AGENTS.md` | Short operating contract for AI agents. Read this first. |
 | `.specify/` | Spec-Kit constitution and governance memory. |
+| `assets/brand/` | Reusable visual identity assets. |
+| `docs/brand/` | Seshat BI visual identity and brand rules. |
 | `specs/` | Feature specs, plans, tasks, and checklists. |
 | `src/retail/` | The `retail` CLI package: static and live governance surfaces. |
 | `warehouse/` | Tool-agnostic medallion SQL: `bronze`, `silver`, `gold`, migrations. |
