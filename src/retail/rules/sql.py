@@ -366,9 +366,15 @@ def _strip_sql_noise(text: str) -> str:
 _CREATE_GOLD_DIM = re.compile(
     r"\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?gold\.(dim_\w+)", re.IGNORECASE
 )
-# An INSERT INTO gold.dim_x whose statement (up to ';') contains a -1 literal.
+# An INSERT INTO gold.dim_x whose statement (up to ';') seeds a -1 member in the
+# VALUES KEY position -- i.e. `... VALUES (-1, ...)` (the surrogate key column).
+# Anchoring on the VALUES-position -1 (not -1 ANYWHERE) is shared by S6 (entity dims
+# must HAVE such a member) and S8 (date dims must NOT), and excludes arithmetic like
+# `extract(month FROM d) - 1` which is not an unknown-member insert (Codex review:
+# S8 is ERROR, so a loose `-1`-anywhere match would block a valid calendar). Both
+# `VALUES (-1, ...)` and `OVERRIDING SYSTEM VALUE VALUES (-1, ...)` match.
 _INSERT_GOLD_DIM_MINUS1 = re.compile(
-    r"\bINSERT\s+INTO\s+gold\.(dim_\w+)\b[^;]*?(?<![\w.])-\s*1\b",
+    r"\bINSERT\s+INTO\s+gold\.(dim_\w+)\b[^;]*?\bVALUES\s*\(\s*-\s*1\b",
     re.IGNORECASE | re.DOTALL,
 )
 

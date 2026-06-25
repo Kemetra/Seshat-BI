@@ -277,6 +277,45 @@ def test_s8_exempts_test_fixtures(tmp_path: Path) -> None:
     assert findings == [], "tests/ fixtures are exempt from the live scan"
 
 
+def test_s8_ignores_minus_one_arithmetic_in_date_insert(tmp_path: Path) -> None:
+    """S8 must NOT flag a valid date-dim insert that uses `- 1` ARITHMETIC.
+
+    Regression guard (2026-06-25 Codex review): the old pattern matched `-1` ANYWHERE
+    before the `;`, so a calendar deriving e.g. a zero-based month (`extract(month
+    FROM d) - 1`) or a previous-day offset tripped S8 -- and since S8 is ERROR it would
+    BLOCK a perfectly valid marked calendar. Only a `-1` in the VALUES/key position is
+    an unknown member; arithmetic `- 1` is not.
+    """
+    rel = _write(
+        tmp_path,
+        "warehouse/migrations/0002_gold.sql",
+        "CREATE TABLE gold.dim_date (date_sk int, full_date date, month_idx int);\n"
+        "INSERT INTO gold.dim_date\n"
+        "SELECT (to_char(g.d,'YYYYMMDD'))::int, g.d::date,\n"
+        "       extract(month FROM g.d)::int - 1\n"  # zero-based month -- arithmetic, not a member
+        "FROM generate_series(DATE '2023-01-01', DATE '2025-12-31',"
+        " INTERVAL '1 day') AS g(d);\n",
+    )
+    findings = list(s8_date_dim_no_unknown_member(_ctx(tmp_path, rel)))
+    assert findings == [], (
+        "S8 must not treat arithmetic `- 1` as an unknown member; "
+        f"got false-positive: {findings}"
+    )
+
+
+def test_s8_still_flags_values_minus_one_after_narrowing(tmp_path: Path) -> None:
+    """The narrowing must NOT reopen Codex #1: a real VALUES(-1,...) member still ERRORs."""
+    rel = _write(
+        tmp_path,
+        "warehouse/migrations/0002_gold.sql",
+        "CREATE TABLE gold.dim_date (date_sk int, full_date date);\n"
+        "INSERT INTO gold.dim_date VALUES (-1, NULL);\n",
+    )
+    findings = list(s8_date_dim_no_unknown_member(_ctx(tmp_path, rel)))
+    assert findings, "S8 must STILL flag a real VALUES(-1,...) date member"
+    assert findings[0].rule_id == "S8"
+
+
 # ===========================================================================
 # S7 -- contiguous date dim (enforces RC15)
 # ===========================================================================

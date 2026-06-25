@@ -42,7 +42,7 @@ defaults:
       reason: "no returns in this source -- all measures strictly positive, no transaction-type/return column; data owner confirmed returns live in a separate figure/system. is_return is N/A here."
       detail_in: "mappings/retail_store_sales/assumptions.md"
     - id: "RC4"
-      reason: "customer_id is a pseudonymous surrogate (CUST_xx), not raw PII; PROPOSED keep as a dimension pending governance sign-off rather than the RC4 auto-drop. OPEN (Q1)."
+      reason: "customer_id is a pseudonymous surrogate (CUST_xx), not raw PII; KEEP as a dimension (RC4 auto-drop deviation). Q1 RESOLVED 2026-06-25 (data owner): keep, no raw PII."
       detail_in: "mappings/retail_store_sales/unresolved-questions.md"
 
 # -----------------------------------------------------------------------------
@@ -61,8 +61,8 @@ columns:
     gold_placement: "degenerate_dim"
 
   - source_name: "customer_id"
-    decision: "keep"                       # PENDING governance (Q1); default RC4 = drop
-    reason: "pseudonymous customer surrogate (CUST_xx, 25 distinct) -> dim_customer. NOT raw PII; kept pending governance sign-off (deviation from RC4)."
+    decision: "keep"                       # Q1 RESOLVED (data owner 2026-06-25); RC4 deviation stands
+    reason: "pseudonymous customer surrogate (CUST_xx, 25 distinct) -> dim_customer. NOT raw PII; KEPT (Q1 resolved 2026-06-25, deviation from the RC4 auto-drop)."
     rename_to: "customer_id"
     silver_type: "text"
     missing_policy: "null"
@@ -143,10 +143,10 @@ columns:
 
   - source_name: "discount_applied"
     decision: "keep"
-    reason: "discount FLAG (True/False); NOT a return marker. 33.39% blank -> blank semantics OPEN (Q2). Kept as a fact attribute / degenerate dim pending the blank ruling."
+    reason: "discount FLAG (True/False); NOT a return marker. 33.39% blank. Q2 RESOLVED 2026-06-25 (data owner): a blank is UNKNOWN -> NULL boolean, NOT coerced to False; discount metrics EXCLUDE unknowns. Kept as a degenerate dim on the fact."
     rename_to: "discount_applied"
-    silver_type: "text"                    # keep as text until Q2 resolves blank=unknown vs False
-    missing_policy: "null"                 # RC5 baseline; do NOT auto-coerce blank to False (Q2)
+    silver_type: "boolean"                 # Q2 resolved: CASE lower(NULLIF(x,'')) -> true/false, blank -> NULL
+    missing_policy: "null"                 # RC5: blank = unknown -> NULL (NOT coerced to False), per Q2
     pii: false
     gold_placement: "degenerate_dim"
 
@@ -195,7 +195,7 @@ gold_star:
 
   degenerate_dimensions:
     - "transaction_id"                     # the grain key, no attributes
-    - "discount_applied"                   # discount flag (pending Q2)
+    - "discount_applied"                   # discount flag (boolean; Q2 resolved -> blank = NULL unknown)
 
   date_dimension:
     name: "gold.dim_date_rss"

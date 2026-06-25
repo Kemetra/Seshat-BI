@@ -60,6 +60,37 @@ def test_norm_headers_triple_collision_stays_unique() -> None:
     assert len(out) == len(set(out)), f"headers must be unique, got: {out}"
 
 
+def test_norm_headers_reserves_lineage_column_names() -> None:
+    """#2: a source header normalizing to a lineage column must NOT collide with it.
+
+    The loader appends `_source_file` / `_loaded_at` lineage columns. A source header
+    that normalizes to either would create the same PostgreSQL identifier twice ->
+    CREATE TABLE fails. norm_headers must rename the colliding SOURCE header.
+    """
+    out = lbc.norm_headers(["_source_file", "amount", "_loaded_at"])
+    assert "_source_file" not in out, (
+        "the source header must not claim the lineage name"
+    )
+    assert "_loaded_at" not in out, "the source header must not claim the lineage name"
+    assert len(out) == 3 and len(set(out)) == 3, f"all unique, got: {out}"
+
+
+def test_norm_headers_leading_digit_is_downstream_safe() -> None:
+    """#4: a header normalizing to a leading-digit name must be a valid unquoted ident.
+
+    `2023 sales` -> `2023_sales` loads quoted in bronze but `profile._safe_identifier`
+    (and generated SQL) only accept ^[A-Za-z_]. norm_headers must emit a name that
+    starts with a letter/underscore so the rest of the toolchain can use it unquoted.
+    """
+    import re
+
+    out = lbc.norm_headers(["2023 sales", "Total Amount"])
+    ident = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+    for name in out:
+        assert ident.match(name), f"{name!r} is not a valid unquoted identifier"
+    assert len(set(out)) == 2
+
+
 # --- #8 record count, not physical lines -------------------------------------
 
 

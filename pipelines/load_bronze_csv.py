@@ -75,23 +75,39 @@ def connect(cluster_id: str, database: str):
     return conn
 
 
-def norm_headers(headers: list[str]) -> list[str]:
-    """Deterministic snake_case; collision-safe (duplicate names get _N suffix).
+# Lineage columns the loader appends to every bronze table. A source header that
+# normalizes to one of these is renamed (reserved below) so CREATE TABLE never emits
+# a duplicate identifier (2026-06-25 Codex review #2).
+_LINEAGE_COLS = ("_source_file", "_loaded_at")
 
-    A GENERATED suffix name is itself reserved (added to `seen` and `used`), so a
-    later real header that matches a generated name (e.g. `["A","A","A_2"]` -> a,
-    a_2(gen), a_2(real)) gets a fresh suffix instead of silently duplicating
-    (2026-06-25 Codex review #5). The result is always all-unique.
+
+def norm_headers(headers: list[str]) -> list[str]:
+    """Deterministic snake_case identifiers that the WHOLE toolchain accepts unquoted.
+
+    Every emitted name matches ^[A-Za-z_][A-Za-z0-9_]* (the unquoted-identifier subset
+    that `profile._safe_identifier` and the generated SQL require) and is unique:
+
+    - A GENERATED suffix name is itself reserved, so a later real header matching a
+      generated name (`["A","A","A_2"]` -> a, a_2(gen), a_2(real)) gets a fresh suffix
+      instead of silently duplicating (Codex review #5).
+    - A name that would START WITH A DIGIT (e.g. `2023 sales` -> `2023_sales`) is
+      prefixed `col_` so it is a valid UNQUOTED identifier downstream -- otherwise it
+      loads quoted into bronze but breaks at profiling/build time (Codex review #4).
+    - The lineage column names (`_source_file` / `_loaded_at`) are pre-reserved, so a
+      colliding SOURCE header is renamed rather than clashing with the appended
+      lineage columns (Codex review #2).
     """
     counts: dict[str, int] = {}
-    used: set[str] = set()
+    used: set[str] = set(_LINEAGE_COLS)  # reserve lineage names up front (#2)
     out: list[str] = []
     for h in headers:
         s = re.sub(r"[^\w]+", "_", (h or "").strip().lower(), flags=re.UNICODE)
         s = re.sub(r"_+", "_", s).strip("_") or "col"
+        if s[0].isdigit():
+            s = f"col_{s}"  # leading-digit -> valid unquoted identifier (#4)
         candidate = s
         # bump the suffix until the candidate is genuinely unused (covers a real
-        # header colliding with a previously-generated suffix name)
+        # header colliding with a previously-generated suffix OR a lineage name)
         while candidate in used:
             counts[s] = counts.get(s, 1) + 1
             candidate = f"{s}_{counts[s]}"
