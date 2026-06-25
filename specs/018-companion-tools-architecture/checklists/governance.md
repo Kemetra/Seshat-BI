@@ -70,7 +70,7 @@ Core Authority" gate for F024.
       five future deliverables; CITE the worked example. (Allowed operations)
 - [ ] CHK-G22 No runtime code, UI, dbt, Dagster, or Power BI execution code is written. (FR-010; Forbidden operations)
 - [ ] CHK-G23 None of the five future deliverables (product-modules.md,
-      core-vs-modules-and-adapters.md, ADR 0006, module-contract.md, adapter-contract.md) is
+      core-vs-modules-and-adapters.md, ADR 0008, module-contract.md, adapter-contract.md) is
       created this slice -- enumerated only. (FR-009; Forbidden operations)
 - [ ] CHK-G24 No `retail check` rule, CLI verb, conformance checker, or readiness stage is
       added; `retail check` stays exit 0 and no new rule is added. (FR-010, FR-012, SC-005)

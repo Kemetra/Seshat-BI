@@ -135,7 +135,7 @@ truth-creation and self-approval.
 
 - [ ] T014 Enumerate (do NOT create) the five future deliverables in `spec.md` + `plan.md`:
       `docs/architecture/product-modules.md`, `docs/architecture/core-vs-modules-and-adapters.md`,
-      `docs/decisions/0006-core-authority-vs-product-modules.md`, `templates/module-contract.md`,
+      `docs/decisions/0008-core-authority-vs-product-modules.md`, `templates/module-contract.md`,
       `templates/adapter-contract.md` -- as planned outputs, never authored this slice. [FR-009]
 - [ ] T015 Confirm no numeric/maturity score appears anywhere; readiness stays status +
       evidence + blockers; the deferred maturity concept is parked to F033. [FR-011]
@@ -159,7 +159,7 @@ is implemented. These are FUTURE work; this slice writes none of them.
 - [ ] T020 [FUTURE] Author `docs/architecture/core-vs-modules-and-adapters.md`: the prose
       narrative of the authority boundary + the module-vs-adapter seam + the worked shipped
       classification.
-- [ ] T021 [FUTURE] Author `docs/decisions/0006-core-authority-vs-product-modules.md`: the ADR
+- [ ] T021 [FUTURE] Author `docs/decisions/0008-core-authority-vs-product-modules.md`: the ADR
       recording why the authority cut is orthogonal to the six layers and why only Core
       Authority owns truth.
 - [ ] T022 [FUTURE] Author `templates/module-contract.md`: the copy-me declaration every Module

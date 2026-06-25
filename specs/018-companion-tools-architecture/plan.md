@@ -109,7 +109,7 @@ docs/architecture/
 `-- core-vs-modules-and-adapters.md        # FUTURE -- prose narrative of the authority boundary + module-vs-adapter seam + shipped classification
 
 docs/decisions/
-`-- 0006-core-authority-vs-product-modules.md  # FUTURE -- ADR: why the authority cut is orthogonal to the six layers; why only Core Authority owns truth
+`-- 0008-core-authority-vs-product-modules.md  # FUTURE -- ADR: why the authority cut is orthogonal to the six layers; why only Core Authority owns truth
 
 templates/
 |-- module-contract.md                     # FUTURE -- copy-me declaration every Module fills (category + capability level + reads + derived evidence + forbidden ops)

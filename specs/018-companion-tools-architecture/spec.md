@@ -180,7 +180,7 @@ Future deliverables this feature PLANS (enumerated, NOT created now):
 - `docs/architecture/core-vs-modules-and-adapters.md` -- the prose narrative of the
   authority boundary and the module-vs-adapter seam, with the shipped-feature
   classification worked through.
-- `docs/decisions/0006-core-authority-vs-product-modules.md` -- the ADR recording WHY the
+- `docs/decisions/0008-core-authority-vs-product-modules.md` -- the ADR recording WHY the
   authority cut is orthogonal to the six layers and WHY only Core Authority owns truth.
 - `templates/module-contract.md` -- the copy-me declaration every future Module fills
   (category = Product Module; capability = read-only | artifact-writing | execution-capable;
@@ -333,7 +333,7 @@ distinguishing feature recorded is "no per-invocation human trigger".
   `pass`.
 - **FR-009**: Enumerate (do NOT create) the five future deliverables: `docs/architecture/
   product-modules.md`, `docs/architecture/core-vs-modules-and-adapters.md`,
-  `docs/decisions/0006-core-authority-vs-product-modules.md`, `templates/module-contract.md`,
+  `docs/decisions/0008-core-authority-vs-product-modules.md`, `templates/module-contract.md`,
   `templates/adapter-contract.md`.
 - **FR-010**: This feature MUST add NO runtime code, NO UI, NO dbt, NO Dagster, NO Power BI
   execution, NO `retail check` rule, and NO readiness stage. `retail check` stays exit 0 and
@@ -417,7 +417,7 @@ approving a metric/mapping remain Core Authority operations owned by a named hum
 
 - Writing any runtime code, UI, dbt, Dagster, or Power BI execution code.
 - Creating any of the five future deliverables (`product-modules.md`,
-  `core-vs-modules-and-adapters.md`, ADR 0006, `module-contract.md`, `adapter-contract.md`)
+  `core-vs-modules-and-adapters.md`, ADR 0008, `module-contract.md`, `adapter-contract.md`)
   in this slice -- they are enumerated, not authored.
 - Adding a `retail check` rule, a CLI verb, a readiness stage, or a conformance checker.
 - Emitting a numeric/maturity score for any tool (rule #9).

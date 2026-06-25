@@ -72,7 +72,7 @@
   shipped features", not left as a clarification marker. This is the literal meaning of
   "formalize, do not reinvent".
 - The five future deliverables (`product-modules.md`, `core-vs-modules-and-adapters.md`, ADR
-  0006, `module-contract.md`, `adapter-contract.md`) are enumerated as planned outputs and are
+  0008, `module-contract.md`, `adapter-contract.md`) are enumerated as planned outputs and are
   scheduled as Phase 7 build tasks in `tasks.md`, never as this slice's output.
 - Principle V judgment calls (a proposed truth-creating tool, an adapter asked to define what
   it executes) are deliberately surfaced as stop-and-ask edge cases, not auto-resolved.
