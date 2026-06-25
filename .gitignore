@@ -53,3 +53,12 @@ build/
 # how Claude Code launches it).
 *.vsix
 tools/powerbi-modeling-mcp/
+
+# --- Agent-harness runtime scratch (machine-local, never committed) ---
+# Per-run scratch created by coding-agent harnesses: Codex (.codex/), other
+# agent runtimes (.agents/), and the temporary git worktrees a Workflow run
+# mounts (.claude/worktrees/). NOTE: only .claude/worktrees/ is ignored, NOT
+# all of .claude/ -- .claude/skills/ and .claude/workflows/ are tracked source.
+.agents/
+.codex/
+.claude/worktrees/
