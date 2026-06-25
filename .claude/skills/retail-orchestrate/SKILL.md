@@ -68,9 +68,10 @@ field into two sources of truth. You may READ `Gate status`; you may not write
 | GATE Mapping approval | (read state) | -- | reviewer set `Gate status: CLEARED` | silver |
 | 5 Build silver | **retail-build-warehouse** (authors the silver `.sql`) -> then **[SEAM: a human APPLIES the SQL; execution is the deferred DB-write seam]** | `retail check` | exit 0 | gold |
 | 6 Build gold (star) | **retail-build-warehouse** (authors the gold star `.sql`) -> then **[SEAM: human applies]** | `retail check` | exit 0 | validate |
-| ACCEPT Live validate | **retail-validate** | `retail validate --source-map mappings/<table>/source-map.yaml` | exit 0 (or deferred-boundary report) | PBIP |
+| ACCEPT Live validate | **retail-validate** | `retail validate --source-map mappings/<table>/source-map.yaml` | exit 0 (or deferred-boundary report) | semantic |
+| GATE Semantic Model Ready | **retail-semantic-check** (read-only; computes the Stage-5 verdict: `retail check` clean AND every measure binds to an approved metric contract) | `retail check` + contract-binding read | verdict `pass` (a green checker is necessary-NOT-sufficient) | PBIP |
 | 7 Build Power BI model | **pbip-workflow** + `powerbi-analyst` agent | `retail check` | exit 0 | done |
-| PBIP build engine | **[SEAM -- pbi-cli deferred adapter, Principle II]** | -- | -- | -- |
+| PBIP build engine | **[SEAM -- pbi-cli deferred adapter, Principle II; gated on Semantic Model Ready = pass]** | -- | -- | -- |
 
 At every gate node, run the SAME command CI runs (`retail check`, and
 `retail validate` once creds exist) so local behavior equals the unattended gate.
@@ -151,7 +152,7 @@ HARD-STOPS instead of being auto-fixed.
 
 ## See also
 
-- The verbs: `.claude/skills/{source-mapping,retail-govern,retail-validate,pbip-workflow}/SKILL.md`.
+- The verbs: `.claude/skills/{source-mapping,retail-govern,retail-validate,retail-semantic-check,pbip-workflow}/SKILL.md`.
 - The spec + posture: `specs/005-layer-d-orchestration/spec.md`;
   `.specify/memory/constitution.md` Principles I, IV, V, VIII.
 - The method + exit gates: `docs/medallion-playbook.md`.

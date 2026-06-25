@@ -105,6 +105,38 @@ and named approvals):
   the metric owner; this feature reads them, it does not define them.
 - These are surfaced, not answered.
 
+## Post-implementation verification note (2026-06-25)
+
+The skill `.claude/skills/retail-semantic-check/SKILL.md` was authored and the SC-003
+central property was traced manually against the committed RetailGold model (14
+PascalCase measures: TotalSales, NetSales, TotalTax, TotalDiscount, TotalQuantity,
+SalesLineCount, AverageLineValue, DiscountRate, EffectiveTaxRate, ReturnSales,
+ReturnRate, SalesYTD, SalesPY, SalesYoYPct) with the F009 filled store
+(`mappings/c086/metrics/`) confirmed ABSENT. Two branches were walked:
+
+- **Binding branch** (precondition `gold_ready: pass`, exercised via a throwaway,
+  uncommitted `mappings/c086/readiness-status.yaml`): step 2 `retail check` exit 0
+  recorded as MECHANICAL-pass-only; step 4 finds zero filled, owner-approved contracts
+  -> verdict **`blocked`**, not `pass`. The existence of `templates/metric-contract.yaml`
+  did NOT flip step 4 to "store present" (the binding target is a FILLED contract under
+  `mappings/<table>/metrics/`, not the template). This is the literal SC-003 /
+  Acceptance-3 outcome.
+- **Ordering branch** (the REAL repo state today): there is NO
+  `mappings/c086/readiness-status.yaml`, so Gold Ready cannot be proven `pass` and the
+  skill emits **`not_started`** at step 1 and STOPS (before reaching the binding step).
+
+Refinement of N2: the spec prose (lines 70-81 of spec.md) describes c086's live verdict
+TODAY as `blocked`, but the truthful live verdict today is `not_started` -- because
+c086's gold has not been live-validated (the deferred DB boundary; no readiness file
+records `gold_ready: pass`). This is NOT a skill defect: `not_started` is the correct,
+more-honest state when the prior stage is unproven, and the ordering gate (Principle
+VIII) correctly takes precedence over the `blocked` the later steps would produce.
+Acceptance-1 (`not_started`) and Acceptance-3 (`blocked`) describe DIFFERENT
+preconditions; both satisfy the central property (never a false `pass`). The skill's
+step-1 wording was tightened to treat an absent/unreadable readiness file explicitly as
+`not_started`. No `retail check` rule was added (count held at 27); the unit suite
+(250 tests) and `retail check` (exit 0) stayed green with the skill present.
+
 ## Verdict
 
 All three artifacts are mutually consistent, fully cover the requirements, and conform
