@@ -13,7 +13,9 @@ binds_to:
   pii_sensitive: false
 
 readiness:
-  status: "not_started"          # PROPOSAL awaiting owner approval (Principle V)
+  status: "pass"
   evidence:
+    - "approved by data_owner on 2026-06-25"
     - "gold.fct_sales_rss built + live-validated 2026-06-25 (penny-exact total_spent sum = 1,552,071.00)"
+    - "NULL handling confirmed forced: 604 NULLs are truly unknown (not recoverable from price*qty)"
   blocking_reasons: []

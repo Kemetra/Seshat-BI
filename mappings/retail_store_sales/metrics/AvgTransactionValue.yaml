@@ -22,7 +22,8 @@ binds_to:
   pii_sensitive: false
 
 readiness:
-  status: "not_started"
+  status: "pass"
   evidence:
-    - "numerator = TotalSales; denominator = transactions with non-NULL total_spent (11,971), aligned to the numerator's row-set -- verified on gold.fct_sales_rss 2026-06-25"
+    - "approved by data_owner on 2026-06-25"
+    - "numerator = TotalSales; denominator = transactions with non-NULL total_spent (11,971), aligned to the numerator's row-set -- verified on gold.fct_sales_rss 2026-06-25 (= 129.65)"
   blocking_reasons: []

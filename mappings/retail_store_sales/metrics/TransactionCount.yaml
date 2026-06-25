@@ -12,7 +12,8 @@ binds_to:
   pii_sensitive: false
 
 readiness:
-  status: "not_started"
+  status: "pass"
   evidence:
+    - "approved by data_owner on 2026-06-25"
     - "gold.fct_sales_rss built + live-validated 2026-06-25 (12,575 rows; transaction_id unique)"
   blocking_reasons: []

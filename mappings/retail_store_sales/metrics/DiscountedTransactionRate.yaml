@@ -4,7 +4,16 @@
 
 name: "DiscountedTransactionRate"
 grain: "a RATIO valid at any rollup; recomputed at the current filter grain. NOT additive."
-formula_intent: "The share of transactions that had a discount applied -- discounted transactions divided by total transactions. AMBIGUOUS until Q2 is settled: 33.39% of rows have a BLANK discount_applied (unknown). The data owner ruled blank = UNKNOWN (not False), so this metric must decide whether the denominator EXCLUDES unknowns (rate among known-discount-status transactions) or INCLUDES them (treating unknown as not-discounted, which would understate the rate). Until that is fixed, the metric is not computable without biasing it."
+formula_intent: >-
+  The share of transactions that had a discount applied -- transactions with
+  discount_applied = TRUE divided by ALL transactions (denominator = the full
+  transaction count, 12,575). PER OWNER RULING (2026-06-25): unknown discount status
+  (NULL, 33.39% / 4,199 rows) is counted as NOT-DISCOUNTED in the denominator. On the
+  current data this is 4,219 / 12,575 = 33.55%.
+  CAVEAT (material -- carry to any dashboard): this UNDERSTATES the true discount rate,
+  because 33% of transactions have an UNKNOWN (not confirmed-False) discount status. The
+  rate among transactions with a KNOWN status is 50.37% (4,219 / 8,376). The 33.55%
+  figure assumes every unknown was un-discounted, which is a floor, not the true rate.
 owner: "<metric owner -- the user, acting as data owner>"
 binds_to:
   gold_table: "gold.fct_sales_rss"
@@ -14,7 +23,8 @@ binds_to:
   pii_sensitive: false
 
 readiness:
-  status: "blocked"
-  evidence: []
-  blocking_reasons:
-    - "Q2 follow-on: discount_applied is NULL (unknown) on 33.39% (4,199) of rows. The rate's denominator treatment of unknowns is undecided -- excluding vs including them changes the number materially. The metric owner must rule how unknowns are handled before this contract is approvable; the agent will not pick a default that biases the rate."
+  status: "pass"
+  evidence:
+    - "approved by data_owner on 2026-06-25 (ruled: include unknowns as not-discounted; denominator = all transactions)"
+    - "rate = 4,219 / 12,575 = 33.55% on gold.fct_sales_rss"
+  blocking_reasons: []
