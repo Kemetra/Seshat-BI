@@ -92,7 +92,9 @@ def load_targets(path: Path | str) -> ValidationTargets:
         fks.append((sk, dim_name, sk))
 
     date_dim = _require(star, "date_dimension", "gold_star")
-    date_dim_name = _gold_qualify(_require(date_dim, "name", "gold_star.date_dimension"))
+    date_dim_name = _gold_qualify(
+        _require(date_dim, "name", "gold_star.date_dimension")
+    )
     date_sk = _require(date_dim, "surrogate_key", "gold_star.date_dimension")
 
     return ValidationTargets(

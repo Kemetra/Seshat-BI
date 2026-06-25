@@ -62,15 +62,18 @@ def test_s1_ignores_quoted_text_in_comments(tmp_path: Path) -> None:
     spaced phrase in a comment is prose, not a PG identifier.
     """
     sql = (
-        '-- Build silver.retail_store_sales from the dirty Kaggle "retail store sales" CSV.\n'
-        "/* block comment with a \"Bad Quoted Name\" inside */\n"
+        "-- Build silver.retail_store_sales from the dirty Kaggle "
+        '"retail store sales" CSV.\n'
+        '/* block comment with a "Bad Quoted Name" inside */\n'
         "CREATE TABLE silver.retail_store_sales (transaction_id text);\n"
     )
     ctx = _ctx(tmp_path, _stage_text(tmp_path, "comment_quotes.sql", sql))
     assert list(s1_snake_case_identifiers(ctx)) == []
 
 
-def test_s1_still_flags_real_quoted_identifier_after_comment_fix(tmp_path: Path) -> None:
+def test_s1_still_flags_real_quoted_identifier_after_comment_fix(
+    tmp_path: Path,
+) -> None:
     """The comment fix must NOT blind S1 to a real bad quoted identifier in code."""
     sql = (
         '-- a comment mentioning "ignored phrase"\n'

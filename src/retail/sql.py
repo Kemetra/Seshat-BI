@@ -104,7 +104,9 @@ def strip_sql_comments(text: str) -> str:
         if text.startswith("--", i):
             j = text.find("\n", i)
             end = n if j == -1 else j
-            out.append(" " * (end - i))  # keep columns; newline (if any) added next loop
+            out.append(
+                " " * (end - i)
+            )  # keep columns; newline (if any) added next loop
             i = end
             continue
         if text.startswith("/*", i):

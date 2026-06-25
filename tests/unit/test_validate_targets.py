@@ -90,6 +90,7 @@ def test_bare_gold_names_are_schema_qualified_to_gold() -> None:
     name (e.g. `gold.fct_sales_rss`) untouched -- so BOTH conventions work.
     """
     import tempfile
+
     from retail.validate_targets import load_targets
 
     bare = (
@@ -121,6 +122,7 @@ def test_bare_gold_names_are_schema_qualified_to_gold() -> None:
 def test_already_qualified_gold_names_are_left_untouched() -> None:
     """An already-`gold.`-qualified gold_star name must NOT be double-qualified."""
     import tempfile
+
     from retail.validate_targets import load_targets
 
     qualified = (

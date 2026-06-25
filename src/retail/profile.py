@@ -73,7 +73,7 @@ _TEXT_TYPES = frozenset(
 
 
 def _discover_columns(runner: QueryRunner, table: str) -> tuple[tuple[str, str], ...]:
-    """(column_name, data_type) for ``schema.table`` from information_schema, in order."""
+    """Ordered (column_name, data_type) for ``schema.table`` from information_schema."""
     if "." in table:
         schema, name = table.split(".", 1)
     else:
