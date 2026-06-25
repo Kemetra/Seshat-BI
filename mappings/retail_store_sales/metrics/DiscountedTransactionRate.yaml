@@ -1,0 +1,20 @@
+# Metric contract -- DiscountedTransactionRate (filled instance for retail_store_sales)
+# F009 define-layer. BLOCKED: the denominator/numerator depend on the Q2 ruling about
+# what a BLANK discount_applied means -- a human judgment call (Principle V).
+
+name: "DiscountedTransactionRate"
+grain: "a RATIO valid at any rollup; recomputed at the current filter grain. NOT additive."
+formula_intent: "The share of transactions that had a discount applied -- discounted transactions divided by total transactions. AMBIGUOUS until Q2 is settled: 33.39% of rows have a BLANK discount_applied (unknown). The data owner ruled blank = UNKNOWN (not False), so this metric must decide whether the denominator EXCLUDES unknowns (rate among known-discount-status transactions) or INCLUDES them (treating unknown as not-discounted, which would understate the rate). Until that is fixed, the metric is not computable without biasing it."
+owner: "<metric owner -- the user, acting as data owner>"
+binds_to:
+  gold_table: "gold.fct_sales_rss"
+  columns:
+    - "discount_applied"
+    - "transaction_id"
+  pii_sensitive: false
+
+readiness:
+  status: "blocked"
+  evidence: []
+  blocking_reasons:
+    - "Q2 follow-on: discount_applied is NULL (unknown) on 33.39% (4,199) of rows. The rate's denominator treatment of unknowns is undecided -- excluding vs including them changes the number materially. The metric owner must rule how unknowns are handled before this contract is approvable; the agent will not pick a default that biases the rate."

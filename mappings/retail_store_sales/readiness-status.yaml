@@ -53,9 +53,13 @@ stages:
     blocking_reasons: []
 
   semantic_model_ready:
-    status: "not_started"
-    evidence: []
-    blocking_reasons: []
+    status: "blocked"
+    evidence:
+      - "F009 metric contracts authored (proposals) under mappings/retail_store_sales/metrics/: TotalSales, TotalQuantity, TransactionCount, AvgTransactionValue (not_started, awaiting owner approval); DiscountedTransactionRate (blocked on Q2 unknown-NULL handling)"
+    blocking_reasons:
+      - "metric contracts are PROPOSALS -- not yet owner-approved (Principle V; no self-grant)"
+      - "no governed PBIP model over gold.fct_sales_rss yet (the existing Retailgold.SemanticModel is the C086 star); model authoring (pbip-workflow + powerbi-analyst) follows contract approval"
+      - "DiscountedTransactionRate blocked: Q2 follow-on -- how the rate treats the 33% unknown discount_applied is an owner decision"
 
   dashboard_ready:
     status: "not_started"

@@ -1,6 +1,6 @@
 -- 0003_create_silver_retail_store_sales.sql
 -- Build silver.retail_store_sales (typed/cleaned transaction fact) from
--- bronze.retail_store_sales (the dirty Kaggle "retail store sales" CSV, training DB).
+-- bronze.retail_store_sales (the dirty Kaggle retail-store-sales CSV, training DB).
 --
 -- Medallion: bronze = faithful TEXT landing (retained); silver = typed/cleaned flat
 -- table; gold (0004) = Kimball star. Power BI reads gold, not silver.

@@ -1,0 +1,18 @@
+# Metric contract -- TotalQuantity (filled instance for retail_store_sales)
+# F009 define-layer. PROPOSAL: status not_started until the metric owner approves.
+
+name: "TotalQuantity"
+grain: "valid at fct_sales_rss transaction grain; additive across all dimensions and over time"
+formula_intent: "The total number of units sold across all retail transactions -- the sum of the per-transaction quantity. Rows with a missing quantity (604, ~4.8%) contribute nothing (NULL ignored), not zero."
+owner: "<metric owner -- the user, acting as data owner>"
+binds_to:
+  gold_table: "gold.fct_sales_rss"
+  columns:
+    - "quantity"
+  pii_sensitive: false
+
+readiness:
+  status: "not_started"
+  evidence:
+    - "gold.fct_sales_rss built + live-validated 2026-06-25 (penny-exact quantity sum = 66,276)"
+  blocking_reasons: []

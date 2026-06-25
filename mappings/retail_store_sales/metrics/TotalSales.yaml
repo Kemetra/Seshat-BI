@@ -1,0 +1,19 @@
+# Metric contract -- TotalSales (filled instance for retail_store_sales)
+# F009 define-layer. PROPOSAL: status not_started until the metric owner approves.
+# formula_intent is plain-language INTENT, NOT DAX. binds_to is gold-only.
+
+name: "TotalSales"
+grain: "valid at fct_sales_rss transaction grain (one row = one transaction); additive across all dimensions and over time"
+formula_intent: "The total money taken across all retail transactions -- the sum of the per-transaction total_spent amount. Rows with a missing total_spent (604, ~4.8%) contribute nothing (NULL is ignored in the sum), not zero."
+owner: "<metric owner -- the user, acting as data owner>"
+binds_to:
+  gold_table: "gold.fct_sales_rss"
+  columns:
+    - "total_spent"
+  pii_sensitive: false
+
+readiness:
+  status: "not_started"          # PROPOSAL awaiting owner approval (Principle V)
+  evidence:
+    - "gold.fct_sales_rss built + live-validated 2026-06-25 (penny-exact total_spent sum = 1,552,071.00)"
+  blocking_reasons: []
