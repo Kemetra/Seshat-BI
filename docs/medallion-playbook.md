@@ -272,6 +272,26 @@ Run these on every table; each is a hard-won check, not a nicety.
 11. Measure totals reconcile across **every** layer (source → silver → gold → BI).
 12. Document counts reconcile (source cols = dropped + kept + derived).
 
+### Tool-robustness rules (the live surface, not the data)
+
+Hard-won when the first table was driven end-to-end against a real DB (ADR 0005);
+these guard the TOOL against arbitrary data, distinct from the cleaning traps above.
+
+13. **Type-branch auto-discovered columns.** Any check that applies a text-only
+    function (`trim`, `''`) to every column of an auto-discovered table MUST branch
+    on `data_type`: TEXT → `''OR NULL`; non-text (timestamptz/numeric/boolean, a
+    lineage column) → plain `IS NULL`. (`trim()` on a timestamptz crashes.)
+14. **Never bank a live exit code without its evidence.** A `retail validate` exit 0
+    is a pass ONLY with the "running live checks" banner + a per-check result. Run the
+    `retail` console script (not `python -m retail.cli`); export `.env` first. An exit
+    code alone is not proof a check ran.
+15. **Schema-resolve artifact names at the read boundary.** A table/object name read
+    from a `source-map.yaml` and spliced into SQL must be schema-qualified when read
+    (a `gold_star` name → the `gold` schema), bare or already-qualified both handled.
+16. **Comment-strip before token/identifier rules.** A SQL rule that scans for
+    identifiers MUST run over comment-stripped text, or quoted prose in a `--`/`/* */`
+    comment will false-trip it.
+
 ## Appendix B — SQL skeletons
 
 ```sql
