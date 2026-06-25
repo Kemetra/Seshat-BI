@@ -4,7 +4,7 @@
 name: "TransactionCount"
 grain: "valid at fct_sales_rss transaction grain; a distinct count of transactions, sliceable by any dimension and over time"
 formula_intent: "How many retail transactions occurred -- the count of distinct transaction_id (the fact is one row per transaction, so this is the fact row count within the current filter)."
-owner: "<metric owner -- the user, acting as data owner>"
+owner: "data_owner"   # approved 2026-06-25 (see readiness evidence + readiness-status approvals[])
 binds_to:
   gold_table: "gold.fct_sales_rss"
   columns:

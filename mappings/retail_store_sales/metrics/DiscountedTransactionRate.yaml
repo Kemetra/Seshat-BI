@@ -14,7 +14,7 @@ formula_intent: >-
   because 33% of transactions have an UNKNOWN (not confirmed-False) discount status. The
   rate among transactions with a KNOWN status is 50.37% (4,219 / 8,376). The 33.55%
   figure assumes every unknown was un-discounted, which is a floor, not the true rate.
-owner: "<metric owner -- the user, acting as data owner>"
+owner: "data_owner"   # approved 2026-06-25 (see readiness evidence + readiness-status approvals[])
 binds_to:
   gold_table: "gold.fct_sales_rss"
   columns:

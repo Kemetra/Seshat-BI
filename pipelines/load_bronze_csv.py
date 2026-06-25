@@ -20,6 +20,7 @@ Usage:
         --csv data/raw/kaggle-retail-dirty/retail_store_sales.csv \\
         --table bronze.retail_store_sales
 """
+
 from __future__ import annotations
 
 import argparse
@@ -32,8 +33,6 @@ import re
 import subprocess
 import sys
 
-import psycopg2
-
 
 def log(msg: str) -> None:
     print(f"[{datetime.datetime.now():%H:%M:%S}] {msg}", flush=True)
@@ -43,7 +42,9 @@ def get_conn_params(cluster_id: str, database: str) -> dict:
     """Read connection details from doctl at runtime (no secrets in source)."""
     out = subprocess.run(
         ["doctl", "databases", "connection", cluster_id, "-o", "json"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     info = json.loads(out.stdout)
     c = info[0] if isinstance(info, list) else info
@@ -58,6 +59,15 @@ def get_conn_params(cluster_id: str, database: str) -> dict:
 
 
 def connect(cluster_id: str, database: str):
+    # Lazy-load the optional driver so `--help` and the pure functions (used in
+    # tests / static envs without the `db` extra) do not crash at import time.
+    try:
+        import psycopg2
+    except ImportError:
+        sys.exit(
+            "psycopg2 not installed (the live-DB boundary is optional). "
+            "Enable it with: pip install 'retail[db]'"
+        )
     conn = psycopg2.connect(**get_conn_params(cluster_id, database))
     conn.autocommit = True
     with conn.cursor() as cur:
@@ -66,18 +76,28 @@ def connect(cluster_id: str, database: str):
 
 
 def norm_headers(headers: list[str]) -> list[str]:
-    """Deterministic snake_case; collision-safe (duplicate names get _N suffix)."""
-    seen: dict[str, int] = {}
+    """Deterministic snake_case; collision-safe (duplicate names get _N suffix).
+
+    A GENERATED suffix name is itself reserved (added to `seen` and `used`), so a
+    later real header that matches a generated name (e.g. `["A","A","A_2"]` -> a,
+    a_2(gen), a_2(real)) gets a fresh suffix instead of silently duplicating
+    (2026-06-25 Codex review #5). The result is always all-unique.
+    """
+    counts: dict[str, int] = {}
+    used: set[str] = set()
     out: list[str] = []
     for h in headers:
         s = re.sub(r"[^\w]+", "_", (h or "").strip().lower(), flags=re.UNICODE)
         s = re.sub(r"_+", "_", s).strip("_") or "col"
-        if s in seen:
-            seen[s] += 1
-            s = f"{s}_{seen[s]}"
-        else:
-            seen[s] = 1
-        out.append(s)
+        candidate = s
+        # bump the suffix until the candidate is genuinely unused (covers a real
+        # header colliding with a previously-generated suffix name)
+        while candidate in used:
+            counts[s] = counts.get(s, 1) + 1
+            candidate = f"{s}_{counts[s]}"
+        counts.setdefault(s, 1)
+        used.add(candidate)
+        out.append(candidate)
     return out
 
 
@@ -101,8 +121,10 @@ def create_objects(conn, table: str, cols: list[str]) -> None:
               _loaded_at   TIMESTAMPTZ NOT NULL DEFAULT now()
             );
         """)
-    log(f"schemas bronze/silver/gold ready; {table} = {len(cols)} cols + lineage "
-        f"(schema={schema})")
+    log(
+        f"schemas bronze/silver/gold ready; {table} = {len(cols)} cols + lineage "
+        f"(schema={schema})"
+    )
 
 
 def csv_rows(path: str):
@@ -114,6 +136,19 @@ def csv_rows(path: str):
             yield ["" if v is None else str(v) for v in row]
 
 
+def count_csv_records(path: str) -> int:
+    """Data records (header excluded) counted by the CSV parser, NOT physical lines.
+
+    A quoted field with an embedded newline is ONE record across several physical
+    lines; counting raw lines over-counts and produces a false reconcile FAIL
+    (2026-06-25 Codex review #8). Uses the same parser COPY consumes.
+    """
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        r = csv.reader(f)
+        next(r, None)  # header
+        return sum(1 for _ in r)
+
+
 def csv_buffer(path: str, ncols: int, source_file: str) -> tuple[io.StringIO, int]:
     buf = io.StringIO()
     # QUOTE_ALL: every field quoted, so an empty source field becomes "" and COPY
@@ -121,8 +156,19 @@ def csv_buffer(path: str, ncols: int, source_file: str) -> tuple[io.StringIO, in
     w = csv.writer(buf, quoting=csv.QUOTE_ALL, lineterminator="\n")
     loaded_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
     n = 0
-    for row in csv_rows(path):
-        row = (list(row) + [""] * ncols)[:ncols]  # pad/truncate defensively
+    for i, row in enumerate(csv_rows(path), start=1):
+        # FAIL LOUD on a ragged row wider than the header: silently dropping the
+        # extra cells would corrupt the faithful-landing contract (an unescaped
+        # delimiter / extra column would shift data) (2026-06-25 Codex review #6).
+        if len(row) > ncols:
+            raise ValueError(
+                f"{source_file}: ragged row {i} has {len(row)} fields but the "
+                f"header declares {ncols} columns; refusing to truncate source "
+                f"data (faithful bronze). Fix the source row or the header."
+            )
+        row = list(row) + [""] * (
+            ncols - len(row)
+        )  # short rows padded (dirty-faithful)
         w.writerow(row + [source_file, loaded_at])
         n += 1
     buf.seek(0)
@@ -148,23 +194,28 @@ def load_csv(conn, table: str, cols: list[str], path: str) -> None:
 
 
 def reconcile(conn, table: str, path: str, fname: str) -> None:
-    with open(path, newline="", encoding="utf-8-sig") as f:
-        file_rows = sum(1 for _ in f) - 1  # minus header
+    file_rows = count_csv_records(path)  # CSV records, not physical lines (#8)
     with conn.cursor() as cur:
         cur.execute(f"SELECT COUNT(*) FROM {table} WHERE _source_file = %s;", (fname,))
         db_rows = cur.fetchone()[0]
     ok = file_rows == db_rows
-    log(f"RECONCILE {fname}: csv={file_rows} db={db_rows} -> {'PASS' if ok else 'FAIL'}")
+    log(
+        f"RECONCILE {fname}: csv={file_rows} db={db_rows} -> {'PASS' if ok else 'FAIL'}"
+    )
     if not ok:
         sys.exit(f"reconcile FAILED for {fname}")
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Load a CSV source into bronze (all-TEXT).")
+    ap = argparse.ArgumentParser(
+        description="Load a CSV source into bronze (all-TEXT)."
+    )
     ap.add_argument("--cluster-id", default=os.environ.get("DO_DB_CLUSTER_ID"))
     ap.add_argument("--database", default=os.environ.get("ANALYTICS_DB_NAME"))
     ap.add_argument("--csv", required=True, help="path to the source CSV")
-    ap.add_argument("--table", required=True, help="target table, e.g. bronze.retail_store_sales")
+    ap.add_argument(
+        "--table", required=True, help="target table, e.g. bronze.retail_store_sales"
+    )
     a = ap.parse_args()
 
     if not a.cluster_id:

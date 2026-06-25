@@ -292,6 +292,35 @@ these guard the TOOL against arbitrary data, distinct from the cleaning traps ab
     identifiers MUST run over comment-stripped text, or quoted prose in a `--`/`/* */`
     comment will false-trip it.
 
+Hard-won when an independent reviewer (Codex) reviewed the first end-to-end PR and
+found nine defects a green self-test + green `retail check` + green `retail validate`
+all missed (ADR 0006). These continue the tool-robustness set:
+
+17. **A comment-stripper feeding an identifier rule MUST be quote-aware.** A `--` or
+    `/* */` inside a `'...'` string literal or `"..."` quoted identifier is DATA, not
+    a comment marker -- copy it through. A quote-blind stripper opens a phantom comment
+    on a `'--'` literal and BLANKS the rest of the line, hiding any real bad identifier
+    after it (a silent false NEGATIVE -- worse than a false positive in a checker).
+18. **A marked date table carries NO unknown/sentinel member.** Every OTHER gold dim
+    gets a `-1 'UNKNOWN'` member (trap: RC14); the DATE dim is the EXCEPTION. It becomes
+    a marked date table (`dataCategory: Time`), which Power BI validates as
+    unique/contiguous/NO-nulls -- a `-1, NULL` member breaks refresh / time-intelligence
+    even though the SQL succeeds. Rule `S8` (ERROR) enforces this; `S6` exempts the date
+    dim. An unmatched/NULL FACT date is handled OUTSIDE the calendar (fail-loud via
+    `date_sk NOT NULL`, or a nullable FK + DAX), NEVER absorbed by a `-1` date member.
+19. **Never COALESCE a real-but-unmatched key to the unknown member.** `COALESCE(
+    dd.date_sk, -1)` over a hard-coded calendar span silently buckets a real out-of-span
+    date to Unknown -- and the coverage/orphan checks stay green (the `-1` member is a
+    valid FK target). Debare the join and let `NOT NULL` reject the unmatched row: a
+    coverage gap must FAIL the load, not masquerade as "Unknown".
+20. **Count parsed RECORDS, not physical lines; fail loud on ragged rows.** When
+    reconciling a CSV load, count with the SAME parser COPY consumes (a quoted embedded
+    newline is ONE record across many lines). Reserve GENERATED dedup names (a real
+    header can collide with a previously-generated suffix). A row WIDER than the header
+    must fail loud (truncating it corrupts faithful landing); a SHORT row is padded.
+    Lazy-load the optional DB driver so `--help` / pure helpers work without the `db`
+    extra.
+
 ## Appendix B — SQL skeletons
 
 ```sql

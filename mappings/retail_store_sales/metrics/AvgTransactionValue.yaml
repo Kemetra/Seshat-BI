@@ -13,7 +13,7 @@ formula_intent: >-
   understate the average by ~5% (123.43) because 604 transactions have a NULL (truly
   unknown -- not recoverable from price*quantity) total_spent and contribute no sales.
   A ratio: compute at the display grain, never average-of-averages.
-owner: "<metric owner -- the user, acting as data owner>"
+owner: "data_owner"   # approved 2026-06-25 (see readiness evidence + readiness-status approvals[])
 binds_to:
   gold_table: "gold.fct_sales_rss"
   columns:

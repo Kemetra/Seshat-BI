@@ -394,6 +394,11 @@ def s6_gold_unknown_member(ctx: RuleContext) -> list[Finding]:
         }
         for m in _CREATE_GOLD_DIM.finditer(clean):
             dim = m.group(1).lower()
+            # A date dim is the documented EXCEPTION (S8): it becomes a marked date
+            # table (dataCategory: Time), which rejects nulls, so it must NOT carry a
+            # -1 unknown member. Exempt it here so S6 and S8 are complementary.
+            if dim.startswith("dim_date"):
+                continue
             if dim in with_member:
                 continue
             line = clean.count("\n", 0, m.start()) + 1
@@ -404,6 +409,52 @@ def s6_gold_unknown_member(ctx: RuleContext) -> list[Finding]:
                     message=(
                         f"gold.{dim} has no -1 unknown-member INSERT; a Kimball dim "
                         "should carry an unknown member at _sk = -1 (enforces RC14)"
+                    ),
+                    locator=f"{rel}:{line}",
+                )
+            )
+    return findings
+
+
+@register("S8", "date dim has no -1/NULL unknown member (marked date table)")
+def s8_date_dim_no_unknown_member(ctx: RuleContext) -> list[Finding]:
+    """A `gold.dim_date*` must NOT carry a `-1`/NULL unknown member (inverse of S6).
+
+    Codex PR review #1 (2026-06-25): a date dim destined to be a marked date table
+    (`dataCategory: Time`) is validated by Power BI as unique/contiguous/NO-nulls.
+    A `-1, NULL` unknown member lands a BLANK in the date key, so refresh or
+    time-intelligence can fail even though the SQL migration succeeds and
+    `retail validate` stays green (the -1 member is also a valid FK target, so date
+    coverage / orphan checks do not catch it). This is the inverse of S6 (which
+    REQUIRES the -1 member on every OTHER gold dim).
+
+    ERROR severity (a hard correctness gate, not an "override-when" RC default like
+    S6/S7): the bug reaches Power BI silently, which is exactly what a static gate
+    must prevent. Operates on noise-stripped raw text (the lexer drops numeric
+    literals, so -1 is invisible in token space). Unmatched/NULL FACT dates must be
+    handled outside the marked calendar (fail-loud or a nullable FK + DAX), never by
+    polluting the date table -- see ADR 0006.
+    """
+    findings: list[Finding] = []
+    for rel in iter_sql_files(ctx):
+        if is_test_path(rel):
+            continue
+        clean = _strip_sql_noise(_read(ctx, rel))
+        for m in _INSERT_GOLD_DIM_MINUS1.finditer(clean):
+            dim = m.group(1).lower()
+            if not dim.startswith("dim_date"):
+                continue
+            line = clean.count("\n", 0, m.start()) + 1
+            findings.append(
+                Finding(
+                    rule_id="S8",
+                    severity=Severity.ERROR,
+                    message=(
+                        f"gold.{dim} inserts a -1/NULL unknown member; a marked date "
+                        "table (dataCategory: Time) must have NO null/sentinel key "
+                        "member -- it breaks Power BI date-table validation / "
+                        "time-intelligence. Handle unmatched fact dates outside the "
+                        "calendar (fail-loud or nullable FK), not with a -1 member."
                     ),
                     locator=f"{rel}:{line}",
                 )

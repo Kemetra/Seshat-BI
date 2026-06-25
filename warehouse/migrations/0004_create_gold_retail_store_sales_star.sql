@@ -85,8 +85,10 @@ CREATE TABLE gold.dim_date_rss (
   iso_week   SMALLINT,
   is_weekend BOOLEAN
 );
--- -1 unknown member
-INSERT INTO gold.dim_date_rss VALUES (-1, NULL, NULL, NULL, NULL, 'Unknown', NULL, 'Unknown', NULL, NULL);
+-- NO -1 unknown member: dim_date_rss is a MARKED date table (dataCategory: Time),
+-- which Power BI validates as unique/contiguous/NO-nulls. A -1,NULL member would
+-- break that (Codex review #1 / rule S8). An unmatched fact date is handled by
+-- date_sk NOT NULL below (the load fails loudly), never by a sentinel member.
 -- CONTIGUOUS calendar over the full span (RC15; never SELECT DISTINCT date)
 INSERT INTO gold.dim_date_rss
 SELECT
@@ -129,7 +131,9 @@ SELECT
   COALESCE(dp.product_sk, -1),
   COALESCE(dpm.payment_method_sk, -1),
   COALESCE(dl.location_sk, -1),
-  COALESCE(dd.date_sk, -1),
+  dd.date_sk,   -- NO COALESCE to a -1 date member: an unmatched/NULL fact date
+                -- yields NULL and is rejected by date_sk NOT NULL (fail loud,
+                -- a real calendar-coverage bug), never silently bucketed (Codex #2)
   s.price_per_unit, s.quantity, s.total_spent
 FROM silver.retail_store_sales s
 LEFT JOIN gold.dim_customer_rss       dc  ON dc.customer_id     = s.customer_id

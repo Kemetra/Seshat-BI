@@ -4,7 +4,7 @@
 name: "TotalQuantity"
 grain: "valid at fct_sales_rss transaction grain; additive across all dimensions and over time"
 formula_intent: "The total number of units sold across all retail transactions -- the sum of the per-transaction quantity. Rows with a missing quantity (604, ~4.8%) contribute nothing (NULL ignored), not zero."
-owner: "<metric owner -- the user, acting as data owner>"
+owner: "data_owner"   # approved 2026-06-25 (see readiness evidence + readiness-status approvals[])
 binds_to:
   gold_table: "gold.fct_sales_rss"
   columns:

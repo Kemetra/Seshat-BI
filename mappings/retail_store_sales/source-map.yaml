@@ -21,8 +21,8 @@ meta:
   # the transformed silver output.
   primary_key:
     - "transaction_id"
-  reviewed_by: "<analyst / reviewer>"     # gate review pending
-  reviewed_on: "<YYYY-MM-DD>"
+  reviewed_by: "data_owner"               # gate CLEARED; see readiness-status.yaml approvals[]
+  reviewed_on: "2026-06-25"
 
 defaults:
   adopted:
