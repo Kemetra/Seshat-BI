@@ -12,6 +12,10 @@
 .env.*
 !.env.example
 
+# ── Raw source data (never commit; bronze is loaded into Postgres, not git) ──
+# Raw CSV/Excel sources land in the DB bronze layer; the files stay local + untracked.
+data/raw/
+
 # ── Python (future pipelines) ──
 __pycache__/
 *.py[cod]
