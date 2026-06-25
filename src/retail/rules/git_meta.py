@@ -198,7 +198,35 @@ def rule_g2_definition_committed(ctx: RuleContext) -> Iterable[Finding]:
 # P2 — commit-message convention
 # ---------------------------------------------------------------------------
 
-SUBJECT_RE = re.compile(r"^(feat|fix|refactor|docs|chore): .+")
+# Allowed commit types for HUMAN-authored subjects: the original core set plus
+# the standard Conventional-Commits types and the project-specific `brand` type
+# (brand / visual-identity assets). A `type(scope):` parenthesized scope is
+# REJECTED -- governance rule P2 is deliberately scope-free (use `docs:` not
+# `docs(018):`).
+#
+# AUTOMATION EXEMPTION: a subject carrying a leading `[name]` prefix
+# (e.g. `[codex]`, `[bot]`) is an automated/tool-generated commit whose subject
+# format the kit does not control (it arrives via a squash merge of a bot PR).
+# Such subjects are accepted as-is, since enforcing the human convention on a
+# machine-written subject is out of the author's hands. Human subjects (no
+# bracket prefix) must still be `<type>: <desc>`, scope-free.
+# See docs/decisions/0012-p2-commit-types.md.
+_P2_TYPES = (
+    "feat",
+    "fix",
+    "refactor",
+    "docs",
+    "chore",
+    "build",
+    "ci",
+    "perf",
+    "test",
+    "style",
+    "revert",
+    "brand",
+)
+_BOT_PREFIX_RE = re.compile(r"^\[[A-Za-z0-9_-]+\] ")
+SUBJECT_RE = re.compile(r"^(?:" + "|".join(_P2_TYPES) + r"): .+")
 # Local-fallback range when no --commit-range is supplied. On a repo with fewer
 # than 20 commits git rejects HEAD~20; the guard below turns that into a clean
 # P2 ERROR finding (not a no-op). CI uses fetch-depth: 0 (full history) and
@@ -233,14 +261,20 @@ def rule_p2_commit_subjects(ctx: RuleContext) -> Iterable[Finding]:
             ]
     findings: list[Finding] = []
     for subject in subjects:
+        # Automated/tool-generated subjects (leading `[name]` prefix) are exempt
+        # from the human convention -- the kit does not control their format.
+        if _BOT_PREFIX_RE.match(subject):
+            continue
         if not SUBJECT_RE.match(subject):
             findings.append(
                 Finding(
                     rule_id="P2",
                     severity=Severity.ERROR,
                     message=(
-                        "commit subject must match "
-                        "'<type>: <desc>' (feat|fix|refactor|docs|chore)"
+                        "commit subject must match '<type>: <desc>' "
+                        "(" + "|".join(_P2_TYPES) + "); "
+                        "scopes are not allowed (use 'docs:' not 'docs(018):'); "
+                        "automated '[bot] ...' subjects are exempt"
                     ),
                     locator=subject,
                 )
