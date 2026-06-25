@@ -22,6 +22,9 @@
 
 ## Git
 
-- Commit messages: `<type>: <description>` where type ∈
-  `{feat, fix, refactor, docs, chore}`.
+- Commit messages: `<type>: <description>` where type is one of
+  `{feat, fix, refactor, docs, chore, build, ci, perf, test, style, revert, brand}`.
+  Scopes are not allowed (use `docs:` not `docs(018):`); an automated
+  `[bot] ...` subject prefix is exempt from the convention. See
+  `docs/decisions/0012-p2-commit-types.md`.
 - `core.autocrlf=true`; line endings governed by `.gitattributes`.

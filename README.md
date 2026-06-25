@@ -17,6 +17,7 @@ model, design the dashboard -- and only then publish.
 ![bi](https://img.shields.io/badge/BI-Power%20BI%20PBIP-C69214)
 ![gate](https://img.shields.io/badge/governance-retail%20check-0B9A9A)
 ![python](https://img.shields.io/badge/python-3.13-001E35)
+![license](https://img.shields.io/badge/license-Apache--2.0-001E35)
 
 </div>
 
@@ -280,10 +281,13 @@ Palette: `deep_navy #001E35` | `rich_gold #C69214` | `teal #0B9A9A` | `ivory #F7
 ## Contributing
 
 - Commit subjects follow `<type>: <description>` (`feat` / `fix` / `refactor` /
-  `docs` / `chore`), **scope-free** -- no `docs(018):` parentheses (governance rule P2).
+  `docs` / `chore` / `build` / `ci` / `perf` / `test` / `style` / `revert` / `brand`),
+  **scope-free** -- no `docs(018):` parentheses (governance rule P2). An automated
+  `[bot] ...` subject prefix is exempt.
 - Conventions: [`docs/conventions.md`](docs/conventions.md).
 - Before a PR, `retail check` must pass and committed text must be ASCII / UTF-8
   without BOM.
+- License: Apache-2.0 (see [LICENSE](LICENSE)).
 
 <div align="center">
 <br/>

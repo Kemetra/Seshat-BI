@@ -271,6 +271,40 @@ def test_p2_validates_single_commit_message(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
+def test_p2_accepts_extended_types_bot_prefix_and_rejects_scopes(tmp_path: Path) -> None:
+    """P2 accepts the extended type set + an optional [bot] prefix; still rejects scopes."""
+    import dataclasses
+
+    repo = make_git_repo(tmp_path)
+
+    def findings_for(subject: str) -> list:
+        ctx = dataclasses.replace(context_for(repo), commit_message=subject)
+        return list(rule_p2_commit_subjects(ctx))
+
+    # Newly-allowed: conventional types, the project `brand` type, and an
+    # optional automation prefix carried by squash merges of bot PRs.
+    accepted = [
+        "brand: add seven-point Seshat star svg",
+        "[codex] harden live sql validation (#26)",
+        "build: pin python 3.13",
+        "ci: scope P2 to the branch range",
+        "perf: prefilter the secret scan",
+        "test: cover the extended P2 types",
+        "style: format with ruff",
+        "revert: undo the bad migration",
+        "[bot] chore: bump deps",
+    ]
+    for subject in accepted:
+        assert findings_for(subject) == [], f"expected accepted: {subject!r}"
+
+    # Still rejected: a parenthesized scope (P2 is deliberately scope-free) and
+    # an unknown type. The no-scope discipline must survive the type widening.
+    for subject in ("docs(018): scoped subject", "wip: not a type", "no type at all"):
+        assert len(findings_for(subject)) == 1, f"expected rejected: {subject!r}"
+        assert findings_for(subject)[0].rule_id == "P2"
+
+
+@pytest.mark.unit
 def test_p2_exempts_merge_commits(tmp_path: Path) -> None:
     import dataclasses
 
