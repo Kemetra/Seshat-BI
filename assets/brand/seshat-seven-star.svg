@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Seshat seven-point star</title>
+  <desc id="desc">A simple seven-point Seshat-inspired star mark in rich gold on a transparent background.</desc>
+  <defs>
+    <style>
+      .gold { fill: #C69214; }
+      .navy { fill: #001E35; }
+    </style>
+  </defs>
+  <path class="gold" d="M256 24 L284.2 183.9 L398.5 68.6 L324.6 213.1 L484.2 183.1 L337.4 252.4 L485.6 318.7 L325.4 292.0 L402.3 434.9 L285.6 322.0 L260.7 482.4 L225.8 323.9 L116.4 443.8 L184.3 296.3 L26.3 333.3 L169.9 257.6 L18.5 198.0 L179.7 217.8 L94.0 79.9 L217.5 185.2 Z"/>
+  <circle class="navy" cx="256" cy="256" r="13" opacity="0.9"/>
+</svg>
