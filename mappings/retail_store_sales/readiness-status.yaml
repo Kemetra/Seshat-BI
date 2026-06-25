@@ -12,42 +12,44 @@ source_id: "retail_store_sales"
 source_family: "kaggle_retail_store_sales_dirty"
 
 # --- where we are -----------------------------------------------------------
-current_stage: "mapping_ready"
+current_stage: "gold_ready"            # silver+gold built + live-validated 2026-06-25
 mapping_version: "1"
 
 # --- the seven stages -------------------------------------------------------
 stages:
 
   source_ready:
-    status: "warning"
+    status: "pass"
     evidence:
       - "mappings/retail_store_sales/source-profile.md (12,575 rows; 11 cols; PK transaction_id unique; missingness '' OR NULL measured)"
-    blocking_reasons:
-      - "semantic proposals unconfirmed (grain single-item-vs-basket Q3; discount_applied blank meaning Q2)"
-      - "customer_id PII publish-safety not yet ruled by governance (Q1)"
-    # warning, not pass: mechanical numbers complete, but semantics await analyst
-    # confirmation + the PII ruling. A pass needs those confirmed.
+      - "semantics confirmed by data owner 2026-06-25 (Q2 discount-blank=unknown, Q3 grain=single-item transaction); PII ruling made (Q1 keep)"
+    blocking_reasons: []
+    # pass: mechanical numbers complete AND the semantic proposals + PII ruling were
+    # confirmed by the data owner (see unresolved-questions.md Q1-Q4 = answered).
 
   mapping_ready:
-    status: "blocked"
+    status: "pass"
     evidence:
       - "mappings/retail_store_sales/source-map.yaml (grain=transaction, PK=transaction_id, gold star: fct_sales + 4 dims + dim_date)"
-      - "mappings/retail_store_sales/assumptions.md (RC adopted/deviated: RC8 N/A returns, RC4 customer_id kept pending)"
-      - "mappings/retail_store_sales/unresolved-questions.md (Gate status: OPEN; Q1-Q4)"
-      - "mappings/retail_store_sales/reconciliation-report.md (blank; pending live run)"
-    blocking_reasons:
-      - "Gate status: OPEN -- 4 open questions (Q1 PII governance, Q2 discount blank, Q3 grain semantics, Q4 missing-item handling)"
-      - "map authored but not yet reviewed/APPROVED (no approvals[] entry)"
+      - "mappings/retail_store_sales/assumptions.md (RC adopted/deviated: RC8 N/A returns, RC4 customer_id kept)"
+      - "mappings/retail_store_sales/unresolved-questions.md (Gate status: CLEARED; Q1-Q4 answered)"
+      - "approval recorded in approvals[] below (data owner, 2026-06-25)"
+    blocking_reasons: []
 
   silver_ready:
-    status: "not_started"
-    evidence: []
-    blocking_reasons:
-      - "prior stage mapping_ready is not pass (gate OPEN)"
+    status: "pass"
+    evidence:
+      - "warehouse/migrations/0003_create_silver_retail_store_sales.sql applied to training; 12,575 silver rows"
+      - "retail check exit 0 (S1-S7); PK transaction_id re-proven unique on transformed silver (V-RC2 PASS)"
+    blocking_reasons: []
 
   gold_ready:
-    status: "not_started"
-    evidence: []
+    status: "pass"
+    evidence:
+      - "warehouse/migrations/0004_create_gold_retail_store_sales_star.sql applied; fct_sales_rss 12,575 rows + 5 dims (each with -1 member)"
+      - "retail validate exit 0 WITH banner: PK unique, date coverage complete, 0 orphan FKs (all 5), penny-exact reconcile (quantity 66,276; total_spent 1,552,071.00)"
+      - "mappings/retail_store_sales/reconciliation-report.md (filled, PASS)"
+      - "the 9.65% missing-item rows (1,213) correctly land on the -1 unknown product member (Q4 honored)"
     blocking_reasons: []
 
   semantic_model_ready:
@@ -66,20 +68,20 @@ stages:
     blocking_reasons: []
 
 # --- cross-cutting ----------------------------------------------------------
-evidence: []
-blocking_reasons:
-  - "mapping gate OPEN -- human review + the 4 open questions block the build"
+evidence:
+  - "mapping gate CLEARED 2026-06-25; Q1-Q4 answered (data owner)"
+blocking_reasons: []
 
 # --- approvals (named human sign-offs; the agent cannot self-grant) ---------
-approvals: []
-  # filled by the reviewer when the map is approved:
-  # - stage: "mapping_ready"
-  #   owner: "<analyst>"
-  #   at: "<YYYY-MM-DD>"
+approvals:
+  - stage: "mapping_ready"
+    owner: "data_owner"               # the user, acting as data owner/analyst/governance
+    at: "2026-06-25"
+    note: "accepted the four open-question recommendations (Q1 keep customer_id; Q2 blank discount = unknown; Q3 single-item grain; Q4 missing item -> -1 unknown member)"
 
 # --- the single next allowed action -----------------------------------------
-next_action: "human review of the map + answer the 4 open questions in mappings/retail_store_sales/unresolved-questions.md (Q1 governance, Q2-Q4 analyst); on approval, set Gate status: CLEARED and record an approvals[] entry"
+next_action: "Stage 5 Semantic Model Ready -- author metric contracts (F009) under mappings/retail_store_sales/metrics/ + build a governed PBIP model over gold.fct_sales_rss, then retail-semantic-check. (gold is validated; this is the next stage.)"
 
 # --- audit ------------------------------------------------------------------
 last_checked_at: "2026-06-25"
-checked_by: "agent (retail-onboard-table)"
+checked_by: "agent (onboard -> build -> validate; mapping approved by data owner)"

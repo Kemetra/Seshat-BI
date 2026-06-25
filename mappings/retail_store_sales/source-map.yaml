@@ -156,7 +156,11 @@ columns:
 gold_star:
 
   fact:
-    name: "fct_sales"
+    # gold-qualified + _rss suffix: the star shares the `gold` schema with C086's
+    # fct_sales, so this table is fct_sales_rss. retail validate reads these names
+    # VERBATIM (the check SQL does not prepend `gold.`), so they must be schema-
+    # qualified and match the materialized tables in 0004_*.sql exactly.
+    name: "gold.fct_sales_rss"
     grain: "one row = one retail transaction"      # = meta.grain (RC1)
     measures:                                       # RC9: independent measures
       - "quantity"
@@ -164,26 +168,26 @@ gold_star:
       # price_per_unit kept as a fact attribute (unit rate), not summed
 
   dimensions:
-    - name: "dim_customer"
+    - name: "gold.dim_customer_rss"
       surrogate_key: "customer_sk"
       has_unknown_member: true             # RC14: -1 unknown member
       attributes:
-        - "customer_id"                    # pseudonymous natural key (pending Q1)
+        - "customer_id"                    # pseudonymous natural key (Q1: kept)
 
-    - name: "dim_product"
+    - name: "gold.dim_product_rss"
       surrogate_key: "product_sk"
       has_unknown_member: true             # RC14: covers the 9.65% missing item (Q4)
       attributes:
         - "item"                           # product natural key
         - "category"                       # flat denorm attribute (item->category 1:1, RC12)
 
-    - name: "dim_payment_method"
+    - name: "gold.dim_payment_method_rss"
       surrogate_key: "payment_method_sk"
       has_unknown_member: true
       attributes:
         - "payment_method"
 
-    - name: "dim_location"
+    - name: "gold.dim_location_rss"
       surrogate_key: "location_sk"
       has_unknown_member: true
       attributes:
@@ -194,7 +198,7 @@ gold_star:
     - "discount_applied"                   # discount flag (pending Q2)
 
   date_dimension:
-    name: "dim_date"
+    name: "gold.dim_date_rss"
     surrogate_key: "date_sk"               # YYYYMMDD integer
     method: "generate_series"              # RC15: contiguous, one row per calendar day
     contiguous: true

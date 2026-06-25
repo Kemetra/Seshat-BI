@@ -12,7 +12,8 @@
 - **Date raised:** 2026-06-25
 - **Raised by:** agent (`retail-onboard-table` -> `source-mapping`)
 - **Maps to playbook phases:** Phase 2 (decision points) + Phase 4 (review gate)
-- **Gate status:** `OPEN` -- the build is blocked until every row below is `answered`.
+- **Gate status:** `CLEARED` -- all four questions answered 2026-06-25 (data owner accepted
+  the agent recommendations). Approval recorded in `readiness-status.yaml` `approvals[]`.
 
 ---
 
@@ -20,10 +21,10 @@
 
 | ID | Question | Why it blocks | Who must answer | Proposed default (if unanswered) | Status | Resolution |
 |----|----------|---------------|-----------------|----------------------------------|--------|------------|
-| Q1 | Is `customer_id` (`CUST_xx`, 25 distinct, pseudonymous) safe to keep + publish as `dim_customer`, or must it be dropped/hashed? | The customer dimension and any per-customer analysis cannot be built until the PII/publish-safety ruling is made. Deviates from RC4 (auto-drop). | governance | RC4 default = DROP before the BI layer. Agent RECOMMENDS keep (already a pseudonymous surrogate, no raw PII), pending sign-off. | `open` | |
-| Q2 | What does a BLANK `discount_applied` mean (4,199 / 33.39%): unknown, or implicit False? | Every discount metric downstream depends on it; coercing blank->False silently would bias the discount rate. | analyst | RC5 default = blank stays NULL/`''` (unknown); do NOT coerce to False. | `open` | |
-| Q3 | Is a transaction a SINGLE item (one row = one line), or a basket header that could have multiple lines elsewhere? | Confirms the grain semantics. PK is unique either way, but it affects whether `total_spent` is a line total or a basket total, and whether a line dimension is needed. | analyst | one row = one transaction at the lowest grain the source provides (RC1); single-item line assumed pending confirmation. | `open` | |
-| Q4 | How to handle the 9.65% (1,213) rows with a missing `item`? | The product dimension build needs a rule: drop the rows, or land them on the `-1` unknown member of `dim_product`. | analyst | RC14 default = keep the rows; FK COALESCE to the `-1` unknown product member (do not drop sales). | `open` | |
+| Q1 | Is `customer_id` (`CUST_xx`, 25 distinct, pseudonymous) safe to keep + publish as `dim_customer`, or must it be dropped/hashed? | The customer dimension and any per-customer analysis cannot be built until the PII/publish-safety ruling is made. Deviates from RC4 (auto-drop). | governance | RC4 default = DROP before the BI layer. Agent RECOMMENDS keep (already a pseudonymous surrogate, no raw PII), pending sign-off. | `answered` | 2026-06-25 (data owner): KEEP `customer_id` as `dim_customer` -- it is a pseudonymous surrogate, no raw PII. RC4 deviation stands (recorded in assumptions.md). |
+| Q2 | What does a BLANK `discount_applied` mean (4,199 / 33.39%): unknown, or implicit False? | Every discount metric downstream depends on it; coercing blank->False silently would bias the discount rate. | analyst | RC5 default = blank stays NULL/`''` (unknown); do NOT coerce to False. | `answered` | 2026-06-25 (data owner): blank = UNKNOWN -> NULL in silver (RC5). Do NOT coerce to False; discount metrics exclude unknowns. |
+| Q3 | Is a transaction a SINGLE item (one row = one line), or a basket header that could have multiple lines elsewhere? | Confirms the grain semantics. PK is unique either way, but it affects whether `total_spent` is a line total or a basket total, and whether a line dimension is needed. | analyst | one row = one transaction at the lowest grain the source provides (RC1); single-item line assumed pending confirmation. | `answered` | 2026-06-25 (data owner): one row = one single-item transaction; `total_spent` is the line total. No separate basket/line dimension. |
+| Q4 | How to handle the 9.65% (1,213) rows with a missing `item`? | The product dimension build needs a rule: drop the rows, or land them on the `-1` unknown member of `dim_product`. | analyst | RC14 default = keep the rows; FK COALESCE to the `-1` unknown product member (do not drop sales). | `answered` | 2026-06-25 (data owner): KEEP the rows; FK COALESCE the missing `item` to the `-1` unknown member of `dim_product` (RC14). Do not drop sales. |
 
 > Do not delete answered rows -- flip `Status` to `answered` and fill `Resolution` so
 > review sees the audit trail.
