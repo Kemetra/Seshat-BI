@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "powerbi-modeling": {
-      "command": "C:\\Users\\Shaaban\\Documents\\GitHub\\Retail_Tower_analytics\\tools\\powerbi-modeling-mcp\\extension\\server\\powerbi-modeling-mcp.exe",
+      "command": "C:\\Users\\Shaaban\\Documents\\GitHub\\Seshat_BI\\tools\\powerbi-modeling-mcp\\extension\\server\\powerbi-modeling-mcp.exe",
       "args": ["--read-write", "--compatibility=powerbi"]
     }
   }

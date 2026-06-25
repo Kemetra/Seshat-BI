@@ -77,6 +77,10 @@ No Power BI execution runs before semantic-model readiness.
 Seshat BI ships a Python package, `retail`, with two governance surfaces.
 
 ```bash
+# clone
+git clone https://github.com/ahmed-shaaban-94/Seshat_BI.git
+cd Seshat_BI
+
 # install (editable, with dev extras)
 python -m venv .venv
 . .venv/Scripts/activate          # Windows Git Bash / PowerShell: use the matching activate
