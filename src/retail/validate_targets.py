@@ -41,6 +41,20 @@ def _require(mapping: dict[str, Any], key: str, ctx: str) -> Any:
     return mapping[key]
 
 
+def _gold_qualify(name: str) -> str:
+    """Qualify a gold_star object name to the `gold` schema if it has no schema.
+
+    The live-check SQL uses these names VERBATIM (`FROM {fact}`), never prepending a
+    schema -- so a bare `fct_sales` would query the search_path and fail
+    (UndefinedTable). A gold_star object IS, by definition (Principle III / RC14), in
+    the `gold` schema, so a bare name is qualified to `gold.<name>`. An already-
+    qualified name (any `schema.object`, e.g. `gold.fct_sales_rss`) is left untouched,
+    so a star sharing the `gold` schema can disambiguate with a suffixed, qualified
+    name. Both the bare convention (c086) and the qualified convention work.
+    """
+    return name if "." in name else f"gold.{name}"
+
+
 def load_targets(path: Path | str) -> ValidationTargets:
     """Parse a filled source-map.yaml into the four validate targets.
 
@@ -63,19 +77,22 @@ def load_targets(path: Path | str) -> ValidationTargets:
 
     star = _require(data, "gold_star", "top level")
     fact = _require(star, "fact", "gold_star")
-    fact_name = _require(fact, "name", "gold_star.fact")
+    # gold_star objects live in the `gold` schema; qualify a bare name so the live
+    # check SQL (which uses the name verbatim) resolves. Already-qualified names pass
+    # through unchanged. See _gold_qualify.
+    fact_name = _gold_qualify(_require(fact, "name", "gold_star.fact"))
     measures = tuple(_require(fact, "measures", "gold_star.fact"))
 
     dims = _require(star, "dimensions", "gold_star")
     fks: list[tuple[str, str, str]] = []
     for dim in dims:
-        dim_name = _require(dim, "name", "gold_star.dimensions[]")
+        dim_name = _gold_qualify(_require(dim, "name", "gold_star.dimensions[]"))
         sk = _require(dim, "surrogate_key", f"dimension {dim_name}")
         # RC14: fact FK column == dim surrogate key; join dim.<sk> = fct.<sk>.
         fks.append((sk, dim_name, sk))
 
     date_dim = _require(star, "date_dimension", "gold_star")
-    date_dim_name = _require(date_dim, "name", "gold_star.date_dimension")
+    date_dim_name = _gold_qualify(_require(date_dim, "name", "gold_star.date_dimension"))
     date_sk = _require(date_dim, "surrogate_key", "gold_star.date_dimension")
 
     return ValidationTargets(
