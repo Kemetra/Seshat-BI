@@ -1,0 +1,85 @@
+# =============================================================================
+# readiness-status.yaml  --  retail_store_sales (the training-DB end-to-end testbed)
+# =============================================================================
+# Per-table readiness state (ADR 0004), spanning all seven stages. Seeded by the
+# retail-onboard-table wizard (the FIRST writer). Four statuses + evidence + blockers,
+# never a numeric score. ASCII only.
+# =============================================================================
+
+# --- identity ---------------------------------------------------------------
+table: "bronze.retail_store_sales"
+source_id: "retail_store_sales"
+source_family: "kaggle_retail_store_sales_dirty"
+
+# --- where we are -----------------------------------------------------------
+current_stage: "mapping_ready"
+mapping_version: "1"
+
+# --- the seven stages -------------------------------------------------------
+stages:
+
+  source_ready:
+    status: "warning"
+    evidence:
+      - "mappings/retail_store_sales/source-profile.md (12,575 rows; 11 cols; PK transaction_id unique; missingness '' OR NULL measured)"
+    blocking_reasons:
+      - "semantic proposals unconfirmed (grain single-item-vs-basket Q3; discount_applied blank meaning Q2)"
+      - "customer_id PII publish-safety not yet ruled by governance (Q1)"
+    # warning, not pass: mechanical numbers complete, but semantics await analyst
+    # confirmation + the PII ruling. A pass needs those confirmed.
+
+  mapping_ready:
+    status: "blocked"
+    evidence:
+      - "mappings/retail_store_sales/source-map.yaml (grain=transaction, PK=transaction_id, gold star: fct_sales + 4 dims + dim_date)"
+      - "mappings/retail_store_sales/assumptions.md (RC adopted/deviated: RC8 N/A returns, RC4 customer_id kept pending)"
+      - "mappings/retail_store_sales/unresolved-questions.md (Gate status: OPEN; Q1-Q4)"
+      - "mappings/retail_store_sales/reconciliation-report.md (blank; pending live run)"
+    blocking_reasons:
+      - "Gate status: OPEN -- 4 open questions (Q1 PII governance, Q2 discount blank, Q3 grain semantics, Q4 missing-item handling)"
+      - "map authored but not yet reviewed/APPROVED (no approvals[] entry)"
+
+  silver_ready:
+    status: "not_started"
+    evidence: []
+    blocking_reasons:
+      - "prior stage mapping_ready is not pass (gate OPEN)"
+
+  gold_ready:
+    status: "not_started"
+    evidence: []
+    blocking_reasons: []
+
+  semantic_model_ready:
+    status: "not_started"
+    evidence: []
+    blocking_reasons: []
+
+  dashboard_ready:
+    status: "not_started"
+    evidence: []
+    blocking_reasons: []
+
+  publish_ready:
+    status: "not_started"
+    evidence: []
+    blocking_reasons: []
+
+# --- cross-cutting ----------------------------------------------------------
+evidence: []
+blocking_reasons:
+  - "mapping gate OPEN -- human review + the 4 open questions block the build"
+
+# --- approvals (named human sign-offs; the agent cannot self-grant) ---------
+approvals: []
+  # filled by the reviewer when the map is approved:
+  # - stage: "mapping_ready"
+  #   owner: "<analyst>"
+  #   at: "<YYYY-MM-DD>"
+
+# --- the single next allowed action -----------------------------------------
+next_action: "human review of the map + answer the 4 open questions in mappings/retail_store_sales/unresolved-questions.md (Q1 governance, Q2-Q4 analyst); on approval, set Gate status: CLEARED and record an approvals[] entry"
+
+# --- audit ------------------------------------------------------------------
+last_checked_at: "2026-06-25"
+checked_by: "agent (retail-onboard-table)"
