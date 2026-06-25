@@ -12,7 +12,7 @@ source_id: "retail_store_sales"
 source_family: "kaggle_retail_store_sales_dirty"
 
 # --- where we are -----------------------------------------------------------
-current_stage: "semantic_model_ready" # contracts approved + governed PBIP model authored + semantic-check pass
+current_stage: "dashboard_ready"      # design authored (warning); review sign-off pending
 mapping_version: "1"
 
 # --- the seven stages -------------------------------------------------------
@@ -61,9 +61,14 @@ stages:
     blocking_reasons: []
 
   dashboard_ready:
-    status: "not_started"
-    evidence: []
-    blocking_reasons: []
+    status: "warning"
+    evidence:
+      - "design authored: mappings/retail_store_sales/design/ (dashboard-layout.md, visual-list.md, visual-contract-binding-map.md)"
+      - "10 measure-bearing visuals, single focused overview page; all 5 approved contracts bound, zero orphan visuals"
+    blocking_reasons:
+      - "design-review sign-off pending -- the BI report owner must approve the visual->contract binding map (Principle V; the skill never self-grants dashboard_ready: pass)"
+    # warning = design exists + is reviewable, NOT yet approved. pass requires the
+    # reviewer's approvals[] entry, not the agent's.
 
   publish_ready:
     status: "not_started"
@@ -83,7 +88,7 @@ approvals:
     note: "accepted the four open-question recommendations (Q1 keep customer_id; Q2 blank discount = unknown; Q3 single-item grain; Q4 missing item -> -1 unknown member)"
 
 # --- the single next allowed action -----------------------------------------
-next_action: "Stage 6 Dashboard Ready -- design a report against the approved contracts (dashboard-design / F011), supplying the business questions the page must answer. Stages 1-5 are pass."
+next_action: "design-review: the BI report owner reviews mappings/retail_store_sales/design/visual-contract-binding-map.md and, if approved, records a {stage: dashboard_ready, owner, at} entry in approvals[] -> dashboard_ready becomes pass -> Stage 7 (Publish: the BI handoff pack, F013)."
 
 # --- audit ------------------------------------------------------------------
 last_checked_at: "2026-06-25"
