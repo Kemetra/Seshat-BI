@@ -1,0 +1,111 @@
+# =============================================================================
+# readiness-status.yaml  --  retail_store_sales (the training-DB end-to-end testbed)
+# =============================================================================
+# Per-table readiness state (ADR 0004), spanning all seven stages. Seeded by the
+# retail-onboard-table wizard (the FIRST writer). Four statuses + evidence + blockers,
+# never a numeric score. ASCII only.
+# =============================================================================
+
+# --- identity ---------------------------------------------------------------
+table: "bronze.retail_store_sales"
+source_id: "retail_store_sales"
+source_family: "kaggle_retail_store_sales_dirty"
+
+# --- where we are -----------------------------------------------------------
+current_stage: "publish_ready"        # stages 1-6 pass; publish_ready=warning (prior approval retracted after the DiscountedTransactionRate correction; re-approval pending)
+mapping_version: "1"
+
+# --- the seven stages -------------------------------------------------------
+stages:
+
+  source_ready:
+    status: "pass"
+    evidence:
+      - "mappings/retail_store_sales/source-profile.md (12,575 rows; 11 cols; PK transaction_id unique; missingness '' OR NULL measured)"
+      - "semantics confirmed by data owner 2026-06-25 (Q2 discount-blank=unknown, Q3 grain=single-item transaction); PII ruling made (Q1 keep)"
+    blocking_reasons: []
+    # pass: mechanical numbers complete AND the semantic proposals + PII ruling were
+    # confirmed by the data owner (see unresolved-questions.md Q1-Q4 = answered).
+
+  mapping_ready:
+    status: "pass"
+    evidence:
+      - "mappings/retail_store_sales/source-map.yaml (grain=transaction, PK=transaction_id, gold star: fct_sales + 4 dims + dim_date)"
+      - "mappings/retail_store_sales/assumptions.md (RC adopted/deviated: RC8 N/A returns, RC4 customer_id kept)"
+      - "mappings/retail_store_sales/unresolved-questions.md (Gate status: CLEARED; Q1-Q4 answered)"
+      - "approval recorded in approvals[] below (data owner, 2026-06-25)"
+    blocking_reasons: []
+
+  silver_ready:
+    status: "pass"
+    evidence:
+      - "warehouse/migrations/0003_create_silver_retail_store_sales.sql applied to training; 12,575 silver rows"
+      - "retail check exit 0 (S1-S7); PK transaction_id re-proven unique on transformed silver (V-RC2 PASS)"
+    blocking_reasons: []
+
+  gold_ready:
+    status: "pass"
+    evidence:
+      - "warehouse/migrations/0004_create_gold_retail_store_sales_star.sql applied; fct_sales_rss 12,575 rows + 5 dims (the 4 entity dims each carry a -1 member; dim_date_rss deliberately carries NONE -- it is a marked date table, rule S8)"
+      - "retail validate exit 0 WITH banner: PK unique, date coverage complete, 0 orphan FKs (all 5), penny-exact reconcile (quantity 66,276; total_spent 1,552,071.00)"
+      - "mappings/retail_store_sales/reconciliation-report.md (filled, PASS)"
+      - "the 9.65% missing-item rows (1,213) correctly land on the -1 unknown product member (Q4 honored)"
+    blocking_reasons: []
+
+  semantic_model_ready:
+    status: "pass"
+    evidence:
+      - "5 metric contracts owner-approved 2026-06-25 (pass): TotalSales, TotalQuantity, TransactionCount, AvgTransactionValue, DiscountedTransactionRate (mappings/retail_store_sales/metrics/)"
+      - "governed PBIP model authored as TMDL: powerbi/RetailStoreSales.SemanticModel (5 dims + fct_sales_rss; marked date table; parameterized connection, no real host)"
+      - "retail-semantic-check 5-step verdict = pass: retail check exit 0 (D1-D8/C1/R1/G6), gold_ready=pass, all 5 model measures bind 1:1 to an approved contract"
+    blocking_reasons: []
+
+  dashboard_ready:
+    status: "pass"
+    evidence:
+      - "design authored: mappings/retail_store_sales/design/ (dashboard-layout.md, visual-list.md, visual-contract-binding-map.md)"
+      - "10 measure-bearing visuals, single focused overview page; all 5 approved contracts bound, zero orphan visuals"
+      - "design review APPROVED by data_owner on 2026-06-25 (binding map sign-off block)"
+    blocking_reasons: []
+
+  publish_ready:
+    status: "warning"
+    evidence:
+      - "BI handoff pack assembled: mappings/retail_store_sales/handoff/ (bi-handoff-pack.md + handoff-review-checklist.md)"
+      - "every required section resolves to a committed artifact (contracts, bronze->gold reconciliation PASS, deployed-schema data dictionary, the mandatory caveats)"
+    blocking_reasons:
+      - "publish RE-APPROVAL pending: the prior publish approval (2026-06-25) was given against a pack that framed DiscountedTransactionRate as 33.55% (denominator = all transactions). That metric was CORRECTED to the approved Q2 ruling (known-status, 50.37%), so the approved pack materially changed and the prior approval is retracted as stale. The data owner must review the corrected pack and re-record a {stage: publish_ready} approval. Live publish itself remains the deferred F016 adapter."
+    # warning = pack complete + reviewable; pass requires a FRESH publish approval
+    # against the corrected DiscountedTransactionRate framing (Principle V; no self-grant).
+
+# --- cross-cutting ----------------------------------------------------------
+evidence:
+  - "mapping gate CLEARED 2026-06-25; Q1-Q4 answered (data owner)"
+blocking_reasons: []
+
+# --- approvals (named human sign-offs; the agent cannot self-grant) ---------
+approvals:
+  - stage: "mapping_ready"
+    owner: "data_owner"               # the user, acting as data owner/analyst/governance
+    at: "2026-06-25"
+    note: "accepted the four open-question recommendations (Q1 keep customer_id; Q2 blank discount = unknown; Q3 single-item grain; Q4 missing item -> -1 unknown member)"
+  - stage: "semantic_model_ready"
+    owner: "data_owner"
+    at: "2026-06-25"
+    note: "approved the 5 metric contracts (TotalSales, TotalQuantity, TransactionCount, AvgTransactionValue, DiscountedTransactionRate)"
+  - stage: "dashboard_ready"
+    owner: "data_owner"               # acting as BI report owner
+    at: "2026-06-25"
+    note: "approved the dashboard design / visual->contract binding map (10 visuals, zero orphans, all 5 contracts bound; v04 discount caveat noted)"
+  # NOTE: a publish_ready approval was recorded 2026-06-25 and then RETRACTED the same
+  # day -- it was given against a handoff pack framing DiscountedTransactionRate as
+  # 33.55%, which was corrected to the approved known-status definition (50.37%). The
+  # approved artifact materially changed, so the approval no longer applies; a fresh
+  # publish approval against the corrected pack is required (publish_ready = warning).
+
+# --- the single next allowed action -----------------------------------------
+next_action: "publish RE-APPROVAL -- the data owner reviews the CORRECTED handoff pack (DiscountedTransactionRate now = known-status 50.37%, not the retracted 33.55% framing) and records a fresh {stage: publish_ready, owner, at} entry -> publish_ready becomes pass. Stages 1-6 remain pass. (Optional, the owner's call: re-affirm semantic_model_ready/dashboard_ready, both approved citing this contract -- though the dashboard design always described the known-status rate.) Live publish to a Power BI workspace is the deferred F016 execution adapter."
+
+# --- audit ------------------------------------------------------------------
+last_checked_at: "2026-06-25"
+checked_by: "agent (onboard -> build -> validate; mapping approved by data owner)"

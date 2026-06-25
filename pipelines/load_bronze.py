@@ -24,6 +24,7 @@ Configuration (flags override env):
     --src-dir    / SALES_SRC_DIR      folder of .xlsx files to load
     --base-file                       file whose header defines the bronze columns
 """
+
 from __future__ import annotations
 
 import argparse
@@ -50,7 +51,9 @@ def get_conn_params(cluster_id: str, database: str) -> dict:
     """Read connection details from doctl at runtime (no secrets in source)."""
     out = subprocess.run(
         ["doctl", "databases", "connection", cluster_id, "-o", "json"],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     info = json.loads(out.stdout)
     c = info[0] if isinstance(info, list) else info
@@ -89,7 +92,9 @@ def norm_headers(headers: list[str]) -> list[str]:
 
 
 def read_base_headers(src_dir: str, base_file: str) -> list[str]:
-    wb = openpyxl.load_workbook(os.path.join(src_dir, base_file), read_only=True, data_only=True)
+    wb = openpyxl.load_workbook(
+        os.path.join(src_dir, base_file), read_only=True, data_only=True
+    )
     ws = wb[wb.sheetnames[0]]
     hdr = [c.value for c in next(ws.iter_rows(min_row=1, max_row=1))]
     wb.close()
@@ -108,7 +113,9 @@ def create_objects(conn, cols: list[str]) -> None:
               _loaded_at   TIMESTAMPTZ NOT NULL DEFAULT now()
             );
         """)
-    log(f"schemas bronze/silver/gold ready; {BRONZE_TABLE} = {len(cols)} cols + lineage")
+    log(
+        f"schemas bronze/silver/gold ready; {BRONZE_TABLE} = {len(cols)} cols + lineage"
+    )
 
 
 def excel_rows(path: str):
@@ -156,10 +163,13 @@ def reconcile(conn, fname: str, path: str) -> None:
     excel_rows_n = wb[wb.sheetnames[0]].max_row - 1
     wb.close()
     with conn.cursor() as cur:
-        cur.execute(f"SELECT COUNT(*) FROM {BRONZE_TABLE} WHERE _source_file = %s;", (fname,))
+        cur.execute(
+            f"SELECT COUNT(*) FROM {BRONZE_TABLE} WHERE _source_file = %s;", (fname,)
+        )
         db_rows = cur.fetchone()[0]
     ok = excel_rows_n == db_rows
-    log(f"RECONCILE {fname}: excel={excel_rows_n} db={db_rows} -> {'PASS' if ok else 'FAIL'}")
+    verdict = "PASS" if ok else "FAIL"
+    log(f"RECONCILE {fname}: excel={excel_rows_n} db={db_rows} -> {verdict}")
     if not ok:
         sys.exit(f"reconcile FAILED for {fname}")
 
@@ -167,7 +177,9 @@ def reconcile(conn, fname: str, path: str) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Load C086 sales Excel files into bronze.")
     ap.add_argument("--cluster-id", default=os.environ.get("DO_DB_CLUSTER_ID"))
-    ap.add_argument("--database", default=os.environ.get("ANALYTICS_DB_NAME", "ezaby_demo"))
+    ap.add_argument(
+        "--database", default=os.environ.get("ANALYTICS_DB_NAME", "ezaby_demo")
+    )
     ap.add_argument("--src-dir", default=os.environ.get("SALES_SRC_DIR"))
     ap.add_argument("--base-file", default="C086_Sales_2023_H1_Jan-Jun.xlsx")
     ap.add_argument("--create-only", action="store_true")

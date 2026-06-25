@@ -1,0 +1,146 @@
+table 'gold fct_sales_rss'
+	lineageTag: b8181b29-2758-4bb2-b8dc-d11a376e13a3
+
+	/// Total money taken across all retail transactions (sum of total_spent). Binds to approved metric contract: TotalSales.yaml.
+	measure TotalSales = SUM('gold fct_sales_rss'[total_spent])
+		formatString: #,0.00
+		displayFolder: Sales
+		lineageTag: f8a7ec1c-04d5-44de-958f-5b411710c35d
+
+	/// Total number of units sold across all retail transactions (sum of quantity). Binds to approved metric contract: TotalQuantity.yaml.
+	measure TotalQuantity = SUM('gold fct_sales_rss'[quantity])
+		formatString: #,0.0000
+		displayFolder: Sales
+		lineageTag: dd858326-d81d-476f-a796-eeb2a4397022
+
+	/// Count of retail transactions (fact is one row per transaction). Binds to approved metric contract: TransactionCount.yaml.
+	measure TransactionCount = COUNTROWS('gold fct_sales_rss')
+		formatString: #,0
+		displayFolder: Sales
+		lineageTag: 69939cc1-6710-4b58-a8a2-4a1a1102d95b
+
+	/// Average money taken per transaction WITH a recorded sale; denominator aligned to the numerator's row-set (transactions with non-null total_spent). Binds to approved metric contract: AvgTransactionValue.yaml.
+	measure AvgTransactionValue = DIVIDE([TotalSales], CALCULATE([TransactionCount], NOT(ISBLANK('gold fct_sales_rss'[total_spent]))))
+		formatString: #,0.00
+		displayFolder: Ratios
+		lineageTag: 3c1883b4-1eab-4d72-98b9-8c790cca8135
+
+	/// Share of KNOWN-STATUS transactions that had a discount applied; denominator = transactions with a known discount status (discount_applied NOT NULL), per the Q2 ruling that excludes unknowns. Binds to approved metric contract: DiscountedTransactionRate.yaml.
+	measure DiscountedTransactionRate = DIVIDE(CALCULATE([TransactionCount], 'gold fct_sales_rss'[discount_applied] = TRUE()), CALCULATE([TransactionCount], NOT(ISBLANK('gold fct_sales_rss'[discount_applied]))))
+		formatString: 0.0%
+		displayFolder: Ratios
+		lineageTag: 8d0fd576-2a16-4d75-8706-977df6adb2e2
+
+	column fct_sales_rss_sk
+		dataType: int64
+		formatString: 0
+		lineageTag: 5687b1f5-e782-446b-9d09-5030ca3575dd
+		summarizeBy: none
+		sourceColumn: fct_sales_rss_sk
+
+		annotation SummarizationSetBy = User
+
+	column transaction_id
+		dataType: string
+		lineageTag: 6c2b3c0e-c9ba-4a49-b565-068dc4fbf430
+		summarizeBy: none
+		sourceColumn: transaction_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column customer_sk
+		dataType: int64
+		formatString: 0
+		lineageTag: 25b48554-cfaf-4dba-a7b2-c3b317230525
+		summarizeBy: none
+		sourceColumn: customer_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column product_sk
+		dataType: int64
+		formatString: 0
+		lineageTag: eeba284a-d316-408c-a6e8-0a13d8bcd9a4
+		summarizeBy: none
+		sourceColumn: product_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column payment_method_sk
+		dataType: int64
+		formatString: 0
+		lineageTag: c0d0fa04-f80a-465a-b021-15f49e3bce1c
+		summarizeBy: none
+		sourceColumn: payment_method_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column location_sk
+		dataType: int64
+		formatString: 0
+		lineageTag: f26308d3-84bd-426d-8204-cbe08f0df033
+		summarizeBy: none
+		sourceColumn: location_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_sk
+		dataType: int64
+		formatString: 0
+		lineageTag: 01bded12-1226-40b4-a70b-9ccc180b6d9f
+		summarizeBy: none
+		sourceColumn: date_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column price_per_unit
+		dataType: double
+		lineageTag: 6020b834-f34f-421c-8a6a-7f3a2975ab46
+		summarizeBy: none
+		sourceColumn: price_per_unit
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column quantity
+		dataType: double
+		lineageTag: 925e0222-4613-4e7b-94f6-33b8b2ed1655
+		summarizeBy: none
+		sourceColumn: quantity
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column total_spent
+		dataType: double
+		lineageTag: 6242a994-0da9-4ea7-8bd4-14e4badf2aa9
+		summarizeBy: none
+		sourceColumn: total_spent
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column discount_applied
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: c43c247e-774c-4101-b250-367befda6e67
+		summarizeBy: none
+		sourceColumn: discount_applied
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'gold fct_sales_rss' = m
+		mode: import
+		source =
+				let
+				  Source = PostgreSQL.Database(Server, Database),
+				  #"Navigation 1" = Source{[Schema = "gold", Item = "fct_sales_rss"]}[Data]
+				in
+				  #"Navigation 1"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table

@@ -86,6 +86,62 @@ def tokenize_sql(text: str) -> list[SqlToken]:
     return tokens
 
 
+def strip_sql_comments(text: str) -> str:
+    """Blank out `--` and `/* */` comments, PRESERVING line structure + quoted
+    identifiers AND string literals.
+
+    Unlike ``tokenize_sql`` (which also collapses quoted identifiers to an empty
+    token), this keeps `'...'` literals and `"..."`/`[...]` identifiers intact so an
+    identifier-level rule (S1) can still inspect them -- it only removes comment
+    spans, replacing each removed character that is not a newline with a space so
+    every line number and column outside comments is unchanged.
+
+    Quote state is TRACKED (2026-06-25 Codex review fix): a `--` or `/*` that
+    appears INSIDE a `'...'` string literal or a `"..."` quoted identifier is data,
+    not a comment marker, and is copied through verbatim. Without this, a `'--'`
+    literal opened a phantom comment that blanked the rest of the line -- hiding any
+    real bad quoted identifier after it (an S1 false negative). PostgreSQL escapes a
+    quote by doubling it (`''` / `""`) inside the same literal; that is handled by
+    re-opening immediately, which leaves the doubled quotes (and the span) intact --
+    correct for comment-stripping, whose only job is to neutralize comments.
+    """
+    out: list[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        # Inside a quoted span, copy through until the matching close quote; never
+        # interpret a comment marker here.
+        if ch in ("'", '"'):
+            out.append(ch)
+            i += 1
+            while i < n:
+                out.append(text[i])
+                if text[i] == ch:
+                    i += 1
+                    break
+                i += 1
+            continue
+        if text.startswith("--", i):
+            j = text.find("\n", i)
+            end = n if j == -1 else j
+            out.append(
+                " " * (end - i)
+            )  # keep columns; newline (if any) added next loop
+            i = end
+            continue
+        if text.startswith("/*", i):
+            j = text.find("*/", i)
+            end = n if j == -1 else j + 2
+            span = text[i:end]
+            # preserve newlines inside the block so line numbers downstream hold
+            out.append("".join("\n" if c == "\n" else " " for c in span))
+            i = end
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
+
+
 def iter_sql_files(ctx: RuleContext) -> list[str]:
     """Repo-relative POSIX paths of tracked warehouse SQL files."""
     return sorted(

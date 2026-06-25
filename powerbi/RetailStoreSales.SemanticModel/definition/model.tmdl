@@ -1,0 +1,20 @@
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	sourceQueryCulture: en-US
+	dataAccessOptions
+		legacyRedirects
+		returnErrorValuesAsNull
+
+annotation __PBI_TimeIntelligenceEnabled = 1
+
+annotation PBI_QueryOrder = ["gold dim_customer_rss","gold dim_date_rss","gold dim_location_rss","gold dim_payment_method_rss","gold dim_product_rss","gold fct_sales_rss","Server","Database"]
+
+ref table 'gold dim_customer_rss'
+ref table 'gold dim_date_rss'
+ref table 'gold dim_location_rss'
+ref table 'gold dim_payment_method_rss'
+ref table 'gold dim_product_rss'
+ref table 'gold fct_sales_rss'
+
+ref cultureInfo en-US

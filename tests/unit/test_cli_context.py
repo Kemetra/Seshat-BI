@@ -1,6 +1,7 @@
 """M1.7: mode-aware build_context + the two new CLI flags."""
 
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,28 @@ from retail.runner import build_context
 from tests.unit._gitfix import make_git_repo
 
 pytestmark = pytest.mark.unit
+
+
+def test_python_m_invokes_main_not_a_noop() -> None:
+    """`python -m retail.cli` MUST run main(), not exit 0 as a silent no-op.
+
+    Regression guard (2026-06-25 defect): without an `if __name__ == "__main__"`
+    block the module imported and exited 0 without running, so `python -m retail.cli
+    validate` looked like a pass while doing nothing. With the guard, a missing
+    subcommand reaches argparse (required=True) and exits 2 -- proof main() ran.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    proc = subprocess.run(
+        [sys.executable, "-m", "retail.cli"],
+        cwd=repo_root / "src",
+        capture_output=True,
+        text=True,
+    )
+    # argparse with required subparser -> exit 2 (NOT the old silent 0 no-op).
+    assert proc.returncode == 2, (
+        f"python -m retail.cli should run main() and exit 2 on no subcommand, "
+        f"got {proc.returncode} (stdout={proc.stdout!r} stderr={proc.stderr!r})"
+    )
 
 
 def test_build_context_defaults_both_none(tmp_path: Path) -> None:

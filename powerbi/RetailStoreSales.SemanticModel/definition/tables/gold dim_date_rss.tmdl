@@ -1,0 +1,108 @@
+table 'gold dim_date_rss'
+	lineageTag: 1df7908f-38df-4a7c-99aa-6d1611de2754
+	dataCategory: Time
+
+	column date_sk
+		dataType: int64
+		formatString: 0
+		lineageTag: 840aa94f-a5e8-4ee2-aac3-546855d1eb4b
+		summarizeBy: none
+		sourceColumn: date_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column full_date
+		dataType: dateTime
+		isUnique
+		isKey
+		formatString: Long Date
+		lineageTag: 6c3eafb4-fbd7-41d9-a1cd-f019894468fd
+		summarizeBy: none
+		sourceColumn: full_date
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column year
+		dataType: int64
+		formatString: 0
+		lineageTag: 0a1c4d3b-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+		summarizeBy: none
+		sourceColumn: year
+
+		annotation SummarizationSetBy = User
+
+	column quarter
+		dataType: int64
+		formatString: 0
+		lineageTag: 1b2c5d4e-6f70-4b8c-9da0-1f2a3b4c5d6e
+		summarizeBy: none
+		sourceColumn: quarter
+
+		annotation SummarizationSetBy = User
+
+	column month
+		dataType: int64
+		formatString: 0
+		lineageTag: 2c3d6e5f-7081-4c9d-aeb1-2a3b4c5d6e7f
+		summarizeBy: none
+		sourceColumn: month
+
+		annotation SummarizationSetBy = User
+
+	column month_name
+		dataType: string
+		lineageTag: 3d4e7f60-8192-4dae-bfc2-3b4c5d6e7f80
+		summarizeBy: none
+		sourceColumn: month_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column day
+		dataType: int64
+		formatString: 0
+		lineageTag: 4e5f8071-92a3-4ebf-c0d3-4c5d6e7f8091
+		summarizeBy: none
+		sourceColumn: day
+
+		annotation SummarizationSetBy = User
+
+	column day_name
+		dataType: string
+		lineageTag: 5f609182-a3b4-4fc0-d1e4-5d6e7f8091a2
+		summarizeBy: none
+		sourceColumn: day_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column iso_week
+		dataType: int64
+		formatString: 0
+		lineageTag: 6071a293-b4c5-40d1-e2f5-6e7f8091a2b3
+		summarizeBy: none
+		sourceColumn: iso_week
+
+		annotation SummarizationSetBy = User
+
+	column is_weekend
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 7182b3a4-c5d6-41e2-f306-7f8091a2b3c4
+		summarizeBy: none
+		sourceColumn: is_weekend
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'gold dim_date_rss' = m
+		mode: import
+		source =
+				let
+				  Source = PostgreSQL.Database(Server, Database),
+				  #"Navigation 1" = Source{[Schema = "gold", Item = "dim_date_rss"]}[Data]
+				in
+				  #"Navigation 1"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table

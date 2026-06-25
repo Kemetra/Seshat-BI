@@ -1,0 +1,40 @@
+table 'gold dim_product_rss'
+	lineageTag: 9de9cd96-42a4-400e-a967-931d0e510b20
+
+	column product_sk
+		dataType: int64
+		formatString: 0
+		lineageTag: 00ec0dee-e5e9-4000-84ea-ab502be7d44a
+		summarizeBy: none
+		sourceColumn: product_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column item
+		dataType: string
+		lineageTag: c78f4f82-3941-43ec-9416-dcd60b9daf2b
+		summarizeBy: none
+		sourceColumn: item
+
+		annotation SummarizationSetBy = Automatic
+
+	column category
+		dataType: string
+		lineageTag: ad7de164-bc7a-456f-bdbb-d9ed8f48722c
+		summarizeBy: none
+		sourceColumn: category
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'gold dim_product_rss' = m
+		mode: import
+		source =
+				let
+				  Source = PostgreSQL.Database(Server, Database),
+				  #"Navigation 1" = Source{[Schema = "gold", Item = "dim_product_rss"]}[Data]
+				in
+				  #"Navigation 1"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table

@@ -21,6 +21,7 @@ from retail.rules.sql import (
     s5_type_discipline,
     s6_gold_unknown_member,
     s7_contiguous_date_dim,
+    s8_date_dim_no_unknown_member,
 )
 
 pytestmark = pytest.mark.unit
@@ -185,6 +186,140 @@ def test_s6_clean_multiple_dims_all_with_members(tmp_path: Path) -> None:
     assert findings == [], f"all dims have -1 members; expected clean, got: {findings}"
 
 
+def test_s6_exempts_dim_date_from_minus_one_requirement(tmp_path: Path) -> None:
+    """A gold.dim_date* must NOT be required to carry a -1 unknown member (S6).
+
+    Reconciliation with S8 (2026-06-25 Codex review): every OTHER gold dim gets a
+    `-1 'UNKNOWN'` member (RC14/S6), but the DATE dim is the documented exception --
+    it is destined to be a marked date table (dataCategory: Time), which Power BI
+    validates as unique/contiguous/NO-nulls. So S6 must not flag a date dim that has
+    no -1 member, and S8 (below) flags a date dim that DOES. The two are inverse and
+    complementary, never contradictory.
+    """
+    rel = _write(
+        tmp_path,
+        "warehouse/migrations/0002_gold.sql",
+        "CREATE TABLE gold.dim_date (date_sk int, full_date date);\n"
+        "INSERT INTO gold.dim_date\n"
+        "SELECT (to_char(g.d,'YYYYMMDD'))::int, g.d::date\n"
+        "FROM generate_series(DATE '2023-01-01', DATE '2025-12-31',"
+        " INTERVAL '1 day') AS g(d);\n",  # NO -1 member -- correct for a date dim
+    )
+    findings = list(s6_gold_unknown_member(_ctx(tmp_path, rel)))
+    assert findings == [], (
+        "S6 must EXEMPT a date dim from the -1-member requirement (it becomes a "
+        f"marked date table that rejects nulls), got: {findings}"
+    )
+
+
+# ===========================================================================
+# S8 -- a marked date dim must carry NO -1/NULL unknown member (inverse of S6)
+# ===========================================================================
+
+
+def test_s8_flags_date_dim_with_minus_one_member(tmp_path: Path) -> None:
+    """S8 ERRORs on a `gold.dim_date*` that inserts a -1/NULL unknown member.
+
+    Codex PR review #1 (2026-06-25): a -1,NULL member in a date table that is marked
+    dataCategory: Time makes Power BI date-table validation fail (or breaks
+    time-intelligence) even though the SQL migration succeeds. The SQL must not
+    create such a member; ERROR (a hard correctness gate, unlike S6/S7 warnings).
+    """
+    rel = _write(
+        tmp_path,
+        "warehouse/migrations/0002_gold.sql",
+        "CREATE TABLE gold.dim_date (date_sk int, full_date date);\n"
+        "INSERT INTO gold.dim_date VALUES (-1, NULL);\n",
+    )
+    findings = list(s8_date_dim_no_unknown_member(_ctx(tmp_path, rel)))
+    assert findings, "expected S8 to flag a date dim with a -1/NULL member"
+    f = findings[0]
+    assert f.rule_id == "S8"
+    assert f.severity == Severity.ERROR
+    assert "dim_date" in f.message
+
+
+def test_s8_clean_when_date_dim_has_no_unknown_member(tmp_path: Path) -> None:
+    rel = _write(
+        tmp_path,
+        "warehouse/migrations/0002_gold.sql",
+        "CREATE TABLE gold.dim_date (date_sk int, full_date date);\n"
+        "INSERT INTO gold.dim_date\n"
+        "SELECT (to_char(g.d,'YYYYMMDD'))::int, g.d::date\n"
+        "FROM generate_series(DATE '2023-01-01', DATE '2025-12-31',"
+        " INTERVAL '1 day') AS g(d);\n",
+    )
+    findings = list(s8_date_dim_no_unknown_member(_ctx(tmp_path, rel)))
+    assert findings == [], (
+        f"a date dim with no -1 member must be clean, got: {findings}"
+    )
+
+
+def test_s8_ignores_non_date_gold_dims(tmp_path: Path) -> None:
+    """S8 only checks date dims; a normal dim's -1 member (S6-required) is fine."""
+    rel = _write(
+        tmp_path,
+        "warehouse/migrations/0002_gold.sql",
+        "CREATE TABLE gold.dim_product (product_sk int, name text);\n"
+        "INSERT INTO gold.dim_product VALUES (-1, 'UNKNOWN');\n",
+    )
+    findings = list(s8_date_dim_no_unknown_member(_ctx(tmp_path, rel)))
+    assert findings == [], "S8 must only inspect gold.dim_date* tables"
+
+
+def test_s8_exempts_test_fixtures(tmp_path: Path) -> None:
+    rel = _write(
+        tmp_path,
+        "tests/fixtures/bad.sql",
+        "INSERT INTO gold.dim_date VALUES (-1, NULL);\n",
+    )
+    findings = list(s8_date_dim_no_unknown_member(_ctx(tmp_path, rel)))
+    assert findings == [], "tests/ fixtures are exempt from the live scan"
+
+
+def test_s8_ignores_minus_one_arithmetic_in_date_insert(tmp_path: Path) -> None:
+    """S8 must NOT flag a valid date-dim insert that uses `- 1` ARITHMETIC.
+
+    Regression guard (2026-06-25 Codex review): the old pattern matched `-1` ANYWHERE
+    before the `;`, so a calendar deriving e.g. a zero-based month (`extract(month
+    FROM d) - 1`) or a previous-day offset tripped S8 -- and since S8 is ERROR it would
+    BLOCK a perfectly valid marked calendar. Only a `-1` in the VALUES/key position is
+    an unknown member; arithmetic `- 1` is not.
+    """
+    rel = _write(
+        tmp_path,
+        "warehouse/migrations/0002_gold.sql",
+        "CREATE TABLE gold.dim_date (date_sk int, full_date date, month_idx int);\n"
+        "INSERT INTO gold.dim_date\n"
+        "SELECT (to_char(g.d,'YYYYMMDD'))::int, g.d::date,\n"
+        # the `- 1` below is arithmetic (zero-based month), NOT an unknown member:
+        "       extract(month FROM g.d)::int - 1\n"
+        "FROM generate_series(DATE '2023-01-01', DATE '2025-12-31',"
+        " INTERVAL '1 day') AS g(d);\n",
+    )
+    findings = list(s8_date_dim_no_unknown_member(_ctx(tmp_path, rel)))
+    assert findings == [], (
+        "S8 must not treat arithmetic `- 1` as an unknown member; "
+        f"got false-positive: {findings}"
+    )
+
+
+def test_s8_still_flags_values_minus_one_after_narrowing(tmp_path: Path) -> None:
+    """The narrowing must NOT reopen Codex #1.
+
+    A real `VALUES (-1, ...)` date member must still raise an S8 ERROR.
+    """
+    rel = _write(
+        tmp_path,
+        "warehouse/migrations/0002_gold.sql",
+        "CREATE TABLE gold.dim_date (date_sk int, full_date date);\n"
+        "INSERT INTO gold.dim_date VALUES (-1, NULL);\n",
+    )
+    findings = list(s8_date_dim_no_unknown_member(_ctx(tmp_path, rel)))
+    assert findings, "S8 must STILL flag a real VALUES(-1,...) date member"
+    assert findings[0].rule_id == "S8"
+
+
 # ===========================================================================
 # S7 -- contiguous date dim (enforces RC15)
 # ===========================================================================
@@ -234,14 +369,18 @@ def test_s7_ignores_select_distinct_on_non_date_dim(tmp_path: Path) -> None:
 # ===========================================================================
 
 
-def test_all_three_clean_on_conforming_migration(tmp_path: Path) -> None:
+def test_all_four_clean_on_conforming_migration(tmp_path: Path) -> None:
+    # The conforming shape (post Codex-review fix): the date dim is a contiguous
+    # generate_series calendar with NO -1/NULL member (so it can be a marked date
+    # table); a NORMAL dim carries its -1 member (RC14/S6). All four S-rules clean.
     rel = _write(
         tmp_path,
         "warehouse/migrations/0002_gold.sql",
+        "CREATE TABLE gold.dim_product (product_sk int, name text);\n"
+        "INSERT INTO gold.dim_product VALUES (-1, 'UNKNOWN');\n"
         "CREATE TABLE gold.dim_date (date_sk int, full_date date);\n"
-        "INSERT INTO gold.dim_date VALUES (-1, NULL);\n"
         "INSERT INTO gold.dim_date\n"
-        "SELECT row_number() OVER (), g.d::date\n"
+        "SELECT (to_char(g.d,'YYYYMMDD'))::int, g.d::date\n"
         "FROM generate_series(DATE '2023-01-01', DATE '2025-12-31',"
         " INTERVAL '1 day') AS g(d);\n"
         "CREATE TABLE gold.fct_sales (amt numeric(18,2));\n",
@@ -250,3 +389,4 @@ def test_all_three_clean_on_conforming_migration(tmp_path: Path) -> None:
     assert list(s5_type_discipline(ctx)) == []
     assert list(s6_gold_unknown_member(ctx)) == []
     assert list(s7_contiguous_date_dim(ctx)) == []
+    assert list(s8_date_dim_no_unknown_member(ctx)) == []

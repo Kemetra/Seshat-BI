@@ -40,11 +40,14 @@ layer up -- it governs the SEMANTIC MODEL, not the SQL.
   scope boundary -- F009 DEFINES, F010 CHECKS. (Per the roadmap "Next" tier, this
   slice carries the F010 line; the description's "F010 / on-disk 010" naming refers
   to the same checking layer this spec defines.)
-- **AUTHORING the model is OUT of scope (F016, gated).** This skill never writes
-  TMDL, never adds or edits a measure, relationship, or date marker, and never calls
-  pbi-cli / PBIP automation (constitution Principle II; roadmap hard rule #6 -- F016
-  is last and gated on this stage being `pass`). It reads an EXISTING model and
-  reports; a human edits Power BI Desktop to remediate.
+- **AUTHORING the model is OUT of scope FOR THIS SKILL.** This read-only checker never
+  writes TMDL, never adds or edits a measure, relationship, or date marker. (Clarified
+  2026-06-25: authoring the governed model as committed TMDL is a SEPARATE Stage-7
+  activity -- `pbip-workflow` + `powerbi-analyst`, model-as-code -- NOT F016. F016 is the
+  execution-only adapter: live connection / refresh / publish, which CANNOT define
+  semantic logic; it is last and gated on this stage being `pass`, constitution
+  Principle II / roadmap hard rule #6.) The checker reads an EXISTING model and reports;
+  a human (or the Stage-7 authoring step) edits the TMDL to remediate, never this skill.
 
 ## Architecture (a pure skill; no codegen, no new checker rules, no CLI)
 

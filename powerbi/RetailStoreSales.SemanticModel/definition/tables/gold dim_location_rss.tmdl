@@ -1,0 +1,32 @@
+table 'gold dim_location_rss'
+	lineageTag: 308c667a-b612-4763-9d4d-d060154ef838
+
+	column location_sk
+		dataType: int64
+		formatString: 0
+		lineageTag: 54dcf8b5-4599-44f1-8800-c24bfb619a29
+		summarizeBy: none
+		sourceColumn: location_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column location
+		dataType: string
+		lineageTag: d191801d-a170-490a-9054-8ceca5325e4e
+		summarizeBy: none
+		sourceColumn: location
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'gold dim_location_rss' = m
+		mode: import
+		source =
+				let
+				  Source = PostgreSQL.Database(Server, Database),
+				  #"Navigation 1" = Source{[Schema = "gold", Item = "dim_location_rss"]}[Data]
+				in
+				  #"Navigation 1"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table

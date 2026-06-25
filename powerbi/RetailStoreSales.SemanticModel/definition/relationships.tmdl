@@ -1,0 +1,29 @@
+relationship f4c82114-0206-4d53-80cd-db3eae006ee1
+	fromColumn: 'gold fct_sales_rss'.customer_sk
+	toColumn: 'gold dim_customer_rss'.customer_sk
+
+	annotation PBI_IsFromSource = FS
+
+relationship c994fefd-5a03-410a-8ad4-6f48e81174e7
+	fromColumn: 'gold fct_sales_rss'.product_sk
+	toColumn: 'gold dim_product_rss'.product_sk
+
+	annotation PBI_IsFromSource = FS
+
+relationship b8287cbf-3277-48af-bbba-d5f514f4e694
+	fromColumn: 'gold fct_sales_rss'.payment_method_sk
+	toColumn: 'gold dim_payment_method_rss'.payment_method_sk
+
+	annotation PBI_IsFromSource = FS
+
+relationship 8e899b19-15ca-47e2-8cd7-87cb822a8553
+	fromColumn: 'gold fct_sales_rss'.location_sk
+	toColumn: 'gold dim_location_rss'.location_sk
+
+	annotation PBI_IsFromSource = FS
+
+relationship 293b29d6-27ee-4fcc-b3b8-a2b97474c8cc
+	fromColumn: 'gold fct_sales_rss'.date_sk
+	toColumn: 'gold dim_date_rss'.date_sk
+
+	annotation PBI_IsFromSource = FS

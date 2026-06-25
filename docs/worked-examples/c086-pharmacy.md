@@ -75,9 +75,11 @@ never invent a business rollup, require an analyst-supplied mapping.
 
 **What C086 did.** A Kimball star in `gold`: **1 fact** (`fct_sales`, line-item grain, 246,916
 rows) + **6 conformed dimensions** (product, customer, salesperson, billing_type, branch, date).
-Surrogate `_sk` IDENTITY keys; an **unknown member at `_sk = -1`** in every dim; fact FKs
+Surrogate `_sk` IDENTITY keys; an **unknown member at `_sk = -1`** in every ENTITY dim; fact FKs
 `COALESCE(...,-1)`; `invoice_no`/`line_no`/`original_invoice_ref` as **degenerate dimensions** on
-the fact; `dim_date` a **contiguous generated calendar**.
+the fact; `dim_date` a **contiguous generated calendar** that deliberately carries **no `-1`
+member** (a marked date table -- rule S8 -- rejects nulls; an unmatched fact date fails via
+`date_sk NOT NULL`).
 
 **Rule it proves.** ADR **RC14** (Kimball star + `-1` member + degenerate dims), **RC15** (contiguous
 date dim); playbook Phase 6.
@@ -171,6 +173,9 @@ Statically checkable from committed text — these are now **wired into `retail 
 - **RC7 → S5** — type discipline: money/qty not cast to float; leading-zero ids not cast to int.
 - **RC13 / S4b** — idempotent migration *form* (already a checker rule; layer-aware per §6).
 - **RC14 → S6** — star structure: each `gold.dim_*` has a `-1` unknown member (static, partial).
+  S6 EXEMPTS `dim_date*` (the date dim is a marked date table and carries none).
+- **(date) → S8** — the inverse of S6: a marked `gold.dim_date*` must carry **no** `-1`/NULL
+  member (ERROR); an unmatched fact date fails via `date_sk NOT NULL`, never a sentinel.
 - **RC15 → S7** — `dim_date` built from `generate_series`, not `SELECT DISTINCT date`.
 
 These are *structural / textual* — parseable from the migration SQL without a database. The

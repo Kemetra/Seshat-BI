@@ -79,6 +79,75 @@ def test_orphan_target_one_fk_per_dimension() -> None:
     )
 
 
+def test_bare_gold_names_are_schema_qualified_to_gold() -> None:
+    """A gold_star name WITHOUT a schema must be qualified to `gold.<name>`.
+
+    Regression guard (2026-06-25 defect): the check SQL uses the fact/dim names
+    VERBATIM (`FROM {target.fact}`), never prepending `gold.`. A source-map whose
+    gold_star carries bare names (e.g. c086's `fct_sales`, `dim_product`) then
+    produced `FROM fct_sales` -> UndefinedTable, and the CLI swallowed it. The loader
+    must qualify a bare name to the `gold` schema, while leaving an already-qualified
+    name (e.g. `gold.fct_sales_rss`) untouched -- so BOTH conventions work.
+    """
+    import tempfile
+
+    from retail.validate_targets import load_targets
+
+    bare = (
+        "meta:\n"
+        "  table_id: demo\n"
+        "  primary_key: [id]\n"
+        "gold_star:\n"
+        "  fact:\n"
+        "    name: fct_demo\n"  # BARE -- no schema
+        "    measures: [amt]\n"
+        "  dimensions:\n"
+        "    - name: dim_thing\n"  # BARE
+        "      surrogate_key: thing_sk\n"
+        "  date_dimension:\n"
+        "    name: dim_date\n"  # BARE
+        "    surrogate_key: date_sk\n"
+    )
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "bare.source-map.yaml"
+        p.write_text(bare, encoding="utf-8")
+        t = load_targets(p)
+    assert t.reconcile.gold == "gold.fct_demo"
+    assert t.orphans.fact == "gold.fct_demo"
+    assert t.date_coverage.fact == "gold.fct_demo"
+    assert t.date_coverage.date_dim == "gold.dim_date"
+    assert t.orphans.fks == (("thing_sk", "gold.dim_thing", "thing_sk"),)
+
+
+def test_already_qualified_gold_names_are_left_untouched() -> None:
+    """An already-`gold.`-qualified gold_star name must NOT be double-qualified."""
+    import tempfile
+
+    from retail.validate_targets import load_targets
+
+    qualified = (
+        "meta:\n"
+        "  table_id: demo\n"
+        "  primary_key: [id]\n"
+        "gold_star:\n"
+        "  fact:\n"
+        "    name: gold.fct_demo_rss\n"  # ALREADY qualified
+        "    measures: [amt]\n"
+        "  dimensions:\n"
+        "    - name: gold.dim_thing_rss\n"
+        "      surrogate_key: thing_sk\n"
+        "  date_dimension:\n"
+        "    name: gold.dim_date_rss\n"
+        "    surrogate_key: date_sk\n"
+    )
+    with tempfile.TemporaryDirectory() as d:
+        p = Path(d) / "qual.source-map.yaml"
+        p.write_text(qualified, encoding="utf-8")
+        t = load_targets(p)
+    assert t.reconcile.gold == "gold.fct_demo_rss"  # not gold.gold.fct_demo_rss
+    assert t.orphans.fks == (("thing_sk", "gold.dim_thing_rss", "thing_sk"),)
+
+
 def test_load_targets_missing_file_raises_clear_error() -> None:
     from retail.validate_targets import load_targets
 

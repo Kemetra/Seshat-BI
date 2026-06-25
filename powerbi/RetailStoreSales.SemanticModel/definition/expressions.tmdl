@@ -1,0 +1,11 @@
+/// Postgres host:port. Real value supplied at refresh (Desktop/gateway), never committed.
+expression Server = "<your-db-host>:5432" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+	lineageTag: 5d36ae75-e2ad-41d5-8960-bd0478be89f2
+
+	annotation PBI_ResultType = Text
+
+/// Postgres database name. Real value supplied at refresh (Desktop/gateway), never committed.
+expression Database = "<your-database>" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+	lineageTag: 049dc35e-3063-470c-8b89-b5be13b100db
+
+	annotation PBI_ResultType = Text

@@ -1,0 +1,29 @@
+# Metric contract -- AvgTransactionValue (filled instance for retail_store_sales)
+# F009 define-layer. PROPOSAL: status not_started until the metric owner approves.
+# A ratio metric: NOT additive -- it must be recomputed at each grain, never summed.
+
+name: "AvgTransactionValue"
+grain: "a RATIO valid at any rollup; recomputed at the current filter grain. NOT additive -- never pre-aggregate or sum it."
+formula_intent: >-
+  The average money taken per transaction THAT HAS A RECORDED SALE -- the sum of
+  total_spent divided by the COUNT OF TRANSACTIONS WITH A NON-NULL total_spent (the
+  same row-set the numerator sums over). The denominator MUST be aligned to the
+  numerator: do NOT divide by the all-transactions count. On the current data that is
+  1,552,071.00 / 11,971 = 129.65; dividing by all 12,575 transactions instead would
+  understate the average by ~5% (123.43) because 604 transactions have a NULL (truly
+  unknown -- not recoverable from price*quantity) total_spent and contribute no sales.
+  A ratio: compute at the display grain, never average-of-averages.
+owner: "data_owner"   # approved 2026-06-25 (see readiness evidence + readiness-status approvals[])
+binds_to:
+  gold_table: "gold.fct_sales_rss"
+  columns:
+    - "total_spent"          # numerator: SUM, and the denominator counts rows where this is non-NULL
+    - "transaction_id"
+  pii_sensitive: false
+
+readiness:
+  status: "pass"
+  evidence:
+    - "approved by data_owner on 2026-06-25"
+    - "numerator = TotalSales; denominator = transactions with non-NULL total_spent (11,971), aligned to the numerator's row-set -- verified on gold.fct_sales_rss 2026-06-25 (= 129.65)"
+  blocking_reasons: []

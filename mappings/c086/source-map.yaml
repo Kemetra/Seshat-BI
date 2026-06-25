@@ -348,7 +348,9 @@ columns:
 
 # -----------------------------------------------------------------------------
 # gold_star -- the Phase 6 target shape (RC14): 1 fact at line grain + 6
-# conformed dims. Every dim has a -1 unknown member; fact FKs COALESCE to -1.
+# conformed dims. Each ENTITY dim has a -1 unknown member (fact FKs COALESCE to -1);
+# the DATE dim deliberately carries NONE (it is a marked date table -- rule S8 --
+# which Power BI validates no-nulls; unmatched fact dates fail-loud via date_sk NOT NULL).
 # -----------------------------------------------------------------------------
 gold_star:
 
@@ -420,6 +422,8 @@ gold_star:
     surrogate_key: "date_sk"             # YYYYMMDD-style key
     method: "generate_series"            # RC15: contiguous, one row per calendar day
     contiguous: true
+    has_unknown_member: false            # S8: a marked date table carries NO -1/NULL
+                                         # member; unmatched fact dates fail-loud (NOT NULL)
     span:
       from: "2023-01-01"                 # earliest real fact date
       to: "2025-12-31"                   # latest real fact date (1,096 rows)

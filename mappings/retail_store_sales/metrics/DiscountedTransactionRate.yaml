@@ -1,0 +1,37 @@
+# Metric contract -- DiscountedTransactionRate (filled instance for retail_store_sales)
+# F009 define-layer. The denominator/numerator follow the Q2 ruling about what a BLANK
+# discount_applied means -- a human judgment call (Principle V), answered in
+# unresolved-questions.md Q2 (2026-06-25): blank = UNKNOWN -> NULL; discount metrics
+# EXCLUDE unknowns. This contract realigns to that ruling (2026-06-25 correction:
+# an earlier draft wrongly framed the denominator as ALL transactions / 33.55%).
+
+name: "DiscountedTransactionRate"
+grain: "a RATIO valid at any rollup; recomputed at the current filter grain. NOT additive."
+formula_intent: >-
+  The share of KNOWN-STATUS transactions that had a discount applied -- transactions
+  with discount_applied = TRUE divided by transactions with a KNOWN discount status
+  (discount_applied IS NOT NULL). PER OWNER RULING (unresolved-questions.md Q2,
+  2026-06-25): a blank discount_applied is UNKNOWN (NULL in silver, RC5), NOT coerced
+  to False, and is EXCLUDED from BOTH the numerator and the denominator. On the current
+  data this is 4,219 / 8,376 = 50.37%. This is the APPROVED metric.
+  SUPPORTING CAVEATS (record-only -- NOT the approved metric, and NOT separate governed
+  measures unless a future contract adds them):
+  - Floor rate (if unknowns were treated as not-discounted): 4,219 / 12,575 = 33.55%.
+    A lower bound, not the approved rate. Surface it on a discount visual as context.
+  - Unknown-discount-status rate: 4,199 / 12,575 = 33.39% of transactions have no
+    recorded discount status. Any discount figure must disclose this coverage gap.
+owner: "data_owner"   # approved 2026-06-25 (see readiness evidence + readiness-status approvals[])
+binds_to:
+  gold_table: "gold.fct_sales_rss"
+  columns:
+    - "discount_applied"
+    - "transaction_id"
+  pii_sensitive: false
+
+readiness:
+  status: "pass"
+  evidence:
+    - "approved by data_owner on 2026-06-25 (Q2 ruling: blank = unknown -> EXCLUDE from numerator AND denominator; denominator = known-status transactions)"
+    - "approved rate = 4,219 / 8,376 = 50.37% (known-status) on gold.fct_sales_rss; floor 4,219/12,575 = 33.55% and unknown-rate 4,199/12,575 = 33.39% are supporting caveats only"
+    - "2026-06-25 correction: realigned the formula_intent + the DAX denominator to the Q2 ruling (an earlier draft had stated denominator = all transactions / 33.55%)"
+  blocking_reasons: []

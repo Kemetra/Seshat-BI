@@ -213,3 +213,12 @@ def _run_validate(args) -> int:
         return 1
     print("retail validate: all live checks passed (0 findings).", file=sys.stderr)
     return 0
+
+
+if __name__ == "__main__":
+    # Make `python -m retail.cli ...` invoke the CLI instead of being a silent no-op.
+    # The installed `retail` console script (pyproject [project.scripts]) calls main()
+    # directly; without this guard `python -m retail.cli` imported the module and
+    # exited 0 without running anything. Under pytest __name__ != "__main__", so this
+    # never fires during tests.
+    sys.exit(main())

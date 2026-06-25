@@ -100,8 +100,10 @@ Indexes: `sale_date`, `customer_id`, `product_id`.
 ## gold schema — Kimball star (Power BI reads here)
 
 Built from silver in migration `0002`. Surrogate `_sk` INT keys; natural keys
-retained; every dimension has an **Unknown member at `_sk = -1`**; fact FKs
-COALESCE missing lookups to `-1`. Measures reconcile to the penny vs silver.
+retained; every ENTITY dimension has an **Unknown member at `_sk = -1`** (fact FKs
+COALESCE missing lookups to `-1`); the **date dimension carries none** -- it is a
+marked date table (rule S8), so an unmatched fact date fails the load (`date_sk NOT
+NULL`) rather than landing on a sentinel. Measures reconcile to the penny vs silver.
 
 ### `gold.fct_sales` — line-item fact (246,916 rows)
 PK `fct_sales_sk`. `invoice_no` + `line_no` are **degenerate dimensions** (carried

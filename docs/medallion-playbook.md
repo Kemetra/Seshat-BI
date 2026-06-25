@@ -228,7 +228,10 @@ matches the shipped governance rule **RC8** ("Power BI reads `gold`"): one canon
 
 - One fact at the silver grain + conformed dimensions (one per business entity).
 - Surrogate `_sk` keys; keep natural keys as attributes.
-- **Unknown member at `_sk = -1`** in every dim; fact FKs `COALESCE` missing lookups to -1.
+- **Unknown member at `_sk = -1`** in every ENTITY dim; fact FKs `COALESCE` missing
+  lookups to -1. The DATE dim is the EXCEPTION (rule S8): it carries NO -1 member (a
+  marked date table rejects nulls), and an unmatched fact date fails via `date_sk NOT
+  NULL` rather than a sentinel.
 - Transaction identifiers with no attributes (invoice no, line no) → **degenerate
   dimensions** on the fact, not their own dim.
 - **Date dimension is a CONTIGUOUS generated calendar** over the full span — never
@@ -271,6 +274,55 @@ Run these on every table; each is a hard-won check, not a nicety.
 10. Date dimension contiguous (generated), not distinct-from-data.
 11. Measure totals reconcile across **every** layer (source → silver → gold → BI).
 12. Document counts reconcile (source cols = dropped + kept + derived).
+
+### Tool-robustness rules (the live surface, not the data)
+
+Hard-won when the first table was driven end-to-end against a real DB (ADR 0005);
+these guard the TOOL against arbitrary data, distinct from the cleaning traps above.
+
+13. **Type-branch auto-discovered columns.** Any check that applies a text-only
+    function (`trim`, `''`) to every column of an auto-discovered table MUST branch
+    on `data_type`: TEXT -> `''OR NULL`; non-text (timestamptz/numeric/boolean, a
+    lineage column) -> plain `IS NULL`. (`trim()` on a timestamptz crashes.)
+14. **Never bank a live exit code without its evidence.** A `retail validate` exit 0
+    is a pass ONLY with the "running live checks" banner + a per-check result. Run the
+    `retail` console script (not `python -m retail.cli`); export `.env` first. An exit
+    code alone is not proof a check ran.
+15. **Schema-resolve artifact names at the read boundary.** A table/object name read
+    from a `source-map.yaml` and spliced into SQL must be schema-qualified when read
+    (a `gold_star` name -> the `gold` schema), bare or already-qualified both handled.
+16. **Comment-strip before token/identifier rules.** A SQL rule that scans for
+    identifiers MUST run over comment-stripped text, or quoted prose in a `--`/`/* */`
+    comment will false-trip it.
+
+Hard-won when an independent reviewer (Codex) reviewed the first end-to-end PR and
+found nine defects a green self-test + green `retail check` + green `retail validate`
+all missed (ADR 0006). These continue the tool-robustness set:
+
+17. **A comment-stripper feeding an identifier rule MUST be quote-aware.** A `--` or
+    `/* */` inside a `'...'` string literal or `"..."` quoted identifier is DATA, not
+    a comment marker -- copy it through. A quote-blind stripper opens a phantom comment
+    on a `'--'` literal and BLANKS the rest of the line, hiding any real bad identifier
+    after it (a silent false NEGATIVE -- worse than a false positive in a checker).
+18. **A marked date table carries NO unknown/sentinel member.** Every OTHER gold dim
+    gets a `-1 'UNKNOWN'` member (trap: RC14); the DATE dim is the EXCEPTION. It becomes
+    a marked date table (`dataCategory: Time`), which Power BI validates as
+    unique/contiguous/NO-nulls -- a `-1, NULL` member breaks refresh / time-intelligence
+    even though the SQL succeeds. Rule `S8` (ERROR) enforces this; `S6` exempts the date
+    dim. An unmatched/NULL FACT date is handled OUTSIDE the calendar (fail-loud via
+    `date_sk NOT NULL`, or a nullable FK + DAX), NEVER absorbed by a `-1` date member.
+19. **Never COALESCE a real-but-unmatched key to the unknown member.** `COALESCE(
+    dd.date_sk, -1)` over a hard-coded calendar span silently buckets a real out-of-span
+    date to Unknown -- and the coverage/orphan checks stay green (the `-1` member is a
+    valid FK target). Debare the join and let `NOT NULL` reject the unmatched row: a
+    coverage gap must FAIL the load, not masquerade as "Unknown".
+20. **Count parsed RECORDS, not physical lines; fail loud on ragged rows.** When
+    reconciling a CSV load, count with the SAME parser COPY consumes (a quoted embedded
+    newline is ONE record across many lines). Reserve GENERATED dedup names (a real
+    header can collide with a previously-generated suffix). A row WIDER than the header
+    must fail loud (truncating it corrupts faithful landing); a SHORT row is padded.
+    Lazy-load the optional DB driver so `--help` / pure helpers work without the `db`
+    extra.
 
 ## Appendix B — SQL skeletons
 

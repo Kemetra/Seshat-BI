@@ -71,7 +71,13 @@ approved contracts (`dashboard-ready.md`).
 - Do NOT author a measure that has no metric contract.
 - Do NOT commit a real connection host -- keep PBIP params parameterized (G6).
 - Do NOT write a `pass` without owner-approved contracts as evidence.
-- Do NOT run pbi-cli/PBIP automation before this stage is `pass`.
+- Do NOT EXECUTE the model -- no live connection, refresh, publish, or deployment
+  against the gold DB. That is the execution-only F016 adapter (official Power BI
+  connection / MCP), gated on this stage being `pass`. NOTE (clarified 2026-06-25):
+  AUTHORING the governed model as committed TMDL -- relationships, the marked date
+  table, PascalCase measures binding to approved contracts -- IS this stage's work
+  (Phase 7, model-as-code / `pbip-workflow` + `powerbi-analyst`); it is NOT F016.
+  F016 owns only the LIVE connection/refresh/publish, never the semantic definition.
 
 ## See also
 

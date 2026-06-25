@@ -3,7 +3,9 @@
 --
 -- Power BI reads gold. One fact (line-item grain) + 6 conformed dimensions.
 -- Surrogate _sk keys (GENERATED ... IDENTITY), natural keys retained, an unknown
--- member (_sk = -1) in every dim, fact FKs COALESCE missing/unknown lookups to -1.
+-- member (_sk = -1) in every ENTITY dim (fact FKs COALESCE missing/unknown lookups
+-- to -1); the DATE dim carries NO -1 member (marked date table, rule S8) -- an
+-- unmatched fact date is rejected by date_sk NOT NULL, not absorbed by a sentinel.
 -- invoice_no + line_no are DEGENERATE dimensions: they live on the fact, not a dim.
 --
 -- Idempotent: drop fact before dims (FK order), recreate all in one transaction.
@@ -109,8 +111,10 @@ CREATE TABLE gold.dim_date (
   iso_week   SMALLINT,
   is_weekend BOOLEAN
 );
--- -1 unknown member
-INSERT INTO gold.dim_date VALUES (-1, NULL, NULL, NULL, NULL, 'Unknown', NULL, 'Unknown', NULL, NULL);
+-- NO -1 unknown member: dim_date is a MARKED date table (dataCategory: Time),
+-- which Power BI validates as unique/contiguous/NO-nulls. A -1,NULL member would
+-- break that (Codex review #1 / rule S8). An unmatched fact date is handled by
+-- date_sk NOT NULL below (the load fails loudly), never by a sentinel member.
 -- generate a CONTIGUOUS calendar over the full span (covers the 2 zero-sales gap days)
 INSERT INTO gold.dim_date
 SELECT
@@ -157,7 +161,9 @@ SELECT
   COALESCE(dp.product_sk, -1),
   COALESCE(dc.customer_sk, -1),
   COALESCE(dsp.salesperson_sk, -1),
-  COALESCE(dd.date_sk, -1),
+  dd.date_sk,   -- NO COALESCE to a -1 date member: an unmatched/NULL fact date
+                -- yields NULL and is rejected by date_sk NOT NULL (fail loud,
+                -- a real calendar-coverage bug), never silently bucketed (Codex #2)
   COALESCE(dbt.billing_type_sk, -1),
   COALESCE(db.branch_sk, -1),
   s.quantity, s.sales_amount, s.net_amount, s.tax_amount, s.discount_amount, s.is_return

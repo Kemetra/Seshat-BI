@@ -1,0 +1,32 @@
+table 'gold dim_payment_method_rss'
+	lineageTag: 3d8a078f-82f2-47dc-a853-3bf66203eae7
+
+	column payment_method_sk
+		dataType: int64
+		formatString: 0
+		lineageTag: c3a932c5-caaf-4ac2-8101-f13d965fce85
+		summarizeBy: none
+		sourceColumn: payment_method_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column payment_method
+		dataType: string
+		lineageTag: 1875dd4c-24d3-4303-b425-a0811ec9e505
+		summarizeBy: none
+		sourceColumn: payment_method
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'gold dim_payment_method_rss' = m
+		mode: import
+		source =
+				let
+				  Source = PostgreSQL.Database(Server, Database),
+				  #"Navigation 1" = Source{[Schema = "gold", Item = "dim_payment_method_rss"]}[Data]
+				in
+				  #"Navigation 1"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table

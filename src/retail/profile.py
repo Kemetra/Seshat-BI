@@ -63,18 +63,28 @@ class ProfileResult:
     pk: PkProof
 
 
-def _discover_columns(runner: QueryRunner, table: str) -> tuple[str, ...]:
-    """Column names for ``schema.table`` from information_schema, in order."""
+# Postgres data_type strings (information_schema) that hold character data and so
+# support trim()/'' missingness. Everything else (timestamptz, numeric, boolean, a
+# lineage _loaded_at, ...) is profiled with plain IS NULL -- trim() is text-only and
+# crashes (`function btrim(timestamp with time zone) does not exist`) on non-text.
+_TEXT_TYPES = frozenset(
+    {"text", "character varying", "varchar", "character", "char", "name", '"char"'}
+)
+
+
+def _discover_columns(runner: QueryRunner, table: str) -> tuple[tuple[str, str], ...]:
+    """Ordered (column_name, data_type) for ``schema.table`` from information_schema."""
     if "." in table:
         schema, name = table.split(".", 1)
     else:
         schema, name = "public", table
     rows = runner.run(
-        "SELECT column_name FROM information_schema.columns "
+        "SELECT column_name, data_type FROM information_schema.columns "
         "WHERE table_schema = %s AND table_name = %s ORDER BY ordinal_position",
         (schema, name),
     )
-    return tuple(r[0] for r in rows)
+    # tolerate a runner that only returns the name (older fixtures) -> assume text
+    return tuple((r[0], (r[1] if len(r) > 1 else "text")) for r in rows)
 
 
 def profile(
@@ -88,19 +98,29 @@ def profile(
     row_count = row_rows[0][0] if row_rows else 0
 
     col_profiles: list[ColumnProfile] = []
-    for col in columns:
-        col = _safe_identifier(col)
-        # Missingness is ''OR NULL, NEVER IS NULL alone (RC5 / the load-bearing
-        # trap): a faithful landing writes '' for None, so IS NULL reports 0.
-        stat = runner.run(
-            f"SELECT count(*) FILTER (WHERE trim({col}) = '' OR {col} IS NULL), "
-            f"count(DISTINCT trim({col})) FROM {table}"
-        )
+    for col_name, data_type in columns:
+        col = _safe_identifier(col_name)
+        if data_type.lower() in _TEXT_TYPES:
+            # TEXT: missingness is ''OR NULL, NEVER IS NULL alone (RC5 / the
+            # load-bearing trap): a faithful landing writes '' for None, so IS NULL
+            # alone reports 0. trim() also folds whitespace-variant phantom distincts.
+            stat = runner.run(
+                f"SELECT count(*) FILTER (WHERE trim({col}) = '' OR {col} IS NULL), "
+                f"count(DISTINCT trim({col})) FROM {table}"
+            )
+        else:
+            # NON-TEXT (timestamptz, numeric, boolean, a lineage column, ...):
+            # trim() is text-only and would crash. A non-text column cannot hold '',
+            # so plain IS NULL is the correct (and only valid) missingness measure.
+            stat = runner.run(
+                f"SELECT count(*) FILTER (WHERE {col} IS NULL), "
+                f"count(DISTINCT {col}) FROM {table}"
+            )
         missing, distinct = (stat[0][0], stat[0][1]) if stat else (0, 0)
         pct = (missing / row_count * 100.0) if row_count else 0.0
         col_profiles.append(
             ColumnProfile(
-                name=col,
+                name=col_name,
                 missing_count=missing,
                 missing_pct=pct,
                 distinct_cardinality=distinct,

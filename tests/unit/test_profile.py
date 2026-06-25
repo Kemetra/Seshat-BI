@@ -32,7 +32,8 @@ def test_profile_discovers_columns_and_counts_rows() -> None:
 
     runner = FakeRunner(
         [
-            [("net_amt",), ("prod_cat",)],  # information_schema.columns -> 2 cols
+            # information_schema.columns -> (name, data_type) per col
+            [("net_amt", "text"), ("prod_cat", "text")],
             [(100,)],  # row count
             [(0, 50)],  # net_amt: 0 missing, 50 distinct
             [(8, 12)],  # prod_cat: 8 missing, 12 distinct
@@ -46,6 +47,39 @@ def test_profile_discovers_columns_and_counts_rows() -> None:
     assert tuple(c.name for c in result.columns) == ("net_amt", "prod_cat")
 
 
+def test_non_text_column_uses_is_null_not_trim() -> None:
+    """A non-text column (e.g. a TIMESTAMPTZ lineage column) must be profiled with
+    IS NULL, NOT trim()/''.
+
+    Regression guard (2026-06-25 defect): profile() ran trim() on EVERY discovered
+    column; against a bronze table carrying a `_loaded_at TIMESTAMPTZ` lineage column
+    this errored `function btrim(timestamp with time zone) does not exist`. trim() is
+    text-only; a faithful all-TEXT bronze does not write '' into a timestamptz, so the
+    correct missingness for a non-text column is plain IS NULL.
+    """
+    from retail.profile import profile
+
+    runner = FakeRunner(
+        [
+            # a text col + a timestamptz lineage col
+            [("sku", "text"), ("_loaded_at", "timestamp with time zone")],
+            [(100,)],  # rows
+            [(4, 20)],  # sku: ''OR NULL missingness (text path)
+            [(0, 100)],  # _loaded_at: IS NULL missingness (non-text path)
+            [(100, 100, 0)],  # pk proof
+        ]
+    )
+    result = profile(runner, "bronze.demo", ("sku",))
+    # text column still uses the ''OR NULL measure
+    assert "= ''" in runner.calls[2] and "trim" in runner.calls[2]
+    # non-text column uses IS NULL and does NOT call trim() (which would crash live)
+    nontext_sql = runner.calls[3]
+    assert "IS NULL" in nontext_sql
+    assert "trim" not in nontext_sql and "= ''" not in nontext_sql
+    assert result.columns[1].name == "_loaded_at"
+    assert result.columns[1].missing_count == 0
+
+
 def test_missingness_uses_empty_or_null_not_is_null_alone() -> None:
     from retail.profile import profile
 
@@ -53,7 +87,7 @@ def test_missingness_uses_empty_or_null_not_is_null_alone() -> None:
     # COUNT those '' rows; IS NULL alone would (wrongly) report 0 missing.
     runner = FakeRunner(
         [
-            [("city",)],  # one column
+            [("city", "text")],  # one column
             [(200,)],  # 200 rows
             [(30, 5)],  # city: 30 ''OR NULL missing, 5 distinct
             [(200, 200, 0)],  # pk proof
@@ -71,7 +105,7 @@ def test_missingness_uses_empty_or_null_not_is_null_alone() -> None:
 def test_pk_proof_unique_when_distinct_equals_total_and_no_nulls() -> None:
     from retail.profile import profile
 
-    runner = FakeRunner([[("id",)], [(100,)], [(0, 100)], [(100, 100, 0)]])
+    runner = FakeRunner([[("id", "text")], [(100,)], [(0, 100)], [(100, 100, 0)]])
     pk = profile(runner, "bronze.demo", ("id",)).pk
     assert pk.is_unique is True
 
@@ -80,11 +114,11 @@ def test_pk_proof_not_unique_when_duplicates_or_nulls() -> None:
     from retail.profile import profile
 
     # 100 rows, 98 distinct -> 2 dupes -> not unique
-    dupes = FakeRunner([[("id",)], [(100,)], [(0, 100)], [(100, 98, 0)]])
+    dupes = FakeRunner([[("id", "text")], [(100,)], [(0, 100)], [(100, 98, 0)]])
     assert profile(dupes, "bronze.demo", ("id",)).pk.is_unique is False
 
     # 100 rows, 100 distinct, but 3 NULL pk -> not unique
-    nulls = FakeRunner([[("id",)], [(100,)], [(0, 100)], [(100, 100, 3)]])
+    nulls = FakeRunner([[("id", "text")], [(100,)], [(0, 100)], [(100, 100, 3)]])
     assert profile(nulls, "bronze.demo", ("id",)).pk.is_unique is False
 
 

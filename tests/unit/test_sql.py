@@ -45,6 +45,89 @@ def test_s1_flags_quoted_caps(tmp_path: Path) -> None:
     assert all(f.severity is Severity.ERROR for f in findings)
 
 
+def _stage_text(tmp_path: Path, name: str, sql: str) -> str:
+    dest_dir = tmp_path / "warehouse"
+    dest_dir.mkdir(exist_ok=True)
+    (dest_dir / name).write_text(sql, encoding="utf-8")
+    return f"warehouse/{name}"
+
+
+def test_s1_ignores_quoted_text_in_comments(tmp_path: Path) -> None:
+    """S1 must not flag a double-quoted phrase inside a SQL COMMENT.
+
+    Regression guard (2026-06-25 defect): a comment like
+    `-- ... the dirty Kaggle "retail store sales" CSV` tripped S1 because the rule
+    scanned raw lines with the _QUOTED regex and never stripped comments (unlike
+    S3/S5/S6/S7, which route through the comment-aware lexer). A double-quoted
+    spaced phrase in a comment is prose, not a PG identifier.
+    """
+    sql = (
+        "-- Build silver.retail_store_sales from the dirty Kaggle "
+        '"retail store sales" CSV.\n'
+        '/* block comment with a "Bad Quoted Name" inside */\n'
+        "CREATE TABLE silver.retail_store_sales (transaction_id text);\n"
+    )
+    ctx = _ctx(tmp_path, _stage_text(tmp_path, "comment_quotes.sql", sql))
+    assert list(s1_snake_case_identifiers(ctx)) == []
+
+
+def test_s1_still_flags_real_quoted_identifier_after_comment_fix(
+    tmp_path: Path,
+) -> None:
+    """The comment fix must NOT blind S1 to a real bad quoted identifier in code."""
+    sql = (
+        '-- a comment mentioning "ignored phrase"\n'
+        'CREATE TABLE silver."Bad Name" (x int);\n'
+    )
+    ctx = _ctx(tmp_path, _stage_text(tmp_path, "real_bad_ident.sql", sql))
+    findings = list(s1_snake_case_identifiers(ctx))
+    assert findings, "S1 must still catch the real quoted non-snake_case identifier"
+    assert any("Bad Name" in f.message for f in findings)
+    assert all("ignored phrase" not in f.message for f in findings)
+
+
+def test_strip_sql_comments_preserves_double_dash_inside_string_literal() -> None:
+    """`--` inside a '...' string literal is DATA, not a comment marker.
+
+    Regression guard (2026-06-25 Codex PR review): strip_sql_comments tracked no
+    quote state, so a `'--'` literal opened a phantom comment span that blanked the
+    rest of the line -- hiding any real bad quoted identifier after it. The literal
+    body may be collapsed, but text AFTER the closing quote must survive intact.
+    """
+    from retail.sql import strip_sql_comments
+
+    src = "SELECT '--' AS x, silver.\"Bad Name\" AS y;\n"
+    out = strip_sql_comments(src)
+    # the real quoted identifier after the literal must NOT be blanked away
+    assert '"Bad Name"' in out
+    assert out.endswith("AS y;\n")  # nothing after the literal was eaten as a comment
+
+
+def test_strip_sql_comments_double_dash_inside_quoted_identifier() -> None:
+    """A `--` inside a "..." quoted identifier is also not a comment start."""
+    from retail.sql import strip_sql_comments
+
+    src = 'CREATE TABLE silver."has--dashes" (x int); -- trailing comment\n'
+    out = strip_sql_comments(src)
+    assert '"has--dashes"' in out  # the identifier (incl. its --) is preserved
+    assert "trailing comment" not in out  # the real trailing comment IS stripped
+
+
+def test_s1_flags_bad_identifier_after_double_dash_string_literal(
+    tmp_path: Path,
+) -> None:
+    """S1 must still flag a bad quoted identifier sitting after a `'--'` literal.
+
+    The user-visible half of the strip_sql_comments quote-state defect: before the
+    fix, S1 saw the literal's `--` as a comment and never reached `"Bad Name"`.
+    """
+    sql = "SELECT '--' AS x, silver.\"Bad Name\" AS y;\n"
+    ctx = _ctx(tmp_path, _stage_text(tmp_path, "dash_in_literal.sql", sql))
+    findings = list(s1_snake_case_identifiers(ctx))
+    assert findings, "S1 must catch the bad identifier after a '--' string literal"
+    assert any("Bad Name" in f.message for f in findings)
+
+
 def test_s2_passes_raw_amount_column(tmp_path: Path) -> None:
     ctx = _ctx(tmp_path, _stage(tmp_path, "pass_s1_s2.sql"))
     assert list(s2_medallion_schemas(ctx)) == []

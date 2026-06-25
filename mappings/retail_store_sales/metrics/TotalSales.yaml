@@ -1,0 +1,21 @@
+# Metric contract -- TotalSales (filled instance for retail_store_sales)
+# F009 define-layer. PROPOSAL: status not_started until the metric owner approves.
+# formula_intent is plain-language INTENT, NOT DAX. binds_to is gold-only.
+
+name: "TotalSales"
+grain: "valid at fct_sales_rss transaction grain (one row = one transaction); additive across all dimensions and over time"
+formula_intent: "The total money taken across all retail transactions -- the sum of the per-transaction total_spent amount. The 604 (~4.8%) rows with a missing total_spent contribute nothing (NULL ignored), not zero. This NULL-ignore is FORCED, not a choice: all 604 also have a NULL price_per_unit AND quantity, so total_spent is NOT recoverable from price*quantity (verified) -- no real revenue is discarded."
+owner: "data_owner"   # approved 2026-06-25 (see readiness evidence + readiness-status approvals[])
+binds_to:
+  gold_table: "gold.fct_sales_rss"
+  columns:
+    - "total_spent"
+  pii_sensitive: false
+
+readiness:
+  status: "pass"
+  evidence:
+    - "approved by data_owner on 2026-06-25"
+    - "gold.fct_sales_rss built + live-validated 2026-06-25 (penny-exact total_spent sum = 1,552,071.00)"
+    - "NULL handling confirmed forced: 604 NULLs are truly unknown (not recoverable from price*qty)"
+  blocking_reasons: []

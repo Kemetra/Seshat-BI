@@ -12,12 +12,22 @@
 .env.*
 !.env.example
 
+# ── Raw source data (never commit; bronze is loaded into Postgres, not git) ──
+# Raw CSV/Excel sources land in the DB bronze layer; the files stay local + untracked.
+data/raw/
+
 # ── Python (future pipelines) ──
 __pycache__/
 *.py[cod]
 .venv/
 venv/
 .ipynb_checkpoints/
+
+# ── Ad-hoc / scratch EDA notebooks at the repo root ──
+# Exploratory notebooks kept locally; not part of the governed medallion pipeline
+# (which lives in warehouse/ + powerbi/ + mappings/). Anchored to root so an
+# intentionally-tracked notebook under a notebooks/ dir is unaffected.
+/retail-sales-dataset.ipynb
 
 # ── OS / editor junk ──
 .DS_Store

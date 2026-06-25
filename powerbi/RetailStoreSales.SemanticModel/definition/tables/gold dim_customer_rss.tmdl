@@ -1,0 +1,32 @@
+table 'gold dim_customer_rss'
+	lineageTag: dea28025-66b1-45dc-9b83-1bce9d2c4134
+
+	column customer_sk
+		dataType: int64
+		formatString: 0
+		lineageTag: be068ca1-4b37-4814-85ce-7e4f5942b7ad
+		summarizeBy: none
+		sourceColumn: customer_sk
+
+		annotation SummarizationSetBy = Automatic
+
+	column customer_id
+		dataType: string
+		lineageTag: eb15fcfc-a06a-4a06-b7b0-fa34210a6b13
+		summarizeBy: none
+		sourceColumn: customer_id
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'gold dim_customer_rss' = m
+		mode: import
+		source =
+				let
+				  Source = PostgreSQL.Database(Server, Database),
+				  #"Navigation 1" = Source{[Schema = "gold", Item = "dim_customer_rss"]}[Data]
+				in
+				  #"Navigation 1"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
