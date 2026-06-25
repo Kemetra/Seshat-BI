@@ -1,6 +1,10 @@
 # Tower BI Agent Kit -- Roadmap
 
-- **Status:** Active planning (docs/planning only; no runtime code in this doc).
+- **Status:** Delivered ledger. As of 2026-06-25 the entire spec'd sequence
+  (F005-F015, incl. F011A) is **SHIPPED** to `main`; **F016 (the Power BI execution
+  adapter -- official Power BI MCP / connection; `pbi-cli` no longer preferred) is the
+  only remaining feature** -- deliberately LAST, execution-only, and gated (hard rule #6).
+  This doc now records what was delivered plus the one feature still parked.
 - **Product identity:** **Tower BI Agent Kit** is the product. The **Tower BI
   Readiness System** is the operating spine inside it.
 - **Read first:** `docs/readiness/readiness-model.md` (the spine),
@@ -50,16 +54,21 @@ The kit's surfaces, top (what the user touches) to bottom (later adapter):
 | Layer | Name | What it is | Status |
 |-------|------|------------|--------|
 | 1 | **Agent Experience** | the agent + skills are the interface; CLI is a gate it calls | shipped (conductor + verbs) |
-| 2 | **Source Intelligence** | profile, business meaning, Arabic retail dictionary | next (F006-F007) |
-| 3 | **Mapping Governance** | the source-mapping gate, grain confidence, mapping diff | shipped gate; F008 deepens |
-| 4 | **Validation & Readiness** | `retail check` / `retail validate` + the readiness spine | shipped checks; F005 spine |
-| 5 | **Metrics & Semantic Model** | metric contracts, KPI packs, governed PBIP model | F009-F010 |
-| 6 | **Dashboard & Delivery** | dashboard design, QC room, handoff pack, publish | F011-F016 (gated, later) |
+| 2 | **Source Intelligence** | profile, business meaning, Arabic retail dictionary, drift detector | shipped (F006-F007, F014) |
+| 3 | **Mapping Governance** | the source-mapping gate, grain confidence, mapping diff | shipped (gate + F008) |
+| 4 | **Validation & Readiness** | `retail check` / `retail validate` + the readiness spine, QC room, ledger | shipped (checks + F005, F012, F015) |
+| 5 | **Metrics & Semantic Model** | metric contracts, KPI packs, governed PBIP model | shipped (F009-F010) |
+| 6 | **Dashboard & Delivery** | dashboard design, handoff pack; Power BI execution adapter | shipped (F011, F011A, F013); **F016 execution adapter remains (official Power BI MCP / connection; execution-only, gated, last)** |
 
 ## Feature sequence
 
-Each feature advances a readiness stage. **Feature 005 is the next executable
-slice.** Dashboard and pbi-cli/PBIP work are explicitly **later and gated**.
+Each feature advances a readiness stage. **The entire sequence below (F005-F015,
+incl. F011A) is SHIPPED.** The single remaining feature is **F016 (the Power BI
+execution adapter -- official Power BI MCP / connection; `pbi-cli` no longer preferred)**
+-- the next executable slice, deliberately LAST, execution-only, and gated on
+semantic-model readiness (hard rule #6). The tables below are kept as a delivered
+ledger (catalog + commit refs); the original Now/Next/Then/Later tiers are retained
+as the historical authoring order.
 
 > **Numbering note (spec-dir vs roadmap F-number).** The roadmap F-number is the
 > authoritative sequence id. Spec *directory* numbers under `specs/` are allocated
@@ -72,38 +81,38 @@ slice.** Dashboard and pbi-cli/PBIP work are explicitly **later and gated**.
 > roadmap F-number disagree, the roadmap row wins; each spec's own header states both
 > numbers.
 
-### Now
+### Tier 1 (authored first) -- SHIPPED
 
-| Feature | Name | Layer | Advances stage | One-line scope |
-|---------|------|-------|----------------|----------------|
-| **005** | Retail Readiness Model | 4 | the spine itself (all stages) | the readiness state model + status template + per-stage docs (this slice's home) |
-| **006** | Table Onboarding Wizard | 1-2 | Source -> Mapping | an agent workflow that walks a new table through profile -> map -> gate |
-| **007** | Business Meaning Registry + Arabic Retail Dictionary | 2 | Source Ready | a generic registry of business terms + an Arabic<->English retail term dictionary (generic, not C086 values) |
+| Feature | Name | Layer | Advances stage | One-line scope | Shipped |
+|---------|------|-------|----------------|----------------|---------|
+| **005** | Retail Readiness Model | 4 | the spine itself (all stages) | the readiness state model + status template + per-stage docs (this slice's home) | yes (spine docs on `main`) |
+| **006** | Table Onboarding Wizard | 1-2 | Source -> Mapping | an agent workflow that walks a new table through profile -> map -> gate | `f75159e` |
+| **007** | Business Meaning Registry + Arabic Retail Dictionary | 2 | Source Ready | a generic registry of business terms + an Arabic<->English retail term dictionary (generic, not C086 values) | `7dfbcf5` |
 
-### Next
+### Tier 2 -- SHIPPED
 
-| Feature | Name | Layer | Advances stage | One-line scope |
-|---------|------|-------|----------------|----------------|
-| **008** | Grain Confidence + Mapping Diff Reviewer | 3 | Mapping Ready | surface grain-uniqueness confidence + a reviewable diff between mapping versions |
-| **009** | Metric Contract Store + Retail KPI Packs | 5 | Semantic Model Ready | a store of metric definitions (name, grain, formula intent, owner) + generic retail KPI packs |
-| **010** | Semantic Model Readiness | 5 | Semantic Model Ready | readiness checks for the PBIP model (relationships, date table, measures bind to contracts) |
+| Feature | Name | Layer | Advances stage | One-line scope | Shipped |
+|---------|------|-------|----------------|----------------|---------|
+| **008** | Grain Confidence + Mapping Diff Reviewer | 3 | Mapping Ready | surface grain-uniqueness confidence + a reviewable diff between mapping versions | `2a3eeec` |
+| **009** | Metric Contract Store + Retail KPI Packs | 5 | Semantic Model Ready | a store of metric definitions (name, grain, formula intent, owner) + generic retail KPI packs | `0a4347c` |
+| **010** | Semantic Model Readiness | 5 | Semantic Model Ready | readiness checks for the PBIP model (relationships, date table, measures bind to contracts) | `8fa6bbf` |
 
-### Then
+### Tier 3 -- SHIPPED
 
-| Feature | Name | Layer | Advances stage | One-line scope |
-|---------|------|-------|----------------|----------------|
-| **011** | Power BI Dashboard Design Skill | 6 | Dashboard Ready | an agent skill that designs a dashboard FROM approved metric contracts (no contracts -> no design) |
-| **011A** | Power BI Visual Foundation | 6 | Dashboard Ready | the design FOUNDATION the F011 verb reasons with (four-surface router + generic templates/tokens/theme/blueprints; defines no new gate) |
-| **012** | Data Quality Control Room | 4 | all stages | a consolidated view of data-quality findings + blockers across tables |
-| **013** | BI Handoff Pack | 6 | Publish Ready | the documentation/evidence bundle handed to a BI consumer |
+| Feature | Name | Layer | Advances stage | One-line scope | Shipped |
+|---------|------|-------|----------------|----------------|---------|
+| **011** | Power BI Dashboard Design Skill | 6 | Dashboard Ready | an agent skill that designs a dashboard FROM approved metric contracts (no contracts -> no design) | `ecbb518` |
+| **011A** | Power BI Visual Foundation | 6 | Dashboard Ready | the design FOUNDATION the F011 verb reasons with (four-surface router + generic templates/tokens/theme/blueprints; defines no new gate) | `53d43f1` |
+| **012** | Data Quality Control Room | 4 | all stages | a consolidated view of data-quality findings + blockers across tables | `e9a3264` |
+| **013** | BI Handoff Pack | 6 | Publish Ready | the documentation/evidence bundle handed to a BI consumer | `f00ff13` |
 
-### Later
+### Tier 4 -- SHIPPED (except F016)
 
-| Feature | Name | Layer | Advances stage | One-line scope |
-|---------|------|-------|----------------|----------------|
-| **014** | Source Drift Detector | 2 | Source Ready | detect when a source's shape/semantics drift from its profile |
-| **015** | Reconciliation Ledger | 4 | Gold Ready | a durable ledger of cross-layer reconciliation results over time |
-| **016** | pbi-cli / PBIP Adapter | 6 | Dashboard/Publish | the deferred Power BI authoring engine -- LAST, gated on semantic-model readiness |
+| Feature | Name | Layer | Advances stage | One-line scope | Shipped |
+|---------|------|-------|----------------|----------------|---------|
+| **014** | Source Drift Detector | 2 | Source Ready | detect when a source's shape/semantics drift from its profile | `70914d4` |
+| **015** | Reconciliation Ledger | 4 | Gold Ready | a durable ledger of cross-layer reconciliation results over time | `0eefe57` |
+| **016** | Power BI Execution Adapter (official Power BI MCP / connection) | 6 | Dashboard/Publish | the deferred, EXECUTION-ONLY Power BI adapter -- materializes/publishes an already-approved model; cannot define metrics, mappings, semantic logic, or dashboard design. LAST, gated on semantic-model readiness. (`pbi-cli` is no longer the preferred path; the official Power BI MCP / connection is the preferred future adapter.) | **NOT BUILT -- the only remaining feature (gated, by design)** |
 
 ## Hard design rules (non-negotiable, gate the sequence)
 
@@ -117,7 +126,11 @@ existing constitution (Principles I, IV, V, VIII), they do not replace it:
    reviewed/accepted unresolved questions.
 4. **No gold to Power BI before validation.** Gold Ready requires the live checks.
 5. **No dashboard design before metric contracts.** F011 is gated on F009/F010.
-6. **No pbi-cli / PBIP automation before semantic-model readiness.** F016 is last.
+6. **No Power BI EXECUTION before semantic-model readiness.** The execution adapter
+   (F016 -- preferably the official Power BI MCP / connection; `pbi-cli` no longer the
+   preferred path) is LAST and gated. It is execution-only -- it materializes/publishes
+   an already-approved model and CANNOT define metrics, mappings, semantic logic, or
+   dashboard design. No current readiness stage depends on it.
 7. **C086 is the first worked example, not the universal schema.** Generic
    templates carry no pharmacy specifics.
 8. **Docs/templates/checklists first; automate only after artifacts prove
@@ -128,11 +141,14 @@ existing constitution (Principles I, IV, V, VIII), they do not replace it:
 
 ## What is intentionally out of scope (this roadmap slice)
 
-- No runtime code, new validators, dashboard generation, pbi-cli publishing,
-  Fabric deployment, ML, forecasting, a universal ERP connector, or fully
-  automated mapping approval.
-- This is a planning update: it sequences the work and defines the readiness
-  stages as docs/templates. Each feature above gets its own spec before code.
+- Still out of scope (unbuilt by design): the Power BI EXECUTION adapter (F016 --
+  official Power BI MCP / connection preferred, `pbi-cli` no longer preferred;
+  execution-only, gated + last), Fabric deployment, ML, forecasting, a universal
+  ERP connector, and fully automated mapping approval.
+- The shipped F005-F015 slices are docs/skills/templates (agent-first, hard rule
+  #8); they added NO new `retail check` rule (the static gate stays at 27 rules) and
+  NO new runtime validator beyond the already-shipped `retail check` / `retail
+  validate`. Each shipped feature has its own spec under `specs/`.
 
 ## See also
 

@@ -5,7 +5,7 @@ session convention; located via `.specify/feature.json`)
 
 **Created**: 2026-06-24
 
-**Status**: Draft
+**Status**: Implemented (commit `2a3eeec`, 2026-06-25) -- shipped to `main`
 
 **Input**: "Roadmap F008 (Layer 3 Mapping Governance). Advances readiness stage:
 Mapping Ready. Surface grain-uniqueness CONFIDENCE as EVIDENCE (a measured

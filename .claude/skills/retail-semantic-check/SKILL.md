@@ -9,7 +9,8 @@ description: >-
   reads the committed TMDL and the filled metric-contract store (F009), and emits ONE
   status (not_started | blocked | warning | pass) with evidence + blockers, then
   STOPS. It NEVER edits TMDL, NEVER defines/approves a metric contract (that is F009),
-  and NEVER calls pbi-cli / PBIP authoring automation (that is F016).
+  and NEVER calls the Power BI execution adapter (official Power BI MCP / connection;
+  `pbi-cli` no longer preferred) -- that is F016.
 ---
 
 # retail-semantic-check
@@ -36,9 +37,10 @@ Invoke-and-interpret only, and READ-ONLY.
   intent, owner, approval) is defined and owned by feature F009 (the `metric-contract`
   template + the `metric-contract-store` guide). This skill is the CONSUMER: it reads
   contracts to test the binding; it never creates, edits, or approves one.
-- **NEVER AUTHORS the model (F016, deferred + gated).** It writes no TMDL, adds/edits
+- **NEVER AUTHORS or EXECUTES the model (F016, deferred + gated).** It writes no TMDL, adds/edits
   no measure / relationship / date marker, opens no DB connection, and calls no
-  pbi-cli / PBIP automation (constitution Principle II; roadmap hard rule #6 -- F016
+  the Power BI execution adapter (official Power BI MCP / connection; `pbi-cli` no
+  longer preferred) (constitution Principle II; roadmap hard rule #6 -- F016
   is last and gated on THIS stage being `pass`). It reads an EXISTING model and
   reports; a human edits Power BI Desktop and re-saves the PBIP to remediate.
 
@@ -152,7 +154,8 @@ the four explicit statuses + evidence + blockers are the only vocabulary). Then 
 ## Read-only / author-nothing contract
 
 This skill writes no TMDL, edits no measure / relationship / date marker, opens no DB
-connection, invokes no pbi-cli / PBIP automation, and modifies no file under
+connection, invokes no Power BI execution adapter (official Power BI MCP / connection;
+`pbi-cli` no longer preferred), and modifies no file under
 `powerbi/`. For every FIXABLE finding it REPORTS the human remediation step rather
 than applying it:
 
@@ -165,7 +168,8 @@ than applying it:
 | An unbound measure | author + owner-approve the metric contract under F009 (`mappings/<table>/metrics/`), not here |
 
 Programmatic remediation (editing TMDL, marking a date table, adding a measure) is the
-deferred F016 pbi-cli/PBIP adapter, gated on this stage being `pass` (Principle II;
+deferred, execution-only F016 Power BI adapter (official Power BI MCP / connection;
+`pbi-cli` no longer preferred), gated on this stage being `pass` (Principle II;
 hard rule #6).
 
 ## Fail-loud judgment-stop table (HARD-STOP, never a silent default)

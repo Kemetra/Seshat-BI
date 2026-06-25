@@ -60,8 +60,9 @@ When this stage is `pass`: assemble the BI handoff pack (Stage 7,
 
 - Do NOT invent metrics at design time -- only bind to approved contracts.
 - Do NOT design any visual before its metric contract exists (rule 5).
-- Do NOT call pbi-cli / PBIP authoring automation -- that is feature 016, the
-  last and gated adapter; it is not part of this stage.
+- Do NOT call the Power BI execution adapter (official Power BI MCP / connection;
+  `pbi-cli` no longer the preferred path) -- that is feature 016, the last and gated,
+  EXECUTION-ONLY adapter (it cannot define metrics or design); not part of this stage.
 
 ## Design foundation that backs this stage
 

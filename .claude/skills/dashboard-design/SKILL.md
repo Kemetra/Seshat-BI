@@ -9,7 +9,8 @@ description: >-
   guidance only -- a layout plan, a visual list, and a visual->contract binding
   map where every visual binds to exactly one approved contract. It NEVER invents
   a metric, NEVER publishes, NEVER opens Power BI Desktop or a DB connection, and
-  NEVER calls pbi-cli/PBIP authoring automation (that is feature F016). It authors,
+  NEVER calls the Power BI execution adapter (official Power BI MCP / connection;
+  `pbi-cli` no longer preferred) -- that is feature F016. It authors,
   runs static retail check, records dashboard_ready at most as warning, and STOPS.
 ---
 
@@ -23,7 +24,7 @@ contracts (F009) and the governed PBIP model (F010), then authors a layout plan,
 visual list, and a visual->contract binding map so every visual traces to a
 contract that already exists and is approved. It is the agent expression of roadmap
 hard rule 5 ("no dashboard design before metric contracts") and hard rule 6 ("no
-pbi-cli/PBIP automation before semantic-model readiness").
+Power BI execution before semantic-model readiness").
 
 This verb is the gated, contract-binding design step that the broader
 `powerbi-dashboard-design` router (F011A, the visual-design FOUNDATION) hands the
@@ -38,8 +39,9 @@ a visual list, a visual->contract binding map, and (optionally) a blank PBIR
 scaffold a human fills -- no side effects, no DB/Desktop connection, the same
 category as `source-mapping` authoring `mappings/` and `retail-build-warehouse`
 authoring `warehouse/migrations/*.sql`. EXECUTING the design -- generating the PBIR
-report, publishing to a workspace, calling pbi-cli/PBIP authoring automation -- is
-the deferred F016 adapter seam and is OUT of scope here. The skill authors, runs
+report, publishing to a workspace, calling the Power BI execution adapter (official
+Power BI MCP / connection; `pbi-cli` no longer preferred) -- is the deferred,
+execution-only F016 adapter seam and is OUT of scope here. The skill authors, runs
 static `retail check` on any committed report text, and STOPS.
 
 ## Hard gate (rule 5) -- verify BEFORE authoring anything
@@ -67,12 +69,13 @@ of the prior stage is the entry condition).
 |-------------------|--------------------------|
 | layout plan, visual list, visual->contract binding map | generating/publishing the PBIR report |
 | optional blank PBIR scaffold a human fills | opening Power BI Desktop or a DB connection |
-| running static `retail check` on committed report text | calling pbi-cli / PBIP authoring automation |
+| running static `retail check` on committed report text | calling the Power BI execution adapter (official Power BI MCP / connection) |
 | recording `dashboard_ready: warning` + evidence | publishing to a workspace / refreshing a model |
 
-The skill authors, checks, and STOPS. Name F016 (the pbi-cli/PBIP adapter, the
-last and gated feature) as the owner of any execution step. If the procedure ever
-needs to publish or author the PBIR via automation, STOP and hand off to F016.
+The skill authors, checks, and STOPS. Name F016 (the Power BI execution adapter --
+official Power BI MCP / connection; `pbi-cli` no longer preferred; the last and gated,
+EXECUTION-ONLY feature) as the owner of any execution step. If the procedure ever needs
+to publish or author the PBIR via automation, STOP and hand off to F016.
 
 ## Preconditions (STOP unless ALL hold)
 
@@ -183,8 +186,9 @@ REVIEWER, not by this skill. When that approval is recorded by the reviewer,
   contracts (metric definition is F009).
 - Do NOT design any visual before its metric contract exists / before
   `semantic_model_ready: pass` (rule 5).
-- Do NOT call pbi-cli / PBIP authoring automation, generate or publish the PBIR, or
-  refresh a model -- that is feature F016 (rule 6).
+- Do NOT call the Power BI execution adapter (official Power BI MCP / connection;
+  `pbi-cli` no longer preferred), generate or publish the PBIR, or refresh a model --
+  that is feature F016 (rule 6), execution-only and gated.
 - Do NOT open a DB or Power BI Desktop connection.
 - Do NOT self-grant `dashboard_ready: pass` -- the highest this skill records is
   `warning`; `pass` needs the reviewer's `approvals[]` entry.

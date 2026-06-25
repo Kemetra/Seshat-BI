@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-24
 
-**Status**: Draft
+**Status**: Implemented (commit `e9a3264`, 2026-06-25) -- shipped to `main`
 
 **Input**: "Roadmap F012 (Layer 4 Validation & Readiness). Advances readiness stage: all stages (a consolidated view). A consolidated VIEW of data-quality findings + blockers across tables, sourced from the existing gates (retail check WARNs, retail validate ERRORs) and the per-table data-issues.md / blocking-reasons.md templates. It AGGREGATES existing evidence; it does NOT introduce new validators or new gates (scope discipline / YAGNI). Every finding carries a measured number as evidence, never an adjective; no fake confidence/score (hard rule #9). Generic (#7). Maps to the readiness spine roll-up."
 

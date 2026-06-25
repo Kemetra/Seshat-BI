@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-24
 
-**Status**: Draft
+**Status**: Implemented (commit `f75159e`, 2026-06-25) -- shipped to `main`
 
 **Input**: "Roadmap F006 (Layer 1-2). Advances readiness stage: Source -> Mapping. An agent-first workflow/skill that walks a NEW table through profile -> business-meaning -> source-map -> the source-mapping gate, producing the per-table readiness artifacts and stopping at the Principle-V human seams (grain, PII, business rollup, identity). Agent-first not CLI-first (hard rule #1). No source goes directly to silver (hard rule #2): the wizard ENDS at Mapping Ready, it does not build silver. Docs/templates/checklist first (hard rule #8). Generic only -- no C086/pharmacy specifics (hard rule #7). Aligns to docs/readiness/source-ready.md and mapping-ready.md and the readiness spine (4 statuses + evidence + blockers, no fake confidence)."
 

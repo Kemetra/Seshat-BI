@@ -14,8 +14,9 @@
 > the data, a metric, or a number.
 >
 > **No publishing here.** This pack does NOT publish to a workspace, does NOT invoke
-> pbi-cli / PBIP automation, and does NOT deploy to Fabric (roadmap rule #6; that is the
-> deferred, gated F016 adapter).
+> the Power BI execution adapter (official Power BI MCP / connection; `pbi-cli` no
+> longer preferred), and does NOT deploy to Fabric (roadmap rule #6; that is the
+> deferred, gated, execution-only F016 adapter).
 >
 > **No fake confidence.** Readiness is the four explicit statuses + evidence + blockers.
 > NO fabricated confidence/health number anywhere (roadmap rule #9).

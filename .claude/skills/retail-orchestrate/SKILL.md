@@ -71,7 +71,7 @@ field into two sources of truth. You may READ `Gate status`; you may not write
 | ACCEPT Live validate | **retail-validate** | `retail validate --source-map mappings/<table>/source-map.yaml` | exit 0 (or deferred-boundary report) | semantic |
 | GATE Semantic Model Ready | **retail-semantic-check** (read-only; computes the Stage-5 verdict: `retail check` clean AND every measure binds to an approved metric contract) | `retail check` + contract-binding read | verdict `pass` (a green checker is necessary-NOT-sufficient) | PBIP |
 | 7 Build Power BI model | **pbip-workflow** + `powerbi-analyst` agent | `retail check` | exit 0 | done |
-| PBIP build engine | **[SEAM -- pbi-cli deferred adapter, Principle II; gated on Semantic Model Ready = pass]** | -- | -- | -- |
+| PBIP execution engine | **[SEAM -- Power BI execution adapter (official Power BI MCP / connection; `pbi-cli` no longer preferred), deferred + execution-only, Principle II; gated on Semantic Model Ready = pass]** | -- | -- | -- |
 
 At every gate node, run the SAME command CI runs (`retail check`, and
 `retail validate` once creds exist) so local behavior equals the unattended gate.
@@ -131,7 +131,9 @@ escalate rather than guess.
 
 - **Silver/gold SQL builder** -- writing `warehouse/` SQL is DB-write territory the
   foundation defers; it needs its own spec. The conductor stops here and says so.
-- **pbi-cli** -- the deferred Power BI authoring adapter (Principle II); not wired.
+- **Power BI execution adapter** -- the deferred, execution-only Power BI adapter
+  (official Power BI MCP / connection; `pbi-cli` no longer preferred), Principle II;
+  not wired. It executes an approved model; it never defines metrics/mappings/semantics.
 - **Live `retail validate` run** -- needs the `db` extra + a user DSN (Principle
   VIII). Without them, report the boundary and the enable steps (`pip install
   'retail[db]'`, set `DATABASE_URL` or `ANALYTICS_DB_*` in the gitignored `.env`);

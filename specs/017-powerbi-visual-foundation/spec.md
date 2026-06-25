@@ -6,7 +6,7 @@
 
 **Created**: 2026-06-25
 
-**Status**: Draft
+**Status**: Implemented (commit `53d43f1`, F011A) -- shipped to `main`
 
 **Input**: "F011A Power BI Visual Foundation. Layer 6 (Dashboard & Delivery). Advances readiness stage: Dashboard Ready. A docs/templates/skill FOUNDATION that teaches an agent to handle Power BI dashboard design across four SEPARATE surfaces -- (1) report visuals, (2) external background/canvas assets, (3) theme JSON, (4) later implementation handoff -- and never to blend them. Docs/templates/skill-only (roadmap rule 8). Generic to retail BI (rule 7). HARD GATES inherited from Dashboard Ready: no design before metric contracts + semantic model contracts exist (rule 5); no PBIP/PBIR edits and no pbi-cli automation in this slice (rule 6, F016 owns that)."
 

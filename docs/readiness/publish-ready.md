@@ -3,8 +3,11 @@
 Status: Planning (docs/templates; no runtime code).
 
 Stage 7 of 7. The BI handoff pack is complete, reviewed, and approved to publish.
-Maps to post-Phase-7. Publishing/pbi-cli/PBIP/Fabric deployment is a SEPARATE,
-LAST step (feature 016) gated on every prior stage -- it is NOT this stage.
+Maps to post-Phase-7. Power BI EXECUTION (publishing via the official Power BI MCP /
+connection adapter; `pbi-cli` no longer the preferred path) and Fabric deployment are a
+SEPARATE, LAST step (feature 016) gated on every prior stage -- it is NOT this stage.
+The execution adapter is execution-only; it cannot define metrics, mappings, semantic
+logic, or dashboard design.
 
 ## Purpose
 
@@ -64,15 +67,17 @@ mechanical -- a human authorizes release.
 
 ## Next allowed action
 
-When `pass`: publish via the approved path -- the pbi-cli/PBIP adapter
-(feature 016), and ONLY once that adapter exists and is itself gated on every
-prior stage. Until feature 016 is built, the next action is to record the
-approved pack and STOP; there is no automated publish today.
+When `pass`: publish via the approved path -- the Power BI execution adapter
+(feature 016; official Power BI MCP / connection preferred, `pbi-cli` no longer
+preferred), and ONLY once that adapter exists and is itself gated on every prior
+stage. Until feature 016 is built, the next action is to record the approved pack
+and STOP; there is no automated publish today.
 
 ## What the agent must NOT do
 
 - Publish, or trigger any deployment, without the recorded publish approval.
-- Run pbi-cli/PBIP automation before feature 016 is built and gated.
+- Run the Power BI execution adapter (official Power BI MCP / connection; `pbi-cli`
+  no longer preferred) before feature 016 is built and gated.
 - Deploy to Microsoft Fabric (out of scope for this kit).
 - Mark `pass` while any prior stage is not `pass`, or with caveats/reconciliation missing.
 - Edit the deployed schema or metric contracts to make the pack "tie" -- escalate instead.

@@ -175,8 +175,10 @@ Follow-up TODOs (recorded at v1.0.0):
 The Tower BI Agent Kit is a standalone, agent-first way to turn a raw retail
 source table into a governed Power BI semantic model along the path
 source -> mapping -> silver -> gold -> Power BI. An AI agent drives the
-workflow; enforced static checks gate every step; pbi-cli is a later adapter at
-the bottom of the stack, not the core. This kit is a standalone analytics
+workflow; enforced static checks gate every step; the Power BI execution adapter
+(preferably the official Power BI MCP / connection; `pbi-cli` no longer preferred)
+is a later, execution-only step at the bottom of the stack, not the core. This kit
+is a standalone analytics
 service and is NOT bound by the Retail Tower OS orchestrator or its
 contract-boundary rules (see the repo `CLAUDE.md`). Power BI is the primary
 surface; the source substrate is a DigitalOcean Postgres medallion warehouse
@@ -218,16 +220,24 @@ posture and the architecture's Layer D / Layer A split.
 ### II. Depend, Never Fork
 The opinion lives in this repo; the engine is borrowed and upgradeable.
 
-- `pbi-cli` MUST be consumed as an external dependency installed via `pipx`,
+- The Power BI **execution adapter** MUST be consumed as an external dependency,
   unforked and independently upgradeable. The kit MUST NOT vendor, fork, or
-  re-implement it (governance spec, settled decision #1: depend-not-fork).
-- `pbi-cli` is a LATER Power BI semantic-model adapter at the bottom of the
-  stack (architecture ENGINE row), not the core and not the center of gravity
-  (architecture North-Star correction #4). It is the engine the agent's
-  authoring step executes against; it is not what the kit IS.
+  re-implement it (governance spec, settled decision #1: depend-not-fork). As of
+  2026-06-25 the **preferred future adapter is the official Power BI MCP /
+  official Power BI connection**; `pbi-cli` is demoted to one possible such tool
+  and is **no longer the preferred execution path**. The principle binds to the
+  adapter ROLE, not to any one tool.
+- The execution adapter is **EXECUTION-ONLY**: it materializes/publishes against
+  an already-approved model. It MUST NOT define metrics, mappings, semantic logic,
+  or dashboard design -- those are owned by the upstream governed artifacts
+  (F009 contracts, the source-mapping gate, F010/F011), never by the adapter.
+- The adapter is a LATER step at the bottom of the stack (architecture ENGINE
+  row), **an adapter, not the product core** and not the center of gravity
+  (architecture North-Star correction #4). It is what the agent's execution step
+  runs against; it is not what the kit IS. No current readiness stage depends on it.
 - All retail opinion -- the governance rules, the cleaning defaults, the
   templates, this Constitution -- MUST live in this repository, on top of the
-  unopinionated engine. There MUST be no "fork tax": upgrading `pbi-cli` MUST
+  unopinionated engine. There MUST be no "fork tax": upgrading the adapter MUST
   NOT require re-applying local patches.
 
 **Rationale**: Forking a maximally capable, opinion-less tool to add opinion
@@ -457,9 +467,10 @@ gates these principles already define into tracked readiness state.
   (Gold Ready requires the live `retail validate`; static `retail check` exit 0
   is necessary, not sufficient).
 - The spine adds NO new gate: each stage's gate is an EXISTING check
-  (`retail check`, `retail validate`, or an artifact review). `pbi-cli` / PBIP
-  automation remains a later adapter (Principle II), gated on Semantic Model
-  Ready -- it is not entered earlier.
+  (`retail check`, `retail validate`, or an artifact review). The Power BI
+  execution adapter (official Power BI MCP / connection; `pbi-cli` no longer
+  preferred) remains a later, execution-only step (Principle II), gated on
+  Semantic Model Ready -- NO current stage depends on it; it is not entered earlier.
 - Authoritative artifacts: `docs/readiness/readiness-model.md` (the model),
   `docs/readiness/readiness-pipeline.md` (the sequence), the seven
   `docs/readiness/<stage>-ready.md` docs, `docs/roadmap/roadmap.md` (the feature
@@ -473,8 +484,9 @@ and templates (architecture doc, section 8). Out of scope for this slice:
 
 - NO validator scripts. Live-validator CATEGORIES are documented only
   (Principle VIII).
-- NO `pbi-cli` integration or wiring. It is placed as the later adapter,
-  not connected (Principle II).
+- NO Power BI execution-adapter integration or wiring (official Power BI MCP /
+  connection preferred; `pbi-cli` no longer preferred). It is placed as the later,
+  execution-only adapter, not connected (Principle II).
 - NO CLI installer. NO Spec-Kit preset or custom bundle.
   **(Amended v1.1.0, 2026-06-24):** Spec-Kit IS now initialized into the repo
   (`specify init --here --integration claude --script ps`): the canonical

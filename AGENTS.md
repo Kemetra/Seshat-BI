@@ -22,8 +22,11 @@ This file is the short operating contract. The full law is
   is not `CLEARED`). No `silver.*` SQL before an approved map (Principle IV).
 - **Do NOT point Power BI at gold before `retail validate` passes** (Principle VIII).
 - **Do NOT design dashboards before metric contracts exist** (roadmap rule 5).
-- **Do NOT run pbi-cli / PBIP automation** -- that is feature 016, last and gated
-  on `semantic_model_ready` (Principle II; it is a later adapter).
+- **Do NOT run the Power BI execution adapter** (the official Power BI MCP /
+  connection; `pbi-cli` no longer the preferred path) -- that is feature 016, last
+  and gated on `semantic_model_ready` (Principle II). It is a later, EXECUTION-ONLY
+  adapter (it cannot define metrics, mappings, semantic logic, or dashboard design);
+  no current stage depends on it.
 - **Do NOT self-grant an approval.** Approvals are named human actions
   (Principle V): grain, PII publish-safety, business rollups, sentinel-vs-null.
 

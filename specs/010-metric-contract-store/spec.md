@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-24
 
-**Status**: Draft
+**Status**: Implemented (commit `0a4347c`, 2026-06-25) -- shipped to `main`
 
 **Input**: "Roadmap F009 (Layer 5 Metrics & Semantic Model). Advances readiness stage Semantic Model Ready. A STORE/template of metric definitions (name, grain, formula INTENT, owner, the gold columns it binds to) plus GENERIC retail KPI packs (the pack schema + example generic KPIs, not C086 numbers). This is the metric-DEFINITION layer (F009): it defines contracts; it does NOT itself check a PBIP model (that is F010 / on-disk 011). No dashboard design here (hard rule #5). Docs/templates first (#8). Generic (#7). No fake confidence (#9)."
 

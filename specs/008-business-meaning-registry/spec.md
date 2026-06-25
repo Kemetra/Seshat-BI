@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-24
 
-**Status**: Draft
+**Status**: Implemented (commit `7dfbcf5`, 2026-06-25) -- shipped to `main`
 
 **Input**: "Roadmap F007 (Layer 2 Source Intelligence). Advances readiness stage: Source Ready. A GENERIC registry of business terms plus an Arabic<->English retail term DICTIONARY (term, canonical meaning, synonyms, the readiness evidence it contributes) -- the schema/template for the registry, NOT a filled pharmacy dictionary. Strictly generic: carry NO C086/ezaby/pharmacy values (hard rule #7); those would be a filled instance later. Docs/templates first (hard rule #8). Feeds Source Ready evidence per docs/readiness/source-ready.md. No fake confidence (hard rule #9)."
 

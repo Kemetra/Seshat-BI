@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-24
 
-**Status**: Draft
+**Status**: Implemented (commit `70914d4`, 2026-06-25) -- shipped to `main`
 
 **Input**: "Roadmap F014 (Layer 2 Source Intelligence, 'Later' tier). Advances the Source Ready stage. Detect when a source's SHAPE or semantics DRIFT from its recorded source profile (new/removed/retyped columns, distribution shift), surfaced as readiness EVIDENCE + blockers that can move a table's Source Ready status to warning/blocked. 'Later' tier: spec the DESIGN (docs/templates/checklist) per hard rule #8; do not assume an ingestion runtime exists (scope discipline). Drift judgment that affects grain/identity/PII is a Principle-V human seam. Generic (#7). No fake confidence -- measured drift signal + blockers, not a score (#9)."
 

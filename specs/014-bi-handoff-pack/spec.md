@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-24
 
-**Status**: Draft
+**Status**: Implemented (commit `f00ff13`, 2026-06-25) -- shipped to `main`
 
 **Roadmap**: F013 (Layer 6 -- Dashboard & Delivery). Advances readiness stage
 **Publish Ready** (stage 7 of 7).

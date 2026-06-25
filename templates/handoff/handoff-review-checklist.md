@@ -54,8 +54,9 @@
 
 - [ ] No fabricated confidence/health NUMBER anywhere -- statuses + evidence + blockers
       only (roadmap rule #9).
-- [ ] No publishing / pbi-cli / PBIP / Fabric action taken -- that is the deferred,
-      gated F016 adapter (roadmap rule #6).
+- [ ] No publishing / Power BI execution adapter (official Power BI MCP / connection;
+      `pbi-cli` no longer preferred) / Fabric action taken -- that is the deferred,
+      gated, execution-only F016 adapter (roadmap rule #6).
 - [ ] No worked-example (C086) specifics inlined -- generic; the example is cited only
       (Principle VII).
 

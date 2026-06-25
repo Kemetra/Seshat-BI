@@ -38,7 +38,7 @@ the first worked example / a filled instance, not the schema.)
 
 | Status | Meaning HERE |
 |--------|--------------|
-| `not_started` | Gold not `pass`, OR no metric contracts exist yet (F009/F010 unbuilt) -- default for new tables |
+| `not_started` | Gold not `pass`, OR no FILLED, owner-approved metric contracts exist for this table yet (the F009 template + F010 checker are shipped; the per-table contracts under `mappings/<table>/metrics/` are not authored) -- default for new tables |
 | `blocked` | a D/C/R/G6 finding, a measure with no contract, or a real host in PBIP params (G6) -- see Blocking reasons |
 | `warning` | `retail check` clean but a non-fatal item recorded (e.g. an accepted display-folder deviation); never auto-promotes |
 | `pass` | model committed + clean, `retail check` exit 0, every measure traces to an approved contract, owner signed off |
@@ -50,7 +50,9 @@ the first worked example / a filled instance, not the schema.)
 - A C1 connection-parameter finding or R1 relative-reference finding.
 - G6: a real connection host baked into PBIP params (must be parameterized).
 - A measure with no corresponding metric contract.
-- Metric contracts (F009/F010) do not exist yet -> stays `not_started`/`blocked`.
+- No FILLED, owner-approved metric contracts exist for this table's measures yet
+  (the F009 template + F010 checker are shipped; per-table contracts under
+  `mappings/<table>/metrics/` are unauthored) -> stays `not_started`/`blocked`.
 
 ## Required owner / approval
 

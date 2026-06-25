@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-24
 
-**Status**: Draft
+**Status**: Implemented (commit `0eefe57`, 2026-06-25) -- shipped to `main`
 
 **Input**: "Roadmap F015 (Layer 4 Validation & Readiness, 'Later' tier). Advances readiness stage: Gold Ready. A durable LEDGER of cross-layer reconciliation RESULTS over time (each entry: which reconciliation, when, measured penny/row deltas, pass/fail, the evidence) -- a history layer over the existing retail validate reconciliation check, NOT a new validator. Gold to Power BI requires validation (hard rule #4); the ledger records that validation's results durably. 'Later' tier: spec the design/template first (hard rule #8); do not build the storage runtime (scope discipline). Generic (#7). Entries carry measured numbers as evidence; no fabricated confidence (#9)."
 

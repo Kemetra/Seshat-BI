@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-24
 
-**Status**: Draft
+**Status**: Implemented (commit `ecbb518`, F011) -- shipped to `main`
 
 **Input**: "Roadmap F011 (Layer 6 Dashboard & Delivery). Advances readiness stage: Dashboard Ready. An agent SKILL that designs a dashboard FROM approved metric contracts. HARD GATE (rule #5): no approved metric contracts -> no design; this feature is explicitly gated on F009 (metric-contract-store) and F010 (semantic-model-readiness). Design = layout/visual/metric-binding guidance authored by the agent; it does NOT publish and does NOT invoke pbi-cli/PBIP authoring automation (hard rule #6 -- F016 is last). Docs/skill-first (#8). Generic (#7)."
 

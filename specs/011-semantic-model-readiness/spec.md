@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-24
 
-**Status**: Draft
+**Status**: Implemented (commit `8fa6bbf`, 2026-06-25) -- shipped to `main`
 
 **Input**: "Roadmap F010 (Layer 5 Metrics & Semantic Model). Advances readiness stage: Semantic Model Ready. Readiness CHECKS for the governed PBIP semantic model: relationships valid, a marked date table exists, and every measure BINDS to an approved metric contract from the metric-contract store (F009 / on-disk 010). This is the model-CHECKING layer; it CONSUMES the contracts that F009 DEFINES -- do not redefine contracts here. Gold must be live-validated before Power BI (hard rule #4) -- this stage sits AFTER Gold Ready. No pbi-cli/PBIP AUTHORING automation (hard rule #6 -- F016 is last and gated); this only READS/checks an existing PBIP model. Maps to docs/readiness/semantic-model-ready.md. No fake confidence (#9)."
 
