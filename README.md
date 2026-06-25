@@ -11,7 +11,7 @@ Building a new retail mart? Copy the pattern in `docs/worked-examples/c086-pharm
 | Folder | Purpose |
 |--------|---------|
 | `warehouse/` | Tool-agnostic SQL: medallion `bronze` (landing) -> `silver` (typed/cleaned) -> `gold` (reporting), plus migrations. |
-| `powerbi/` | Power BI projects in **PBIP** (plain-text) format — the only tool-specific folder. Reads `gold` only. |
+| `powerbi/` | Power BI projects in **PBIP** (plain-text) format -- the only tool-specific folder. Reads `gold` only. |
 | `pipelines/` | Data ingestion: manual now, automated feed later (same `bronze` landing contract). |
 | `templates/` | Generic source-mapping-gate blanks (profile, map, assumptions, questions, reconciliation). |
 | `mappings/` | Per-table **filled** mapping artifacts, one folder per table (`mappings/<table>/`). See [ADR 0003](docs/decisions/0003-mapping-artifact-location.md). |
@@ -24,14 +24,14 @@ Building a new retail mart? Copy the pattern in `docs/worked-examples/c086-pharm
 ```
 DigitalOcean PostgreSQL
   bronze (landing)  ->  silver (typed/cleaned)  ->  gold (reporting)  ->  Power BI (PBIP, gold only)
-        ▲
-   manual loads now · automated feed later
+        ^
+   manual loads now ; automated feed later
 ```
 
 ## Getting started
 
 1. Copy `.env.example` to `.env` and fill in the DigitalOcean Postgres connection
-   values. `.env` is git-ignored — never commit it.
+   values. `.env` is git-ignored -- never commit it.
 2. **For Power BI:** enable **Power BI Project (.pbip)** in Power BI Desktop
    Preview features (it's in preview as of 2025-12), then save projects under
    `powerbi/`. See `powerbi/README.md`.
