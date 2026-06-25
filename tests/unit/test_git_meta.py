@@ -274,7 +274,7 @@ def test_p2_validates_single_commit_message(tmp_path: Path) -> None:
 def test_p2_accepts_extended_types_bot_prefix_and_rejects_scopes(
     tmp_path: Path,
 ) -> None:
-    """P2 accepts the extended type set + an optional [bot] prefix; still rejects scopes."""
+    """P2 accepts extended types + optional [bot] prefix; still rejects scopes."""
     import dataclasses
 
     repo = make_git_repo(tmp_path)
