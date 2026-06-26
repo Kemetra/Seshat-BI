@@ -1,0 +1,13 @@
+<!doctype html>
+<!-- @dsCard group="Patterns" name="Patterns · Number formats" subtitle="Integer, decimal, money, percent defaults" viewport="700x220" --><html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css"></head><body>
+<div class="col" style="gap:10px">
+  <div class="eyebrow">Number-format defaults</div>
+  <div class="grid" style="grid-template-columns:repeat(2,1fr);gap:10px">
+    <div class="tile"><b>Integer</b> <span class="mono">#,##0</span> &rarr; 12,480</div>
+    <div class="tile"><b>Decimal</b> <span class="mono">#,##0.00</span> &rarr; 31.42</div>
+    <div class="tile"><b>Money</b> <span class="mono">#,##0</span> &rarr; $4,200,000 (scale millions on exec)</div>
+    <div class="tile"><b>Percent</b> <span class="mono">0.0%</span> &rarr; 8.3%</div>
+  </div>
+  <div class="muted" style="font-size:12px">Always group thousands. Headline money scales to millions on exec pages.</div>
+</div>
+</body></html>

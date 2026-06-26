@@ -1,0 +1,47 @@
+/* Seshat BI Claude Design System — colors_and_type.css
+ * Tokens compiled from docs/brand/visual-identity.md (the committed brand).
+ * NO external @import: claude.ai CSP blocks external font hosts. We use the
+ * brand's declared FALLBACK stacks only (Cinzel/Inter would not load).
+ */
+:root {
+  /* Brand palette (visual-identity.md sec 5) */
+  --color-navy:        #001E35;
+  --color-midnight:    #04172A;
+  --color-gold:        #C69214;
+  --color-gold-light:  #F2C14E;
+  --color-teal:        #0B9A9A;
+  --color-teal-light:  #31C6C2;
+  --color-ivory:       #F7F1E7;
+  --color-sand:        #E8D8BD;
+
+  /* Foreground by surface (contrast-verified) */
+  --color-fg-on-dark:  #F7F1E7;   /* ivory on navy = 15.11:1 */
+  --color-fg-on-light: #001E35;   /* navy on ivory = 15.11:1 */
+  --color-fg-muted:    #4b5b6e;
+
+  /* Surfaces */
+  --color-surface-dark:  #001E35;
+  --color-surface-light: #F7F1E7;
+  --color-line:          #E8D8BD;
+
+  /* Semantic (conservative, accessible) */
+  --color-success: #2E7D5B;
+  --color-warning: #B5832A;
+  --color-danger:  #B23A3A;
+  --color-neutral: #6B7480;
+
+  /* Type — fallback stacks ONLY (no web fonts under CSP) */
+  --font-display: 'Cinzel', 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+  --font-sans:    'Inter', 'Segoe UI', Arial, system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', 'Cascadia Code', Consolas, ui-monospace, monospace;
+
+  --fw-regular: 400; --fw-medium: 500; --fw-semibold: 600; --fw-bold: 700;
+  --tracking-eyebrow: 0.18em; --tracking-wide: 0.06em; --tracking-tight: -0.01em;
+
+  /* Spacing — 4px base */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 24px; --space-6: 32px; --space-7: 48px; --space-8: 64px; --space-9: 96px;
+
+  --radius-control: 10px; --radius-card: 14px; --radius-pill: 9999px;
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
