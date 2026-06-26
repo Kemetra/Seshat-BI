@@ -32,6 +32,13 @@ def _safe_identifier(name: str) -> str:
     be bound as query params). The runner is read-only, but a crafted name must
     not be able to break out of the identifier position. Allow letters, digits,
     underscore, and dots between parts; reject everything else.
+
+    NOTE (audit 2026-06-26 #40): this overlaps :mod:`retail.identifiers`, but the
+    grammars differ deliberately -- this accepts an UNLIMITED dotted chain via one
+    regex (the inverted-data-flow profiler runs before a source-map exists), while
+    ``identifiers.validate_qualified_identifier`` caps at two parts. They are kept
+    separate rather than merged so neither validator's contract shifts; both use
+    ``fullmatch`` and reject quotes/comments/separators identically.
     """
     # fullmatch (not match): `.match` anchors only at the start, so a
     # newline-terminated name like "valid_id\nDROP ..." would slip past the

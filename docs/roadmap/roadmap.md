@@ -142,7 +142,7 @@ sequences before it or assumes it exists.
 | **F028** | Evidence Pack Generator | Product Module (artifact-writing) | Publish Ready (consumes F013) | `022` | -- |
 | **F029** | dbt Transformation Adapter | Execution Adapter (DB-connected) | Silver/Gold Ready | `023` | `0009-dbt-is-transformation-adapter` |
 | **F030** | Dagster Orchestration Adapter | Execution Adapter (orchestrator) | all (sequences, decides none) | `024` | `0010-dagster-orchestration-adapter` |
-| **F031** | Adapter Maintenance & Auto-Update Policy | Maintenance Automation | none (protects all) | `025` | `0011-adapter-safe-auto-updates` |
+| **F031** | Adapter Maintenance & Auto-Update Policy | Maintenance Automation | none (protects all) | `025` | `0011-safe-auto-updates` |
 | **F032** | Adapter Compatibility Matrix | Maintenance Automation | none | `026` | -- |
 | **F033** | Release & Maturity Management | Maintenance Automation / Skill | none | `027` | -- |
 | **F034** | Visual Implementation MVP | Dashboard & Delivery (manual build, F016-independent) | Dashboard Ready (design-approved -> page-implemented) | `039` | -- |

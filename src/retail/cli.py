@@ -105,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
                     f"error: commit message file not found: {args.commit_msg_file}",
                     file=sys.stderr,
                 )
-                sys.exit(1)
+                return 1  # main() is -> int; the __main__ guard does sys.exit(main())
             # git's COMMIT_EDITMSG ends in a trailing newline (\r\n on Windows) —
             # strip it so the message passed to rules is the bare text.
             commit_message = raw.rstrip("\r\n")
@@ -154,11 +154,36 @@ def _load_targets(source_map: str):
 
 
 def _redact_dsn(message: object, dsn: str) -> str:
+    """Scrub a DSN and its sensitive COMPONENTS out of an error message.
+
+    A literal replace is not enough: psycopg2 reformats the DSN into its own text
+    (e.g. ``connection to server at "host" (1.2.3.4), port 5432 failed: FATAL:
+    password authentication failed for user "admin"``) where the literal DSN never
+    appears yet host/user/password leak. So, in addition to the literal DSN, parse
+    the DSN and redact each non-empty component (host, username, password, and the
+    ``user@`` credentials prefix) wherever it appears (audit 2026-06-26 #7).
+    """
+    from urllib.parse import urlsplit
+
     text = str(message) or message.__class__.__name__
-    if dsn:
-        text = text.replace(dsn, "<redacted DSN>")
-        if "@" in dsn:
-            text = text.replace(dsn.split("@", 1)[0] + "@", "<credentials>@")
+    if not dsn:
+        return text
+    text = text.replace(dsn, "<redacted DSN>")
+    if "@" in dsn:
+        text = text.replace(dsn.split("@", 1)[0] + "@", "<credentials>@")
+    # Component-level scrub for the reformatted-by-the-driver case.
+    try:
+        parts = urlsplit(dsn)
+    except ValueError:
+        return text
+    # Longest first so a host containing the username substring is fully covered.
+    for secret in sorted(
+        {parts.password, parts.username, parts.hostname},
+        key=lambda s: len(s or ""),
+        reverse=True,
+    ):
+        if secret:
+            text = text.replace(secret, "<redacted>")
     return text
 
 
@@ -277,9 +302,21 @@ def _run_semantic_check(args) -> int:
 
     repo = Path(args.repo)
 
+    # Confine --metrics-dir to the repo tree: resolve it and reject a value that
+    # traverses outside the repo root (e.g. `../../etc`) so contract discovery
+    # cannot be pointed at arbitrary filesystem locations (audit 2026-06-26 #26).
+    repo_resolved = repo.resolve()
+    metrics_root = (repo / args.metrics_dir).resolve()
+    if metrics_root != repo_resolved and not metrics_root.is_relative_to(repo_resolved):
+        print(
+            f"error: --metrics-dir {args.metrics_dir!r} escapes the repo root; "
+            "it must resolve to a path inside --repo.",
+            file=sys.stderr,
+        )
+        return 1
+
     # 1. Index contract definitions by measure name (YAML stem == measure name).
     definitions: dict[str, dict | None] = {}
-    metrics_root = repo / args.metrics_dir
     if metrics_root.is_dir():
         for contract_path in sorted(metrics_root.glob("*/metrics/*.yaml")):
             name = contract_path.stem

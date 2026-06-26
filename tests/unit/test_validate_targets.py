@@ -155,16 +155,14 @@ def test_load_targets_missing_file_raises_clear_error() -> None:
         load_targets(FIXTURE.parent / "does_not_exist.source-map.yaml")
 
 
-def test_load_targets_rejects_map_missing_gold_star() -> None:
+def test_load_targets_rejects_map_missing_gold_star(tmp_path: Path) -> None:
+    # #21: stage into tmp_path instead of writing into the live fixture tree.
     from retail.validate_targets import load_targets
 
-    bad = FIXTURE.parent / "bad_no_gold_star.source-map.yaml"
+    bad = tmp_path / "bad_no_gold_star.source-map.yaml"
     bad.write_text("meta:\n  table_id: x\n  primary_key: [a]\n", encoding="utf-8")
-    try:
-        with pytest.raises(ValueError, match="gold_star"):
-            load_targets(bad)
-    finally:
-        bad.unlink()
+    with pytest.raises(ValueError, match="gold_star"):
+        load_targets(bad)
 
 
 @pytest.mark.parametrize(

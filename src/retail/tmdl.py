@@ -42,7 +42,7 @@ PUBLIC API (consumed by D1-D8 rules and by M4b):
   - iter_model_files(ctx: RuleContext, suffix: str) -> Iterable[tuple[str, str]]
   - iter_m_sources(repo_root: Path, tracked_files: tuple[str, ...]) -> Iterable[MSource]
   - normalize_measure_body(expression: str) -> str
-  - top_level_blocks(text: str) -> list[str]   (M0 regression anchor — kept intact)
+  - top_level_blocks(text: str) -> list[str]   (M0 regression anchor; test-only)
   - DATE_TABLE_MARKER: str
   - TI_TRIGGER_FUNCTIONS: frozenset[str]
 """
@@ -163,7 +163,10 @@ class TmdlTable:
         name: table name.
         measures: all ``measure`` blocks found.
         columns: all ``column`` blocks found.
-        partition_sources: RAW M source body texts (for D8).
+        partition_sources: RAW M source body texts, one joined string per source.
+            NOTE: D8 does NOT consume this field -- it re-scans raw table-file
+            bodies independently (see ``iter_m_sources``); this attribute is
+            retained for parser completeness, not for any rule.
         annotations: raw ``annotation <name> = <value>`` lines (for D7 marker).
         line: 1-based line number of the ``table`` header.
     """
@@ -246,6 +249,11 @@ def parse_tmdl(text: str) -> TmdlTable | None:
         ind = _indent(raw)
 
         # --- measure block ---
+        # KNOWN GAP (audit 2026-06-26 #32, none-today): the name class `[^'=]+?`
+        # excludes `=`, so a single-quoted measure name CONTAINING `=` would be
+        # truncated at the `=`. No committed measure has `=` in its name; widening
+        # the regex risks re-testing all TMDL parsing for a zero-trigger case, so
+        # this is documented, not changed.
         mm = re.match(
             r"measure\s+('?)(?P<name>[^'=]+?)\1\s*=\s*(?P<expr>.*)$", stripped
         )
@@ -275,6 +283,10 @@ def parse_tmdl(text: str) -> TmdlTable | None:
             continue
 
         # --- column block ---
+        # KNOWN GAP (audit 2026-06-26 #31, none-today): an UNQUOTED calculated
+        # column `column Name = expr` would let the name class absorb ` = expr`.
+        # No committed model has a calc column in this form; documented, not changed
+        # (a regex tweak here would re-test all column parsing for a zero trigger).
         cm = re.match(r"column\s+('?)(?P<name>[^'\n]+?)\1\s*$", stripped)
         if cm and ind == 1:
             name = cm.group("name").strip()

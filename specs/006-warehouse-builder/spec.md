@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-24
 
-**Status**: Draft
+**Status**: Shipped (retail-build-warehouse authoring skill landed)
 
 **Input**: "Build the silver/gold SQL-authoring builder -- the middle-of-loop seam the retail-orchestrate conductor parks at. It reads an APPROVED source-map (mappings/<table>/, Gate status: CLEARED) and AUTHORS the numbered migration .sql files into warehouse/migrations/ in the load-bearing Phase 5/6 order, then STOPS. Authoring .sql FILES is in-scope (same category as source-mapping authoring mappings/); EXECUTING the SQL against Postgres is the deferred DB-write seam."
 

@@ -6,7 +6,7 @@
 > number is the next free on-disk slot. Here spec-dir 020 = roadmap F026. When the dir
 > number and the F-number disagree, the roadmap F-number wins. This header states both.
 
-**Created**: 2026-06-25   **Status**: Planned (spec only -- no runtime code this slice)
+**Created**: 2026-06-25   **Status**: Shipped (readiness-viewer skill landed; spec authored no runtime Python by design)
 
 **Input**: "Roadmap F026 (Product Module, read-only). A module that DISPLAYS readiness across sources / tables / reports by reading the Core Authority artifacts (readiness-status.yaml at mappings/<table>/, ADR 0004) -- current_stage, per-stage status, evidence[], blocking_reasons[], approvals[], next_action. It is the STAGE-CENTRIC lens: a per-stage status matrix across the seven readiness stages, evidence rendered as links/references, an approvals timeline, and the single next_action per table. It does NOT recompute truth, does NOT change readiness state, does NOT infer approvals, and shows missing evidence AS MISSING. Critical overlap: F012 Data Quality Control Room is already a read-only cross-table roll-up of findings + blockers; F026 is scoped strictly as the DELTA (a different view over overlapping inputs), with an explicit recommendation to ship as a stage-view mode of F012 (or merge into F012 if the delta proves thin). Generic (#7). No fake confidence (#9)."
 

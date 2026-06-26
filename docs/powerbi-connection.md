@@ -80,12 +80,14 @@ Power BI's **Get Data → PostgreSQL** bakes the **literal** host and database i
 every table's M partition, e.g.:
 
 ```m
-Source = PostgreSQL.Database("realhost.db.ondigitalocean.com:25060", "ezaby_demo")
+Source = PostgreSQL.Database("<your-host>.db.ondigitalocean.com:25060", "<database>")
 ```
 
-That literal is a committed connection string — `retail check` **C2** (secret scan)
-and **C1** (parameterized-connection rule) will both fail on it, and the real host
-ends up in git. This is not optional cleanup; it blocks the gate.
+With a **real** host in place of `<your-host>`, that line is a committed connection
+string — `retail check` **C2** (secret scan) and **C1** (parameterized-connection
+rule) will both fail on it, and the real host ends up in git. (The `<...>`
+placeholders above are exempt from C2 so this guide itself stays gate-clean.) This
+is not optional cleanup; it blocks the gate.
 
 **Required before the first commit of any PBIP model:**
 

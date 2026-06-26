@@ -8,7 +8,7 @@ F033=027. When the dir number and the F-number disagree, the roadmap F-number wi
 F024-F033 are a forward batch not yet recorded in the committed roadmap, which today
 documents through F016; this spec does not edit the roadmap.)
 
-**Created**: 2026-06-25   **Status**: Planned (spec only -- no runtime code this slice)
+**Created**: 2026-06-25   **Status**: Shipped (dbt-transformation-adapter skill landed; spec authored no runtime Python by design)
 
 **Input**: "Define how dbt enters as a TRANSFORMATION ADAPTER for Silver/Gold without
 becoming the brain. dbt is the build ENGINE; Tower BI is the brain. Entry condition:

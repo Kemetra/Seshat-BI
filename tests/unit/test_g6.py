@@ -65,20 +65,19 @@ def test_test_fixtures_are_exempt() -> None:
     assert list(check_pbip_param_no_real_value(ctx)) == []
 
 
-def test_only_scans_parameter_expressions() -> None:
+def test_only_scans_parameter_expressions(tmp_path: Path) -> None:
     # A normal (non-IsParameterQuery) shared expression with a literal must NOT
     # fire -- G6 targets connection PARAMETERS, not every M expression.
-    d = FIXTURES / "nonparam.SemanticModel" / "definition"
-    d.mkdir(parents=True, exist_ok=True)
-    f = d / "expressions.tmdl"
-    f.write_text(
+    # #20: stage into tmp_path instead of writing into the live FIXTURES tree.
+    d = tmp_path / "nonparam.SemanticModel" / "definition"
+    d.mkdir(parents=True)
+    (d / "expressions.tmdl").write_text(
         'expression FxRate = "1.0" meta [IsParameterQuery=false, Type="Text"]\n',
         encoding="utf-8",
     )
-    try:
-        findings = list(check_pbip_param_no_real_value(_ctx("nonparam.SemanticModel")))
-        assert findings == []
-    finally:
-        f.unlink()
-        d.rmdir()
-        d.parent.rmdir()
+    ctx = RuleContext(
+        repo_root=tmp_path,
+        tracked_files=("nonparam.SemanticModel/definition/expressions.tmdl",),
+    )
+    findings = list(check_pbip_param_no_real_value(ctx))
+    assert findings == []

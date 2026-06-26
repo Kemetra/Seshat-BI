@@ -65,7 +65,13 @@ def test_run_pairs_drift_exits_one() -> None:
     pairs = [MeasurePair("AvgTransactionValue", DAX_AVG, "p.tmdl:1", buggy_def)]
     findings, exit_code = run_semantic_pairs(pairs)
     assert exit_code == 1
-    assert any(f.severity is Severity.ERROR for f in findings)
+    # #17: assert rule_id and measure name are present, not just severity
+    assert any(
+        f.rule_id == "L3"
+        and f.severity is Severity.ERROR
+        and "AvgTransactionValue" in f.message
+        for f in findings
+    )
 
 
 def test_run_pairs_escalate_warns_but_exits_zero() -> None:
@@ -83,4 +89,10 @@ def test_run_pairs_escalate_warns_but_exits_zero() -> None:
     pairs = [MeasurePair("AvgTransactionValue", escalate_dax, "p.tmdl:1", escalate_def)]
     findings, exit_code = run_semantic_pairs(pairs)
     assert exit_code == 0  # WARNING does not fail the gate
-    assert any(f.severity is Severity.WARNING for f in findings)
+    # #17: assert rule_id and measure name are present, not just severity
+    assert any(
+        f.rule_id == "L3"
+        and f.severity is Severity.WARNING
+        and "AvgTransactionValue" in f.message
+        for f in findings
+    )

@@ -43,12 +43,22 @@ If D10 newly fires, that's a real anti-pattern surfaced → report, do not edit 
 
 ## DESIGN-ONLY / DEFER (human review required — NOT implemented here)
 
-### A. `$$` dollar-quote tokenizer (next priority)
-Add a single shared SQL string/comment stripper (the audit's deferred refactor) instead of
-patching 3 parallel paths. `_DOLLAR_TAG = r'\$([A-Za-z_][A-Za-z0-9_]*)?\$'` evaluated before
-the quote branch, with explicit handling so `$1`/`$2` positional params do NOT open a span;
-body blanked with newlines preserved. Deferred: touches 8 rules incl. ERROR (S1/S2/S3/S4b);
-state-machine ordering subtle; needs human bless on the shared-stripper extraction.
+### A. `$$` dollar-quote tokenizer — SHIPPED 2026-06-26
+Implemented as a single shared dollar-tag *recognizer* `_dollar_quote_end(text, i)` (NOT the
+full shared-stripper refactor, which stays deferred + finding #10) called from all three
+strippers (`tokenize_sql`, `strip_sql_comments`, `_strip_sql_noise`), each keeping its own
+output contract. `_DOLLAR_TAG = r'\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$'`; close-tag matching uses
+the EXACT opening tag (an inner `$other$` in a `$$…$$` span is body); unterminated fails
+closed to EOF; `$1`/`$2` positional params do not open a span. A `$` glued to a preceding
+identifier-continuation char does not open a span (`a$b$c` is one PG identifier — guarding
+this avoids a regression vs the bare lexer; the `i>0` check also guards `text[-1]`). 19 TDD
+tests + adversarial verification (4 agents); 0-drift real-model gate.
+
+**Known residual limitations (deferred, all PG-malformed or S1-flagged, absent from tracked
+SQL):** `a$$b` / `$$a$$$$b$$` (`$` glued to an identifier/closer) are handled to
+*no-worse-than-baseline*, not full PG fidelity; non-ASCII dollar-quote tags (`$café$`) are
+not recognized (ASCII tag class) and fall through to baseline. Full PG-identifier-aware
+disambiguation is the "buy a real lexer" path ADR-0001 rejected — YAGNI for a zero-`$` corpus.
 
 ### B. L4 live-DB value proxy (architectural decision)
 New `value_proxy.py` + `retail value-check` subcommand mirroring `retail validate` (lazy

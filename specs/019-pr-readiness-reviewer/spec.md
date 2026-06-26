@@ -6,7 +6,7 @@
 
 **Created**: 2026-06-25
 
-**Status**: Planned (spec only -- no runtime code this slice)
+**Status**: Shipped (pr-readiness-reviewer skill landed; spec authored no runtime Python by design)
 
 **Input**: "A Product Module (read-only) that turns the manual PR review pattern into a repeatable skill. It reads one PR's state (open/draft/mergeable, CI/workflow conclusions, open review threads, unresolved Codex/GitHub review comments) and the committed readiness evidence (readiness-status.yaml, source-map approval metadata, declared-vs-run tests, no raw data / no secrets / no local paths) and emits a structured verdict: merge_ready (yes/no), blockers[], warnings[], required_human_decisions[], evidence[], next_action. It MUST distinguish blocker vs warning. It reports readiness from evidence only -- it CANNOT merge a PR, approve a PR, resolve a review thread, or move a readiness stage. Category per F024: Product Module, read-only. Generic (#7). No fake confidence (#9). Depends on F024."
 

@@ -8,7 +8,7 @@ roadmap F-number wins: this is F027.)
 
 **Created**: 2026-06-25
 
-**Status**: Planned (spec only -- no runtime code this slice)
+**Status**: Shipped (approval-console skill landed; spec authored no runtime Python by design)
 
 **Input**: "A Product Module for human-in-the-loop decisions. It turns an agent's
 judgment-call question into a reviewable DECISION PACKAGE (a request), then RECORDS the

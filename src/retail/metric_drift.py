@@ -140,8 +140,14 @@ def _outer_call(expr: str, func: str) -> str | None:
     Returns None if `expr` is not a single top-level call to `func` (so a bare measure
     ref, a different function, or trailing junk all yield None). Paren-balanced.
     """
-    expr = expr.strip()
-    m = re.match(rf"^{func}\s*\(", expr, re.IGNORECASE)
+    # Strip a trailing `;` and surrounding whitespace -- a non-standard but harmless
+    # statement terminator must not make the wrapper unrecognized, which would
+    # silently bypass the drift check (audit 2026-06-26 #33).
+    expr = expr.strip().rstrip(";").rstrip()
+    # re.escape: `func` is interpolated into a regex. Callers pass literals today
+    # ("CALCULATE"/"DIVIDE"), but escaping prevents a future dynamic func with
+    # regex metacharacters from being treated as a pattern (audit #25).
+    m = re.match(rf"^{re.escape(func)}\s*\(", expr, re.IGNORECASE)
     if not m:
         return None
     inner_start = m.end()

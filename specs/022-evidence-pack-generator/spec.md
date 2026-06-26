@@ -5,7 +5,7 @@
 number is the next free on-disk slot. Here dir 022 == F028. When dir number and
 F-number disagree, the roadmap F-number wins.)
 
-**Created**: 2026-06-25   **Status**: Planned (spec only -- no runtime code this slice)
+**Created**: 2026-06-25   **Status**: Shipped (evidence-pack-generator skill landed; spec authored no runtime Python by design)
 
 **Input**: "A product module that ASSEMBLES a single readable evidence pack for any
 table or report reaching late readiness stages. The pack has 10 fixed sections

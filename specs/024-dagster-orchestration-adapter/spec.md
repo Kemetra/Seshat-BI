@@ -9,7 +9,7 @@
 > F-number disagree, the roadmap F-number wins. This feature is roadmap F030,
 > authored on disk as spec 024.
 
-**Created**: 2026-06-25   **Status**: Planned (spec only -- no runtime code this slice)
+**Created**: 2026-06-25   **Status**: Shipped (dagster-orchestration-adapter skill landed; spec authored no runtime Python by design)
 
 **Input**: "Define how Dagster enters later as an ORCHESTRATION ADAPTER. Dagster RUNS approved
 steps; Tower BI decides whether the result passes. Dagster MAY orchestrate: load bronze, profile

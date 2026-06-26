@@ -2,7 +2,7 @@
 
 - **Status:** Draft (Phase 0/1 foundation -- architecture + spec + templates only)
 - **Date:** 2026-06-24
-- **Repo:** `Retail_Tower_analytics`
+- **Repo:** `Seshat_BI` (renamed 2026-06-26 from `Retail_Tower_analytics`; this Phase-0 doc preserves the original name in its historical body below)
 - **Scope of this document:** name the product, place the pieces that **already
   exist**, and add the one new load-bearing idea (a source-mapping gate). It defines
   **no new code, no new tables, no validators.** Those are later slices.

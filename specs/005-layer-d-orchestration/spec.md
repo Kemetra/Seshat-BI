@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-24
 
-**Status**: Draft
+**Status**: Shipped (retail-orchestrate conductor skill landed)
 
 **Input**: "Build toward orchestration (Layer D). Claude Code IS the orchestrator (confirmed -- no standalone runtime). Author ONE conductor skill that sequences the existing verb-skills (source-mapping, retail-govern, retail-validate, pbip-workflow) across the medallion phases and self-heals against the gate exit code, stopping at the two human seams. Demonstrate the self-heal loop on the gate that fully exists today (`retail check`), replayable over the c086 worked example. No new Python; static core stays stdlib-only."
 

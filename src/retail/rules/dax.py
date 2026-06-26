@@ -296,8 +296,13 @@ def d7_ti_needs_date_marker(ctx: RuleContext) -> Iterable[Finding]:
 # D8 — gold-only sourcing
 # ---------------------------------------------------------------------------
 
-# Regex to extract the bodies of double-quoted M string literals.
-_M_STRING_LITERAL = re.compile(r'"([^"]*)"')
+# Regex for double-quoted M string literals. M escapes an inner quote by doubling
+# it (`""`), so `"a""b"` is the ONE literal `a"b` -- the `(?:[^"]|"")*` body
+# consumes escaped pairs rather than ending at the first inner quote (audit
+# 2026-06-26 #29; an old `"([^"]*)"` split there and could leak a schema token
+# sitting after an escaped quote past D8's scan). Group 1 is the raw body (with
+# `""` pairs intact); ``_extract_m_string_bodies`` unescapes them to the true value.
+_M_STRING_LITERAL = re.compile(r'"((?:[^"]|"")*)"')
 
 # Regex for the M connection option ``[Schema="<value>"]`` / ``Schema = "<value>"``.
 _M_SCHEMA_OPTION = re.compile(r'Schema\s*=\s*"([^"]+)"', re.IGNORECASE)
@@ -310,9 +315,11 @@ def _extract_m_string_bodies(m_text: str) -> list[str]:
     """Return the text contents of all double-quoted string literals in ``m_text``.
 
     Used to expose SQL embedded in ``Value.NativeQuery(_, "SELECT … FROM schema.obj")``
-    to ``stale_schema_tokens``, which would otherwise strip those strings.
+    to ``stale_schema_tokens``, which would otherwise strip those strings. Each
+    body has its M `""` escapes collapsed back to a single `"` so the returned text
+    is the literal's true value.
     """
-    return _M_STRING_LITERAL.findall(m_text)
+    return [body.replace('""', '"') for body in _M_STRING_LITERAL.findall(m_text)]
 
 
 @register("D8", "Partitions must source from gold schema only")
@@ -388,8 +395,11 @@ def d8_gold_only_sourcing(ctx: RuleContext) -> Iterable[Finding]:
 # D9 — no hardcoded date literals in measures
 # ---------------------------------------------------------------------------
 
-# DATE(yyyy, m, d) constructor or a quoted ISO date literal "yyyy-mm-dd".
-_DATE_LITERAL = re.compile(r"DATE\s*\(\s*\d{3,4}\s*,|\b\d{4}-\d{2}-\d{2}\b")
+# DATE(yyyy, m, d) constructor or an ISO date literal yyyy-m-d. The ISO branch
+# accepts 1-or-2-digit month/day (`2024-1-1` is just as hardcoded as `2024-01-01`;
+# the old `\d{2}` each silently missed single-digit forms -- audit 2026-06-26 #30).
+# The 4-digit-year anchor keeps it from matching 2-/3-digit `n-n-n` arithmetic runs.
+_DATE_LITERAL = re.compile(r"DATE\s*\(\s*\d{3,4}\s*,|\b\d{4}-\d{1,2}-\d{1,2}\b")
 
 
 @register("D9", "No hardcoded date literals in measures")

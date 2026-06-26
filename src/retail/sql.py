@@ -42,6 +42,42 @@ class SqlToken:
     line: int
 
 
+# A PostgreSQL dollar-quote OPENING tag: `$$` or `$tag$` where tag is an
+# identifier (letter/underscore start). `$1`/`$2` positional params are NOT
+# tags -- the char after the optional identifier must be `$`, and a digit-led
+# `$1` fails this, so it is never treated as a span opener.
+_DOLLAR_TAG = re.compile(r"\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$")
+# PG's identifier-continuation class includes `$`, so a `$` glued to a preceding
+# identifier char (`a$b$c`) is identifier text, not a tag opener (ASCII subset of
+# scan.l's ident_cont `[A-Za-z0-9_$\200-\377]`).
+_IDENT_CONT = re.compile(r"[A-Za-z0-9_$]")
+
+
+def _dollar_quote_end(text: str, i: int) -> int | None:
+    """If a dollar-quote span opens at ``text[i]`` (a `$`), return the index just
+    past its CLOSING tag; otherwise return ``None``.
+
+    Shared by all three SQL strippers so the close-tag-matching grammar lives in
+    one place. The closing tag is the EXACT opening tag string -- e.g. an inner
+    `$other$` inside a `$$ ... $$` span is body text, not a terminator. An
+    unterminated span fails closed to EOF (returns ``len(text)``), mirroring the
+    existing quote/comment branches.
+
+    A `$` glued to a preceding identifier-continuation char does NOT open a span:
+    PG lexes `a$b$c` as one identifier, so opening there would swallow real SQL to
+    EOF (a regression vs the bare lexer). The ``i > 0`` check also guards ``i == 0``
+    from reading ``text[-1]`` as a wrap-around index.
+    """
+    if i > 0 and _IDENT_CONT.match(text[i - 1]):
+        return None  # `$` inside/after an identifier (e.g. `a$b$c`) is not a tag
+    m = _DOLLAR_TAG.match(text, i)
+    if not m:
+        return None  # e.g. `$1` positional param -> caller handles normally
+    open_tag = m.group(0)
+    j = text.find(open_tag, m.end())
+    return len(text) if j == -1 else j + len(open_tag)
+
+
 def tokenize_sql(text: str) -> list[SqlToken]:
     """Tokenize SQL, dropping comments and string-literal contents.
 
@@ -77,6 +113,16 @@ def tokenize_sql(text: str) -> list[SqlToken]:
             tokens.append(SqlToken("", line))
             i = n if j == -1 else j + 1
             continue
+        if ch == "$":
+            end = _dollar_quote_end(text, i)
+            if end is not None:
+                # A PL/pgSQL body collapses to a placeholder token (like a string
+                # literal) so no inner word leaks; line accounting spans the body.
+                line += text.count("\n", i, end)
+                tokens.append(SqlToken("", line))
+                i = end
+                continue
+            # not a dollar-quote opener (e.g. `$1`); fall through to skip the `$`.
         m = word.match(text, i)
         if m:
             tokens.append(SqlToken(m.group(0), line))
@@ -121,6 +167,16 @@ def strip_sql_comments(text: str) -> str:
                     break
                 i += 1
             continue
+        if ch == "$":
+            end = _dollar_quote_end(text, i)
+            if end is not None:
+                # Blank a PL/pgSQL body (a `--`/quoted-ident inside it is data, not
+                # code) but keep columns + newlines so line numbers downstream hold.
+                span = text[i:end]
+                out.append("".join("\n" if c == "\n" else " " for c in span))
+                i = end
+                continue
+            # not a dollar-quote opener (e.g. `$1`); copy the `$` through below.
         if text.startswith("--", i):
             j = text.find("\n", i)
             end = n if j == -1 else j
