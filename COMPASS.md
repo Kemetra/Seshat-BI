@@ -44,6 +44,7 @@ Stages:
 | Source mapping / grain / PII / unresolved questions | `docs/readiness/readiness-model.md` + `docs/knowledge-map.md` | source map + unresolved questions |
 | SQL validation / SQL reconciliation / transformation logic | `skills/bi-sql-knowledge/SKILL.md` then `skills/bi-sql-knowledge/INDEX.md` | SQL validation / reconciliation checklist |
 | DAX / metric contracts / semantic model prerequisites | `skills/bi-dax-knowledge/SKILL.md` then `skills/bi-dax-knowledge/INDEX.md` | metric contract / semantic model handoff |
+| Python / pandas / dataframe source-prep reasoning, cleaning, aggregation-grain review | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | cleaning / aggregation-grain review artifact (planned routes deferred) |
 | Dashboard / visual design / audience / layout | `.claude/skills/powerbi-dashboard-design/` (gated "design from contracts" verb: `.claude/skills/dashboard-design/`) | dashboard blueprint |
 | Power BI execution / publish | STOP unless `semantic_model_ready` and publish gates have passed | blocked verdict or BI handoff pack |
 | Unknown or ambiguous task | `docs/knowledge-map.md` | clarifying question or blocked verdict |
@@ -53,19 +54,34 @@ Power BI execution remains execution-only and gated: **F016** advances only when
 
 ## The knowledge layer
 
-Two reasoning skills are the deepest assets the routes above point into. Both are
-*reasoning and validation* layers, never executors — they reason about SQL/DAX,
-they never run a query, run DAX, or touch a database.
+The reasoning skills are the deepest assets the routes above point into. All are
+*reasoning and validation* layers, never executors — they reason about SQL/DAX/Python,
+they never run a query, run DAX, run Python, or touch a database.
 
 | Skill | Foundation concept | Use for |
 |---|---|---|
 | `skills/bi-sql-knowledge/` | **table grain** + aggregation correctness | source profiling, grain/keys/uniqueness, joins & fan-out, COUNT/NULL semantics, dedup, validation & reconciliation queries, silver/gold transform logic, SQL anti-patterns |
 | `skills/bi-dax-knowledge/` | **filter context** + context transition | metric contracts, measure generation/review, time-intelligence, ranking/segmentation, semantic-model prerequisites, DAX performance |
+| `skills/bi-python-knowledge/` | **dataframe grain** + source-prep reasoning | pandas/dataframe source-prep reasoning, cleaning/standardization review, aggregation-grain review, Python BI analyzer candidates, reasoning training/eval seed (*initial seed*) |
 
-Mandatory flow inside either skill: **`SKILL.md` → `INDEX.md` → ONLY the file(s)
+Mandatory flow inside any of these skills: **`SKILL.md` → `INDEX.md` → ONLY the file(s)
 the route names → an artifact** (checklist, metric/validation contract, or
 analyzer-style verdict). Reading the whole base is an anti-pattern. Each `INDEX.md`
 routes by *task* and by *symptom* — enter from the symptom if you have one.
+
+### BI Python knowledge
+
+Use `skills/bi-python-knowledge/SKILL.md` for Python / pandas / dataframe source-prep
+reasoning. Route through `skills/bi-python-knowledge/INDEX.md` and open only the named
+files.
+
+Current seed coverage includes cleaning/standardization, aggregation-grain review,
+analyzer rule candidates, and a training/eval seed. Treat this layer as an **initial
+seed**: planned dataframe, dtype/profiling, merge/fan-out, validation, and performance
+routes remain deferred until implemented.
+
+This layer is reasoning/review only. It does not execute Python, define metrics,
+approve readiness gates, replace SQL/DAX, or own dashboard design.
 
 ## Hard stops
 

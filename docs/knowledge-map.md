@@ -30,11 +30,15 @@ ONLY the file(s) that `INDEX.md` names — never the whole knowledge base.
 | 11. DAX measure review | DAX | `skills/bi-dax-knowledge/SKILL.md` then `skills/bi-dax-knowledge/INDEX.md` | analyzer-style DAX verdict |
 | 12. Metric contract definition | DAX | `skills/bi-dax-knowledge/INDEX.md` | metric contract |
 | 13. Semantic model readiness | DAX + Readiness | `skills/bi-dax-knowledge/INDEX.md` + `docs/readiness/semantic-model-ready.md` | model-review checklist / semantic model handoff |
-| 14. Dashboard design | Dashboard | `.claude/skills/powerbi-dashboard-design/` (see boundary below) | dashboard blueprint |
-| 15. Data quality control room | Readiness | `docs/readiness/readiness-model.md` | data issues / blocking reasons |
-| 16. BI handoff pack | Readiness | `docs/readiness/publish-ready.md` | BI handoff pack |
-| 17. Power BI execution adapter | Roadmap (gated) | `docs/roadmap/roadmap.md` | blocked verdict (gated F016 / execution-only / later) |
-| 18. Unknown / ambiguous request | Compass | `COMPASS.md` | clarifying question or blocked verdict |
+| 14. Python cleaning / standardization review | Python | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | cleaning review artifact / shipped cleaning route |
+| 15. Python aggregation / groupby grain review | Python | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | `skills/bi-python-knowledge/checklists/aggregation-grain-checklist.md` |
+| 16. Python / pandas dataframe pipeline review | Python | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | analyzer-candidate / review artifact if available; otherwise planned/deferred |
+| 17. Python source-prep reasoning | Python | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | relevant shipped or planned route (planned routes deferred) |
+| 18. Dashboard design | Dashboard | `.claude/skills/powerbi-dashboard-design/` (see boundary below) | dashboard blueprint |
+| 19. Data quality control room | Readiness | `docs/readiness/readiness-model.md` | data issues / blocking reasons |
+| 20. BI handoff pack | Readiness | `docs/readiness/publish-ready.md` | BI handoff pack |
+| 21. Power BI execution adapter | Roadmap (gated) | `docs/roadmap/roadmap.md` | blocked verdict (gated F016 / execution-only / later) |
+| 22. Unknown / ambiguous request | Compass | `COMPASS.md` | clarifying question or blocked verdict |
 
 ## Route by symptom (knowledge layer)
 
@@ -46,6 +50,7 @@ map only points; the cause → checks → fix → stop rule lives in the skill.
 |---|---|---|
 | Totals doubled / inflated, row count changed after a join, COUNT/AVG wrong, reload doubled the data, gold won't reconcile to source, slow-but-correct SQL | SQL | `skills/bi-sql-knowledge/INDEX.md` → "Route by symptom" → PB-SQL-* verdict |
 | Measure ignores slicers, total row wrong, YOY/YTD wrong, ranking changes unexpectedly, DISTINCTCOUNT off, measure slow | DAX | `skills/bi-dax-knowledge/INDEX.md` → "Route by symptom" → analyzer-style verdict |
+| Messy category/string/currency cleaning, dataframe grain/aggregation question, pandas source-prep review | Python | `skills/bi-python-knowledge/SKILL.md` → `skills/bi-python-knowledge/INDEX.md` → cleaning / aggregation-grain review artifact (planned routes deferred) |
 
 Supporting references:
 
@@ -68,17 +73,29 @@ Power BI execution: route to `docs/roadmap/roadmap.md` and treat as gated **F016
 - **Readiness** owns stage and gating.
 - **SQL knowledge** owns SQL correctness and reconciliation reasoning.
 - **DAX knowledge** owns measures, DAX review, and DAX model prerequisites.
+- **Python knowledge** assists with pandas/dataframe source-prep reasoning, cleaning,
+  and aggregation-grain review, and may produce review artifacts and source-prep
+  evidence. It is an initial seed; planned routes stay deferred. It does not execute
+  Python, run notebooks, define metrics, approve readiness gates, or replace SQL/DAX.
 - **Dashboard design** owns visual/page design after metric contracts.
 - **Execution adapters** cannot define mappings, metrics, semantic logic, or
   dashboard design.
+
+Cross-layer guards: a metric-definition request routes to DAX (not Python); a SQL
+transformation/reconciliation request routes to SQL/readiness (not Python); a
+readiness-gate approval routes to readiness (not Python); a dashboard-design request
+routes to dashboard design (not Python).
 
 ## Do not use this map for
 
 - learning SQL from scratch
 - learning DAX from scratch
+- learning Python/pandas from scratch
 - running database queries
+- executing Python or running notebooks
 - publishing Power BI
 - approving mappings automatically
 - replacing human business decisions
 - bypassing readiness gates
+- treating the Python layer as complete (it is an initial seed)
 - treating C086 as a generic schema
