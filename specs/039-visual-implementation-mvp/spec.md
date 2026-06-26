@@ -6,7 +6,18 @@
 
 **Created**: 2026-06-25
 
-**Status**: Draft
+**Status**: Finalized -- authoring slice shipped 2026-06-26. The three GENERIC artifacts
+exist: the trace template (`templates/visual-implementation-trace.md`) and the Dashboard
+Ready evidence-item edit (`docs/readiness/dashboard-ready.md`) landed with the Tier-5 batch
+(`aba74c8`); the implementation-review procedure
+(`.claude/skills/powerbi-dashboard-design/workflows/visual-implementation-review.md`) landed
+2026-06-26, completing the rule-8 authoring slice. **The built-page worked example (US-1,
+SC-001, SC-007, FR-013) remains UNMET by design** -- it requires a human building the page in
+Power BI Desktop and committing the PBIR (FR-008/FR-009 forbid agent-generated PBIR; Desktop
+is also absent on the authoring machine). That step is deferred to the BI owner; the agent's
+procedure + trace + verification are ready for it. The gate (FR-006) is satisfied for
+`retail_store_sales` (`semantic_model_ready: pass` + design-review sign-off recorded
+2026-06-25), so the build is unblocked whenever the owner performs it.
 
 **Input**: "Visual Implementation MVP (F034). Layer 6 (Dashboard & Delivery). Advances readiness stage: Dashboard Ready -- specifically, it advances `dashboard_ready` from 'design approved on paper' to 'the approved design is realized as visuals on a real PBIR page'. A human builds the approved dashboard blueprint as visuals in Power BI Desktop, saves the report as plain-text PBIR (PBIP), and the page is reviewed in git like code. Docs/templates/skill-only authoring slice (roadmap rule 8); generic to retail BI (rule 7). INDEPENDENT of F016: it is a MANUAL Desktop build with git-diff review, not execution automation, so it crosses no automation boundary (rule 6 gates only the F016 adapter). HARD GATES inherited from Dashboard Ready: no implementation before `semantic_model_ready` is `pass` and the design-review sign-off exists (rule 5); NO pbi-cli / Power BI MCP automation, NO publish (rule 6, F016 owns that). It adds NO new readiness stage and NO new `retail check` rule -- only an evidence item under the existing Dashboard Ready owner."
 

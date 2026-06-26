@@ -58,6 +58,7 @@ Classify the request, then open the single matching workflow under `workflows/`.
 | Final review | 1 | `workflows/dashboard-qa.md` |
 | Mobile-specific layout | 1 | `workflows/mobile-layout.md` |
 | Build / implement in Power BI | 4 | `workflows/powerbi-handoff.md` |
+| Review / verify a built PBIR page | 4 | `workflows/visual-implementation-review.md` |
 
 Routing rules:
 
