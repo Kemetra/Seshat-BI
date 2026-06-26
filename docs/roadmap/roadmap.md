@@ -1,4 +1,4 @@
-# Tower BI Agent Kit -- Roadmap
+# Seshat BI -- Roadmap
 
 - **Status:** Delivered ledger + a partly-shipped companion tier. As of 2026-06-25 the
   entire originally-spec'd sequence (F005-F015, incl. F011A) is **SHIPPED** to
@@ -16,8 +16,9 @@
   the L3 new predicate ops were assessed and DEFERRED for want of a consumer/target
   (see `docs/superpowers/specs/`). This doc records what was delivered, the one
   original feature still parked, and the companion tier's true state.
-- **Product identity:** **Tower BI Agent Kit** is the product. The **Tower BI
-  Readiness System** is the operating spine inside it.
+- **Product identity:** **Seshat BI** is the product (package alias `Seshat_BI`;
+  previously developed under the internal name *Tower BI Agent Kit*). The
+  **Readiness System** is the operating spine inside it.
 - **Read first:** `docs/readiness/readiness-model.md` (the spine),
   `docs/architecture/readiness-pipeline.md` (how it sits on the existing kit).
 

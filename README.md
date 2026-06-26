@@ -50,25 +50,30 @@ never a faked confidence score -- it is `status` + `evidence` + `blocking_reason
 The seven points of the Seshat star are the seven readiness stages. Each is a
 gate: a stage is never entered before the prior one passes.
 
-```text
-  raw source
-    1  Source Ready          profiled and understood
-    2  Mapping Ready         grain, keys, PII, placement mapped + reviewed
-    3  Silver Ready          typed/cleaned tables, statically clean
-    4  Gold Ready            Kimball mart built + live-validated
-    5  Semantic Model Ready  metric contracts + governed Power BI model
-    6  Dashboard Ready       report designed from approved metrics only
-    7  Publish Ready         handoff pack complete, approved to publish
+```mermaid
+flowchart LR
+    RAW([raw source]):::raw
+    S1[1 - Source Ready<br/><sub>profiled and understood</sub>]:::stage
+    S2[2 - Mapping Ready<br/><sub>grain / keys / PII / placement</sub>]:::stage
+    S3[3 - Silver Ready<br/><sub>typed, cleaned, statically clean</sub>]:::stage
+    S4[4 - Gold Ready<br/><sub>Kimball mart + live-validated</sub>]:::stage
+    S5[5 - Semantic Model Ready<br/><sub>metric contracts + governed model</sub>]:::stage
+    S6[6 - Dashboard Ready<br/><sub>designed from approved metrics</sub>]:::stage
+    S7[7 - Publish Ready<br/><sub>handoff pack, approved to publish</sub>]:::stage
+
+    RAW --> S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7
+
+    classDef raw fill:#E8D8BD,stroke:#001E35,stroke-width:1px,color:#001E35;
+    classDef stage fill:#001E35,stroke:#C69214,stroke-width:1.5px,color:#F7F1E7;
 ```
 
 The ordering is non-negotiable, and the gates are the product:
 
-```text
-No source goes directly to silver.
-No gold reaches Power BI before validation.
-No dashboard is designed before its metrics are defined.
-No Power BI execution runs before semantic-model readiness.
-```
+> [!IMPORTANT]
+> - No source goes directly to silver.
+> - No gold reaches Power BI before validation.
+> - No dashboard is designed before its metrics are defined.
+> - No Power BI execution runs before semantic-model readiness.
 
 ---
 
@@ -93,7 +98,7 @@ retail check                       # exit 0 == the repo is governance-clean
 Not installing the package? Run the checker straight from source:
 
 ```bash
-PYTHONPATH=src python -m retail.cli check --repo .
+python -m retail.cli check --repo .
 ```
 
 Tests:
@@ -102,12 +107,15 @@ Tests:
 pytest -m unit -q                  # fast unit suite
 ```
 
-Live validation runs only when a database connection is configured (the driver
-import is lazy, so the rest of the kit works with no DB):
+Live validation and the DAX/value surfaces run only when a database connection
+is configured (the driver import is lazy, so the rest of the kit works with no
+DB):
 
 ```bash
 pip install -e ".[db]"
-retail validate --source-map mappings/<table>/source-map.yaml
+retail validate       --source-map mappings/<table>/source-map.yaml   # gold-layer live checks
+retail semantic-check --repo .                                        # L3 contract<->DAX drift
+retail value-check    --repo .                                        # L4 value proxy (approved value vs live aggregate)
 ```
 
 > [!IMPORTANT]
@@ -120,17 +128,23 @@ retail validate --source-map mappings/<table>/source-map.yaml
 
 ## What is built today
 
-Everything below is on `main`, with a spec under `specs/` and held by the
-`retail check` gate. (For what is planned but not yet built, see the [Roadmap](#roadmap).)
+Everything below is on `main`, each with a written spec (under `specs/` or
+`docs/superpowers/specs/`) and held by the `retail check` gate. (For what is
+planned but not yet built, see the [Roadmap](#roadmap).)
 
 | Capability | What it gives you |
 |------------|-------------------|
 | **Spec-Kit foundation + agent constitution** | The governance law every workflow obeys (`.specify/memory/constitution.md`). |
 | **Source-mapping gate** | `source-map.yaml` must be reviewed before any silver SQL is written. |
-| **`retail check` (static gate)** | Checks committed SQL, TMDL/PBIR, config, docs, and repo text; the exit code is the authority. |
+| **`retail check` (static gate)** | A 31-rule static gate over committed SQL, TMDL/PBIR, config, docs, and repo text; the exit code is the authority. |
 | **`retail validate` (live surface)** | PK uniqueness, date coverage, orphan FKs, reconciliation, source-map-driven checks. |
-| **Readiness spine F005-F015** | The seven-stage model, source intelligence, grain confidence, metric contracts, semantic-model readiness, dashboard design, QC control room, reconciliation ledger, drift detector. |
-| **Power BI Visual Foundation (F011A)** | The four-surface design substrate the dashboard verb reasons with. |
+| **DAX governance L1-L2** | DAX best-practice rules `D1`-`D11` enforced statically inside `retail check` (single-quote handling, `ALL`-variants, dollar-quote tokenizer, and more). |
+| **`retail semantic-check` (L3 contract drift)** | Detects when a committed measure's denominator drifts from its metric contract. |
+| **`retail value-check` (L4 value proxy)** | Recomputes a measure's live aggregate and compares it to an owner-approved expected value within tolerance -- never fakes a pass. |
+| **`retail generate` (DAX Generator)** | Generates a verified best-practice DAX measure from an approved metric contract, with a self-proving loop. |
+| **Readiness spine (F005-F015, incl. F011A)** | The full seven-stage model: source intelligence, grain confidence, metric contracts, semantic-model readiness, dashboard design + the four-surface Visual Foundation, QC control room, reconciliation ledger, drift detector. |
+| **Companion Modules & Adapters (F025-F030)** | Six docs-first skills: PR readiness reviewer, readiness viewer, approval console, evidence-pack generator, and optional **dbt** / **Dagster** adapters (advisory only -- they never create truth). |
+| **F034 authoring slice** | The trace template, Dashboard Ready evidence item, and the read-only visual-implementation-review workflow (the built page itself stays a human Power BI Desktop action). |
 | **C086 pharmacy worked example** | A complete, filled run of the pipeline -- proof of the pattern, not the universal schema. |
 
 A green static check is necessary but not sufficient: semantic correctness needs
@@ -140,13 +154,28 @@ the live validation boundary when a database is available.
 
 ## Architecture
 
-```text
-DigitalOcean PostgreSQL
-   bronze  ->  silver  ->  gold  ->  Power BI PBIP
-  landing      cleaned     mart       reads gold only
-      ^
-      |  manual load now; automated ingestion later
-   raw source
+```mermaid
+flowchart LR
+    SRC([raw source]):::raw
+    B[bronze<br/><sub>landing</sub>]:::med
+    S[silver<br/><sub>cleaned</sub>]:::med
+    G[gold<br/><sub>Kimball mart</sub>]:::gold
+    PBI[Power BI PBIP<br/><sub>reads gold only</sub>]:::pbi
+
+    SRC -.->|manual load now, automated later| B
+    B --> S --> G --> PBI
+
+    subgraph DO [DigitalOcean PostgreSQL]
+        B
+        S
+        G
+    end
+
+    classDef raw fill:#E8D8BD,stroke:#001E35,color:#001E35;
+    classDef med fill:#001E35,stroke:#0B9A9A,stroke-width:1.5px,color:#F7F1E7;
+    classDef gold fill:#001E35,stroke:#C69214,stroke-width:2px,color:#F2C14E;
+    classDef pbi fill:#0B9A9A,stroke:#001E35,stroke-width:1.5px,color:#F7F1E7;
+    style DO fill:#F7F1E7,stroke:#C69214,stroke-dasharray:4 3,color:#001E35;
 ```
 
 Responsibilities stay separated; Power BI is the reporting target, never the
@@ -203,7 +232,7 @@ read readiness status
 | `src/retail/` | The `retail` CLI package: static + live governance surfaces. |
 | `warehouse/` | Tool-agnostic medallion SQL: `bronze` / `silver` / `gold` + migrations. |
 | `powerbi/` | Power BI PBIP artifacts. Power BI reads `gold` only. |
-| `specs/` | Feature specs, plans, tasks, checklists (29 features). |
+| `specs/` | Feature specs, plans, tasks, checklists (30 spec directories). |
 | `mappings/` | Filled per-table source-mapping artifacts, one folder per table. |
 | `templates/` | Generic blanks: profiles, maps, contracts, readiness, dashboards, handoff packs. |
 | `reports/` | Dashboard / page / visual blueprints and delivery artifacts. |
@@ -229,20 +258,27 @@ Power BI is the reporting target, not the source of truth.
 
 ## Roadmap
 
-> [!WARNING]
-> The items in this section are **planned, not built.** They have drafted specs
-> under `specs/` but no runtime. Do not treat them as current capabilities.
+The originally-specified sequence (**F005-F015, including F011A**) is fully
+shipped to `main`. What remains is deliberately **human-gated** or **deferred for
+want of a consumer** -- never blocked by missing effort:
 
-- **F016 -- Power BI execution adapter** (official Power BI MCP / connection).
-  Deliberately last and gated: execution-only, it materializes/publishes an
-  already-approved model and cannot define metrics, mappings, semantic logic, or
-  dashboard design.
-- **Companion Modules & Adapters tier (F024-F034)** -- planning artifacts only:
-  PR readiness reviewer, readiness viewer, approval console, evidence-pack
-  generator, an optional **dbt** transformation adapter (F029), an optional
-  **Dagster** orchestration adapter (F030), maintenance/compatibility policy, and
-  the Visual Implementation MVP (F034). dbt and Dagster are *optional companion
-  engines*, not replacements for the migration build.
+> [!WARNING]
+> The items below are **not current capabilities.** Do not treat a gated or
+> deferred feature as if it were shipped.
+
+| Remaining item | State | Why it waits |
+|----------------|-------|--------------|
+| **F016 -- Power BI execution adapter** | gated, by design | Execution-only (materializes/publishes an already-approved model; cannot define metrics, mappings, semantic logic, or dashboard design). Deliberately last; not startable before `semantic_model_ready` is `pass`. |
+| **F034 built page** | human action | The agent ships the trace template + review workflow; a person builds the approved design in Power BI Desktop and commits the PBIR. |
+| **F024 + F031-F033** | spec-only | Companion architecture doc + maintenance automation -- no runtime consumer yet (the adapters they would maintain are docs-only skills). |
+| **pbi-tools extract / L3 new operators** | deferred | Revisit when a real `.pbix` + installed toolchain (pbi-tools) or a real predicate consumer (L3) appears. |
+
+> [!NOTE]
+> The **Companion Modules & Adapters** that *did* ship (F025-F030 -- PR readiness
+> reviewer, readiness viewer, approval console, evidence-pack generator, and the
+> optional **dbt** / **Dagster** adapters) are listed under
+> [What is built today](#what-is-built-today). dbt and Dagster are *optional
+> companion engines* and advisory only -- they never create truth.
 
 Guiding rules: any new feature must improve exactly one readiness stage, and
 docs / templates / checklists come before automation. Full ledger:

@@ -1,9 +1,13 @@
 # AGENTS.md -- operating rules for agents in this repo
 
-Tower BI Agent Kit is **agent-first**: you (the agent) are the interface; the CLI
+Seshat BI is **agent-first**: you (the agent) are the interface; the CLI
 gates (`retail check`, `retail validate`) are helpers you CALL, never the product.
 This file is the short operating contract. The full law is
 `.specify/memory/constitution.md`; the spine is `docs/readiness/readiness-model.md`.
+
+> **Naming.** The product is **Seshat BI** (package alias `Seshat_BI`). It was
+> previously developed under the internal name *Tower BI Agent Kit*; the
+> governance spine is still the **Readiness System**. Same product, one brand.
 
 ## Decide from readiness state
 

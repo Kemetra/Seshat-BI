@@ -1,7 +1,9 @@
-# Tower BI Readiness System -- the model
+# The Readiness System -- the model
 
-- **Status:** Planning (docs/templates; no runtime code).
-- **What it is:** the **operating spine** inside the Tower BI Agent Kit. It does
+- **Status:** Shipped -- the seven-stage spine (F005-F015) is on `main`; this
+  doc is its model. (The spine is docs/templates/skills by design, hard rule #8;
+  it adds no runtime validator beyond `retail check` / `retail validate`.)
+- **What it is:** the **operating spine** inside Seshat BI. It does
   NOT replace the constitution, the medallion playbook, the source-mapping gate,
   or `retail check` -- it **organizes them into stage-based readiness state** the
   agent reads to decide the next allowed action.

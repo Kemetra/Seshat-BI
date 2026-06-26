@@ -1,11 +1,11 @@
 # Visual Identity -- Seshat BI
 
-- **Status:** Draft identity system for the public-facing brand layer.
-- **Product system:** Tower BI Agent Kit / Tower BI Readiness System.
-- **Brand face:** Seshat BI.
+- **Status:** Active -- the committed brand for the product.
+- **Product:** Seshat BI (package alias `Seshat_BI`; previously developed under the internal name *Tower BI Agent Kit*).
+- **Operating spine:** the **Readiness System** (Source -> Mapping -> Silver -> Gold -> Semantic Model -> Dashboard -> Publish).
 - **Use for:** README visuals, docs covers, Power BI theme direction, dashboard headers, CLI/app icon experiments, portfolio presentation.
 
-Seshat BI is the visual identity for the same product idea: an agent-first Retail BI readiness system that turns messy retail data into trusted, governed BI.
+Seshat BI is the visual identity for an agent-first Retail BI readiness system that turns messy retail data into trusted, governed BI.
 
 The identity should feel like:
 
@@ -15,17 +15,18 @@ ancient knowledge + governed analytics + modern BI engineering
 
 ---
 
-## 1. Brand relationship
+## 1. Names
 
 | Name | Role |
 |------|------|
-| **Tower BI Agent Kit** | The technical product and repo architecture. |
-| **Tower BI Readiness System** | The governance spine: Source -> Mapping -> Silver -> Gold -> Semantic Model -> Dashboard -> Publish. |
-| **Seshat BI** | The visual/public brand layer: logo, icon, presentation system, dashboard styling. |
+| **Seshat BI** | The product -- its public name, repo, CLI package (`Seshat_BI`), and brand. Use it everywhere. |
+| **Readiness System** | The governance spine inside the product: Source -> Mapping -> Silver -> Gold -> Semantic Model -> Dashboard -> Publish. |
+| **Tower BI Agent Kit** | *Historical.* The former internal development name for the same product. Kept only to explain older references; do not use it for new material. |
 
-Use **Tower BI Agent Kit** when speaking to developers and agents.
-
-Use **Seshat BI** when presenting the product visually, building portfolio material, designing covers, or creating executive-facing assets.
+Use **Seshat BI** in all current material -- developer docs, agent contracts,
+README, portfolio, covers, and Power BI theming alike. The only time
+*Tower BI Agent Kit* appears is when a doc explains the rename for readers who
+knew the old name.
 
 ---
 
