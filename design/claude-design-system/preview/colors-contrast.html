@@ -1,0 +1,17 @@
+<!doctype html>
+<!-- @dsCard group="Foundations" name="Foundations · Contrast" subtitle="WCAG AA — measured ratios, gold/teal are accent-on-dark" viewport="760x360" --><html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css"></head><body>
+<div class="col" style="gap:12px">
+  <div class="eyebrow">Verified contrast (WCAG 2.1 · AA body 4.5:1)</div>
+  <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">
+    <div class="tile--dark tile" style="color:#F7F1E7">ivory on navy — 15.11 · <b style="color:#31C6C2">PASS</b></div>
+    <div class="tile--dark tile" style="color:#C69214">gold on navy — 6.08 · <b style="color:#31C6C2">PASS</b></div>
+    <div class="tile--dark tile" style="color:#0B9A9A">teal on navy — 4.93 · <b style="color:#31C6C2">PASS</b></div>
+    <!-- Labels are navy (accessible) with a small swatch; we DEMONSTRATE the bad pairing,
+         we do not RENDER text in it (gold-on-ivory text would itself be the bug). -->
+    <div class="tile" style="color:#001E35"><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#C69214;vertical-align:middle"></span> gold on ivory — 2.48 · <b style="color:#B23A3A">FAIL (accent only)</b></div>
+    <div class="tile" style="color:#001E35"><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#0B9A9A;vertical-align:middle"></span> teal on ivory — 3.06 · <b style="color:#B5832A">large/heading only</b></div>
+    <div class="tile" style="color:#001E35">navy on ivory — 15.11 · <b style="color:#2E7D5B">PASS</b></div>
+  </div>
+  <div class="muted">Rule: gold/teal are accent-on-dark. Never gold body text on a light surface.</div>
+</div>
+</body></html>
