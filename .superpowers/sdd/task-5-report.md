@@ -131,4 +131,4 @@ Full suite command: `python -m pytest -m unit -q`
 Kind-absent regression tests: `test_kind_absent_ratio_path_unchanged` and `test_aggregation_unread_on_kind_absent_path` both PASSED.
 
 ### Commit hash
-(see below after commit)
+`0cfcff2`
