@@ -249,6 +249,11 @@ def parse_tmdl(text: str) -> TmdlTable | None:
         ind = _indent(raw)
 
         # --- measure block ---
+        # KNOWN GAP (audit 2026-06-26 #32, none-today): the name class `[^'=]+?`
+        # excludes `=`, so a single-quoted measure name CONTAINING `=` would be
+        # truncated at the `=`. No committed measure has `=` in its name; widening
+        # the regex risks re-testing all TMDL parsing for a zero-trigger case, so
+        # this is documented, not changed.
         mm = re.match(
             r"measure\s+('?)(?P<name>[^'=]+?)\1\s*=\s*(?P<expr>.*)$", stripped
         )
@@ -278,6 +283,10 @@ def parse_tmdl(text: str) -> TmdlTable | None:
             continue
 
         # --- column block ---
+        # KNOWN GAP (audit 2026-06-26 #31, none-today): an UNQUOTED calculated
+        # column `column Name = expr` would let the name class absorb ` = expr`.
+        # No committed model has a calc column in this form; documented, not changed
+        # (a regex tweak here would re-test all column parsing for a zero trigger).
         cm = re.match(r"column\s+('?)(?P<name>[^'\n]+?)\1\s*$", stripped)
         if cm and ind == 1:
             name = cm.group("name").strip()

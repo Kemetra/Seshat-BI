@@ -105,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
                     f"error: commit message file not found: {args.commit_msg_file}",
                     file=sys.stderr,
                 )
-                sys.exit(1)
+                return 1  # main() is -> int; the __main__ guard does sys.exit(main())
             # git's COMMIT_EDITMSG ends in a trailing newline (\r\n on Windows) —
             # strip it so the message passed to rules is the bare text.
             commit_message = raw.rstrip("\r\n")

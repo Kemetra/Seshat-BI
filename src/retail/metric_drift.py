@@ -140,7 +140,10 @@ def _outer_call(expr: str, func: str) -> str | None:
     Returns None if `expr` is not a single top-level call to `func` (so a bare measure
     ref, a different function, or trailing junk all yield None). Paren-balanced.
     """
-    expr = expr.strip()
+    # Strip a trailing `;` and surrounding whitespace -- a non-standard but harmless
+    # statement terminator must not make the wrapper unrecognized, which would
+    # silently bypass the drift check (audit 2026-06-26 #33).
+    expr = expr.strip().rstrip(";").rstrip()
     m = re.match(rf"^{func}\s*\(", expr, re.IGNORECASE)
     if not m:
         return None

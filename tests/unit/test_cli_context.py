@@ -150,18 +150,18 @@ def test_main_commit_msg_file_strips_crlf(
     assert captured["commit_message"] == "feat: windows line ending"
 
 
-def test_main_missing_commit_msg_file_exits_1_with_message(
+def test_main_missing_commit_msg_file_returns_1_with_message(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # A nonexistent --commit-msg-file must exit 1 with a readable message, not a
-    # raw FileNotFoundError traceback.
+    # A nonexistent --commit-msg-file must RETURN 1 (main is typed -> int) with a
+    # readable message, not raise SystemExit mid-function (audit #28) nor a raw
+    # FileNotFoundError traceback. The __main__ guard does sys.exit(main()).
     missing = tmp_path / "does-not-exist"
     monkeypatch.setattr("retail.cli.run", lambda rules, ctx: 0)
 
-    with pytest.raises(SystemExit) as exc_info:
-        main_under_test(["check", "--commit-msg-file", str(missing)])
+    rc = main_under_test(["check", "--commit-msg-file", str(missing)])
 
-    assert exc_info.value.code == 1
+    assert rc == 1
     err = capsys.readouterr().err
     assert "commit message file not found" in err
     assert str(missing) in err
