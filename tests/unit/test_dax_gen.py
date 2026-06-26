@@ -117,7 +117,62 @@ def test_emit_base_unknown_filter_op_refuses():
     assert "op" in reason or "filter" in reason
 
 
-from retail.dax_gen import _emit_ratio
+from retail.dax_gen import _emit_ratio, generate_measure
+from retail.metric_drift import check_measure_drift
+
+BASE_REVENUE = {
+    "kind": "base", "aggregation": "sum",
+    "source": {"table": "gold.fct_sales_rss", "column": "total_spent"},
+}
+RATIO_DISC = {
+    "kind": "ratio",
+    "additive": False,
+    "numerator": {"aggregation": "count_rows", "source": {"table": "gold.fct_sales_rss"},
+                  "filter": [{"column": "discount_applied", "op": "is_true"}]},
+    "denominator": {"aggregation": "count_rows", "source": {"table": "gold.fct_sales_rss"},
+                    "filter": [{"column": "discount_applied", "op": "is_not_null"}]},
+}
+
+
+@pytest.mark.parametrize("name,defn", [
+    ("TotalRevenue", BASE_REVENUE),
+    ("DiscountedRate", RATIO_DISC),
+])
+def test_generate_roundtrips_to_pass(name, defn):
+    r = generate_measure(defn, name=name, doc_intent="meaning of the measure")
+    assert r.ok is True, r.reason
+    # THE CORE PROPERTY: the emitted DAX re-verifies as pass against the same contract
+    assert check_measure_drift(r.dax, defn).status == "pass"
+
+
+def test_generated_tmdl_passes_d_rules():
+    r = generate_measure(BASE_REVENUE, name="TotalRevenue", doc_intent="total money")
+    assert r.ok is True
+    # PascalCase name (D1), has displayFolder (D2), has /// doc (D11), uses DIVIDE not / where relevant
+    assert "/// " in r.tmdl_block
+    assert "displayFolder" in r.tmdl_block
+    assert "measure TotalRevenue" in r.tmdl_block
+
+
+def test_generate_refuses_unknown_kind():
+    r = generate_measure({"kind": "wormhole"}, name="X")
+    assert r.ok is False
+    assert r.dax is None and r.tmdl_block is None
+    assert "kind" in r.reason
+
+
+def test_generate_refuses_bad_pascalcase_name():
+    r = generate_measure(BASE_REVENUE, name="total_revenue")  # D1 ERROR
+    assert r.ok is False
+    assert r.dax is None and r.tmdl_block is None
+
+
+def test_doc_intent_isolation_same_dax_diff_comment():
+    a = generate_measure(BASE_REVENUE, name="Rev", doc_intent="intent A")
+    b = generate_measure(BASE_REVENUE, name="Rev", doc_intent="intent B")
+    assert a.dax == b.dax                     # identical semantics
+    assert a.tmdl_block != b.tmdl_block       # differ only in the /// comment
+    assert "intent A" in a.tmdl_block and "intent B" in b.tmdl_block
 
 
 def test_emit_ratio_inline_count_rows():

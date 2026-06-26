@@ -131,3 +131,100 @@ def _emit_ratio(defn: dict) -> tuple[str | None, str | None]:
     if den_reason is not None:
         return None, f"denominator: {den_reason}"
     return f"DIVIDE({num_dax}, {den_dax})", None
+
+
+_DEFAULT_FORMATS: dict[str, str] = {
+    "sum": "#,0", "count": "#,0", "distinct_count": "#,0",
+    "average": "#,0.00", "count_rows": "#,0", "ratio": "0.0%",
+}
+
+
+def _default_format(definition: dict) -> str:
+    """Return the presentation default format string for this definition."""
+    if definition.get("kind") == "ratio":
+        return _DEFAULT_FORMATS["ratio"]
+    return _DEFAULT_FORMATS.get(definition.get("aggregation", ""), "#,0")
+
+
+def _build_tmdl_block(
+    name: str, dax: str, format_string: str, display_folder: str, doc_intent: str
+) -> str:
+    """A TMDL measure block. /// doc is documentation only (from doc_intent)."""
+    doc = (doc_intent or name).replace("\n", " ").strip()
+    return (
+        f"\t/// {doc}\n"
+        f"\tmeasure {name} = {dax}\n"
+        f"\t\tformatString: {format_string}\n"
+        f"\t\tdisplayFolder: {display_folder}\n"
+    )
+
+
+def _run_d_rules(tmdl_block: str, name: str) -> tuple[list[str], list[str]]:
+    """Stage the block under a temp SemanticModel path and run D1-D11."""
+    import tempfile
+    from pathlib import Path
+
+    from .core import RuleContext, Severity
+    from .runner import _format  # "[sev] id msg (loc)"
+    from . import rules as _rules_pkg  # noqa: F401  fire @register
+    from .registry import all_rules
+
+    # A minimal TMDL table wrapper: `table T` header at indent 0, measure at indent 1.
+    # No stub measure -- the generated block IS the only measure in the table.
+    table_text = f"table T\n{tmdl_block}"
+    errors: list[str] = []
+    warnings: list[str] = []
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        rel = "Model.SemanticModel/definition/tables/T.tmdl"
+        dest = root / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(table_text, encoding="utf-8")
+        ctx = RuleContext(repo_root=root, tracked_files=(rel,))
+        for reg in all_rules():
+            if not reg.id.startswith("D"):
+                continue
+            for f in reg.rule(ctx):
+                line = _format(f)
+                (errors if f.severity is Severity.ERROR else warnings).append(line)
+    return errors, warnings
+
+
+def generate_measure(
+    definition: dict,
+    *,
+    name: str,
+    format_string: str | None = None,
+    display_folder: str | None = None,
+    doc_intent: str | None = None,
+) -> "GenResult":
+    """Contract definition -> verified DAX measure. Fail-closed at every step."""
+    if not name:
+        raise ValueError("generate_measure requires a measure name")
+
+    # STEP 1+2: validate shape + emit DAX
+    kind = definition.get("kind") if isinstance(definition, dict) else None
+    if kind == "base":
+        dax, reason = _emit_base(definition)
+    elif kind == "ratio":
+        dax, reason = _emit_ratio(definition)
+    else:
+        return GenResult.refuse(f"unsupported kind {kind!r} (expected base|ratio)")
+    if reason is not None:
+        return GenResult.refuse(reason)
+
+    # STEP 3: semantic verify (L3) -- BEFORE form. pass is the only acceptable result.
+    from .metric_drift import check_measure_drift
+
+    v = check_measure_drift(dax, definition)
+    if v.status != "pass":
+        return GenResult.refuse(f"L3 {v.status}: {v.detail}")
+
+    # STEP 4: build TMDL block + form verify (D1-D11)
+    fmt = format_string or _default_format(definition)
+    folder = display_folder or "Measures"
+    block = _build_tmdl_block(name, dax, fmt, folder, doc_intent or "")
+    errors, warnings = _run_d_rules(block, name)
+    if errors:
+        return GenResult.refuse("D-rule ERROR(s): " + "; ".join(errors))
+    return GenResult.success(dax=dax, tmdl_block=block, warnings=tuple(warnings))
