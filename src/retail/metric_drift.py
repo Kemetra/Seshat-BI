@@ -73,6 +73,24 @@ _RE_IS_NOT_NULL = re.compile(
 _RE_IS_TRUE = re.compile(
     r"^(?P<col>.+?)\s*=\s*TRUE\s*\(\s*\)$", re.IGNORECASE | re.DOTALL
 )
+# --- WIDENED whitelist: 4 more recognized-equivalent spellings ---
+# `<colref> <> BLANK ( )`  -> is_not_null  (recognized-equivalent of NOT(ISBLANK))
+_RE_NE_BLANK = re.compile(
+    r"^(?P<col>.+?)\s*<>\s*BLANK\s*\(\s*\)$", re.IGNORECASE | re.DOTALL
+)
+# `ISBLANK ( <colref> ) = FALSE ( )`  -> is_not_null
+_RE_ISBLANK_EQ_FALSE = re.compile(
+    r"^ISBLANK\s*\(\s*(?P<col>.+?)\s*\)\s*=\s*FALSE\s*\(\s*\)$",
+    re.IGNORECASE | re.DOTALL,
+)
+# `TRUE ( ) = <colref>`  -> is_true  (order-flipped form of col = TRUE())
+_RE_TRUE_EQ = re.compile(
+    r"^TRUE\s*\(\s*\)\s*=\s*(?P<col>.+?)$", re.IGNORECASE | re.DOTALL
+)
+# `<colref> <> FALSE ( )`  -> is_true
+_RE_NE_FALSE = re.compile(
+    r"^(?P<col>.+?)\s*<>\s*FALSE\s*\(\s*\)$", re.IGNORECASE | re.DOTALL
+)
 
 
 def _strip_column_qualification(colref: str) -> str:
@@ -172,19 +190,29 @@ def _normalize_denominator(expr: str) -> tuple[str, list[str]] | None:
 def _recognize_filter(pred: str) -> Filter | None:
     """Map a predicate text to a recognized Filter, or None (-> escalate).
 
-    The whitelist is deliberately TIGHT: only canonical `NOT(ISBLANK(col))` and
-    `col = TRUE()`. DAX has many equivalent spellings (`col <> BLANK()`,
-    `ISBLANK(col)=FALSE()`, ...); those are NOT guessed -- they escalate.
+    The whitelist is deliberately TIGHT. Recognized canonical spellings:
+      is_not_null:  NOT(ISBLANK(col)) | col <> BLANK() | ISBLANK(col) = FALSE()
+      is_true:      col = TRUE()      | TRUE() = col   | col <> FALSE()
+    DAX has further equivalent spellings (LEN(col)<>0, COALESCE(...), col = 1, ...)
+    that need type knowledge or are low-frequency; those are NOT guessed -- they
+    escalate. Every captured column is routed through _strip_column_qualification
+    (bracket-notation only), so a non-column capture falls through to escalate.
     """
     pred = pred.strip()
-    m = _RE_IS_NOT_NULL.match(pred)
-    if m:
-        col = _strip_column_qualification(m.group("col"))
-        return Filter(column=col, op="is_not_null") if col else None
-    m = _RE_IS_TRUE.match(pred)
-    if m:
-        col = _strip_column_qualification(m.group("col"))
-        return Filter(column=col, op="is_true") if col else None
+    # is_not_null spellings
+    for rx in (_RE_IS_NOT_NULL, _RE_NE_BLANK, _RE_ISBLANK_EQ_FALSE):
+        m = rx.match(pred)
+        if m:
+            col = _strip_column_qualification(m.group("col"))
+            if col:
+                return Filter(column=col, op="is_not_null")
+    # is_true spellings
+    for rx in (_RE_IS_TRUE, _RE_TRUE_EQ, _RE_NE_FALSE):
+        m = rx.match(pred)
+        if m:
+            col = _strip_column_qualification(m.group("col"))
+            if col:
+                return Filter(column=col, op="is_true")
     return None
 
 
@@ -212,6 +240,15 @@ def check_measure_drift(dax_expr: str, definition: dict[str, Any] | None) -> Ver
     # Backward compat: no structured definition -> nothing to check.
     if not definition or "denominator" not in definition:
         return Verdict("skip", "contract has no structured `definition.denominator`")
+
+    # Additive measures are not ratios; denominator filter-set logic does not apply.
+    # Require an explicit `additive: false` to proceed; True or absent -> escalate.
+    if definition.get("additive") is not False:
+        return Verdict(
+            "escalate",
+            "additive measure (or `additive` unset); "
+            "denominator filter-set logic does not apply",
+        )
 
     contract_filters = _contract_filters(definition["denominator"])
     if contract_filters is None:

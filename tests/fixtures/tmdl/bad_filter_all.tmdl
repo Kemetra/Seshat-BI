@@ -1,0 +1,4 @@
+table T
+
+	measure CashSales = CALCULATE([TotalSales], FILTER(ALL('gold dim_billing_type'), 'gold dim_billing_type'[type] = "Cash"))
+		displayFolder: Sales

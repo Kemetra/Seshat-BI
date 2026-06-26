@@ -380,6 +380,107 @@ def d8_gold_only_sourcing(ctx: RuleContext) -> Iterable[Finding]:
 
 
 # ---------------------------------------------------------------------------
+# D9 — no hardcoded date literals in measures
+# ---------------------------------------------------------------------------
+
+# DATE(yyyy, m, d) constructor or a quoted ISO date literal "yyyy-mm-dd".
+_DATE_LITERAL = re.compile(r"DATE\s*\(\s*\d{3,4}\s*,|\b\d{4}-\d{2}-\d{2}\b")
+
+
+@register("D9", "No hardcoded date literals in measures")
+def d9_no_hardcoded_dates(ctx: RuleContext) -> Iterable[Finding]:
+    """Warn when a measure embeds a hardcoded date (DATE(y,m,d) or "yyyy-mm-dd").
+
+    Dates belong in the date dimension; baked-in literals bypass the model's date
+    table and freeze the logic. Comments and string literals are stripped first so
+    a date mentioned in a comment/string is not flagged.
+    """
+    for rel, text in iter_model_files(ctx, ".tmdl"):
+        table = parse_tmdl(text)
+        if table is None:
+            continue
+        for m in table.measures:
+            cleaned = _strip_dax_comments_and_strings(m.expression)
+            if _DATE_LITERAL.search(cleaned):
+                yield Finding(
+                    rule_id="D9",
+                    severity=Severity.WARNING,
+                    message=(
+                        f"Measure '{m.name}' embeds a hardcoded date literal;"
+                        " use the date dimension instead"
+                    ),
+                    locator=f"{rel}:{m.line}",
+                )
+
+
+# ---------------------------------------------------------------------------
+# D10 — no FILTER(ALL(...)) full-table-scan anti-pattern
+# ---------------------------------------------------------------------------
+
+# FILTER ( ALL ( ... -- a full-table scan where a column filter usually suffices.
+_FILTER_ALL = re.compile(r"FILTER\s*\(\s*ALL\s*\(", re.IGNORECASE)
+
+
+@register("D10", "No FILTER(ALL(...)) full-table-scan anti-pattern")
+def d10_no_filter_all(ctx: RuleContext) -> Iterable[Finding]:
+    """Warn when a measure uses FILTER(ALL(...)); prefer a column filter in CALCULATE.
+
+    Comments and string literals are stripped first so the pattern is only matched
+    in live DAX, not in a comment or string.
+    """
+    for rel, text in iter_model_files(ctx, ".tmdl"):
+        table = parse_tmdl(text)
+        if table is None:
+            continue
+        for m in table.measures:
+            cleaned = _strip_dax_comments_and_strings(m.expression)
+            if _FILTER_ALL.search(cleaned):
+                yield Finding(
+                    rule_id="D10",
+                    severity=Severity.WARNING,
+                    message=(
+                        f"Measure '{m.name}' uses FILTER(ALL(...));"
+                        " prefer a column filter inside CALCULATE"
+                    ),
+                    locator=f"{rel}:{m.line}",
+                )
+
+
+# ---------------------------------------------------------------------------
+# D11 — every measure carries a /// doc comment
+# ---------------------------------------------------------------------------
+
+
+@register("D11", "Each measure must have a /// doc comment")
+def d11_measures_documented(ctx: RuleContext) -> Iterable[Finding]:
+    """Warn when a measure has no TMDL `///` doc comment on the line above it.
+
+    TMDL writes a measure description as one or more `///` lines immediately
+    preceding the `measure` header. A measure with no such line is undocumented.
+    Uses parse_tmdl for measure names + line numbers, then checks the raw line
+    above each measure header (skipping blank lines) for a `///` prefix.
+    """
+    for rel, text in iter_model_files(ctx, ".tmdl"):
+        table = parse_tmdl(text)
+        if table is None:
+            continue
+        lines = text.splitlines()
+        for m in table.measures:
+            # m.line is 1-based; the line above is index m.line - 2.
+            idx = m.line - 2
+            while idx >= 0 and not lines[idx].strip():
+                idx -= 1  # skip blank lines between the doc and the measure
+            documented = idx >= 0 and lines[idx].strip().startswith("///")
+            if not documented:
+                yield Finding(
+                    rule_id="D11",
+                    severity=Severity.WARNING,
+                    message=f"Measure '{m.name}' has no /// doc comment",
+                    locator=f"{rel}:{m.line}",
+                )
+
+
+# ---------------------------------------------------------------------------
 # C1 — parameterized connection (no string literals for server/db)
 # ---------------------------------------------------------------------------
 

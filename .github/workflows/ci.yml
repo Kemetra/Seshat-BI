@@ -51,3 +51,11 @@ jobs:
           else
             retail check
           fi
+
+      - name: Retail semantic-check (L3 contract<->DAX drift)
+        # Separate step from `retail check` (above): the static check core is
+        # stdlib-only and must never import yaml. `retail semantic-check` parses
+        # metric-contract YAML (pyyaml, already installed via the [dev] extra) to
+        # gate the contract<->DAX denominator drift class (drift => exit 1). No
+        # --commit-range: it reads committed TMDL + contracts, not git diffs.
+        run: retail semantic-check --repo .

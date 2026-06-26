@@ -1,0 +1,5 @@
+table T
+
+	/// Total money taken across all transactions.
+	measure DocumentedSales = SUM('gold fct_sales_rss'[total_spent])
+		displayFolder: Sales

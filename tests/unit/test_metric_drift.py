@@ -127,16 +127,78 @@ def test_empty_calculate_wrapper_normalizes_to_drift() -> None:
 def test_unrecognized_predicate_escalates() -> None:
     """An unknown predicate spelling is NOT guessed -- it escalates to a human.
 
-    `x <> BLANK()` is semantically `is_not_null` but is not in the recognized-op
-    whitelist; L3 must escalate (never silently pass or drift on an unknown form).
+    `LEN(col) <> 0` is semantically is_not_null for text but needs type knowledge;
+    it is intentionally NOT in the recognized whitelist -> escalate. (Note: the
+    old `col <> BLANK()` example is now a RECOGNIZED spelling -- see
+    test_is_not_null_via_ne_blank_passes.)
     """
     unknown = (
         "DIVIDE(CALCULATE([TransactionCount], 'gold fct_sales_rss'[discount_applied] "
         "= TRUE()), CALCULATE([TransactionCount], "
-        "'gold fct_sales_rss'[discount_applied] <> BLANK()))"
+        "LEN('gold fct_sales_rss'[discount_applied]) <> 0))"
     )
     v = check_measure_drift(unknown, DEF_DISCOUNTED)
     assert v.status == "escalate", v
+
+
+# --- WIDENED predicate whitelist: 4 new recognized spellings -----------------
+
+
+def test_is_not_null_via_ne_blank_passes() -> None:
+    """`col <> BLANK()` is the recognized-equivalent of NOT(ISBLANK(col))."""
+    dax = (
+        "DIVIDE(CALCULATE([TransactionCount], 'gold fct_sales_rss'[discount_applied] "
+        "= TRUE()), CALCULATE([TransactionCount], "
+        "'gold fct_sales_rss'[discount_applied] <> BLANK()))"
+    )
+    v = check_measure_drift(dax, DEF_DISCOUNTED)
+    assert v.status == "pass", v
+
+
+def test_is_not_null_via_isblank_eq_false_passes() -> None:
+    """`ISBLANK(col) = FALSE()` is the recognized-equivalent of NOT(ISBLANK(col))."""
+    dax = (
+        "DIVIDE([TotalSales], CALCULATE([TransactionCount], "
+        "ISBLANK('gold fct_sales_rss'[total_spent]) = FALSE()))"
+    )
+    v = check_measure_drift(dax, DEF_AVG)
+    assert v.status == "pass", v
+
+
+def test_is_true_via_true_eq_col_passes() -> None:
+    """`TRUE() = col` is the order-flipped recognized-equivalent of col = TRUE()."""
+    contract = {
+        "additive": False,
+        "numerator": {"aggregation": "count_rows", "filter": []},
+        "denominator": {
+            "aggregation": "count_rows",
+            "filter": [{"column": "discount_applied", "op": "is_true"}],
+        },
+    }
+    dax = (
+        "DIVIDE([TotalSales], CALCULATE([TransactionCount], "
+        "TRUE() = 'gold fct_sales_rss'[discount_applied]))"
+    )
+    v = check_measure_drift(dax, contract)
+    assert v.status == "pass", v
+
+
+def test_is_true_via_ne_false_passes() -> None:
+    """`col <> FALSE()` is the recognized-equivalent of col = TRUE()."""
+    contract = {
+        "additive": False,
+        "numerator": {"aggregation": "count_rows", "filter": []},
+        "denominator": {
+            "aggregation": "count_rows",
+            "filter": [{"column": "discount_applied", "op": "is_true"}],
+        },
+    }
+    dax = (
+        "DIVIDE([TotalSales], CALCULATE([TransactionCount], "
+        "'gold fct_sales_rss'[discount_applied] <> FALSE()))"
+    )
+    v = check_measure_drift(dax, contract)
+    assert v.status == "pass", v
 
 
 def test_non_divide_measure_escalates() -> None:
@@ -151,6 +213,35 @@ def test_unparseable_unbalanced_parens_escalates() -> None:
     """Malformed/unbalanced DAX is escalated, never crashes and never guesses."""
     broken = "DIVIDE(CALCULATE([TransactionCount], [x] = TRUE()"  # missing close
     v = check_measure_drift(broken, DEF_DISCOUNTED)
+    assert v.status == "escalate", v
+
+
+# --- additive measures escalate (filter-set logic does not apply) -----------
+
+
+def test_additive_measure_escalates() -> None:
+    """An additive measure's denominator filter-set logic does not apply -> escalate."""
+    additive_def = {
+        "additive": True,
+        "denominator": {
+            "aggregation": "count_rows",
+            "filter": [{"column": "total_spent", "op": "is_not_null"}],
+        },
+    }
+    v = check_measure_drift(DAX_AVG, additive_def)
+    assert v.status == "escalate", v
+    assert "additive" in v.detail.lower()
+
+
+def test_missing_additive_flag_escalates() -> None:
+    """A definition that omits `additive` is not-confirmed-ratio -> escalate."""
+    no_flag_def = {
+        "denominator": {
+            "aggregation": "count_rows",
+            "filter": [{"column": "total_spent", "op": "is_not_null"}],
+        },
+    }
+    v = check_measure_drift(DAX_AVG, no_flag_def)
     assert v.status == "escalate", v
 
 

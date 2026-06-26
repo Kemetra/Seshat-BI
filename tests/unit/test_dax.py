@@ -15,6 +15,9 @@ from retail.rules.dax import (
     d6_no_bidir_relationships,
     d7_ti_needs_date_marker,
     d8_gold_only_sourcing,
+    d9_no_hardcoded_dates,
+    d10_no_filter_all,
+    d11_measures_documented,
 )
 from retail.tmdl import TmdlMeasure
 
@@ -577,3 +580,107 @@ def test_d7_fires_when_datacategory_but_no_iskey(tmp_path: Path) -> None:
     findings = list(d7_ti_needs_date_marker(ctx))
     assert len(findings) == 1
     assert findings[0].rule_id == "D7"
+
+
+# ---------------------------------------------------------------------------
+# D9 — no hardcoded date literals in measures
+# ---------------------------------------------------------------------------
+
+
+def test_d9_flags_date_literal(tmp_path: Path) -> None:
+    findings = list(d9_no_hardcoded_dates(_ctx(tmp_path, "bad_date_literal.tmdl")))
+    assert len(findings) == 1
+    assert findings[0].rule_id == "D9"
+    assert findings[0].severity is Severity.WARNING
+    assert "SalesSince" in findings[0].message
+
+
+def test_d9_passes_clean(tmp_path: Path) -> None:
+    assert (
+        list(d9_no_hardcoded_dates(_ctx(tmp_path, "clean_no_date_literal.tmdl"))) == []
+    )
+
+
+def test_d9_locator_includes_line_number(tmp_path: Path) -> None:
+    findings = list(d9_no_hardcoded_dates(_ctx(tmp_path, "bad_date_literal.tmdl")))
+    assert findings[0].locator.endswith(":3")
+
+
+def test_d9_exempts_tests_prefix(tmp_path: Path) -> None:
+    rel = "tests/fixtures/tmdl/bad_date_literal.tmdl"
+    dest = tmp_path / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(
+        (FIXTURES / "bad_date_literal.tmdl").read_text(encoding="utf-8-sig"),
+        encoding="utf-8",
+    )
+    ctx = RuleContext(repo_root=tmp_path, tracked_files=(rel,))
+    assert list(d9_no_hardcoded_dates(ctx)) == []
+
+
+# ---------------------------------------------------------------------------
+# D10 — no FILTER(ALL(...)) full-table-scan anti-pattern
+# ---------------------------------------------------------------------------
+
+
+def test_d10_flags_filter_all(tmp_path: Path) -> None:
+    findings = list(d10_no_filter_all(_ctx(tmp_path, "bad_filter_all.tmdl")))
+    assert len(findings) == 1
+    assert findings[0].rule_id == "D10"
+    assert findings[0].severity is Severity.WARNING
+    assert "CashSales" in findings[0].message
+
+
+def test_d10_passes_clean(tmp_path: Path) -> None:
+    assert list(d10_no_filter_all(_ctx(tmp_path, "clean_column_filter.tmdl"))) == []
+
+
+def test_d10_locator_includes_line_number(tmp_path: Path) -> None:
+    findings = list(d10_no_filter_all(_ctx(tmp_path, "bad_filter_all.tmdl")))
+    assert findings[0].locator.endswith(":3")
+
+
+def test_d10_exempts_tests_prefix(tmp_path: Path) -> None:
+    rel = "tests/fixtures/tmdl/bad_filter_all.tmdl"
+    dest = tmp_path / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(
+        (FIXTURES / "bad_filter_all.tmdl").read_text(encoding="utf-8-sig"),
+        encoding="utf-8",
+    )
+    ctx = RuleContext(repo_root=tmp_path, tracked_files=(rel,))
+    assert list(d10_no_filter_all(ctx)) == []
+
+
+# ---------------------------------------------------------------------------
+# D11 — every measure carries a /// doc comment
+# ---------------------------------------------------------------------------
+
+
+def test_d11_flags_undocumented_measure(tmp_path: Path) -> None:
+    findings = list(d11_measures_documented(_ctx(tmp_path, "bad_no_doc.tmdl")))
+    assert len(findings) == 1
+    assert findings[0].rule_id == "D11"
+    assert findings[0].severity is Severity.WARNING
+    assert "UndocumentedSales" in findings[0].message
+
+
+def test_d11_passes_documented(tmp_path: Path) -> None:
+    assert list(d11_measures_documented(_ctx(tmp_path, "clean_with_doc.tmdl"))) == []
+
+
+def test_d11_locator_includes_line_number(tmp_path: Path) -> None:
+    findings = list(d11_measures_documented(_ctx(tmp_path, "bad_no_doc.tmdl")))
+    assert findings[0].locator.endswith(":3")
+
+
+def test_d11_exempts_tests_prefix(tmp_path: Path) -> None:
+    rel = "tests/fixtures/tmdl/bad_no_doc.tmdl"
+    dest = tmp_path / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(
+        (FIXTURES / "bad_no_doc.tmdl").read_text(encoding="utf-8-sig"),
+        encoding="utf-8",
+    )
+    ctx = RuleContext(repo_root=tmp_path, tracked_files=(rel,))
+    assert list(d11_measures_documented(ctx)) == []

@@ -1,0 +1,4 @@
+table T
+
+	measure SalesSince = CALCULATE([TotalSales], 'gold dim_date'[date] >= DATE(2024, 1, 1))
+		displayFolder: Sales

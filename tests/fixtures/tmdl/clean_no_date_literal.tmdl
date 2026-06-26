@@ -1,0 +1,4 @@
+table T
+
+	measure TotalSales = SUM('gold fct_sales_rss'[total_spent])
+		displayFolder: Sales

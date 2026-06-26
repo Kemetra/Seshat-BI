@@ -68,6 +68,22 @@ def _build_parser() -> argparse.ArgumentParser:
             "Without it, validate reports the deferred state."
         ),
     )
+
+    # L3 semantic / contract<->DAX drift gate (feature: DAX fortification Phase 1).
+    # Parses metric-contract YAML (lazy yaml inside the handler) -- NOT in the
+    # stdlib-only `retail check` core chain.
+    semantic = sub.add_parser(
+        "semantic-check",
+        help="L3 contract<->DAX denominator drift on committed metric contracts",
+    )
+    semantic.add_argument("--repo", default=".", help="repo root to check")
+    semantic.add_argument(
+        "--metrics-dir",
+        dest="metrics_dir",
+        default="mappings",
+        metavar="DIR",
+        help="root dir holding <dataset>/metrics/<Measure>.yaml contracts",
+    )
     return parser
 
 
@@ -103,6 +119,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "validate":
         return _run_validate(args)
+
+    if args.command == "semantic-check":
+        return _run_semantic_check(args)
 
     return 0
 
@@ -236,6 +255,79 @@ def _run_validate(args) -> int:
         return 1
     print("retail validate: all live checks passed (0 findings).", file=sys.stderr)
     return 0
+
+
+def _run_semantic_check(args) -> int:
+    """Run the L3 contract<->DAX drift gate.
+
+    Lazy imports (yaml via load_definition, plus semantic + metric_drift, plus the
+    TMDL parser) live INSIDE this handler so the stdlib-only `retail check` import
+    chain never pulls them. Pairs each committed measure (parsed from the model
+    TMDL) with its contract definition (mappings/<dataset>/metrics/<name>.yaml) and
+    reports drift (ERROR) / escalate (WARNING). Returns 1 iff any drift.
+
+    Scans the model TMDL directly from the filesystem (not git ls-files): the
+    semantic-check surface is not a registered rule, so it reads the repo tree
+    directly -- which also makes it runnable in a non-git directory.
+    """
+    from .metric_drift import load_definition
+    from .runner import _format
+    from .semantic import MeasurePair, run_semantic_pairs
+    from .tmdl import parse_tmdl
+
+    repo = Path(args.repo)
+
+    # 1. Index contract definitions by measure name (YAML stem == measure name).
+    definitions: dict[str, dict | None] = {}
+    metrics_root = repo / args.metrics_dir
+    if metrics_root.is_dir():
+        for contract_path in sorted(metrics_root.glob("*/metrics/*.yaml")):
+            name = contract_path.stem
+            try:
+                definitions[name] = load_definition(str(contract_path))
+            except (OSError, ValueError) as exc:
+                print(
+                    f"error: could not load contract {contract_path}: {exc}",
+                    file=sys.stderr,
+                )
+                return 1
+
+    # 2. Pair each committed measure with its contract definition (if any).
+    # Scan *.SemanticModel/definition/**/*.tmdl, skipping any tests/ fixtures.
+    # The recursive ``**`` glob matches zero-or-more intermediate dirs, so it
+    # covers both top-level (definition/foo.tmdl) and nested (definition/tables/
+    # foo.tmdl) files in one pass -- no separate top-level glob (which would
+    # double-count) is needed.
+    pairs: list[MeasurePair] = []
+    for tmdl_path in sorted(repo.rglob("*.SemanticModel/definition/**/*.tmdl")):
+        rel = tmdl_path.relative_to(repo).as_posix()
+        if rel.startswith("tests/") or "/tests/" in rel:
+            continue
+        try:
+            text = tmdl_path.read_text(encoding="utf-8-sig")
+        except OSError:
+            continue
+        table = parse_tmdl(text)
+        if table is None:
+            continue
+        for measure in table.measures:
+            if measure.name in definitions:
+                pairs.append(
+                    MeasurePair(
+                        name=measure.name,
+                        dax=measure.expression,
+                        locator=f"{rel}:{measure.line}",
+                        definition=definitions[measure.name],
+                    )
+                )
+
+    # 3. Run the drift check; print findings; return the exit code.
+    findings, exit_code = run_semantic_pairs(pairs)
+    for finding in findings:
+        print(_format(finding))
+    if exit_code == 0 and not findings:
+        print("retail semantic-check: no drift (0 findings).", file=sys.stderr)
+    return exit_code
 
 
 if __name__ == "__main__":

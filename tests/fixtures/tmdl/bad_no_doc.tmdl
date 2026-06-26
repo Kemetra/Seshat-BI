@@ -1,0 +1,4 @@
+table T
+
+	measure UndocumentedSales = SUM('gold fct_sales_rss'[total_spent])
+		displayFolder: Sales
