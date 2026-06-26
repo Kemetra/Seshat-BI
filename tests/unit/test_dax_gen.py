@@ -115,3 +115,36 @@ def test_emit_base_unknown_filter_op_refuses():
     )
     assert dax is None
     assert "op" in reason or "filter" in reason
+
+
+from retail.dax_gen import _emit_ratio
+
+
+def test_emit_ratio_inline_count_rows():
+    dax, reason = _emit_ratio({
+        "kind": "ratio",
+        "numerator": {"aggregation": "count_rows",
+                      "source": {"table": "gold.fct_sales_rss"},
+                      "filter": [{"column": "discount_applied", "op": "is_true"}]},
+        "denominator": {"aggregation": "count_rows",
+                        "source": {"table": "gold.fct_sales_rss"},
+                        "filter": [{"column": "discount_applied", "op": "is_not_null"}]},
+    })
+    assert reason is None
+    assert dax == (
+        "DIVIDE("
+        "CALCULATE(COUNTROWS('gold fct_sales_rss'), "
+        "'gold fct_sales_rss'[discount_applied] = TRUE()), "
+        "CALCULATE(COUNTROWS('gold fct_sales_rss'), "
+        "NOT(ISBLANK('gold fct_sales_rss'[discount_applied]))))"
+    )
+
+
+def test_emit_ratio_refuses_bad_side():
+    dax, reason = _emit_ratio({
+        "kind": "ratio",
+        "numerator": {"aggregation": "sum", "source": {"table": "gold.t"}},  # no column
+        "denominator": {"aggregation": "count_rows", "source": {"table": "gold.t"}},
+    })
+    assert dax is None
+    assert "column" in reason

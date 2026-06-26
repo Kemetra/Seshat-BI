@@ -79,15 +79,6 @@ def _qualify(table: str, column: str | None) -> str:
     return f"{tbl}[{column}]" if column else tbl
 
 
-def _emit_predicate(f: dict) -> str | None:
-    col = f.get("column")
-    op = f.get("op")
-    tmpl = _OP_TO_DAX.get(op) if op else None
-    if not col or tmpl is None:
-        return None
-    return tmpl.format(col=f"'__TBL__'[{col}]")  # table injected by caller
-
-
 def _emit_base(defn: dict) -> tuple[str | None, str | None]:
     agg = defn.get("aggregation")
     if agg not in _AGG_TO_DAX:
@@ -120,3 +111,23 @@ def _emit_base(defn: dict) -> tuple[str | None, str | None]:
             return None, f"unrecognized filter op {op!r} on column {col!r}"
         preds.append(tmpl.format(col=f"{tbl}[{col}]"))
     return f"CALCULATE({inner}, {', '.join(preds)})", None
+
+
+def _emit_side(side: dict) -> tuple[str | None, str | None]:
+    """A ratio side is an inline aggregation -- identical rules to a base body."""
+    return _emit_base(side)  # same shape/validation; returns (dax, reason)
+
+
+def _emit_ratio(defn: dict) -> tuple[str | None, str | None]:
+    """Emit a ratio measure as DIVIDE(numerator, denominator)."""
+    num = defn.get("numerator")
+    den = defn.get("denominator")
+    if not isinstance(num, dict) or not isinstance(den, dict):
+        return None, "ratio requires numerator and denominator objects"
+    num_dax, num_reason = _emit_side(num)
+    if num_reason is not None:
+        return None, f"numerator: {num_reason}"
+    den_dax, den_reason = _emit_side(den)
+    if den_reason is not None:
+        return None, f"denominator: {den_reason}"
+    return f"DIVIDE({num_dax}, {den_dax})", None
