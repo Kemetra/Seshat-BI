@@ -320,11 +320,16 @@ MUST_BE_EMPTY = (
 
 
 # Path prefixes excluded from the C2 CONTENT regex scan. tests/ holds fixtures
-# that intentionally contain secret-LOOKING literals to exercise the scanner,
-# and .superpowers/ holds SDD scratch/reports that quote those fixtures; neither
-# is tracked source that could leak a real secret. (Scope: content scan only —
-# the .env and .env.example sub-checks are unaffected.)
-_C2_SCAN_EXCLUDED_PREFIXES = ("docs/", "tests/", ".superpowers/")
+# that intentionally contain secret-LOOKING literals to exercise the scanner;
+# docs/superpowers/ and .superpowers/ hold SDD scratch/reports/plans that QUOTE
+# those fixtures (e.g. a sample postgres connection URL inside a plan's code
+# block); none is tracked source that could leak a real secret.
+# Audit 2026-06-26 #8: the exclusion was narrowed from all of docs/ to
+# docs/superpowers/ so REAL operational docs/runbooks (docs/operations/,
+# docs/architecture/, …) ARE scanned -- a leaked DSN in a runbook was the audit's
+# concern and was previously invisible. (Scope: content scan only — the .env and
+# .env.example sub-checks are unaffected.)
+_C2_SCAN_EXCLUDED_PREFIXES = ("docs/superpowers/", "tests/", ".superpowers/")
 
 
 def _scan_excluded(path: str) -> bool:

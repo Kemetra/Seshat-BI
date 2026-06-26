@@ -154,11 +154,36 @@ def _load_targets(source_map: str):
 
 
 def _redact_dsn(message: object, dsn: str) -> str:
+    """Scrub a DSN and its sensitive COMPONENTS out of an error message.
+
+    A literal replace is not enough: psycopg2 reformats the DSN into its own text
+    (e.g. ``connection to server at "host" (1.2.3.4), port 5432 failed: FATAL:
+    password authentication failed for user "admin"``) where the literal DSN never
+    appears yet host/user/password leak. So, in addition to the literal DSN, parse
+    the DSN and redact each non-empty component (host, username, password, and the
+    ``user@`` credentials prefix) wherever it appears (audit 2026-06-26 #7).
+    """
+    from urllib.parse import urlsplit
+
     text = str(message) or message.__class__.__name__
-    if dsn:
-        text = text.replace(dsn, "<redacted DSN>")
-        if "@" in dsn:
-            text = text.replace(dsn.split("@", 1)[0] + "@", "<credentials>@")
+    if not dsn:
+        return text
+    text = text.replace(dsn, "<redacted DSN>")
+    if "@" in dsn:
+        text = text.replace(dsn.split("@", 1)[0] + "@", "<credentials>@")
+    # Component-level scrub for the reformatted-by-the-driver case.
+    try:
+        parts = urlsplit(dsn)
+    except ValueError:
+        return text
+    # Longest first so a host containing the username substring is fully covered.
+    for secret in sorted(
+        {parts.password, parts.username, parts.hostname},
+        key=lambda s: len(s or ""),
+        reverse=True,
+    ):
+        if secret:
+            text = text.replace(secret, "<redacted>")
     return text
 
 

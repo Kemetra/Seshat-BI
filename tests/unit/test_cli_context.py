@@ -405,3 +405,24 @@ def test_validate_db_boundary_error_is_clean_cli_message(
     assert "<redacted DSN>" in err
     assert "postgresql://u:p@h:5432/db" not in err
     assert "Traceback" not in err
+
+
+def test_redact_dsn_scrubs_psycopg2_reformatted_host_and_user() -> None:
+    """psycopg2 reformats the DSN into its own error text, so the literal DSN never
+    appears yet the HOST, IP, PORT and USERNAME all leak. A literal-substring
+    replace misses this; redaction must scrub the DSN's components (audit #7).
+    """
+    from retail.cli import _redact_dsn
+
+    dsn = "postgresql://admin:s3cret@db.ondigitalocean.com:25060/prod?sslmode=require"
+    # A realistic psycopg2.OperationalError string — the literal dsn is NOT in it.
+    psycopg2_msg = (
+        'connection to server at "db.ondigitalocean.com" (203.0.113.7), '
+        'port 25060 failed: FATAL: password authentication failed for user "admin"'
+    )
+    out = _redact_dsn(psycopg2_msg, dsn)
+    assert "db.ondigitalocean.com" not in out, out  # host must be scrubbed
+    assert "admin" not in out, out  # username must be scrubbed
+    assert "s3cret" not in out, out  # password must never appear
+    # The message must remain useful (still mentions the auth-failure nature).
+    assert "failed" in out

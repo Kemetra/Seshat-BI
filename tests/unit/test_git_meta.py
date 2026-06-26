@@ -421,12 +421,15 @@ def test_c2_ignores_angle_bracket_placeholder_in_scanned_file(tmp_path: Path) ->
 
 
 @pytest.mark.unit
-def test_c2_skips_docs_and_example_files(tmp_path: Path) -> None:
+def test_c2_skips_superpowers_scratch_and_example_files(tmp_path: Path) -> None:
+    """docs/superpowers/ (SDD scratch that quotes fixture DSNs) and *.example are
+    excluded from the content scan (audit #8: the exclusion is scoped, not all of
+    docs/)."""
     repo = make_git_repo(tmp_path)
     _seed_c2_repo(repo)
-    docs = repo / "docs"
-    docs.mkdir()
-    (docs / "conn.md").write_text(
+    scratch = repo / "docs" / "superpowers" / "plans"
+    scratch.mkdir(parents=True)
+    (scratch / "plan.md").write_text(
         "postgresql://user:pw@real-host.db.ondigitalocean.com:25060/db\n",
         encoding="utf-8",
     )
@@ -436,6 +439,24 @@ def test_c2_skips_docs_and_example_files(tmp_path: Path) -> None:
     )
     commit_all(repo, "docs: add connection placeholders")
     assert list(rule_c2_no_committed_secrets(context_for(repo))) == []
+
+
+@pytest.mark.unit
+def test_c2_scans_real_docs_runbook(tmp_path: Path) -> None:
+    """A real DSN in an operational doc/runbook (docs/ outside superpowers/) MUST
+    be flagged -- this is exactly the gap audit #8 says the old broad docs/
+    exclusion left invisible."""
+    repo = make_git_repo(tmp_path)
+    _seed_c2_repo(repo)
+    runbook = repo / "docs" / "operations"
+    runbook.mkdir(parents=True)
+    (runbook / "deploy.md").write_text(
+        "Connect with postgresql://admin:s3cret@db-prod-01.db.ondigitalocean.com/db\n",
+        encoding="utf-8",
+    )
+    commit_all(repo, "docs: add runbook")
+    findings = list(rule_c2_no_committed_secrets(context_for(repo)))
+    assert any(f.locator.startswith("docs/operations/deploy.md:") for f in findings)
 
 
 @pytest.mark.unit
