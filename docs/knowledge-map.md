@@ -9,7 +9,9 @@ SQL, DAX, or readiness; it points you at the one layer that does.
 ## Routing rule
 
 Open only what the route names. Do not read the whole repo. Do not duplicate
-knowledge from skills into this file.
+knowledge from skills into this file. For a knowledge-layer route (SQL or DAX),
+the two-hop is mandatory: open the skill's `SKILL.md`, then its `INDEX.md`, then
+ONLY the file(s) that `INDEX.md` names — never the whole knowledge base.
 
 ## Route by task
 
@@ -33,6 +35,17 @@ knowledge from skills into this file.
 | 16. BI handoff pack | Readiness | `docs/readiness/publish-ready.md` | BI handoff pack |
 | 17. Power BI execution adapter | Roadmap (gated) | `docs/roadmap/roadmap.md` | blocked verdict (gated F016 / execution-only / later) |
 | 18. Unknown / ambiguous request | Compass | `COMPASS.md` | clarifying question or blocked verdict |
+
+## Route by symptom (knowledge layer)
+
+If you arrive with a *symptom* rather than a task label, jump straight to the
+matching knowledge skill's symptom index — do not diagnose from this file. This
+map only points; the cause → checks → fix → stop rule lives in the skill.
+
+| Symptom family | Layer | Open first → then |
+|---|---|---|
+| Totals doubled / inflated, row count changed after a join, COUNT/AVG wrong, reload doubled the data, gold won't reconcile to source, slow-but-correct SQL | SQL | `skills/bi-sql-knowledge/INDEX.md` → "Route by symptom" → PB-SQL-* verdict |
+| Measure ignores slicers, total row wrong, YOY/YTD wrong, ranking changes unexpectedly, DISTINCTCOUNT off, measure slow | DAX | `skills/bi-dax-knowledge/INDEX.md` → "Route by symptom" → analyzer-style verdict |
 
 Supporting references:
 
