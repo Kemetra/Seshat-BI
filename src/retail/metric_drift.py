@@ -331,6 +331,10 @@ def check_measure_drift(dax_expr: str, definition: dict[str, Any] | None) -> Ver
     """
     if definition and definition.get("kind") == "base":
         return _check_base_drift(dax_expr, definition)
+    # kind:ratio implies non-additive; caller need not restate additive:false.
+    # Shallow-copy only when the key is truly absent (explicit additive:true is respected).
+    if definition and definition.get("kind") == "ratio" and "additive" not in definition:
+        definition = {**definition, "additive": False}
     # ----- existing ratio path BELOW, UNCHANGED -----
     # Backward compat: no structured definition -> nothing to check.
     if not definition or "denominator" not in definition:

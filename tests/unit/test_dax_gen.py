@@ -126,7 +126,6 @@ BASE_REVENUE = {
 }
 RATIO_DISC = {
     "kind": "ratio",
-    "additive": False,
     "numerator": {"aggregation": "count_rows", "source": {"table": "gold.fct_sales_rss"},
                   "filter": [{"column": "discount_applied", "op": "is_true"}]},
     "denominator": {"aggregation": "count_rows", "source": {"table": "gold.fct_sales_rss"},

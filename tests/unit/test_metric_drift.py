@@ -426,3 +426,41 @@ def test_aggregation_unread_on_kind_absent_path() -> None:
     before = check_measure_drift(DAX_DISCOUNTED, DEF_DISCOUNTED)
     after = check_measure_drift(DAX_DISCOUNTED, mutated)
     assert before == after
+
+
+# --- spec §4: kind:ratio implies non-additive (Task 5 gap close) -------------
+
+
+def test_kind_ratio_without_additive_treated_nonadditive() -> None:
+    """A kind:ratio contract that omits `additive` must pass, not escalate.
+
+    §4 of the approved spec: `kind: ratio` IMPLIES non-additive semantics;
+    the caller need not restate `additive: false`.
+    """
+    no_additive_def = {
+        "kind": "ratio",
+        "denominator": {
+            "aggregation": "count_rows",
+            "filter": [{"column": "discount_applied", "op": "is_not_null"}],
+        },
+    }
+    v = check_measure_drift(DAX_DISCOUNTED, no_additive_def)
+    assert v.status == "pass", v
+
+
+def test_kind_ratio_explicit_additive_true_still_escalates() -> None:
+    """An explicit `additive: true` on a kind:ratio contract must still escalate.
+
+    The normalization only fills in a missing key; an explicit flag is respected.
+    """
+    explicit_additive_def = {
+        "kind": "ratio",
+        "additive": True,
+        "denominator": {
+            "aggregation": "count_rows",
+            "filter": [{"column": "discount_applied", "op": "is_not_null"}],
+        },
+    }
+    v = check_measure_drift(DAX_DISCOUNTED, explicit_additive_def)
+    assert v.status == "escalate", v
+    assert "additive" in v.detail.lower()
