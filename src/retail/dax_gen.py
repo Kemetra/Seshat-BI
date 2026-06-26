@@ -134,8 +134,12 @@ def _emit_ratio(defn: dict) -> tuple[str | None, str | None]:
 
 
 _DEFAULT_FORMATS: dict[str, str] = {
-    "sum": "#,0", "count": "#,0", "distinct_count": "#,0",
-    "average": "#,0.00", "count_rows": "#,0", "ratio": "0.0%",
+    "sum": "#,0",
+    "count": "#,0",
+    "distinct_count": "#,0",
+    "average": "#,0.00",
+    "count_rows": "#,0",
+    "ratio": "0.0%",
 }
 
 
@@ -164,10 +168,10 @@ def _run_d_rules(tmdl_block: str, name: str) -> tuple[list[str], list[str]]:
     import tempfile
     from pathlib import Path
 
-    from .core import RuleContext, Severity
-    from .runner import _format  # "[sev] id msg (loc)"
     from . import rules as _rules_pkg  # noqa: F401  fire @register
+    from .core import RuleContext, Severity
     from .registry import all_rules
+    from .runner import _format  # "[sev] id msg (loc)"
 
     # A minimal TMDL table wrapper: `table T` header at indent 0, measure at indent 1.
     # No stub measure -- the generated block IS the only measure in the table.

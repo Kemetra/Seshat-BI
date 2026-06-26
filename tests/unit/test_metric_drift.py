@@ -23,6 +23,8 @@ This module parses YAML (pyyaml, a dev/optional dep) and MUST live OUTSIDE the
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
 
 import pytest
 
@@ -468,10 +470,6 @@ def test_kind_ratio_explicit_additive_true_still_escalates() -> None:
     assert "additive" in v.detail.lower()
 
 
-import subprocess
-import sys
-
-
 def test_retail_rules_pulls_neither_dax_gen_nor_yaml():
     from pathlib import Path
 
@@ -482,5 +480,7 @@ def test_retail_rules_pulls_neither_dax_gen_nor_yaml():
     )
     env = os.environ.copy()
     env["PYTHONPATH"] = str(Path(__file__).parent.parent.parent / "src")
-    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env)
+    r = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, env=env
+    )
     assert r.returncode == 0, r.stderr

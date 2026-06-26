@@ -4,9 +4,21 @@ Phase 1: kind:base + kind:ratio, generate -> verify -> refuse. The headline
 property is the round-trip: every emitted measure re-verifies as `pass`.
 """
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 
-from retail.dax_gen import GenResult
+from retail.dax_gen import (
+    GenResult,
+    _emit_base,
+    _emit_ratio,
+    generate_measure,
+    load_contract,
+)
+from retail.metric_drift import check_measure_drift
 
 pytestmark = pytest.mark.unit
 
@@ -37,13 +49,13 @@ def test_genresult_rejects_refusal_with_dax():
         GenResult(ok=False, dax="SUM(T[c])", reason="x")
 
 
-from retail.dax_gen import _emit_base
-
-
 def test_emit_base_sum_no_filter():
     dax, reason = _emit_base(
-        {"kind": "base", "aggregation": "sum",
-         "source": {"table": "gold.fct_sales_rss", "column": "total_spent"}}
+        {
+            "kind": "base",
+            "aggregation": "sum",
+            "source": {"table": "gold.fct_sales_rss", "column": "total_spent"},
+        }
     )
     assert reason is None
     assert dax == "SUM('gold fct_sales_rss'[total_spent])"
@@ -51,8 +63,11 @@ def test_emit_base_sum_no_filter():
 
 def test_emit_base_count_rows_no_column():
     dax, reason = _emit_base(
-        {"kind": "base", "aggregation": "count_rows",
-         "source": {"table": "gold.fct_sales_rss"}}
+        {
+            "kind": "base",
+            "aggregation": "count_rows",
+            "source": {"table": "gold.fct_sales_rss"},
+        }
     )
     assert reason is None
     assert dax == "COUNTROWS('gold fct_sales_rss')"
@@ -60,9 +75,12 @@ def test_emit_base_count_rows_no_column():
 
 def test_emit_base_with_filter_wraps_calculate():
     dax, reason = _emit_base(
-        {"kind": "base", "aggregation": "count_rows",
-         "source": {"table": "gold.fct_sales_rss"},
-         "filter": [{"column": "discount_applied", "op": "is_true"}]}
+        {
+            "kind": "base",
+            "aggregation": "count_rows",
+            "source": {"table": "gold.fct_sales_rss"},
+            "filter": [{"column": "discount_applied", "op": "is_true"}],
+        }
     )
     assert reason is None
     assert dax == (
@@ -73,8 +91,11 @@ def test_emit_base_with_filter_wraps_calculate():
 
 def test_emit_base_sum_without_column_refuses():
     dax, reason = _emit_base(
-        {"kind": "base", "aggregation": "sum",
-         "source": {"table": "gold.fct_sales_rss"}}
+        {
+            "kind": "base",
+            "aggregation": "sum",
+            "source": {"table": "gold.fct_sales_rss"},
+        }
     )
     assert dax is None
     assert "column" in reason
@@ -82,8 +103,11 @@ def test_emit_base_sum_without_column_refuses():
 
 def test_emit_base_count_rows_with_column_refuses():
     dax, reason = _emit_base(
-        {"kind": "base", "aggregation": "count_rows",
-         "source": {"table": "gold.fct_sales_rss", "column": "x"}}
+        {
+            "kind": "base",
+            "aggregation": "count_rows",
+            "source": {"table": "gold.fct_sales_rss", "column": "x"},
+        }
     )
     assert dax is None
     assert "count_rows" in reason
@@ -91,8 +115,11 @@ def test_emit_base_count_rows_with_column_refuses():
 
 def test_emit_base_non_gold_table_refuses():
     dax, reason = _emit_base(
-        {"kind": "base", "aggregation": "sum",
-         "source": {"table": "silver.fct", "column": "c"}}
+        {
+            "kind": "base",
+            "aggregation": "sum",
+            "source": {"table": "silver.fct", "column": "c"},
+        }
     )
     assert dax is None
     assert "gold" in reason
@@ -100,8 +127,11 @@ def test_emit_base_non_gold_table_refuses():
 
 def test_emit_base_unknown_aggregation_refuses():
     dax, reason = _emit_base(
-        {"kind": "base", "aggregation": "median",
-         "source": {"table": "gold.t", "column": "c"}}
+        {
+            "kind": "base",
+            "aggregation": "median",
+            "source": {"table": "gold.t", "column": "c"},
+        }
     )
     assert dax is None
     assert "aggregation" in reason
@@ -109,34 +139,44 @@ def test_emit_base_unknown_aggregation_refuses():
 
 def test_emit_base_unknown_filter_op_refuses():
     dax, reason = _emit_base(
-        {"kind": "base", "aggregation": "count_rows",
-         "source": {"table": "gold.t"},
-         "filter": [{"column": "c", "op": "is_weird"}]}
+        {
+            "kind": "base",
+            "aggregation": "count_rows",
+            "source": {"table": "gold.t"},
+            "filter": [{"column": "c", "op": "is_weird"}],
+        }
     )
     assert dax is None
     assert "op" in reason or "filter" in reason
 
 
-from retail.dax_gen import _emit_ratio, generate_measure
-from retail.metric_drift import check_measure_drift
-
 BASE_REVENUE = {
-    "kind": "base", "aggregation": "sum",
+    "kind": "base",
+    "aggregation": "sum",
     "source": {"table": "gold.fct_sales_rss", "column": "total_spent"},
 }
 RATIO_DISC = {
     "kind": "ratio",
-    "numerator": {"aggregation": "count_rows", "source": {"table": "gold.fct_sales_rss"},
-                  "filter": [{"column": "discount_applied", "op": "is_true"}]},
-    "denominator": {"aggregation": "count_rows", "source": {"table": "gold.fct_sales_rss"},
-                    "filter": [{"column": "discount_applied", "op": "is_not_null"}]},
+    "numerator": {
+        "aggregation": "count_rows",
+        "source": {"table": "gold.fct_sales_rss"},
+        "filter": [{"column": "discount_applied", "op": "is_true"}],
+    },
+    "denominator": {
+        "aggregation": "count_rows",
+        "source": {"table": "gold.fct_sales_rss"},
+        "filter": [{"column": "discount_applied", "op": "is_not_null"}],
+    },
 }
 
 
-@pytest.mark.parametrize("name,defn", [
-    ("TotalRevenue", BASE_REVENUE),
-    ("DiscountedRate", RATIO_DISC),
-])
+@pytest.mark.parametrize(
+    "name,defn",
+    [
+        ("TotalRevenue", BASE_REVENUE),
+        ("DiscountedRate", RATIO_DISC),
+    ],
+)
 def test_generate_roundtrips_to_pass(name, defn):
     r = generate_measure(defn, name=name, doc_intent="meaning of the measure")
     assert r.ok is True, r.reason
@@ -147,7 +187,8 @@ def test_generate_roundtrips_to_pass(name, defn):
 def test_generated_tmdl_passes_d_rules():
     r = generate_measure(BASE_REVENUE, name="TotalRevenue", doc_intent="total money")
     assert r.ok is True
-    # PascalCase name (D1), has displayFolder (D2), has /// doc (D11), uses DIVIDE not / where relevant
+    # PascalCase name (D1), has displayFolder (D2), has /// doc (D11),
+    # uses DIVIDE not / where relevant
     assert "/// " in r.tmdl_block
     assert "displayFolder" in r.tmdl_block
     assert "measure TotalRevenue" in r.tmdl_block
@@ -169,21 +210,27 @@ def test_generate_refuses_bad_pascalcase_name():
 def test_doc_intent_isolation_same_dax_diff_comment():
     a = generate_measure(BASE_REVENUE, name="Rev", doc_intent="intent A")
     b = generate_measure(BASE_REVENUE, name="Rev", doc_intent="intent B")
-    assert a.dax == b.dax                     # identical semantics
-    assert a.tmdl_block != b.tmdl_block       # differ only in the /// comment
+    assert a.dax == b.dax  # identical semantics
+    assert a.tmdl_block != b.tmdl_block  # differ only in the /// comment
     assert "intent A" in a.tmdl_block and "intent B" in b.tmdl_block
 
 
 def test_emit_ratio_inline_count_rows():
-    dax, reason = _emit_ratio({
-        "kind": "ratio",
-        "numerator": {"aggregation": "count_rows",
-                      "source": {"table": "gold.fct_sales_rss"},
-                      "filter": [{"column": "discount_applied", "op": "is_true"}]},
-        "denominator": {"aggregation": "count_rows",
-                        "source": {"table": "gold.fct_sales_rss"},
-                        "filter": [{"column": "discount_applied", "op": "is_not_null"}]},
-    })
+    dax, reason = _emit_ratio(
+        {
+            "kind": "ratio",
+            "numerator": {
+                "aggregation": "count_rows",
+                "source": {"table": "gold.fct_sales_rss"},
+                "filter": [{"column": "discount_applied", "op": "is_true"}],
+            },
+            "denominator": {
+                "aggregation": "count_rows",
+                "source": {"table": "gold.fct_sales_rss"},
+                "filter": [{"column": "discount_applied", "op": "is_not_null"}],
+            },
+        }
+    )
     assert reason is None
     assert dax == (
         "DIVIDE("
@@ -195,21 +242,18 @@ def test_emit_ratio_inline_count_rows():
 
 
 def test_emit_ratio_refuses_bad_side():
-    dax, reason = _emit_ratio({
-        "kind": "ratio",
-        "numerator": {"aggregation": "sum", "source": {"table": "gold.t"}},  # no column
-        "denominator": {"aggregation": "count_rows", "source": {"table": "gold.t"}},
-    })
+    dax, reason = _emit_ratio(
+        {
+            "kind": "ratio",
+            "numerator": {
+                "aggregation": "sum",
+                "source": {"table": "gold.t"},
+            },  # no column
+            "denominator": {"aggregation": "count_rows", "source": {"table": "gold.t"}},
+        }
+    )
     assert dax is None
     assert "column" in reason
-
-
-import os
-import subprocess
-import sys
-from pathlib import Path
-
-from retail.dax_gen import load_contract
 
 
 def test_load_contract_reads_definition(tmp_path: Path):
@@ -228,13 +272,16 @@ def test_load_contract_reads_definition(tmp_path: Path):
 def test_dax_gen_import_is_stdlib_only():
     # importing dax_gen must NOT pull yaml at import time (lazy in load_contract)
     import os
+
     code = (
         "import sys; import retail.dax_gen; "
         "assert 'yaml' not in sys.modules, 'yaml imported at module scope'"
     )
     env = os.environ.copy()
     env["PYTHONPATH"] = str(Path(__file__).parent.parent.parent / "src")
-    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env)
+    r = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, env=env
+    )
     assert r.returncode == 0, r.stderr
 
 
@@ -249,7 +296,9 @@ def _run_cli(*argv: str) -> subprocess.CompletedProcess[str]:
     env["PYTHONPATH"] = _WORKTREE_SRC
     return subprocess.run(
         [sys.executable, "-m", "retail.cli", *argv],
-        capture_output=True, text=True, env=env,
+        capture_output=True,
+        text=True,
+        env=env,
     )
 
 
@@ -263,15 +312,17 @@ def test_cli_generate_success_stdout_tmdl() -> None:
 def test_cli_generate_refusal_stdout_empty_stderr_reason() -> None:
     r = _run_cli("generate", "--contract", str(CONTRACTS / "refuse_no_column.yaml"))
     assert r.returncode == 1
-    assert r.stdout.strip() == ""          # stdout = verified-only
+    assert r.stdout.strip() == ""  # stdout = verified-only
     assert "refused" in r.stderr.lower()
 
 
 def test_cli_generate_json_format() -> None:
-    r = _run_cli("generate", "--contract", str(CONTRACTS / "ratio_disc.yaml"),
-                 "--format", "json")
+    r = _run_cli(
+        "generate", "--contract", str(CONTRACTS / "ratio_disc.yaml"), "--format", "json"
+    )
     assert r.returncode == 0
     import json
+
     obj = json.loads(r.stdout)
     assert obj["ok"] is True and obj["dax"].startswith("DIVIDE(")
 
@@ -279,16 +330,22 @@ def test_cli_generate_json_format() -> None:
 def test_cli_out_refuses_powerbi_path() -> None:
     # an --out resolving under powerbi/ is refused (resolved-path check)
     target = "powerbi/Model.SemanticModel/x.tmdl"
-    r = _run_cli("generate", "--contract", str(CONTRACTS / "base_revenue.yaml"),
-                 "--out", target)
+    r = _run_cli(
+        "generate", "--contract", str(CONTRACTS / "base_revenue.yaml"), "--out", target
+    )
     assert r.returncode == 1
     assert "powerbi" in r.stderr.lower()
     assert r.stdout.strip() == ""
 
 
 def test_cli_out_refuses_traversal_into_powerbi() -> None:
-    r = _run_cli("generate", "--contract", str(CONTRACTS / "base_revenue.yaml"),
-                 "--out", "../powerbi/sneak.tmdl")
+    r = _run_cli(
+        "generate",
+        "--contract",
+        str(CONTRACTS / "base_revenue.yaml"),
+        "--out",
+        "../powerbi/sneak.tmdl",
+    )
     assert r.returncode == 1
     assert "powerbi" in r.stderr.lower()
     assert r.stdout.strip() == ""
@@ -296,11 +353,21 @@ def test_cli_out_refuses_traversal_into_powerbi() -> None:
 
 def test_cli_out_writes_then_refuses_overwrite(tmp_path: Path) -> None:
     out = tmp_path / "m.tmdl"
-    r1 = _run_cli("generate", "--contract", str(CONTRACTS / "base_revenue.yaml"),
-                  "--out", str(out))
+    r1 = _run_cli(
+        "generate",
+        "--contract",
+        str(CONTRACTS / "base_revenue.yaml"),
+        "--out",
+        str(out),
+    )
     assert r1.returncode == 0 and out.exists()
-    r2 = _run_cli("generate", "--contract", str(CONTRACTS / "base_revenue.yaml"),
-                  "--out", str(out))
+    r2 = _run_cli(
+        "generate",
+        "--contract",
+        str(CONTRACTS / "base_revenue.yaml"),
+        "--out",
+        str(out),
+    )
     assert r2.returncode == 1
     assert "exist" in r2.stderr.lower()
 
@@ -309,14 +376,19 @@ def test_cli_out_refuses_symlink_into_powerbi(tmp_path: Path):
     # a symlink whose target resolves under powerbi/ must be refused.
     # Skip ONLY the symlink case where the OS denies symlink creation
     # (Windows without privilege) -- the ../powerbi and absolute cases never skip.
-    powerbi = (Path.cwd() / "powerbi")
+    powerbi = Path.cwd() / "powerbi"
     powerbi.mkdir(exist_ok=True)
     link = tmp_path / "link.tmdl"
     try:
         os.symlink(powerbi / "real.tmdl", link)
     except (OSError, NotImplementedError):
         pytest.skip("symlink creation not permitted on this platform/CI")
-    r = _run_cli("generate", "--contract", str(CONTRACTS / "base_revenue.yaml"),
-                 "--out", str(link))
+    r = _run_cli(
+        "generate",
+        "--contract",
+        str(CONTRACTS / "base_revenue.yaml"),
+        "--out",
+        str(link),
+    )
     assert r.returncode == 1
     assert "powerbi" in r.stderr.lower()
