@@ -1,0 +1,1009 @@
+{
+  "$schema_version": "0.1-staged",
+  "status": "CANDIDATES -- STAGED, NOT ENFORCEABLE. Static skill artifacts; no runtime analyzer is wired.",
+  "scope": "Slice 1 -- SQL analytical mental model, logical query processing, grain, aggregation correctness. Slice 2 -- joins, relationship/uniqueness assumptions, duplicate (fan-out) amplification, NULL behavior in joins/filters/anti-joins. Slice 3 -- window functions (OVER/PARTITION/ORDER, frames, ranking, LAG/LEAD, where-clause restriction). Slice 4 -- date/time & time-series (truncation, time zones, date spine, half-open ranges, period-over-period, indexing). Slice 5 -- validation & reconciliation (zero-row gates, control totals, referential integrity, freshness/completeness, idempotency). Slice 6 -- performance & maintainability (sargability, SELECT *, implicit cross join, CTE grain, filter-early) + consolidation summary. | SQL Cookbook C1 -- set operations & table comparison. C2 -- DML & transformation logic. C3 -- reporting & reshaping. C4 -- string & data cleaning. C5 -- advanced date recipes. C6 -- gaps & islands + hierarchical/recursive. C7 -- metadata-driven profiling & SQL-generating-SQL.",
+  "promotion_policy": {
+    "analyzer_v1": "static / low false-positive: promotion target after review",
+    "analyzer_v2": "needs AST or schema metadata: keep staged",
+    "human_guidance_only": "judgment call: never auto-enforced"
+  },
+  "candidate_field_spec": [
+    "id",
+    "name",
+    "category",
+    "future_phase",
+    "detectability",
+    "required_inputs",
+    "risk",
+    "rationale",
+    "example_signal",
+    "recommended_fix",
+    "related_concepts",
+    "promotion_status"
+  ],
+  "candidates": [
+    {
+      "id": "SARC-GRAIN-01",
+      "name": "Aggregation over a join result without a stated/verified grain",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "heuristic",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "risk": "medium",
+      "rationale": "Fan-out double-counting is the most dangerous silent BI-SQL bug; no error is raised.",
+      "example_signal": "Signal: Aggregation over a join result without a stated/verified grain",
+      "recommended_fix": "Declare the result grain; verify join keys are unique on the one side; aggregate to grain before joining if fan-out is possible.",
+      "related_concepts": [
+        "SC-003",
+        "SC-005",
+        "SC-007"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-COUNT-01",
+      "name": "COUNT(column) where COUNT(*) or COUNT(DISTINCT) is likely intended",
+      "category": "correctness",
+      "future_phase": "analyzer_v1",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "medium",
+      "rationale": "COUNT variants diverge exactly when data has nulls/duplicates, silently mis-measuring entities like orders.",
+      "example_signal": "Signal: COUNT(column) where COUNT(*) or COUNT(DISTINCT) is likely intended",
+      "recommended_fix": "Pick deliberately: rows -> COUNT(*); distinct entities -> COUNT(DISTINCT col); non-null values -> COUNT(col).",
+      "related_concepts": [
+        "SC-006"
+      ],
+      "promotion_status": "promoted",
+      "severity": "info",
+      "promoted_to": "SAR-COUNT-01"
+    },
+    {
+      "id": "SARC-HAVING-01",
+      "name": "Aggregate condition placed in WHERE (or row condition in HAVING)",
+      "category": "correctness",
+      "future_phase": "analyzer_v1",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "low",
+      "rationale": "Reflects a misunderstanding of logical query processing order; query errors or wrong intent.",
+      "example_signal": "Signal: Aggregate condition placed in WHERE (or row condition in HAVING)",
+      "recommended_fix": "Filter groups/aggregates in HAVING; keep row-level conditions in WHERE.",
+      "related_concepts": [
+        "SC-002"
+      ],
+      "promotion_status": "promoted",
+      "severity": "warning",
+      "promoted_to": "SAR-HAVING-01"
+    },
+    {
+      "id": "SARC-KEY-01",
+      "name": "Join on a column not asserted unique on the one side",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "schema_metadata",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "risk": "low",
+      "rationale": "Unverified uniqueness is the root cause of fan-out and broken reconciliation.",
+      "example_signal": "Signal: Join on a column not asserted unique on the one side",
+      "recommended_fix": "Verify uniqueness of the join key on the one side (GROUP BY key HAVING COUNT(*)>1); dedup or change grain if not unique.",
+      "related_concepts": [
+        "SC-004",
+        "SC-007"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-NULL-01",
+      "name": "Aggregate or denominator sensitive to NULLs without explicit handling",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "heuristic",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "risk": "high",
+      "rationale": "Nulls silently change counts, averages, and filters; for validation this must be intentional.",
+      "example_signal": "Signal: Aggregate or denominator sensitive to NULLs without explicit handling",
+      "recommended_fix": "Decide null treatment explicitly (COALESCE to a default, or document exclusion); beware NOT IN with nullable subqueries.",
+      "related_concepts": [
+        "SC-008"
+      ],
+      "promotion_status": "staged",
+      "severity": "info"
+    },
+    {
+      "id": "SARC-AVG-01",
+      "name": "AVG of pre-aggregated values (average of averages)",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "heuristic",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "medium",
+      "rationale": "Unweighted averages of averages ignore group sizes and give a wrong overall figure.",
+      "example_signal": "Signal: AVG of pre-aggregated values (average of averages)",
+      "recommended_fix": "Average from the base grain (SUM(x)/SUM(n)) or weight by group size; don't average group averages unweighted.",
+      "related_concepts": [
+        "SC-008"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-DISTINCT-01",
+      "name": "DISTINCT used to suppress duplicates without explaining grain",
+      "category": "maintainability",
+      "future_phase": "human_guidance_only",
+      "detectability": "heuristic",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "high",
+      "rationale": "DISTINCT masks fan-out created earlier and can still leave additive aggregates wrong.",
+      "example_signal": "Signal: DISTINCT used to suppress duplicates without explaining grain",
+      "recommended_fix": "Identify why duplicates exist (which join fanned out), fix the grain; use DISTINCT only when distinctness is the genuine intent, with grain stated.",
+      "related_concepts": [
+        "SC-007"
+      ],
+      "promotion_status": "staged",
+      "severity": "info"
+    },
+    {
+      "id": "SARC-FANOUT-01",
+      "name": "SUM/COUNT after a join whose right-side key is not verified unique",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "schema_metadata",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "risk": "medium",
+      "rationale": "Fan-out silently multiplies additive aggregates; the #1 cause of inflated BI totals.",
+      "example_signal": "Signal: SUM/COUNT after a join whose right-side key is not verified unique",
+      "recommended_fix": "Verify right-side join-key uniqueness; aggregate to grain before joining or join to a one-row-per-key summary. Compare COUNT(*) before/after.",
+      "related_concepts": [
+        "SC-010",
+        "SC-011",
+        "SC-007"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-M2M-01",
+      "name": "Many-to-many join without a bridge or pre-aggregation",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "schema_metadata",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "risk": "medium",
+      "rationale": "Combinatorial row multiplication corrupts grain and every additive metric.",
+      "example_signal": "Signal: Many-to-many join without a bridge or pre-aggregation",
+      "recommended_fix": "Pre-aggregate one side to one row per key or use a bridge; never aggregate directly across an unresolved many-to-many.",
+      "related_concepts": [
+        "SC-010",
+        "SC-011"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-NOTIN-01",
+      "name": "NOT IN against a subquery/column that may contain NULL",
+      "category": "correctness",
+      "future_phase": "analyzer_v1",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "risk": "medium",
+      "rationale": "A single NULL makes NOT IN return zero rows silently (three-valued logic).",
+      "example_signal": "Signal: NOT IN against a subquery/column that may contain NULL",
+      "recommended_fix": "Use NOT EXISTS or LEFT JOIN ... IS NULL; if NOT IN is required, exclude nulls explicitly.",
+      "related_concepts": [
+        "SC-012",
+        "SC-014",
+        "SC-008"
+      ],
+      "promotion_status": "promoted",
+      "severity": "warning",
+      "promoted_to": "SAR-NOTIN-01"
+    },
+    {
+      "id": "SARC-LEFTFILTER-01",
+      "name": "Right-table predicate of a LEFT JOIN placed in WHERE",
+      "category": "correctness",
+      "future_phase": "analyzer_v1",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "low",
+      "rationale": "It silently converts a LEFT JOIN into an INNER JOIN, dropping rows and understating totals.",
+      "example_signal": "Signal: Right-table predicate of a LEFT JOIN placed in WHERE",
+      "recommended_fix": "Move the right-table condition into the ON clause to preserve unmatched left rows.",
+      "related_concepts": [
+        "SC-009"
+      ],
+      "promotion_status": "promoted",
+      "severity": "warning",
+      "promoted_to": "SAR-LEFTFILTER-01"
+    },
+    {
+      "id": "SARC-DEDUP-01",
+      "name": "Deduplication without a deterministic survivor",
+      "category": "maintainability",
+      "future_phase": "human_guidance_only",
+      "detectability": "heuristic",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "high",
+      "rationale": "DISTINCT/GROUP BY dedup is non-deterministic about which row wins; silver/gold dedup must be explainable.",
+      "example_signal": "Signal: Deduplication without a deterministic survivor",
+      "recommended_fix": "Dedup with ROW_NUMBER() OVER(PARTITION BY key ORDER BY <tiebreak>) and filter rn=1; document the survivor rule.",
+      "related_concepts": [
+        "SC-013"
+      ],
+      "promotion_status": "staged",
+      "severity": "info"
+    },
+    {
+      "id": "SARC-WINDOW-ORDER-01",
+      "name": "Ordered window function without a deterministic ORDER BY tiebreak",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "risk": "medium",
+      "rationale": "Ties produce nondeterministic ROW_NUMBER/rank and dedup survivors that change between runs.",
+      "example_signal": "Signal: Ordered window function without a deterministic ORDER BY tiebreak",
+      "recommended_fix": "Add a tiebreak column to the OVER ORDER BY so the ordering is total (e.g. a unique key).",
+      "related_concepts": [
+        "SC-016",
+        "SC-018"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-WINDOW-FRAME-01",
+      "name": "Running aggregate with ORDER BY but no explicit ROWS frame",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "medium",
+      "rationale": "The default RANGE frame makes running totals jump at duplicate ORDER BY values.",
+      "example_signal": "Signal: Running aggregate with ORDER BY but no explicit ROWS frame",
+      "recommended_fix": "Specify ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW for row-by-row accumulation; the RANGE default groups tied rows.",
+      "related_concepts": [
+        "SC-017"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-WINDOW-LASTVAL-01",
+      "name": "LAST_VALUE/FIRST_VALUE without an explicit frame",
+      "category": "correctness",
+      "future_phase": "analyzer_v1",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "low",
+      "rationale": "The default frame ends at the current row, so LAST_VALUE returns the current row, not the partition's last.",
+      "example_signal": "Signal: LAST_VALUE/FIRST_VALUE without an explicit frame",
+      "recommended_fix": "Add ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING to read the true partition first/last.",
+      "related_concepts": [
+        "SC-017",
+        "SC-019"
+      ],
+      "promotion_status": "promoted",
+      "severity": "warning",
+      "promoted_to": "SAR-WINDOW-LASTVAL-01"
+    },
+    {
+      "id": "SARC-WINDOW-WHERE-01",
+      "name": "Window function referenced in WHERE/GROUP BY/HAVING",
+      "category": "correctness",
+      "future_phase": "analyzer_v1",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "low",
+      "rationale": "Window functions are computed at SELECT (after WHERE/HAVING); using them earlier is invalid.",
+      "example_signal": "Signal: Window function referenced in WHERE/GROUP BY/HAVING",
+      "recommended_fix": "Compute the window in a subquery/CTE and filter it in an outer query.",
+      "related_concepts": [
+        "SC-020",
+        "SC-002"
+      ],
+      "promotion_status": "promoted",
+      "severity": "error",
+      "promoted_to": "SAR-WINDOW-WHERE-01"
+    },
+    {
+      "id": "SARC-WINDOW-SPARSE-01",
+      "name": "LAG/LEAD for period-over-period without a date spine",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "heuristic",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "risk": "high",
+      "rationale": "LAG reads the previous row, not the previous calendar period; gaps silently break MoM/YoY.",
+      "example_signal": "Signal: LAG/LEAD for period-over-period without a date spine",
+      "recommended_fix": "Join to a complete date spine so periods are contiguous before applying LAG/LEAD.",
+      "related_concepts": [
+        "SC-019"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-DATE-BETWEEN-01",
+      "name": "BETWEEN on a timestamp/date column where a half-open range is intended",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "risk": "medium",
+      "rationale": "BETWEEN is inclusive of the end instant and silently undercounts the last day.",
+      "example_signal": "Signal: BETWEEN on a timestamp/date column where a half-open range is intended",
+      "recommended_fix": "Use >= start AND < next_start; avoid BETWEEN on timestamps (drops the end day's time-of-day).",
+      "related_concepts": [
+        "SC-024"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-DATE-TRUNC-01",
+      "name": "Grouping by a raw timestamp instead of truncating to a grain",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "risk": "medium",
+      "rationale": "Near-unique timestamps produce one group per instant; no real aggregation.",
+      "example_signal": "Signal: Grouping by a raw timestamp instead of truncating to a grain",
+      "recommended_fix": "Truncate to the reporting grain (DATE_TRUNC) or group by a date-dimension period column.",
+      "related_concepts": [
+        "SC-021"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-DATE-TZ-01",
+      "name": "Date bucketing without explicit time-zone handling",
+      "category": "correctness",
+      "future_phase": "human_guidance_only",
+      "detectability": "heuristic",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "risk": "high",
+      "rationale": "Zone mismatches shift events across midnight and corrupt daily counts and reconciliation.",
+      "example_signal": "Signal: Date bucketing without explicit time-zone handling",
+      "recommended_fix": "Store UTC; convert to the business/local zone before truncating or bucketing to a day/period.",
+      "related_concepts": [
+        "SC-022"
+      ],
+      "promotion_status": "staged",
+      "severity": "info"
+    },
+    {
+      "id": "SARC-DATE-SPINE-01",
+      "name": "Period-over-period or gap-sensitive series without a date spine",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "heuristic",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "risk": "medium",
+      "rationale": "Sparse periods make 'previous row' != 'previous period', silently breaking YoY/MoM and rolling windows.",
+      "example_signal": "Signal: Period-over-period or gap-sensitive series without a date spine",
+      "recommended_fix": "LEFT JOIN a complete date spine (calendar table) so periods are contiguous before LAG/LEAD/rolling.",
+      "related_concepts": [
+        "SC-023",
+        "SC-025"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-DATE-SARG-01",
+      "name": "Function wrapped on a date column in WHERE (non-sargable)",
+      "category": "performance",
+      "future_phase": "analyzer_v1",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "low",
+      "rationale": "Wrapping the column prevents index use and is error-prone at boundaries.",
+      "example_signal": "Signal: Function wrapped on a date column in WHERE (non-sargable)",
+      "recommended_fix": "Filter the bare column with a range predicate (>= start AND < next_start) instead of YEAR()/DATE_TRUNC() in WHERE.",
+      "related_concepts": [
+        "SC-024"
+      ],
+      "promotion_status": "promoted",
+      "severity": "info",
+      "promoted_to": "SAR-DATE-SARG-01"
+    },
+    {
+      "id": "SARC-DATE-PARTIAL-01",
+      "name": "Comparing a partial period to a full period",
+      "category": "correctness",
+      "future_phase": "human_guidance_only",
+      "detectability": "human_review",
+      "required_inputs": [
+        "sql_text",
+        "visual_context"
+      ],
+      "risk": "high",
+      "rationale": "Unequal period lengths make period-over-period comparisons misleading.",
+      "example_signal": "Signal: Comparing a partial period to a full period",
+      "recommended_fix": "Compare like-for-like period lengths (e.g. MTD vs same-MTD last period) or explicitly label the partial comparison.",
+      "related_concepts": [
+        "SC-025",
+        "SC-026"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-VAL-GATE-01",
+      "name": "Transformation/promotion path with no validation gate",
+      "category": "validation",
+      "future_phase": "human_guidance_only",
+      "detectability": "human_review",
+      "required_inputs": [
+        "pipeline_metadata",
+        "sql_text"
+      ],
+      "risk": "medium",
+      "rationale": "Unvalidated tables propagate duplicates, nulls, and orphans into measures and dashboards.",
+      "example_signal": "Signal: Transformation/promotion path with no validation gate",
+      "recommended_fix": "Add zero-row gates for uniqueness, not-null, and referential integrity before promoting to the next layer.",
+      "related_concepts": [
+        "SC-027",
+        "SC-028",
+        "SC-029"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-RECON-TOTAL-01",
+      "name": "Layer-to-layer data movement without a control-total reconciliation",
+      "category": "validation",
+      "future_phase": "human_guidance_only",
+      "detectability": "human_review",
+      "required_inputs": [
+        "pipeline_metadata"
+      ],
+      "risk": "medium",
+      "rationale": "Without a control total, dropped or inflated data passes silently.",
+      "example_signal": "Signal: Layer-to-layer data movement without a control-total reconciliation",
+      "recommended_fix": "Reconcile an invariant value total (revenue/quantity) plus distinct-entity counts across source/silver/gold.",
+      "related_concepts": [
+        "SC-030"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-RECON-GRAIN-01",
+      "name": "Reconciliation comparing mismatched grains",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "heuristic",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "risk": "medium",
+      "rationale": "Grain mismatch creates false mismatches or hides real ones.",
+      "example_signal": "Signal: Reconciliation comparing mismatched grains",
+      "recommended_fix": "Align both sides to a shared grain before comparing totals.",
+      "related_concepts": [
+        "SC-030",
+        "SC-005"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-VAL-COUNTONLY-01",
+      "name": "Reconciliation on row counts only (no value tie-out)",
+      "category": "validation",
+      "future_phase": "analyzer_v2",
+      "detectability": "heuristic",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "high",
+      "rationale": "Counts can match while sums drift (fan-out) or values change with counts unchanged.",
+      "example_signal": "Signal: Reconciliation on row counts only (no value tie-out)",
+      "recommended_fix": "Pair row counts with a value control total and distinct-entity counts.",
+      "related_concepts": [
+        "SC-030",
+        "SC-011"
+      ],
+      "promotion_status": "staged",
+      "severity": "info"
+    },
+    {
+      "id": "SARC-VAL-FRESH-01",
+      "name": "Periodic load without a freshness/completeness gate",
+      "category": "validation",
+      "future_phase": "human_guidance_only",
+      "detectability": "human_review",
+      "required_inputs": [
+        "pipeline_metadata",
+        "schema_metadata"
+      ],
+      "risk": "medium",
+      "rationale": "Correct-but-stale or partially-loaded data passes other gates undetected.",
+      "example_signal": "Signal: Periodic load without a freshness/completeness gate",
+      "recommended_fix": "Add a recency check (max date within SLA) and a spine-based completeness check for missing periods/segments.",
+      "related_concepts": [
+        "SC-031",
+        "SC-023"
+      ],
+      "promotion_status": "staged",
+      "severity": "info"
+    },
+    {
+      "id": "SARC-SELECTSTAR-01",
+      "name": "SELECT * in a persisted transformation or view",
+      "category": "maintainability",
+      "future_phase": "analyzer_v1",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "medium",
+      "rationale": "Reads/stores unneeded columns, breaks on schema drift, and hides the step's grain/contract.",
+      "example_signal": "Signal: SELECT * in a persisted transformation or view",
+      "recommended_fix": "List explicit output columns; declare the step's grain. Reserve SELECT * for ad-hoc exploration.",
+      "related_concepts": [
+        "SC-035",
+        "SC-036"
+      ],
+      "promotion_status": "promoted",
+      "severity": "info",
+      "promoted_to": "SAR-SELECTSTAR-01"
+    },
+    {
+      "id": "SARC-CROSSJOIN-01",
+      "name": "Join with no ON condition (implicit cross join)",
+      "category": "correctness",
+      "future_phase": "analyzer_v1",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "low",
+      "rationale": "A Cartesian product explodes rows and corrupts every aggregate.",
+      "example_signal": "Signal: Join with no ON condition (implicit cross join)",
+      "recommended_fix": "Add an explicit, correct ON condition; if a cross join is intended, write CROSS JOIN deliberately.",
+      "related_concepts": [
+        "SC-009",
+        "SC-037"
+      ],
+      "promotion_status": "promoted",
+      "severity": "warning",
+      "promoted_to": "SAR-CROSSJOIN-01"
+    },
+    {
+      "id": "SARC-SARG-01",
+      "name": "Non-sargable predicate (function-wrapped column or leading-wildcard LIKE)",
+      "category": "performance",
+      "future_phase": "analyzer_v1",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "medium",
+      "rationale": "Prevents index/zone-map use, forcing full scans.",
+      "example_signal": "Signal: Non-sargable predicate (function-wrapped column or leading-wildcard LIKE)",
+      "recommended_fix": "Keep the column bare; use range predicates; avoid LIKE '%x'.",
+      "related_concepts": [
+        "SC-033",
+        "SC-024"
+      ],
+      "promotion_status": "promoted",
+      "severity": "info",
+      "promoted_to": "SAR-SARG-01"
+    },
+    {
+      "id": "SARC-CTE-GRAIN-01",
+      "name": "CTE stack without declared grain per step",
+      "category": "maintainability",
+      "future_phase": "human_guidance_only",
+      "detectability": "human_review",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "high",
+      "rationale": "Fan-out and double-counting hide in untracked CTE grain; review becomes unreliable.",
+      "example_signal": "Signal: CTE stack without declared grain per step",
+      "recommended_fix": "Comment each CTE with its grain; make grain transitions explicit.",
+      "related_concepts": [
+        "SC-038",
+        "SC-005"
+      ],
+      "promotion_status": "staged",
+      "severity": "info"
+    },
+    {
+      "id": "SARC-FILTER-LATE-01",
+      "name": "Selective filter applied after an expensive join/aggregate",
+      "category": "performance",
+      "future_phase": "analyzer_v2",
+      "detectability": "heuristic",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "risk": "high",
+      "rationale": "Processing far more rows than necessary; slow and memory-heavy.",
+      "example_signal": "Signal: Selective filter applied after an expensive join/aggregate",
+      "recommended_fix": "Push the most selective filters before joins/aggregations so fewer rows flow downstream.",
+      "related_concepts": [
+        "SC-034",
+        "SC-037"
+      ],
+      "promotion_status": "staged",
+      "severity": "info"
+    },
+    {
+      "id": "SARC-UNIONALL-01",
+      "name": "UNION used where UNION ALL is likely intended",
+      "category": "correctness",
+      "future_phase": "analyzer_v1",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "medium",
+      "rationale": "Dropping legitimate duplicate rows understates counts/totals in BI.",
+      "example_signal": "Signal: UNION used where UNION ALL is likely intended",
+      "recommended_fix": "Use UNION ALL unless duplicate removal is intended; UNION silently dedupes and adds sort cost.",
+      "related_concepts": [
+        "SC-040"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-SETOP-COLS-01",
+      "name": "Set operation with mismatched/misordered column projections",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "risk": "medium",
+      "rationale": "Set ops compare/stack by position, not name -- wrong columns silently combined.",
+      "example_signal": "Signal: Set operation with mismatched/misordered column projections",
+      "recommended_fix": "Project identical columns, same order, compatible types on both sides; set ops match by position.",
+      "related_concepts": [
+        "SC-039"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-DML-NOFILTER-01",
+      "name": "UPDATE/DELETE without a WHERE clause",
+      "category": "correctness",
+      "future_phase": "analyzer_v1",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "low",
+      "rationale": "A missing WHERE mutates every row -- large-scale silent corruption.",
+      "example_signal": "Signal: UPDATE/DELETE without a WHERE clause",
+      "recommended_fix": "Scope every UPDATE/DELETE with a precise WHERE; preview with a SELECT first.",
+      "related_concepts": [
+        "SC-045",
+        "SC-046"
+      ],
+      "promotion_status": "staged",
+      "severity": "error"
+    },
+    {
+      "id": "SARC-DML-IDEMPOTENT-01",
+      "name": "Append INSERT load where MERGE/replace (idempotent) is needed",
+      "category": "validation",
+      "future_phase": "human_guidance_only",
+      "detectability": "human_review",
+      "required_inputs": [
+        "sql_text",
+        "pipeline_metadata"
+      ],
+      "risk": "medium",
+      "rationale": "Append loads double rows/totals on re-run and break reconciliation.",
+      "example_signal": "Signal: Append INSERT load where MERGE/replace (idempotent) is needed",
+      "recommended_fix": "Load layers with MERGE/upsert or replace keyed on a unique business key so reloads are idempotent.",
+      "related_concepts": [
+        "SC-047",
+        "SC-032"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-DML-MULTIMATCH-01",
+      "name": "Update-from / MERGE source matches multiple rows per target key",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "schema_metadata",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "risk": "medium",
+      "rationale": "Multi-match makes the update nondeterministic or errors.",
+      "example_signal": "Signal: Update-from / MERGE source matches multiple rows per target key",
+      "recommended_fix": "Ensure the source is unique per target key (verify) or pre-aggregate before the update/merge.",
+      "related_concepts": [
+        "SC-045",
+        "SC-010"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-ROLLUP-01",
+      "name": "UNION of separate GROUP BY aggregations instead of ROLLUP/GROUPING SETS",
+      "category": "maintainability",
+      "future_phase": "analyzer_v2",
+      "detectability": "heuristic",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "high",
+      "rationale": "Hand-unioned aggregations are slow, verbose, and desync between levels.",
+      "example_signal": "Signal: UNION of separate GROUP BY aggregations instead of ROLLUP/GROUPING SETS",
+      "recommended_fix": "Compute multiple subtotal levels with one ROLLUP/CUBE/GROUPING SETS query.",
+      "related_concepts": [
+        "SC-051"
+      ],
+      "promotion_status": "staged",
+      "severity": "info"
+    },
+    {
+      "id": "SARC-GROUPINGFLAG-01",
+      "name": "ROLLUP/CUBE result without GROUPING() to flag subtotal rows",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "medium",
+      "rationale": "Subtotal NULLs are read as real categories or double-counted downstream.",
+      "example_signal": "Signal: ROLLUP/CUBE result without GROUPING() to flag subtotal rows",
+      "recommended_fix": "Use GROUPING(col) to distinguish subtotal/total rows from real NULL categories; filter subtotals before re-aggregating.",
+      "related_concepts": [
+        "SC-052"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-STR-NORMALIZE-01",
+      "name": "Join/GROUP BY on a raw text column without normalization",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "heuristic",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "risk": "high",
+      "rationale": "Case/whitespace variants split groups and miss matches -- silent count/reconciliation errors.",
+      "example_signal": "Signal: Join/GROUP BY on a raw text column without normalization",
+      "recommended_fix": "Canonicalize text keys (TRIM/UPPER/unaccent) before grouping/joining, or key on a surrogate.",
+      "related_concepts": [
+        "SC-054",
+        "SC-008"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-CAST-UNSAFE-01",
+      "name": "CAST of text to number/date without safe parsing",
+      "category": "correctness",
+      "future_phase": "analyzer_v1",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "medium",
+      "rationale": "One garbage value errors the load or silently mis-converts.",
+      "example_signal": "Signal: CAST of text to number/date without safe parsing",
+      "recommended_fix": "Use TRY_CAST or a pattern guard; quarantine unparseable values instead of hard-casting.",
+      "related_concepts": [
+        "SC-058",
+        "SC-008"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-CALENDAR-GEN-01",
+      "name": "Hardcoded date list instead of a generated calendar spine",
+      "category": "maintainability",
+      "future_phase": "analyzer_v2",
+      "detectability": "heuristic",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "high",
+      "rationale": "Hardcoded/implicit dates are brittle and let missing periods vanish.",
+      "example_signal": "Signal: Hardcoded date list instead of a generated calendar spine",
+      "recommended_fix": "Generate a contiguous calendar (recursive CTE / numbers table) and LEFT JOIN facts to it.",
+      "related_concepts": [
+        "SC-059",
+        "SC-023"
+      ],
+      "promotion_status": "staged",
+      "severity": "info"
+    },
+    {
+      "id": "SARC-OVERLAP-01",
+      "name": "Non-canonical interval-overlap boundary logic",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "medium",
+      "rationale": "Wrong boundary logic double-counts touching intervals or misses containment.",
+      "example_signal": "Signal: Non-canonical interval-overlap boundary logic",
+      "recommended_fix": "Use the canonical half-open overlap test: a_start < b_end AND b_start < a_end.",
+      "related_concepts": [
+        "SC-062",
+        "SC-024"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-RECURSE-GUARD-01",
+      "name": "Recursive CTE without a termination/cycle/depth guard",
+      "category": "correctness",
+      "future_phase": "analyzer_v1",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "low",
+      "rationale": "Missing guards cause infinite recursion on deep or cyclic data.",
+      "example_signal": "Signal: Recursive CTE without a termination/cycle/depth guard",
+      "recommended_fix": "Ensure the recursive member terminates; add a path-based cycle guard and a depth cap.",
+      "related_concepts": [
+        "SC-066",
+        "SC-067"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    },
+    {
+      "id": "SARC-METADATA-DRIFT-01",
+      "name": "Hardcoded table/column list instead of catalog-driven checks",
+      "category": "validation",
+      "future_phase": "human_guidance_only",
+      "detectability": "human_review",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "risk": "high",
+      "rationale": "Hand-listed schemas go stale; drift silently breaks checks or leaves blind spots.",
+      "example_signal": "Signal: Hardcoded table/column list instead of catalog-driven checks",
+      "recommended_fix": "Generate checks/profiles from information_schema; reconcile against expected schema to detect drift.",
+      "related_concepts": [
+        "SC-068",
+        "SC-069"
+      ],
+      "promotion_status": "staged",
+      "severity": "info"
+    },
+    {
+      "id": "SARC-GENSQL-INJECTION-01",
+      "name": "Generated SQL concatenates identifiers/literals without quoting",
+      "category": "correctness",
+      "future_phase": "analyzer_v2",
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "risk": "medium",
+      "rationale": "Unquoted concatenation produces broken or injectable SQL.",
+      "example_signal": "Signal: Generated SQL concatenates identifiers/literals without quoting",
+      "recommended_fix": "Quote identifiers (quote_ident) and escape literals (quote_literal) when generating SQL from metadata.",
+      "related_concepts": [
+        "SC-069"
+      ],
+      "promotion_status": "staged",
+      "severity": "warning"
+    }
+  ],
+  "promotion_readiness": {
+    "note": "Consolidated view (Slice 6). analyzer_v1 = static/low-FP, promotion targets after review; analyzer_v2 = needs AST/metadata, stay staged; human_guidance_only = judgment, never auto-enforced.",
+    "by_future_phase": {
+      "analyzer_v2": 23,
+      "analyzer_v1": 14,
+      "human_guidance_only": 10
+    },
+    "analyzer_v1_candidates": [
+      "SARC-CAST-UNSAFE-01",
+      "SARC-COUNT-01",
+      "SARC-CROSSJOIN-01",
+      "SARC-DATE-SARG-01",
+      "SARC-DML-NOFILTER-01",
+      "SARC-HAVING-01",
+      "SARC-LEFTFILTER-01",
+      "SARC-NOTIN-01",
+      "SARC-RECURSE-GUARD-01",
+      "SARC-SARG-01",
+      "SARC-SELECTSTAR-01",
+      "SARC-UNIONALL-01",
+      "SARC-WINDOW-LASTVAL-01",
+      "SARC-WINDOW-WHERE-01"
+    ],
+    "total": 47
+  },
+  "promotion_log": "2026-06-26 draft: 10 analyzer_v1 candidates promoted into sql-analyzer-rules.json (see promoted_to). Remaining staged: analyzer_v2 + human_guidance_only."
+}

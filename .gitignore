@@ -67,3 +67,6 @@ tools/powerbi-modeling-mcp/
 # + timestamp), regenerated on every run. The durable record is the hand-written
 # six-gate-verdict-*.md alongside it, which IS committed.
 specs/038-tabular-editor-bpa-adapter/evidence/smoke-*.md
+
+# Local git worktrees (isolated workspaces)
+.worktrees/
