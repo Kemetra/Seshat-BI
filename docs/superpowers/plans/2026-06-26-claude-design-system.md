@@ -50,8 +50,12 @@ MARKER = re.compile(
     r'<!--\s*@dsCard\s+group="[^"]+"\s+name="[^"]+"\s+'
     r'subtitle="[^"]+"\s+viewport="\d+x\d+"\s*-->'
 )
-# off-host: http(s) anywhere, or src/url/import pointing off the project
-OFFHOST = re.compile(r'https?://', re.I)
+# Off-host http(s) reference. The inline-SVG namespace http://www.w3.org/2000/svg
+# is NOT a network fetch (inline SVG in HTML needs no xmlns at all, but if one is
+# present it must not trip the gate), so exempt it explicitly.
+OFFHOST = re.compile(r'https?://(?!www\.w3\.org/)', re.I)
+# CSS may only reference project-relative siblings; a remote @import is the CSP trap.
+CSS_OFFHOST = re.compile(r'@import\s+url\(\s*[\'"]?https?://', re.I)
 FORBIDDEN_DATA = re.compile(r'\bC086\b|pharmacy', re.I)
 
 
@@ -69,12 +73,26 @@ def check_card(path: Path) -> list[str]:
     body = text.split("<body>", 1)[-1]
     if len(re.sub(r"<[^>]+>|\s", "", body)) < 40:
         issues.append("thin card -- body has < 40 chars of visible content")
+    if path.name == "brand-seven-star.html" and 'data-points="7"' not in text:
+        issues.append('seven-point star card must carry data-points="7" (visual-identity sec 3.1)')
+    return issues
+
+
+def check_css(path: Path) -> list[str]:
+    """CSS files: only the remote-@import CSP trap is checked (no marker/thin rules)."""
+    text = path.read_text(encoding="utf-8")
+    issues: list[str] = []
+    if CSS_OFFHOST.search(text) or OFFHOST.search(text):
+        issues.append("CSS references an external host (remote @import / url) -- CSP forbids it")
     return issues
 
 
 def main(argv: list[str]) -> int:
     root = Path(argv[1]) if len(argv) > 1 else Path(__file__).parent / "preview"
     cards = sorted(root.glob("*.html"))
+    # CSS the bundle depends on: the shared card CSS (in preview/) and the tokens
+    # file (in the parent dir) -- both are where the CSP @import trap would land.
+    css_files = sorted(root.glob("*.css")) + sorted(root.parent.glob("colors_and_type.css"))
     if not cards:
         print(f"[FAIL] no cards found in {root}")
         return 1
@@ -83,10 +101,14 @@ def main(argv: list[str]) -> int:
         for issue in check_card(c):
             print(f"[FAIL] {c.name}: {issue}")
             total_issues += 1
+    for f in css_files:
+        for issue in check_css(f):
+            print(f"[FAIL] {f.name}: {issue}")
+            total_issues += 1
     if total_issues:
-        print(f"[FAIL] {total_issues} issues across {len(cards)} cards")
+        print(f"[FAIL] {total_issues} issues across {len(cards)} cards + {len(css_files)} css")
         return 1
-    print(f"[OK] {len(cards)} cards")
+    print(f"[OK] {len(cards)} cards, {len(css_files)} css clean")
     return 0
 
 
@@ -94,12 +116,41 @@ if __name__ == "__main__":
     raise SystemExit(main(sys.argv))
 ```
 
-- [ ] **Step 2: Run it against the empty preview dir — verify it FAILS**
+Note: the `data-points="7"` star check moves INTO the validator from the start
+(Task 1), so Task 4 no longer modifies the validator — it just authors the star
+card that the existing check already gates.
+
+- [ ] **Step 2: Test the validator itself (it is the gate — prove its regex works) with one good + one bad fixture**
+
+Run this inline self-test (a throwaway temp dir; do not commit the fixtures):
+
+```bash
+python - <<'PY'
+import tempfile, pathlib, subprocess, sys
+v = "design/claude-design-system/validate_cards.py"
+good = ('<!doctype html>\n<!-- @dsCard group="G" name="N" subtitle="S" viewport="700x190" -->'
+        '<html><body><div>Enough visible content here to clear the thin-card floor easily.</div></body></html>')
+bad  = ('<!doctype html>\n<html><body><a href="https://evil.example">x</a></body></html>')  # no marker + off-host
+d = pathlib.Path(tempfile.mkdtemp()) / "preview"; d.mkdir()
+(d / "ok.html").write_text(good, encoding="utf-8")
+r = subprocess.run([sys.executable, v, str(d)], capture_output=True, text=True)
+assert r.returncode == 0, f"good card should PASS:\n{r.stdout}"
+(d / "broken.html").write_text(bad, encoding="utf-8")
+r = subprocess.run([sys.executable, v, str(d)], capture_output=True, text=True)
+assert r.returncode == 1 and "broken.html" in r.stdout, f"bad card should FAIL:\n{r.stdout}"
+print("[OK] validator self-test passed")
+PY
+```
+
+Expected: `[OK] validator self-test passed`. (Proves MARKER, OFFHOST, and thin
+checks actually fire — the gate is trustworthy before any real card depends on it.)
+
+- [ ] **Step 3: Run it against the empty preview dir — verify the no-cards guard**
 
 Run: `python design/claude-design-system/validate_cards.py design/claude-design-system/preview`
 Expected: `[FAIL] no cards found ...`, exit 1. (RED — no cards yet.)
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add design/claude-design-system/validate_cards.py
@@ -280,8 +331,10 @@ git -c commit.gpgsign=false commit -F <message-file>   # subject: "feat: brand t
     <div class="tile--dark tile" style="color:#F7F1E7">ivory on navy — 15.11 · <b style="color:#31C6C2">PASS</b></div>
     <div class="tile--dark tile" style="color:#C69214">gold on navy — 6.08 · <b style="color:#31C6C2">PASS</b></div>
     <div class="tile--dark tile" style="color:#0B9A9A">teal on navy — 4.93 · <b style="color:#31C6C2">PASS</b></div>
-    <div class="tile" style="color:#C69214">gold on ivory — 2.48 · <b style="color:#B23A3A">FAIL (accent only)</b></div>
-    <div class="tile" style="color:#0B9A9A">teal on ivory — 3.06 · <b style="color:#B5832A">large/heading only</b></div>
+    <!-- Labels are navy (accessible) with a small swatch; we DEMONSTRATE the bad pairing,
+         we do not RENDER text in it (gold-on-ivory text would itself be the bug). -->
+    <div class="tile" style="color:#001E35"><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#C69214;vertical-align:middle"></span> gold on ivory — 2.48 · <b style="color:#B23A3A">FAIL (accent only)</b></div>
+    <div class="tile" style="color:#001E35"><span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#0B9A9A;vertical-align:middle"></span> teal on ivory — 3.06 · <b style="color:#B5832A">large/heading only</b></div>
     <div class="tile" style="color:#001E35">navy on ivory — 15.11 · <b style="color:#2E7D5B">PASS</b></div>
   </div>
   <div class="muted">Rule: gold/teal are accent-on-dark. Never gold body text on a light surface.</div>
@@ -328,7 +381,7 @@ git -c commit.gpgsign=false commit -F <message-file>   # subject: "feat: brand t
 - [ ] **Step 5: Run validator — expect PASS for these 4 cards**
 
 Run: `python design/claude-design-system/validate_cards.py design/claude-design-system/preview`
-Expected: `[OK] 4 cards`, exit 0. (GREEN.) If any FAIL line appears, fix the named card and re-run.
+Expected: `[OK] 4 cards, 2 css clean`, exit 0. (GREEN.) If any FAIL line appears, fix the named card and re-run.
 
 - [ ] **Step 6: Commit**
 
@@ -345,26 +398,19 @@ git -c commit.gpgsign=false commit -F <message-file>   # subject: "feat: foundat
 - Create: `design/claude-design-system/preview/brand-seven-star.html`
 - Create: `design/claude-design-system/preview/brand-logo-system.html`
 - Create: `design/claude-design-system/preview/brand-dos-donts.html`
-- Modify: `design/claude-design-system/validate_cards.py` (add the seven-point-star check)
 
 **Interfaces:**
-- Consumes: `_card.css`, tokens.
-- Produces: three `group="Brand"` cards + a strengthened validator that asserts the star card declares exactly seven points.
+- Consumes: `_card.css`, tokens, and the `data-points="7"` star check already in the validator (added in Task 1 — this task does NOT modify the validator).
+- Produces: three `group="Brand"` cards.
 
-- [ ] **Step 1: Add the seven-point check to the validator (RED first — there is no star card yet, but the check targets the star filename).**
+- [ ] **Step 1: Write `brand-seven-star.html` — a true seven-point star as inline SVG, with `data-points="7"`, shown correct-vs-wrong.**
 
-In `validate_cards.py`, add inside `check_card`, before `return issues`:
-
-```python
-    if path.name == "brand-seven-star.html":
-        # the star is drawn as an inline SVG <polygon> with 7 points = 14 numbers,
-        # OR explicitly annotated. Require a data-points="7" attribute as the
-        # machine-checkable contract so a wrong star cannot pass silently.
-        if 'data-points="7"' not in text:
-            issues.append('seven-point star card must carry data-points="7" (visual-identity sec 3.1)')
-```
-
-- [ ] **Step 2: Write `brand-seven-star.html` — a true seven-point star as inline SVG, with `data-points="7"`, shown correct-vs-wrong.**
+The polygon points below were generated by construction (NOT hand-placed):
+outer radius 46, inner radius 20, 7 tips starting at top (-90°), inner vertices
+offset by half a step (360/14°), interleaved → exactly 14 vertex pairs. Do not
+add an `xmlns` to inline SVG — it is unnecessary and the validator treats a bare
+`http://` as an off-host reference (the w3.org namespace is exempted, but inline
+SVG simply needs no xmlns).
 
 ```html
 <!doctype html>
@@ -374,8 +420,8 @@ In `validate_cards.py`, add inside `check_card`, before `return issues`:
   <div class="row" style="gap:40px">
     <div class="col" style="align-items:center;gap:6px">
       <svg width="96" height="96" viewBox="-50 -50 100 100" aria-label="seven-point star">
-        <!-- 7 outer + 7 inner vertices, alternating; outer r=46, inner r=20 -->
-        <polygon fill="#C69214" points="0,-46 8.7,-18 43.8,-22.2 17.4,-6.2 28.8,33.2 0,12.5 -28.8,33.2 -17.4,-6.2 -43.8,-22.2 -8.7,-18 0,-46 8.9,-17.9 19.5,9.9 -19.5,9.9 -8.9,-17.9"/>
+        <!-- 14 vertices: tip,valley,tip,valley… outer r=46, inner r=20, computed -->
+        <polygon fill="#C69214" points="0.0,-46.0 8.7,-18.0 36.0,-28.7 19.5,-4.5 44.8,10.2 15.6,12.5 20.0,41.4 0.0,20.0 -20.0,41.4 -15.6,12.5 -44.8,10.2 -19.5,-4.5 -36.0,-28.7 -8.7,-18.0"/>
       </svg>
       <span class="mono" style="color:#2E7D5B">correct · 7 points</span>
     </div>
@@ -388,9 +434,12 @@ In `validate_cards.py`, add inside `check_card`, before `return issues`:
 </body></html>
 ```
 
-NOTE: the implementer MUST verify the polygon renders as a clean seven-point star in a browser before committing (the points above are a heptagram approximation; adjust vertices so all seven tips are visibly equal). The `data-points="7"` attribute is the machine contract; the visual is the human contract.
+Verify before committing: open in a browser and count seven equal tips; the
+right-side tip (vertex 3, `36.0,-28.7`) must be a real outer point, not collapsed
+inward. (A pentagram bug looks like 5 tips — if you see 5, the coordinates were
+altered.)
 
-- [ ] **Step 3: Write `brand-logo-system.html` — labeled layout slots (placeholder line-art per the taken default).**
+- [ ] **Step 2: Write `brand-logo-system.html` — labeled layout slots (placeholder line-art per the taken default).**
 
 ```html
 <!doctype html>
@@ -407,7 +456,7 @@ NOTE: the implementer MUST verify the polygon renders as a clean seven-point sta
 </body></html>
 ```
 
-- [ ] **Step 4: Write `brand-dos-donts.html` — the sec 3 non-negotiable rules.**
+- [ ] **Step 3: Write `brand-dos-donts.html` — the sec 3 non-negotiable rules.**
 
 ```html
 <!doctype html>
@@ -433,15 +482,15 @@ NOTE: the implementer MUST verify the polygon renders as a clean seven-point sta
 </body></html>
 ```
 
-- [ ] **Step 5: Run validator — expect PASS for all 7 cards**
+- [ ] **Step 4: Run validator — expect PASS for all 7 cards**
 
 Run: `python design/claude-design-system/validate_cards.py design/claude-design-system/preview`
-Expected: `[OK] 7 cards`, exit 0. (GREEN. If the star card lacks `data-points="7"`, it FAILS — fix and re-run.)
+Expected: `[OK] 7 cards, 2 css clean`, exit 0. (GREEN. If the star card lacks `data-points="7"`, it FAILS — fix and re-run.)
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add design/claude-design-system/preview/brand-*.html design/claude-design-system/validate_cards.py
+git add design/claude-design-system/preview/brand-*.html
 git -c commit.gpgsign=false commit -F <message-file>   # subject: "feat: brand cards (seven-point star, logo, do/dont)"
 ```
 
@@ -559,7 +608,7 @@ git -c commit.gpgsign=false commit -F <message-file>   # subject: "feat: brand c
 - [ ] **Step 6: Run validator — expect PASS for all 12 cards**
 
 Run: `python design/claude-design-system/validate_cards.py design/claude-design-system/preview`
-Expected: `[OK] 12 cards`, exit 0. (GREEN.)
+Expected: `[OK] 12 cards, 2 css clean`, exit 0. (GREEN.)
 
 - [ ] **Step 7: Commit**
 
@@ -669,7 +718,7 @@ committed **Seshat BI** brand (`docs/brand/visual-identity.md`).
 - [ ] **Step 5: Run validator — expect PASS for all 15 cards**
 
 Run: `python design/claude-design-system/validate_cards.py design/claude-design-system/preview`
-Expected: `[OK] 15 cards`, exit 0. (GREEN.)
+Expected: `[OK] 15 cards, 2 css clean`, exit 0. (GREEN.)
 
 - [ ] **Step 6: Commit**
 
@@ -687,7 +736,7 @@ git -c commit.gpgsign=false commit -F <message-file>   # subject: "feat: pattern
 - [ ] **Step 1: Full validator run + manual render spot-check**
 
 Run: `python design/claude-design-system/validate_cards.py design/claude-design-system/preview`
-Expected: `[OK] 15 cards`. Then open 3 cards (colors-brand, components-kpi-card, brand-seven-star) in a browser; confirm they render against `_card.css`, the star shows seven equal points, and no console request to an external host.
+Expected: `[OK] 15 cards, 2 css clean`. Then open 3 cards (colors-brand, components-kpi-card, brand-seven-star) in a browser; confirm they render against `_card.css`, the star shows seven equal points, and no console request to an external host.
 
 - [ ] **Step 2: Confirm the commit history is clean and CI-safe**
 
