@@ -31,4 +31,5 @@ mappings/
 - **Blanks:** [`../templates/`](../templates/) -- the generic templates to copy.
 - **Filled instance (narrated):** [`../docs/worked-examples/c086-pharmacy.md`](../docs/worked-examples/c086-pharmacy.md) -- what a complete set looks like (build half, to Gold).
 - **Full-spine instance (narrated):** [`../docs/worked-examples/retail-store-sales.md`](../docs/worked-examples/retail-store-sales.md) -- the second example, end to end through Dashboard Ready (+ Publish `warning`).
+- **All examples (index):** [`../docs/worked-examples/README.md`](../docs/worked-examples/README.md) -- compares the examples and says which to read when.
 - **The gate:** [`../docs/architecture/tower-bi-agent-kit.md`](../docs/architecture/tower-bi-agent-kit.md) Sec 5.
