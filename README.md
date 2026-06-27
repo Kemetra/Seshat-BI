@@ -334,6 +334,10 @@ Palette: `deep_navy #001E35` | `rich_gold #C69214` | `teal #0B9A9A` | `ivory #F7
 - Release notes: [`RELEASE_NOTES.md`](RELEASE_NOTES.md) -- and the v0.1 snapshot [`docs/releases/v0.1.md`](docs/releases/v0.1.md).
 - Local verification (mirrors CI intent): [`docs/quality/local-verification.md`](docs/quality/local-verification.md).
 - Guided demo (second worked example): [`docs/demo/retail-store-sales-demo.md`](docs/demo/retail-store-sales-demo.md).
+- Capability snapshot: [`docs/quality/post-idea-bank-capability-state.md`](docs/quality/post-idea-bank-capability-state.md) -- what works now / planned / forbidden / needs-ruling / needs-data, by layer.
+- Net Sales end-to-end trace (paper proof of one KPI path): [`docs/demo/net-sales-end-to-end-readiness-trace.md`](docs/demo/net-sales-end-to-end-readiness-trace.md).
+- Big Data strategy (scale is a condition, not a tool): [`docs/big-data/big-data-capability-report.md`](docs/big-data/big-data-capability-report.md) + the assessment templates [`docs/big-data/data-volume-assessment.md`](docs/big-data/data-volume-assessment.md).
+- Integration smoke test for the idea-bank features: [`docs/quality/top-idea-bank-integration-smoke-test.md`](docs/quality/top-idea-bank-integration-smoke-test.md).
 - Before a PR, `retail check` must pass and committed text must be ASCII / UTF-8
   without BOM.
 - License: Apache-2.0 (see [LICENSE](LICENSE)).

@@ -226,6 +226,26 @@ execution path.
 > rule set from 31 to **33** (the wiring test `EXPECTED_RULE_IDS` is the guard; both
 > emit zero findings on `main`). The DAX-governance L3 boundary is unchanged.
 
+## Post-integration stabilization phase -- SHIPPED (2026-06-28)
+
+A docs-only stabilization phase after the idea-bank sequence, planned in
+`docs/planning/post-integration-stabilization-plan.md` and gated on the
+integration smoke test. It adds **no runtime behaviour, no new rule, and no
+dependency** -- it summarizes the system, proves one KPI path on paper, and sets
+scale boundaries. Nothing here advances a readiness stage or grants an approval.
+
+| Order | Artifact | What shipped | PR / commit |
+|-------|----------|--------------|-------------|
+| 0 | Integration smoke test | `docs/quality/top-idea-bank-integration-smoke-test.md` -- verifies A1/B2/B1/F7/F8 cohere + governance alignment; docs-level PASS | #68 (`a002cea`) |
+| 1 | Capability state report | `docs/quality/post-idea-bank-capability-state.md` -- works-now / planned / forbidden / needs-ruling / needs-data, owns vs must-not-own by layer | #70 (`bdf2785`) |
+| 2 | Net Sales end-to-end trace | `docs/demo/net-sales-end-to-end-readiness-trace.md` -- one KPI path proven on paper (cites the real `NetSales` measure), proven vs needs-real-data split, no live-validation claim | #72 (`fed7e4f`) |
+| 3 | Big Data capability report | `docs/big-data/big-data-capability-report.md` -- Big Data is a scale/latency condition, not a tool; report-only, no platform adoption | #73 (`f438e17`) |
+| 4 | Data volume assessment templates | `docs/big-data/data-volume-assessment.md` + `templates/data-volume-profile.md` + `templates/large-source-profile.md` + `checklists/large-source-review-checklist.md` -- verdicts `LOCAL_OK`/`WAREHOUSE_RECOMMENDED`/`SCALE_REVIEW_REQUIRED`/`BLOCKED` (statuses, never a score) | #74 (`3cd5ffe`) |
+
+> Big Data remains **report/template-only**: no Spark/Fabric/Databricks/Snowflake/
+> BigQuery adoption, no `analytics-scale-knowledge`, no dependency -- scale tooling
+> waits on a measured assessment and a human ruling.
+
 ## Hard design rules (non-negotiable, gate the sequence)
 
 These are the ordering constraints the roadmap encodes. They reinforce the
