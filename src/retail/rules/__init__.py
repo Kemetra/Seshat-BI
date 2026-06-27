@@ -15,9 +15,10 @@ from . import (  # noqa: F401  (imported for side effects)
     dax,
     g6,
     git_meta,
+    never_execute,
     pbir,
     routes,
     sql,
 )
 
-__all__ = ["dax", "g6", "git_meta", "pbir", "routes", "sql"]
+__all__ = ["dax", "g6", "git_meta", "never_execute", "pbir", "routes", "sql"]

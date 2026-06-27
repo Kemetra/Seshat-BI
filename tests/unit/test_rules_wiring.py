@@ -63,6 +63,7 @@ EXPECTED_RULE_IDS = frozenset(
         "D11",  # TMDL/DAX hygiene: every measure documented (///)
         "R1",  # PBIR
         "A1",  # route registry: every route target resolves or is marked planned
+        "B1",  # never-execute: no module-scope DB/network import in the static core
         "C1",
         "C2",  # connection/secrets
         "G1",
