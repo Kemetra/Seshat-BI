@@ -11,6 +11,13 @@ that is the *only* wiring step required for new rules to be discovered.
 from __future__ import annotations
 
 # Side-effecting imports: each module registers its rules on import.
-from . import dax, g6, git_meta, pbir, sql  # noqa: F401  (imported for side effects)
+from . import (  # noqa: F401  (imported for side effects)
+    dax,
+    g6,
+    git_meta,
+    pbir,
+    routes,
+    sql,
+)
 
-__all__ = ["dax", "g6", "git_meta", "pbir", "sql"]
+__all__ = ["dax", "g6", "git_meta", "pbir", "routes", "sql"]

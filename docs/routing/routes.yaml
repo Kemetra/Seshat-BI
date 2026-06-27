@@ -1,0 +1,212 @@
+# Route registry — machine-checkable knowledge-routing manifest (A1)
+#
+# This file makes the two-hop routing contract VERIFIABLE. Each route mirrors a
+# row of `docs/knowledge-map.md` "Route by task" (and the COMPASS fast-routing
+# table). The A1 rule (`src/retail/rules/routes.py`) reads this manifest and
+# fails the gate when a route's contract is broken.
+#
+# Contract per route:
+#   id      — the knowledge-map task number (stable handle).
+#   task    — the task label, copied from the knowledge map (human reference).
+#   targets — the repo-relative POSIX path(s) the route opens first. A two-hop
+#             knowledge route lists its SKILL.md then INDEX.md.
+#   status  — built | planned.
+#               built   -> EVERY target must be a tracked file.
+#               planned -> the target is deferred; NO target may resolve yet
+#                          (a resolving "planned" target is a stale marker).
+#
+# This manifest resolves references only. It NEVER executes anything: A1 is a
+# read-only static check, consistent with the "knowledge/reasoning layers never
+# execute" invariant.
+#
+# When you add, move, or build a routed file, update the matching route here in
+# the SAME change — the A1 gate is the guard that keeps routing honest.
+
+routes:
+  # --- Readiness routes -----------------------------------------------------
+  - id: "1"
+    task: "Source onboarding"
+    targets:
+      - "docs/readiness/readiness-model.md"
+    status: built
+  - id: "2"
+    task: "Source profiling"
+    targets:
+      - "docs/readiness/source-ready.md"
+    status: built
+  - id: "3"
+    task: "Source mapping"
+    targets:
+      - "docs/readiness/mapping-ready.md"
+    status: built
+  - id: "4"
+    task: "Grain detection"
+    targets:
+      - "docs/readiness/mapping-ready.md"
+    status: built
+  - id: "5"
+    task: "Mapping diff / mapping review"
+    targets:
+      - "docs/readiness/mapping-ready.md"
+    status: built
+
+  # --- SQL knowledge (two-hop: SKILL.md -> INDEX.md) ------------------------
+  - id: "6"
+    task: "SQL validation"
+    targets:
+      - "skills/bi-sql-knowledge/SKILL.md"
+      - "skills/bi-sql-knowledge/INDEX.md"
+    status: built
+  - id: "7"
+    task: "SQL reconciliation"
+    targets:
+      - "skills/bi-sql-knowledge/SKILL.md"
+      - "skills/bi-sql-knowledge/INDEX.md"
+    status: built
+  - id: "8"
+    task: "Silver/gold SQL transformation"
+    targets:
+      - "skills/bi-sql-knowledge/SKILL.md"
+      - "skills/bi-sql-knowledge/INDEX.md"
+    status: built
+  - id: "9"
+    task: "SQL anti-pattern review"
+    targets:
+      - "skills/bi-sql-knowledge/INDEX.md"
+    status: built
+
+  # --- DAX knowledge (two-hop) ----------------------------------------------
+  - id: "10"
+    task: "DAX measure generation"
+    targets:
+      - "skills/bi-dax-knowledge/SKILL.md"
+      - "skills/bi-dax-knowledge/INDEX.md"
+    status: built
+  - id: "11"
+    task: "DAX measure review"
+    targets:
+      - "skills/bi-dax-knowledge/SKILL.md"
+      - "skills/bi-dax-knowledge/INDEX.md"
+    status: built
+
+  # --- Retail KPI knowledge (business meaning — first stop) -----------------
+  - id: "12"
+    task: "Metric contract definition (business meaning)"
+    targets:
+      - "skills/retail-kpi-knowledge/SKILL.md"
+      - "skills/retail-kpi-knowledge/INDEX.md"
+      - "skills/retail-kpi-knowledge/checklists/metric-contract-review-checklist.md"
+    status: built
+  - id: "12a"
+    task: "KPI additivity / grain / ambiguity"
+    targets:
+      - "skills/retail-kpi-knowledge/SKILL.md"
+      - "skills/retail-kpi-knowledge/INDEX.md"
+    status: built
+  - id: "12b"
+    task: "KPI-pack selection (MVP / first dashboard)"
+    targets:
+      - "skills/retail-kpi-knowledge/INDEX.md"
+      - "skills/retail-kpi-knowledge/checklists/kpi-pack-review-checklist.md"
+    status: built
+  - id: "12c"
+    task: "Measure generation for a ready business contract"
+    targets:
+      - "skills/bi-dax-knowledge/INDEX.md"
+    status: built
+
+  # --- Semantic model readiness (DAX + Readiness) ---------------------------
+  - id: "13"
+    task: "Semantic model readiness"
+    targets:
+      - "skills/bi-dax-knowledge/INDEX.md"
+      - "docs/readiness/semantic-model-ready.md"
+    status: built
+
+  # --- Python knowledge (single-node) ---------------------------------------
+  - id: "14"
+    task: "Python cleaning / standardization review"
+    targets:
+      - "skills/bi-python-knowledge/SKILL.md"
+      - "skills/bi-python-knowledge/INDEX.md"
+    status: built
+  - id: "15"
+    task: "Python aggregation / groupby grain review"
+    targets:
+      - "skills/bi-python-knowledge/SKILL.md"
+      - "skills/bi-python-knowledge/INDEX.md"
+      - "skills/bi-python-knowledge/checklists/aggregation-grain-checklist.md"
+    status: built
+  - id: "16"
+    task: "Python / pandas dataframe pipeline review"
+    targets:
+      - "skills/bi-python-knowledge/SKILL.md"
+      - "skills/bi-python-knowledge/INDEX.md"
+    status: built
+  - id: "17"
+    task: "Python source-prep reasoning"
+    targets:
+      - "skills/bi-python-knowledge/SKILL.md"
+      - "skills/bi-python-knowledge/INDEX.md"
+    status: built
+
+  # --- Big-data knowledge (distributed / scale-out) -------------------------
+  - id: "17a"
+    task: "Decide whether to scale out / choose a compute engine"
+    targets:
+      - "skills/bi-bigdata-knowledge/SKILL.md"
+      - "skills/bi-bigdata-knowledge/INDEX.md"
+      - "skills/bi-bigdata-knowledge/checklists/engine-selection-checklist.md"
+    status: built
+  - id: "17b"
+    task: "Distributed partitioning / shuffle / skew / large joins"
+    targets:
+      - "skills/bi-bigdata-knowledge/SKILL.md"
+      - "skills/bi-bigdata-knowledge/INDEX.md"
+    status: built
+  - id: "17c"
+    task: "Aggregate at grain over very large data / incremental / formats"
+    targets:
+      - "skills/bi-bigdata-knowledge/INDEX.md"
+    status: built
+  - id: "17d"
+    task: "Distributed pipeline review / validation at scale / cost-perf"
+    targets:
+      - "skills/bi-bigdata-knowledge/SKILL.md"
+      - "skills/bi-bigdata-knowledge/INDEX.md"
+    status: built
+
+  # --- Dashboard design -----------------------------------------------------
+  - id: "18"
+    task: "Dashboard design"
+    targets:
+      - ".claude/skills/powerbi-dashboard-design/SKILL.md"
+    status: built
+
+  # --- Readiness control room / handoff -------------------------------------
+  - id: "19"
+    task: "Data quality control room"
+    targets:
+      - "docs/readiness/readiness-model.md"
+    status: built
+  - id: "20"
+    task: "BI handoff pack"
+    targets:
+      - "docs/readiness/publish-ready.md"
+    status: built
+
+  # --- Power BI execution adapter (gated / deferred) ------------------------
+  - id: "21"
+    task: "Power BI execution adapter (F016)"
+    # F016 is execution-only and gated; no adapter file exists yet. The route
+    # currently terminates at the roadmap with a blocked verdict.
+    targets:
+      - "docs/roadmap/roadmap.md"
+    status: built
+
+  # --- Compass fallback -----------------------------------------------------
+  - id: "22"
+    task: "Unknown / ambiguous request"
+    targets:
+      - "COMPASS.md"
+    status: built

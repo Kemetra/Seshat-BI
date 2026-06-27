@@ -62,6 +62,7 @@ EXPECTED_RULE_IDS = frozenset(
         "D10",  # TMDL/DAX hygiene: no FILTER(ALL(...)) anti-pattern
         "D11",  # TMDL/DAX hygiene: every measure documented (///)
         "R1",  # PBIR
+        "A1",  # route registry: every route target resolves or is marked planned
         "C1",
         "C2",  # connection/secrets
         "G1",
