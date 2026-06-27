@@ -20,7 +20,8 @@ target deferred · resolve **[planned]** routes by returning a planned/deferred 
 | Write a brand-new KPI contract | `references/metric-contract-template.md` | metric-contract-review-checklist |
 | Prepare DAX handoff (measure) | relevant `contracts/*.md` + `references/metric-contract-template.md` | handoff note to DAX (formula, additivity, filters — not DAX code) |
 | Prepare SQL handoff (required fields, grain, transform, reconciliation) | relevant `contracts/*.md` + `references/source-field-requirements.md` | handoff note to SQL (fields, grain, exclusions, validation — not SQL code) |
-| Prepare Python handoff (source-prep) | relevant `contracts/*.md` + `references/source-field-requirements.md` | handoff note to Python (required fields + dtype/quality assumptions — not Python code) |
+| Prepare Python handoff (single-node source-prep) | relevant `contracts/*.md` + `references/source-field-requirements.md` | handoff note to Python (required fields + dtype/quality assumptions — not Python code) |
+| Prepare Big-data handoff (distributed / at-scale aggregation & reconciliation) | relevant `contracts/*.md` + `references/source-field-requirements.md` | handoff note to Big-data (required fields, grain + additivity for distributed aggregation, scale reconciliation checks — not job code; only when too large for single-node) |
 | Confirm required source fields | `references/source-field-requirements.md` | metric-contract-review-checklist |
 
 ## 2. Symptom routes

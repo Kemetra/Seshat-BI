@@ -44,13 +44,14 @@ exist.]
 **Validation checks**
 [Reconciliation to source, sample spot-checks, bound checks, empty-period behaviour.]
 
-**Implementation handoff notes (SQL / DAX / Python)**
-[The same payload feeds all three implementation layers, each taking its slice:
+**Implementation handoff notes (SQL / DAX / Python / Big-data)**
+[The same payload feeds all four implementation layers, each taking its slice:
 SQL — required fields, grain, filters/exclusions, validation/reconciliation (+ it owns the
 physical field binding); DAX — business formula, additivity, filter rules; Python —
-required fields + their dtype/quality assumptions for source-prep. List the
-fact/dimension fields, grain, additivity, filter rules, and open ambiguities. No
-SQL/DAX/Python code.]
+required fields + their dtype/quality assumptions for single-node source-prep; Big-data —
+required fields, grain + additivity for distributed aggregation and scale reconciliation,
+*only when too large for single-node*. List the fact/dimension fields, grain, additivity,
+filter rules, and open ambiguities. No SQL/DAX/Python/job code.]
 
 **Dashboard use**
 [Which pages/tiles would use it.]

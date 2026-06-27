@@ -18,7 +18,7 @@ any required item is **not** ready for handoff and is **not** dashboard-ready.
 - [ ] **Ambiguity checked** — every relevant item from `knowledge/kpi-ambiguities.md`
       either resolved (with the deciding owner) or flagged Needs business definition.
 - [ ] **Validation checks listed** — at least one reconciliation and one sanity/bound check.
-- [ ] **Implementation handoff ready (SQL / DAX / Python)** — handoff notes state the
+- [ ] **Implementation handoff ready (SQL / DAX / Python / Big-data)** — handoff notes state the
       fact/dimension fields, grain, additivity, filters, and open ambiguities for the
       implementation layers (SQL: fields/grain/transform/reconciliation; DAX: the measure;
       Python: source-prep of the required fields).
@@ -33,5 +33,5 @@ any required item is **not** ready for handoff and is **not** dashboard-ready.
 
 ## Verdict
 
-Record one of: **Ready for implementation handoff (SQL / DAX / Python)** · **Planned** ·
+Record one of: **Ready for implementation handoff (SQL / DAX / Python / Big-data)** · **Planned** ·
 **Needs business definition (blocked on: …)**.

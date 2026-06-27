@@ -1,0 +1,91 @@
+{
+  "$schema_note": "Recommended distributed BI design patterns (positive counterparts to the anti-patterns). Each is a default approach an agent should reach for. IDs reference best practices (BD-BP-*) and concepts (BD-CN-*, PY-*).",
+  "version": "1.0.0",
+  "slice_origin": "BD Slice 10",
+  "patterns": [
+    {
+      "id": "BD-PAT-001",
+      "name": "Single-node first",
+      "do": "Estimate post-pruning size; if it fits one machine (Polars/DuckDB) or a warehouse pushdown, do not scale out.",
+      "guards_against": ["BD-AP-001"],
+      "refs": ["BD-CN-021", "BD-CN-022", "BD-BP-003"]
+    },
+    {
+      "id": "BD-PAT-002",
+      "name": "Broadcast the small dimension",
+      "do": "Broadcast small dims (products/stores) against large facts to avoid shuffling the fact.",
+      "guards_against": ["BD-AP-006"],
+      "refs": ["BD-CN-035", "BD-BP-004"]
+    },
+    {
+      "id": "BD-PAT-003",
+      "name": "Pre-aggregate the many-side before join",
+      "do": "Aggregate the one-to-many side to the join grain first; fixes fan-out and shuffle blow-up.",
+      "guards_against": ["BD-AP-011"],
+      "refs": ["BD-CN-009", "PY-CN-051"]
+    },
+    {
+      "id": "BD-PAT-004",
+      "name": "Filter and project early",
+      "do": "Push row filters and column selection before every wide step; verify pruning in the plan.",
+      "guards_against": ["BD-AP-004", "BD-AP-009"],
+      "refs": ["BD-CN-028", "BD-CN-076", "BD-CN-032"]
+    },
+    {
+      "id": "BD-PAT-005",
+      "name": "Let AQE handle common skew; salt the rest",
+      "do": "Enable AQE skew-join and coalescing; salt only known hot keys AQE/broadcast can't resolve.",
+      "guards_against": ["BD-AP-007"],
+      "refs": ["BD-CN-029", "BD-CN-039", "BD-BP-005"]
+    },
+    {
+      "id": "BD-PAT-006",
+      "name": "Additive partial aggregation",
+      "do": "Express aggregations to allow map-side combine; recompute non-additive measures at grain.",
+      "guards_against": ["BD-AP-013"],
+      "refs": ["BD-CN-043", "BD-CN-044"]
+    },
+    {
+      "id": "BD-PAT-007",
+      "name": "Choose exact vs approximate distinct deliberately",
+      "do": "Use approx-distinct for tolerant trends; exact for financial reconciliation; label which.",
+      "guards_against": ["BD-AP-012"],
+      "refs": ["BD-CN-045", "BD-BP-006"]
+    },
+    {
+      "id": "BD-PAT-008",
+      "name": "Columnar + table format storage",
+      "do": "Store analytical data as partitioned Parquet, or Delta/Iceberg when updates/evolution/ACID are needed.",
+      "guards_against": ["BD-AP-010"],
+      "refs": ["BD-CN-050", "BD-CN-053"]
+    },
+    {
+      "id": "BD-PAT-009",
+      "name": "Idempotent incremental writes with late-data lookback",
+      "do": "Partition-overwrite or merge-on-key; process only the changed slice; reprocess a late-data lookback window idempotently.",
+      "guards_against": ["BD-AP-015", "BD-AP-016", "BD-AP-017"],
+      "refs": ["BD-CN-058", "BD-CN-059", "BD-CN-060", "BD-BP-007"]
+    },
+    {
+      "id": "BD-PAT-010",
+      "name": "Reconcile by distributed control totals; hand off to gate",
+      "do": "Compute additive control totals distributed at each stage; record evidence; hand to readiness/SQL gate, never self-approve.",
+      "guards_against": ["BD-AP-018", "BD-AP-019", "BD-AP-020"],
+      "refs": ["BD-CN-064", "BD-CN-069", "PY-CN-068"]
+    },
+    {
+      "id": "BD-PAT-011",
+      "name": "Inspect distributed, never collect to driver",
+      "do": "Use aggregates, limit+sample, and the job UI to inspect; collect only small bounded results.",
+      "guards_against": ["BD-AP-005"],
+      "refs": ["BD-CN-010", "BD-CN-073"]
+    },
+    {
+      "id": "BD-PAT-012",
+      "name": "Diagnose to fast-enough-and-cheap-enough",
+      "do": "Read plan + job UI, fix the dominant cost, re-measure time and cost, stop at budget.",
+      "guards_against": ["BD-AP-014"],
+      "refs": ["BD-CN-071", "BD-CN-077", "BD-CN-078"]
+    }
+  ]
+}

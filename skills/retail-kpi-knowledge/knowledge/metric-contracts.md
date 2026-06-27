@@ -32,7 +32,7 @@ Every contract in `contracts/` uses this fixed structure:
 - Interpretation
 - Common mistakes
 - Validation checks
-- Implementation handoff notes (SQL / DAX / Python)
+- Implementation handoff notes (SQL / DAX / Python / Big-data)
 - Dashboard use
 - Priority
 - Owner
@@ -47,9 +47,9 @@ The canonical blank is `references/metric-contract-template.md`.
 - **Needs business definition** — a required policy (VAT, returns, cost method,
   same-store, snapshot date) is unresolved; the KPI is blocked until the owner decides.
 
-## Handoff to implementation (SQL / DAX / Python)
+## Handoff to implementation (SQL / DAX / Python / Big-data)
 
-A contract does not feed only DAX. The same governed contract hands off to **all three**
+A contract does not feed only DAX. The same governed contract hands off to **all four**
 implementation layers, each consuming the slice it owns. This layer provides the meaning;
 it never writes the code.
 
@@ -58,6 +58,7 @@ it never writes the code.
 | **SQL knowledge** (`skills/bi-sql-knowledge/`) | required fields, grain, filters/exclusions, validation/reconciliation checks | the physical source binding, silver/gold transform logic, reconciliation queries |
 | **DAX knowledge** (`skills/bi-dax-knowledge/`) | business-terms formula, additivity call, filter/exclusion rules, recommended dimensions | the measure, filter context, relationships, semantic-model prerequisites |
 | **Python knowledge** (`skills/bi-python-knowledge/`) | required fields + their dtypes/quality assumptions, grain for any pre-aggregation | dataframe source-prep, cleaning/standardization, dtype decisions |
+| **Big-data knowledge** (`skills/bi-bigdata-knowledge/`) | required fields, grain + additivity (for distributed aggregation), validation/reconciliation checks (run at scale) | engine selection, partitioning/shuffle, skew, distributed aggregation, scale reconciliation — *only when the data is too large for single-node Python* |
 
 Every handoff carries the same core payload:
 

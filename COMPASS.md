@@ -43,9 +43,10 @@ Stages:
 | Source profiling | `docs/readiness/readiness-model.md` + `docs/knowledge-map.md` | source profile |
 | Source mapping / grain / PII / unresolved questions | `docs/readiness/readiness-model.md` + `docs/knowledge-map.md` | source map + unresolved questions |
 | SQL validation / SQL reconciliation / transformation logic | `skills/bi-sql-knowledge/SKILL.md` then `skills/bi-sql-knowledge/INDEX.md` | SQL validation / reconciliation checklist |
-| KPI business meaning / metric-contract definition / additivity / grain / ambiguity / KPI-pack selection | `skills/retail-kpi-knowledge/SKILL.md` then `skills/retail-kpi-knowledge/INDEX.md` | metric contract (business meaning) + implementation handoff note (SQL / DAX / Python) |
+| KPI business meaning / metric-contract definition / additivity / grain / ambiguity / KPI-pack selection | `skills/retail-kpi-knowledge/SKILL.md` then `skills/retail-kpi-knowledge/INDEX.md` | metric contract (business meaning) + implementation handoff note (SQL / DAX / Python / Big-data) |
 | DAX / measure generation / measure review / semantic-model prerequisites (after the business contract is ready) | `skills/bi-dax-knowledge/SKILL.md` then `skills/bi-dax-knowledge/INDEX.md` | generated/reviewed measure + semantic-model handoff |
-| Python / pandas / dataframe source-prep reasoning, cleaning, aggregation-grain review | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | cleaning / aggregation-grain review artifact (planned routes deferred) |
+| Python / pandas / dataframe source-prep reasoning, cleaning, aggregation-grain review (single-node) | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | cleaning / aggregation-grain review artifact (planned routes deferred) |
+| Big-data / distributed / larger-than-memory: engine selection, partitioning/shuffle, skew, distributed joins/aggregation, file formats, incremental, scale validation | `skills/bi-bigdata-knowledge/SKILL.md` then `skills/bi-bigdata-knowledge/INDEX.md` | engine-selection / partitioning / join-skew / pipeline-review / validation checklist or verdict |
 | Dashboard / visual design / audience / layout | `.claude/skills/powerbi-dashboard-design/` (gated "design from contracts" verb: `.claude/skills/dashboard-design/`) | dashboard blueprint |
 | Power BI execution / publish | STOP unless `semantic_model_ready` and publish gates have passed | blocked verdict or BI handoff pack |
 | Unknown or ambiguous task | `docs/knowledge-map.md` | clarifying question or blocked verdict |
@@ -61,10 +62,11 @@ they never run a query, run DAX, run Python, or touch a database.
 
 | Skill | Foundation concept | Use for |
 |---|---|---|
-| `skills/retail-kpi-knowledge/` | **business KPI meaning** + metric contracts | defining a KPI in business terms, additivity/grain classification, ambiguity resolution (gross vs net, VAT, returns, cost method, same-store), required-field lists, KPI-pack selection, implementation handoff prep for SQL / DAX / Python (*initial seed*) |
+| `skills/retail-kpi-knowledge/` | **business KPI meaning** + metric contracts | defining a KPI in business terms, additivity/grain classification, ambiguity resolution (gross vs net, VAT, returns, cost method, same-store), required-field lists, KPI-pack selection, implementation handoff prep for SQL / DAX / Python / Big-data (*initial seed*) |
 | `skills/bi-sql-knowledge/` | **table grain** + aggregation correctness | source profiling, grain/keys/uniqueness, joins & fan-out, COUNT/NULL semantics, dedup, validation & reconciliation queries, silver/gold transform logic, SQL anti-patterns |
 | `skills/bi-dax-knowledge/` | **filter context** + context transition | measure generation/review, time-intelligence, ranking/segmentation, semantic-model prerequisites, DAX performance (implements a business contract from `retail-kpi-knowledge`) |
 | `skills/bi-python-knowledge/` | **dataframe grain** + source-prep reasoning | pandas/dataframe source-prep reasoning, cleaning/standardization review, aggregation-grain review, Python BI analyzer candidates, reasoning training/eval seed (*initial seed*) |
+| `skills/bi-bigdata-knowledge/` | **execution topology** (single-node → distributed) | engine selection (Spark/Dask/Polars/DuckDB/warehouse), partitioning/shuffle/skew, distributed joins & aggregation, file/table formats (Parquet/Delta/Iceberg), incremental/idempotent processing, validation & cost at scale; the scale-out sibling of bi-python (borrows its grain/additivity spine, owns only the distributed twist) |
 
 Mandatory flow inside any of these skills: **`SKILL.md` → `INDEX.md` → ONLY the file(s)
 the route names → an artifact** (checklist, metric/validation contract, or
@@ -85,6 +87,27 @@ routes remain deferred until implemented.
 This layer is reasoning/review only. It does not execute Python, define metrics,
 approve readiness gates, replace SQL/DAX, or own dashboard design.
 
+### BI Big-data knowledge (scale-out sibling of bi-python)
+
+Use `skills/bi-bigdata-knowledge/SKILL.md` when the data is **too large for single-node
+pandas** and the task is about *distributed or larger-than-memory execution*: choosing an
+engine (Spark / Dask / Polars / DuckDB / push-down to the warehouse), controlling
+partitioning and shuffle, avoiding skew and fan-out at scale, aggregating at a declared
+grain over very large data, choosing a file/table format (Parquet / Delta / Iceberg),
+incremental/idempotent processing, validating/reconciling at scale, or diagnosing
+performance/cost. Route through `skills/bi-bigdata-knowledge/INDEX.md`; end on an
+engine-selection / partitioning / join-skew / pipeline-review / validation checklist.
+
+It is the scale-out companion to `bi-python-knowledge`: the shared spine (grain, fan-out,
+additivity, null semantics, reconciliation) is **borrowed by `PY-` ID, not repeated** (see
+its `references/cross-layer-map.md`); this layer owns only what changes when compute becomes
+distributed. The single most important call it makes is often *"don't scale out — push this
+heavy join/aggregation down to the SQL/warehouse layer"* — a boundary call, not a failure.
+
+This layer is reasoning/review only. It does not run jobs, define metric meaning (that is
+`retail-kpi-knowledge`), write SQL/DAX, approve readiness gates, or design dashboards. Stop
+and route to `bi-python-knowledge` if the honest answer is "this fits on one machine".
+
 ### Retail KPI knowledge (business meaning — first stop for metric definition)
 
 Use `skills/retail-kpi-knowledge/SKILL.md` whenever the task is *what a retail KPI
@@ -99,9 +122,11 @@ same-store), or choosing an MVP KPI pack. Route through
 This is the **first stop** for metric-contract definition. A completed business
 contract then hands off to **whichever layer implements its slice** — `skills/bi-sql-knowledge/`
 for required fields, grain, transform and reconciliation; `skills/bi-dax-knowledge/` for the
-measure and semantic-model prerequisites; `skills/bi-python-knowledge/` for source-prep
-(dtypes/cleaning of the required fields). Those layers implement meaning, they do not
-redefine it. Treat this layer as an **initial seed**: 10 live metric contracts; the
+measure and semantic-model prerequisites; `skills/bi-python-knowledge/` for single-node
+source-prep (dtypes/cleaning of the required fields); `skills/bi-bigdata-knowledge/` for
+distributed / at-scale aggregation and reconciliation when the data is too large for a
+single node. Those layers implement meaning, they do not redefine it. Treat this layer as
+an **initial seed**: 10 live metric contracts; the
 KPIs named in `patterns/metric-contract-candidates.json` are planned/deferred and
 their routes return a planned note, never a fabricated contract.
 

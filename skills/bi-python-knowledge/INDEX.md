@@ -15,6 +15,13 @@ the named artifact. Do not pre-load the whole `knowledge/` directory.
 > fields + dtype/quality assumptions here for source-prep. If a request is really "what
 > does this KPI mean", route to `skills/retail-kpi-knowledge/` first — do not infer the
 > KPI's meaning from column names in Python.
+>
+> **Scale boundary — distributed work lives in the sibling layer.** This layer is
+> **single-node** pandas. If the data is too large for one machine (it spills, OOMs, or the
+> job is about partitioning/shuffle/skew/distributed joins/Spark/Dask), route to
+> `skills/bi-bigdata-knowledge/` — the scale-out sibling that borrows this layer's
+> grain/additivity spine and owns the distributed twist. Single-node first; scale out only
+> when genuinely needed.
 
 ---
 

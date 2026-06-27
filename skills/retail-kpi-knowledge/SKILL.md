@@ -40,7 +40,8 @@ The agent needs to:
 - choose an MVP KPI pack for a first dashboard
 - detect ambiguous or dangerous KPI meaning (gross vs net, VAT, returns, cost method)
 - prepare a handoff to an implementation layer (SQL for fields/grain/transform, DAX for
-  the measure, Python for source-prep)
+  the measure, Python for single-node source-prep, Big-data for distributed/at-scale
+  aggregation & reconciliation)
 
 ## Do not use when
 
