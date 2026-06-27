@@ -49,6 +49,16 @@ retail semantic-check --repo .
 - `retail semantic-check --repo .` reports contract-vs-measure drift (no drift =
   clean).
 
+> [!NOTE]
+> **Known P2 finding on the current tree.** `retail check`'s P2 rule scans the
+> recent commit range (`HEAD~20..HEAD`) and currently flags two pre-existing
+> nonconforming commit subjects -- `Add agent compass and knowledge router (#48)`
+> and `Add BI DAX knowledge skill v0.2 (#42)` -- so on a clean checkout of `main`
+> the gate exits `1` for that reason. This is a recorded, known condition that
+> predates this release, not a fresh failure. Do not record `retail check` as
+> exiting cleanly while those two historical subjects are in range; the remaining
+> surfaces in the sequence above exit cleanly.
+
 ## 5. Optional DB / live validation path
 
 These run only when a real database connection is configured (the driver import

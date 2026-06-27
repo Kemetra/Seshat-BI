@@ -74,6 +74,13 @@ retail check
 retail semantic-check --repo .
 ```
 
+> [!NOTE]
+> On the current `main`, `retail check` exits `1` because its P2 rule scans the
+> recent commit range (`HEAD~20..HEAD`) and flags two pre-existing nonconforming
+> commit subjects (#48, #42) that predate this release -- a known, recorded
+> condition, not a regression from this pack. The other surfaces above exit
+> cleanly. See [`docs/quality/local-verification.md`](docs/quality/local-verification.md).
+
 A full local-verification checklist (including the optional DB/live path) is in
 [`docs/quality/local-verification.md`](docs/quality/local-verification.md).
 
