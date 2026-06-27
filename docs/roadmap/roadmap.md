@@ -14,7 +14,10 @@
   follow-on (L4 value proxy) shipped 2026-06-26 (`retail value-check`); the
   `$$`-tokenizer fix and the F038 BPA spike shipped; the pbi-tools extract spike and
   the L3 new predicate ops were assessed and DEFERRED for want of a consumer/target
-  (see `docs/superpowers/specs/`). This doc records what was delivered, the one
+  (see `docs/superpowers/specs/`). Additionally, the **idea-bank execution sequence
+  (A1/B2/B1/F7/F8) SHIPPED 2026-06-27** (PRs #62-#66) -- five gated items drawn from
+  the exploratory idea bank; A1 + B1 take the static `retail check` gate to 33 rules
+  (see the Idea-Bank section below). This doc records what was delivered, the one
   original feature still parked, and the companion tier's true state.
 - **Product identity:** **Seshat BI** is the product (package alias `Seshat_BI`;
   previously developed under the internal name *Tower BI Agent Kit*). The
@@ -53,7 +56,8 @@ for any deferred/gated item).
   toolchain (pbi-tools) or a real predicate consumer (L3) appears.
 
 > The kit already ships an agent-first constitution, a source-mapping gate, the
-> Spec-Kit foundation, the C086 worked example, a 31-rule static `retail check`,
+> Spec-Kit foundation, the C086 worked example, a 33-rule static `retail check`
+> (31 from the original sequence + A1/B1 from the idea-bank sequence),
 > and a `retail validate` live surface. This roadmap reconciles that foundation
 > (feature 001-004 + the orchestration/builder slices) with the readiness
 > direction: every future feature advances one **readiness stage**.
@@ -198,6 +202,30 @@ sequences before it or assumes it exists.
 > here: 0008 (F024), 0009 (F029), 0010 (F030), 0011 (F031) -- shipped ADRs are
 > 0001-0007 and are never reused.
 
+## Idea-Bank execution sequence (A1/B2/B1/F7/F8) -- SHIPPED (2026-06-27)
+
+A separate, gated five-PR sequence taken from the **idea bank**
+(`docs/roadmap/idea-backlog.md`) via the approved plan
+(`docs/planning/top-idea-bank-execution-plan.md`). The idea bank remains
+exploratory; selection there was not a commitment -- each item still passed the
+normal feature discipline (small PR, one family, review, CI green) before
+shipping. All five are now **merged to `main`** (PRs #62-#66). Two add static
+`retail check` rules (A1, B1); three are docs/CLI surface (B2, F7, F8). None
+advances a readiness stage, grants an approval, or touches the gated F016
+execution path.
+
+| Idea | Name | Layer | What shipped | PR / commit |
+|------|------|-------|--------------|-------------|
+| **A1** | Route Registry Manifest | 1 (routing integrity) | `docs/routing/routes.yaml` (mirrors the knowledge-map routes 1-22) + static rule **A1** (`src/retail/rules/routes.py`): a `built` route target must resolve to a tracked file; a `planned` target must not yet exist (stale marker) -- honest both directions, read-only, lazy `yaml`. | #62 (`abbbd73`) |
+| **B2** | Structured Findings Output | 4 (observability) | `retail check --format {text,json}`; default text output preserved **byte-for-byte** (proven by diff vs `main`); opt-in `run_json()` emits `{"findings":[...],"exit_code":N}`; `Finding.to_dict()` + `FindingDict`. No rule behavior changed. | #63 (`ca1431c`) |
+| **B1** | Never-Execute Invariant Guard | 4 (invariant protection) | Static rule **B1** (`src/retail/rules/never_execute.py`): stdlib-`ast` scan of the static-core modules (cli/runner/core/registry/rules) for a **module-scope** DB/network import (psycopg2, requests, socket, http, urllib.request, ...). Lazy in-handler imports stay allowed; `urllib.parse` allowed; an unparseable module fails loud. Never opens a connection. | #64 (`9d12589`) |
+| **F7** | KPI Decision-Question Index | 5 (KPI usability) | A "Decision questions this domain answers" section in all 11 `skills/retail-kpi-knowledge/domains/*.md`; each question routes to a real `contracts/*.md` (Seeded) or an honest `--`/Planned marker. Pure docs in the KPI meaning layer; no contract meaning changed. | #65 (`ae471aa`) |
+| **F8** | KPI Coverage Scorecard | 5 (analytical coverage) | A per-table coverage scorecard template (`skills/retail-kpi-knowledge/references/kpi-coverage-scorecard-template.md`): coverage as explicit **status + named blocker** (Covered / Blocked -- missing field / Blocked -- needs business definition / Planned / Out of scope), **never a numeric score** (hard rule #9); Covered requires contract Seeded AND fields present; grants no readiness. | #66 (`9d782f8`) |
+
+> **Effect on the static gate:** A1 and B1 take the registered `retail check`
+> rule set from 31 to **33** (the wiring test `EXPECTED_RULE_IDS` is the guard; both
+> emit zero findings on `main`). The DAX-governance L3 boundary is unchanged.
+
 ## Hard design rules (non-negotiable, gate the sequence)
 
 These are the ordering constraints the roadmap encodes. They reinforce the
@@ -231,7 +259,8 @@ existing constitution (Principles I, IV, V, VIII), they do not replace it:
   ERP connector, and fully automated mapping approval.
 - The shipped F005-F015 slices are docs/skills/templates (agent-first, hard rule
   #8); they added NO new `retail check` rule (the static gate was 27 rules at that
-  slice; it is now 31 after S8 + D9-D11 + G6) and
+  slice; it grew to 31 after S8 + D9-D11 + G6, and then to **33** after the
+  idea-bank A1 + B1 rules -- see the Idea-Bank execution sequence above) and
   NO new runtime validator beyond the already-shipped `retail check` / `retail
   validate`. Each shipped feature has its own spec under `specs/`.
 
