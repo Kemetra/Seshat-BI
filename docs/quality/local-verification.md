@@ -58,6 +58,11 @@ retail semantic-check --repo .
 > predates this release, not a fresh failure. Do not record `retail check` as
 > exiting cleanly while those two historical subjects are in range; the remaining
 > surfaces in the sequence above exit cleanly.
+>
+> `HEAD~20..HEAD` is the **local fallback** range only. CI passes an explicit
+> `--commit-range` (such as `origin/main..HEAD`), so the gate scopes to the PR's
+> own commits and is not tripped by these older subjects -- which is why the CI
+> `check` job can be green while a bare local `retail check` exits `1`.
 
 ## 5. Optional DB / live validation path
 
