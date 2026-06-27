@@ -15,6 +15,64 @@ What it lacks is a single, legible answer to "where is this table, and what is
 the one next thing allowed?" The readiness spine is that answer -- a **state
 model**, not a new gate. It turns the existing gates into a tracked sequence.
 
+## The spine at a glance (diagram)
+
+The seven stages, the gate enforced on each transition, and the **human-approval seams**
+(the agent never self-grants these -- Principle V). A stage is entered only when the prior
+stage is `pass`. Four stages require a named-human approval recorded in `approvals[]`
+(highlighted); `Silver Ready` and `Gold Ready` are mechanical gates with no stage
+approval.
+
+```mermaid
+flowchart TD
+    S1["1 - Source Ready<br/>a profiled, understood source exists"]
+    S2["2 - Mapping Ready<br/>grain / PK / PII mapped + reviewed"]
+    S3["3 - Silver Ready<br/>typed / cleaned silver, statically clean"]
+    S4["4 - Gold Ready<br/>Kimball star, live-validated"]
+    S5["5 - Semantic Model Ready<br/>metric contracts + governed PBIP model"]
+    S6["6 - Dashboard Ready<br/>design bound to approved contracts"]
+    S7["7 - Publish Ready<br/>handoff pack complete + approved"]
+    F16["F016 - Power BI execution adapter<br/>materialize / publish (DEFERRED, gated, last)"]
+
+    S1 -->|"source-mapping gate (HUMAN approval)"| S2
+    S2 -->|"retail check (static gate)"| S3
+    S3 -->|"retail validate (live gate)"| S4
+    S4 -->|"contracts owner-approved + retail-semantic-check"| S5
+    S5 -->|"design review sign-off: no contract = no visual"| S6
+    S6 -->|"handoff review + publish approval (HUMAN)"| S7
+    S5 -.->|"gated on semantic-model readiness (hard rule #6); execution-only"| F16
+
+    classDef human fill:#fde68a,stroke:#b45309,color:#000;
+    classDef gated fill:#e5e7eb,stroke:#6b7280,color:#000,stroke-dasharray:5 5;
+    class S2,S5,S6,S7 human;
+    class F16 gated;
+```
+
+> The highlighted stages each require a **named-human approval** the agent cannot grant
+> for itself, recorded in `approvals[]`: `Mapping Ready` (mandatory gate sign-off),
+> `Semantic Model Ready` (metric owner approves the contracts), `Dashboard Ready` (report
+> owner signs off the visual->contract binding), and `Publish Ready` (data-owner/governance
+> publish approval). `Silver Ready` and `Gold Ready` are mechanical gates (`retail check` /
+> `retail validate`) with no stage approval. `Source Ready` additionally needs the data
+> owner to confirm the proposed semantics + any PII ruling before it is `pass`. `F016` is
+> the deliberately-last, execution-only Power BI adapter -- gated on Semantic Model Ready,
+> a prerequisite of no stage (it materializes/publishes an already-approved model; it
+> cannot define meaning).
+
+Each stage's status is one of four values; `blocked` stops the next stage, `warning` does
+not:
+
+```mermaid
+stateDiagram-v2
+    [*] --> not_started
+    not_started --> blocked: required artifact / check / approval missing
+    not_started --> warning: advanced, with a non-fatal issue recorded
+    not_started --> pass: all required artifacts + checks + approvals
+    blocked --> pass: blocker resolved
+    warning --> pass: issue cleared / deviation accepted
+    pass --> [*]: prior stage pass -> next stage may begin
+```
+
 ## The state model
 
 Each source/table/report carries a **readiness status** (see
