@@ -7,7 +7,7 @@ from pathlib import Path
 import retail.rules  # noqa: F401  (import for side effects: fires every @register)
 
 from .registry import all_rules
-from .runner import build_context, run
+from .runner import build_context, run, run_json
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -37,6 +37,17 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="PATH",
         help="commit-msg-hook mode: file holding the incoming commit message (P2).",
+    )
+    check.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("text", "json"),
+        default="text",
+        help=(
+            "findings output format. 'text' (default) is the human-readable "
+            "[severity] id message (locator) lines, unchanged. 'json' emits one "
+            "structured document for tooling; the exit code is identical."
+        ),
     )
 
     # LIVE validators (feature 004). Needs a running DB + the optional `db` extra
@@ -174,6 +185,9 @@ def main(argv: list[str] | None = None) -> int:
             commit_range=args.commit_range,
             commit_message=commit_message,
         )
+        # Default 'text' calls the unchanged run(); 'json' is the opt-in path.
+        if args.output_format == "json":
+            return run_json(all_rules(), ctx)
         return run(all_rules(), ctx)
 
     if args.command == "validate":

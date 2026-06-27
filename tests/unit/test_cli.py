@@ -48,3 +48,69 @@ def test_check_returns_1_when_a_rule_errors(tmp_path):
 def test_no_subcommand_returns_2(capsys):
     # argparse error path: missing required subcommand.
     assert cli.main([]) == 2
+
+
+@pytest.mark.unit
+def test_check_default_format_is_text_and_unchanged(tmp_path, capsys):
+    # B2 backward-compat guard: `check` with NO --format must produce the exact
+    # legacy text line, byte-for-byte. A regression here breaks existing consumers.
+    _init_repo(tmp_path)
+    from retail.core import Finding, RuleContext, Severity
+
+    @registry.register("E9", "always errors")
+    def boom(ctx: RuleContext):
+        return [Finding("E9", Severity.ERROR, "nope", "a.sql:1")]
+
+    code = cli.main(["check", "--repo", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert code == 1
+    assert out == "[error] E9 nope (a.sql:1)\n"
+
+
+@pytest.mark.unit
+def test_check_format_text_explicit_equals_default(tmp_path, capsys):
+    # --format text is identical to omitting the flag.
+    _init_repo(tmp_path)
+    from retail.core import Finding, RuleContext, Severity
+
+    @registry.register("E9", "always errors")
+    def boom(ctx: RuleContext):
+        return [Finding("E9", Severity.ERROR, "nope", "a.sql:1")]
+
+    assert cli.main(["check", "--repo", str(tmp_path), "--format", "text"]) == 1
+    assert capsys.readouterr().out == "[error] E9 nope (a.sql:1)\n"
+
+
+@pytest.mark.unit
+def test_check_format_json_emits_structured_output(tmp_path, capsys):
+    import json
+
+    _init_repo(tmp_path)
+    from retail.core import Finding, RuleContext, Severity
+
+    @registry.register("E9", "always errors")
+    def boom(ctx: RuleContext):
+        return [Finding("E9", Severity.ERROR, "nope", "a.sql:1")]
+
+    code = cli.main(["check", "--repo", str(tmp_path), "--format", "json"])
+    assert code == 1
+    doc = json.loads(capsys.readouterr().out)
+    # Exact match: the test registers exactly one rule with exactly one finding.
+    assert doc == {
+        "findings": [
+            {
+                "rule_id": "E9",
+                "severity": "error",
+                "message": "nope",
+                "locator": "a.sql:1",
+            }
+        ],
+        "exit_code": 1,
+    }
+
+
+@pytest.mark.unit
+def test_check_rejects_unknown_format(tmp_path):
+    # argparse rejects an out-of-choices --format value with exit 2.
+    _init_repo(tmp_path)
+    assert cli.main(["check", "--repo", str(tmp_path), "--format", "xml"]) == 2

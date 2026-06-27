@@ -3,7 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Callable, Iterable
+from typing import Callable, Iterable, TypedDict
+
+
+class FindingDict(TypedDict):
+    """Serialized shape of a :class:`Finding` (the ``check --format json`` payload)."""
+
+    rule_id: str
+    severity: str
+    message: str
+    locator: str
 
 
 class Severity(str, Enum):
@@ -18,6 +27,19 @@ class Finding:
     severity: Severity
     message: str
     locator: str
+
+    def to_dict(self) -> FindingDict:
+        """Plain-dict view for structured (JSON) output.
+
+        Severity is rendered as its string value (``"error"`` / ``"warning"`` /
+        ``"info"``) so the JSON round-trips to the same Severity via the enum.
+        """
+        return {
+            "rule_id": self.rule_id,
+            "severity": self.severity.value,
+            "message": self.message,
+            "locator": self.locator,
+        }
 
 
 @dataclass(frozen=True)

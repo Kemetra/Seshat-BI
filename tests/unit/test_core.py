@@ -14,6 +14,28 @@ def test_severity_values():
 
 
 @pytest.mark.unit
+def test_finding_to_dict_renders_severity_as_value():
+    f = Finding("D8", Severity.ERROR, "boom", "f.tmdl:3")
+    assert f.to_dict() == {
+        "rule_id": "D8",
+        "severity": "error",
+        "message": "boom",
+        "locator": "f.tmdl:3",
+    }
+
+
+@pytest.mark.unit
+def test_finding_to_dict_round_trips_via_severity_enum():
+    # The "error" string must reconstruct the same Severity (JSON round-trip).
+    f = Finding("W1", Severity.WARNING, "heads up", "f.sql:2")
+    d = f.to_dict()
+    assert Severity(d["severity"]) is Severity.WARNING
+    assert (
+        Finding(d["rule_id"], Severity(d["severity"]), d["message"], d["locator"]) == f
+    )
+
+
+@pytest.mark.unit
 def test_finding_is_frozen_dataclass():
     f = Finding(
         rule_id="D8",

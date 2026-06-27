@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from retail.core import Finding, RegisteredRule, RuleContext, Severity
-from retail.runner import build_context, run
+from retail.runner import build_context, run, run_json
 
 
 def _ctx() -> RuleContext:
@@ -47,6 +47,94 @@ def test_run_exits_0_when_no_findings_at_all(capsys):
 
     rules = (RegisteredRule(id="C0", rule=clean, title="clean"),)
     assert run(rules, _ctx()) == 0
+
+
+@pytest.mark.unit
+def test_run_json_emits_parseable_document_and_matches_findings(capsys):
+    import json
+
+    def bad(ctx: RuleContext):
+        return [Finding("E1", Severity.ERROR, "boom", "f.sql:1")]
+
+    def warn(ctx: RuleContext):
+        return [Finding("W1", Severity.WARNING, "heads up", "f.sql:2")]
+
+    rules = (
+        RegisteredRule(id="E1", rule=bad, title="bad"),
+        RegisteredRule(id="W1", rule=warn, title="warn"),
+    )
+    code = run_json(rules, _ctx())
+    assert code == 1  # an ERROR is present
+
+    doc = json.loads(capsys.readouterr().out)
+    assert doc["exit_code"] == 1
+    assert doc["findings"] == [
+        {"rule_id": "E1", "severity": "error", "message": "boom", "locator": "f.sql:1"},
+        {
+            "rule_id": "W1",
+            "severity": "warning",
+            "message": "heads up",
+            "locator": "f.sql:2",
+        },
+    ]
+
+
+@pytest.mark.unit
+def test_run_json_preserves_within_rule_finding_order(capsys):
+    import json
+
+    # A single rule yielding multiple findings -> JSON array keeps yield order.
+    def multi(ctx: RuleContext):
+        return [
+            Finding("M1", Severity.INFO, "first", "f:1"),
+            Finding("M1", Severity.ERROR, "second", "f:2"),
+            Finding("M1", Severity.WARNING, "third", "f:3"),
+        ]
+
+    rules = (RegisteredRule(id="M1", rule=multi, title="multi"),)
+    assert run_json(rules, _ctx()) == 1  # an ERROR is present
+    doc = json.loads(capsys.readouterr().out)
+    assert [f["message"] for f in doc["findings"]] == ["first", "second", "third"]
+
+
+@pytest.mark.unit
+def test_run_json_warning_only_exit_0_with_findings_present(capsys):
+    import json
+
+    # run and run_json agree on exit code, AND the JSON document lists the warning.
+    def warn(ctx: RuleContext):
+        return [Finding("W1", Severity.WARNING, "heads up", "f.sql:2")]
+
+    rules = (RegisteredRule(id="W1", rule=warn, title="warn"),)
+    text_code = run(rules, _ctx())
+    capsys.readouterr()  # drain the text output
+    json_code = run_json(rules, _ctx())
+    doc = json.loads(capsys.readouterr().out)
+    assert text_code == json_code == 0  # WARNING only -> 0
+    assert doc == {
+        "findings": [
+            {
+                "rule_id": "W1",
+                "severity": "warning",
+                "message": "heads up",
+                "locator": "f.sql:2",
+            }
+        ],
+        "exit_code": 0,
+    }
+
+
+@pytest.mark.unit
+def test_run_json_empty_findings(capsys):
+    import json
+
+    def clean(ctx: RuleContext):
+        return ()
+
+    rules = (RegisteredRule(id="C0", rule=clean, title="clean"),)
+    assert run_json(rules, _ctx()) == 0
+    doc = json.loads(capsys.readouterr().out)
+    assert doc == {"findings": [], "exit_code": 0}
 
 
 @pytest.mark.unit

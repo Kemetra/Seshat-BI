@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -64,11 +65,53 @@ def _format(finding: Finding) -> str:
     )
 
 
+def _collect(rules: tuple[RegisteredRule, ...], ctx: RuleContext) -> list[Finding]:
+    """Run every rule once and gather findings in rule order, for ``run_json``.
+
+    This is a fresh invocation of every rule (``run`` invokes them separately and
+    inline). Rules are pure by contract (``core.Rule``: "context in, findings out,
+    no side effects"), so a second invocation yields the same findings — that purity
+    is what keeps the text and JSON outputs in agreement.
+    """
+    return [finding for registered in rules for finding in registered.rule(ctx)]
+
+
+def _exit_code(findings: list[Finding]) -> int:
+    """1 if any ERROR finding is present, else 0 (WARNING/INFO never fail)."""
+    return 1 if any(f.severity is Severity.ERROR for f in findings) else 0
+
+
 def run(rules: tuple[RegisteredRule, ...], ctx: RuleContext) -> int:
+    """Default human-readable output: one ``_format`` line per finding.
+
+    This is the default ``retail check`` output and its text shape is a contract
+    (CI diffs against it). It iterates inline rather than reusing ``_collect`` so
+    its behavior stays exactly what it was before B2; the JSON output is a
+    SEPARATE path (``run_json``).
+    """
     exit_code = 0
     for registered in rules:
         for finding in registered.rule(ctx):
             print(_format(finding))
             if finding.severity is Severity.ERROR:
                 exit_code = 1
+    return exit_code
+
+
+def run_json(rules: tuple[RegisteredRule, ...], ctx: RuleContext) -> int:
+    """Opt-in structured output: one JSON document of all findings on stdout.
+
+    Prints a single object ``{"findings": [...], "exit_code": N}`` so a consumer
+    can parse the result without scraping the text lines. Returns the SAME exit
+    code as ``run`` (1 iff any ERROR finding). Rule behavior is unchanged — only
+    the rendering differs.
+    """
+    findings = _collect(rules, ctx)
+    exit_code = _exit_code(findings)
+    print(
+        json.dumps(
+            {"findings": [f.to_dict() for f in findings], "exit_code": exit_code},
+            indent=2,
+        )
+    )
     return exit_code
