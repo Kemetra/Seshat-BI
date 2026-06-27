@@ -95,12 +95,12 @@ idempotent migration · **RC14** Kimball star + `-1` member · **RC15** contiguo
 
 The static rules, by family. The **live registry in `src/retail/rules/` is the
 authoritative list and count**; the `retail-govern` skill maps each id to its fix. (`S4`
-is split into `S4a`/`S4b`; `D10` is intentionally unused.)
+is split into `S4a`/`S4b`, so the letter ids span `D1`-`D11` with the `S4a`/`S4b` pair.)
 
 | Family | Layer it guards | Rules |
 |--------|-----------------|-------|
 | **S** | SQL / migrations | `S1` snake_case identifiers · `S2` medallion schema names · `S3` `vw_` prefix on views · `S4a` migration filename + numbering · `S4b` migration guard form (layer-aware) · `S5` type discipline (RC7) · `S6` gold dim `-1` unknown member (RC14) · `S7` contiguous date dim (RC15) · `S8` marked date table has no `-1`/NULL member |
-| **D** | DAX / TMDL semantic model | `D1` PascalCase measure names · `D2` displayFolder required · `D3` no duplicated measure logic · `D4` use `DIVIDE()` not `/` · `D5` prefer explicit measures (WARN) · `D6` no bidirectional relationships · `D7` time-intelligence needs a date-table marker · `D8` partitions source from `gold` only · `D9` no hardcoded date literals in measures · `D11` each measure needs a `///` doc comment |
+| **D** | DAX / TMDL semantic model | `D1` PascalCase measure names · `D2` displayFolder required · `D3` no duplicated measure logic · `D4` use `DIVIDE()` not `/` · `D5` prefer explicit measures (WARN) · `D6` no bidirectional relationships · `D7` time-intelligence needs a date-table marker · `D8` partitions source from `gold` only · `D9` no hardcoded date literals in measures · `D10` no `FILTER(ALL/ALLSELECTED/ALLEXCEPT(...))` full-table-scan anti-pattern · `D11` each measure needs a `///` doc comment |
 | **C** | connection / secrets | `C1` connection uses parameter identifiers, not string literals · `C2` no committed secrets |
 | **R** | PBIR report | `R1` PBIR model reference must be relative |
 | **G** | git / project hygiene | `G1` `.gitignore` correctness · `G2` definition artifacts committed · `G3` UTF-8 without BOM · `G4` `.gitattributes` EOL policy · `G5` Windows MAX_PATH discipline · `G6` no real host/value in committed PBIP parameters |
