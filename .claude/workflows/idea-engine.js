@@ -4,6 +4,7 @@ export const meta = {
   whenToUse: 'When you want a deep, exhaustive, rigorously vetted idea bank for the project. All-Opus, xhigh effort, multi-round -- thorough and heavy (many agents/tokens/time). Re-runnable; pass args to focus a theme. Output is an idea bank, never a plan.',
   phases: [
     { title: 'Ground',         detail: '5 subsystem explorers map the repo in parallel; JS merge + reconcile-verify', model: 'opus' },
+    { title: 'Memory',         detail: 'read prior bank + Ground ship-status: label shipped/settled ideas (no re-litigation)', model: 'opus' },
     { title: 'Generate',       detail: 'creative / BI / technical lenses propose in parallel (round 1)', model: 'opus' },
     { title: 'Cross-pollinate',detail: 'each lens reacts to the others; surface cross-disciplinary ideas', model: 'opus' },
     { title: 'Completeness',   detail: 'critic finds blind spots -> one more targeted generation pass', model: 'opus' },
@@ -321,6 +322,89 @@ function renderMap(m) {
 }
 const exploreMap = renderMap(explore)
 
+// ===================== 1b. MEMORY (read prior bank; do NOT re-read git) =====================
+// History-aware: the engine reads its prior output + Ground's verified ship-status so it
+// stops regenerating ideas that already SHIPPED and stops re-litigating settled REJECTs.
+// It LABELS and de-emphasizes; it never deletes a genuinely-new idea (that carve-out lives
+// in the panel). Memory consumes Ground's ship_status -- it does NOT read git itself
+// (single owner of ship-status = Ground), and it never writes the roadmap (no auto-promote).
+phase('Memory')
+const MEMORY_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['prior_ideas', 'git_corroborated', 'notes'],
+  properties: {
+    prior_ideas: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['prior_id', 'prior_title', 'prior_verdict', 'current_state', 'verdict_citation', 'state_citation'],
+        properties: {
+          prior_id: { type: 'string', description: 'the prior heading id, e.g. A1, F6' },
+          prior_title: { type: 'string' },
+          prior_verdict: { type: 'string', enum: ['ADOPT', 'CONSIDER', 'PARK', 'REJECT', 'UNKNOWN'] },
+          current_state: { type: 'string', enum: ['shipped', 'rejected-settled', 'open'] },
+          verdict_citation: { type: 'string', description: 'verbatim heading line + the section header it sits under' },
+          state_citation: { type: 'string', description: 'Ground ship_status row / PR / file, or "none-found"' },
+        },
+      },
+    },
+    git_corroborated: { type: 'boolean', description: 'always false here -- Ground owns git; recorded for honesty' },
+    notes: { type: 'string' },
+  },
+}
+// Ground's verified ship-status, compacted for the memory reader (its sole state source).
+const shipStatusForMemory = JSON.stringify(
+  (explore && Array.isArray(explore.ship_status) ? explore.ship_status : [])
+    .map(r => ({ feature_id: r.feature_id, status: r.status, evidence_path: r.evidence_path })),
+  null, 2
+)
+const memory = await agent(
+  `${PROJECT}
+
+YOU ARE THE MEMORY READER for Seshat BI. You do NOT propose ideas. You read the prior idea bank
+and label each prior idea with its CURRENT state, so this run does not regenerate shipped work or
+re-litigate settled rejections. You are given Ground's VERIFIED ship-status table -- that is your
+authoritative source for what shipped. Do NOT re-read git (Ground owns that).
+
+STEPS:
+1. Read the prior bank at ${REPO}/docs/roadmap/idea-backlog.md from disk. If it does not exist or
+   has no idea headings, return prior_ideas: [] and say so in notes (a first run is normal).
+2. Parse each idea heading (e.g. "### A1. Machine-Checkable Route Registry"). For EACH: capture
+   prior_id, prior_title, the verdict SECTION it sits under (## ADOPT/CONSIDER/PARK/REJECT) as
+   prior_verdict, and -- as verdict_citation -- the VERBATIM heading line plus the verbatim section
+   header, so any misparse is a quotable artifact a human can catch.
+3. Set current_state by matching the idea against Ground's ship_status:
+   - "shipped" ONLY if a ship_status row marks an equivalent capability SHIPPED -- cite that row
+     (feature_id + evidence_path) in state_citation.
+   - "rejected-settled" if the prior verdict was REJECT/INELIGIBLE and nothing changed -- cite the
+     prior rationale line.
+   - "open" otherwise. If you cannot back a shipped/settled claim with a citation, it is "open".
+4. NEVER guess that something shipped. No citation -> open. git_corroborated is always false
+   (Ground owns git). You never execute anything and you never write the roadmap.
+
+=== GROUND VERIFIED SHIP-STATUS (your only state source) ===
+${shipStatusForMemory}`,
+  { label: 'memory:read-prior', phase: 'Memory', schema: MEMORY_SCHEMA, ...SCOUT }
+)
+
+// Rendered ledger injected into the generation + review prompts. Lists shipped + settled
+// so lenses don't re-propose them as new (but MAY extend, if materially different).
+function renderMemoryLine(mem) {
+  const prior = (mem && Array.isArray(mem.prior_ideas)) ? mem.prior_ideas : []
+  const shipped = prior.filter(p => p.current_state === 'shipped')
+  const settled = prior.filter(p => p.current_state === 'rejected-settled')
+  if (!shipped.length && !settled.length) return ''  // first run / nothing to remember
+  const fmt = arr => arr.map(p => `${p.prior_id} ${p.prior_title}`).join('; ')
+  const parts = ['\n=== KNOWN HISTORY (do NOT re-propose as new) ===']
+  if (shipped.length) parts.push(`ALREADY SHIPPED (cite + extend only if materially different): ${fmt(shipped)}.`)
+  if (settled.length) parts.push(`REJECTED-as-settled (do not re-litigate unless materially new -- and say how it differs): ${fmt(settled)}.`)
+  parts.push('You MAY propose in the same area ONLY IF materially different (new mechanism/seam/value), and you MUST state how it differs. Do not pad the list by restating shipped work.')
+  return parts.join('\n')
+}
+const MEMORY_LINE = renderMemoryLine(memory)
+
 // ===================== 2. GENERATE (round 1) =====================
 phase('Generate')
 const LENSES = [
@@ -329,7 +413,7 @@ const LENSES = [
   { key: 'technical',label: 'gen:technical', role: `a PROFESSIONAL TECHNICAL ARCHITECT lens. Generate ideas that strengthen the system -- architecture, testing/CI gates, performance, the router/two-hop contract, knowledge-layer tooling, drift/reconciliation, adapter design, observability, agent-eval harnesses. Buildable in-repo.` },
 ]
 function genPrompt(role, extra='') {
-  return `You are ${role}\nGenerate 6-8 ideas for Seshat BI. Each MUST respect the hard principles (no executor, no gate bypass, generic-only, no fabricated confidence). Mix NOW and HORIZON. ${extra}\n\n=== REPO MAP ===\n${exploreMap}`
+  return `You are ${role}\nGenerate 6-8 ideas for Seshat BI. Each MUST respect the hard principles (no executor, no gate bypass, generic-only, no fabricated confidence). Mix NOW and HORIZON. ${extra}${MEMORY_LINE}\n\n=== REPO MAP ===\n${exploreMap}`
 }
 const round1 = await parallel(LENSES.map(l => () =>
   agent(genPrompt(l.role), { label: `${l.label}:r1`, phase: 'Generate', schema: IDEA_SCHEMA, ...SCOUT })
@@ -377,6 +461,10 @@ const synthesis = await agent(
 - Keep each idea's title, pitch, horizon, why_it_fits, rough_shape, source_lens(es).
 - Do NOT score (the reviewer does). Do NOT invent new ideas; only merge/clarify.
 - Flag any idea that might violate a hard principle (the reviewer rules).
+- If a candidate matches a prior idea KNOWN to have SHIPPED (see history below), KEEP it but
+  tag it "prior_state: shipped" with the citation -- do NOT drop it (a materially-new variant
+  and the convergence signal both matter). Dropping would hide a genuine extension.
+${MEMORY_LINE}
 
 === REPO MAP ===\n${exploreMap}\n\n=== ALL RAW IDEAS (JSON) ===\n${JSON.stringify(allIdeas, null, 2)}
 
@@ -511,26 +599,36 @@ function renderIdea(i) {
   return lines.join('\n')
 }
 
-// renderBacklog: deterministic. `prior` is RESERVED (ignored) until PR4 (cross-run
-// memory) populates a SHIPPED/SETTLED appendix; matching prior ideas is a Memory
-// concern -- title is NOT a reliable cross-run join key, so no matcher is built here.
+// renderBacklog: deterministic. `prior` is the Memory object (PR4); when present its
+// shipped/settled prior ideas are rendered as a SHIPPED / SETTLED appendix so the live
+// ADOPT/CONSIDER/PARK/REJECT body stays about OPEN ideas. Matching is read from Memory's
+// own citations -- title is NOT a reliable cross-run join key, so no fuzzy matcher here.
 function renderBacklog(review, opts) {
   const ideas = (review && Array.isArray(review.scored_ideas)) ? review.scored_ideas : []
   const { v, h } = tally(ideas)
   const dateLine = opts.date ? `Generated on ${opts.date}.` : 'Generated on (date pending).'
   const rawN = opts.rawCount, scoredM = ideas.length, rounds = opts.rounds
 
+  // History-aware contract (the run is now memory-aware; see PR4). Still an idea BANK,
+  // never a roadmap: a SHIPPED tag only records a human already took an equivalent idea
+  // through the normal process -- the engine never promotes anything itself.
   const HEADER = [
     '# Seshat BI -- Idea Bank',
     '',
     '> **This is a future-idea bank, not a roadmap and not a commitment.** Nothing here is',
     '> planned, scheduled, or approved. It is exploratory brainstorming output to browse for',
-    '> inspiration. The authoritative roadmap is `docs/roadmap/roadmap.md` (F-numbered features);',
-    '> the "verdicts" and scores below are an automated reviewer\'s opinion to help triage *what',
-    '> might be worth a closer look later* -- they do not promote anything into the roadmap. An',
-    '> idea moves forward only through the normal spec/feature process, with a human decision.',
+    '> inspiration. The authoritative roadmap is `docs/roadmap/roadmap.md` (F-numbered features).',
     '',
-    `_Generated by the \`idea-engine\` workflow. ${dateLine} Re-running regenerates this file; treat each run as a fresh snapshot of ideas, not an evolving plan._`,
+    '_Re-running regenerates this file as a HISTORY-AWARE snapshot: each run still re-reasons every',
+    '_idea from scratch, but it now READS the prior bank and Ground\'s verified ship-status first, so',
+    '_an idea that has since SHIPPED is recorded as shipped (with its evidence) and a settled rejection',
+    '_is not re-litigated. This is still an idea BANK, not an evolving plan: nothing here is promoted,',
+    '_scheduled, or committed. A SHIPPED tag only records that a human already took an equivalent idea',
+    '_through the normal feature process -- the engine never moves an idea onto the roadmap itself. The',
+    '_verdicts and scores are an automated reviewer\'s triage opinion. An idea advances only through the',
+    '_normal spec/feature process, with a human decision._',
+    '',
+    `_Generated by the \`idea-engine\` workflow. ${dateLine}_`,
     '',
     // Honest funnel: raw and scored are both real JS counts; the sentence does not
     // imply a measured conversion between them.
@@ -546,6 +644,7 @@ function renderBacklog(review, opts) {
     '- **Horizon** -- `NOW` (fits the repo today) - `HORIZON` (future vision).',
     '- **Eligibility** -- respects all hard principles, or violates one (named in the rationale).',
     '- **V / F** -- value / feasibility (1-10), reviewer-assigned.',
+    '- **SHIPPED / SETTLED** -- a prior idea Memory matched to shipped work or a settled rejection; kept for the record, not an open candidate.',
   ].join('\n')
 
   // Sections in fixed order; preserve input order within each (no sort, no RNG).
@@ -556,16 +655,27 @@ function renderBacklog(review, opts) {
     return [`## ${verdict}`, '', group.map(renderIdea).join('\n\n')].join('\n')
   }).filter(Boolean)
 
-  return [HEADER, PORTFOLIO, LEGEND, ...SECTIONS].join('\n\n') + '\n'
+  // SHIPPED / SETTLED appendix from Memory (prior ideas no longer open). Omitted when
+  // Memory is absent (first run) or found nothing shipped/settled.
+  const priorIdeas = (opts.prior && Array.isArray(opts.prior.prior_ideas)) ? opts.prior.prior_ideas : []
+  const closed = priorIdeas.filter(p => p.current_state === 'shipped' || p.current_state === 'rejected-settled')
+  const APPENDIX = closed.length
+    ? ['## SHIPPED / SETTLED (prior ideas, for the record)', '',
+       closed.map(p => {
+         const tag = p.current_state === 'shipped' ? 'SHIPPED' : 'SETTLED (rejected)'
+         return `- **${norm(p.prior_id)} ${norm(p.prior_title)}** -- ${tag}. ${norm(p.state_citation || '')}`
+       }).join('\n')].join('\n')
+    : null
+
+  return [HEADER, PORTFOLIO, LEGEND, ...SECTIONS, ...(APPENDIX ? [APPENDIX] : [])].join('\n\n') + '\n'
 }
 
-const rounds_done = round1.filter(Boolean).length + crossRound.filter(Boolean).length + fillRound.filter(Boolean).length
 const backlog_markdown = renderBacklog(review, {
   date: DATE,
   ascii: ASCII,
   rawCount: allIdeas.length,
   rounds: 3,                 // r1 + cross + fill generation rounds
-  prior: null,               // RESERVED for PR4 (cross-run memory)
+  prior: memory,             // PR4: cross-run memory -> SHIPPED/SETTLED appendix
 })
 
 return {
@@ -573,6 +683,7 @@ return {
   explore_rendered: exploreMap,              // the prose+table substrate the lenses saw
   ground_missing_subsystems: merged.missing_subsystems,  // dead explorers -- degraded signal
   ground_contradictions: merged.contradictions.length,   // how many ship-status disputes were ruled
+  memory,                                    // prior-bank labeling (shipped/settled/open)
   gaps_found: gaps,
   synthesis,
   adversarial_verify: verify,
