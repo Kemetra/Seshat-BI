@@ -32,8 +32,7 @@ must still match `^<type>: <desc>`.
 ### 2. P2 remains DELIBERATELY SCOPE-FREE
 
 A parenthesized scope -- `type(scope):`, e.g. `docs(018):` -- is still REJECTED.
-This preserves the prior no-scope rule (see
-`memory/p2-rule-no-commit-scopes.md`): speckit-chain branches carry numeric
+This preserves the prior no-scope rule: speckit-chain branches carry numeric
 feature scopes locally, but the squash-merge collapses them to a single
 scope-free subject. Use `docs:`, never `docs(018):`. Widening the type set does
 NOT relax this -- `SUBJECT_RE` admits a bare type followed by `: ` only.
@@ -74,5 +73,4 @@ colliding with that reserved block.
 - The rule + types: `src/retail/rules/git_meta.py` (`_P2_TYPES`,
   `_BOT_PREFIX_RE`, `SUBJECT_RE`, `rule_p2_commit_subjects`).
 - The tests: `tests/unit/test_git_meta.py`.
-- The prior no-scope decision context: `memory/p2-rule-no-commit-scopes.md`.
 - The reserved-numbering source: `docs/roadmap/roadmap.md`.

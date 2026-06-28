@@ -534,8 +534,8 @@ DigitalOcean PostgreSQL
 
 ## Conventions
 
-See [`docs/conventions.md`](docs/conventions.md). Design rationale lives in
-[`docs/superpowers/specs/`](docs/superpowers/specs/).
+See [`docs/conventions.md`](../../conventions.md). Design rationale lives in
+[`docs/superpowers/specs/`](../specs/).
 
 ## Notes for Windows
 

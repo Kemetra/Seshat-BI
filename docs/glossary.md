@@ -105,6 +105,8 @@ is split into `S4a`/`S4b`, so the letter ids span `D1`-`D11` with the `S4a`/`S4b
 | **R** | PBIR report | `R1` PBIR model reference must be relative |
 | **G** | git / project hygiene | `G1` `.gitignore` correctness · `G2` definition artifacts committed · `G3` UTF-8 without BOM · `G4` `.gitattributes` EOL policy · `G5` Windows MAX_PATH discipline · `G6` no real host/value in committed PBIP parameters |
 | **P** | project layout / process | `P1` Approach-A PBIP layout · `P2` commit-message convention |
+| **A** | route registry / architecture | `A1` route-registry targets resolve or are honestly marked planned |
+| **B** | never-execute boundary | `B1` no module-scope DB/network import in the static core (the static surface never executes on import) |
 
 ## Project shorthand
 

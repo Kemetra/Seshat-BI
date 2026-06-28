@@ -48,7 +48,7 @@ Run what CI runs (`.github/workflows/ci.yml`) locally:
 ruff format --check src tests   # formatting
 ruff check src tests            # lint (E, F, I)
 pytest -m unit                  # unit tests
-retail check                    # static governance gate (the 6 rule families)
+retail check                    # static governance gate (the 8 rule families)
 retail semantic-check --repo .  # contract <-> DAX drift (L3)
 ```
 

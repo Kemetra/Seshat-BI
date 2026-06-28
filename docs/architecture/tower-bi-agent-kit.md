@@ -48,7 +48,7 @@ to re-describe or re-decide them:
 
 | Existing artifact | What it is | Role in the kit |
 |-------------------|------------|-----------------|
-| **`retail check`** (`src/retail/`, 31 static rules) | The shippable governance core -- stdlib-only, CI-able, parses committed TMDL/PBIR/SQL/git text. No `pbi-cli`, no Desktop, no network. | **The enforced gate (Layer A, static surface).** Already on `main`. |
+| **`retail check`** (`src/retail/`, 33 static rules) | The shippable governance core -- stdlib-only, CI-able, parses committed TMDL/PBIR/SQL/git text. No `pbi-cli`, no Desktop, no network. | **The enforced gate (Layer A, static surface).** Already on `main`. |
 | **`docs/medallion-playbook.md`** (7 phases) | The interactive cleaning method: connect & profile -> grain-first cleaning decisions -> ruleset -> review gate -> build silver -> build gold -> data dictionary. | **The process the agent runs.** The source-mapping gate (Sec 5) formalizes its early phases. |
 | **`docs/decisions/0002-retail-cleaning-defaults.md`** (RC1-RC16) | The reusable cleaning/modeling defaults: grain, PII, types, returns, star schema, contiguous date dim, reconciliation. | **The default rulings** every new table starts from. The constitution ratifies their *spirit* as principles. |
 | **`docs/worked-examples/c086-pharmacy.md`** + `c086-adr0002-compliance.md` | The first validated medallion table: 16/16 ADR-default PASS after live DB validation across 246,916 silver rows. | **The first worked example** -- a *filled instance* of every template, cited, never the schema itself. |
@@ -122,7 +122,7 @@ phases into committed, reviewable artifacts.** The mapping:
 | `templates/reconciliation-report.md` | **Phase 5/6 validation gates** (the live acceptance checks) | The blank that the live DB run fills: PK uniqueness, date-dim coverage, 0 orphan FKs, penny-exact cross-layer measure reconciliation. C086 Sec 5 is a filled instance. |
 
 **Where filled copies live:** a table copies these five blanks into **`mappings/<table>/`**
-(one folder per table) and fills them -- per [ADR 0003](decisions/0003-mapping-artifact-location.md).
+(one folder per table) and fills them -- per [ADR 0003](../decisions/0003-mapping-artifact-location.md).
 `templates/` holds the generic blanks; `mappings/<table>/` holds the table's filled set.
 
 **Relationship to the playbook, stated to avoid a silent fork:** the playbook remains
