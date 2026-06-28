@@ -8,6 +8,7 @@ export const meta = {
     { title: 'PR-ready ledger', detail: 'read-only assembler: present the PR-readiness ledger and STOP at the human PR gate', model: 'opus' },
   ],
 }
+const S = (...c) => String.fromCharCode(...c)
 
 const REPO = 'C:/Users/Shaaban/Documents/GitHub/Seshat_BI'
 
@@ -76,7 +77,7 @@ function coerce(a) {
     const t = v.trim()
     if (t && !t.startsWith('{')) {
       const feat = t.replace(/^feat\//, '')
-      if (!/^\d{3}-[a-z0-9-]+$/.test(feat)) return { error: `bare arg must be a feature "NNN-kebab" (got "${t}")` }
+      if (!/^\d{3}-[a-z0-9-]+$/.test(feat)) return { error: `bare arg must be a feature \u0022NNN-kebab\u0022 (got \u0022${t}\u0022)` }
       return { value: norm({ feature: feat }) }
     }
     try { v = JSON.parse(t) } catch (e) { return { error: `args was a string that did not JSON.parse: ${String(e)}` } }
@@ -147,27 +148,27 @@ const HANDOFF_FACTS = {
 }
 const facts = await agent(
   `You are the HANDOFF READER for a Seshat BI implement run. You FETCH raw facts; you do NOT judge, ` +
-  `summarize, interpret "resolved", or decide pass/fail. Read-only, no writes, no execution beyond the ` +
+  `summarize, interpret \u0022resolved\u0022, or decide pass/fail. Read-only, no writes, no execution beyond the ` +
   `read-only git commands below.\n\n` +
   `FEATURE: ${INPUT.feature}\nSPEC DIR: ${INPUT.spec_dir}\n\n` +
   `Return HANDOFF_FACTS:\n` +
   `- dir_exists: does ${REPO}/${INPUT.spec_dir}/ exist?\n` +
-  `- files: for EACH of ${ARTIFACTS.join(', ')} under the spec dir, {name, exists, bytes, committed}. ` +
+  `- files: for EACH of ${ARTIFACTS.join(S(44,32))} under the spec dir, {name, exists, bytes, committed}. ` +
   `committed = the file is TRACKED on the branch AND has no pending change: true only if ` +
   `\`git ls-files --error-unmatch <path>\` succeeds AND \`git status --porcelain <path>\` is empty. ` +
   `An uncommitted/dirty artifact must be committed:false (the build runs off the committed branch, so ` +
   `working-tree-only changes would be invisible to it).\n` +
-  `- spec_md_raw: the FULL verbatim text of spec.md (or "" if missing). Do not truncate.\n` +
-  `- clarifications_raw: the verbatim text of ONLY the "## Clarifications" section of spec.md (or "").\n` +
-  `- plan_review_verdict_line: the verbatim line(s) of plan-review.md that contain the word "Verdict" (or "").\n` +
+  `- spec_md_raw: the FULL verbatim text of spec.md (or \u0022\u0022 if missing). Do not truncate.\n` +
+  `- clarifications_raw: the verbatim text of ONLY the \u0022## Clarifications\u0022 section of spec.md (or \u0022\u0022).\n` +
+  `- plan_review_verdict_line: the verbatim line(s) of plan-review.md that contain the word \u0022Verdict\u0022 (or \u0022\u0022).\n` +
   `- git: current_branch (git rev-parse --abbrev-ref HEAD); branch_resolved (true unless detached); ` +
   `spec_dir_on_branch (does ${INPUT.spec_dir}/spec.md exist on the checked-out branch?); ` +
   `origin_main_available (does origin/main resolve?); ahead/behind (git rev-list --count origin/main...HEAD; ` +
   `ahead=-1 if origin/main unavailable); detached (is HEAD detached?).\n` +
-  `- status_line_provenance: ratified_line_present (does spec.md contain a "Status: Ratified (...)" line?); ` +
-  `last_author_of_status_line (git blame the Status line, return the author name verbatim, "" if no Ratified ` +
+  `- status_line_provenance: ratified_line_present (does spec.md contain a \u0022Status: Ratified (...)\u0022 line?); ` +
+  `last_author_of_status_line (git blame the Status line, return the author name verbatim, \u0022\u0022 if no Ratified ` +
   `line); introduced_by_human (true UNLESS the commit that introduced the Ratified line was authored by a ` +
-  `workflow/bot identity such as one containing "claude", "bot", "github-actions", or the workflow's own ` +
+  `workflow/bot identity such as one containing \u0022claude\u0022, \u0022bot\u0022, \u0022github-actions\u0022, or the workflow\u0027s own ` +
   `committer -- if bot-authored, false).\n\n` +
   `Fabricate nothing. A missing file is exists:false, not a guess. Return RAW text, not interpretation.`,
   { label: 'preflight:read-handoff', phase: 'Pre-flight', schema: HANDOFF_FACTS, model: 'opus', effort: 'low' }
@@ -194,13 +195,13 @@ if (!facts.dir_exists) return refuse('H1', `spec dir ${INPUT.spec_dir} not found
   [`${INPUT.spec_dir}/ absent`], ['Re-invoke with the exact NNN-kebab you ratified, or run idea-to-spec first.'])
 // H2: all 5 artifacts present + non-empty
 const missing = ARTIFACTS.filter(n => !fileOk(n))
-if (missing.length) return refuse('H2', `artifact set incomplete -- the chain did not finish: missing/empty ${missing.join(', ')}`,
+if (missing.length) return refuse('H2', `artifact set incomplete -- the chain did not finish: missing/empty ${missing.join(S(44,32))}`,
   missing, ['Run idea-to-spec (or speckit-finish-chain) to produce spec+plan+tasks+analysis+plan-review.'])
 // H2b: every artifact must be COMMITTED + clean on the branch. The build runs in a fresh
 // worktree off the committed branch, so an uncommitted/dirty tasks.md or plan.md would pass
 // the working-tree preflight but be absent (or stale) when /speckit-implement runs.
 const uncommitted = ARTIFACTS.filter(n => !fileCommitted(n))
-if (uncommitted.length) return refuse('H2', `artifact(s) not committed/clean on the branch: ${uncommitted.join(', ')} -- the build runs off the committed tree and would not see working-tree-only changes`,
+if (uncommitted.length) return refuse('H2', `artifact(s) not committed/clean on the branch: ${uncommitted.join(S(44,32))} -- the build runs off the committed tree and would not see working-tree-only changes`,
   uncommitted, ['Commit the spec artifacts on the feature branch (git add specs/<dir>/ && commit) before re-invoking; do not leave them dirty.'])
 // H3: human-ratified (the load-bearing gate) -- Ratified present, no contradictory Draft/BLOCKED,
 //     and the line was introduced by a HUMAN (git-blame provenance), not the workflow.
@@ -209,7 +210,7 @@ const h3 = H3_RATIFIED_RE.test(specRaw) && !H3_DRAFT_RE.test(specRaw) && !H3_BLO
 if (!h3) {
   const statusExcerpt = (specRaw.match(/^.*\*\*Status.*$/mi) || ['(no Status line found)'])[0]
   return refuse('H3', 'spec.md Status is not human-Ratified (missing, or carries Draft/BLOCKED, or the Ratified line was bot-authored)',
-    [statusExcerpt, `introduced_by_human=${prov.introduced_by_human}, blame_author="${prov.last_author_of_status_line || ''}"`],
+    [statusExcerpt, `introduced_by_human=${prov.introduced_by_human}, blame_author=\u0022${prov.last_author_of_status_line || S()}\u0022`],
     ['A HUMAN must edit spec.md to "**Status**: Ratified (<name>, <YYYY-MM-DD>)" and commit it themselves. implement cannot do this.'])
 }
 // H4: no unresolved Principle-V marker remains in ## Clarifications
@@ -305,28 +306,28 @@ const BUILD_RESULT = {
 const build = await agent(
   `You are the IMPLEMENT BUILDER for Seshat BI, in an ISOLATED git worktree (worktree isolation -- ` +
   `your own checkout). You write code + tests + per-task commits on the RATIFIED feature branch and ` +
-  `STOP. You NEVER merge, push, touch main, open a PR, or edit the spec's Status line. Repo: Seshat_BI.\n\n` +
+  `STOP. You NEVER merge, push, touch main, open a PR, or edit the spec\u0027s Status line. Repo: Seshat_BI.\n\n` +
   `FEATURE: ${INPUT.feature}\nSPEC DIR: ${INPUT.spec_dir}\nRATIFIED BRANCH: ${branch}\n\n` +
   `STEP A -- worktree safety FIRST: assert git rev-parse --abbrev-ref HEAD is the ratified feature ` +
-  `branch (carrying ${INPUT.spec_dir}/spec.md) and NOT main/detached. If not, STOP: status:'failed', ` +
-  `blocked_reason:'worktree-not-on-feature-branch', write nothing.\n\n` +
+  `branch (carrying ${INPUT.spec_dir}/spec.md) and NOT main/detached. If not, STOP: status:\u0027failed\u0027, ` +
+  `blocked_reason:\u0027worktree-not-on-feature-branch\u0027, write nothing.\n\n` +
   `STEP A0 -- PIN the feature dir via the ENV OVERRIDE (critical, and do NOT dirty tracked config): ` +
-  `/speckit-implement's prereq script resolves the feature in this order (verified, common.ps1 L290): ` +
+  `/speckit-implement\u0027s prereq script resolves the feature in this order (verified, common.ps1 L290): ` +
   `(1) the SPECIFY_FEATURE_DIRECTORY env var, then (2) the PERSISTED .specify/feature.json (which is a ` +
   `TRACKED file that may hold a STALE prior feature). So EXPORT SPECIFY_FEATURE_DIRECTORY=${INPUT.spec_dir} ` +
   `for every command in this run BEFORE invoking the skill -- the env override wins, so you get the ` +
   `right feature WITHOUT modifying the tracked .specify/feature.json (leaving it dirty risks it being ` +
   `swept into a task commit, or tested-with-but-absent-from the PR). Do NOT overwrite the file; do NOT ` +
-  `commit any config change. If you cannot set the env, FAIL closed (status:'failed', ` +
-  `blocked_reason:'cannot pin SPECIFY_FEATURE_DIRECTORY') rather than mutate the tracked file -- never ` +
+  `commit any config change. If you cannot set the env, FAIL closed (status:\u0027failed\u0027, ` +
+  `blocked_reason:\u0027cannot pin SPECIFY_FEATURE_DIRECTORY\u0027) rather than mutate the tracked file -- never ` +
   `risk a silent wrong-feature build (ledger would report ${INPUT.feature} while a stale list ran).\n\n` +
-  `STEP B -- handle the SKILL's interactive STOP: /speckit-implement has a hard "Wait for user ` +
-  `response" prompt when checklists are incomplete. You have NO user. Do NOT auto-answer it. Record it ` +
-  `as a tasks_blocked entry {reason:'checklist-incomplete-stop'} and return status:'partial' -- the ` +
+  `STEP B -- handle the SKILL\u0027s interactive STOP: /speckit-implement has a hard \u0022Wait for user ` +
+  `response\u0022 prompt when checklists are incomplete. You have NO user. Do NOT auto-answer it. Record it ` +
+  `as a tasks_blocked entry {reason:\u0027checklist-incomplete-stop\u0027} and return status:\u0027partial\u0027 -- the ` +
   `human decides.\n\n` +
   `STEP C -- BUILD: invoke /speckit-implement over ${INPUT.spec_dir}/tasks.md. Execute the ratified ` +
   `task list (do NOT re-plan -- YAGNI). TDD order, tests-first; a task is DONE only when its tests pass. ` +
-  `Commit per task: "feat(${INPUT.feature.slice(0, 3)}): <task-id> <desc>". Skip a task already done + ` +
+  `Commit per task: \u0022feat(${INPUT.feature.slice(0, 3)}): <task-id> <desc>\u0022. Skip a task already done + ` +
   `committed + passing (resume-safe). STOP a task (never invent) if it needs a Principle-V ruling ` +
   `(grain/uniqueness, PII publish-safety, business rollup/segment, product identity) the spec left open, ` +
   `or assumes a DEFERRED capability (F016 Power BI Execution Adapter; F031-F033 spec-only) -> record to ` +
@@ -334,25 +335,25 @@ const build = await agent(
   `non-dependent tasks past it.\n\n` +
   `STEP D -- ENV-GAP (honest, never fake green): local Python is 3.12 but the package requires >=3.13, ` +
   `and there is NO skipif(version) marker, so this test does NOT auto-skip and will fail/err locally: ` +
-  `${CI_ONLY_TESTS.join(', ')}. Run pytest -m unit with an EXPLICIT --deselect of exactly that node id; ` +
+  `${CI_ONLY_TESTS.join(S(44,32))}. Run pytest -m unit with an EXPLICIT --deselect of exactly that node id; ` +
   `return the EXACT pytest_argv, the verbatim pytest_summary_line, and pytest_deselected_ids. A test that ` +
   `could NOT run is NEVER counted as passing -- a task whose only verifying test is that CI-only one is ` +
-  `committed with verified:'ci-only' (code complete, CI-verified-pending), never 'tests-pass'. Report ` +
-  `coverage_term_total as observed or "unknown" -- NEVER fabricate a number.\n\n` +
+  `committed with verified:\u0027ci-only\u0027 (code complete, CI-verified-pending), never \u0027tests-pass\u0027. Report ` +
+  `coverage_term_total as observed or \u0022unknown\u0022 -- NEVER fabricate a number.\n\n` +
   `STEP E -- VERIFY (after build, on this SAME worktree, in CI order; return RAW exits, do not judge):\n` +
-  `  1. pip install -e ".[dev]"  -> install_ok\n` +
+  `  1. pip install -e \u0022.[dev]\u0022  -> install_ok\n` +
   `  2. ruff format --check src tests  -> ruff_format_exit\n` +
   `  3. ruff check src tests  -> ruff_check_exit\n` +
   `  4. pytest -m unit (with the deselect from STEP D)  -> summary + deselected ids + collected\n` +
   `  5. git fetch origin main; if git merge-base origin/main HEAD resolves, run ` +
-  `retail check --commit-range "<merge-base>..HEAD" -> retail_check_exit (retail_check_commit_range_` +
+  `retail check --commit-range \u0022<merge-base>..HEAD\u0022 -> retail_check_exit (retail_check_commit_range_` +
   `resolved:true). If merge-base does NOT resolve, run BARE retail check (exactly as CI does in that ` +
   `case -- ci.yml falls back to bare retail check, it does NOT skip) and record its exit in ` +
   `retail_check_exit with retail_check_commit_range_resolved:false. Either way retail_check_exit MUST ` +
   `reflect a real run -- the gate scores it (a P2 on grandfathered history is honest; it collapses on ` +
   `squash-merge, same as CI).\n` +
   `  6. retail semantic-check --repo .  -> retail_semantic_check_exit\n` +
-  `  retail_validate_status: record 'needs-db' (the EXPECTED deferred state -- retail validate without a ` +
+  `  retail_validate_status: record \u0027needs-db\u0027 (the EXPECTED deferred state -- retail validate without a ` +
   `DB/--source-map returns the deferred state; CI does NOT run it; it is INFORMATIONAL, never scored).\n` +
   `  wiring_ok: if any task added/removed a @register rule, the SAME change updated EXPECTED_RULE_IDS in ` +
   `tests/unit/test_rules_wiring.py (the test asserts len(all_rules())==len(EXPECTED_RULE_IDS)); else true.\n` +
@@ -362,7 +363,7 @@ const build = await agent(
   `CONSTRAINTS: ASCII + UTF-8 no BOM in any authored file (-- and ->, no glyphs; rule IX). Generic-only ` +
   `(no C086/pharmacy specifics; rule 7). No fabricated confidence/coverage (rule 9). Never merge/push/` +
   `touch main/open a PR/edit Status. status is your self-report -- the orchestrator RE-DERIVES the real ` +
-  `outcome in JS; report honestly (a failing test is 'test-fail' in tasks_blocked, never hidden).`,
+  `outcome in JS; report honestly (a failing test is \u0027test-fail\u0027 in tasks_blocked, never hidden).`,
   { label: `build:${INPUT.feature}`, phase: 'Build + verify (isolated)', isolation: 'worktree', schema: BUILD_RESULT, model: 'opus', effort: 'high' }
 )
 
@@ -432,8 +433,8 @@ function completionGate(b, expectedBranch) {
     if (v && v.install_ok === false) {
       reasons.push('pip install -e ".[dev]" failed -- run implement on a >=3.13 dev toolchain (the package requires-python >=3.13; local 3.12 cannot install/build/test it). This is an environment gate, not a code failure.')
     } else {
-      reasons.push(`tests/lint not green: "${summary || 'no verify record'}"` +
-        (v && !argvIsFullUnitRun ? ` (argv was NOT a full "pytest -m unit" run: "${argv}")` : '') +
+      reasons.push(`tests/lint not green: \u0022${summary || S(110,111,32,118,101,114,105,102,121,32,114,101,99,111,114,100)}\u0022` +
+        (v && !argvIsFullUnitRun ? ` (argv was NOT a full \u0022pytest -m unit\u0022 run: \u0022${argv}\u0022)` : '') +
         (v && !deselectExplained ? ' (UNEXPLAINED deselect -- not the CI-only allow-list)' : ''))
     }
   }
@@ -445,8 +446,8 @@ function completionGate(b, expectedBranch) {
   // as auto-green would advertise PR-ready locally while CI's bare run fails.
   const checkGreen = !!(v && v.retail_check_exit === 0)
   const semanticGreen = !!(v && v.retail_semantic_check_exit === 0)
-  if (!checkGreen) reasons.push(`retail check exit ${v ? v.retail_check_exit : '?'}` + (v && v.retail_check_commit_range_resolved === false ? ' (bare run; merge-base unresolved)' : ''))
-  if (!semanticGreen) reasons.push(`retail semantic-check exit ${v ? v.retail_semantic_check_exit : '?'}`)
+  if (!checkGreen) reasons.push(`retail check exit ${v ? v.retail_check_exit : S(63)}` + (v && v.retail_check_commit_range_resolved === false ? ' (bare run; merge-base unresolved)' : ''))
+  if (!semanticGreen) reasons.push(`retail semantic-check exit ${v ? v.retail_semantic_check_exit : S(63)}`)
 
   // (d) wiring + never-execute invariants green
   const wiringGreen = !!(v && v.wiring_ok === true && v.never_execute_ok === true)
@@ -454,7 +455,7 @@ function completionGate(b, expectedBranch) {
 
   // (e) no Principle-V wall / surfaced judgment call
   const noWall = !!(b && b.principle_v_wall === false && (!Array.isArray(b.open_for_human) || b.open_for_human.length === 0))
-  if (!noWall) reasons.push(`Principle-V wall: ${b && b.open_for_human ? b.open_for_human.join('; ') : 'unresolved judgment call'}`)
+  if (!noWall) reasons.push(`Principle-V wall: ${b && b.open_for_human ? b.open_for_human.join(S(59,32)) : S(117,110,114,101,115,111,108,118,101,100,32,106,117,100,103,109,101,110,116,32,99,97,108,108)}`)
 
   // (f) the build+verify happened on the EXPECTED ratified branch, not just "not main".
   // If verify ran on some other feature branch, the PR-ready branch the ledger advertises
@@ -462,7 +463,7 @@ function completionGate(b, expectedBranch) {
   // head_branch to the expected branch (and always reject main as a backstop).
   const headOk = !!(v && v.head_branch && v.head_branch !== 'main' &&
     (!expectedBranch || v.head_branch === expectedBranch))
-  if (!headOk) reasons.push(`HEAD at verify time is "${v ? v.head_branch : '?'}" -- must be the ratified branch "${expectedBranch || '(expected)'}", never main or another branch`)
+  if (!headOk) reasons.push(`HEAD at verify time is \u0022${v ? v.head_branch : S(63)}\u0022 -- must be the ratified branch \u0022${expectedBranch || S(40,101,120,112,101,99,116,101,100,41)}\u0022, never main or another branch`)
 
   if (reasons.length === 0) return { outcome: 'READY_FOR_PR', reasons: [] }
   // hard red (fix-first) vs partial (honest progress / wall -- resume continues)
@@ -495,17 +496,17 @@ const ledger = await agent(
   `Write pr_summary with these sections, stop-on-fail top-down: (1) FROM SPEC: feature + branch + the ` +
   `ratified status line (a human wrote it; implement did not); (2) OUTCOME + the blocking reasons first ` +
   `if not READY_FOR_PR; (3) TASKS: done/total + blocked ids; (4) TESTS: status + the NAMED ci-only ` +
-  `deselected test, flagged as a RESIDUAL RISK the human must weigh: "this subprocess import-isolation ` +
+  `deselected test, flagged as a RESIDUAL RISK the human must weigh: \u0022this subprocess import-isolation ` +
   `test is deselected locally and is verified ONLY by CI (3.13); if a change regresses it, CI -- not ` +
-  `this local run -- is what catches it. It is NOT a faked local pass." List any real failures ` +
+  `this local run -- is what catches it. It is NOT a faked local pass.\u0022 List any real failures ` +
   `individually; (5) GOVERNANCE: retail check / semantic-check / wiring / ` +
-  `never-execute each its own line, plus "retail validate: needs-db-deferred (informational, per ` +
-  `Principle VIII)"; (6) PRINCIPLE-V STOPS: surfaced questions or "(none)"; (7) DIFF SUMMARY: the ` +
+  `never-execute each its own line, plus \u0022retail validate: needs-db-deferred (informational, per ` +
+  `Principle VIII)\u0022; (6) PRINCIPLE-V STOPS: surfaced questions or \u0022(none)\u0022; (7) DIFF SUMMARY: the ` +
   `per-task commit subjects on the branch; (8) NEXT ACTION.\n` +
   `If READY_FOR_PR: how_to_open_pr = the exact human steps (gh pr create --base main --head ${branch} ` +
-  `..., review, merge) and note the workflow itself will NOT open or merge it; how_to_fix_and_rerun = "".\n` +
-  `If BLOCKED/PARTIAL: how_to_fix_and_rerun = what to fix + "re-invoke Workflow({scriptPath, ` +
-  `resumeFromRunId}) -- done tasks skip"; how_to_open_pr = "".`,
+  `..., review, merge) and note the workflow itself will NOT open or merge it; how_to_fix_and_rerun = \u0022\u0022.\n` +
+  `If BLOCKED/PARTIAL: how_to_fix_and_rerun = what to fix + \u0022re-invoke Workflow({scriptPath, ` +
+  `resumeFromRunId}) -- done tasks skip\u0022; how_to_open_pr = \u0022\u0022.`,
   { label: 'ledger:pr-ready', phase: 'PR-ready ledger', schema: PR_LEDGER, model: 'opus', effort: 'high' }
 )
 

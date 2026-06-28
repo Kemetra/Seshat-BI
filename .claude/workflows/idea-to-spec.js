@@ -9,6 +9,7 @@ export const meta = {
     { title: 'Ratify ledger', detail: 'read-only assembler: present the ledger and STOP at the human gate', model: 'opus' },
   ],
 }
+const S = (...c) => String.fromCharCode(...c)
 
 const REPO = 'C:/Users/Shaaban/Documents/GitHub/Seshat_BI'
 const BACKLOG_PATH = 'docs/roadmap/idea-backlog.md'
@@ -64,8 +65,8 @@ const c = coerce(args)
 if (c.error) { log(`idea-to-spec: ${c.error}`); return { error: c.error } }
 const INPUT = c.value
 const DATE_NOTE = INPUT.date
-  ? `Use "### Session ${INPUT.date}" as the Clarifications session heading.`
-  : `No date supplied; use "### Session (date pending)" and note in the ledger that the operator must fill the date -- do NOT invent one (scripts cannot call new Date()).`
+  ? `Use \u0022### Session ${INPUT.date}\u0022 as the Clarifications session heading.`
+  : `No date supplied; use \u0022### Session (date pending)\u0022 and note in the ledger that the operator must fill the date -- do NOT invent one (scripts cannot call new Date()).`
 
 // ===================== STAGE 0: PRE-FLIGHT + LOCATE ===============================
 // Pure-JS parse + match. Workflow scripts have no fs, so a single minimal read-only agent
@@ -85,8 +86,8 @@ const READ_SCHEMA = {
   },
 }
 const backlogRead = await agent(
-  `Read the file ${REPO}/${BACKLOG_PATH} and return its FULL verbatim content in 'content' ` +
-  `(found:true). If the file does not exist, return found:false and content:"". Do NOT summarize, ` +
+  `Read the file ${REPO}/${BACKLOG_PATH} and return its FULL verbatim content in \u0027content\u0027 ` +
+  `(found:true). If the file does not exist, return found:false and content:\u0022\u0022. Do NOT summarize, ` +
   `truncate, reformat, or interpret -- return the raw bytes as text. Read nothing else.`,
   { label: 'preflight:read-backlog', phase: 'Pre-flight', schema: READ_SCHEMA, model: 'opus', effort: 'low' }
 )
@@ -142,20 +143,20 @@ function blocked(status, reason, evidence, options) {
   return { outcome: 'BLOCKED', blocked: { status, stage_failed: 'pre-flight', title: INPUT.title, reason, evidence: evidence || [], human_options: options || [] } }
 }
 if (loc.notFound) {
-  log(`idea-to-spec: idea not found -- "${INPUT.title}"`)
-  return blocked('idea-not-found', `No idea in the backlog matched "${INPUT.title}".`, loc.notFound,
+  log(`idea-to-spec: idea not found -- \u0022${INPUT.title}\u0022`)
+  return blocked('idea-not-found', `No idea in the backlog matched \u0022${INPUT.title}\u0022.`, loc.notFound,
     ['Re-invoke with one of the closest titles above, exactly as written in the backlog.'])
 }
 if (loc.ambiguous) {
   const ev = loc.ambiguous.map(i => `${i.id}. ${i.title_raw}`)
   log(`idea-to-spec: idea ambiguous -- ${ev.length} matches`)
-  return blocked('idea-ambiguous', `"${INPUT.title}" matched ${ev.length} ideas; refusing to guess which you meant.`, ev,
+  return blocked('idea-ambiguous', `\u0022${INPUT.title}\u0022 matched ${ev.length} ideas; refusing to guess which you meant.`, ev,
     ['Re-invoke with the full exact title (or the heading id like "A1") to disambiguate.'])
 }
 const chosen = loc.match
 if (!chosen.eligible && !INPUT.allow_ineligible) {
   log(`idea-to-spec: idea ineligible -- ${chosen.id} (${chosen.section})`)
-  return blocked('ineligible', `"${chosen.id}. ${chosen.title_raw}" is in the ${chosen.section} section -- the bank judged it ineligible (it crosses a hard principle). You cannot ratify a hard-principle violation.`,
+  return blocked('ineligible', `\u0022${chosen.id}. ${chosen.title_raw}\u0022 is in the ${chosen.section} section -- the bank judged it ineligible (it crosses a hard principle). You cannot ratify a hard-principle violation.`,
     [`${chosen.id}. ${chosen.title_raw} [${chosen.section}]`],
     ['If you intend to pursue it anyway, re-invoke with { title, allow_ineligible: true } -- the violation will be recorded, never cleared, and stamped into the spec as BLOCKED.'])
 }
@@ -189,7 +190,7 @@ const GROUNDING_SCHEMA = {
 }
 const grounding = await agent(
   `You are the GROUNDER for a Seshat BI planning run. Read the real repo under ${REPO} (READ-ONLY; ` +
-  `you write nothing, you execute nothing). Confirm the chosen idea's named seams so the spec it seeds ` +
+  `you write nothing, you execute nothing). Confirm the chosen idea\u0027s named seams so the spec it seeds ` +
   `is concrete, not hand-wavy.\n\n` +
   `CHOSEN IDEA: ${chosen.id}. ${asciiFold(chosen.title_raw)}  [bank verdict: ${chosen.section}]\n\n` +
   `DO:\n` +
@@ -197,14 +198,14 @@ const grounding = await agent(
   `A reference that does NOT exist as described is confirmed:false and goes in missing_or_deferred -- a ` +
   `blocking assumption, never glossed over.\n` +
   `- Map the idea to its roadmap.md F-number + readiness stage. If you cannot find an F-number, set ` +
-  `f_number:"none" AND roadmap_stage:"unmapped" AND push "which readiness stage does this advance?" to ` +
+  `f_number:\u0022none\u0022 AND roadmap_stage:\u0022unmapped\u0022 AND push \u0022which readiness stage does this advance?\u0022 to ` +
   `open_for_human -- do NOT guess a stage.\n` +
   `- List constraining_principles (the constitution principles that bound this idea, in your words).\n` +
   `- Surface (NEVER answer) any Principle-V judgment call -- grain/uniqueness, PII publish-safety, ` +
   `business rollup/segment, product identity -- into open_for_human.\n` +
-  `- Note c086_risk: how a pharmacy/C086 specific could leak into what must stay generic ("none" if N/A).\n` +
+  `- Note c086_risk: how a pharmacy/C086 specific could leak into what must stay generic (\u0022none\u0022 if N/A).\n` +
   `Fabricate nothing. ASCII only (-- and ->). This grounding seeds the spec; getting it wrong poisons ` +
-  `the whole plan, so prefer "confirmed:false" over an optimistic guess.`,
+  `the whole plan, so prefer \u0022confirmed:false\u0022 over an optimistic guess.`,
   { label: `ground:${chosen.id}`, phase: 'Ground', schema: GROUNDING_SCHEMA, model: 'opus', effort: 'high' }
 )
 
@@ -246,7 +247,7 @@ const plan = await agent(
   `You DEFINE and CHECK; you NEVER approve, never implement, never merge, never push, never touch main. ` +
   `Repo: Seshat_BI.\n\n` +
   `CHOSEN IDEA: ${chosen.id}. ${asciiFold(chosen.title_raw)}  [bank verdict: ${chosen.section}]\n` +
-  (forced_ineligible ? `FORCED INELIGIBLE: the human used allow_ineligible to proceed past the bank's ineligible verdict. You MUST stamp "**Status**: Draft -- BLOCKED: ineligible per bank (${chosen.section}); proceeding under explicit human override" into the spec front-matter and surface the violation in open_for_human. NEVER self-clear it.\n` : '') +
+  (forced_ineligible ? `FORCED INELIGIBLE: the human used allow_ineligible to proceed past the bank\u0027s ineligible verdict. You MUST stamp \u0022**Status**: Draft -- BLOCKED: ineligible per bank (${chosen.section}); proceeding under explicit human override\u0022 into the spec front-matter and surface the violation in open_for_human. NEVER self-clear it.\n` : '') +
   `\n=== GROUNDING (from the read-only grounder; the seed for the spec) ===\n${JSON.stringify(grounding, null, 2)}\n\n` +
   `RUN THESE STAGES IN ORDER, committing on THIS branch after each that writes a file; SKIP any stage ` +
   `whose output already exists (resume-safe), counting it in stages_done:\n\n` +
@@ -257,24 +258,24 @@ const plan = await agent(
   `branch (next is 041+, auto-numbered by scanning specs+branches for max+1) BEFORE it writes the ` +
   `spec, then creates specs/NNN-*/ + .specify/feature.json. Do NOT run the feature script separately ` +
   `and do NOT pre-create the dir -- a second manual branch would split the artifacts across two ` +
-  `branches and point the ratify handoff at the wrong worktree. Pass the short name "${kebabHint}" to ` +
+  `branches and point the ratify handoff at the wrong worktree. Pass the short name \u0022${kebabHint}\u0022 to ` +
   `the hook (keep the path short; Windows 260-char rule). If branch/spec creation fails (e.g. name ` +
-  `collision, hook non-zero), STOP: return status:'failed', blocked_reason with the error, write no ` +
+  `collision, hook non-zero), STOP: return status:\u0027failed\u0027, blocked_reason with the error, write no ` +
   `further artifacts. AFTER specify returns, record the ACTUAL feature (NNN-kebab) + branch it created ` +
   `(read .specify/feature.json / the current branch -- do not assume; the hook owns the number). Run ` +
   `NON-INTERACTIVELY: make informed guesses for ordinary gaps but NEVER block on a prompt and NEVER ` +
   `answer a Principle-V [NEEDS CLARIFICATION] marker (grain / PII / rollup / identity) -- leave those ` +
-  `markers in place for stage 3. Put the idea title verbatim (ASCII) in the spec's Input line.\n\n` +
+  `markers in place for stage 3. Put the idea title verbatim (ASCII) in the spec\u0027s Input line.\n\n` +
   `STAGE 3 -- /speckit-clarify (advisor-driven): for each ambiguity (max 5, highest Impact*Uncertainty ` +
   `first): reason as the advisor against the constitution / readiness spine / RC defaults / the roadmap ` +
   `stage, pick the RECOMMENDED answer, record {question, recommended_answer, reasoning, reversible}, and ` +
   `integrate it into the spec. ${DATE_NOTE} HARD CARVE-OUT (Principle V -- do NOT answer; record to ` +
-  `open_for_human and into the spec's ## Clarifications block): grain/uniqueness, PII publish-safety, ` +
+  `open_for_human and into the spec\u0027s ## Clarifications block): grain/uniqueness, PII publish-safety, ` +
   `business rollup/segment, product identity. Also harvest any Principle-V markers stage 2 (specify) left in place. ` +
-  `If a clarify question is BUILD-BLOCKING (the spec cannot be meaningfully written without the human's ` +
-  `ruling), STOP: status:'blocked', blocked_reason:'clarify-principle-v-wall' + the wall question(s) ` +
+  `If a clarify question is BUILD-BLOCKING (the spec cannot be meaningfully written without the human\u0027s ` +
+  `ruling), STOP: status:\u0027blocked\u0027, blocked_reason:\u0027clarify-principle-v-wall\u0027 + the wall question(s) ` +
   `recorded -- do NOT fabricate a spec around the unknown.\n\n` +
-  `STAGE 4 -- /speckit-plan then /speckit-tasks (idempotent, skip-if-exists). Stay INSIDE this one idea's ` +
+  `STAGE 4 -- /speckit-plan then /speckit-tasks (idempotent, skip-if-exists). Stay INSIDE this one idea\u0027s ` +
   `first-step scope (YAGNI: add the seam, not the implementation). Do NOT assume any DEFERRED capability ` +
   `exists (F016 Power BI Execution Adapter; F031-F033 spec-only runtimes).\n\n` +
   `STAGE 5 -- /speckit-analyze (READ-ONLY on spec/plan/tasks): run the real cross-artifact consistency ` +
@@ -286,16 +287,16 @@ const plan = await agent(
   `Write your findings to plan-review.md committed on the branch (durable; the handoff reads it). Set ` +
   `plan_review_verdict PASS / PASS-WITH-NOTES / BLOCKED. A draft missing analyze or tasks is automatic ` +
   `BLOCKED. On a CRITICAL you are unsure of, say so in notes -- never retry, never override.\n\n` +
-  `COMMIT DISCIPLINE: "docs(NNN): specify" after stage 2, "docs(NNN): clarify" after 3, "docs(NNN): ` +
-  `plan+tasks" after 4, "docs(NNN): analyze" after 5, "docs(NNN): plan-review" after 6. Never merge/push/` +
+  `COMMIT DISCIPLINE: \u0022docs(NNN): specify\u0022 after stage 2, \u0022docs(NNN): clarify\u0022 after 3, \u0022docs(NNN): ` +
+  `plan+tasks\u0022 after 4, \u0022docs(NNN): analyze\u0022 after 5, \u0022docs(NNN): plan-review\u0022 after 6. Never merge/push/` +
   `touch main.\n\n` +
   `CONSTRAINTS (every authored artifact): ASCII + UTF-8 no BOM (-- and ->, no glyphs; rule IX). ` +
   `Generic-only (no C086/pharmacy specifics in a generic artifact; rule 7). No fabricated confidence / ` +
   `readiness score (rule 9). No executor (docs only). Never self-grant a readiness pass.\n\n` +
-  `STATUS RULE: status:'drafted' REQUIRES every stage ran AND analyze_verdict != 'not-run' AND ` +
+  `STATUS RULE: status:\u0027drafted\u0027 REQUIRES every stage ran AND analyze_verdict != \u0027not-run\u0027 AND ` +
   `plan_review_verdict in {PASS, PASS-WITH-NOTES}. Any missing stage or a BLOCKED review -> status ` +
-  `'blocked'/'partial' with a non-empty blocked_reason. A half-spec must NEVER report 'drafted'. The spec ` +
-  `front-matter Status stays "**Status**: Draft" -- you are FORBIDDEN to write "Ratified" (only a human ` +
+  `\u0027blocked\u0027/\u0027partial\u0027 with a non-empty blocked_reason. A half-spec must NEVER report \u0027drafted\u0027. The spec ` +
+  `front-matter Status stays \u0022**Status**: Draft\u0022 -- you are FORBIDDEN to write \u0022Ratified\u0022 (only a human ` +
   `does that, after this workflow returns).`,
   { label: `plan:${chosen.id}`, phase: 'Plan (per-idea, isolated)', isolation: 'worktree', schema: PLAN_RESULT, model: 'opus', effort: 'high' }
 )
@@ -342,7 +343,7 @@ const ledger = await agent(
   `You are the RATIFY-LEDGER assembler for a Seshat BI planning run. You are a NON-WRITING assembler: ` +
   `you read the committed branch files + the plan record below and ARRANGE them into a scannable ` +
   `ratify ledger for a human. You perform NO judgment of your own, you change NO verdict or score, and ` +
-  `you NEVER write a "Ratified" value anywhere -- ratification is a human action AFTER this workflow ` +
+  `you NEVER write a \u0022Ratified\u0022 value anywhere -- ratification is a human action AFTER this workflow ` +
   `returns. The outcome is FIXED by the orchestrator (given below); do not change it.\n\n` +
   `FIXED OUTCOME: ${gateOutcome}\n` +
   `IDEA: ${chosen.id}. ${asciiFold(chosen.title_raw)}  [bank verdict: ${chosen.section}]` +
@@ -352,13 +353,13 @@ const ledger = await agent(
   `=== GROUNDING (open_for_human originated partly here) ===\n${JSON.stringify({ open_for_human: grounding && grounding.open_for_human, missing_or_deferred: grounding && grounding.missing_or_deferred }, null, 2)}\n\n` +
   `Build ratify_summary as ASCII markdown ordered so a human reads downward and stops the moment ` +
   `something fails: (1) FROM IDEA (the id+title+bank verdict, explicitly flagged as a TRIAGE opinion -- ` +
-  `ratifying THIS spec is a fresh decision, not the bank's); (2) ARTIFACTS present (spec/plan/tasks/` +
+  `ratifying THIS spec is a fresh decision, not the bank\u0027s); (2) ARTIFACTS present (spec/plan/tasks/` +
   `analysis/plan-review); (3) CLARIFY -- the recommended answers the workflow chose + reasoning; ` +
   `(4) OPEN FOR YOU -- the Principle-V questions the workflow REFUSED to answer (the human must resolve ` +
-  `these before ratifying), or "(none)"; (5) ANALYZE verdict; (6) PLAN REVIEW verdict + findings; ` +
+  `these before ratifying), or \u0022(none)\u0022; (5) ANALYZE verdict; (6) PLAN REVIEW verdict + findings; ` +
   `(7) OUTCOME (${gateOutcome}). If READY_FOR_RATIFY, how_to_ratify lists the exact human steps: resolve ` +
-  `every OPEN FOR YOU item in spec.md, flip "**Status**: Draft" to "**Status**: Ratified (<name>, ` +
-  `<YYYY-MM-DD>)", commit "docs(${plan && plan.feature ? plan.feature : 'NNN'}): ratify spec" on the ` +
+  `every OPEN FOR YOU item in spec.md, flip \u0022**Status**: Draft\u0022 to \u0022**Status**: Ratified (<name>, ` +
+  `<YYYY-MM-DD>)\u0022, commit \u0022docs(${plan && plan.feature ? plan.feature : S(78,78,78)}): ratify spec\u0022 on the ` +
   `branch -- and note the implement workflow refuses the spec until that human Status edit lands. If ` +
   `BLOCKED, how_to_ratify instead states what must be fixed and that NO ratify path is offered yet. ` +
   `ASCII only.`,

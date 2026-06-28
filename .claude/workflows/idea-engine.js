@@ -16,6 +16,7 @@ export const meta = {
     { title: 'Render',         detail: 'pure-JS: render the idea-backlog markdown (no agent); orchestrator writes' },
   ],
 }
+const S = (...c) => String.fromCharCode(...c)
 
 const REPO = 'C:/Users/Shaaban/Documents/GitHub/Seshat_BI'
 
@@ -47,11 +48,11 @@ const DATE = (typeof _A.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(_A.date)
 // ascii: normalize rendered output to ASCII (-- and ->). Default true (Principle IX).
 const ASCII = typeof _A.ascii === 'boolean' ? _A.ascii : true
 const FOCUS_LINE = FOCUS
-  ? `\nFOCUS for this run (bias ideas toward this, but don't ignore strong off-theme ideas): ${FOCUS}\n`
+  ? `\nFOCUS for this run (bias ideas toward this, but don\u0027t ignore strong off-theme ideas): ${FOCUS}\n`
   : ''
 
 const PROJECT = `
-PROJECT: Seshat BI (package alias Seshat_BI; formerly "Tower BI Agent Kit"). An AGENT-FIRST
+PROJECT: Seshat BI (package alias Seshat_BI; formerly \u0022Tower BI Agent Kit\u0022). An AGENT-FIRST
 Retail BI readiness system. It guides agents from raw retail sources through 7 readiness
 stages -- Source -> Mapping -> Silver -> Gold -> Semantic Model -> Dashboard -> Publish -- using
 documented gates, evidence, and human approvals. The agent is the interface; CLI gates
@@ -308,7 +309,7 @@ function aggregatePanel(panel, expectedReviewers, verifyRec) {
     const horizon = rows.map(r => r.horizon).find(Boolean) || 'NOW'
     const strengthens_layer = rows.map(r => r.strengthens_layer).find(Boolean) || 'none'
     // rationale: concatenate each reviewer's one-liner with its standpoint
-    const rationale = rows.map(r => `[${r.reviewer_standpoint || 'reviewer'}] ${r.rationale || ''}`.trim()).join(' ')
+    const rationale = rows.map(r => `[${r.reviewer_standpoint || S(114,101,118,105,101,119,101,114)}] ${r.rationale || S()}`.trim()).join(' ')
 
     return {
       title, horizon, consistency, value_score, feasibility_score, score_spread,
@@ -403,12 +404,20 @@ const MERGED_MAP_SCHEMA = {
 
 // The 5 subsystem explorers. Each pins opus xhigh explicitly (never the Explore
 // agentType Haiku default) and is read-only.
+// NOTE: this clause is hoisted out of the ship-delta brief and built with string
+// concatenation (NOT a nested `${cond ? `a` : `b`}` template). The Workflow loader's
+// parser does not recurse into ${} interpolation, so a backtick nested inside one
+// desyncs its tokenizer and the whole script fails to load. Keep template literals here
+// to simple ${var} interpolation only.
+const SHIP_DELTA_RANGE = SINCE_REF
+  ? ' over range ' + SINCE_REF
+  : ' (no range supplied -- use roadmap SHIPPED markers only; do NOT invent a range)'
 const EXPLORERS = [
-  { key: 'knowledge', label: 'explore:knowledge', brief: `Map skills/: each knowledge layer's SKILL.md + INDEX.md. COUNT the layers exactly (there are FIVE: bi-sql, bi-dax, bi-python, bi-bigdata, retail-kpi -- do not assume four) and note which are seed vs mature. Capture what each layer routes and its two-hop contract.` },
+  { key: 'knowledge', label: 'explore:knowledge', brief: `Map skills/: each knowledge layer\u0027s SKILL.md + INDEX.md. COUNT the layers exactly (there are FIVE: bi-sql, bi-dax, bi-python, bi-bigdata, retail-kpi -- do not assume four) and note which are seed vs mature. Capture what each layer routes and its two-hop contract.` },
   { key: 'src', label: 'explore:src', brief: `Map src/retail/**: the rule families in rules/*.py (each @register), cli.py, runner.py, registry. Cross-check the rule count against EXPECTED_RULE_IDS in tests/unit/test_rules_wiring.py (the wiring test is the source of truth). Note the never-execute / stdlib-only discipline as you see it in code.` },
   { key: 'docs', label: 'explore:docs', brief: `Map the docs spine: COMPASS.md, AGENTS.md, docs/knowledge-map.md, docs/readiness/, docs/metrics/, docs/quality/. Capture the readiness stage model (7 stages, 4 statuses), the router, the metric-contract store, and any quality/smoke-test docs.` },
-  { key: 'roadmap', label: 'explore:roadmap', brief: `Map docs/roadmap/roadmap.md as the canonical F-number ledger AND read docs/roadmap/idea-backlog.md for context. For roadmap.md, record each F-number's status using the shared enum. This subsystem owns the roadmap's own SHIPPED/DEFERRED/PARTIAL markers.` },
-  { key: 'ship-delta', label: 'explore:ship-delta', brief: `Establish ship-status from REPO TRUTH ONLY: git log subjects${SINCE_REF ? ` over range ${SINCE_REF}` : ` (no range supplied -- use roadmap SHIPPED markers only; do NOT invent a range)`} plus the roadmap's SHIPPED markers. Do NOT read prior idea-backlog titles -- those are engine OUTPUT, not repo truth (reading them is a statefulness leak; that is cross-run memory's job, not grounding's). Your ship_status describes only "what the repo contains."` },
+  { key: 'roadmap', label: 'explore:roadmap', brief: `Map docs/roadmap/roadmap.md as the canonical F-number ledger AND read docs/roadmap/idea-backlog.md for context. For roadmap.md, record each F-number\u0027s status using the shared enum. This subsystem owns the roadmap\u0027s own SHIPPED/DEFERRED/PARTIAL markers.` },
+  { key: 'ship-delta', label: 'explore:ship-delta', brief: `Establish ship-status from REPO TRUTH ONLY: git log subjects${SHIP_DELTA_RANGE} plus the roadmap\u0027s SHIPPED markers. Do NOT read prior idea-backlog titles -- those are engine OUTPUT, not repo truth (reading them is a statefulness leak; that is cross-run memory\u0027s job, not grounding\u0027s). Your ship_status describes only \u0022what the repo contains.\u0022` },
 ]
 
 const submaps = await parallel(EXPLORERS.map(e => () =>
@@ -417,7 +426,7 @@ const submaps = await parallel(EXPLORERS.map(e => () =>
 
 YOU ARE A SUBSYSTEM EXPLORER for Seshat BI. Read the real repo under ${REPO} and map ONLY your
 subsystem. Do NOT propose ideas. Do NOT execute anything (read-only). Cite a file/feature for
-every capability and every ship-status row. If a path is unreadable, list it in 'unreadable' --
+every capability and every ship-status row. If a path is unreadable, list it in \u0027unreadable\u0027 --
 never guess.
 
 YOUR SUBSYSTEM: ${e.brief}
@@ -527,7 +536,7 @@ function renderMap(m) {
   }
   if (Array.isArray(m.ship_status) && m.ship_status.length) {
     lines.push('=== SHIP STATUS (feature -> status [evidence]) ===')
-    m.ship_status.forEach(r => lines.push(`- ${r.feature_id}: ${r.status} [${r.evidence_path}]${r.verifier_opened_evidence ? '' : ' (UNVERIFIED-evidence)'}`))
+    m.ship_status.forEach(r => lines.push(`- ${r.feature_id}: ${r.status} [${r.evidence_path}]${r.verifier_opened_evidence ? S() : S(32,40,85,78,86,69,82,73,70,73,69,68,45,101,118,105,100,101,110,99,101,41)}`))
     lines.push('')
   }
   if (Array.isArray(m.reconciliation_ledger) && m.reconciliation_ledger.length) {
@@ -536,7 +545,7 @@ function renderMap(m) {
     lines.push('')
   }
   if (Array.isArray(m.missing_subsystems) && m.missing_subsystems.length) {
-    lines.push(`=== DEGRADED: missing subsystem explorers: ${m.missing_subsystems.join(', ')} ===`, '')
+    lines.push(`=== DEGRADED: missing subsystem explorers: ${m.missing_subsystems.join(S(44,32))} ===`, '')
   }
   if (Array.isArray(m.principles) && m.principles.length) {
     lines.push('=== PRINCIPLES (an idea must respect) ===')
@@ -591,29 +600,29 @@ const memory = await agent(
 
 YOU ARE THE MEMORY READER for Seshat BI. You do NOT propose ideas. You read the prior idea bank
 and label each prior idea with its CURRENT state, so this run does not regenerate shipped work or
-re-litigate settled rejections. You are given Ground's VERIFIED ship-status table -- that is your
+re-litigate settled rejections. You are given Ground\u0027s VERIFIED ship-status table -- that is your
 authoritative source for what shipped. Do NOT re-read git (Ground owns that).
 
 STEPS:
 1. Read the prior bank at ${REPO}/docs/roadmap/idea-backlog.md from disk. If it does not exist or
    has no idea headings, return prior_ideas: [] and say so in notes (a first run is normal).
-2. Parse each idea heading (e.g. "### A1. Machine-Checkable Route Registry"). For EACH: capture
+2. Parse each idea heading (e.g. \u0022### A1. Machine-Checkable Route Registry\u0022). For EACH: capture
    prior_id, prior_title, the verdict SECTION it sits under (## ADOPT/CONSIDER/PARK/REJECT) as
    prior_verdict, and -- as verdict_citation -- the VERBATIM heading line plus the verbatim section
    header, so any misparse is a quotable artifact a human can catch.
-2b. ALSO parse the "## SHIPPED / SETTLED (prior ideas, for the record)" appendix if present: its
-   entries are BULLETS, not headings, of the form "- **<id> <title>** -- SHIPPED. <citation>" or
-   "-- SETTLED (rejected). <citation>". For each bullet, emit a prior_ideas entry with prior_id,
+2b. ALSO parse the \u0022## SHIPPED / SETTLED (prior ideas, for the record)\u0022 appendix if present: its
+   entries are BULLETS, not headings, of the form \u0022- **<id> <title>** -- SHIPPED. <citation>\u0022 or
+   \u0022-- SETTLED (rejected). <citation>\u0022. For each bullet, emit a prior_ideas entry with prior_id,
    prior_title, prior_verdict (ADOPT/REJECT/UNKNOWN as best inferred from the tag), current_state
-   ("shipped" for SHIPPED, "rejected-settled" for SETTLED), verdict_citation = the verbatim bullet,
-   and state_citation = the bullet's trailing citation. This is the round-trip: closed ideas live
+   (\u0022shipped\u0022 for SHIPPED, \u0022rejected-settled\u0022 for SETTLED), verdict_citation = the verbatim bullet,
+   and state_citation = the bullet\u0027s trailing citation. This is the round-trip: closed ideas live
    in that appendix as bullets, so they MUST be re-read here or they vanish from memory next run.
-3. Set current_state by matching the idea against Ground's ship_status:
-   - "shipped" ONLY if a ship_status row marks an equivalent capability SHIPPED -- cite that row
+3. Set current_state by matching the idea against Ground\u0027s ship_status:
+   - \u0022shipped\u0022 ONLY if a ship_status row marks an equivalent capability SHIPPED -- cite that row
      (feature_id + evidence_path) in state_citation.
-   - "rejected-settled" if the prior verdict was REJECT/INELIGIBLE and nothing changed -- cite the
+   - \u0022rejected-settled\u0022 if the prior verdict was REJECT/INELIGIBLE and nothing changed -- cite the
      prior rationale line.
-   - "open" otherwise. If you cannot back a shipped/settled claim with a citation, it is "open".
+   - \u0022open\u0022 otherwise. If you cannot back a shipped/settled claim with a citation, it is \u0022open\u0022.
 4. NEVER guess that something shipped. No citation -> open. git_corroborated is always false
    (Ground owns git). You never execute anything and you never write the roadmap.
 
@@ -651,7 +660,7 @@ const LENSES = [
   { key: 'technical',label: 'gen:technical', role: `a PROFESSIONAL TECHNICAL ARCHITECT lens. Generate ideas that strengthen the system -- architecture, testing/CI gates, performance, the router/two-hop contract, knowledge-layer tooling, drift/reconciliation, adapter design, observability, agent-eval harnesses. Buildable in-repo.` },
 ]
 function genPrompt(role, extra='') {
-  return `You are ${role}\nGenerate 6-8 ideas for Seshat BI. Each MUST respect the hard principles (no executor, no gate bypass, generic-only, no fabricated confidence). Mix NOW and HORIZON. For each idea set strengthens_layer to the ONE knowledge layer it most strengthens (bi-sql / bi-dax / bi-python / bi-bigdata / retail-kpi / docs-spine), or 'none' if it strengthens the engine/CLI/gates rather than a knowledge layer -- judge honestly, do not force a layer. ${extra}${MEMORY_LINE}\n\n=== REPO MAP ===\n${exploreMap}`
+  return `You are ${role}\nGenerate 6-8 ideas for Seshat BI. Each MUST respect the hard principles (no executor, no gate bypass, generic-only, no fabricated confidence). Mix NOW and HORIZON. For each idea set strengthens_layer to the ONE knowledge layer it most strengthens (bi-sql / bi-dax / bi-python / bi-bigdata / retail-kpi / docs-spine), or \u0027none\u0027 if it strengthens the engine/CLI/gates rather than a knowledge layer -- judge honestly, do not force a layer. ${extra}${MEMORY_LINE}\n\n=== REPO MAP ===\n${exploreMap}`
 }
 // classify a lens result: 'failed' = agent returned null (schema/death), 'empty' =
 // a valid response with no ideas, 'ok' = real ideas. This separates a FAILURE from a
@@ -683,7 +692,7 @@ phase('Completeness')
 const sofar = [...round1, ...crossRound].filter(r => r._status === 'ok')
 const sofarJson = JSON.stringify(sofar.map(r => ({ lens: r.lens || r._key, ideas: (r.ideas||[]).map(i => i.title) })), null, 2)
 const gaps = await agent(
-  `You are a COMPLETENESS CRITIC. Below are all idea TITLES generated so far for Seshat BI, plus the repo map. Your job is to find what's MISSING -- readiness stages with few ideas, repo gaps/tensions nobody addressed, idea TYPES underrepresented (e.g. all features and no DX, or all technical and no business value), and obvious adjacent ideas no lens reached. List 5-10 specific missing angles as short prompts ("nobody proposed anything for X / for the Y gap"). Do not generate full ideas -- just name the blind spots precisely.\n\n=== REPO MAP ===\n${exploreMap}\n\n=== IDEA TITLES SO FAR ===\n${sofarJson}`,
+  `You are a COMPLETENESS CRITIC. Below are all idea TITLES generated so far for Seshat BI, plus the repo map. Your job is to find what\u0027s MISSING -- readiness stages with few ideas, repo gaps/tensions nobody addressed, idea TYPES underrepresented (e.g. all features and no DX, or all technical and no business value), and obvious adjacent ideas no lens reached. List 5-10 specific missing angles as short prompts (\u0022nobody proposed anything for X / for the Y gap\u0022). Do not generate full ideas -- just name the blind spots precisely.\n\n=== REPO MAP ===\n${exploreMap}\n\n=== IDEA TITLES SO FAR ===\n${sofarJson}`,
   { label: 'critic:gaps', phase: 'Completeness', ...SCOUT }
 )
 // one targeted fill pass aimed at the named gaps
@@ -717,10 +726,13 @@ const run_health = (() => {
   const anyFailed = rounds.some(r => r.failed > 0)
   const anyShort = rounds.some(r => r.ok < r.expected)
   const degraded = anyFailed || anyShort || groundFailed || memoryFailed
-  const parts = rounds.filter(r => r.ok < r.expected).map(r => `${r.label} ${r.ok}/${r.expected} lenses ok${r.failed ? ` (${r.failed} failed)` : ''}`)
+  const parts = rounds.filter(r => r.ok < r.expected).map(r => {
+    const failedSuffix = r.failed ? ' (' + r.failed + ' failed)' : ''   // de-nested: no `` inside ${}
+    return `${r.label} ${r.ok}/${r.expected} lenses ok${failedSuffix}`
+  })
   if (groundFailed) parts.unshift('grounding reconcile-verify returned null -- the repo map is the RAW UNVERIFIED submap union')
   if (memoryFailed) parts.unshift('memory:read-prior returned null -- prior shipped/settled ideas are UNKNOWN this run; lenses may re-propose closed work')
-  const banner = degraded ? `DEGRADED RUN: ${parts.join('; ')}. Treat this bank as partial.` : ''
+  const banner = degraded ? `DEGRADED RUN: ${parts.join(S(59,32))}. Treat this bank as partial.` : ''
   return { rounds, degraded, banner }
 })()
 
@@ -731,11 +743,11 @@ const synthesis = await agent(
 (initial, cross-pollination, gap-fill). Merge into ONE clean candidate set.
 - DEDUPE near-duplicates (keep the strongest framing; note where lenses/rounds converged -- convergence is a strength signal).
 - GROUP into themes.
-- Keep each idea's title, pitch, horizon, why_it_fits, rough_shape, strengthens_layer, source_lens(es).
+- Keep each idea\u0027s title, pitch, horizon, why_it_fits, rough_shape, strengthens_layer, source_lens(es).
 - Do NOT score (the reviewer does). Do NOT invent new ideas; only merge/clarify.
 - Flag any idea that might violate a hard principle (the reviewer rules).
 - If a candidate matches a prior idea KNOWN to have SHIPPED (see history below), KEEP it but
-  tag it "prior_state: shipped" with the citation -- do NOT drop it (a materially-new variant
+  tag it \u0022prior_state: shipped\u0022 with the citation -- do NOT drop it (a materially-new variant
   and the convergence signal both matter). Dropping would hide a genuine extension.
 ${MEMORY_LINE}
 
@@ -752,12 +764,12 @@ phase('Verify')
 // disposition is refuted; an idea earns 'survived' only if its hardest objection fails.
 const verify = await agent(
   `You are an ADVERSARIAL SKEPTIC. For EVERY idea in the synthesized candidate set below you MUST
-attempt a refutation -- there is no "skip the ones that look fine." The default disposition of
-every idea is that it does NOT survive; an idea earns 'survived' only if your hardest objection
+attempt a refutation -- there is no \u0022skip the ones that look fine.\u0022 The default disposition of
+every idea is that it does NOT survive; an idea earns \u0027survived\u0027 only if your hardest objection
 provably fails. Killing nothing is a RED FLAG that you did not really try.
 
 For EACH idea, find the strongest objection: does it secretly violate a hard principle? does it
-duplicate a feature the ship-status says is already SHIPPED? is the "feasible" framing hiding a
+duplicate a feature the ship-status says is already SHIPPED? is the \u0022feasible\u0022 framing hiding a
 missing dependency (a gold source, a runtime consumer, a human ruling)? would it quietly turn a
 reasoning layer into an executor or a stats engine? Then rule it survived / weakened / killed
 with one line of why.
@@ -778,9 +790,14 @@ const PANELISTS = [
   { key: 'shipped-duplication-auditor', label: 'review:shipped-duplication-auditor', standpoint:
     `the SHIPPED-DUPLICATION AUDITOR. Judge CONSISTENCY with shipped work using the ship-status table + history. PENALIZE an idea that merely RESTATES shipped work; do NOT penalize a genuine extension that builds ON shipped work -- but it must name the shipped feature and say which it is. An idea matching settled-rejected history should not be ADOPT unless it is materially new.` },
   { key: 'value-feasibility-realist', label: 'review:value-feasibility-realist', standpoint:
-    `the VALUE/FEASIBILITY REALIST. Judge value and feasibility honestly: is "feasible" hiding a missing gold source, a runtime consumer that does not exist yet, or an unmade human ruling? Reward genuine analytical/system value; discount ideas whose feasibility depends on something deferred (e.g. F016).` },
+    `the VALUE/FEASIBILITY REALIST. Judge value and feasibility honestly: is \u0022feasible\u0022 hiding a missing gold source, a runtime consumer that does not exist yet, or an unmade human ruling? Reward genuine analytical/system value; discount ideas whose feasibility depends on something deferred (e.g. F016).` },
 ]
-const panel = (await parallel(PANELISTS.map(p => () =>
+// NOTE: two statements, NOT `const panel = (await parallel(...)).filter(Boolean)`. The
+// Workflow loader's parser cannot match a `(`-wrapped multi-line expression whose closing
+// `)` is followed by a `.method()` (e.g. `).filter(Boolean)`); it desyncs and the whole
+// script fails to load (node --check passes -- the loader is stricter). Splitting the
+// wrapper into a plain `await` assignment + a separate `.filter` line avoids the trigger.
+const panelRaw = await parallel(PANELISTS.map(p => () =>
   agent(
     `You are ${p.standpoint}
 
@@ -789,7 +806,7 @@ Score from YOUR standpoint; the other two cover the other angles. Default to cau
 triage opinion for an IDEA BANK, never a build decision -- you never promote anything to the roadmap.
 
 For EACH idea set: horizon (NOW/HORIZON); eligible (bool) + ineligibility_reason (named principle
-or ''); consistency (consistent/minor-tension/conflict); value_score & feasibility_score (1-10);
+or \u0027\u0027); consistency (consistent/minor-tension/conflict); value_score & feasibility_score (1-10);
 verdict (ADOPT/CONSIDER/PARK/REJECT/SHIPPED -- use SHIPPED only if it matches a shipped feature);
 survived_verification (survived/weakened/killed, weighed from the skeptic); prior_status
 (new/shipped/rejected-settled/open-prior from the history); relitigation (n/a/settled/materially-new);
@@ -797,10 +814,11 @@ rationale; first_step for ADOPT/CONSIDER. An idea the skeptic KILLED should not 
 
 === SHIP STATUS ===\n${JSON.stringify((explore_map && explore_map.ship_status) || [], null, 2)}${MEMORY_LINE}
 === SYNTHESIZED CANDIDATES ===\n${synthesis}
-=== ADVERSARIAL SKEPTIC'S CHALLENGES ===\n${verify ? JSON.stringify(verify) : '(skeptic produced nothing)'}`,
+=== ADVERSARIAL SKEPTIC\u0027S CHALLENGES ===\n${verify ? JSON.stringify(verify) : S(40,115,107,101,112,116,105,99,32,112,114,111,100,117,99,101,100,32,110,111,116,104,105,110,103,41)}`,
     { label: p.label, phase: 'Panel-review', schema: PANEL_REVIEWER_SCHEMA, ...LEAD }
   ).then(r => r ? { ...r, _key: p.key } : null)
-)).filter(Boolean)
+))
+const panel = panelRaw.filter(Boolean)
 
 // ===================== 8. AGGREGATE (pure JS gate + clamp; tiny prose agent) =====================
 // The arithmetic, the eligibility gate, and the demote-only clamp are PURE JS -- never an
@@ -837,8 +855,8 @@ const FALLBACK_DISSENT = { dissent_by_title: [], portfolio_summary: aggregated.i
 const dissentRaw = aggregated.ideas.length ? await agent(
   `You are the PANEL CLERK. Write human-facing PROSE only -- you change NO scores and NO verdicts
 (those are already computed). (1) For each idea flagged with a panel split below, write a one- to
-two-sentence 'dissent' explaining the disagreement (e.g. "2 reviewers ADOPT; the principle auditor
-ruled it ineligible for X"). (2) Write a 'portfolio_summary': a scannable paragraph a human can act
+two-sentence \u0027dissent\u0027 explaining the disagreement (e.g. \u00222 reviewers ADOPT; the principle auditor
+ruled it ineligible for X\u0022). (2) Write a \u0027portfolio_summary\u0027: a scannable paragraph a human can act
 on. Return dissent keyed by idea title, plus the summary. Do not invent ideas or numbers.
 
 === AGGREGATED IDEAS (verdicts/scores already final; splits flagged) ===
@@ -907,7 +925,7 @@ const RESCUE_SCHEMA = {
 }
 const rescue = rejected.length ? await agent(
   `You are the STEELMAN. Below are ONLY the ideas the panel did not adopt (PARK / REJECT /
-INELIGIBLE), each with the reviewers' rationale. For EACH, attempt one good-faith rescue: is there
+INELIGIBLE), each with the reviewers\u0027 rationale. For EACH, attempt one good-faith rescue: is there
 a reframing or a NARROWER seam that would make it eligible and worth a closer look later (e.g. a
 std-dev anomaly KIND -> an owner-set absolute threshold; a feature needing a missing gold source ->
 the authorable contract-with-blocking-reason seam)? If yes, give the reframed_pitch + narrowed_seam.
@@ -916,7 +934,7 @@ run inherits so it stops re-litigating.
 
 YOU DO NOT RE-SCORE. You output a reason, never a verdict or eligibility -- the gate has already
 ruled. A rescue is a suggestion for a HUMAN to consider in a future run, never an override. Respect
-every hard principle: a "rescue" that still executes, bypasses a gate, or fabricates confidence is
+every hard principle: a \u0022rescue\u0022 that still executes, bypasses a gate, or fabricates confidence is
 NOT a rescue -- say rescue_possible false and name the principle.
 
 === NOT-ADOPTED IDEAS (title, verdict, eligibility, rationale) ===
@@ -1045,6 +1063,7 @@ function renderBacklog(review, opts) {
   // History-aware contract (the run is now memory-aware; see PR4). Still an idea BANK,
   // never a roadmap: a SHIPPED tag only records a human already took an equivalent idea
   // through the normal process -- the engine never promotes anything itself.
+  const shippedSuffix = v.SHIPPED ? ', SHIPPED ' + v.SHIPPED : ''   // de-nested: no `` inside ${}
   const HEADER = [
     '# Seshat BI -- Idea Bank',
     '',
@@ -1068,10 +1087,10 @@ function renderBacklog(review, opts) {
     // Honest funnel: raw and scored are both real JS counts; the sentence does not
     // imply a measured conversion between them. SHIPPED is shown only when nonzero so the
     // count stays equal to the rendered sections (no scored idea silently disappears).
-    `**${scoredM} ideas scored** (generated across ${rounds} rounds; raw pre-dedupe ${rawN}). Verdicts: ADOPT ${v.ADOPT}, CONSIDER ${v.CONSIDER}, PARK ${v.PARK}, REJECT ${v.REJECT}${v.SHIPPED ? `, SHIPPED ${v.SHIPPED}` : ''}. Horizon: NOW ${h.NOW}, HORIZON ${h.HORIZON}.`,
+    `**${scoredM} ideas scored** (generated across ${rounds} rounds; raw pre-dedupe ${rawN}). Verdicts: ADOPT ${v.ADOPT}, CONSIDER ${v.CONSIDER}, PARK ${v.PARK}, REJECT ${v.REJECT}${shippedSuffix}. Horizon: NOW ${h.NOW}, HORIZON ${h.HORIZON}.`,
   ].join('\n')
 
-  const PORTFOLIO = ['## Reviewer portfolio verdict', '', `> ${norm((review && review.summary) || '')}`].join('\n')
+  const PORTFOLIO = ['## Reviewer portfolio verdict', '', `> ${norm((review && review.summary) || S())}`].join('\n')
 
   const LEGEND = [
     '## Legend',
@@ -1105,7 +1124,7 @@ function renderBacklog(review, opts) {
     ? ['## SHIPPED / SETTLED (prior ideas, for the record)', '',
        closed.map(p => {
          const tag = p.current_state === 'shipped' ? 'SHIPPED' : 'SETTLED (rejected)'
-         return `- **${norm(p.prior_id)} ${norm(p.prior_title)}** -- ${tag}. ${norm(p.state_citation || '')}`
+         return `- **${norm(p.prior_id)} ${norm(p.prior_title)}** -- ${tag}. ${norm(p.state_citation || S())}`
        }).join('\n')].join('\n')
     : null
 
@@ -1116,10 +1135,11 @@ function renderBacklog(review, opts) {
     ? ['## Rescue notes (steelman of the not-adopted)', '',
        '_A reframing that MIGHT make an idea eligible later, or the irreducible reason it stays out. A reason for a human to weigh next run -- never a verdict; the gate already ruled._', '',
        rescues.map(r => {
-         const head = `- **${norm(r.title)}** -- ${r.rescue_possible ? 'rescue possible' : 'no rescue'}.`
+         const head = `- **${norm(r.title)}** -- ${r.rescue_possible ? S(114,101,115,99,117,101,32,112,111,115,115,105,98,108,101) : S(110,111,32,114,101,115,99,117,101)}.`
+         const seamNote = r.narrowed_seam ? ' Narrowed seam: ' + norm(r.narrowed_seam) : ''   // de-nested
          const body = r.rescue_possible
-           ? ` ${norm(r.reframed_pitch || '')}${r.narrowed_seam ? ` Narrowed seam: ${norm(r.narrowed_seam)}` : ''}`
-           : ` ${norm(r.residual_blocker || '')}`
+           ? ` ${norm(r.reframed_pitch || S())}${seamNote}`
+           : ` ${norm(r.residual_blocker || S())}`
          return head + body
        }).join('\n')].join('\n')
     : null
@@ -1129,15 +1149,16 @@ function renderBacklog(review, opts) {
   const m = opts.metrics
   const METRICS = m ? (() => {
     const yf = m.yield_funnel
+    const layerPairs = Object.entries(m.layer_coverage || {}).map(([k, n]) => k + ' ' + n).join(', ')   // de-nested
     const layerLine = Object.keys(m.layer_coverage || {}).length > 1 || (m.layer_coverage && !m.layer_coverage.none)
-      ? `\n- Layer coverage: ${Object.entries(m.layer_coverage).map(([k, n]) => `${k} ${n}`).join(', ')}`
+      ? `\n- Layer coverage: ${layerPairs}`
       : ''
     return ['## Run health & self-metrics', '',
       `- Yield: ${yf.raw_pre_dedupe} raw -> ${yf.scored} scored (ADOPT ${yf.adopt}, CONSIDER ${yf.consider}, PARK ${yf.park}, REJECT ${yf.reject}).`,
       `- Eligibility-rejection rate: ${m.eligibility_rejection_rate_pct}%.`,
-      `- Consistency: ${m.consistency_mix.consistent} consistent, ${m.consistency_mix['minor-tension']} minor-tension, ${m.consistency_mix.conflict} conflict.`,
+      `- Consistency: ${m.consistency_mix.consistent} consistent, ${m.consistency_mix[S(109,105,110,111,114,45,116,101,110,115,105,111,110)]} minor-tension, ${m.consistency_mix.conflict} conflict.`,
       `- Verification: ${m.survived_verification_mix.survived} survived, ${m.survived_verification_mix.weakened} weakened, ${m.survived_verification_mix.killed} killed.${layerLine}`,
-      `- Run health: ${m.degraded ? 'DEGRADED (see banner above)' : 'all lenses reported'}.`,
+      `- Run health: ${m.degraded ? S(68,69,71,82,65,68,69,68,32,40,115,101,101,32,98,97,110,110,101,114,32,97,98,111,118,101,41) : S(97,108,108,32,108,101,110,115,101,115,32,114,101,112,111,114,116,101,100)}.`,
     ].join('\n')
   })() : null
 
