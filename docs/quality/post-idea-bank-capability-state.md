@@ -12,9 +12,9 @@ confirmed from the repo is marked **Not verified**.
 
 ## What works now
 
-- A **static governance gate**, `retail check`, with **33 registered rules**
-  (verified: `src/retail/rules/`, registry count via `retail.registry.all_rules()`;
-  wiring guarded by `tests/unit/test_rules_wiring.py` `EXPECTED_RULE_IDS`). It reads
+- A **static governance gate**, `retail check`, with its full registered rule set
+  (catalog: `docs/glossary.md`; live count via `retail.registry.all_rules()`,
+  pinned by `tests/unit/test_rules_wiring.py` `EXPECTED_RULE_IDS`). It reads
   committed files only; it is stdlib-only at import.
 - **Route integrity** — Idea A1, a **registered rule** (`A1`):
   `docs/routing/routes.yaml` mirrors the knowledge-map routes; the A1 rule fails
@@ -90,7 +90,7 @@ confirmed from the repo is marked **Not verified**.
 
 | Layer | Owns (works now) | Must not own | Status |
 |-------|------------------|--------------|--------|
-| Route / gate integrity | Machine-checkable routes (A1); the static `retail check` gate (33 rules) | Executing the routes/commands it references; granting readiness | Works now (static) |
+| Route / gate integrity | Machine-checkable routes (A1); the static `retail check` gate | Executing the routes/commands it references; granting readiness | Works now (static) |
 | Structured findings | Opt-in JSON rendering of findings (Idea B2 — a CLI flag, not a rule) | Changing default output; altering rule behaviour | Works now |
 | Never-execute guard | Static `ast` block on module-scope DB/network imports (B1) | Opening a real connection; blocking legitimate lazy imports | Works now |
 | SQL knowledge | Grain/keys/joins/fan-out, COUNT/NULL semantics, transform & reconciliation reasoning | Running SQL; defining KPI meaning | Reasoning only |

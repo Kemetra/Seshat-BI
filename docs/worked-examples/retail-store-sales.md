@@ -39,7 +39,7 @@ absorbed all four without a C086-specific rule firing.
 - Handoff: `mappings/retail_store_sales/handoff/` (pack + review checklist)
 - Readiness state: `mappings/retail_store_sales/readiness-status.yaml` (the spine record)
 - Process: `docs/medallion-playbook.md`; the spine: `docs/readiness/readiness-model.md`
-- Governance: `retail check` (33-rule static gate) + `retail validate` (live surface)
+- Governance: `retail check` (static gate) + `retail validate` (live surface)
 
 **How to reuse this for a new table:** copy this section structure, swap
 `retail_store_sales` for the new table, walk the seven stages, and fill each section's

@@ -93,9 +93,16 @@ idempotent migration · **RC14** Kimball star + `-1` member · **RC15** contiguo
 
 ## Static check rules (`retail check`)
 
-The static rules, by family. The **live registry in `src/retail/rules/` is the
-authoritative list and count**; the `retail-govern` skill maps each id to its fix. (`S4`
-is split into `S4a`/`S4b`, so the letter ids span `D1`-`D11` with the `S4a`/`S4b` pair.)
+This catalog is the **single source of truth for `retail check`'s rule count.**
+The **live registry in `src/retail/rules/` is authoritative**; the table below
+mirrors it and the `retail-govern` skill maps each id to its fix.
+
+> **Currently 33 rules in 8 families** (S, D, C, R, G, P, A, B). When a rule is
+> added or removed, update the table and this line **together** — and elsewhere
+> refer to "the static `retail check` gate" by name rather than restating a
+> number. Restated counts are exactly what drifted before (see
+> `docs/quality/drift-consistency-audit-2026-06-28.md`). (`S4` is split into
+> `S4a`/`S4b`.)
 
 | Family | Layer it guards | Rules |
 |--------|-----------------|-------|

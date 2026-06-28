@@ -16,7 +16,7 @@
   the L3 new predicate ops were assessed and DEFERRED for want of a consumer/target
   (see `docs/superpowers/specs/`). Additionally, the **idea-bank execution sequence
   (A1/B2/B1/F7/F8) SHIPPED 2026-06-27** (PRs #62-#66) -- five gated items drawn from
-  the exploratory idea bank; A1 + B1 take the static `retail check` gate to 33 rules
+  the exploratory idea bank; A1 + B1 add two static rules to the `retail check` gate
   (see the Idea-Bank section below). This doc records what was delivered, the one
   original feature still parked, and the companion tier's true state.
 - **Product identity:** **Seshat BI** is the product (package alias `Seshat_BI`;
@@ -56,8 +56,8 @@ for any deferred/gated item).
   toolchain (pbi-tools) or a real predicate consumer (L3) appears.
 
 > The kit already ships an agent-first constitution, a source-mapping gate, the
-> Spec-Kit foundation, the C086 worked example, a 33-rule static `retail check`
-> (31 from the original sequence + A1/B1 from the idea-bank sequence),
+> Spec-Kit foundation, the C086 worked example, the static `retail check` gate
+> (the original sequence plus A1/B1 from the idea-bank sequence),
 > and a `retail validate` live surface. This roadmap reconciles that foundation
 > (feature 001-004 + the orchestration/builder slices) with the readiness
 > direction: every future feature advances one **readiness stage**.

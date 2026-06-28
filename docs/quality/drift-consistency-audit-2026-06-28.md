@@ -103,12 +103,25 @@ The other skills are documented in their own `SKILL.md` (and, for the adapters,
 Optional follow-up: have `docs/operations/agent-operating-playbook.md` index every
 skill with its landing path. Left as a note, not done here.
 
-## Root cause & recommendation
+## Root cause & fix — single source of truth (IMPLEMENTED)
 
-The dominant drift is the **rule count repeated as free text in ~13+ files**, so
-every new rule leaves a tail of stale numbers. `docs/glossary.md` already declares
-*"the live registry in `src/retail/rules/` is the authoritative list and count"* —
-the remaining step is to stop **restating** the number elsewhere: prose should say
-"the static gate (see the glossary / `retail check --list` for the current count)"
-rather than hardcoding "N rules". That single-source-of-truth convention, applied
-going forward, prevents the next round of this audit.
+The dominant drift was the **rule count repeated as free text in ~13+ files**, so
+every new rule left a tail of stale numbers. This is now fixed at the root:
+
+- **`docs/glossary.md` is the single source of truth for the count.** It carries
+  the authoritative rule catalog plus one explicit count line ("Currently 33 rules
+  in 8 families"), and a convention: when a rule changes, update the catalog and
+  that line together, and **do not restate the number elsewhere**.
+- **All live docs were de-numbered.** README, the roadmap, `readiness-pipeline.md`,
+  `tower-bi-agent-kit.md`, both worked examples, and `post-idea-bank-capability-state.md`
+  now refer to "the static `retail check` gate" by name (linking to the glossary)
+  instead of hardcoding "N rules". Historical *deltas* (e.g. "A1 + B1 add two rules",
+  ADR-0006's "27 → 28") are kept — they are fixed facts, not current-state counts.
+- **Left as a number on purpose:** historical/dated artifacts (`specs/**`, the
+  constitution, dated `superpowers/` docs) and the unrelated SQL-analyzer "SAR" rule
+  family in `skills/bi-sql-knowledge/`.
+
+**Optional follow-up (code, not done here):** add a `retail check --list` / `retail
+rules` subcommand that prints ids + count from the registry, so the count becomes
+machine-derived and even the glossary line can cite a command. The rule set is
+already pinned by `tests/unit/test_rules_wiring.py` `EXPECTED_RULE_IDS`.

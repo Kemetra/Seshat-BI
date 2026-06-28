@@ -136,7 +136,7 @@ planned but not yet built, see the [Roadmap](#roadmap).)
 |------------|-------------------|
 | **Spec-Kit foundation + agent constitution** | The governance law every workflow obeys (`.specify/memory/constitution.md`). |
 | **Source-mapping gate** | `source-map.yaml` must be reviewed before any silver SQL is written. |
-| **`retail check` (static gate)** | A 33-rule static gate over committed SQL, TMDL/PBIR, config, docs, and repo text; the exit code is the authority. |
+| **`retail check` (static gate)** | A static gate over committed SQL, TMDL/PBIR, config, docs, and repo text (rule catalog: `docs/glossary.md`); the exit code is the authority. |
 | **`retail validate` (live surface)** | PK uniqueness, date coverage, orphan FKs, reconciliation, source-map-driven checks. |
 | **DAX governance L1-L2** | DAX best-practice rules `D1`-`D11` enforced statically inside `retail check` (single-quote handling, `ALL`-variants, dollar-quote tokenizer, and more). |
 | **`retail semantic-check` (L3 contract drift)** | Detects when a committed measure's denominator drifts from its metric contract. |

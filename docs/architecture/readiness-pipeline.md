@@ -37,7 +37,7 @@ binds the existing layers into stages:
      source -> mapping -> silver -> gold -> semantic model -> dashboard -> publish
         | each stage's gate is an EXISTING check:
         v
-  A  GOVERNANCE CORE         retail check (static, 33 rules) + retail validate (live)
+  A  GOVERNANCE CORE         retail check (static) + retail validate (live)
         |                    -- the gates the stages assert; unchanged
         v
   ENGINE / SUBSTRATE         pbi-cli (later adapter) ; Postgres medallion + PBIP

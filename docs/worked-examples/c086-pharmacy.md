@@ -14,7 +14,7 @@ policy nuance left as a checker-policy decision.*
 - Process: `docs/medallion-playbook.md` (the 7-phase method)
 - Defaults: `docs/decisions/0002-retail-cleaning-defaults.md` (the RC1–RC16 rulings)
 - Compliance: `docs/c086-adr0002-compliance.md` (the static + live matrix)
-- Governance: `retail check` (the 33-rule static gate; rules in `src/retail/`)
+- Governance: `retail check` (the static gate; rules in `src/retail/`)
 
 **How to reuse this for a new table:** copy this section structure, swap C086 for the new
 table, run the playbook's 7 phases to produce the answers, then fill §4–§5 with that table's
@@ -179,7 +179,7 @@ Statically checkable from committed text — these are now **wired into `retail 
 - **RC15 → S7** — `dim_date` built from `generate_series`, not `SELECT DISTINCT date`.
 
 These are *structural / textual* — parseable from the migration SQL without a database. The
-checker now reports **33 rules** (was 26 when this example was written); on C086 they all pass (the migrations satisfy the defaults).
+checker has grown since this example was written (the current catalog lives in `docs/glossary.md`); on C086 they all pass (the migrations satisfy the defaults).
 
 ## 8. Which validations require LIVE DB validation
 
