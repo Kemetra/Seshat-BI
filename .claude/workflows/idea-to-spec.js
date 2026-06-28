@@ -103,10 +103,14 @@ function parseBacklog(raw) {
   for (const line of raw.split(/\r?\n/)) {
     const sec = line.match(/^##\s+(ADOPT|CONSIDER|PARK|REJECT)\b/)
     if (sec) { section = sec[1]; continue }
-    const h = line.match(/^###\s+([A-Z]+\d+)\.\s+(.+?)\s*$/)   // "### A1. Title ..."
+    // Tolerate BOTH the fortified bare-title heading "### Title" AND the legacy
+    // ID-prefixed "### A1. Title". The fortified idea-engine renderer drops the ID
+    // (it is an ephemeral per-run label; the TITLE is the durable match key), so the
+    // ID group is OPTIONAL. Group numbering is preserved: h[1]=id|undefined, h[2]=title.
+    const h = line.match(/^###\s+(?:([A-Z]+\d+)\.\s+)?(.+?)\s*$/)   // "### Title" OR legacy "### A1. Title"
     if (h && section) {
       ideas.push({
-        id: h[1],                                   // ephemeral label, not a stable key
+        id: h[1] || '--',                           // ephemeral label (absent in fortified backlogs), not a stable key
         title_raw: h[2],                            // verbatim, for the ledger echo
         title_fold: asciiFold(h[2]).toLowerCase(),  // folded + lowered, for matching
         section,                                    // ADOPT | CONSIDER | PARK | REJECT
@@ -124,7 +128,7 @@ function locate(ideas, input) {
   const exact = ideas.filter(i => i.title_fold === needle)
   if (exact.length === 1) return { match: exact[0] }
   if (exact.length > 1) return { ambiguous: exact }
-  const byId = ideas.filter(i => i.id.toLowerCase() === needle)
+  const byId = ideas.filter(i => i.id !== '--' && i.id.toLowerCase() === needle)   // '--' placeholder = ID-less fortified backlog; title is the only key there
   if (byId.length === 1) return { match: byId[0] }
   const sub = ideas.filter(i => i.title_fold.includes(needle))
   if (sub.length === 1) return { match: sub[0] }
