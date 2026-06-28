@@ -12,6 +12,7 @@ export const meta = {
     { title: 'Verify',         detail: 'adversarial skeptic challenges EVERY candidate (default-refuted)', model: 'opus' },
     { title: 'Panel-review',   detail: '3 independent reviewers (principle / shipped-dup / value-feasibility) score the set', model: 'opus' },
     { title: 'Aggregate',      detail: 'pure-JS median + eligibility gate + demote-only clamp; tiny prose agent for dissent', model: 'opus' },
+    { title: 'Rescue',         detail: 'steelman the not-adopted ideas (reason only, never a re-score); skipped if none', model: 'opus' },
     { title: 'Render',         detail: 'pure-JS: render the idea-backlog markdown (no agent); orchestrator writes' },
   ],
 }
@@ -99,13 +100,16 @@ const IDEA_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['title', 'pitch', 'horizon', 'why_it_fits', 'rough_shape'],
+        required: ['title', 'pitch', 'horizon', 'why_it_fits', 'rough_shape', 'strengthens_layer'],
         properties: {
           title: { type: 'string' },
           pitch: { type: 'string', description: '2-3 sentences: what it is and the value' },
           horizon: { type: 'string', enum: ['NOW', 'HORIZON'] },
           why_it_fits: { type: 'string' },
           rough_shape: { type: 'string', description: 'the seam it touches, not full impl' },
+          // Which knowledge layer / spine this idea would strengthen -- surfaces layer
+          // starvation in self-metrics. The lens JUDGES this; nothing is assigned by index.
+          strengthens_layer: { type: 'string', enum: ['bi-sql', 'bi-dax', 'bi-python', 'bi-bigdata', 'retail-kpi', 'docs-spine', 'none'], description: 'the knowledge layer this most strengthens, or none' },
         },
       },
     },
@@ -155,10 +159,11 @@ const PANEL_REVIEWER_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['title', 'horizon', 'eligible', 'ineligibility_reason', 'consistency', 'value_score', 'feasibility_score', 'verdict', 'survived_verification', 'prior_status', 'relitigation', 'rationale'],
+        required: ['title', 'horizon', 'eligible', 'ineligibility_reason', 'consistency', 'value_score', 'feasibility_score', 'verdict', 'survived_verification', 'prior_status', 'relitigation', 'rationale', 'strengthens_layer'],
         properties: {
           title: { type: 'string' },
           horizon: { type: 'string', enum: ['NOW', 'HORIZON'] },
+          strengthens_layer: { type: 'string', enum: ['bi-sql', 'bi-dax', 'bi-python', 'bi-bigdata', 'retail-kpi', 'docs-spine', 'none'], description: 'carried from the idea: the knowledge layer it most strengthens' },
           eligible: { type: 'boolean' },
           ineligibility_reason: { type: 'string', description: 'named principle, or "" if eligible' },
           consistency: { type: 'string', enum: ['consistent', 'minor-tension', 'conflict'] },
@@ -262,12 +267,13 @@ function aggregatePanel(panel) {
     // first non-empty first_step; horizon = majority/first
     const first_step = (rows.map(r => r.first_step).find(s => s && String(s).trim())) || 'None.'
     const horizon = rows.map(r => r.horizon).find(Boolean) || 'NOW'
+    const strengthens_layer = rows.map(r => r.strengthens_layer).find(Boolean) || 'none'
     // rationale: concatenate each reviewer's one-liner with its standpoint
     const rationale = rows.map(r => `[${r.reviewer_standpoint || 'reviewer'}] ${r.rationale || ''}`.trim()).join(' ')
 
     return {
       title, horizon, consistency, value_score, feasibility_score, score_spread,
-      eligibility_gate, verdict, survived_verification, first_step, rationale,
+      eligibility_gate, verdict, survived_verification, first_step, rationale, strengthens_layer,
       _per_reviewer: rows.map(r => ({ standpoint: r.reviewer_standpoint, eligible: r.eligible, verdict: r.verdict, v: r.value_score, f: r.feasibility_score })),
     }
   })
@@ -577,7 +583,7 @@ const LENSES = [
   { key: 'technical',label: 'gen:technical', role: `a PROFESSIONAL TECHNICAL ARCHITECT lens. Generate ideas that strengthen the system -- architecture, testing/CI gates, performance, the router/two-hop contract, knowledge-layer tooling, drift/reconciliation, adapter design, observability, agent-eval harnesses. Buildable in-repo.` },
 ]
 function genPrompt(role, extra='') {
-  return `You are ${role}\nGenerate 6-8 ideas for Seshat BI. Each MUST respect the hard principles (no executor, no gate bypass, generic-only, no fabricated confidence). Mix NOW and HORIZON. ${extra}${MEMORY_LINE}\n\n=== REPO MAP ===\n${exploreMap}`
+  return `You are ${role}\nGenerate 6-8 ideas for Seshat BI. Each MUST respect the hard principles (no executor, no gate bypass, generic-only, no fabricated confidence). Mix NOW and HORIZON. For each idea set strengthens_layer to the ONE knowledge layer it most strengthens (bi-sql / bi-dax / bi-python / bi-bigdata / retail-kpi / docs-spine), or 'none' if it strengthens the engine/CLI/gates rather than a knowledge layer -- judge honestly, do not force a layer. ${extra}${MEMORY_LINE}\n\n=== REPO MAP ===\n${exploreMap}`
 }
 // classify a lens result: 'failed' = agent returned null (schema/death), 'empty' =
 // a valid response with no ideas, 'ok' = real ideas. This separates a FAILURE from a
@@ -654,7 +660,7 @@ const synthesis = await agent(
 (initial, cross-pollination, gap-fill). Merge into ONE clean candidate set.
 - DEDUPE near-duplicates (keep the strongest framing; note where lenses/rounds converged -- convergence is a strength signal).
 - GROUP into themes.
-- Keep each idea's title, pitch, horizon, why_it_fits, rough_shape, source_lens(es).
+- Keep each idea's title, pitch, horizon, why_it_fits, rough_shape, strengthens_layer, source_lens(es).
 - Do NOT score (the reviewer does). Do NOT invent new ideas; only merge/clarify.
 - Flag any idea that might violate a hard principle (the reviewer rules).
 - If a candidate matches a prior idea KNOWN to have SHIPPED (see history below), KEEP it but
@@ -764,9 +770,62 @@ const review = {
     rationale: i.rationale,
     survived_verification: i.survived_verification,
     first_step: i.first_step,
+    strengthens_layer: i.strengthens_layer,
     dissent: dissentMap[i.title] || '',
   })),
 }
+
+// ===================== 8b. RESCUE (steelman the rejected) =====================
+// One agent reads ONLY the PARK/REJECT/ineligible ideas and attempts a good-faith
+// rescue REASON -- a reframing or seam-narrowing that MIGHT make an idea eligible, or
+// a clear "no rescue exists" with the irreducible blocker. It NEVER re-scores: the
+// schema has no verdict/eligible field, so it cannot launder an idea back past the gate
+// (the gate already ran). Zero cost on a clean run: skipped entirely if nothing rejected.
+phase('Rescue')
+const rejected = review.scored_ideas.filter(i =>
+  i.verdict === 'PARK' || i.verdict === 'REJECT' || i.eligible === false)
+const RESCUE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['rescues'],
+  properties: {
+    rescues: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        // NO verdict / eligible field by design -- this stage produces a REASON, never a
+        // re-score. Re-judging is a future run's panel job, not this agent's.
+        required: ['title', 'rescue_possible', 'reframed_pitch', 'narrowed_seam', 'residual_blocker'],
+        properties: {
+          title: { type: 'string' },
+          rescue_possible: { type: 'boolean', description: 'is there a plausible reframing that could make it eligible later?' },
+          reframed_pitch: { type: 'string', description: 'the rescued framing, or "" if none' },
+          narrowed_seam: { type: 'string', description: 'the smaller eligible seam, or "" if none' },
+          residual_blocker: { type: 'string', description: 'the irreducible reason it stays rejected (the durable signal for next run)' },
+        },
+      },
+    },
+  },
+}
+const rescue = rejected.length ? await agent(
+  `You are the STEELMAN. Below are ONLY the ideas the panel did not adopt (PARK / REJECT /
+INELIGIBLE), each with the reviewers' rationale. For EACH, attempt one good-faith rescue: is there
+a reframing or a NARROWER seam that would make it eligible and worth a closer look later (e.g. a
+std-dev anomaly KIND -> an owner-set absolute threshold; a feature needing a missing gold source ->
+the authorable contract-with-blocking-reason seam)? If yes, give the reframed_pitch + narrowed_seam.
+If no, state the irreducible residual_blocker plainly -- that reason is the durable signal the next
+run inherits so it stops re-litigating.
+
+YOU DO NOT RE-SCORE. You output a reason, never a verdict or eligibility -- the gate has already
+ruled. A rescue is a suggestion for a HUMAN to consider in a future run, never an override. Respect
+every hard principle: a "rescue" that still executes, bypasses a gate, or fabricates confidence is
+NOT a rescue -- say rescue_possible false and name the principle.
+
+=== NOT-ADOPTED IDEAS (title, verdict, eligibility, rationale) ===
+${JSON.stringify(rejected.map(i => ({ title: i.title, verdict: i.verdict, eligible: i.eligible, rationale: i.rationale })), null, 2)}`,
+  { label: 'rescue:steelman', phase: 'Rescue', schema: RESCUE_SCHEMA, ...SCOUT }
+) : { rescues: [] }
 
 // ===================== 8. RENDER (pure JS, orchestrator writes) =====================
 // Deterministic output: the workflow does NOT write the file (matching the repo's
@@ -924,6 +983,21 @@ function renderBacklog(review, opts) {
        }).join('\n')].join('\n')
     : null
 
+  // Rescue notes: for each not-adopted idea, the steelman's reframing or the irreducible
+  // blocker. Reasons only -- never a re-score. Omitted on a clean run (nothing rejected).
+  const rescues = (opts.rescue && Array.isArray(opts.rescue.rescues)) ? opts.rescue.rescues : []
+  const RESCUE = rescues.length
+    ? ['## Rescue notes (steelman of the not-adopted)', '',
+       '_A reframing that MIGHT make an idea eligible later, or the irreducible reason it stays out. A reason for a human to weigh next run -- never a verdict; the gate already ruled._', '',
+       rescues.map(r => {
+         const head = `- **${norm(r.title)}** -- ${r.rescue_possible ? 'rescue possible' : 'no rescue'}.`
+         const body = r.rescue_possible
+           ? ` ${norm(r.reframed_pitch || '')}${r.narrowed_seam ? ` Narrowed seam: ${norm(r.narrowed_seam)}` : ''}`
+           : ` ${norm(r.residual_blocker || '')}`
+         return head + body
+       }).join('\n')].join('\n')
+    : null
+
   // Run health & self-metrics: how this run did (deterministic counts). Written into the
   // file so it is a durable signal, not an editor-optional header.
   const m = opts.metrics
@@ -941,7 +1015,7 @@ function renderBacklog(review, opts) {
     ].join('\n')
   })() : null
 
-  return [HEADER, PORTFOLIO, LEGEND, ...SECTIONS, ...(APPENDIX ? [APPENDIX] : []), ...(METRICS ? [METRICS] : [])].join('\n\n') + '\n'
+  return [HEADER, PORTFOLIO, LEGEND, ...SECTIONS, ...(RESCUE ? [RESCUE] : []), ...(APPENDIX ? [APPENDIX] : []), ...(METRICS ? [METRICS] : [])].join('\n\n') + '\n'
 }
 
 const self_metrics = selfMetrics(review, allIdeas.length, run_health)
@@ -953,6 +1027,7 @@ const backlog_markdown = renderBacklog(review, {
   prior: memory,             // PR4: cross-run memory -> SHIPPED/SETTLED appendix
   health: run_health,        // FU1: fail-loud DEGRADED banner
   metrics: self_metrics,     // FU1: deterministic run-quality rollup
+  rescue,                    // FU2: steelman notes for the not-adopted
 })
 
 return {
@@ -971,6 +1046,7 @@ return {
   rounds: { r1: round1.filter(r => r._status === 'ok').length, cross: crossRound.filter(r => r._status === 'ok').length, fill: fillRound.filter(r => r._status === 'ok').length },
   run_health,                                // FU1: per-round census + degraded flag
   self_metrics,                              // FU1: deterministic run-quality rollup
+  rescue,                                    // FU2: steelman notes for the not-adopted
   focus: FOCUS,
   // Deterministic output: orchestrator writes backlog_markdown to backlog_path.
   backlog_markdown,
