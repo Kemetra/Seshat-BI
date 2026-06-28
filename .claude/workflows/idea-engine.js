@@ -3,7 +3,7 @@ export const meta = {
   description: 'Idea generator for Seshat BI. Explore grounds on the real repo; three lenses (creative / BI analyst / technical) generate in parallel, then cross-pollinate (each reacts to the others); a completeness critic finds blind spots and triggers one targeted fill pass; a synthesizer merges; an adversarial skeptic stress-tests the strong candidates; an external reviewer scores value/feasibility and gates eligibility & consistency. Every stage runs on Opus at xhigh effort. Output: a ranked NOW/HORIZON idea BANK -- exploratory inspiration, not a roadmap or commitment.',
   whenToUse: 'When you want a deep, exhaustive, rigorously vetted idea bank for the project. All-Opus, xhigh effort, multi-round -- thorough and heavy (many agents/tokens/time). Re-runnable; pass args to focus a theme. Output is an idea bank, never a plan.',
   phases: [
-    { title: 'Explore',        detail: 'map the real repo: shipped, planned, gaps, principles', model: 'opus' },
+    { title: 'Ground',         detail: '5 subsystem explorers map the repo in parallel; JS merge + reconcile-verify', model: 'opus' },
     { title: 'Generate',       detail: 'creative / BI / technical lenses propose in parallel (round 1)', model: 'opus' },
     { title: 'Cross-pollinate',detail: 'each lens reacts to the others; surface cross-disciplinary ideas', model: 'opus' },
     { title: 'Completeness',   detail: 'critic finds blind spots -> one more targeted generation pass', model: 'opus' },
@@ -110,22 +110,216 @@ const IDEA_SCHEMA = {
   },
 }
 
-// ===================== 1. EXPLORE =====================
-phase('Explore')
+// ===================== 1. GROUND (multi-agent explore + JS merge + verify) =====================
+// One explorer could carry a blind spot into every downstream stage (it already did:
+// the engine grounded on "4 knowledge layers" when there are 5). Five subsystem
+// explorers read in parallel; a pure-JS merge unions + flags contradictions; one
+// reconcile-verify agent re-opens cited evidence and downgrades unbacked claims.
+phase('Ground')
+
+// Shared status vocabulary -- used by submap ship-status, the reconcile ruling, and
+// (later) cross-run memory. UNVERIFIED is the safe default: the gate treats it as
+// "not shipped" so an unbacked claim can never read as a settled capability.
+const STATUS_ENUM = ['SHIPPED', 'DEFERRED', 'PARTIAL', 'PLANNED', 'REJECTED-INELIGIBLE', 'UNVERIFIED']
+
+const SUBMAP_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['subsystem', 'capability_notes', 'tensions', 'ship_status', 'unreadable'],
+  properties: {
+    subsystem: { type: 'string', enum: ['knowledge', 'src', 'docs', 'roadmap', 'ship-delta'] },
+    capability_notes: { type: 'array', items: { type: 'string' }, description: 'factual capability statements, each citing a file/feature' },
+    tensions: { type: 'array', items: { type: 'string' }, description: 'incomplete/duplicated/awkward seams -- idea fuel' },
+    ship_status: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['feature_id', 'status', 'evidence_path'],
+        properties: {
+          feature_id: { type: 'string', description: 'F-number or named capability' },
+          status: { type: 'string', enum: STATUS_ENUM },
+          evidence_path: { type: 'string', description: 'the file/PR backing this status' },
+        },
+      },
+    },
+    unreadable: { type: 'array', items: { type: 'string' }, description: 'paths the explorer could not read (say so, do not guess)' },
+  },
+}
+
+const MERGED_MAP_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['capability_map', 'tensions', 'ship_status', 'reconciliation_ledger', 'missing_subsystems', 'principles', 'verification_notes'],
+  properties: {
+    capability_map: { type: 'string', description: 'merged prose map by readiness stage -- the narrative substrate downstream lenses build on' },
+    tensions: { type: 'array', items: { type: 'string' } },
+    ship_status: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['feature_id', 'status', 'evidence_path', 'verifier_opened_evidence'],
+        properties: {
+          feature_id: { type: 'string' },
+          status: { type: 'string', enum: STATUS_ENUM },
+          evidence_path: { type: 'string' },
+          // The verifier asserts it OPENED the cited file -- it does not certify its
+          // own DEFINE. status==UNVERIFIED is treated as "not shipped" downstream.
+          verifier_opened_evidence: { type: 'boolean' },
+        },
+      },
+    },
+    reconciliation_ledger: {
+      type: 'array',
+      description: 'each contradiction the explorers disagreed on, and how it was ruled by re-reading',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['feature_id', 'conflicting_claims', 'ruling', 'winning_evidence'],
+        properties: {
+          feature_id: { type: 'string' },
+          conflicting_claims: { type: 'array', items: { type: 'string' } },
+          ruling: { type: 'string', enum: STATUS_ENUM },
+          winning_evidence: { type: 'string' },
+        },
+      },
+    },
+    missing_subsystems: { type: 'array', items: { type: 'string' }, description: 'explorers that died/returned null -- a verification signal, not a silent gap' },
+    principles: { type: 'array', items: { type: 'string' } },
+    verification_notes: { type: 'string' },
+  },
+}
+
+// The 5 subsystem explorers. Each pins opus xhigh explicitly (never the Explore
+// agentType Haiku default) and is read-only.
+const EXPLORERS = [
+  { key: 'knowledge', label: 'explore:knowledge', brief: `Map skills/: each knowledge layer's SKILL.md + INDEX.md. COUNT the layers exactly (there are FIVE: bi-sql, bi-dax, bi-python, bi-bigdata, retail-kpi -- do not assume four) and note which are seed vs mature. Capture what each layer routes and its two-hop contract.` },
+  { key: 'src', label: 'explore:src', brief: `Map src/retail/**: the rule families in rules/*.py (each @register), cli.py, runner.py, registry. Cross-check the rule count against EXPECTED_RULE_IDS in tests/unit/test_rules_wiring.py (the wiring test is the source of truth). Note the never-execute / stdlib-only discipline as you see it in code.` },
+  { key: 'docs', label: 'explore:docs', brief: `Map the docs spine: COMPASS.md, AGENTS.md, docs/knowledge-map.md, docs/readiness/, docs/metrics/, docs/quality/. Capture the readiness stage model (7 stages, 4 statuses), the router, the metric-contract store, and any quality/smoke-test docs.` },
+  { key: 'roadmap', label: 'explore:roadmap', brief: `Map docs/roadmap/roadmap.md as the canonical F-number ledger AND read docs/roadmap/idea-backlog.md for context. For roadmap.md, record each F-number's status using the shared enum. This subsystem owns the roadmap's own SHIPPED/DEFERRED/PARTIAL markers.` },
+  { key: 'ship-delta', label: 'explore:ship-delta', brief: `Establish ship-status from REPO TRUTH ONLY: git log subjects${SINCE_REF ? ` over range ${SINCE_REF}` : ` (no range supplied -- use roadmap SHIPPED markers only; do NOT invent a range)`} plus the roadmap's SHIPPED markers. Do NOT read prior idea-backlog titles -- those are engine OUTPUT, not repo truth (reading them is a statefulness leak; that is cross-run memory's job, not grounding's). Your ship_status describes only "what the repo contains."` },
+]
+
+const submaps = await parallel(EXPLORERS.map(e => () =>
+  agent(
+    `${PROJECT}
+
+YOU ARE A SUBSYSTEM EXPLORER for Seshat BI. Read the real repo under ${REPO} and map ONLY your
+subsystem. Do NOT propose ideas. Do NOT execute anything (read-only). Cite a file/feature for
+every capability and every ship-status row. If a path is unreadable, list it in 'unreadable' --
+never guess.
+
+YOUR SUBSYSTEM: ${e.brief}
+
+Return capability_notes (each citing a file), tensions (incomplete/duplicated/awkward seams),
+ship_status (feature_id + status from the shared enum + evidence_path), and unreadable[].`,
+    { label: e.label, phase: 'Ground', agentType: 'Explore', schema: SUBMAP_SCHEMA, ...SCOUT }
+  ).then(r => r ? { ...r, _key: e.key } : null)
+))
+
+// Pure-JS merge: union notes/tensions (dedupe by exact string), collect ship-status
+// by feature_id, flag contradictions, and record dead explorers. No Date/random;
+// deterministic order by explorer index.
+function mergeSubmaps(maps) {
+  const live = maps.filter(Boolean)
+  const expected = EXPLORERS.map(e => e.key)
+  const got = new Set(live.map(m => m._key))
+  const missing_subsystems = expected.filter(k => !got.has(k))
+
+  const dedupe = arr => [...new Set(arr)]
+  const capability_notes = dedupe(live.flatMap(m => m.capability_notes || []))
+  const tensions = dedupe(live.flatMap(m => m.tensions || []))
+  const unreadable = dedupe(live.flatMap(m => m.unreadable || []))
+
+  // group ship-status rows by feature_id to surface disagreements
+  const byFeature = {}
+  for (const m of live) {
+    for (const row of (m.ship_status || [])) {
+      if (!row || !row.feature_id) continue
+      ;(byFeature[row.feature_id] = byFeature[row.feature_id] || []).push({ ...row, _from: m._key })
+    }
+  }
+  const contradictions = []
+  for (const fid of Object.keys(byFeature)) {
+    const statuses = new Set(byFeature[fid].map(r => r.status))
+    if (statuses.size > 1) contradictions.push({ feature_id: fid, rows: byFeature[fid] })
+  }
+  return { capability_notes, tensions, unreadable, byFeature, contradictions, missing_subsystems }
+}
+const merged = mergeSubmaps(submaps)
+
+// Reconcile-verify: one agent re-opens cited evidence, rules each contradiction by
+// re-reading, downgrades any unbacked claim to UNVERIFIED, and SUBTRACTS hallucinations
+// (never invents capability). It transcribes any quoted source text to ASCII.
 const explore = await agent(
   `${PROJECT}
 
-YOU ARE THE EXPLORER. Read the real repo under ${REPO} and produce a tight, factual MAP the
-idea generators build on. Do NOT propose ideas yet. Read enough to ground (not everything):
-COMPASS.md, AGENTS.md, docs/knowledge-map.md, docs/roadmap/roadmap.md,
-docs/readiness/readiness-model.md, the 5 skills' SKILL.md; skim docs/ for what's missing.
+YOU ARE THE RECONCILE-VERIFIER for Seshat BI grounding. Five subsystem explorers produced
+submaps; a pure-JS merge unioned them and flagged contradictions. Your job is to produce ONE
+verified MERGED MAP that downstream idea generation trusts. You read the repo (read-only, no
+execution) to CONFIRM claims -- you SUBTRACT hallucinations, you never invent capability.
 
-Output: 1) CAPABILITY MAP by readiness stage; 2) SHIPPED FEATURES (F-numbers, brief);
-3) GAPS & DEFERRALS (F016, Tier 5 partials, seed deferrals, absent-but-expected capability);
-4) TENSIONS/FRICTION (incomplete/duplicated/awkward -- good idea fuel); 5) the PRINCIPLES an
-idea must respect, in your own words. Cite file/feature names. This is the shared substrate.`,
-  { label: 'explore:repo-map', phase: 'Explore', agentType: 'Explore', ...SCOUT }
+DO:
+- Write capability_map as merged PROSE by readiness stage (Source -> Mapping -> Silver -> Gold
+  -> Semantic Model -> Dashboard -> Publish), the narrative substrate the lenses build on.
+- For ship_status: re-open each cited evidence_path. If it backs the claim, keep the status and
+  set verifier_opened_evidence true. If you cannot back it, downgrade status to UNVERIFIED.
+- Rule EACH flagged contradiction by re-reading the files; record feature_id + the conflicting
+  claims + your ruling (shared enum) + the winning evidence in reconciliation_ledger.
+- Independently scan for the same capability appearing under two different feature_ids (a naming
+  collision) and note it in verification_notes.
+- Sanity-check headline counts you can verify: the knowledge-layer count (should be 5) and the
+  registered-rule count vs EXPECTED_RULE_IDS in tests/unit/test_rules_wiring.py.
+- Carry missing_subsystems through verbatim from the merge (a dead explorer is a signal).
+- ASCII only: transcribe any quoted source text with -- and ->, never paste a Unicode glyph.
+- Restate the hard PRINCIPLES an idea must respect, in your own words.
+
+=== MERGED SUBMAPS (JSON: notes, tensions, ship-status grouped by feature, contradictions) ===
+${JSON.stringify({
+    capability_notes: merged.capability_notes,
+    tensions: merged.tensions,
+    unreadable: merged.unreadable,
+    ship_status_by_feature: merged.byFeature,
+    contradictions: merged.contradictions,
+    missing_subsystems: merged.missing_subsystems,
+  }, null, 2)}`,
+  { label: 'ground:reconcile-verify', phase: 'Ground', schema: MERGED_MAP_SCHEMA, ...SCOUT }
 )
+
+// renderMap: turn the structured MERGED MAP back into the prose+table substrate the
+// downstream stages interpolate (they used a single prose string before). Deterministic.
+function renderMap(m) {
+  if (!m || typeof m !== 'object') return String(m || '')
+  const lines = []
+  lines.push('=== CAPABILITY MAP ===', m.capability_map || '', '')
+  if (Array.isArray(m.tensions) && m.tensions.length) {
+    lines.push('=== TENSIONS / FRICTION ===')
+    m.tensions.forEach(t => lines.push(`- ${t}`))
+    lines.push('')
+  }
+  if (Array.isArray(m.ship_status) && m.ship_status.length) {
+    lines.push('=== SHIP STATUS (feature -> status [evidence]) ===')
+    m.ship_status.forEach(r => lines.push(`- ${r.feature_id}: ${r.status} [${r.evidence_path}]${r.verifier_opened_evidence ? '' : ' (UNVERIFIED-evidence)'}`))
+    lines.push('')
+  }
+  if (Array.isArray(m.reconciliation_ledger) && m.reconciliation_ledger.length) {
+    lines.push('=== RECONCILED CONTRADICTIONS ===')
+    m.reconciliation_ledger.forEach(r => lines.push(`- ${r.feature_id}: ruled ${r.ruling} (${r.winning_evidence})`))
+    lines.push('')
+  }
+  if (Array.isArray(m.missing_subsystems) && m.missing_subsystems.length) {
+    lines.push(`=== DEGRADED: missing subsystem explorers: ${m.missing_subsystems.join(', ')} ===`, '')
+  }
+  if (Array.isArray(m.principles) && m.principles.length) {
+    lines.push('=== PRINCIPLES (an idea must respect) ===')
+    m.principles.forEach(p => lines.push(`- ${p}`))
+    lines.push('')
+  }
+  if (m.verification_notes) lines.push('=== VERIFICATION NOTES ===', m.verification_notes)
+  return lines.join('\n')
+}
+const exploreMap = renderMap(explore)
 
 // ===================== 2. GENERATE (round 1) =====================
 phase('Generate')
@@ -135,7 +329,7 @@ const LENSES = [
   { key: 'technical',label: 'gen:technical', role: `a PROFESSIONAL TECHNICAL ARCHITECT lens. Generate ideas that strengthen the system -- architecture, testing/CI gates, performance, the router/two-hop contract, knowledge-layer tooling, drift/reconciliation, adapter design, observability, agent-eval harnesses. Buildable in-repo.` },
 ]
 function genPrompt(role, extra='') {
-  return `You are ${role}\nGenerate 6-8 ideas for Seshat BI. Each MUST respect the hard principles (no executor, no gate bypass, generic-only, no fabricated confidence). Mix NOW and HORIZON. ${extra}\n\n=== REPO MAP ===\n${explore}`
+  return `You are ${role}\nGenerate 6-8 ideas for Seshat BI. Each MUST respect the hard principles (no executor, no gate bypass, generic-only, no fabricated confidence). Mix NOW and HORIZON. ${extra}\n\n=== REPO MAP ===\n${exploreMap}`
 }
 const round1 = await parallel(LENSES.map(l => () =>
   agent(genPrompt(l.role), { label: `${l.label}:r1`, phase: 'Generate', schema: IDEA_SCHEMA, ...SCOUT })
@@ -158,7 +352,7 @@ phase('Completeness')
 const sofar = [...round1, ...crossRound].filter(Boolean)
 const sofarJson = JSON.stringify(sofar.map(r => ({ lens: r.lens || r._key, ideas: (r.ideas||[]).map(i => i.title) })), null, 2)
 const gaps = await agent(
-  `You are a COMPLETENESS CRITIC. Below are all idea TITLES generated so far for Seshat BI, plus the repo map. Your job is to find what's MISSING -- readiness stages with few ideas, repo gaps/tensions nobody addressed, idea TYPES underrepresented (e.g. all features and no DX, or all technical and no business value), and obvious adjacent ideas no lens reached. List 5-10 specific missing angles as short prompts ("nobody proposed anything for X / for the Y gap"). Do not generate full ideas -- just name the blind spots precisely.\n\n=== REPO MAP ===\n${explore}\n\n=== IDEA TITLES SO FAR ===\n${sofarJson}`,
+  `You are a COMPLETENESS CRITIC. Below are all idea TITLES generated so far for Seshat BI, plus the repo map. Your job is to find what's MISSING -- readiness stages with few ideas, repo gaps/tensions nobody addressed, idea TYPES underrepresented (e.g. all features and no DX, or all technical and no business value), and obvious adjacent ideas no lens reached. List 5-10 specific missing angles as short prompts ("nobody proposed anything for X / for the Y gap"). Do not generate full ideas -- just name the blind spots precisely.\n\n=== REPO MAP ===\n${exploreMap}\n\n=== IDEA TITLES SO FAR ===\n${sofarJson}`,
   { label: 'critic:gaps', phase: 'Completeness', ...SCOUT }
 )
 // one targeted fill pass aimed at the named gaps
@@ -184,7 +378,7 @@ const synthesis = await agent(
 - Do NOT score (the reviewer does). Do NOT invent new ideas; only merge/clarify.
 - Flag any idea that might violate a hard principle (the reviewer rules).
 
-=== REPO MAP ===\n${explore}\n\n=== ALL RAW IDEAS (JSON) ===\n${JSON.stringify(allIdeas, null, 2)}
+=== REPO MAP ===\n${exploreMap}\n\n=== ALL RAW IDEAS (JSON) ===\n${JSON.stringify(allIdeas, null, 2)}
 
 Output a clean candidate list grouped by theme, each idea with its fields + source lens(es)
 + a convergence note where applicable.`,
@@ -252,7 +446,7 @@ extension; penalize restating what's shipped. Mark INELIGIBLE ideas, don't softe
 
 Remember: this is a triage opinion for an IDEA BANK, not a build decision.
 
-=== REPO MAP ===\n${explore}
+=== REPO MAP ===\n${exploreMap}
 === SYNTHESIZED CANDIDATES ===\n${synthesis}
 === ADVERSARIAL SKEPTIC'S CHALLENGES ===\n${verify}`,
   { label: 'review:score-and-gate', phase: 'Review', schema: REVIEW_SCHEMA, ...LEAD }
@@ -375,7 +569,10 @@ const backlog_markdown = renderBacklog(review, {
 })
 
 return {
-  explore_map: explore,
+  explore_map: explore,                      // the structured, verified MERGED_MAP
+  explore_rendered: exploreMap,              // the prose+table substrate the lenses saw
+  ground_missing_subsystems: merged.missing_subsystems,  // dead explorers -- degraded signal
+  ground_contradictions: merged.contradictions.length,   // how many ship-status disputes were ruled
   gaps_found: gaps,
   synthesis,
   adversarial_verify: verify,
