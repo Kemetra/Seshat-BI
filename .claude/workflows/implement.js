@@ -272,7 +272,7 @@ const BUILD_RESULT = {
         ruff_format_exit: { type: 'number' },
         ruff_check_exit: { type: 'number' },
         retail_check_exit: { type: 'number' },
-        retail_check_commit_range_resolved: { type: 'boolean', description: 'true if merge-base(origin/main,HEAD) resolved; false -> P2 deferred to CI' },
+        retail_check_commit_range_resolved: { type: 'boolean', description: 'true if merge-base(origin/main,HEAD) resolved (ranged run); false -> a BARE retail check was run instead (as CI does); retail_check_exit is scored either way' },
         retail_semantic_check_exit: { type: 'number' },
         retail_validate_status: { type: 'string', enum: ['needs-db', 'pass', 'fail'], description: 'needs-db is the EXPECTED deferred state; INFORMATIONAL, never scored' },
         wiring_ok: { type: 'boolean', description: 'EXPECTED_RULE_IDS updated for any added/removed @register rule (test_rules_wiring green)' },
@@ -316,9 +316,11 @@ const build = await agent(
   `  4. pytest -m unit (with the deselect from STEP D)  -> summary + deselected ids + collected\n` +
   `  5. git fetch origin main; if git merge-base origin/main HEAD resolves, run ` +
   `retail check --commit-range "<merge-base>..HEAD" -> retail_check_exit (retail_check_commit_range_` +
-  `resolved:true); if merge-base does NOT resolve in the worktree, set retail_check_commit_range_` +
-  `resolved:false and DEFER P2 to CI (do NOT run bare retail check -- it would scan unrelated branch ` +
-  `history).\n` +
+  `resolved:true). If merge-base does NOT resolve, run BARE retail check (exactly as CI does in that ` +
+  `case -- ci.yml falls back to bare retail check, it does NOT skip) and record its exit in ` +
+  `retail_check_exit with retail_check_commit_range_resolved:false. Either way retail_check_exit MUST ` +
+  `reflect a real run -- the gate scores it (a P2 on grandfathered history is honest; it collapses on ` +
+  `squash-merge, same as CI).\n` +
   `  6. retail semantic-check --repo .  -> retail_semantic_check_exit\n` +
   `  retail_validate_status: record 'needs-db' (the EXPECTED deferred state -- retail validate without a ` +
   `DB/--source-map returns the deferred state; CI does NOT run it; it is INFORMATIONAL, never scored).\n` +
@@ -379,8 +381,12 @@ function completionGate(b, expectedBranch) {
   // so scanning the raw argv would false-positive on the allowed deselect. After stripping,
   // the remainder must be a full "pytest -m unit" with no -k, no ::node-id, no bare .py file.
   const argvCore = argv.replace(/(^|\s)--deselect(\s+|=)\S+/g, ' ')
+  // Reject narrowing/cached-subset flags too: -k, ::node-id, a bare .py file, AND the
+  // cache-based subset flags (--lf/--last-failed/--ff/--failed-first/--sw/--stepwise) which
+  // run only a CACHED subset and would report "N passed" without the full unit suite.
   const argvIsFullUnitRun = /(^|\s)-m\s+unit(\s|$)/.test(argvCore) &&
-    !/(^|\s)-k(\s|=)/.test(argvCore) && !/::/.test(argvCore) && !/(^|\s)[^\s-]\S*\.py(\s|$)/.test(argvCore)
+    !/(^|\s)-k(\s|=)/.test(argvCore) && !/::/.test(argvCore) && !/(^|\s)[^\s-]\S*\.py(\s|$)/.test(argvCore) &&
+    !/(^|\s)(--lf|--last-failed|--ff|--failed-first|--sw|--stepwise|--stepwise-skip)(\s|$)/.test(argvCore)
   const summaryGreen = !!(v && v.install_ok && v.pytest_collected >= 0 && argvIsFullUnitRun &&
     /(?:^|\s)\d+ passed\b/.test(summary) && !/\b(failed|error|errors)\b/i.test(summary))
   const deselectExplained = deselectsAreExplained(v)
@@ -399,10 +405,14 @@ function completionGate(b, expectedBranch) {
     }
   }
 
-  // (c) the EXACT CI gate set: retail check (or deferred-to-ci) + retail semantic-check
-  const checkGreen = !!(v && (v.retail_check_exit === 0 || v.retail_check_commit_range_resolved === false))
+  // (c) the EXACT CI gate set: retail check + retail semantic-check. CI does NOT skip
+  // retail check when the merge-base is unavailable -- it falls back to BARE `retail check`
+  // (ci.yml L49-53). So the agent must do the same (run bare retail check on an unresolved
+  // range), and the gate ALWAYS scores retail_check_exit === 0. Treating an unresolved range
+  // as auto-green would advertise PR-ready locally while CI's bare run fails.
+  const checkGreen = !!(v && v.retail_check_exit === 0)
   const semanticGreen = !!(v && v.retail_semantic_check_exit === 0)
-  if (!checkGreen) reasons.push(`retail check exit ${v ? v.retail_check_exit : '?'}`)
+  if (!checkGreen) reasons.push(`retail check exit ${v ? v.retail_check_exit : '?'}` + (v && v.retail_check_commit_range_resolved === false ? ' (bare run; merge-base unresolved)' : ''))
   if (!semanticGreen) reasons.push(`retail semantic-check exit ${v ? v.retail_semantic_check_exit : '?'}`)
 
   // (d) wiring + never-execute invariants green
