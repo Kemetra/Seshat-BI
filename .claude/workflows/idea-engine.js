@@ -1,7 +1,7 @@
 export const meta = {
   name: 'idea-engine',
-  description: 'Idea generator for Seshat BI. Explore grounds on the real repo; three lenses (creative / BI analyst / technical) generate in parallel, then cross-pollinate (each reacts to the others); a completeness critic finds blind spots and triggers one targeted fill pass; a synthesizer merges; an adversarial skeptic stress-tests the strong candidates; an external reviewer scores value/feasibility and gates eligibility & consistency. Every stage runs on Opus at xhigh effort. Output: a ranked NOW/HORIZON idea BANK -- exploratory inspiration, not a roadmap or commitment.',
-  whenToUse: 'When you want a deep, exhaustive, rigorously vetted idea bank for the project. All-Opus, xhigh effort, multi-round -- thorough and heavy (many agents/tokens/time). Re-runnable; pass args to focus a theme. Output is an idea bank, never a plan.',
+  description: 'Idea generator for Seshat BI. Ground maps the real repo with five subsystem explorers + a reconcile-verify pass; Memory reads the prior bank so shipped/settled ideas are not regenerated; three lenses (creative / BI analyst / technical) generate in parallel, then cross-pollinate; a completeness critic finds blind spots and triggers one targeted fill pass; a synthesizer merges; an adversarial skeptic challenges EVERY candidate (default-refuted); a three-standpoint reviewer PANEL scores value/feasibility and rules eligibility; a pure-JS aggregate takes the median, gates eligibility, and applies a demote-only clamp. Every agent stage runs on Opus at xhigh effort. Output: a ranked NOW/HORIZON idea BANK, rendered deterministically -- exploratory inspiration, not a roadmap or commitment.',
+  whenToUse: 'When you want a deep, exhaustive, rigorously vetted, history-aware idea bank for the project. All-Opus, xhigh effort, multi-round, multi-explorer, panel-reviewed -- thorough and heavy (many agents/tokens/time). Re-runnable; pass a focus string or {focus,sinceRef,date,ascii}. Output is an idea bank, never a plan.',
   phases: [
     { title: 'Ground',         detail: '5 subsystem explorers map the repo in parallel; JS merge + reconcile-verify', model: 'opus' },
     { title: 'Memory',         detail: 'read prior bank + Ground ship-status: label shipped/settled ideas (no re-litigation)', model: 'opus' },
@@ -9,8 +9,9 @@ export const meta = {
     { title: 'Cross-pollinate',detail: 'each lens reacts to the others; surface cross-disciplinary ideas', model: 'opus' },
     { title: 'Completeness',   detail: 'critic finds blind spots -> one more targeted generation pass', model: 'opus' },
     { title: 'Synthesize',     detail: 'merge + dedupe into one candidate set', model: 'opus' },
-    { title: 'Verify',         detail: 'adversarial skeptic stress-tests each strong candidate', model: 'opus' },
-    { title: 'Review',         detail: 'external reviewer scores + gates eligibility & consistency', model: 'opus' },
+    { title: 'Verify',         detail: 'adversarial skeptic challenges EVERY candidate (default-refuted)', model: 'opus' },
+    { title: 'Panel-review',   detail: '3 independent reviewers (principle / shipped-dup / value-feasibility) score the set', model: 'opus' },
+    { title: 'Aggregate',      detail: 'pure-JS median + eligibility gate + demote-only clamp; tiny prose agent for dissent', model: 'opus' },
     { title: 'Render',         detail: 'pure-JS: render the idea-backlog markdown (no agent); orchestrator writes' },
   ],
 }
@@ -109,6 +110,169 @@ const IDEA_SCHEMA = {
       },
     },
   },
+}
+
+// Disposition enum keeps the repo's existing vocabulary minus 'not-challenged' (the
+// "I didn't look" hole) -- 'killed' is KEPT (it is already in the committed backlog's
+// triage history; renaming it to 'refuted' would silently break that record).
+const DISPOSITION_ENUM = ['survived', 'weakened', 'killed']
+const VERDICT_ENUM = ['ADOPT', 'CONSIDER', 'PARK', 'REJECT', 'SHIPPED']
+
+const VERIFY_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['challenged', 'skeptic_summary'],
+  properties: {
+    skeptic_summary: { type: 'string' },
+    challenged: {
+      type: 'array',
+      description: 'EVERY candidate idea, each with a genuine refutation attempt',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['title', 'strongest_objection', 'objection_holds', 'disposition', 'why'],
+        properties: {
+          title: { type: 'string' },
+          strongest_objection: { type: 'string' },
+          objection_holds: { type: 'boolean' },
+          disposition: { type: 'string', enum: DISPOSITION_ENUM },
+          why: { type: 'string' },
+        },
+      },
+    },
+  },
+}
+
+const PANEL_REVIEWER_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['reviewer_standpoint', 'scored_ideas', 'summary'],
+  properties: {
+    reviewer_standpoint: { type: 'string' },
+    summary: { type: 'string' },
+    scored_ideas: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['title', 'horizon', 'eligible', 'ineligibility_reason', 'consistency', 'value_score', 'feasibility_score', 'verdict', 'survived_verification', 'prior_status', 'relitigation', 'rationale'],
+        properties: {
+          title: { type: 'string' },
+          horizon: { type: 'string', enum: ['NOW', 'HORIZON'] },
+          eligible: { type: 'boolean' },
+          ineligibility_reason: { type: 'string', description: 'named principle, or "" if eligible' },
+          consistency: { type: 'string', enum: ['consistent', 'minor-tension', 'conflict'] },
+          value_score: { type: 'integer', minimum: 1, maximum: 10 },
+          feasibility_score: { type: 'integer', minimum: 1, maximum: 10 },
+          verdict: { type: 'string', enum: VERDICT_ENUM },
+          survived_verification: { type: 'string', enum: DISPOSITION_ENUM },
+          prior_status: { type: 'string', enum: ['new', 'shipped', 'rejected-settled', 'open-prior'] },
+          relitigation: { type: 'string', enum: ['n/a', 'settled', 'materially-new'] },
+          rationale: { type: 'string' },
+          first_step: { type: 'string' },
+        },
+      },
+    },
+  },
+}
+
+const DISSENT_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['dissent_by_title', 'portfolio_summary'],
+  properties: {
+    portfolio_summary: { type: 'string' },
+    dissent_by_title: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['title', 'dissent'],
+        properties: {
+          title: { type: 'string' },
+          dissent: { type: 'string' },
+        },
+      },
+    },
+  },
+}
+
+// aggregatePanel: PURE JS. Matches ideas by title across the 3 reviewer records and
+// reduces to one verdict per idea. Median scores; eligibility gate (pass/fail/split);
+// demote-only clamp (fail -> REJECT, split -> at most CONSIDER); majority verdict else
+// the MORE CAUTIOUS of the tie. No Date/random; deterministic.
+function aggregatePanel(panel) {
+  const live = (panel || []).filter(Boolean)
+  // union of titles, first-seen order preserved (reviewer 0 then 1 then 2)
+  const order = []
+  const seen = new Set()
+  const byTitle = {}
+  for (const reviewer of live) {
+    for (const si of (reviewer.scored_ideas || [])) {
+      if (!si || !si.title) continue
+      if (!seen.has(si.title)) { seen.add(si.title); order.push(si.title) }
+      ;(byTitle[si.title] = byTitle[si.title] || []).push(si)
+    }
+  }
+  const median = nums => {
+    const a = nums.filter(n => Number.isFinite(n)).slice().sort((x, y) => x - y)
+    if (!a.length) return 1
+    const m = Math.floor(a.length / 2)
+    return a.length % 2 ? a[m] : Math.round((a[m - 1] + a[m]) / 2)
+  }
+  const cautionRank = { REJECT: 4, PARK: 3, CONSIDER: 2, ADOPT: 1, SHIPPED: 0 } // higher = more cautious
+  const dispRank = { killed: 3, weakened: 2, survived: 1 }                       // worst-seen wins
+
+  const ideas = order.map(title => {
+    const rows = byTitle[title]
+    const n = rows.length
+    const eligibleCount = rows.filter(r => r.eligible === true).length
+    const eligibility_gate = eligibleCount === n ? 'pass' : (eligibleCount === 0 ? 'fail' : 'split')
+
+    const value_score = median(rows.map(r => r.value_score))
+    const feasibility_score = median(rows.map(r => r.feasibility_score))
+    const vs = rows.map(r => r.value_score).filter(Number.isFinite)
+    const fs = rows.map(r => r.feasibility_score).filter(Number.isFinite)
+    const score_spread = Math.max(
+      vs.length ? Math.max(...vs) - Math.min(...vs) : 0,
+      fs.length ? Math.max(...fs) - Math.min(...fs) : 0
+    )
+
+    // majority verdict if 2+ agree; else the MORE CAUTIOUS of those present.
+    const counts = {}
+    for (const r of rows) counts[r.verdict] = (counts[r.verdict] || 0) + 1
+    let verdict = null, best = 0
+    for (const v of Object.keys(counts)) if (counts[v] > best) { best = counts[v]; verdict = v }
+    if (best < 2) {  // no majority -> most cautious present
+      verdict = rows.map(r => r.verdict).sort((a, b) => (cautionRank[b] ?? 2) - (cautionRank[a] ?? 2))[0]
+    }
+    // demote-only clamp by the eligibility gate (can only move toward caution).
+    if (eligibility_gate === 'fail' && !['PARK', 'REJECT'].includes(verdict)) verdict = 'REJECT'
+    if (eligibility_gate === 'split' && verdict === 'ADOPT') verdict = 'CONSIDER'
+
+    // worst disposition any reviewer recorded
+    const survived_verification = rows.map(r => r.survived_verification)
+      .sort((a, b) => (dispRank[b] || 0) - (dispRank[a] || 0))[0] || 'survived'
+
+    // most cautious consistency present
+    const consRank = { conflict: 3, 'minor-tension': 2, consistent: 1 }
+    const consistency = rows.map(r => r.consistency)
+      .sort((a, b) => (consRank[b] || 0) - (consRank[a] || 0))[0] || 'consistent'
+
+    // first non-empty first_step; horizon = majority/first
+    const first_step = (rows.map(r => r.first_step).find(s => s && String(s).trim())) || 'None.'
+    const horizon = rows.map(r => r.horizon).find(Boolean) || 'NOW'
+    // rationale: concatenate each reviewer's one-liner with its standpoint
+    const rationale = rows.map(r => `[${r.reviewer_standpoint || 'reviewer'}] ${r.rationale || ''}`.trim()).join(' ')
+
+    return {
+      title, horizon, consistency, value_score, feasibility_score, score_spread,
+      eligibility_gate, verdict, survived_verification, first_step, rationale,
+      _per_reviewer: rows.map(r => ({ standpoint: r.reviewer_standpoint, eligible: r.eligible, verdict: r.verdict, v: r.value_score, f: r.feasibility_score })),
+    }
+  })
+  const splits = ideas.filter(i => i.eligibility_gate === 'split' || i.score_spread >= 4).map(i => i.title)
+  return { ideas, splits }
 }
 
 // ===================== 1. GROUND (multi-agent explore + JS merge + verify) =====================
@@ -473,72 +637,104 @@ Output a clean candidate list grouped by theme, each idea with its fields + sour
   { label: 'synthesize:merge', phase: 'Synthesize', ...LEAD }
 )
 
-// ===================== 6. ADVERSARIAL VERIFY (top candidates) =====================
+// ===================== 6. ADVERSARIAL VERIFY (universal coverage) =====================
 phase('Verify')
-// A skeptic stress-tests the synthesized set for feasibility/eligibility traps BEFORE final scoring.
+// Every idea is challenged -- no "only the tempting ones" escape hatch. Default
+// disposition is refuted; an idea earns 'survived' only if its hardest objection fails.
 const verify = await agent(
-  `You are an ADVERSARIAL SKEPTIC. For the synthesized candidate set below, try to KILL the most
-attractive-looking ideas. For each idea that looks like a likely ADOPT (high apparent value +
-seems feasible), attempt to refute it: does it secretly violate a hard principle? does it
-duplicate a shipped feature? is the "feasible" framing hiding a missing dependency (a gold
-source, a runtime consumer, a human ruling)? would it quietly turn a reasoning layer into an
-executor or a stats engine? Default to skeptical: if an idea can't survive a hard look, say so.
-Output, per challenged idea: title, the strongest objection, and a survives/weakened/killed call
-with one line of why. Ideas you don't challenge are presumed fine -- only spend effort on the
-tempting ones.
+  `You are an ADVERSARIAL SKEPTIC. For EVERY idea in the synthesized candidate set below you MUST
+attempt a refutation -- there is no "skip the ones that look fine." The default disposition of
+every idea is that it does NOT survive; an idea earns 'survived' only if your hardest objection
+provably fails. Killing nothing is a RED FLAG that you did not really try.
 
+For EACH idea, find the strongest objection: does it secretly violate a hard principle? does it
+duplicate a feature the ship-status says is already SHIPPED? is the "feasible" framing hiding a
+missing dependency (a gold source, a runtime consumer, a human ruling)? would it quietly turn a
+reasoning layer into an executor or a stats engine? Then rule it survived / weakened / killed
+with one line of why.
+
+=== SHIP STATUS (for the duplicate-of-shipped check) ===\n${JSON.stringify((explore && explore.ship_status) || [], null, 2)}
 === SYNTHESIZED CANDIDATES ===\n${synthesis}`,
-  { label: 'verify:skeptic', phase: 'Verify', ...SCOUT }
+  { label: 'verify:skeptic', phase: 'Verify', schema: VERIFY_SCHEMA, ...SCOUT }
 )
 
-// ===================== 7. EXTERNAL REVIEW (score + gate) =====================
-phase('Review')
-const REVIEW_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['scored_ideas', 'summary'],
-  properties: {
-    summary: { type: 'string' },
-    scored_ideas: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['title', 'horizon', 'eligible', 'consistency', 'value_score', 'feasibility_score', 'verdict', 'rationale'],
-        properties: {
-          title: { type: 'string' },
-          horizon: { type: 'string', enum: ['NOW', 'HORIZON'] },
-          eligible: { type: 'boolean' },
-          consistency: { type: 'string', enum: ['consistent', 'minor-tension', 'conflict'] },
-          value_score: { type: 'integer', minimum: 1, maximum: 10 },
-          feasibility_score: { type: 'integer', minimum: 1, maximum: 10 },
-          verdict: { type: 'string', enum: ['ADOPT', 'CONSIDER', 'PARK', 'REJECT'] },
-          rationale: { type: 'string' },
-          survived_verification: { type: 'string', enum: ['survived', 'weakened', 'killed', 'not-challenged'], description: 'how it fared against the adversarial skeptic' },
-          first_step: { type: 'string' },
-        },
-      },
-    },
-  },
-}
-const review = await agent(
-  `You are the EXTERNAL REVIEWER -- independent, skeptical, default to caution. Score the
-synthesized idea set for Seshat BI. You also have an ADVERSARIAL SKEPTIC's challenges -- weigh
-them: an idea the skeptic KILLED should not be ADOPT; one WEAKENED should drop in feasibility.
+// ===================== 7. PANEL REVIEW (3 independent standpoints) =====================
+// Three reviewers judge the SAME set from distinct standpoints, in a parallel barrier
+// that collects exactly 3 records (zero-arg thunks closing over the reviewer -- no index).
+// A single reviewer was one point of judgment; the panel surfaces eligibility disagreement.
+phase('Panel-review')
+const PANELISTS = [
+  { key: 'principle-auditor', label: 'review:principle-auditor', standpoint:
+    `the HARD-PRINCIPLE AUDITOR. Judge ELIGIBILITY only and presume an idea INELIGIBLE until it proves it touches ONLY reasoning/static/read-only seams. Name the violated principle for anything that executes, bypasses a gate, fabricates confidence, self-grants approval, or is C086-specific. Be the strictest of the three.` },
+  { key: 'shipped-duplication-auditor', label: 'review:shipped-duplication-auditor', standpoint:
+    `the SHIPPED-DUPLICATION AUDITOR. Judge CONSISTENCY with shipped work using the ship-status table + history. PENALIZE an idea that merely RESTATES shipped work; do NOT penalize a genuine extension that builds ON shipped work -- but it must name the shipped feature and say which it is. An idea matching settled-rejected history should not be ADOPT unless it is materially new.` },
+  { key: 'value-feasibility-realist', label: 'review:value-feasibility-realist', standpoint:
+    `the VALUE/FEASIBILITY REALIST. Judge value and feasibility honestly: is "feasible" hiding a missing gold source, a runtime consumer that does not exist yet, or an unmade human ruling? Reward genuine analytical/system value; discount ideas whose feasibility depends on something deferred (e.g. F016).` },
+]
+const panel = (await parallel(PANELISTS.map(p => () =>
+  agent(
+    `You are ${p.standpoint}
 
-For EACH idea: eligible (respects ALL hard principles? name the violated one if not);
-consistency (consistent / minor-tension / conflict with shipped features); value_score &
-feasibility_score (1-10); survived_verification (survived/weakened/killed/not-challenged);
-verdict (ADOPT / CONSIDER / PARK / REJECT); first_step for ADOPT/CONSIDER. Reward genuine
-extension; penalize restating what's shipped. Mark INELIGIBLE ideas, don't soften them.
+You are ONE of three independent reviewers scoring the SAME synthesized idea set for Seshat BI.
+Score from YOUR standpoint; the other two cover the other angles. Default to caution. This is a
+triage opinion for an IDEA BANK, never a build decision -- you never promote anything to the roadmap.
 
-Remember: this is a triage opinion for an IDEA BANK, not a build decision.
+For EACH idea set: horizon (NOW/HORIZON); eligible (bool) + ineligibility_reason (named principle
+or ''); consistency (consistent/minor-tension/conflict); value_score & feasibility_score (1-10);
+verdict (ADOPT/CONSIDER/PARK/REJECT/SHIPPED -- use SHIPPED only if it matches a shipped feature);
+survived_verification (survived/weakened/killed, weighed from the skeptic); prior_status
+(new/shipped/rejected-settled/open-prior from the history); relitigation (n/a/settled/materially-new);
+rationale; first_step for ADOPT/CONSIDER. An idea the skeptic KILLED should not be ADOPT.
 
-=== REPO MAP ===\n${exploreMap}
+=== SHIP STATUS ===\n${JSON.stringify((explore && explore.ship_status) || [], null, 2)}${MEMORY_LINE}
 === SYNTHESIZED CANDIDATES ===\n${synthesis}
-=== ADVERSARIAL SKEPTIC'S CHALLENGES ===\n${verify}`,
-  { label: 'review:score-and-gate', phase: 'Review', schema: REVIEW_SCHEMA, ...LEAD }
-)
+=== ADVERSARIAL SKEPTIC'S CHALLENGES ===\n${verify ? JSON.stringify(verify) : '(skeptic produced nothing)'}`,
+    { label: p.label, phase: 'Panel-review', schema: PANEL_REVIEWER_SCHEMA, ...LEAD }
+  ).then(r => r ? { ...r, _key: p.key } : null)
+)).filter(Boolean)
+
+// ===================== 8. AGGREGATE (pure JS gate + clamp; tiny prose agent) =====================
+// The arithmetic, the eligibility gate, and the demote-only clamp are PURE JS -- never an
+// LLM sampling pass (an LLM cannot miscompute a median or call a 2-1 split a "majority").
+// The clamp only DEMOTES toward caution, so it is orchestration, not self-approval.
+phase('Aggregate')
+const aggregated = aggregatePanel(panel)   // -> { ideas:[...], counts, splits }
+
+// One tiny agent writes ONLY the dissent prose + portfolio summary; it touches no number.
+const dissentAgent = aggregated.ideas.length ? await agent(
+  `You are the PANEL CLERK. Write human-facing PROSE only -- you change NO scores and NO verdicts
+(those are already computed). (1) For each idea flagged with a panel split below, write a one- to
+two-sentence 'dissent' explaining the disagreement (e.g. "2 reviewers ADOPT; the principle auditor
+ruled it ineligible for X"). (2) Write a 'portfolio_summary': a scannable paragraph a human can act
+on. Return dissent keyed by idea title, plus the summary. Do not invent ideas or numbers.
+
+=== AGGREGATED IDEAS (verdicts/scores already final; splits flagged) ===
+${JSON.stringify(aggregated.ideas.map(i => ({ title: i.title, verdict: i.verdict, eligibility_gate: i.eligibility_gate, value_score: i.value_score, feasibility_score: i.feasibility_score, score_spread: i.score_spread, per_reviewer: i._per_reviewer })), null, 2)}`,
+  { label: 'aggregate:dissent-prose', phase: 'Aggregate', schema: DISSENT_SCHEMA, ...LEAD }
+) : { dissent_by_title: [], portfolio_summary: 'No ideas reached the panel.' }
+
+// Stitch the JS-computed ideas + the agent prose into the review-shaped object the
+// deterministic renderer (PR2) already consumes. scored_ideas keeps the same field
+// names the renderer reads (title/horizon/eligible/consistency/value_score/
+// feasibility_score/verdict/rationale/first_step) PLUS dissent.
+const dissentMap = {}
+for (const d of (dissentAgent.dissent_by_title || [])) dissentMap[d.title] = d.dissent
+const review = {
+  summary: dissentAgent.portfolio_summary || '',
+  scored_ideas: aggregated.ideas.map(i => ({
+    title: i.title,
+    horizon: i.horizon,
+    eligible: i.eligibility_gate !== 'fail',   // renderer tags INELIGIBLE when false
+    consistency: i.consistency,
+    value_score: i.value_score,
+    feasibility_score: i.feasibility_score,
+    verdict: i.verdict,
+    rationale: i.rationale,
+    survived_verification: i.survived_verification,
+    first_step: i.first_step,
+    dissent: dissentMap[i.title] || '',
+  })),
+}
 
 // ===================== 8. RENDER (pure JS, orchestrator writes) =====================
 // Deterministic output: the workflow does NOT write the file (matching the repo's
@@ -577,7 +773,7 @@ function tally(ideas) {
 //   ### <title>
 //   `<horizon>` - **V<n> / F<n>** - consistency: <c> - <eligibility tag>
 //   **Why this verdict:** <rationale>
-//   **Panel dissent:** <dissent>        (only if present -- reserved for PR5)
+//   **Panel dissent:** <dissent>        (only when the panel disagreed)
 //   **First step:** <first_step or 'None.'>
 function renderIdea(i) {
   const eligTag = i.eligible === false
@@ -591,7 +787,7 @@ function renderIdea(i) {
     '',
     `**Why this verdict:** ${norm(i.rationale)}`,
   ]
-  if (i.dissent && String(i.dissent).trim()) {  // reserved for PR5 panel; '' today
+  if (i.dissent && String(i.dissent).trim()) {  // panel split (PR5); '' if unanimous
     lines.push('', `**Panel dissent:** ${norm(i.dissent)}`)
   }
   const firstStep = (i.first_step && String(i.first_step).trim()) || 'None.'
@@ -687,7 +883,9 @@ return {
   gaps_found: gaps,
   synthesis,
   adversarial_verify: verify,
-  review,
+  panel,                                     // the 3 raw reviewer records (pre-aggregation)
+  panel_splits: aggregated.splits,           // ideas where the panel disagreed (eligibility/score)
+  review,                                    // aggregated, renderer-shaped (JS gate + clamp applied)
   raw_idea_count: allIdeas.length,
   rounds: { r1: round1.filter(Boolean).length, cross: crossRound.filter(Boolean).length, fill: fillRound.filter(Boolean).length },
   focus: FOCUS,
