@@ -206,13 +206,21 @@ const DISSENT_SCHEMA = {
 // reduces to one verdict per idea. Median scores; eligibility gate (pass/fail/split);
 // demote-only clamp (fail -> REJECT, split -> at most CONSIDER); majority verdict else
 // the MORE CAUTIOUS of the tie. No Date/random; deterministic.
-function aggregatePanel(panel, expectedReviewers) {
+function aggregatePanel(panel, expectedReviewers, verifyRec) {
   const live = (panel || []).filter(Boolean)
   // A panelist that died (null) is a gate-integrity problem, not a smaller panel: if the
   // strict principle auditor fails, the remaining reviewers must not be treated as a
   // complete eligibility ruling. Track the shortfall so the gate can refuse to pass.
   const expected = Number.isFinite(expectedReviewers) ? expectedReviewers : live.length
   const panel_failed = Math.max(0, expected - live.length)
+  // The skeptic's "challenge EVERY candidate" contract is enforced HERE in JS, not by the
+  // schema (which only requires an array) or the prompt (a request). An idea the skeptic
+  // silently omitted from challenged[] is treated as if it FAILED the gate: marked killed
+  // and demoted out of ADOPT, mirroring the demote-only eligibility clamp. Unchallenged !=
+  // safe -- it means coverage was not proven, so it must not read as a survived ADOPT.
+  const challengedTitles = new Set(((verifyRec && Array.isArray(verifyRec.challenged) ? verifyRec.challenged : []))
+    .map(ch => ch && ch.title).filter(Boolean))
+  let uncovered = 0
   // union of titles, first-seen order preserved (reviewer 0 then 1 then 2). Carry each
   // reviewer's standpoint/key DOWN onto its rows so attribution survives grouping.
   const order = []
@@ -277,8 +285,18 @@ function aggregatePanel(panel, expectedReviewers) {
     if (eligibility_gate === 'split' && verdict === 'ADOPT') verdict = 'CONSIDER'
 
     // worst disposition any reviewer recorded
-    const survived_verification = rows.map(r => r.survived_verification)
+    let survived_verification = rows.map(r => r.survived_verification)
       .sort((a, b) => (dispRank[b] || 0) - (dispRank[a] || 0))[0] || 'survived'
+
+    // skeptic-coverage clamp: an idea the adversarial skeptic never challenged has UNPROVEN
+    // coverage -> treat it as killed and demote it out of ADOPT (mirrors the eligibility
+    // clamp; demote-only, never promotes). This is what actually enforces the every-candidate
+    // contract -- without it an omitted idea could ride through as a survived ADOPT.
+    if (!challengedTitles.has(title)) {
+      uncovered++
+      survived_verification = 'killed'
+      if (verdict === 'ADOPT') verdict = 'CONSIDER'
+    }
 
     // most cautious consistency present
     const consRank = { conflict: 3, 'minor-tension': 2, consistent: 1 }
@@ -299,7 +317,7 @@ function aggregatePanel(panel, expectedReviewers) {
     }
   })
   const splits = ideas.filter(i => i.eligibility_gate === 'split' || i.score_spread >= 4).map(i => i.title)
-  return { ideas, splits, panel_failed, reviewers_seen: live.length, reviewers_expected: expected }
+  return { ideas, splits, panel_failed, reviewers_seen: live.length, reviewers_expected: expected, uncovered_by_skeptic: uncovered }
 }
 
 // ===================== 1. GROUND (multi-agent explore + JS merge + verify) =====================
@@ -619,6 +637,11 @@ function renderMemoryLine(mem) {
   return parts.join('\n')
 }
 const MEMORY_LINE = renderMemoryLine(memory)
+// A dead memory:read-prior agent (null/schema miss) makes renderMemoryLine return "" --
+// indistinguishable from a genuine first run, silently re-allowing shipped/settled ideas
+// to be re-proposed with no DEGRADED flag. Symmetric to groundFailed: a failed memory read
+// is an HONEST degraded run, not an invisible "no history". (Folded into run_health below.)
+const memoryFailed = !memory || typeof memory !== 'object'
 
 // ===================== 2. GENERATE (round 1) =====================
 phase('Generate')
@@ -693,9 +716,10 @@ const run_health = (() => {
   ]
   const anyFailed = rounds.some(r => r.failed > 0)
   const anyShort = rounds.some(r => r.ok < r.expected)
-  const degraded = anyFailed || anyShort || groundFailed
+  const degraded = anyFailed || anyShort || groundFailed || memoryFailed
   const parts = rounds.filter(r => r.ok < r.expected).map(r => `${r.label} ${r.ok}/${r.expected} lenses ok${r.failed ? ` (${r.failed} failed)` : ''}`)
   if (groundFailed) parts.unshift('grounding reconcile-verify returned null -- the repo map is the RAW UNVERIFIED submap union')
+  if (memoryFailed) parts.unshift('memory:read-prior returned null -- prior shipped/settled ideas are UNKNOWN this run; lenses may re-propose closed work')
   const banner = degraded ? `DEGRADED RUN: ${parts.join('; ')}. Treat this bank as partial.` : ''
   return { rounds, degraded, banner }
 })()
@@ -783,7 +807,7 @@ rationale; first_step for ADOPT/CONSIDER. An idea the skeptic KILLED should not 
 // LLM sampling pass (an LLM cannot miscompute a median or call a 2-1 split a "majority").
 // The clamp only DEMOTES toward caution, so it is orchestration, not self-approval.
 phase('Aggregate')
-const aggregated = aggregatePanel(panel, PANELISTS.length)   // -> { ideas, splits, panel_failed, ... }
+const aggregated = aggregatePanel(panel, PANELISTS.length, verify)   // verify threaded for the skeptic-coverage clamp
 
 // Fold the review-panel census into run_health: a dead reviewer (esp. the principle
 // auditor) is a degraded run, even if every generation lens reported. This makes a
@@ -795,6 +819,13 @@ if (aggregated.panel_failed > 0) {
     ? `${run_health.banner} Also: ${note}.`
     : `DEGRADED RUN: ${note}. Treat this bank as partial.`
   run_health.rounds.push({ label: 'panel-review', expected: aggregated.reviewers_expected, ok: aggregated.reviewers_seen, empty: 0, failed: aggregated.panel_failed })
+}
+// Skeptic-coverage gap: ideas the adversarial skeptic never challenged were JS-clamped
+// (killed + demoted out of ADOPT); announce it loud rather than only clamping silently.
+if (aggregated.uncovered_by_skeptic > 0) {
+  const note = `adversarial skeptic did not challenge ${aggregated.uncovered_by_skeptic} candidate(s) -- those were clamped (killed, demoted from ADOPT) for unproven coverage`
+  run_health.degraded = true
+  run_health.banner = run_health.banner ? `${run_health.banner} Also: ${note}.` : `DEGRADED RUN: ${note}. Treat this bank as partial.`
 }
 
 // One tiny agent writes ONLY the dissent prose + portfolio summary; it touches no number.
