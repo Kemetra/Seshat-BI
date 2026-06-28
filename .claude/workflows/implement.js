@@ -24,7 +24,10 @@ const H3_BLOCKED_RE  = /^\s*-?\s*\*\*Status:?\*\*:?.*\bBLOCKED\b/mi
 // ## Clarifications text. We do NOT invent an owner+date resolution grammar (the upstream
 // writes free-text), and resolution QUALITY is the human's job at ratification -- H4 only
 // fails-closed on a remaining open marker.
-const H4_OPEN_MARKER_RE = /\b(OPEN FOR (?:THE )?(?:YOU|HUMAN)|open_for_human|NEEDS CLARIFICATION|\(open\)|\bunresolved\b|\bTBD\b|\bTODO\b)\b/i
+// Two alternations: word-like markers carry \b boundaries; the literal "(open)" cannot
+// (its parens are non-word chars, so a \b...\(open\)...\b group never matches) -- it is a
+// separate boundary-free alternative.
+const H4_OPEN_MARKER_RE = /\b(?:OPEN FOR (?:THE )?(?:YOU|HUMAN)|open_for_human|NEEDS CLARIFICATION|unresolved|TBD|TODO)\b|\(open\)/i
 const H5_VERDICT_RE  = /^\s*(?:#+\s*)?(?:\*\*)?Verdict(?:\*\*)?\s*:?\s*\**\s*(PASS-WITH-NOTES|PASS|BLOCKED)\b/im
 
 // The ONLY tests permitted to be locally deselected for the Python-3.13 reason. Local is
@@ -344,20 +347,36 @@ function completionGate(b) {
   const v = b && b.verify
   const reasons = []
 
-  // (a) every task accounted for -- computed in JS, not trusted from the agent's status enum
+  // (a) every task accounted for -- computed in JS, not trusted from the agent's status enum.
+  // A "done" task must also be COMMITTED, or its changes are not on the PR branch: a
+  // size-only done===total check would call READY a branch missing that task's code.
+  const doneArr = (b && Array.isArray(b.tasks_done)) ? b.tasks_done : null
   const total = b ? b.tasks_total : 0
-  const done = (b && Array.isArray(b.tasks_done)) ? b.tasks_done.length : -1
+  const done = doneArr ? doneArr.length : -1
   const blocked = (b && Array.isArray(b.tasks_blocked)) ? b.tasks_blocked.length : 1
-  const tasksAllDone = total > 0 && done === total && blocked === 0
-  if (!tasksAllDone) reasons.push(`tasks incomplete: ${done}/${total} done, ${blocked} blocked`)
+  const allCommitted = !!doneArr && doneArr.every(t => t && t.committed === true)
+  const tasksAllDone = total > 0 && done === total && blocked === 0 && allCommitted
+  if (!tasksAllDone) reasons.push(`tasks incomplete: ${done}/${total} done, ${blocked} blocked` + (doneArr && !allCommitted ? ', some done tasks UNCOMMITTED (not on the branch)' : ''))
 
-  // (b) tests + lint green; the ONLY deselects are the JS allow-list; install + collection ok
+  // (b) tests + lint green; the ONLY deselects are the JS allow-list; install + collection ok.
+  // The argv MUST be the real CI gate: "pytest -m unit" with NO narrowing (-k / a single
+  // file / a node-id arg), or an "N passed" summary from a narrowed run could fake green.
   const summary = (v && v.pytest_summary_line) || ''
-  const summaryGreen = !!(v && v.install_ok && v.pytest_collected >= 0 &&
+  const argv = (v && v.pytest_argv) || ''
+  // Strip the sanctioned "--deselect <node-id>" tokens BEFORE checking for narrowing --
+  // a deselect value legitimately contains a .py path and a ::node-id (the CI-only test),
+  // so scanning the raw argv would false-positive on the allowed deselect. After stripping,
+  // the remainder must be a full "pytest -m unit" with no -k, no ::node-id, no bare .py file.
+  const argvCore = argv.replace(/(^|\s)--deselect(\s+|=)\S+/g, ' ')
+  const argvIsFullUnitRun = /(^|\s)-m\s+unit(\s|$)/.test(argvCore) &&
+    !/(^|\s)-k(\s|=)/.test(argvCore) && !/::/.test(argvCore) && !/(^|\s)[^\s-]\S*\.py(\s|$)/.test(argvCore)
+  const summaryGreen = !!(v && v.install_ok && v.pytest_collected >= 0 && argvIsFullUnitRun &&
     /(?:^|\s)\d+ passed\b/.test(summary) && !/\b(failed|error|errors)\b/i.test(summary))
   const deselectExplained = deselectsAreExplained(v)
   const testsOk = !!(summaryGreen && deselectExplained && v && v.ruff_format_exit === 0 && v.ruff_check_exit === 0)
-  if (!testsOk) reasons.push(`tests/lint not green: "${summary || 'no verify record'}"` + (v && !deselectExplained ? ' (UNEXPLAINED deselect -- not the CI-only allow-list)' : ''))
+  if (!testsOk) reasons.push(`tests/lint not green: "${summary || 'no verify record'}"` +
+    (v && !argvIsFullUnitRun ? ` (argv was NOT a full "pytest -m unit" run: "${argv}")` : '') +
+    (v && !deselectExplained ? ' (UNEXPLAINED deselect -- not the CI-only allow-list)' : ''))
 
   // (c) the EXACT CI gate set: retail check (or deferred-to-ci) + retail semantic-check
   const checkGreen = !!(v && (v.retail_check_exit === 0 || v.retail_check_commit_range_resolved === false))
