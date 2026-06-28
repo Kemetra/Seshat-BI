@@ -1,12 +1,12 @@
 export const meta = {
   name: 'idea-engine',
-  description: 'Idea generator for Seshat BI. Explore grounds on the real repo; three lenses (creative / BI analyst / technical) generate in parallel, then cross-pollinate (each reacts to the others); a completeness critic finds blind spots and triggers one targeted fill pass; a synthesizer merges; an adversarial skeptic stress-tests the strong candidates; an external reviewer scores value/feasibility and gates eligibility & consistency. Every stage runs on Opus at xhigh effort. Output: a ranked NOW/HORIZON idea BANK — exploratory inspiration, not a roadmap or commitment.',
-  whenToUse: 'When you want a deep, exhaustive, rigorously vetted idea bank for the project. All-Opus, xhigh effort, multi-round — thorough and heavy (many agents/tokens/time). Re-runnable; pass args to focus a theme. Output is an idea bank, never a plan.',
+  description: 'Idea generator for Seshat BI. Explore grounds on the real repo; three lenses (creative / BI analyst / technical) generate in parallel, then cross-pollinate (each reacts to the others); a completeness critic finds blind spots and triggers one targeted fill pass; a synthesizer merges; an adversarial skeptic stress-tests the strong candidates; an external reviewer scores value/feasibility and gates eligibility & consistency. Every stage runs on Opus at xhigh effort. Output: a ranked NOW/HORIZON idea BANK -- exploratory inspiration, not a roadmap or commitment.',
+  whenToUse: 'When you want a deep, exhaustive, rigorously vetted idea bank for the project. All-Opus, xhigh effort, multi-round -- thorough and heavy (many agents/tokens/time). Re-runnable; pass args to focus a theme. Output is an idea bank, never a plan.',
   phases: [
     { title: 'Explore',        detail: 'map the real repo: shipped, planned, gaps, principles', model: 'opus' },
     { title: 'Generate',       detail: 'creative / BI / technical lenses propose in parallel (round 1)', model: 'opus' },
     { title: 'Cross-pollinate',detail: 'each lens reacts to the others; surface cross-disciplinary ideas', model: 'opus' },
-    { title: 'Completeness',   detail: 'critic finds blind spots → one more targeted generation pass', model: 'opus' },
+    { title: 'Completeness',   detail: 'critic finds blind spots -> one more targeted generation pass', model: 'opus' },
     { title: 'Synthesize',     detail: 'merge + dedupe into one candidate set', model: 'opus' },
     { title: 'Verify',         detail: 'adversarial skeptic stress-tests each strong candidate', model: 'opus' },
     { title: 'Review',         detail: 'external reviewer scores + gates eligibility & consistency', model: 'opus' },
@@ -15,7 +15,33 @@ export const meta = {
 
 const REPO = 'C:/Users/Shaaban/Documents/GitHub/Seshat_BI'
 
-const FOCUS = (typeof args === 'string' && args.trim()) ? args.trim() : null
+// ---- args boundary (one coerce, shared by every fortification) ----
+// args : undefined
+//      | "<focus string>"                                      // back-compat: bare string = FOCUS
+//      | { focus?, sinceRef?:"<a..b>", date?:"YYYY-MM-DD", ascii?:bool }
+//      | a JSON-encoded STRING of the object above
+// NOTE: unlike speckit-finish-chain's coerce (which THROWS on non-JSON), this one
+// treats a non-JSON string as a bare focus -- so `args: "KPI coverage"` works.
+function coerce(a) {
+  if (typeof a !== 'string') return { value: a }       // already object/undefined
+  const s = a.trim()
+  if (!s) return { value: null }
+  try { return { value: JSON.parse(s) } }              // JSON object/array
+  catch { return { value: s } }                        // NOT JSON -> whole string is FOCUS
+}
+const _c = coerce(args)
+const _A = (_c.value && typeof _c.value === 'object' && !Array.isArray(_c.value)) ? _c.value : {}
+const FOCUS = typeof _c.value === 'string' ? _c.value.trim()
+  : (typeof _A.focus === 'string' ? _A.focus.trim() : null)
+// sinceRef: a git range "a..b" for the future ship-delta explorer (PR3). Validated
+// here; consumed later. Absent -> roadmap markers only, never invent a range.
+const SINCE_REF = (typeof _A.sinceRef === 'string'
+  && /^[A-Za-z0-9_./~^-]+\.\.[A-Za-z0-9_./~^-]+$/.test(_A.sinceRef)) ? _A.sinceRef : null
+// date: stamped into the rendered backlog (PR2). Scripts cannot call new Date();
+// absent/malformed -> "(date pending)" placeholder for the human to fill.
+const DATE = (typeof _A.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(_A.date)) ? _A.date : null
+// ascii: normalize rendered output to ASCII (-- and ->). Default true (Principle IX).
+const ASCII = typeof _A.ascii === 'boolean' ? _A.ascii : true
 const FOCUS_LINE = FOCUS
   ? `\nFOCUS for this run (bias ideas toward this, but don't ignore strong off-theme ideas): ${FOCUS}\n`
   : ''
@@ -23,7 +49,7 @@ const FOCUS_LINE = FOCUS
 const PROJECT = `
 PROJECT: Seshat BI (package alias Seshat_BI; formerly "Tower BI Agent Kit"). An AGENT-FIRST
 Retail BI readiness system. It guides agents from raw retail sources through 7 readiness
-stages — Source → Mapping → Silver → Gold → Semantic Model → Dashboard → Publish — using
+stages -- Source -> Mapping -> Silver -> Gold -> Semantic Model -> Dashboard -> Publish -- using
 documented gates, evidence, and human approvals. The agent is the interface; CLI gates
 (retail check, retail validate) are helpers it calls, never the product.
 
@@ -36,12 +62,13 @@ HARD PRINCIPLES (any idea that violates these is INELIGIBLE):
 - YAGNI: add the seam, not speculative implementation, unless asked.
 
 WHAT EXISTS (grounding):
-- 4 router-first knowledge layers under skills/: bi-sql-knowledge (table grain),
+- 5 router-first knowledge layers under skills/: bi-sql-knowledge (table grain),
   bi-dax-knowledge (filter context), bi-python-knowledge (dataframe grain, seed),
-  retail-kpi-knowledge (business KPI meaning, seed — newest, PR #58).
-- Roadmap F005–F015 SHIPPED; F016 (Power BI Execution Adapter) is the ONLY unbuilt core
+  bi-bigdata-knowledge (execution topology / distributed), retail-kpi-knowledge
+  (business KPI meaning, seed -- newest, PR #58).
+- Roadmap F005-F015 SHIPPED; F016 (Power BI Execution Adapter) is the ONLY unbuilt core
   feature (deferred, execution-only, gated on semantic-model readiness). Tier 5 companion
-  modules/adapters (F024–F034) are PARTLY shipped.
+  modules/adapters (F024-F034) are PARTLY shipped.
 - Docs spine: docs/readiness/ (the stage model), docs/knowledge-map.md (the router),
   COMPASS.md + AGENTS.md (entry contract), docs/metrics/ (F009 metric-contract store +
   retail-kpi-catalog menu), docs/quality/agent-routing-smoke-test.md.
@@ -60,6 +87,7 @@ const LEAD  = { model: 'opus', effort: 'xhigh' }   // synthesize / final review
 
 const IDEA_SCHEMA = {
   type: 'object',
+  additionalProperties: false,
   required: ['lens', 'ideas'],
   properties: {
     lens: { type: 'string' },
@@ -67,6 +95,7 @@ const IDEA_SCHEMA = {
       type: 'array',
       items: {
         type: 'object',
+        additionalProperties: false,
         required: ['title', 'pitch', 'horizon', 'why_it_fits', 'rough_shape'],
         properties: {
           title: { type: 'string' },
@@ -88,11 +117,11 @@ const explore = await agent(
 YOU ARE THE EXPLORER. Read the real repo under ${REPO} and produce a tight, factual MAP the
 idea generators build on. Do NOT propose ideas yet. Read enough to ground (not everything):
 COMPASS.md, AGENTS.md, docs/knowledge-map.md, docs/roadmap/roadmap.md,
-docs/readiness/readiness-model.md, the 4 skills' SKILL.md; skim docs/ for what's missing.
+docs/readiness/readiness-model.md, the 5 skills' SKILL.md; skim docs/ for what's missing.
 
 Output: 1) CAPABILITY MAP by readiness stage; 2) SHIPPED FEATURES (F-numbers, brief);
 3) GAPS & DEFERRALS (F016, Tier 5 partials, seed deferrals, absent-but-expected capability);
-4) TENSIONS/FRICTION (incomplete/duplicated/awkward — good idea fuel); 5) the PRINCIPLES an
+4) TENSIONS/FRICTION (incomplete/duplicated/awkward -- good idea fuel); 5) the PRINCIPLES an
 idea must respect, in your own words. Cite file/feature names. This is the shared substrate.`,
   { label: 'explore:repo-map', phase: 'Explore', agentType: 'Explore', ...SCOUT }
 )
@@ -100,9 +129,9 @@ idea must respect, in your own words. Cite file/feature names. This is the share
 // ===================== 2. GENERATE (round 1) =====================
 phase('Generate')
 const LENSES = [
-  { key: 'creative', label: 'gen:creative', role: `a CREATIVE PROGRAMMER lens. Generate inventive, original ideas — features, agent capabilities, DX wins, novel uses of the knowledge layers, surprising combinations. Favor imagination and delight.` },
-  { key: 'bi',       label: 'gen:bi-analyst', role: `a PROFESSIONAL BI ANALYST lens (15+ yrs retail). Generate ideas that increase ANALYTICAL VALUE — KPI/metric coverage, decision-support, forecasting, anomaly/exception surfacing, business-question coverage, things a real merchandiser/finance owner needs.` },
-  { key: 'technical',label: 'gen:technical', role: `a PROFESSIONAL TECHNICAL ARCHITECT lens. Generate ideas that strengthen the system — architecture, testing/CI gates, performance, the router/two-hop contract, knowledge-layer tooling, drift/reconciliation, adapter design, observability, agent-eval harnesses. Buildable in-repo.` },
+  { key: 'creative', label: 'gen:creative', role: `a CREATIVE PROGRAMMER lens. Generate inventive, original ideas -- features, agent capabilities, DX wins, novel uses of the knowledge layers, surprising combinations. Favor imagination and delight.` },
+  { key: 'bi',       label: 'gen:bi-analyst', role: `a PROFESSIONAL BI ANALYST lens (15+ yrs retail). Generate ideas that increase ANALYTICAL VALUE -- KPI/metric coverage, decision-support, forecasting, anomaly/exception surfacing, business-question coverage, things a real merchandiser/finance owner needs.` },
+  { key: 'technical',label: 'gen:technical', role: `a PROFESSIONAL TECHNICAL ARCHITECT lens. Generate ideas that strengthen the system -- architecture, testing/CI gates, performance, the router/two-hop contract, knowledge-layer tooling, drift/reconciliation, adapter design, observability, agent-eval harnesses. Buildable in-repo.` },
 ]
 function genPrompt(role, extra='') {
   return `You are ${role}\nGenerate 6-8 ideas for Seshat BI. Each MUST respect the hard principles (no executor, no gate bypass, generic-only, no fabricated confidence). Mix NOW and HORIZON. ${extra}\n\n=== REPO MAP ===\n${explore}`
@@ -123,12 +152,12 @@ const crossRound = await parallel(LENSES.map(l => () =>
   ).then(r => r ? { ...r, _key: l.key } : null)
 ))
 
-// ===================== 4. COMPLETENESS CRITIC → targeted pass =====================
+// ===================== 4. COMPLETENESS CRITIC -> targeted pass =====================
 phase('Completeness')
 const sofar = [...round1, ...crossRound].filter(Boolean)
 const sofarJson = JSON.stringify(sofar.map(r => ({ lens: r.lens || r._key, ideas: (r.ideas||[]).map(i => i.title) })), null, 2)
 const gaps = await agent(
-  `You are a COMPLETENESS CRITIC. Below are all idea TITLES generated so far for Seshat BI, plus the repo map. Your job is to find what's MISSING — readiness stages with few ideas, repo gaps/tensions nobody addressed, idea TYPES underrepresented (e.g. all features and no DX, or all technical and no business value), and obvious adjacent ideas no lens reached. List 5-10 specific missing angles as short prompts ("nobody proposed anything for X / for the Y gap"). Do not generate full ideas — just name the blind spots precisely.\n\n=== REPO MAP ===\n${explore}\n\n=== IDEA TITLES SO FAR ===\n${sofarJson}`,
+  `You are a COMPLETENESS CRITIC. Below are all idea TITLES generated so far for Seshat BI, plus the repo map. Your job is to find what's MISSING -- readiness stages with few ideas, repo gaps/tensions nobody addressed, idea TYPES underrepresented (e.g. all features and no DX, or all technical and no business value), and obvious adjacent ideas no lens reached. List 5-10 specific missing angles as short prompts ("nobody proposed anything for X / for the Y gap"). Do not generate full ideas -- just name the blind spots precisely.\n\n=== REPO MAP ===\n${explore}\n\n=== IDEA TITLES SO FAR ===\n${sofarJson}`,
   { label: 'critic:gaps', phase: 'Completeness', ...SCOUT }
 )
 // one targeted fill pass aimed at the named gaps
@@ -148,7 +177,7 @@ phase('Synthesize')
 const synthesis = await agent(
   `You are the SYNTHESIZER. Many ideas were generated across three lenses over three rounds
 (initial, cross-pollination, gap-fill). Merge into ONE clean candidate set.
-- DEDUPE near-duplicates (keep the strongest framing; note where lenses/rounds converged — convergence is a strength signal).
+- DEDUPE near-duplicates (keep the strongest framing; note where lenses/rounds converged -- convergence is a strength signal).
 - GROUP into themes.
 - Keep each idea's title, pitch, horizon, why_it_fits, rough_shape, source_lens(es).
 - Do NOT score (the reviewer does). Do NOT invent new ideas; only merge/clarify.
@@ -172,7 +201,7 @@ duplicate a shipped feature? is the "feasible" framing hiding a missing dependen
 source, a runtime consumer, a human ruling)? would it quietly turn a reasoning layer into an
 executor or a stats engine? Default to skeptical: if an idea can't survive a hard look, say so.
 Output, per challenged idea: title, the strongest objection, and a survives/weakened/killed call
-with one line of why. Ideas you don't challenge are presumed fine — only spend effort on the
+with one line of why. Ideas you don't challenge are presumed fine -- only spend effort on the
 tempting ones.
 
 === SYNTHESIZED CANDIDATES ===\n${synthesis}`,
@@ -183,6 +212,7 @@ tempting ones.
 phase('Review')
 const REVIEW_SCHEMA = {
   type: 'object',
+  additionalProperties: false,
   required: ['scored_ideas', 'summary'],
   properties: {
     summary: { type: 'string' },
@@ -190,6 +220,7 @@ const REVIEW_SCHEMA = {
       type: 'array',
       items: {
         type: 'object',
+        additionalProperties: false,
         required: ['title', 'horizon', 'eligible', 'consistency', 'value_score', 'feasibility_score', 'verdict', 'rationale'],
         properties: {
           title: { type: 'string' },
@@ -208,8 +239,8 @@ const REVIEW_SCHEMA = {
   },
 }
 const review = await agent(
-  `You are the EXTERNAL REVIEWER — independent, skeptical, default to caution. Score the
-synthesized idea set for Seshat BI. You also have an ADVERSARIAL SKEPTIC's challenges — weigh
+  `You are the EXTERNAL REVIEWER -- independent, skeptical, default to caution. Score the
+synthesized idea set for Seshat BI. You also have an ADVERSARIAL SKEPTIC's challenges -- weigh
 them: an idea the skeptic KILLED should not be ADOPT; one WEAKENED should drop in feasibility.
 
 For EACH idea: eligible (respects ALL hard principles? name the violated one if not);
