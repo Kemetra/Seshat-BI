@@ -232,7 +232,12 @@ function aggregatePanel(panel, expectedReviewers) {
     const m = Math.floor(a.length / 2)
     return a.length % 2 ? a[m] : Math.round((a[m - 1] + a[m]) / 2)
   }
-  const cautionRank = { REJECT: 4, PARK: 3, CONSIDER: 2, ADOPT: 1, SHIPPED: 0 } // higher = more cautious
+  // higher = wins a no-majority tie. SHIPPED is a CLOSED outcome (already-shipped, do not
+  // relitigate) and must outrank the open verdicts: when the shipped-duplication auditor
+  // alone recognizes a duplicate and the other two split on open verdicts, the candidate
+  // closes as SHIPPED, not an open section. REJECT still tops it (a hard-principle kill
+  // beats "we already shipped it").
+  const cautionRank = { REJECT: 5, SHIPPED: 4, PARK: 3, CONSIDER: 2, ADOPT: 1 }
   const dispRank = { killed: 3, weakened: 2, survived: 1 }                       // worst-seen wins
 
   const ideas = order.map(title => {
@@ -654,6 +659,8 @@ function census(label, expected, arr) {
   const ok = arr.filter(r => r._status === 'ok').length
   return { label, expected, ok, empty, failed }
 }
+// Built now over the generation rounds; the REVIEW PANEL census is folded in after the
+// panel runs (a failed reviewer is also a degraded run -- see the panel-failure fold below).
 const run_health = (() => {
   const rounds = [
     census('generate', LENSES.length, round1),
@@ -754,6 +761,18 @@ rationale; first_step for ADOPT/CONSIDER. An idea the skeptic KILLED should not 
 phase('Aggregate')
 const aggregated = aggregatePanel(panel, PANELISTS.length)   // -> { ideas, splits, panel_failed, ... }
 
+// Fold the review-panel census into run_health: a dead reviewer (esp. the principle
+// auditor) is a degraded run, even if every generation lens reported. This makes a
+// short panel fail loud in the banner, not just silently downgrade per-idea gates.
+if (aggregated.panel_failed > 0) {
+  const note = `review panel ${aggregated.reviewers_seen}/${aggregated.reviewers_expected} reviewers ok (${aggregated.panel_failed} failed) -- eligibility rulings are incomplete; affected ideas downgraded to needs-review`
+  run_health.degraded = true
+  run_health.banner = run_health.banner
+    ? `${run_health.banner} Also: ${note}.`
+    : `DEGRADED RUN: ${note}. Treat this bank as partial.`
+  run_health.rounds.push({ label: 'panel-review', expected: aggregated.reviewers_expected, ok: aggregated.reviewers_seen, empty: 0, failed: aggregated.panel_failed })
+}
+
 // One tiny agent writes ONLY the dissent prose + portfolio summary; it touches no number.
 const dissentAgent = aggregated.ideas.length ? await agent(
   `You are the PANEL CLERK. Write human-facing PROSE only -- you change NO scores and NO verdicts
@@ -852,16 +871,28 @@ ${JSON.stringify(rejected.map(i => ({ title: i.title, verdict: i.verdict, eligib
 phase('Render')
 const BACKLOG_PATH = 'docs/roadmap/idea-backlog.md'
 
-// ASCII normalization of the authored backlog (default on, Principle IX). This single
-// line is the ONLY place a literal Unicode glyph is allowed in this file: it is the
-// search set the normalizer strips (em-dash, en-dash, rightwards arrow, middle dot).
-// Everything the engine WRITES to docs/roadmap/idea-backlog.md passes through norm()
-// and is proven ASCII; .claude/workflows scripts are not governed content artifacts.
-const U_EMDASH = '—', U_ENDASH = '–', U_ARROW = '→', U_MIDDOT = '·'
+// ASCII normalization of the authored backlog (default on, Principle IX). Agent prose
+// (rationale, dissent, rescue, portfolio summary, memory citations) is NOT constrained to
+// ASCII upstream, so norm() must GUARANTEE ASCII on the way into the file, not just fold a
+// few known glyphs. The FOLD table maps common punctuation to readable ASCII; a final
+// catch-all replaces any remaining non-ASCII codepoint (NBSP -> space, everything else
+// dropped) so a stray smart-quote/ellipsis/non-breaking-space can never break the contract.
+// The FOLD glyph literals are the only non-ASCII in this file.
+const FOLD = [
+  ['—', '--'], ['–', '--'], ['―', '--'],   // em / en / horizontal bar
+  ['→', '->'], ['·', '-'], ['•', '-'],     // arrow / middle dot / bullet
+  ['‘', "'"], ['’', "'"], ['‚', "'"],      // smart single quotes
+  ['“', '"'], ['”', '"'], ['„', '"'],      // smart double quotes
+  ['…', '...'],                                  // ellipsis
+  [' ', ' '], [' ', ' '], [' ', ' '],   // non-breaking / thin / narrow-nbsp
+]
 function toAscii(s) {
   if (typeof s !== 'string') return ''
-  return s.split(U_EMDASH).join('--').split(U_ENDASH).join('--')
-          .split(U_ARROW).join('->').split(U_MIDDOT).join('-')
+  let out = s
+  for (const [from, to] of FOLD) out = out.split(from).join(to)
+  // catch-all: any codepoint still > 127 is dropped (the named maps above handle the
+  // readable cases; this is the backstop that makes the ASCII guarantee total).
+  return out.replace(/[^\x00-\x7F]/g, '')
 }
 const norm = ASCII ? toAscii : (s => (typeof s === 'string' ? s : ''))
 
