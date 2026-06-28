@@ -479,6 +479,23 @@ ${JSON.stringify({
   { label: 'ground:reconcile-verify', phase: 'Ground', schema: MERGED_MAP_SCHEMA, ...SCOUT }
 )
 
+// If the reconcile-verifier failed (null / schema miss), do NOT continue with an empty,
+// ungrounded map -- that would silently produce a normal-looking but baseless idea bank.
+// Fall back to the raw merged submap FACTS (unverified, every status forced to UNVERIFIED)
+// and mark the run degraded. A degraded grounding is honest; an empty one is dangerous.
+const groundFailed = !explore || typeof explore !== 'object'
+const explore_map = groundFailed
+  ? {
+      capability_map: '(reconcile-verifier did not return -- this map is the RAW union of the subsystem explorers, UNVERIFIED. Treat every claim with suspicion.)\n' + merged.capability_notes.map(n => `- ${n}`).join('\n'),
+      tensions: merged.tensions,
+      ship_status: Object.keys(merged.byFeature).map(fid => { const r = merged.byFeature[fid][0]; return { feature_id: fid, status: 'UNVERIFIED', evidence_path: (r && r.evidence_path) || 'unknown', verifier_opened_evidence: false } }),
+      reconciliation_ledger: [],
+      missing_subsystems: merged.missing_subsystems.concat(['reconcile-verify']),
+      principles: [],
+      verification_notes: 'DEGRADED: reconcile-verify agent returned null; downstream ran on the raw unverified submap union.',
+    }
+  : explore
+
 // renderMap: turn the structured MERGED MAP back into the prose+table substrate the
 // downstream stages interpolate (they used a single prose string before). Deterministic.
 function renderMap(m) {
@@ -511,7 +528,7 @@ function renderMap(m) {
   if (m.verification_notes) lines.push('=== VERIFICATION NOTES ===', m.verification_notes)
   return lines.join('\n')
 }
-const exploreMap = renderMap(explore)
+const exploreMap = renderMap(explore_map)
 
 // ===================== 1b. MEMORY (read prior bank; do NOT re-read git) =====================
 // History-aware: the engine reads its prior output + Ground's verified ship-status so it
@@ -547,7 +564,7 @@ const MEMORY_SCHEMA = {
 }
 // Ground's verified ship-status, compacted for the memory reader (its sole state source).
 const shipStatusForMemory = JSON.stringify(
-  (explore && Array.isArray(explore.ship_status) ? explore.ship_status : [])
+  (explore_map && Array.isArray(explore_map.ship_status) ? explore_map.ship_status : [])
     .map(r => ({ feature_id: r.feature_id, status: r.status, evidence_path: r.evidence_path })),
   null, 2
 )
@@ -566,6 +583,13 @@ STEPS:
    prior_id, prior_title, the verdict SECTION it sits under (## ADOPT/CONSIDER/PARK/REJECT) as
    prior_verdict, and -- as verdict_citation -- the VERBATIM heading line plus the verbatim section
    header, so any misparse is a quotable artifact a human can catch.
+2b. ALSO parse the "## SHIPPED / SETTLED (prior ideas, for the record)" appendix if present: its
+   entries are BULLETS, not headings, of the form "- **<id> <title>** -- SHIPPED. <citation>" or
+   "-- SETTLED (rejected). <citation>". For each bullet, emit a prior_ideas entry with prior_id,
+   prior_title, prior_verdict (ADOPT/REJECT/UNKNOWN as best inferred from the tag), current_state
+   ("shipped" for SHIPPED, "rejected-settled" for SETTLED), verdict_citation = the verbatim bullet,
+   and state_citation = the bullet's trailing citation. This is the round-trip: closed ideas live
+   in that appendix as bullets, so they MUST be re-read here or they vanish from memory next run.
 3. Set current_state by matching the idea against Ground's ship_status:
    - "shipped" ONLY if a ship_status row marks an equivalent capability SHIPPED -- cite that row
      (feature_id + evidence_path) in state_citation.
@@ -669,10 +693,10 @@ const run_health = (() => {
   ]
   const anyFailed = rounds.some(r => r.failed > 0)
   const anyShort = rounds.some(r => r.ok < r.expected)
-  const degraded = anyFailed || anyShort
-  const banner = degraded
-    ? `DEGRADED RUN: ${rounds.filter(r => r.ok < r.expected).map(r => `${r.label} ${r.ok}/${r.expected} lenses ok${r.failed ? ` (${r.failed} failed)` : ''}`).join('; ')}. Treat this bank as partial.`
-    : ''
+  const degraded = anyFailed || anyShort || groundFailed
+  const parts = rounds.filter(r => r.ok < r.expected).map(r => `${r.label} ${r.ok}/${r.expected} lenses ok${r.failed ? ` (${r.failed} failed)` : ''}`)
+  if (groundFailed) parts.unshift('grounding reconcile-verify returned null -- the repo map is the RAW UNVERIFIED submap union')
+  const banner = degraded ? `DEGRADED RUN: ${parts.join('; ')}. Treat this bank as partial.` : ''
   return { rounds, degraded, banner }
 })()
 
@@ -714,7 +738,7 @@ missing dependency (a gold source, a runtime consumer, a human ruling)? would it
 reasoning layer into an executor or a stats engine? Then rule it survived / weakened / killed
 with one line of why.
 
-=== SHIP STATUS (for the duplicate-of-shipped check) ===\n${JSON.stringify((explore && explore.ship_status) || [], null, 2)}
+=== SHIP STATUS (for the duplicate-of-shipped check) ===\n${JSON.stringify((explore_map && explore_map.ship_status) || [], null, 2)}
 === SYNTHESIZED CANDIDATES ===\n${synthesis}`,
   { label: 'verify:skeptic', phase: 'Verify', schema: VERIFY_SCHEMA, ...SCOUT }
 )
@@ -747,7 +771,7 @@ survived_verification (survived/weakened/killed, weighed from the skeptic); prio
 (new/shipped/rejected-settled/open-prior from the history); relitigation (n/a/settled/materially-new);
 rationale; first_step for ADOPT/CONSIDER. An idea the skeptic KILLED should not be ADOPT.
 
-=== SHIP STATUS ===\n${JSON.stringify((explore && explore.ship_status) || [], null, 2)}${MEMORY_LINE}
+=== SHIP STATUS ===\n${JSON.stringify((explore_map && explore_map.ship_status) || [], null, 2)}${MEMORY_LINE}
 === SYNTHESIZED CANDIDATES ===\n${synthesis}
 === ADVERSARIAL SKEPTIC'S CHALLENGES ===\n${verify ? JSON.stringify(verify) : '(skeptic produced nothing)'}`,
     { label: p.label, phase: 'Panel-review', schema: PANEL_REVIEWER_SCHEMA, ...LEAD }
@@ -774,7 +798,12 @@ if (aggregated.panel_failed > 0) {
 }
 
 // One tiny agent writes ONLY the dissent prose + portfolio summary; it touches no number.
-const dissentAgent = aggregated.ideas.length ? await agent(
+// It is a NON-CRITICAL prose step -- the verdicts/scores are already final in JS -- so a null
+// return (schema miss / agent failure) must NOT abort the run after the panel succeeded. We
+// coalesce null to a safe default (matching the defensive null-handling on the lens/panel
+// agents) so the deterministic renderer still emits the aggregated scores.
+const FALLBACK_DISSENT = { dissent_by_title: [], portfolio_summary: aggregated.ideas.length ? '(panel summary unavailable -- the dissent clerk did not return; verdicts and scores below are final.)' : 'No ideas reached the panel.' }
+const dissentRaw = aggregated.ideas.length ? await agent(
   `You are the PANEL CLERK. Write human-facing PROSE only -- you change NO scores and NO verdicts
 (those are already computed). (1) For each idea flagged with a panel split below, write a one- to
 two-sentence 'dissent' explaining the disagreement (e.g. "2 reviewers ADOPT; the principle auditor
@@ -784,7 +813,8 @@ on. Return dissent keyed by idea title, plus the summary. Do not invent ideas or
 === AGGREGATED IDEAS (verdicts/scores already final; splits flagged) ===
 ${JSON.stringify(aggregated.ideas.map(i => ({ title: i.title, verdict: i.verdict, eligibility_gate: i.eligibility_gate, value_score: i.value_score, feasibility_score: i.feasibility_score, score_spread: i.score_spread, per_reviewer: i._per_reviewer })), null, 2)}`,
   { label: 'aggregate:dissent-prose', phase: 'Aggregate', schema: DISSENT_SCHEMA, ...LEAD }
-) : { dissent_by_title: [], portfolio_summary: 'No ideas reached the panel.' }
+) : null
+const dissentAgent = dissentRaw || FALLBACK_DISSENT
 
 // Stitch the JS-computed ideas + the agent prose into the review-shaped object the
 // deterministic renderer (PR2) already consumes. scored_ideas keeps the same field
@@ -1096,7 +1126,7 @@ const backlog_markdown = renderBacklog(review, {
 })
 
 return {
-  explore_map: explore,                      // the structured, verified MERGED_MAP
+  explore_map,                               // the structured map (verified, or unverified-fallback if reconcile failed)
   explore_rendered: exploreMap,              // the prose+table substrate the lenses saw
   ground_missing_subsystems: merged.missing_subsystems,  // dead explorers -- degraded signal
   ground_contradictions: merged.contradictions.length,   // how many ship-status disputes were ruled
