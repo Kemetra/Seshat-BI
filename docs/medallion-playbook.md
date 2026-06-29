@@ -80,6 +80,31 @@ top data-quality issues — with numbers.
 decided first** because it dictates which columns are structural keys before you
 decide anything else.
 
+**The HYBRID walk (how to sequence the steps below).** Run grouped by dependency, not
+strictly one-global-pass-per-step. Per-step loop: present step → keep/enhance/change the
+step → apply → next (the walk both cleans the table and refines the pipeline).
+
+- **A. Global-first (decide across ALL columns):** **2.1 keep/drop FIRST** → **2.0 grain/PK
+  which VALIDATES the key survived** (and may choose a generated surrogate key, keeping the
+  natural key silver-only for the proof) → **2.2 PII** (a flagged *name* is not auto-PII:
+  individual/patient data is sensitive → drop default; staff names and B2B company names
+  are legitimate non-sensitive attributes).
+- **B. Per-survivor (decide these TOGETHER, one kept column at a time):** 2.3 rename +
+  2.5 type + 2.4 missing-value + gold placement. Missing-value is per-column (NO global
+  `'' → NULL` baseline) and only for columns where profiled `missing_count > 0`. A
+  present-but-wrong value is a *value remap* in a derived column, not a sentinel.
+- **C. Global-tail (across all rows):** 2.6 row filters (reconcile source − dropped =
+  silver, accounting for OVERLAP; a blank-targeting filter must run PRE-sentinel) →
+  2.7/2.8 derived columns (generate the fact surrogate AFTER filters), rollups, hierarchy.
+- **D. Gate:** Phase 4 review. Recording the judgment-call answers is NOT map approval —
+  no silver SQL until the full map is reviewed.
+
+The rule is **per-column vs global by dependency**: global when a decision is table-wide
+(PII policy) or cross-row (filters); per-column when it depends only on that column's own
+keep. Naming: gold/BI columns use PascalCase with `_` by logic (`Product_ID`,
+`Gross_Sales`, `Sale_SK`); the date dim carries no `-1`/sentinel member (markable as a
+Power BI date table).
+
 ### 2.0 Grain (FIRST — do not skip or defer)
 
 **Ask:** *"What does ONE ROW represent? Confirm with the data: how many rows vs how
@@ -116,11 +141,15 @@ type your own. Fix typos and opaque source codes; leave already-clear names alon
 
 ### 2.4 Missing-value handling
 
-**Ask (per column with any missing):** leave NULL / fill with what / drop.
-- Baseline first: convert `''` → NULL on all columns.
-- Recommend NULL for genuinely-unknown; a sentinel (`'UNKNOWN'`, `'UNCLASSIFIED'`) for
-  dimension attributes that must group cleanly; verify the sentinel doesn't collide
-  with a real value.
+This step splits across the hybrid walk: the **baseline is global**, the **sentinel
+choice is per-column** (bundled with rename/type/placement in phase B).
+- **Baseline (global, phase A):** convert `''` → NULL on **all** columns first, so
+  missingness is honest before any row filter runs.
+- **Sentinel-vs-NULL (per column, phase B):** for each kept column, decide NULL
+  (genuinely-unknown) vs a sentinel (`'UNKNOWN'`, `'UNCLASSIFIED'`) for dimension
+  attributes that must group cleanly; verify the sentinel doesn't collide with a real
+  value. Facts stay NULL (a sentinel would corrupt sums). This is a per-column judgment,
+  decided with that column's rename/type/placement — not one global toggle.
 
 ### 2.5 Data types
 

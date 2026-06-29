@@ -121,45 +121,55 @@ Derived from the data, not field names.
 - **Money-relationship checks (derived).** `net_sales = gross_sales + dis_tax` holds on
   `194,053 / 249,106` (`77.9%`); `gross_sales = salse_not_tax` on `194,053` (`77.9%`);
   `net_sales = salse_not_tax + tax` on only `86,100` (`34.6%`). NO identity holds
-  universally -> keep independent measures (RC9); do not collapse on a name assumption.
+  universally. (Decision: rather than keep all independent measures, the data-owner kept
+  ONLY `Gross_Sales` + `Quantity` -- an RC9 deviation, see assumptions.md / Q5.)
 
 ---
 
-## Candidate grain & candidate PK
+## Candidate grain & PK
 
-- **Candidate grain:** one row = one **invoice line item**.
+- **Grain:** one row = one **invoice line item**.
 - **Grain ratio:** `249,106` lines vs `102,818` invoices = **`2.42` lines/invoice**.
-- **Candidate PK:** `( billing_document, item_no )`.
-- **Uniqueness proof (landed data, via `profile.py`):**
+- **Chosen PK (decision):** a **generated surrogate `Sale_SK`** over the post-filter
+  silver rows (`1..246,916`). The **natural key `(billing_document, item_no)`** is
+  retained in **silver only** as the uniqueness/dedup proof and is NOT exposed to gold
+  (surrogate-PK pattern). `reference_no` is kept as a degenerate (invoice-level) attribute.
+- **Natural-key uniqueness proof (landed data, via `profile.py`):**
   - `COUNT(*)            = 249,106`
-  - `COUNT(DISTINCT pk)  = 249,106`  (= COUNT(*))
-  - `NULLs in PK columns = 0`
-  - -> `is_unique = True`
+  - `COUNT(DISTINCT (billing_document,item_no)) = 249,106`  (= COUNT(*))
+  - `NULLs in key columns = 0`  -> `is_unique = True`
 
-Rejected alternates: `reference_no` and `billing_document` alone (102,818 distinct =
-invoice grain, not line); `fi_document_no` (33,809 blank, 13.6%); adding `material` to the
-composite is redundant (two-col key already unique).
+Rejected as PK: `reference_no` / `billing_document` alone (102,818 distinct = invoice
+grain, not line); `fi_document_no` (33,809 blank, 13.6%).
 
-> Forward seam (RC2): this is the candidate PK on the LANDED data. The silver migration
-> must RE-VERIFY uniqueness on the TRANSFORMED output (TRIM/cast can collapse keys).
+> Forward seam (RC2): the natural-key uniqueness above is on the LANDED data; the silver
+> migration must RE-VERIFY it on the TRANSFORMED, post-filter output. The surrogate
+> `Sale_SK` is unique by construction, so the natural key remains the meaningful proof.
 
 ---
 
 ## Top data-quality issues
 
 1. **`customer` field contaminated with the site code** -- 85,911 rows (34.5%) have
-   `customer = 'C086'` (the branch), not a customer id. Likely walk-in/cash sales. Blocks
-   clean `dim_customer` design. (unresolved-questions Q6.)
-2. **2,190-row reduction needed bronze->silver** -- 513 junk-division rows
+   `customer = 'C086'` (the branch), not a customer id. Walk-in/cash sales. This is a
+   VALUE REMAP, not a missing value -- handled via derived `Customer_ID_Clean`
+   (`'C086' -> 'WALK_IN'`); `dim_customer` is keyed on the clean value. (Q6, ANSWERED.)
+2. **2,190-row reduction bronze->silver** -- 513 junk-division rows
    (`AUX`/`ARCHIVE`/`EL EZABY SERVICES`/blank) + 1,680 zero-value rows (qty=0 AND gross=0),
-   no overlap, = 2,190. (unresolved-questions Q4.)
-3. **Multiple overlapping money columns** -- `salse_not_tax`~=gross, `subtotal5_discount`~=`dis_tax`,
-   `kzwi1`~=`salse_not_tax`; only some hold as exact identities (see semantics). Which are
-   the independent measures vs droppable dups is an RC9 decision. (unresolved-questions Q5.)
-4. **7 PII columns present** -- `person_name`, `buyer`, `customer_name`, `cosm_mg`,
-   `area_mg`, `insurance_tel`, `insurance_no`. Default drop pending governance. (Q2.)
-5. **2 fully-empty columns** (`knumv`, `ref_return_date`) + **4 single-value constants**
-   (`site`, `site_name`, `cosm_mg`, `area_mg`) -> RC3 drop / constant.
+   with a **3-row overlap**: `513 + 1,680 - 3 = 2,190` -> silver = 246,916. ORDERING: the
+   blank-division filter must run PRE-sentinel (before `Division` gets `'UNCLASSIFIED'`),
+   else the 3 blank-division rows survive. (Q4, ANSWERED.)
+3. **Many money columns; only 2 measures kept** -- of `gross_sales`, `net_sales`, `tax`,
+   `dis_tax`, `salse_not_tax`, `subtotal5_discount`, `kzwi1`, `add_dis`, `paid`, the
+   data-owner kept ONLY `Gross_Sales` + `Quantity` as fact measures; the rest dropped.
+   (Q5, ANSWERED -- an RC9 deviation, recorded in assumptions.md.)
+4. **Sensitive PII vs business names** -- `insurance_tel` (patient phone), `cosm_mg`,
+   `area_mg` (manager personal names) are sensitive -> DROPPED. `person_name`/`buyer`
+   (STAFF names for KPIs) and `customer_name` (B2B COMPANY names) are NOT personal PII ->
+   KEPT as business attributes. (Q2, ANSWERED.)
+5. **2 fully-empty columns** (`knumv`, `ref_return_date`) + **single-value constants**
+   (`cosm_mg`, `area_mg` -> dropped). `site`/`site_name` are single-valued but KEPT as a
+   1-member `dim_branch` for multi-store conformance (Q3, ANSWERED).
 
 ---
 

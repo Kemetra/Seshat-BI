@@ -1,359 +1,297 @@
 # =============================================================================
 # source-map.yaml  --  sales_c086 (El Ezaby pharmacy branch C086 sales)
 # =============================================================================
-# Filled instance of the source-mapping spine. Decisions derived from an
-# INDEPENDENT live read-only profile (2026-06-29), recorded in source-profile.md.
-# NOT copied from the prior c086 worked example. Some decisions are deliberately
-# raised as unresolved-questions (the build is blocked until answered).
+# Filled instance, authored by walking the HYBRID cleaning chain (skill +
+# docs/medallion-playbook.md Phase 2) interactively with the data-owner
+# (Ahmed Shaaban) on 2026-06-29. Decisions rest on a live read-only profile of
+# bronze.sales_c086_raw. NOT copied from the prior c086 worked example.
 #
-# RC ids cited here are ADR-0002 cleaning defaults (RC1-RC16), a separate
-# namespace from the `retail check` governance D1-D8 rules.
+# Chain order applied (final): keep/drop FIRST -> grain/PK validates -> PII ->
+# per-column (rename + type + missing + placement) -> row filters -> derive -> gate.
+#
+# RC ids = ADR-0002 cleaning defaults (separate namespace from the checker's D1-D8).
 # =============================================================================
 
 meta:
   table_id: "sales_c086"
-  source_system: "retail_pos_export"            # xlsx sales export, faithfully landed
+  source_system: "retail_pos_export"
   profiled_from: "mappings/sales_c086/source-profile.md"
-  grain: "one row = one invoice line item"      # RC1, decided FIRST
-  primary_key:                                  # RC2, unique on landed data (0 NULL)
-    - "billing_document"                        # invoice id  -> silver invoice_no
-    - "item_no"                                 # line number -> silver line_no
-  reviewed_by: "<PENDING REVIEW -- name the reviewer>"
-  reviewed_on: "<PENDING>"                       # quoted so it is not auto-typed
+  grain: "one row = one invoice line item"        # 249,106 bronze -> 246,916 silver (post-filter)
+  # PRIMARY KEY: a GENERATED surrogate over the post-filter silver rows. The natural
+  # key (billing_document, item_no) is retained in SILVER ONLY for the RC2 uniqueness
+  # /dedup proof, and is NOT exposed to gold (decision: surrogate-PK pattern, D4).
+  primary_key:
+    - "Sale_SK"                                    # generated IDENTITY 1..246,916 (post-filter)
+  natural_key_silver_only:                         # the dedup proof; hidden from gold
+    - "billing_document"
+    - "item_no"
+  reviewed_by: "<PENDING REVIEW -- judgment-call ANSWERS recorded by Ahmed Shaaban; map REVIEW still pending>"
+  reviewed_on: "<PENDING>"
 
 defaults:
   adopted:
-    - "RC1"    # lowest grain (invoice line item)
-    - "RC2"    # PK verified on data; re-verify on transformed output
-    - "RC3"    # drop no-signal columns (knumv, ref_return_date 100% empty)
-    - "RC4"    # PII removed early (default drop, pending governance -- Q2)
-    - "RC5"    # '' -> NULL baseline
+    - "RC1"    # lowest grain (invoice line)
+    - "RC2"    # PK proven -- via the silver-only natural key (surrogate is unique by construction)
+    - "RC3"    # drop no-signal columns
+    - "RC4"    # PII removed early (truly-sensitive cols dropped; staff/company names are NOT PII -- see assumptions)
+    - "RC5"    # '' -> NULL (per-column, no global baseline -- see chain note)
     - "RC7"    # money/qty NUMERIC; leading-zero ids TEXT
-    - "RC8"    # is_return from authoritative billing_type_2, not measure sign
-    - "RC9"    # keep independent money measures
-    - "RC12"   # flat product hierarchy (subcategory is multi-parent)
-    - "RC14"   # gold Kimball star (+ -1 member, FK COALESCE, degenerate dims)
+    - "RC8"    # is_return from authoritative billing_type_2, not the measure sign
+    - "RC12"   # flat product hierarchy (subcategory multi-parent)
+    - "RC14"   # gold Kimball star (-1 unknown member + FK COALESCE + degenerate dims)
     - "RC15"   # contiguous generate_series date dim
-  deviations:
-    # No clean RC deviation; instead this table surfaces a DATA-QUALITY issue the
-    # prior run folded in silently: the contaminated customer field. It is raised
-    # as a blocking question (Q6), not a default override. See assumptions.md.
+  deviations:                                      # detail + triggering facts in assumptions.md
+    - id: "RC9"
+      reason: "only 2 measures kept (Gross_Sales, Quantity); net/tax/all discount columns dropped at keep/drop per data-owner. Independent-measure default not fully adopted."
+      detail_in: "mappings/sales_c086/assumptions.md"
+    - id: "RC2"
+      reason: "fact PK is a GENERATED surrogate (Sale_SK), not the natural key. Natural key kept silver-only for the proof; surrogate exposed to gold."
+      detail_in: "mappings/sales_c086/assumptions.md"
     - id: "RC6"
-      reason: "single-branch constants (site/site_name) + walk-in customer member need an explicit sentinel/member ruling (Q3, Q6) -- not a plain '' -> NULL"
+      reason: "single-branch site kept as a 1-member dim_branch; customer site-code contamination remapped to a WALK_IN member (a value remap, not a sentinel)."
       detail_in: "mappings/sales_c086/assumptions.md"
 
 # -----------------------------------------------------------------------------
-# columns -- all 48 source columns (every column appears, incl. dropped).
+# columns -- all 46 business + 2 lineage source columns. Names: PascalCase with
+# '_' applied by logic per name (D11): single-concept joined, multi-concept and
+# id/key/suffix names take '_'. ids/codes -> TEXT; money/qty -> NUMERIC.
 # -----------------------------------------------------------------------------
 columns:
 
-  # --- PK / structural keys (non-droppable) ---
-  - source_name: "billing_document"
-    decision: "keep"
-    reason: "invoice id; PK part (RC1/RC2); leading-zero -> TEXT"
-    rename_to: "invoice_no"
-    silver_type: "text"
-    missing_policy: "null"
-    pii: false
-    gold_placement: "degenerate_dim"
-  - source_name: "item_no"
-    decision: "keep"
-    reason: "line number within invoice; PK part; ordinal"
-    rename_to: "line_no"
-    silver_type: "smallint"
-    missing_policy: "null"
-    pii: false
-    gold_placement: "degenerate_dim"
-
-  # --- product dimension ---
+  # --- product dimension (dim_product) ---
   - source_name: "material"
     decision: "keep"
     reason: "product id; 1:1 with material_desc; leading-zero -> TEXT"
-    rename_to: "product_id"
+    rename_to: "Product_ID"
     silver_type: "text"
     missing_policy: "null"
     pii: false
-    gold_placement: "dim:dim_product.product_id"
+    gold_placement: "dim:dim_product.Product_ID"
   - source_name: "material_desc"
     decision: "keep"
     reason: "product name (1:1 with material)"
-    rename_to: "product_name"
+    rename_to: "Product_Name"
     silver_type: "text"
-    missing_policy: "sentinel:'UNKNOWN'"
+    missing_policy: "null"
     pii: false
-    gold_placement: "dim:dim_product.product_name"
-  - source_name: "category"
-    decision: "keep"
-    reason: "product hierarchy level (flat, RC12)"
-    rename_to: "category"
-    silver_type: "text"
-    missing_policy: "sentinel:'UNCLASSIFIED'"
-    pii: false
-    gold_placement: "dim:dim_product.category"
-  - source_name: "subcategory"
-    decision: "keep"
-    reason: "product hierarchy level; MULTI-PARENT (36 subcats roll to >1 cat) -> flat (RC12)"
-    rename_to: "subcategory"
-    silver_type: "text"
-    missing_policy: "sentinel:'UNCLASSIFIED'"
-    pii: false
-    gold_placement: "dim:dim_product.subcategory"
-  - source_name: "segment"
-    decision: "keep"
-    reason: "product hierarchy level (flat, RC12)"
-    rename_to: "segment"
-    silver_type: "text"
-    missing_policy: "sentinel:'UNCLASSIFIED'"
-    pii: false
-    gold_placement: "dim:dim_product.segment"
-  - source_name: "division"
-    decision: "keep"
-    reason: "product division; ALSO drives the junk-row filter (Q4)"
-    rename_to: "division"
-    silver_type: "text"
-    missing_policy: "sentinel:'UNCLASSIFIED'"
-    pii: false
-    gold_placement: "dim:dim_product.division"
+    gold_placement: "dim:dim_product.Product_Name"
   - source_name: "brand"
     decision: "keep"
     reason: "product attribute"
-    rename_to: "brand"
+    rename_to: "Brand"
     silver_type: "text"
-    missing_policy: "sentinel:'UNKNOWN'"
+    missing_policy: "sentinel:'UNKNOWN'"           # 284 blanks
     pii: false
-    gold_placement: "dim:dim_product.brand"
-  - source_name: "mat_group"
+    gold_placement: "dim:dim_product.Brand"
+  - source_name: "category"
     decision: "keep"
-    reason: "product material group (1:1 with mat_group_2)"
-    rename_to: "material_group"
+    reason: "product hierarchy level (flat, RC12)"
+    rename_to: "Category"
     silver_type: "text"
-    missing_policy: "sentinel:'UNKNOWN'"
+    missing_policy: "sentinel:'UNCLASSIFIED'"      # 3 blanks
     pii: false
-    gold_placement: "dim:dim_product.material_group"
-  - source_name: "mat_group_2"
-    decision: "drop"
-    reason: "redundant code half of mat_group 1:1 pair (RC3); keep the label"
-    rename_to: null
-    silver_type: null
-    missing_policy: null
+    gold_placement: "dim:dim_product.Category"
+  - source_name: "subcategory"
+    decision: "keep"
+    reason: "product hierarchy level; MULTI-PARENT (36 subcats roll to >1 cat) -> flat (RC12)"
+    rename_to: "Subcategory"
+    silver_type: "text"
+    missing_policy: "sentinel:'UNCLASSIFIED'"
     pii: false
-    gold_placement: "dropped"
+    gold_placement: "dim:dim_product.Subcategory"
+  - source_name: "segment"
+    decision: "keep"
+    reason: "product hierarchy level (flat)"
+    rename_to: "Segment"
+    silver_type: "text"
+    missing_policy: "sentinel:'UNCLASSIFIED'"
+    pii: false
+    gold_placement: "dim:dim_product.Segment"
+  - source_name: "division"
+    decision: "keep"
+    reason: "product division; ALSO drives the junk-row filter (see row_filters -- the blank-division filter must run PRE-sentinel, D12)"
+    rename_to: "Division"
+    silver_type: "text"
+    missing_policy: "sentinel:'UNCLASSIFIED'"      # 3 blanks; filter on blanks runs BEFORE this substitution (D12)
+    pii: false
+    gold_placement: "dim:dim_product.Division"
   - source_name: "item_cluster"
     decision: "keep"
     reason: "product attribute (32% missing -> sentinel)"
-    rename_to: "item_cluster"
+    rename_to: "Cluster"
     silver_type: "text"
-    missing_policy: "sentinel:'UNKNOWN'"
+    missing_policy: "sentinel:'UNKNOWN'"           # 79,734 blanks
     pii: false
-    gold_placement: "dim:dim_product.item_cluster"
-  - source_name: "item_status"
-    decision: "keep"
-    reason: "product lifecycle attribute (ACTIVE/DELISTED/...)"
-    rename_to: "item_status"
-    silver_type: "text"
-    missing_policy: "sentinel:'UNKNOWN'"
-    pii: false
-    gold_placement: "dim:dim_product.item_status"
+    gold_placement: "dim:dim_product.Cluster"
 
-  # --- customer dimension (CONTAMINATED -- see Q6) ---
+  # --- customer dimension (dim_customer); keyed on the CLEANED id (Customer_ID_Clean) ---
   - source_name: "customer"
     decision: "derive"
-    reason: "customer id; BUT 85,911 rows carry site code 'C086' (present-but-wrong, NOT missing -> a missing_policy sentinel would NOT fire). The walk-in relabel is a VALUE REMAP done in derived_columns.customer_id_clean, not a missing-value policy. See Q6."
-    rename_to: "customer_id"        # raw landed id; the cleaned value is derived_columns.customer_id_clean
-    silver_type: "text"
-    missing_policy: "null"          # RC5: genuine '' -> NULL only; the 'C086' remap is NOT here
-    pii: false
-    gold_placement: "dim:dim_customer.customer_id"
-  - source_name: "customer_name"
-    decision: "drop"
-    reason: "customer personal name -> PII (RC4, default drop pending governance Q2)"
-    rename_to: null
-    silver_type: null
-    missing_policy: null
-    pii: true
-    gold_placement: "dropped"
-
-  # --- salesperson dimension ---
-  - source_name: "personel_number"
-    decision: "keep"
-    reason: "salesperson id; 1:1 with person_name"
-    rename_to: "salesperson_id"
+    reason: "customer id; 85,911 rows carry the SITE code 'C086' (present-but-wrong, walk-in). Remapped via derived Customer_ID_Clean; dim keyed on the clean value."
+    rename_to: "Customer_ID"
     silver_type: "text"
     missing_policy: "null"
     pii: false
-    gold_placement: "dim:dim_salesperson.salesperson_id"
+    gold_placement: "dim:dim_customer.Customer_ID"
+  - source_name: "customer_name"
+    decision: "keep"
+    reason: "company name (B2B insurance customers) -- NOT personal PII; kept as a customer attribute"
+    rename_to: "Customer_Name"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_customer.Customer_Name"
+
+  # --- salesperson dimension (dim_salesperson) -- staff names kept for KPIs (not PII) ---
+  - source_name: "personel_number"
+    decision: "keep"
+    reason: "salesperson id (dim key); 1:1 with person_name"
+    rename_to: "Salesperson_ID"
+    silver_type: "text"
+    missing_policy: "null"                          # 1,748 blanks -> NULL -> -1 unknown member
+    pii: false
+    gold_placement: "dim:dim_salesperson.Salesperson_ID"
   - source_name: "person_name"
-    decision: "drop"
-    reason: "salesperson personal name -> PII (RC4, default drop pending governance Q2)"
-    rename_to: null
-    silver_type: null
-    missing_policy: null
-    pii: true
-    gold_placement: "dropped"
+    decision: "keep"
+    reason: "salesperson name -- staff KPI dimension, NOT personal PII"
+    rename_to: "Salesperson_Name"
+    silver_type: "text"
+    missing_policy: "sentinel:'UNKNOWN'"           # 22,044 blanks
+    pii: false
+    gold_placement: "dim:dim_salesperson.Salesperson_Name"
   - source_name: "position"
     decision: "keep"
-    reason: "salesperson role attribute (non-identifying)"
-    rename_to: "salesperson_position"
+    reason: "salesperson role attribute"
+    rename_to: "Salesperson_Position"
     silver_type: "text"
     missing_policy: "sentinel:'UNKNOWN'"
     pii: false
-    gold_placement: "dim:dim_salesperson.salesperson_position"
+    gold_placement: "dim:dim_salesperson.Salesperson_Position"
+
+  # --- product-purchaser dimension (dim_product_purchaser) -- 16 counter agents, own dim ---
   - source_name: "buyer"
+    decision: "keep"
+    reason: "the counter agent who handled the purchase (16 staff names); own dimension with a generated key"
+    rename_to: "Product_Purchaser"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_product_purchaser.Product_Purchaser"
+
+  # --- billing type dimension (dim_billing_type) -- Q1 answered ---
+  - source_name: "billing_type_2"
+    decision: "keep"
+    reason: "AUTHORITATIVE billing Z-code; stable join key; drives Is_Return (RC8, Q1)"
+    rename_to: "Billing_Type_Code"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_billing_type.Billing_Type_Code"
+  - source_name: "billing_type"
     decision: "drop"
-    reason: "buyer personal name -> PII (RC4, default drop pending governance Q2)"
+    reason: "raw Arabic label; Q1 (RC10): replaced by the English Billing_Type_Label derived from the CODE. Arabic source value not carried to silver."
     rename_to: null
     silver_type: null
     missing_policy: null
-    pii: true
+    pii: false
     gold_placement: "dropped"
 
-  # --- billing type dimension + returns ---
-  - source_name: "billing_type_2"
-    decision: "keep"
-    reason: "AUTHORITATIVE billing Z-code; stable join key; drives is_return (RC8)"
-    rename_to: "billing_type_code"
-    silver_type: "text"
-    missing_policy: "null"
-    pii: false
-    gold_placement: "dim:dim_billing_type.billing_type_code"
-  - source_name: "billing_type"
-    decision: "keep"
-    reason: "Arabic billing label (1:1 with code); human-readable attribute"
-    rename_to: "billing_type_label"
-    silver_type: "text"
-    missing_policy: "null"
-    pii: false
-    gold_placement: "dim:dim_billing_type.billing_type_label"
-
-  # --- fact measures (RC7 exact NUMERIC, RC9 independent) ---
+  # --- fact measures (only 2 kept; RC9 deviation) ---
   - source_name: "gross_sales"
     decision: "keep"
-    reason: "gross sales measure (RC9 independent); exact NUMERIC (RC7)"
-    rename_to: "gross_sales"
-    silver_type: "numeric(18,2)"
-    missing_policy: "null"
-    pii: false
-    gold_placement: "fact_measure"
-  - source_name: "net_sales"
-    decision: "keep"
-    reason: "net sales measure (RC9 independent)"
-    rename_to: "net_sales"
-    silver_type: "numeric(18,2)"
-    missing_policy: "null"
-    pii: false
-    gold_placement: "fact_measure"
-  - source_name: "tax"
-    decision: "keep"
-    reason: "tax measure (RC9 independent)"
-    rename_to: "tax_amount"
-    silver_type: "numeric(18,2)"
-    missing_policy: "null"
-    pii: false
-    gold_placement: "fact_measure"
-  - source_name: "dis_tax"
-    decision: "keep"
-    reason: "discount measure (RC9 independent)"
-    rename_to: "discount_amount"
+    reason: "gross sales measure; exact NUMERIC (RC7)"
+    rename_to: "Gross_Sales"
     silver_type: "numeric(18,2)"
     missing_policy: "null"
     pii: false
     gold_placement: "fact_measure"
   - source_name: "quantity"
     decision: "keep"
-    reason: "quantity measure; fractional units allowed (pharmacy part-packs)"
-    rename_to: "quantity"
+    reason: "quantity measure; fractional units (pharmacy part-packs)"
+    rename_to: "Quantity"
     silver_type: "numeric(18,3)"
     missing_policy: "null"
     pii: false
     gold_placement: "fact_measure"
 
-  # --- overlapping/operational money columns (RC9 dup candidates -- Q5) ---
-  - source_name: "salse_not_tax"
-    decision: "drop"
-    reason: "~= gross_sales on 78% of rows; near-duplicate measure (RC9 dup, Q5)"
-    rename_to: null
-    silver_type: null
-    missing_policy: null
-    pii: false
-    gold_placement: "dropped"
-  - source_name: "subtotal5_discount"
-    decision: "drop"
-    reason: "~= dis_tax; near-duplicate discount measure (RC9 dup, Q5)"
-    rename_to: null
-    silver_type: null
-    missing_policy: null
-    pii: false
-    gold_placement: "dropped"
-  - source_name: "kzwi1"
-    decision: "drop"
-    reason: "SAP condition value ~= salse_not_tax; no independent signal (RC3/RC9, Q5)"
-    rename_to: null
-    silver_type: null
-    missing_policy: null
-    pii: false
-    gold_placement: "dropped"
-  - source_name: "add_dis"
-    decision: "drop"
-    reason: "additional-discount operational column; not a reported sales measure (Q5)"
-    rename_to: null
-    silver_type: null
-    missing_policy: null
-    pii: false
-    gold_placement: "dropped"
-  - source_name: "paid"
-    decision: "drop"
-    reason: "cash-paid operational amount; not a sales measure (Q5)"
-    rename_to: null
-    silver_type: null
-    missing_policy: null
-    pii: false
-    gold_placement: "dropped"
-
-  # --- date ---
-  # NOTE: the gold_placement enum (fact_measure | dim:X | degenerate_dim | dropped)
-  # has NO slot for "the fact's date FK". sale_date is NOT a measure (never summed)
-  # and not a degenerate dim; it resolves to date_sk -> dim_date (RC15). Recorded as
-  # "date_fk" with this note rather than mislabeled fact_measure. Enum gap flagged for
-  # the template (the date dim is declared separately under gold_star.date_dimension).
+  # --- date (fact FK -> dim_date; dim_date carries NO -1 member, D10/S8) ---
   - source_name: "date"
     decision: "keep"
-    reason: "sale date; resolves to dim_date.date_sk on the fact (RC15). NOT a measure."
-    rename_to: "sale_date"
+    reason: "sale date; resolves to dim_date.Date_SK. NOT a measure. dim_date is markable as a Power BI date table -> no sentinel/unknown row allowed (D10)."
+    rename_to: "Sale_Date"
     silver_type: "date"
     missing_policy: "null"
     pii: false
-    gold_placement: "date_fk"               # fact FK -> gold_star.date_dimension (dim_date)
+    gold_placement: "date_fk"
 
-  # --- returns reference (degenerate) ---
-  - source_name: "ref_return"
-    decision: "keep"
-    reason: "original-invoice reference on return lines (95% blank by design)"
-    rename_to: "original_invoice_ref"
-    silver_type: "text"
-    missing_policy: "null"
-    pii: false
-    gold_placement: "degenerate_dim"
+  # --- degenerate dim on the fact ---
   - source_name: "reference_no"
     decision: "keep"
-    reason: "per-invoice reference number; degenerate dim on the fact"
-    rename_to: "invoice_reference"
+    reason: "per-invoice reference; degenerate dim (invoice-level grouping in reports)"
+    rename_to: "Invoice"
     silver_type: "text"
     missing_policy: "null"
     pii: false
     gold_placement: "degenerate_dim"
-  - source_name: "fi_document_no"
-    decision: "drop"
-    reason: "finance doc cross-ref; 13.6% blank, not used in BI star (RC3, Q5 confirm)"
-    rename_to: null
-    silver_type: null
-    missing_policy: null
-    pii: false
-    gold_placement: "dropped"
 
-  # --- high-missing / low-signal attributes ---
+  # --- branch dimension (dim_branch) -- single-branch extract, 1-member dim (Q3) ---
+  - source_name: "site"
+    decision: "keep"
+    reason: "branch id; single value 'C086' here -> 1-member dim_branch kept for multi-store conformance (Q3)"
+    rename_to: "Branch_ID"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_branch.Branch_ID"
+  - source_name: "site_name"
+    decision: "keep"
+    reason: "branch name (single value here)"
+    rename_to: "Branch_Name"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_branch.Branch_Name"
+
+  # --- natural key: SILVER-ONLY (the RC2 uniqueness proof; NOT exposed to gold) ---
+  - source_name: "billing_document"
+    decision: "keep"
+    reason: "invoice id; retained in SILVER ONLY as half the natural-key uniqueness proof (D4). Not in gold."
+    rename_to: "Invoice_No"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "silver_only"
+  - source_name: "item_no"
+    decision: "keep"
+    reason: "line number; SILVER ONLY, other half of the natural-key proof. Not in gold."
+    rename_to: "Line_No"
+    silver_type: "smallint"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "silver_only"
+
+  # --- lineage (loader-added; silver-only) ---
+  - source_name: "_source_file"
+    decision: "keep"
+    reason: "lineage; silver-only traceability"
+    rename_to: "_source_file"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "silver_only"
+  - source_name: "_loaded_at"
+    decision: "keep"
+    reason: "lineage load timestamp; silver-only"
+    rename_to: "_loaded_at"
+    silver_type: "timestamptz"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "silver_only"
+
+  # --- DROPPED (no signal / near-dup / operational / truly-sensitive PII) ---
   - source_name: "certification"
     decision: "drop"
-    reason: "67.96% missing, no clear BI use (RC3)"
+    reason: "67.96% blank, no clear use (RC3)"
     rename_to: null
     silver_type: null
     missing_policy: null
@@ -361,7 +299,63 @@ columns:
     gold_placement: "dropped"
   - source_name: "assignment"
     decision: "drop"
-    reason: "46.88% missing, no clear BI use (RC3)"
+    reason: "46.88% blank, no clear use (RC3)"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+  - source_name: "salse_not_tax"
+    decision: "drop"
+    reason: "~= gross_sales (near-dup measure); RC9"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+  - source_name: "fi_document_no"
+    decision: "drop"
+    reason: "finance doc ref; 13.6% blank; not used in the BI star"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+  - source_name: "insurance_tel"
+    decision: "drop"
+    reason: "patient phone -> sensitive PII (RC4)"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: true
+    gold_placement: "dropped"
+  - source_name: "insurance_no"
+    decision: "drop"
+    reason: "per-transaction insurance/claim number; 38% blank; dropped at keep/drop"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+  - source_name: "dis_tax"
+    decision: "drop"
+    reason: "discount measure dropped at keep/drop (RC9 deviation -- only gross + qty kept)"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+  - source_name: "paid"
+    decision: "drop"
+    reason: "cash-paid operational amount; not a kept measure"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+  - source_name: "kzwi1"
+    decision: "drop"
+    reason: "SAP condition value ~= salse_not_tax; no independent signal"
     rename_to: null
     silver_type: null
     missing_policy: null
@@ -375,60 +369,46 @@ columns:
     missing_policy: null
     pii: false
     gold_placement: "dropped"
-
-  # --- PII insurance (patient health-adjacent) ---
-  - source_name: "insurance_tel"
+  - source_name: "item_status"
     decision: "drop"
-    reason: "patient phone -> sensitive PII (RC4, drop before BI layer)"
-    rename_to: null
-    silver_type: null
-    missing_policy: null
-    pii: true
-    gold_placement: "dropped"
-  - source_name: "insurance_no"
-    decision: "drop"
-    reason: "insurance claim number -> sensitive PII (RC4, drop before BI layer)"
-    rename_to: null
-    silver_type: null
-    missing_policy: null
-    pii: true
-    gold_placement: "dropped"
-
-  # --- single-value constants (RC3 / Q3) ---
-  - source_name: "site"
-    decision: "drop"
-    reason: "single value 'C086' (single-branch extract); pin as constant, not a dim (Q3)"
+    reason: "product lifecycle attribute dropped at keep/drop (data-owner)"
     rename_to: null
     silver_type: null
     missing_policy: null
     pii: false
     gold_placement: "dropped"
-  - source_name: "site_name"
+  - source_name: "tax"
     decision: "drop"
-    reason: "single value; single-branch constant (Q3)"
+    reason: "tax measure dropped at keep/drop (RC9 deviation)"
     rename_to: null
     silver_type: null
     missing_policy: null
     pii: false
     gold_placement: "dropped"
-  - source_name: "cosm_mg"
+  - source_name: "add_dis"
     decision: "drop"
-    reason: "single value manager name -> constant + PII (RC3/RC4)"
+    reason: "additional-discount operational column; dropped"
     rename_to: null
     silver_type: null
     missing_policy: null
-    pii: true
+    pii: false
     gold_placement: "dropped"
-  - source_name: "area_mg"
+  - source_name: "mat_group"
     decision: "drop"
-    reason: "single value manager name -> constant + PII (RC3/RC4)"
+    reason: "material group dropped at keep/drop (data-owner)"
     rename_to: null
     silver_type: null
     missing_policy: null
-    pii: true
+    pii: false
     gold_placement: "dropped"
-
-  # --- 100%-empty (RC3) ---
+  - source_name: "mat_group_2"
+    decision: "drop"
+    reason: "redundant code-half of mat_group 1:1 pair (RC3)"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
   - source_name: "knumv"
     decision: "drop"
     reason: "100% empty -> no signal (RC3)"
@@ -437,116 +417,182 @@ columns:
     missing_policy: null
     pii: false
     gold_placement: "dropped"
+  - source_name: "cosm_mg"
+    decision: "drop"
+    reason: "single value manager name -> constant + personal name (RC3/RC4)"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: true
+    gold_placement: "dropped"
+  - source_name: "area_mg"
+    decision: "drop"
+    reason: "single value manager name -> constant + personal name (RC3/RC4)"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: true
+    gold_placement: "dropped"
+  - source_name: "net_sales"
+    decision: "drop"
+    reason: "net sales measure dropped at keep/drop (RC9 deviation -- only gross + qty kept)"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+  - source_name: "ref_return"
+    decision: "drop"
+    reason: "original-invoice ref on returns; dropped at keep/drop (data-owner)"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
   - source_name: "ref_return_date"
     decision: "drop"
-    reason: "100% empty -> no signal (RC3); return date not captured in this extract"
+    reason: "100% empty -> no signal (RC3)"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+  - source_name: "subtotal5_discount"
+    decision: "drop"
+    reason: "~= dis_tax discount; dropped at keep/drop (RC9 deviation)"
     rename_to: null
     silver_type: null
     missing_policy: null
     pii: false
     gold_placement: "dropped"
 
-  # --- lineage (loader-added; not modeled) ---
-  - source_name: "_source_file"
-    decision: "keep"
-    reason: "lineage; retained on silver for traceability, not exposed in gold"
-    rename_to: "_source_file"
-    silver_type: "text"
-    missing_policy: "null"
-    pii: false
-    gold_placement: "dropped"
-  - source_name: "_loaded_at"
-    decision: "keep"
-    reason: "lineage load timestamp; retained on silver, not exposed in gold"
-    rename_to: "_loaded_at"
-    silver_type: "timestamptz"
-    missing_policy: "null"
-    pii: false
-    gold_placement: "dropped"
+# -----------------------------------------------------------------------------
+# row_filters (Phase C) -- applied bronze->silver. ORDERING (D12): the blank-
+# division filter targets a BLANK and MUST evaluate PRE-sentinel (before the
+# Division 'UNCLASSIFIED' substitution above), else trim(division)='' matches 0
+# rows and the 3 blank rows survive. Implement: filter on raw blanks first.
+# -----------------------------------------------------------------------------
+row_filters:
+  filters:
+    - name: "junk_division"
+      rule: "drop where upper(trim(division)) IN ('AUX','ARCHIVE','EL EZABY SERVICES') OR trim(division)=''"
+      rows_dropped: 513
+      pre_sentinel: true                            # D12: must run before Division sentinel substitution
+    - name: "zero_value_line"
+      rule: "drop where quantity::numeric = 0 AND gross_sales::numeric = 0"
+      rows_dropped: 1680
+  overlap_rows: 3
+  reconciliation: "513 + 1680 - 3 overlap = 2190 dropped; 249106 - 2190 = 246916 silver rows"
 
 # -----------------------------------------------------------------------------
-# gold_star -- Phase 6 target (RC14). 1 fact at invoice-line grain + 4 entity dims.
-# (No dim_branch: single-branch extract -> branch is a constant, not a dim -- Q3.)
+# gold_star (Phase 6 / RC14). 1 fact (Sale_SK PK) + 6 entity dims + date dim.
 # -----------------------------------------------------------------------------
 gold_star:
 
   fact:
     name: "fct_sales"
-    grain: "one row = one invoice line item"   # = meta.grain (RC1)
-    measures:                                   # RC9 independent measures
-      - "gross_sales"
-      - "net_sales"
-      - "tax_amount"
-      - "discount_amount"
-      - "quantity"
+    grain: "one row = one invoice line item (246,916 post-filter)"
+    primary_key: "Sale_SK"                          # generated surrogate
+    measures:                                       # only 2 kept (RC9 deviation)
+      - "Gross_Sales"
+      - "Quantity"
 
   dimensions:
     - name: "dim_product"
-      surrogate_key: "product_sk"
-      has_unknown_member: true                  # RC14 -1 member
-      attributes:                               # flat (RC12 -- multi-parent hierarchy)
-        - "product_id"
-        - "product_name"
-        - "category"
-        - "subcategory"
-        - "segment"
-        - "division"
-        - "brand"
-        - "material_group"
-        - "item_cluster"
-        - "item_status"
+      surrogate_key: "Product_SK"
+      has_unknown_member: true
+      attributes:                                   # flat (RC12 multi-parent)
+        - "Product_ID"
+        - "Product_Name"
+        - "Brand"
+        - "Category"
+        - "Subcategory"
+        - "Segment"
+        - "Division"
+        - "Cluster"
     - name: "dim_customer"
-      surrogate_key: "customer_sk"
-      has_unknown_member: true                  # RC14 -1 unknown member
-      keyed_on: "customer_id_clean"             # the REMAPPED id (Q6), not the raw 'C086'
+      surrogate_key: "Customer_SK"
+      has_unknown_member: true
+      keyed_on: "Customer_ID_Clean"                 # the WALK_IN remap, not raw Customer_ID
       attributes:
-        - "customer_id_clean"                   # 'WALK_IN' for the 85,911 site-code rows
+        - "Customer_ID_Clean"
+        - "Customer_Name"
     - name: "dim_salesperson"
-      surrogate_key: "salesperson_sk"
+      surrogate_key: "Salesperson_SK"
+      has_unknown_member: true                      # 1,748 blank-id rows land here
+      attributes:
+        - "Salesperson_ID"
+        - "Salesperson_Name"
+        - "Salesperson_Position"
+    - name: "dim_product_purchaser"
+      surrogate_key: "Purchaser_SK"
       has_unknown_member: true
       attributes:
-        - "salesperson_id"
-        - "salesperson_position"
+        - "Product_Purchaser"
     - name: "dim_billing_type"
-      surrogate_key: "billing_type_sk"
+      surrogate_key: "Billing_Type_SK"
       has_unknown_member: true
       attributes:
-        - "billing_type_code"
-        - "billing_type_label"
+        - "Billing_Type_Code"
+        - "Billing_Type_Label"
+    - name: "dim_branch"
+      surrogate_key: "Branch_SK"
+      has_unknown_member: true
+      attributes:
+        - "Branch_ID"
+        - "Branch_Name"
 
   degenerate_dimensions:
-    - "invoice_no"
-    - "line_no"
-    - "invoice_reference"
-    - "original_invoice_ref"
+    - "Invoice"                                     # reference_no
 
+  # Date dim: contiguous calendar; carries NO -1/unknown member (D10/S8) so Power BI
+  # can mark it as a date table. An unmatched fact date fails via Date_SK NOT NULL.
   date_dimension:
     name: "dim_date"
-    surrogate_key: "date_sk"                    # YYYYMMDD integer
-    method: "generate_series"                   # RC15 contiguous
+    surrogate_key: "Date_SK"                        # YYYYMMDD integer
+    method: "generate_series"
     contiguous: true
+    has_unknown_member: false                       # D10/S8 -- NO sentinel/null row
     span:
-      from: "2023-01-01"                        # earliest real sale_date
-      to: "2025-12-31"                          # latest real sale_date
+      from: "2023-01-01"
+      to: "2025-12-31"
 
 # -----------------------------------------------------------------------------
 # derived_columns -- computed in silver, not present in the source.
 # -----------------------------------------------------------------------------
 derived_columns:
 
-  - name: "is_return"
-    type: "boolean"
-    derived_from: "billing_type_2"              # AUTHORITATIVE, not the measure sign (RC8)
-    rule: "billing_type_2 IN ('Z4','Z5','Z6','Z8','Z10') -> true, else false"
-    note: "RC8: the 5 Z-codes whose Arabic label means return (transliterated murtaja). 12,365 return rows (4.96%). Full code->label map and confirmation in unresolved-questions Q1. UNMAPPED billing codes must raise loudly, not silently default."
+  - name: "Sale_SK"
+    type: "bigint"
+    derived_from: "row_identity"                    # generated IDENTITY/row_number over POST-FILTER rows
+    rule: "generated 1..246916 over the silver rows AFTER row_filters; the fact PK"
+    note: "generated after row_filters so it numbers the 246,916 surviving rows (no gaps)."
 
-  # customer_id_clean (Q6): a VALUE REMAP, not a missing-value policy. The raw
-  # `customer` is non-null but 85,911 rows hold the SITE code 'C086' (the branch),
-  # not a customer id. A missing_policy sentinel cannot fix this (the value is
-  # present, not '' or NULL). This explicit CASE relabels the contaminated value so
-  # dim_customer never gains a member literally keyed 'C086'.
-  - name: "customer_id_clean"
+  - name: "Is_Return"
+    type: "boolean"
+    derived_from: "billing_type_2"                  # AUTHORITATIVE, not the measure sign (RC8)
+    rule: "billing_type_2 IN ('Z4','Z5','Z6','Z8','Z10') -> true, else false"
+    note: "Q1 ANSWERED 2026-06-29 by Ahmed Shaaban. 5 Z-codes whose Arabic label means return; each also negative avg_net. UNMAPPED codes raise loudly."
+
+  - name: "Billing_Type_Label"
     type: "text"
-    derived_from: "customer"                    # remaps the raw landed id
-    rule: "CASE WHEN trim(customer) = 'C086' (= the site code) THEN 'WALK_IN' ELSE customer END"
-    note: "Q6 proposed default (analyst must confirm the business meaning). 'WALK_IN' is a MEANINGFUL member, distinct from the dim's -1 unknown member. dim_customer is keyed on customer_id_clean, NOT the raw customer. If Q6 instead routes these to the -1 unknown member, drop this derived column and leave the raw id to COALESCE to -1."
+    derived_from: "billing_type_2"                  # English label from the CODE (Q1, RC10)
+    rule: "map billing_type_2 -> English label (table below); UNMAPPED -> raise loudly"
+    map:
+      FP:  "Credit Sale"
+      Z1:  "Cash Sale"
+      Z3:  "Delivery"
+      Z7:  "Delivery - Credit"
+      Z9:  "Pick-Up Order"
+      Z4:  "Cash Return"
+      Z5:  "Credit Return"
+      Z6:  "Delivery Return"
+      Z8:  "Delivery - Credit Return"
+      Z10: "Pick-Up Order Return"
+    note: "Q1: 10 codes 1:1 with billing_type_2; the 5 Return labels == Is_Return=true. RC10: code is the join key, label standardized to English."
+
+  - name: "Customer_ID_Clean"
+    type: "text"
+    derived_from: "customer"                        # VALUE REMAP (present-but-wrong, not missing)
+    rule: "CASE WHEN trim(customer) = 'C086' (the site code) THEN 'WALK_IN' ELSE customer END"
+    note: "Q6: 85,911 rows carry the site code as a customer id (walk-in/cash). 'WALK_IN' is a meaningful member, distinct from the dim -1 unknown. dim_customer is keyed on this, not raw customer."

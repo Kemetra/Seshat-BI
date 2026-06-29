@@ -41,6 +41,58 @@ table's filled set lives in `mappings/<table>/`:
 4. `unresolved-questions.md` -- the build-blocking judgment calls + who answers.
 5. `reconciliation-report.md` -- the blank the later live run fills (RC16).
 
+## Cleaning chain (canonical order -- the HYBRID walk)
+
+A fixed, dependency-ordered chain. The shape is **hybrid**: order-sensitive steps run as
+GLOBAL passes, intra-column steps run PER-SURVIVOR (each kept column resolved in one
+bundle), cross-row steps run as a GLOBAL tail. The agent recommends a default at every
+step; the human decides (Principle V). NONE advance to silver -- the gate (D) is the stop.
+
+**Per-step loop:** present the step (purpose + default + its behavior on the table) ->
+human chooses keep / enhance / change the STEP -> apply -> next. The walk both cleans the
+table AND lets the pipeline itself be refined.
+
+**A. GLOBAL-FIRST (decide across ALL columns):**
+1. **Keep / Drop** (Phase 2.1 / RC3) -- FIRST. One global pass over the inventory.
+2. **Grain & PK** (Phase 2.0 / RC1, RC2) -- VALIDATES that the key survived step 1; ERROR
+   (or surface) if a needed key column was dropped. May choose a GENERATED SURROGATE key
+   over the natural grain (first-class option); if so, keep the natural key SILVER-ONLY
+   for the uniqueness/dedup proof and expose only the surrogate to gold (a bare surrogate
+   is unique by construction and cannot detect a double-load).
+3. **PII** (Phase 2.2 / RC4) -- EARLY. A flagged NAME is NOT auto-PII: distinguish
+   individual/patient data (sensitive -> drop default) from STAFF names (KPI dimensions)
+   and COMPANY names (B2B org) -- the latter two are legitimate non-sensitive attributes.
+
+**B. PER-SURVIVOR (one kept column at a time, decided TOGETHER):**
+4. **Rename** (2.3) + **Type** (2.5 / RC7) + **Missing-value** (2.4 / RC5,RC6) + **Gold
+   placement**. Missing-value is decided HERE, per column (no global `''->NULL` baseline),
+   and ONLY for columns whose profiled `missing_count > 0` (skip 0-blank columns). A
+   present-but-wrong value (e.g. a site code in a customer id) is a VALUE REMAP in a
+   derived column, NOT a missing-value sentinel.
+
+**C. GLOBAL-TAIL (cross-row):**
+5. **Row filters** (2.6) -- which rows to drop (junk/zero-value); state the count and
+   reconcile (`source - dropped = silver`, accounting for OVERLAP). ORDERING (load-bearing):
+   a filter that targets BLANKS must evaluate PRE-sentinel (before step B's sentinel
+   substitution), else `trim(col)=''` matches 0 rows and those rows wrongly survive.
+6. **Derive** (2.7-2.8 / RC8, RC11, RC12) -- is_return from the AUTHORITATIVE column;
+   value remaps; surrogate keys (generate the fact SK AFTER filters so it numbers
+   surviving rows); analyst-supplied rollups; flat hierarchy. The date dim carries NO
+   `-1`/unknown/sentinel member (so Power BI can mark it a date table, S8); an unmatched
+   fact date fails via `Date_SK NOT NULL`.
+
+**D. GATE (hard stop; Principle IV):**
+7. **Named-human review** -- recording the judgment-call ANSWERS is NOT map approval. No
+   `silver.*` SQL until the full map is reviewed.
+
+**Naming:** gold/BI column names use PascalCase with `_` applied by logic per name
+(single-concept joined: `Brand`; multi-concept / id / key: `Product_ID`, `Gross_Sales`,
+`Sale_SK`). This differs from silver snake_case.
+
+> Per-column vs global is by DEPENDENCY, not preference: global when a decision is
+> table-wide (PII policy) or cross-row (filters); per-column when it depends only on that
+> column's own keep decision. See `docs/medallion-playbook.md` Phase 2 for the rationale.
+
 ## Procedure
 
 ### 1. Locate

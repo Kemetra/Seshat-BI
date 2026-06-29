@@ -1,13 +1,24 @@
 # Fresh Source Analysis — `bronze.sales_c086_raw`
 
-> **Independent analysis** produced from a live read-only profile on 2026-06-29,
-> driven by our current `retail` tooling (`retail.profile.profile`) + targeted
-> semantic probes. The prior c086 worked example was **not** reused as the answer;
-> every decision below is grounded in a measurement re-run on the live data. Where
-> our findings happen to agree with the prior run, that is corroboration, not copy.
+> **EXPLORATORY DOC — partially SUPERSEDED.** This was the first-pass analysis. The
+> AUTHORITATIVE, final decisions now live in the four gate artifacts in this folder
+> (`source-map.yaml`, `source-profile.md`, `assumptions.md`, `unresolved-questions.md`),
+> produced by walking the hybrid cleaning chain with the data-owner. Where this doc and
+> those artifacts differ, **the artifacts win.** Key changes since this was written:
+> - **PK** is now a generated surrogate `Sale_SK` (natural key kept silver-only), NOT the
+>   natural composite shown in §1 below.
+> - **Measures** are now ONLY `Gross_Sales` + `Quantity` (the §5 multi-measure set was
+>   reduced by the data-owner; RC9 deviation).
+> - **Filters** have a **3-row overlap**: `513 + 1,680 - 3 = 2,190` (§6 said "no overlap"
+>   -- that was WRONG).
+> - **PII**: staff names (`person_name`,`buyer`) + company names (`customer_name`) are
+>   KEPT (not PII); only `insurance_tel`/`cosm_mg`/`area_mg` dropped as sensitive.
+> - **buyer** = product purchaser (counter agent) -> its own `dim_product_purchaser`.
+> - **Star** = 6 entity dims + date (added `dim_branch`, `dim_product_purchaser`).
 >
-> Source: `ezaby_demo` @ cluster `db-pgsql-fra1-29712` (fra1). DB driver and
-> credentials supplied at runtime; no DSN committed.
+> The measured PROFILE numbers below remain valid; the DECISIONS are superseded as noted.
+>
+> Source: `ezaby_demo` @ cluster `db-pgsql-fra1-29712` (fra1). Read-only; no DSN committed.
 
 ## 1. Shape & grain (mechanical, via `profile.py`)
 
@@ -119,10 +130,12 @@ If silver lands at line grain after filtering, the gap decomposes **exactly**:
 |---|---:|
 | junk division (`AUX`/`ARCHIVE`/`EL EZABY SERVICES`/blank) | 513 |
 | zero-value line (`quantity = 0 AND gross_sales = 0`) | 1,680 |
-| **union (no overlap)** | **2,190** |
+| overlap (both conditions) | −3 |
+| **union** | **2,190** |
 
-`249,106 − 2,190 = 246,916`. These two filters are derived from the live data
-(division value list + zero-value test), and together account for the entire gap.
+`513 + 1,680 − 3 = 2,190`; `249,106 − 2,190 = 246,916`. (CORRECTION: an earlier draft
+said "no overlap" — there is a **3-row overlap**.) These two filters together account for
+the entire gap.
 Whether both filters are *desired* policy is a build decision for the reviewer.
 
 ## 7. Open judgment calls (Principle V — human must answer)
