@@ -9,9 +9,10 @@
 - **Table id:** `sales_c086` (El Ezaby pharmacy branch C086 sales)
 - **Date raised / answered:** `2026-06-29`
 - **Raised by:** agent  |  **Answered by:** Ahmed Shaaban (data-owner)
-- **Gate status:** `ANSWERS RECORDED -- MAP REVIEW PENDING`. The six judgment calls are
-  answered, but the full map has NOT yet been reviewed/approved. **No `silver.*` SQL is
-  written until the map is reviewed.** (Answers != map approval.)
+- **Gate status:** `CLEARED`. The six judgment calls are answered AND the map was reviewed
+  and approved by the data-owner (Ahmed Shaaban) via the merge of PR #86 into `main`
+  (2026-06-29). The source-mapping gate is cleared; silver/gold SQL authoring is unblocked.
+  (Authoring `.sql` files only; applying the SQL to the DB remains a separate human step.)
 
 ---
 
