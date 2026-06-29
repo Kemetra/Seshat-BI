@@ -74,11 +74,12 @@ clarification are recorded under the dated session below.
 > Clarify-pass confirmation: a dedicated clarification pass reviewed the spec for further
 > underspecified areas (max 5, highest Impact*Uncertainty first). The three load-bearing
 > ambiguities above (fixture scope, parser robustness, comparison key) were the only substantive
-> ones and are resolved. No `[NEEDS CLARIFICATION]` markers remain. The single Principle-V item
-> (roadmap promotion / F-numbering) was REFUSED by the agent and reserved for the owner above. No
-> grain/uniqueness, PII publish-safety, business-rollup/segment, or product-identity question
-> applies (this is a test-only governance-core artifact over synthetic in-memory findings -- it
-> touches no data grain, no published PII, no business segment, and no product identity).
+> ones and are resolved. No open-clarification placeholders remain in this section. The single
+> Principle-V item (roadmap promotion / F-numbering) was ruled by the repo owner at ratification
+> (stay unmapped -- recorded above). No grain/uniqueness, PII publish-safety,
+> business-rollup/segment, or product-identity question applies (this is a test-only
+> governance-core artifact over synthetic in-memory findings -- it touches no data grain, no
+> published PII, no business segment, and no product identity).
 
 ## User Scenarios & Testing *(mandatory)*
 
