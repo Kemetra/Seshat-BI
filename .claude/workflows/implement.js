@@ -1,7 +1,7 @@
 export const meta = {
   name: 'implement',
-  description: 'IMPLEMENT bridge: the 3rd + FINAL stage of idea -> plan -> implement. Consumes a HUMAN-RATIFIED spec dir (spec.md + plan.md + tasks.md + analysis.md + plan-review.md) and drives /speckit-implement task-by-task in an isolated worktree, TDD-gated, then runs the CI gate set (ruff, pytest -m unit, retail check, retail semantic-check) and STOPS at a PR-ready branch a human merges. It fails CLOSED on a disk handoff checklist (H1-H6) before touching anything, and is structurally incapable of merging to main, pushing to main, self-ratifying, building an unratified spec, or faking a test result. The only writes are code + tests + per-task commits on the worktree branch. One feature per run.',
-  whenToUse: 'After a human has RATIFIED a spec produced by idea-to-spec (the spec.md front-matter says "**Status**: Ratified (<name>, <date>)"). Pass the feature "NNN-kebab" (string) or { feature, spec_dir?, branch?, date?, open_draft_pr? }. Output is a PR-ready worktree branch + a PR-readiness ledger -- never a merge, never an approval.',
+  description: 'IMPLEMENT bridge: the 3rd + FINAL stage of idea -> plan -> implement. Consumes a HUMAN-RATIFIED spec dir (spec.md + plan.md + tasks.md + analysis.md + plan-review.md) and drives /speckit-implement task-by-task IN PLACE on the ratified feature-branch worktree (invoke it FROM that worktree -- it does not create or switch worktrees), TDD-gated, then runs the CI gate set (ruff, pytest -m unit, retail check, retail semantic-check) and STOPS at a PR-ready branch a human merges. It fails CLOSED on a disk handoff checklist (H1-H6) before touching anything, and is structurally incapable of merging to main, pushing to main, self-ratifying, building an unratified spec, or faking a test result. The only writes are code + tests + per-task commits on the feature branch. One feature per run.',
+  whenToUse: 'After a human has RATIFIED a spec produced by idea-to-spec (the spec.md front-matter says "**Status**: Ratified (<name>, <date>)"). PRECONDITION: invoke from WITHIN the ratified feature-branch worktree (the checkout idea-to-spec left the spec on) -- this workflow does NOT create or switch worktrees; the reader + builder run in the session cwd, so HEAD must already be the feature branch carrying specs/<NNN-kebab>/. Pass the feature "NNN-kebab" (string) or { feature, spec_dir?, branch?, date?, open_draft_pr? }. Output is a PR-ready worktree branch + a PR-readiness ledger -- never a merge, never an approval.',
   phases: [
     { title: 'Pre-flight' },                                                                  // 0a read + 0b JS gate
     { title: 'Build + verify (isolated)', detail: 'one worktree agent: /speckit-implement over tasks.md (TDD), then the CI gate set', model: 'opus' },
@@ -116,8 +116,8 @@ const HANDOFF_FACTS = {
           exists: { type: 'boolean' },
           bytes: { type: 'number' },
           // committed = the file is tracked AND clean on the branch (git ls-files finds it
-          // AND git status shows no pending change). The build runs in a fresh worktree off
-          // the COMMITTED branch, so an uncommitted artifact would be invisible to it.
+          // AND git status shows no pending change). The PR ships the COMMITTED branch, so an
+          // uncommitted artifact would never reach it (and a dirty one risks being swept into a commit).
           committed: { type: 'boolean' },
         },
       },
@@ -160,8 +160,8 @@ const facts = await agent(
   `- files: for EACH of ${ARTIFACTS.join(S(44,32))} under the spec dir, {name, exists, bytes, committed}. ` +
   `committed = the file is TRACKED on the branch AND has no pending change: true only if ` +
   `\`git ls-files --error-unmatch <path>\` succeeds AND \`git status --porcelain <path>\` is empty. ` +
-  `An uncommitted/dirty artifact must be committed:false (the build runs off the committed branch, so ` +
-  `working-tree-only changes would be invisible to it).\n` +
+  `An uncommitted/dirty artifact must be committed:false (the PR ships the committed branch, so ` +
+  `working-tree-only changes would never reach it).\n` +
   `- spec_md_raw: the FULL verbatim text of spec.md (or \u0022\u0022 if missing). Do not truncate.\n` +
   `- clarifications_raw: the verbatim text of ONLY the \u0022## Clarifications\u0022 section of spec.md (or \u0022\u0022).\n` +
   `- plan_review_verdict_line: the verbatim text of the WHOLE "## Verdict" section of plan-review.md ` +
@@ -197,16 +197,23 @@ const fileCommitted = n => { const x = fileRec(n); return !!(x && x.committed ==
 const g = facts.git || {}
 const prov = facts.status_line_provenance || {}
 
-// H1: spec dir exists
-if (!facts.dir_exists) return refuse('H1', `spec dir ${INPUT.spec_dir} not found on this branch`,
-  [`${INPUT.spec_dir}/ absent`], ['Re-invoke with the exact NNN-kebab you ratified, or run idea-to-spec first.'])
+// H1: spec dir exists ON THE CURRENT BRANCH/CWD. The reader is NOT worktree-isolated -- it
+// resolves the repo root from the SESSION cwd, so a "not found" here almost always means the
+// session is on the WRONG branch (e.g. main / a generic session worktree), not that the spec
+// is truly absent: idea-to-spec leaves the spec committed on a numbered FEATURE branch in its
+// own worktree. Name that cause so the operator switches worktrees instead of re-numbering.
+if (!facts.dir_exists) return refuse('H1', `spec dir ${INPUT.spec_dir} not found on the CURRENT branch "${g.current_branch || '?'}"`,
+  [`${INPUT.spec_dir}/ absent on ${g.current_branch || '?'}`, `the spec is likely committed on the FEATURE branch "${INPUT.branch || INPUT.feature}", not the branch this session is on`],
+  [`Switch into the ratified feature worktree (the checkout on branch "${INPUT.branch || INPUT.feature}" that carries ${INPUT.spec_dir}/) and re-invoke from there -- implement runs in the session cwd and does NOT switch branches itself.`,
+   'If you have not planned this idea yet, run idea-to-spec first.'])
 // H2: all 5 artifacts present + non-empty
 const missing = ARTIFACTS.filter(n => !fileOk(n))
 if (missing.length) return refuse('H2', `artifact set incomplete -- the chain did not finish: missing/empty ${missing.join(S(44,32))}`,
   missing, ['Run idea-to-spec (or speckit-finish-chain) to produce spec+plan+tasks+analysis+plan-review.'])
-// H2b: every artifact must be COMMITTED + clean on the branch. The build runs in a fresh
-// worktree off the committed branch, so an uncommitted/dirty tasks.md or plan.md would pass
-// the working-tree preflight but be absent (or stale) when /speckit-implement runs.
+// H2b: every artifact must be COMMITTED + clean on the branch. The PR ships the COMMITTED
+// branch, so an uncommitted/dirty tasks.md or plan.md would pass this working-tree preflight
+// but never reach the PR -- and a dirty spec dir risks being swept into a task commit. Require
+// committed+clean so what the build reads is exactly what the PR carries.
 const uncommitted = ARTIFACTS.filter(n => !fileCommitted(n))
 if (uncommitted.length) return refuse('H2', `artifact(s) not committed/clean on the branch: ${uncommitted.join(S(44,32))} -- the build runs off the committed tree and would not see working-tree-only changes`,
   uncommitted, ['Commit the spec artifacts on the feature branch (git add specs/<dir>/ && commit) before re-invoking; do not leave them dirty.'])
@@ -311,11 +318,13 @@ const BUILD_RESULT = {
   },
 }
 const build = await agent(
-  `You are the IMPLEMENT BUILDER for Seshat BI, in an ISOLATED git worktree (worktree isolation -- ` +
-  `your own checkout). You write code + tests + per-task commits on the RATIFIED feature branch and ` +
+  `You are the IMPLEMENT BUILDER for Seshat BI. You run in the SESSION cwd, which the workflow ` +
+  `requires to ALREADY be the ratified feature-branch worktree (idea-to-spec created one worktree ` +
+  `per feature; you build IN PLACE on that branch -- you are NOT separately isolated and must NOT ` +
+  `create or switch worktrees). You write code + tests + per-task commits on the RATIFIED feature branch and ` +
   `STOP. You NEVER merge, push, touch main, open a PR, or edit the spec\u0027s Status line. Repo: Seshat_BI.\n\n` +
   `FEATURE: ${INPUT.feature}\nSPEC DIR: ${INPUT.spec_dir}\nRATIFIED BRANCH: ${branch}\n\n` +
-  `STEP A -- worktree safety FIRST: assert git rev-parse --abbrev-ref HEAD is the ratified feature ` +
+  `STEP A -- worktree safety FIRST (load-bearing now that you build in place): assert git rev-parse --abbrev-ref HEAD is the ratified feature ` +
   `branch (carrying ${INPUT.spec_dir}/spec.md) and NOT main/detached. If not, STOP: status:\u0027failed\u0027, ` +
   `blocked_reason:\u0027worktree-not-on-feature-branch\u0027, write nothing.\n\n` +
   `STEP A0 -- PIN the feature dir via the ENV OVERRIDE (critical, and do NOT dirty tracked config): ` +
@@ -371,7 +380,14 @@ const build = await agent(
   `(no C086/pharmacy specifics; rule 7). No fabricated confidence/coverage (rule 9). Never merge/push/` +
   `touch main/open a PR/edit Status. status is your self-report -- the orchestrator RE-DERIVES the real ` +
   `outcome in JS; report honestly (a failing test is \u0027test-fail\u0027 in tasks_blocked, never hidden).`,
-  { label: `build:${INPUT.feature}`, phase: 'Build + verify (isolated)', isolation: 'worktree', schema: BUILD_RESULT, model: 'opus', effort: 'high' }
+  // NO isolation:'worktree' here. The completion gate requires head_branch === expectedBranch
+  // (the ratified feature branch), but a fresh isolated worktree gets a NEW branch and git
+  // forbids a second checkout of an already-checked-out branch -- so an isolated builder can
+  // NEVER satisfy the gate. The builder instead runs in the session cwd, which the whenToUse
+  // precondition requires to already BE the ratified feature-branch worktree (idea-to-spec
+  // creates one worktree per feature, so this builder is one-feature-per-run inside it --
+  // the per-feature worktree already provides the isolation a separate build worktree would).
+  { label: `build:${INPUT.feature}`, phase: 'Build + verify (isolated)', schema: BUILD_RESULT, model: 'opus', effort: 'high' }
 )
 
 // ===================== STAGE 3: COMPLETION GATE (pure JS; agent cannot soften) =====
