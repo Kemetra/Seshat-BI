@@ -116,7 +116,7 @@ const drafts = await parallel(IDEAS.map(idea => () => agent(
   `  - tasks   -> specs/${idea.number}-${idea.name}/tasks.md\n` +
   `  - analyze -> the analyze findings (record into specs/${idea.number}-${idea.name}/analysis.md)\n` +
   `For each step whose file is MISSING: run it, then COMMIT immediately on the worktree branch ` +
-  `(one commit per step, message "docs(${idea.number}): <step>") so progress is durable if the ` +
+  `(one commit per step, message "docs: <step> (${idea.number})" -- P2 forbids a docs(NNN) scope) so progress is durable if the ` +
   `next step is interrupted. For each step whose file EXISTS: count it in steps_done and move on.\n\n` +
   `Run order: specify -> plan -> tasks -> analyze. Use SPECIFY_FEATURE_DIRECTORY=` +
   `specs/${idea.number}-${idea.name} and the explicit Number ${idea.number} (override auto-numbering ` +

@@ -18,7 +18,10 @@ export const meta = {
 }
 const S = (...c) => String.fromCharCode(...c)
 
-const REPO = 'C:/Users/Shaaban/Documents/GitHub/Seshat_BI'
+// Device-portable: never hardcode a machine path. The agents that consume REPO resolve
+// the real repo root themselves at runtime (`git rev-parse --show-toplevel`), so this works
+// from any device / user / worktree. The literal below is only a human-readable fallback hint.
+const REPO = 'the repo root (resolve with `git rev-parse --show-toplevel`)'
 
 // ---- args boundary (one coerce, shared by every fortification) ----
 // args : undefined
@@ -424,7 +427,7 @@ const submaps = await parallel(EXPLORERS.map(e => () =>
   agent(
     `${PROJECT}
 
-YOU ARE A SUBSYSTEM EXPLORER for Seshat BI. Read the real repo under ${REPO} and map ONLY your
+YOU ARE A SUBSYSTEM EXPLORER for Seshat BI. FIRST resolve the repo root with \`git rev-parse --show-toplevel\` (do NOT assume any machine path), then read the real repo there and map ONLY your
 subsystem. Do NOT propose ideas. Do NOT execute anything (read-only). Cite a file/feature for
 every capability and every ship-status row. If a path is unreadable, list it in \u0027unreadable\u0027 --
 never guess.
@@ -604,7 +607,7 @@ re-litigate settled rejections. You are given Ground\u0027s VERIFIED ship-status
 authoritative source for what shipped. Do NOT re-read git (Ground owns that).
 
 STEPS:
-1. Read the prior bank at ${REPO}/docs/roadmap/idea-backlog.md from disk. If it does not exist or
+1. Resolve the repo root with \`git rev-parse --show-toplevel\` (do NOT assume any machine path), then read the prior bank at <repo-root>/docs/roadmap/idea-backlog.md from disk. If it does not exist or
    has no idea headings, return prior_ideas: [] and say so in notes (a first run is normal).
 2. Parse each idea heading (e.g. \u0022### A1. Machine-Checkable Route Registry\u0022). For EACH: capture
    prior_id, prior_title, the verdict SECTION it sits under (## ADOPT/CONSIDER/PARK/REJECT) as

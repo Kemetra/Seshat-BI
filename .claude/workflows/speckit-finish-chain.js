@@ -140,8 +140,8 @@ const finished = await pipeline(
     `and it is our repo convention, not part of the read-only contract). Record analyze_verdict ` +
     `(clean if 0 CRITICAL and 0 HIGH; else findings), analyze_critical, analyze_high.\n\n` +
     `=== COMMIT DISCIPLINE (durable, resume-safe) ===\n` +
-    `Commit on THIS worktree branch after each step that wrote a file: "docs(${spec.number}): clarify" ` +
-    `after step 1 (spec.md changed), "docs(${spec.number}): analyze" after step 3 (analysis.md added). ` +
+    `Commit on THIS worktree branch after each step that wrote a file (P2 forbids a docs(NNN) scope -- the number goes in the description): "docs: clarify (${spec.number})" ` +
+    `after step 1 (spec.md changed), "docs: analyze (${spec.number})" after step 3 (analysis.md added). ` +
     `If a step's output already exists from a prior run, SKIP it and count it in steps_done. Do NOT ` +
     `merge, push, or touch main -- leave commits on the worktree branch.\n\n` +
     `=== CONSTRAINTS ===\n` +

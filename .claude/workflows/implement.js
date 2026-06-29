@@ -10,7 +10,10 @@ export const meta = {
 }
 const S = (...c) => String.fromCharCode(...c)
 
-const REPO = 'C:/Users/Shaaban/Documents/GitHub/Seshat_BI'
+// Device-portable: never hardcode a machine path. The agents that consume REPO resolve
+// the real repo root themselves at runtime (`git rev-parse --show-toplevel`), so this works
+// from any device / user / worktree. The literal below is only a human-readable fallback hint.
+const REPO = 'the repo root (resolve with `git rev-parse --show-toplevel`)'
 
 // ---- single source of truth (the disk contract this workflow verifies) ---------
 // implement.js cannot import idea-to-spec.js (workflow scripts are eval'd in isolation),
@@ -152,7 +155,8 @@ const facts = await agent(
   `read-only git commands below.\n\n` +
   `FEATURE: ${INPUT.feature}\nSPEC DIR: ${INPUT.spec_dir}\n\n` +
   `Return HANDOFF_FACTS:\n` +
-  `- dir_exists: does ${REPO}/${INPUT.spec_dir}/ exist?\n` +
+  `- dir_exists: FIRST resolve the repo root with \`git rev-parse --show-toplevel\` (do NOT assume any ` +
+  `machine path), then report whether <repo-root>/${INPUT.spec_dir}/ exists on the checked-out branch.\n` +
   `- files: for EACH of ${ARTIFACTS.join(S(44,32))} under the spec dir, {name, exists, bytes, committed}. ` +
   `committed = the file is TRACKED on the branch AND has no pending change: true only if ` +
   `\`git ls-files --error-unmatch <path>\` succeeds AND \`git status --porcelain <path>\` is empty. ` +
@@ -327,7 +331,7 @@ const build = await agent(
   `human decides.\n\n` +
   `STEP C -- BUILD: invoke /speckit-implement over ${INPUT.spec_dir}/tasks.md. Execute the ratified ` +
   `task list (do NOT re-plan -- YAGNI). TDD order, tests-first; a task is DONE only when its tests pass. ` +
-  `Commit per task: \u0022feat(${INPUT.feature.slice(0, 3)}): <task-id> <desc>\u0022. Skip a task already done + ` +
+  `Commit per task: \u0022feat: <task-id> <desc> (${INPUT.feature.slice(0, 3)})\u0022. Skip a task already done + ` +
   `committed + passing (resume-safe). STOP a task (never invent) if it needs a Principle-V ruling ` +
   `(grain/uniqueness, PII publish-safety, business rollup/segment, product identity) the spec left open, ` +
   `or assumes a DEFERRED capability (F016 Power BI Execution Adapter; F031-F033 spec-only) -> record to ` +

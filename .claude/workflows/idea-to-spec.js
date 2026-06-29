@@ -11,7 +11,10 @@ export const meta = {
 }
 const S = (...c) => String.fromCharCode(...c)
 
-const REPO = 'C:/Users/Shaaban/Documents/GitHub/Seshat_BI'
+// Device-portable: never hardcode a machine path. The agents that consume REPO resolve
+// the real repo root themselves at runtime (`git rev-parse --show-toplevel`), so this works
+// from any device / user / worktree. The literal below is only a human-readable fallback hint.
+const REPO = 'the repo root (resolve with `git rev-parse --show-toplevel`)'
 const BACKLOG_PATH = 'docs/roadmap/idea-backlog.md'
 
 // ---- ASCII fold (Principle IX) -------------------------------------------------
@@ -166,7 +169,8 @@ if (INPUT.section) {
     },
   }
   const backlogRead = await agent(
-    `Read the file ${REPO}/${BACKLOG_PATH} and return its FULL verbatim content in \u0027content\u0027 ` +
+    `FIRST resolve the repo root with \`git rev-parse --show-toplevel\` (do NOT assume any machine path), ` +
+    `then read <repo-root>/${BACKLOG_PATH} and return its FULL verbatim content in\u0027content\u0027 ` +
     `(found:true). If the file does not exist, return found:false and content:\u0022\u0022. Do NOT summarize, ` +
     `truncate, reformat, or interpret -- return the raw bytes as text. Read nothing else.`,
     { label: 'preflight:read-backlog', phase: 'Pre-flight', schema: READ_SCHEMA, model: 'opus', effort: 'low' }
@@ -226,7 +230,8 @@ const GROUNDING_SCHEMA = {
   },
 }
 const grounding = await agent(
-  `You are the GROUNDER for a Seshat BI planning run. Read the real repo under ${REPO} (READ-ONLY; ` +
+  `You are the GROUNDER for a Seshat BI planning run. FIRST resolve the repo root with ` +
+  `\`git rev-parse --show-toplevel\` (do NOT assume any machine path), then read the real repo there (READ-ONLY; ` +
   `you write nothing, you execute nothing). Confirm the chosen idea\u0027s named seams so the spec it seeds ` +
   `is concrete, not hand-wavy.\n\n` +
   `CHOSEN IDEA: ${chosen.id}. ${asciiFold(chosen.title_raw)}  [bank verdict: ${chosen.section}]\n\n` +
@@ -324,8 +329,8 @@ const plan = await agent(
   `Write your findings to plan-review.md committed on the branch (durable; the handoff reads it). Set ` +
   `plan_review_verdict PASS / PASS-WITH-NOTES / BLOCKED. A draft missing analyze or tasks is automatic ` +
   `BLOCKED. On a CRITICAL you are unsure of, say so in notes -- never retry, never override.\n\n` +
-  `COMMIT DISCIPLINE: \u0022docs(NNN): specify\u0022 after stage 2, \u0022docs(NNN): clarify\u0022 after 3, \u0022docs(NNN): ` +
-  `plan+tasks\u0022 after 4, \u0022docs(NNN): analyze\u0022 after 5, \u0022docs(NNN): plan-review\u0022 after 6. Never merge/push/` +
+  `COMMIT DISCIPLINE: \u0022docs: specify (NNN)\u0022 after stage 2, \u0022docs: clarify (NNN)\u0022 after 3, \u0022docs: ` +
+  `plan+tasks (NNN)\u0022 after 4, \u0022docs: analyze (NNN)\u0022 after 5, \u0022docs: plan-review (NNN)\u0022 after 6. Never merge/push/` +
   `touch main.\n\n` +
   `CONSTRAINTS (every authored artifact): ASCII + UTF-8 no BOM (-- and ->, no glyphs; rule IX). ` +
   `Generic-only (no C086/pharmacy specifics in a generic artifact; rule 7). No fabricated confidence / ` +
@@ -396,7 +401,7 @@ const ledger = await agent(
   `these before ratifying), or \u0022(none)\u0022; (5) ANALYZE verdict; (6) PLAN REVIEW verdict + findings; ` +
   `(7) OUTCOME (${gateOutcome}). If READY_FOR_RATIFY, how_to_ratify lists the exact human steps: resolve ` +
   `every OPEN FOR YOU item in spec.md, flip \u0022**Status**: Draft\u0022 to \u0022**Status**: Ratified (<name>, ` +
-  `<YYYY-MM-DD>)\u0022, commit \u0022docs(${plan && plan.feature ? plan.feature : S(78,78,78)}): ratify spec\u0022 on the ` +
+  `<YYYY-MM-DD>)\u0022, commit \u0022docs: ratify spec (${plan && plan.feature ? plan.feature : S(78,78,78)})\u0022 on the ` +
   `branch -- and note the implement workflow refuses the spec until that human Status edit lands. If ` +
   `BLOCKED, how_to_ratify instead states what must be fixed and that NO ratify path is offered yet. ` +
   `ASCII only.`,
