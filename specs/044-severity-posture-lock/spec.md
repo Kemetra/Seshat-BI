@@ -2,9 +2,9 @@
 
 **Feature Branch**: `044-045-severity-posture-lock`
 
-**Created**: (date pending -- operator to fill)
+**Created**: 2026-06-29
 
-**Status**: Draft
+**Status**: Ratified (Ahmed Shaaban, 2026-06-29)
 
 **Input**: User description: "Severity-Posture Regression Lock (golden severity table)"
 
@@ -321,7 +321,7 @@ confirm it passes; remove the throwaway rule and regenerate.
   and leaves them for human resolution; it does not invent answers.
 -->
 
-### Session (date pending)
+### Session 2026-06-29
 
 > Operator: this session was run by the planning advisor. Fill the real date.
 > The advisor RESOLVED the non-judgment ambiguities below (recording reasoning
@@ -367,7 +367,7 @@ This subsection is retained (empty) so the carve-out history is auditable.
 #### Advisor-resolved Principle-V calls (human-authorized)
 
 > These four Principle-V judgment calls were resolved by the planning advisor
-> under EXPLICIT human authorization on (date pending). Each records the
+> under EXPLICIT human authorization on 2026-06-29. Each records the
 > {decision, option chosen, rationale, reversibility}. This authorization does
 > NOT extend to ratification: Status stays Draft and the date stays pending --
 > only a human commit may set the Ratified line (the ratify gate's git-blame
