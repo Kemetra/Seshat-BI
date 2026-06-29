@@ -221,10 +221,12 @@ execution path.
 | **B1** | Never-Execute Invariant Guard | 4 (invariant protection) | Static rule **B1** (`src/retail/rules/never_execute.py`): stdlib-`ast` scan of the static-core modules (cli/runner/core/registry/rules) for a **module-scope** DB/network import (psycopg2, requests, socket, http, urllib.request, ...). Lazy in-handler imports stay allowed; `urllib.parse` allowed; an unparseable module fails loud. Never opens a connection. | #64 (`9d12589`) |
 | **F7** | KPI Decision-Question Index | 5 (KPI usability) | A "Decision questions this domain answers" section in all 11 `skills/retail-kpi-knowledge/domains/*.md`; each question routes to a real `contracts/*.md` (Seeded) or an honest `--`/Planned marker. Pure docs in the KPI meaning layer; no contract meaning changed. | #65 (`ae471aa`) |
 | **F8** | KPI Coverage Scorecard | 5 (analytical coverage) | A per-table coverage scorecard template (`skills/retail-kpi-knowledge/references/kpi-coverage-scorecard-template.md`): coverage as explicit **status + named blocker** (Covered / Blocked -- missing field / Blocked -- needs business definition / Planned / Out of scope), **never a numeric score** (hard rule #9); Covered requires contract Seeded AND fields present; grants no readiness. | #66 (`9d782f8`) |
+| **A3** | Route-Registry Coverage Reconciler | 1 (routing integrity) | Static rule **A3** (`src/retail/rules/routes_coverage.py`): the knowledge-map `## Route by task` id set and the `docs/routing/routes.yaml` id set must be in **bijection** -- a map-only id OR a manifest-only id is each an ERROR (fail-closed both directions, matching A1). Hand-rolled stdlib table extractor (no markdown dependency), lazy `yaml`, fail-loud on unreadable inputs. Guards the map<->manifest boundary A1 never reads; zero findings on `main`. | 047 (this sequence) |
 
-> **Effect on the static gate:** A1 and B1 take the registered `retail check`
-> rule set from 31 to **33** (the wiring test `EXPECTED_RULE_IDS` is the guard; both
-> emit zero findings on `main`). The DAX-governance L3 boundary is unchanged.
+> **Effect on the static gate:** A1 and B1 took the registered `retail check`
+> rule set from 31 to **33**; **A3 takes it to 34** (the wiring test
+> `EXPECTED_RULE_IDS` is the guard; all emit zero findings on `main`). The
+> DAX-governance L3 boundary is unchanged.
 
 ## Post-integration stabilization phase -- SHIPPED (2026-06-28)
 

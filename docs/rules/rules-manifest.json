@@ -4,6 +4,10 @@
     "title": "Route registry targets resolve or are honestly marked planned"
   },
   {
+    "id": "A3",
+    "title": "Knowledge-map route ids and the routing manifest ids are in bijection"
+  },
+  {
     "id": "B1",
     "title": "No module-scope DB/network import in the static core (never-execute)"
   },
