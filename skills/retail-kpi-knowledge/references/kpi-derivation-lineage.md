@@ -57,11 +57,13 @@ this doc does not do.
 ## Blast radius
 
 Because derivation flows downward, a change to a base KPI's definition propagates to its
-descendants. Example: a Net Sales ruling (e.g. the pre-tax VAT decision, A1) changes
-KPI-MC-02, which propagates to KPI-MC-05 (ATV), KPI-MC-08 (Returns Rate %), KPI-MC-09
-(Gross Margin), and KPI-MC-10 (Gross Margin %) -- one ruling, six KPIs touched (Net Sales
-itself plus its dependents, and Gross Margin % via Gross Margin). Surfacing the graph makes
-that leverage visible instead of implicit.
+descendants. Example: a Gross Sales ruling (e.g. the pre-tax VAT decision, A1) changes
+KPI-MC-01, which flows to KPI-MC-02 (Net Sales) and KPI-MC-07 (Discount Rate %), and then
+on through Net Sales to KPI-MC-05 (ATV), KPI-MC-08 (Returns Rate %), KPI-MC-09 (Gross
+Margin), and KPI-MC-10 (Gross Margin %) -- one base ruling, six downstream KPIs touched.
+A change to an intermediate node has a smaller blast radius: a Net Sales (KPI-MC-02) ruling
+reaches its four dependents KPI-MC-05, KPI-MC-08, KPI-MC-09, and KPI-MC-10. Surfacing the
+graph makes this leverage visible instead of implicit.
 
 ## Provenance
 

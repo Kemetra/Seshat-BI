@@ -148,19 +148,24 @@ COGS, Return Value); confirm base KPIs are listed as base with no outgoing deriv
 
 A contract author starting a new derived KPI needs a place in the contract shape to declare what it
 derives from. After this work the metric-contract template carries a `**Derives from**` body section
-(with placeholder guidance), and two exemplar contracts -- Net Sales (a base KPI) and Average
-Transaction Value (a derived KPI) -- carry a filled `**Derives from**` section, so the seam is
-demonstrated on one base and one derived case.
+(with placeholder guidance), and two exemplar contracts -- Net Sales (derived from KPI-MC-01 +
+KPI-MC-06) and Average Transaction Value (derived from KPI-MC-02 + KPI-MC-04) -- carry a filled
+`**Derives from**` section, so the seam is demonstrated on two derived cases (the template's
+placeholder still shows the base "none -- base KPI" form, so both forms are documented). [The
+Net Sales classification follows the metric-owner ruling in ## Clarifications: Net Sales is
+DERIVED per its formula "Gross Sales - total discount", superseding the original T006 "base"
+framing.]
 
 **Why this priority**: The template change is the reusable seam; the two exemplars prove it reads
-correctly for both a base ("none -- base KPI") and a derived ("KPI-MC-02, KPI-MC-04") case. The
-other 8 contracts are a later mechanical follow-up (out of this first-step scope).
+correctly for the derived case (Net Sales: "KPI-MC-01, KPI-MC-06"; ATV: "KPI-MC-02, KPI-MC-04"),
+while the template placeholder documents the base "none -- base KPI" form. The other 8 contracts
+are a later mechanical follow-up (out of this first-step scope).
 
 **Independent Test**: Diff `references/metric-contract-template.md`; confirm a `**Derives from**`
-section was added with generic placeholder text and no C086 specifics. Diff `contracts/net-sales.md`
-and `contracts/average-transaction-value.md`; confirm each gained a `**Derives from**` section whose
-content is transcribed from that contract's own committed prose (Net Sales: none -- base; ATV:
-KPI-MC-02 + KPI-MC-04).
+section was added with generic placeholder text (including the "none -- base KPI" form) and no C086
+specifics. Diff `contracts/net-sales.md` and `contracts/average-transaction-value.md`; confirm each
+gained a `**Derives from**` section whose content is transcribed from that contract's own committed
+prose (Net Sales: KPI-MC-01 + KPI-MC-06; ATV: KPI-MC-02 + KPI-MC-04).
 
 **Acceptance Scenarios**:
 
@@ -168,8 +173,9 @@ KPI-MC-02 + KPI-MC-04).
    `**Derives from**` section instructing them to list base-KPI dependencies by KPI-MC ID (or state
    "none -- base KPI"), referencing IDs never filenames.
 2. **Given** `contracts/net-sales.md`, **When** a reader reaches the `**Derives from**` section,
-   **Then** it states the KPI is base (no derives-from edge) -- consistent with its "Base for ..."
-   prose.
+   **Then** it lists KPI-MC-01 (Gross Sales) + KPI-MC-06 (Discount Amount) -- transcribed from its
+   formula "Net Sales = Gross Sales - total discount" -- and notes Net Sales is in turn the base for
+   its downstream KPIs (per the ## Clarifications ruling).
 3. **Given** `contracts/average-transaction-value.md`, **When** a reader reaches the `**Derives
    from**` section, **Then** it lists KPI-MC-02 (Net Sales) and KPI-MC-04 (Transactions Count),
    transcribed from "ATV = Net Sales / Transactions Count".
