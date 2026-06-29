@@ -58,6 +58,16 @@ in committed prose) is carried as a stop-and-ask marker the agent must not cross
   concept/name match inside Net Sales's verbatim formula "Gross Sales - total discount", rather
   than an explicit cross-reference like ATV's "from Net Sales contract". Both are sound
   transcriptions from committed prose; the concept-match is approved as a real edge.
+- **RESOLVED -- Net Sales (KPI-MC-02) is DERIVED, not base (supersedes T006).** The spec carried an
+  internal contradiction: US2/T006 instructed the net-sales contract section to read "none -- base
+  KPI", while US1/T010 (and the accepted edges above) list Net Sales as deriving from KPI-MC-01 +
+  KPI-MC-06. The metric owner rules Net Sales is DERIVED: its own committed formula "Net Sales =
+  Gross Sales - total discount (line + header), pre-tax" is a derivation. The "primary
+  realized-revenue base" language in its Interpretation refers to reuse (base FOR downstream KPIs),
+  not graph topology -- a node can be both an intermediate (derived from 01, 06) and a parent (base
+  for 05, 08, 09, 10). T006 is therefore authored as `**Derives from**: KPI-MC-01, KPI-MC-06`. The
+  lineage doc is unchanged (4 base: 01, 03, 04, 06; 6 derived: 02, 05, 07, 08, 09, 10). ATV remains
+  the derived exemplar; the base-exemplar role for the section seam is not required by any FR.
 
 ### Session 2026-06-29
 
