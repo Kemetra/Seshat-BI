@@ -1,0 +1,3 @@
+table T
+	measure Dt = IF(TODAY() > DATE(2020, 1, 1), 1, 0)
+		displayFolder: F

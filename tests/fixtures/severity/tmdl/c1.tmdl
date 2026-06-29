@@ -1,0 +1,3 @@
+table T
+	partition p = m
+		source = let s = Sql.Database("a_host", "a_db") in s

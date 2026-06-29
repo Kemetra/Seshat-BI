@@ -1,0 +1,5 @@
+table T
+	measure OneA = SUM(T[c])
+		displayFolder: F
+	measure OneB = SUM(T[c])
+		displayFolder: F

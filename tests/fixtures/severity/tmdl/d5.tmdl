@@ -1,0 +1,4 @@
+table T
+	column val
+		dataType: int64
+		summarizeBy: sum

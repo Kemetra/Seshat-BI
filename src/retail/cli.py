@@ -166,6 +166,21 @@ def _build_parser() -> argparse.ArgumentParser:
         "--repo", default=".", help="repo root to write the manifest into"
     )
 
+    # Severity-posture golden record (feature 044). Writes the observed severity
+    # posture of every registered rule + the L3 surface to
+    # docs/rules/severity-posture.json. Test-only consumer (the snapshot test);
+    # adds NO new `retail check` rule and NO new EXPECTED_RULE_ID.
+    severity_posture = sub.add_parser(
+        "severity-posture",
+        help=(
+            "regenerate docs/rules/severity-posture.json from the live rule "
+            "registry + L3 surface (observed, not read)"
+        ),
+    )
+    severity_posture.add_argument(
+        "--repo", default=".", help="repo root to write the record into"
+    )
+
     return parser
 
 
@@ -217,6 +232,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "manifest":
         return _run_manifest(args)
 
+    if args.command == "severity-posture":
+        return _run_severity_posture(args)
+
     return 0
 
 
@@ -226,6 +244,15 @@ def _run_manifest(args) -> int:
 
     write_manifest(args.repo)
     print(f"wrote {MANIFEST_REL_PATH} from the live rule registry")
+    return 0
+
+
+def _run_severity_posture(args) -> int:
+    """Regenerate the severity-posture golden record from live observation."""
+    from .severity_posture import RECORD_REL_PATH, write
+
+    write(args.repo)
+    print(f"wrote {RECORD_REL_PATH} from the live rule registry + L3 surface")
     return 0
 
 

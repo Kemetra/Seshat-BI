@@ -1,0 +1,110 @@
+{
+  "l3": {
+    "L3:verdict_to_finding": [
+      "error",
+      "warning"
+    ]
+  },
+  "registered": {
+    "A1": [
+      "error"
+    ],
+    "B1": [
+      "error"
+    ],
+    "C1": [
+      "error"
+    ],
+    "C2": [
+      "error"
+    ],
+    "D1": [
+      "error"
+    ],
+    "D10": [
+      "warning"
+    ],
+    "D11": [
+      "warning"
+    ],
+    "D2": [
+      "error"
+    ],
+    "D3": [
+      "error"
+    ],
+    "D4": [
+      "error"
+    ],
+    "D5": [
+      "warning"
+    ],
+    "D6": [
+      "error"
+    ],
+    "D7": [
+      "error"
+    ],
+    "D8": [
+      "error"
+    ],
+    "D9": [
+      "warning"
+    ],
+    "G1": [
+      "error"
+    ],
+    "G2": [
+      "info"
+    ],
+    "G3": [
+      "error"
+    ],
+    "G4": [
+      "error"
+    ],
+    "G5": [
+      "error"
+    ],
+    "G6": [
+      "error"
+    ],
+    "P1": [
+      "error"
+    ],
+    "P2": [
+      "error"
+    ],
+    "R1": [
+      "error"
+    ],
+    "S1": [
+      "error"
+    ],
+    "S2": [
+      "error"
+    ],
+    "S3": [
+      "error"
+    ],
+    "S4a": [
+      "error"
+    ],
+    "S4b": [
+      "error",
+      "warning"
+    ],
+    "S5": [
+      "warning"
+    ],
+    "S6": [
+      "warning"
+    ],
+    "S7": [
+      "warning"
+    ],
+    "S8": [
+      "error"
+    ]
+  }
+}

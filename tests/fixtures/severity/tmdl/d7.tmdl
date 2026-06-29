@@ -1,0 +1,3 @@
+table T
+	measure Ti = TOTALYTD(SUM(T[c]), T[d])
+		displayFolder: F

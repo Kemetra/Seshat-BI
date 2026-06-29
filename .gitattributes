@@ -24,3 +24,4 @@
 *.png    binary
 *.svg    text eol=lf
 docs/rules/rules-manifest.json text eol=lf
+docs/rules/severity-posture.json text eol=lf
