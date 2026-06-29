@@ -374,11 +374,14 @@ North-Star #2.
 ### VIII. Static-First Governance, Live Deferred
 Ship the static core; defer live validation to a named later surface.
 
-- The shippable governance core is the STATIC checker: 26 rules over committed
-  TMDL / PBIR / SQL / git text, stdlib-only and CI-able, with NO dependency on
-  pbi-cli, Power BI Desktop, or the network. It is the enforced gate that
-  ships now (src/retail/; governance spec, static surface).
-- The 26 rules span the namespaces S1, S2, S3, S4a, S4b, S5, S6, S7; D1-D8; R1;
+- The shippable governance core is the STATIC checker: the registered rule set
+  over committed TMDL / PBIR / SQL / git text, stdlib-only and CI-able, with NO
+  dependency on pbi-cli, Power BI Desktop, or the network. It is the enforced gate
+  that ships now (src/retail/; governance spec, static surface). The authoritative,
+  always-current rule inventory is the generated `docs/rules/rules-manifest.json`
+  (regenerate with `retail manifest`; guarded by the rule-registry snapshot test) --
+  this document does not restate a literal rule count, which would drift.
+- The registered rules span the namespaces S1, S2, S3, S4a, S4b, S5, S6, S7; D1-D8; R1;
   C1, C2; G1-G5; P1, P2. (The checker's D1-D8 is a DISTINCT namespace from ADR
   0002's cleaning defaults, which are now RC1-RC16; see Principle VI.) S5/S6/S7
   are SQL-family rules that ENFORCE the statically-checkable cleaning defaults

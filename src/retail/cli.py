@@ -154,6 +154,18 @@ def _build_parser() -> argparse.ArgumentParser:
         default="tmdl",
         help="output format on success (tmdl or json)",
     )
+
+    # Rule-registry snapshot manifest (feature 043). Writes the golden inventory
+    # docs/rules/rules-manifest.json from the live registry. Test-only consumer
+    # (the snapshot test); adds NO new `retail check` rule.
+    manifest = sub.add_parser(
+        "manifest",
+        help="regenerate docs/rules/rules-manifest.json from the live rule registry",
+    )
+    manifest.add_argument(
+        "--repo", default=".", help="repo root to write the manifest into"
+    )
+
     return parser
 
 
@@ -202,6 +214,18 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "generate":
         return _run_generate(args)
 
+    if args.command == "manifest":
+        return _run_manifest(args)
+
+    return 0
+
+
+def _run_manifest(args) -> int:
+    """Regenerate the rule-registry snapshot manifest from the live registry."""
+    from .manifest import MANIFEST_REL_PATH, write_manifest
+
+    write_manifest(args.repo)
+    print(f"wrote {MANIFEST_REL_PATH} from the live rule registry")
     return 0
 
 

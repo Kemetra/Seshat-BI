@@ -1,0 +1,134 @@
+[
+  {
+    "id": "A1",
+    "title": "Route registry targets resolve or are honestly marked planned"
+  },
+  {
+    "id": "B1",
+    "title": "No module-scope DB/network import in the static core (never-execute)"
+  },
+  {
+    "id": "C1",
+    "title": "Connection must use parameter identifiers, not string literals"
+  },
+  {
+    "id": "C2",
+    "title": "no committed secrets"
+  },
+  {
+    "id": "D1",
+    "title": "Measure names must be PascalCase"
+  },
+  {
+    "id": "D10",
+    "title": "No FILTER(ALL/ALLSELECTED/ALLEXCEPT(...)) full-table-scan anti-pattern"
+  },
+  {
+    "id": "D11",
+    "title": "Each measure must have a /// doc comment"
+  },
+  {
+    "id": "D2",
+    "title": "Each measure must have a displayFolder"
+  },
+  {
+    "id": "D3",
+    "title": "No duplicated measure logic"
+  },
+  {
+    "id": "D4",
+    "title": "Use DIVIDE() not the / operator"
+  },
+  {
+    "id": "D5",
+    "title": "Prefer explicit measures over implicit aggregation"
+  },
+  {
+    "id": "D6",
+    "title": "No bidirectional relationships"
+  },
+  {
+    "id": "D7",
+    "title": "Time-intelligence requires a date-table marker"
+  },
+  {
+    "id": "D8",
+    "title": "Partitions must source from gold schema only"
+  },
+  {
+    "id": "D9",
+    "title": "No hardcoded date literals in measures"
+  },
+  {
+    "id": "G1",
+    "title": ".gitignore correctness"
+  },
+  {
+    "id": "G2",
+    "title": "definition artifacts committed"
+  },
+  {
+    "id": "G3",
+    "title": "UTF-8 without BOM"
+  },
+  {
+    "id": "G4",
+    "title": ".gitattributes EOL policy"
+  },
+  {
+    "id": "G5",
+    "title": "Windows MAX_PATH discipline"
+  },
+  {
+    "id": "G6",
+    "title": "No real host/value in committed PBIP parameters"
+  },
+  {
+    "id": "P1",
+    "title": "Approach-A layout"
+  },
+  {
+    "id": "P2",
+    "title": "commit-message convention"
+  },
+  {
+    "id": "R1",
+    "title": "PBIR model reference must be relative"
+  },
+  {
+    "id": "S1",
+    "title": "snake_case SQL identifiers"
+  },
+  {
+    "id": "S2",
+    "title": "medallion schema names"
+  },
+  {
+    "id": "S3",
+    "title": "vw_ prefix on views"
+  },
+  {
+    "id": "S4a",
+    "title": "migration filename + numbering"
+  },
+  {
+    "id": "S4b",
+    "title": "migration guard form"
+  },
+  {
+    "id": "S5",
+    "title": "type discipline (enforces ADR RC7)"
+  },
+  {
+    "id": "S6",
+    "title": "gold dim -1 unknown member (enforces ADR RC14)"
+  },
+  {
+    "id": "S7",
+    "title": "contiguous date dim (enforces ADR RC15)"
+  },
+  {
+    "id": "S8",
+    "title": "date dim has no -1/NULL unknown member (marked date table)"
+  }
+]

@@ -23,3 +23,4 @@
 *.abf    binary
 *.png    binary
 *.svg    text eol=lf
+docs/rules/rules-manifest.json text eol=lf
