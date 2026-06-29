@@ -159,7 +159,58 @@ def test_map_table_not_locatable_fails_loud(tmp_path: Path) -> None:
     findings = list(check_route_coverage(ctx))
     assert len(findings) == 1
     assert _MAP in findings[0].message
-    assert findings != []
+
+
+def test_empty_routes_list_is_not_vacuous_green(tmp_path: Path) -> None:
+    # routes: [] is valid shape but empty -> every map id is manifest-only drift,
+    # never a vacuous green.
+    ctx = _stage(tmp_path, ("1", "2"), "routes: []\n")
+    findings = list(check_route_coverage(ctx))
+    assert len(findings) == 2
+    assert all(f.rule_id == "A3" for f in findings)
+    named = " ".join(f.message for f in findings)
+    assert "1" in named and "2" in named
+
+
+def test_empty_map_table_is_not_vacuous_green(tmp_path: Path) -> None:
+    # A locatable "Route by task" section with only header+separator (no data
+    # rows) -> every manifest id is map-only drift, never a vacuous green.
+    map_text = (
+        "# Knowledge map\n\n"
+        "## Route by task\n\n"
+        "| Task | Route | Open first | End on |\n"
+        "|---|---|---|---|\n\n"
+        "## Route by symptom\n"
+    )
+    ctx = _stage(tmp_path, None, _manifest_with(("1", "2")), map_text=map_text)
+    findings = list(check_route_coverage(ctx))
+    assert len(findings) == 2
+    assert all(f.rule_id == "A3" for f in findings)
+
+
+def test_separator_logic_does_not_drop_dash_containing_ids(tmp_path: Path) -> None:
+    # A real data id like "1-a" contains a dash but is NOT a separator row; it must
+    # be extracted. A pure "---" first cell IS a separator and must be skipped.
+    map_text = (
+        "# Knowledge map\n\n"
+        "## Route by task\n\n"
+        "| Task | Route | Open first | End on |\n"
+        "|---|---|---|---|\n"
+        "| 1-a Task | Route | `x` | y |\n"
+        "## Route by symptom\n"
+    )
+    ctx = _stage(tmp_path, None, _manifest_with(("1-a",)), map_text=map_text)
+    assert list(check_route_coverage(ctx)) == []
+
+
+def test_multiple_bad_routes_all_reported(tmp_path: Path) -> None:
+    # Two malformed manifest entries -> two findings (accumulate, not abort),
+    # mirroring A1's per-route error idiom.
+    manifest = 'routes:\n  - "not-a-dict"\n  - other: 1\n'
+    ctx = _stage(tmp_path, ("1",), manifest)
+    findings = list(check_route_coverage(ctx))
+    assert len(findings) == 2
+    assert all(f.rule_id == "A3" for f in findings)
 
 
 def test_missing_map_fails_loud(tmp_path: Path) -> None:

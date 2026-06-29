@@ -74,8 +74,12 @@ def _map_ids(text: str) -> set[str] | None:
         if not cells:
             continue
         first = cells[0]
-        # Skip the header row ("Task") and the |---| separator row.
-        if not first or first.lower() == "task" or set(first) <= {"-", ":"}:
+        # Skip the header row ("Task") and the |---| separator row. A separator
+        # cell is only dashes/colons AND contains at least one dash (so a real
+        # data cell that happens to be all colons, or any cell mixing letters and
+        # dashes like "1-a", is NOT mistaken for a separator and dropped).
+        is_separator = bool(first) and set(first) <= {"-", ":"} and "-" in first
+        if not first or first.lower() == "task" or is_separator:
             continue
         token = first.split()[0] if first.split() else ""
         if token.endswith("."):
@@ -118,20 +122,25 @@ def _manifest_ids(ctx: RuleContext) -> set[str] | list[Finding]:
             )
         ]
 
+    # Accumulate per-route structural errors (one finding each), mirroring A1's
+    # append-and-continue idiom rather than aborting on the first bad entry, so a
+    # manifest with N malformed routes surfaces all N. Any structural error makes
+    # the parse unreliable, so we return the findings (never a partial id set) and
+    # let the caller fail loud.
     ids: set[str] = set()
+    errors: list[Finding] = []
     for index, route in enumerate(data["routes"]):
+        loc = f"{_MANIFEST}:route[{index}]"
         if not isinstance(route, dict):
-            return [
-                _finding(
-                    f"route #{index} is not a mapping", f"{_MANIFEST}:route[{index}]"
-                )
-            ]
+            errors.append(_finding(f"route #{index} is not a mapping", loc))
+            continue
         route_id = route.get("id")
         if route_id is None:
-            return [
-                _finding(f"route #{index} has no 'id'", f"{_MANIFEST}:route[{index}]")
-            ]
+            errors.append(_finding(f"route #{index} has no 'id'", loc))
+            continue
         ids.add(str(route_id))
+    if errors:
+        return errors
     return ids
 
 
