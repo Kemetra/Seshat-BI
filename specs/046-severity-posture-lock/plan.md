@@ -1,8 +1,8 @@
 # Implementation Plan: Severity-Posture Regression Lock (golden severity table)
 
-**Branch**: `044-045-severity-posture-lock` | **Date**: (date pending -- operator to fill) | **Spec**: [spec.md](./spec.md)
+**Branch**: `046-severity-posture-lock` | **Date**: (date pending -- operator to fill) | **Spec**: [spec.md](./spec.md)
 
-**Input**: Feature specification from `specs/044-severity-posture-lock/spec.md`
+**Input**: Feature specification from `specs/046-severity-posture-lock/spec.md`
 
 ## Summary
 
@@ -103,7 +103,7 @@ No violations -> Complexity Tracking is empty.
 ### Documentation (this feature)
 
 ```text
-specs/044-severity-posture-lock/
+specs/046-severity-posture-lock/
 |-- spec.md              # Stage 2 output (+ clarify edits)
 |-- plan.md              # This file
 |-- tasks.md             # Stage 4 output (/speckit-tasks)

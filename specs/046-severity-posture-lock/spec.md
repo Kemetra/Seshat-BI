@@ -1,6 +1,6 @@
 # Feature Specification: Severity-Posture Regression Lock (golden severity table)
 
-**Feature Branch**: `044-045-severity-posture-lock`
+**Feature Branch**: `046-severity-posture-lock`
 
 **Created**: 2026-06-29
 

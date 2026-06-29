@@ -1,6 +1,6 @@
 # Tasks: Severity-Posture Regression Lock (golden severity table)
 
-**Input**: Design documents from `specs/044-severity-posture-lock/`
+**Input**: Design documents from `specs/046-severity-posture-lock/`
 
 **Prerequisites**: plan.md (required), spec.md (required for user stories + the
 Principle-V clarifications). The grain and L3-coverage rulings have been RESOLVED
