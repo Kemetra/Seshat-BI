@@ -22,6 +22,7 @@ from . import (  # noqa: F401  (imported for side effects)
     routes,
     routes_coverage,
     sql,
+    status_claims,
 )
 
 __all__ = [
@@ -35,4 +36,5 @@ __all__ = [
     "routes",
     "routes_coverage",
     "sql",
+    "status_claims",
 ]

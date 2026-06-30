@@ -114,8 +114,8 @@ confirmed from the repo is marked **Not verified**.
 
 ## Recommended next proof
 
-The next step should be the **Net Sales end-to-end readiness trace**
-(`docs/demo/net-sales-end-to-end-readiness-trace.md`, planned): a single KPI path
+The first end-to-end proof is the **Net Sales end-to-end readiness trace**
+(`docs/demo/net-sales-end-to-end-readiness-trace.md`, shipped): a single KPI path
 walked from business question → contract → required fields → source/table coverage
 → blockers → SQL/gold expectation → DAX/semantic readiness → dashboard usage →
 readiness gates, with an explicit "proven on paper vs needs real data" split. One

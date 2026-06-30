@@ -142,5 +142,9 @@
   {
     "id": "S8",
     "title": "date dim has no -1/NULL unknown member (marked date table)"
+  },
+  {
+    "id": "SC1",
+    "title": "Prose status claims reconcile with tracked-file evidence"
   }
 ]

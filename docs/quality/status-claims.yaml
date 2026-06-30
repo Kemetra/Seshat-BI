@@ -1,0 +1,25 @@
+# Status-claims manifest -- the single source SC1 (src/retail/rules/status_claims.py)
+# reconciles against tracked-file evidence. Each entry records a PROSE status claim a
+# governance/status doc makes, so the gate fails closed when the claim drifts from
+# reality (a "planned" marker on something that shipped, or a "built" claim for a
+# missing artifact).
+#
+# Each claim:
+#   id                stable handle for the claim (named in findings)
+#   doc               the doc making the claim (must be a tracked file)
+#   anchor            the LITERAL sentence in `doc` that asserts the claim; SC1
+#                     verifies this text is present so a moved/removed sentence is
+#                     itself flagged. Must stay byte-identical to the doc wording.
+#   claimed-artifact  the artifact the claim is about (tracked => exists)
+#   claimed-status    built  -> claimed-artifact MUST be tracked (else false-built ERROR)
+#                     planned-> claimed-artifact must NOT be tracked (else stale ERROR)
+#
+# This manifest is hand-curated (not auto-generated); add an entry when a doc makes a
+# checkable status claim worth locking against drift.
+
+claims:
+  - id: "capability-state-net-sales-trace"
+    doc: "docs/quality/post-idea-bank-capability-state.md"
+    anchor: "(`docs/demo/net-sales-end-to-end-readiness-trace.md`, shipped)"
+    claimed-artifact: "docs/demo/net-sales-end-to-end-readiness-trace.md"
+    claimed-status: "built"

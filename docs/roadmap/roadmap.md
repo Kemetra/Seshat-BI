@@ -222,11 +222,15 @@ execution path.
 | **F7** | KPI Decision-Question Index | 5 (KPI usability) | A "Decision questions this domain answers" section in all 11 `skills/retail-kpi-knowledge/domains/*.md`; each question routes to a real `contracts/*.md` (Seeded) or an honest `--`/Planned marker. Pure docs in the KPI meaning layer; no contract meaning changed. | #65 (`ae471aa`) |
 | **F8** | KPI Coverage Scorecard | 5 (analytical coverage) | A per-table coverage scorecard template (`skills/retail-kpi-knowledge/references/kpi-coverage-scorecard-template.md`): coverage as explicit **status + named blocker** (Covered / Blocked -- missing field / Blocked -- needs business definition / Planned / Out of scope), **never a numeric score** (hard rule #9); Covered requires contract Seeded AND fields present; grants no readiness. | #66 (`9d782f8`) |
 | **A3** | Route-Registry Coverage Reconciler | 1 (routing integrity) | Static rule **A3** (`src/retail/rules/routes_coverage.py`): the knowledge-map `## Route by task` id set and the `docs/routing/routes.yaml` id set must be in **bijection** -- a map-only id OR a manifest-only id is each an ERROR (fail-closed both directions, matching A1). Hand-rolled stdlib table extractor (no markdown dependency), lazy `yaml`, fail-loud on unreadable inputs. Guards the map<->manifest boundary A1 never reads; zero findings on `main`. | 047 (this sequence) |
+| **B3** | Live-Surface Import Boundary Guard | 1 (never-execute integrity) | Static rule **B3** (`src/retail/rules/live_surface_boundary.py`): the live-surface modules (`validate`, `value_proxy`, `semantic`, `dax_gen`) must keep DB/network imports LAZY -- a module-scope connection-capable import in any of them is an ERROR. The live-surface complement of B1; reuses B1's AST helper unchanged. Zero findings on `main`. | 048 (this sequence) |
+| **PP1** | Publish-pack Completeness Gate | 1 (publish integrity) | Static rule **PP1** (`src/retail/rules/publish_pack.py`): every committed `mappings/<table>/handoff/bi-handoff-pack.md` must have all six required-section index rows (a-f) present and filled (non-`<placeholder>`/non-GAP) -- else ERROR. Reuses G6's placeholder mechanism over the index table's resolution column only. Checks the publish-approval slot is present-and-filled ONLY, never grants it (Principle V). Zero findings on `main`. | 049 (this sequence) |
+| **SC1** | Stale-Marker Sweep / Status-Claim Reconciler | 1 (status integrity) | Static rule **SC1** (`src/retail/rules/status_claims.py`): a hand-curated manifest (`docs/quality/status-claims.yaml`) of prose status claims (doc + anchor + claimed-artifact + claimed-status) is reconciled against tracked-file evidence -- a `planned` marker on a shipped artifact, or a `built` claim for a missing one, is an ERROR. A1's resolver shape applied to prose; checks only listed claims (never free-scans). Seeded with one corrected stale-doc defect; zero findings on `main`. | 050 (this sequence) |
 
 > **Effect on the static gate:** A1 and B1 took the registered `retail check`
-> rule set from 31 to **33**; **A3 takes it to 34** (the wiring test
-> `EXPECTED_RULE_IDS` is the guard; all emit zero findings on `main`). The
-> DAX-governance L3 boundary is unchanged.
+> rule set from 31 to **33**; the idea-loop sequence then added **A3 (34)**, **B3
+> (35)**, **PP1 (36)**, and **SC1 (37)** (the wiring test `EXPECTED_RULE_IDS` is the
+> guard; all emit zero findings on `main`). The DAX-governance L3 boundary is
+> unchanged.
 
 ## Post-integration stabilization phase -- SHIPPED (2026-06-28)
 

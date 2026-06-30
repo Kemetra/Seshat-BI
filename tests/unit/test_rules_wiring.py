@@ -77,6 +77,7 @@ EXPECTED_RULE_IDS = frozenset(
         "P1",
         "P2",  # process
         "PP1",  # publish-pack completeness: every required handoff section filled
+        "SC1",  # status-claim reconciler: prose claim matches tracked-file evidence
     }
 )
 
