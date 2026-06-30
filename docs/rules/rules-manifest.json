@@ -68,6 +68,10 @@
     "title": "No hardcoded date literals in measures"
   },
   {
+    "id": "DF1",
+    "title": "Parked-on dependency edges reconcile with tracked-file evidence"
+  },
+  {
     "id": "G1",
     "title": ".gitignore correctness"
   },

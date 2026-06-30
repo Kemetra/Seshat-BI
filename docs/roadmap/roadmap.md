@@ -225,12 +225,13 @@ execution path.
 | **B3** | Live-Surface Import Boundary Guard | 1 (never-execute integrity) | Static rule **B3** (`src/retail/rules/live_surface_boundary.py`): the live-surface modules (`validate`, `value_proxy`, `semantic`, `dax_gen`) must keep DB/network imports LAZY -- a module-scope connection-capable import in any of them is an ERROR. The live-surface complement of B1; reuses B1's AST helper unchanged. Zero findings on `main`. | 048 (this sequence) |
 | **PP1** | Publish-pack Completeness Gate | 1 (publish integrity) | Static rule **PP1** (`src/retail/rules/publish_pack.py`): every committed `mappings/<table>/handoff/bi-handoff-pack.md` must have all six required-section index rows (a-f) present and filled (non-`<placeholder>`/non-GAP) -- else ERROR. Reuses G6's placeholder mechanism over the index table's resolution column only. Checks the publish-approval slot is present-and-filled ONLY, never grants it (Principle V). Zero findings on `main`. | 049 (this sequence) |
 | **SC1** | Stale-Marker Sweep / Status-Claim Reconciler | 1 (status integrity) | Static rule **SC1** (`src/retail/rules/status_claims.py`): a hand-curated manifest (`docs/quality/status-claims.yaml`) of prose status claims (doc + anchor + claimed-artifact + claimed-status) is reconciled against tracked-file evidence -- a `planned` marker on a shipped artifact, or a `built` claim for a missing one, is an ERROR. A1's resolver shape applied to prose; checks only listed claims (never free-scans). Seeded with one corrected stale-doc defect; zero findings on `main`. | 050 (this sequence) |
+| **DF1** | Parked-On Map / dependency-edge reconciler | 1 (dependency integrity) | Static rule **DF1** (`src/retail/rules/parked_on.py`): a hand-curated manifest (`docs/quality/parked-on.yaml`) of parked-on edges (blocked + parked_on + doc + anchor + evidence, optional shipped_when_tracked) is reconciled against tracked-file evidence -- a missing blocker/evidence, an absent anchor, or a parked-but-shipped contradiction is an ERROR. SC1's resolver shape applied to dependency edges; v1 maps the F016 bottleneck cluster (pbi-tools, L3-ops, F031-F033). Adds the seam, never F016. Zero findings on `main`. | 051 (this sequence) |
 
 > **Effect on the static gate:** A1 and B1 took the registered `retail check`
 > rule set from 31 to **33**; the idea-loop sequence then added **A3 (34)**, **B3
-> (35)**, **PP1 (36)**, and **SC1 (37)** (the wiring test `EXPECTED_RULE_IDS` is the
-> guard; all emit zero findings on `main`). The DAX-governance L3 boundary is
-> unchanged.
+> (35)**, **PP1 (36)**, **SC1 (37)**, and **DF1 (38)** (the wiring test
+> `EXPECTED_RULE_IDS` is the guard; all emit zero findings on `main`). The
+> DAX-governance L3 boundary is unchanged.
 
 ## Post-integration stabilization phase -- SHIPPED (2026-06-28)
 

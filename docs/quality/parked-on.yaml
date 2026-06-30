@@ -1,0 +1,60 @@
+# Parked-on dependency-edge manifest -- the source DF1
+# (src/retail/rules/parked_on.py) reconciles against tracked-file evidence. Each edge
+# records that a feature is PARKED ON a shared blocker (F016, the gated Power BI
+# execution adapter), so the gate fails closed when an edge drifts from reality:
+#   - the cited blocker/evidence is missing or untracked, or
+#   - the anchor sentence asserting the park is no longer in the citing doc, or
+#   - the park is contradicted because the target has shipped (an OPTIONAL
+#     shipped_when_tracked path is now a tracked file).
+#
+# Each edge:
+#   id                   stable handle (named in findings)
+#   blocked              the parked feature/work item (generic label)
+#   parked_on            the shared blocker it waits on (e.g. "F016")
+#   doc                  the doc asserting the park (must be a tracked file)
+#   anchor               the LITERAL sentence in `doc` asserting the park; DF1
+#                        verifies this text is present (a moved/removed sentence is
+#                        itself flagged). Must stay byte-identical to the doc wording.
+#   evidence             a tracked deferred-spec/record file documenting the park
+#   shipped_when_tracked OPTIONAL -- if this path becomes a tracked file the target
+#                        has shipped and a still-asserted park is contradicted (ERROR).
+#                        Omitted here: no v1 edge has a machine-checkable ship signal yet.
+#
+# Hand-curated (not auto-generated). v1 scope = the F016 bottleneck cluster only.
+# Generic kit-feature edges only -- no worked-example domain facts.
+
+edges:
+  - id: "pbi-tools-extract-parked-on-f016"
+    blocked: "pbi-tools extract spike"
+    parked_on: "F016"
+    doc: "docs/roadmap/roadmap.md"
+    anchor: "| pbi-tools extract spike | **DEFERRED** -- no `.pbix` target, no installed toolchain |"
+    evidence: "docs/superpowers/specs/2026-06-26-pbi-tools-extract-spike-deferred.md"
+
+  - id: "l3-new-operators-parked-on-f016"
+    blocked: "L3 new predicate operators"
+    parked_on: "F016"
+    doc: "docs/roadmap/roadmap.md"
+    anchor: "| L3 new predicate operators | **DEFERRED** -- no consumer |"
+    evidence: "docs/superpowers/specs/2026-06-26-l3-new-operators-deferred.md"
+
+  - id: "f031-maintenance-policy-parked-on-f016"
+    blocked: "F031 adapter maintenance policy"
+    parked_on: "F016"
+    doc: "docs/roadmap/roadmap.md"
+    anchor: "**F031-F033 (maintenance automation)** -- no consumer yet"
+    evidence: "specs/025-adapter-maintenance-policy/spec.md"
+
+  - id: "f032-compatibility-matrix-parked-on-f016"
+    blocked: "F032 adapter compatibility matrix"
+    parked_on: "F016"
+    doc: "docs/roadmap/roadmap.md"
+    anchor: "**F031-F033 (maintenance automation)** -- no consumer yet"
+    evidence: "specs/026-adapter-compatibility-matrix/spec.md"
+
+  - id: "f033-release-maturity-parked-on-f016"
+    blocked: "F033 release maturity management"
+    parked_on: "F016"
+    doc: "docs/roadmap/roadmap.md"
+    anchor: "**F031-F033 (maintenance automation)** -- no consumer yet"
+    evidence: "specs/027-release-maturity-management/spec.md"

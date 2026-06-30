@@ -191,7 +191,11 @@ def _run_d_rules(tmdl_block: str, name: str) -> tuple[list[str], list[str]]:
         dest.write_text(table_text, encoding="utf-8")
         ctx = RuleContext(repo_root=root, tracked_files=(rel,))
         for reg in all_rules():
-            if not reg.id.startswith("D"):
+            # The D-rule family is D1-D11 (TMDL/DAX hygiene): a 'D' followed by a
+            # digit. Match that precisely -- a bare startswith("D") also catches
+            # unrelated rules like DF1 (parked-on), which then run against this
+            # synthetic single-TMDL context and fail loud on their absent manifest.
+            if not (len(reg.id) >= 2 and reg.id[0] == "D" and reg.id[1].isdigit()):
                 continue
             for f in reg.rule(ctx):
                 line = _format(f)
