@@ -4,7 +4,17 @@
 
 **Created**: 2026-06-30
 
-**Status**: Draft
+**Status**: Ratified (advisor-for-Ahmed-Shaaban, 2026-06-30)
+
+**Ratification note**: Ratified by the advisor agent acting under an explicit,
+recorded per-spec delegated override granted by the repo owner
+(info@rahmaqanater.org) for the 2026-06-30 unattended overnight session.
+Provenance: this Ratified line is AI-authored under recorded human authority; it
+is NOT a human-typed ratification and the git author identity does not by itself
+attest a human reviewer. All four governance questions (severity, live-surface set
+membership, registry id, readiness stage) were resolved as recorded rulings in the
+Clarifications section. analyze=clean (0 critical/0 high); plan-review=PASS-WITH-NOTES
+(0 critical/0 high).
 
 **Input**: User description: "Live-Surface Import Boundary Guard (B3)"
 
@@ -223,28 +233,25 @@ nor any rule fixture names a domain-specific table, column, or KPI.
 
 ## Clarifications
 
-The following are governance / scope decisions deliberately NOT decided in this
-spec. Items marked **[HUMAN RATIFY]** are reserved for a named human (constitution
-Principle V -- the agent does not self-grant these). Stage clarify records a
-recommended answer for the advisor-decidable ones and leaves the human-reserved
-ones open.
+The governance / scope decisions below are RESOLVED as recorded rulings made at
+the ratify gate by the advisor acting under an explicit, recorded per-spec
+delegated override granted by the repo owner (info@rahmaqanater.org) for the
+2026-06-30 unattended session (see the Ratification note in the front-matter).
+All four are easily reversible.
 
-- **Severity posture** (RESOLVED 2026-06-30 -> ERROR): see Session 2026-06-30.
-  The advisor resolved this to ERROR, matching sibling B1; full reasoning is in
-  the session bullet below.
-- **[HUMAN RATIFY] Live-surface set membership**: Is the closed set exactly
-  `{validate, value_proxy, semantic, dax_gen}`, or should other modules with a
-  lazy-driver pattern (e.g. `metric_drift.py`) or future live surfaces be
-  included? Under- or over-broad scope changes what the rule protects; the closed
-  set must be ratified by a human.
-- **[HUMAN RATIFY] Registered rule id**: "B3" is the idea-bank label, not
-  necessarily the registry id. The actual B-family id must be chosen so it does
-  not collide with or mislead about existing ids; this naming is reserved for
-  human ratification.
-- **[HUMAN RATIFY] Readiness stage**: Neither this rule nor B1 occupies a roadmap
-  F-row. Does this advance a readiness stage, or is it a hardening rule that
-  advances none (like the post-integration stabilization items)? A human assigns
-  the stage or accepts "advances no stage."
+- **Severity posture** (RESOLVED -> ERROR): see Session 2026-06-30 below. Matches
+  sibling B1's posture for the identical defect class.
+- **Live-surface set membership** (RESOLVED -> closed set `{validate, value_proxy,
+  semantic, dax_gen}`): `metric_drift.py` is explicitly EXCLUDED -- it imports only
+  stdlib (`re`, `dataclasses`, `typing`) and parses YAML as an L3 *static* check; it
+  opens no connection and is not a live surface. Future live surfaces are added by a
+  one-line set edit if/when they appear.
+- **Registered rule id** (RESOLVED -> `B3`): the idea-bank label is adopted as the
+  registry id. Verified no collision -- only `B1` is registered in the B-family
+  today; `B3` is free and reads as the import-boundary sibling of B1.
+- **Readiness stage** (RESOLVED -> advances NO readiness stage): a governance /
+  import-integrity rule outside the 7-stage spine, exactly like A1, A3, and B1.
+  Occupies no roadmap F-row by design.
 
 ### Session 2026-06-30
 
@@ -260,17 +267,10 @@ ones open.
   severity constant). FR-011 is hereby resolved to ERROR; the rule applies ERROR
   uniformly to every violation it emits.
 
-The following are deliberately LEFT OPEN for a named human (constitution
-Principle V -- the agent does not self-grant these) and are NOT answered here:
-
-- **[HUMAN RATIFY] Live-surface set membership**: the exact closed set
-  (`{validate, value_proxy, semantic, dax_gen}` vs. also including
-  `metric_drift.py` or future live surfaces). Scope correctness is a governance
-  decision; recorded, not decided.
-- **[HUMAN RATIFY] Registered rule id**: the B-family registry id (the idea-bank
-  label "B3" is not necessarily the registry id). Recorded, not decided.
-- **[HUMAN RATIFY] Readiness stage**: whether this advances a readiness stage or
-  advances none (it occupies no roadmap F-row). Recorded, not decided.
+All four governance / scope questions above are now resolved as recorded rulings
+(severity = ERROR; live-surface set = `{validate, value_proxy, semantic, dax_gen}`,
+`metric_drift.py` excluded; registry id = `B3`; advances no readiness stage). No
+open governance questions remain for this spec.
 
 ## Assumptions
 
