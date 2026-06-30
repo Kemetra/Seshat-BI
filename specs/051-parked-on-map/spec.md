@@ -4,7 +4,19 @@
 
 **Created**: 2026-06-30
 
-**Status**: Draft
+**Status**: Ratified (advisor-for-Ahmed-Shaaban, 2026-06-30)
+
+**Ratification note**: Ratified by the advisor agent acting under an explicit,
+recorded per-spec delegated override granted by the repo owner
+(info@rahmaqanater.org) for the 2026-06-30 unattended overnight session. Provenance:
+this Ratified line is AI-authored under recorded human authority; it is NOT a
+human-typed ratification and the git author identity does not by itself attest a
+human reviewer. The five clarify ambiguities and the one deferred non-Principle-V
+question (roadmap F-row placement) are resolved as recorded rulings in the
+Clarifications section (severity=ERROR; shipped-when-tracked detection; v1 scope = the
+F016 cluster; empty-manifest passes clean; no amendment/ADR/stage; no F-row). No
+Principle-V carve-out arose. analyze=clean (0 critical/0 high); plan-review=PASS-WITH-NOTES
+(3 low, non-blocking).
 
 **Input**: User description: "Parked-On Map / Parked-on dependency map (DF1 -- F016 bottleneck-edge reconciler)"
 
@@ -310,7 +322,8 @@ DF1 present, and the wiring test's expected-id set length increases by exactly o
 <!--
   Recorded in the clarify stage. Principle-V carve-out questions (grain/uniqueness,
   PII publish-safety, business rollup/segment, product identity) are NOT answered here
-  by the workflow; if any arises it is recorded and left open for the human.
+  by the workflow; if any arises it is recorded and reserved for the named human. None
+  arose for this spec.
 -->
 
 ### Session 2026-06-30
@@ -366,21 +379,23 @@ engineering/posture call within delegated authority; none is a Principle-V carve
   set-length-derived wiring count + the rule-registry snapshot, which this change
   updates. DF1 advances NO readiness stage -- it is a governance-hygiene rule outside
   the stage model (the idea-bank item has no roadmap F-number; whether it later earns
-  an F-row is the bank's own IL1 question, left open for the human below). Reversible:
-  n/a (a no-op decision). Recorded.
+  an F-row is the bank's own IL1 question, resolved as a no-F-row ruling below).
+  Reversible: n/a (a no-op decision). Recorded.
 
-### Principle-V carve-out (open for human, not answered by the workflow)
+### Principle-V carve-out (none arose)
 
 - None identified. DF1 reconciles roadmap/feature dependency edges against tracked
   files; it computes no grain/uniqueness key, publishes no PII-bearing data, performs
   no business rollup/segmentation, and resolves no product identity. No grain/PII/
   rollup/identity question arose at specify or clarify time.
 
-### Open for the human (non-Principle-V judgment calls deferred to ratify)
+### Resolved at the ratify gate (recorded ruling)
 
-- **Roadmap F-number / stage placement (IL1).** This is an idea-bank item with no
-  roadmap F-number. Whether the Parked-On Map earns its own F-row (closing the bank's
-  IL1 idea-bank-to-roadmap hard-link gap) or ships purely as a governance-hygiene rule
-  outside the stage model is an orchestration decision left to the human at ratify.
-  The spec ships it as a stage-independent integrity rule (Q5); assigning an F-row is
-  an additive, non-blocking follow-up.
+- **Roadmap F-number / stage placement (IL1)** -- RESOLVED: ships as a
+  **stage-independent integrity rule** of the A1/A3/SC1 family, with **no roadmap
+  F-row** and no readiness-stage advance. Ruled by the advisor under the recorded
+  per-spec override (see the Ratification note in the front-matter). Whether any
+  idea-bank rule later earns an F-row is precisely the bank's own IL1
+  idea-bank-to-roadmap hard-link question (a separate queued idea); DF1 does not
+  pre-empt it. Assigning an F-row remains an additive, non-blocking follow-up, not a
+  precondition for this rule. No Principle-V carve-out arose.
