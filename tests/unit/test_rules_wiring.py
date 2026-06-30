@@ -76,6 +76,7 @@ EXPECTED_RULE_IDS = frozenset(
         "G6",  # PBIP parameter hygiene (no real host/value in committed params)
         "P1",
         "P2",  # process
+        "PP1",  # publish-pack completeness: every required handoff section filled
     }
 )
 
