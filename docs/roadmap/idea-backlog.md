@@ -461,6 +461,11 @@ _A reframing that MIGHT make an idea eligible later, or the irreducible reason i
 - **F8 Per-Table KPI Coverage Scorecard** -- SHIPPED. ship_status: 'Idea-F8 KPI Coverage Scorecard' SHIPPED -- skills/retail-kpi-knowledge/references/kpi-coverage-scorecard-template.md (PR #66 9d782f8)
 - **F5 Demand-Signal Forecast Pack (sell-through + reorder exception)** -- SETTLED (rejected). ship_status: 'Idea-F5 Demand-Signal Forecast' REJECTED-INELIGIBLE -- docs/roadmap/idea-backlog.md PARK (same ML/statistical boundary). Prior rationale: 'Flagged for the ML/forecasting hard line, and the flag holds ... the naming (forecast pack, demand-signal) sits on the out-of-scope ML boundary.'
 - **F6 Anomaly-Baseline Contracts (statistical exception flags)** -- SETTLED (rejected). ship_status: 'Idea-F6 Anomaly-Baseline Contracts' REJECTED-INELIGIBLE -- docs/roadmap/idea-backlog.md REJECT (violates ML/statistical out-of-scope hard principle). Prior rationale: 'Ineligible as framed against the ML/statistical out-of-scope principle ... the deterministic L3/L4 verification machinery ... cannot check it without becoming a stats engine.'
+- **A3 Route-Registry Coverage Reconciler** -- SHIPPED. ship_status: 'Idea-A3 Route-Registry Coverage Reconciler' SHIPPED -- src/retail/rules/routes_coverage.py @register A3 (knowledge-map ids == routes.yaml ids bijection) (PR #95; spec 047)
+- **B3 Live-Surface Import Boundary Guard** -- SHIPPED. ship_status: 'Idea-B3 Live-Surface Import Boundary Guard' SHIPPED -- src/retail/rules/live_surface_boundary.py @register B3 (no module-scope DB/network import in a live surface) (PR #96; spec 048)
+- **PP1 Publish-pack Completeness Gate** -- SHIPPED. ship_status: 'Idea-PP1 Publish-pack Completeness Gate' SHIPPED -- src/retail/rules/publish_pack.py @register PP1 (every required handoff-pack section filled) (PR #97; spec 049)
+- **SC1 Stale-Marker Sweep / Status-Claim Reconciler** -- SHIPPED. ship_status: 'Idea-SC1 Status-Claim Reconciler' SHIPPED -- src/retail/rules/status_claims.py @register SC1 (prose status claim matches tracked-file evidence) (PR #98; spec 050)
+- **DF1 Parked-On Map / dependency-edge reconciler** -- SHIPPED. ship_status: 'Idea-DF1 Parked-On Map' SHIPPED -- src/retail/rules/parked_on.py @register DF1 (parked-on edges reconcile with tracked-file evidence) (PR #99; spec 051)
 
 ## Run health & self-metrics
 

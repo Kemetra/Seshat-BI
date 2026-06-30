@@ -1,0 +1,74 @@
+# Shipped-ideas ledger -- the structured memory seam (IL1) the idea-engine's Memory
+# stage reads as authoritative known-history, so it stops re-pitching shipped ideas and
+# stops re-litigating settled rejections.
+#
+# HUMAN-CURATED (like docs/quality/status-claims.yaml and parked-on.yaml). The engine
+# only READS this file -- it never appends, never writes the roadmap, and never re-reads
+# git from it. Ground remains the single owner of live git-derived ship-status; this
+# ledger is the curated record of what a human has already shipped or settled.
+#
+# This sits ALONGSIDE the prose "## SHIPPED / SETTLED" appendix in idea-backlog.md. On a
+# conflict, this structured file is authoritative for the engine's machine read and the
+# disagreement is surfaced as a memory-integrity signal (never silently rewritten).
+#
+# Each key is the idea's backlog short-code. Each value has EXACTLY:
+#   status  : "shipped" | "settled"
+#   pr_sha  : non-empty PR-number and/or commit-SHA evidence string
+#   f_row   : a roadmap F-row label (e.g. "F062") or the literal "none"
+# Generic governance identifiers only -- never sample data, metric values, or
+# worked-example domain specifics. This ledger RECORDS an f_row only when a human already placed
+# one; it NEVER assigns a roadmap F-row (the idea bank is not a roadmap; Principle V).
+
+# --- idea-bank execution sequence (PRs #62-#66) ---
+A1:
+  status: shipped
+  pr_sha: "PR #62 abbbd73"
+  f_row: none
+B1:
+  status: shipped
+  pr_sha: "PR #64 9d12589"
+  f_row: none
+B2:
+  status: shipped
+  pr_sha: "PR #63 ca1431c (json only; SARIF half not shipped)"
+  f_row: none
+F7:
+  status: shipped
+  pr_sha: "PR #65 ae471aa"
+  f_row: none
+F8:
+  status: shipped
+  pr_sha: "PR #66 9d782f8"
+  f_row: none
+
+# --- settled rejections (ML/statistical out-of-scope boundary) ---
+F5:
+  status: settled
+  pr_sha: "idea-backlog.md PARK -- ML/forecasting out-of-scope boundary"
+  f_row: none
+F6:
+  status: settled
+  pr_sha: "idea-backlog.md REJECT -- ML/statistical out-of-scope hard principle"
+  f_row: none
+
+# --- 2026-06-30 idea-loop sequence (PRs #95-#99) ---
+A3:
+  status: shipped
+  pr_sha: "PR #95 (spec 047 route-registry-coverage-reconciler)"
+  f_row: none
+B3:
+  status: shipped
+  pr_sha: "PR #96 (spec 048 live-surface-import-boundary-guard)"
+  f_row: none
+PP1:
+  status: shipped
+  pr_sha: "PR #97 (spec 049 publish-pack-completeness-gate)"
+  f_row: none
+SC1:
+  status: shipped
+  pr_sha: "PR #98 (spec 050 stale-marker-sweep)"
+  f_row: none
+DF1:
+  status: shipped
+  pr_sha: "PR #99 (spec 051 parked-on-map)"
+  f_row: none

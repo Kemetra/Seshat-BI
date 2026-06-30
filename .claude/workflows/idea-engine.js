@@ -620,6 +620,19 @@ STEPS:
    (\u0022shipped\u0022 for SHIPPED, \u0022rejected-settled\u0022 for SETTLED), verdict_citation = the verbatim bullet,
    and state_citation = the bullet\u0027s trailing citation. This is the round-trip: closed ideas live
    in that appendix as bullets, so they MUST be re-read here or they vanish from memory next run.
+2c. ALSO read the structured ledger at <repo-root>/docs/roadmap/shipped-ideas.yaml if present (IL1).
+   It is a YAML mapping of idea-id to { status: shipped|settled, pr_sha: evidence, f_row: label-or-none }.
+   ABSENT or EMPTY file: skip this step (not an error; the prose appendix + ship_status still apply).
+   PRESENT but MALFORMED (invalid YAML, an entry missing a required key, or a status other than
+   shipped/settled): STOP and report a clear error in notes -- do NOT silently proceed as if no
+   history existed. For each well-formed entry emit or merge a prior_ideas entry: prior_id = the key,
+   current_state = \u0022shipped\u0022 for status shipped or \u0022rejected-settled\u0022 for status settled, and
+   state_citation built from pr_sha (append the f_row when it is not \u0022none\u0022). This ledger is
+   HUMAN-CURATED known-history, NOT a git read -- you still never re-read git (Ground owns that).
+   It is AUTHORITATIVE on conflict: if the ledger and the prose appendix disagree on an idea-id
+   state, use the LEDGER value and record the disagreement in notes as a memory-integrity signal;
+   never silently rewrite either source. The ledger is read-only evidence: never write it, and
+   never treat an f_row value as permission to place anything on the roadmap (a human places F-rows).
 3. Set current_state by matching the idea against Ground\u0027s ship_status:
    - \u0022shipped\u0022 ONLY if a ship_status row marks an equivalent capability SHIPPED -- cite that row
      (feature_id + evidence_path) in state_citation.
