@@ -36,3 +36,8 @@
   deliberately reserved for a named owner and recorded in the Clarifications section.
   They are NOT to be answered by the agent; they do not block the DEFINE-layer
   authoring scope of this feature.
+- Clarify session 2026-07-01 resolved three advisor-answerable DESIGN decisions
+  (Q1 applicability, Q2 not-applicable vs undecided, Q3 ledger block placement),
+  integrated as FR-015/FR-016/FR-017. The four Principle-V carve-outs (headline-moving
+  criterion, roadmap placement, per-ruling correctness, decision-status vocabulary
+  pick) remain reserved for a human and are recorded, not answered.

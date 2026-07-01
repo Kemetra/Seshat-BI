@@ -228,6 +228,18 @@ feature.
 - **FR-012**: The motivating example used in any authored artifact MUST be the generic
   retail-store-sales discounted-transaction-rate denominator case; no domain-specific
   case is inlined.
+- **FR-015**: A contract MUST record a ledger entry only for each catalogued ambiguity
+  that APPLIES to its metric; an ambiguity that does not apply may be omitted. Omission
+  of an APPLICABLE material ambiguity is a review defect and is treated as undecided
+  (Q1).
+- **FR-016**: Not-applicable MUST be expressed by omitting the entry (optionally with a
+  one-line note), NOT by a decided status; undecided MUST be an explicit status that
+  carries a blocking reason. A reviewer distinguishes the two by presence-and-status,
+  never by inference (Q2).
+- **FR-017**: The ambiguity ledger MUST be authored as its own top-level block on the
+  contract, a sibling of the readiness block, NOT nested inside readiness. An undecided
+  material entry forces readiness to `blocked` and records a readiness blocking reason,
+  but the readiness block's existing verbatim shape MUST NOT drift (Q3).
 
 *The following requirements depend on human rulings and are recorded as open in
 Clarifications rather than resolved here:*
@@ -302,6 +314,37 @@ Principle-V judgment calls reserved for a named human owner. These are recorded,
 answered, by this spec; the agent may recommend but must not decide them.
 
 ### Session 2026-07-01
+
+**Advisor-resolved design decisions** (recorded design rulings, not business
+judgment calls; integrated into the requirements below):
+
+- **Q1 -- Applicability model: all 11 entries always, or only applicable ones?**
+  Recommended answer: **only applicable ambiguities are recorded; each recorded
+  entry is explicit.** A contract records an entry for each catalogued ambiguity that
+  applies to its metric; an ambiguity that does not apply may be omitted. Silence on an
+  APPLICABLE material ambiguity is a review defect (treated as undecided). Reasoning: a
+  fixed 11-row block on every contract would force meaningless entries (for example a
+  same-store ruling on a line-grain revenue metric), and padding the ledger with
+  not-applicable rows dilutes the signal. Making omission-of-an-applicable-material-
+  ambiguity a defect keeps the enforcement teeth without forcing noise. Reversible:
+  easy (a schema-comment convention).
+- **Q2 -- How is a not-applicable ambiguity distinguished from an undecided one?**
+  Recommended answer: **omission means not-applicable; an explicit undecided status is
+  required to mark a material ambiguity as unresolved.** Not-applicable is expressed by
+  leaving the entry out (optionally with a one-line note), never by a decided status.
+  Undecided is an explicit status that carries a blocking reason. Reasoning: this keeps
+  the two states unambiguous to a reviewer -- absence is benign only for
+  non-applicable ambiguities, and any material ambiguity must be present as an explicit
+  undecided-or-decided entry. Reversible: easy.
+- **Q3 -- Where does the ledger block sit in the contract structure?**
+  Recommended answer: **a sibling top-level block on the contract (for example
+  `ambiguities`), adjacent to the readiness block, NOT nested inside readiness.** An
+  undecided material entry FORCES readiness to `blocked` and adds a readiness
+  blocking_reason, but the ledger itself is its own block so the readiness block's
+  existing shape does not drift. Reasoning: nesting the ledger inside readiness would
+  alter the verbatim readiness structure that must not drift across F009 artifacts; a
+  sibling block adds the seam without touching the readiness schema. Reversible: costly
+  (moving the block after filled contracts exist is a migration), so pin it now.
 
 *(carve-out) The following are reserved for a human owner and are NOT answered here:*
 
