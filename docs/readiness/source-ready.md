@@ -46,13 +46,24 @@ source, and confirm each semantic proposal is marked as a proposal awaiting sign
 not stated as fact.
 
 - For a **DB source**, the numbers come from `profile.py` over a read-only connection.
-- For a **file source (csv/excel)**, there is no shipped mechanical profiler yet
-  (`profile.py` is DB-only). Until one lands, a file source is profiled in
-  deferred-boundary mode: record the File-source addendum + per-column rows as
-  `[PENDING LIVE PROFILE]`, mark the detected encoding/delimiter/header `[PROPOSED]`,
-  and record `warning` -- never a fabricated `pass`. The file-grain reasoning that
-  guides this pass lives in `skills/bi-python-knowledge/` (route: profile a freshly
-  loaded source).
+- For a **file source (csv/excel)**, the numbers come from `file_profile.py` -- the
+  read-only file profiler. It computes the same mechanical set (row/col count,
+  `'' OR NULL` missingness, distinct cardinality, candidate-PK proof) from the file's
+  raw cells; CSV uses the stdlib (no extra), Excel uses the optional `files` extra
+  (`pip install 'retail[files]'`). The file-grain reasoning that guides the read
+  (encoding, delimiter, header row, sheet selection) lives in
+  `skills/bi-python-knowledge/` (route: profile a standalone file source).
+
+  **A file source reaches `pass` like a DB source does -- with one extra gate.** The
+  mechanical numbers self-evidence (recorded from `file_profile.py`). BUT a file has
+  no declared schema, so the detected **encoding** (and, for CSV, the delimiter and
+  header-row) is a `[PROPOSED]` inference that every text column rests on: a wrong
+  encoding silently corrupts every label (PY-CN-082). Encoding-confirmation is
+  therefore a GATING semantic proposal -- treated exactly like the semantic rows: the
+  data owner must confirm the encoding (and delimiter/header) before this stage can
+  read `pass`. Until confirmed, record `warning`, not `pass`. If no reader is
+  available at all (Excel without the `files` extra), fall back to deferred-boundary
+  mode: `[PENDING LIVE PROFILE]` + `warning`, never a fabricated `pass`.
 
 ## Statuses
 
@@ -60,8 +71,8 @@ not stated as fact.
 |--------|--------------|
 | `not_started` | no `source-profile.md` for `<table>` yet |
 | `blocked` | a required number is missing/unmeasurable, or semantics were INVENTED instead of proposed -- see Blocking reasons |
-| `warning` | profile recorded but with a noted caveat (e.g. `[PENDING LIVE PROFILE]` rows in deferred-boundary mode) -- does not auto-promote |
-| `pass` | every required number recorded from `profile.py`; semantics PROPOSED + flagged; evidence cites `mappings/<table>/source-profile.md` |
+| `warning` | profile recorded but with a noted caveat (e.g. `[PENDING LIVE PROFILE]` rows in deferred-boundary mode; or a **file source** whose encoding/delimiter/header is still `[PROPOSED]`, unconfirmed by the owner) -- does not auto-promote |
+| `pass` | every required number recorded from `profile.py` (DB) or `file_profile.py` (file); semantics PROPOSED + flagged; **for a file source, the owner has CONFIRMED the encoding (and delimiter/header)**; evidence cites `mappings/<table>/source-profile.md` |
 
 ## Blocking reasons
 
@@ -109,6 +120,7 @@ source-mapping workflow to author the source-map decisions.
 - `../source-intelligence.md` -- Layer 2: how the OPTIONAL registry + dictionary feed this stage's evidence.
 - `../../templates/business-meaning-registry.md`, `../../templates/retail-term-dictionary.md` -- the OPTIONAL semantic-proposal artifacts.
 - `../../.claude/skills/source-mapping/SKILL.md` -- the skill that runs this stage; calls `profile.py` as the mechanical profiler.
-- `../../src/retail/profile.py` -- the mechanical profiler (row/col counts, `'' OR NULL` missingness, candidate-PK proof).
+- `../../src/retail/profile.py` -- the mechanical profiler for a DB table (row/col counts, `'' OR NULL` missingness, candidate-PK proof).
+- `../../src/retail/file_profile.py` -- the mechanical profiler for a CSV/Excel file source (same measures, driver-free; CSV on the stdlib, Excel via the `files` extra).
 - `../medallion-playbook.md` -- Phase 1, which this stage maps to.
 - C086 is the first worked example -- a filled instance, not the schema: `../worked-examples/c086-pharmacy.md`.
