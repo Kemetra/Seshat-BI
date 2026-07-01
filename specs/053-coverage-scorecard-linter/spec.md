@@ -294,3 +294,76 @@ is a known repo failure mode; this keeps the registry symmetric.
 (Advisor-resolved and human-carve-out clarifications are recorded below. Human
 carve-out items -- Principle V judgment calls the agent is forbidden to answer -- are
 marked OPEN FOR HUMAN and are NOT answered here.)
+
+**Q1 (advisor-resolved) -- Where do filled per-table scorecards live, and what is the
+authoritative match glob so the rule is not permanently dormant?**
+
+- Decision: filled instances live under `mappings/<table>/` (the PP1 per-table
+  instance pattern) and the rule matches by filename suffix `*coverage-scorecard.md`,
+  scanning `RuleContext.tracked_files` and excluding the one generic template path and
+  `tests/` fixtures.
+- Reasoning: no filled instance exists on main today, so absent a defined location the
+  rule would silently never fire. PP1 already establishes `mappings/<table>/...` as the
+  per-table artifact home; reusing it keeps the retail-check family consistent and
+  gives the rule a real target. The suffix match (not a fixed full path) tolerates the
+  per-table subpath while still pinning the artifact kind.
+- Reversible: easy (a one-line glob/suffix change if the repo later standardizes a
+  different committed location).
+
+**Q2 (advisor-resolved) -- What discriminator excludes the generic template (and its
+illustrative worked example) from scanning?**
+
+- Decision: exclude by the explicit template file path
+  `skills/retail-kpi-knowledge/references/kpi-coverage-scorecard-template.md`. Because
+  the template is a REFERENCES doc (not under `templates/`), PP1's directory-prefix
+  exclusion does not transfer; an explicit-path exclusion is used instead. The
+  template's illustrative `raw.sales` worked-example table lives inside that same file
+  and is therefore excluded with it.
+- Reasoning: the template is placeholders-plus-illustration by design; scanning it
+  would false-positive (its worked-example contract paths are illustrative, its cells
+  hold `<placeholder>` tokens, and its KPI names include a literal `%`). PP1 sets the
+  exclude-the-template precedent; only the discriminator kind differs.
+- Reversible: easy.
+
+**Q3 (advisor-resolved) -- Which coverage statuses REQUIRE a resolving
+`contracts/<file>.md` path versus may legitimately carry `--`?**
+
+- Decision: only `Covered` requires a resolving contract path. `Planned` and
+  `Out of scope` explicitly carry the em-dash `--` (the template shows this) and are
+  EXEMPT. The two `Blocked -- ...` statuses are NOT required to cite a resolving
+  contract path (a blocked KPI's contract may be un-seeded or its file may not yet
+  exist); they are checked for a named BLOCKER instead (FR-003), not a contract path.
+- Reasoning: the template's own worked example shows `Blocked -- ...` rows citing a
+  `contracts/<file>.md` in some cases and the meaning of Blocked is "cannot cover yet",
+  so requiring a resolving contract on a Blocked row would over-constrain. Tying the
+  hard contract-resolution requirement to `Covered` only mirrors the template's
+  semantic ("Covered = contract Seeded AND fields present") without adjudicating
+  whether the contract is truly Seeded (that stays a human/readiness call, Principle V).
+- Reversible: costly-ish (tightening Blocked rows later would newly fail existing
+  instances) -- deliberately kept to the minimal `Covered`-only requirement now.
+
+**Q4 (advisor-resolved) -- What exactly is a forbidden "percentage", given the
+template's own example KPI name "Returns Rate % (Value)" contains a literal `%`?**
+
+- Decision: the no-percentage law targets a NUMBER immediately followed by `%` (a
+  computed score token such as `70%`), not the literal `%` glyph inside a KPI name. A
+  KPI named with `%` but carrying no number-then-`%` token does not trip the rule.
+- Reasoning: hard rule #9 forbids a fabricated numeric coverage SCORE, not the `%`
+  character as text; a digit-then-`%` token is the score signature. This avoids a false
+  positive on legitimately `%`-named KPIs while still catching "70% covered".
+- Reversible: easy.
+
+**OPEN FOR HUMAN (Principle V -- NOT answered by the agent)**
+
+- **Roadmap-stage placement**: does a KPI-coverage linter advance any readiness stage
+  or map to a roadmap F-number, or does it follow the prior idea-bank rule sequence
+  (A1/B1/A3/B3/PP1/SC1/DF1) treatment of advancing NO stage and granting no approval?
+  The spec assumes the "advances no stage, unmapped" treatment (see Assumptions) but
+  the authoritative governance placement is a human ruling, not an agent guess.
+- **Principle-V structural-only boundary confirmation**: confirm that `SL1` verifies
+  STRUCTURE only (enum membership, blocker presence when the status is Blocked,
+  contract-path resolution when the status is Covered, no-percentage) and MUST NEVER
+  decide whether a stated `Covered` is TRUE, grant any readiness stage, or populate a
+  status itself. The spec is authored to this boundary (FR-006, SC-009), but the
+  judgment that "structure-only is the correct and sufficient scope" is a human
+  governance confirmation, mirroring PP1's ratified Principle-V publish-safety ruling.
