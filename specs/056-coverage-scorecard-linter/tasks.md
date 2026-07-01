@@ -1,6 +1,6 @@
 # Tasks: Coverage Scorecard Linter (SL1)
 
-**Feature**: `053-coverage-scorecard-linter`
+**Feature**: `056-coverage-scorecard-linter`
 **Spec**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md) | **Contract**: [contracts/rule-contract.md](./contracts/rule-contract.md)
 
 TDD is the repo default (RED -> GREEN -> refactor). Test tasks precede the

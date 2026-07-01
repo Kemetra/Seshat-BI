@@ -169,6 +169,18 @@ def test_c9c_table_after_prose_not_parsed(tmp_path):
     assert _findings(_ctx(tmp_path, {INST: body, "contracts/net.md": "x"})) == []
 
 
+# --- malformed row: a 3-cell pipe row inside the table is flagged, not skipped ---
+def test_malformed_row_flagged(tmp_path):
+    body = _scorecard(
+        "| Net Sales | `contracts/net.md` | Covered | -- |\n"
+        "| Broken KPI | contracts/x.md | Covered |\n"  # only 3 cells -- missing Blocker
+    )
+    findings = _findings(_ctx(tmp_path, {INST: body, "contracts/net.md": "x"}))
+    assert len(findings) == 1
+    assert "malformed" in findings[0].message.lower()
+    assert findings[0].severity is Severity.ERROR
+
+
 # --- glob: a *coverage-scorecard.md OUTSIDE mappings/ is not scanned --------
 def test_non_mappings_scorecard_not_scanned(tmp_path):
     bad = _scorecard("| X | `contracts/missing.md` | Covered | -- |\n")

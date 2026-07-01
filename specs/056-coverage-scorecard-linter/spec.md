@@ -1,6 +1,6 @@
 # Feature Specification: Coverage Scorecard Linter (SL1)
 
-**Feature Branch**: `053-coverage-scorecard-linter` (spec dir renumbered to `056-coverage-scorecard-linter` to avoid the 053 collision across the parallel kraken runs; roadmap F-number wins on any disagreement)
+**Feature Branch**: `056-coverage-scorecard-linter` (spec dir renumbered to `056-coverage-scorecard-linter` to avoid the 053 collision across the parallel kraken runs; roadmap F-number wins on any disagreement)
 
 **Created**: 2026-07-01
 

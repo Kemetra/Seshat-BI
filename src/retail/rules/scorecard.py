@@ -101,17 +101,23 @@ def _is_dash(cell: str) -> bool:
     return s in ("", "--")
 
 
-def _status_table_rows(text: str) -> list[re.Match]:
-    """The data rows of ONLY the anchored '> Table:' status table.
+def _status_table_rows(text: str) -> tuple[list[re.Match], list[str]]:
+    """Parse the anchored '> Table:' status table.
+
+    Returns ``(rows, malformed)`` where ``rows`` are the well-formed 4-column data-row
+    matches and ``malformed`` are the raw text of table-ish lines (start with ``|``)
+    inside the anchored region that FAIL the 4-column shape (e.g. a 3-cell row missing
+    the Blocker column) -- those are flagged, never silently skipped.
 
     The region starts at the '> Table:' caption and ends at the FIRST of: a heading of
-    any level, or -- once the table's rows have started -- any line that is neither a
-    table row nor blank (prose or a deeper subheading table follows). This keeps a stray
-    4-column table under a '###' subheading or after intervening prose from being parsed
-    as status rows (C9 / FR-009).
+    any level, or -- once the table's rows have started -- a non-table, non-blank line
+    that does NOT start with ``|`` (prose). A stray 4-column table under a '###'
+    subheading or after intervening prose is therefore excluded (C9 / FR-009), while a
+    malformed pipe-row within the table is reported (not dropped).
     """
     lines = text.splitlines()
     out: list[re.Match] = []
+    malformed: list[str] = []
     in_section = False
     header_seen = False
     for line in lines:
@@ -128,8 +134,16 @@ def _status_table_rows(text: str) -> list[re.Match]:
             continue
         m = _ROW_RE.match(line)
         if not m:
-            # Once the table has started, a non-table, non-blank line (prose) ends it.
-            if header_seen and line.strip():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            # A pipe-started line that failed the 4-column shape is a MALFORMED row --
+            # flag it (only after the table's data rows have begun). A non-pipe,
+            # non-blank line is prose and ends the anchored region.
+            if header_seen and stripped.startswith("|"):
+                malformed.append(stripped)
+                continue
+            if header_seen:
                 break
             continue
         # Skip the header row (the one before the separator) -- its status cell is the
@@ -137,7 +151,7 @@ def _status_table_rows(text: str) -> list[re.Match]:
         if not header_seen:
             continue
         out.append(m)
-    return out
+    return out, malformed
 
 
 @register("SL1", "Committed KPI coverage scorecard is structurally well-formed")
@@ -160,7 +174,21 @@ def check_coverage_scorecard(ctx: RuleContext) -> Iterable[Finding]:
             )
             continue
 
-        for m in _status_table_rows(text):
+        rows, malformed = _status_table_rows(text)
+        for bad in malformed:
+            findings.append(
+                Finding(
+                    rule_id="SL1",
+                    severity=Severity.ERROR,
+                    message=(
+                        "coverage scorecard has a malformed status-table row "
+                        "(not the required 4 columns | KPI | Contract | Coverage "
+                        f"status | Blocker |): {bad}"
+                    ),
+                    locator=rel,
+                )
+            )
+        for m in rows:
             kpi = m.group("kpi").strip()
             contract = m.group("contract")
             status_raw = m.group("status")

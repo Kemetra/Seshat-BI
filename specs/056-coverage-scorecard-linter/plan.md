@@ -1,8 +1,8 @@
 # Implementation Plan: Coverage Scorecard Linter (SL1)
 
-**Branch**: `053-coverage-scorecard-linter` | **Date**: 2026-07-01 | **Spec**: [spec.md](./spec.md)
+**Branch**: `056-coverage-scorecard-linter` | **Date**: 2026-07-01 | **Spec**: [spec.md](./spec.md)
 
-**Input**: Feature specification from `/specs/053-coverage-scorecard-linter/spec.md`
+**Input**: Feature specification from `/specs/056-coverage-scorecard-linter/spec.md`
 
 ## Summary
 
@@ -116,7 +116,7 @@ No violations. Complexity Tracking is empty.
 ### Documentation (this feature)
 
 ```text
-specs/053-coverage-scorecard-linter/
+specs/056-coverage-scorecard-linter/
   plan.md              # This file
   research.md          # Phase 0 output
   data-model.md        # Phase 1 output

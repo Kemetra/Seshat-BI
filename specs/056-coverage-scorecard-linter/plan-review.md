@@ -1,6 +1,6 @@
 # Adversarial Plan-Review: Coverage Scorecard Linter (SL1)
 
-**Feature**: `053-coverage-scorecard-linter` | **Date**: 2026-07-01
+**Feature**: `056-coverage-scorecard-linter` | **Date**: 2026-07-01
 **Reviewer posture**: single default-adverse skeptic, read-only over spec.md,
 plan.md, tasks.md, research.md, data-model.md, contracts/rule-contract.md,
 quickstart.md, analysis.md. Reports fixes; edits nothing.
