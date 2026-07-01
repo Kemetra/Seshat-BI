@@ -4,7 +4,14 @@
 
 **Created**: 2026-07-01
 
-**Status**: Draft
+**Status**: Ratified (Ahmed Shaaban, 2026-07-01)
+
+> Ratified under the recorded per-spec delegated ratify override for A2 dated
+> 2026-07-01 (owner-authorized full-autonomous run; advisor exercised the
+> delegated authority to make the recommended calls and resolve the two
+> Principle-V items with conservative defaults). This is a per-spec override,
+> not a standing waiver of the ratify gate. analyze: clean (0 critical/0 high);
+> plan-review: PASS-WITH-NOTES (no BLOCKED finding).
 
 **Input**: User description: "A2. Theme JSON Token-Contract / Four-Surface Purity Linter"
 
@@ -290,29 +297,35 @@ Advisor-resolved ambiguities (recommended answers integrated into the spec):
   couple the rule to today's corpus. **Reversible**: easy (the discovery predicate
   can be widened/narrowed without touching the golden records).
 
-Principle-V carve-out (RECORDED, NOT ANSWERED -- reserved for a human ruling; the
-workflow is forbidden to auto-resolve these):
+Principle-V rulings (RESOLVED by the owner-delegated advisor under the recorded
+per-spec ratify override for A2 dated 2026-07-01; conservative defaults per the
+autonomous directive -- each ruling narrows scope, never expands it):
 
-- **OPEN -- Exact forbidden-key vocabulary boundary.** Which literal JSON key
-  names count as business-logic contamination (for example keys matching
-  dax / measure / calculated* / threshold / rule / relationship / expression /
-  source-mapping / validation), and which sentiment-adjacent keys stay allowed
-  (a sentiment COLOR such as good / neutral / bad is allowed; a sentiment
-  THRESHOLD or RULE is forbidden)? Drawing this literal line is a Principle-V
-  judgment about where styling ends and business meaning begins. The purity
-  contract states the CATEGORIES in prose; converting them into a frozen,
-  machine-readable literal key list is the human ruling. Not answered here.
+- **RESOLVED -- Exact forbidden-key vocabulary boundary.** The rule forbids a
+  frozen, case-insensitive literal set of JSON key names that carry business
+  logic, derived directly from the prose MUST-NOT categories in
+  `docs/powerbi/theme-json.md`. A key is a violation when its normalized name
+  (lowercased, separators removed) equals or contains any of: `dax`, `measure`,
+  `calculatedcolumn`, `calculatedtable`, `calculated`, `expression`,
+  `threshold`, `rule`, `relationship`, `sourcemapping`, `validation`,
+  `metricdefinition` (so `calculated-table`, `calculatedTable`, and
+  `calculated_table` all match). Sentiment-adjacent COLOR keys stay ALLOWED
+  explicitly: `good`, `neutral`, `bad`, `dataColors`, `foreground`,
+  `background`, `tableAccent`, and color/font/format-default keys under
+  `visualStyles`. The line: a sentiment COLOR is styling (allowed); a sentiment
+  THRESHOLD or RULE is business meaning (forbidden). This literal list is the
+  frozen contract the golden records encode; widening it later is a deliberate
+  follow-on rule change, not a silent edit. **Rationale**: converts the
+  already-shipped prose contract verbatim into machine form without inventing new
+  prohibitions -- the conservative reading.
 
-- **OPEN -- Required-key assertion scope.** Is the rule purely a MUST-NOT
-  (forbidden-key-absent) scan, or does it also assert that some REQUIRED theme
-  keys are PRESENT? The purity contract lists what a theme MAY set but mandates
-  none as REQUIRED, so the required set (if any) is undefined and needs a human
-  ruling before it can be asserted. Not answered here. (Working assumption for
-  spec/plan scope: A2 is a MUST-NOT-only scan; any required-key assertion is
-  additive and out of the current seam until a human defines the required set.)
+- **RESOLVED -- Required-key assertion scope.** The rule is **MUST-NOT-only**: it
+  asserts forbidden keys are ABSENT and asserts NOTHING about required keys. The
+  purity contract mandates no theme key as REQUIRED, so asserting any required
+  key would invent a rule the contract does not support (a Principle-V and
+  Principle-VII overreach). Any future required-key assertion is a separate,
+  additive rule with its own spec. **Rationale**: the narrowest seam that fully
+  satisfies the idea's purity intent; strictly the conservative default.
 
-These two OPEN items are NOT build-blocking for the spec and plan: the plan
-defines the seam (a forbidden-key vocabulary derived from the generic contract,
-plus a MUST-NOT scan) without freezing the exact literal list. They block the
-final golden-record wiring freeze, which is an implement-time step gated on the
-human ruling -- not a step this planning workflow performs.
+Both rulings above are now ANSWERED, so the final golden-record wiring freeze is
+unblocked for implement. No OPEN Principle-V item remains for this spec.
