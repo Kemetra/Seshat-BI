@@ -97,6 +97,8 @@ Verdict: correctly scoped.
 
 ## Verdict
 
+**Verdict**: PASS-WITH-NOTES
+
 **PASS-WITH-NOTES.** All five axes clear. Artifacts are present, consistent,
 grounded, and constitution-aligned; analyze is clean. The only carry-forwards are
 two LOW implementation notes and two non-blocking open_for_human governance meanings.

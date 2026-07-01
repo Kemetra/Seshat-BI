@@ -1,10 +1,26 @@
 # Feature Specification: Assumption Ledger Rule (AL1)
 
-**Feature Branch**: `053-assumption-ledger-rule-al1`
+**Feature Branch**: `053-assumption-ledger-rule-al1` (spec dir renumbered to `059-assumption-ledger-rule-al1` to avoid the 053 collision across the parallel kraken runs; roadmap F-number wins on any disagreement)
 
 **Created**: 2026-07-01
 
-**Status**: Draft
+**Status**: Ratified (advisor-for-Ahmed-Shaaban, 2026-07-01)
+
+**Ratification note**: Ratified by the advisor agent under the explicit, recorded per-session
+delegated override granted by the repo owner (info@rahmaqanater.org) for the 2026-07-01
+"release the kraken" batch of seven idea-to-spec specs. Provenance: this Ratified line is
+AI-authored under recorded human authority; NOT a human-typed ratification -- the git author
+identity does not by itself attest a human reviewer. Convention rulings (recorded, also
+surfaced open_for_human for later override): C1 = the "unresolved-assumption marker" is the
+EXISTING `readiness.status == "blocked"` + non-empty `blocking_reasons[]` (no new token); C2 =
+the ERROR fires when that blocked contract ALSO carries a FILLED `binds_to` (real gold_table +
+non-placeholder columns); C3 = STANDALONE (not gated on the unshipped Ambiguity-Ledger DEFINE
+half; genuine zero-findings baseline on main since on-main contracts are `pass`). This is the
+CHECK half of spec 058 but depends on it for nothing. Adds `src/retail/rules/assumptions.py`
+(@register AL1) + tests + the 5-point wiring (EXPECTED_RULE_IDS, manifest, severity-posture);
+rule count 39 -> 40. Static YAML read only, lazy yaml import (B1/B3 preserved), categorical (no
+score). analyze=clean (0 critical/0 high); plan-review=PASS-WITH-NOTES. Override is
+per-session/per-this-set only; it covers ratification, not merge (normal CI gate still applies).
 
 **Input**: User description: "Assumption Ledger Rule (AL1)"
 
