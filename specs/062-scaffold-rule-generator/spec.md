@@ -4,7 +4,19 @@
 
 **Created**: 2026-07-02
 
-**Status**: Draft
+**Status**: Ratified (Ahmed Shaaban, 2026-07-02)
+
+> Ratified under the recorded ADOPT-batch autonomous authority dated 2026-07-02
+> (owner directive: build+ratify+merge the entire ADOPT bucket; the advisor
+> exercises the delegated per-spec ratify authority). A recorded per-spec override
+> within that batch, not a standing waiver. The three open items are already-decided
+> boundaries the spec adopts, not unresolved blockers: DEC-1 the helper never
+> invents rule intent (author supplies id/title/logic); DEC-2 wiring-pass is
+> disposed by the suite + gate exit code, never self-granted (Principle I); DEC-3
+> the feature advances NO readiness stage and takes no roadmap F-row (YAGNI, matches
+> manifest.py/severity_posture.py). The generator PRINTS glossary/regen commands,
+> never auto-edits prose or golden records (Principle V). analyze: clean (0/0);
+> plan-review: PASS-WITH-NOTES.
 
 **Input**: User description: "E6. retail scaffold-rule / new-rule Authoring Generator + Doctor"
 
