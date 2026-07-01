@@ -96,6 +96,49 @@ named owner decides (Principle I). A `pass` with no evidence is a defect
 A pack's readiness rolls up from its members: a pack is no more ready than its
 least-ready contract, and a pack `pass` also needs its own owner approval as evidence.
 
+## Per-contract ambiguity ledger
+
+Each metric contract carries an `ambiguities[]` block recording the human ruling for every
+`kpi-ambiguities.md` item that bears on it. **Purpose:** force each number-affecting ambiguity
+to a *recorded* ruling so an undecided one cannot silently ride into a `pass`.
+
+**Keying (A1..A11 -- the full range, not "A1..A10").** Each entry's `id` is one of A1 VAT,
+A2 returns, A3 date, A4 gross/net, A5 discount line/header, A6 cost method, A7 cancelled/void,
+A8 product key, A9 branch key, **A10 inventory snapshot, A11 same-store** -- the last two are
+the range correction (the idea title's "A1-A10" would have dropped A11 same-store).
+
+**Lifecycle:** applicable -> `decision_status: undecided` (a number-moving one forces the
+contract `blocked` with a matching `blocking_reason`) -> the named owner rules ->
+`decision_status: decided` with `ruling` + `evidence` (who + date). **Applicability by
+omission:** an ambiguity that does not bear on a contract is simply absent from its
+`ambiguities[]` -- omission means not-applicable, never "silently resolved".
+
+**Non-pass blocker rule (FR-013 fail-safe):** an ambiguity with `number_moving: true` and
+`decision_status: undecided` records a `blocking_reason` and forces `readiness.status:
+blocked`. A named owner may record `number_moving: false` to make it non-blocking, but ONLY
+with a non-empty `evidence[]` recording who downgraded it and when -- the downgrade is itself
+a human ruling carrying the same attribution bar as a `decided` ruling, so the agent can never
+silently clear a blocker by flipping the boolean. The agent never sets `number_moving: false`
+and never invents a ruling to clear an entry. **No fake confidence (rule #9):**
+`decision_status` is exactly `decided | undecided` -- no third word, no numeric
+confidence/certainty field.
+
+**Motivating example (generic):** the DiscountedTransactionRate denominator ruling
+(all-transactions vs known-status-only) is a number-moving A7/A4 ambiguity -- undecided, it
+blocks; ruled, it records the chosen denominator + owner + date. A real *filled* instance lives
+in `../worked-examples/c086-pharmacy.md`; it is cited, never inlined here (Principle VII).
+
+**Define/check boundary (verbatim, this feature respects it).** DEFINING a contract writes
+INTENT + binding + this ambiguity ruling; it never authors DAX, never touches a `powerbi/`
+model, and **adds no `retail check` rule**. The enforcing CHECK half (the AL1 static rule) is a
+SEPARATE, deferred idea and is **not** implemented here -- until it ships, the non-pass blocker
+is a docs convention the reviewer honors, not a gate exit code.
+
+**Pack rollup (no new logic).** A contract blocked by an undecided number-moving ambiguity
+propagates to its packs through the EXISTING rollup rule above ("a pack is no more ready than
+its least-ready contract") -- this feature adds NO new rollup logic; it relies on what the store
+already states.
+
 ## Principle-V stop-and-ask triggers
 
 These are HUMAN judgment calls. The agent RECOMMENDS; the named owner DECIDES. When

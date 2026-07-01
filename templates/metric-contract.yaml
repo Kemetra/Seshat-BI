@@ -142,6 +142,41 @@ readiness:
                                       #   open stop-and-ask item (see list below).
 
 # -----------------------------------------------------------------------------
+# PER-CONTRACT AMBIGUITY DECISION LEDGER (idea-bank DEFINE half; spec 058).
+# Records the human ruling for each kpi-ambiguities.md item (A1..A11) that bears on
+# THIS contract. The agent RECOMMENDS; the named owner DECIDES. An undecided
+# NUMBER-MOVING ambiguity is a blocking_reason it structurally cannot clear.
+#
+#   id             one of A1..A11 (skills/retail-kpi-knowledge/knowledge/kpi-ambiguities.md):
+#                  A1 VAT, A2 returns, A3 date, A4 gross/net, A5 discount line/header,
+#                  A6 cost method, A7 cancelled/void, A8 product key, A9 branch key,
+#                  A10 inventory snapshot, A11 same-store. (Full range A1..A11 -- not A1..A10.)
+#   decision_status  decided | undecided   (NO 5th word, NO numeric confidence -- rule #9)
+#   ruling         the recorded human decision (free text) when decided; "" when undecided
+#   evidence       who ruled + date + a committed reference. REQUIRED (non-empty) whenever
+#                  decision_status is `decided` OR number_moving is `false` on an `undecided`
+#                  entry (that downgrade is itself a human ruling and must carry attribution).
+#                  Left [] ONLY for an `undecided` + `number_moving: true` entry (the honest
+#                  open, blocking state).
+#   number_moving  true if the candidate rulings would change a reported number for this
+#                  contract (FR-013 fail-safe: number_moving + undecided => this contract's
+#                  readiness.status is `blocked` with a matching blocking_reason). A named
+#                  owner may record number_moving:false to make an undecided entry
+#                  non-blocking, but ONLY with evidence[] recording who downgraded it and when
+#                  -- the agent never sets number_moving:false and never downgrades.
+ambiguities: []                       # e.g.:
+                                      # - id: A4
+                                      #   decision_status: undecided
+                                      #   ruling: ""
+                                      #   evidence: []
+                                      #   number_moving: true      # -> forces readiness blocked
+                                      # - id: A1
+                                      #   decision_status: decided
+                                      #   ruling: "VAT excluded from Net Sales denominator"
+                                      #   evidence: ["ruled by <owner> on <YYYY-MM-DD>"]
+                                      #   number_moving: true
+
+# -----------------------------------------------------------------------------
 # AUTHORING: Principle-V stop-and-ask triggers (verbatim across all F009 artifacts).
 # Each of these is a HUMAN judgment call. The agent RECOMMENDS; the named owner
 # DECIDES. When any holds, record it as a blocking_reason and set status `blocked`
