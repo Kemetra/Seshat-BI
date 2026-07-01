@@ -1,6 +1,6 @@
 # Tasks: First-Hour Compass / New-Table Author Onboarding Cockpit
 
-**Branch**: `053-first-hour-compass-new-table` | **Spec**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md)
+**Branch**: `055-first-hour-compass-new-table` | **Spec**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md)
 
 Docs/template/skill-only slice (Principle VIII; hard rule #8). No runtime code, no
 tests-as-code -- verification is static review + a `git status`-clean read-only proof.

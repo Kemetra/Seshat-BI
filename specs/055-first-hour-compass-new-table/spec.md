@@ -1,6 +1,6 @@
 # Feature Specification: First-Hour Compass / New-Table Author Onboarding Cockpit
 
-**Feature Branch**: `053-first-hour-compass-new-table` (spec dir renumbered to `055-first-hour-compass-new-table` to avoid the 053 collision across the parallel kraken runs; roadmap F-number wins on any disagreement)
+**Feature Branch**: `055-first-hour-compass-new-table` (spec dir renumbered to `055-first-hour-compass-new-table` to avoid the 053 collision across the parallel kraken runs; roadmap F-number wins on any disagreement)
 
 **Created**: 2026-07-01
 

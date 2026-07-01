@@ -1,8 +1,8 @@
 # Implementation Plan: First-Hour Compass / New-Table Author Onboarding Cockpit
 
-**Branch**: `053-first-hour-compass-new-table` | **Date**: 2026-07-01 | **Spec**: [spec.md](./spec.md)
+**Branch**: `055-first-hour-compass-new-table` | **Date**: 2026-07-01 | **Spec**: [spec.md](./spec.md)
 
-**Input**: Feature specification from `specs/053-first-hour-compass-new-table/spec.md`
+**Input**: Feature specification from `specs/055-first-hour-compass-new-table/spec.md`
 
 ## Summary
 
@@ -71,7 +71,7 @@ files only).
 ### Documentation (this feature)
 
 ```text
-specs/053-first-hour-compass-new-table/
+specs/055-first-hour-compass-new-table/
 |-- spec.md              # stage 2 (done)
 |-- plan.md              # this file (stage 4)
 |-- tasks.md             # stage 4 (/speckit-tasks)

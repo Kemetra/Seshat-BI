@@ -1,6 +1,6 @@
 # Adversarial Plan-Review: First-Hour Compass / New-Table Author Onboarding Cockpit
 
-**Branch**: `053-first-hour-compass-new-table` | **Date**: 2026-07-01
+**Branch**: `055-first-hour-compass-new-table` | **Date**: 2026-07-01
 **Reviewer stance**: single default-adverse skeptic, READ-ONLY (reports fixes, edits nothing).
 **Artifacts reviewed**: spec.md, plan.md, tasks.md, analysis.md, checklists/requirements.md.
 
