@@ -59,7 +59,7 @@ product-identity assumption (Principle V / VII).
 | `source_ready` | `docs/readiness/source-ready.md` | `.claude/skills/retail-onboard-table` |
 | `mapping_ready` | `docs/readiness/mapping-ready.md` | `.claude/skills/source-mapping` |
 | `silver_ready` | `docs/readiness/silver-ready.md` | `.claude/skills/retail-build-warehouse` |
-| `gold_ready` | `docs/readiness/gold-ready.md` | `.claude/skills/retail-validate` |
+| `gold_ready` | `docs/readiness/gold-ready.md` | `.claude/skills/retail-build-warehouse` (build the gold star), then `.claude/skills/retail-validate` (live-validate it) |
 | `semantic_model_ready` | `docs/readiness/semantic-model-ready.md` | `.claude/skills/retail-semantic-check` |
 | `dashboard_ready` | `docs/readiness/dashboard-ready.md` | `.claude/skills/dashboard-design` |
 | `publish_ready` | `docs/readiness/publish-ready.md` | `.claude/skills/evidence-pack-generator` (+ `approval-console` for the recorded sign-off) |
