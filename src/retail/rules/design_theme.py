@@ -12,6 +12,19 @@ Vocabulary is the frozen, generic literal set resolved in the spec's
 Clarifications (RESOLVED 2026-07-01), derived verbatim from the theme-json.md
 MUST-NOT categories -- no tenant/example/brand literal (Principle VII). The scan
 is categorical over KEY NAMES only, never over free-text values (FR-005).
+
+Matching is deliberately SUBSTRING containment on the normalized key (so
+``calculatedTable`` and ``calculated-table`` both match ``calculated``). Two
+consequences are intentional, frozen trade-offs (FR-013), not defects:
+- Possible FALSE POSITIVE: a future non-standard styling key whose normalized
+  name merely contains a short token (``rule``, ``measure``) would be flagged
+  (e.g. a hypothetical ``rulerColor``). No real Microsoft-documented theme key
+  or the committed starter theme collides today; a contributor who hits a
+  surprise DL1 failure on a genuinely-innocuous key resolves it by adding that
+  key to ``_ALLOWED_KEYS`` (a deliberate, reviewed vocabulary change).
+- Deliberate FALSE NEGATIVE: business-flavored keys that contain none of the 12
+  tokens (e.g. ``sourceColumn``, ``kpiGoalValue``) are MUST-NOT-only out of
+  scope; widening the vocabulary is a follow-on rule change, never a silent edit.
 """
 
 from __future__ import annotations
