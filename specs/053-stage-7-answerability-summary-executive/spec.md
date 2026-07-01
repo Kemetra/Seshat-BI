@@ -235,13 +235,38 @@ or field names; confirm none are present and any concrete instance is cited by r
 
 ## Clarifications
 
-The following are Principle-V judgment calls (grain/PII/rollup/identity). They are
-recorded here for a human ruling and are NOT answered by the planning agent.
+### Session 2026-07-01
 
-- PII publish-safety (FR-014): whether/how the template must inherit the caveats-note
-  PII-exclusion posture and assert no publish-safety judgment.
-- Business rollup/segment ordering (FR-015): whether the blocked-pending list may carry any
-  severity/priority ordering, or must stay a flat observed list.
+Advisor-resolved (ordinary ambiguities; reasoned against the constitution, the readiness
+spine, and the F8 no-score discipline):
+
+- **Q: Where in `publish-ready.md` does the non-gating reference go?**
+  A: In the "See also" section only, worded as an optional executive companion. Reasoning:
+  "Required artifacts" / "Required checks" / "Blocking reasons" are gating sections; placing
+  it there would change Stage 7 pass conditions (over-scope, violates YAGNI). "See also" is
+  the existing non-gating list. Reversible: easy (a doc line).
+- **Q: How is a "Planned" (no seeded contract) KPI handled so it is neither dropped nor
+  miscounted as answerable?**
+  A: Route Planned KPIs to a distinct "Planned / not yet contracted" note, outside the three
+  headline lists (FR-013). Reasoning: F8 treats Planned as "nothing to cover, do not
+  fabricate"; folding it into answerable-today would fabricate coverage, and dropping it
+  silently would hide a real gap. Reversible: easy.
+- **Q: What is the atomic unit each list is keyed on -- KPI or decision question?**
+  A: The decision question (the F7 domain-file row), with its KPI's F8 coverage status
+  attached. Reasoning: the audience is sponsor/finance, who think in business questions, not
+  KPI internals; F7 already routes each decision question to a contract or Planned marker, so
+  no new mapping is invented (Principle VII, no rollup). Reversible: easy.
+
+Deferred to human (Principle-V judgment calls -- grain/PII/rollup/identity; NOT answered by
+the planning agent):
+
+- **PII publish-safety (FR-014)**: whether/how the template must inherit the caveats-note
+  PII-exclusion posture and assert no publish-safety judgment. An executive "answerable
+  today" list could be misread as "safe to expose"; whether the template must carry an
+  explicit PII posture is a publish-safety judgment reserved for a human.
+- **Business rollup/segment ordering (FR-015)**: whether the blocked-pending list may carry
+  any severity/priority ordering, or must stay a flat observed list. Ordering implies a
+  priority judgment (which blocker matters most) the agent must not make unilaterally.
 
 ## Out of Scope
 
