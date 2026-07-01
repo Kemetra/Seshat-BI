@@ -87,37 +87,37 @@ No violations. Complexity Tracking not required.
 
 ```text
 specs/061-wiring-meta-gate/
-├── plan.md              # This file
-├── research.md          # Phase 0 output
-├── data-model.md        # Phase 1 output
-├── quickstart.md        # Phase 1 output
-├── contracts/
-│   └── meta-gate-contract.md   # the check contract (assertions + failure shape)
-├── checklists/
-│   └── requirements.md  # spec quality checklist (from specify)
-├── spec.md
-└── tasks.md             # Phase 2 output (/speckit-tasks)
++-- plan.md              # This file
++-- research.md          # Phase 0 output
++-- data-model.md        # Phase 1 output
++-- quickstart.md        # Phase 1 output
++-- contracts/
+|   `-- meta-gate-contract.md   # the check contract (assertions + failure shape)
++-- checklists/
+|   `-- requirements.md  # spec quality checklist (from specify)
++-- spec.md
+`-- tasks.md             # Phase 2 output (/speckit-tasks)
 ```
 
 ### Source Code (repository root)
 
 ```text
 src/retail/
-├── registry.py          # (existing) all_rules() -> ground truth; unchanged
-├── rules/
-│   └── __init__.py      # (existing) import list + __all__; the un-guarded seam; unchanged
-├── manifest.py          # (existing) build_manifest(); read for cross-check; unchanged
-└── severity_posture.py  # (existing) posture generator; golden read statically; unchanged
++-- registry.py          # (existing) all_rules() -> ground truth; unchanged
++-- rules/
+|   `-- __init__.py      # (existing) import list + __all__; the un-guarded seam; unchanged
++-- manifest.py          # (existing) build_manifest(); read for cross-check; unchanged
+`-- severity_posture.py  # (existing) posture generator; golden read statically; unchanged
 
 docs/rules/
-├── rules-manifest.json      # (existing golden) read statically; unchanged
-└── severity-posture.json    # (existing golden) read statically; unchanged
++-- rules-manifest.json      # (existing golden) read statically; unchanged
+`-- severity-posture.json    # (existing golden) read statically; unchanged
 
 tests/unit/
-├── test_rules_wiring.py         # (existing) EXPECTED_RULE_IDS lives here; unchanged
-├── test_rules_manifest_snapshot.py  # (existing) unchanged
-├── test_severity_posture.py     # (existing) unchanged
-└── test_wiring_meta_gate.py     # NEW: the single lockstep meta-gate test module
++-- test_rules_wiring.py         # (existing) EXPECTED_RULE_IDS lives here; unchanged
++-- test_rules_manifest_snapshot.py  # (existing) unchanged
++-- test_severity_posture.py     # (existing) unchanged
+`-- test_wiring_meta_gate.py     # NEW: the single lockstep meta-gate test module
 ```
 
 **Structure Decision**: Single-project layout. The ONLY new artifact is
