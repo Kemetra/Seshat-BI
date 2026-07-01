@@ -77,6 +77,8 @@ Looking for any place the artifact self-grants a human approval, moves a readine
 
 ## Verdict
 
+**Verdict**: PASS-WITH-NOTES
+
 - hidden-principle-violation: PASS
 - assumes-deferred-capability: PASS
 - c086-leak: PASS (one builder-discipline note)
