@@ -62,9 +62,11 @@ ordering dependency).
 
 ## Phase 3 - Guardrails (IMPROVE / verify invariants)
 
-- [ ] **T013** Run the existing import-boundary guard test (B3) and `retail
-  check` to confirm no new heavy import leaked into the stdlib-only path with the
-  new module present. (SC-004, FR-008.)
+- [ ] **T013** Run the existing import-boundary guard test (B3,
+  `tests/unit/test_live_surface_boundary.py`) and `retail check` to confirm no
+  new heavy import leaked into the stdlib-only path with the new module present.
+  If the recorder becomes reachable from a guarded module, extend that test to
+  cover `readiness_evidence`. (SC-004, FR-008.)
 - [ ] **T014** [P] Grep the new module + tests for any C086 / pharmacy table,
   column, or measure literal; confirm none are hardcoded (identifiers come only
   from test fixtures / inputs). (FR-009, FR-010.)
