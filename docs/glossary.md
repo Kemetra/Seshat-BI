@@ -76,6 +76,7 @@ are grouped, then alphabetical within a group.
 | **`retail validate`** | the live data surface; reconciles a materialized table against a running Postgres (read-only). |
 | **`retail value-check`** | the L4 value proxy that asserts a contract's live value still matches its approved `expected_value`. |
 | **`retail generate`** | the DAX generator that emits a verified measure from an approved metric contract. |
+| **`retail scaffold`** | the rule-authoring helper: author mode writes a new rule's stub module + failing test + EXPECTED_RULE_IDS insertion and prints the golden-regen commands + a glossary row (write/print split); `--doctor` reads the five wiring places and reports drift (062). |
 
 ## Cleaning defaults — RC1–RC16
 
