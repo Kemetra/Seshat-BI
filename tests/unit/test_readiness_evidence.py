@@ -70,6 +70,17 @@ def test_dsn_scrubbed_from_recorded_text():
     assert "secret" not in " ".join(b2["blocking_reasons"])
 
 
+# T005b: overlapping DSN components are redacted longest-first (no host leak)
+def test_dsn_overlapping_components_redacted():
+    # username "db" is a substring of host "dbhost.internal".
+    dsn = "postgresql://db:pw@dbhost.internal:5432/prod"
+    findings = [_err("connect to dbhost.internal failed for user db", "t.a")]
+    b = build_gold_ready_block(findings, "schema.tbl", run_mode="live", dsn=dsn)
+    blob = " ".join(b["blocking_reasons"])
+    assert "dbhost.internal" not in blob  # the full host must not survive
+    assert "host.internal" not in blob  # nor a mangled remnant of it
+
+
 # T006: deferred mode -> blocked with deferred-boundary reason, no clean evidence
 def test_deferred_mode_blocked_no_clean_evidence():
     b = build_gold_ready_block([], "schema.tbl", run_mode="deferred")

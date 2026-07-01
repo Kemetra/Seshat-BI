@@ -53,9 +53,17 @@ def _scrub(text: str, dsn: Optional[str]) -> str:
         parts = urlsplit(dsn)
     except ValueError:
         return out
-    for component in (parts.password, parts.username, parts.hostname):
-        if component:
-            out = out.replace(component, "<redacted>")
+    # Redact components LONGEST-first: if one component is a substring of another (e.g.
+    # username "db" inside host "dbhost.internal"), replacing the short one first would
+    # mangle the longer one so its own replacement can no longer match, leaking part of
+    # the host. Sorting by descending length replaces the most-specific value first.
+    components = sorted(
+        {c for c in (parts.password, parts.username, parts.hostname) if c},
+        key=len,
+        reverse=True,
+    )
+    for component in components:
+        out = out.replace(component, "<redacted>")
     return out
 
 
