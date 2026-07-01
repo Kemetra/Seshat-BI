@@ -7,17 +7,19 @@ mapping work begins. Maps to medallion-playbook Phase 1.
 
 ## Purpose
 
-Establish that the raw `<schema>.<table>` source has been measured and proposed
-for understanding -- BEFORE a single source-map decision is made. "Ready" here
-means the mechanical numbers are recorded and the semantic profile rows are
-PROPOSED for human confirmation, never invented. This is the floor every later
-stage stands on: no mapping, no silver, no judgment calls yet.
+Establish that the raw source has been measured and proposed for understanding --
+BEFORE a single source-map decision is made. A raw source is **either a DB
+`<schema>.<table>` OR a standalone file (CSV / Excel)**; both land in bronze and both
+are profiled through the same gate. "Ready" here means the mechanical numbers are
+recorded and the semantic profile rows are PROPOSED for human confirmation, never
+invented. This is the floor every later stage stands on: no mapping, no silver, no
+judgment calls yet.
 
 ## Required artifacts
 
 | Artifact | What it must contain |
 |----------|----------------------|
-| `mappings/<table>/source-profile.md` | row count, column count; per-column missingness measured as `'' OR NULL` (not `IS NULL` alone); candidate-key uniqueness proof; returns-column population; PROPOSED semantics |
+| `mappings/<table>/source-profile.md` | `Source kind` (db-table / csv / excel); row count, column count; per-column missingness measured as `'' OR NULL` (not `IS NULL` alone); candidate-key uniqueness proof; returns-column population; PROPOSED semantics. **For a file source (csv/excel):** the File-source addendum too -- format, encoding (`[PROPOSED]`), delimiter/quote (csv), header row, and the enumerated in-scope sheet list (Excel) |
 
 The profile is the ONLY required artifact at this stage. The other four mapping
 artifacts (`source-map.yaml`, `assumptions.md`, `unresolved-questions.md`,
@@ -39,9 +41,18 @@ review. See `docs/source-intelligence.md` for how a filled copy contributes evid
 | Profile review | The numbers are recorded AND the semantic rows are PROPOSED (not invented), flagged for human confirmation |
 
 This stage has no `retail check` / `retail validate` gate. The gate is a review:
-confirm the mechanical numbers came from `profile.py` over a read-only
-connection, and confirm each semantic proposal is marked as a proposal awaiting
-sign-off, not stated as fact.
+confirm the mechanical numbers came from a read-only profiling pass over the landed
+source, and confirm each semantic proposal is marked as a proposal awaiting sign-off,
+not stated as fact.
+
+- For a **DB source**, the numbers come from `profile.py` over a read-only connection.
+- For a **file source (csv/excel)**, there is no shipped mechanical profiler yet
+  (`profile.py` is DB-only). Until one lands, a file source is profiled in
+  deferred-boundary mode: record the File-source addendum + per-column rows as
+  `[PENDING LIVE PROFILE]`, mark the detected encoding/delimiter/header `[PROPOSED]`,
+  and record `warning` -- never a fabricated `pass`. The file-grain reasoning that
+  guides this pass lives in `skills/bi-python-knowledge/` (route: profile a freshly
+  loaded source).
 
 ## Statuses
 
@@ -63,6 +74,10 @@ sign-off, not stated as fact.
   asserted) rather than PROPOSED for confirmation.
 - Numbers fabricated because the live boundary was unavailable, instead of
   marking them `[PENDING LIVE PROFILE]`.
+- **File source only:** `Source kind` is csv/excel but the File-source addendum is
+  missing; encoding/delimiter/header ASSERTED as fact instead of `[PROPOSED]`; or (Excel)
+  the sheets not enumerated and the profiled sheet not stated -- the first sheet assumed
+  silently to be the data.
 
 ## Required owner / approval
 

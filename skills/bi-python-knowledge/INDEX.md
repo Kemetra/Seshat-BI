@@ -10,7 +10,8 @@ the named artifact. Do not pre-load the whole `knowledge/` directory.
 >
 > **Boundary — KPI meaning lives upstream.** A KPI's *business meaning* (definition,
 > additivity, required fields, grain intent, ambiguity, owner rulings) is owned by
-> `skills/retail-kpi-knowledge/`. This layer owns dataframe source-prep: cleaning,
+> `skills/retail-kpi-knowledge/`. This layer owns dataframe source-prep: reading a
+> standalone **file source** (CSV / Excel) into a trustworthy frame, cleaning,
 > dtype/quality reasoning, and aggregation grain. A KPI contract hands its required
 > fields + dtype/quality assumptions here for source-prep. If a request is really "what
 > does this KPI mean", route to `skills/retail-kpi-knowledge/` first — do not infer the
@@ -31,6 +32,7 @@ the named artifact. Do not pre-load the whole `knowledge/` directory.
 
 | If the agent needs to… | Open | End on |
 |---|---|---|
+| Profile a **standalone file source** (CSV / Excel) — grain, encoding, delimiter, header row, multi-sheet, inferred-type traps | `knowledge/file-source-grain.md` (PY-CN-081..085, PY-BP-007, PY-PB-011) | the File-source addendum in `templates/source-profile.md` (marked `[PROPOSED]` / `[PENDING LIVE PROFILE]`) |
 | Clean / standardize strings, categories, currency, units, sentinels, or duplicates | `knowledge/cleaning-and-standardization.md` | row-count ledger + cleaning verdict (defined in the file; the cleaning-review checklist is planned — see note) |
 | Aggregate / groupby at a correct grain (use the checklist as a standalone review artifact) | *(groupby knowledge file is planned)* | `checklists/aggregation-grain-checklist.md` |
 | Review proposed (not-yet-active) static-analysis rules for Python pipelines | `patterns/analyzer-rule-candidates.json` | the candidate list itself (staging artifact) |
@@ -48,6 +50,8 @@ the named artifact. Do not pre-load the whole `knowledge/` directory.
 
 | Symptom the agent observes | Likely cause | Open | End on |
 |---|---|---|---|
+| A file reads with the whole row in one column, or non-ASCII labels are garbage, or leading-zero codes vanish, or the header looks like a title / `Unnamed: N` | Wrong delimiter / encoding / BOM / type inference / header row on a file source | `knowledge/file-source-grain.md` (PY-PB-011) | the recorded finding + File-source addendum |
+| Excel row count includes a phantom blank/summary row, or the wrong sheet was read | Merged/multi-row header, or first-sheet-assumed | `knowledge/file-source-grain.md` (PY-CN-085) | enumerated sheets + flattened header |
 | Numbers import as text / `object` dtype | Thousands separators, currency symbols, no coercion | `knowledge/cleaning-and-standardization.md` (PY-CN-033) | row-count ledger + verdict (in file) |
 | `channel`/`region` shows more values than its domain | Casing / whitespace drift | `knowledge/cleaning-and-standardization.md` (PY-CN-031/032) | row-count ledger + verdict (in file) |
 | Sentinel values (`-1`, `999`) summed as if real | Sentinel not mapped to null | `knowledge/cleaning-and-standardization.md` (PY-CN-034) | row-count ledger + verdict (in file) |
@@ -64,7 +68,7 @@ These routes are part of the intended layer but their knowledge/checklist files 
 | Intended route | Planned file | Status |
 |---|---|---|
 | Understand what a dataframe *is* in BI terms | `knowledge/dataframe-mental-model.md`, `knowledge/python-core-concepts-for-bi.md` | planned / not yet implemented |
-| Profile a freshly loaded source | `knowledge/profiling-and-source-inspection.md` | planned / not yet implemented |
+| Profile a freshly loaded source (general dataframe profiling) | `knowledge/profiling-and-source-inspection.md` | planned / not yet implemented — for a **file source** (CSV/Excel), the file-specific slice `knowledge/file-source-grain.md` is **live** (see task routes) |
 | Judge or fix dtypes / detect schema drift | `knowledge/pandas-dtypes-and-schema.md` | planned / not yet implemented |
 | Decide how to handle nulls / blanks / sentinels (full slice) | `knowledge/nulls-missing-values-and-blanks.md` | planned / not yet implemented |
 | Merge/join two dataframes safely | `knowledge/joins-merge-and-fanout.md` | planned / not yet implemented |

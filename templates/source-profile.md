@@ -25,9 +25,10 @@
 | Field | Value |
 |-------|-------|
 | Table id | `<table-id>` (e.g. `C091`) |
-| Source system | `<source-system>` (e.g. ERP / POS export / SAP extract) |
+| Source kind | `<db-table / csv / excel>` (a DB `<schema>.<table>`, or a standalone file -- fill the File-source addendum below when csv/excel) |
+| Source system | `<source-system>` (e.g. ERP / POS export / SAP extract; for a file: the system that produced the export) |
 | Landed location | `<bronze.schema.table>` (faithful all-TEXT landing) |
-| Connection | read-only; credentials from the gitignored `.env` at runtime -- **never inline a connection string or secret here** |
+| Connection | read-only; credentials from the gitignored `.env` at runtime -- **never inline a connection string or secret here**. For a file source: the read-only path/glob the file was profiled from -- **never inline a share credential or absolute user path** |
 | Profiled on | `<YYYY-MM-DD>` |
 | Profiled by | `<analyst / agent>` |
 | Source files folded in | `<N>` files / `<single export>` (relevant to the cross-file drift check below) |
@@ -45,6 +46,54 @@
 > Record the **landed (bronze, raw) row count** here -- the source as it arrived, before
 > any filter. The post-clean silver count is recorded later in `reconciliation-report.md`,
 > not in this file.
+
+---
+
+## File-source addendum (csv / excel only)
+
+Fill this section **only when `Source kind` is `csv` or `excel`**; delete it for a
+`db-table` source. A standalone file has structural facts a DB table does not -- how it
+was decoded, where the header row is, which sheets exist -- and getting them wrong
+silently misreads every column below. **These are the file equivalent of "the connection";
+record them from the read-only open, do not assume from the file name or extension.**
+
+> **PROPOSED, not asserted.** Encoding, delimiter, and header-row detection are
+> *inferences* unless a data owner has confirmed them. Record the detected value AND mark
+> it `[PROPOSED]` until confirmed -- exactly as the semantic rows below are proposed, never
+> invented (Principle V / RC-semantics). A guessed encoding stated as fact is the file
+> analogue of inventing a business rollup.
+
+| Field | Value |
+|-------|-------|
+| Format | `<csv / tsv / xlsx / xls>` |
+| Encoding | `<utf-8 / utf-8-sig / cp1256 / latin-1>` `[PROPOSED]` -- how bytes decode to text; a wrong guess mojibakes Arabic/accented labels (see Encoding corruption in Semantics) |
+| Byte-order mark (BOM) | `<present / absent>` -- a UTF-8 BOM leaks into the first header name if not stripped |
+| Delimiter | `<, / ; / tab / pipe>` `[PROPOSED]` (csv/tsv only) -- `;` is common in cp1256 locales; a wrong delimiter reads the whole row as one column |
+| Quote / escape char | `<" / ' / none>` (csv/tsv only) -- embedded delimiters inside quoted fields |
+| Header row | `<row index, 0-based / none>` `[PROPOSED]` -- the row carrying column names; a report title or blank line above it shifts every column if misread |
+| Skipped pre-header rows | `<N>` -- banner/title/blank rows above the header (Excel exports often carry these) |
+| Line terminator | `<LF / CRLF>` (csv/tsv only) |
+
+**Excel workbooks -- one row per sheet that is in scope.** Enumerate sheets; do NOT assume
+the first sheet is the data. State which sheet(s) this profile covers and why the others are
+out of scope (empty, a pivot, a legend).
+
+| Sheet name | In scope? | Row count | Col count | Header row | Notes |
+|------------|-----------|-----------|-----------|------------|-------|
+| `<sheet>` | `<yes / no>` | `<N>` | `<N>` | `<row index>` | `<why in/out of scope; merged cells; multi-row header>` |
+| `<sheet>` | | | | | |
+
+**File-source traps (each silently corrupts the per-column profile below):**
+- **Merged / multi-row headers** (Excel) -- a two-row header reads as a phantom first data
+  row and NULLs a real column name. Report merged-header rows: `<N>`.
+- **Type inference is a guess, not the type.** A reader that auto-infers dtypes may read a
+  leading-zero product code as an integer (dropping the zeros, RC7) or a mixed column as
+  `object`. Treat every inferred type as *landed-as-TEXT* for this profile; the target type
+  is a `source-map.yaml` decision, exactly as for a DB source.
+- **Cross-file / cross-sheet drift** -- if `>1` file or sheet is folded into one header, a
+  column-order or header-rename change in one silently misaligns values. This is the file
+  form of the Cross-file schema drift check in Semantics below -- profile categoricals
+  grouped by source file/sheet.
 
 ---
 

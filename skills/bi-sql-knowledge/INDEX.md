@@ -102,3 +102,17 @@ about SQL *correctness and trust*; engine-specific plan reading (EXPLAIN/ANALYZE
 and join strategies) is intentionally out of scope here and will arrive as a separate slice.
 Performance content in `knowledge/sql-performance-notes.md` is *reasoning* (sargability, filter
 early, grain across CTEs), not plan analysis.
+
+**Deferred seams (explicitly unclaimed here -- routed elsewhere, not silently missing):**
+
+- **Cross-dialect SQL (SQL Server / T-SQL, MySQL, Snowflake, ...).** This layer's cards are
+  engine-agnostic in intent but Postgres-flavoured in examples (dollar-quoting, `bronze/silver/
+  gold` schema zones, `"`-quoted identifiers). Per-dialect identifier quoting, type/date-timestamp
+  semantics, and window/aggregation portability are **not covered yet** and will arrive as a
+  separate dialect slice. Reason about SQL *correctness* here; do not assume a card's syntax ports
+  verbatim to another engine.
+- **Standalone file sources (CSV / Excel).** A source that arrives as a file, not a DB table, is
+  **not this layer's job.** Its grain, encoding, header/type-inference, and multi-sheet reasoning
+  are owned by `skills/bi-python-knowledge/` (route: *profile a freshly loaded source* /
+  *file-source grain*). Route a file source there; the SQL layer picks up only once the file has
+  landed as a bronze table.
