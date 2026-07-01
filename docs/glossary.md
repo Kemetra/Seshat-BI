@@ -97,7 +97,7 @@ This catalog is the **single source of truth for `retail check`'s rule count.**
 The **live registry in `src/retail/rules/` is authoritative**; the table below
 mirrors it and the `retail-govern` skill maps each id to its fix.
 
-> **Currently 40 rules in 13 families** (S, D, C, R, G, P, A, B, PP, SC, DF, SL, AL).
+> **Currently 41 rules in 14 families** (S, D, C, R, RS, G, P, A, B, PP, SC, DF, SL, AL).
 > When a rule is added or removed, update the table and this line **together** — and
 > elsewhere refer to "the static `retail check` gate" by name rather than restating a
 > number. Restated counts are exactly what drifted before (see
@@ -110,6 +110,7 @@ mirrors it and the `retail-govern` skill maps each id to its fix.
 | **D** | DAX / TMDL semantic model | `D1` PascalCase measure names · `D2` displayFolder required · `D3` no duplicated measure logic · `D4` use `DIVIDE()` not `/` · `D5` prefer explicit measures (WARN) · `D6` no bidirectional relationships · `D7` time-intelligence needs a date-table marker · `D8` partitions source from `gold` only · `D9` no hardcoded date literals in measures · `D10` no `FILTER(ALL/ALLSELECTED/ALLEXCEPT(...))` full-table-scan anti-pattern · `D11` each measure needs a `///` doc comment |
 | **C** | connection / secrets | `C1` connection uses parameter identifiers, not string literals · `C2` no committed secrets |
 | **R** | PBIR report | `R1` PBIR model reference must be relative |
+| **RS** | readiness-status integrity | `RS1` readiness status files are internally consistent (status, evidence, blockers, approvals, and current stage agree) |
 | **G** | git / project hygiene | `G1` `.gitignore` correctness · `G2` definition artifacts committed · `G3` UTF-8 without BOM · `G4` `.gitattributes` EOL policy · `G5` Windows MAX_PATH discipline · `G6` no real host/value in committed PBIP parameters |
 | **P** | project layout / process | `P1` Approach-A PBIP layout · `P2` commit-message convention |
 | **A** | route registry / architecture | `A1` route-registry targets resolve or are honestly marked planned · `A3` knowledge-map route ids ↔ `routes.yaml` ids are in bijection |

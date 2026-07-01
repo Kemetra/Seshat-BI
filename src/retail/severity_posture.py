@@ -279,6 +279,24 @@ def _observe_rule(rule_id: str, fn) -> set[str]:
             rel = "powerbi/M.Report/definition.pbir"
             _write(repo, rel, _PBIR_R1)
             tracked = [rel]
+        elif rule_id == "RS1":
+            rel = "mappings/demo/readiness-status.yaml"
+            _write(
+                repo,
+                rel,
+                'table: "bronze.demo"\n'
+                'current_stage: "mapping_ready"\n'
+                "stages:\n"
+                "  source_ready:\n"
+                '    status: "pass"\n'
+                "    evidence: []\n"
+                "    blocking_reasons: []\n"
+                "  mapping_ready:\n"
+                '    status: "not_started"\n'
+                "    evidence: []\n"
+                "    blocking_reasons: []\n",
+            )
+            tracked = [rel]
         elif rule_id == "G6":
             rel = "powerbi/M.SemanticModel/definition/expressions.tmdl"
             _write(repo, rel, _EXPR_G6)

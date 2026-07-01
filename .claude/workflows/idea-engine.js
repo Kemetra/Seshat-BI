@@ -1,16 +1,16 @@
 export const meta = {
   name: 'idea-engine',
-  description: 'Idea generator for Seshat BI. Ground maps the real repo with five subsystem explorers + a reconcile-verify pass; Memory reads the prior bank so shipped/settled ideas are not regenerated; three lenses (creative / BI analyst / technical) generate in parallel, then cross-pollinate; a completeness critic finds blind spots and triggers one targeted fill pass; a synthesizer merges; an adversarial skeptic challenges EVERY candidate (default-refuted); a three-standpoint reviewer PANEL scores value/feasibility and rules eligibility; a pure-JS aggregate takes the median, gates eligibility, and applies a demote-only clamp. Every agent stage runs on Opus at xhigh effort. Output: a ranked NOW/HORIZON idea BANK, rendered deterministically -- exploratory inspiration, not a roadmap or commitment.',
+  description: 'Idea generator for Seshat BI. Ground maps the real repo with five subsystem explorers + a reconcile-verify pass; Memory reads the prior bank so shipped/settled ideas are not regenerated; four lenses (creative / BI analyst / technical / design) generate in parallel, then cross-pollinate; a completeness critic finds blind spots and triggers one targeted fill pass; a synthesizer merges; an adversarial skeptic challenges EVERY candidate (default-refuted); a four-standpoint reviewer PANEL scores value/feasibility and rules eligibility; a pure-JS aggregate takes the median, gates eligibility, and applies a demote-only clamp. Every agent stage runs on Opus at xhigh effort. Output: a ranked NOW/HORIZON idea BANK, rendered deterministically -- exploratory inspiration, not a roadmap or commitment.',
   whenToUse: 'When you want a deep, exhaustive, rigorously vetted, history-aware idea bank for the project. All-Opus, xhigh effort, multi-round, multi-explorer, panel-reviewed -- thorough and heavy (many agents/tokens/time). Re-runnable; pass a focus string or {focus,sinceRef,date,ascii}. Output is an idea bank, never a plan.',
   phases: [
     { title: 'Ground',         detail: '5 subsystem explorers map the repo in parallel; JS merge + reconcile-verify', model: 'opus' },
     { title: 'Memory',         detail: 'read prior bank + Ground ship-status: label shipped/settled ideas (no re-litigation)', model: 'opus' },
-    { title: 'Generate',       detail: 'creative / BI / technical lenses propose in parallel (round 1)', model: 'opus' },
+    { title: 'Generate',       detail: 'creative / BI / technical / design lenses propose in parallel (round 1)', model: 'opus' },
     { title: 'Cross-pollinate',detail: 'each lens reacts to the others; surface cross-disciplinary ideas', model: 'opus' },
     { title: 'Completeness',   detail: 'critic finds blind spots -> one more targeted generation pass', model: 'opus' },
     { title: 'Synthesize',     detail: 'merge + dedupe into one candidate set', model: 'opus' },
     { title: 'Verify',         detail: 'adversarial skeptic challenges EVERY candidate (default-refuted)', model: 'opus' },
-    { title: 'Panel-review',   detail: '3 independent reviewers (principle / shipped-dup / value-feasibility) score the set', model: 'opus' },
+    { title: 'Panel-review',   detail: '4 independent reviewers (principle / shipped-dup / value-feasibility / design-foundation) score the set', model: 'opus' },
     { title: 'Aggregate',      detail: 'pure-JS median + eligibility gate + demote-only clamp; tiny prose agent for dissent', model: 'opus' },
     { title: 'Rescue',         detail: 'steelman the not-adopted ideas (reason only, never a re-score); skipped if none', model: 'opus' },
     { title: 'Render',         detail: 'pure-JS: render the idea-backlog markdown (no agent); orchestrator writes' },
@@ -74,6 +74,10 @@ WHAT EXISTS (grounding):
   bi-dax-knowledge (filter context), bi-python-knowledge (dataframe grain, seed),
   bi-bigdata-knowledge (execution topology / distributed), retail-kpi-knowledge
   (business KPI meaning, seed -- newest, PR #58).
+- Power BI design FOUNDATION under skills/powerbi-dashboard-design: a router+vocabulary over
+  four surfaces (report visuals / external background / theme JSON / handoff). It DEFINES and
+  CHECKS the presentation layer only -- it never authors a PBIP/PBIR, never generates DAX,
+  never invents a metric (report execution/authoring is deferred F016).
 - Roadmap F005-F015 SHIPPED; F016 (Power BI Execution Adapter) is the ONLY unbuilt core
   feature (deferred, execution-only, gated on semantic-model readiness). Tier 5 companion
   modules/adapters (F024-F034) are PARTLY shipped.
@@ -113,7 +117,10 @@ const IDEA_SCHEMA = {
           rough_shape: { type: 'string', description: 'the seam it touches, not full impl' },
           // Which knowledge layer / spine this idea would strengthen -- surfaces layer
           // starvation in self-metrics. The lens JUDGES this; nothing is assigned by index.
-          strengthens_layer: { type: 'string', enum: ['bi-sql', 'bi-dax', 'bi-python', 'bi-bigdata', 'retail-kpi', 'docs-spine', 'none'], description: 'the knowledge layer this most strengthens, or none' },
+          // 'design-system' = the Power BI presentation FOUNDATION (theme tokens, background/
+          // canvas conventions, layout blueprints, accessibility/contrast, design-review
+          // evidence) -- governance of the design layer, never report authoring.
+          strengthens_layer: { type: 'string', enum: ['bi-sql', 'bi-dax', 'bi-python', 'bi-bigdata', 'retail-kpi', 'docs-spine', 'design-system', 'none'], description: 'the knowledge layer this most strengthens, or none' },
         },
       },
     },
@@ -167,7 +174,7 @@ const PANEL_REVIEWER_SCHEMA = {
         properties: {
           title: { type: 'string' },
           horizon: { type: 'string', enum: ['NOW', 'HORIZON'] },
-          strengthens_layer: { type: 'string', enum: ['bi-sql', 'bi-dax', 'bi-python', 'bi-bigdata', 'retail-kpi', 'docs-spine', 'none'], description: 'carried from the idea: the knowledge layer it most strengthens' },
+          strengthens_layer: { type: 'string', enum: ['bi-sql', 'bi-dax', 'bi-python', 'bi-bigdata', 'retail-kpi', 'docs-spine', 'design-system', 'none'], description: 'carried from the idea: the knowledge layer it most strengthens' },
           eligible: { type: 'boolean' },
           ineligibility_reason: { type: 'string', description: 'named principle, or "" if eligible' },
           consistency: { type: 'string', enum: ['consistent', 'minor-tension', 'conflict'] },
@@ -694,9 +701,10 @@ const LENSES = [
   { key: 'creative', label: 'gen:creative', role: `a CREATIVE PROGRAMMER lens. Generate inventive, original ideas -- features, agent capabilities, DX wins, novel uses of the knowledge layers, surprising combinations. Favor imagination and delight.` },
   { key: 'bi',       label: 'gen:bi-analyst', role: `a PROFESSIONAL BI ANALYST lens (15+ yrs retail). Generate ideas that increase ANALYTICAL VALUE -- KPI/metric coverage, decision-support, forecasting, anomaly/exception surfacing, business-question coverage, things a real merchandiser/finance owner needs.` },
   { key: 'technical',label: 'gen:technical', role: `a PROFESSIONAL TECHNICAL ARCHITECT lens. Generate ideas that strengthen the system -- architecture, testing/CI gates, performance, the router/two-hop contract, knowledge-layer tooling, drift/reconciliation, adapter design, observability, agent-eval harnesses. Buildable in-repo.` },
+  { key: 'design',   label: 'gen:design', role: `a PROFESSIONAL BI DASHBOARD DESIGNER lens (data-viz + design-systems background). Generate ideas that strengthen the PRESENTATION FOUNDATION as a GOVERNED, principle-safe layer -- theme-token contracts, background/canvas asset conventions, layout blueprints, accessibility/contrast checkers, colour + sentiment-colour governance, visual-hierarchy linters, design-review evidence records, screenshot-QA harnesses, mobile-layout conventions. Reason WITH the powerbi-dashboard-design skill's four surfaces (report visuals / external background / theme JSON / handoff) and its discipline: DEFINE and CHECK the design foundation, NEVER author a PBIP/PBIR, NEVER generate DAX, NEVER invent a metric, NEVER bake a KPI value into a background or business meaning into a theme. Design ideas must be static/read-only reasoning plus authoring-of-conventions, buildable in-repo today (report execution/authoring is deferred F016 -- do not propose it). Set strengthens_layer to design-system for these.` },
 ]
 function genPrompt(role, extra='') {
-  return `You are ${role}\nGenerate 6-8 ideas for Seshat BI. Each MUST respect the hard principles (no executor, no gate bypass, generic-only, no fabricated confidence). Mix NOW and HORIZON. For each idea set strengthens_layer to the ONE knowledge layer it most strengthens (bi-sql / bi-dax / bi-python / bi-bigdata / retail-kpi / docs-spine), or \u0027none\u0027 if it strengthens the engine/CLI/gates rather than a knowledge layer -- judge honestly, do not force a layer. ${extra}${MEMORY_LINE}\n\n=== REPO MAP ===\n${exploreMap}`
+  return `You are ${role}\nGenerate 6-8 ideas for Seshat BI. Each MUST respect the hard principles (no executor, no gate bypass, generic-only, no fabricated confidence). Mix NOW and HORIZON. For each idea set strengthens_layer to the ONE knowledge layer it most strengthens (bi-sql / bi-dax / bi-python / bi-bigdata / retail-kpi / docs-spine / design-system), or \u0027none\u0027 if it strengthens the engine/CLI/gates rather than a knowledge layer -- judge honestly, do not force a layer (design-system = the Power BI presentation FOUNDATION: theme tokens, background/canvas conventions, layout blueprints, accessibility, design-review evidence -- governance, never report authoring). ${extra}${MEMORY_LINE}\n\n=== REPO MAP ===\n${exploreMap}`
 }
 // classify a lens result: 'failed' = agent returned null (schema/death), 'empty' =
 // a valid response with no ideas, 'ok' = real ideas. This separates a FAILURE from a
@@ -827,6 +835,8 @@ const PANELISTS = [
     `the SHIPPED-DUPLICATION AUDITOR. Judge CONSISTENCY with shipped work using the ship-status table + history. PENALIZE an idea that merely RESTATES shipped work; do NOT penalize a genuine extension that builds ON shipped work -- but it must name the shipped feature and say which it is. An idea matching settled-rejected history should not be ADOPT unless it is materially new.` },
   { key: 'value-feasibility-realist', label: 'review:value-feasibility-realist', standpoint:
     `the VALUE/FEASIBILITY REALIST. Judge value and feasibility honestly: is \u0022feasible\u0022 hiding a missing gold source, a runtime consumer that does not exist yet, or an unmade human ruling? Reward genuine analytical/system value; discount ideas whose feasibility depends on something deferred (e.g. F016).` },
+  { key: 'design-foundation-reviewer', label: 'review:design-foundation-reviewer', standpoint:
+    `the DESIGN-FOUNDATION REVIEWER. Judge design/presentation ideas on real design value (visual hierarchy, accessibility, theme consistency, layout reuse, design-review rigour) AND on eligibility within the four-surface discipline: an idea that authors a PBIP/PBIR, generates DAX, invents a metric, or bakes data into a static background/theme is INELIGIBLE (surface-blending or F016 execution). Reward governance/linting/evidence seams that make the design layer checkable; discount purely cosmetic ideas with no durable seam. For non-design ideas outside your expertise, defer (score conservatively, flag low confidence) rather than distort the panel.` },
 ]
 // NOTE: two statements, NOT `const panel = (await parallel(...)).filter(Boolean)`. The
 // Workflow loader's parser cannot match a `(`-wrapped multi-line expression whose closing

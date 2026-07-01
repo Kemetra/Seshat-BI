@@ -116,6 +116,10 @@
     "title": "PBIR model reference must be relative"
   },
   {
+    "id": "RS1",
+    "title": "Readiness status files are internally consistent"
+  },
+  {
     "id": "S1",
     "title": "snake_case SQL identifiers"
   },

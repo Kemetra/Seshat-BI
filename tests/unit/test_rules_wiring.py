@@ -62,6 +62,7 @@ EXPECTED_RULE_IDS = frozenset(
         "D10",  # TMDL/DAX hygiene: no FILTER(ALL(...)) anti-pattern
         "D11",  # TMDL/DAX hygiene: every measure documented (///)
         "R1",  # PBIR
+        "RS1",  # readiness-status contradiction linter
         "A1",  # route registry: every route target resolves or is marked planned
         "A3",  # route coverage: knowledge-map ids == routes.yaml ids (bijection)
         "B1",  # never-execute: no module-scope DB/network import in the static core

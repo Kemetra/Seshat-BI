@@ -12,7 +12,7 @@ source_id: "retail_store_sales"
 source_family: "kaggle_retail_store_sales_dirty"
 
 # --- where we are -----------------------------------------------------------
-current_stage: "publish_ready"        # stages 1-6 pass; publish_ready=warning (prior approval retracted after the DiscountedTransactionRate correction; re-approval pending)
+current_stage: "publish_ready"        # stages 1-6 pass; publish_ready=blocked (prior approval retracted after the DiscountedTransactionRate correction; re-approval pending)
 mapping_version: "1"
 
 # --- the seven stages -------------------------------------------------------
@@ -69,19 +69,20 @@ stages:
     blocking_reasons: []
 
   publish_ready:
-    status: "warning"
+    status: "blocked"
     evidence:
       - "BI handoff pack assembled: mappings/retail_store_sales/handoff/ (bi-handoff-pack.md + handoff-review-checklist.md)"
       - "every required section resolves to a committed artifact (contracts, bronze->gold reconciliation PASS, deployed-schema data dictionary, the mandatory caveats)"
     blocking_reasons:
       - "publish RE-APPROVAL pending: the prior publish approval (2026-06-25) was given against a pack that framed DiscountedTransactionRate as 33.55% (denominator = all transactions). That metric was CORRECTED to the approved Q2 ruling (known-status, 50.37%), so the approved pack materially changed and the prior approval is retracted as stale. The data owner must review the corrected pack and re-record a {stage: publish_ready} approval. Live publish itself remains the deferred F016 adapter."
-    # warning = pack complete + reviewable; pass requires a FRESH publish approval
+    # blocked = pack complete + reviewable, but pass requires a FRESH publish approval
     # against the corrected DiscountedTransactionRate framing (Principle V; no self-grant).
 
 # --- cross-cutting ----------------------------------------------------------
 evidence:
   - "mapping gate CLEARED 2026-06-25; Q1-Q4 answered (data owner)"
-blocking_reasons: []
+blocking_reasons:
+  - "publish RE-APPROVAL pending: the corrected handoff pack materially changed after the prior publish approval; the data owner must review the corrected pack and re-record a {stage: publish_ready} approval."
 
 # --- approvals (named human sign-offs; the agent cannot self-grant) ---------
 approvals:
