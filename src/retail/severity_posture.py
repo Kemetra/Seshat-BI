@@ -321,6 +321,18 @@ def _observe_rule(rule_id: str, fn) -> set[str]:
             # the routes manifest is absent/untracked -> A1 fails loud (ERROR).
             _write(repo, "warehouse/a.sql", "SELECT 1;\n")
             tracked = ["warehouse/a.sql"]
+        elif rule_id == "SL1":
+            # a filled per-table scorecard with a status outside the enum -> SL1 ERROR.
+            _write(
+                repo,
+                "mappings/demo/demo-coverage-scorecard.md",
+                "# Coverage scorecard\n\n"
+                "> Table: `schema.demo` -- generic grain\n\n"
+                "| KPI | Contract | Coverage status | Blocker |\n"
+                "|-----|----------|-----------------|---------|\n"
+                "| Demo KPI | -- | Sorta covered | -- |\n",
+            )
+            tracked = ["mappings/demo/demo-coverage-scorecard.md"]
         elif rule_id == "AL1":
             # a metric contract with an unresolved assumption (blocked + reasons) AND a
             # settled gold binding -> AL1 fails loud (ERROR).

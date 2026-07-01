@@ -69,7 +69,9 @@ invented).
    `<statement, citing assumptions.md>`.
 3. **Known gaps** -- sourced verbatim from `data-issues.md`, WITH the measured count
    (e.g. "`<N>` rows land on the `-1` unknown member of `dim_<x>`"); never softened to
-   an adjective: `<list with counts>`.
+   an adjective: `<list with counts>`. (The optional interpretive source for these gaps --
+   which KPI each distorts and in which direction -- is `dq-signal-interpretation.md`; the
+   count itself stays sourced from `data-issues.md`.)
 4. **Out of scope** -- what this deployment explicitly does NOT carry: `<list>`.
 
 ## Data dictionary (against the DEPLOYED `<schema>.<table>`)

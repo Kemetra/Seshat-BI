@@ -154,5 +154,9 @@
   {
     "id": "SC1",
     "title": "Prose status claims reconcile with tracked-file evidence"
+  },
+  {
+    "id": "SL1",
+    "title": "Committed KPI coverage scorecard is structurally well-formed"
   }
 ]
