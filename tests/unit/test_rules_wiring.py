@@ -82,6 +82,7 @@ EXPECTED_RULE_IDS = frozenset(
         "DF1",  # parked-on reconciler: dependency edges match tracked-file evidence
         "SL1",  # coverage-scorecard linter: scorecard is structurally well-formed
         "AL1",  # assumption-ledger: unresolved-assumption marker + a settled binding
+        "DL1",  # design-lint: theme JSON purity (styling defaults only, no logic)
     }
 )
 

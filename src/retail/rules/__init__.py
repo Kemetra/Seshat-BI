@@ -14,6 +14,7 @@ from __future__ import annotations
 from . import (  # noqa: F401  (imported for side effects)
     assumptions,
     dax,
+    design_theme,
     g6,
     git_meta,
     live_surface_boundary,
@@ -32,6 +33,7 @@ from . import (  # noqa: F401  (imported for side effects)
 __all__ = [
     "assumptions",
     "dax",
+    "design_theme",
     "g6",
     "git_meta",
     "live_surface_boundary",

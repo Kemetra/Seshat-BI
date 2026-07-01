@@ -76,6 +76,10 @@
     "title": "Parked-on dependency edges reconcile with tracked-file evidence"
   },
   {
+    "id": "DL1",
+    "title": "Theme JSON carries styling defaults only, no business logic"
+  },
+  {
     "id": "G1",
     "title": ".gitignore correctness"
   },
