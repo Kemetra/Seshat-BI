@@ -11,10 +11,12 @@ formula_intent: >-
   basis is an owner judgment call; verify live.
 owner: "Pharmacy Sales Analytics lead"
 binds_to:
-  gold_table: "gold.fct_sales"
+  # BLOCKED (AL1): binding held as placeholder until owner picks the denominator basis
+  #   (products-that-sold vs full catalog). intended on resolution: gold.fct_sales / [gross_sales, product_sk]
+  gold_table: "gold.<fact>"
   columns:
-    - "gross_sales"
-    - "product_sk"
+    - "<gross_sales>"
+    - "<product_sk>"
   pii_sensitive: false
 
 readiness:

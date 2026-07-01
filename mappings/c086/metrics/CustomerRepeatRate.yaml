@@ -19,12 +19,13 @@ formula_intent: >-
   as a SEPARATE named-scoped metric at status warning, never fold walk-ins in.
 owner: "Pharmacy Sales Analytics lead"
 binds_to:
-  gold_table: "gold.fct_sales"
+  # BLOCKED (AL1): binding held as placeholder -- whole-base repeat rate is impossible
+  #   (WALK_IN collapses identity). intended on named-only resolution: gold.fct_sales / [customer_sk, invoice, gold.dim_customer.customer_id]
+  gold_table: "gold.<fact>"
   columns:
-    - "customer_sk"                       # customer identity
-    - "invoice"                           # distinct baskets per customer (degenerate txn id)
-    # dim dependency:
-    - "gold.dim_customer.customer_id"     # = 'WALK_IN' is the un-splittable anonymous identity
+    - "<customer_sk>"
+    - "<invoice>"
+    - "<gold.dim_customer.customer_id>"
   pii_sensitive: false
 
 readiness:

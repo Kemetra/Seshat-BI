@@ -11,10 +11,12 @@ formula_intent: >-
   On the full model = 88.30% (strong Pareto concentration).
 owner: "Pharmacy Sales Analytics lead"
 binds_to:
-  gold_table: "gold.fct_sales"
+  # BLOCKED (AL1): binding held as placeholder until owner ratifies the 20% ABC threshold.
+  #   intended on resolution: gold.fct_sales / [gross_sales, gold.dim_product.product_sk]
+  gold_table: "gold.<fact>"
   columns:
-    - "gross_sales"
-    - "gold.dim_product.product_sk"
+    - "<gross_sales>"
+    - "<gold.dim_product.product_sk>"
   pii_sensitive: false
 
 readiness:
