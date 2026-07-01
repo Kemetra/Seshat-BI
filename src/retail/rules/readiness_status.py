@@ -53,9 +53,7 @@ def _finding(message: str, locator: str) -> Finding:
 
 def _iter_status_files(ctx: RuleContext) -> list[str]:
     return [
-        p
-        for p in ctx.tracked_files
-        if _INSTANCE_RE.match(p) and not is_test_path(p)
+        p for p in ctx.tracked_files if _INSTANCE_RE.match(p) and not is_test_path(p)
     ]
 
 
@@ -212,4 +210,3 @@ def check_readiness_status_consistency(ctx: RuleContext) -> Iterable[Finding]:
                 )
 
     return findings
-

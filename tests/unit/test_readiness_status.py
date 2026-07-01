@@ -102,8 +102,7 @@ def test_blocked_stage_without_blockers_fails(tmp_path: Path) -> None:
     )
     messages = _messages(_ctx(tmp_path, text))
     assert any(
-        "publish_ready" in m and "blocked" in m and "no blocking" in m
-        for m in messages
+        "publish_ready" in m and "blocked" in m and "no blocking" in m for m in messages
     )
 
 
@@ -128,13 +127,13 @@ def test_approval_required_stage_pass_without_approval_fails(tmp_path: Path) -> 
 
 def test_current_stage_cannot_skip_earlier_blocked_stage(tmp_path: Path) -> None:
     old = (
-        '  mapping_ready:\n'
+        "  mapping_ready:\n"
         '    status: "pass"\n'
         '    evidence: ["source-map.yaml"]\n'
         "    blocking_reasons: []"
     )
     new = (
-        '  mapping_ready:\n'
+        "  mapping_ready:\n"
         '    status: "blocked"\n'
         '    evidence: ["source-map.yaml"]\n'
         '    blocking_reasons: ["grain not approved"]'
