@@ -111,3 +111,46 @@ ADL:
   status: shipped
   pr_sha: "PR #106 (spec 058 per-contract-ambiguity-decision-ledger; ambiguities[] block on metric-contract.yaml)"
   f_row: none
+
+# --- 2026-07-01/02 design-lint + governance wave (specs 060-066) ---
+# Recorded 2026-07-02 after verifying commit SHAs are ancestors of origin/main + live
+# source (@register rules present). These ships POST-DATE the 2026-07-01 idea-bank
+# snapshot, which still lists them as open ADOPT under DIFFERENT per-run short-codes
+# (A2/A8/E6/F4/G1). Keyed here by SHIP label; snapshot label noted in evidence.
+# NOTE: the snapshot reviewer predicted A2 (theme) + A8 (background) would co-ship in
+# one module, but they shipped as TWO separate rules/PRs: DL1 (theme, #119) and DL2
+# (background, #124). See the DL2 entry below.
+DL1:
+  status: shipped
+  pr_sha: "PR #119 (spec 060 theme-json-purity-linter; snapshot A2) src/retail/rules/design_theme.py @register DL1"
+  f_row: none
+SC2:
+  status: shipped
+  pr_sha: "PR #125 (spec 065 rule-count-reconciler; snapshot F4) @register SC2 src/retail/rules/rule_count_claims.py"
+  f_row: none
+G1:
+  status: shipped
+  pr_sha: "PR #126 (spec 066 design-foundation-idea-lane; snapshot G1) idea-engine design lane render + ledger shape reuse"
+  f_row: none
+
+# --- 2026-07-02 ratified-spec build wave (specs 061-064; verified on origin/main) ---
+# These POST-DATE the 2026-07-01 idea-bank snapshot (which still lists them as open
+# ADOPT under the snapshot short-codes E1/E6/A8/J1). Confirmed shipped by checking the
+# commit SHAs are ancestors of origin/main (not the stale local main ref). Keyed by
+# snapshot short-code; E1/J1 verified spec-faithful + green gate before recording.
+E1:
+  status: shipped
+  pr_sha: "PR #121 (spec 061 wiring-meta-gate) tests/unit/test_wiring_meta_gate.py; test-only stdlib meta-gate, mutation-verified fail-closed; no rule/no src change"
+  f_row: none
+E6:
+  status: shipped
+  pr_sha: "PR #122 (spec 062 scaffold-rule-generator) src/retail/scaffold.py + cli.py `scaffold`/--doctor"
+  f_row: none
+DL2:
+  status: shipped
+  pr_sha: "PR #124 (spec 064 background-spec-purity; snapshot A8) src/retail/rules/design_background.py @register DL2"
+  f_row: none
+J1:
+  status: shipped
+  pr_sha: "PR #123 (spec 063 approval-evidence-pack, roadmap F035) .claude/skills/approval-evidence-pack/SKILL.md + templates/approval-evidence-pack.md; docs/skill/template only, no rule/no code"
+  f_row: none
