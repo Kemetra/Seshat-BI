@@ -1148,6 +1148,32 @@ function renderBacklog(review, opts) {
     '- **SHIPPED / SETTLED** -- a prior idea Memory matched to shipped work or a settled rejection; kept for the record, not an open candidate.',
   ].join('\n')
 
+  // Design-foundation lane (G1, spec-dir 066): a first-class CATEGORICAL cohort view of
+  // the design layer. It groups ideas by their EXISTING `strengthens_layer === 'design-system'`
+  // signal (the design lens + design-foundation reviewer already emit it) and renders them as
+  // a cross-reference list -- title + the existing categorical verdict + horizon only. It is
+  // ROUTING/RENDERING ONLY: it attaches NO computed or ranked numeric score (roadmap hard
+  // rule #9), never promotes an idea onto the roadmap or assigns an F-row (Principle V), and
+  // does not touch scoring, the Memory contract, or any authoring. The cohort renders
+  // PRESENT-BUT-EMPTY so the design layer stays a visible first-class cohort even on a run
+  // with zero design ideas. Non-design ideas are never forced in (strict signal match).
+  const designCohort = ideas.filter(i => i.strengthens_layer === 'design-system')
+  const DESIGN_LANE = [
+    '## Design Foundation',
+    '',
+    '_A first-class CATEGORICAL cohort of the Power BI presentation FOUNDATION layer',
+    '(`strengthens_layer = design-system`): theme-token contracts, background/canvas',
+    'conventions, layout blueprints, accessibility/contrast, design-review evidence --',
+    'governance of the design layer, never report authoring. This is a cross-reference',
+    'grouping, not a re-score: each idea keeps its existing verdict and is detailed in',
+    'its verdict section above. No numeric score is attached here (roadmap hard rule #9),',
+    'and the lane never promotes an idea onto the roadmap or assigns an F-row (Principle V)._',
+    '',
+    designCohort.length
+      ? designCohort.map(i => `- **${norm(i.title)}** -- ${norm(i.verdict)} - \`${norm(i.horizon)}\``).join('\n')
+      : '_(No design-foundation ideas in this run. The lane stays present as a first-class cohort.)_',
+  ].join('\n')
+
   // Sections in fixed order; preserve input order within each (no sort, no RNG).
   // Empty sections are omitted. SHIPPED is included so a panel-detected duplicate-of-
   // shipped candidate is never silently dropped from the rendered set (it is scored, so
@@ -1208,7 +1234,7 @@ function renderBacklog(review, opts) {
     ].join('\n')
   })() : null
 
-  return [HEADER, PORTFOLIO, LEGEND, ...SECTIONS, ...(RESCUE ? [RESCUE] : []), ...(APPENDIX ? [APPENDIX] : []), ...(METRICS ? [METRICS] : [])].join('\n\n') + '\n'
+  return [HEADER, PORTFOLIO, LEGEND, DESIGN_LANE, ...SECTIONS, ...(RESCUE ? [RESCUE] : []), ...(APPENDIX ? [APPENDIX] : []), ...(METRICS ? [METRICS] : [])].join('\n\n') + '\n'
 }
 
 const self_metrics = selfMetrics(review, allIdeas.length, run_health)
