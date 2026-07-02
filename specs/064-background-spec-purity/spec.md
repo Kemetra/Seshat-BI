@@ -341,11 +341,11 @@ tenant/example-specific path or key appears anywhere in the rule's vocabulary.
 
 Advisor-resolved ambiguities (recommended answers integrated into the spec):
 
-- **Q1 -- Unresolved placeholder in a discovered filled spec.** A file discovered
+- **Q1 -- Placeholder still present in a discovered filled spec.** A file discovered
   as a filled background spec that still carries the template placeholder
   `<true|false>` in a `forbidden_dynamic_content` or `qa_checklist` value is
-  neither a real `true` nor a real `false`. **Recommended answer**: treat an
-  unresolved placeholder in a value of a DISCOVERED filled spec as a half-filled
+  neither a real `true` nor a real `false`. **Recommended answer**: treat a
+  still-present placeholder in a value of a DISCOVERED filled spec as a half-filled
   defect and surface a finding ("value not filled: still the `<true|false>`
   placeholder"). The blank template itself is exempt from discovery entirely
   (Q3), so this only ever fires on a file the discovery convention says is filled.
@@ -430,6 +430,7 @@ Principle-V convention RESOLVED (under the ADOPT-batch autonomous authority,
   proven DL1 discovery pattern verbatim; narrowest choice that lets the rule work
   without inventing a per-page directory layout the repo has not yet adopted.
 
-All advisor-resolved items (Q1-Q5) are ANSWERED. One Principle-V convention item
-remains OPEN for the human owner; the spec is buildable and inert-safe until it
-is ruled, so this does not block planning.
+All advisor-resolved items (Q1-Q5) are ANSWERED, and the file-discovery
+convention (the one Principle-V item) is RESOLVED above under the ADOPT-batch
+autonomous authority (frozen `*.background.yaml` suffix). No open item remains for
+this spec; it is buildable and inert-safe on today's empty corpus.
