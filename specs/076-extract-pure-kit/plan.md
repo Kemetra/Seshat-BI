@@ -163,7 +163,7 @@ landed or been discarded (FR-006). Do not start otherwise.**
 **Findings that scope this:** no raw customer rows are committed (only maps/specs about
 the data); no live DSN/**credential** is committed. BUT — correcting an earlier draft
 (caught by the adversarial review) — a **real DigitalOcean cluster identifier
-`db-pgsql-fra1-29712` + the DB name `ezaby_demo` ARE committed** in 7 tracked files
+`db-<cluster-id>` + the DB name `ezaby_demo` ARE committed** in 7 tracked files
 (`docs/c086-adr0002-compliance.md`, both `docs/worked-examples/*.md`,
 `mappings/c086/reconciliation-report.md`, `mappings/{sales_c086/analysis.md,
 sales_c086/reconciliation-report.md}`, `mappings/retail_store_sales/reconciliation-bronze-to-gold.md`).
@@ -203,7 +203,7 @@ A future-PR reviewer runs, on the post-extraction tip:
 #    cluster id + db name, and the schema/PII tokens. Excludes only the C2 gate's own
 #    regex, *.example, and legitimately-historical specs/ (documented exclusions):
 git grep -nI \
-  -e "c086" -e "ezaby" -e "ezaby_demo" -e "db-pgsql-fra1-29712" \
+  -e "c086" -e "ezaby" -e "ezaby_demo" -e "db-<cluster-id>" \
   -e "insurance_no" -e "personel_number" -e "sales_c086" \
   -- ':!src/retail/rules/git_meta.py' ':!*.example' ':!specs/*'   # -> expect: no output
 # 2. No committed DSN/host (the C2 gate + the marker grep above; note the C2 regex is

@@ -11,6 +11,14 @@ pytestmark = pytest.mark.unit
 
 STATUS_PATH = "mappings/demo/readiness-status.yaml"
 
+# A valid owner: a person name + authority class (NOT a bare role token -- C4).
+OWNER = "A. Lovelace (data_owner)"
+
+
+def _appr(stage: str, owner: str = OWNER, extra: str = "") -> str:
+    """One approvals[] YAML line, kept short so no fixture line exceeds line-length."""
+    return f"  - {{stage: {stage}, owner: '{owner}', at: '2026-01-01'{extra}}}\n"
+
 
 def _status_yaml(
     *,
@@ -22,10 +30,10 @@ def _status_yaml(
 ) -> str:
     if approvals is None:
         approvals = (
-            "  - {stage: mapping_ready, owner: data_owner, at: '2026-01-01'}\n"
-            "  - {stage: semantic_model_ready, owner: data_owner, at: '2026-01-01'}\n"
-            "  - {stage: dashboard_ready, owner: data_owner, at: '2026-01-01'}\n"
-            "  - {stage: publish_ready, owner: data_owner, at: '2026-01-01'}\n"
+            _appr("mapping_ready")
+            + _appr("semantic_model_ready")
+            + _appr("dashboard_ready")
+            + _appr("publish_ready")
         )
     return f"""table: "bronze.demo"
 source_id: "demo"
@@ -109,6 +117,26 @@ def test_pass_stage_without_evidence_fails(tmp_path: Path) -> None:
     assert any("source_ready" in m and "no evidence" in m for m in messages)
 
 
+def test_bare_role_owner_fails(tmp_path: Path) -> None:
+    # C4 enforcement (Codex PR#143 review): a bare authority-class owner token with
+    # no person name is a defect -- the approval must name its decider.
+    approvals = (
+        _appr("mapping_ready", owner="data_owner")  # bare role token -> defect
+        + _appr("semantic_model_ready")
+        + _appr("dashboard_ready")
+        + _appr("publish_ready")
+    )
+    messages = _messages(_ctx(tmp_path, _status_yaml(approvals=approvals)))
+    assert any("bare/missing owner" in m and "mapping_ready" in m for m in messages)
+
+
+def test_named_owner_with_role_passes(tmp_path: Path) -> None:
+    # The person + role form ("Name (role)") is NOT bare -- it must not fire.
+    assert (
+        list(check_readiness_status_consistency(_ctx(tmp_path, _status_yaml()))) == []
+    )
+
+
 def test_blocked_stage_without_blockers_fails(tmp_path: Path) -> None:
     text = _status_yaml(
         current_stage="publish_ready",
@@ -133,9 +161,9 @@ def test_non_blocked_stage_with_blockers_fails(tmp_path: Path) -> None:
 
 def test_approval_required_stage_pass_without_approval_fails(tmp_path: Path) -> None:
     approvals = (
-        "  - {stage: mapping_ready, owner: data_owner, at: '2026-01-01'}\n"
-        "  - {stage: semantic_model_ready, owner: data_owner, at: '2026-01-01'}\n"
-        "  - {stage: dashboard_ready, owner: data_owner, at: '2026-01-01'}\n"
+        _appr("mapping_ready")
+        + _appr("semantic_model_ready")
+        + _appr("dashboard_ready")
     )
     messages = _messages(_ctx(tmp_path, _status_yaml(approvals=approvals)))
     assert any("publish_ready" in m and "approvals" in m for m in messages)
@@ -190,15 +218,14 @@ def _file_source_yaml(*, kind: str = "csv", with_source_approval: bool) -> str:
     """A readiness status whose source_ready block declares a file source_kind. The
     stage is pass at every stage; source_ready has an approval only when requested."""
     approvals = (
-        "  - {stage: mapping_ready, owner: data_owner, at: '2026-01-01'}\n"
-        "  - {stage: semantic_model_ready, owner: data_owner, at: '2026-01-01'}\n"
-        "  - {stage: dashboard_ready, owner: data_owner, at: '2026-01-01'}\n"
-        "  - {stage: publish_ready, owner: data_owner, at: '2026-01-01'}\n"
+        _appr("mapping_ready")
+        + _appr("semantic_model_ready")
+        + _appr("dashboard_ready")
+        + _appr("publish_ready")
     )
     if with_source_approval:
         approvals = (
-            "  - {stage: source_ready, owner: data_owner, at: '2026-01-01', "
-            "note: 'encoding utf-8 confirmed'}\n"
+            _appr("source_ready", extra=", note: 'encoding utf-8 confirmed'")
         ) + approvals
     base = _status_yaml(approvals=approvals)
     # inject source_kind into the source_ready block

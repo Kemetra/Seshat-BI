@@ -45,6 +45,36 @@ _STATUS_VALUES: frozenset[str] = frozenset(
 _APPROVAL_REQUIRED: frozenset[str] = frozenset(
     {"mapping_ready", "semantic_model_ready", "dashboard_ready", "publish_ready"}
 )
+# The authority-class tokens an approval owner may carry (any spelling). An owner
+# that is ONLY one of these -- a bare role with no person -- is a defect: the
+# named-human guarantee (Principle V / audit C4) requires the DECIDER's name, e.g.
+# "Ahmed Shaaban (data_owner)". This turns the C4 convention into an enforced rule.
+_ROLE_TOKENS: frozenset[str] = frozenset(
+    {
+        "analyst",
+        "governance",
+        "data_owner",
+        "data-owner",
+        "metric_owner",
+        "metric-owner",
+        "owner",
+    }
+)
+
+
+def _owner_is_bare_role(owner: object) -> bool:
+    """True if ``owner`` is a bare authority-class token with no person name.
+    Case- and whitespace-insensitive. A name + role ("Ahmed Shaaban (data_owner)")
+    has content beyond the token, so it is NOT bare. A missing/empty owner is
+    handled as bare too (an approval must name its decider)."""
+    if not isinstance(owner, str):
+        return True
+    norm = owner.strip().lower()
+    if not norm:
+        return True
+    return norm in _ROLE_TOKENS
+
+
 # A source_ready block carrying one of these (normalized) source_kind values is a FILE
 # source, whose pass additionally requires an owner encoding-confirmation (a
 # source_ready approval). A DB source omits source_kind (or says db-table), so this
@@ -155,6 +185,21 @@ def check_readiness_status_consistency(ctx: RuleContext) -> Iterable[Finding]:
             for a in approvals
             if isinstance(a, dict) and isinstance(a.get("stage"), str)
         }
+
+        # C4 enforcement: every approval must name its DECIDER, not just a role.
+        for a in approvals:
+            if not isinstance(a, dict):
+                continue
+            if _owner_is_bare_role(a.get("owner")):
+                stage = a.get("stage")
+                findings.append(
+                    _finding(
+                        f"approval for stage {stage!r} has a bare/missing owner "
+                        f"{a.get('owner')!r}; record the decider by name + authority "
+                        'class (e.g. "Ada Lovelace (data_owner)"), never a role alone',
+                        rel,
+                    )
+                )
 
         earliest_blocked_index: int | None = None
         for index, stage_name in enumerate(_STAGE_ORDER):

@@ -35,7 +35,7 @@ erasure trigger (see plan Security section).
   customer rows committed; the exposure is client-identifying schema/business content
   (`ezaby`, `insurance_no`, segment rollups), not PII data.
 - No credential/DSN in the tree (PBIP uses `<your-db-host>` placeholders). **BUT
-  (corrected post-review): the real cluster id `db-pgsql-fra1-29712` + db name
+  (corrected post-review): the real cluster id `db-<cluster-id>` + db name
   `ezaby_demo` ARE committed in 7 files** — host-identifying, not a secret. It evades the
   C2 gate (FQDN-only regex) and the first-draft grep; both the redaction list and
   acceptance markers now include it.

@@ -21,7 +21,7 @@ in-flight c086 supersession work resolving.
 The independent skeptic **BLOCKED the first draft** and was right: my classification
 **omitted `powerbi/`** — which ships a full client BI model (`c086 _sales.*` + a
 generically-NAMED copy `Retailgold.*` = the same c086 star) — and my "no host committed"
-finding was **false** (the real cluster id `db-pgsql-fra1-29712` + `ezaby_demo` are in 7
+finding was **false** (the real cluster id `db-<cluster-id>` + `ezaby_demo` are in 7
 files, evading both the C2 gate's FQDN-only regex and my first grep). Both would have let
 the future PR **ship client data while reporting "clean."** Fixed: complete top-level
 classification + a catch-all, `powerbi/` archived, corrected security finding, broadened
@@ -60,7 +60,7 @@ as a separate, explicitly-authorized operation.
 > to Ratified. The implementation PR is a SEPARATE, later change; this spec builds nothing.
 
 - **DEC-1 strategy**: **package + archive** (NOT a repo split) — the recommended default.
-- **DEC-2 security**: **current-tip redaction now** (add cluster id `db-pgsql-fra1-29712`
+- **DEC-2 security**: **current-tip redaction now** (add cluster id `db-<cluster-id>`
   + `ezaby_demo` + bare `c086` to the redaction targets); **history purge DEFERRED** to a
   public-release / erasure trigger, as a separately-authorized operation — the recommended
   default.

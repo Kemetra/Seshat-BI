@@ -9,7 +9,7 @@
 > Ratified by owner directive "ratify 076 with recommended decisions" (2026-07-02),
 > adopting each ratify-ledger DEC at its recommended default: **DEC-1** package + archive
 > (not a repo split); **DEC-2** current-tip redaction now + history-purge deferred to a
-> public-release / erasure trigger (add the cluster id `db-pgsql-fra1-29712` + `ezaby_demo`
+> public-release / erasure trigger (add the cluster id `db-<cluster-id>` + `ezaby_demo`
 > + bare `c086` to the redaction); **DEC-3** narrative-only worked example + one tiny
 > synthetic table; **DEC-4** the extraction PR waits for the in-flight c086 supersession
 > work to resolve (now clean) before it runs. The owner reviewed and merged the spec
@@ -63,7 +63,7 @@ security plan for a FUTURE implementation PR. It writes no code and moves no fil
   rollups), NOT PII rows.
 - **No credential/DSN is committed, BUT a real host IDENTIFIER is** (corrected after the
   adversarial review). No password, no full DSN (PBIP uses `<your-db-host>`
-  placeholders). However the real DigitalOcean cluster id **`db-pgsql-fra1-29712`** + the
+  placeholders). However the real DigitalOcean cluster id **`db-<cluster-id>`** + the
   DB name **`ezaby_demo`** are committed in **7 tracked files**. This is host-identifying,
   not a secret — and it evades BOTH guards: the C2 gate's regex is FQDN-only
   (`*.db.ondigitalocean.com`) and never sees the bare cluster id; the first-draft
@@ -114,7 +114,7 @@ a training repo with someone's pharmacy data baked in. It is also the security o
 
 **Independent Test**: On the post-extraction repo, grep the WHOLE tracked tree (incl.
 `powerbi/`, `reports/`, `assets/`) for the client/data markers (`c086`, `ezaby`,
-`ezaby_demo`, `db-pgsql-fra1-29712`, `insurance_no`, `personel_number`, `sales_c086`,
+`ezaby_demo`, `db-<cluster-id>`, `insurance_no`, `personel_number`, `sales_c086`,
 segment rollups) → zero hits outside the C2 gate's own regex, `*.example`, and
 legitimately-historical `specs/`. `retail check` + `retail kit-lint` still exit 0, and
 `unzip -l` on the built wheel shows no `powerbi/`/`mappings/`/`warehouse/` paths.

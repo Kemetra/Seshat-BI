@@ -20,7 +20,7 @@ Usage:
 
 Configuration (flags override env):
     --cluster-id / DO_DB_CLUSTER_ID   DigitalOcean DB cluster id (for doctl)
-    --database   / ANALYTICS_DB_NAME  target logical database (no default; supply via env/flag)
+    --database   / ANALYTICS_DB_NAME  target logical database (no default; required)
     --src-dir    / SALES_SRC_DIR      folder of .xlsx files to load
     --base-file                       file whose header defines the bronze columns
 """
@@ -177,9 +177,7 @@ def reconcile(conn, fname: str, path: str) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Load C086 sales Excel files into bronze.")
     ap.add_argument("--cluster-id", default=os.environ.get("DO_DB_CLUSTER_ID"))
-    ap.add_argument(
-        "--database", default=os.environ.get("ANALYTICS_DB_NAME")
-    )
+    ap.add_argument("--database", default=os.environ.get("ANALYTICS_DB_NAME"))
     ap.add_argument("--src-dir", default=os.environ.get("SALES_SRC_DIR"))
     ap.add_argument("--base-file", default="C086_Sales_2023_H1_Jan-Jun.xlsx")
     ap.add_argument("--create-only", action="store_true")
@@ -189,6 +187,11 @@ def main() -> None:
 
     if not a.cluster_id:
         sys.exit("missing --cluster-id (or DO_DB_CLUSTER_ID env)")
+    if not a.database:
+        # No default any more (the old hardcoded DB name was removed for hygiene).
+        # Fail loud rather than hand dbname=None to libpq, which would silently
+        # connect to the caller's default database and load bronze into the wrong DB.
+        sys.exit("missing --database (or ANALYTICS_DB_NAME env)")
     if not a.create_only and not a.src_dir:
         sys.exit("missing --src-dir (or SALES_SRC_DIR env)")
 
