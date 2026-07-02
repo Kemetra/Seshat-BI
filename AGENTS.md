@@ -70,6 +70,11 @@ This file is the short operating contract. The full law is
 `pbip-workflow` (PBIP git/TMDL). Each verb does its job and STOPS; the self-heal
 loop lives only in the conductor.
 
+Kit / tooling verbs (outside the medallion sequence): `retail-init` (bootstrap the
+Compass-Driven kit substrate + route a new user to a first profile) ;
+`retail-scaffold` (author a NEW `retail check` rule, or `--doctor` an existing rule's
+wiring -- the authoring sibling of `retail-govern`, which interprets rule findings).
+
 ## See also
 
 - Compass: `COMPASS.md`.
