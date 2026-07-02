@@ -144,6 +144,13 @@ LEFT JOIN gold.dim_payment_method_rss dpm ON dpm.payment_method = s.payment_meth
 LEFT JOIN gold.dim_location_rss       dl  ON dl.location        = s.location
 LEFT JOIN gold.dim_date_rss           dd  ON dd.full_date       = s.transaction_date;
 
+-- Declared grain (map: one row = one retail transaction, PK transaction_id).
+-- The surrogate fct_sales_rss_sk is the physical PK, but the DECLARED business key
+-- must be physically enforced too, or a double-insert / partial re-run would
+-- silently duplicate every transaction in the BI-facing fact with no constraint
+-- failing (audit C36). Added after load, alongside the FK constraints.
+ALTER TABLE gold.fct_sales_rss ADD CONSTRAINT uq_fct_rss_transaction_id UNIQUE (transaction_id);
+
 -- FK constraints (after load, so the -1 members and rows exist)
 ALTER TABLE gold.fct_sales_rss ADD CONSTRAINT fk_fct_rss_customer       FOREIGN KEY (customer_sk)       REFERENCES gold.dim_customer_rss (customer_sk);
 ALTER TABLE gold.fct_sales_rss ADD CONSTRAINT fk_fct_rss_product        FOREIGN KEY (product_sk)        REFERENCES gold.dim_product_rss (product_sk);
