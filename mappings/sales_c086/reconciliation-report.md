@@ -30,8 +30,8 @@ coverage, 0 orphan FKs, penny-exact reconciliation. Implemented as `retail valid
 | Silver object | `silver.sales_c086` (NOT YET BUILT) |
 | Gold objects | `gold.fct_sales` (PK `Sale_SK`) + `dim_product` / `dim_customer` / `dim_salesperson` / `dim_product_purchaser` / `dim_billing_type` / `dim_branch` + `dim_date` (NOT YET BUILT) |
 | Run date | `<PENDING>` |
-| DB cluster | `db-pgsql-fra1-29712` (fra1) |
-| Database | `ezaby_demo` |
+| DB cluster | from gitignored `.env` (not committed) |
+| Database | from gitignored `.env` (not committed) |
 | Run by | `<PENDING>` |
 | Connection | **READ-ONLY**, credentials from gitignored `.env`. No writes. |
 

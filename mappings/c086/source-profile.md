@@ -16,7 +16,7 @@
 > **ASCII only.** Arrows are `->`, pairs `<->`, status `[OK]`/`[x]`.
 >
 > **Cite numbers, not adjectives.** Counts are sourced from the committed migration
-> SQL and the read-only live run of 2026-06-24 (vs `ezaby_demo`).
+> SQL and the read-only live run of 2026-06-24 (vs the analytics DB; name from `.env`).
 
 ---
 

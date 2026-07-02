@@ -20,7 +20,7 @@ Usage:
 
 Configuration (flags override env):
     --cluster-id / DO_DB_CLUSTER_ID   DigitalOcean DB cluster id (for doctl)
-    --database   / ANALYTICS_DB_NAME  target logical database (default: ezaby_demo)
+    --database   / ANALYTICS_DB_NAME  target logical database (no default; supply via env/flag)
     --src-dir    / SALES_SRC_DIR      folder of .xlsx files to load
     --base-file                       file whose header defines the bronze columns
 """
@@ -178,7 +178,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Load C086 sales Excel files into bronze.")
     ap.add_argument("--cluster-id", default=os.environ.get("DO_DB_CLUSTER_ID"))
     ap.add_argument(
-        "--database", default=os.environ.get("ANALYTICS_DB_NAME", "ezaby_demo")
+        "--database", default=os.environ.get("ANALYTICS_DB_NAME")
     )
     ap.add_argument("--src-dir", default=os.environ.get("SALES_SRC_DIR"))
     ap.add_argument("--base-file", default="C086_Sales_2023_H1_Jan-Jun.xlsx")

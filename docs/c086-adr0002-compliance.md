@@ -45,7 +45,7 @@ not move). This was the disambiguation required before any ADR default is wired 
 | **RC15** | Date dim = **contiguous generated calendar**, never `SELECT DISTINCT` | **PASS (pattern) / LIVE (coverage)** | `0002` L114-127: `generate_series(2023-01-01 .. 2025-12-31, 1 day)` — contiguous, NOT distinct-from-data. Comment: "covers the 2 zero-sales gap days." Pattern is correct in SQL. **Coverage** (does the range actually span all `sale_date`s?) needs the live data. | No | **DONE -> checker rule S7 (static, pattern half).** Checks `dim_date` built from `generate_series` (good) vs `SELECT DISTINCT ... date` (bad). The contiguity *coverage* remains the deferred live half. |
 | **RC16** | Reconcile measure totals every layer; assert 0 orphan FKs before done | **LIVE** | `0002` adds FK constraints AFTER load (L173-178) → Postgres rejects orphans at constraint-add time, so a successful migration *implies* 0 orphans. But the comment-claimed cross-layer total reconciliation (source→silver→gold→BI) is **not in the SQL** — it's a manual/validation step. Cannot prove from text. | No | **Maybe (live):** reconciliation is inherently a live-data check → `retail validate` (deferred live surface), not static. |
 
-## LIVE verification (run 2026-06-24, read-only, against `ezaby_demo` on db-pgsql-fra1-29712)
+## LIVE verification (run 2026-06-24, read-only, against the analytics DB on the DO cluster)
 
 The 3 LIVE items are now **confirmed against real data** (not just correct-by-construction):
 
@@ -59,8 +59,9 @@ The 3 LIVE items are now **confirmed against real data** (not just correct-by-co
 - **Data-quality note (not a defect):** `salesperson_sk` has 71 fact rows mapped to the `-1` unknown
   member — i.e. ~71 line items lack salesperson attribution; the RC14 unknown-member pattern absorbs
   them correctly (no orphan). Worth surfacing to the analyst as a known gap.
-- **Note:** data lives in DB `ezaby_demo` (cluster db-pgsql-fra1-29712), NOT `defaultdb`; `defaultdb`
-  is empty. `.env` points at `ezaby_demo`.
+- **Note:** the analytics data lives in a dedicated logical DB (NOT the cluster's default `defaultdb`,
+  which is empty). The concrete DB name + cluster id come from the gitignored `.env` at runtime; no
+  real DB name or cluster id is committed.
 
 ## Summary (updated with live results)
 

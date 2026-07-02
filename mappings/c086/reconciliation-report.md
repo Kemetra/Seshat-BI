@@ -43,8 +43,8 @@ validation gates and to ADR 0002 defaults `RC2`, `RC15`, `RC16`
 | Silver object | `silver.sales_c086` |
 | Gold objects | `gold.fct_sales` + `gold.dim_product` / `dim_customer` / `dim_salesperson` / `dim_billing_type` / `dim_branch` / `dim_date` (1 fact at line grain + 6 conformed dims) |
 | Run date | `2026-06-24` |
-| DB cluster | `db-pgsql-fra1-29712` (fra1) |
-| Database | `ezaby_demo` (the DB that actually holds the data; `defaultdb` is empty -- `.env` points at `ezaby_demo`) |
+| DB cluster | from gitignored `.env` (not committed) |
+| Database | from gitignored `.env` (a dedicated logical DB; the cluster's `defaultdb` is empty; not committed) |
 | Run by | back-authored from committed 0001/0002 (live-validated) |
 | Connection | **READ-ONLY.** Credentials from the git-ignored `.env` (never committed; Power BI uses parameters, not baked-in strings). No writes performed. |
 

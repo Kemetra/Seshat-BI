@@ -112,8 +112,9 @@ a query confirms it.
 
 ## 5. Live DB validation evidence
 
-**What C086 did.** A **read-only** validation run against `ezaby_demo` (cluster
-`db-pgsql-fra1-29712`, fra1) confirmed the three LIVE items on real data:
+**What C086 did.** A **read-only** validation run against the analytics DB (on the
+DigitalOcean cluster; DB name + cluster id from the gitignored `.env`) confirmed the
+three LIVE items on real data:
 - **RC2 — PASS:** `silver.sales_c086` 246,916 rows = 246,916 distinct `(invoice_no,line_no)`, 0 NULL PK.
 - **RC15 — PASS:** `gold.dim_date` 2023-01-01..2025-12-31 = 1,096 rows = exact span (contiguous);
   spans all `sale_date`s; **0** sale_dates missing from the calendar.
@@ -129,7 +130,8 @@ absorbs them correctly (no orphan); surface this to the analyst as a known gap.
 **Rule it proves.** ADR **RC2, RC16, RC15-coverage**; playbook Phase 5/6 validation gates.
 
 **Evidence.** Live read-only run 2026-06-24 (recorded in `docs/c086-adr0002-compliance.md`
-§LIVE). Note: the data lives in DB **`ezaby_demo`**, not `defaultdb` (which is empty).
+§LIVE). Note: the data lives in a dedicated logical DB, not the cluster's `defaultdb`
+(which is empty); the concrete DB name + cluster id come from the gitignored `.env`.
 
 **Future tables — copy / watch.** *Copy:* run exactly these three checks against the built DB
 before declaring done — PK uniqueness, date coverage + contiguity, 0-orphans + penny-exact

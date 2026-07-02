@@ -18,7 +18,7 @@
 >
 > The measured PROFILE numbers below remain valid; the DECISIONS are superseded as noted.
 >
-> Source: `ezaby_demo` @ cluster `db-pgsql-fra1-29712` (fra1). Read-only; no DSN committed.
+> Source: the analytics DB on the DO cluster (name + cluster id from gitignored `.env`). Read-only; no DSN committed.
 
 ## 1. Shape & grain (mechanical, via `profile.py`)
 

@@ -21,13 +21,13 @@ Configure via flags or env vars:
 | Flag | Env | Meaning |
 |------|-----|---------|
 | `--cluster-id` | `DO_DB_CLUSTER_ID` | DigitalOcean DB cluster id (for `doctl databases connection`) |
-| `--database` | `ANALYTICS_DB_NAME` | target logical database (default `ezaby_demo`) |
+| `--database` | `ANALYTICS_DB_NAME` | target logical database (no default; supply via env/flag) |
 | `--src-dir` | `SALES_SRC_DIR` | folder of `.xlsx` files to load |
 
 \`\`\`bash
 # create bronze/silver/gold schemas + the bronze table, then load all files
 python pipelines/load_bronze.py \
-  --cluster-id "$DO_DB_CLUSTER_ID" --database ezaby_demo \
+  --cluster-id "$DO_DB_CLUSTER_ID" --database "$ANALYTICS_DB_NAME" \
   --src-dir "/path/to/sales/c086" --all
 
 # load a single file (idempotent — replaces that file's prior rows)

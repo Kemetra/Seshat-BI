@@ -90,7 +90,7 @@ present but the actual live run against the production DB is a deferred follow-u
 
 **Independent Test**: `retail validate --help` lists the subcommand and its flags
 (`--database`, target args); the handler's connection path is covered by the seam, the live
-execution against `ezaby_demo` is documented as the deferred step.
+execution against the analytics DB is documented as the deferred step.
 
 **Acceptance Scenarios**:
 
@@ -131,7 +131,7 @@ execution against `ezaby_demo` is documented as the deferred step.
 - **FR-008**: Tests (TDD, first) cover each check pass+fail with a fake runner, plus a guard
   test that the validate/cli import works with psycopg2 absent. Targets (PK/FK/measures) are
   passed as parameters; per-table sourcing from `source-map.yaml` is deferred.
-- **FR-009**: The **live run** against the real DB (`ezaby_demo`) is **out of scope this slice**
+- **FR-009**: The **live run** against the real DB (the analytics DB) is **out of scope this slice**
   -- the surface is built and fixture-verified; executing it live is the deferred follow-up.
 
 ### Key Entities
@@ -162,7 +162,7 @@ execution against `ezaby_demo` is documented as the deferred step.
 ## Assumptions
 
 - Live execution against the production DB is deferred (option B): this slice builds + fixture-
-  tests the surface; the real run against `ezaby_demo` (read-only, creds from gitignored `.env`)
+  tests the surface; the real run against the analytics DB (read-only, creds from gitignored `.env`)
   is a clean follow-up needing a DB window.
 - Check targets (PK columns, FK->dim map, measures) are parameters now; the per-table source is
   the kit's `source-map.yaml` (deferred wiring, named not built).

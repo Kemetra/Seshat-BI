@@ -793,3 +793,38 @@ def test_c2_pathological_label_then_literal_returns_fast(tmp_path: Path) -> None
     assert elapsed < 5.0, f"DO_ENDPOINT_RE backtracked ({elapsed:.2f}s) — ReDoS"
     # The line does contain a valid endpoint (label + literal), so it IS flagged.
     assert any(f.rule_id == "C2" for f in findings)
+
+
+# ---------------------------------------------------------------------------
+# C17 remediation: a committed DO cluster SLUG (real connection context, invisible
+# to the FQDN/URI patterns) is flagged; documented placeholders are not.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_c2_flags_do_cluster_slug(tmp_path: Path) -> None:
+    # A real cluster slug (db-<engine>-<region><n>-<id>) committed in a scanned
+    # file must be flagged even without a full FQDN or postgres:// URI.
+    target = tmp_path / "docs" / "runbook.md"
+    target.parent.mkdir(parents=True)
+    target.write_text("cluster db-pgsql-fra1-29712 holds the data\n", encoding="utf-8")
+    ctx = RuleContext(repo_root=tmp_path, tracked_files=("docs/runbook.md",))
+    findings = _scan_contents(ctx)
+    assert len(findings) == 1
+    assert findings[0].rule_id == "C2"
+    assert findings[0].locator == "docs/runbook.md:1"
+    assert "cluster slug" in findings[0].message
+
+
+@pytest.mark.unit
+def test_c2_cluster_slug_placeholder_not_flagged(tmp_path: Path) -> None:
+    # A documented placeholder (angle brackets cannot sit inside the slug class)
+    # and ordinary hyphenated identifiers must NOT trip the slug detector.
+    target = tmp_path / "docs" / "conn.md"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        "cluster db-<engine>-<region>-<id> from .env; see dim-product, fct-sales.\n",
+        encoding="utf-8",
+    )
+    ctx = RuleContext(repo_root=tmp_path, tracked_files=("docs/conn.md",))
+    assert _scan_contents(ctx) == []

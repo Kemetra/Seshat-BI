@@ -18,7 +18,7 @@
 # This is the machine-readable spine of the source-mapping gate for C086: each
 # source column mapped to (a) its silver column and (b) its placement in the
 # gold Kimball star. The gate is CLEARED -- 16/16 ADR-0002 defaults pass,
-# validated live on 2026-06-24 (read-only vs ezaby_demo).
+# validated live on 2026-06-24 (read-only vs the analytics DB; name from .env).
 #
 # RC ids below are ADR-0002 cleaning defaults (RC1-RC16). The retail check
 # governance checker uses a SEPARATE D1-D8 namespace. Distinct prefixes, no

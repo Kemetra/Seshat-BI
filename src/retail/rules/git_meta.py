@@ -309,6 +309,20 @@ def rule_p2_commit_subjects(ctx: RuleContext) -> Iterable[Finding]:
 # the label class).
 DO_ENDPOINT_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]{0,253}\.db\.ondigitalocean\.com")
 CONN_URI_RE = re.compile(r"postgres(?:ql)?://[^@\s]+@")
+# A DigitalOcean managed-database CLUSTER SLUG has the shape
+# `db-<engine>-<region-letters><digit>-<numeric-id>` (a concrete example is a
+# `db-` prefix, an engine token, a region label ending in a digit, then a run of
+# digits). It is NOT a secret on its own (it grants no access and hides the full
+# FQDN), but it IS real connection context the repo's hard rule ("never write real
+# values into tracked files") forbids -- and the audit found it committed in 8
+# files, invisible to the FQDN/URI patterns above. The pattern is anchored on the
+# engine token + `<region-letters><digit>` + trailing numeric cluster id, so
+# ordinary hyphenated tokens (table names use `_`; `dim-`/`fct-` never carry a
+# trailing `-<digits>`) do not match, and the `<...>` angle-bracket placeholder
+# cannot appear inside the character class, so a documented placeholder such as
+# `db-<engine>-<region>-<id>` does NOT match. (This very comment is deliberately
+# written to describe the shape without embedding a matching literal.)
+DO_CLUSTER_SLUG_RE = re.compile(r"\bdb-[a-z]{2,}-[a-z]{2,}\d-\d{3,}\b")
 REQUIRED_ENV_KEYS = (
     "ANALYTICS_DB_HOST",
     "ANALYTICS_DB_PORT",
@@ -432,6 +446,21 @@ def _scan_contents(ctx: RuleContext) -> list[Finding]:
                         rule_id="C2",
                         severity=Severity.ERROR,
                         message="possible committed connection string / secret",
+                        locator=f"{path}:{lineno}",
+                    )
+                )
+            # A committed DO cluster slug is real connection context (not a secret,
+            # but a real value the hard rule forbids). Reported separately so the
+            # message does not overstate it as a "secret".
+            elif DO_CLUSTER_SLUG_RE.search(line):
+                findings.append(
+                    Finding(
+                        rule_id="C2",
+                        severity=Severity.ERROR,
+                        message=(
+                            "committed DigitalOcean cluster slug (real connection "
+                            "context) -- move it to the gitignored .env"
+                        ),
                         locator=f"{path}:{lineno}",
                     )
                 )
