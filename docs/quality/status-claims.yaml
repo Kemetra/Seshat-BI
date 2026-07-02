@@ -27,25 +27,19 @@ claims:
   # first-hour-compass surfaces two worked examples as first-arrival reference
   # patterns; SC1 locks those file references so the skill can never point at a
   # deleted/renamed example (nor can the anchoring table row silently move).
-  - id: "first-hour-compass-worked-example-c086"
-    doc: ".claude/skills/first-hour-compass/SKILL.md"
-    anchor: "| `docs/worked-examples/c086-pharmacy.md` | The medallion **build** pattern (pharmacy sales): bronze -> silver -> gold + live validation, to **Gold Ready** |"
-    claimed-artifact: "docs/worked-examples/c086-pharmacy.md"
-    claimed-status: "built"
+  # (076 extraction) the c086-pharmacy worked example was archived out of the
+  # product as client data; first-hour-compass now offers only retail-store-sales
+  # (the Kaggle public example). The c086 claim is removed; the store-sales claim
+  # below remains the single locked worked-example reference.
   - id: "first-hour-compass-worked-example-store-sales"
     doc: ".claude/skills/first-hour-compass/SKILL.md"
-    anchor: "| `docs/worked-examples/retail-store-sales.md` | The **full seven-stage spine** to Dashboard Ready -- metric contracts, governed model, dashboard design, handoff |"
+    anchor: "| `docs/worked-examples/retail-store-sales.md` | The **full seven-stage spine** to Dashboard Ready -- metric contracts, governed model, dashboard design, handoff (on the public Kaggle retail-store-sales dataset) |"
     claimed-artifact: "docs/worked-examples/retail-store-sales.md"
     claimed-status: "built"
   # The usage/boundary doc also names both examples in its first-arrival section;
   # lock those references too so the doc and skill cannot drift apart or dangle.
-  - id: "first-hour-compass-doc-worked-example-c086"
-    doc: "docs/tools/first-hour-compass.md"
-    anchor: "analog: `docs/worked-examples/c086-pharmacy.md` (the medallion BUILD pattern to Gold Ready --"
-    claimed-artifact: "docs/worked-examples/c086-pharmacy.md"
-    claimed-status: "built"
   - id: "first-hour-compass-doc-worked-example-store-sales"
     doc: "docs/tools/first-hour-compass.md"
-    anchor: "point-of-sale / transactional retail) or `docs/worked-examples/retail-store-sales.md` (the"
+    anchor: "`docs/worked-examples/retail-store-sales.md` (the full seven-stage spine to Dashboard Ready --"
     claimed-artifact: "docs/worked-examples/retail-store-sales.md"
     claimed-status: "built"

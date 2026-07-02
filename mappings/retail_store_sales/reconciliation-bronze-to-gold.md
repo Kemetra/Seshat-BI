@@ -18,7 +18,7 @@
 | Bronze object | `bronze.retail_store_sales` (faithful all-TEXT landing + lineage) |
 | Gold object | `gold.fct_sales_rss` (+ 5 dims) |
 | Run date | 2026-06-25 |
-| DB cluster / database | `db-pgsql-fra1-29712` / `training` |
+| DB cluster / database | `<postgres-cluster>` / `training` (host in the gitignored `.env`) |
 | Run by | agent (read-only psycopg2 session; SELECT only) |
 | Connection | READ-ONLY; credentials from `doctl` at runtime; no writes, none committed |
 

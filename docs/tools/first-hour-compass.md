@@ -27,12 +27,11 @@ named nothing -- the Compass does more than point at `retail-onboard-table`: it 
 **worked example to steer by**. This is the first-hour "aha" -- the fastest start is to hold a
 filled example up and copy its *shape*, not to begin at an empty gate.
 
-The card presents the two committed worked examples and lets the author pick the closer domain
-analog: `docs/worked-examples/c086-pharmacy.md` (the medallion BUILD pattern to Gold Ready --
-point-of-sale / transactional retail) or `docs/worked-examples/retail-store-sales.md` (the
-full seven-stage spine to Dashboard Ready -- store-level / general retail sales, and the example
-to use when the later stages are needed). It then
-routes into `retail-onboard-table` for the author's own table, holding the chosen example up as
+The card presents the committed worked example as the reference pattern:
+`docs/worked-examples/retail-store-sales.md` (the full seven-stage spine to Dashboard Ready --
+build mechanics through semantic model, dashboard, and handoff, on the public Kaggle
+retail-store-sales dataset). It then
+routes into `retail-onboard-table` for the author's own table, holding the example up as
 the reference. The two differ in depth: c086 stops at Gold Ready (build mechanics), while
 retail-store-sales carries the semantic-model / dashboard / handoff stages
 (see `docs/worked-examples/README.md`).
@@ -71,8 +70,8 @@ Every value is a verbatim copy. The card never recomputes a status or synthesize
 
 ## Generic, not C086
 
-The template + cross-walk are generic (`<schema>.<table>`, `<stage_key>`). C086 /
-`retail_store_sales` appears only as a cited filled instance in `../worked-examples/c086-pharmacy.md`.
+The template + cross-walk are generic (`<schema>.<table>`, `<stage_key>`).
+`retail_store_sales` appears only as a cited filled instance in `../worked-examples/retail-store-sales.md`.
 
 ## Deferred (not built this slice)
 
@@ -85,7 +84,7 @@ The template + cross-walk are generic (`<schema>.<table>`, `<stage_key>`). C086 
 
 - The card template + stage->skill cross-walk: `../../templates/first-hour-compass.md`
 - The skill: `../../.claude/skills/first-hour-compass/SKILL.md`
-- First-arrival reference patterns: `../worked-examples/c086-pharmacy.md`,
+- First-arrival reference pattern: `../worked-examples/retail-store-sales.md`,
   `../worked-examples/retail-store-sales.md`
 - The onboarding walk the arrival flow routes into: `../../.claude/skills/retail-onboard-table/SKILL.md`
 - Multi-table parent (F026): `readiness-viewer.md`

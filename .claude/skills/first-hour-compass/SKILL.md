@@ -50,17 +50,15 @@ at "run `retail-onboard-table`". First give them a concrete pattern to steer by.
 first-hour "aha": a new author's fastest path is to hold up a filled example and copy its
 *shape*, not to start from an empty gate.
 
-Present the two committed worked examples and let the user pick the closer domain analog:
+Present the committed worked example as the reference pattern to steer by:
 
 | Worked example | What it demonstrates | Pick it when your table is... |
 |----------------|----------------------|-------------------------------|
-| `docs/worked-examples/c086-pharmacy.md` | The medallion **build** pattern (pharmacy sales): bronze -> silver -> gold + live validation, to **Gold Ready** | ...a point-of-sale / transactional retail table (line items, returns, walk-ins) and you are focused on the build mechanics |
-| `docs/worked-examples/retail-store-sales.md` | The **full seven-stage spine** to Dashboard Ready -- metric contracts, governed model, dashboard design, handoff | ...a store-level / general retail-sales table, or you need the later stages (semantic model, dashboard, handoff) |
+| `docs/worked-examples/retail-store-sales.md` | The **full seven-stage spine** to Dashboard Ready -- metric contracts, governed model, dashboard design, handoff (on the public Kaggle retail-store-sales dataset) | ...any retail-sales table; it carries the build mechanics AND the later stages (semantic model, dashboard, handoff) |
 
-Then hand off to `retail-onboard-table` for the user's own table, **holding the chosen example
-up as the reference** for that walk. Note the depth difference: c086 is the build-to-Gold
-pattern; for semantic-model / dashboard / handoff guidance, `retail-store-sales` is the example
-that carries those stages (see `docs/worked-examples/README.md`). Be explicit about what "use this example" means:
+Then hand off to `retail-onboard-table` for the user's own table, **holding the example
+up as the reference** for that walk (see `docs/worked-examples/README.md`). Be explicit
+about what "use this example" means:
 
 - The examples are **narrative patterns, not file templates** -- c086 itself says "copy this
   section structure, swap C086 for the new table, run the playbook's 7 phases". So the skill
@@ -103,8 +101,8 @@ tracked file); the only output is the rendered card in the response.
 ## See also
 
 - The card template + stage->skill cross-walk: `../../../templates/first-hour-compass.md`
-- First-arrival reference patterns: `../../../docs/worked-examples/c086-pharmacy.md`,
-  `../../../docs/worked-examples/retail-store-sales.md` (narrative patterns, not templates)
+- First-arrival reference pattern: `../../../docs/worked-examples/retail-store-sales.md`
+  (a narrative pattern, not a template)
 - The onboarding walk this routes into: `../retail-onboard-table/SKILL.md`
 - Usage + boundary doc: `../../../docs/tools/first-hour-compass.md`
 - Multi-table parent (F026): `../readiness-viewer/SKILL.md`

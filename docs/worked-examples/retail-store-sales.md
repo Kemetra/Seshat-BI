@@ -176,7 +176,7 @@ exits 0.
 **Evidence.** `0004_create_gold_retail_store_sales_star.sql`;
 `mappings/retail_store_sales/reconciliation-report.md` (verdict **PASS**) and
 `readiness-status.yaml` `gold_ready`, from a read-only `retail validate` run against the
-`training` DB (cluster `db-pgsql-fra1-29712`): PK unique on the transform, date coverage
+`training` DB (a Postgres cluster; host in the gitignored `.env`): PK unique on the transform, date coverage
 complete, **0 orphan FKs across all 5 dims**, penny-exact reconciliation (quantity
 **66,276**; total_spent **1,552,071.00**), and the 1,213 missing-item rows confirmed on
 the `-1` member.
