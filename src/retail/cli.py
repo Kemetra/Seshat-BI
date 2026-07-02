@@ -226,6 +226,18 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     init_p.add_argument("--repo", default=".", help="repo root to bootstrap")
 
+    # `kit-lint` (feature 072): standalone Maintenance-Automation step (NOT a `retail
+    # check` rule -- it parses yaml). Fails loud (exit 1) when a compass PROJECTION
+    # drifts from the canonical kit source. Read-only; reads no constitution.
+    kit_lint_p = sub.add_parser(
+        "kit-lint",
+        help=(
+            "fail loud if a compass projection (.seshat/compass.yaml or the fenced "
+            "AGENTS.md/CLAUDE.md regions) drifts from .seshat/kit-source.yaml"
+        ),
+    )
+    kit_lint_p.add_argument("--repo", default=".", help="repo root to lint")
+
     return parser
 
 
@@ -285,6 +297,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "init":
         return _run_init(args)
+
+    if args.command == "kit-lint":
+        return _run_kit_lint(args)
 
     return 0
 
@@ -384,6 +399,31 @@ def _run_init(args) -> int:
         print(f"projected SESHAT-KIT fence in {name}")
     print(f"\n{result.next_step}")
     return 0
+
+
+def _run_kit_lint(args) -> int:
+    """Fail loud on compass projection drift (feature 072). Read-only.
+
+    Standalone step, NOT a `retail check` rule -- imported LAZILY (it pulls in the
+    pyyaml-using compass_project), mirroring `_run_semantic_check` / `_run_init` and
+    keeping the check path yaml-free. Exit 0 clean (or not-bootstrapped), 1 on drift.
+    """
+    from . import kit_lint
+
+    report = kit_lint.lint(args.repo)
+
+    if not report.bootstrapped:
+        print("kit-lint: not bootstrapped -- run `retail init` (nothing to lint).")
+        return 0
+
+    for r in report.results:
+        status = "ok" if r.ok else "DRIFT"
+        print(f"[{status}] {r.name}")
+        for d in r.details:
+            print(f"    {d}")
+    if report.ok:
+        print("kit-lint: no projection drift.")
+    return 0 if report.ok else 1
 
 
 def _ensure_driver() -> bool:
