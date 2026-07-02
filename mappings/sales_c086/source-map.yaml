@@ -25,8 +25,8 @@ meta:
   natural_key_silver_only:                         # the dedup proof; hidden from gold
     - "billing_document"
     - "item_no"
-  reviewed_by: "<PENDING REVIEW -- judgment-call ANSWERS recorded by Ahmed Shaaban; map REVIEW still pending>"
-  reviewed_on: "<PENDING>"
+  reviewed_by: "Ahmed Shaaban (data_owner) -- map review completed; approval recorded in readiness-status.yaml approvals[]"
+  reviewed_on: "2026-07-02"
 
 defaults:
   adopted:

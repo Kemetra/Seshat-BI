@@ -9,10 +9,16 @@
 - **Table id:** `sales_c086` (El Ezaby pharmacy branch C086 sales)
 - **Date raised / answered:** `2026-06-29`
 - **Raised by:** agent  |  **Answered by:** Ahmed Shaaban (data-owner)
-- **Gate status:** `CLEARED`. The six judgment calls are answered AND the map was reviewed
-  and approved by the data-owner (Ahmed Shaaban) via the merge of PR #86 into `main`
-  (2026-06-29). The source-mapping gate is cleared; silver/gold SQL authoring is unblocked.
-  (Authoring `.sql` files only; applying the SQL to the DB remains a separate human step.)
+- **Gate status:** `CLEARED`. The six judgment calls were answered (2026-06-29) and the
+  map REVIEW was completed and approved by the data-owner (Ahmed Shaaban) on 2026-07-02;
+  the approval is recorded in `readiness-status.yaml` `approvals[]` ({stage: mapping_ready}).
+  Silver/gold SQL authoring is unblocked. (Authoring `.sql` files only; applying the SQL
+  to the DB remains a separate human step.)
+- **CORRECTION (2026-07-02 adversarial audit):** an earlier revision of this file claimed
+  the map was approved "via the merge of PR #86 into `main` (2026-06-29)". That claim is
+  RETRACTED: a merge is not a map review, and at that merge the map's own `reviewed_by`
+  still read `<PENDING>`. Migrations 0005/0006 were therefore authored AHEAD of the gate
+  (an ordering violation). The 2026-07-02 recorded approval above is the remediation.
 
 ---
 

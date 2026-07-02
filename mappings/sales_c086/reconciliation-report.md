@@ -1,7 +1,8 @@
 # Reconciliation Report -- `sales_c086`
 
-> The LIVE acceptance blank. Completed only AFTER silver + gold are built. The gate
-> is shut and no silver/gold exists, so live results are `PENDING`. Only the SOURCE
+> The LIVE acceptance blank. Completed only AFTER silver + gold are built. The mapping
+> gate is CLEARED (map approved by the data-owner 2026-07-02 -- see readiness-status.yaml)
+> but no silver/gold is applied yet, so live results are `PENDING`. Only the SOURCE
 > (bronze) baseline is filled, measured 2026-06-29. Reflects the final chain decisions
 > (Sale_SK surrogate PK; 2 measures Gross_Sales + Quantity; overlap-corrected filters).
 > ASCII only.
@@ -14,8 +15,9 @@ LIVE acceptance gates (playbook Phase 5/6; ADR RC2, RC15, RC16): PK uniqueness, 
 coverage, 0 orphan FKs, penny-exact reconciliation. Implemented as `retail validate`
 (`src/retail/validate.py`).
 
-> **STATUS: PENDING BUILD.** silver/gold for `sales_c086` are not built; the gate is OPEN
-> (judgment-call ANSWERS recorded, map REVIEW pending). Observed columns stay `PENDING`
+> **STATUS: PENDING BUILD.** silver/gold for `sales_c086` are not built (0005/0006 are
+> authored, awaiting the human apply step); the mapping gate is CLEARED (map reviewed +
+> approved 2026-07-02, recorded in readiness-status.yaml). Observed columns stay `PENDING`
 > until the build + a read-only `retail validate` run. The SOURCE baseline is recorded now.
 
 ---

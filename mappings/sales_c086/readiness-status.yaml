@@ -1,0 +1,101 @@
+# =============================================================================
+# readiness-status.yaml  --  sales_c086 (El Ezaby pharmacy branch C086 sales)
+# =============================================================================
+# Per-table readiness state (ADR 0004), spanning all seven stages. Created
+# 2026-07-02 as remediation of the adversarial audit (findings C1/C7): the
+# mapping gate had been claimed CLEARED in prose with no approvals[] record and
+# no readiness-status file at all. This file records the REAL state: the map
+# review + approval by the data-owner (2026-07-02), and the honest position of
+# every later stage. Four statuses + evidence + blockers, never a numeric
+# score. ASCII only.
+# =============================================================================
+
+# --- identity ---------------------------------------------------------------
+table: "bronze.sales_c086_raw"
+source_id: "sales_c086"
+source_family: "retail_pos_export"
+
+# --- where we are -----------------------------------------------------------
+current_stage: "silver_ready"         # stages 1-2 pass; silver blocked on the human apply step
+mapping_version: "1"
+
+# --- the seven stages -------------------------------------------------------
+stages:
+
+  source_ready:
+    status: "pass"
+    # DB source (bronze table) -- source_kind omitted per the template default.
+    evidence:
+      - "mappings/sales_c086/source-profile.md (249,106 landed rows; 48 cols; natural key (billing_document, item_no) proven unique; missingness measured)"
+      - "semantics + PII ruling answered by the data-owner 2026-06-29 (unresolved-questions.md Q1-Q6: return flag, PII drops, branch dim, row filters, measure set, WALK_IN remap)"
+    blocking_reasons: []
+
+  mapping_ready:
+    status: "pass"
+    evidence:
+      - "mappings/sales_c086/source-map.yaml (grain = invoice line item; PK = generated sale_sk; natural key silver-only; reviewed_by filled 2026-07-02)"
+      - "mappings/sales_c086/assumptions.md (RC adopted/deviations recorded: RC9 two-measure set, RC2 surrogate PK, RC6 WALK_IN remap)"
+      - "mappings/sales_c086/unresolved-questions.md (Gate status: CLEARED; Q1-Q6 answered 2026-06-29; map review completed 2026-07-02)"
+      - "approval recorded in approvals[] below (Ahmed Shaaban, data_owner, 2026-07-02)"
+    blocking_reasons: []
+    # NOTE (audit trail): warehouse/migrations/0005/0006 were AUTHORED 2026-06-29,
+    # ahead of this review -- a gate-ordering violation caught by the 2026-07-02
+    # adversarial audit. The violation is acknowledged in unresolved-questions.md;
+    # the recorded approval below is the remediation, not a back-dated claim.
+
+  silver_ready:
+    status: "blocked"
+    evidence:
+      - "warehouse/migrations/0005_create_silver_sales_c086.sql authored (DROP+CREATE, one txn); retail check exit 0"
+    blocking_reasons:
+      - "the SQL is authored but NOT applied: applying migrations to the DB is a human seam (DB write). A human runs 0005, then 0006, then a read-only retail validate fills reconciliation-report.md."
+
+  gold_ready:
+    status: "not_started"
+    # 0006_create_gold_sales_c086_star.sql is PRE-AUTHORED and gated (retail check
+    # exit 0), but the stage is not entered: silver_ready is blocked on the apply
+    # step and the live reconciliation (mappings/sales_c086/reconciliation-report.md)
+    # is PENDING BUILD.
+    evidence: []
+    blocking_reasons: []
+
+  semantic_model_ready:
+    status: "not_started"
+    # A PBIP model (powerbi/c086 _sales.SemanticModel, 30 measures) and 33 metric
+    # contracts (mappings/c086/metrics/) EXIST but were built ahead of the pipeline
+    # (audit finding C14). The stage is not entered until gold_ready passes and the
+    # contracts carry owner approval.
+    evidence: []
+    blocking_reasons: []
+
+  dashboard_ready:
+    status: "not_started"
+    # A 5-page report exists (powerbi/c086 _sales.Report), built ahead of the
+    # pipeline (audit finding C14). Not entered until semantic_model_ready passes.
+    evidence: []
+    blocking_reasons: []
+
+  publish_ready:
+    status: "not_started"
+    evidence: []
+    blocking_reasons: []
+
+# --- cross-cutting ----------------------------------------------------------
+evidence:
+  - "mapping gate CLEARED: judgment calls answered 2026-06-29; map review + approval recorded 2026-07-02"
+blocking_reasons:
+  - "silver apply pending: a human applies warehouse/migrations/0005 + 0006 to the DB (read-write human seam), then a read-only retail validate run fills reconciliation-report.md."
+
+# --- approvals (named human sign-offs; the agent cannot self-grant) ---------
+approvals:
+  - stage: "mapping_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-07-02"
+    note: "map review completed and approved in-session (adversarial-audit remediation). The six judgment calls were answered 2026-06-29; the map REVIEW itself happened 2026-07-02. Supersedes the retracted 'approved via the merge of PR #86' prose claim -- a merge is not a map review."
+
+# --- the single next allowed action -----------------------------------------
+next_action: "a human applies warehouse/migrations/0005_create_silver_sales_c086.sql then 0006_create_gold_sales_c086_star.sql to the DB (human seam), then runs a read-only retail validate to fill mappings/sales_c086/reconciliation-report.md"
+
+# --- audit ------------------------------------------------------------------
+last_checked_at: "2026-07-02"
+checked_by: "agent (adversarial-audit remediation); map approved by Ahmed Shaaban (data_owner)"

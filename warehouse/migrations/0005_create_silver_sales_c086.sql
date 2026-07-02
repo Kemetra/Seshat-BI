@@ -2,7 +2,9 @@
 -- Build silver.sales_c086 (typed/cleaned line-item fact) from bronze.sales_c086_raw.
 --
 -- SUPERSEDES 0001_create_silver_sales_c086.sql. Authoritative silver build for the
--- FINAL approved map (mappings/sales_c086/, gate CLEARED via PR #86, 2026-06-29).
+-- FINAL approved map (mappings/sales_c086/; map review + approval recorded 2026-07-02
+-- in readiness-status.yaml approvals[]. NOTE: this SQL was authored 2026-06-29, AHEAD
+-- of that review -- the gate-ordering violation is acknowledged + remediated there).
 -- Differs from 0001 by design:
 --   * 2 measures only: gross_sales + quantity (net/tax/discount dropped -- RC9 deviation).
 --   * Generated surrogate PK sale_sk; natural key (invoice_no, line_no) kept SILVER-ONLY
