@@ -1,3 +1,22 @@
+-- =====================================================================
+-- *** SUPERSEDED -- DO NOT RUN ***
+-- =====================================================================
+-- This migration is SUPERSEDED by 0005_create_silver_sales_c086.sql, which
+-- builds silver.sales_c086 with the CURRENT authoritative schema (brand,
+-- division, salesperson_position, gross_sales, quantity, ...). The shape
+-- built below is OBSOLETE and no longer matches what 0006 (gold star) reads.
+--
+-- Two foot-guns this guard defuses:
+--   1. The DROP TABLE + CREATE below would SILENTLY REVERT the authoritative
+--      0005 silver back to this old shape and break 0006.
+--   2. 0002 (also superseded) still SELECTs the old columns produced here.
+--
+-- A hard PL/pgSQL guard (immediately after BEGIN, before the destructive DROP)
+-- raises an exception so this script ABORTS its transaction and can never
+-- reach the DROP. The original body is retained below for history/readability
+-- only. See warehouse/README.md (Supersession note).
+-- =====================================================================
+--
 -- 0001_create_silver_sales_c086.sql
 -- Build silver.sales_c086 (typed/cleaned line-item fact) from bronze.sales_c086_raw.
 --
@@ -16,6 +35,9 @@
 SET client_encoding TO 'UTF8';
 
 BEGIN;
+
+-- *** SUPERSEDED GUARD *** -- refuse to run; abort before the destructive DROP.
+DO $$ BEGIN RAISE EXCEPTION 'Migration 0001 is SUPERSEDED by 0005_create_silver_sales_c086.sql -- do not run. See warehouse/README.md.'; END $$;
 
 CREATE SCHEMA IF NOT EXISTS silver;
 

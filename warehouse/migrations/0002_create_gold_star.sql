@@ -1,3 +1,23 @@
+-- =====================================================================
+-- *** SUPERSEDED -- DO NOT RUN ***
+-- =====================================================================
+-- This migration is SUPERSEDED by 0006_create_gold_sales_c086_star.sql, which
+-- builds the gold star over the CURRENT authoritative silver (from 0005).
+--
+-- Why it is now BROKEN and dangerous:
+--   1. It SELECTs silver columns that no longer exist in the 0005-built silver
+--      (product_brand, product_group, business_segment, job_title, net_amount,
+--      sales_amount). The current silver has brand, division,
+--      salesperson_position, gross_sales/quantity only -- so this script now
+--      ERRORS mid-transaction against the live schema.
+--   2. Its DROP TABLE statements would tear down the authoritative 0006 gold.
+--
+-- A hard PL/pgSQL guard (immediately after BEGIN, before the DROPs) raises an
+-- exception so this script ABORTS its transaction and can never reach the DROP.
+-- The original body is retained below for history/readability only.
+-- See warehouse/README.md (Supersession note).
+-- =====================================================================
+--
 -- 0002_create_gold_star.sql
 -- Build the gold Kimball star schema over silver.sales_c086.
 --
@@ -15,6 +35,9 @@
 SET client_encoding TO 'UTF8';
 
 BEGIN;
+
+-- *** SUPERSEDED GUARD *** -- refuse to run; abort before the destructive DROPs.
+DO $$ BEGIN RAISE EXCEPTION 'Migration 0002 is SUPERSEDED by 0006_create_gold_sales_c086_star.sql -- do not run. See warehouse/README.md.'; END $$;
 
 CREATE SCHEMA IF NOT EXISTS gold;
 
