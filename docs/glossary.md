@@ -117,7 +117,7 @@ mirrors it and the `retail-govern` skill maps each id to its fix.
 | **A** | route registry / architecture | `A1` route-registry targets resolve or are honestly marked planned · `A3` knowledge-map route ids ↔ `routes.yaml` ids are in bijection |
 | **B** | never-execute boundary | `B1` no module-scope DB/network import in the static core (the static surface never executes on import) · `B3` live-surface modules keep DB/network imports lazy (no module-scope connection import) |
 | **PP** | publish-pack completeness | `PP1` every required handoff-pack section is filled (checks the publish-approval slot is present, never grants it) |
-| **SC** | status-claim integrity | `SC1` a prose status claim reconciles with tracked-file evidence (no stale planned/built marker) |
+| **SC** | status-claim integrity | `SC1` a prose status claim reconciles with tracked-file evidence (no stale planned/built marker) · `SC2` a prose "N rules" count claim reconciles with the authoritative rule count (manifest-anchored, never a free repo scan) |
 | **DF** | dependency-edge integrity | `DF1` parked-on dependency edges reconcile with tracked-file evidence |
 | **SL** | KPI coverage scorecard | `SL1` a committed coverage scorecard is structurally well-formed (status-enum, named blocker, resolving contract, no percentage) |
 | **AL** | assumption ledger | `AL1` a metric contract with an unresolved assumption (blocked + reasons) must not also carry a settled gold binding |
