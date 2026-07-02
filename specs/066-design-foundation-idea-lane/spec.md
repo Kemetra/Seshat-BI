@@ -4,7 +4,22 @@
 
 **Created**: 2026-07-02
 
-**Status**: Draft
+**Status**: Ratified (Ahmed Shaaban, 2026-07-02)
+
+> Ratified under the recorded ADOPT-batch autonomous authority dated 2026-07-02
+> (owner directive: build+ratify+merge the entire ADOPT bucket; the advisor
+> exercises the delegated per-spec ratify authority). A recorded per-spec override
+> within that batch, not a standing waiver. No OPEN carve-out remains; the three
+> reserved items are resolved conservatively (each the narrowest, no-schema-churn
+> choice): (1) lane grain = a new `## Design Foundation` section in idea-backlog.md
+> (simplest, no per-idea tag migration, matches the existing section structure);
+> (2) ledger = REUSE the existing shipped-ideas.yaml `{status, pr_sha, f_row}` shape
+> UNCHANGED (no new field -> the IL1 ledger-contract guard is untouched); (3) no
+> roadmap F-row (off-spine like IL1/SC2; f_row none). Scope is the basic lane
+> (docs + small idea-engine JS routing) only -- the structured lint-backlog +
+> auto-reconciler stays a deferred HORIZON extension, and G1 adds NO src/retail rule
+> and never promotes an idea onto the roadmap (Principle V). analyze: clean (0/0);
+> plan-review: PASS-WITH-NOTES.
 
 **Input**: User description: "G1. Design-Foundation Idea Lane + Backlog Seed"
 
