@@ -479,6 +479,21 @@ def scaffold(
     if registered is not None and rule_id in registered:
         return ScaffoldResult(refused=f"rule id {rule_id!r} is already registered")
 
+    # 2b. Refuse if the id is already a member of EXPECTED_RULE_IDS even when the
+    #     live registry does not know it (a prior partial scaffold whose stub
+    #     module was deleted but whose EXPECTED_RULE_IDS edit survived). Without
+    #     this the id would be inserted a SECOND time -- contradicting the spec's
+    #     idempotent-safe "will not double-insert" guarantee. Read-only check.
+    wiring_probe = _read(repo, WIRING_TEST_REL)
+    if wiring_probe is not None and _id_in_expected_set(wiring_probe, rule_id):
+        return ScaffoldResult(
+            refused=(
+                f"rule id {rule_id!r} is already a member of {EXPECTED_SET_NAME} "
+                f"in {WIRING_TEST_REL} (prior partial scaffold?); refusing to "
+                f"double-insert"
+            )
+        )
+
     module_rel = f"src/retail/rules/{_module_name(rule_id)}.py"
     test_rel = f"tests/unit/test_{_module_name(rule_id)}.py"
 

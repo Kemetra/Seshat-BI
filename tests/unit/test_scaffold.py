@@ -120,6 +120,36 @@ def test_scaffold_refuses_already_registered_id(tmp_path: Path) -> None:
     assert result.written == ()
 
 
+def test_scaffold_refuses_when_id_already_in_expected_set_but_module_absent(
+    tmp_path: Path,
+) -> None:
+    # Regression: a prior partial scaffold left the id inside EXPECTED_RULE_IDS
+    # but its stub module was deleted, so the LIVE registry no longer knows it.
+    # The "already registered" refusal (live-registry only) does NOT fire here,
+    # so without a text-membership check the id would be inserted a SECOND time,
+    # breaking the spec's idempotent-safe "will not double-insert" guarantee.
+    repo = _fixture_repo(tmp_path)
+    wiring_rel = "tests/unit/test_rules_wiring.py"
+    wiring = repo / wiring_rel
+    text = wiring.read_text(encoding="utf-8")
+    # Inject a fresh id (not a live-registered rule) into EXPECTED_RULE_IDS,
+    # simulating the surviving-edit half of a partial prior scaffold.
+    injected = text.replace(
+        "EXPECTED_RULE_IDS = frozenset(\n    {\n",
+        'EXPECTED_RULE_IDS = frozenset(\n    {\n        "Zdup",\n',
+        1,
+    )
+    assert injected != text, "fixture EXPECTED_RULE_IDS block shape changed"
+    wiring.write_text(injected, encoding="utf-8")
+
+    result = scaffold.scaffold(repo, "Zdup", "A title")
+    assert not result.ok
+    assert "already a member" in result.refused
+    assert result.written == ()
+    # The id appears exactly once -- never double-inserted.
+    assert wiring.read_text(encoding="utf-8").count('"Zdup"') == 1
+
+
 def test_scaffold_refuses_when_stub_module_exists(tmp_path: Path) -> None:
     repo = _fixture_repo(tmp_path)
     # Pre-create the stub module the helper would write.
