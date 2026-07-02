@@ -59,3 +59,12 @@ jobs:
         # gate the contract<->DAX denominator drift class (drift => exit 1). No
         # --commit-range: it reads committed TMDL + contracts, not git diffs.
         run: retail semantic-check --repo .
+
+      - name: Retail kit-lint (compass projection drift)
+        # Separate step (feature 072): like semantic-check, this parses yaml
+        # (.seshat/kit-source.yaml) so it stays OUT of the stdlib-only `retail check`
+        # core. Fails loud (exit 1) when a compass projection -- .seshat/compass.yaml
+        # or the fenced SESHAT-KIT regions of AGENTS.md/CLAUDE.md -- drifts from the
+        # canonical source (i.e. someone edited the source but forgot `retail init`).
+        # Read-only; reads no constitution. On an un-bootstrapped repo it exits 0.
+        run: retail kit-lint --repo .
