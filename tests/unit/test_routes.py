@@ -76,6 +76,51 @@ def test_built_route_with_missing_target_fails(tmp_path: Path) -> None:
     assert "broken" in findings[0].message.lower()
 
 
+def test_seed_route_with_resolving_target_passes(tmp_path: Path) -> None:
+    # A 'seed' target that EXISTS passes -- seed means "exists but is an initial
+    # cut"; the only mechanical guarantee (like built) is existence.
+    ctx = _stage(
+        tmp_path,
+        "routes:\n"
+        '  - id: "1"\n'
+        '    task: "x"\n'
+        '    targets: ["skills/a/SKILL.md"]\n'
+        "    status: seed\n",
+        extra_files=("skills/a/SKILL.md",),
+    )
+    assert list(check_routes_resolve(ctx)) == []
+
+
+def test_seed_route_with_missing_target_fails(tmp_path: Path) -> None:
+    # A 'seed' route whose target does not exist is broken, exactly like 'built'.
+    ctx = _stage(
+        tmp_path,
+        "routes:\n"
+        '  - id: "1"\n'
+        '    task: "x"\n'
+        '    targets: ["skills/a/MISSING.md"]\n'
+        "    status: seed\n",
+    )
+    findings = list(check_routes_resolve(ctx))
+    assert len(findings) == 1
+    assert findings[0].rule_id == "A1"
+    assert findings[0].severity is Severity.ERROR
+    assert "MISSING.md" in findings[0].message
+    assert "broken" in findings[0].message.lower()
+
+
+def test_seed_route_with_no_targets_fails(tmp_path: Path) -> None:
+    # A 'seed' route pointing at nothing fails, never passes vacuously.
+    ctx = _stage(
+        tmp_path,
+        'routes:\n  - id: "1"\n    task: "x"\n    targets: []\n    status: seed\n',
+    )
+    findings = list(check_routes_resolve(ctx))
+    assert len(findings) == 1
+    assert findings[0].rule_id == "A1"
+    assert "no targets" in findings[0].message.lower()
+
+
 def test_planned_route_with_unresolved_target_passes(tmp_path: Path) -> None:
     # A planned target that does NOT resolve yet is the honest deferral.
     ctx = _stage(

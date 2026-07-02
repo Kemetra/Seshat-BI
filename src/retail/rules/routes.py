@@ -13,6 +13,12 @@ Per route:
 * ``status: planned`` -> the target is deferred and must NOT resolve yet. A
   ``planned`` route whose target now exists is a STALE marker (ERROR): the file
   was built but the manifest was never flipped to ``built``.
+* ``status: seed``    -> the target EXISTS but is only an initial cut (an early
+  seed of a layer, not a complete build). Mechanically identical to ``built``:
+  EVERY target must resolve as a tracked file. The distinguishing fact of ``seed``
+  vs ``planned`` is precisely that the target exists; the distinguishing fact of
+  ``seed`` vs ``built`` (completeness) is a human ruling the rule NEVER makes --
+  the seed -> built promotion criterion is deferred (Principle V, out of scope).
 
 This keeps routing honest in both directions, the same fail-closed shape G6 uses
 for placeholder-vs-real parameter values.
@@ -34,7 +40,12 @@ from ..core import Finding, RuleContext, Severity
 from ..registry import register
 
 _MANIFEST = "docs/routing/routes.yaml"
-_VALID_STATUS: frozenset[str] = frozenset({"built", "planned"})
+_VALID_STATUS: frozenset[str] = frozenset({"built", "planned", "seed"})
+# Statuses that assert the target EXISTS: every target must resolve as a tracked
+# file (a missing target is a broken route). 'seed' means "exists but is only an
+# initial cut" -- the only mechanical guarantee is existence, identical to 'built';
+# the completeness/promotion (seed -> built) is a human ruling the rule never makes.
+_MUST_RESOLVE: frozenset[str] = frozenset({"built", "seed"})
 
 
 def _finding(message: str, locator: str) -> Finding:
@@ -107,20 +118,20 @@ def check_routes_resolve(ctx: RuleContext) -> Iterable[Finding]:
             )
             continue
 
-        # A 'built' route with no targets points at nothing -> fail, never pass
-        # vacuously (a 'planned' route legitimately has no resolving target yet).
-        if status == "built" and not targets:
+        # A 'built'/'seed' route with no targets points at nothing -> fail, never
+        # pass vacuously (a 'planned' route legitimately has no resolving target yet).
+        if status in _MUST_RESOLVE and not targets:
             findings.append(
-                _finding(f"route {route_id!r} is 'built' but lists no targets", loc)
+                _finding(f"route {route_id!r} is {status!r} but lists no targets", loc)
             )
             continue
 
         for target in targets:
             resolved = target in tracked
-            if status == "built" and not resolved:
+            if status in _MUST_RESOLVE and not resolved:
                 findings.append(
                     _finding(
-                        f"route {route_id!r} (built) points at {target!r}, "
+                        f"route {route_id!r} ({status}) points at {target!r}, "
                         f"which is not a tracked file -- the route is broken",
                         loc,
                     )
