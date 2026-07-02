@@ -24,5 +24,5 @@
 claims:
   - id: "glossary-rule-count"
     doc: "docs/glossary.md"
-    anchor: "Currently 44 rules in 14 families"
-    claimed-count: 44
+    anchor: "Currently 45 rules in 14 families"
+    claimed-count: 45
