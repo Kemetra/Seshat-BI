@@ -159,9 +159,9 @@ tenant/example-specific path or key appears anywhere in the rule's vocabulary.
 - **Placeholder still present**: A file discovered as a filled spec that still
   carries the `<true|false>` placeholder in a `forbidden_dynamic_content` or
   `qa_checklist` value has been mistaken for filled or was left half-filled. This
-  is neither a real `true` nor a real `false`; how the rule treats an unresolved
-  placeholder in a discovered filled spec is [NEEDS CLARIFICATION: placeholder in
-  a discovered filled spec -- finding, or silently skipped as not-yet-filled?].
+  is neither a real `true` nor a real `false`; a discovered filled spec that still
+  carries the `<true|false>` placeholder in a contract value is treated as a
+  half-filled defect and surfaced as a finding (resolved in Clarifications, Q1).
 - **A forbidden key or qa item is missing entirely**: A filled spec that omits a
   key the contract declares cannot have its boolean asserted; whether a missing
   contract key is a finding or ignored is a parse-contract detail resolved in
@@ -327,4 +327,96 @@ tenant/example-specific path or key appears anywhere in the rule's vocabulary.
 
 ### Session 2026-07-02
 
-<!-- Populated by /speckit-clarify (stage 3). -->
+Advisor-resolved ambiguities (recommended answers integrated into the spec):
+
+- **Q1 -- Unresolved placeholder in a discovered filled spec.** A file discovered
+  as a filled background spec that still carries the template placeholder
+  `<true|false>` in a `forbidden_dynamic_content` or `qa_checklist` value is
+  neither a real `true` nor a real `false`. **Recommended answer**: treat an
+  unresolved placeholder in a value of a DISCOVERED filled spec as a half-filled
+  defect and surface a finding ("value not filled: still the `<true|false>`
+  placeholder"). The blank template itself is exempt from discovery entirely
+  (Q3), so this only ever fires on a file the discovery convention says is filled.
+  **Reasoning**: fail-closed is the conservative default -- a discovered filled
+  spec that silently keeps a placeholder is a value nobody asserted, which is
+  exactly the "silently claims compliance while declaring nothing" gap the rule
+  exists to close. Silently skipping it would let a half-filled spec pass as
+  clean. **Reversible**: easy (a parse-contract detail; loosening to "skip
+  placeholder rows" later is a message/behavior change, not a golden-record
+  contract).
+
+- **Q2 -- Boolean vocabulary freeze.** Which exact keys does the rule assert?
+  **Recommended answer**: freeze the vocabulary VERBATIM from the two declared
+  blocks in `templates/background-spec.yaml`. The `forbidden_dynamic_content`
+  keys asserted MUST be `false`: `contains_kpi_value`, `contains_dynamic_title`,
+  `contains_measure_or_metric`, `contains_data_label_or_axis_value`,
+  `contains_date_or_refresh_stamp`, `contains_filter_or_slicer_state`,
+  `baked_in_screenshot_of_a_visual` (7 keys). The `qa_checklist` items asserted
+  MUST be `true`-or-recorded-reason: `is_static_structure_only`,
+  `no_forbidden_dynamic_content`, `exported_at_canvas_size_1to1`,
+  `safe_zones_align_to_grid`, `whitespace_preserved`,
+  `not_dark_behind_dense_charts`, `contrast_sufficient_for_visuals`,
+  `consistent_aspect_ratio`, `branding_is_chrome_not_data` (9 items). **Reasoning**:
+  deriving the vocabulary verbatim from the template's OWN declared contract (not
+  from any tenant example) is the Principle-VII-clean reading and mirrors DL1. A
+  future template key addition becomes a reviewed vocabulary change, not silent
+  drift. **Reversible**: costly (the frozen list is encoded in the golden records;
+  changing it is a reviewed vocabulary change across the wiring places).
+
+- **Q3 -- Parse contract: real boolean vs placeholder vs recorded reason.**
+  How does the rule distinguish the three value shapes? **Recommended answer**:
+  a `forbidden_dynamic_content` value is a violation only when it parses to the
+  real boolean `true`; a real `false` passes; the placeholder string
+  `<true|false>` (or any non-boolean value) in a forbidden key is a finding
+  (Q1 / malformed-value edge case). A `qa_checklist` item passes when it parses
+  to real boolean `true`, OR when it is `false` accompanied by a recorded reason
+  string; a bare `false` with no reason is a finding; the placeholder or a
+  non-boolean value is a finding. The "recorded reason" is detected as a present,
+  non-empty, non-placeholder reason string associated with that item; the rule
+  detects PRESENCE of a reason, never judges the reason's adequacy (Principle V).
+  **Reasoning**: this is the smallest categorical parse that honors the template's
+  "each MUST be true; a false entry is a blocking reason or a recorded warning +
+  reason" wording without the rule reading meaning into free text. **Reversible**:
+  easy (parse-contract detail, not a golden-record contract).
+
+- **Q4 -- Severity of a violation.** Is a declared defect an ERROR or a WARNING?
+  **Recommended answer**: ERROR (fail closed), matching the sibling DL1 posture
+  and the template's own "a true entry is a defect" / "a false entry is a blocking
+  reason" wording. Severity is OBSERVED per branch from the emitted findings, not
+  declared in a governed per-rule severity table (ratified 044). **Reasoning**: a
+  declared baked-in KPI value is a substantive defect the surface exists to
+  prevent; treating it as advisory would defeat the rule. Conservative and
+  consistent with the design-lint family. **Reversible**: costly (severity posture
+  is observed into the golden severity-posture record; a later downgrade is a
+  reviewed posture change).
+
+- **Q5 -- Readiness stage advanced.** Does A8 advance any readiness stage?
+  **Recommended answer**: it advances NO readiness stage. A8 has no roadmap
+  F-number; it is an idea-bank governance-lint rule (like DL1 / A2 and the A1 / B1
+  idea-bank rules), a static checker that flags and never approves. **Reasoning**:
+  self-granting a stage would violate Principle V (the rule packages, it never
+  approves) and there is no roadmap mapping to advance. **Reversible**: easy (a
+  human can later map it to a stage; the rule asserts nothing about stages today).
+
+Principle-V item RECORDED for human ruling (NOT answered here -- an owner
+convention decision, surfaced to open_for_human):
+
+- **OPEN -- File-discovery convention for committed FILLED background specs.** No
+  committed naming/location convention for a filled instance exists today (only
+  the blank `templates/background-spec.yaml`). A generic path/suffix that marks a
+  committed filled spec MUST be SET by the owner before the rule can discover
+  anything (for example a `*.background.yaml` suffix under a per-page design
+  directory). This is a repository-convention decision (the analogue of DL1's
+  fixed `.theme.json` suffix), not something the advisor may invent, because it
+  fixes where every future page's background spec must live. The advisor's
+  RECOMMENDED default, pending the human ruling, is: discover committed files
+  matching a generic `*.background.yaml` suffix, exempt `templates/` and the
+  test-fixture path, and treat that suffix as the frozen discovery convention.
+  Until the owner ratifies a convention, the rule is inert (FR-011): with zero
+  files matching the suffix it emits zero findings, so recording this OPEN item
+  does not block a buildable, green-on-empty spec. The convention literal is
+  finalized at ratify/wiring time against the owner's ruling.
+
+All advisor-resolved items (Q1-Q5) are ANSWERED. One Principle-V convention item
+remains OPEN for the human owner; the spec is buildable and inert-safe until it
+is ruled, so this does not block planning.

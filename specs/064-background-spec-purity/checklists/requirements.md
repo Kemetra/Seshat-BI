@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain (1 remains -- placeholder handling; resolved in /speckit-clarify stage 3)
+- [x] No [NEEDS CLARIFICATION] markers remain (placeholder handling resolved in Clarifications Q1)
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,7 +31,7 @@
 
 ## Notes
 
-- One [NEEDS CLARIFICATION] marker deliberately remains (unresolved-placeholder
-  handling in a discovered filled spec) plus a set of Principle-V vocabulary /
-  convention / severity items to be settled in /speckit-clarify (Session
-  2026-07-02). Items marked incomplete require spec updates before `/speckit-plan`.
+- All [NEEDS CLARIFICATION] markers resolved in Clarifications (Session
+  2026-07-02, Q1-Q5). One Principle-V convention item (filled-spec file-discovery
+  convention) remains OPEN for the human owner and is recorded, not answered; the
+  spec is buildable and inert-safe until it is ruled, so planning is unblocked.
