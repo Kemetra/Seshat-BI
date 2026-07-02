@@ -87,6 +87,22 @@ def test_valid_readiness_status_passes(tmp_path: Path) -> None:
     assert list(check_readiness_status_consistency(ctx)) == []
 
 
+def test_malformed_yaml_fails_loud(tmp_path: Path) -> None:
+    # The fail-closed branch (audit R7): unparseable YAML must raise a loud RS1
+    # ERROR, never be silently skipped -- a commit-blocking gate cannot treat a
+    # broken status file as "no findings".
+    text = "table: [unterminated\n  bad: : :\n"
+    messages = _messages(_ctx(tmp_path, text))
+    assert any("not valid YAML" in m for m in messages)
+
+
+def test_non_mapping_yaml_fails_loud(tmp_path: Path) -> None:
+    # A well-formed YAML that is not a mapping (e.g. a bare list) must also fail
+    # loud rather than slip through the dict-shape guard.
+    messages = _messages(_ctx(tmp_path, "- just\n- a\n- list\n"))
+    assert any("must be a mapping" in m for m in messages)
+
+
 def test_pass_stage_without_evidence_fails(tmp_path: Path) -> None:
     text = _status_yaml().replace('evidence: ["source-profile.md"]', "evidence: []")
     messages = _messages(_ctx(tmp_path, text))
