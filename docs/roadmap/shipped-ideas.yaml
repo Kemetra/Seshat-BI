@@ -155,6 +155,19 @@ J1:
   pr_sha: "PR #123 (spec 063 approval-evidence-pack, roadmap F035) .claude/skills/approval-evidence-pack/SKILL.md + templates/approval-evidence-pack.md; docs/skill/template only, no rule/no code"
   f_row: none
 
+# --- AL2 (H2) -- hand-built rule, outside the documented waves ---
+# AL2 (cross-contract assumption-coherence rule) shipped BEFORE the deferred-ADOPT wave
+# below (it is PR #129 / cc606b8, which predates #133 H1 and #134 H3). It was hand-built,
+# NOT spec-driven: its commit tag "(067, H2)" cites a bare "067" matching NEITHER
+# committed 067 dir (067-bi-python-cleaning-artifacts, 067-seed-route-honesty-rule).
+# There is NO committed spec for AL2 -- acknowledged provenance debt (see C5 / the
+# docstring in src/retail/rules/assumption_coherence.py and specs/README.md). Keyed by
+# the H-code "H2" to match the H1/H3 keying convention; recorded here for honest history.
+H2:
+  status: shipped
+  pr_sha: "PR #129 cc606b8 (@register AL2 src/retail/rules/assumption_coherence.py; hand-built, NO committed spec -- bare '067' tag matches no 067 dir; provenance debt per C5)"
+  f_row: none
+
 # --- 2026-07-02 deferred-ADOPT resolution wave (H1, H3 built; E4 dropped; H4 held) ---
 # The 4 ideas the owner personally triaged OUT of the ADOPT batch (E4/H1/H3/H4) were
 # re-examined after the owner ratified "all in my own name". Evidence (per-idea

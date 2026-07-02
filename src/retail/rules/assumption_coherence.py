@@ -6,7 +6,13 @@ those two decided rulings disagree, the gold table carries two contradictory set
 answers to the same question -- a coherence defect a reader of one contract would never
 see. AL2 ERRORs on that contradiction.
 
-Ratified build defaults (spec 067 ## Clarifications):
+Ratified build defaults -- provenance note: these were hand-ratified at the PR #129
+adversarial review (commit cc606b8, "AL2 ... (067, H2)"); AL2 was hand-built, NOT
+spec-driven. There is NO committed spec covering AL2. The bare "067" tag in the commit
+matches neither committed 067 dir (specs/067-bi-python-cleaning-artifacts,
+specs/067-seed-route-honesty-rule -- neither is about assumption-coherence). This is
+acknowledged provenance debt: the defaults below (C1/C2/DEC-1) are honest but have no
+committed spec backing them.
 - C1 -- grouping key is ``binds_to.gold_table`` (non-placeholder); a missing or
   ``<...>`` placeholder gold_table excludes the contract from grouping.
 - C2 -- a contradiction is >= 2 DISTINCT decided rulings for one code within a group,

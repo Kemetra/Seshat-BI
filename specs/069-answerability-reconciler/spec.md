@@ -7,7 +7,10 @@
 **Status**: Ratified (Ahmed Shaaban, 2026-07-02)
 
 > Ratified by the owner in their own name (2026-07-02), authorizing the build of the
-> deferred ADOPT idea H3. plan-review: PASS-WITH-NOTES (0 critical / 0 high); the
+> deferred ADOPT idea H3. plan-review: PASS-WITH-NOTES (0 critical / 0 high) -- SEE
+> CORRECTION (2026-07-02) in plan-review.md: the "analyze: clean" evidence is RETRACTED
+> (no analysis.md/plan.md/tasks.md was ever committed; by the repo's own preconditions
+> this build should have been BLOCKED). The
 > Principle-V line is drawn and held by FR-015 / OPEN-3 (the rule reports a
 > question/contract conflict, never rules which side is canonical). The three OPEN
 > Principle-V items (OPEN-1 severity posture, OPEN-2 roadmap slot, OPEN-3 canonical-side

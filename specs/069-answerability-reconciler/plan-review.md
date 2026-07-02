@@ -98,3 +98,27 @@ recommendation); (4) fail loud on an absent corpus (FR-013) and an unparseable r
 Ratified under the owner's in-name ratification (Ahmed Shaaban, 2026-07-02) of the
 deferred ADOPT ideas; the three OPEN Principle-V items remain deferred to a human
 and are out of scope for this build.
+
+## CORRECTION (2026-07-02, adversarial-audit remediation)
+
+This correction is APPENDED, not a rewrite; the original review above is preserved so
+the trail stays visible.
+
+RETRACTION of the "analyze: clean (0 critical / 0 high)" evidence claim recorded at the
+top of the Verdict section. That claim has NO committed backing:
+
+- The only files ever committed to this spec dir are spec.md, plan-review.md, and
+  checklists/requirements.md. There is NO committed analysis.md, plan.md, or tasks.md
+  (verified 2026-07-02 against git ls-files and the on-disk tree).
+- With no committed analysis.md, the recorded "analyze: clean" verdict cannot be traced
+  to any artifact -- it asserts a passing analyze step whose evidence was never
+  committed.
+- By this repo's OWN sibling precondition standard, that is disqualifying. The sibling
+  review specs/067-seed-route-honesty-rule/plan-review.md states: "Preconditions
+  checked: analyze ran (analysis.md present, verdict clean), tasks.md present, plan.md
+  present. A draft missing analyze or tasks would be automatic BLOCKED." By that
+  standard, this build -- missing analysis.md, plan.md, AND tasks.md -- should have been
+  BLOCKED, not PASS-WITH-NOTES.
+
+The retained verdict prose above is left unedited for the record; this correction is the
+authoritative note on its evidentiary status. Acknowledged process debt.
