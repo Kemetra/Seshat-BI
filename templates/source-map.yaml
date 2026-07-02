@@ -48,12 +48,13 @@
 #   distinct namespaces -- no collision. (The ADR namespace was renamed from D* to
 #   RC* in feature 002 because the checker ids live in code and could not move.)
 #
-# C086 IS A FILLED INSTANCE, NEVER THE UNIVERSAL SCHEMA
-#   The first table through this kit is C086 (a retail pharmacy sales example). Its
-#   filled map has grain (invoice_no + line_no) and a star of 1 fact + 6 dims.
+# RETAIL_STORE_SALES IS A FILLED INSTANCE, NEVER THE UNIVERSAL SCHEMA
+#   The worked example through this kit is retail_store_sales (Kaggle retail data).
+#   Its filled map has grain = one transaction (PK transaction_id) and a star of
+#   1 fact (fct_sales_rss) + 4 entity dims + dim_date_rss.
 #   See docs/worked-examples/retail-store-sales.md for that filled instance. Do NOT
-#   copy pharmacy specifics (billing codes, segment rollups, insurance PII) into
-#   this template -- the values below are deliberately obvious placeholders.
+#   copy its dataset specifics (category lists, payment methods, discount semantics)
+#   into this template -- the values below are deliberately obvious placeholders.
 #
 # SISTER ARTIFACTS IN THE MAPPING GATE  (a reviewer reads all 5 as a set)
 #   templates/source-profile.md ........... Phase 1 (the numbers this map rests on)

@@ -85,12 +85,14 @@ Fill one block per deviation (delete the placeholder block if there are none):
 | Triggering data fact | `<the profiled evidence that forced it -- cite the figure/finding in source-profile.md>` |
 | Recorded in | `<the table's own ADR + section, e.g. docs/decisions/00NN-<table>-deviations.md>` |
 
-> **No fabricated examples.** Do not invent a deviation to fill the shape. The first
-> worked example, **C086**, adopted **16/16 defaults with 0 deviations** after live DB
-> validation, so its `assumptions.md` Deviations section is empty -- a filled instance of
-> "all defaults held." See `docs/worked-examples/retail-store-sales.md`. A non-zero
-> Deviations section looks like the block
-> above, with real `Dn` ids and a real triggering fact from that table's profile.
+> **No fabricated examples.** Do not invent a deviation to fill the shape -- and do
+> not hide a real one: if every default held, an EMPTY Deviations section is the
+> correct record. For a filled instance of a real deviation record, see
+> `docs/worked-examples/retail-store-sales.md` section 2, which documents two
+> deliberate deviations (RC4: `customer_id` KEPT; RC8: N/A -- the dataset has no
+> returns), each with its triggering data fact. A non-zero Deviations section looks
+> like the block above, with real `Dn` ids and a real triggering fact from that
+> table's profile.
 
 ---
 

@@ -1,15 +1,15 @@
 # Worked Example — retail_store_sales (Kaggle "Retail Store Sales, dirty")
 
-> **The second validated Seshat BI worked example — and the first that traverses the
-> FULL seven-stage readiness spine** (Source Ready → … → Dashboard Ready, with Publish
-> Ready held at `warning` by design). Where `retail-store-sales.md` proves the medallion
-> *build* (bronze → silver → gold + live validation), this example proves the rest of
-> the spine: metric contracts, a governed PBIP model, a dashboard design bound to those
+> **The validated Seshat BI worked example — the first that traverses the FULL
+> seven-stage readiness spine** (Source Ready → … → Dashboard Ready, with Publish
+> Ready held at `warning` by design). Sections 1–4 prove the medallion *build*
+> (bronze → silver → gold + live validation); sections 5–7 prove the rest of the
+> spine: metric contracts, a governed PBIP model, a dashboard design bound to those
 > contracts, a handoff pack, and an honest **approval-retraction** when an approved
 > artifact materially changed.
 >
 > This doc is the **evidence record** that `retail_store_sales` is built and governed
-> correctly, and the **reusable second pattern** a future retail table copies. It does
+> correctly, and the **reusable pattern** a future retail table copies. It does
 > not restate the source artifacts — it references and summarizes them.
 
 **Verdict:** *retail_store_sales is the kit's first end-to-end-to-Dashboard-Ready table:
