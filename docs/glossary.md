@@ -98,7 +98,7 @@ This catalog is the **single source of truth for `retail check`'s rule count.**
 The **live registry in `src/retail/rules/` is authoritative**; the table below
 mirrors it and the `retail-govern` skill maps each id to its fix.
 
-> **Currently 44 rules in 14 families** (S, D, C, R, RS, G, P, A, B, PP, SC, DF, SL, AL).
+> **Currently 45 rules in 14 families** (S, D, C, R, RS, G, P, A, B, PP, SC, DF, SL, AL).
 > When a rule is added or removed, update the table and this line **together** — and
 > elsewhere refer to "the static `retail check` gate" by name rather than restating a
 > number. Restated counts are exactly what drifted before (see
@@ -120,7 +120,7 @@ mirrors it and the `retail-govern` skill maps each id to its fix.
 | **SC** | status-claim integrity | `SC1` a prose status claim reconciles with tracked-file evidence (no stale planned/built marker) · `SC2` a prose "N rules" count claim reconciles with the authoritative rule count (manifest-anchored, never a free repo scan) |
 | **DF** | dependency-edge integrity | `DF1` parked-on dependency edges reconcile with tracked-file evidence |
 | **SL** | KPI coverage scorecard | `SL1` a committed coverage scorecard is structurally well-formed (status-enum, named blocker, resolving contract, no percentage) |
-| **AL** | assumption ledger | `AL1` a metric contract with an unresolved assumption (blocked + reasons) must not also carry a settled gold binding |
+| **AL** | assumption ledger | `AL1` a metric contract with an unresolved assumption (blocked + reasons) must not also carry a settled gold binding · `AL2` contracts on one gold table record no contradictory decided ambiguity rulings |
 
 ## Project shorthand
 

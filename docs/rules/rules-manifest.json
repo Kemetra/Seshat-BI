@@ -12,6 +12,10 @@
     "title": "Metric contract with an unresolved assumption also carries a settled binding"
   },
   {
+    "id": "AL2",
+    "title": "Contracts on one gold table record no contradictory decided ambiguity rulings"
+  },
+  {
     "id": "B1",
     "title": "No module-scope DB/network import in the static core (never-execute)"
   },
