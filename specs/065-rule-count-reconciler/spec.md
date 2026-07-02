@@ -4,7 +4,20 @@
 
 **Created**: 2026-07-02
 
-**Status**: Draft
+**Status**: Ratified (Ahmed Shaaban, 2026-07-02)
+
+> Ratified under the recorded ADOPT-batch autonomous authority dated 2026-07-02
+> (owner directive: build+ratify+merge the entire ADOPT bucket; the advisor
+> exercises the delegated per-spec ratify authority). A recorded per-spec override
+> within that batch, not a standing waiver. No OPEN carve-out remains. The load-
+> bearing design fork is resolved in Clarifications Q1: the authoritative count
+> source is the committed `docs/rules/rules-manifest.json` read with stdlib json --
+> NOT an `all_rules()` import -- preserving the stdlib-only never-execute core
+> (matches SC1's discipline). The two reserved items are roadmap-placement only and
+> resolved conservatively: SC2 is governance-internal test/CHECK infrastructure in
+> the SC1/DF1 family and takes NO roadmap F-row here (YAGNI; a human may add one
+> later). SC2 is manifest-only, fail-loud, categorical (no score), CHECK-never-fix.
+> analyze: clean (0/0); plan-review: PASS-WITH-NOTES.
 
 **Input**: User description: "F4. Rule-Count Claim Reconciler (SC2)"
 
