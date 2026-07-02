@@ -59,11 +59,21 @@ as a separate, explicitly-authorized operation.
 > To authorize the future implementation PR: state DEC-1..DEC-4 and set `spec.md` Status
 > to Ratified. The implementation PR is a SEPARATE, later change; this spec builds nothing.
 
-- **DEC-1 strategy**: ______
-- **DEC-2 security**: ______
-- **DEC-3 examples**: ______
-- **DEC-4 ordering ack**: ______
-- **Named owner / date**: ______
-- **Build authorization** (may the future extraction PR proceed, post-c086-resolution?): ______
+- **DEC-1 strategy**: **package + archive** (NOT a repo split) — the recommended default.
+- **DEC-2 security**: **current-tip redaction now** (add cluster id `db-pgsql-fra1-29712`
+  + `ezaby_demo` + bare `c086` to the redaction targets); **history purge DEFERRED** to a
+  public-release / erasure trigger, as a separately-authorized operation — the recommended
+  default.
+- **DEC-3 examples**: **narrative-only worked example + one tiny synthetic table** — the
+  recommended default.
+- **DEC-4 ordering ack**: **acknowledged** — the extraction PR waits for the in-flight
+  c086 supersession work to resolve first (now clean).
+- **Named owner / date**: **Ahmed Shaaban, 2026-07-02** (owner directive "ratify 076 with
+  recommended decisions"; transcribed per the delegated-authority pattern, cf. 062/072).
+- **Build authorization** (may the future extraction PR proceed, post-c086-resolution?):
+  **Yes** — the future extraction PR (tasks.md Group B) is authorized under DEC-1..DEC-4.
+  It is a SEPARATE change; its own PR merge remains a distinct act.
 
-Until filled, `spec.md` stays Draft; no extraction, no deletion, no history change occurs.
+`spec.md` is now **Ratified (Ahmed Shaaban, 2026-07-02)**. The future extraction PR is
+authorized under the four decisions above; no extraction/deletion/history change occurs
+until that separate PR runs.

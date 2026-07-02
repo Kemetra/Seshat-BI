@@ -4,7 +4,19 @@
 
 **Created**: 2026-07-02
 
-**Status**: Draft
+**Status**: Ratified (Ahmed Shaaban, 2026-07-02)
+
+> Ratified by owner directive "ratify 076 with recommended decisions" (2026-07-02),
+> adopting each ratify-ledger DEC at its recommended default: **DEC-1** package + archive
+> (not a repo split); **DEC-2** current-tip redaction now + history-purge deferred to a
+> public-release / erasure trigger (add the cluster id `db-pgsql-fra1-29712` + `ezaby_demo`
+> + bare `c086` to the redaction); **DEC-3** narrative-only worked example + one tiny
+> synthetic table; **DEC-4** the extraction PR waits for the in-flight c086 supersession
+> work to resolve (now clean) before it runs. The owner reviewed and merged the spec
+> (#141); the adversarial review's BLOCKER (unclassified `powerbi/` client model + false
+> "no host committed") was fixed before ratify. This authorizes the FUTURE extraction PR
+> (tasks.md Group B) to proceed under these decisions — it does NOT itself perform the
+> extraction. Recorded per the delegated-authority pattern (cf. specs 062, 072).
 
 **Input**: Owner directive — turn the proven-but-data-heavy training repo into a pure,
 reusable, agent-driven BI kit. Keep the product layer (`src/retail/`,
