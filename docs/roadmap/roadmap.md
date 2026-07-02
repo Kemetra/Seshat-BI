@@ -229,12 +229,14 @@ execution path.
 | **SC1** | Stale-Marker Sweep / Status-Claim Reconciler | 1 (status integrity) | Static rule **SC1** (`src/retail/rules/status_claims.py`): a hand-curated manifest (`docs/quality/status-claims.yaml`) of prose status claims (doc + anchor + claimed-artifact + claimed-status) is reconciled against tracked-file evidence -- a `planned` marker on a shipped artifact, or a `built` claim for a missing one, is an ERROR. A1's resolver shape applied to prose; checks only listed claims (never free-scans). Seeded with one corrected stale-doc defect; zero findings on `main`. | 050 (this sequence) |
 | **DF1** | Parked-On Map / dependency-edge reconciler | 1 (dependency integrity) | Static rule **DF1** (`src/retail/rules/parked_on.py`): a hand-curated manifest (`docs/quality/parked-on.yaml`) of parked-on edges (blocked + parked_on + doc + anchor + evidence, optional shipped_when_tracked) is reconciled against tracked-file evidence -- a missing blocker/evidence, an absent anchor, or a parked-but-shipped contradiction is an ERROR. SC1's resolver shape applied to dependency edges; v1 maps the F016 bottleneck cluster (pbi-tools, L3-ops, F031-F033). Adds the seam, never F016. Zero findings on `main`. | 051 (this sequence) |
 | **IL1** | Idea-Bank Memory Seam | 1 (memory integrity) | NOT a `retail check` rule -- a docs/data + workflow-read seam. Adds a human-curated structured ledger (`docs/roadmap/shipped-ideas.yaml`, idea-id -> {status, pr_sha, f_row}) read by the idea-engine Memory stage as authoritative known-history (alongside the prose SHIPPED/SETTLED appendix; authoritative on conflict, surfaced never silently rewritten). A pytest guard enforces the ledger contract. Strictly read/evidence -- never assigns a roadmap F-row (a human does); the engine never appends (Ground stays single owner of git-derived ship-status). Rule count unchanged (38). | 052 (this sequence) |
+| **SC2** | Rule-Count Claim Reconciler | 1 (count integrity) | Static rule **SC2** (`src/retail/rules/rule_count_claims.py`): a hand-curated manifest (`docs/quality/rule-count-claims.yaml`) of prose "N rules" count claims (id + doc + anchor + claimed-count) is reconciled against the AUTHORITATIVE count -- `len(docs/rules/rules-manifest.json)` read with stdlib `json`, never by importing the rules package (preserving the stdlib-only never-execute core). SC1's resolver shape applied to the rule-COUNT facet SC1 delegated out. Seeded with the one corrected stale glossary count; zero findings on `main`. Off-spine idea-bank integrity rule (sibling SC1/DF1); no F-number/readiness stage self-assigned (a human may assign one). Rule count N -> N+1. | 065 (off-spine) |
 
 > **Effect on the static gate:** A1 and B1 took the registered `retail check`
 > rule set from 31 to **33**; the idea-loop sequence then added **A3 (34)**, **B3
-> (35)**, **PP1 (36)**, **SC1 (37)**, and **DF1 (38)** (the wiring test
-> `EXPECTED_RULE_IDS` is the guard; all emit zero findings on `main`). The
-> DAX-governance L3 boundary is unchanged.
+> (35)**, **PP1 (36)**, **SC1 (37)**, and **DF1 (38)**; subsequent off-spine
+> integrity rules brought the set to **44**, most recently **SC2** (the rule-count
+> reconciler) (the wiring test `EXPECTED_RULE_IDS` is the guard; all emit zero
+> findings on `main`). The DAX-governance L3 boundary is unchanged.
 
 ## Post-integration stabilization phase -- SHIPPED (2026-06-28)
 

@@ -1,0 +1,28 @@
+# Rule-count-claims manifest -- the single source SC2
+# (src/retail/rules/rule_count_claims.py) reconciles against the AUTHORITATIVE rule
+# count. SC2 is the rule-COUNT sibling of SC1 (status-claims.yaml): SC1 checks prose
+# built/planned status claims; SC2 checks the prose "N rules" count claim, the facet
+# SC1 explicitly delegated out of its scope.
+#
+# The authoritative count is len(docs/rules/rules-manifest.json), read with the
+# stdlib json module -- NEVER by importing the rules package -- so SC2 keeps the
+# stdlib-only never-execute discipline of the retail check core chain.
+#
+# Each claim:
+#   id             stable handle for the claim (named in findings)
+#   doc            the doc making the count claim (must be a tracked file)
+#   anchor         the LITERAL sentence in `doc` stating the count; SC2 verifies this
+#                  text is present so a moved/removed sentence is itself flagged. Must
+#                  stay byte-identical to the doc wording.
+#   claimed-count  the integer the prose asserts; must equal the authoritative count
+#                  (a non-negative integer)
+#
+# This manifest is hand-curated (not auto-generated); add an entry when a doc states a
+# checkable rule count worth locking against drift. It is LIVE-STATE-ONLY -- SC2
+# reconciles against the count source as committed now, not any dated snapshot.
+
+claims:
+  - id: "glossary-rule-count"
+    doc: "docs/glossary.md"
+    anchor: "Currently 44 rules in 14 families"
+    claimed-count: 44

@@ -98,7 +98,7 @@ This catalog is the **single source of truth for `retail check`'s rule count.**
 The **live registry in `src/retail/rules/` is authoritative**; the table below
 mirrors it and the `retail-govern` skill maps each id to its fix.
 
-> **Currently 41 rules in 14 families** (S, D, C, R, RS, G, P, A, B, PP, SC, DF, SL, AL).
+> **Currently 44 rules in 14 families** (S, D, C, R, RS, G, P, A, B, PP, SC, DF, SL, AL).
 > When a rule is added or removed, update the table and this line **together** — and
 > elsewhere refer to "the static `retail check` gate" by name rather than restating a
 > number. Restated counts are exactly what drifted before (see

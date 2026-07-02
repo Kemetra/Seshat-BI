@@ -168,6 +168,10 @@
     "title": "Prose status claims reconcile with tracked-file evidence"
   },
   {
+    "id": "SC2",
+    "title": "Prose rule-count claims reconcile with the authoritative count"
+  },
+  {
     "id": "SL1",
     "title": "Committed KPI coverage scorecard is structurally well-formed"
   }
