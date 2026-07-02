@@ -87,15 +87,15 @@ blocking_reasons:
 # --- approvals (named human sign-offs; the agent cannot self-grant) ---------
 approvals:
   - stage: "mapping_ready"
-    owner: "data_owner"               # the user, acting as data owner/analyst/governance
+    owner: "Ahmed Shaaban (data_owner)"   # named human, acting as data owner/analyst/governance
     at: "2026-06-25"
     note: "accepted the four open-question recommendations (Q1 keep customer_id; Q2 blank discount = unknown; Q3 single-item grain; Q4 missing item -> -1 unknown member)"
   - stage: "semantic_model_ready"
-    owner: "data_owner"
+    owner: "Ahmed Shaaban (data_owner)"
     at: "2026-06-25"
     note: "approved the 5 metric contracts (TotalSales, TotalQuantity, TransactionCount, AvgTransactionValue, DiscountedTransactionRate)"
   - stage: "dashboard_ready"
-    owner: "data_owner"               # acting as BI report owner
+    owner: "Ahmed Shaaban (data_owner)"   # named human, acting as BI report owner
     at: "2026-06-25"
     note: "approved the dashboard design / visual->contract binding map (10 visuals, zero orphans, all 5 contracts bound; v04 discount caveat noted)"
   # NOTE: a publish_ready approval was recorded 2026-06-25 and then RETRACTED the same

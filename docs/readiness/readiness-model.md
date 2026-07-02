@@ -21,7 +21,9 @@ The seven stages, the gate enforced on each transition, and the **human-approval
 (the agent never self-grants these -- Principle V). A stage is entered only when the prior
 stage is `pass`. Four stages require a named-human approval recorded in `approvals[]`
 (highlighted); `Silver Ready` and `Gold Ready` are mechanical gates with no stage
-approval.
+approval. Each `approvals[].owner` records the DECIDER by NAME plus the authority
+class in parentheses (e.g. `"Ahmed Shaaban (data_owner)"`), so the approval traces
+to a named human -- a bare role token alone is a defect (audit C4).
 
 ```mermaid
 flowchart TD
