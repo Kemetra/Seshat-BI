@@ -213,6 +213,19 @@ def _build_parser() -> argparse.ArgumentParser:
         help="the one-line rule title (author mode)",
     )
 
+    # `init` (feature 070): SUBSTRATE-WRITING ONLY. Writes the compass projection +
+    # manifests + the fenced SESHAT-KIT regions of AGENTS.md/CLAUDE.md, then PRINTS
+    # the next agent step. It NEVER prompts, shows a menu, or emits a profile -- the
+    # delegate/route/profile flow is the agent performing the `retail-init` skill.
+    init_p = sub.add_parser(
+        "init",
+        help=(
+            "bootstrap the Compass-Driven kit substrate (writes .seshat/ + fenced "
+            "AGENTS.md/CLAUDE.md regions) and print the next agent step -- no wizard"
+        ),
+    )
+    init_p.add_argument("--repo", default=".", help="repo root to bootstrap")
+
     return parser
 
 
@@ -269,6 +282,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "scaffold":
         return _run_scaffold(args)
+
+    if args.command == "init":
+        return _run_init(args)
 
     return 0
 
@@ -339,6 +355,34 @@ def _run_scaffold(args) -> int:
     print("\nnext steps (run/apply by hand -- not written by scaffold):")
     for line in result.printed:
         print(f"  {line}")
+    return 0
+
+
+def _run_init(args) -> int:
+    """Bootstrap the kit substrate (feature 070). SUBSTRATE-WRITING ONLY.
+
+    Writes the compass projection + manifests + the fenced SESHAT-KIT regions, then
+    PRINTS the next agent step. Never prompts, never shows a menu, never profiles --
+    the delegate/route/profile flow is the agent performing the `retail-init` skill.
+    The module is imported LAZILY (it pulls in the pyyaml-using compass_project),
+    mirroring the other subcommand handlers and keeping the check path yaml-free.
+    """
+    from . import kit_init
+
+    try:
+        result = kit_init.bootstrap(args.repo)
+    except RuntimeError as exc:
+        # A malformed fence is a hard stop -- report, do not force a rewrite.
+        print(f"[stopped] {exc}", file=sys.stderr)
+        return 1
+
+    if result.already_bootstrapped:
+        print("already bootstrapped -- re-projected the SESHAT-KIT regions.")
+    for w in result.written:
+        print(f"wrote {w}")
+    for name in result.fenced:
+        print(f"projected SESHAT-KIT fence in {name}")
+    print(f"\n{result.next_step}")
     return 0
 
 

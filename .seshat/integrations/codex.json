@@ -1,0 +1,7 @@
+{
+  "checksum": "f8234c22fb0813a798ff534f2bf39e1ce8267098bafae4621e4f7da4aa97ee8f",
+  "files": [
+    ".seshat/compass.yaml"
+  ],
+  "harness": "codex"
+}

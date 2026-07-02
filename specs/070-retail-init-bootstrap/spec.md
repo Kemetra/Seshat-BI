@@ -4,7 +4,14 @@
 
 **Created**: 2026-07-02
 
-**Status**: Draft
+**Status**: Ratified (Ahmed Shaaban, 2026-07-02)
+
+> Ratified by owner directive dated 2026-07-02 ("ratify it and authorize
+> implementation"), accepting DEC-1/2/3 as specified (Phase-1-only scope; live-DB
+> profile with `[PENDING LIVE PROFILE]` degrade, no CSV/Excel profiler; fence-body
+> human review until the Phase-2 drift linter). The advisor transcribes the owner's
+> recorded decision (approval-console pattern) -- it does not originate it. analyze:
+> 0 CRITICAL / 0 HIGH; plan-review round 2: PASS-WITH-NOTES. Build authorized.
 
 **Input**: User description: "Phase-1 Step 1-2 of the Compass-Driven Agent Kit
 (`docs/roadmap/distribution-ideas.md`): an agent-invokable `retail init` that

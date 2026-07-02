@@ -18,6 +18,12 @@
 # carriage-return byte as a control char -- force LF so they load on Windows checkouts.
 .claude/workflows/*.js   text eol=lf
 
+# Generated kit substrate (feature 070) — machine-written projections whose manifest
+# checksums are computed over the file bytes, so pin LF for cross-platform
+# determinism. Overrides the global `*.json eol=crlf` for this dir only (PBIP JSON
+# elsewhere still gets CRLF for Power BI Desktop). Placed last: last match wins.
+.seshat/**   text eol=lf
+
 # Binary artifacts — never normalize.
 *.pbix   binary
 *.abf    binary

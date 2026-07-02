@@ -1,0 +1,44 @@
+# Canonical kit source (feature 070) -- the SINGLE source of truth the compass
+# router, the fenced AGENTS.md/CLAUDE.md prose, and the manifests are all PROJECTED
+# from. Downstream of the constitution. MUST NOT contain a current_stage or any
+# per-table run-state (FR-005). See specs/070-retail-init-bootstrap/.
+kit: seshat-bi
+version: "0.2.0"
+
+# Orientation PROTOCOL -- declares HOW to orient; points at per-table state, stores none.
+orient:
+  question_first: "What readiness stage am I serving?"
+  state_lives_in: "readiness-status.yaml (per TABLE, recomputed)"
+  recompute_from:
+    - committed artifacts
+    - "Gate status"
+    - migration presence
+
+# The verbs the agent DRIVES (helpers it CALLS; each does its job and STOPS).
+verbs:
+  - id: retail-orchestrate
+    purpose: "conductor -- sequence the medallion verbs, self-heal against the gate"
+  - id: first-hour-compass
+    purpose: "first-arrival worked-example offer + single-source seam list + single-table orientation card"
+  - id: retail-onboard-table
+    purpose: "Source->Mapping front door; owns the Stage-1 read-only DB-backed profile (grain candidates, column types)"
+  - id: source-mapping
+    purpose: "the mapping gate -- produces source-map.yaml"
+  - id: retail-build-warehouse
+    purpose: "author silver/gold SQL; stop before executing"
+  - id: retail-validate
+    purpose: "live checks; needs db extra + DSN, else [PENDING LIVE PROFILE]"
+  - id: retail-govern
+    purpose: "static check (retail check)"
+
+# Hard-stops the agent READS as orientation (enforcement is the lint rules + G6/C2, not this file).
+hard_stops:
+  - never_self_grant_approval
+  - no_silver_before_mapping_cleared
+  - no_dashboard_before_metric_contracts
+  - never_fabricate_a_confidence_score
+
+# Which harness projections are generated.
+integrations:
+  - claude
+  - codex

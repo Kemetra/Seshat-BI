@@ -72,11 +72,19 @@ No violations. Notable stances the human should confirm they accept:
 > `Ratified (<name>, <date>)`, record the rationale, and (if desired) authorize the
 > build of the tasks in `tasks.md`.
 
-- **Decision** (ratify / revise / reject): ______
-- **Named owner**: ______
-- **Date**: ______
-- **Rationale / conditions**: ______
-- **Build authorization** (may `speckit-implement` proceed?): ______
+- **Decision** (ratify / revise / reject): **ratify**
+- **Named owner**: **Ahmed Shaaban**
+- **Date**: **2026-07-02**
+- **Rationale / conditions**: **Owner directive "ratify it and authorize
+  implementation." DEC-1/2/3 accepted as specified (Phase-1-only scope; live-DB
+  profile with `[PENDING LIVE PROFILE]` degrade and no CSV/Excel profiler;
+  fence-body human review until the Phase-2 drift linter). No conditions beyond the
+  spec as written.** (Transcribed by the advisor from the owner's recorded decision
+  -- approval-console pattern; not self-originated.)
+- **Build authorization** (may `speckit-implement` proceed?): **Yes.** The 25 tasks
+  in `tasks.md` are authorized to build, TDD, on a feature branch off `main`. Merge
+  of the resulting PR to `main` remains a separate act requiring explicit owner
+  approval (two-party review).
 
-Until this slot is filled, `spec.md` stays `Draft`, no task is implemented, and nothing
-merges to `main`.
+`spec.md` is now `Ratified (Ahmed Shaaban, 2026-07-02)`. Build proceeds on branch
+`070-retail-init-impl`; nothing merges to `main` without a separate owner approval.
