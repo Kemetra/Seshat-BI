@@ -1,5 +1,5 @@
 /// Postgres host:port. Real value supplied at refresh (Desktop/gateway), never committed.
-expression Server = "<your-db-host>:5432" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+expression Server = "<your-db-host>:25060" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
 	lineageTag: 56268b54-2742-49f2-b7a1-f5c88a5fe849
 
 	annotation PBI_ResultType = Text

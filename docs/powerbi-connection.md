@@ -94,7 +94,7 @@ is not optional cleanup; it blocks the gate.
 1. Define two M parameters (shared expressions) with **placeholder** defaults — the
    real host/db are supplied at refresh (Desktop/gateway), never committed:
    ```m
-   Server   = "<your-db-host>:5432" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+   Server   = "<your-db-host>:25060" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
    Database = "<your-database>"      meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
    ```
 2. Repoint **every** table partition to use the identifiers, not literals:
