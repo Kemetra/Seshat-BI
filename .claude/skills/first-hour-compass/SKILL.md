@@ -43,6 +43,38 @@ artifact, which skill authors it, and what human STOP is recorded?*
 - **Pipeline ordering** is respected: a downstream stage is never presented as reachable while
   an upstream gate is not `pass`.
 
+## First arrival: offer a worked example as the reference pattern
+
+When there is **no table yet** -- the user has just arrived and named nothing -- do not stop
+at "run `retail-onboard-table`". First give them a concrete pattern to steer by. This is the
+first-hour "aha": a new author's fastest path is to hold up a filled example and copy its
+*shape*, not to start from an empty gate.
+
+Present the two committed worked examples and let the user pick the closer domain analog:
+
+| Worked example | What it demonstrates | Pick it when your table is... |
+|----------------|----------------------|-------------------------------|
+| `docs/worked-examples/c086-pharmacy.md` | The medallion **build** pattern (pharmacy sales): bronze -> silver -> gold + live validation, to **Gold Ready** | ...a point-of-sale / transactional retail table (line items, returns, walk-ins) and you are focused on the build mechanics |
+| `docs/worked-examples/retail-store-sales.md` | The **full seven-stage spine** to Dashboard Ready -- metric contracts, governed model, dashboard design, handoff | ...a store-level / general retail-sales table, or you need the later stages (semantic model, dashboard, handoff) |
+
+Then hand off to `retail-onboard-table` for the user's own table, **holding the chosen example
+up as the reference** for that walk. Note the depth difference: c086 is the build-to-Gold
+pattern; for semantic-model / dashboard / handoff guidance, `retail-store-sales` is the example
+that carries those stages (see `docs/worked-examples/README.md`). Be explicit about what "use this example" means:
+
+- The examples are **narrative patterns, not file templates** -- c086 itself says "copy this
+  section structure, swap C086 for the new table, run the playbook's 7 phases". So the skill
+  **references** the example while onboarding; it does **not** copy files into the user's table
+  dir. (The actual starting artifacts come from `templates/`, seeded by `retail-onboard-table`.)
+- **Read-only + route only.** This section presents the two examples and routes into the
+  existing onboarding walk. It creates no truth, seeds no artifact, and writes nothing itself
+  (the run still leaves `git status` clean; `retail-onboard-table` is what later authors files).
+
+Set expectations honestly on the same breath: **the agent handles the sequence and the
+plumbing; the user still owns the judgment** -- grain, PII placement, business rollups, and
+metric policy are the four human seams `retail-onboard-table` will surface and STOP on, never
+auto-resolve (Principle V).
+
 ## The two-condition approval flag
 
 The card flags "approval required" for the next stage only when BOTH hold, read from the stage
@@ -71,6 +103,9 @@ tracked file); the only output is the rendered card in the response.
 ## See also
 
 - The card template + stage->skill cross-walk: `../../../templates/first-hour-compass.md`
+- First-arrival reference patterns: `../../../docs/worked-examples/c086-pharmacy.md`,
+  `../../../docs/worked-examples/retail-store-sales.md` (narrative patterns, not templates)
+- The onboarding walk this routes into: `../retail-onboard-table/SKILL.md`
 - Usage + boundary doc: `../../../docs/tools/first-hour-compass.md`
 - Multi-table parent (F026): `../readiness-viewer/SKILL.md`
 - Static parent (F006): `../../../docs/readiness/onboarding-checklist.md`

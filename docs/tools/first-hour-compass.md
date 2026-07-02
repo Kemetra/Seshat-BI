@@ -13,10 +13,39 @@ F006 static onboarding checklist.
 ## When to use it (and when not)
 
 - **Use it** when you are working ONE table and ask "where am I / what do I do next?"
+- **Use it on first arrival** -- before any table exists -- to get a starting pattern (see
+  the next section).
 - **Use the readiness-viewer (F026)** instead when you want the multi-table stage MATRIX across
   every source/table/report.
 - **Use the control room (F012)** instead when you want the worst-first, cross-table
   data-quality findings + blockers roll-up.
+
+## First arrival: offering a worked example (no table yet)
+
+When there is no `mappings/<table>/` at all -- a new author has just installed the kit and
+named nothing -- the Compass does more than point at `retail-onboard-table`: it first offers a
+**worked example to steer by**. This is the first-hour "aha" -- the fastest start is to hold a
+filled example up and copy its *shape*, not to begin at an empty gate.
+
+The card presents the two committed worked examples and lets the author pick the closer domain
+analog: `docs/worked-examples/c086-pharmacy.md` (the medallion BUILD pattern to Gold Ready --
+point-of-sale / transactional retail) or `docs/worked-examples/retail-store-sales.md` (the
+full seven-stage spine to Dashboard Ready -- store-level / general retail sales, and the example
+to use when the later stages are needed). It then
+routes into `retail-onboard-table` for the author's own table, holding the chosen example up as
+the reference. The two differ in depth: c086 stops at Gold Ready (build mechanics), while
+retail-store-sales carries the semantic-model / dashboard / handoff stages
+(see `docs/worked-examples/README.md`).
+
+Two honesty rules the card states in the same breath:
+
+- The examples are **narrative patterns, not file templates** -- the Compass references one
+  while onboarding; it copies no files. The starting artifacts are seeded by
+  `retail-onboard-table` from `templates/` (read-only contract preserved: a Compass run leaves
+  `git status` clean).
+- **The agent handles sequence and plumbing; the author still owns the judgment** -- grain, PII
+  placement, business rollups, and metric policy are the four Principle-V seams
+  `retail-onboard-table` surfaces and STOPs on, never auto-resolves.
 
 ## How it reads `readiness-status.yaml` (renders, never re-derives)
 
@@ -56,6 +85,9 @@ The template + cross-walk are generic (`<schema>.<table>`, `<stage_key>`). C086 
 
 - The card template + stage->skill cross-walk: `../../templates/first-hour-compass.md`
 - The skill: `../../.claude/skills/first-hour-compass/SKILL.md`
+- First-arrival reference patterns: `../worked-examples/c086-pharmacy.md`,
+  `../worked-examples/retail-store-sales.md`
+- The onboarding walk the arrival flow routes into: `../../.claude/skills/retail-onboard-table/SKILL.md`
 - Multi-table parent (F026): `readiness-viewer.md`
 - Static parent (F006): `../readiness/onboarding-checklist.md`
 - Pipeline ordering + gates: `../readiness/readiness-pipeline.md`
