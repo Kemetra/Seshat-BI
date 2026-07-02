@@ -80,6 +80,10 @@
     "title": "Theme JSON carries styling defaults only, no business logic"
   },
   {
+    "id": "DL2",
+    "title": "Background spec declares no baked-in dynamic content"
+  },
+  {
     "id": "G1",
     "title": ".gitignore correctness"
   },
