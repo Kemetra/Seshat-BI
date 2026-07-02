@@ -119,3 +119,6 @@ gate or design the specific dashboard itself.
 - The gated verb this router hands off to: the F011/012 `dashboard-design` skill
   (`.claude/skills/dashboard-design/SKILL.md`; spec at `specs/012-dashboard-design-skill/`).
 - The deferred execution owner: F016 (PBIP/PBIR authoring, pbi-cli, publish).
+- The design-foundation idea lane: `docs/roadmap/idea-backlog.md` `## Design Foundation`
+  -- the categorical cohort where design-layer ideas (`strengthens_layer = design-system`)
+  land in the idea bank (exploratory, not a roadmap).
