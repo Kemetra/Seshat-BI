@@ -174,18 +174,22 @@ specifically; that was a misread — corrected here so the eventual spec survive
 | **Scaffold files, then let the agent drive** from them | ✅ **Yes** — agents read `.specify/` templates + constitution to orient. Strong precedent. |
 | **An AGENT invokes the scaffolder** (`init` is agent-triggered) | ❌ **No** — `.specify/` was scaffolded by a human CLI. This half is unprecedented here; it is, by its own nature, the CLI-install pattern 001 declined. |
 
-> **F024 classification — this needs a NEW category, not a stretch (governance gap, must
-> resolve before speccing).** F024's five categories were built for **pipeline-surface**
-> tools that *consume Core Authority* (the closed set: readiness status, maps, metric
-> contracts, approvals, assumptions, questions — spec 018:122). But `init`/`sync`/the
-> generator consume the **canonical kit source** — the kit's own files, a **meta-level**
-> artifact that is NOT a Core Authority member. So labeling them "Product Module" (which by
-> definition consumes Core Authority, spec 018:131–133) **fails the category's own input
-> test.** The constitution-consistent move (Principle VI; spec 018:485 says a sixth category
-> "would be a future spec, not a silent addition") is to **open a spec that adds a 6th
-> "Kit / Meta-Automation" category** — a tool that operates on the kit's own files (install,
-> project, sync, drift-lint), never creates truth, never touches a table's Core Authority.
-> The Phase table below uses that proposed category and flags it as pending amendment.
+> **F024 classification — RESOLVED: use existing categories, NO amendment.** The wrong move
+> is "Product Module" (that category *consumes Core Authority*, spec 018:131–133 — and
+> `init`/`sync`/the generator consume the kit's own files, not a table's truth). But the fix
+> is NOT a 6th category: FR-001 declares the five a **"normative, closed set"**, and adding
+> one is a versioned constitution amendment — over-engineering when an existing category fits.
+> Two do, cleanly, because neither restricts its INPUT to Core Authority:
+> - **Projection generator + drift linter = `Maintenance Automation`** (FR-006): runs in CI
+>   without a per-invocation human trigger, emits only derived evidence (the projections + a
+>   pass/fail signal), creates no truth, self-approves nothing. Exact fit.
+> - **`init` / `sync` = `Official Workflow Skill`**: an agent procedure invoked to drive a
+>   step (scaffold-and-orient / re-project), writing files but self-granting nothing — the
+>   same category as `retail-orchestrate` and the onboarding wizard.
+>
+> The "consumes Core Authority" restriction is specific to Product Module; Maintenance
+> Automation and Workflow Skill carry no such input rule, so the meta-level tension dissolves
+> without touching the closed set.
 
 ---
 
@@ -194,11 +198,11 @@ specifically; that was a misread — corrected here so the eventual spec survive
 Discriminator: **does the kit's own code make the network fetch, or does pip/git?**
 
 - **Package-driven (Phase-1 model, ships now).** Update = `pip install -U seshat-bi`
-  (pip/git fetches), then `retail sync` re-projects `.seshat/` + regenerates
-  `AGENTS.md`/`CLAUDE.md` from the installed package, three-way-merging user edits by
-  checksum. Kit touches only the **local repo working set** → **Product Module /
-  `execution-capable` / `local-only`**. Constitution-clean; runs **under** the F031
-  update-safety lanes.
+  (pip/git fetches), then `retail sync` re-projects `.seshat/` + regenerates ONLY the fenced
+  regions of `AGENTS.md`/`CLAUDE.md` from the installed package, three-way-merging user edits
+  by checksum. Kit touches only the **local repo working set** → **Official Workflow Skill**
+  (invoked to drive the re-projection step; the generator it calls is Maintenance Automation).
+  Constitution-clean; runs **under** the F031 update-safety lanes.
 - **Channel-driven (deferred, gated end-state).** The kit itself fetches from a remote
   channel → **crosses the external trust boundary** → **Execution Adapter /
   `external-service-connected`**, gated like F016; collides with "never auto-exec
@@ -234,11 +238,11 @@ steps** — they orient the agent silently underneath step 2.
 
 ### Phase 2 — the backstage substrate (built, never user-facing)
 
-| Component | What | Proposed category (pending F024 amendment) |
+| Component | What | F024 category (RESOLVED — existing, no amendment) |
 |---|---|---|
 | Canonical kit source | the single committed source projections generate from; **downstream of the constitution** | committed static artifact |
-| Projection generator | one source → `compass.yaml` + fenced `AGENTS.md`/`CLAUDE.md` regions + manifests | **Kit / Meta-Automation** (new category) |
-| Drift linter | fail loud if a projection drifts from source **or the source drifts from the constitution** | **Kit / Meta-Automation** (CI-only; **never a user step**) |
+| Projection generator | one source → `compass.yaml` + fenced `AGENTS.md`/`CLAUDE.md` regions + manifests | **Maintenance Automation** (CI, emits derived evidence, no truth) |
+| Drift linter | fail loud if a projection drifts from source **or the source drifts from the constitution** | **Maintenance Automation** (CI-only; **never a user step**) |
 
 > The drift linter + checksummed manifests are **kit-author hygiene, not analyst value** —
 > they can only ever say "the plumbing is consistent," never "your numbers are right." Keep
@@ -256,18 +260,28 @@ fenced regions**, three-way-merge user edits, surface F033 release notes), then
 Channel-driven fetch + rollback + integrity — the kit itself fetches from a remote →
 **Execution Adapter / `external-service-connected`**, gated like F016.
 
-## Open questions to resolve BEFORE this becomes a spec
+## Pre-spec questions — RESOLVED (grounded in repo law 2026-07-02)
 
-1. **F024 6th category** — does "Kit / Meta-Automation" get added by amendment (Principle
-   VI), or is operating-on-kit-files ruled in-scope for Product Module? (Must pick one.)
-2. **The Codex premise** — verify Codex genuinely lacks a skill-invocation layer.
-3. **The fence spec** — exact delimiter + which region of `CLAUDE.md`/`AGENTS.md` is
-   generated vs constitution-owned.
+1. **F024 category — RESOLVED: no new category.** FR-001 declares the five a closed set;
+   adding a sixth is a versioned amendment (over-engineering). Existing categories fit because
+   they don't restrict INPUT to Core Authority: generator + drift linter = **Maintenance
+   Automation** (FR-006); `init`/`sync` = **Official Workflow Skill**. Only Product Module
+   required Core-Authority input — so simply don't use it.
+2. **Codex premise — RESOLVED: reframed & confirmed.** Codex IS a configured harness on this
+   repo (ADR 0006 — a PR reviewer that found 9 real defects). The repo has no evidence about
+   its skill-invocation capability, so the honest claim is *"Codex drives via the `AGENTS.md`
+   convention"* (verified), NOT the absolute *"has no skill system"* (kept hedged). The
+   harness-neutral router is how Codex reaches parity today regardless — foundation holds.
+3. **Fence — RESOLVED: reuse the existing pattern.** No need to design one. `CLAUDE.md` already
+   ships a working fence (`<!-- SPECKIT START -->…<!-- SPECKIT END -->`, lines 35–39) that
+   leaves all surrounding repo law untouched. `sync` writes ONLY inside a
+   `<!-- SESHAT-KIT START -->…<!-- SESHAT-KIT END -->` block; everything outside is
+   hand-authored / constitution-owned and never touched. Proven-in-production safety property.
 
 ## The paved next step
 
 A human **chooses one idea** — the natural first pick is **Phase-1 Step 1–2** (the
 `init`-to-worked-example-to-first-profile path), because it delivers a visible result and
 pulls the backstage substrate in behind it only as far as that path needs. Then run
-`idea-to-spec` on that single idea (one idea per run) inside a worktree, resolving the
-three open questions above during `clarify`.
+`idea-to-spec` on that single idea (one idea per run) inside a worktree. The three questions
+above are now **settled**, so `clarify` inherits answers, not open decisions.
