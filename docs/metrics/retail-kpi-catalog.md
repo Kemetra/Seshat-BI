@@ -130,6 +130,9 @@ approved, never by fabricating the input.
 
 - The atomic contract template: `../../templates/metric-contract.yaml`.
 - The pack template: `../../templates/kpi-pack.yaml`.
+- The per-KPI sufficiency card (is one KPI's contract complete enough to build?):
+  `../../templates/kpi-sufficiency-card.md` (categorical `ready`/`blocked` + named
+  blockers, never a score; distinct from the per-table coverage scorecard).
 - The store rules + lifecycle: `metric-contract-store.md`.
 - A filled set of five contracts (real example): `../../mappings/retail_store_sales/metrics/`.
 - The stage that reads contracts: `../readiness/semantic-model-ready.md`.

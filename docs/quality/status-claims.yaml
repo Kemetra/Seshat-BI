@@ -43,3 +43,21 @@ claims:
     anchor: "`docs/worked-examples/retail-store-sales.md` (the full seven-stage spine to Dashboard Ready --"
     claimed-artifact: "docs/worked-examples/retail-store-sales.md"
     claimed-status: "built"
+
+  # (I2) The bi-python groupby/grain knowledge slice landed: its INDEX route moved
+  # planned -> live. Lock the live route reference so the INDEX can never point at a
+  # deleted/renamed knowledge file, nor silently regress the route to "planned".
+  - id: "bi-python-groupby-knowledge-built"
+    doc: "skills/bi-python-knowledge/INDEX.md"
+    anchor: "| Aggregate / groupby at a correct grain (use the checklist as a standalone review artifact) | `knowledge/groupby-aggregation-and-grain.md` | `checklists/aggregation-grain-checklist.md` |"
+    claimed-artifact: "skills/bi-python-knowledge/knowledge/groupby-aggregation-and-grain.md"
+    claimed-status: "built"
+
+  # (H4) The per-KPI contract-sufficiency card template landed and is referenced from
+  # the KPI catalog "See also". Lock the reference so the catalog can never point at a
+  # deleted/renamed template.
+  - id: "kpi-sufficiency-card-template-built"
+    doc: "docs/metrics/retail-kpi-catalog.md"
+    anchor: "`../../templates/kpi-sufficiency-card.md` (categorical `ready`/`blocked` + named"
+    claimed-artifact: "templates/kpi-sufficiency-card.md"
+    claimed-status: "built"
