@@ -34,7 +34,7 @@ the named artifact. Do not pre-load the whole `knowledge/` directory.
 |---|---|---|
 | Profile a **standalone file source** (CSV / Excel) — grain, encoding, delimiter, header row, multi-sheet, inferred-type traps | `knowledge/file-source-grain.md` (PY-CN-081..085, PY-BP-007, PY-PB-011) | the File-source addendum in `templates/source-profile.md` (marked `[PROPOSED]` / `[PENDING LIVE PROFILE]`) |
 | Clean / standardize strings, categories, currency, units, sentinels, or duplicates | `knowledge/cleaning-and-standardization.md` | `checklists/cleaning-review-checklist.md` (cleaning verdict + row-count ledger) |
-| Aggregate / groupby at a correct grain (use the checklist as a standalone review artifact) | *(groupby knowledge file is planned)* | `checklists/aggregation-grain-checklist.md` |
+| Aggregate / groupby at a correct grain (use the checklist as a standalone review artifact) | `knowledge/groupby-aggregation-and-grain.md` | `checklists/aggregation-grain-checklist.md` |
 | Review proposed (not-yet-active) static-analysis rules for Python pipelines | `patterns/analyzer-rule-candidates.json` | the candidate list itself (staging artifact) |
 | Confirm the business meaning of a retail column | `references/source-map.md` | n/a (reference) |
 | Confirm the fictional retail schema used by all examples | `references/retail-dataframe-schema.md` | n/a (reference) |
@@ -56,7 +56,7 @@ the named artifact. Do not pre-load the whole `knowledge/` directory.
 | `channel`/`region` shows more values than its domain | Casing / whitespace drift | `knowledge/cleaning-and-standardization.md` (PY-CN-031/032) | row-count ledger + verdict (in file) |
 | Sentinel values (`-1`, `999`) summed as if real | Sentinel not mapped to null | `knowledge/cleaning-and-standardization.md` (PY-CN-034) | row-count ledger + verdict (in file) |
 | Duplicate rows suspected | No declared uniqueness key | `knowledge/cleaning-and-standardization.md` (PY-CN-035) | row-count ledger + verdict (in file) |
-| Sums look too big after grouping | Double-counting / wrong grain / non-additive measure summed | *(groupby knowledge file is planned)* | `checklists/aggregation-grain-checklist.md` |
+| Sums look too big after grouping | Double-counting / wrong grain / non-additive measure summed | `knowledge/groupby-aggregation-and-grain.md` | `checklists/aggregation-grain-checklist.md` |
 
 ---
 
@@ -72,7 +72,6 @@ These routes are part of the intended layer but their knowledge/checklist files 
 | Judge or fix dtypes / detect schema drift | `knowledge/pandas-dtypes-and-schema.md` | planned / not yet implemented |
 | Decide how to handle nulls / blanks / sentinels (full slice) | `knowledge/nulls-missing-values-and-blanks.md` | planned / not yet implemented |
 | Merge/join two dataframes safely | `knowledge/joins-merge-and-fanout.md` | planned / not yet implemented |
-| Aggregate / groupby at a correct grain (knowledge file) | `knowledge/groupby-aggregation-and-grain.md` | planned / not yet implemented |
 | Parse dates / build period columns | `knowledge/dates-times-and-calendars.md` | planned / not yet implemented |
 | Validate / reconcile a result before handoff | `knowledge/validation-and-reconciliation.md`, `patterns/validation-patterns.json` | planned / not yet implemented |
 | Diagnose slowness or memory blowup | `knowledge/performance-and-memory.md` | planned / not yet implemented |
@@ -90,7 +89,8 @@ These routes are part of the intended layer but their knowledge/checklist files 
 
 ```
 knowledge/   reasoning content, one domain per file
-             — shipped: cleaning-and-standardization.md
+             — shipped: cleaning-and-standardization.md, file-source-grain.md,
+               groupby-aggregation-and-grain.md
 patterns/    machine-readable rule + pattern sets (JSON)
              — shipped: analyzer-rule-candidates.json (candidates only, not active)
 checklists/  the artifacts routes end on
