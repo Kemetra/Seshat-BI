@@ -74,3 +74,29 @@ def test_sqlserver_is_text_type() -> None:
     assert d.is_text_type("varchar")
     assert d.is_text_type("NVARCHAR")
     assert not d.is_text_type("int")
+
+
+def test_mysql_count_where_is_count_case() -> None:
+    assert get_dialect("mysql").count_where("x IS NULL") == (
+        "COUNT(CASE WHEN x IS NULL THEN 1 END)"
+    )
+
+
+def test_mysql_quote_ident_backtick() -> None:
+    assert get_dialect("mysql").quote_ident("col") == "`col`"
+
+
+def test_mysql_placeholder_is_percent_s() -> None:
+    # mysql-connector paramstyle is pyformat (%s), same as psycopg2.
+    assert get_dialect("mysql").placeholder() == "%s"
+
+
+def test_mysql_translate_params_noop() -> None:
+    d = get_dialect("mysql")
+    assert d.translate_params("WHERE a = %s") == "WHERE a = %s"
+
+
+def test_mysql_distinct_tuple_is_derived_table() -> None:
+    assert get_dialect("mysql").distinct_tuple_count(("a", "b"), "s.t") == (
+        "(SELECT COUNT(*) FROM (SELECT DISTINCT a, b FROM s.t) AS sub)"
+    )
