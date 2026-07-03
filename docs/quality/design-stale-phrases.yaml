@@ -1,0 +1,24 @@
+# Design stale-phrase manifest -- the source DR1
+# (src/retail/rules/design_routes.py) reconciles against committed doc text. Each
+# entry records a prose phrase that is KNOWN STALE (a superseded verb, a "spec-only"
+# claim about a shipped surface, a renamed design token). DR1 is the INVERSE of SC1:
+# SC1 requires an anchor to be PRESENT (a moved/removed anchor is flagged); DR1 flags
+# an anchor that is STILL PRESENT (the stale phrase was never removed). The gate fails
+# closed when a listed stale phrase is still in its doc.
+#
+# Each phrase:
+#   doc     the doc that (still) contains the stale phrase (must be a tracked file)
+#   anchor  the LITERAL stale substring; DR1 ERRORs while this text remains in `doc`.
+#           Must stay byte-identical to the offending wording. To clear the finding,
+#           edit the doc to remove/replace the phrase, then delete this entry.
+#   reason  (optional) one line: what the phrase should say instead / why it is stale
+#
+# Hand-curated (not auto-generated). It is LIVE-STATE-ONLY -- DR1 reconciles against
+# the doc text as committed now. Add an entry when a design-layer doc carries a
+# confirmed stale phrase worth locking against re-introduction; remove it once the doc
+# is corrected. An empty list is the healthy steady state (no known stale phrases).
+#
+# DR1 also enforces a path foot-gun check (no tracked file under `.claude/worktrees/`)
+# which needs no manifest entry; that half is hardcoded in the rule module.
+
+phrases: []

@@ -112,6 +112,10 @@
     "title": "A layout grid's column/row arithmetic closes against its canvas and margins"
   },
   {
+    "id": "DR1",
+    "title": "Design-layer route path foot-gun + stale-phrase guard"
+  },
+  {
     "id": "G1",
     "title": ".gitignore correctness"
   },

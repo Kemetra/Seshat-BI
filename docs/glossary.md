@@ -98,7 +98,7 @@ This catalog is the **single source of truth for `retail check`'s rule count.**
 The **live registry in `src/retail/rules/` is authoritative**; the table below
 mirrors it and the `retail-govern` skill maps each id to its fix.
 
-> **Currently 51 rules in 18 families** (S, D, C, R, RS, G, P, A, B, PP, SC, DF, SL, AL, AD, AQ, DL, CT).
+> **Currently 52 rules in 19 families** (S, D, C, R, RS, G, P, A, B, PP, SC, DF, SL, AL, AD, AQ, DL, CT, DR).
 > When a rule is added or removed, update the table and this line **together** — and
 > elsewhere refer to "the static `retail check` gate" by name rather than restating a
 > number. Restated counts are exactly what drifted before (see
@@ -125,6 +125,7 @@ mirrors it and the `retail-govern` skill maps each id to its fix.
 | **AQ** | answerability | `AQ1` every domain decision-question route resolves to an existing contract (Seeded) or is honestly marked Planned with the placeholder glyph; dangling Seeded routes and stale Planned markers ERROR, ambiguous rows WARN |
 | **DL** | design-lint (Power BI visual surfaces) | `DL1` theme JSON purity -- a theme file carries styling DEFAULTS only (surface 3, `docs/powerbi/theme-json.md`) · `DL2` background-spec purity -- a page background carries STATIC STRUCTURE ONLY, no dynamic/data-bound content (surface 2) · `DL3` token->theme fidelity -- a theme's declared styling values (dataColors, background) match the design tokens they compile from (surface 3) · `DL4` design-review evidence well-formedness -- a filled design-review-evidence record carries every required field (page_id, anti_patterns_checked, contrast_pairs, reviewer, date); verify-slot-only, never grants the pass · `DL5` grid arithmetic-closure -- a layout grid's column/row math closes (usable width/height == columns*column_width + gutters), and a declared arithmetic_check is not stale |
 | **CT** | contrast / accessibility | `CT1` token text/background color pairs meet the token-declared WCAG contrast floor (deterministic sRGB luminance ratio, pass/fail against `accessibility.min_text_contrast_ratio`, never a score) |
+| **DR** | design-layer route honesty | `DR1` path foot-gun + stale-phrase guard -- no tracked file lives under a `.claude/worktrees/` scratch prefix, and no doc still contains a curated known-stale phrase (`docs/quality/design-stale-phrases.yaml`; the inverse of SC1's anchor-presence check) |
 
 ## Project shorthand
 
