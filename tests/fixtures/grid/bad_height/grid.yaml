@@ -1,0 +1,17 @@
+grid_id: "synthetic-bad-height"
+profiles:
+  "compact":
+    canvas:
+      width: 200
+      height: 150
+    margin:
+      top: 10
+      right: 10
+      bottom: 10
+      left: 10
+    grid:
+      columns: 4
+      rows: 3
+      gutter: 20
+      column_width: 30    # width closes
+      row_height: 25      # 3*25 + 2*20 = 115 != 130 (height does NOT close)

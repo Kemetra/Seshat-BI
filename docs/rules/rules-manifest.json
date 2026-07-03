@@ -108,6 +108,10 @@
     "title": "A filled design-review evidence record carries every required field"
   },
   {
+    "id": "DL5",
+    "title": "A layout grid's column/row arithmetic closes against its canvas and margins"
+  },
+  {
     "id": "G1",
     "title": ".gitignore correctness"
   },

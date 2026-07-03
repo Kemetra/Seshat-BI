@@ -1,0 +1,3 @@
+grid_id: "synthetic-malformed
+profiles: [ this is not valid yaml
+  canvas: {{{

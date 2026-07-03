@@ -98,7 +98,7 @@ This catalog is the **single source of truth for `retail check`'s rule count.**
 The **live registry in `src/retail/rules/` is authoritative**; the table below
 mirrors it and the `retail-govern` skill maps each id to its fix.
 
-> **Currently 50 rules in 18 families** (S, D, C, R, RS, G, P, A, B, PP, SC, DF, SL, AL, AD, AQ, DL, CT).
+> **Currently 51 rules in 18 families** (S, D, C, R, RS, G, P, A, B, PP, SC, DF, SL, AL, AD, AQ, DL, CT).
 > When a rule is added or removed, update the table and this line **together** — and
 > elsewhere refer to "the static `retail check` gate" by name rather than restating a
 > number. Restated counts are exactly what drifted before (see
@@ -123,7 +123,7 @@ mirrors it and the `retail-govern` skill maps each id to its fix.
 | **AL** | assumption ledger | `AL1` a metric contract with an unresolved assumption (blocked + reasons) must not also carry a settled gold binding · `AL2` contracts on one gold table record no contradictory decided ambiguity rulings |
 | **AD** | additivity consistency | `AD1` a metric's additivity classification is not composed illegally with its lineage parents (no direct sum of a non-additive/semi-additive metric); absent/ambiguous class is ERRORed, never inferred |
 | **AQ** | answerability | `AQ1` every domain decision-question route resolves to an existing contract (Seeded) or is honestly marked Planned with the placeholder glyph; dangling Seeded routes and stale Planned markers ERROR, ambiguous rows WARN |
-| **DL** | design-lint (Power BI visual surfaces) | `DL1` theme JSON purity -- a theme file carries styling DEFAULTS only (surface 3, `docs/powerbi/theme-json.md`) · `DL2` background-spec purity -- a page background carries STATIC STRUCTURE ONLY, no dynamic/data-bound content (surface 2) · `DL3` token->theme fidelity -- a theme's declared styling values (dataColors, background) match the design tokens they compile from (surface 3) · `DL4` design-review evidence well-formedness -- a filled design-review-evidence record carries every required field (page_id, anti_patterns_checked, contrast_pairs, reviewer, date); verify-slot-only, never grants the pass |
+| **DL** | design-lint (Power BI visual surfaces) | `DL1` theme JSON purity -- a theme file carries styling DEFAULTS only (surface 3, `docs/powerbi/theme-json.md`) · `DL2` background-spec purity -- a page background carries STATIC STRUCTURE ONLY, no dynamic/data-bound content (surface 2) · `DL3` token->theme fidelity -- a theme's declared styling values (dataColors, background) match the design tokens they compile from (surface 3) · `DL4` design-review evidence well-formedness -- a filled design-review-evidence record carries every required field (page_id, anti_patterns_checked, contrast_pairs, reviewer, date); verify-slot-only, never grants the pass · `DL5` grid arithmetic-closure -- a layout grid's column/row math closes (usable width/height == columns*column_width + gutters), and a declared arithmetic_check is not stale |
 | **CT** | contrast / accessibility | `CT1` token text/background color pairs meet the token-declared WCAG contrast floor (deterministic sRGB luminance ratio, pass/fail against `accessibility.min_text_contrast_ratio`, never a score) |
 
 ## Project shorthand

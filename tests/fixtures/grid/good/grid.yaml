@@ -1,0 +1,20 @@
+grid_id: "synthetic-good"
+profiles:
+  "compact":
+    canvas:
+      width: 200
+      height: 150
+    margin:
+      top: 10
+      right: 10
+      bottom: 10
+      left: 10
+    grid:
+      columns: 4
+      rows: 3
+      gutter: 20
+      column_width: 30    # 4*30 + 3*20 = 180 == 200-10-10
+      row_height: 30      # 3*30 + 2*20 = 130 == 150-10-10
+    arithmetic_check:
+      width_closes: true
+      height_closes: true
