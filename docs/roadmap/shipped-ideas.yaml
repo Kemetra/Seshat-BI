@@ -191,3 +191,37 @@ E4:
 # "separate template vs fold into F8" as an OPEN human packaging ruling (Principle V).
 # It is deferred pending that owner ruling -- neither shipped nor settled-rejected, so
 # it gets no key. Add an `H4:` row only when the owner rules and it ships (or is settled).
+
+# --- 2026-07-03 design category autonomous wave (PRs #146-149) ---
+# The owner directed a full-autonomous build of the OPEN design ideas (build ->
+# review -> PR -> CI green + comments resolved -> merge). Five design ideas shipped
+# as design-lint rules + one test adoption; registry 47->51. The theme dataColors
+# were reconciled to the tokens per the owner's canonical-palette ruling (recorded
+# in the #146 body). Three post-merge Codex P2 findings (DL3/DL4/DL5 completeness
+# gaps) were resolved in #149.
+#
+# KEYED BY SHIPPED @register ID (DL3/CT1/DL4/DL5), NOT the 2026-07-01 snapshot
+# short-codes (A1/A3/C1): those short-codes ALREADY key different earlier ideas
+# above (A1=route-registry #62, A3=route-coverage #95, C1=connection). Reusing
+# them here would be a duplicate YAML key that silently shadows the earlier ship.
+# The design snapshot's A1/A3/C1/A7/D2 map to DL3/CT1/DL4/DL5/(D2 test) 1:1.
+DL3:
+  status: shipped
+  pr_sha: "PR #146 (design arc; snapshot A1) @register DL3 src/retail/rules/design_theme_fidelity.py -- token->theme fidelity; owner ruled tokens canonical (2026-07-03), theme dataColors reconciled to the categorical token palette. Hardened in #149 (missing-dataColors now ERRORs)."
+  f_row: none
+CT1:
+  status: shipped
+  pr_sha: "PR #146 (design arc; snapshot A3) @register CT1 src/retail/rules/design_contrast.py -- WCAG contrast pre-check, deterministic sRGB ratio vs the token-declared floor (new CT family)."
+  f_row: none
+DL4:
+  status: shipped
+  pr_sha: "PR #146 (design arc; snapshot C1) @register DL4 src/retail/rules/design_review_evidence.py + templates/design-review-evidence.md -- design-review evidence well-formedness (verify-slot-only, distinct from RS1). Hardened in #149 (placeholder-only list-section now ERRORs)."
+  f_row: none
+DL5:
+  status: shipped
+  pr_sha: "PR #147 (snapshot A7) @register DL5 src/retail/rules/design_grid_closure.py -- grid arithmetic-closure self-check; live 16x9 grid closes (green on main). Severity-posture DL5 case added in #149."
+  f_row: none
+D2:
+  status: shipped
+  pr_sha: "PR #148 (snapshot D2) tests/unit/test_design_cards.py + docs/quality/design-cards-count.yaml -- adopts the orphaned validate_cards.py into the governed test surface (test-only, no @register rule)."
+  f_row: none
