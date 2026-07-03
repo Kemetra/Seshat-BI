@@ -1,0 +1,9 @@
+# Design-cards count anchor -- the expected number of committed Claude Design
+# System preview cards. test_design_cards.py asserts validate_cards.main() exits 0
+# over the committed bundle AND that the bundle still has exactly this many cards,
+# so a card silently dropped (or an ungoverned one slipped in) fails the gate.
+#
+# This adopts the orphaned design/claude-design-system/validate_cards.py into the
+# governed test surface (idea D2): the validator existed but ran on nothing in CI.
+# Bump this number in the SAME commit that adds/removes a preview card.
+expected_card_count: 15
