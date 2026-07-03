@@ -38,6 +38,21 @@ class Dialect(Protocol):
     def columns_query(self) -> str: ...
     def normalize_catalog_literal(self, value: str) -> str: ...
 
+    # R4 -- resolve_config/connect/redact. The config shape differs by engine
+    # (a DSN/ODBC keyword string for Postgres/SQL-Server, a kwargs dict for
+    # MySQL/Snowflake), hence the union return/param types. This is a
+    # documentation-level Protocol declaration -- it records the seam's
+    # contract explicitly (previously undeclared on Protocol, so a caller
+    # holding a `Dialect`-typed value had no static signature for these three
+    # methods at all) rather than a hardened type-checker gate: no mypy/
+    # pyright is configured in this repo, and even under one, the concrete
+    # classes accept a narrower/single param type than this Protocol's union,
+    # which a strict checker would flag as its own (separate, pre-existing-
+    # pattern) contravariance note rather than something this change resolves.
+    def resolve_config(self, env: dict[str, str]) -> str | dict[str, object] | None: ...
+    def connect(self, config: str | dict[str, object]) -> object: ...
+    def redact(self, message: object, config: str | dict[str, object]) -> str: ...
+
 
 # Postgres text types (information_schema.data_type), from profile.py today.
 _PG_TEXT_TYPES = frozenset(
@@ -118,6 +133,18 @@ class SqlServerDialect:
 
         Returns None (no host configured) rather than a half-built string, so
         the caller's "no connection configured" error path is reused verbatim.
+
+        UID/PWD values are brace-wrapped (ODBC's documented escaping form,
+        `KEYWORD={value}`) so a `;` inside a password/username is unambiguous
+        both to the driver and to `redact()` -- without bracing, a `;` inside
+        the value is indistinguishable from the next `KEYWORD=` separator and
+        `config.split(";")` truncates the value (R4).
+
+        Known limitation (not hardened here, out of R4's `;`/bare-host scope):
+        this brace-wraps but does not double an internal literal `}` the way
+        full ODBC escaping requires (`}}` inside a braced value). A password
+        containing `}` is not a case this fix targets; `;` and bare-host
+        leakage are.
         """
         driver = env.get("ANALYTICS_DB_ODBC_DRIVER") or "ODBC Driver 18 for SQL Server"
         host = env.get("ANALYTICS_DB_HOST")
@@ -128,9 +155,9 @@ class SqlServerDialect:
         if env.get("ANALYTICS_DB_NAME"):
             parts.append(f"DATABASE={env['ANALYTICS_DB_NAME']}")
         if env.get("ANALYTICS_DB_USER"):
-            parts.append(f"UID={env['ANALYTICS_DB_USER']}")
+            parts.append("UID={" + env["ANALYTICS_DB_USER"] + "}")
         if env.get("ANALYTICS_DB_PASSWORD"):
-            parts.append(f"PWD={env['ANALYTICS_DB_PASSWORD']}")
+            parts.append("PWD={" + env["ANALYTICS_DB_PASSWORD"] + "}")
         parts.append("Encrypt=yes")
         if env.get("ANALYTICS_DB_TRUST_CERT", "").lower() in ("1", "true", "yes"):
             parts.append("TrustServerCertificate=yes")
@@ -154,20 +181,91 @@ class SqlServerDialect:
     def redact(self, message: object, config: str) -> str:
         """Scrub PWD/UID/SERVER/DATABASE values from an error message.
 
-        Two passes: (1) regex-scrub `KW=value` up to the next `;` directly in
-        the message text; (2) also replace each raw value from the ODBC
-        keyword string verbatim, in case the driver reformatted the error
-        (mirrors _redact_dsn's component-level scrub for psycopg2).
+        A naive `config.split(";")` is ambiguous: a `;` INSIDE a password (or
+        any value) is indistinguishable from the separator between keywords,
+        so a plain split silently truncates the value at the first embedded
+        `;`. resolve_config now brace-wraps PWD/UID (`KEY={value}`, the ODBC-
+        documented escape), which makes those two values unambiguous; this
+        method parses brace-wrapped tokens as a single unit instead of
+        splitting on every `;` blindly.
+
+        Two passes, mirroring `_redact_dsn`'s component-level scrub for
+        psycopg2: (1) a best-effort `KW=value` regex pass directly against the
+        message text (covers brace and bare forms, and stops at a following
+        `;` OR `}`); (2) a component-level pass that re-derives each secret
+        VALUE from the config string (unwrapping braces, and splitting SERVER
+        on the LAST `,` to isolate the bare host) and replaces it verbatim
+        wherever it appears -- this is what catches the driver reformatting
+        the error into its own text (e.g. FreeTDS "TCP Provider: host 'X' not
+        found", which never contains "SERVER=" or the port at all). Component
+        values are scrubbed longest-first so a short value (e.g. a username
+        that is a substring of the host) cannot pre-empt a longer overlapping
+        match, matching `_redact_dsn`'s discipline.
         """
         text = str(message)
-        for kw in ("PWD", "UID", "SERVER", "DATABASE"):
+        for kw in ("PWD", "UID"):
+            # Brace form first (value may legitimately contain ';'), then bare.
+            text = re.sub(rf"({kw}=)\{{[^}}]*\}}", r"\1<redacted>", text)
             text = re.sub(rf"({kw}=)[^;]*", r"\1<redacted>", text)
-        for token in (config or "").split(";"):
-            if "=" in token:
-                _, val = token.split("=", 1)
-                if val and val not in ("yes", "no"):
-                    text = text.replace(val, "<redacted>")
+        for kw in ("SERVER", "DATABASE"):
+            text = re.sub(rf"({kw}=)[^;]*", r"\1<redacted>", text)
+
+        secrets: set[str] = set()
+        for kw, val in self._parse_tokens(config or ""):
+            if not val or val.lower() in ("yes", "no"):
+                continue
+            if kw == "SERVER":
+                # SERVER=host,port -- scrub the bare host independently, since
+                # the driver may print it alone with no port and no prefix.
+                host = val.rsplit(",", 1)[0]
+                if host:
+                    secrets.add(host)
+                secrets.add(val)
+            else:
+                secrets.add(val)
+
+        for secret in sorted(secrets, key=len, reverse=True):
+            text = text.replace(secret, "<redacted>")
         return text
+
+    @staticmethod
+    def _parse_tokens(config: str) -> list[tuple[str, str]]:
+        """Split an ODBC keyword string into (KEYWORD, value) pairs.
+
+        Unlike a naive ``config.split(";")``, this splits on ``;`` only
+        OUTSIDE of a brace-wrapped value (``KEY={...}``) -- a brace-wrapped
+        value may legitimately contain a literal ``;`` (that is the whole
+        point of the ODBC brace-escape), and a blind split truncates it.
+        Also unwraps the surrounding ``{}`` from the returned value.
+        """
+        tokens: list[str] = []
+        depth = 0
+        current: list[str] = []
+        for ch in config:
+            if ch == "{":
+                depth += 1
+                current.append(ch)
+            elif ch == "}":
+                depth = max(0, depth - 1)
+                current.append(ch)
+            elif ch == ";" and depth == 0:
+                tokens.append("".join(current))
+                current = []
+            else:
+                current.append(ch)
+        if current:
+            tokens.append("".join(current))
+
+        pairs: list[tuple[str, str]] = []
+        for token in tokens:
+            if "=" not in token:
+                continue
+            kw, val = token.split("=", 1)
+            kw = kw.strip().upper()
+            if val.startswith("{") and val.endswith("}") and len(val) >= 2:
+                val = val[1:-1]
+            pairs.append((kw, val))
+        return pairs
 
     def quote_ident(self, name: str, *, context: str = "identifier") -> str:
         v = validate_identifier(name, context=context)

@@ -212,8 +212,10 @@ def test_sqlserver_resolve_config_builds_odbc_keyword_string() -> None:
     cfg = d.resolve_config(env)
     assert cfg is not None
     assert "SERVER=h,1433" in cfg
-    assert "UID=u" in cfg
-    assert "PWD=p" in cfg
+    # UID/PWD are brace-wrapped per the ODBC-documented escape (R4: this is
+    # what makes a ";" inside a password unambiguous -- see redact()).
+    assert "UID={u}" in cfg
+    assert "PWD={p}" in cfg
     assert "DATABASE=db" in cfg
 
 
@@ -236,6 +238,62 @@ def test_sqlserver_redact_scrubs_reformatted_password_not_in_kw_form() -> None:
     cfg = "DRIVER={ODBC Driver 18 for SQL Server};SERVER=h;UID=u;PWD=hunter2pass"
     out = d.redact("connection refused; credential 'hunter2pass' rejected", cfg)
     assert "hunter2pass" not in out
+
+
+def test_sqlserver_redact_scrubs_password_containing_semicolon() -> None:
+    # R4 adversarial: a password containing ";" must not truncate the scrub.
+    # config.split(";") would previously chop "PWD=pa;ss:w0rd" down to "PWD=pa",
+    # leaking the "ss:w0rd" half of the real password in error text.
+    env = {
+        "ANALYTICS_DB_HOST": "h",
+        "ANALYTICS_DB_USER": "u",
+        "ANALYTICS_DB_PASSWORD": "pa;ss:w0rd",
+    }
+    d = get_dialect("sqlserver")
+    cfg = d.resolve_config(env)
+    assert cfg is not None
+    out = d.redact("login failed: password 'pa;ss:w0rd' rejected", cfg)
+    assert "pa;ss:w0rd" not in out
+    assert "ss:w0rd" not in out
+    assert "w0rd" not in out
+
+
+def test_sqlserver_redact_scrubs_bare_host_without_server_prefix() -> None:
+    # R4 adversarial: on a DNS/TCP failure, pyodbc/FreeTDS prints the bare host
+    # with NO "SERVER=" prefix and no port (e.g. FreeTDS "TCP Provider" errors).
+    # The old code only matched "SERVER=..." and stored "host,port" as one
+    # composite token, so the port-less bare host never matched and leaked.
+    # NOTE: username/password are deliberately multi-char and non-substrings of
+    # the message, so a stray single-char accidental match (e.g. "UID=u"
+    # matching a letter inside "found") cannot produce a false-positive pass.
+    env = {
+        "ANALYTICS_DB_HOST": "prodsql.internal.corp",
+        "ANALYTICS_DB_USER": "svcuser",
+        "ANALYTICS_DB_PASSWORD": "hunter2",
+    }
+    d = get_dialect("sqlserver")
+    cfg = d.resolve_config(env)
+    assert cfg is not None
+    out = d.redact("TCP Provider: host 'prodsql.internal.corp' not found", cfg)
+    assert "prodsql.internal.corp" not in out
+
+
+def test_sqlserver_redact_regression_simple_password_still_scrubbed() -> None:
+    # Regression guard for the brace-wrap change: a password with NO ";" (the
+    # common case) must still be fully scrubbed, in both the brace-wrapped
+    # PWD={...} form (resolve_config's new output) and if it appears bare in
+    # driver-reformatted text.
+    env = {
+        "ANALYTICS_DB_HOST": "h",
+        "ANALYTICS_DB_USER": "u",
+        "ANALYTICS_DB_PASSWORD": "topsecret",
+    }
+    d = get_dialect("sqlserver")
+    cfg = d.resolve_config(env)
+    assert cfg is not None
+    assert "PWD={topsecret}" in cfg
+    out = d.redact("login failed: PWD={topsecret} rejected; raw topsecret leaked?", cfg)
+    assert "topsecret" not in out
 
 
 def test_mysql_resolve_config_builds_kwargs_dict() -> None:
