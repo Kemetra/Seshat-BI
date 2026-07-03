@@ -100,3 +100,36 @@ def test_mysql_distinct_tuple_is_derived_table() -> None:
     assert get_dialect("mysql").distinct_tuple_count(("a", "b"), "s.t") == (
         "(SELECT COUNT(*) FROM (SELECT DISTINCT a, b FROM s.t) AS sub)"
     )
+
+
+def test_snowflake_quote_ident_uppercases() -> None:
+    # R1: Snowflake folds unquoted names to UPPERCASE; quoting must match stored case
+    # or the query silently matches nothing.
+    assert get_dialect("snowflake").quote_ident("my_table") == '"MY_TABLE"'
+
+
+def test_snowflake_quote_qualified_uppercases_each_part() -> None:
+    assert get_dialect("snowflake").quote_qualified(
+        "bronze.my_table", context="t"
+    ) == '"BRONZE"."MY_TABLE"'
+
+
+def test_snowflake_count_where_is_count_case() -> None:
+    assert get_dialect("snowflake").count_where("x IS NULL") == (
+        "COUNT(CASE WHEN x IS NULL THEN 1 END)"
+    )
+
+
+def test_snowflake_is_text_type_collapses_to_text() -> None:
+    d = get_dialect("snowflake")
+    assert d.is_text_type("TEXT")
+    assert d.is_text_type("text")
+    assert not d.is_text_type("NUMBER")
+
+
+def test_snowflake_columns_query_uppercases_filter() -> None:
+    # The profiler must pass UPPERCASE (schema, table); the query uses ILIKE-safe
+    # equality on UPPER()-folded catalog values.
+    sql = get_dialect("snowflake").columns_query()
+    assert "INFORMATION_SCHEMA.COLUMNS" in sql
+    assert "%s" in sql  # snowflake default paramstyle is pyformat

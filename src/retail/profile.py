@@ -84,7 +84,13 @@ def _discover_columns(
         schema, name = table.split(".", 1)
     else:
         schema, name = "public", table
-    rows = runner.run(dialect.columns_query(), (schema, name))
+    rows = runner.run(
+        dialect.columns_query(),
+        (
+            dialect.normalize_catalog_literal(schema),
+            dialect.normalize_catalog_literal(name),
+        ),
+    )
     # tolerate a runner that only returns the name (older fixtures) -> assume text
     return tuple((r[0], (r[1] if len(r) > 1 else "text")) for r in rows)
 
