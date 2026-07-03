@@ -47,6 +47,20 @@ The lane stays present as a first-class cohort even when empty.)_
 
 ## ADOPT
 
+> **⚠️ Reconciliation note (2026-07-03 design wave).** This bank is GENERATED
+> output and predates the design-category build wave; it re-renders on the next
+> idea-engine run. The design ideas below are already reconciled in the
+> authoritative surfaces — do not read their ADOPT/CONSIDER bucket here as
+> live-open:
+> - **BUILT/SHIPPED:** A1→`DL3`, A3→`CT1`, C1→`DL4`, A7→`DL5`, D2 (test),
+>   A6 (grid fix) — recorded in `docs/roadmap/shipped-ideas.yaml` (the live ledger
+>   the engine's Memory stage reads).
+> - **RULED (declined / recommended / held):** D3, F2, F3, B1, E2, E7, H4, D1, I3
+>   — dispositions in `docs/roadmap/design-ideas-decisions.md`.
+>
+> `shipped-ideas.yaml` + `design-ideas-decisions.md` are authoritative; this
+> generated view is not maintained by hand.
+
 ### A2. Theme JSON Token-Contract / Four-Surface Purity Linter
 
 `NOW` - **V7 / F8** - consistency: consistent - respects principles
