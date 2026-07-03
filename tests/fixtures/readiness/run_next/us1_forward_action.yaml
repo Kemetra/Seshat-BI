@@ -1,0 +1,23 @@
+# Fixture #1 (quickstart row 1) -- US1 unblocked forward case.
+# source_ready pass, everything after not_started.
+# Expected run-next response: outcome=next_action, stage=mapping_ready.
+table: "silver.example_table"
+current_stage: "mapping_ready"
+stages:
+  source_ready:
+    status: "pass"
+    evidence: ["mappings/example_table/source-profile.md"]
+  mapping_ready:
+    status: "not_started"
+  silver_ready:
+    status: "not_started"
+  gold_ready:
+    status: "not_started"
+  semantic_model_ready:
+    status: "not_started"
+  dashboard_ready:
+    status: "not_started"
+  publish_ready:
+    status: "not_started"
+approvals: []
+next_action: "Begin Mapping Ready (Stage 2) -- the source-mapping gate."

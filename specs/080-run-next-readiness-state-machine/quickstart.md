@@ -52,20 +52,33 @@ Scenarios, and Edge Cases.
 | 14 | two different stages both `blocked` | `stop_blocked` @ the EARLIER of the two, plus a `dual_blocked` caveat naming the later one | Edge case: dual blocked |
 | 15 | `source_ready` declares `source_kind: csv`, is `pass`, no matching `source_ready` approval | `approval_required` @ `source_ready` (the file-source special case) | Edge case: file-source approval |
 
-**Note on fixture #3/#5 ambiguity**: whether an approval-required stage's OWN
-approval gates ENTRY into that stage, or only gates LEAVING it once it reaches
-`pass`, must be resolved consistently with how RS1 already treats it: RS1
-checks a stage's approval requirement only when that stage's OWN status is
-`pass` (`stage_name in _APPROVAL_REQUIRED and stage_name not in approved_stages`
-fires on a `pass` block). This feature mirrors that: the approval check fires
-when we are ABOUT to treat a `pass` stage as cleared for moving on (i.e. an
-approval-required stage recorded `pass` without its approval is
-`approval_required`, not silently passed-through), not as a precondition to
-starting a `not_started` stage. A future implementation's fixtures must encode
-this precisely and a reviewer should re-verify it against RS1's exact
-behavior before shipping, since this is the one place where "state machine"
-literalism (checking a precondition to ENTER vs. a precondition to ADVANCE
-PAST) could silently diverge from the existing gate's semantics.
+**Note on fixture #3/#5 ambiguity -- RESOLVED (2026-07-03, implementation slice).**
+Whether an approval-required stage's OWN approval gates ENTRY into that stage or
+only gates LEAVING it once it reaches `pass` is now settled, consistent with how
+RS1 actually treats it: RS1 checks a stage's approval requirement only when that
+stage's OWN status is `pass` (the approval check lives inside the `status ==
+"pass"` block of `src/retail/rules/readiness_status.py`; verified against the
+current source at build time). This feature mirrors that exactly -- the approval
+check fires when we are ABOUT to treat a `pass` stage as cleared for moving on
+(an approval-required stage recorded `pass` without a shape-valid approval is
+`approval_required`, never silently passed through), NOT as a precondition to
+starting a `not_started` stage. Concretely for the two fixtures:
+
+- **Fixture #3** (`us1_publish_next.yaml`): `publish_ready` is `not_started`, so it
+  is the earliest non-`pass` stage and the walk returns its forward `next_action`.
+  The publish approval gates the transition of `publish_ready` TO `pass`, not
+  entry into the stage -- so no `approval_required` fires here. (This is the
+  owner-ratified reading (a) recorded in spec.md Assumption A5 /
+  NEEDS-CLARIFICATION-1.)
+- **Fixture #5** (`us2_approved_chain.yaml`): every `pass` stage through
+  `dashboard_ready` carries a shape-valid approval, so none of them trip the
+  pass-branch approval check; the walk reaches `publish_ready` (`not_started`) and
+  returns `next_action`.
+
+Both encoded in the shipped fixtures under `tests/fixtures/readiness/run_next/`;
+the SKILL.md walk and its "Verified fixtures" table match this resolution. The
+"state machine" ENTER-vs-ADVANCE-PAST ambiguity no longer exists as an open
+question.
 
 ## Read-only proof procedure
 

@@ -1,0 +1,52 @@
+# US3 input-defect cases (quickstart rows 9, 10, 12). Three independently
+# referenceable cases documented in one file. Each expects outcome=input_defect
+# (the skill never guesses a default on a malformed/invalid input).
+#
+# --- Case 12 (invalid status string) -------------------------------------------
+# mapping_ready carries an unrecognized status value ("in_review"); the walk
+# cannot trust stage order past it.
+# Expected: outcome=input_defect, stage=mapping_ready (first defective stage).
+case_invalid_status:
+  table: "silver.example_table"
+  current_stage: "mapping_ready"
+  stages:
+    source_ready:
+      status: "pass"
+      evidence: ["mappings/example_table/source-profile.md"]
+    mapping_ready:
+      status: "in_review"          # NOT one of {not_started, blocked, warning, pass}
+    silver_ready:
+      status: "not_started"
+  next_action: "review the mapping"
+
+# --- Case 10 (current_stage disagreement) --------------------------------------
+# stages show mapping_ready blocked (the real first wall), but current_stage
+# claims "gold_ready" -- skipping the blocker. RS1 flags this class; this skill
+# surfaces it. The primary outcome is still the honest computed one
+# (stop_blocked @ mapping_ready); the current_stage skip is noted as a defect.
+# Expected: outcome=stop_blocked, stage=mapping_ready, with an input_defect-style
+# note that current_stage 'gold_ready' skips the blocked mapping_ready.
+case_current_stage_skip:
+  table: "silver.example_table"
+  current_stage: "gold_ready"       # skips the blocked mapping_ready below
+  stages:
+    source_ready:
+      status: "pass"
+      evidence: ["mappings/example_table/source-profile.md"]
+    mapping_ready:
+      status: "blocked"
+      blocking_reasons: ["PII column classification not signed off"]
+    silver_ready:
+      status: "not_started"
+    gold_ready:
+      status: "not_started"
+  next_action: "load gold"
+
+# --- Case 9 (malformed / missing stages) ---------------------------------------
+# The top-level 'stages' key is absent entirely -- the file cannot be walked.
+# Expected: outcome=input_defect, stage=null (file-level defect).
+case_missing_stages:
+  table: "silver.example_table"
+  current_stage: "mapping_ready"
+  # (no 'stages:' key at all)
+  next_action: "start"

@@ -1,0 +1,30 @@
+# Fixture #15 (quickstart row 15) -- US2 file-source Source Ready special case.
+# source_ready is pass with source_kind: csv (a FILE source per RS1's
+# _FILE_SOURCE_KINDS {csv, tsv, excel}), but has NO shape-valid approvals[] entry
+# for source_ready. A file source requires a Source Ready approval (RS1's special
+# case); a DB source_kind would NOT.
+# The walk reaches source_ready on the pass branch, sees it is approval-required
+# (file source) with no valid approval, and returns approval_required.
+# Expected: outcome=approval_required, stage=source_ready,
+# required_authority=data_owner (the class expected for a file-source sign-off).
+table: "csv.example_upload"
+current_stage: "source_ready"
+stages:
+  source_ready:
+    status: "pass"
+    source_kind: "csv"
+    evidence: ["mappings/example_upload/source-profile.md"]
+  mapping_ready:
+    status: "not_started"
+  silver_ready:
+    status: "not_started"
+  gold_ready:
+    status: "not_started"
+  semantic_model_ready:
+    status: "not_started"
+  dashboard_ready:
+    status: "not_started"
+  publish_ready:
+    status: "not_started"
+approvals: []
+next_action: "confirm the CSV source semantics + PII ruling for Source Ready"

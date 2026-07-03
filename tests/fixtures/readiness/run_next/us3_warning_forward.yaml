@@ -1,0 +1,30 @@
+# Fixture #13 (quickstart row 13) -- US3 warning carried forward.
+# silver_ready is warning (advanced, with a non-fatal issue recorded). warning
+# does NOT block the next stage, but is not silently dropped: the walk treats
+# silver_ready as the forward frontier and attaches a warning_carried_forward
+# caveat.
+# Expected: outcome=next_action, stage=silver_ready,
+# caveats=[{kind: warning_carried_forward, detail names silver_ready}].
+table: "silver.example_table"
+current_stage: "silver_ready"
+stages:
+  source_ready:
+    status: "pass"
+    evidence: ["mappings/example_table/source-profile.md"]
+  mapping_ready:
+    status: "pass"
+    evidence: ["mappings/example_table/source-map.yaml"]
+  silver_ready:
+    status: "warning"
+    blocking_reasons: []
+  gold_ready:
+    status: "not_started"
+  semantic_model_ready:
+    status: "not_started"
+  dashboard_ready:
+    status: "not_started"
+  publish_ready:
+    status: "not_started"
+approvals:
+  - {stage: mapping_ready, owner: "Ada Lovelace (analyst)", at: "2026-06-20"}
+next_action: "review the silver WARN (a static S-rule fired) then proceed to Gold"

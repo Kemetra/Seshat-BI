@@ -1,0 +1,27 @@
+# Fixture #7 (quickstart row 7) -- US3 stored-vs-computed next_action disagreement.
+# mapping_ready is not_started -> the COMPUTED next action is "start mapping".
+# But the file's STORED next_action string names a materially different stage
+# ("publish the dashboard"). The skill reports the computed outcome AND flags the
+# disagreement -- it never silently trusts the stored string.
+# Expected: outcome=next_action, stage=mapping_ready,
+# caveats=[{kind: next_action_disagreement, detail names stored vs computed}].
+table: "silver.example_table"
+current_stage: "mapping_ready"
+stages:
+  source_ready:
+    status: "pass"
+    evidence: ["mappings/example_table/source-profile.md"]
+  mapping_ready:
+    status: "not_started"
+  silver_ready:
+    status: "not_started"
+  gold_ready:
+    status: "not_started"
+  semantic_model_ready:
+    status: "not_started"
+  dashboard_ready:
+    status: "not_started"
+  publish_ready:
+    status: "not_started"
+approvals: []
+next_action: "publish the dashboard to the workspace"
