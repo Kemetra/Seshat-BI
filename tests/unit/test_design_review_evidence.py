@@ -98,6 +98,22 @@ def test_committed_template_is_wellformed_shape() -> None:
 # --- User Story 4: robust + boundary -----------------------------------------
 
 
+def test_placeholder_only_list_section_is_error() -> None:
+    """Codex #146: a list-section (anti_patterns_checked / contrast_pairs) whose
+    only rows are still template placeholders is not filled -- DL4 must ERROR, not
+    pass on the heading's mere presence."""
+    findings = list(
+        check_design_review_evidence(_ctx("empty_section/design-review-evidence.md"))
+    )
+    assert len(findings) >= 1
+    assert all(f.severity is Severity.ERROR for f in findings)
+    assert any(
+        "anti_patterns_checked" in (f.message + f.locator)
+        or "contrast_pairs" in (f.message + f.locator)
+        for f in findings
+    )
+
+
 def test_no_instances_zero_findings() -> None:
     assert (
         list(check_design_review_evidence(_ctx("warehouse/x.sql", "README.md"))) == []

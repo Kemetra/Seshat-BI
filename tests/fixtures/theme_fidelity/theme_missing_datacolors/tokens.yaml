@@ -1,0 +1,7 @@
+meta:
+  compiles_to: "theme.json"
+colors:
+  background: "#FFFFFF"
+  data_colors:
+    - "#111111"
+    - "#222222"

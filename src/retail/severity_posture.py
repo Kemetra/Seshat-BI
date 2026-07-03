@@ -368,6 +368,25 @@ def _observe_rule(rule_id: str, fn: Rule) -> set[str]:
                 '  blocking_reasons: ["A4 gross/net denominator not ruled"]\n',
             )
             tracked = ["mappings/demo/metrics/DemoMetric.yaml"]
+        elif rule_id == "DL5":
+            # A layout grid whose column arithmetic does NOT close -> DL5 ERRORs.
+            # usable width = 200 - 10 - 10 = 180, but 4*25 + 3*20 = 160 != 180.
+            _write(
+                repo,
+                "design/grids/demo-grid.yaml",
+                "grid_id: demo\n"
+                "profiles:\n"
+                '  "p":\n'
+                "    canvas: { width: 200, height: 150 }\n"
+                "    margin: { top: 10, right: 10, bottom: 10, left: 10 }\n"
+                "    grid:\n"
+                "      columns: 4\n"
+                "      rows: 3\n"
+                "      gutter: 20\n"
+                "      column_width: 25\n"
+                "      row_height: 30\n",
+            )
+            tracked = ["design/grids/demo-grid.yaml"]
         else:
             # An unknown rule id: leave tracked empty -> no-finding marker.
             tracked = []

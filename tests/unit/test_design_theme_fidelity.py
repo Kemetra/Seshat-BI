@@ -100,6 +100,26 @@ def test_length_mismatch_is_a_finding_not_an_index_crash() -> None:
     assert all(f.severity is Severity.ERROR for f in findings)
 
 
+def test_theme_missing_datacolors_is_error() -> None:
+    """Codex #146: when the tokens declare data_colors but the theme drops
+    dataColors entirely (or a non-list), DL3 must ERROR -- a theme with no
+    categorical palette is a fidelity failure, not a silent pass."""
+    findings = list(
+        check_theme_fidelity(
+            _ctx(
+                "theme_missing_datacolors/tokens.yaml",
+                "theme_missing_datacolors/theme.json",
+            )
+        )
+    )
+    dc = [f for f in findings if "dataColors" in f.locator or "dataColors" in f.message]
+    assert len(dc) >= 1
+    assert all(f.severity is Severity.ERROR for f in dc)
+    assert any(
+        "missing" in f.message.lower() or "not a list" in f.message.lower() for f in dc
+    )
+
+
 def test_sentiment_mapping_is_out_of_scope_v1() -> None:
     """DL3 v1 never reconciles the sentiment slots (deferred, human-owned 4->3
     map). A pair that differs ONLY on sentiment produces no finding."""

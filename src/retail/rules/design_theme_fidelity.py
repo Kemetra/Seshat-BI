@@ -147,7 +147,19 @@ def _reconcile(tokens_rel: str, theme_rel: str, ctx: RuleContext) -> Iterable[Fi
     # --- data_colors (positional, T029-declared correspondence) ---
     tok_dc = colors.get("data_colors")
     thm_dc = theme.get("dataColors")
-    if isinstance(tok_dc, list) and isinstance(thm_dc, list):
+    if isinstance(tok_dc, list) and not isinstance(thm_dc, list):
+        # The tokens DECLARE data_colors compiles into the theme (T029); a theme
+        # that drops dataColors (or gives it a non-list type) has no categorical
+        # palette to reconcile -- a fidelity failure, not a silent pass.
+        yield Finding(
+            RULE_ID,
+            Severity.ERROR,
+            f"tokens declare {len(tok_dc)} data_colors but the theme has no "
+            f"dataColors list (missing or not a list); the compiled palette is "
+            f"absent and fidelity cannot be reconciled",
+            f"{theme_rel}#/dataColors",
+        )
+    elif isinstance(tok_dc, list) and isinstance(thm_dc, list):
         if len(tok_dc) != len(thm_dc):
             yield Finding(
                 RULE_ID,
