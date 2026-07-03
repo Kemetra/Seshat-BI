@@ -1,0 +1,40 @@
+# Navigation regression scenarios (F1).
+#
+# Each scenario asserts a knowledge-navigation expectation that the COMPASS fast-
+# routing table must keep satisfying. The F1 harness (tests/unit/
+# test_navigation_regression.py) extracts the actual targets from COMPASS.md's
+# "Fast routing" table and checks them against these expectations + the route
+# registry. This fixture is the human-curated expectation half; COMPASS.md is the
+# live half. When a routed file is renamed/moved without updating COMPASS, the
+# harness fails closed.
+#
+# Each scenario:
+#   task_contains   a substring that identifies the COMPASS "Task type" row
+#   expect_targets  repo-relative POSIX paths the row's Route MUST name and that MUST
+#                   resolve on disk (a subset — the row may name more)
+
+scenarios:
+  - task_contains: "SQL validation"
+    expect_targets:
+      - "skills/bi-sql-knowledge/SKILL.md"
+      - "skills/bi-sql-knowledge/INDEX.md"
+  - task_contains: "KPI business meaning"
+    expect_targets:
+      - "skills/retail-kpi-knowledge/SKILL.md"
+      - "skills/retail-kpi-knowledge/INDEX.md"
+  - task_contains: "DAX / measure generation"
+    expect_targets:
+      - "skills/bi-dax-knowledge/SKILL.md"
+      - "skills/bi-dax-knowledge/INDEX.md"
+  - task_contains: "Python / pandas"
+    expect_targets:
+      - "skills/bi-python-knowledge/SKILL.md"
+      - "skills/bi-python-knowledge/INDEX.md"
+  - task_contains: "Big-data"
+    expect_targets:
+      - "skills/bi-bigdata-knowledge/SKILL.md"
+      - "skills/bi-bigdata-knowledge/INDEX.md"
+  - task_contains: "Source understanding"
+    expect_targets:
+      - "docs/readiness/readiness-model.md"
+      - "docs/knowledge-map.md"
