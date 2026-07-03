@@ -44,7 +44,7 @@ Three options were weighed:
 ```
 QueryRunner   (UNCHANGED)  — "how do I execute": run(sql, params) -> rows
 Dialect       (NEW)        — "how do I phrase it": quoting, params, fragments, connect
-   ├─ PostgresDialect   (extracted verbatim from today's strings — zero behavior change)
+   ├─ PostgresDialect   (emits byte-identical SQL to today's strings — KEEPS native FILTER + row-value DISTINCT; NOT rewritten to the portable forms — zero behavior change)
    ├─ SqlServerDialect  (T-SQL, pyodbc)
    ├─ MySqlDialect
    └─ SnowflakeDialect
@@ -157,7 +157,7 @@ Each driver is imported **lazily inside `connect()`** only. CI installs none of 
 
 - **Dialect-fragment unit tests** — each dialect's builders assert exact SQL strings per engine (no DB). Fast; in the stdlib-only suite.
 - **Silent-failure regression tests** — R1 (folding round-trip: introspect → quote → query resolves non-empty), R2 (`LIKE '%x%'` + bound param round-trips per paramstyle), R3 (empty-table conditional count = 0 not None), R4 (redaction scrubs each engine's credential fields from error text). These assert **generated SQL and the translation/redaction logic**, injected against fake runners.
-- **Backward-compat guard** — the existing 897 tests stay green; `PostgresDialect` is extracted from today's exact strings, so Postgres behavior is byte-identical.
+- **Backward-compat guard** — the existing tests stay green; `PostgresDialect` emits byte-identical SQL to today's exact strings (it **keeps** the native `FILTER` and row-value `DISTINCT` forms — it is **not** rewritten to the portable `COUNT(CASE)`/derived-table forms; only the three new dialects use those). Postgres behavior is byte-identical, so the suite remains a true regression oracle.
 - **Driver-free invariant** — extend the existing guard tests: `retail.cli` / `retail.validate` / `retail.profile` / `retail.value_proxy` / `retail.dialect` import path must NOT import psycopg2, pyodbc, mysql.connector, or snowflake.connector.
 
 **Honest limit (Principle VIII — live-deferred):** CI **cannot** verify that SQL Server actually returns 0 on an empty conditional count, or that Snowflake resolves a folded identifier — the recon agents could not even import pyodbc/snowflake, and CI installs no engine. Per-engine **live** validation is therefore **deferred under Principle VIII**, the same bucket as the already-deferred Postgres live run (needs the extra + real credentials). The suite proves the *generated SQL and translation logic* are correct; it does not prove each engine *executes* it — that is an explicit, governed deferral, not an omission.
