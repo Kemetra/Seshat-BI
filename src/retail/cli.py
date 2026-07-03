@@ -247,6 +247,20 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     kit_lint_p.add_argument("--repo", default=".", help="repo root to lint")
 
+    doctor_p = sub.add_parser(
+        "doctor",
+        help=(
+            "read-only repo-wide drift digest (aggregates A1/A3/SC1 + a "
+            "load-bearing-doc probe); advisory by default, --strict to fail on findings"
+        ),
+    )
+    doctor_p.add_argument("--repo", default=".", help="repo root to diagnose")
+    doctor_p.add_argument(
+        "--strict",
+        action="store_true",
+        help="exit non-zero if any finding is present (default: advisory, exit 0)",
+    )
+
     return parser
 
 
@@ -309,6 +323,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "kit-lint":
         return _run_kit_lint(args)
+
+    if args.command == "doctor":
+        from .doctor import run_doctor
+
+        return run_doctor(Path(args.repo), strict=args.strict)
 
     return 0
 
