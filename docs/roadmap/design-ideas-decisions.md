@@ -51,16 +51,31 @@ intent is explicit.
 
 ## LATENT BUG SURFACED (owner action — worth more than the rule)
 
-### A6 — grid-fit: a real desktop-grid / blueprint inconsistency
-The desktop `design/grids/16x9-grid.yaml` enumerates zones
-`header / kpi_strip / main_insight / diagnostic / footer_status`, but three
-committed blueprints (`branch-performance.yaml`, `data-quality-control-room.yaml`,
-`product-mix.yaml`) place sections in `exception_detail` / `filter_rail` — which
-exist only as **mobile-grid** bands. Either the desktop grid should enumerate
-those zones, or the blueprints are mis-placing sections. **Owner ruling needed:
-desktop-grid gap or blueprint error?** (Once ruled, a section-zone-resolution
-rule + the exec-ceiling check — tokens declare exceeding 6 visuals = a
-warning-with-reason — become grounded and buildable.)
+### A6 — grid-fit: desktop-grid / blueprint inconsistency — RESOLVED (grid fixed)
+The desktop `design/grids/16x9-grid.yaml` enumerated only 5 of the 7 committed
+section-vocabulary zones (`docs/powerbi/dashboard-blueprints.md` §Section
+vocabulary declares seven, incl. `exception-detail` and `filter rail`, and says a
+control room "leans on exception-detail"). Three blueprints legitimately use
+`exception_detail` / `filter_rail`; the **desktop grid was the incomplete side**
+(the mobile grid already had all seven). Ruled a **desktop-grid gap**, not a
+blueprint error — the authoritative vocabulary is the tiebreaker.
+
+**Fixed:** both 16x9 profiles now enumerate all seven zones; all four blueprints
+resolve. NOTE (needs a human eyeball): the two added zones' geometry is
+**authored/illustrative, not vocabulary-derived** — `exception_detail` shares the
+diagnostic rows (6-7); `filter_rail` is marked `placement: side` (rows
+deliberately omitted, because this grid is a row-band model with no column/side
+concept — a side rail is not a row span).
+
+**Ready-to-build follow-up (HELD, not auto-built):** an A6 section-zone-resolution
+rule (assert every blueprint `section:` resolves to a zone in its referenced
+grid) is now grounded and green-on-main after the reconciliation. HELD pending
+(1) a human eyeball on the authored grid-zone geometry above (esp. `filter_rail`),
+and (2) a ruling on which grid a section resolves against when a blueprint's
+`grid_ref` is absent (`branch-performance.yaml` has no `grid_ref`). Plus the
+optional exec-ceiling check (tokens declare exceeding 6 visuals = warning-with-
+reason). Not built now: nothing consumes it yet, and it would enforce a state
+this session just created before any human review (circular).
 
 ## RECOMMENDED — owner decision (recorded, not auto-built)
 

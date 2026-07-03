@@ -87,11 +87,20 @@ profiles:
     # zones -- suggested generic bands (in ROW units) for the page-blueprint
     # section vocabulary. Generic guidance, not a fixed mandate; a page may merge
     # or omit bands. (See workflows/page-blueprint.md for the section vocabulary.)
+    # The seven-section vocabulary (docs/powerbi/dashboard-blueprints.md): the
+    # full committed menu a blueprint may use. Not every page uses every section
+    # (an exec summary leans on header + kpi_strip + main_insight; a control room
+    # leans on exception_detail + footer_status). exception_detail is the
+    # drill/detail band (shares the diagnostic rows -- detail, not the headline);
+    # filter_rail is the side slicer band spanning the content rows (kept to the
+    # side so it does not dominate). Optional bands carry `optional: true`.
     zones:
       header:           { rows: "1" }       # page title / date context / filter summary
       kpi_strip:        { rows: "2" }       # the KPI cards (each with comparison/context)
       main_insight:     { rows: "3-5" }     # the page's primary answer visual(s)
       diagnostic:       { rows: "6-7" }     # supporting breakdown / trend
+      exception_detail: { rows: "6-7", optional: true }  # drill/detail table for rows needing attention (shares the diagnostic band)
+      filter_rail:      { placement: "side", optional: true }  # side slicer rail -- a COLUMN-side element, not a row band (this grid has no column model); rows deliberately omitted
       footer_status:    { rows: "8" }       # data-as-of / source / control notes
     # arithmetic_check -- a reviewer confirms these CLOSE (T034 only parses YAML).
     arithmetic_check:
@@ -130,6 +139,8 @@ profiles:
       kpi_strip:        { rows: "2" }
       main_insight:     { rows: "3-5" }
       diagnostic:       { rows: "6-7" }
+      exception_detail: { rows: "6-7", optional: true }  # drill/detail table (shares the diagnostic band)
+      filter_rail:      { placement: "side", optional: true }  # side slicer rail -- column-side, not a row band; rows deliberately omitted
       footer_status:    { rows: "8" }
     arithmetic_check:
       usable_width: 1848          # 1920 - 36 - 36
