@@ -50,6 +50,7 @@ _LIVE_SURFACE: frozenset[str] = frozenset(
         "src/retail/value_proxy.py",
         "src/retail/semantic.py",
         "src/retail/dax_gen.py",
+        "src/retail/dialect.py",
     }
 )
 

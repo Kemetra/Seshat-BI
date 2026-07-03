@@ -38,6 +38,8 @@ _FORBIDDEN_ROOTS: frozenset[str] = frozenset(
         "sqlalchemy",
         "pymysql",
         "pyodbc",
+        "mysql",
+        "snowflake",
         "requests",
         "httpx",
         "aiohttp",

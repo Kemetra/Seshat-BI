@@ -15,6 +15,7 @@ import pytest
 
 from retail.core import RuleContext, Severity
 from retail.rules.never_execute import (
+    _FORBIDDEN_ROOTS,
     _is_governed,
     check_no_module_scope_execution_imports,
     module_scope_violations,
@@ -106,6 +107,11 @@ def test_stdlib_and_local_imports_are_not_flagged():
         "from .core import Finding\n"
     )
     assert module_scope_violations(src) == []
+
+
+def test_snowflake_and_mysql_connector_are_forbidden_roots() -> None:
+    assert "snowflake" in _FORBIDDEN_ROOTS
+    assert "mysql" in _FORBIDDEN_ROOTS
 
 
 # --- governed-module selection ---------------------------------------------

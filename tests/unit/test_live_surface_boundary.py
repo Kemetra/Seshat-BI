@@ -159,3 +159,7 @@ def test_live_surface_set_is_generic_module_paths(tmp_path) -> None:
     for member in _LIVE_SURFACE:
         assert member.startswith("src/retail/")
         assert member.endswith(".py")
+
+
+def test_dialect_module_is_a_live_surface() -> None:
+    assert "src/retail/dialect.py" in _LIVE_SURFACE
