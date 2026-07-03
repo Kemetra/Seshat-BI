@@ -1,19 +1,19 @@
 export const meta = {
   name: 'idea-engine',
-  description: 'Idea generator for Seshat BI. Ground maps the real repo with five subsystem explorers + a reconcile-verify pass; Memory reads the prior bank so shipped/settled ideas are not regenerated; six role lenses (creative / BI analyst / technical / design / business-consumer / newcomer-operator) generate in parallel, then cross-pollinate; a completeness critic finds blind spots and triggers one targeted fill pass; a synthesizer merges; an adversarial skeptic challenges EVERY candidate (default-refuted); a four-standpoint reviewer PANEL scores value/feasibility and rules eligibility; a pure-JS aggregate takes the median, gates eligibility, and applies a demote-only clamp. Each idea is tagged with WHO it serves (end_user / operator / tool_internal) so a run heavy on tool-internal self-checking is a visible signal, not hidden. Every agent stage runs on Opus at xhigh effort. Output: a ranked NOW/HORIZON idea BANK, rendered deterministically -- exploratory inspiration, not a roadmap or commitment.',
-  whenToUse: 'When you want a deep, exhaustive, rigorously vetted, history-aware idea bank for the project -- OR when you want to hand the engine your OWN rough/half-formed idea(s) to expand into a reviewable shape and run through the same skeptic + reviewer panel. All-Opus, xhigh effort, multi-round, multi-explorer, panel-reviewed -- thorough and heavy (many agents/tokens/time). Re-runnable; pass a focus string, or {focus,sinceRef,date,ascii}, or {ideas:["rough words","another"]} / {seed:"rough words"} to review your own ideas (a bare string is treated as both focus AND a single seed idea). When ideas are supplied they are expanded, tagged origin:user, reviewed like any idea, and surfaced in a "Your Ideas" lane at the top. Output is an idea bank, never a plan.',
+  description: 'Idea generator for Seshat BI. Ground maps the real repo with five subsystem explorers + a reconcile-verify pass; Memory reads the prior bank so shipped/settled ideas are not regenerated; six role lenses (creative / BI analyst / technical / design / business-consumer / newcomer-operator) generate in parallel, then cross-pollinate; a completeness critic finds blind spots and triggers one targeted fill pass; a synthesizer merges; an adversarial skeptic challenges EVERY candidate (default-refuted); a four-standpoint reviewer PANEL scores value/feasibility and rules eligibility; a pure-JS aggregate takes the median, gates eligibility, and applies a demote-only clamp. Each idea is tagged with WHO it serves (end_user / operator / tool_internal) so a run heavy on tool-internal self-checking is a visible signal, not hidden. Model is matched to each stage: the idea-originating and verdict stages (Interpret / Generate / Completeness / Synthesize / Skeptic / Panel) run on Opus at xhigh effort; the context-gathering and reaction stages (Ground / Memory / Cross-pollinate / dissent / Rescue) run on Sonnet at high effort -- faster and cheaper without weakening any verdict. Output: a ranked NOW/HORIZON idea BANK, rendered deterministically -- exploratory inspiration, not a roadmap or commitment.',
+  whenToUse: 'When you want a deep, exhaustive, rigorously vetted, history-aware idea bank for the project -- OR when you want to hand the engine your OWN rough/half-formed idea(s) to expand into a reviewable shape and run through the same skeptic + reviewer panel. Opus-xhigh on the idea/verdict stages + Sonnet-high on the gather/react stages, multi-round, multi-explorer, panel-reviewed -- thorough (many agents/tokens/time, though lighter than all-Opus). Re-runnable; pass a focus string, or {focus,sinceRef,date,ascii}, or {ideas:["rough words","another"]} / {seed:"rough words"} to review your own ideas (a bare string is treated as both focus AND a single seed idea). When ideas are supplied they are expanded, tagged origin:user, reviewed like any idea, and surfaced in a "Your Ideas" lane at the top. Output is an idea bank, never a plan.',
   phases: [
-    { title: 'Ground',         detail: '5 subsystem explorers map the repo in parallel; JS merge + reconcile-verify', model: 'opus' },
-    { title: 'Memory',         detail: 'read prior bank + Ground ship-status: label shipped/settled ideas (no re-litigation)', model: 'opus' },
+    { title: 'Ground',         detail: '5 subsystem explorers map the repo in parallel; JS merge + reconcile-verify', model: 'sonnet' },
+    { title: 'Memory',         detail: 'read prior bank + Ground ship-status: label shipped/settled ideas (no re-litigation)', model: 'sonnet' },
     { title: 'Interpret',      detail: 'expand the USER\'S own rough idea(s) into reviewable shape + surface the chosen/rejected readings (only when ideas supplied)', model: 'opus' },
     { title: 'Generate',       detail: 'creative / BI / technical / design / consumer / operator lenses propose in parallel (round 1)', model: 'opus' },
-    { title: 'Cross-pollinate',detail: 'each lens reacts to the others; surface cross-disciplinary ideas', model: 'opus' },
+    { title: 'Cross-pollinate',detail: 'each lens reacts to the others; surface cross-disciplinary ideas', model: 'sonnet' },
     { title: 'Completeness',   detail: 'critic finds blind spots -> one more targeted generation pass', model: 'opus' },
     { title: 'Synthesize',     detail: 'merge + dedupe into one candidate set', model: 'opus' },
     { title: 'Verify',         detail: 'adversarial skeptic challenges EVERY candidate (default-refuted)', model: 'opus' },
     { title: 'Panel-review',   detail: '4 independent reviewers (principle / shipped-dup / value-feasibility / design-foundation) score the set', model: 'opus' },
-    { title: 'Aggregate',      detail: 'pure-JS median + eligibility gate + demote-only clamp; tiny prose agent for dissent', model: 'opus' },
-    { title: 'Rescue',         detail: 'steelman the not-adopted ideas (reason only, never a re-score); skipped if none', model: 'opus' },
+    { title: 'Aggregate',      detail: 'pure-JS median + eligibility gate + demote-only clamp; tiny prose agent for dissent', model: 'sonnet' },
+    { title: 'Rescue',         detail: 'steelman the not-adopted ideas (reason only, never a re-score); skipped if none', model: 'sonnet' },
     { title: 'Render',         detail: 'pure-JS: render the idea-backlog markdown (no agent); orchestrator writes' },
   ],
 }
@@ -128,12 +128,22 @@ approved. Verdicts/scores are a triage opinion only. Ideas advance only through 
 spec/feature process with a human decision.
 ${FOCUS_LINE}`
 
-// ---- model tiers ----
-// User directive: run ALL stages on Opus for maximum quality (overrides the
-// sonnet-scout / opus-lead split). Both aliases point at Opus; kept as two names
-// so the stage intent stays readable and the split is easy to restore later.
-const SCOUT = { model: 'opus', effort: 'xhigh' }   // explore / generate / cross-pollinate / critic / verify
-const LEAD  = { model: 'opus', effort: 'xhigh' }   // synthesize / final review
+// ---- model tiers (model matched to what the stage DECIDES) ----
+// The rule: a stage that ORIGINATES or JUDGES an idea runs on Opus xhigh -- those
+// outputs ARE the product and a weak model there makes the rigor decorative. A stage
+// that only GATHERS context or reacts/rephrases runs on Sonnet high -- reliable code
+// reading + reasoning, far faster/cheaper than Opus, and it decides no verdict.
+// User directive: the non-Opus tier is Sonnet at HIGH effort (not medium/low) -- a
+// quality safety-margin on the retrieval/reaction stages.
+//   GATHER  -> Ground explorers, Ground reconcile, Memory, Cross-pollinate, Aggregate-dissent, Rescue
+//   CREATE  -> Interpret, Generate, Completeness (originate ideas / read user intent)  [UNTOUCHABLE Opus]
+//   JUDGE   -> Synthesize, Skeptic, Panel (decide verdicts / protect user ideas)       [UNTOUCHABLE Opus]
+const GATHER = { model: 'sonnet', effort: 'high' }   // retrieval + reaction, decides no verdict
+const CREATE = { model: 'opus',   effort: 'xhigh' }  // originates ideas / reads user intent -- the ideas themselves
+const JUDGE  = { model: 'opus',   effort: 'xhigh' }  // synthesize / skeptic / panel -- the verdicts (the goal)
+// Back-compat aliases so any un-repointed call still resolves; new calls use the tier names.
+const SCOUT = GATHER
+const LEAD  = JUDGE
 
 const IDEA_SCHEMA = {
   type: 'object',
@@ -541,7 +551,7 @@ YOUR SUBSYSTEM: ${e.brief}
 
 Return capability_notes (each citing a file), tensions (incomplete/duplicated/awkward seams),
 ship_status (feature_id + status from the shared enum + evidence_path), and unreadable[].`,
-    { label: e.label, phase: 'Ground', agentType: 'Explore', schema: SUBMAP_SCHEMA, ...SCOUT }
+    { label: e.label, phase: 'Ground', agentType: 'Explore', schema: SUBMAP_SCHEMA, ...GATHER }
   ).then(r => r ? { ...r, _key: e.key } : null)
 ))
 
@@ -611,7 +621,7 @@ ${JSON.stringify({
     contradictions: merged.contradictions,
     missing_subsystems: merged.missing_subsystems,
   }, null, 2)}`,
-  { label: 'ground:reconcile-verify', phase: 'Ground', schema: MERGED_MAP_SCHEMA, ...SCOUT }
+  { label: 'ground:reconcile-verify', phase: 'Ground', schema: MERGED_MAP_SCHEMA, ...GATHER }
 )
 
 // If the reconcile-verifier failed (null / schema miss), do NOT continue with an empty,
@@ -749,7 +759,7 @@ STEPS:
 
 === GROUND VERIFIED SHIP-STATUS (your only state source) ===
 ${shipStatusForMemory}`,
-  { label: 'memory:read-prior', phase: 'Memory', schema: MEMORY_SCHEMA, ...SCOUT }
+  { label: 'memory:read-prior', phase: 'Memory', schema: MEMORY_SCHEMA, ...GATHER }
 )
 
 // Rendered ledger injected into the generation + review prompts. Lists shipped + settled
@@ -822,7 +832,7 @@ ${MEMORY_LINE}
 
 === REPO MAP ===
 ${exploreMap}`,
-    { label: 'interpret:user-ideas', phase: 'Interpret', schema: INTERPRET_SCHEMA, ...LEAD }
+    { label: 'interpret:user-ideas', phase: 'Interpret', schema: INTERPRET_SCHEMA, ...CREATE }
   )
   const expanded = (interpreted && Array.isArray(interpreted.expanded)) ? interpreted.expanded : []
   userIdeas = expanded.map(e => ({
@@ -887,7 +897,7 @@ function classify(r, key) {
   return { ...r, _key: key, _status: ideas.length ? 'ok' : 'empty' }
 }
 const round1 = await parallel(LENSES.map(l => () =>
-  agent(genPrompt(l.role), { label: `${l.label}:r1`, phase: 'Generate', schema: IDEA_SCHEMA, ...SCOUT })
+  agent(genPrompt(l.role), { label: `${l.label}:r1`, phase: 'Generate', schema: IDEA_SCHEMA, ...CREATE })
     .then(r => classify(r, l.key))
 ))
 
@@ -898,7 +908,7 @@ const crossRound = await parallel(LENSES.map(l => () =>
   agent(
     genPrompt(l.role,
       `You have now SEEN what the other lenses proposed (below). React to them: combine a strong idea from another lens with your own perspective, fill a gap they left, or push a half-idea further. Generate 3-5 NEW cross-disciplinary ideas (do NOT repeat ideas already listed). The best ideas live at the seams between disciplines.\n\n=== ALL ROUND-1 IDEAS ===\n${round1Json}`),
-    { label: `${l.label}:cross`, phase: 'Cross-pollinate', schema: IDEA_SCHEMA, ...SCOUT }
+    { label: `${l.label}:cross`, phase: 'Cross-pollinate', schema: IDEA_SCHEMA, ...GATHER }
   ).then(r => classify(r, l.key))
 ))
 
@@ -908,13 +918,13 @@ const sofar = [...round1, ...crossRound].filter(r => r._status === 'ok')
 const sofarJson = JSON.stringify(sofar.map(r => ({ lens: r.lens || r._key, ideas: (r.ideas||[]).map(i => i.title) })), null, 2)
 const gaps = await agent(
   `You are a COMPLETENESS CRITIC. Below are all idea TITLES generated so far for Seshat BI, plus the repo map. Your job is to find what\u0027s MISSING -- readiness stages with few ideas, repo gaps/tensions nobody addressed, idea TYPES underrepresented (e.g. all features and no DX, or all technical and no business value), and obvious adjacent ideas no lens reached. List 5-10 specific missing angles as short prompts (\u0022nobody proposed anything for X / for the Y gap\u0022). Do not generate full ideas -- just name the blind spots precisely.\n\n=== REPO MAP ===\n${exploreMap}\n\n=== IDEA TITLES SO FAR ===\n${sofarJson}`,
-  { label: 'critic:gaps', phase: 'Completeness', ...SCOUT }
+  { label: 'critic:gaps', phase: 'Completeness', ...CREATE }
 )
 // one targeted fill pass aimed at the named gaps
 const fillRound = await parallel(LENSES.map(l => () =>
   agent(genPrompt(l.role,
     `A completeness critic identified these BLIND SPOTS in the ideas generated so far. From YOUR lens, generate 2-4 ideas that specifically fill the gaps most relevant to you (do not repeat existing ideas).\n\n=== BLIND SPOTS ===\n${gaps}`),
-    { label: `${l.label}:fill`, phase: 'Completeness', schema: IDEA_SCHEMA, ...SCOUT }
+    { label: `${l.label}:fill`, phase: 'Completeness', schema: IDEA_SCHEMA, ...CREATE }
   ).then(r => classify(r, l.key))
 ))
 
@@ -985,7 +995,7 @@ ${MEMORY_LINE}
 Output a clean candidate list grouped by theme, each idea with its fields (INCLUDING its origin tag --
 user or engine) + source lens(es) + a convergence note where applicable. Every origin:user idea must
 still be present and clearly marked as the user's own.`,
-  { label: 'synthesize:merge', phase: 'Synthesize', ...LEAD }
+  { label: 'synthesize:merge', phase: 'Synthesize', ...JUDGE }
 )
 
 // ===================== 6. ADVERSARIAL VERIFY (universal coverage) =====================
@@ -1006,7 +1016,7 @@ with one line of why.
 
 === SHIP STATUS (for the duplicate-of-shipped check) ===\n${JSON.stringify((explore_map && explore_map.ship_status) || [], null, 2)}
 === SYNTHESIZED CANDIDATES ===\n${synthesis}`,
-  { label: 'verify:skeptic', phase: 'Verify', schema: VERIFY_SCHEMA, ...SCOUT }
+  { label: 'verify:skeptic', phase: 'Verify', schema: VERIFY_SCHEMA, ...JUDGE }
 )
 
 // ===================== 7. PANEL REVIEW (3 independent standpoints) =====================
@@ -1052,7 +1062,7 @@ asked for), and the steelman stage will look for a narrower eligible seam.
 === SHIP STATUS ===\n${JSON.stringify((explore_map && explore_map.ship_status) || [], null, 2)}${MEMORY_LINE}
 === SYNTHESIZED CANDIDATES ===\n${synthesis}
 === ADVERSARIAL SKEPTIC\u0027S CHALLENGES ===\n${verify ? JSON.stringify(verify) : S(40,115,107,101,112,116,105,99,32,112,114,111,100,117,99,101,100,32,110,111,116,104,105,110,103,41)}`,
-    { label: p.label, phase: 'Panel-review', schema: PANEL_REVIEWER_SCHEMA, ...LEAD }
+    { label: p.label, phase: 'Panel-review', schema: PANEL_REVIEWER_SCHEMA, ...JUDGE }
   ).then(r => r ? { ...r, _key: p.key } : null)
 ))
 const panel = panelRaw.filter(Boolean)
@@ -1115,7 +1125,7 @@ on. Return dissent keyed by idea title, plus the summary. Do not invent ideas or
 
 === AGGREGATED IDEAS (verdicts/scores already final; splits flagged) ===
 ${JSON.stringify(aggregated.ideas.map(i => ({ title: i.title, verdict: i.verdict, eligibility_gate: i.eligibility_gate, value_score: i.value_score, feasibility_score: i.feasibility_score, score_spread: i.score_spread, per_reviewer: i._per_reviewer })), null, 2)}`,
-  { label: 'aggregate:dissent-prose', phase: 'Aggregate', schema: DISSENT_SCHEMA, ...LEAD }
+  { label: 'aggregate:dissent-prose', phase: 'Aggregate', schema: DISSENT_SCHEMA, ...GATHER }
 ) : null
 const dissentAgent = dissentRaw || FALLBACK_DISSENT
 
@@ -1198,7 +1208,7 @@ NOT a rescue -- say rescue_possible false and name the principle.
 
 === NOT-ADOPTED IDEAS (title, verdict, eligibility, rationale) ===
 ${JSON.stringify(rejected.map(i => ({ title: i.title, verdict: i.verdict, eligible: i.eligible, rationale: i.rationale })), null, 2)}`,
-  { label: 'rescue:steelman', phase: 'Rescue', schema: RESCUE_SCHEMA, ...SCOUT }
+  { label: 'rescue:steelman', phase: 'Rescue', schema: RESCUE_SCHEMA, ...GATHER }
 ) : { rescues: [] }
 
 // ===================== 8. RENDER (pure JS, orchestrator writes) =====================
