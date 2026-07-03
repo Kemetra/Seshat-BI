@@ -1,0 +1,35 @@
+# Fixture #5 (quickstart row 5) -- US2 fully-approved chain through
+# dashboard_ready, all four approvals shape-valid, publish_ready not_started.
+# Contrast with fixture #4: here every approval is a valid "Person Name (class)".
+# The walk clears source..dashboard (pass + valid approvals) and reaches
+# publish_ready (not_started) as the forward frontier.
+# Expected: outcome=next_action, stage=publish_ready (the approved chain does not
+# stop at any approval seam because every one is satisfied).
+table: "silver.example_table"
+current_stage: "publish_ready"
+stages:
+  source_ready:
+    status: "pass"
+    evidence: ["mappings/example_table/source-profile.md"]
+  mapping_ready:
+    status: "pass"
+    evidence: ["mappings/example_table/source-map.yaml"]
+  silver_ready:
+    status: "pass"
+    evidence: ["warehouse/silver/010_stg_example.sql"]
+  gold_ready:
+    status: "pass"
+    evidence: ["warehouse/gold/020_fct_example.sql", "retail validate exit 0"]
+  semantic_model_ready:
+    status: "pass"
+    evidence: ["powerbi/Example.SemanticModel"]
+  dashboard_ready:
+    status: "pass"
+    evidence: ["design/example/layout.md"]
+  publish_ready:
+    status: "not_started"
+approvals:
+  - {stage: mapping_ready, owner: "Ada Lovelace (analyst)", at: "2026-06-20"}
+  - {stage: semantic_model_ready, owner: "Grace Hopper (metric_owner)", at: "2026-06-28"}
+  - {stage: dashboard_ready, owner: "Katherine Johnson (governance)", at: "2026-07-01"}
+next_action: "Begin the Publish Ready handoff (Stage 7)."

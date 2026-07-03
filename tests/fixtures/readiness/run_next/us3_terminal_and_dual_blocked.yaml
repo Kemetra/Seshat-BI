@@ -1,0 +1,40 @@
+# US3 terminal + dual-blocked cases (quickstart rows 11, 14). Two independently
+# referenceable cases in one file.
+#
+# --- Case 11 (all-pass terminal) -----------------------------------------------
+# All seven stages pass, all four required approvals shape-valid. The walk clears
+# every stage and completes without hitting a wall.
+# Expected: outcome=terminal_pass, stage=null.
+case_terminal_pass:
+  table: "silver.example_table"
+  current_stage: "publish_ready"
+  stages:
+    source_ready:      { status: "pass", evidence: ["mappings/example_table/source-profile.md"] }
+    mapping_ready:     { status: "pass", evidence: ["mappings/example_table/source-map.yaml"] }
+    silver_ready:      { status: "pass", evidence: ["warehouse/silver/010_stg_example.sql"] }
+    gold_ready:        { status: "pass", evidence: ["warehouse/gold/020_fct_example.sql", "retail validate exit 0"] }
+    semantic_model_ready: { status: "pass", evidence: ["powerbi/Example.SemanticModel"] }
+    dashboard_ready:   { status: "pass", evidence: ["design/example/layout.md"] }
+    publish_ready:     { status: "pass", evidence: ["handoff/example/bi-handoff-pack.md"] }
+  approvals:
+    - {stage: mapping_ready, owner: "Ada Lovelace (analyst)", at: "2026-06-20"}
+    - {stage: semantic_model_ready, owner: "Grace Hopper (metric_owner)", at: "2026-06-28"}
+    - {stage: dashboard_ready, owner: "Katherine Johnson (governance)", at: "2026-07-01"}
+    - {stage: publish_ready, owner: "Ahmed Shaaban (data_owner)", at: "2026-07-02"}
+  next_action: "done"
+
+# --- Case 14 (dual-blocked) ----------------------------------------------------
+# TWO stages are blocked (mapping_ready and gold_ready). Only the EARLIEST in
+# walk order (mapping_ready) is the outcome stage; the later one is named in a
+# dual_blocked caveat, never silently dropped.
+# Expected: outcome=stop_blocked, stage=mapping_ready,
+# caveats=[{kind: dual_blocked, detail names gold_ready as also blocked}].
+case_dual_blocked:
+  table: "silver.example_table"
+  current_stage: "mapping_ready"
+  stages:
+    source_ready:  { status: "pass", evidence: ["mappings/example_table/source-profile.md"] }
+    mapping_ready: { status: "blocked", blocking_reasons: ["grain not confirmed unique on data"] }
+    silver_ready:  { status: "not_started" }
+    gold_ready:    { status: "blocked", blocking_reasons: ["orphan FKs found in fct_example"] }
+  next_action: "resolve grain"

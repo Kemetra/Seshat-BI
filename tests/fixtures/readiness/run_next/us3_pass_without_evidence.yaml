@@ -1,0 +1,31 @@
+# Fixture #6 (quickstart row 6) -- US3 pass-without-evidence caveat.
+# gold_ready is pass but its evidence[] is empty (a recognized defect the
+# readiness model names). The walk records a pass_without_evidence caveat for
+# gold_ready, then continues; semantic_model_ready is not_started -> forward
+# frontier.
+# Expected: outcome=next_action, stage=semantic_model_ready,
+# caveats=[{kind: pass_without_evidence, detail names gold_ready}].
+table: "silver.example_table"
+current_stage: "semantic_model_ready"
+stages:
+  source_ready:
+    status: "pass"
+    evidence: ["mappings/example_table/source-profile.md"]
+  mapping_ready:
+    status: "pass"
+    evidence: ["mappings/example_table/source-map.yaml"]
+  silver_ready:
+    status: "pass"
+    evidence: ["warehouse/silver/010_stg_example.sql"]
+  gold_ready:
+    status: "pass"
+    evidence: []
+  semantic_model_ready:
+    status: "not_started"
+  dashboard_ready:
+    status: "not_started"
+  publish_ready:
+    status: "not_started"
+approvals:
+  - {stage: mapping_ready, owner: "Ada Lovelace (analyst)", at: "2026-06-20"}
+next_action: "author metric contracts for Semantic Model Ready"

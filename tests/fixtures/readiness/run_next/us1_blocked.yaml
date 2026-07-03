@@ -1,0 +1,25 @@
+# Fixture #2 (quickstart row 2) -- US1 blocked stage.
+# mapping_ready blocked with a concrete blocking reason.
+# Expected run-next response: outcome=stop_blocked, stage=mapping_ready,
+# blocking_reasons copied verbatim.
+table: "silver.example_table"
+current_stage: "mapping_ready"
+stages:
+  source_ready:
+    status: "pass"
+    evidence: ["mappings/example_table/source-profile.md"]
+  mapping_ready:
+    status: "blocked"
+    blocking_reasons: ["grain not confirmed unique on data"]
+  silver_ready:
+    status: "not_started"
+  gold_ready:
+    status: "not_started"
+  semantic_model_ready:
+    status: "not_started"
+  dashboard_ready:
+    status: "not_started"
+  publish_ready:
+    status: "not_started"
+approvals: []
+next_action: "resolve the open grain question in mappings/example_table/unresolved-questions.md"

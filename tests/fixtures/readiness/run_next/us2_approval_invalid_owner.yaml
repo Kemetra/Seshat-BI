@@ -1,0 +1,34 @@
+# Fixture #4 (quickstart row 4) -- US2 shape-invalid approval owner.
+# semantic_model_ready is recorded pass, but its approvals[] entry carries a
+# BARE ROLE TOKEN ("metric_owner") as the owner -- fails RS1's _owner_is_valid
+# (name part is itself a role token; no "Person Name (class)" shape).
+# The walk clears source..gold (pass, valid), reaches semantic_model_ready on
+# the pass branch, finds no shape-valid approval, and returns approval_required.
+# Expected: outcome=approval_required, stage=semantic_model_ready,
+# required_authority=metric_owner. NEVER next_action past it.
+table: "silver.example_table"
+current_stage: "semantic_model_ready"
+stages:
+  source_ready:
+    status: "pass"
+    evidence: ["mappings/example_table/source-profile.md"]
+  mapping_ready:
+    status: "pass"
+    evidence: ["mappings/example_table/source-map.yaml"]
+  silver_ready:
+    status: "pass"
+    evidence: ["warehouse/silver/010_stg_example.sql"]
+  gold_ready:
+    status: "pass"
+    evidence: ["warehouse/gold/020_fct_example.sql", "retail validate exit 0"]
+  semantic_model_ready:
+    status: "pass"
+    evidence: ["powerbi/Example.SemanticModel"]
+  dashboard_ready:
+    status: "not_started"
+  publish_ready:
+    status: "not_started"
+approvals:
+  - {stage: mapping_ready, owner: "Ada Lovelace (analyst)", at: "2026-06-20"}
+  - {stage: semantic_model_ready, owner: "metric_owner", at: "2026-07-01"}
+next_action: "done"

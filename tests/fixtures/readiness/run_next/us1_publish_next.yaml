@@ -1,0 +1,36 @@
+# Fixture #3 (quickstart row 3) -- US1 chain pass through dashboard_ready,
+# publish_ready not_started, all prior approvals shape-valid.
+# Approval-timing resolution (ratified 2026-07-03, reading (a)): a publish
+# approval gates the transition of publish_ready TO pass, NOT entry into it.
+# publish_ready is not_started -> it is the earliest non-pass stage -> the walk
+# returns its forward action. The publish approval is NOT yet required (the stage
+# has not been reached as a pass).
+# Expected run-next response: outcome=next_action, stage=publish_ready.
+table: "silver.example_table"
+current_stage: "publish_ready"
+stages:
+  source_ready:
+    status: "pass"
+    evidence: ["mappings/example_table/source-profile.md"]
+  mapping_ready:
+    status: "pass"
+    evidence: ["mappings/example_table/source-map.yaml"]
+  silver_ready:
+    status: "pass"
+    evidence: ["warehouse/silver/010_stg_example.sql"]
+  gold_ready:
+    status: "pass"
+    evidence: ["warehouse/gold/020_fct_example.sql", "retail validate exit 0, 2026-07-01"]
+  semantic_model_ready:
+    status: "pass"
+    evidence: ["powerbi/Example.SemanticModel", "metrics/example/net_sales.yaml"]
+  dashboard_ready:
+    status: "pass"
+    evidence: ["design/example/layout.md"]
+  publish_ready:
+    status: "not_started"
+approvals:
+  - {stage: mapping_ready, owner: "Ada Lovelace (analyst)", at: "2026-06-20"}
+  - {stage: semantic_model_ready, owner: "Grace Hopper (metric_owner)", at: "2026-06-28"}
+  - {stage: dashboard_ready, owner: "Katherine Johnson (governance)", at: "2026-07-01"}
+next_action: "Begin the Publish Ready handoff (Stage 7)."
