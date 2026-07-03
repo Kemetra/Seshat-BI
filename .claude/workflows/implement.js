@@ -5,7 +5,7 @@ export const meta = {
   phases: [
     { title: 'Pre-flight' },                                                                  // 0a read + 0b JS gate
     { title: 'Build + verify (isolated)', detail: 'one worktree agent: /speckit-implement over tasks.md (TDD), then the CI gate set', model: 'opus' },
-    { title: 'PR-ready ledger', detail: 'read-only assembler: present the PR-readiness ledger and STOP at the human PR gate', model: 'opus' },
+    { title: 'PR-ready ledger', detail: 'read-only assembler: present the PR-readiness ledger and STOP at the human PR gate', model: 'sonnet' },
   ],
 }
 const S = (...c) => String.fromCharCode(...c)
@@ -178,7 +178,7 @@ const facts = await agent(
   `workflow/bot identity such as one containing \u0022claude\u0022, \u0022bot\u0022, \u0022github-actions\u0022, or the workflow\u0027s own ` +
   `committer -- if bot-authored, false).\n\n` +
   `Fabricate nothing. A missing file is exists:false, not a guess. Return RAW text, not interpretation.`,
-  { label: 'preflight:read-handoff', phase: 'Pre-flight', schema: HANDOFF_FACTS, model: 'opus', effort: 'low' }
+  { label: 'preflight:read-handoff', phase: 'Pre-flight', schema: HANDOFF_FACTS, model: 'sonnet', effort: 'high' }
 )
 
 // ===================== STAGE 0b: H1-H6 FAIL-CLOSED GATE (pure JS) =================
@@ -530,7 +530,7 @@ const ledger = await agent(
   `..., review, merge) and note the workflow itself will NOT open or merge it; how_to_fix_and_rerun = \u0022\u0022.\n` +
   `If BLOCKED/PARTIAL: how_to_fix_and_rerun = what to fix + \u0022re-invoke Workflow({scriptPath, ` +
   `resumeFromRunId}) -- done tasks skip\u0022; how_to_open_pr = \u0022\u0022.`,
-  { label: 'ledger:pr-ready', phase: 'PR-ready ledger', schema: PR_LEDGER, model: 'opus', effort: 'high' }
+  { label: 'ledger:pr-ready', phase: 'PR-ready ledger', schema: PR_LEDGER, model: 'sonnet', effort: 'high' }
 )
 
 // ===================== TERMINAL SEAM (no-merge constants; uncomputable-otherwise) ==
