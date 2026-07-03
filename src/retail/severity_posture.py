@@ -368,6 +368,39 @@ def _observe_rule(rule_id: str, fn: Rule) -> set[str]:
                 '  blocking_reasons: ["A4 gross/net denominator not ruled"]\n',
             )
             tracked = ["mappings/demo/metrics/DemoMetric.yaml"]
+        elif rule_id == "DL1":
+            # A theme carrying a forbidden business-logic key -> DL1 ERRORs.
+            _write(repo, "demo.theme.json", '{"measure": "bad"}\n')
+            tracked = ["demo.theme.json"]
+        elif rule_id == "DL2":
+            # A background spec with a forbidden_dynamic_content key set true.
+            _write(
+                repo,
+                "mappings/demo/background/page.background.yaml",
+                "forbidden_dynamic_content:\n  kpi_value: true\n",
+            )
+            tracked = ["mappings/demo/background/page.background.yaml"]
+        elif rule_id == "DL3":
+            # tokens declare data_colors but the theme drifts -> DL3 ERRORs.
+            _write(
+                repo,
+                "design/tokens/demo-design-tokens.yaml",
+                "meta: { compiles_to: demo.theme.json }\n"
+                "colors:\n  data_colors:\n    - '#111111'\n",
+            )
+            _write(repo, "demo.theme.json", '{"dataColors": ["#999999"]}\n')
+            tracked = [
+                "design/tokens/demo-design-tokens.yaml",
+                "demo.theme.json",
+            ]
+        elif rule_id == "DL4":
+            # A design-review evidence record missing a required field -> DL4 ERRORs.
+            _write(
+                repo,
+                "reports/demo/design-review-evidence.md",
+                "## Record\n\n- **page_id:** `p01`\n",
+            )
+            tracked = ["reports/demo/design-review-evidence.md"]
         elif rule_id == "DL5":
             # A layout grid whose column arithmetic does NOT close -> DL5 ERRORs.
             # usable width = 200 - 10 - 10 = 180, but 4*25 + 3*20 = 160 != 180.
@@ -387,6 +420,17 @@ def _observe_rule(rule_id: str, fn: Rule) -> set[str]:
                 "      row_height: 30\n",
             )
             tracked = ["design/grids/demo-grid.yaml"]
+        elif rule_id == "CT1":
+            # tokens with a text/background pair below the declared floor -> CT1 ERRORs.
+            _write(
+                repo,
+                "design/tokens/demo-design-tokens.yaml",
+                "colors:\n"
+                "  background: '#FFFFFF'\n"
+                "  text:\n    primary: '#CCCCCC'\n"
+                "accessibility:\n  min_text_contrast_ratio: '4.5:1'\n",
+            )
+            tracked = ["design/tokens/demo-design-tokens.yaml"]
         else:
             # An unknown rule id: leave tracked empty -> no-finding marker.
             tracked = []
