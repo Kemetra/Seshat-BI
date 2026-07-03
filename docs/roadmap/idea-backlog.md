@@ -509,6 +509,12 @@ _A reframing that MIGHT make an idea eligible later, or the irreducible reason i
 
 ## SHIPPED / SETTLED (prior ideas, for the record)
 
+> This appendix is a FROZEN historical snapshot ("for the record"); it is NOT
+> maintained in lockstep with `docs/roadmap/shipped-ideas.yaml`, which is the
+> live, authoritative ledger and grows past this list. A backlog↔ledger count
+> mismatch here is expected, not drift (see the F3 ruling in
+> `docs/roadmap/design-ideas-decisions.md`).
+
 - **ADL Per-Contract Ambiguity Decision Ledger (force A1-A10 to a recorded ruling)** -- SHIPPED. shipped-ideas.yaml ADL: shipped -- PR #106 (spec 058 per-contract-ambiguity-decision-ledger; ambiguities[] block on metric-contract.yaml)
 - **S7A Stage 7 Answerability Summary (executive-readable)** -- SHIPPED. shipped-ideas.yaml S7A: shipped -- PR #101 (spec 053 stage-7-answerability-summary; templates/handoff/answerability-summary.md)
 - **FHC First-Hour Compass / New-Table Author Onboarding Cockpit** -- SHIPPED. shipped-ideas.yaml FHC: shipped -- PR #103 (spec 055 first-hour-compass; templates/first-hour-compass.md + skill + tools doc)
