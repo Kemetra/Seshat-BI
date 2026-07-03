@@ -1,6 +1,32 @@
 <!--
 Sync Impact Report
 ==================
+Version change: 1.6.1 -> 1.7.0 (amendment 2026-07-04, multi-engine read-only seam, PR #176)
+Amendment rationale (1.7.0, MINOR -- scope expansion, backward-compatible, NO
+                principle removed/redefined, no gate lowered): Principle III's
+                "Postgres-first; other engines out of scope" boundary is widened
+                so the READ-ONLY profile + validate seam MAY connect to SQL Server,
+                MySQL, and Snowflake via a Dialect abstraction, each behind an
+                optional lazy driver extra. Postgres remains the DEFAULT and the
+                only engine whose behavior is byte-identical; warehouse-SQL
+                authoring and Power BI's gold read stay Postgres-only until
+                separately specified; gold-only and bronze->silver->gold flow are
+                UNCHANGED. This is a MINOR (new capability on top of the existing
+                floor), not a MAJOR (no principle is redefined or removed).
+                Changed: Principle III gains a multi-engine bullet; Principle VIII's
+                "other engines out of scope" sentence is replaced with the
+                engine-aware connection description (ANALYTICS_DB_ENGINE, default
+                postgres). Evidence: 974 tests green, retail check exit 0, Postgres
+                SQL byte-identical (independently verified), driver-free import path
+                preserved (B1/B3 extended), four R4 credential-leak classes closed,
+                C2 secret-scan extended to the new connection-string shapes.
+                Ratified by: Ahmed Shaaban (repo owner), 2026-07-04 -- an explicit
+                human action; the agent transcribed this decision and did not
+                self-ratify. Live per-engine runs remain DEFERRED (Principle VIII):
+                CI proves the generated SQL + translation/redaction logic, not that
+                each engine executes it. See docs/superpowers/specs/
+                2026-07-03-multi-engine-ratify-ledger.md.
+
 Version change: 1.6.0 -> 1.6.1 (amendment 2026-07-02, brand-name reconciliation, #111)
 Amendment rationale (1.6.1, PATCH -- wording/identity clarification, NO principle
                 added/removed/redefined, no gate changed): the active governing
@@ -283,6 +309,14 @@ One substrate, one read surface, one source of truth.
   redundant second source of truth (architecture North-Star correction #5).
 - `gold` MUST be a Kimball star (fact + conformed dimensions), the single
   shape the BI model binds to.
+- The **read-only profile + validate seam** MAY connect to additional engines
+  (SQL Server, MySQL, Snowflake) through the `Dialect` abstraction, each behind
+  an optional lazy driver extra (`retail[mssql|mysql|snowflake]`). Postgres
+  remains the **default** and the only engine whose behavior is guaranteed
+  byte-identical. **Warehouse-SQL authoring** (`retail-build-warehouse`) and
+  **Power BI's `gold` read** remain Postgres-only until separately specified.
+  The gold-only rule and the `bronze -> silver -> gold` flow-direction rule are
+  UNCHANGED. (Amendment 1.7.0, 2026-07-04, PR #176; ratified by Ahmed Shaaban.)
 
 **Rationale**: A single downstream read surface (`gold`) keeps the BI model's
 contract narrow and the lineage legible; reading `silver`/`bronze` from Power BI
@@ -420,9 +454,13 @@ Ship the static core; defer live validation to a named later surface.
   against a real database is the remaining deferred step (needs the optional `db`
   extra + credentials). The DB driver (psycopg2) is OPTIONAL and imported LAZILY
   only in the validate handler, so the static core's import path stays driver-free.
-- Connection is host-agnostic: any Postgres (local / remote / DigitalOcean /
-  other) via a DSN from env. Other engines and local files are explicitly out of
-  scope (Postgres-first, Principle III) -- deferred to future specs.
+- Connection is engine-aware via `ANALYTICS_DB_ENGINE` (default `postgres`): any
+  Postgres (local / remote / DigitalOcean / other) via a DSN from env, PLUS SQL
+  Server / MySQL / Snowflake for the read-only profile + validate seam through the
+  `Dialect` abstraction (optional lazy driver extras; Principle III, amendment
+  1.7.0). Live per-engine runs remain DEFERRED (need the extra + credentials);
+  CI proves the generated SQL + translation/redaction logic, not that each engine
+  executes it. Local files remain out of scope.
 - Severity asymmetry (intentional): static rules WARN (suspect patterns with ADR
   "override when" clauses); live checks ERROR (proven defects). Suspect -> WARN,
   proven -> ERROR.
@@ -572,7 +610,7 @@ a filled worked example under `docs/worked-examples/` (the first filled instance
 
 ---
 
-**Version**: 1.6.1 | **Ratified**: 2026-06-24 | **Last Amended**: 2026-07-02
+**Version**: 1.7.0 | **Ratified**: 2026-06-24 | **Last Amended**: 2026-07-04
 
 > The 1.6.1 brand-name amendment (#111) is drafted and awaits human ratification;
 > the agent does not self-ratify. Confirm the PATCH classification and the wording,

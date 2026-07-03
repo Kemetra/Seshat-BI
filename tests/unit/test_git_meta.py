@@ -10,6 +10,7 @@ from retail.core import RuleContext, Severity
 from retail.rules.git_meta import (
     _read_leading_bytes,
     _scan_contents,
+    _scan_line_for_secret,
     check_gitattributes_eol,
     rule_c2_no_committed_secrets,
     rule_g1_gitignore_correctness,
@@ -535,6 +536,117 @@ def test_c2_flags_env_example_with_filled_secret(tmp_path: Path) -> None:
     commit_all(repo, "chore: bad example")
     findings = list(rule_c2_no_committed_secrets(context_for(repo)))
     assert any("ANALYTICS_DB_PASSWORD" in f.message for f in findings)
+
+
+# ---------------------------------------------------------------------------
+# Task 11 -- C2 multi-engine extension: _scan_line_for_secret catches an ODBC
+# keyword string, a mysql:// URI, and a Snowflake account+password kwargs
+# pair, while keeping the existing <...>-placeholder exemption.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_c2_flags_odbc_password_string() -> None:
+    hit = _scan_line_for_secret("DRIVER={ODBC Driver 18 for SQL Server};PWD=realpw;")
+    assert hit is True
+
+
+@pytest.mark.unit
+def test_c2_ignores_placeholder_odbc() -> None:
+    assert _scan_line_for_secret("DRIVER={...};PWD=<your-password>;") is False
+
+
+@pytest.mark.unit
+def test_c2_flags_odbc_uid_string() -> None:
+    assert _scan_line_for_secret("SERVER=h;UID=realuser;PWD=<placeholder>") is True
+
+
+@pytest.mark.unit
+def test_c2_ignores_fstring_interpolated_pwd_uid() -> None:
+    # dialect.py's own SqlServerDialect.resolve_config builds these lines --
+    # the scanner must not self-trip on the source that CONSTRUCTS the string.
+    assert (
+        _scan_line_for_secret("parts.append(f\"PWD={env['ANALYTICS_DB_PASSWORD']}\")")
+        is False
+    )
+    assert (
+        _scan_line_for_secret("parts.append(f\"UID={env['ANALYTICS_DB_USER']}\")")
+        is False
+    )
+
+
+@pytest.mark.unit
+def test_c2_flags_mysql_uri() -> None:
+    assert _scan_line_for_secret("mysql://user:pw@real-host.example.com/db") is True
+
+
+@pytest.mark.unit
+def test_c2_ignores_mysql_uri_placeholder() -> None:
+    assert _scan_line_for_secret("mysql://<user>:<pw>@<host>/db") is False
+
+
+@pytest.mark.unit
+def test_c2_flags_snowflake_account_password_pair() -> None:
+    line = 'cfg = {"account": "acme-prod", "password": "hunter2"}'
+    assert _scan_line_for_secret(line) is True
+
+
+@pytest.mark.unit
+def test_c2_ignores_snowflake_account_alone() -> None:
+    # account with no password is not connection context on its own.
+    assert _scan_line_for_secret('cfg = {"account": "acme-prod"}') is False
+
+
+@pytest.mark.unit
+def test_c2_ignores_snowflake_env_lookup_source() -> None:
+    # dialect.py's own SnowflakeDialect.resolve_config builds config from env
+    # lookups -- must not self-trip on the source that CONSTRUCTS the dict.
+    line = (
+        'config["account"] = env.get("ANALYTICS_DB_ACCOUNT")\n'
+        'config["password"] = env.get("ANALYTICS_DB_PASSWORD")'
+    )
+    assert _scan_line_for_secret(line) is False
+
+
+@pytest.mark.unit
+def test_c2_end_to_end_flags_committed_odbc_secret(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path)
+    _seed_c2_repo(repo)
+    (repo / "config.txt").write_text(
+        "DRIVER={ODBC Driver 18 for SQL Server};SERVER=h;UID=admin;PWD=realsecret;\n",
+        encoding="utf-8",
+    )
+    commit_all(repo, "chore: add sqlserver config")
+    findings = list(rule_c2_no_committed_secrets(context_for(repo)))
+    assert any(f.locator.startswith("config.txt:") for f in findings)
+
+
+@pytest.mark.unit
+def test_c2_sentinel_real_repo_source_does_not_self_trip() -> None:
+    """The scanner's own extension must not flag the real dialect.py / cli.py /
+    git_meta.py source it lives in -- those modules build ODBC/mysql/Snowflake
+    config strings from env lookups, never literal secrets. This is the C2
+    analog of the B3 real-file sentinel: a pre-merge guard the live gate
+    (which runs main's ruleset, per the editable install) cannot provide.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    src_root = repo_root / "src" / "retail"
+    targets = [
+        src_root / "dialect.py",
+        src_root / "cli.py",
+        src_root / "rules" / "git_meta.py",
+    ]
+    offenders: dict[str, list[str]] = {}
+    for path in targets:
+        text = path.read_text(encoding="utf-8")
+        hits = [
+            f"{lineno}: {line}"
+            for lineno, line in enumerate(text.splitlines(), start=1)
+            if _scan_line_for_secret(line)
+        ]
+        if hits:
+            offenders[str(path.relative_to(repo_root))] = hits
+    assert offenders == {}, f"C2 self-trip on real source: {offenders}"
 
 
 # ---------------------------------------------------------------------------

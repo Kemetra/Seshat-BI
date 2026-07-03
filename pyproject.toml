@@ -34,6 +34,19 @@ dev = [
 db = [
     "psycopg2-binary>=2.9",
 ]
+# Additional per-engine extras for `retail validate`'s multi-engine LIVE run
+# (Task 11 / R4). NOT in `dev` -- same reasoning as `db`: CI installs none of
+# these, so the static core and the validate/dialect logic stay driver-free
+# and the suite passing proves every connect() import is lazy.
+mssql = [
+    "pyodbc>=5.0",
+]
+mysql = [
+    "mysql-connector-python>=9.0",
+]
+snowflake = [
+    "snowflake-connector-python>=3.0",
+]
 # `files` extra: the optional reader for profiling an EXCEL file source
 # (`retail.file_profile.make_excel_reader`). NOT in `dev` -- CI installs no reader,
 # so the suite passing proves file_profile's import path stays library-free and

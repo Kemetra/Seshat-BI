@@ -34,7 +34,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable
 
 from .core import Finding, Severity
-from .identifiers import quote_identifier, quote_qualified_identifier
+from .dialect import Dialect, get_dialect
 from .validate import QueryRunner  # the driver-free DB seam (Protocol)
 
 __all__ = ["ExpectedValue", "parse_expected_value", "check_expected_value"]
@@ -148,20 +148,21 @@ def _to_decimal(value: object) -> Decimal | None:
         return None
 
 
-def _aggregate_sql(expected: ExpectedValue) -> str:
+def _aggregate_sql(expected: ExpectedValue, dialect: Dialect) -> str:
     """Build the single-aggregate SELECT for a non-ratio expected value.
 
-    Quotes the gold table and column via the hardened identifier helpers (raises
-    ValueError on an unsafe identifier BEFORE any SQL is built).
+    Quotes the gold table and column via the dialect's identifier helpers (raises
+    ValueError on an unsafe identifier BEFORE any SQL is built; validation lives
+    inside the dialect, same hardening as before).
     """
-    table = quote_qualified_identifier(
+    table = dialect.quote_qualified(
         expected.gold_table, context="L4 gold table", min_parts=1, max_parts=2
     )
     template = _AGG_SQL[expected.aggregation]
     if expected.aggregation == "count_rows":
         agg = template  # count(*)
     else:
-        col = quote_identifier(expected.column, context="L4 column")
+        col = dialect.quote_ident(expected.column, context="L4 column")
         agg = template.format(col=col) if "{col}" in template else f"{template}({col})"
     return f"SELECT {agg} FROM {table}"
 
@@ -173,9 +174,9 @@ def _error(name: str, message: str, locator: str) -> Finding:
 
 
 def _check_single(
-    runner: QueryRunner, name: str, expected: ExpectedValue
+    runner: QueryRunner, name: str, expected: ExpectedValue, *, dialect: Dialect
 ) -> list[Finding]:
-    sql = _aggregate_sql(expected)  # may raise ValueError (unsafe identifier)
+    sql = _aggregate_sql(expected, dialect)  # may raise ValueError (unsafe identifier)
     rows = runner.run(sql)
     if not rows or not rows[0]:
         return [_error(name, f"{name}: live aggregate returned no rows (L4)", name)]
@@ -203,7 +204,10 @@ def _check_single(
     return []
 
 
-def _count(runner: QueryRunner, table: str, where_sql: str) -> int | None:
+def _count(
+    runner: QueryRunner, table: str, where_sql: str, *, dialect: Dialect
+) -> int | None:
+    del dialect  # unused today: the count(*) ... WHERE ... form is engine-portable
     rows = runner.run(f"SELECT count(*) FROM {table} WHERE {where_sql}")
     if not rows or not rows[0] or rows[0][0] is None:
         return None
@@ -214,9 +218,9 @@ def _count(runner: QueryRunner, table: str, where_sql: str) -> int | None:
 
 
 def _check_ratio(
-    runner: QueryRunner, name: str, expected: ExpectedValue
+    runner: QueryRunner, name: str, expected: ExpectedValue, *, dialect: Dialect
 ) -> list[Finding]:
-    table = quote_qualified_identifier(
+    table = dialect.quote_qualified(
         expected.gold_table, context="L4 gold table", min_parts=1, max_parts=2
     )
     num_filter = expected.numerator_count_sql_filter
@@ -230,8 +234,8 @@ def _check_ratio(
                 name,
             )
         ]
-    numerator = _count(runner, table, num_filter)
-    denominator = _count(runner, table, den_filter)
+    numerator = _count(runner, table, num_filter, dialect=dialect)
+    denominator = _count(runner, table, den_filter, dialect=dialect)
     if numerator is None or denominator is None:
         return [
             _error(
@@ -265,14 +269,22 @@ def _check_ratio(
 
 
 def check_expected_value(
-    runner: QueryRunner, name: str, expected: ExpectedValue
+    runner: QueryRunner,
+    name: str,
+    expected: ExpectedValue,
+    *,
+    dialect: Dialect | None = None,
 ) -> Iterable[Finding]:
     """Verify one measure's live aggregate against its approved value.
 
     Within tolerance => no finding (pass). Outside tolerance, or no rows / NULL /
     unparseable / zero ratio denominator => one V-L4 ERROR (a proven regression).
     Raises ValueError (before any query) if the contract names an unsafe identifier.
+
+    ``dialect`` defaults to Postgres (the only engine wired up today); passing it
+    explicitly is how a future engine's value-check would opt in.
     """
+    dialect = dialect or get_dialect("postgres")
     if expected.aggregation == "ratio":
-        return _check_ratio(runner, name, expected)
-    return _check_single(runner, name, expected)
+        return _check_ratio(runner, name, expected, dialect=dialect)
+    return _check_single(runner, name, expected, dialect=dialect)

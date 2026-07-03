@@ -502,22 +502,68 @@ def _run_kit_lint(args: argparse.Namespace) -> int:
     return 0 if report.ok else 1
 
 
+def _safe_target_label(engine: str, config: object) -> str:
+    """A credential-free label for the "running against ..." status line.
+
+    A Postgres DSN string keeps only the host segment (matches the
+    pre-existing behavior, unchanged). Every OTHER string-shaped config --
+    today that's only the SQL-Server ODBC keyword string, which embeds
+    PWD=/UID= directly with no "@" delimiter to split on -- is NOT safe to
+    echo even partially, so it falls through to the engine-only label (same
+    posture as the kwargs-dict engines, MySQL/Snowflake): no field of a
+    non-Postgres config is guaranteed secret-free enough to print.
+    """
+    if engine == "postgres" and isinstance(config, str):
+        return config.split("@")[-1] if "@" in config else config
+    return engine
+
+
+def _current_engine() -> str:
+    """Read ANALYTICS_DB_ENGINE from the environment (default: postgres).
+
+    Indirected (not inlined at call sites) so tests can monkeypatch a single
+    seam. Reading the env HERE (not at call sites) keeps _ensure_driver() and
+    _make_runner(dsn) at their existing zero-/one-arg signatures, which the
+    test suite already monkeypatches directly (test_cli_context.py).
+    """
+    import os
+
+    return os.environ.get("ANALYTICS_DB_ENGINE") or "postgres"
+
+
 def _ensure_driver() -> bool:
-    """True if the optional psycopg2 driver is importable. LAZY: the import lives
-    here, never at module scope, so `retail check` / CI (no driver) never load it."""
+    """True if the current engine's optional DB driver is importable. LAZY: the
+    import lives here, never at module scope, so `retail check` / CI (no driver)
+    never load it. Postgres path is UNCHANGED (identical import + behavior)."""
+    engine = _current_engine()
     try:
-        import psycopg2  # noqa: F401  (lazy: only when validate actually connects)
+        if engine == "postgres":
+            import psycopg2  # noqa: F401  (lazy: only when validate actually connects)
+        elif engine == "sqlserver":
+            import pyodbc  # noqa: F401
+        elif engine == "mysql":
+            import mysql.connector  # noqa: F401
+        elif engine == "snowflake":
+            import snowflake.connector  # noqa: F401
+        else:
+            return False
     except ImportError:
         return False
     return True
 
 
 def _make_runner(dsn: str) -> QueryRunner:
-    """Build a real (lazy psycopg2) QueryRunner. Indirected through cli so tests
-    can monkeypatch it with a fake -- no real DB is touched in the suite."""
-    from .validate import make_psycopg2_runner
+    """Build a real (lazy driver) QueryRunner for the current engine.
 
-    return make_psycopg2_runner(dsn)
+    Indirected through cli so tests can monkeypatch it with a fake -- no real
+    DB is touched in the suite. The ``dsn`` parameter carries whatever
+    ``resolve_config`` produced for the active engine (a DSN string for
+    Postgres/SQL-Server's ODBC string, a kwargs dict for MySQL/Snowflake); the
+    name is kept for Postgres call-site/monkeypatch compatibility.
+    """
+    from .dialect import get_dialect
+
+    return get_dialect(_current_engine()).connect(dsn)
 
 
 def _load_targets(source_map: str) -> ValidationTargets:
@@ -566,13 +612,17 @@ def _redact_dsn(message: object, dsn: str) -> str:
 def _run_validate(args: argparse.Namespace) -> int:
     """Run the LIVE validators against a real DB.
 
-    The psycopg2 import is LAZY (via ``_ensure_driver`` / ``_make_runner``, never
-    at module scope) so that `retail check` and CI -- which install no DB driver --
-    never import it. If the driver or a usable connection is missing, exit non-zero
-    with an actionable message, never a raw traceback.
+    The DB driver import is LAZY (via ``_ensure_driver`` / ``_make_runner``,
+    never at module scope) so that `retail check` and CI -- which install no
+    DB driver -- never import it. If the driver or a usable connection is
+    missing, exit non-zero with an actionable message, never a raw traceback.
 
-    Connection is host-agnostic (any Postgres: local / remote / DigitalOcean /
-    other) via a DSN resolved from --dsn or env (DATABASE_URL / ANALYTICS_DB_*).
+    Engine selection: ``ANALYTICS_DB_ENGINE`` (default ``postgres``) picks the
+    Dialect. The POSTGRES PATH IS UNCHANGED -- it keeps using --dsn/DATABASE_URL/
+    resolve_dsn verbatim, so engine unset (or "postgres") behaves identically to
+    before this feature. Other engines resolve their config from the
+    Dialect.resolve_config(env) seam (an ODBC string for SQL Server, a kwargs
+    dict for MySQL/Snowflake) and do not support --dsn (a Postgres-only flag).
 
     Two modes:
       * ``--source-map PATH`` given -> load that table's targets, connect, run the
@@ -583,15 +633,23 @@ def _run_validate(args: argparse.Namespace) -> int:
     import os
 
     from .core import Severity
+    from .dialect import get_dialect
     from .runner import _format  # reuse the [severity] id message (locator) format
     from .validate import resolve_dsn, run_live_checks
 
-    # 1. Resolve a DSN (host-agnostic). --dsn wins; else env. No DSN -> clear error.
-    env = dict(os.environ)
-    if args.dsn:
-        env = {**env, "DATABASE_URL": args.dsn}
-    dsn = resolve_dsn(env)
-    if dsn is None:
+    engine = _current_engine()
+    dialect = get_dialect(engine)
+
+    # 1. Resolve the engine's config. Postgres: --dsn wins; else env (UNCHANGED
+    #    behavior). Other engines: --dsn is not applicable; resolve from env only.
+    if engine == "postgres":
+        env = dict(os.environ)
+        if args.dsn:
+            env = {**env, "DATABASE_URL": args.dsn}
+        config = resolve_dsn(env)
+    else:
+        config = dialect.resolve_config(dict(os.environ))
+    if config is None:
         print(
             "error: no database connection configured.\n"
             "       pass --dsn (a postgresql:// connection string), or set\n"
@@ -611,7 +669,7 @@ def _run_validate(args: argparse.Namespace) -> int:
         )
         return 1
 
-    safe_host = dsn.split("@")[-1] if "@" in dsn else dsn  # never echo credentials
+    safe_host = _safe_target_label(engine, config)
 
     # 3a. Deferred mode: no table targets supplied -> report, do not connect.
     if not args.source_map:
@@ -635,12 +693,12 @@ def _run_validate(args: argparse.Namespace) -> int:
 
     print(f"retail validate: running live checks against {safe_host}", file=sys.stderr)
     try:
-        runner = _make_runner(dsn)
-        findings = run_live_checks(runner, targets)
+        runner = _make_runner(config)
+        findings = run_live_checks(runner, targets, dialect=dialect)
     except Exception as exc:
         print(
             "error: live validation failed at the DB boundary "
-            f"({exc.__class__.__name__}): {_redact_dsn(exc, dsn)}",
+            f"({exc.__class__.__name__}): {dialect.redact(exc, config)}",
             file=sys.stderr,
         )
         print(
@@ -787,13 +845,15 @@ def _run_value_check(args: argparse.Namespace) -> int:
     import os
 
     from .core import Severity
-    from .identifiers import quote_identifier
+    from .dialect import get_dialect
     from .metric_drift import load_definition
     from .runner import _format
     from .validate import resolve_dsn
     from .value_proxy import check_expected_value, parse_expected_value
 
     repo = Path(args.repo)
+    engine = _current_engine()
+    dialect = get_dialect(engine)
 
     # Confine --metrics-dir to the repo tree (same guard as semantic-check, #26).
     repo_resolved = repo.resolve()
@@ -806,12 +866,16 @@ def _run_value_check(args: argparse.Namespace) -> int:
         )
         return 1
 
-    # 1. Resolve a DSN (host-agnostic). --dsn wins; else env. No DSN -> clear error.
-    env = dict(os.environ)
-    if args.dsn:
-        env = {**env, "DATABASE_URL": args.dsn}
-    dsn = resolve_dsn(env)
-    if dsn is None:
+    # 1. Resolve the engine's config. Postgres: --dsn wins; else env (UNCHANGED
+    #    behavior). Other engines: --dsn is not applicable; resolve from env only.
+    if engine == "postgres":
+        env = dict(os.environ)
+        if args.dsn:
+            env = {**env, "DATABASE_URL": args.dsn}
+        config = resolve_dsn(env)
+    else:
+        config = dialect.resolve_config(dict(os.environ))
+    if config is None:
         print(
             "error: no database connection configured.\n"
             "       pass --dsn (a postgresql:// connection string), or set\n"
@@ -870,11 +934,11 @@ def _run_value_check(args: argparse.Namespace) -> int:
             if expected.aggregation == "ratio":
                 num_sql = _filter_to_sql(
                     (definition or {}).get("numerator", {}).get("filter"),
-                    quote_identifier,
+                    dialect.quote_ident,
                 )
                 den_sql = _filter_to_sql(
                     (definition or {}).get("denominator", {}).get("filter"),
-                    quote_identifier,
+                    dialect.quote_ident,
                 )
                 if num_sql is None or den_sql is None:
                     print(
@@ -899,16 +963,18 @@ def _run_value_check(args: argparse.Namespace) -> int:
         return 0
 
     # 4. Connect and run each check. No real DB is touched in tests (fake runner).
-    safe_host = dsn.split("@")[-1] if "@" in dsn else dsn
+    safe_host = _safe_target_label(engine, config)
     print(
         f"retail value-check: running L4 value checks against {safe_host}",
         file=sys.stderr,
     )
     try:
-        runner = _make_runner(dsn)
+        runner = _make_runner(config)
         findings = []
         for name, expected in expectations:
-            findings.extend(check_expected_value(runner, name, expected))
+            findings.extend(
+                check_expected_value(runner, name, expected, dialect=dialect)
+            )
     except ValueError as exc:
         # an unsafe identifier in a contract -> clean message, no traceback
         print(
@@ -919,7 +985,7 @@ def _run_value_check(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(
             "error: live value-check failed at the DB boundary "
-            f"({exc.__class__.__name__}): {_redact_dsn(exc, dsn)}",
+            f"({exc.__class__.__name__}): {dialect.redact(exc, config)}",
             file=sys.stderr,
         )
         return 1

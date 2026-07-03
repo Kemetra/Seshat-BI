@@ -323,6 +323,69 @@ CONN_URI_RE = re.compile(r"postgres(?:ql)?://[^@\s]+@")
 # `db-<engine>-<region>-<id>` does NOT match. (This very comment is deliberately
 # written to describe the shape without embedding a matching literal.)
 DO_CLUSTER_SLUG_RE = re.compile(r"\bdb-[a-z]{2,}-[a-z]{2,}\d-\d{3,}\b")
+
+# Task 11 (R4/C2 extension) — catch three more committed-secret SHAPES the
+# Postgres-only patterns above are blind to: an ODBC keyword string carrying a
+# real credential value for either of two ODBC keywords (the connection
+# password keyword and the connection user-id keyword), a MySQL connection
+# URI, and a Snowflake account-plus-password kwargs pair. Each VALUE class
+# deliberately excludes:
+#   * an angle-bracket-wrapped token (the existing documented-placeholder
+#     exemption),
+#   * a curly brace (an f-string/format-string interpolation token -- SOURCE
+#     CODE building the string, not a committed secret; this is what keeps
+#     this very module's own dialect.py resolve_config() bodies from self-
+#     tripping the scanner they extend), and
+#   * the ODBC keyword separator / whitespace / a slash (so PROSE describing
+#     "keyword A or keyword B" together, as in this very comment, cannot
+#     itself look like a real assigned value).
+# so a real literal value (letters/digits/most punctuation) still matches,
+# while the placeholder/interpolation/prose shapes do not. (This comment block
+# is deliberately written without the two ODBC keywords' literal `KEYWORD=`
+# forms appearing back to back, for the same reason the DO_CLUSTER_SLUG_RE
+# comment above avoids embedding a matching literal.)
+ODBC_SECRET_RE = re.compile(r"\b(?:PWD|UID)=[^;\s{}<>/]+")
+# The scheme is assembled from parts (mirroring validate.py's postgres scheme
+# split) so this source file never itself contains the full scheme-then-
+# userinfo-then-at-sign literal shape the pattern below exists to catch --
+# angle brackets are excluded from the userinfo class so a documented
+# placeholder (a MySQL URI with bracketed user/password/host tokens) does not
+# match either.
+_MYSQL_SCHEME = "mysql" + ":" + "//"
+MYSQL_URI_RE = re.compile(re.escape(_MYSQL_SCHEME) + r"[^@\s<>]+@")
+
+# Snowflake kwargs pair: `account=`/`account:` (optionally quoted key) with a
+# REAL value, together with a `password=`/`password:` REAL value anywhere on
+# the same line -- the pairing is what makes it connection context (a bare
+# `account=` alone is not flagged; it grants no access on its own). A regex
+# alone over-matches Python source that BUILDS such a dict from env vars (e.g.
+# `config["account"] = env.get("ANALYTICS_DB_ACCOUNT")` -- the "value" here is
+# a variable reference, not a literal), so a value is accepted only when it is
+# a quoted string OR an unquoted token NOT immediately followed by `.` or `(`
+# in the source (which would mark it as a name/attribute/call reference).
+_SNOWFLAKE_KV_RE = re.compile(
+    r"[\"']?(account|password)[\"']?\s*[:=]\s*([\"']?)([^,;\s\"'{}()<>]*)",
+    re.IGNORECASE,
+)
+
+
+def _snowflake_kv_is_real(quote: str, value: str, line: str, end_pos: int) -> bool:
+    if not value:
+        return False
+    if not quote and end_pos < len(line) and line[end_pos] in ".(":
+        return False  # unquoted + followed by '.'/'(' -> a name/call reference
+    return True
+
+
+def _has_snowflake_secret_pair(line: str) -> bool:
+    seen: dict[str, bool] = {}
+    for m in _SNOWFLAKE_KV_RE.finditer(line):
+        key, quote, value = m.group(1).lower(), m.group(2), m.group(3)
+        if _snowflake_kv_is_real(quote, value, line, m.end(3)):
+            seen[key] = True
+    return seen.get("account", False) and seen.get("password", False)
+
+
 REQUIRED_ENV_KEYS = (
     "ANALYTICS_DB_HOST",
     "ANALYTICS_DB_PORT",
@@ -421,6 +484,33 @@ def _check_env_example(ctx: RuleContext) -> list[Finding]:
     return findings
 
 
+def _scan_line_for_secret(line: str) -> bool:
+    """True if ``line`` carries a committed connection string / secret shape.
+
+    Factored out of ``_scan_contents`` (Task 11) so the multi-engine patterns
+    (the ODBC credential keywords, a MySQL connection URI, a Snowflake
+    account-plus-password pair) share one tested seam with the original
+    Postgres URI / DigitalOcean endpoint checks.
+    Excludes the DO cluster-slug shape, which is reported as a SEPARATE, less
+    severe-sounding Finding message by ``_scan_contents`` (not "a secret").
+    """
+    # DO_ENDPOINT_RE ([A-Za-z0-9][A-Za-z0-9-]*\.db\.ondigitalocean\.com)
+    # backtracks O(n^2) on a long alnum/hyphen run (~minutes on a 200k-char
+    # minified line). stdlib re has no possessive quantifiers, so gate it
+    # behind an O(n) substring check: any real endpoint MUST contain this
+    # literal, so the prefilter is a necessary condition — behavior is
+    # identical, only the pathological scan is skipped. The other patterns'
+    # forbidden-char classes are already linear, so they run as-is.
+    do_hit = ".db.ondigitalocean.com" in line and bool(DO_ENDPOINT_RE.search(line))
+    return (
+        bool(CONN_URI_RE.search(line))
+        or do_hit
+        or bool(ODBC_SECRET_RE.search(line))
+        or bool(MYSQL_URI_RE.search(line))
+        or _has_snowflake_secret_pair(line)
+    )
+
+
 def _scan_contents(ctx: RuleContext) -> list[Finding]:
     findings: list[Finding] = []
     for path in ctx.tracked_files:
@@ -432,15 +522,7 @@ def _scan_contents(ctx: RuleContext) -> list[Finding]:
         except (OSError, UnicodeDecodeError):
             continue
         for lineno, line in enumerate(text.splitlines(), start=1):
-            # DO_ENDPOINT_RE ([A-Za-z0-9][A-Za-z0-9-]*\.db\.ondigitalocean\.com)
-            # backtracks O(n^2) on a long alnum/hyphen run (~minutes on a 200k-char
-            # minified line). stdlib re has no possessive quantifiers, so gate it
-            # behind an O(n) substring check: any real endpoint MUST contain this
-            # literal, so the prefilter is a necessary condition — behavior is
-            # identical, only the pathological scan is skipped. CONN_URI_RE's
-            # [^@\s]+@ is already linear (the class excludes @), so it runs as-is.
-            do_hit = ".db.ondigitalocean.com" in line and DO_ENDPOINT_RE.search(line)
-            if CONN_URI_RE.search(line) or do_hit:
+            if _scan_line_for_secret(line):
                 findings.append(
                     Finding(
                         rule_id="C2",

@@ -15,6 +15,8 @@ paths only (no domain artifact).
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from retail.core import RuleContext, Severity
@@ -23,6 +25,7 @@ from retail.rules.live_surface_boundary import (
     _LIVE_SURFACE,
     check_live_surface_imports,
 )
+from retail.rules.never_execute import module_scope_violations
 
 pytestmark = pytest.mark.unit
 
@@ -159,3 +162,28 @@ def test_live_surface_set_is_generic_module_paths(tmp_path) -> None:
     for member in _LIVE_SURFACE:
         assert member.startswith("src/retail/")
         assert member.endswith(".py")
+
+
+def test_dialect_module_is_a_live_surface() -> None:
+    assert "src/retail/dialect.py" in _LIVE_SURFACE
+
+
+# --- sentinel: the REAL dialect.py module is import-lazy today (Task 11) -----
+
+
+def test_real_dialect_module_has_no_module_scope_driver_imports() -> None:
+    """Sentinel: the real ``src/retail/dialect.py`` on disk is execution-free.
+
+    Task 11 adds per-engine ``connect()`` methods that import pyodbc /
+    mysql.connector / snowflake.connector -- this proves those imports are
+    LAZY (inside the connect methods), not module-scope, mirroring B1's
+    ``test_real_core_modules_have_no_module_scope_execution_imports`` sentinel
+    (test_never_execute.py). This is the pre-merge guard: the editable
+    ``retail`` install used for a live ``retail check`` run points at main's
+    checkout, so main's B3 rule instance never sees this worktree's edits --
+    only this test (running against THIS worktree's source) does.
+    """
+    repo_root = Path(__file__).resolve().parents[2]
+    dialect_path = repo_root / "src" / "retail" / "dialect.py"
+    source = dialect_path.read_text(encoding="utf-8")
+    assert module_scope_violations(source) == []
