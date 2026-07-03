@@ -229,7 +229,7 @@ The very first shippable slice must end on something an analyst can see:
 
 | Step | What the analyst experiences | Notes |
 |---|---|---|
-| **1. `init` bootstraps + offers a worked example** | "Pick a starting point: `c086-pharmacy` or `retail-store-sales`" — then it clones that filled spine's *shape* against my table. | The worked examples already exist (`docs/worked-examples/`); the bootstrap must **connect me to them**, not walk past them. |
+| **1. `init` bootstraps + offers a worked example** | "Pick a starting point: a filled worked example under `docs/worked-examples/` such as `retail-store-sales`" — then it clones that filled spine's *shape* against my table. | The worked examples already exist (`docs/worked-examples/`); the bootstrap must **connect me to them**, not walk past them. |
 | **2. First run profiles MY table** | The next command profiles my actual source and shows me grain candidates / column types — a result, not a gate. | Uses the existing `retail-orchestrate` → `source-mapping` verbs; `init` just routes me into them. |
 | **3. Honest expectation-setting** | Up front: *"the agent handles sequence and plumbing — you still own grain, PII, and metric policy."* | The hard-stops the agent won't self-grant ARE the judgment; don't imply more relief than an analyst gets. |
 

@@ -92,5 +92,5 @@ Each row is a STOP: PROPOSE with the supporting data fact, raise an
 - The delegated mapping leg: `../../.claude/skills/source-mapping/SKILL.md`.
 - The spine: `readiness-model.md`, `readiness-pipeline.md`;
   `../../templates/readiness-status.yaml`.
-- The roadmap row: `../roadmap/roadmap.md` (F006). C086 is the first filled instance,
-  not the schema: `../worked-examples/c086-pharmacy.md`.
+- The roadmap row: `../roadmap/roadmap.md` (F006). A filled worked example under
+  `../worked-examples/` is the first real instance, not the schema.

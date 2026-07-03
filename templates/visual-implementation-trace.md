@@ -30,7 +30,7 @@
   C086 IS AN EXAMPLE, NEVER INLINED HERE. Do NOT copy any C086/pharmacy or
   retail_store_sales specifics (real measure names, real rates, segment rollups,
   grain keys) into this file. The worked instance is CITED, never inlined:
-  see docs/worked-examples/c086-pharmacy.md and the per-subject-area trace it
+  see a filled worked example under docs/worked-examples/ and the per-subject-area trace it
   produces. ASCII + UTF-8 no BOM; only `--` and `->`; no real connection host or
   secret (Principle IX).
 -->
@@ -188,4 +188,4 @@ THE PAGE, not a retraction of the design approval.
   declaration: `templates/module-contract.md`.
 - Metric definitions live upstream (referenced, never redefined here): F009.
 - The deferred execution/publish adapter (named, never invoked): F016.
-- The worked instance (CITED, never inlined): `docs/worked-examples/c086-pharmacy.md`.
+- The worked instance (CITED, never inlined): a filled worked example under `docs/worked-examples/`.

@@ -264,8 +264,8 @@ self-approve.
 - The gates it reads (never re-runs as a new check): the `retail-govern` / `retail check`
   static surface, the `retail-validate` / `retail validate` live surface.
 - The roadmap row + hard rules: `../../../docs/roadmap/roadmap.md` (F025, cross-cutting;
-  #7 / #8 / #9); Principles V, VII, VIII, IX. C086 is a cited filled instance:
-  `../../../docs/worked-examples/c086-pharmacy.md`.
+  #7 / #8 / #9); Principles V, VII, VIII, IX. A filled worked example lives under
+  `../../../docs/worked-examples/`.
 
 ## Orchestration
 

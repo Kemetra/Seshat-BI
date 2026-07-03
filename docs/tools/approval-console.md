@@ -204,4 +204,4 @@ The console adds no new validator and no new gate. It is the missing write-back 
 - The conductor it plugs into: `.claude/skills/retail-orchestrate/SKILL.md`.
 - The constitution: Principle V (stop-and-ask), VII (generic), VIII (static-first), IX
   (ASCII / no BOM).
-- C086 filled instance (cited, never inlined): `docs/worked-examples/c086-pharmacy.md`.
+- A filled worked example (cited, never inlined): a worked example under `docs/worked-examples/`.

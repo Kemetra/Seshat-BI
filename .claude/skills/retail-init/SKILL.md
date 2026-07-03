@@ -53,9 +53,9 @@ Phase-1 Step 1-2 of `docs/roadmap/distribution-ideas.md`.
    wording from `first-hour-compass` (its single source) — do not re-type a divergent
    list.
 3. **Delegate the worked-example offer.** Route into `first-hour-compass`, which
-   presents `c086-pharmacy` (build-to-Gold) and `retail-store-sales` (full
-   seven-stage spine) and takes the user's pick as a narrative pattern to steer by
-   (not a file template).
+   presents `retail-store-sales` (full seven-stage spine, `docs/worked-examples/
+   retail-store-sales.md`) and takes the user's pick as a narrative pattern to
+   steer by (not a file template).
 4. **Route into the profile.** Hand the user's named table to `retail-onboard-table`
    (the Source → Mapping front door, which owns the Stage-1 read-only profile). The
    agent-visible first result is the grain candidates + column types it returns.

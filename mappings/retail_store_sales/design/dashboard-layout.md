@@ -1,6 +1,6 @@
 # Dashboard layout plan -- retail_store_sales
 
-Filled instance (the second worked example, after C086). Authored by the
+Filled instance (the worked example). Authored by the
 `dashboard-design` verb from the 5 APPROVED metric contracts once
 `semantic_model_ready` reached `pass`. AUTHORING ONLY -- no publish, no Power BI
 Desktop / DB connection, no execution adapter (that is F016). ASCII, UTF-8 no BOM.

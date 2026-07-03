@@ -133,5 +133,5 @@ NO numeric confidence/health score is emitted (roadmap rule #9).
 - The inherited evidence: `../readiness-scorecard.md`, `../reconciliation-report.md`,
   `../data-issues.md`, `../assumptions.md`, `../source-map.yaml`, `../metric-contract.yaml`.
 - The deferred publish adapter (out of scope here): roadmap F016
-  (`../../docs/roadmap/roadmap.md`); Principles V, VII, VIII. C086 is a cited filled
-  instance: `../../docs/worked-examples/c086-pharmacy.md`.
+  (`../../docs/roadmap/roadmap.md`); Principles V, VII, VIII. For a cited filled
+  instance, see a filled worked example under `../../docs/worked-examples/`.

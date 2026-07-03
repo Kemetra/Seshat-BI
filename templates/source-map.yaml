@@ -51,7 +51,7 @@
 # C086 IS A FILLED INSTANCE, NEVER THE UNIVERSAL SCHEMA
 #   The first table through this kit is C086 (El Ezaby pharmacy sales). Its
 #   filled map has grain (invoice_no + line_no) and a star of 1 fact + 6 dims.
-#   See docs/worked-examples/c086-pharmacy.md for that filled instance. Do NOT
+#   See a filled worked example under `docs/worked-examples/` for that instance. Do NOT
 #   copy pharmacy specifics (billing codes, segment rollups, insurance PII) into
 #   this template -- the values below are deliberately obvious placeholders.
 #

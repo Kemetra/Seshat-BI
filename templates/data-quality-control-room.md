@@ -13,8 +13,8 @@
 > **No fake confidence.** There is NO health/confidence score column, and a filled copy
 > MUST NOT add one (roadmap rule #9). Readiness is the four explicit statuses + counts.
 >
-> **Generic, not C086.** Placeholder rows only; C086 is a cited filled instance, never
-> inlined. ASCII only, UTF-8 no BOM.
+> **Generic, not client-specific.** Placeholder rows only; a filled worked example is a
+> cited instance, never inlined. ASCII only, UTF-8 no BOM.
 
 ---
 
@@ -76,5 +76,5 @@ nothing invented. A blocker with no named owner is "UNASSIGNED" and flagged.
 - The per-table sibling: `readiness-scorecard.md`; the aggregated sources:
   `data-issues.md`, `blocking-reasons.md`, `readiness-status.yaml`.
 - The model + no-fake-confidence rule: `../docs/readiness/readiness-model.md`.
-- The roadmap row: `../docs/roadmap/roadmap.md` (F012). C086 is a cited filled instance:
-  `../docs/worked-examples/c086-pharmacy.md`.
+- The roadmap row: `../docs/roadmap/roadmap.md` (F012). A filled worked example is cited
+  under `../docs/worked-examples/`.

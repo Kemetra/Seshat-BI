@@ -1,7 +1,7 @@
 # BI Handoff Pack -- gold.fct_sales_rss (retail_store_sales)
 
-Filled instance of `templates/handoff/bi-handoff-pack.md` (the second worked example,
-after C086). The documentation/evidence bundle for the BI consumer of the
+Filled instance of `templates/handoff/bi-handoff-pack.md` for the `retail_store_sales`
+worked example. The documentation/evidence bundle for the BI consumer of the
 `RetailStoreSales` model. COMPOSES existing committed evidence -- invents nothing. No
 publish, no execution adapter (F016 owns live publish/refresh). ASCII, UTF-8 no BOM.
 

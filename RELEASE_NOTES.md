@@ -30,9 +30,11 @@ snapshot:
     metric contract.
 - The **SQL**, **DAX**, and **Python** knowledge layers that the agent routes
   through.
-- Two worked examples: the **C086 pharmacy** example and the
-  **retail_store_sales** example (the second domain, and the first to traverse
-  the full spine to Dashboard Ready with Publish Ready honestly at `warning`).
+- One worked example, **retail_store_sales**
+  (`docs/worked-examples/retail-store-sales.md`), the domain that traverses the
+  full spine to Dashboard Ready with Publish Ready honestly at `warning`. An
+  earlier client-specific (C086) example was archived out of the kit so that
+  the shipped example stays generic, not tied to one client's schema.
 - **Power BI / PBIP governance and handoff** conventions (plain-text TMDL/PBIR,
   handoff packs, gold-only reads).
 

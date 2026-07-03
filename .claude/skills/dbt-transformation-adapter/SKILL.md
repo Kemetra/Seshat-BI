@@ -137,4 +137,4 @@ At a seam: state plainly what is deferred, what would unblock it, and STOP.
   declaration: `templates/adapter-contract.md`.
 - The spec / plan / tasks: `specs/023-dbt-transformation-adapter/{spec,plan,tasks}.md`.
 - `.specify/memory/constitution.md` (Principles III, IV, V, VI, VII, VIII, IX).
-- The filled first-MVP instance is CITED, never inlined: `docs/worked-examples/c086-pharmacy.md`.
+- The filled first-MVP instance is CITED, never inlined: a worked example under `docs/worked-examples/`.

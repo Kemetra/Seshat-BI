@@ -43,7 +43,7 @@
 # C086 IS A FILLED INSTANCE, NEVER THE UNIVERSAL SCHEMA
 #   The first table through this kit is C086 (El Ezaby pharmacy sales). Its filled
 #   contracts live alongside its mapping artifacts under mappings/<table>/metrics/.
-#   See docs/worked-examples/c086-pharmacy.md for that filled instance. Do NOT copy
+#   See a filled worked example under docs/worked-examples/ for that filled instance. Do NOT copy
 #   pharmacy specifics (billing codes, segment rollups, insurance PII, pharmacy
 #   grain keys, real metric names) into this template -- the values below are
 #   deliberately obvious placeholders.

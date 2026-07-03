@@ -165,4 +165,4 @@ HARD-STOPS instead of being auto-fixed.
 - The spec + posture: `specs/005-layer-d-orchestration/spec.md`;
   `.specify/memory/constitution.md` Principles I, IV, V, VIII.
 - The method + exit gates: `docs/medallion-playbook.md`.
-- The replay reference: `docs/worked-examples/c086-pharmacy.md`.
+- The replay reference: a filled worked example under `docs/worked-examples/`.

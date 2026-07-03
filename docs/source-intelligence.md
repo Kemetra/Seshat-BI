@@ -65,4 +65,4 @@ only the four-value spine vocabulary plus the `proposed`/`confirmed` entry-level
 - The roadmap row + hard rules: `roadmap/roadmap.md` (F007, Layer 2; #7/#8/#9).
 - Principles: `../.specify/memory/constitution.md` V, VI/RC8, VII.
 - The filled instance the templates cite: `data-dictionary.md`,
-  `worked-examples/c086-pharmacy.md`.
+  a filled worked example under `worked-examples/`.

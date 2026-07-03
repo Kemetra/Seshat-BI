@@ -242,7 +242,7 @@ attribute / degenerate dim). This profile is its evidence base.
   disambiguated in feature 002.)*
 - **Architecture:** `docs/architecture/tower-bi-agent-kit.md` Sec 5 -- the source-mapping
   gate and how the five templates map to playbook phases.
-- **Worked example (a filled instance):** `docs/worked-examples/c086-pharmacy.md` --
-  C086 (El Ezaby pharmacy sales) is the first table profiled through this gate
-  (`249,106` raw rows). C086 is an example, never the universal schema; its
-  source-specific columns and codes belong to its own artifacts, not to this template.
+- **Worked example (a filled instance):** a filled worked example under
+  `docs/worked-examples/` shows a table profiled through this gate. A worked
+  example is an example, never the universal schema; its source-specific columns
+  and codes belong to its own artifacts, not to this template.

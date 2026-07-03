@@ -13,9 +13,8 @@
 - **Status:** Authored (docs / template / skill only -- no runtime code; the agent is the
   runtime).
 
-> ASCII only, UTF-8 no BOM; `--` and `->` only. Generic -- C086 / `retail_store_sales`
-> are filled instances CITED as references (`docs/worked-examples/c086-pharmacy.md`),
-> never inlined (Principle VII).
+> ASCII only, UTF-8 no BOM; `--` and `->` only. Generic -- `retail_store_sales` is a filled
+> instance CITED as a reference under `docs/worked-examples/`, never inlined (Principle VII).
 
 ## Purpose
 
@@ -154,5 +153,5 @@ state, it does not move through it.
   `../../templates/source-map.yaml`; the model + no-fake-confidence rule:
   `../readiness/readiness-model.md`; the stage sequence: `../readiness/readiness-pipeline.md`.
 - The roadmap row + hard rules: `../roadmap/roadmap.md` (F025); Principles V, VII, VIII,
-  IX (`../../.specify/memory/constitution.md`). C086 is a cited filled instance:
-  `../worked-examples/c086-pharmacy.md`.
+  IX (`../../.specify/memory/constitution.md`). A filled instance is cited (never inlined)
+  under `../worked-examples/`.

@@ -9,7 +9,7 @@ orchestrator / contract-boundary rules. Power BI primary; DigitalOcean Postgres
 source. Data flows `bronze` → `silver` → `gold`; Power BI reads the `gold`
 schema only.
 
-For new retail mart work, start from `docs/worked-examples/c086-pharmacy.md` and follow the medallion playbook.
+For new retail mart work, start from a filled worked example under `docs/worked-examples/` and follow the medallion playbook.
 
 ## Hard rules
 

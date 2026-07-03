@@ -303,4 +303,4 @@ existing constitution (Principles I, IV, V, VIII), they do not replace it:
 - Architecture: `docs/architecture/readiness-pipeline.md` (spine on the kit),
   `docs/architecture/tower-bi-agent-kit.md` (the kit).
 - Foundation: `.specify/memory/constitution.md`, `specs/001-retail-bi-agent-kit/`,
-  `docs/medallion-playbook.md`, `docs/worked-examples/c086-pharmacy.md`.
+  `docs/medallion-playbook.md`, and a filled worked example under `docs/worked-examples/`.

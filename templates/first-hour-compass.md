@@ -70,4 +70,4 @@ product-identity assumption (Principle V / VII).
 - The static definition-of-done parent (F006): `../docs/readiness/onboarding-checklist.md`
 - The input this card reads: `readiness-status.yaml` (canonical per-table location: ADR 0004 `mappings/<table>/readiness-status.yaml`)
 - Stage ordering + gates: `../docs/readiness/readiness-pipeline.md`, `../docs/readiness/<stage>-ready.md`
-- A filled concrete instance (worked example): `../docs/worked-examples/c086-pharmacy.md`
+- A filled concrete instance: a worked example under `../docs/worked-examples/`

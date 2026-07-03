@@ -132,5 +132,5 @@ governed core.
   frame (PY-CN-031..036).
 - `skills/bi-sql-knowledge/INDEX.md` -- Future extension: file sources are explicitly routed
   here, not to the SQL layer.
-- C086 (El Ezaby pharmacy) is a DB-landed worked example, not a file source -- a filled
-  instance, never the universal schema: `docs/worked-examples/c086-pharmacy.md`.
+- A DB-landed worked example is not a file source -- a filled instance, never the universal
+  schema: see a filled worked example under `docs/worked-examples/`.

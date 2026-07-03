@@ -72,5 +72,5 @@
 - The pack this gates: `bi-handoff-pack.md`.
 - The stage authority + blocking reasons: `../../docs/readiness/publish-ready.md`.
 - The model + no-fake-confidence rule: `../../docs/readiness/readiness-model.md`.
-- The deferred publish adapter (out of scope): roadmap F016. C086 is a cited filled
-  instance: `../../docs/worked-examples/c086-pharmacy.md`.
+- The deferred publish adapter (out of scope): roadmap F016. A filled worked example is
+  cited under `../../docs/worked-examples/`.

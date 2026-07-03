@@ -75,4 +75,4 @@ When `pass`: build the semantic model -> Stage 5 (Semantic Model Ready).
 - Reconciliation template (point-in-time snapshot): `../../templates/reconciliation-report.md`
 - Reconciliation ledger (durable history over time): `../../templates/reconciliation-ledger-entry.md`
 - Live validate gate: `../../.claude/skills/retail-validate/SKILL.md`
-- First filled instance (worked example): `../../docs/worked-examples/c086-pharmacy.md`
+- First filled instance (worked example): a filled worked example under `../../docs/worked-examples/`

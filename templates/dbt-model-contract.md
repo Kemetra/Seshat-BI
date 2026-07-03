@@ -27,8 +27,8 @@
    Copy this file once per model, alongside the model .sql (or under the model's dir),
    fill every <ANGLE-BRACKET> field, delete this comment banner, and keep it committed
    with the model. GENERIC -- no retail_store_sales / C086 column or table names; the
-   filled first-MVP instance is CITED in docs/worked-examples/c086-pharmacy.md, never
-   inlined here (Principle VII).
+   filled first-MVP instance is CITED in a filled worked example under
+   docs/worked-examples/, never inlined here (Principle VII).
 =============================================================================
 -->
 
@@ -107,4 +107,4 @@ blocked -- it never invents the missing meaning or proceeds past the missing cit
 - The map it cites: `templates/source-map.yaml` (filled per table under `mappings/<table>/`).
 - The decision record: `docs/decisions/0009-dbt-is-transformation-adapter.md`.
 - The category contract: `docs/architecture/product-modules.md`.
-- The filled first-MVP instance is CITED, never inlined: `docs/worked-examples/c086-pharmacy.md`.
+- The filled first-MVP instance is CITED, never inlined: a filled worked example under `docs/worked-examples/`.

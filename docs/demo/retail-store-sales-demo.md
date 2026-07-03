@@ -1,22 +1,21 @@
 # Demo: retail_store_sales
 
-A guided reading path through the **second** worked example,
-`retail_store_sales`. Follow it to see the readiness spine applied end to end on
-a domain that is not C086.
+A guided reading path through the worked example, `retail_store_sales`. Follow
+it to see the readiness spine applied end to end on a real domain.
 
 ## Why this demo exists
 
-The C086 pharmacy example proves the pattern once. The risk with a single example
-is that the kit silently hardcodes that example's schema. `retail_store_sales` is
-a deliberately different domain -- a generic store-sales source (no returns, PII
-kept, English-only) -- carried through the same gates with no special-casing.
+`retail_store_sales` is a generic store-sales source (no returns, PII kept,
+English-only) carried through every readiness gate with no special-casing, so
+the kit's generality doesn't depend on any one client's schema.
 
-## How it proves the kit is not hardcoded to C086
+## How it proves the kit is not hardcoded to a client schema
 
-`retail_store_sales` uses the same artifacts, the same gates, and the same `retail`
-surfaces as C086, but with its own grain, its own keys, and its own metric
-contracts. Nothing in the spine is named after either example. If the kit only
-worked for C086, the second example could not reach Dashboard Ready -- it does.
+`retail_store_sales` uses the same artifacts, the same gates, and the same
+`retail` surfaces as any onboarded table, but with its own grain, its own keys,
+and its own metric contracts. Nothing in the spine is named after this example
+-- the same spine reaches Dashboard Ready here precisely because it never
+special-cased this example's schema.
 
 ## Read in this order
 

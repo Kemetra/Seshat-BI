@@ -1,209 +1,185 @@
 # Data Dictionary
 
 Catalog of the analytics warehouse: medallion layers, tables, columns, and
-business rules. Source system is the El Ezaby pharmacy POS/ERP (SAP-style),
-store **C086** ("[store name redacted]"), sales 2023-01-01 → 2025-12-31.
-Data is bilingual (Arabic staff/billing terms, English drug names).
+business rules. This dictionary documents the kit's surviving worked example,
+**`retail_store_sales`** — the Kaggle "retail store sales (dirty)" CSV (a
+single POS-style transaction export), landed into the `training` Postgres
+database. Data is English/ASCII throughout; the source system is a flat file,
+not a live POS/ERP feed.
 
 Medallion flow: `bronze` (raw landing) → `silver` (typed/cleaned) → `gold`
 (Kimball star; **Power BI reads gold**). Built by `warehouse/migrations/`.
 
 | Layer | Table | Grain | Rows |
 |-------|-------|-------|-----:|
-| bronze | `sales_c086_raw` | invoice line item (raw) | 249,106 |
-| silver | `sales_c086` | invoice line item (cleaned) | 246,916 |
-| gold | `fct_sales` | invoice line item | 246,916 |
-| gold | `dim_product` | product (SKU) | 9,669* |
-| gold | `dim_customer` | customer | 639* |
-| gold | `dim_salesperson` | salesperson | 257 |
-| gold | `dim_date` | calendar day | 1,097* |
-| gold | `dim_billing_type` | billing type | 11* |
-| gold | `dim_branch` | store/branch | 2* |
+| bronze | `retail_store_sales` | one retail transaction (raw) | 12,575 |
+| silver | `retail_store_sales` | one retail transaction (cleaned) | 12,575 |
+| gold | `fct_sales_rss` | one retail transaction | 12,575 |
+| gold | `dim_customer_rss` | customer | see note* |
+| gold | `dim_product_rss` | product (item) | see note* |
+| gold | `dim_payment_method_rss` | payment method | see note* |
+| gold | `dim_location_rss` | transaction channel | see note* |
+| gold | `dim_date_rss` | calendar day | see note* |
 
-\* includes the `-1` "Unknown" member (Kimball unknown-member pattern).
+\* Dimension row counts are not asserted here because they are not attested in
+the source artifacts (`source-profile.md` reports *source column* distinct
+cardinalities — 25 `customer_id`, 201 `item`, 8 `category`, 3
+`payment_method`, 2 `location` — not gold dimension row counts, and the
+reconciliation report does not enumerate them). Each entity dimension carries
+one additional `-1` UNKNOWN member (Kimball unknown-member pattern); `dim_date_rss`
+does not (see below).
 
 ---
 
 ## bronze schema — faithful landing
 
-`bronze.sales_c086_raw` — 48 columns, **all `TEXT`**, plus lineage. No cleaning.
-Loaded from C086 sales Excel files by `pipelines/load_bronze.py`. Missing cells
-land as empty string `''` (not NULL). Every value traceable via `_source_file`.
+`bronze.retail_store_sales` — 11 source columns, **all `TEXT`**, plus lineage
+(`_source_file`, `_loaded_at`). No cleaning. Loaded from the single
+`retail_store_sales.csv` export. Missing cells land as empty string `''`
+(not NULL) — a faithful landing, so missingness must be measured as
+`'' OR NULL`, never `IS NULL` alone.
 
-Not catalogued column-by-column here (it mirrors the source spreadsheet headers,
-normalized to `snake_case`). The authoritative transform from bronze → silver is
-`warehouse/migrations/0001_create_silver_sales_c086.sql`.
+Not catalogued column-by-column here (it mirrors the source CSV headers). The
+authoritative transform from bronze → silver is
+`warehouse/migrations/0003_create_silver_retail_store_sales.sql`, decided from
+`mappings/retail_store_sales/source-map.yaml`.
 
 Key bronze facts that shaped silver:
-- Grain verified: `reference_no + item_no` unique across all 249,106 rows.
-- Returns identified by `billing_type` (contains `مرتجع`) — not by sign alone.
-- 4,945 `material_desc` values carried mojibake from a Windows-1256 mis-decode.
-- 14 `division` values incl. junk (`AUX`, `ARCHIVE`, `EL EZABY SERVICES`, blank).
+- Grain verified: `transaction_id` unique across all 12,575 rows (0 nulls/blanks).
+- No returns in this source: every measure (`total_spent`, `quantity`,
+  `price_per_unit`) is strictly positive and there is no transaction-type or
+  return-flag column. Confirmed with the data owner — returns exist in a
+  separate figure/system not loaded here (deviation RC8, N/A for this table).
+- `item` <-> `category` is 1:1 on the data (0 items map to more than one
+  category) — a flat, denormalized product dimension, no fan-out.
+- `total_spent == price_per_unit * quantity` holds on 11,362 / 11,362 complete
+  rows = 100.00% — fully derivable, kept as an independent landed measure.
 
 ---
 
 ## silver schema — typed & cleaned
 
-`silver.sales_c086` — **30 columns**, grain = **invoice line item**,
-**PK = (`invoice_no`, `line_no`)**. Built from bronze in migration `0001`.
-Indexes: `sale_date`, `customer_id`, `product_id`.
+`silver.retail_store_sales` — **11 columns**, grain = **one retail
+transaction**, **PK = `transaction_id`**. Built from bronze in migration
+`0003`. Indexes: `transaction_date`, `customer_id`, `item`.
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `product_id` | text | Product/SKU code (natural key). Leading zeros significant → TEXT. |
-| `product_name` | text | Product description; mojibake stripped via charset whitelist. |
-| `quantity` | numeric(18,4) | Units sold. **Negative = return.** |
-| `sales_amount` | numeric(18,2) | **Gross** sales (line). Negative on returns. |
-| `net_amount` | numeric(18,2) | Net revenue (gross − tax/discount). `net ≤ gross` verified on all sales. |
-| `tax_amount` | numeric(18,2) | Tax. |
-| `discount_amount` | numeric(18,2) | Discount (stored **negative** on sales; positive on returns). |
-| `invoice_no` | text | Store invoice reference (e.g. `C0860010008384`). PK part. |
-| `line_no` | smallint | Invoice line number (1–44). PK part. |
-| `sale_date` | date | Transaction date (time component dropped — always 00:00:00). |
-| `billing_type` | text | Payment/return type, **English** (see mapping below). |
-| `billing_type_code` | text | SAP Z-code (`Z1`, `Z5`, …). Stable join key. |
-| `is_return` | boolean | TRUE for the 5 return billing types. Use this to separate sales/returns. |
-| `customer_id` | text | Customer code (natural key). Leading zeros significant. |
-| `customer_name` | text | Customer/payer name. **Attribute only — not a key** (25 names span >1 id). |
-| `salesperson_id` | text | Staff code. Missing → `'UNKNOWN'`. |
-| `salesperson_name` | text | Staff name (Arabic). Missing → `'UNKNOWN'`. |
-| `job_title` | text | Staff role (e.g. صيدلى = pharmacist). Missing → `'UNKNOWN'`. |
-| `procurement_buyer` | text | Buyer/procurement code. |
-| `product_division` | text | Hierarchy L1 (RX/OTC/NUTRACEUTICAL/…). |
-| `product_category` | text | Hierarchy L2. |
-| `product_subcategory` | text | Hierarchy L3. |
-| `product_segment` | text | Hierarchy L4. |
-| `product_brand` | text | Brand. Missing → `'UNKNOWN'`. |
-| `product_group` | text | Material group label (e.g. `DRUG-LEGAL-LOCAL-…`). |
-| `product_cluster` | text | A/B/C/D performance class. Missing → `'UNCLASSIFIED'`. |
-| `original_invoice_ref` | text | For returns: the originating invoice. NULL on non-returns. |
-| `branch_code` | text | Store code (`C086`). |
-| `branch_name` | text | Store name ([redacted]). |
-| `business_segment` | text | Rollup of `product_division` (see mapping below). |
+| `transaction_id` | text | Transaction key (`TXN_xxxxxxx`). PK. Unique on the landed data; re-proven unique on the transform (V-RC2). |
+| `customer_id` | text | Pseudonymous customer surrogate (`CUST_xx`). **Kept** per data-owner ruling (Q1) — not raw PII, but flagged `pii: true` in the map for governance review. |
+| `item` | text | Product natural key (`Item_N_<CAT>`). 9.65% missing in bronze → `NULL` in silver → folds to the gold `-1` member. |
+| `category` | text | Product category; 1:1 attribute of `item` (0 fan-out). |
+| `price_per_unit` | numeric(12,2) | Unit price. Float-as-text in bronze, cast to exact NUMERIC. |
+| `quantity` | numeric(12,2) | Units sold (range 1–10). Kept as NUMERIC, not INT, until confirmed integer-only. |
+| `total_spent` | numeric(12,2) | Line total. `= price_per_unit * quantity` on 100% of complete rows; independent landed measure (not recomputed). |
+| `payment_method` | text | Cash / Credit Card / Digital Wallet. |
+| `location` | text | In-store / Online (transaction channel). |
+| `transaction_date` | date | `YYYY-MM-DD`, cast from text. Spans 2022-01-01 → 2025-01-18. |
+| `discount_applied` | boolean | Discount FLAG, **not** a return marker. `'true'`/`'false'` cast to boolean; blank is **UNKNOWN → NULL**, deliberately not coerced to `FALSE` (data-owner ruling, Q2). |
 
-### Row filters applied (bronze → silver: 249,106 → 246,916)
-- Drop `division ∈ {AUX, ARCHIVE, EL EZABY SERVICES, ''}` — 513 junk rows.
-- Drop zero-value lines (`quantity = 0 AND sales_amount = 0`) — 1,680 rows
-  (all zero-value return adjustment lines; overlap with above = 3).
+### Row filters applied (bronze → silver: 12,575 → 12,575)
+No junk-row filter and no zero-value filter: the profile found no junk rows
+and no zero/negative measures. Missing measures are kept as `NULL`, not
+dropped — a transaction with a blank price/quantity is still a real row.
 
 ### Dropped columns (not carried to silver)
-`kzwi1`, `dis_tax`, `add_dis`, `salse_not_tax` (redundant/duplicate money);
-`paid` (does not reconcile); `knumv`, `ref_return_date` (100% empty);
-`crm_order`, `certification`, `assignment` (mostly empty); `cosm_mg`, `area_mg`
-(single-value); `mat_group_2` (1:1 code of `product_group`); `billing_document`,
-`fi_document_no` (SAP refs, out of scope); `item_status` (status col dropped);
-**`insurance_no`, `insurance_tel` (patient health PII — intentionally dropped)**;
-`_source_file`, `_loaded_at` (lineage). Recoverable from bronze if needed.
+None beyond the lineage columns `_source_file`, `_loaded_at` (infrastructure,
+recoverable from bronze if needed). All 11 source columns were kept (`decision:
+keep` on every column in `source-map.yaml`).
 
 ---
 
 ## gold schema — Kimball star (Power BI reads here)
 
-Built from silver in migration `0002`. Surrogate `_sk` INT keys; natural keys
-retained; every ENTITY dimension has an **Unknown member at `_sk = -1`** (fact FKs
-COALESCE missing lookups to `-1`); the **date dimension carries none** -- it is a
-marked date table (rule S8), so an unmatched fact date fails the load (`date_sk NOT
-NULL`) rather than landing on a sentinel. Measures reconcile to the penny vs silver.
+Built from silver in migration `0004`. Surrogate `_sk` INT keys (`GENERATED …
+IDENTITY`); natural keys retained; every ENTITY dimension has an **Unknown
+member at `_sk = -1`** (fact FKs `COALESCE` missing lookups to `-1`); the
+**date dimension carries none** — it is a marked date table (rule S8), so an
+unmatched fact date fails the load (`date_sk NOT NULL`) rather than landing on
+a sentinel. Measures reconcile to the penny vs silver (verdict PASS in
+`mappings/retail_store_sales/reconciliation-report.md`).
 
-### `gold.fct_sales` — line-item fact (246,916 rows)
-PK `fct_sales_sk`. `invoice_no` + `line_no` are **degenerate dimensions** (carried
-on the fact, no `dim_invoice`). 6 FK constraints (all enforced, 0 orphans).
+All gold objects for this table carry an **`_rss` suffix** (retail store
+sales) — a namespace convention so more than one star can coexist side by
+side in the shared `gold` schema without name collisions. `retail validate`
+reads these object names **verbatim** from `source-map.yaml` (it does not
+prepend `gold.`), so they must be schema-qualified and match the migration
+exactly.
+
+### `gold.fct_sales_rss` — transaction-grain fact (12,575 rows)
+PK `fct_sales_rss_sk`. `transaction_id` and `discount_applied` are
+**degenerate dimensions** (carried on the fact, no separate dim table). A
+`UNIQUE (transaction_id)` constraint enforces the declared business grain
+alongside the surrogate PK. 5 FK constraints (all enforced, 0 orphans).
 
 | Column | Type | Description |
 |--------|------|-------------|
-| `fct_sales_sk` | integer | Surrogate PK. |
-| `invoice_no` | text | Degenerate dim — store invoice ref. |
-| `line_no` | smallint | Degenerate dim — line number. |
-| `original_invoice_ref` | text | Originating invoice for returns (nullable). |
-| `product_sk` | integer | FK → `dim_product`. |
-| `customer_sk` | integer | FK → `dim_customer`. |
-| `salesperson_sk` | integer | FK → `dim_salesperson` (−1 on 71 UNKNOWN rows). |
-| `date_sk` | integer | FK → `dim_date` (`YYYYMMDD`). |
-| `billing_type_sk` | integer | FK → `dim_billing_type`. |
-| `branch_sk` | integer | FK → `dim_branch`. |
-| `quantity` | numeric(18,4) | Units (negative = return). Additive. |
-| `sales_amount` | numeric(18,2) | Gross. Additive. **Mixes returns (negative) — filter `NOT is_return` for gross-only.** |
-| `net_amount` | numeric(18,2) | Net revenue. Additive. |
-| `tax_amount` | numeric(18,2) | Tax. Additive. |
-| `discount_amount` | numeric(18,2) | Discount (signed). Additive. |
-| `is_return` | boolean | Return flag (mirrors `dim_billing_type.is_return`). |
+| `fct_sales_rss_sk` | integer | Surrogate PK. |
+| `transaction_id` | text | Degenerate dim — transaction key. `NOT NULL`, unique. |
+| `discount_applied` | boolean | Degenerate dim — discount flag. `NULL` = unknown (Q2 ruling). |
+| `customer_sk` | integer | FK → `dim_customer_rss`. |
+| `product_sk` | integer | FK → `dim_product_rss` (−1 covers the 9.65% missing-`item` rows, 1,213 of them). |
+| `payment_method_sk` | integer | FK → `dim_payment_method_rss`. |
+| `location_sk` | integer | FK → `dim_location_rss`. |
+| `date_sk` | integer | FK → `dim_date_rss` (`YYYYMMDD`). `NOT NULL` — no sentinel fallback. |
+| `price_per_unit` | numeric(12,2) | Unit rate. Kept as a fact attribute, **not summed**. |
+| `quantity` | numeric(12,2) | Units. Additive measure. Reconciles to **66,276** total vs silver. |
+| `total_spent` | numeric(12,2) | Line total. Additive measure. Reconciles to **1,552,071.00** total vs silver. |
 
-### `gold.dim_product` (9,669 incl. −1)
-`product_sk` (PK), `product_id` (NK), `product_name`, `product_brand`,
-`product_group`, `product_cluster`, `product_division`, `product_category`,
-`product_subcategory`, `product_segment`, `business_segment`.
-Hierarchy is **flat** (denormalized) — not snowflaked, because the same child can
-appear under >1 parent (legitimate commercial overlap). Build a drill hierarchy in
-Power BI from the flat columns; each SKU has a single path so totals don't double-count.
+### `gold.dim_customer_rss`
+`customer_sk` (PK), `customer_id` (NK, pseudonymous surrogate — kept per
+owner ruling, Q1; opposite of a "drop PII" default, since `customer_id` here
+is not raw PII).
 
-### `gold.dim_customer` (639 incl. −1)
-`customer_sk` (PK), `customer_id` (NK), `customer_name`. **Key on `customer_id`** —
-`customer_name` collapses walk-in/masked names across multiple ids.
+### `gold.dim_product_rss`
+`product_sk` (PK), `item` (NK), `category` (flat 1:1 attribute, verified 0
+fan-out — `max(category)` is a safe collapse per item). Hierarchy is flat
+(denormalized), matching the source's 1:1 item↔category relationship.
 
-### `gold.dim_salesperson` (257)
-`salesperson_sk` (PK), `salesperson_id` (NK), `salesperson_name`, `job_title`.
-Silver `'UNKNOWN'` rows fold into the `-1` member (71 fact rows).
+### `gold.dim_payment_method_rss`
+`payment_method_sk` (PK), `payment_method` (NK: Cash / Credit Card / Digital
+Wallet).
 
-### `gold.dim_date` (1,097 incl. −1) — **contiguous calendar**
+### `gold.dim_location_rss`
+`location_sk` (PK), `location` (NK: In-store / Online — transaction channel).
+
+### `gold.dim_date_rss` (contiguous calendar, no `-1` member)
 `date_sk` (`YYYYMMDD` smart key, PK), `full_date`, `year`, `quarter`, `month`,
-`month_name`, `day`, `day_name`, `iso_week`, `is_weekend`. Generated for the full
-2023-01-01 → 2025-12-31 span (1,096 days) so time-intelligence is correct even on
-the 2 zero-sales days. **Mark as the date table in Power BI.**
-
-### `gold.dim_billing_type` (11 incl. −1)
-`billing_type_sk` (PK), `billing_type_code` (NK, SAP Z-code), `billing_type`
-(English label), `is_return`.
-
-### `gold.dim_branch` (2 incl. −1)
-`branch_sk` (PK), `branch_code` (NK), `branch_name`. One real store today;
-modeled as a dim to future-proof multi-store.
-
----
-
-## Reference mappings
-
-### `billing_type` (Arabic → English) and `is_return`
-| Code | Arabic (source) | English (silver/gold) | is_return |
-|------|-----------------|-----------------------|:---------:|
-| FP  | اجل | Credit | |
-| Z1  | فورى | Cash | |
-| Z5  | مرتجع اجل | Credit Return | ✓ |
-| Z4  | مرتجع فورى | Cash Return | ✓ |
-| Z9  | Pick-Up Order | Pick-Up Order | |
-| Z10 | Pick-Up Order Return | Pick-Up Order Return | ✓ |
-| Z3  | توصيل | Delivery | |
-| Z6  | مرتجع توصيل | Delivery Return | ✓ |
-| Z7  | توصيل - اجل | Delivery Credit | |
-| Z8  | مرتجع توصيل - اجل | Delivery Credit Return | ✓ |
-
-### `business_segment` (rollup of `product_division`)
-| business_segment | source divisions |
-|------------------|------------------|
-| PHARMA | OTC, RX, NUTRACEUTICAL, EVERYDAY ESSENTIALS, HOME HEALTH CARE |
-| HVI | HIGH VALUE ITEMS |
-| NON-PHARMA | BEAUTY SKIN CARE, TOTAL HAIR CARE, BABY AND MOM, COSMETICS, PREMIUM SKIN CARE |
-
-> `business_segment` is a **merchandising** axis, not clinical. `HIGH VALUE ITEMS`
-> holds clinically-RX products (oncology, etc.), so a clinical "pharma" total must
-> use `product_division`/`product_category`, not `business_segment = 'PHARMA'`.
+`month_name`, `day`, `day_name`, `iso_week`, `is_weekend`. Generated via
+`generate_series` for the full 2022-01-01 → 2025-01-18 span so time
+intelligence is correct across the whole calendar. **Mark as the date table
+in Power BI.** Deliberately carries **no** `-1`/NULL member (rule S8): an
+unmatched fact date is rejected by `date_sk NOT NULL` at load time — a
+real calendar-coverage bug fails loudly instead of being silently bucketed.
 
 ---
 
 ## Caveats & known limitations
 
-- **Returns mix into `sales_amount`** (they are negative). For gross sales, filter
-  `is_return = FALSE`; for net-of-returns, sum across all rows. Always use
-  `is_return` (or `billing_type` containing "Return") — never the quantity sign alone.
-- **Patient PII (`insurance_no`, `insurance_phone`) is intentionally excluded** from
-  silver/gold. Do not re-introduce into any Power BI dataset without a governance review.
-- **Return events slightly undercounted**: 1,680 zero-value return lines were dropped,
-  so return-line counts under-report; return *value* is unaffected.
-- **`original_invoice_ref`** ties a return to its originating invoice but the original
-  sale *date* is not available (source field was 100% empty).
-- **Out of scope for v1** (rebuildable from bronze): per-line SAP/finance reconciliation
-  (`billing_document`), product lifecycle status (`item_status`), cash-collected (`paid`).
-- **`product_cluster`** (A/B/C/D) is a source-provided class and 32% blank
-  (`'UNCLASSIFIED'`); compute ABC from actual revenue in analysis rather than relying on it.
+- **No returns in this source.** All measures (`quantity`, `price_per_unit`,
+  `total_spent`) are strictly positive; there is no return/transaction-type
+  column. This is a confirmed deviation (RC8, N/A) from the kit's default
+  returns rule, not a gap — do not infer returns from sign or absence of a
+  flag.
+- **`discount_applied` is a flag, not a return marker.** 33.39% of bronze rows
+  (4,199 / 12,575) are blank. Blank means **UNKNOWN**, not `FALSE` — a
+  data-owner ruling (Q2). Discount metrics must exclude unknowns rather than
+  treating a blank as "no discount."
+- **`item` is 9.65% missing** (1,213 / 12,575 bronze rows). These rows fold
+  correctly to the `dim_product_rss` `-1` UNKNOWN member in gold (Q4 ruling) —
+  they are not dropped.
+- **`customer_id` is pseudonymous, not raw PII**, and is intentionally
+  **kept** (Q1 ruling) — a deliberate deviation from the kit's RC4 auto-drop
+  default. It remains flagged `pii: true` in the map for a governance
+  decision on downstream publishing, even though it was not dropped at the
+  mapping gate.
+- **`total_spent` is derivable but not recomputed.** It equals
+  `price_per_unit * quantity` on 100% of complete rows, but the 604 blank rows
+  are kept as `NULL` rather than backfilled — recomputing them is a future
+  analyst decision, not baked into this build.
+- **Measure blanks (~4.8% each)** in `price_per_unit`, `quantity`, and
+  `total_spent` are kept as `NULL` in silver and gold, not dropped or
+  zero-filled — a transaction with an incomplete measure is still a real row.
 
 ---
 

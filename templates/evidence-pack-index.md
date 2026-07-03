@@ -151,5 +151,5 @@ winner or reconcile silently.
   per-table copy: `mappings/<table>/handoff/bi-handoff-pack.md`).
 - The four-status / no-fake-confidence model: `../docs/readiness/readiness-model.md`.
 - The authority contract: `../docs/architecture/product-modules.md`;
-  `../templates/module-contract.md`. C086 is a cited filled instance:
-  `../docs/worked-examples/c086-pharmacy.md`.
+  `../templates/module-contract.md`. A filled worked example is cited as an
+  instance under `../docs/worked-examples/`.

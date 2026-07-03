@@ -250,4 +250,4 @@ Validation runs are READ-ONLY.
   `docs/readiness/readiness-model.md`; the stage sequence `docs/readiness/readiness-pipeline.md`.
 - The spec: `specs/024-dagster-orchestration-adapter/spec.md`. The constitution it instantiates:
   `.specify/memory/constitution.md` (Principles I, II, IV, V, VII, VIII, IX).
-- The replay reference (cited, never inlined): `docs/worked-examples/c086-pharmacy.md`.
+- The replay reference (cited, never inlined): a filled worked example under `docs/worked-examples/`.

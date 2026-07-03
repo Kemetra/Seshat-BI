@@ -226,8 +226,8 @@ is OPTIONAL and DEFERRED; the console MUST NOT emit one.
 - The category it realizes: `docs/architecture/product-modules.md` (F024; Product Module /
   `artifact-writing`) and the Core-vs-Module authority boundary
   (`docs/architecture/core-vs-modules-and-adapters.md`); the copy-me declaration:
-  `templates/module-contract.md`. C086 is a cited filled instance:
-  `docs/worked-examples/c086-pharmacy.md`.
+  `templates/module-contract.md`. A filled instance is cited under
+  `docs/worked-examples/`.
 - The constitution: Principle V (stop-and-ask), VII (generic), VIII (static-first), IX
   (ASCII / no BOM).
 

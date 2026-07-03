@@ -73,8 +73,9 @@ Entity dims use a `-1` member so unmatched/missing keys join cleanly via
 `COALESCE(..., -1)` (RC14, rule S6). The **date** dim is the exception: it is a *marked
 date table* (contiguous, no nulls) that Power BI validates for time-intelligence — a `-1`
 member would break refresh. Rule **S8** enforces "no `-1` on the date dim"; an unmatched
-fact date fails loud via `date_sk NOT NULL`. See `docs/worked-examples/c086-pharmacy.md` §6
-and the trap-checklist in `docs/medallion-playbook.md` (Appendix A, #18–19).
+fact date fails loud via `date_sk NOT NULL`. See a filled worked example under
+`docs/worked-examples/` and the trap-checklist in `docs/medallion-playbook.md`
+(Appendix A, #18–19).
 
 **Why keep IDs (transaction/customer) as TEXT, not integers?**
 Leading zeros and non-numeric ids must survive; casting them to int corrupts keys (RC7,
@@ -123,10 +124,11 @@ No. F029 (dbt) and F030 (Dagster) are **optional** companion engines — advisor
 that execute approved steps but never create truth. They are not prerequisites for anything
 (`docs/roadmap/roadmap.md`, Tier 5).
 
-**Why is C086 everywhere — is it the schema to follow?**
-No. C086 (El Ezaby pharmacy) is the *first* worked example, not the universal schema (hard
-rule #7). A second example (`retail-store-sales.md`) exists precisely to prove the kit is
-generic. Copy the *structure*, not C086's *answers*.
+**Is the worked example the schema to follow?**
+No. The kit ships one validated worked example — `retail_store_sales`
+(`docs/worked-examples/retail-store-sales.md`) — that proves the generic medallion playbook
+end-to-end, from mapping through gold. An example is not the schema (hard rule #7). Copy the
+*structure*, not `retail_store_sales`'s *answers*.
 
 ## See also
 

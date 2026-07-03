@@ -60,11 +60,12 @@ Then hand off to `retail-onboard-table` for the user's own table, **holding the 
 up as the reference** for that walk (see `docs/worked-examples/README.md`). Be explicit
 about what "use this example" means:
 
-- The examples are **narrative patterns, not file templates** -- c086 itself says "copy this
-  section structure, swap C086 for the new table, run the playbook's 7 phases". So the skill
-  **references** the example while onboarding; it does **not** copy files into the user's table
-  dir. (The actual starting artifacts come from `templates/`, seeded by `retail-onboard-table`.)
-- **Read-only + route only.** This section presents the two examples and routes into the
+- The example is a **narrative pattern, not a file template** -- `retail-store-sales.md` itself
+  says "copy this section structure, swap in the new table, run the playbook's 7 phases". So the
+  skill **references** the example while onboarding; it does **not** copy files into the user's
+  table dir. (The actual starting artifacts come from `templates/`, seeded by
+  `retail-onboard-table`.)
+- **Read-only + route only.** This section presents the worked example and routes into the
   existing onboarding walk. It creates no truth, seeds no artifact, and writes nothing itself
   (the run still leaves `git status` clean; `retail-onboard-table` is what later authors files).
 

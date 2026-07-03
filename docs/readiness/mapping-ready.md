@@ -83,4 +83,4 @@ approved `source-map.yaml`.
 - Mapping artifacts + layout: `../../mappings/README.md`.
 - Mapping decision: `../../docs/decisions/0003-mapping-artifact-location.md`.
 - RC1-RC16 assumptions (ADR 0002): `../../docs/decisions/0002-retail-cleaning-defaults.md`.
-- Filled instance (first worked example): `../../docs/worked-examples/c086-pharmacy.md`.
+- Filled instance: a worked example under `../../docs/worked-examples/`.

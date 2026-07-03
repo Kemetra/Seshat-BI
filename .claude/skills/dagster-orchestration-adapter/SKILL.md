@@ -324,4 +324,4 @@ NOT produce a finished, published deliverable -- that is the named-seam design, 
   `.specify/memory/constitution.md` Principles I, II, IV, V, VII, VIII, IX.
 - The method + exit gates: `docs/medallion-playbook.md`. The readiness spine:
   `docs/readiness/readiness-model.md`. The replay reference (cited, never inlined):
-  `docs/worked-examples/c086-pharmacy.md`.
+  a worked example under `docs/worked-examples/`.

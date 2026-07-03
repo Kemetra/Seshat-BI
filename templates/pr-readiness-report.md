@@ -36,8 +36,9 @@
 > conclusion, thread / comment id) or a committed source (path + field / line). A finding
 > with no traceable source is a defect.
 >
-> **Generic, not C086.** Placeholders only; C086 / `retail_store_sales` are filled
-> instances CITED as references (`docs/worked-examples/c086-pharmacy.md`), never inlined
+> **Generic, not an instance.** Placeholders only; `retail_store_sales` is a filled
+> instance CITED as a reference (a filled worked example under
+> `docs/worked-examples/`), never inlined
 > (Principle VII). ASCII only, UTF-8 no BOM; use `--` and `->` (no Unicode symbols, no
 > smart quotes).
 
@@ -159,5 +160,5 @@ merge / approve / resolve / move a stage on its own.
 - The closest read-only sibling: the portfolio roll-up `data-quality-control-room.md`
   (F012) -- F012 answers "which table is broken across the portfolio"; this answers "is
   THIS pull request safe to merge".
-- The model + no-fake-confidence rule: `../docs/readiness/readiness-model.md`. C086 is a
-  cited filled instance: `../docs/worked-examples/c086-pharmacy.md`.
+- The model + no-fake-confidence rule: `../docs/readiness/readiness-model.md`. A filled
+  worked example under `../docs/worked-examples/` is a cited filled instance.

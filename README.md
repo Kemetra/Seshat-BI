@@ -146,7 +146,7 @@ planned but not yet built, see the [Roadmap](#roadmap).)
 | **Companion Modules & Adapters (F025-F030)** | Six docs-first skills: PR readiness reviewer, readiness viewer, approval console, evidence-pack generator, and optional **dbt** / **Dagster** adapters (advisory only -- they never create truth). |
 | **F034 authoring slice** | The trace template, Dashboard Ready evidence item, and the read-only visual-implementation-review workflow (the built page itself stays a human Power BI Desktop action). |
 | **C086 pharmacy worked example** | A complete, filled run of the pipeline -- proof of the pattern, not the universal schema. |
-| **retail_store_sales worked example** | The second example, and the first to traverse the FULL seven-stage spine (to Dashboard Ready, Publish Ready `warning`) -- proves genericity on a different domain (no returns; PII kept; English-only). |
+| **retail_store_sales worked example** | The validated worked example -- traverses the full seven-stage spine (to Dashboard Ready, Publish Ready `warning`) -- proves the generic playbook (no returns; PII kept; English-only). |
 
 A green static check is necessary but not sufficient: semantic correctness needs
 the live validation boundary when a database is available.
@@ -202,9 +202,8 @@ allowed action:
 2. `.specify/memory/constitution.md` -- the full governance law.
 3. `docs/readiness/readiness-model.md` -- the seven-stage spine.
 4. `docs/architecture/readiness-pipeline.md` -- how readiness sits on the kit.
-5. `docs/worked-examples/c086-pharmacy.md` -- the first filled example (not the schema).
-6. `docs/worked-examples/retail-store-sales.md` -- the second example; the full spine to Dashboard Ready.
-7. `docs/worked-examples/README.md` -- the worked-examples index (compares them; which to read when).
+5. `docs/worked-examples/retail-store-sales.md` -- the filled worked example; the full spine to Dashboard Ready.
+6. `docs/worked-examples/README.md` -- the worked-examples index (which to read when).
 
 <details>
 <summary><b>Typical agent flow</b></summary>
@@ -332,7 +331,7 @@ Palette: `deep_navy #001E35` | `rich_gold #C69214` | `teal #0B9A9A` | `ivory #F7
 - FAQ (common questions, with sources): [`docs/faq.md`](docs/faq.md).
 - Release notes: [`RELEASE_NOTES.md`](RELEASE_NOTES.md) -- and the v0.1 snapshot [`docs/releases/v0.1.md`](docs/releases/v0.1.md).
 - Local verification (mirrors CI intent): [`docs/quality/local-verification.md`](docs/quality/local-verification.md).
-- Guided demo (second worked example): [`docs/demo/retail-store-sales-demo.md`](docs/demo/retail-store-sales-demo.md).
+- Guided demo (worked example): [`docs/demo/retail-store-sales-demo.md`](docs/demo/retail-store-sales-demo.md).
 - Capability snapshot: [`docs/quality/post-idea-bank-capability-state.md`](docs/quality/post-idea-bank-capability-state.md) -- what works now / planned / forbidden / needs-ruling / needs-data, by layer.
 - Net Sales end-to-end trace (paper proof of one KPI path): [`docs/demo/net-sales-end-to-end-readiness-trace.md`](docs/demo/net-sales-end-to-end-readiness-trace.md).
 - Big Data strategy (scale is a condition, not a tool): [`docs/big-data/big-data-capability-report.md`](docs/big-data/big-data-capability-report.md) + the assessment templates [`docs/big-data/data-volume-assessment.md`](docs/big-data/data-volume-assessment.md).

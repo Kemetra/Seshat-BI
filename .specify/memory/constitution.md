@@ -387,8 +387,8 @@ The questions and gates generalize; the answers are per-table.
   other PII columns, per-table grain keys) belong to that example's own
   artifacts and MUST NOT be baked into the kit's generic templates or principles.
 - Templates MUST use placeholders and cite the worked example as the filled
-  instance, never copy its answers inline. See
-  `docs/worked-examples/c086-pharmacy.md` for what a fully filled set looks like
+  instance, never copy its answers inline. See a filled worked example under
+  `docs/worked-examples/` for what a fully filled set looks like
   (validated 16/16 against the ADR defaults on a live database).
 
 **Rationale**: A kit whose templates carry one table's specifics is a kit that
@@ -568,7 +568,7 @@ expression of these principles); `specs/001-retail-bi-agent-kit/spec.md` (the
 Phase 0/1 feature spec); `docs/superpowers/specs/2026-06-23-pbi-governance-layer-design.md`
 (the A->C->D governance design); `docs/medallion-playbook.md` (the method);
 `docs/decisions/0002-retail-cleaning-defaults.md` (the defaults, RC1-RC16);
-`docs/worked-examples/c086-pharmacy.md` (the first filled instance).
+a filled worked example under `docs/worked-examples/` (the first filled instance).
 
 ---
 

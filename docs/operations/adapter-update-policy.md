@@ -156,5 +156,5 @@ and by forbidding any update from moving a stage to `pass`.
   (F024 / on-disk spec 018).
 - The principles: `.specify/memory/constitution.md` (Principles II, III, V, VIII, IX);
   hard rule #9, `docs/roadmap/roadmap.md`.
-- The worked-example reference (cited, never inlined): `docs/worked-examples/c086-pharmacy.md`.
+- The worked-example reference (cited, never inlined): a filled worked example under `docs/worked-examples/`.
 - The spec: `specs/025-adapter-maintenance-policy/spec.md`.

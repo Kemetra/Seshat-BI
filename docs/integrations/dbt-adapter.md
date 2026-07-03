@@ -112,7 +112,7 @@ reconciliation parity test against that table's migration-built gold fact. The f
 models for the worked example will live under the planned `dbt/models/` tree; the GENERIC
 templates (`templates/dbt-adapter-contract.md`, `templates/dbt-model-contract.md`), the
 ADR, and the skill carry NO `retail_store_sales` / C086 values (Principle VII). The filled
-instance is documented at `docs/worked-examples/c086-pharmacy.md`; its column / table
+instance is documented in a filled worked example under `docs/worked-examples/`; its column / table
 specifics are never inlined into the generic artifacts.
 
 ## Connection + secrets (Principle IX)
@@ -156,6 +156,6 @@ compatibility tests exist. (Recorded in `templates/dbt-adapter-contract.md` and 
 - The category contract: `docs/architecture/product-modules.md`; the copy-me Adapter
   declaration: `templates/adapter-contract.md`.
 - The parity target + the worked example: `warehouse/migrations/`,
-  `docs/worked-examples/c086-pharmacy.md`.
+  a filled worked example under `docs/worked-examples/`.
 - The spec / plan / tasks: `specs/023-dbt-transformation-adapter/{spec,plan,tasks}.md`.
 - `.specify/memory/constitution.md` (Principles III, IV, V, VI, VII, VIII, IX).

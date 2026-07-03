@@ -32,8 +32,8 @@ The card presents the committed worked example as the reference pattern:
 build mechanics through semantic model, dashboard, and handoff, on the public Kaggle
 retail-store-sales dataset). It then
 routes into `retail-onboard-table` for the author's own table, holding the example up as
-the reference. The two differ in depth: c086 stops at Gold Ready (build mechanics), while
-retail-store-sales carries the semantic-model / dashboard / handoff stages
+the reference: retail-store-sales carries the whole spine end to end, from Source through
+Mapping and Silver/Gold build mechanics to the semantic-model, dashboard, and handoff stages
 (see `docs/worked-examples/README.md`).
 
 Two honesty rules the card states in the same breath:

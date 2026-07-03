@@ -102,5 +102,5 @@ The detector FLAGS this; it MUST NOT silently demote or auto-`pass` any downstre
 - The measures reused: `../decisions/0002-retail-cleaning-defaults.md` (RC2/RC5/RC8); the
   deferred-live profiler the runtime will reuse: `../../src/retail/profile.py`.
 - The roadmap row: `../roadmap/roadmap.md` (F014, Layer 2, "Later"; filed under spec dir
-  015). C086 is the first filled baseline, an example not the schema:
-  `../worked-examples/c086-pharmacy.md`.
+  015). A filled worked example under `../worked-examples/` is a baseline, an example
+  not the schema.

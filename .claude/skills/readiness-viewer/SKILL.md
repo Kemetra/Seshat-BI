@@ -260,8 +260,9 @@ The skill modifies nothing: after a run, `git status` shows zero modified
   stage sequence: `docs/readiness/readiness-pipeline.md`; the "Required owner /
   approval" field per stage: `docs/readiness/<stage>-ready.md`.
 - The roadmap row + hard rules: `docs/roadmap/roadmap.md` (F026; rules #7/#8/#9);
-  Principles V, VII, VIII, IX. C086 / retail_store_sales are cited filled
-  instances: `docs/worked-examples/c086-pharmacy.md`.
+  Principles V, VII, VIII, IX. retail_store_sales is a cited filled
+  instance: `docs/worked-examples/retail-store-sales.md` (a filled worked
+  example under `docs/worked-examples/`).
 
 ## Orchestration
 

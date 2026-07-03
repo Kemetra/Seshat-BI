@@ -18,7 +18,7 @@ is out of scope (a human applies). Maps to playbook Phase 5.
 | `warehouse/migrations/NNNN_create_silver_<table>.sql` | Authored by the `retail-build-warehouse` skill from the CLEARED map; numbered, idempotent. Phase-5 order is load-bearing. |
 | CLEARED map (from Stage 2) | `source-map.yaml` with `Gate status: CLEARED` -- the input the migration is derived from. |
 
-First filled instance: `warehouse/migrations/0001_create_silver_sales_c086.sql`.
+First filled instance: `warehouse/migrations/0003_create_silver_retail_store_sales.sql`.
 
 ## Required checks
 

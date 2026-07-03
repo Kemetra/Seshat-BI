@@ -126,7 +126,7 @@ confidence/certainty field.
 **Motivating example (generic):** the DiscountedTransactionRate denominator ruling
 (all-transactions vs known-status-only) is a number-moving A7/A4 ambiguity -- undecided, it
 blocks; ruled, it records the chosen denominator + owner + date. A real *filled* instance lives
-in `../worked-examples/c086-pharmacy.md`; it is cited, never inlined here (Principle VII).
+in a filled worked example under `../worked-examples/`; it is cited, never inlined here (Principle VII).
 
 **Define/check boundary (verbatim, this feature respects it).** DEFINING a contract writes
 INTENT + binding + this ambiguity ruling; it never authors DAX, never touches a `powerbi/`
@@ -198,4 +198,4 @@ gates -- it only supplies the artifact Stage 5 was waiting for.
 - Status + evidence + blockers vocabulary: `../readiness/readiness-model.md`
 - The four-status template idiom: `../../templates/readiness-status.yaml`
 - Roadmap hard rules 5/7/8/9 + the F009/F010 split: `../roadmap/roadmap.md`
-- C086 as the filled-instance reference (not the schema): `../worked-examples/c086-pharmacy.md`
+- A filled worked example as the filled-instance reference (not the schema): `../worked-examples/`

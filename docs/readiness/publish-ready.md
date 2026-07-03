@@ -91,4 +91,4 @@ and STOP; there is no automated publish today.
 - Optional executive/sponsor companion to the handoff pack (NOT a required Stage 7 artifact, not a gate): `../../templates/handoff/answerability-summary.md`
 - The concrete record-and-STOP record of this stage's action (non-gating evidence): the "Publish approval" section of `../../templates/handoff/bi-handoff-pack.md`
 - Status + approvals template: `../../templates/readiness-status.yaml`
-- A filled instance (first worked example): `../worked-examples/c086-pharmacy.md`
+- A filled instance (first worked example): a filled worked example under `../worked-examples/`

@@ -179,4 +179,4 @@ migrations as the default.
 - The integration doc + the enumerated `dbt/` shape: `docs/integrations/dbt-adapter.md`.
 - The skill that runs dbt behind the gate: `.claude/skills/dbt-transformation-adapter/SKILL.md`.
 - The example connection profile: `profiles.example.yml` (placeholders only).
-- The filled first-MVP instance is CITED, never inlined: `docs/worked-examples/c086-pharmacy.md`.
+- The filled first-MVP instance is CITED, never inlined: a filled worked example under `docs/worked-examples/`.

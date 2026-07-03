@@ -345,8 +345,8 @@ and opened no DB connection.
 - The authority contract: `../../../docs/architecture/product-modules.md` (the five
   categories + the matrix), `../../../templates/module-contract.md` (the copy-me
   declaration filled above).
-- The spec: `../../../specs/063-approval-evidence-pack/spec.md`. C086 is a cited
-  filled instance: `../../../docs/worked-examples/c086-pharmacy.md`.
+- The spec: `../../../specs/063-approval-evidence-pack/spec.md`. A filled worked
+  example lives under `../../../docs/worked-examples/`.
 
 ## Orchestration
 

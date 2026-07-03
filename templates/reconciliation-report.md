@@ -6,10 +6,10 @@
 > the workflow -- the others are authored before silver SQL; this one is filled only after
 > silver and gold are built and a live DB is reachable.
 >
-> For a **filled instance**, see `docs/worked-examples/c086-pharmacy.md` section 5 plus
-> `docs/c086-adr0002-compliance.md` (C086: 246,916 silver rows, penny-exact across 5
-> measures, 71 fact rows landing on the salesperson `-1` unknown member). C086 is a *filled
-> instance*, not the universal schema -- keep its pharmacy specifics out of this template.
+> For a **filled instance**, see a filled worked example under `docs/worked-examples/`
+> (section 5), which records real silver row counts, penny-exact measure totals, and any
+> rows landing on the `-1` unknown member. A worked example is a *filled instance*, not the
+> universal schema -- keep its domain specifics out of this template.
 
 ---
 
@@ -170,6 +170,6 @@ signals noted for analyst follow-up" or "FAIL on category X, see notes">`.
   surface; complementary to these live gates, not a substitute.
 - **Sibling gate artifacts:** `templates/source-profile.md`, `templates/source-map.yaml`,
   `templates/assumptions.md`, `templates/unresolved-questions.md`.
-- **Filled instance:** `docs/worked-examples/c086-pharmacy.md` section 5 +
-  `docs/c086-adr0002-compliance.md` (246,916 rows; penny-exact across 5 measures; 71 rows on
-  the salesperson `-1` member). C086 is the first worked example, never the universal schema.
+- **Filled instance:** a filled worked example under `docs/worked-examples/` (section 5) --
+  records real silver row counts, penny-exact measure totals, and any rows landing on the
+  `-1` unknown member. A worked example is a filled instance, never the universal schema.

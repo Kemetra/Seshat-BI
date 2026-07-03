@@ -114,5 +114,5 @@ These are surfaced, never resolved by the generator (Principle V):
   the four-status / no-fake-confidence model: `../docs/readiness/readiness-model.md`; the
   publish stage authority: `../docs/readiness/publish-ready.md`.
 - The authority contract: `../docs/architecture/product-modules.md`;
-  `../templates/module-contract.md`. C086 is a cited filled instance:
-  `../docs/worked-examples/c086-pharmacy.md`.
+  `../templates/module-contract.md`. A filled worked example is cited by reference
+  under `../docs/worked-examples/`.

@@ -115,8 +115,8 @@ state-mutating `retail check` / `retail validate` run of its own.
   (`src/retail/validate.py`, V-RC2/V-RC15/V-RC16).
 - The conductor it plugs into: `.claude/skills/retail-orchestrate/SKILL.md`.
 - The roadmap row + hard rules: `docs/roadmap/roadmap.md` (F012, Layer 4; #7/#8/#9);
-  Principles V, VII, VIII. C086 is a cited filled instance:
-  `docs/worked-examples/c086-pharmacy.md`.
+  Principles V, VII, VIII. A filled worked example lives under
+  `docs/worked-examples/`.
 
 ## Orchestration
 

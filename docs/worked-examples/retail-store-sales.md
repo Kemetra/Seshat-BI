@@ -1,15 +1,16 @@
 # Worked Example — retail_store_sales (Kaggle "Retail Store Sales, dirty")
 
-> **The second validated Seshat BI worked example — and the first that traverses the
+> **The validated Seshat BI worked example — and the first that traverses the
 > FULL seven-stage readiness spine** (Source Ready → … → Dashboard Ready, with Publish
-> Ready held at `warning` by design). Where `c086-pharmacy.md` proves the medallion
-> *build* (bronze → silver → gold + live validation), this example proves the rest of
-> the spine: metric contracts, a governed PBIP model, a dashboard design bound to those
-> contracts, a handoff pack, and an honest **approval-retraction** when an approved
-> artifact materially changed.
+> Ready held at `warning` by design). This doc proves the full spine end to end: it
+> ships the medallion *build* itself (`0003_create_silver_retail_store_sales.sql` →
+> `0004_create_gold_retail_store_sales_star.sql`, live-validated bronze → silver →
+> gold), plus the rest of the spine on top of it: metric contracts, a governed PBIP
+> model, a dashboard design bound to those contracts, a handoff pack, and an honest
+> **approval-retraction** when an approved artifact materially changed.
 >
 > This doc is the **evidence record** that `retail_store_sales` is built and governed
-> correctly, and the **reusable second pattern** a future retail table copies. It does
+> correctly, and the **reusable pattern** a future retail table copies. It does
 > not restate the source artifacts — it references and summarizes them.
 
 **Verdict:** *retail_store_sales is the kit's first end-to-end-to-Dashboard-Ready table:
@@ -17,16 +18,20 @@
 governed TMDL model whose every measure binds 1:1 to a contract, and an approved
 10-visual dashboard design — with Publish Ready deliberately at `warning` pending a
 fresh approval after the DiscountedTransactionRate correction. It is the proof that the
-generic kit is genuinely generic: same spine, a different domain, different cleaning
-deviations (RC8 N/A; RC4 keep), no C086 specifics leaking in.*
+generic kit is genuinely generic across independent axes: **no returns in this source**
+(RC8 N/A — no return-flag column, all measures strictly positive), a **kept pseudonymous
+customer key** (RC4 deviation — `customer_id` is a surrogate, not raw PII, kept on the
+owner's ruling), an **unknown-status discount nuance** (a blank `discount_applied` is
+UNKNOWN, never coerced to `False`), and an **English-only source** (no Arabic↔English
+mapping needed). The kit absorbed all four with recorded deviations, not hard-coded
+rules.*
 
-**Why a second example matters (hard rule #7).** *"C086 is the first worked example, not
-the universal schema."* A single example can't prove genericity. This table was chosen
-to differ from C086 on exactly the axes that catch a leaked assumption: **no returns**
-(C086's RC8 return-detection is N/A here), a **kept pseudonymous customer key** (an RC4
-deviation, where C086 dropped PII early), an **unknown-status discount nuance** absent
-from C086, and an English-only Kaggle source (no Arabic↔English mapping). The kit
-absorbed all four without a C086-specific rule firing.
+**Why this evidence matters (hard rule #7).** *"C086 is the first worked example, not
+the universal schema."* One example proving the build isn't enough to prove genericity —
+the axes above are exactly the kind of thing a leaked, hard-coded assumption would fail
+on: a returns rule that doesn't exist, a PII default that can't be deviated, a
+tri-state flag collapsed to boolean, a hidden language assumption. Each one is
+recorded here as a **deviation with its triggering data fact**, not a special case.
 
 **Source artifacts (read these for detail; this doc summarizes them):**
 - Mapping set: `mappings/retail_store_sales/` (`source-profile.md`, `source-map.yaml`,
@@ -44,9 +49,9 @@ absorbed all four without a C086-specific rule firing.
 **How to reuse this for a new table:** copy this section structure, swap
 `retail_store_sales` for the new table, walk the seven stages, and fill each section's
 **Evidence** from that table's own artifacts. The *questions and checks* generalize; the
-*answers* are per-table. For the build-only first half, `c086-pharmacy.md` remains the
-canonical reference; for the contracts → model → dashboard → handoff second half, this
-doc is the reference.
+*answers* are per-table. This doc is the canonical reference for the full spine —
+both the build half (bronze → silver → gold, §§1–4, backed by the `0003_`/`0004_`
+migrations) and the contracts → model → dashboard → handoff half (§§5–7).
 
 > **Namespace note.** "RC1–RC16" are the **ADR 0002 cleaning defaults**
 > (`docs/decisions/0002-retail-cleaning-defaults.md`). The static governance checker uses a separate
@@ -275,19 +280,8 @@ here by design.
 
 ---
 
-## What this example adds over C086 (the genericity proof)
-
-| Axis | C086 (pharmacy) | retail_store_sales | What it proves |
-|------|-----------------|--------------------|----------------|
-| Spine depth | build + live validation (to Gold) | full spine to Dashboard Ready (+ Publish `warning`) | the contracts→model→design→handoff half of the spine works end-to-end |
-| Returns (RC8) | derived from an authoritative billing code | **N/A** (no returns; recorded deviation) | the kit doesn't force a returns rule where none exists |
-| Customer PII (RC4) | dropped early (patient data) | **kept** (pseudonymous surrogate; owner ruling) | the same default resolves either way, per the owner — no C086 answer baked in |
-| Language | Arabic↔English mapping | English-only Kaggle source | no Arabic-dictionary assumption leaks into a generic run |
-| A ratio metric | n/a | `DiscountedTransactionRate` denominator ruling + retraction | non-additive contracts + the approval-retraction governance path |
-
 ## See also
 
-- The first example (build half, canonical): `docs/worked-examples/c086-pharmacy.md`.
 - The spine: `docs/readiness/readiness-model.md` and the seven
   `docs/readiness/<stage>-ready.md` stage docs.
 - Method: `docs/medallion-playbook.md` (the 7 phases).

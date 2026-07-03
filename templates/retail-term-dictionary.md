@@ -86,5 +86,5 @@ surface-form variant, not a distinct term. This keeps the vocabulary from forkin
 - Principles: `../.specify/memory/constitution.md` V (Agent Stops at Judgment Calls),
   VI (Defaults Then Deviations / RC8), VII (C086 Is An Example).
 - The FILLED instance this template CITES, never inlines: `../docs/data-dictionary.md`
-  (the C086 billing_type Arabic->English table + business_segment rollup),
-  `../docs/worked-examples/c086-pharmacy.md`.
+  (the billing_type Arabic->English table + business_segment rollup), and a filled
+  worked example under `../docs/worked-examples/`.

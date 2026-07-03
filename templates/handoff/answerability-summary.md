@@ -25,8 +25,8 @@
   expose by appearing in any list. This summary inherits the caveats-note PII-exclusion
   posture; publish-safety remains a human judgment.
 - **Generic.** This template is schema-agnostic -- generic `<placeholder>` tokens and generic
-  KPI/domain names only. Any concrete (e.g. pharmacy) instance is reached ONLY by reference to
-  `../../docs/worked-examples/c086-pharmacy.md`, never copied inline.
+  KPI/domain names only. Any concrete instance is reached ONLY by reference to
+  a filled worked example under `../../docs/worked-examples/`, never copied inline.
 
 ## Answerable today
 
@@ -90,5 +90,5 @@ the Power BI execution adapter (F016) remains parked.
   `../../skills/retail-kpi-knowledge/knowledge/kpi-ambiguities.md`
 - The engineer-facing sibling this summary sits beside (referenced, not restated):
   `bi-handoff-pack.md`
-- A filled concrete instance (first worked example):
-  `../../docs/worked-examples/c086-pharmacy.md`
+- A filled concrete instance (a worked example):
+  a filled worked example under `../../docs/worked-examples/`

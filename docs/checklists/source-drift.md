@@ -70,5 +70,5 @@ adds NO new gate. See `docs/readiness/source-drift.md` for the taxonomy. ASCII o
   `../../templates/unresolved-questions.md`.
 - The measures reused: `../decisions/0002-retail-cleaning-defaults.md` (RC2/RC5/RC8); the
   deferred-live profiler: `../../src/retail/profile.py`.
-- The roadmap row: `../roadmap/roadmap.md` (F014). C086 is a cited filled baseline:
-  `../worked-examples/c086-pharmacy.md`.
+- The roadmap row: `../roadmap/roadmap.md` (F014). A filled worked example lives under
+  `../worked-examples/`.

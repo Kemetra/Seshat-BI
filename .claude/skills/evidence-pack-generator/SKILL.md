@@ -287,8 +287,8 @@ run of its own and opened no DB connection.
   categories + the matrix + the two sub-vocabularies),
   `../../../docs/architecture/core-vs-modules-and-adapters.md` (the prose + the seam),
   `../../../templates/module-contract.md` (the copy-me declaration filled above).
-- The spec: `../../../specs/022-evidence-pack-generator/spec.md`. C086 is a cited filled
-  instance: `../../../docs/worked-examples/c086-pharmacy.md`.
+- The spec: `../../../specs/022-evidence-pack-generator/spec.md`. It cites a filled
+  worked example under `../../../docs/worked-examples/`.
 
 ## Orchestration
 

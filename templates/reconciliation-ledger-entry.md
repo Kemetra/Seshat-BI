@@ -157,5 +157,6 @@ A `fail` entry instead populates `gold_ready.blocking_reasons[]` and keeps the s
   `readiness-status.yaml`.
 - RC16 (cross-layer reconciliation + 0 orphan FKs):
   `../docs/decisions/0002-retail-cleaning-defaults.md`.
-- The roadmap row: `../docs/roadmap/roadmap.md` (F015, Layer 4, "Later"). C086 is the
-  cited filled instance, not the schema: `../docs/worked-examples/c086-pharmacy.md`.
+- The roadmap row: `../docs/roadmap/roadmap.md` (F015, Layer 4, "Later"). The
+  cited instance is a filled worked example under `../docs/worked-examples/`,
+  not the schema.

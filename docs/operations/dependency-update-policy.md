@@ -205,5 +205,5 @@ stage to `pass`. (Mirrors F012's "all stages" cross-cutting framing.)
   surface and the `retail validate` live surface.
 - The principles: `.specify/memory/constitution.md` (Principles II, III, V, VIII, IX);
   hard rule #9, `docs/roadmap/roadmap.md`.
-- The worked-example reference (cited, never inlined): `docs/worked-examples/c086-pharmacy.md`.
+- The worked-example reference (cited, never inlined): a filled worked example under `docs/worked-examples/`.
 - The spec: `specs/025-adapter-maintenance-policy/spec.md`.

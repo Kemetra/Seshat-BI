@@ -88,7 +88,7 @@ Fill one block per deviation (delete the placeholder block if there are none):
 > **No fabricated examples.** Do not invent a deviation to fill the shape. The first
 > worked example, **C086**, adopted **16/16 defaults with 0 deviations** after live DB
 > validation, so its `assumptions.md` Deviations section is empty -- a filled instance of
-> "all defaults held." See `docs/worked-examples/c086-pharmacy.md` and
+> "all defaults held." See a filled worked example under `docs/worked-examples/` and
 > `docs/c086-adr0002-compliance.md`. A non-zero Deviations section looks like the block
 > above, with real `Dn` ids and a real triggering fact from that table's profile.
 
@@ -138,5 +138,5 @@ A reviewer reads all of the kit's templates and docs as one set:
   decisions).
 - **Governance design:** `docs/superpowers/specs/2026-06-23-pbi-governance-layer-design.md`.
 - **First worked example (filled instance, never the universal schema):**
-  `docs/worked-examples/c086-pharmacy.md` + `docs/c086-adr0002-compliance.md` -- 16/16
+  a filled worked example under `docs/worked-examples/` + `docs/c086-adr0002-compliance.md` -- 16/16
   defaults adopted, 0 deviations, validated live.

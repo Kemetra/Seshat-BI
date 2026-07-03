@@ -51,7 +51,7 @@ to re-describe or re-decide them:
 | **`retail check`** (`src/retail/`) | The shippable governance core -- stdlib-only, CI-able, parses committed TMDL/PBIR/SQL/git text. No `pbi-cli`, no Desktop, no network. | **The enforced gate (Layer A, static surface).** Already on `main`. |
 | **`docs/medallion-playbook.md`** (7 phases) | The interactive cleaning method: connect & profile -> grain-first cleaning decisions -> ruleset -> review gate -> build silver -> build gold -> data dictionary. | **The process the agent runs.** The source-mapping gate (Sec 5) formalizes its early phases. |
 | **`docs/decisions/0002-retail-cleaning-defaults.md`** (RC1-RC16) | The reusable cleaning/modeling defaults: grain, PII, types, returns, star schema, contiguous date dim, reconciliation. | **The default rulings** every new table starts from. The constitution ratifies their *spirit* as principles. |
-| **`docs/worked-examples/c086-pharmacy.md`** + `c086-adr0002-compliance.md` | The first validated medallion table: 16/16 ADR-default PASS after live DB validation across 246,916 silver rows. | **The first worked example** -- a *filled instance* of every template, cited, never the schema itself. |
+| **A filled worked example** under `docs/worked-examples/` | The first validated medallion table: full ADR-default PASS after live DB validation. | **The first worked example** -- a *filled instance* of every template, cited, never the schema itself. |
 | **`docs/superpowers/specs/2026-06-23-pbi-governance-layer-design.md`** | The A->C->D governance design (depend-not-fork, gold-only, static-now/live-deferred). | **The design of Layer A.** This architecture sits one level up: it adds the agent framing and the source-mapping gate on top. |
 | **`pbi-cli`** (PyPI, via `pipx`, unforked) | A maximally-capable but opinion-less Power BI semantic-model tool. | **The later ENGINE adapter** for the Power BI build step -- not the core. |
 
@@ -155,7 +155,7 @@ end** -- and therefore the canonical *filled* instance of every artifact above:
 codes `Z4/Z5/Z6/Z8/Z10`, the PHARMA/HVI/NON-PHARMA segment rollup, insurance PII --
 belong to C086's own artifacts, **not** to the templates, the constitution, or this
 architecture. The *questions and gates* generalize; the *answers* are per-table. See
-`docs/worked-examples/c086-pharmacy.md`.
+a filled worked example under `docs/worked-examples/`.
 
 ## 7. Validator categories (documented only -- no validator logic)
 
@@ -219,6 +219,6 @@ This Phase 0/1 foundation deliberately stops at architecture + spec + templates:
 - **Feature spec:** `specs/001-retail-bi-agent-kit/spec.md` -- the Phase-0/1 slice.
 - **Governance design:** `docs/superpowers/specs/2026-06-23-pbi-governance-layer-design.md`.
 - **Method:** `docs/medallion-playbook.md`. **Defaults:** `docs/decisions/0002-retail-cleaning-defaults.md`.
-- **Worked example:** `docs/worked-examples/c086-pharmacy.md`.
+- **Worked example:** a filled instance under `docs/worked-examples/`.
 - **Templates:** `templates/source-profile.md`, `source-map.yaml`, `assumptions.md`,
   `unresolved-questions.md`, `reconciliation-report.md`.

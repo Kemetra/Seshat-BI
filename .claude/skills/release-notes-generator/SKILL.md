@@ -125,7 +125,7 @@ evidence. It NEVER:
 | F028 evidence pack (`docs/tools/evidence-pack-generator.md`; `.claude/skills/evidence-pack-generator/SKILL.md`; the table's filled `mappings/<table>/evidence-pack-*.md`) | the committed evidence behind each "what became possible" claim and each rung verdict | built; consume freely |
 | F032 compatibility matrix (planned `docs/operations/adapter-compatibility-matrix.md`; `templates/adapter-version-record.md`) | cited for "what changed" + "migration notes"; never recomputed | referenced by id + role -- if not yet on disk, record "consumed input not yet available", do not fabricate its rows |
 | the delivered roadmap ledger (`docs/roadmap/roadmap.md`) + commit refs | the release history of record (one note maps 1:1 to the delivered-ledger row it summarizes) | committed |
-| worked-example docs + on-disk presence (`docs/worked-examples/c086-pharmacy.md`; `mappings/c086/`, `mappings/retail_store_sales/`) | the evidence the L1/L2/L3 binary tests check, and the absence the L4/L5/L6 tests check | committed |
+| worked-example docs + on-disk presence (`docs/worked-examples/retail-store-sales.md`; `mappings/retail_store_sales/`) | the evidence the L1/L2/L3 binary tests check, and the absence the L4/L5/L6 tests check | committed |
 
 It IMPORTS none of these; it READS them. If an input is missing, the rule is "evidence
 not available -- cannot assert capability", never a fabricated claim or row.
@@ -183,10 +183,12 @@ adapter that no readiness stage depends on.
 | L5 | Dagster orchestration | a Dagster orchestration project (F030) exists in-repo |
 | L6 | official Power BI execution adapter | an official Power BI execution adapter (F016) exists in-repo |
 
-L3's caveat -- "generic repeatability BEYOND the two worked tables is the NEXT evidence"
--- is a FORWARD scope-note on the achieved verdict, NOT an unmet gate. L3's binary test
-is satisfied today (the two worked tables each have silver + gold), so L3 is ACHIEVED;
-the caveat is recorded on the achieved verdict, never used to round L3 down.
+L3's caveat -- "generic repeatability BEYOND the worked tables is the NEXT evidence" --
+is a FORWARD scope-note reserved for once L3's binary test is satisfied, NOT license to
+round an unmet L2/L3 up early. Until >= 2 worked tables exist on disk, L3's binary test
+(silver + gold proven repeatable across the >= 2 worked tables L2 requires) is NOT
+satisfied, and L3 is reported NOT ACHIEVED with the missing second worked table named --
+never rounded up on the strength of the first table alone.
 
 ## Worked assessment against today's repo (the honest current state)
 
@@ -196,14 +198,14 @@ repo, never assert from memory):
 | Rung | Verdict TODAY | Evidence (cited) or missing artifact (named) |
 |------|---------------|----------------------------------------------|
 | L0 | achieved | docs/templates/spec-kit artifacts exist (e.g. `docs/medallion-playbook.md`, `docs/readiness/readiness-model.md`, `docs/architecture/product-modules.md`) |
-| L1 | achieved | one worked example: `mappings/c086/` |
-| L2 | achieved | two worked examples: `mappings/c086/` + `mappings/retail_store_sales/` |
-| L3 | achieved | silver + gold proven repeatable for the two worked tables (each has silver + gold). Forward scope-note: generic repeatability beyond the two tables is the next evidence -- recorded on the verdict, NOT an unmet gate |
+| L1 | achieved | one worked example: `mappings/retail_store_sales/` |
+| L2 | not achieved | missing: a second worked-example table with mapping artifacts on disk under `mappings/` (today there is exactly one: `mappings/retail_store_sales/`) |
+| L3 | not achieved | missing: L3 requires the >= 2 worked tables L2 requires; with only one worked table on disk, repeatability across multiple tables is not yet evidenced |
 | L4 | not achieved | missing: a dbt transformation adapter (F029) in-repo |
 | L5 | not achieved | missing: a Dagster orchestration project (F030) in-repo |
 | L6 | not achieved | missing: an official Power BI execution adapter (F016) in-repo |
 
-**Reported level today: L3** (the highest rung whose required evidence ALL exists). The
+**Reported level today: L1** (the highest rung whose required evidence ALL exists). The
 kit makes NO production / GA / enterprise-grade claim: no rung backs one. No rung is
 reported as a number.
 
@@ -286,8 +288,8 @@ no validator run, no DB opened.
   `../../../docs/readiness/readiness-model.md`; hard rule #9.
 - The read-and-present sibling it mirrors: `../retail-control-room/SKILL.md`. The
   conductor it plugs into: `../retail-orchestrate/SKILL.md`.
-- The worked examples that ground the ladder: `../../../docs/worked-examples/c086-pharmacy.md`;
-  `mappings/c086/`, `mappings/retail_store_sales/`.
+- The worked example that grounds the ladder:
+  `../../../docs/worked-examples/retail-store-sales.md`; `mappings/retail_store_sales/`.
 - The spec: `../../../specs/027-release-maturity-management/spec.md`.
 
 ## Orchestration

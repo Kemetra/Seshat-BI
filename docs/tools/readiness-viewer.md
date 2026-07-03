@@ -106,8 +106,8 @@ surfaces the conflict as a flag and does NOT resolve it by picking one side
 
 The skill and the template are generic -- no worked-example specifics (billing
 codes, segments, PII column names, per-table grain keys). C086 / retail_store_sales
-are cited filled instances (`../worked-examples/c086-pharmacy.md`), never inlined
-(Principle VII).
+are cited filled instances (see the worked examples under `../worked-examples/`),
+never inlined (Principle VII).
 
 ## Deferred (enumerated, NOT built this slice)
 
@@ -137,4 +137,4 @@ are cited filled instances (`../worked-examples/c086-pharmacy.md`), never inline
   sequence: `../readiness/readiness-pipeline.md`.
 - The conductor it plugs into: `../../.claude/skills/retail-orchestrate/SKILL.md`.
 - The spec: `../../specs/020-readiness-viewer/spec.md`. C086 / retail_store_sales are
-  cited filled instances: `../worked-examples/c086-pharmacy.md`.
+  cited filled instances under `../worked-examples/`.
