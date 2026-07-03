@@ -20,6 +20,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from .dialect import Dialect, get_dialect
 from .validate import QueryRunner
 
 _IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$")
@@ -75,36 +76,30 @@ class ProfileResult:
     pk: PkProof
 
 
-# Postgres data_type strings (information_schema) that hold character data and so
-# support trim()/'' missingness. Everything else (timestamptz, numeric, boolean, a
-# lineage _loaded_at, ...) is profiled with plain IS NULL -- trim() is text-only and
-# crashes (`function btrim(timestamp with time zone) does not exist`) on non-text.
-_TEXT_TYPES = frozenset(
-    {"text", "character varying", "varchar", "character", "char", "name", '"char"'}
-)
-
-
-def _discover_columns(runner: QueryRunner, table: str) -> tuple[tuple[str, str], ...]:
+def _discover_columns(
+    runner: QueryRunner, table: str, dialect: Dialect
+) -> tuple[tuple[str, str], ...]:
     """Ordered (column_name, data_type) for ``schema.table`` from information_schema."""
     if "." in table:
         schema, name = table.split(".", 1)
     else:
         schema, name = "public", table
-    rows = runner.run(
-        "SELECT column_name, data_type FROM information_schema.columns "
-        "WHERE table_schema = %s AND table_name = %s ORDER BY ordinal_position",
-        (schema, name),
-    )
+    rows = runner.run(dialect.columns_query(), (schema, name))
     # tolerate a runner that only returns the name (older fixtures) -> assume text
     return tuple((r[0], (r[1] if len(r) > 1 else "text")) for r in rows)
 
 
 def profile(
-    runner: QueryRunner, table: str, candidate_pk: tuple[str, ...]
+    runner: QueryRunner,
+    table: str,
+    candidate_pk: tuple[str, ...],
+    *,
+    dialect: Dialect | None = None,
 ) -> ProfileResult:
     """Profile ``table`` mechanically. Read-only; one pass of simple aggregates."""
+    dialect = dialect or get_dialect("postgres")
     table = _safe_identifier(table)
-    columns = _discover_columns(runner, table)
+    columns = _discover_columns(runner, table, dialect)
 
     row_rows = runner.run(f"SELECT count(*) FROM {table}")
     row_count = row_rows[0][0] if row_rows else 0
@@ -112,21 +107,21 @@ def profile(
     col_profiles: list[ColumnProfile] = []
     for col_name, data_type in columns:
         col = _safe_identifier(col_name)
-        if data_type.lower() in _TEXT_TYPES:
+        if dialect.is_text_type(data_type):
             # TEXT: missingness is ''OR NULL, NEVER IS NULL alone (RC5 / the
             # load-bearing trap): a faithful landing writes '' for None, so IS NULL
             # alone reports 0. trim() also folds whitespace-variant phantom distincts.
+            missing_frag = dialect.count_where(f"trim({col}) = '' OR {col} IS NULL")
             stat = runner.run(
-                f"SELECT count(*) FILTER (WHERE trim({col}) = '' OR {col} IS NULL), "
-                f"count(DISTINCT trim({col})) FROM {table}"
+                f"SELECT {missing_frag}, count(DISTINCT trim({col})) FROM {table}"
             )
         else:
             # NON-TEXT (timestamptz, numeric, boolean, a lineage column, ...):
             # trim() is text-only and would crash. A non-text column cannot hold '',
             # so plain IS NULL is the correct (and only valid) missingness measure.
+            missing_frag = dialect.count_where(f"{col} IS NULL")
             stat = runner.run(
-                f"SELECT count(*) FILTER (WHERE {col} IS NULL), "
-                f"count(DISTINCT {col}) FROM {table}"
+                f"SELECT {missing_frag}, count(DISTINCT {col}) FROM {table}"
             )
         missing, distinct = (stat[0][0], stat[0][1]) if stat else (0, 0)
         pct = (missing / row_count * 100.0) if row_count else 0.0
@@ -142,9 +137,9 @@ def profile(
     validated_pk = tuple(_safe_identifier(c) for c in candidate_pk)
     pk_cols = ", ".join(validated_pk)
     null_pred = " OR ".join(f"{c} IS NULL" for c in validated_pk)
+    null_frag = dialect.count_where(null_pred)
     pk_rows = runner.run(
-        f"SELECT count(*), count(DISTINCT ({pk_cols})), "
-        f"count(*) FILTER (WHERE {null_pred}) FROM {table}"
+        f"SELECT count(*), count(DISTINCT ({pk_cols})), {null_frag} FROM {table}"
     )
     total, distinct_pk, null_pk = pk_rows[0] if pk_rows else (0, 0, 0)
     pk = PkProof(
