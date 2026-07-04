@@ -45,6 +45,13 @@ EXPECTED_COUNT = 13
 _HEADING_RE = re.compile(r"^###\s+(\d+)\.\s+(.+?)\s*$")
 # dashboard-qa.md table data row: "| 1 | Too many visuals on one page | ... | ... |"
 _TABLE_ROW_RE = re.compile(r"^\|\s*(\d+)\s*\|\s*([^|]+?)\s*\|")
+# The catalog table's header row -- its 2nd cell names the anti-pattern column.
+# Extraction is ANCHORED to the table that follows THIS header, so an unrelated
+# numeric table elsewhere in the doc (e.g. a severity legend) is never read as an
+# anti-pattern (Codex #181 P2a). A markdown table header cell "| # | Anti-pattern |".
+_TABLE_HEADER_RE = re.compile(r"^\|\s*#\s*\|\s*anti-?pattern\b", re.IGNORECASE)
+# A markdown separator row "|---|---|" -- allowed between the header and the data.
+_TABLE_SEP_RE = re.compile(r"^\|[\s:|-]+\|?\s*$")
 
 
 def _normalize(name: str) -> str:
@@ -71,18 +78,33 @@ def _extract_headings(text: str) -> list[tuple[int, str]]:
 
 
 def _extract_table(text: str) -> list[tuple[int, str]]:
-    """Extract ``(number, raw_name)`` from the ``| N | Name | ... |`` table format.
+    """Extract ``(number, raw_name)`` from the anti-pattern CATALOG table only.
 
-    Format-specific (FR-004): the leading ``| <int> |`` cell means the header row
-    ("| # | Anti-pattern |") and the ``|---|`` separator are skipped naturally
-    (their first cell is not an integer), and the ``### N.`` heading format yields
-    zero rows.
+    Format-specific (FR-004): the ``### N.`` heading format yields zero rows.
+    ANCHORED (Codex #181 P2a): extraction starts only after the catalog header
+    ``| # | Anti-pattern | ... |`` and ends at the first line that is not a table
+    row (or at a second header) -- so an unrelated numeric table elsewhere in the
+    doc (a severity legend, a context table) is never counted as an anti-pattern.
+    The ``|---|`` separator between header and data is allowed.
     """
     out: list[tuple[int, str]] = []
+    in_catalog = False
     for line in text.splitlines():
+        if _TABLE_HEADER_RE.match(line):
+            in_catalog = True
+            continue
+        if not in_catalog:
+            continue
+        if _TABLE_SEP_RE.match(line):
+            continue  # header/data separator row
         m = _TABLE_ROW_RE.match(line)
         if m:
             out.append((int(m.group(1)), m.group(2)))
+            continue
+        # First non-catalog-row line ends the catalog table (blank line, prose,
+        # a new heading, or a foreign table's non-matching header).
+        if line.strip():
+            in_catalog = False
     return out
 
 
@@ -125,10 +147,16 @@ def check_ap1(ctx: RuleContext) -> Iterable[Finding]:
     visual = _extract_headings(visual_text)  # type: ignore[arg-type]
     dash = _extract_table(dash_text)  # type: ignore[arg-type]
 
-    # FR-005: each doc's OWN list must carry exactly the expected count, before
-    # any cross-doc compare -- a malformed own-list is a distinct, earlier error.
+    # FR-005: each doc's OWN list must carry exactly the expected count AND the
+    # stable 1..EXPECTED_COUNT numbering (no duplicate number, no gap), before any
+    # cross-doc compare -- a malformed own-list is a distinct, earlier error.
+    # Count-only is insufficient: two docs can each carry 13 rows that reuse a
+    # number and drop another (e.g. #7 twice, no #13) and still match each other,
+    # a false green the prose's #-cross-references would break (Codex #181 P2b).
     own_list_bad = False
+    expected_numbers = set(range(1, EXPECTED_COUNT + 1))
     for rel, entries in ((VISUAL_QA_REL, visual), (DASHBOARD_QA_REL, dash)):
+        numbers = [n for n, _ in entries]
         if len(entries) != EXPECTED_COUNT:
             own_list_bad = True
             findings.append(
@@ -137,6 +165,21 @@ def check_ap1(ctx: RuleContext) -> Iterable[Finding]:
                     Severity.ERROR,
                     f"{rel} lists {len(entries)} anti-patterns; expected "
                     f"{EXPECTED_COUNT} (its own list is malformed)",
+                    rel,
+                )
+            )
+        elif set(numbers) != expected_numbers or len(set(numbers)) != len(numbers):
+            own_list_bad = True
+            duplicates = sorted({n for n in numbers if numbers.count(n) > 1})
+            missing = sorted(expected_numbers - set(numbers))
+            findings.append(
+                Finding(
+                    RULE_ID,
+                    Severity.ERROR,
+                    f"{rel} anti-pattern numbering is malformed: expected the "
+                    f"stable 1..{EXPECTED_COUNT} with no duplicate or gap "
+                    f"(duplicate number(s): {duplicates or 'none'}; "
+                    f"missing number(s): {missing or 'none'})",
                     rel,
                 )
             )
