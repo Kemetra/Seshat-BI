@@ -90,22 +90,16 @@ this session just created before any human review (circular).
 | **E2** | glossary↔registry bijection test (shrunk) | #161 | verify-only two-thirds; severity-into-`@register` third correctly dropped (ratified 044) |
 | **E7** | `retail doctor` (doctor.py) | #160 | read-only repo-wide drift digest (A3 routes_coverage + SC1 status_claims); broader than `scaffold --doctor` |
 | **H4** | `templates/kpi-sufficiency-card.md` | #157 | owner ruled *separate template*; present/absent + status, NO numeric score |
+| **B1** | `AP1` visual-qa↔dashboard-qa parity rule (`rule_ap1.py`) | #181 (+#183 fix) | ratified 085; two format-specific extractors, fail-closed on count/number→name/name divergence; registry → 54 |
+| **I3** | `SF1` cross-layer checklist fork detector (`rule_sf1.py`) | #182 | ratified 086; reconciles `skills/**/checklists/*.md` against the owner-authored `docs/quality/shared-spine.yaml` fork contract; registry → 55 |
 
 ## RECOMMENDED — owner decision (recorded, not auto-built)
 
-_Genuinely open after the 2026-07-04 git reconciliation — the only two of the
-original six that have no shipping commit._
-
-- **B1** (anti-pattern parity): `visual-qa.md` (### headings) and
-  `dashboard-qa.md` (pipe table) each list 13 anti-patterns with **divergent
-  wording** ("on a page" vs "on one page"). *Recommendation: make the fuller
-  pipe-table (`dashboard-qa.md`, which carries severities) canonical and align
-  `visual-qa.md` to it.* Needs owner eyes (edits a human-authored doc) and the
-  reviewer flagged the two-extractor approach as fragile.
-- **I3** (shared-checklist fork detector): needs an author-authored contract
-  manifest (which checklists must stay in lockstep) — owner must author/authorize
-  the contract before a rule can enforce it. The `specify` stage must NOT fabricate
-  this contract (Principle V).
+_Empty after the 2026-07-04 build wave. B1 and I3 — the last two genuinely-open
+design ideas — were spec'd, ratified (owner: Ahmed Shaaban, 2026-07-04), and
+shipped (#181/#183, #182); see the "SHIPPED since" table above. No design-category
+idea remains in an owner-decision-pending state. **When this section disagrees
+with git, git wins.**_
 
 ## BLOCKED — inert until content lands (no live target)
 
