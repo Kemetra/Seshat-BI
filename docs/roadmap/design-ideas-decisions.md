@@ -77,7 +77,24 @@ optional exec-ceiling check (tokens declare exceeding 6 visuals = warning-with-
 reason). Not built now: nothing consumes it yet, and it would enforce a state
 this session just created before any human review (circular).
 
+## SHIPPED since this section was written (2026-07-04 git reconciliation)
+
+> Four ideas listed below as "owner decision" had in fact **already shipped** in
+> the 2026-07-02/03 build wave; this section (and `shipped-ideas.yaml`) lagged
+> git. Corrected 2026-07-04 — ledger rows added, verified as ancestors of
+> origin/main. **When this section disagrees with git, git wins.**
+
+| Idea | Shipped as | PR | Note |
+|------|-----------|----|------|
+| **D1** | `DR1` design_routes.py | #158 | scoped: path + stale-phrase (boundary.yaml deferred per owner ruling); registry → 52 |
+| **E2** | glossary↔registry bijection test (shrunk) | #161 | verify-only two-thirds; severity-into-`@register` third correctly dropped (ratified 044) |
+| **E7** | `retail doctor` (doctor.py) | #160 | read-only repo-wide drift digest (A3 routes_coverage + SC1 status_claims); broader than `scaffold --doctor` |
+| **H4** | `templates/kpi-sufficiency-card.md` | #157 | owner ruled *separate template*; present/absent + status, NO numeric score |
+
 ## RECOMMENDED — owner decision (recorded, not auto-built)
+
+_Genuinely open after the 2026-07-04 git reconciliation — the only two of the
+original six that have no shipping commit._
 
 - **B1** (anti-pattern parity): `visual-qa.md` (### headings) and
   `dashboard-qa.md` (pipe table) each list 13 anti-patterns with **divergent
@@ -85,14 +102,10 @@ this session just created before any human review (circular).
   pipe-table (`dashboard-qa.md`, which carries severities) canonical and align
   `visual-qa.md` to it.* Needs owner eyes (edits a human-authored doc) and the
   reviewer flagged the two-extractor approach as fragile.
-- **E2** (wiring-truth single-source): guard-vs-generate architecture call that
-  competes with the shipped `E1` meta-gate. Owner architecture decision.
-- **E7** (retail doctor aggregator): overlaps the shipped `scaffold --doctor`;
-  needs a distinctness ruling before it earns a build.
-- **H4** (contract-sufficiency card): the open F8-packaging ruling (separate
-  template vs fold into F8) — unchanged from the prior deferral.
-- **D1 / I3** (two-system boundary guard / shared-spine): each needs an
-  author-authored contract manifest — owner must author/authorize the contract.
+- **I3** (shared-checklist fork detector): needs an author-authored contract
+  manifest (which checklists must stay in lockstep) — owner must author/authorize
+  the contract before a rule can enforce it. The `specify` stage must NOT fabricate
+  this contract (Principle V).
 
 ## BLOCKED — inert until content lands (no live target)
 

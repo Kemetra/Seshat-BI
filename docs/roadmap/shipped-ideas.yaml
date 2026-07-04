@@ -246,3 +246,29 @@ F1:
   status: shipped
   pr_sha: "PR #159 ba76441 (snapshot F1) navigation regression harness for the COMPASS fast-routing table -- test-only harness, no @register rule/no src change"
   f_row: none
+
+# --- 2026-07-04 ledger-integrity reconciliation, wave 2 (D1, E2, E7, H4) ---
+# Four MORE snapshot ideas from the 2026-07-02/03 "open recommended" build wave
+# (design doc: docs/superpowers/specs/2026-07-03-open-recommended-ideas-build-plan-design.md)
+# shipped to origin/main but were never ledgered, so both authoritative surfaces
+# were stale: this ledger AND the RECOMMENDED-owner-decision section of
+# design-ideas-decisions.md still listed them as open. Corrected here (ledger) and
+# there (decisions doc) in the same PR. Verified 2026-07-04: each commit is an
+# ancestor of origin/main and the live artifact exists. Keyed by the 2026-07-01
+# snapshot short-code; none collides with an earlier ship.
+D1:
+  status: shipped
+  pr_sha: "PR #158 c98f5a3 (snapshot D1) @register DR1 src/retail/rules/design_routes.py -- design-layer route path foot-gun + stale-phrase guard (scoped: path + stale-phrase, boundary.yaml deferred per owner ruling); registry -> 52"
+  f_row: none
+E2:
+  status: shipped
+  pr_sha: "PR #161 c7f26ef (snapshot E2, shrunk) test: glossary rule-table <-> live-registry bijection -- the surviving verify-only two-thirds; the severity-into-@register third was correctly dropped (contradicts ratified 044 observed-not-declared). test-only, no @register rule"
+  f_row: none
+E7:
+  status: shipped
+  pr_sha: "PR #160 6cbc099 (snapshot E7) src/retail/doctor.py + `retail doctor` -- read-only repo-wide drift digest aggregating A3 routes_coverage + SC1 status_claims (broader than scaffold --doctor's wiring-only lockstep); no @register rule, no score, never self-grants"
+  f_row: none
+H4:
+  status: shipped
+  pr_sha: "PR #157 f7e78ad (snapshot H4) templates/kpi-sufficiency-card.md -- per-KPI present/absent + categorical ready/blocked + named blockers, NO numeric score (hard rule #9); owner ruled 'separate template' (not folded into F8). docs/template only, no rule/no code"
+  f_row: none
