@@ -49,6 +49,32 @@ wrong model (it would demand authoring 11 historical appendix entries).
 "not maintained in lockstep with shipped-ideas.yaml" note to the appendix so the
 intent is explicit.
 
+### E2 — Generated Wiring-Truth / Golden-Record Single-Source — DECLINED (2026-07-04)
+E2 has three parts; each is either dead or already shipped:
+1. **Severity-into-`@register`** (its load-bearing third) contradicts the
+   **ratified feature-044** model: severity is *observed per-branch*, not a rule
+   property — a single id (e.g. `S4b`) emits BOTH `ERROR` and `WARNING`, and
+   `severity_posture.py` observes this by forcing each branch. A decorator field
+   would contradict a ratified decision. Architecturally dead.
+2. **EXPECTED_RULE_IDS-from-snapshot** — the generate-from-registry contract is
+   already shipped in `src/retail/manifest.py` (`retail manifest`).
+3. **Live==committed lockstep assertion** — already covered by the shipped `E1`
+   5-place wiring meta-gate (`tests/unit/test_wiring_meta_gate.py`, #121).
+No genuine residual survives all three. **Discriminator: the ratified 044
+observed-not-declared severity model + shipped manifest.py + shipped E1.**
+
+### E7 — retail doctor / Lockstep-Drift Diagnostician — DECLINED (2026-07-04)
+E7's proposal (a read-only `doctor.py` aggregating the five wiring places and
+reporting per-id drift with no fix) is **already shipped** as `scaffold --doctor`
+(feature 062, `src/retail/scaffold.py::doctor` line 335): it reads all five
+wiring places (registry, `__init__`, wiring test EXPECTED set, manifest, severity
+posture) and reports per-rule-id drift, read-only, never fixing, never
+self-granting. The only residual (fold in `routes_coverage` / `status_claims` +
+file-existence probes) does not clear E7's own **split eligibility gate** (a
+reviewer voted PARK 5/6 over the read-vs-fix boundary), and the meta-completeness
+role belongs to the shipped E1. **Discriminator: shipped `scaffold --doctor` at
+`scaffold.py:335`.**
+
 ## LATENT BUG SURFACED (owner action — worth more than the rule)
 
 ### A6 — grid-fit: desktop-grid / blueprint inconsistency — RESOLVED (grid fixed)
@@ -85,12 +111,10 @@ this session just created before any human review (circular).
   pipe-table (`dashboard-qa.md`, which carries severities) canonical and align
   `visual-qa.md` to it.* Needs owner eyes (edits a human-authored doc) and the
   reviewer flagged the two-extractor approach as fragile.
-- **E2** (wiring-truth single-source): guard-vs-generate architecture call that
-  competes with the shipped `E1` meta-gate. Owner architecture decision.
-- **E7** (retail doctor aggregator): overlaps the shipped `scaffold --doctor`;
-  needs a distinctness ruling before it earns a build.
 - **H4** (contract-sufficiency card): the open F8-packaging ruling (separate
   template vs fold into F8) — unchanged from the prior deferral.
+  _(2026-07-04: driven to a ratifiable spec via `idea-to-spec`; awaiting human
+  ratification at the ratify ledger. Recommended packaging: separate template.)_
 - **D1 / I3** (two-system boundary guard / shared-spine): each needs an
   author-authored contract manifest — owner must author/authorize the contract.
 
