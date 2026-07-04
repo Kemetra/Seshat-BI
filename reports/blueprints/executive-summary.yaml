@@ -92,6 +92,10 @@ required_metric_contracts:
     store_ref: "<path-or-id in the metric-contract store (F009)>"
     status_required: "pass"
   - name: "<period-comparison-contract>"   # NAME ONLY (vs prior period / target)
+    # spec 088: the growth-contract STRUCTURE now exists to reference here --
+    #   skills/retail-kpi-knowledge/contracts/net-sales-growth.md (and ytd.md,
+    #   same-store-sales-growth.md). Still a placeholder: bind it once the
+    #   comparison-baseline (owner-pending) is ruled and the contract reaches pass.
     store_ref: "<path-or-id in the metric-contract store (F009)>"
     status_required: "pass"
   # NOTE: no `formula:` / `dax:` / `expression:` field exists here BY DESIGN.

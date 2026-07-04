@@ -1,0 +1,90 @@
+# =============================================================================
+# report-composition.yaml  --  the report ABOVE the pages (spec 088)
+# =============================================================================
+# Tower BI Agent Kit  -  Power BI Visual Foundation (F011A, Layer 6 Dashboard).
+# See: templates/dashboard-page-blueprint.yaml (one file = ONE page; this file
+# composes several of those into ONE report), docs/powerbi/dashboard-blueprints.md.
+#
+# WHAT THIS IS
+#   A GENERIC, copy-me template. A dashboard-page-blueprint describes ONE page; a
+#   report is SEVERAL pages plus the navigation between them. This artifact is the
+#   missing PARENT: page order, the landing page, the cross-page navigation model,
+#   and the inter-page links the page vocabulary already references (e.g.
+#   footer_status's "link to the data-quality control room"). It REFERENCES pages
+#   by their blueprint path -- it NEVER inlines a page's sections/visuals/metrics
+#   (that stays the blueprint's job, exactly as a blueprint references, never
+#   inlines, its visuals).
+#
+# INTENT, NOT EXECUTION (four-surface discipline; F016 owns rendering)
+#   This records the navigation INTENT (which page is the landing, which links go
+#   where, which filters carry across pages). The RENDERED navigation -- the actual
+#   buttons, page transitions, runtime filter transfer -- is authored/executed by
+#   F016 (PBIR), deferred. Nothing here authors a PBIP/PBIR, DAX, or SQL.
+#
+# REFERENCE-BY-NAME (Principle VII)
+#   Every page is a blueprint PATH reference; every carried filter and link target
+#   is a NAME. A page referenced with no blueprint is an ORPHAN -> do not list it;
+#   record the blocking reason (mirrors the orphan-visual rule in the blueprint).
+#
+# GENERIC (roadmap rule 7): every value below is an obvious placeholder. No
+# tenant/C086 specifics. ASCII + UTF-8 no BOM; short repo-relative paths (Windows).
+# =============================================================================
+
+# report_name -- the report this composition defines (stable, short).
+report_name: "<ReportName>"          # e.g. RetailExecReport
+
+# audience -- who this whole report serves (plain text; describes the reader).
+audience: "<who reads this report, e.g. executive + branch manager>"
+
+# -----------------------------------------------------------------------------
+# pages -- the ORDERED list of pages in the report. Each is a REFERENCE to a
+# dashboard-page-blueprint (by path), never an inlined page definition. A page
+# with no blueprint is an orphan (record the blocking reason instead of listing it).
+# -----------------------------------------------------------------------------
+pages:
+  - page_id: "<page_id>"             # matches the blueprint's page id
+    blueprint_ref: "<path to the page's dashboard-page-blueprint.yaml>"
+    order: "<int>"                   # reading order within the report
+  # - page_id: "<page_id_2>"
+  #   blueprint_ref: "<...>"
+  #   order: 2
+
+# -----------------------------------------------------------------------------
+# landing_page -- the page the reader arrives on first (a page_id from `pages`).
+# -----------------------------------------------------------------------------
+landing_page: "<page_id of the landing page>"
+
+# -----------------------------------------------------------------------------
+# navigation -- the inter-page links. Each is INTENT (from -> to, by page_id) plus
+# any named external link the page vocabulary references (e.g. the footer's
+# data-quality control-room link). F016 renders the actual buttons/transitions.
+# -----------------------------------------------------------------------------
+navigation:
+  - from_page: "<page_id>"           # source page
+    to: "<page_id | external link name>"   # target page, or a named external target
+    label: "<the link label the reader sees>"
+    purpose: "<why this link exists, e.g. 'drill from exec KPI to branch detail'>"
+  # e.g. the footer DQ link the blueprint's footer_status references:
+  # - from_page: "<any page_id>"
+  #   to: "data-quality-control-room"     # the named target the footer references
+  #   label: "Data quality"
+  #   purpose: "footer link to the DQ control room (footer_status)"
+
+# -----------------------------------------------------------------------------
+# cross_page_filters -- filters that CARRY across pages (by name), so a filter set
+# on one page persists to another. Intent only; F016 wires the runtime transfer.
+# -----------------------------------------------------------------------------
+cross_page_filters:
+  - "<dim_table>.<field>"            # mapped field carried across pages (F010)
+  # - "<dim_table>.<field_2>"
+
+# -----------------------------------------------------------------------------
+# readiness -- the report-composition's own state, using the FOUR explicit
+# statuses ONLY (no score, rule #9). A report is not `pass` until every referenced
+# page blueprint is itself dashboard_ready (the composition inherits, never
+# re-grants, that gate).
+# -----------------------------------------------------------------------------
+readiness:
+  status: "not_started"              # not_started | blocked | warning | pass
+  evidence: []
+  blocking_reasons: []               # e.g. "page <id> references no blueprint (orphan)"

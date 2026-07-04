@@ -151,6 +151,24 @@ interactions:
   drives_bookmark: "<bookmark name, or 'none'>"
 
 # -----------------------------------------------------------------------------
+# drill_through / drill_down (spec 088) -- OPTIONAL, additive. DESIGN INTENT only:
+# WHICH drill this visual OFFERS, to which target, carrying which filter (by name).
+# The RENDERED behavior (the click, the runtime filter transfer, focus/keyboard)
+# is F016's -- record intent here, never the execution. Reference targets/filters/
+# dimensions BY NAME (a target_page names a page in the report-composition; a
+# carried_filter names a mapped field); NEVER inline a DAX/SQL/query.
+# -----------------------------------------------------------------------------
+drill_through:
+  offers: "<true|false>"             # does this visual offer a drill-through?
+  target_page: "<page name in report-composition, or 'none'>"   # by name (F011A)
+  carried_filters:                   # the filter context carried to the target
+    - "<dim_table>.<field>"          # mapped field name (F010); no inlined query
+drill_down:
+  hierarchy:                         # ordered dimension levels (region -> branch -> SKU)
+    - "<dim_table>.<level_field>"    # mapped field per level; intent, not a runtime action
+    # - "<dim_table>.<next_level_field>"
+
+# -----------------------------------------------------------------------------
 # tooltip_behavior -- what the hover tooltip explains. A KPI with no comparison or
 # no explanation is an anti-pattern; a tooltip carries the context, not invented
 # data. Any field named here MUST also be mapped (semantic_model_fields).

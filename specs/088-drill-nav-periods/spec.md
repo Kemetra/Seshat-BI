@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-04
 
-**Status**: Draft
+**Status**: Ratified (Ahmed Shaaban, 2026-07-04) -- C1=structure-only, C2=add-report-composition, C4=combined
 
 **Input**: Owner request (2026-07-04): next gap wave = #4 (drill/nav) + #5
 (period-over-period), from the 2026-07-04 presenting-gap analysis. Authored as one

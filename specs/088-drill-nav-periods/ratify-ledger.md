@@ -37,13 +37,18 @@ adversarial review -> this ledger).
 | `.../ytd.md` (NEW) | F009 | Non-additive/period-accumulation; baseline flagged |
 | `reports/blueprints/executive-summary.yaml` | F011A | comment annotation only |
 
-## OWNER SEAMS -- your decision (agent recommends; you ratify)
+## OWNER SEAMS -- RATIFIED by Ahmed Shaaban, 2026-07-04 (via AskUserQuestion)
 
-| # | Decision | Recommended | Your call |
-|---|----------|-------------|-----------|
-| **C1 [BLOCKING]** | #5 = growth-contract STRUCTURE only; you rule the comparison-baseline + A11 later. Agent writes no definition. | A: structure only. | ______ |
-| **C2** | Add `report-composition.yaml` (new intent layer) vs defer US2. | A: add it (absent-by-gap; references pages only). | ______ |
-| **C4** | Knowingly ratify across F011A (#4) + F009 (#5), two risk stories. | Proceed combined (your chosen pairing). | ______ |
+| # | Decision | Recommended | Owner's call (Ahmed Shaaban, 2026-07-04) |
+|---|----------|-------------|------------------------------------------|
+| **C1 [BLOCKING]** | #5 = growth-contract STRUCTURE only; you rule baseline + A11 later. | A: structure only. | **RATIFIED: A -- structure only; owner rules the comparison-baseline + A11 later; agent writes no definition.** |
+| **C2** | Add `report-composition.yaml` vs defer US2. | A: add it. | **RATIFIED: A -- add report-composition.yaml.** |
+| **C4** | Ratify across F011A (#4) + F009 (#5). | Proceed combined. | **RATIFIED: proceed combined** (owner knowingly signs both risk stories). |
+
+**Spec Status: RATIFIED (Ahmed Shaaban, 2026-07-04).** Build may proceed from
+tasks.md (DEFINE-only). Structure only: RULING the comparison-baseline + A11,
+filling real values, and any enforcement rule remain separate owner-gated
+follow-ups (FR-011 / FR-010).
 
 ## To ratify
 
