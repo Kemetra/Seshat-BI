@@ -225,3 +225,24 @@ D2:
   status: shipped
   pr_sha: "PR #148 (snapshot D2) tests/unit/test_design_cards.py + docs/quality/design-cards-count.yaml -- adopts the orphaned validate_cards.py into the governed test surface (test-only, no @register rule)."
   f_row: none
+
+# --- 2026-07-04 ledger-integrity reconciliation (I1, I2, F1) ---
+# These three snapshot ideas SHIPPED before the 2026-07-01 bank snapshot's own waves
+# but were never recorded here, so a reconciliation against this ledger reported them
+# as "open". They appear in NEITHER this ledger NOR design-ideas-decisions.md; verified
+# 2026-07-04 that each PR's commit is an ancestor of origin/main + the live artifact
+# exists. Recorded now to close the ledger gap (per the file header: a backlog<->ledger
+# discrepancy is surfaced, not silently rewritten). Keyed by the 2026-07-01 snapshot
+# short-code (I1/I2/F1); none of these three keys collides with an earlier ship.
+I1:
+  status: shipped
+  pr_sha: "PR #132 661800e (spec 067-seed-route-honesty-rule; snapshot I1) A1 route rule gains a 'seed' status state -- src/retail/rules/routes.py (_VALID_STATUS/_MUST_RESOLVE include 'seed'); no new @register id, extends shipped A1"
+  f_row: none
+I2:
+  status: shipped
+  pr_sha: "PR #127 a5da4a1 + PR #157 (spec 067-bi-python-cleaning-artifacts, Ratified 2026-07-02; snapshot I2) land bi-python cleaning-review checklist + groupby-aggregation-grain knowledge; docs/knowledge only, no rule/no code"
+  f_row: none
+F1:
+  status: shipped
+  pr_sha: "PR #159 ba76441 (snapshot F1) navigation regression harness for the COMPASS fast-routing table -- test-only harness, no @register rule/no src change"
+  f_row: none
