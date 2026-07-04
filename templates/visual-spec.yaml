@@ -65,7 +65,17 @@
 visual_id: "<visual_id>"             # short stable id, e.g. exec_kpi_sales
 visual_type: "<type>"                # card | kpi_card | line_chart | bar_chart |
                                      #   column_chart | combo_chart | matrix |
-                                     #   table | slicer | map | tooltip
+                                     #   table | slicer | map | tooltip |
+                                     #   key_influencers | decomposition_tree |
+                                     #   smart_narrative
+                                     # The last three (spec 087) are DRIVER visuals
+                                     #   -- they explain "why did the number move".
+                                     #   This is a documented CONVENTION list, not a
+                                     #   code-enforced schema enum; F016 owns live
+                                     #   rendering. A driver visual references its
+                                     #   metric by contract name (never inlined) and
+                                     #   its attribution intent lives in
+                                     #   templates/driver-decomposition.md.
 business_question: "<one question this visual answers>"
                                      # e.g. "How are sales tracking vs last period?"
                                      # If none, do NOT emit the visual (FR-009).

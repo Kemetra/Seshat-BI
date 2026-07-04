@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-04
 
-**Status**: Draft
+**Status**: Ratified (Ahmed Shaaban, 2026-07-04) -- C1=action-on-contract, C2=combined, C3=enum-complete
 
 **Input**: Owner request (2026-07-04): "cover gaps in visualizing and business logics." Scope accepted = the KEYSTONE 3 gaps from the 2026-07-04 presenting-gap analysis, authored as ONE coherent decision-aid feature: gap #2 (KPI decision-readiness), gap #1 (narrative arc), gap #3 (driver/decomposition vocabulary). Runs in worktree ZEUS.
 

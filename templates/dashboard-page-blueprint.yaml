@@ -189,6 +189,32 @@ sections:
     purpose: "data-as-of / last-refresh note + link to the data-quality control room"
 
 # -----------------------------------------------------------------------------
+# narrative (spec 087, decision-aid layer) -- OPTIONAL, additive. The page's
+# top-line MESSAGE: what the reader should conclude and DO. Turns a wall of
+# well-formed visuals into a decision aid. A page WITHOUT it behaves exactly as
+# before. This is design INTENT (plain language); F016 owns any live rendering.
+#
+# REFERENCE-BY-NAME (four-surface discipline, Principle VII): where a slot names a
+# metric, it cites the APPROVED metric contract BY NAME (from required_metric_contracts)
+# -- it NEVER inlines a formula, a DAX expression, a SQL statement, or a raw gold
+# column. A named metric with no approved contract is an ORPHAN reference: do not
+# author it; record the blocking reason (mirrors the orphan-visual rule above).
+#
+# PRINCIPLE V: the headline/so-what/action/exception are HUMAN business judgments.
+# The agent RECOMMENDS; the owner supplies them. Placeholders until then -- never
+# an auto-invented claim, and never a numeric score (#9).
+# -----------------------------------------------------------------------------
+narrative:
+  headline: "<the one-sentence insight this page delivers; names a contract if it cites a metric>"
+    # e.g. "Net Sales are up vs prior period, but Gross Margin slipped below target."
+  so_what: "<why it matters to the audience -- the interpretation, not just the number>"
+    # e.g. "Volume growth is being bought with discount; margin is the risk, not sales."
+  recommended_action: "<the business action the reader should take; plain language, owner-supplied>"
+    # e.g. "Review discount depth in the underperforming category before month-end."
+  key_exception: "<the single most important exception/outlier to look at, by name>"
+    # e.g. "Branch <X> drives most of the margin drop -- start there."
+
+# -----------------------------------------------------------------------------
 # visuals -- REFERENCE LIST. Each entry names a visual by its visual_id and points
 # at its templates/visual-spec.yaml (one file per visual), and the section it sits
 # in. The page does NOT inline a visual's metric/fields/formatting -- that is the

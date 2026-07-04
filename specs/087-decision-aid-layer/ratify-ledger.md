@@ -34,13 +34,17 @@ analyze -> adversarial review -> this ledger).
 | `templates/visual-spec.yaml` | F011A | +3 driver `visual_type` convention values |
 | `templates/driver-decomposition.md` (NEW) | F011A | new factor-attribution artifact |
 
-## OWNER SEAMS -- your decision (agent recommends; you ratify)
+## OWNER SEAMS -- RATIFIED by Ahmed Shaaban, 2026-07-04 (via AskUserQuestion)
 
-| # | Decision | Recommended | Your call |
-|---|----------|-------------|-----------|
-| **C1** | `action_on_breach` ON the contract, or a sibling response-policy artifact. | **A: on the contract** (atomic decision-ready unit; contract already carries readiness+ambiguities). | ______ |
-| **C2** | Knowingly ratify a spec spanning 3 governed artifacts (F009 + F011A x2 + new). | Proceed combined (your chosen mode); no boundary guard crossed (verified). | ______ |
-| **C3** | `direction_of_good` enum = `higher\|lower\|target_band` -- complete for your KPI set? | Yes (retail has target-band KPIs: stock cover, price-index). | ______ |
+| # | Decision | Recommended | Owner's call (Ahmed Shaaban, 2026-07-04) |
+|---|----------|-------------|------------------------------------------|
+| **C1** | `action_on_breach` on the contract vs sibling. | A: on the contract. | **RATIFIED: A -- on the contract.** |
+| **C2** | Ratify a spec spanning 3 governed artifacts. | Proceed combined. | **RATIFIED: proceed combined** (owner knowingly signs all 3 surfaces). |
+| **C3** | `direction_of_good` enum complete? | Yes. | **RATIFIED: complete (higher\|lower\|target_band).** |
+
+**Spec Status: RATIFIED (Ahmed Shaaban, 2026-07-04).** Build may proceed from
+tasks.md (T101 onward, DEFINE-only). Template fields only; backfilling real KPIs
+(FR-011) + the enforcement rule (FR-010) remain separate owner-gated follow-ups.
 
 ## To ratify
 

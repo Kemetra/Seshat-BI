@@ -177,6 +177,55 @@ ambiguities: []                       # e.g.:
                                       #   number_moving: true
 
 # -----------------------------------------------------------------------------
+# DECISION-READINESS (spec 087, decision-aid layer) -- OPTIONAL, additive.
+# Makes a KPI decision-ready: which way is "good", the categorical bands that make
+# a value red/amber/green, and the business action when a band is breached. A
+# downstream KPI card (surface 1) reads these to show a target + sentiment. A
+# contract WITHOUT this block behaves exactly as before (it is not required to be
+# valid). Consumed by the DQ control-room threshold reference and by KPI-card
+# design intent -- never rendered here (F016 owns rendering).
+#
+# PRINCIPLE V -- every value below is a HUMAN business judgment. The agent
+# RECOMMENDS; the named owner DECIDES. Leave the placeholders until the owner
+# supplies them. On a `pass` contract, an unfilled `direction_of_good` or
+# `thresholds.target` is a DISCIPLINE-level open the owner records as a
+# blocking_reason -- it is NOT auto-filled, and (today) NOT machine-enforced by a
+# `retail check` rule (a future optional rule may enforce it; see spec 087 FR-010).
+#
+# NO NUMERIC SCORE (roadmap rule #9 / never_fabricate_a_confidence_score):
+# `thresholds` are NAMED BAND BOUNDARIES expressed in the METRIC'S OWN UNIT
+# (e.g. margin %, days of cover, EGP) -- they are NOT a 0-100 confidence/health
+# score, and a filled copy MUST NOT turn them into one.
+# -----------------------------------------------------------------------------
+
+# direction_of_good -- which way is better for this metric. Owner-decided enum.
+#   higher       larger is better (e.g. Net Sales, Gross Margin %)
+#   lower        smaller is better (e.g. Returns Rate, Stockout %)
+#   target_band  good only INSIDE a range (e.g. days-of-cover, price-index vs
+#                competitor); requires `thresholds` to express a two-sided band.
+direction_of_good: "<higher|lower|target_band>"   # owner-decided; never agent-invented
+
+# thresholds -- the categorical bands, in the metric's OWN UNIT. NOT a score (#9).
+#   target    the goal value the metric is measured against ("none" if the owner
+#             has not set one -- on a `pass` contract that is a blocking open).
+#   good/warn/critical  the band boundaries. For direction_of_good: higher, a
+#             value >= good is green, >= warn is amber, else red; for lower, the
+#             comparison inverts; for target_band, `good` is the acceptable
+#             distance from target and `warn`/`critical` are widening bands.
+thresholds:
+  target: "<value in the metric's own unit | none>"   # e.g. "40 (percent)"; owner-set
+  good: "<band boundary in the metric's own unit>"    # e.g. "38 (percent)"
+  warn: "<band boundary in the metric's own unit>"    # e.g. "35 (percent)"
+  critical: "<band boundary in the metric's own unit>"# e.g. "30 (percent)"
+  # NB: values are units of THIS metric, never a 0-100 confidence score.
+
+# action_on_breach -- the plain-language business action per band. What a reader
+# should DO, not a score. Owner-supplied; placeholder until then (Principle V).
+action_on_breach:
+  warn: "<the business action when the metric enters the warn band>"      # e.g. "flag to branch manager in the weekly review"
+  critical: "<the business action when the metric enters the critical band>"  # e.g. "escalate to regional ops; open a corrective action"
+
+# -----------------------------------------------------------------------------
 # AUTHORING: Principle-V stop-and-ask triggers (verbatim across all F009 artifacts).
 # Each of these is a HUMAN judgment call. The agent RECOMMENDS; the named owner
 # DECIDES. When any holds, record it as a blocking_reason and set status `blocked`
