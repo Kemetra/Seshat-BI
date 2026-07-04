@@ -57,6 +57,15 @@
 - **[NEEDS CLARIFICATION: deferred `retail validate` live surface]** The live
   reconciliation (`reconciliation-report.md`) is filled from a live DB run after silver
   + gold exist. The `training` DB is reachable, so this can run once the build exists.
+- **[ANSWERED -- 2026-07-05 -- H9-time-intel time-intelligence contract policies]** The
+  three planned time-intelligence metric-contract policies were ruled by the named
+  metric owner: **D1 = C** (defer same-store; A11 stays open), **D2 = A** (sale date),
+  **D3 = C** (both baselines, YoY primary). Recorded off this mapping-stage table (which
+  is `CLEARED`) in the durable decision record `approval-decision-H9-time-intel.md`
+  answering `approval-request-H9-time-intel.md`; a `semantic_model_ready` policy-amendment
+  entry is in `readiness-status.yaml` `approvals[]`. Authoring the two unblocked contracts
+  (`ytd-net-sales`, `net-sales-growth`) is a separate F009 step; `same-store-sales-growth`
+  stays `[planned]` (A11 unruled).
 
 ---
 

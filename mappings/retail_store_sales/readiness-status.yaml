@@ -98,6 +98,10 @@ approvals:
     owner: "Ahmed Shaaban (data_owner)"   # named human, acting as BI report owner
     at: "2026-06-25"
     note: "approved the dashboard design / visual->contract binding map (10 visuals, zero orphans, all 5 contracts bound; v04 discount caveat noted)"
+  - stage: "semantic_model_ready"
+    owner: "Ahmed Shaaban (metric_owner)"   # named human, metric_owner authority (F009 metric-contract policy)
+    at: "2026-07-05"
+    note: "AMENDMENT (not a re-pass): ruled the H9-time-intel time-intelligence contract policies -- D1=C defer same-store (A11 stays open), D2=A sale date (A3), D3=C both baselines YoY-primary. Unblocks future F009 authoring of ytd-net-sales + net-sales-growth; same-store-sales-growth stays [planned]. Stage remains pass on its original 5-contract evidence; record: approval-decision-H9-time-intel.md."
   # NOTE: a publish_ready approval was recorded 2026-06-25 and then RETRACTED the same
   # day -- it was given against a handoff pack framing DiscountedTransactionRate as
   # 33.55%, which was corrected to the approved known-status definition (50.37%). The

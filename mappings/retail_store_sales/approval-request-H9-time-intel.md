@@ -4,7 +4,7 @@
 - **stage:** `semantic_model_ready`
 - **subject:** the planned time-intelligence + same-store metric contracts (`ytd-net-sales`, `net-sales-growth`, `same-store-sales-growth`) for the retail KPI layer
 - **owner_required:** `metric-owner`  *(these are metric-contract policy decisions; see Authority class below)*
-- **status:** `open`  *(a request is `open` until a named human answers it via approval-decision.md; it never answers itself)*
+- **status:** `answered`  *(ruled 2026-07-05 by Ahmed Shaaban (metric_owner): D1=C, D2=A, D3=C -- see `approval-decision-H9-time-intel.md`. A request is `open` until a named human answers it via approval-decision.md; it never answers itself.)*
 
 > **Why this is packaged, not decided.** The three planned contracts each depend on a
 > business-definition ambiguity the kit is forbidden to resolve on its own (Principle V;
