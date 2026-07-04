@@ -141,3 +141,42 @@ theme spec lands to check, and (b) the owner fires the spec (per the
 ask-before-firing rule). **Discriminator: no *filled* theme-spec instance (one
 carrying real token hexes + a `Status:`/reviewer, not the template's placeholders)
 exists outside `templates/` today.**
+
+## HELD — gap #8 (i18n / RTL) — NO BUILD, layout is already direction-neutral
+
+_Design/business gap #8 from the 2026-07-04 gap analysis: does the design layer
+handle right-to-left (Arabic) presentation? Investigated 2026-07-04; the honest
+answer is **no active hole, no live target — hold, do not build.**_
+
+**What the investigation found (grounded):**
+- **No hardcoded LTR commitment.** The discriminating grep for spatial direction
+  (`placement: left|right`, horizontal `order:`, `align: left|right`) across
+  `templates/`, `reports/`, `docs/powerbi/` returns **nothing**. The only
+  `placement:` values are semantic (`fact_measure`, `dropped`, `degenerate_dim`),
+  and the grid is a **row-band model with no column/side concept** — a
+  `filter_rail` is `placement: side`, not `left`. Section "reading order" is
+  **top-to-bottom (vertical)**, which is direction-neutral. The layout primitives
+  are already largely RTL-safe by construction.
+- **No active integrity hole** (unlike gap #6): nothing lets an author assert a
+  false i18n claim. Absence of a `direction` field is a missing *feature*, not a
+  self-assertion hole.
+- **No live target + unverified scope.** Nothing in the tree exercises
+  Arabic-*language* display. The kit's established model is **English display over
+  Arabic *source* data** — `retail-term-dictionary` maps Arabic source → canonical
+  English meaning, and the shipped worked example is deliberately English-only
+  ("no Arabic↔English mapping needed"). RTL is a display concern for
+  Arabic-language dashboards, which no committed artifact needs today.
+
+**Held (owner-fired, only if RTL display ever comes into scope):** a single
+additive **declared-intent** field `direction: ltr | rtl` (default `ltr`) on the
+report/page composition — mirroring 088's drill/nav intent (F016 owns the rendered
+mirroring/alignment; the kit declares intent only, never authors the mechanics).
+**Not built now:** manufacturing a direction field for a use case no committed
+artifact exercises is the "manufacture a contract to drain the backlog" move this
+doc exists to refuse. **Discriminator: the spatial-direction grep above returns
+nothing, and no Arabic-language display artifact exists in the tree.**
+
+> Tier note: gap #6 was the last *governance-integrity* gap (a false-claim hole).
+> #7 (delivery formats) and #8 (i18n/RTL) are *feature-coverage* gaps with no live
+> target — 6 of 8 gaps addressed; the remaining two are nice-to-haves held for a
+> real need, not manufactured now.
