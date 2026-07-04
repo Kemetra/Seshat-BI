@@ -33,7 +33,7 @@ A1:
   f_row: none
 B1:
   status: shipped
-  pr_sha: "PR #64 9d12589"
+  pr_sha: "PR #181 a136f47 (+ #183 16f2bac fix) @register AP1 src/retail/rules/rule_ap1.py -- visual-qa <-> dashboard-qa anti-pattern parity (spec 085, ratified 2026-07-04); two format-specific extractors (### headings vs pipe table), fail-closed on count/number->name/name divergence; registry -> 54. CORRECTED 2026-07-04: prior value 'PR #64 9d12589' was a mis-mapping (that PR is the never-execute-invariant test, unrelated to anti-pattern parity)."
   f_row: none
 B2:
   status: shipped
@@ -271,4 +271,8 @@ E7:
 H4:
   status: shipped
   pr_sha: "PR #157 f7e78ad (snapshot H4) templates/kpi-sufficiency-card.md -- per-KPI present/absent + categorical ready/blocked + named blockers, NO numeric score (hard rule #9); owner ruled 'separate template' (not folded into F8). docs/template only, no rule/no code"
+  f_row: none
+I3:
+  status: shipped
+  pr_sha: "PR #182 a5d6f21 @register SF1 src/retail/rules/rule_sf1.py -- cross-layer checklist fork detector (spec 086, ratified 2026-07-04); globs skills/**/checklists/*.md and reconciles against the owner-authored docs/quality/shared-spine.yaml fork contract (shared=byte-identical, distinct=may differ); registry -> 55"
   f_row: none
