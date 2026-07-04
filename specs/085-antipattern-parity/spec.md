@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-04
 
-**Status**: Draft
+**Status**: Ratified (Ahmed Shaaban, 2026-07-04) -- C1=align-first, id=AP1, same-PR landing
 
 **Input**: User description: "Anti-Pattern Parity Rule (workflow <-> prose thirteen-in-lockstep)" -- idea B1 from docs/roadmap/idea-backlog.md (CONSIDER). Two committed docs each carry the SAME thirteen visual-QA anti-patterns but in DIFFERENT structural formats and with DIVERGENT wording; nothing enforces that they stay in lockstep, so an edit to one can silently drift from the other.
 

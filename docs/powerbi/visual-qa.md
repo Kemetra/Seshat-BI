@@ -42,7 +42,7 @@ sign that two surfaces have been blended.
 
 ## The anti-patterns
 
-### 1. Too many visuals on a page
+### 1. Too many visuals on one page
 
 **Looks like**: a page crammed with a dozen or more charts, cards, and tables, so
 no single object draws the eye and the reader must hunt for the answer.
@@ -58,7 +58,7 @@ rest to a diagnostic/detail page or a drill-through. Keep an executive page with
 the conservative max-visuals guidance in
 `design/tokens/tower-retail-design-tokens.yaml`.
 
-### 2. KPI without comparison or context
+### 2. KPI without comparison/context
 
 **Looks like**: a card showing a bare number -- a total or a count -- with no prior
 period, target, variance, or trend beside it.
@@ -106,7 +106,7 @@ decimal places) consistently. Note: number formatting is a presentation default
 (theme/visual format), NOT a metric definition -- the metric's meaning lives in
 its contract (F009).
 
-### 5. Slicers dominating the page
+### 5. Slicers taking too much space
 
 **Looks like**: a wall of slicers/filters taking a large share of the canvas,
 crowding out the visuals that actually answer the question.
@@ -122,7 +122,7 @@ visuals*. Filters serve the answer; they are not the answer.
 secondary filters, and keep only the few slicers the page's question needs in the
 canvas. Reserve the prime canvas for the insight visuals.
 
-### 6. Table as the main executive visual
+### 6. Table used as the main executive visual
 
 **Looks like**: a large detail table or matrix as the centerpiece of an executive
 page, where a card or chart should carry the headline.

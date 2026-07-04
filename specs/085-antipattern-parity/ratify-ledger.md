@@ -35,13 +35,18 @@ tasks -> analyze -> adversarial review -> this ledger). NOT via a plan workflow
   - [MEDIUM] hardcoded 13 brittleness -> FR-013 documents it.
   - [LOW] this ledger now exists.
 
-## OWNER SEAMS -- your decision (the agent recommends; you ratify)
+## OWNER SEAMS -- RATIFIED by Ahmed Shaaban, 2026-07-04 (via AskUserQuestion)
 
-| # | Decision | Recommended | Your call |
-|---|----------|-------------|-----------|
-| **C1** | Synonym map vs align-first. Align-first = you edit `visual-qa.md` so its 13 names exactly match `dashboard-qa.md`'s (the canonical side) BEFORE the rule lands green; then exact normalized equality, no map. | **A: align-first, no map** (clean lockstep, no map-rot; matches the standing B1 recommendation). Requires one prose edit to `visual-qa.md`. | ______ |
-| **C4** | Concrete `@register` rule id. | `AP1` (assigned by `retail scaffold`; you confirm). | ______ |
-| **Landing posture** | Pre-alignment the rule is RED on the current tree (by design, SC-001). Land the `visual-qa.md` alignment edit in the SAME PR, OR land the rule as xfail/skip pending your edit? | **Same PR** (rule + alignment edit together = green, atomic). | ______ |
+| # | Decision | Recommended | Owner's call (Ahmed Shaaban, 2026-07-04) |
+|---|----------|-------------|------------------------------------------|
+| **C1** | Synonym map vs align-first. | A: align-first, no map. | **RATIFIED: A (align-first, no map).** |
+| **C4** | Concrete `@register` rule id. | `AP1`. | **RATIFIED: AP1.** |
+| **Landing posture** | Same PR vs xfail-pending. | Same PR. | **RATIFIED: same PR** (rule + visual-qa.md alignment edit together). |
+
+**Spec Status: RATIFIED (Ahmed Shaaban, 2026-07-04).** Build may proceed from
+tasks.md (T101 onward). The agent may draft the visual-qa.md name-alignment edit
+(mechanical: rename 2 headings to the canonical names) for the owner's review in
+the same PR -- transcribing the ratified align-first decision, not making a new one.
 
 ## To ratify
 
