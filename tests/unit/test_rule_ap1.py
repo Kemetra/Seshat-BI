@@ -59,11 +59,16 @@ def test_count_mismatch_is_error_before_compare() -> None:
 
 
 def test_dropped_entry_is_error_naming_the_gap() -> None:
+    # dashboard-qa.md skips #7 and adds #14 (13 rows, numbering {1-6,8-14}). This
+    # is a malformed OWN-list numbering (gap + out-of-range), which the own-list
+    # numbering guard (Codex #181 P2b) catches before the cross-doc compare -- an
+    # earlier, more precise error than the old "#7 absent across docs" path. The
+    # gap is still named (the missing 7).
     findings = list(check_ap1(_ctx("dropped_entry")))
-    assert findings, "a number->name gap must ERROR"
+    assert findings, "a number gap must ERROR"
     assert all(f.severity is Severity.ERROR for f in findings)
     joined = " ".join(f.message for f in findings)
-    assert "#7" in joined  # the dropped number is named
+    assert "7" in joined  # the dropped number is named (either "#7" or "missing 7")
 
 
 def test_renamed_entry_is_error_naming_both_strings() -> None:
@@ -111,6 +116,31 @@ def test_each_extractor_returns_thirteen_from_its_own_doc() -> None:
     dash = (root / DASHBOARD_QA_REL).read_text(encoding="utf-8")
     assert len(_extract_headings(vis)) == 13
     assert len(_extract_table(dash)) == 13
+
+
+# --- Codex #181 P2 hardening: extractor specificity + duplicate numbers --------
+
+
+def test_foreign_numeric_table_is_not_read_as_anti_patterns() -> None:
+    """Codex #181 P2a: dashboard-qa.md carries a valid 13-row catalog PLUS an
+    unrelated numeric table (a severity legend). The extractor must anchor to the
+    anti-pattern catalog only -- reading the legend rows would inflate the count
+    and falsely ERROR (or, worse, mask a real drift). A well-formed pair with a
+    foreign numeric table present must still PASS."""
+    assert list(check_ap1(_ctx("foreign_numeric_table"))) == []
+
+
+def test_duplicate_number_is_error_even_when_both_docs_share_it() -> None:
+    """Codex #181 P2b: both docs reuse #7 and omit #13 (13 rows each). The naive
+    number->name dict collapses the duplicate, so a pure cross-doc compare returns
+    green even though neither doc carries the stable 1..13 numbering the prose
+    cross-references. AP1 must validate each doc's OWN numbering (no dupes, no gaps)
+    and ERROR."""
+    findings = list(check_ap1(_ctx("duplicate_number")))
+    assert findings, "a duplicate/gapped own-list numbering must ERROR"
+    assert all(f.severity is Severity.ERROR for f in findings)
+    joined = " ".join(f.message for f in findings).lower()
+    assert "7" in joined or "13" in joined or "number" in joined
 
 
 # --- US3: normalization is case-fold + whitespace only, NO synonym map --------
