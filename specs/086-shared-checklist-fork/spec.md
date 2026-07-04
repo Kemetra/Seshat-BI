@@ -4,7 +4,7 @@
 
 **Created**: 2026-07-04
 
-**Status**: Draft
+**Status**: Ratified (Ahmed Shaaban, 2026-07-04) -- fork=distinct, id=SF1, agent authorized to scaffold the spine shape transcribing the distinct ruling
 
 **Input**: User description: "Shared-Checklist Fork Detector" -- idea I3 from docs/roadmap/idea-backlog.md (CONSIDER / HORIZON). As more cross-layer checklists appear under `skills/**/checklists/`, two skills can end up carrying the SAME-basename checklist that has silently diverged (a fork). Nothing declares which same-basename files are intentionally shared (must stay identical) vs intentionally distinct (per-layer specialization) -- so a fork cannot be distinguished from drift.
 

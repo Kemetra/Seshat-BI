@@ -25,13 +25,18 @@ analyze -> adversarial review -> this ledger).
   [MED] bad-enum FR-008b added; [MED] this ledger created; [LOW] SC-004 write-test
   added; [LOW] merge-clash noted.
 
-## OWNER SEAMS -- your decision (heavier than B1's: needs an AUTHORED contract)
+## OWNER SEAMS -- RATIFIED by Ahmed Shaaban, 2026-07-04 (via AskUserQuestion)
 
-| # | Decision | Recommended | Your call |
-|---|----------|-------------|-----------|
-| **C1** | Rule the existing fork `aggregation-grain-checklist.md` (bi-bigdata vs bi-python): `shared` (reconcile to identical) or `distinct` (intentional per-layer). | **distinct** as a HYPOTHESIS (they read as different-scope: distributed vs python). But this is YOUR judgment -- the agent must not set it. | ______ |
-| **C2** | Author `docs/quality/shared-spine.yaml` with the C1 ruling. Agent may commit the documented SHAPE only on request; you fill the value. | You author it (or authorize the shape scaffold, then fill). | ______ |
-| **C4** | Concrete `@register` id. | `SF1` (scaffold assigns; you confirm). | ______ |
+| # | Decision | Recommended | Owner's call (Ahmed Shaaban, 2026-07-04) |
+|---|----------|-------------|------------------------------------------|
+| **C1** | Rule the existing fork `aggregation-grain-checklist.md`: shared or distinct. | distinct (hypothesis). | **RATIFIED: distinct** (intentional per-layer: distributed vs python). |
+| **C2** | Author `docs/quality/shared-spine.yaml`. | Owner authors, or authorizes the shape scaffold. | **AUTHORIZED: agent scaffolds the shape with the owner-confirmed `distinct` value; owner owns future entries.** |
+| **C4** | Concrete `@register` id. | `SF1`. | **RATIFIED: SF1.** |
+
+**Spec Status: RATIFIED (Ahmed Shaaban, 2026-07-04).** Fork ruled `distinct`; the
+agent is authorized to scaffold `docs/quality/shared-spine.yaml` transcribing that
+ruling (the agent transcribes the owner's `distinct` decision -- it does NOT decide
+it). Build may proceed from tasks.md.
 
 ## To ratify
 

@@ -98,7 +98,7 @@ This catalog is the **single source of truth for `retail check`'s rule count.**
 The **live registry in `src/retail/rules/` is authoritative**; the table below
 mirrors it and the `retail-govern` skill maps each id to its fix.
 
-> **Currently 54 rules in 20 families** (S, D, C, R, RS, G, P, A, B, PP, SC, DF, SL, AL, AD, AQ, DL, CT, DR, AP).
+> **Currently 55 rules in 21 families** (S, D, C, R, RS, G, P, A, B, PP, SC, DF, SL, AL, AD, AQ, DL, CT, DR, AP, SF).
 > When a rule is added or removed, update the table and this line **together** — and
 > elsewhere refer to "the static `retail check` gate" by name rather than restating a
 > number. Restated counts are exactly what drifted before (see
@@ -127,6 +127,7 @@ mirrors it and the `retail-govern` skill maps each id to its fix.
 | **CT** | contrast / accessibility | `CT1` token text/background color pairs meet the token-declared WCAG contrast floor (deterministic sRGB luminance ratio, pass/fail against `accessibility.min_text_contrast_ratio`, never a score) |
 | **DR** | design-layer route honesty | `DR1` path foot-gun + stale-phrase guard -- no tracked file lives under a `.claude/worktrees/` scratch prefix, and no doc still contains a curated known-stale phrase (`docs/quality/design-stale-phrases.yaml`; the inverse of SC1's anchor-presence check) |
 | **AP** | anti-pattern parity | `AP1` the thirteen visual-QA anti-patterns are in lockstep across `docs/powerbi/visual-qa.md` (`### N.` headings) and `dashboard-qa.md` (pipe table) -- two format-specific extractors, exact normalized-name equality (align-first, no synonym map); count / number->name / name divergence ERRORs |
+| **SF** | shared-checklist fork | `SF1` a same-basename checklist appearing in 2+ `skills/**/checklists/` is declared `shared` (copies byte-identical) or `distinct` (copies may differ) in the human-authored `docs/quality/shared-spine.yaml`; undeclared collision / shared-drift / bad value / missing manifest ERROR, stale-entry / moot-distinct WARN (never rules the fork itself) |
 
 ## Project shorthand
 

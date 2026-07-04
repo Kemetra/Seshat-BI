@@ -1,0 +1,22 @@
+# Shared-spine manifest -- the HUMAN-AUTHORED cross-layer checklist contract that
+# rule SF1 (src/retail/rules/rule_sf1.py, spec 086, idea I3) enforces.
+#
+# When a checklist BASENAME appears under 2+ skills/**/checklists/ directories,
+# it is a cross-layer collision that MUST be declared here, exactly once, as:
+#   shared    -- all copies MUST be byte-identical (a drift is a defect)
+#   distinct  -- the copies MAY differ (intentional per-layer specialization)
+#
+# SF1 fails fail-closed on: an UNDECLARED collision, a `shared` basename whose
+# copies drift, a value that is not `shared`/`distinct`, or a missing/unparseable
+# file. It WARNs on a stale entry (declared basename that no longer collides) and
+# on a `distinct` basename whose copies became identical (declaration now moot).
+#
+# This file is HUMAN-AUTHORED. SF1 only READS it -- it never writes or generates
+# it, and never rules a fork shared-vs-distinct (that is a Principle-V judgment).
+#
+# Ratified 2026-07-04 (Ahmed Shaaban): aggregation-grain-checklist.md is DISTINCT
+# -- the bi-bigdata copy is the distributed/at-scale route; the bi-python copy is
+# the single-node groupby route. They are intentionally different-scope artifacts.
+
+checklists:
+  aggregation-grain-checklist.md: distinct

@@ -212,6 +212,10 @@
     "title": "Prose rule-count claims reconcile with the authoritative count"
   },
   {
+    "id": "SF1",
+    "title": "cross-layer checklist fork detector"
+  },
+  {
     "id": "SL1",
     "title": "Committed KPI coverage scorecard is structurally well-formed"
   }

@@ -42,6 +42,7 @@ def test_all_rules_returns_a_tuple() -> None:
 EXPECTED_RULE_IDS = frozenset(
     {
         "AP1",
+        "SF1",
         "DR1",
         "S1",
         "S2",
