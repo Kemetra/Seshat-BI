@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from ..core import Finding, RuleContext, Severity
+from ..core import Finding, RuleContext, RuleTier, Severity
 from ..registry import register
 
 _MANIFEST = "docs/quality/parked-on.yaml"
@@ -48,7 +48,11 @@ def _finding(message: str, locator: str) -> Finding:
     )
 
 
-@register("DF1", "Parked-on dependency edges reconcile with tracked-file evidence")
+@register(
+    "DF1",
+    "Parked-on dependency edges reconcile with tracked-file evidence",
+    tier=RuleTier.KIT_SELF,
+)
 def check_parked_on(ctx: RuleContext) -> Iterable[Finding]:
     if _MANIFEST not in ctx.tracked_files:
         return [

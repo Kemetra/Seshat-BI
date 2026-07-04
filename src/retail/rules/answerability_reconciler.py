@@ -34,7 +34,7 @@ from __future__ import annotations
 import re
 from typing import Iterable
 
-from ..core import Finding, RuleContext, Severity, is_test_path
+from ..core import Finding, RuleContext, RuleTier, Severity, is_test_path
 from ..registry import register
 
 RULE_ID = "AQ1"
@@ -89,7 +89,9 @@ def _is_header(cells: list[str]) -> bool:
 
 
 @register(
-    RULE_ID, "Domain decision-question routes resolve or are honestly marked planned"
+    RULE_ID,
+    "Domain decision-question routes resolve or are honestly marked planned",
+    tier=RuleTier.KIT_SELF,
 )
 def check_answerability(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []

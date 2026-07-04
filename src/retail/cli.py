@@ -327,10 +327,17 @@ def main(argv: list[str] | None = None) -> int:
             commit_range=args.commit_range,
             commit_message=commit_message,
         )
+        # Spec A drop-in fitness: in a repo the kit was merely downloaded into
+        # (not bootstrapped), KIT_SELF rules SKIP (INFO) instead of ERROR-ing on
+        # internal manifests that repo can't have. The kit's own repo IS
+        # bootstrapped, so nothing skips there -- behavior is unchanged.
+        from .kit_lint import is_bootstrapped
+
+        bootstrapped = is_bootstrapped(Path(args.repo))
         # Default 'text' calls the unchanged run(); 'json' is the opt-in path.
         if args.output_format == "json":
-            return run_json(all_rules(), ctx)
-        return run(all_rules(), ctx)
+            return run_json(all_rules(), ctx, bootstrapped=bootstrapped)
+        return run(all_rules(), ctx, bootstrapped=bootstrapped)
 
     if args.command == "validate":
         return _run_validate(args)

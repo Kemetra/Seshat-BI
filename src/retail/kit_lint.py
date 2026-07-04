@@ -53,11 +53,20 @@ class LintReport:
         return all(r.ok for r in self.results)
 
 
-def _is_bootstrapped(repo: Path) -> bool:
-    """A repo is lintable once it has a kit source + a compass projection."""
+def is_bootstrapped(repo: Path) -> bool:
+    """True once ``repo`` has a kit source + a compass projection.
+
+    Public since Spec A: the CLI check path and the generators (Spec C) reuse this
+    single predicate to decide whether a repo is the kit itself (run everything) or
+    a repo the kit was merely downloaded into (KIT_SELF rules skip; generators refuse).
+    """
     return (repo / compass_project.SOURCE_REL).exists() and (
         repo / compass_project.COMPASS_REL
     ).exists()
+
+
+# Back-compat alias for internal callers/tests that referenced the private name.
+_is_bootstrapped = is_bootstrapped
 
 
 def check_yaml_projection(repo: Path) -> CheckResult:

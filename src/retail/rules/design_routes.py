@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from ..core import Finding, RuleContext, Severity
+from ..core import Finding, RuleContext, RuleTier, Severity
 from ..registry import register
 
 RULE_ID = "DR1"
@@ -135,7 +135,11 @@ def _check_stale_phrases(ctx: RuleContext) -> list[Finding]:
     return findings
 
 
-@register(RULE_ID, "Design-layer route path foot-gun + stale-phrase guard")
+@register(
+    RULE_ID,
+    "Design-layer route path foot-gun + stale-phrase guard",
+    tier=RuleTier.KIT_SELF,
+)
 def check_design_routes(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
     findings.extend(_check_footgun_paths(ctx))

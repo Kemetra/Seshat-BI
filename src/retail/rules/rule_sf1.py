@@ -26,7 +26,7 @@ import hashlib
 import re
 from typing import Iterable
 
-from ..core import Finding, RuleContext, Severity, is_test_path
+from ..core import Finding, RuleContext, RuleTier, Severity, is_test_path
 from ..registry import register
 
 RULE_ID = "SF1"
@@ -62,7 +62,7 @@ def _collect(ctx: RuleContext) -> dict[str, list[str]]:
     return groups
 
 
-@register(RULE_ID, "cross-layer checklist fork detector")
+@register(RULE_ID, "cross-layer checklist fork detector", tier=RuleTier.KIT_SELF)
 def check_sf1(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
 

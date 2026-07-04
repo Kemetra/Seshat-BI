@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from ..core import Finding, RuleContext, Severity
+from ..core import Finding, RuleContext, RuleTier, Severity
 
 # The registry decorator is imported, not the manifest. The manifest is read at
 # rule-run time from the tracked file below.
@@ -57,7 +57,11 @@ def _finding(message: str, locator: str) -> Finding:
     )
 
 
-@register("A1", "Route registry targets resolve or are honestly marked planned")
+@register(
+    "A1",
+    "Route registry targets resolve or are honestly marked planned",
+    tier=RuleTier.KIT_SELF,
+)
 def check_routes_resolve(ctx: RuleContext) -> Iterable[Finding]:
     # Read-only: the manifest must be a tracked file. If it is absent the gate
     # fails loud rather than passing with nothing to check.

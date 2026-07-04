@@ -29,7 +29,7 @@ from __future__ import annotations
 import re
 from typing import Iterable
 
-from ..core import Finding, RuleContext, Severity, is_test_path
+from ..core import Finding, RuleContext, RuleTier, Severity, is_test_path
 from ..registry import register
 
 RULE_ID = "AP1"
@@ -115,7 +115,9 @@ def _read(ctx: RuleContext, rel: str) -> str | None:
         return None
 
 
-@register(RULE_ID, "visual-qa <-> dashboard-qa anti-pattern parity")
+@register(
+    RULE_ID, "visual-qa <-> dashboard-qa anti-pattern parity", tier=RuleTier.KIT_SELF
+)
 def check_ap1(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
 

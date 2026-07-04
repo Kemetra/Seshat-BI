@@ -37,9 +37,12 @@ comes last.
 1. `core.py` — add `tier: str = "work-repo"` to `RegisteredRule`; add `RuleTier` constants
    `KIT_SELF = "kit-self"`, `WORK_REPO = "work-repo"`.
 2. `registry.py` — `register(rule_id, title, tier=RuleTier.WORK_REPO)` threads tier through.
-3. Tag the kit-internal rules `tier=KIT_SELF`: **A1, A3, SC1, SC2, SF1 (I3), AP1, DF1** plus the
-   corpus/prose/commit-range rules surfaced as noise — **AQ1, DR1, P2**. Everything else keeps
-   the default (`WORK_REPO`) and always gates: G1–G6, P1, S1–S8, D-series, C-series, B1, R1, etc.
+3. Tag the kit-internal rules `tier=KIT_SELF` (10): **A1, A3, SC1, SC2, SF1 (I3), AP1, DF1, AQ1, DR1**
+   — each reads a KIT manifest a foreign repo cannot have. Everything else keeps the default
+   (`WORK_REPO`) and always gates: G1–G6, P1, P2, S1–S8, D-series, C-series, B1, R1, etc.
+   **NOTE:** P2 (commit-message convention) is deliberately WORK_REPO, not kit-self — any repo can
+   adopt a commit convention; it reads the commit range (which any git repo has), not a kit manifest.
+   Its BI-fixture `HEAD~1..HEAD` error is an *empty-history* case handled under Spec D, not here.
 4. `runner.py` — `run(rules, ctx, *, bootstrapped=True)` / `run_json(...)`. When `not bootstrapped`,
    a `KIT_SELF` rule is **not executed**; one `INFO` finding is emitted:
    `"<id> skipped (kit-self rule; repo not kit-bootstrapped)"`. `WORK_REPO` rules always run.
@@ -55,6 +58,18 @@ comes last.
   Guarded by the existing rules-manifest snapshot test (manifest schema unchanged — see C).
 
 **Out of scope (YAGNI):** re-tiering `doctor` (already self-labels advisory) — a later spec.
+
+**Acceptance (measured against the `GitHub/BI` fixture, read-only):** `retail check --repo BI`
+→ **0 kit-self ERRORs** (was ~24 kit-manifest errors flooding the run) + **9 KIT_SELF rules skip
+as INFO**. The kit's OWN repo → byte-identical (bootstrapped ⇒ nothing skips, 0 findings, exit 0).
+Only genuinely-portable defects still gate on BI: P1 (missing READMEs), G4 (.gitattributes),
+S4a (migration gap), **C2 (committed secret) + G6 (real host in a PBIP param)** — the latter two
+were previously buried under the flood and are real, valuable drop-in signal.
+
+**KNOWN GAP (logged, not fixed here):** P2 (commit-message) is portable and correctly runs on BI,
+but errors `could not read commit range 'HEAD~1..HEAD'` on BI's single-commit history. That is a
+rule-robustness gap (no prior commit ⇒ *not-applicable*, should be INFO/skip, not ERROR) — orthogonal
+to Spec A's tier concept and to Spec D's DSN semantics. Tracked as a follow-up; not in this chain.
 
 ---
 

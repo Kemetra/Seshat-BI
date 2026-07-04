@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from ..core import Finding, RuleContext, Severity
+from ..core import Finding, RuleContext, RuleTier, Severity
 from ..registry import register
 
 _MANIFEST = "docs/quality/rule-count-claims.yaml"
@@ -51,7 +51,11 @@ def _finding(message: str, locator: str) -> Finding:
     )
 
 
-@register("SC2", "Prose rule-count claims reconcile with the authoritative count")
+@register(
+    "SC2",
+    "Prose rule-count claims reconcile with the authoritative count",
+    tier=RuleTier.KIT_SELF,
+)
 def check_rule_count_claims(ctx: RuleContext) -> Iterable[Finding]:
     # 1. The manifest must be a tracked file; if absent the gate fails loud rather
     #    than passing with nothing to check.

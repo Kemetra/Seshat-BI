@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from ..core import Finding, RuleContext, Severity
+from ..core import Finding, RuleContext, RuleTier, Severity
 from ..registry import register
 
 _MANIFEST = "docs/routing/routes.yaml"
@@ -144,7 +144,11 @@ def _manifest_ids(ctx: RuleContext) -> set[str] | list[Finding]:
     return ids
 
 
-@register("A3", "Knowledge-map route ids and the routing manifest ids are in bijection")
+@register(
+    "A3",
+    "Knowledge-map route ids and the routing manifest ids are in bijection",
+    tier=RuleTier.KIT_SELF,
+)
 def check_route_coverage(ctx: RuleContext) -> Iterable[Finding]:
     # Fail-loud branches FIRST -- no unreadable input may fall through to an
     # empty-set comparison (which would be a vacuous green).

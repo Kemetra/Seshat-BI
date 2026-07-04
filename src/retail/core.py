@@ -21,6 +21,22 @@ class Severity(str, Enum):
     INFO = "info"  # informational only
 
 
+class RuleTier(str, Enum):
+    """Which repos a rule is meaningful in (Spec A -- drop-in fitness).
+
+    ``WORK_REPO`` (the default) is a PORTABLE rule: it checks a work artifact
+    (SQL, PBIP, layout, gitattributes) that any BI repo can have, so it always
+    runs. ``KIT_SELF`` checks one of the KIT's OWN internal manifests (route
+    registry, status-claims, shared-spine, ...) which a repo the kit was merely
+    downloaded into cannot have; such a rule SKIPs (one INFO finding) when the
+    repo is not kit-bootstrapped, instead of ERROR-ing on an absent manifest.
+    Mirrors kit_lint's "absence is not drift" (FR-006).
+    """
+
+    WORK_REPO = "work-repo"
+    KIT_SELF = "kit-self"
+
+
 @dataclass(frozen=True)
 class Finding:
     rule_id: str
@@ -71,3 +87,6 @@ class RegisteredRule:
     id: str
     rule: Rule
     title: str
+    # Spec A: defaults to WORK_REPO so every already-registered rule is a
+    # portable rule that always gates -- existing kit behavior is unchanged.
+    tier: RuleTier = RuleTier.WORK_REPO

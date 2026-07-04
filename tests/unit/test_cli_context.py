@@ -94,7 +94,7 @@ def test_main_commit_msg_file_is_read_and_stripped(
 
     # Patch where cli looks it up, and stub run so no rules execute.
     monkeypatch.setattr("retail.cli.build_context", fake_build_context)
-    monkeypatch.setattr("retail.cli.run", lambda rules, ctx: 0)
+    monkeypatch.setattr("retail.cli.run", lambda rules, ctx, **kw: 0)
 
     rc = main_under_test(["check", "--commit-msg-file", str(msg_file)])
 
@@ -116,7 +116,7 @@ def test_main_commit_range_flag_threads_through(
         return RuleContext(repo_root=repo_root, tracked_files=())
 
     monkeypatch.setattr("retail.cli.build_context", fake_build_context)
-    monkeypatch.setattr("retail.cli.run", lambda rules, ctx: 0)
+    monkeypatch.setattr("retail.cli.run", lambda rules, ctx, **kw: 0)
 
     rc = main_under_test(["check", "--commit-range", "origin/main..HEAD"])
 
@@ -142,7 +142,7 @@ def test_main_commit_msg_file_strips_crlf(
         return RuleContext(repo_root=repo_root, tracked_files=())
 
     monkeypatch.setattr("retail.cli.build_context", fake_build_context)
-    monkeypatch.setattr("retail.cli.run", lambda rules, ctx: 0)
+    monkeypatch.setattr("retail.cli.run", lambda rules, ctx, **kw: 0)
 
     rc = main_under_test(["check", "--commit-msg-file", str(msg_file)])
 
@@ -157,7 +157,7 @@ def test_main_missing_commit_msg_file_returns_1_with_message(
     # readable message, not raise SystemExit mid-function (audit #28) nor a raw
     # FileNotFoundError traceback. The __main__ guard does sys.exit(main()).
     missing = tmp_path / "does-not-exist"
-    monkeypatch.setattr("retail.cli.run", lambda rules, ctx: 0)
+    monkeypatch.setattr("retail.cli.run", lambda rules, ctx, **kw: 0)
 
     rc = main_under_test(["check", "--commit-msg-file", str(missing)])
 
