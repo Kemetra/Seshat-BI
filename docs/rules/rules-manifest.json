@@ -112,6 +112,10 @@
     "title": "A layout grid's column/row arithmetic closes against its canvas and margins"
   },
   {
+    "id": "DL6",
+    "title": "A visual-spec that self-attests an anti-pattern records a blocking reason"
+  },
+  {
     "id": "DR1",
     "title": "Design-layer route path foot-gun + stale-phrase guard"
   },

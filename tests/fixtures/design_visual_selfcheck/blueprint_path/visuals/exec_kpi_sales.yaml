@@ -1,0 +1,24 @@
+# FIXTURE (blueprint-path): a filled spec authored the documented page-blueprint
+# way -- an arbitrary basename under a visuals/ directory (spec_ref
+# `.../visuals/<visual_id>.yaml`, templates/dashboard-page-blueprint.yaml:200) --
+# NOT literally named visual-spec.yaml. DL6 must DISCOVER it and, because it
+# self-attests an anti-pattern with no recorded reason, ERROR.
+visual_id: "exec_kpi_sales"
+visual_type: "kpi_card"
+business_question: "How are sales tracking vs last period?"
+
+anti_pattern_checks:
+  uses_metric_without_contract: false
+  uses_unmapped_field: false
+  kpi_without_comparison: true         # self-attested defect ...
+  unclear_date_context: false
+  wrong_or_inconsistent_number_format: false
+  table_as_main_executive_visual: false
+  no_tooltip_explanation: false
+  inconsistent_category_colors: false
+  references_inlined_formula_or_dax: false
+
+readiness:
+  status: "blocked"
+  evidence: []
+  blocking_reasons: []                 # ... but NO reason recorded -> DL6 ERROR

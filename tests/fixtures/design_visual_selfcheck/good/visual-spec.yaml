@@ -1,0 +1,30 @@
+# FIXTURE (good): a visual that self-attests an anti-pattern AND records why.
+# DL6 must PASS this: a true anti_pattern_check is paired with a real
+# readiness.blocking_reasons entry (single-spec consistency holds).
+visual_id: "exec_kpi_sales"
+visual_type: "kpi_card"
+business_question: "How are sales tracking vs last period?"
+
+metric_contract:
+  name: "metric_net_sales"
+  store_ref: "some/store/ref"
+  status_required: "pass"
+  none: false
+
+anti_pattern_checks:
+  uses_metric_without_contract: false
+  uses_unmapped_field: true            # self-attested defect -> needs a reason
+  kpi_without_comparison: false
+  unclear_date_context: false
+  wrong_or_inconsistent_number_format: false
+  table_as_main_executive_visual: false
+  no_tooltip_explanation: false
+  inconsistent_category_colors: false
+  references_inlined_formula_or_dax: false
+
+readiness:
+  status: "blocked"
+  evidence:
+    - "approved metric contract metric_net_sales + mapped field list"
+  blocking_reasons:
+    - "unmapped field: fct_sales.region_code -- not in the governed model"

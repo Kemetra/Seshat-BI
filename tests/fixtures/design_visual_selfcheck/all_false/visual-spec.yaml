@@ -1,0 +1,28 @@
+# FIXTURE (all_false): a clean visual -- no anti-pattern self-attested, no
+# blocking reasons required. DL6 must PASS (nothing to pair).
+visual_id: "exec_kpi_clean"
+visual_type: "kpi_card"
+business_question: "How are sales tracking vs last period?"
+
+metric_contract:
+  name: "metric_net_sales"
+  store_ref: "some/store/ref"
+  status_required: "pass"
+  none: false
+
+anti_pattern_checks:
+  uses_metric_without_contract: false
+  uses_unmapped_field: false
+  kpi_without_comparison: false
+  unclear_date_context: false
+  wrong_or_inconsistent_number_format: false
+  table_as_main_executive_visual: false
+  no_tooltip_explanation: false
+  inconsistent_category_colors: false
+  references_inlined_formula_or_dax: false
+
+readiness:
+  status: "pass"
+  evidence:
+    - "approved metric contract metric_net_sales + mapped field list"
+  blocking_reasons: []

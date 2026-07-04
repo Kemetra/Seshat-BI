@@ -90,6 +90,7 @@ EXPECTED_RULE_IDS = frozenset(
         "DL3",  # design-lint: token->theme fidelity (declared values match)
         "DL4",  # design-lint: design-review evidence record is well-formed
         "DL5",  # design-lint: layout grid arithmetic closes (usable == grid-derived)
+        "DL6",  # design-lint: visual-spec self-attested anti-pattern carries a reason
         "CT1",  # contrast: token text/background pairs meet the declared WCAG floor
         "AD1",  # additivity-consistency: no illegal additivity composition in lineage
         "AQ1",  # answerability: domain decision-question routes resolve or are planned

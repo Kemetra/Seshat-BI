@@ -1,0 +1,31 @@
+# FIXTURE (bad): a visual that self-attests an anti-pattern but leaves the
+# reason UNRECORDED (blocking_reasons carries only the template placeholder).
+# DL6 must ERROR: a true anti_pattern_check with no paired blocking reason is a
+# single-spec inconsistency (a flagged defect with no "why").
+visual_id: "exec_kpi_orphan"
+visual_type: "kpi_card"
+business_question: "What is total sales?"
+
+metric_contract:
+  name: "metric_net_sales"
+  store_ref: "some/store/ref"
+  status_required: "pass"
+  none: false
+
+anti_pattern_checks:
+  uses_metric_without_contract: true   # self-attested defect ...
+  uses_unmapped_field: false
+  kpi_without_comparison: false
+  unclear_date_context: false
+  wrong_or_inconsistent_number_format: false
+  table_as_main_executive_visual: false
+  no_tooltip_explanation: false
+  inconsistent_category_colors: false
+  references_inlined_formula_or_dax: false
+
+readiness:
+  status: "blocked"
+  evidence:
+    - "<e.g. the approved metric contract ref + the mapped field list>"
+  blocking_reasons:                    # ... but NO real reason recorded
+    - "<e.g. 'orphan visual: no contract for <business_question>'>"
