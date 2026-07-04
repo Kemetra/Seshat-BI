@@ -8,7 +8,7 @@ with additivity (cumulative measures are semi-additive).
 | KPI | Contract | Status |
 |-----|----------|--------|
 | YTD Net Sales | — | Planned (reuses Net Sales over fiscal calendar) |
-| Net Sales Growth % (period-over-period) | — | Planned |
+| Net Sales Growth % (period-over-period) | `contracts/net-sales-growth.md` | Seeded |
 
 ## Decision questions this domain answers
 
@@ -19,7 +19,7 @@ question is a deferred note — never a fabricated contract.
 | Decision question | Routes to | Status |
 |-------------------|-----------|--------|
 | How are we doing so far this (fiscal) year? | — | Planned (YTD Net Sales — reuses Net Sales over fiscal calendar) |
-| How does this period compare to the last? | — | Planned (Net Sales Growth %, period-over-period) |
+| How does this period compare to the last? | `contracts/net-sales-growth.md` | Seeded |
 
 ## Key ambiguities (see knowledge/kpi-ambiguities.md)
 

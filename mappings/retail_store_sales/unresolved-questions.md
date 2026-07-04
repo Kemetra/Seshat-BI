@@ -63,9 +63,12 @@
   **D3 = C** (both baselines, YoY primary). Recorded off this mapping-stage table (which
   is `CLEARED`) in the durable decision record `approval-decision-H9-time-intel.md`
   answering `approval-request-H9-time-intel.md`; a `semantic_model_ready` policy-amendment
-  entry is in `readiness-status.yaml` `approvals[]`. Authoring the two unblocked contracts
-  (`ytd-net-sales`, `net-sales-growth`) is a separate F009 step; `same-store-sales-growth`
-  stays `[planned]` (A11 unruled).
+  entry is in `readiness-status.yaml` `approvals[]`. **`net-sales-growth` is now Seeded**
+  (D2+D3 were its only open decisions; 2026-07-05). **`ytd-net-sales` is NOT yet
+  unblocked** — it carries a SEPARATE owner-pending ambiguity H9 did not touch (the
+  fiscal-vs-calendar year-start + partial-period normalization), packaged as
+  `approval-request-YTD-year-start.md`; it stays `[planned]` until that is ruled.
+  `same-store-sales-growth` stays `[planned]` (A11 unruled).
 
 ---
 
