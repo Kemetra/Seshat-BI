@@ -46,14 +46,28 @@ def _dump(doc: object) -> str:
 
 
 def _literal(value: object) -> dict:
-    """Wrap a scalar in the PBIR expr/Literal value shape."""
+    """Wrap a scalar in the PBIR expr/Literal value shape.
+
+    Matches the wire format proven by the Microsoft PBIP sample fixture:
+    - bool  -> ``true`` / ``false``
+    - int   -> a DAX long literal with the ``L`` suffix (e.g. ``70L``, ``0L``)
+    - float -> the plain number (e.g. ``0.5``)
+    - str   -> a single-quoted literal with embedded ``'`` doubled (e.g.
+      ``'Today''s Sales'``) -- an unescaped quote is malformed PBIR.
+    """
     if isinstance(value, bool):
         v = "true" if value else "false"
-    elif isinstance(value, (int, float)):
+    elif isinstance(value, int):
+        v = f"{value}L"  # PBIR integer literals carry the DAX long suffix
+    elif isinstance(value, float):
         v = f"{value}"
+    elif isinstance(value, str):
+        v = "'" + value.replace("'", "''") + "'"  # double embedded quotes
     else:
-        # string values are single-quoted literals in PBIR (e.g. 'Top')
-        v = f"'{value}'"
+        raise PbirFormatError(
+            f"formatting value must be a bool/int/float/str, got "
+            f"{type(value).__name__}: {value!r}"
+        )
     return {"expr": {"Literal": {"Value": v}}}
 
 

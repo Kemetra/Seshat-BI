@@ -58,6 +58,36 @@ def test_sets_a_new_group_property(tmp_path: Path) -> None:
     assert props["show"] == {"expr": {"Literal": {"Value": "true"}}}
 
 
+def test_integer_property_uses_dax_long_suffix(tmp_path: Path) -> None:
+    # PBIR integer literals carry the DAX long suffix (the real fixture uses 0L/70L).
+    vj = _copy(tmp_path)
+    apply_visual_format(
+        vj, {"visualContainerObjects": {"dropShadow": {"shadowBlur": 12}}}, force=True
+    )
+    doc = json.loads(vj.read_text())
+    props = doc["visual"]["visualContainerObjects"]["dropShadow"][0]["properties"]
+    assert props["shadowBlur"] == {"expr": {"Literal": {"Value": "12L"}}}
+
+
+def test_string_with_embedded_quote_is_doubled(tmp_path: Path) -> None:
+    # An embedded single quote must be doubled ('') or the PBIR literal is malformed.
+    vj = _copy(tmp_path)
+    apply_visual_format(
+        vj,
+        {"visualContainerObjects": {"title": {"text": "Today's Sales"}}},
+        force=True,
+    )
+    doc = json.loads(vj.read_text())
+    props = doc["visual"]["visualContainerObjects"]["title"][0]["properties"]
+    assert props["text"] == {"expr": {"Literal": {"Value": "'Today''s Sales'"}}}
+
+
+def test_non_scalar_value_raises(tmp_path: Path) -> None:
+    vj = _copy(tmp_path)
+    with pytest.raises(PbirFormatError, match="bool/int/float/str"):
+        apply_visual_format(vj, {"objects": {"labels": {"show": [1, 2]}}})
+
+
 def test_data_binding_is_byte_identical(tmp_path: Path) -> None:
     # THE FR-003 guarantee: formatting must NOT change query/visualType.
     vj = _copy(tmp_path)
