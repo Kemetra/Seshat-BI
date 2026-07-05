@@ -204,6 +204,10 @@
     "title": "PBIR model reference must be relative"
   },
   {
+    "id": "R2",
+    "title": "PBIR report.json is valid, keeps its schema, and references exist"
+  },
+  {
     "id": "RS1",
     "title": "Readiness status files are internally consistent"
   },
