@@ -117,6 +117,30 @@
     "G6": [
       "error"
     ],
+    "HR11": [
+      "<no-finding>"
+    ],
+    "HR12": [
+      "<no-finding>"
+    ],
+    "HR2": [
+      "<no-finding>"
+    ],
+    "HR4": [
+      "<no-finding>"
+    ],
+    "HR5": [
+      "<no-finding>"
+    ],
+    "HR6": [
+      "<no-finding>"
+    ],
+    "HR7": [
+      "<no-finding>"
+    ],
+    "HR8": [
+      "<no-finding>"
+    ],
     "P1": [
       "error"
     ],
@@ -172,9 +196,6 @@
     ],
     "SL1": [
       "error"
-    ],
-    "HR7": [
-      "<no-finding>"
     ]
   }
 }

@@ -148,8 +148,36 @@
     "title": "No real host/value in committed PBIP parameters"
   },
   {
+    "id": "HR11",
+    "title": "summed measure inputs share a unit"
+  },
+  {
+    "id": "HR12",
+    "title": "forward source data-contract presence"
+  },
+  {
+    "id": "HR2",
+    "title": "declared SCD type per gold dimension"
+  },
+  {
+    "id": "HR4",
+    "title": "source freshness declaration"
+  },
+  {
+    "id": "HR5",
+    "title": "snapshot fact measures declare time_additivity"
+  },
+  {
+    "id": "HR6",
+    "title": "RLS role contract binds to a real dim column"
+  },
+  {
     "id": "HR7",
     "title": "reload-strategy declaration for gold loads"
+  },
+  {
+    "id": "HR8",
+    "title": "gold date dim is contiguous/gap-free"
   },
   {
     "id": "P1",
