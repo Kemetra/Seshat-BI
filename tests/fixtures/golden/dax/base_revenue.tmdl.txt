@@ -1,0 +1,4 @@
+	/// the total money taken across all transactions
+	measure TotalRevenue = SUM('gold fct_sales_rss'[total_spent])
+		formatString: #,0
+		displayFolder: Measures

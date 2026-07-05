@@ -148,8 +148,8 @@ new claim is made; this demonstrates the taxonomy decides real tools with no ove
 | `readiness-status.yaml`, `source-map.yaml`, metric contracts, `approvals[]`, `assumptions.md`, `unresolved-questions.md` | 4 / 5 | **Core Authority** (the truth) |
 | the conductor (`retail-orchestrate`) | 1 | **Official Workflow Skill** |
 | `retail-validate`, `retail-govern`, `retail-semantic-check`, table onboarding wizard | 1-4 | **Official Workflow Skill** |
-| control room (F012), grain-confidence reviewer (F008) | 3-4 | **Product Module / `read-only`** |
-| BI handoff pack (F013), dashboard design (F011) | 6 | **Product Module / `artifact-writing`** |
+| control room (F012), grain-confidence reviewer (F008), cross-table lineage (F036) | 3-6 | **Product Module / `read-only`** |
+| BI handoff pack (F013), dashboard design (F011), consumer data dictionary (F037) | 6 | **Product Module / `artifact-writing`** |
 | Power BI execution adapter (F016, official Power BI MCP / connection) | 6 | **Execution Adapter / `publish-capable`** |
 
 ## How F025-F033 declare against this contract

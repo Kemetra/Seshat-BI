@@ -1,0 +1,1 @@
+SUM('gold fct_sales_rss'[total_spent])

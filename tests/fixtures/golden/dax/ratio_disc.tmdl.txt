@@ -1,0 +1,4 @@
+	/// share of transactions that had a discount, among known-status
+	measure DiscountedRate = DIVIDE(CALCULATE(COUNTROWS('gold fct_sales_rss'), 'gold fct_sales_rss'[discount_applied] = TRUE()), CALCULATE(COUNTROWS('gold fct_sales_rss'), NOT(ISBLANK('gold fct_sales_rss'[discount_applied]))))
+		formatString: 0.0%
+		displayFolder: Measures

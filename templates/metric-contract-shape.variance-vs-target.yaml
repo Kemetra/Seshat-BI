@@ -1,0 +1,212 @@
+# =============================================================================
+# metric-contract-shape.variance-vs-target.yaml -- a FILLED PATTERN of
+# templates/metric-contract.yaml applied to an actual-vs-plan (RAG) variance
+# metric, e.g. "Net Sales vs Target %".
+# =============================================================================
+# Feature 095 (actuals-vs-target budget fact + variance readiness). This is a
+# SHAPE, not a real, filled contract: it uses the EXACT field set of
+# templates/metric-contract.yaml (F009) as read on 2026-07-04 -- ZERO new
+# fields, ZERO renamed fields, ZERO forked template. See
+# docs/patterns/target-budget-fact.md for the modelling pattern this contract
+# shape files into, and skills/retail-kpi-knowledge/domains/targets-and-budgets.md
+# for the domain this closes the gap for.
+#
+# NOTE ON FIELD-SET CURRENCY: templates/metric-contract.yaml has, since this
+# feature's design phase, also grown a decision-readiness block (spec 087:
+# direction_of_good / thresholds / action_on_breach). This shape mirrors the
+# CURRENT (not the design-time-snapshotted) field set, including that block,
+# so the field-set diff against templates/metric-contract.yaml stays a true
+# zero-new/zero-renamed match. The RAG-threshold open item this feature names
+# (FR-009) lives on the `thresholds` block below -- that block IS the RAG
+# mechanism on the current template; it is not "a field the template lacks."
+#
+# WHAT A VARIANCE METRIC FILLS DIFFERENTLY FROM A SIMPLE ADDITIVE-SUM METRIC:
+#   - `grain` names a COMPARISON grain (the coarser, target-side rollup), not
+#     the fact's own base grain.
+#   - `formula_intent` must name a SECOND gold table (the target fact) in
+#     plain language, because `binds_to` is scalar-shaped for one table.
+#   - `binds_to.gold_table` is filled with the actuals table only (the
+#     existing single-table shape, used as-is); the two-table tension is
+#     flagged as an open note, never a forced second key.
+#   - `ambiguities[]` carries a required missing-target entry.
+#   - `readiness.blocking_reasons[]` carries two required entries (missing
+#     target case + missing RAG threshold) rather than starting empty.
+#   - `thresholds` stays unfilled (marked NEEDS CLARIFICATION) until an owner
+#     supplies RAG banding -- this is business policy, not a kit default.
+#
+# Every value below is an obvious placeholder (Principle VII: this shape is
+# generic, never a specific table's filled contract). No target VALUE, no
+# variance percentage, and no RAG numeric threshold appears anywhere in this
+# file (Principle V; FR-010).
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# identity
+# -----------------------------------------------------------------------------
+name: "<VarianceMetricName>"          # PascalCase, e.g. NetSalesVsTargetPercent.
+                                      #   Stable; a DAX measure of the same name
+                                      #   traces to this contract.
+
+# -----------------------------------------------------------------------------
+# grain -- for a variance metric this is the COMPARISON grain: the (typically
+# coarser, target-side) grain at which actuals are rolled up to meet targets.
+# It is a DESCRIPTION here, never a concrete per-table value -- which specific
+# dimensions a real table's rollup uses is owner-supplied (see
+# docs/patterns/target-budget-fact.md Section 2 and Section 4).
+# -----------------------------------------------------------------------------
+grain: "<the comparison grain -- e.g. 'valid at the target fact's own grain
+        (typically coarser than the actuals fact, such as month x store x
+        category); actuals are rolled up to meet this grain, never the
+        reverse'>"
+
+# -----------------------------------------------------------------------------
+# formula_intent -- plain-language INTENT, never DAX/SQL. For a variance
+# metric this ALSO names, in plain language, the SECOND (target) gold table
+# this metric compares against, since binds_to below names only one table.
+# -----------------------------------------------------------------------------
+formula_intent: "<plain-language meaning, e.g.: 'The ratio of actual net sales
+                 to planned/target net sales at the comparison grain,
+                 expressed as a percentage. Computed non-additively: sum
+                 actuals separately, sum targets separately, at the
+                 comparison grain, then divide -- never average two
+                 already-computed percentages (see
+                 skills/retail-kpi-knowledge/domains/targets-and-budgets.md).
+                 Reads actuals from the gold_table named below AND from a
+                 SECOND gold table, the target/budget fact
+                 (<gold.target_fact_placeholder> -- name TBD per table), which
+                 is not itself a binds_to entry because binds_to is
+                 single-table-shaped; see the OPEN NOTE on binds_to below.'>"
+
+# -----------------------------------------------------------------------------
+# owner -- named human; never "the agent", never blank.
+# -----------------------------------------------------------------------------
+owner: "<named metric owner>"
+
+# -----------------------------------------------------------------------------
+# binds_to -- the template's EXISTING single-table shape, used as-is. Filled
+# with the PRIMARY (actuals) gold table only. The target (second) table's
+# identity is carried in formula_intent above, not as a second binds_to key.
+# -----------------------------------------------------------------------------
+binds_to:
+  gold_table: "gold.<actuals_fact_placeholder>"   # the ACTUALS fact only.
+    # OPEN NOTE (for human / F009-owner review): a variance metric structurally
+    # needs a SECOND gold table (the target/budget fact) at the comparison
+    # grain. templates/metric-contract.yaml's binds_to block is scalar-shaped
+    # for one table today. This shape does NOT invent a second binds_to key
+    # or fork the template to add one -- it names the target table in
+    # formula_intent instead and flags the gap here for the F009 owner to
+    # decide, if ever, whether binds_to should grow a multi-table shape. This
+    # is not a Principle-V grain/PII/business judgment call; it is a
+    # template-capability note.
+  columns:
+    - "<actuals_measure_column_placeholder>"      # e.g. net_amount; the
+                                                    #   actuals-side measure
+                                                    #   this metric reads.
+  pii_sensitive: false                             # matches the template's
+                                                    #   own default; a real
+                                                    #   table's PII status is
+                                                    #   that table's own
+                                                    #   determination.
+
+# -----------------------------------------------------------------------------
+# readiness -- FOUR explicit statuses only. A variance contract shape starts
+# `blocked` because RAG thresholds and grain are, by definition, not yet
+# owner-supplied on an unfilled shape.
+# -----------------------------------------------------------------------------
+readiness:
+  status: "blocked"                    # not_started | blocked | warning | pass
+  evidence: []
+  blocking_reasons:
+    - "missing-target case: at least one dimension member in the actuals
+       star has no corresponding target row; per
+       skills/retail-kpi-knowledge/domains/targets-and-budgets.md this MUST
+       be flagged, never defaulted to 0% -- resolve via the ambiguities[]
+       entry below before this contract can leave blocked."
+    - "RAG thresholds not yet owner-supplied: this metric's thresholds block
+       is unfilled ([NEEDS CLARIFICATION: RAG thresholds are owner-supplied
+       business policy, not a kit default]); a named owner must supply
+       target/good/warn/critical before this contract can leave blocked."
+
+# -----------------------------------------------------------------------------
+# ambiguities[] -- the EXISTING id/decision_status/ruling/evidence/
+# number_moving shape (no new ledger field). The missing-target case is
+# recorded here as a required pattern entry, citing targets-and-budgets.md's
+# own named ambiguity.
+# -----------------------------------------------------------------------------
+# NOTE: this entry uses ONLY the template's existing id/decision_status/
+# ruling/evidence/number_moving shape -- no new ambiguity-ledger field is
+# added. The missing-target case itself is per
+# skills/retail-kpi-knowledge/domains/targets-and-budgets.md's own named key
+# ambiguity ("Missing targets ... must be flagged, not shown as 0%"): a
+# dimension member present in actuals with no corresponding target row MUST
+# be surfaced as an explicit flag, never defaulted to 0% or silently dropped.
+ambiguities:
+  - id: "<ambiguity-id-placeholder>"    # this shape's missing-target case is
+                                        #   not itself one of the numbered
+                                        #   A1..A11 kpi-ambiguities.md items;
+                                        #   a real filled contract for a
+                                        #   specific table records whichever
+                                        #   A-numbered ambiguities actually
+                                        #   apply to that table, plus this
+                                        #   missing-target case as an
+                                        #   additional named entry.
+    decision_status: "undecided"
+    ruling: ""
+    evidence: []
+    number_moving: true                 # a missing-target member changes the
+                                        #   reported variance number if
+                                        #   mishandled -- forces blocked,
+                                        #   per the template's own fail-safe.
+
+# =============================================================================
+# DECISION-READINESS (spec 087 block, OPTIONAL/additive on the current
+# template -- included here as placeholders because the field-set match
+# (SC-005) requires mirroring the CURRENT template exactly). This is the
+# block where RAG bands actually live on the current template.
+# =============================================================================
+
+# direction_of_good -- owner-decided; never agent-invented. Left as a
+# placeholder here; a variance-vs-target percent is COMMONLY "higher is
+# better", but this shape does not assert that for any real table.
+direction_of_good: "<higher|lower|target_band>"
+
+# thresholds -- NO numeric value anywhere in this shape. This is WHERE a RAG
+# threshold is recorded once an owner supplies one -- not a value itself.
+thresholds:
+  target: "none"    # [NEEDS CLARIFICATION: RAG thresholds are owner-supplied
+                    #   business policy, not a kit default] -- "none" here
+                    #   means no target has been owner-supplied yet, not a
+                    #   numeric zero.
+  good: "<band boundary in the metric's own unit -- owner-supplied>"
+  warn: "<band boundary in the metric's own unit -- owner-supplied>"
+  critical: "<band boundary in the metric's own unit -- owner-supplied>"
+
+# action_on_breach -- plain-language business action; owner-supplied,
+# placeholder until then.
+action_on_breach:
+  warn: "<the business action when this metric enters the warn band -- owner-supplied>"
+  critical: "<the business action when this metric enters the critical band -- owner-supplied>"
+
+# =============================================================================
+# Resolved defaults vs. open Principle-V items (this file's own fields only;
+# see docs/patterns/target-budget-fact.md Section 7 for the pattern-level
+# ledger).
+#
+# RESOLVED (structural consequences this shape already applies):
+#   - readiness.status: blocked -- a structural consequence of the two open
+#     items below being unresolved on any real filled copy of this shape.
+#   - missing-target-must-flag -- recorded as a required ambiguities[] entry,
+#     never a silent default (see the entry above).
+#   - binds_to.gold_table filled with the actuals table only, per the
+#     template's existing single-table shape; the target table is named in
+#     formula_intent, not forced into a second binds_to key.
+#
+# OPEN, owner-supplied (this shape deliberately leaves these unresolved on
+# ANY real filled copy until a named owner supplies them):
+#   - RAG thresholds (thresholds.target/good/warn/critical, and
+#     direction_of_good) -- business policy, no kit default exists.
+#   - The specific comparison grain for any real table (see `grain` above
+#     and docs/patterns/target-budget-fact.md Section 2).
+#   - Whether binds_to should ever grow a multi-table shape -- an F009-owner
+#     template-capability decision, not decided by this feature.
+# =============================================================================

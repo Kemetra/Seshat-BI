@@ -1,0 +1,266 @@
+# =============================================================================
+# factless-fact.yaml  --  copy-me template for a FACTLESS coverage fact
+# =============================================================================
+# Tower BI Agent Kit  -  the factless-fact variant of the gold_star shape.
+# See: docs/patterns/promotion-markdown-factless.md (the pattern this template
+# formalizes -- read it first; it explains WHY this shape exists and how it
+# answers "what was on promotion but did not sell").
+#
+# WHAT THIS IS
+#   A GENERIC, copy-me template for a FACTLESS fact: a Kimball fact table that
+#   records a combination of dimension keys held true (e.g. product x store x
+#   day x promotion), with NO required additive measure. It is still a valid
+#   Kimball star (fact + conformed dimensions, RC14) -- what it lacks is a
+#   measure, not a dimension. This is a SEPARATE file from
+#   templates/source-map.yaml; it does not edit that file. It uses the SAME
+#   section set and authoring-notes convention as source-map.yaml so a reader
+#   already familiar with that file recognizes this one immediately.
+#
+# WHEN TO USE THIS TEMPLATE INSTEAD OF source-map.yaml's gold_star
+#   Use this template when the fact you are mapping has NO additive measure of
+#   its own -- its only purpose is to assert that a combination of dimension
+#   keys was true (a coverage record), so it can be anti-joined against
+#   another fact later. If your source has a real money or quantity column
+#   (a markdown amount, a promoted-units count), you likely want the
+#   MEASURE-BEARING promotion/markdown fact shape instead -- see
+#   docs/patterns/promotion-markdown-factless.md section 4 -- and you should
+#   use templates/source-map.yaml's ordinary gold_star.fact.measures[] for
+#   that, not this template.
+#
+# WHICH PLAYBOOK PHASES THIS FORMALIZES  (it invents no new method)
+#   docs/medallion-playbook.md
+#     Phase 2.0  grain-first (meta.grain, meta.primary_key)   <- decided FIRST
+#     Phase 2.1  column filter            (columns[].decision keep|drop)
+#     Phase 2.2  PII scan (EARLY)         (columns[].pii)
+#     Phase 2.3  renaming                 (columns[].rename_to, snake_case)
+#     Phase 2.4  missing-value handling   (columns[].missing_policy)
+#     Phase 2.5  data types               (columns[].silver_type)
+#     Phase 2.7  categorical std/rollups  (derived_columns, gold_placement dims)
+#   (Phase 2.6 row filters and the build ORDER live in the migration, not here.)
+#
+# WHICH ADR-0002 DEFAULTS EACH FIELD INSTANTIATES  (cite, do not re-decide)
+#   docs/decisions/0002-retail-cleaning-defaults.md
+#     meta.grain / meta.primary_key ......... RC1 (lowest grain), RC2 (PK on data)
+#     columns[].decision: drop (no signal) .. RC3
+#     columns[].pii: true -> dropped early .. RC4
+#     columns[].missing_policy: null ........ RC5 ('' -> NULL baseline)
+#     columns[].missing_policy: sentinel .... RC6 (grouping dims ONLY)
+#     columns[].silver_type ................. RC7 (money/qty NUMERIC; leading-zero
+#                                              IDs TEXT; ordinal -> smallint)
+#     gold_star.fact.measures: [] ........... THE FACTLESS DIFFERENCE -- see below.
+#                                              RC9 (independent additive measures)
+#                                              does not apply: there is no measure.
+#     gold_star (star structure) ............ RC14 (_sk keys, -1 unknown member,
+#                                              FK COALESCE, degenerate dims) --
+#                                              still applies in full; a factless
+#                                              fact is still a Kimball star.
+#     date_dimension ........................ RC15 (CONTIGUOUS generate_series)
+#
+# THIS IS A FILLED-IN-BY-YOU EXAMPLE, NEVER THE UNIVERSAL SCHEMA
+#   The values below are deliberately obvious placeholders (angle brackets).
+#   No real product, store, or promotion name from any worked example belongs
+#   in this file. Fill your own table's real names through the existing
+#   source-mapping gate, exactly as you would with source-map.yaml.
+#
+# SISTER ARTIFACTS
+#   docs/patterns/promotion-markdown-factless.md .. the pattern this formalizes
+#   templates/source-map.yaml ..................... the ordinary (measure-bearing)
+#                                                     gold_star template this
+#                                                     mirrors for the no-measure case
+#   templates/source-profile.md ................... Phase 1 (the numbers this
+#                                                     map rests on)
+#   templates/assumptions.md ...................... ADR defaults adopted vs deviations
+#   templates/unresolved-questions.md ............. the decisions that block the build
+#
+# AUTHORING NOTES
+#   - Keep this YAML valid: it is parsed by tooling, not just read. Quote any
+#     value containing ':' or quotes (see the quoted examples below).
+#   - Use snake_case for every silver name (rename_to). Keep names SHORT
+#     (Windows 260-char PBIP path limit; see repo CLAUDE.md).
+#   - `gold_placement` dim names MUST match a name under `gold_star.dimensions`.
+#   - `gold_star.fact.measures` MUST stay `[]` (empty) for a factless fact.
+#     COUNT(*) over this fact's rows is a valid read ("how many combinations
+#     were on promotion") without being a stored measure column. Do NOT add a
+#     fabricated column (e.g. "coverage_count") here to make this "feel" like
+#     a normal fact -- see docs/patterns/promotion-markdown-factless.md
+#     section 6, Edge Case (d).
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# meta -- decided in Phase 2.0, BEFORE any column decision.
+# For a factless fact, the grain is the COMBINATION that held true (e.g.
+# product x store x day x promotion), not a transaction.
+# -----------------------------------------------------------------------------
+meta:
+  table_id: "<TABLE_ID>"              # short stable id, e.g. example_promo_coverage
+  source_system: "<source_system>"    # e.g. example_promo_planning_system
+  profiled_from: "templates/source-profile.md"   # Phase 1 evidence this map rests on
+  # GRAIN (Phase 2.0 / RC1): what ONE ROW represents. For a factless coverage
+  # fact this is a COMBINATION, e.g. "one row = one product x store x day
+  # combination that was on promotion" -- adopter decides; overlap-handling
+  # (more than one promotion active on the same combination, or a partial-day
+  # promotion) is part of this decision, not answered by this template.
+  grain: "<one row = one ... combination that was on promotion>"
+  # PRIMARY KEY (Phase 2.0 / RC2): verified unique ON THE DATA, and re-verified
+  # on the TRANSFORMED output. Typically the composite of the conformed
+  # dimension keys plus the promotion identifier.
+  primary_key:
+    - "<product_key>"                 # e.g. product_id
+    - "<store_key>"                   # e.g. store_id
+    - "<date_key>"                    # e.g. promo_date
+    - "<promotion_id>"                # e.g. promotion_id
+  reviewed_by: "<analyst / reviewer>"
+  reviewed_on: "<YYYY-MM-DD>"         # quoted so it is not auto-typed as a date
+
+# -----------------------------------------------------------------------------
+# defaults -- which ADR-0002 defaults this table ADOPTS as-is, and which it
+# DEVIATES from. Record only the deviation summary here; the triggering data
+# fact for each deviation lives in templates/assumptions.md. Unchanged shape
+# from templates/source-map.yaml.
+# -----------------------------------------------------------------------------
+defaults:
+  adopted:                            # ADR-0002 defaults taken as written
+    - "RC1"   # model at lowest grain (the coverage combination)
+    - "RC2"   # verify PK on transformed data
+    - "RC4"   # PII removed EARLY
+    - "RC5"   # '' -> NULL baseline
+    - "RC7"   # exact NUMERIC money/qty; leading-zero IDs stay TEXT
+    - "RC14"  # gold Kimball star (+ -1 member, FK COALESCE, degenerate dims)
+    - "RC15"  # contiguous generate_series date dim
+  deviations:                         # defaults this table overrides (see assumptions.md)
+    - id: "<Dn>"                      # e.g. RC6
+      reason: "<why the data forced an override>"
+      detail_in: "templates/assumptions.md"
+    # - id: "..."  (add one entry per deviation; empty list if none)
+
+# -----------------------------------------------------------------------------
+# columns -- one entry per SOURCE column (Phase 2.1-2.5). Every source column
+# must appear, even dropped ones (the reviewer needs the full inventory).
+#   decision      keep | drop | derive
+#   reason        the evidence (missingness %, cardinality, redundancy, PII)
+#   rename_to     snake_case silver name (null when dropped)
+#   silver_type   RC7: money/qty -> numeric(p,s); date -> date;
+#                 leading-zero id -> text; ordinal -> smallint
+#   missing_policy  null  (RC5 default)  |  "sentinel:'UNKNOWN'" (RC6, grouping dims ONLY)
+#   pii           true|false. If true -> decision MUST be drop (RC4, before BI layer).
+#   gold_placement  dim:<dim_name>.<attr> | degenerate_dim | dropped
+#                 (dim_name MUST match a name under gold_star.dimensions)
+#
+# NOTE: a factless coverage source typically has NO "fact_measure" column at
+# all -- that is the point of this shape. If your source DOES have a real
+# money or quantity column, that is a signal the shape you actually need is
+# the measure-bearing promotion/markdown fact (see
+# docs/patterns/promotion-markdown-factless.md section 4), not this
+# factless-fact template. Do not force a real measure column into
+# gold_placement: "dropped" just to keep this template's measures[] empty.
+# -----------------------------------------------------------------------------
+columns:
+
+  # (1) a conformed dimension key -- links to an existing sales-star dimension
+  - source_name: "<SRC_PRODUCT_KEY>"     # e.g. PRODUCT_ID
+    decision: "keep"
+    reason: "conformed key -- joins to the same dim_product the sales star uses"
+    rename_to: "<product_key>"
+    silver_type: "text"                  # RC7: leading-zero id stays TEXT
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_product.<product_key>"
+
+  # (2) another conformed dimension key
+  - source_name: "<SRC_STORE_KEY>"       # e.g. STORE_ID
+    decision: "keep"
+    reason: "conformed key -- joins to the same dim_store the sales star uses"
+    rename_to: "<store_key>"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_store.<store_key>"
+
+  # (3) a promotion identifier with no attributes -> degenerate dimension
+  - source_name: "<SRC_PROMOTION_ID>"    # e.g. PROMO_ID
+    decision: "keep"
+    reason: "promotion identifier with no attributes of its own -> degenerate dim (RC14)"
+    rename_to: "<promotion_id>"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "degenerate_dim"
+
+  # (4) a no-signal column dropped (RC3)
+  - source_name: "<SRC_EMPTY_COL>"       # e.g. LEGACY_FLAG
+    decision: "drop"
+    reason: "100%-empty / single-value / verified duplicate -> no signal (RC3)"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+# -----------------------------------------------------------------------------
+# gold_star -- the Phase 6 target shape (RC14), adapted for the FACTLESS case.
+# One fact at the coverage grain + conformed dimensions. Every dim gets a
+# surrogate _sk and an unknown member at _sk = -1; the fact's FKs COALESCE
+# missing lookups to -1 -- unchanged from the measure-bearing shape.
+#
+# THE ONE STRUCTURAL DIFFERENCE: gold_star.fact.measures is EMPTY. See
+# docs/patterns/promotion-markdown-factless.md section 2.
+# -----------------------------------------------------------------------------
+gold_star:
+
+  fact:
+    name: "fct_<coverage_grain>"         # placeholder; adopting table names its own
+    grain: "<= meta.grain>"              # MUST equal meta.grain (RC1)
+    measures: []                         # EMPTY BY DESIGN -- the factless difference.
+    # Authoring note: COUNT(*) over this fact's rows is a valid read ("how
+    # many combinations were on promotion") without being a stored measure
+    # column. Do NOT add a fabricated "coverage_count" column here (see
+    # docs/patterns/promotion-markdown-factless.md section 6, Edge Case (d)).
+
+  dimensions:
+    - name: "dim_product"                # CONFORMED -- the same instance the
+                                          # sales star uses; do not re-mint
+      surrogate_key: "product_sk"        # RC14: _sk surrogate key
+      has_unknown_member: true           # RC14: unknown member row at _sk = -1
+      attributes:
+        - "<product_id>"                 # natural key kept as an attribute
+        # - "<product_attribute>"
+
+    - name: "dim_store"                  # CONFORMED
+      surrogate_key: "store_sk"
+      has_unknown_member: true           # RC14
+      attributes:
+        - "<store_id>"                   # RC7: leading-zero id stays TEXT
+        # - "<store_attribute>"
+
+  # Promotion identifiers with no attributes -> degenerate dims ON the fact
+  # (RC14). They are columns of the fact, not their own dimension table.
+  degenerate_dimensions:
+    - "<promotion_id>"
+
+  # Date dimension is a CONTIGUOUS generated calendar over the full span
+  # (RC15), NEVER SELECT DISTINCT date (missing days break time-intelligence).
+  # A factless coverage fact reuses the SAME dim_date the sales star uses.
+  date_dimension:
+    name: "dim_date"
+    surrogate_key: "date_sk"             # e.g. YYYYMMDD integer
+    method: "generate_series"            # RC15: contiguous, one row per calendar day
+    contiguous: true
+    span:
+      from: "<YYYY-MM-DD>"               # earliest real coverage date (quoted)
+      to: "<YYYY-MM-DD>"                 # latest real coverage date (quoted)
+
+# -----------------------------------------------------------------------------
+# derived_columns -- columns NOT present in the source, computed in silver
+# (Phase 2.7). Unused in the common case for a factless fact (there is
+# usually nothing to derive when there is no measure); left empty/commented.
+# -----------------------------------------------------------------------------
+derived_columns: []
+  # A factless coverage fact rarely derives a new column, since it carries no
+  # measure to compute from. If a real derivation is needed (e.g. a
+  # promotion-type rollup from an authoritative source column), follow the
+  # same convention as templates/source-map.yaml's derived_columns section:
+  # - name: "<business_rollup>"
+  #   type: "text"
+  #   derived_from: "<grouping_dim_col>"
+  #   mapping_source: "templates/assumptions.md"
+  #   unmapped_default: "UNMAPPED"

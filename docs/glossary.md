@@ -30,6 +30,7 @@ are grouped, then alphabetical within a group.
 | **Status: `pass`** | all required artifacts exist, all required checks pass, approvals are recorded. |
 | **Evidence / blockers** | the explicit `evidence[]` (committed files/check-runs) and `blocking_reasons[]` that justify a status — never a fabricated confidence score (hard rule #9). |
 | **Approval seam** | a stage that needs a named-human sign-off in `approvals[]`: Mapping, Semantic Model, Dashboard, Publish. The agent never self-grants one (Principle V). |
+| **Readiness decay / `stale_pass`** | a concept (not a `retail check` rule): a stage recorded `pass` may become stale when the evidence it rests on changes (a source drift, or an approval that predates a later edit). The signal is SURFACED as a blocker for a named human to demote — never auto-demoted (`source-drift.md` Downstream section; `docs/patterns/readiness-decay.md`). A `stale_review` reaffirmation entry records a human re-check. |
 
 ## Medallion layers
 
