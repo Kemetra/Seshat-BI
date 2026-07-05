@@ -97,6 +97,13 @@ EXPECTED_RULE_IDS = frozenset(
         "AD1",  # additivity-consistency: no illegal additivity composition in lineage
         "AQ1",  # answerability: domain decision-question routes resolve or are planned
         "HR7",  # reload-idempotency: gold deviation load declares its reload-strategy
+        "HR2",  # scd-policy: each gold dimension declares its SCD type (grandfathered)
+        "HR4",  # source-freshness: a source declares expected cadence + max staleness
+        "HR5",  # snapshot-additivity: snapshot-fact measures declare time_additivity
+        "HR6",  # rls-access: an RLS role contract binds to a real dim column
+        "HR8",  # date-spine: a gold date dim is contiguous / gap-free
+        "HR11",  # currency-unit: a summed measure's inputs share a unit
+        "HR12",  # source-data-contract: a forward source data-contract is well-formed
     }
 )
 
