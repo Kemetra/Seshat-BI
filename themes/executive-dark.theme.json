@@ -1,0 +1,35 @@
+{
+  "name": "executive-dark",
+  "dataColors": [
+    "#A5E3E9",
+    "#7BD6DF",
+    "#52C9D6",
+    "#2FB7C5",
+    "#25919C",
+    "#1C6B73"
+  ],
+  "background": "#12263A",
+  "foreground": "#F2F6FA",
+  "tableAccent": "#2FB6C4",
+  "good": "#2E7D5B",
+  "neutral": "#B5832A",
+  "bad": "#B23A3A",
+  "visualStyles": {
+    "*": {
+      "*": {
+        "title": [
+          {
+            "fontFamily": "Segoe UI Semibold",
+            "fontSize": 12
+          }
+        ],
+        "labels": [
+          {
+            "fontFamily": "Segoe UI",
+            "fontSize": 9
+          }
+        ]
+      }
+    }
+  }
+}

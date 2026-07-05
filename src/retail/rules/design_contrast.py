@@ -24,8 +24,22 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Iterable
 
+from ..color import (
+    channel_luminance as _channel_luminance,  # noqa: F401  (kept for import stability)
+)
+from ..color import (
+    contrast_ratio as _contrast_ratio,
+)
+from ..color import (
+    relative_luminance as _relative_luminance,  # noqa: F401  (kept for import stability)
+)
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+
+# WCAG math lives in the shared helper (retail.color) so the CT1 rule and the
+# theme generator apply identical arithmetic. The three names above are
+# re-exported under their original private names to preserve every existing
+# import (e.g. tests/unit/test_design_contrast.py imports _contrast_ratio).
 
 RULE_ID = "CT1"
 
@@ -46,33 +60,6 @@ def _iter_tokens_files(ctx: RuleContext) -> list[str]:
         if p.endswith(_TOKENS_SUFFIX) or base in _TOKENS_BASENAMES:
             out.append(p)
     return out
-
-
-def _channel_luminance(c: int) -> float:
-    """Linearize one 0-255 sRGB channel to its WCAG luminance component."""
-    s = c / 255.0
-    return s / 12.92 if s <= 0.03928 else ((s + 0.055) / 1.055) ** 2.4
-
-
-def _relative_luminance(hex_color: str) -> float:
-    """WCAG 2.x relative luminance of an ``#RRGGBB`` color."""
-    h = hex_color.lstrip("#")
-    if len(h) != 6:
-        raise ValueError(f"not a 6-digit hex color: {hex_color!r}")
-    r, g, b = (int(h[i : i + 2], 16) for i in (0, 2, 4))
-    return (
-        0.2126 * _channel_luminance(r)
-        + 0.7152 * _channel_luminance(g)
-        + 0.0722 * _channel_luminance(b)
-    )
-
-
-def _contrast_ratio(a: str, b: str) -> float:
-    """WCAG contrast ratio (>= 1.0) between two ``#RRGGBB`` colors."""
-    la = _relative_luminance(a)
-    lb = _relative_luminance(b)
-    lighter, darker = (la, lb) if la >= lb else (lb, la)
-    return (lighter + 0.05) / (darker + 0.05)
 
 
 def _parse_floor(raw: Any) -> float | None:

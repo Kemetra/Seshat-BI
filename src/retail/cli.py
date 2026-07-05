@@ -164,6 +164,45 @@ def _build_parser() -> argparse.ArgumentParser:
         help="output format on success (tmdl or json)",
     )
 
+    # Theme generator (Slice 1, DEFINE-only). Assembles a caller-supplied palette
+    # into a gated surface-3 theme artifact set (tokens + theme JSON + spec).
+    # stdlib-only; self-checks CT1 before writing; readiness = warning (no self-
+    # pass). Writes NO PBIR / visual.json; no pbi-cli; adds NO new `retail check`
+    # rule (the emitted files are covered by DL1/DL3/CT1).
+    themegen = sub.add_parser(
+        "theme-gen",
+        help="generate a gated Power BI theme (tokens + theme JSON + spec)",
+    )
+    themegen.add_argument("--name", required=True, help="theme/file basename slug")
+    themegen.add_argument(
+        "--mode", choices=("light", "dark"), required=True, help="light or dark"
+    )
+    themegen.add_argument("--accent", required=True, metavar="#RRGGBB")
+    themegen.add_argument("--background", required=True, metavar="#RRGGBB")
+    themegen.add_argument(
+        "--text-primary", dest="text_primary", required=True, metavar="#RRGGBB"
+    )
+    themegen.add_argument(
+        "--text-secondary", dest="text_secondary", default=None, metavar="#RRGGBB"
+    )
+    themegen.add_argument(
+        "--text-muted", dest="text_muted", default=None, metavar="#RRGGBB"
+    )
+    themegen.add_argument(
+        "--data-colors",
+        dest="data_colors",
+        default=None,
+        metavar="#a,#b,...",
+        help="comma-separated ramp; derived from accent if omitted",
+    )
+    themegen.add_argument("--good", default=None, metavar="#RRGGBB")
+    themegen.add_argument("--neutral", default=None, metavar="#RRGGBB")
+    themegen.add_argument("--bad", default=None, metavar="#RRGGBB")
+    themegen.add_argument("--repo", default=".", help="repo root to write into")
+    themegen.add_argument(
+        "--force", action="store_true", help="overwrite existing files"
+    )
+
     # Rule-registry snapshot manifest (feature 043). Writes the golden inventory
     # docs/rules/rules-manifest.json from the live registry. Test-only consumer
     # (the snapshot test); adds NO new `retail check` rule.
@@ -350,6 +389,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "generate":
         return _run_generate(args)
+
+    if args.command == "theme-gen":
+        from .theme_gen import theme_gen_main
+
+        return theme_gen_main(args)
 
     if args.command == "manifest":
         return _run_manifest(args)

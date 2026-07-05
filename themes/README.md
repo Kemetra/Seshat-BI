@@ -5,11 +5,24 @@ edit). Part of the Power BI Visual Foundation (F011A).
 
 ## What this folder is
 
-A single Power BI theme JSON -- `tower-retail.theme.json` -- plus this README.
-The theme is **surface 3** of the four Power BI design surfaces (see
+The starter Power BI theme JSONs -- plus this README.
+A theme is **surface 3** of the four Power BI design surfaces (see
 `../docs/powerbi/visual-design-system.md`): the one JSON file imported into Power
 BI that sets the report's styling DEFAULTS -- the color palette, fonts, and the
 default formatting visuals inherit unless a visual overrides them.
+
+### Inventory
+
+- `tower-retail.theme.json` -- the hand-authored conservative default (see below).
+- `executive-dark.theme.json` -- a generated dark starter (monochromatic teal
+  ramp) produced by `retail theme-gen` (Slice 1). Its `theme-spec.md` sibling
+  records CT1 contrast (computed, clean) and holds the CVD/render/saturation
+  checks OPEN for a named reviewer; readiness = `warning`, never self-`pass`.
+  Like every theme here it is a STARTER -- validate in Power BI Desktop first.
+
+> `retail theme-gen` (a DEFINE-only kit verb) emits a token+theme+spec triplet
+> from a caller-supplied palette, gated by DL1/DL3/CT1. It writes NO PBIR /
+> report file and depends on no external tool -- surface-3 styling only.
 
 `tower-retail.theme.json` is a conservative, generic, retail-executive STARTER.
 It draws its palette, typography, and sentiment colors from the design tokens in
