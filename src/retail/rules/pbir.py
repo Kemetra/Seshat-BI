@@ -59,3 +59,127 @@ def check_pbir_relative_reference(ctx: RuleContext) -> Iterable[Finding]:
                 )
             )
     return findings
+
+
+# --- R2: PBIR report authoring-lint (polices what the theme-application adapter
+# writes; the READ-ONLY core sibling of the companion writer, ADR 0015). It asserts
+# a committed report.json is valid, keeps its $schema, references only BaseTheme
+# resources that exist, and DEFINES no business logic (the report-file analogue of
+# DL1's styling-only rule). It NEVER writes -- the writer is the adapter.
+#
+# CRITICAL distinction (why this is a WHOLE-KEY denylist, not substring containment):
+# a legitimate PBIR report REFERENCES model objects inline via the query-grammar
+# wrapper keys ``Measure`` / ``Expression`` / ``Column`` wherever a value is
+# data-bound (a filter on a measure, a title bound to a measure). Those are
+# REFERENCES to something the model already DEFINES -- expected, legal report
+# content this adapter exists to enable. R2 forbids only keys that DEFINE business
+# logic in the report file. So it matches the WHOLE normalized key against a
+# denylist of definition-shaped keys; it does NOT do substring containment (which
+# would false-positive ``Measure``/``Expression`` references and break the gate on
+# the first realistic report).
+_R2_FORBIDDEN_KEYS = frozenset(
+    {
+        "measuredefinition",
+        "calculatedcolumn",
+        "calculatedtable",
+        "calculatedmeasure",
+        "daxexpression",
+        "daxmeasure",
+        "sourcemapping",
+        "metricdefinition",
+        "sentimentthreshold",
+        "relationshipdefinition",
+    }
+)
+
+
+def _iter_report_json(ctx: RuleContext) -> list[str]:
+    return [
+        p
+        for p in ctx.tracked_files
+        if p.endswith(".Report/definition/report.json") and not is_test_path(p)
+    ]
+
+
+def _normalize(key: str) -> str:
+    return key.lower().replace("-", "").replace("_", "").replace(" ", "")
+
+
+def _walk_forbidden(node: Any, pointer: str, rel: str) -> Iterable[Finding]:
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if _normalize(key) in _R2_FORBIDDEN_KEYS:
+                yield Finding(
+                    rule_id="R2",
+                    severity=Severity.ERROR,
+                    message=(
+                        f"report.json DEFINES business logic via key {key!r}; a "
+                        f"report file is layout + styling and may only REFERENCE "
+                        f"model objects, never define them (a definition belongs "
+                        f"in the semantic model / metric contract)"
+                    ),
+                    locator=f"{rel}#{pointer}/{key}",
+                )
+            yield from _walk_forbidden(value, f"{pointer}/{key}", rel)
+    elif isinstance(node, list):
+        for i, item in enumerate(node):
+            yield from _walk_forbidden(item, f"{pointer}/{i}", rel)
+
+
+@register("R2", "PBIR report.json is valid, keeps its schema, and references exist")
+def check_pbir_report_authoring(ctx: RuleContext) -> Iterable[Finding]:
+    findings: list[Finding] = []
+    for rel in _iter_report_json(ctx):
+        path = ctx.repo_root / rel
+        try:
+            with path.open(encoding="utf-8-sig") as fh:
+                doc: Any = json.load(fh)
+        except (OSError, json.JSONDecodeError) as exc:
+            findings.append(
+                Finding(
+                    rule_id="R2",
+                    severity=Severity.ERROR,
+                    message=(
+                        f"report.json could not be parsed as JSON "
+                        f"({exc.__class__.__name__}); it must be valid JSON"
+                    ),
+                    locator=f"{rel}#/",
+                )
+            )
+            continue
+        if not isinstance(doc, dict) or "$schema" not in doc:
+            findings.append(
+                Finding(
+                    rule_id="R2",
+                    severity=Severity.ERROR,
+                    message="report.json is missing its $schema declaration",
+                    locator=f"{rel}#/$schema",
+                )
+            )
+            continue
+        # Every BaseTheme referenced by resourcePackages must exist on disk.
+        report_dir = path.parent.parent  # <name>.Report/
+        for pi, pkg in enumerate(doc.get("resourcePackages", []) or []):
+            if not isinstance(pkg, dict):
+                continue
+            for ii, item in enumerate(pkg.get("items", []) or []):
+                if not isinstance(item, dict) or item.get("type") != "BaseTheme":
+                    continue
+                sub = item.get("path")
+                if not isinstance(sub, str):
+                    continue
+                res = report_dir / "StaticResources" / pkg.get("name", "") / sub
+                if not res.exists():
+                    findings.append(
+                        Finding(
+                            rule_id="R2",
+                            severity=Severity.ERROR,
+                            message=(
+                                f"report references BaseTheme resource {sub!r} "
+                                f"which does not exist at its declared path"
+                            ),
+                            locator=(f"{rel}#/resourcePackages/{pi}/items/{ii}/path"),
+                        )
+                    )
+        findings.extend(_walk_forbidden(doc, "", rel))
+    return findings

@@ -64,7 +64,8 @@ EXPECTED_RULE_IDS = frozenset(
         "D9",  # TMDL/DAX hygiene: no hardcoded date literals
         "D10",  # TMDL/DAX hygiene: no FILTER(ALL(...)) anti-pattern
         "D11",  # TMDL/DAX hygiene: every measure documented (///)
-        "R1",  # PBIR
+        "R1",  # PBIR: model reference must be relative
+        "R2",  # PBIR: report.json authoring-lint (valid/schema/refs/no forbidden key)
         "RS1",  # readiness-status contradiction linter
         "A1",  # route registry: every route target resolves or is marked planned
         "A3",  # route coverage: knowledge-map ids == routes.yaml ids (bijection)

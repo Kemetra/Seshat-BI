@@ -1,0 +1,15 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/report/3.3.0/schema.json",
+  "themeCollection": {
+    "baseTheme": { "name": "T", "type": "SharedResources" }
+  },
+  "resourcePackages": [
+    {
+      "name": "SharedResources",
+      "type": "SharedResources",
+      "items": [
+        { "name": "T", "path": "BaseThemes/T.json", "type": "BaseTheme" }
+      ]
+    }
+  ]
+}
