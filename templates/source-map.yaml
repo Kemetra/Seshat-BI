@@ -140,6 +140,11 @@ columns:
     missing_policy: "null"               # RC5: genuine unknown stays NULL
     pii: false
     gold_placement: "fact_measure"
+    # unit / currency (optional; read by HR11). Owner-DECLARED, never agent-inferred
+    # (Principle V). HR11 flags a measure that sums columns with clashing units or
+    # currencies; it NEVER converts. Omit both keys when a measure has no unit
+    # dimension (e.g. a count). Examples: unit: "each" | "kg"; currency: "EGP".
+    currency: "<ISO-4217 e.g. EGP, or omit>"
 
   # (2) a dimension attribute -- grouping column, sentinel allowed (RC6)
   - source_name: "<SRC_CATEGORY>"        # e.g. PROD_CAT

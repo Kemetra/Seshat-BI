@@ -39,7 +39,7 @@ from collections.abc import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
-from ..sql import iter_sql_files
+from ..sql import iter_sql_files, strip_sql_comments
 
 RULE_ID = "HR7"
 
@@ -63,20 +63,6 @@ _RELOAD_MARKER_MD = re.compile(r"reload-strategy:\s*(?P<keys>[^\n|]+)", re.IGNOR
 
 def _read(ctx: RuleContext, rel: str) -> str:
     return (ctx.repo_root / rel).read_text(encoding="utf-8")
-
-
-def _strip_comments_keep_markers(text: str) -> str:
-    """Collapse string literals and block comments, but KEEP ``--`` line comments.
-
-    HR7 must see ``-- reload-strategy:`` markers, so unlike the token lexer we
-    preserve single-line comments; block comments and string literals are blanked
-    so a ``gold.x`` mentioned inside them never triggers classification.
-    """
-    # blank /* ... */ block comments
-    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.DOTALL)
-    # blank single-quoted string literals (keep the quotes' newlines out)
-    text = re.sub(r"'(?:[^']|'')*'", "''", text)
-    return text
 
 
 def _has_gold_target(clean: str) -> bool:
@@ -106,8 +92,22 @@ def _load_policy_declares(ctx: RuleContext, migration_rel: str, table: str) -> b
     return _RELOAD_MARKER_MD.search(text) is not None
 
 
+def _statement_span(clean: str, insert_start: int) -> str:
+    """The SQL text of the INSERT statement beginning at ``insert_start``.
+
+    From the INSERT keyword to the next ``;`` (or end of text). Used to bind an
+    ``ON CONFLICT`` clause to the INSERT it actually belongs to, NOT the whole
+    file -- a sibling upsert must not clear an unrelated bare append (FR-002/006).
+    """
+    end = clean.find(";", insert_start)
+    return clean[insert_start:] if end == -1 else clean[insert_start:end]
+
+
 def _classify_and_check(ctx: RuleContext, rel: str, raw_text: str) -> list[Finding]:
-    clean = _strip_comments_keep_markers(raw_text)
+    # Blank ALL comments (-- and /* */) for DDL classification -- a commented-out
+    # DROP must not clear a real append (FN), and a rollback comment must not be
+    # read as live SQL (FP). Marker detection runs separately on raw_text below.
+    clean = strip_sql_comments(raw_text)
     if not _has_gold_target(clean):
         return []
 
@@ -121,7 +121,6 @@ def _classify_and_check(ctx: RuleContext, rel: str, raw_text: str) -> list[Findi
     }
     cleared = dropped | truncated | whole_table_deleted
 
-    has_conflict = _ON_CONFLICT.search(clean) is not None
     header_declared = _declared_in_header(raw_text)
 
     findings: list[Finding] = []
@@ -134,8 +133,8 @@ def _classify_and_check(ctx: RuleContext, rel: str, raw_text: str) -> list[Findi
         # FULL_DROP_AND_REBUILD: this target was whole-table cleared before insert
         if table in cleared:
             continue
-        # in-SQL key (ON CONFLICT upsert) is a valid declaration
-        if has_conflict:
+        # in-SQL key: ON CONFLICT bound to THIS insert's own statement span only
+        if _ON_CONFLICT.search(_statement_span(clean, m.start())) is not None:
             continue
         # otherwise it is a DEVIATION -- require a declaration
         if header_declared or _load_policy_declares(ctx, rel, table):

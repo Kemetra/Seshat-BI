@@ -121,6 +121,25 @@ binds_to:
                                       #   blocking_reasons until governance signs off.
 
 # -----------------------------------------------------------------------------
+# time_additivity -- how the metric composes over the DATE axis (read by HR5,
+# spec 091). REQUIRED for a metric on a SNAPSHOT-grain fact (e.g. inventory-on-
+# hand), where summing across days is wrong. Owner-DECLARED, never agent-inferred
+# (Principle V). One of: fully | semi | non.
+#   fully  additive over time (sum across days is valid, e.g. sales revenue)
+#   semi   additive across other dims but NOT over time (e.g. stock-on-hand ->
+#          sum across products, but LAST/AVG across days, never SUM)
+#   non    not additive on any axis (e.g. a ratio/percentage)
+# Omit for a transaction-grain fully-additive measure; HR5 only requires it when
+# the bound fact is a snapshot grain.
+time_additivity: "<fully|semi|non, or omit for a transaction-grain measure>"
+
+# unit -- the unit of measure of the metric's value (read by HR11, spec 103).
+# Owner-DECLARED, never agent-inferred (Principle V). HR11 flags a measure whose
+# bound columns carry clashing units/currencies; it NEVER converts. Omit when the
+# metric has no unit dimension (e.g. a transaction count or a ratio).
+unit: "<e.g. EGP, kg, each -- or omit>"
+
+# -----------------------------------------------------------------------------
 # readiness -- the contract's lifecycle state, recorded with the FOUR explicit
 # statuses ONLY. There is NO score field; do not add one (rule #9).
 #   not_started  drafted but not yet reviewed/approved (the default)

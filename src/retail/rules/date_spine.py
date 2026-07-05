@@ -74,6 +74,7 @@ fixtures.
 
 from __future__ import annotations
 
+import datetime
 import re
 from collections.abc import Iterable
 
@@ -123,6 +124,24 @@ def _classify_date_literal(text: str) -> str | None:
     if not m:
         return None
     return m.group("val").strip()
+
+
+def _parse_date_literal(text: str) -> datetime.date | None:
+    """Parse a recognized date literal to a ``datetime.date`` for CHRONOLOGICAL
+    comparison. Handles PostgreSQL's zero-padded (``2022-01-09``) AND non-padded
+    (``2022-1-9``) forms. Returns ``None`` if not a literal or not parseable --
+    the caller then skips the bounds-order check (never string-compares)."""
+    raw = _classify_date_literal(text)
+    if raw is None:
+        return None
+    parts = raw.split("-")
+    if len(parts) != 3:
+        return None
+    try:
+        y, mth, d = (int(p) for p in parts)
+        return datetime.date(y, mth, d)
+    except (ValueError, TypeError):
+        return None
 
 
 def _split_top_level_args(arg_text: str) -> list[str]:
@@ -324,8 +343,12 @@ def _check_statement(
         )
 
     # --- bounds-order check (FR-005) -- only when BOTH bounds are literal dates ---
-    start_date = _classify_date_literal(start_arg)
-    end_date = _classify_date_literal(end_arg)
+    # Compare CHRONOLOGICALLY (parsed dates), never lexically: PostgreSQL accepts
+    # non-zero-padded literals (2022-1-9) whose string order != date order.
+    start_raw = _classify_date_literal(start_arg)
+    end_raw = _classify_date_literal(end_arg)
+    start_date = _parse_date_literal(start_arg)
+    end_date = _parse_date_literal(end_arg)
     if start_date is not None and end_date is not None:
         if start_date > end_date:
             findings.append(
@@ -334,7 +357,7 @@ def _check_statement(
                     severity=Severity.ERROR,
                     message=(
                         f"dim_date generate_series bounds are reversed: start "
-                        f"'{start_date}' is after end '{end_date}' -- an inverted "
+                        f"'{start_raw}' is after end '{end_raw}' -- an inverted "
                         "literal range silently produces zero rows in PostgreSQL"
                     ),
                     locator=f"{rel}:{call_line}",

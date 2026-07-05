@@ -166,6 +166,46 @@ def test_hr7_ignores_non_gold_and_silver_migrations(tmp_path: Path) -> None:
 # --- US3: static-only, no live-proof claim, no numeric score ---
 
 
+def test_hr7_commented_drop_does_not_clear_a_real_append(tmp_path: Path) -> None:
+    """Regression (review Critical): a commented-out DROP must NOT clear a real
+    bare append -- else an undeclared deviation slips past this fail-closed gate."""
+    sql = (
+        "-- DROP TABLE IF EXISTS gold.fct_sales\n"
+        "INSERT INTO gold.fct_sales SELECT * FROM silver.sales;\n"
+    )
+    ctx = _ctx(tmp_path, _mig(tmp_path, "0120_gold.sql", sql))
+    findings = list(check_hr7(ctx))
+    assert len(findings) == 1
+    assert findings[0].severity is Severity.ERROR
+
+
+def test_hr7_rollback_comment_does_not_block_valid_migration(tmp_path: Path) -> None:
+    """Regression (review Critical): a rollback COMMENT mentioning a bare INSERT
+    must NOT be read as live SQL and block an otherwise-valid drop-and-rebuild."""
+    sql = (
+        "DROP TABLE IF EXISTS gold.fct_sales;\n"
+        "INSERT INTO gold.fct_sales SELECT * FROM silver.sales;\n"
+        "-- Rollback: INSERT INTO gold.fct_sales_backup SELECT * FROM gold.fct_sales;\n"
+    )
+    ctx = _ctx(tmp_path, _mig(tmp_path, "0121_gold.sql", sql))
+    assert list(check_hr7(ctx)) == []
+
+
+def test_hr7_sibling_upsert_does_not_clear_a_bare_append(tmp_path: Path) -> None:
+    """Regression (review Critical FR-002): a per-statement ON CONFLICT on one
+    table must NOT clear an unrelated bare append on another (no file-global pass)."""
+    sql = (
+        "INSERT INTO gold.fct_sales SELECT * FROM silver.sales;\n"  # bare deviation
+        "INSERT INTO gold.dim_x SELECT * FROM silver.x\n"
+        "ON CONFLICT (id) DO NOTHING;\n"  # unrelated upsert
+    )
+    ctx = _ctx(tmp_path, _mig(tmp_path, "0122_gold.sql", sql))
+    findings = list(check_hr7(ctx))
+    assert len(findings) == 1
+    assert "gold.fct_sales" in findings[0].message
+    assert "dim_x" not in findings[0].message
+
+
 def test_hr7_module_imports_no_database_driver() -> None:
     src = (_REPO / "src" / "retail" / "rules" / "reload_idempotency.py").read_text(
         encoding="utf-8"

@@ -156,6 +156,35 @@ def test_hr1_conformed_missing_key_on_one_side_is_not_divergence(
     assert list(check_hr1(ctx)) == []
 
 
+def test_hr1_conformed_divergent_attribute_type_fails_closed(tmp_path: Path) -> None:
+    """Regression (review Important): the attribute silver_type divergence limb
+    must actually resolve -- gold_placement uses the BARE dim name, so the prefix
+    must be built from _bare(name), not the schema-qualified declared name."""
+    ya = (
+        "source_id: s1\ngold_star:\n  fact: fct_a\n  dimensions:\n"
+        "    - name: gold.dim_product\n      surrogate_key: product_sk\n"
+        "columns:\n"
+        '    - name: item\n      silver_type: TEXT\n      gold_placement: "dim:dim_product.item"\n'  # noqa: E501
+    )
+    yb = (
+        "source_id: s2\ngold_star:\n  fact: fct_b\n  dimensions:\n"
+        "    - name: gold.dim_product\n      surrogate_key: product_sk\n"
+        "columns:\n"
+        '    - name: item\n      silver_type: NUMERIC\n      gold_placement: "dim:dim_product.item"\n'  # noqa: E501
+    )
+    a = _star(tmp_path, "s1", ya)
+    b = _star(tmp_path, "s2", yb)
+    m = _map(
+        tmp_path,
+        "dimensions:\n  dim_product:\n    status: conformed\n    stars: [s1, s2]\n",
+    )
+    ctx = _ctx(tmp_path, a, b, m)
+    findings = list(check_hr1(ctx))
+    assert len(findings) == 1
+    assert "silver_type" in findings[0].message
+    assert "item" in findings[0].message
+
+
 # --- bad status value => ERROR ---
 
 
