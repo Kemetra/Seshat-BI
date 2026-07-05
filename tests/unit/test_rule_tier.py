@@ -36,6 +36,7 @@ def test_registered_rule_defaults_to_work_repo_tier():
 def test_register_threads_tier():
     from retail import registry
 
+    saved = list(registry._RULES)  # restore on teardown (see test_cli.py)
     registry._RULES.clear()
     try:
 
@@ -45,7 +46,7 @@ def test_register_threads_tier():
 
         assert registry.all_rules()[0].tier == RuleTier.KIT_SELF
     finally:
-        registry._RULES.clear()
+        registry._RULES[:] = saved  # in-place restore preserves list identity
 
 
 @pytest.mark.unit

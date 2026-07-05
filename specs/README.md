@@ -16,9 +16,16 @@ number that shipped it -- never by the bare number alone.
 | --- | --- | --- |
 | 044 | `specs/044-kpi-derivation-lineage` | `specs/044-live-surface-protocol` |
 | 067 | `specs/067-bi-python-cleaning-artifacts` | `specs/067-seed-route-honesty-rule` |
+| 087 | `specs/087-decision-aid-layer` (shipped, PR #185, ratified) | `specs/087-conformed-dimension-readiness` (PR #194, draft) |
+| 088 | `specs/088-drill-nav-periods` (shipped, PR #186, ratified) | `specs/088-scd-dimension-history-policy` (PR #194, draft) |
 
 Both members of each pair are real, committed spec dirs about different features. The
-bare number does not disambiguate them.
+bare number does not disambiguate them. For 087/088 the two members also differ in
+STATUS: the `decision-aid-layer` / `drill-nav-periods` members are ratified and shipped;
+the `conformed-dimension-readiness` / `scd-dimension-history-policy` members arrived as
+draft specs in the parallel readiness-gap batch (PR #194) and share the number by
+coincidence. Cite by the full slug (never a bare "087"/"088"). Renumbering the draft
+members is an owner call, not done here.
 
 ## 3. Some shipped rules cite a bare number that matches NO committed spec dir
 

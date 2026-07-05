@@ -6,10 +6,14 @@ from retail.core import Finding, RuleContext, Severity
 
 @pytest.fixture(autouse=True)
 def _clear_registry():
-    # registry uses a module-global list; isolate each test.
+    # registry uses a module-global list; isolate each test, then RESTORE the
+    # real registered rules on teardown. Without the restore, _RULES stays empty
+    # for every test that runs after this module, so any later test driving the
+    # real all_rules() path silently sees zero rules (mirrors test_cli.py).
+    saved = list(registry._RULES)
     registry._RULES.clear()
     yield
-    registry._RULES.clear()
+    registry._RULES[:] = saved  # in-place restore preserves list identity
 
 
 @pytest.mark.unit
