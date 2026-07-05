@@ -184,6 +184,10 @@
     "title": "gold date dim is contiguous/gap-free"
   },
   {
+    "id": "HR9",
+    "title": "rename-impact orphaned-reference guard"
+  },
+  {
     "id": "P1",
     "title": "Approach-A layout"
   },
