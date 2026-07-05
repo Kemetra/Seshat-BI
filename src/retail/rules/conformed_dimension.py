@@ -178,7 +178,6 @@ def _conformed_divergence(bare: str, stars: dict[str, dict]) -> str | None:
     Compares surrogate_key and shared-attribute silver_type; only fields present
     on BOTH sides of any pair are compared (graceful degradation).
     """
-    ids = sorted(stars)
     # surrogate_key divergence (only among stars that declare one)
     keys = {
         sid: dim.get("surrogate_key")
@@ -188,14 +187,13 @@ def _conformed_divergence(bare: str, stars: dict[str, dict]) -> str | None:
     if len(set(keys.values())) > 1:
         pairs = ", ".join(f"{sid}={keys[sid]!r}" for sid in sorted(keys))
         return f"surrogate_key differs across stars ({pairs})"
-    # shared-attribute silver_type divergence
-    typemaps = {
-        sid: _attr_silver_types(data, dim_name)
-        for sid, (dim, data) in (
-            (sid, (dim, data)) for sid, (dim, data) in stars.items()
-        )
-        for dim_name in [dim.get("name") if isinstance(dim.get("name"), str) else bare]
-    }
+    # shared-attribute silver_type divergence. gold_placement in a source-map is
+    # written with the BARE dim name (e.g. "dim:dim_product.item"), so resolve the
+    # placement prefix from _bare(dim name), NOT the schema-qualified declared name.
+    typemaps: dict[str, dict[str, str]] = {}
+    for sid, (dim, data) in stars.items():
+        dim_bare = _bare(dim.get("name")) or bare
+        typemaps[sid] = _attr_silver_types(data, dim_bare)
     # attributes shared by 2+ stars whose type is known on both
     all_attrs: set[str] = set()
     for tm in typemaps.values():
@@ -205,7 +203,6 @@ def _conformed_divergence(bare: str, stars: dict[str, dict]) -> str | None:
         if len(present) >= 2 and len(set(present.values())) > 1:
             pairs = ", ".join(f"{sid}={present[sid]!r}" for sid in sorted(present))
             return f"attribute {attr!r} silver_type differs across stars ({pairs})"
-    _ = ids  # ids retained for potential future messaging; no numeric tally
     return None
 
 

@@ -69,6 +69,10 @@ _MEASURE_DECL = re.compile(r"^\tmeasure\s+(?:'([^']+)'|([^\s=]+))", re.MULTILINE
 
 # DAX reference tokens
 _QUALIFIED_REF = re.compile(r"'([^']+)'\[([^\]]+)\]")  # 'table'[column]
+# unquoted table[column] (binding-map idiom, e.g. dim_product_rss[category]);
+# the table token is a bare identifier NOT preceded by ' or ] (so it is not the
+# tail of a 'table'[a][b] chain)
+_UNQUOTED_QUALIFIED_REF = re.compile(r"(?<![\w'\]])([A-Za-z_]\w*)\[([^\]]+)\]")
 _BARE_MEASURE_REF = re.compile(
     r"(?<![\w'])\[([^\]]+)\]"
 )  # [Measure] not preceded by ' or word
@@ -128,24 +132,25 @@ def _measure_expressions(text: str) -> str:
     """
     out: list[str] = []
     in_measure = False
-    _child = re.compile(r"^\t(column|measure|partition|annotation|hierarchy)\b")
+    measure_start = re.compile(r"^\tmeasure\s+\S.*=")
     for line in text.splitlines():
-        stripped_lead = re.match(r"^\tmeasure\s+.*=", line)
-        if stripped_lead:
+        if measure_start.match(line):
+            # start (or restart) a measure block: keep the declaration line itself
             in_measure = True
             out.append(line)
             continue
-        if in_measure:
-            # a new table-child decl (or a non-indented line) ends the measure block
-            if _child.match(line) or (
-                line and not line.startswith("\t\t") and not line.startswith("\t\t\t")
-            ):
-                # a continuation of the DAX is indented deeper than the decl; a
-                # sibling decl at one-tab depth ends this measure.
-                if _child.match(line):
-                    in_measure = False
-                    continue
+        if not in_measure:
+            continue
+        # A measure's own DAX continuation is indented DEEPER than the one-tab
+        # declaration (i.e. "\t\t"+). ANY line that is NOT such a continuation --
+        # a sibling one-tab decl (column/measure/partition/annotation/hierarchy),
+        # a blank line, or a dedent to a top-level "table" line -- ENDS the block.
+        # (A blank line inside a measure is not DAX; ending on it is safe because a
+        # real multi-line DAX expression has no blank lines between its tokens.)
+        if line.startswith("\t\t"):
             out.append(line)
+        else:
+            in_measure = False
     return "\n".join(out)
 
 
@@ -277,11 +282,14 @@ def _check_binding_maps(ctx: RuleContext, model: _Model) -> list[Finding]:
         text = _read(ctx, rel)
         if text is None:
             continue
-        seen: set[str] = set()
-        # qualified dim[column]
-        for qm in _QUALIFIED_REF.finditer(text):
-            qtable, qcol = qm.group(1), qm.group(2)
+        seen: set = set()
+
+        def _resolve_qualified(qtable: str, qcol: str) -> None:
+            # resolve against the named table's columns; a binding map uses the
+            # bare table token (dim_product_rss), so match columns_by_bare too.
             known = model.columns_by_table.get(qtable)
+            if known is None:
+                known = model.columns_by_bare.get(_strip_table_prefix(qtable))
             if known is not None and qcol not in known and (qtable, qcol) not in seen:
                 seen.add((qtable, qcol))
                 findings.append(
@@ -289,13 +297,20 @@ def _check_binding_maps(ctx: RuleContext, model: _Model) -> list[Finding]:
                         rule_id=RULE_ID,
                         severity=Severity.ERROR,
                         message=(
-                            f"dashboard binding references {qtable!r}[{qcol}], which "
+                            f"dashboard binding references {qtable}[{qcol}], which "
                             "does not resolve to a committed column (orphaned)"
                         ),
                         locator=f"{rel}:{qcol}",
                     )
                 )
-        blanked = _QUALIFIED_REF.sub("''[]", text)
+
+        # quoted 'table'[column] AND unquoted table[column] (both binding idioms)
+        for qm in _QUALIFIED_REF.finditer(text):
+            _resolve_qualified(qm.group(1), qm.group(2))
+        for qm in _UNQUOTED_QUALIFIED_REF.finditer(text):
+            _resolve_qualified(qm.group(1), qm.group(2))
+        # blank BOTH qualified forms so their [col] is not re-read as a bare measure
+        blanked = _UNQUOTED_QUALIFIED_REF.sub("x[]", _QUALIFIED_REF.sub("''[]", text))
         for bm in _BARE_MEASURE_REF.finditer(blanked):
             ref = bm.group(1).strip()
             if not ref or ref in seen:

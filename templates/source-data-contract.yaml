@@ -1,0 +1,41 @@
+# Source data-contract -- the FORWARD, supplier-facing agreement for one source
+# table (spec 105 / HR12). Instantiate per table into
+# mappings/<table>/source-data-contract.yaml and fill every REPLACE_ME_* sentinel.
+#
+# This is DISTINCT from source-map.yaml's descriptive meta.freshness (090/HR4):
+# freshness is what WE observed about arrival; this contract is what the SUPPLIER
+# is HELD TO going forward -- expected schema, expected arrival, and the declared
+# policy for late-arriving / corrected (restated) rows. It turns drift from
+# reactive ("we noticed it broke") into preventive ("we agreed what correct is").
+#
+# HR12 is STATIC and PRESENCE-only: it checks each section is present and filled
+# (no leftover REPLACE_ME_* sentinel, no blank). It NEVER connects to a DB, never
+# computes actual freshness/arrival, never detects a real restatement event
+# (Principle VIII -- live enforcement is deferred), and NEVER invents the SLA or
+# the schema (Principle V -- these are owner/supplier-supplied). A missing/
+# placeholder section is a fail-closed ERROR (one per section), never a guess.
+#
+# Names/types/cadence below are ILLUSTRATIVE (Principle VII) -- no worked-example
+# (C086 / retail_store_sales) specifics are baked in.
+
+# expected_schema -- the columns the supplier commits to deliver. Each entry needs
+# a real (non-placeholder) name AND type.
+expected_schema:
+  columns:
+    - name: "REPLACE_ME_COLUMN_NAME"      # e.g. transaction_id
+      type: "REPLACE_ME_COLUMN_TYPE"      # e.g. text, numeric, date (source-declared)
+    # - name: ...
+    #   type: ...
+
+# arrival -- when the source is expected to land. cadence is a non-blank,
+# non-placeholder free-text statement the supplier is held to.
+arrival:
+  cadence: "REPLACE_ME_ARRIVAL_CADENCE"   # e.g. "daily by 06:00 Africa/Cairo"
+
+# restatement -- the declared policy for late-arriving or corrected rows. A
+# non-blank, non-placeholder free-text statement (HR12 does NOT parse it
+# semantically -- it only requires that a human stated one).
+restatement:
+  policy: "REPLACE_ME_RESTATEMENT_POLICY"  # e.g. "corrections for prior periods
+                                           #   arrive as full-day replacements keyed
+                                           #   on business_date; no in-place edits"

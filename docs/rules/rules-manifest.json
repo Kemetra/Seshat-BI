@@ -160,10 +160,6 @@
     "title": "forward source data-contract presence"
   },
   {
-    "id": "HR2",
-    "title": "declared SCD type per gold dimension"
-  },
-  {
     "id": "HR4",
     "title": "source freshness declaration"
   },

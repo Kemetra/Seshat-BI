@@ -196,6 +196,39 @@ def test_hr9_ignores_partition_source_m_block(tmp_path: Path) -> None:
     assert list(check_hr9(ctx)) == []
 
 
+def test_hr9_measure_with_child_properties_does_not_leak(tmp_path: Path) -> None:
+    """Regression (review Important): a measure with its own \\t\\t child props
+    (formatString, lineageTag) must be scoped correctly, and a following partition
+    block must still be excluded -- the block terminator must be airtight."""
+    tmdl = (
+        "table 'gold fct'\n"
+        "\tmeasure TotalSales = SUM('gold fct'[total_spent])\n"
+        "\t\tformatString: #,0\n"
+        "\t\tlineageTag: abc-123\n"
+        "\tcolumn total_spent\n\t\tdataType: double\n"
+        "\tpartition 'gold fct' = m\n"
+        "\t\tsource =\n"
+        '\t\t\t\tlet S = Source{[Schema = "gold", Item = "fct"]}[Data] in S\n'
+    )
+    ctx = _ctx(tmp_path, _tmdl(tmp_path, "fct.tmdl", tmdl))
+    assert list(check_hr9(ctx)) == []
+
+
+def test_hr9_binding_map_unquoted_qualified_orphan_fails_closed(tmp_path: Path) -> None:
+    """Regression (review Important, FR-005): an UNQUOTED table[column] ref in a
+    binding map that no longer resolves must be caught (the committed binding-map
+    idiom is dim_x[col], not 'dim_x'[col])."""
+    t = _tmdl(tmp_path, "fct.tmdl", _FCT_TMDL)
+    b = _binding(
+        tmp_path,
+        "t1",
+        "| visual | field |\n|---|---|\n| bar | [TotalSales] by gold fct[gone_col] |\n",
+    )
+    ctx = _ctx(tmp_path, t, b)
+    findings = list(check_hr9(ctx))
+    assert any("gone_col" in f.message for f in findings)
+
+
 # --- landing: clean on the real committed tree ---
 
 

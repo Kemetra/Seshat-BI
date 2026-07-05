@@ -282,7 +282,7 @@ def check_unit_currency_agreement(ctx: RuleContext) -> Iterable[Finding]:
                     rule_id=RULE_ID,
                     severity=Severity.ERROR,
                     message=(
-                        f"metric {metric_name!r} sums bound columns with "
+                        f"metric {metric_name!r} binds columns with "
                         f"clashing declared units: {_fmt_pairs(unit_clash)} "
                         f"(mappings/{table}/source-map.yaml columns[].unit)"
                     ),
@@ -297,7 +297,7 @@ def check_unit_currency_agreement(ctx: RuleContext) -> Iterable[Finding]:
                     rule_id=RULE_ID,
                     severity=Severity.ERROR,
                     message=(
-                        f"metric {metric_name!r} sums bound columns with "
+                        f"metric {metric_name!r} binds columns with "
                         f"clashing declared currencies: "
                         f"{_fmt_pairs(currency_clash)} "
                         f"(mappings/{table}/source-map.yaml columns[].currency)"

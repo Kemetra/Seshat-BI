@@ -117,6 +117,27 @@ def test_hr8_reversed_cast_literal_bounds_fails_closed(tmp_path: Path) -> None:
     assert findings[0].severity is Severity.ERROR
 
 
+def test_hr8_non_padded_valid_range_not_flagged(tmp_path: Path) -> None:
+    """Regression (review Important): a valid range in non-zero-padded PG literals
+    (2022-1-9 -> 2022-01-10) must NOT be flagged reversed. Lexically '2022-1-9' >
+    '2022-01-10', so a string compare would falsely fire; chronologically it is
+    Jan 9 -> Jan 10, a valid forward range."""
+    sql = _dim_date_sql("DATE '2022-1-9'", "DATE '2022-01-10'", "INTERVAL '1 day'")
+    ctx = _ctx(tmp_path, _mig(tmp_path, "0210_gold.sql", sql))
+    assert list(check_hr8(ctx)) == []
+
+
+def test_hr8_non_padded_reversed_range_is_flagged(tmp_path: Path) -> None:
+    """Regression (review Important): a genuinely reversed non-padded range
+    (2022-01-10 -> 2022-1-9) MUST be flagged -- lexically start < end (false
+    negative under a string compare), chronologically Jan 10 -> Jan 9 is reversed."""
+    sql = _dim_date_sql("DATE '2022-01-10'", "DATE '2022-1-9'", "INTERVAL '1 day'")
+    ctx = _ctx(tmp_path, _mig(tmp_path, "0211_gold.sql", sql))
+    findings = list(check_hr8(ctx))
+    assert len(findings) == 1
+    assert findings[0].severity is Severity.ERROR
+
+
 def test_hr8_non_literal_bound_skips_bounds_check(tmp_path: Path) -> None:
     sql = _dim_date_sql(
         "(SELECT min(transaction_date) FROM silver.orders)",
