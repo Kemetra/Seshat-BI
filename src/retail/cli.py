@@ -203,6 +203,29 @@ def _build_parser() -> argparse.ArgumentParser:
         "--force", action="store_true", help="overwrite existing files"
     )
 
+    # PBIR theme-application (adapter increment A). Applies a theme-gen theme to a
+    # committed PBIR report (BaseTheme resource + report.json themeCollection).
+    # Companion authoring adapter (ADR 0015): writes committed PBIR, allow-list-only,
+    # deterministic + validated; NO pbi-cli / live Power BI / external dependency.
+    pbirtheme = sub.add_parser(
+        "pbir-apply-theme",
+        help="apply a generated theme to a committed PBIR report (adapter)",
+    )
+    pbirtheme.add_argument(
+        "--theme", required=True, metavar="PATH", help="the theme JSON to apply"
+    )
+    pbirtheme.add_argument(
+        "--report",
+        required=True,
+        metavar="DIR",
+        help="the *.Report/ dir to apply the theme to",
+    )
+    pbirtheme.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite an existing different base theme",
+    )
+
     # Rule-registry snapshot manifest (feature 043). Writes the golden inventory
     # docs/rules/rules-manifest.json from the live registry. Test-only consumer
     # (the snapshot test); adds NO new `retail check` rule.
@@ -394,6 +417,11 @@ def main(argv: list[str] | None = None) -> int:
         from .theme_gen import theme_gen_main
 
         return theme_gen_main(args)
+
+    if args.command == "pbir-apply-theme":
+        from .pbir_theme_apply import pbir_apply_main
+
+        return pbir_apply_main(args)
 
     if args.command == "manifest":
         return _run_manifest(args)
