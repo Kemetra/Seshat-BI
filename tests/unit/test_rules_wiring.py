@@ -96,6 +96,7 @@ EXPECTED_RULE_IDS = frozenset(
         "CT1",  # contrast: token text/background pairs meet the declared WCAG floor
         "AD1",  # additivity-consistency: no illegal additivity composition in lineage
         "AQ1",  # answerability: domain decision-question routes resolve or are planned
+        "HR1",  # conformed-dimension: same-named cross-star dims are ruled + conform
         "HR7",  # reload-idempotency: gold deviation load declares its reload-strategy
         "HR2",  # scd-policy: each gold dimension declares its SCD type (grandfathered)
         "HR4",  # source-freshness: a source declares expected cadence + max staleness

@@ -148,6 +148,10 @@
     "title": "No real host/value in committed PBIP parameters"
   },
   {
+    "id": "HR1",
+    "title": "cross-star conformed-dimension conformance"
+  },
+  {
     "id": "HR11",
     "title": "summed measure inputs share a unit"
   },

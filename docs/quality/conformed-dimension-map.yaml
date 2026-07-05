@@ -1,0 +1,31 @@
+# Conformed-dimension map -- the human-authored declaration HR1
+# (src/retail/rules/conformed_dimension.py) reads.
+#
+# Model-level (cross-star) counterpart to the per-table source-mapping gate:
+# when MORE THAN ONE gold star exists, a dimension NAME that appears in 2+ stars
+# must be ruled -- is it ONE shared business dimension (`conformed`), or are the
+# same-named dims deliberately separate (`distinct`)? That ruling is a
+# Principle-V human modelling judgment; HR1 never decides it. An undeclared
+# cross-star name is a fail-closed ERROR (finish the ruling), never a guess.
+#
+# Shape (mirrors SF1's docs/quality/shared-spine.yaml -- top-level mapping,
+# enum value, fail-closed on an unrecognized status):
+#
+#   dimensions:
+#     <bare_dimension_name>:        # the gold_star.dimensions[].name, schema prefix stripped
+#       status: conformed           # conformed | distinct  (the ONLY two valid values)
+#       stars:                      # the table ids (meta.table_id / source_id) this ruling covers
+#         - <table_id_a>
+#         - <table_id_b>
+#
+# A `conformed` dimension MUST match surrogate_key + shared-attribute silver_type
+# across every star it covers (HR1 FR-005); a `distinct` dimension never fires.
+# Names, types, and ids above are ILLUSTRATIONS ONLY (Principle VII) -- no
+# worked-example specifics are baked in.
+#
+# The current committed stars (retail_store_sales, demo_sample_orders) use
+# different dimension-naming conventions (suffixed vs bare), so NO dimension name
+# overlaps across them and no ruling is required yet. Add an entry here only when
+# two stars genuinely share a dimension name.
+
+dimensions: {}
