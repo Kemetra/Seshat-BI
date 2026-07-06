@@ -54,6 +54,7 @@ Classify the request, then open the single matching workflow under `workflows/`.
 | Existing screenshot critique | 1 | `workflows/screenshot-review.md` |
 | Background / canvas request | 2 | `workflows/background-asset-design.md` |
 | Colors / fonts / default formatting | 3 | `workflows/theme-json-design.md` |
+| Propose a formatting plan for an approved page | 1/3 | `workflows/formatting-plan.md` |
 | Chart / card / slicer arrangement | 1 | `workflows/visual-design-system.md` + `workflows/page-blueprint.md` |
 | Final review | 1 | `workflows/dashboard-qa.md` |
 | Mobile-specific layout | 1 | `workflows/mobile-layout.md` |

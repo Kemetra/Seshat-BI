@@ -120,6 +120,10 @@
     "title": "A visual-spec that self-attests an anti-pattern records a blocking reason"
   },
   {
+    "id": "DL7",
+    "title": "Formatting-plan ledger is well-formed (citations resolve, allow-list, no score)"
+  },
+  {
     "id": "DR1",
     "title": "Design-layer route path foot-gun + stale-phrase guard"
   },
