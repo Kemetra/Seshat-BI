@@ -71,7 +71,17 @@ def test_image_url_is_resourcepackageitem(tmp_path: Path) -> None:
         }
     }
     assert bg["scaling"] == {"expr": {"Literal": {"Value": "'Fit'"}}}
-    assert bg["name"] == {"expr": {"Literal": {"Value": "'placeholder-asset'"}}}
+    # display name KEEPS the extension (matches the real Desktop sample's 'name.ico')
+    assert bg["name"] == {"expr": {"Literal": {"Value": "'placeholder-asset.png'"}}}
+
+
+def test_transparency_is_raw_0D_literal(tmp_path: Path) -> None:
+    # Verbatim from the real sample: transparency is the RAW decimal literal "0D"
+    # (opaque), NOT a quoted string '0D'. Absent transparency can render invisible.
+    report = _report_copy(tmp_path)
+    set_page_background(ASSET, report, "pg")
+    props = _page(report)["objects"]["background"][0]["properties"]
+    assert props["transparency"] == {"expr": {"Literal": {"Value": "0D"}}}
 
 
 def test_other_page_objects_are_preserved(tmp_path: Path) -> None:

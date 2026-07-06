@@ -16,9 +16,11 @@ sample existed). Values that ARE literals (name, scaling) use the PBIR
 ``expr/Literal`` wrapper with single-quoted strings.
 
 Allow-list (ADR 0015): touches ONLY ``page.json`` ``objects.background`` and the
-``report.json`` RegisteredResources package + the copied asset. It leaves every other
-page object (e.g. ``outspacePane``) and every other report key byte-preserved. It
-NEVER writes a ``visual.json``, page geometry, ``themeCollection``, or a model file.
+``report.json`` RegisteredResources package + the copied asset. Every other page
+object (e.g. ``outspacePane``) and every other report key is preserved unchanged (the
+files are deterministically re-serialized with sorted keys -- the same house style as
+increments A and B -- so values are preserved, not the original byte layout). It NEVER
+writes a ``visual.json``, page geometry, ``themeCollection``, or a model file.
 Surface-2 purity: it references a static image asset; it bakes no data into it.
 
 Companion authoring adapter: stdlib json/pathlib/shutil only, no pbi-cli, no live
@@ -58,11 +60,19 @@ def _literal(value: str) -> dict:
     return {"expr": {"Literal": {"Value": "'" + value.replace("'", "''") + "'"}}}
 
 
+# Transparency is a RAW decimal literal ("0D"), NOT a quoted string -- it must not
+# go through _literal (that would wrap it as '0D'). "0D" = 0% transparency = opaque,
+# verbatim from the real Desktop sample. A background image with the property absent
+# can render invisible, so it is set explicitly.
+_OPAQUE = {"expr": {"Literal": {"Value": "0D"}}}
+
+
 def _image_block(display_name: str, item_name: str, scaling: str) -> dict:
     """The page-background image property, verbatim from the real Desktop sample.
 
     The URL is a ResourcePackageItem reference (PackageType 1 = RegisteredResources),
-    NOT a Literal -- this is the shape that could not be guessed.
+    NOT a Literal -- this is the shape that could not be guessed. ``display_name``
+    keeps the file extension (matching the sample's ``'name.ico'`` form).
     """
     return {
         "image": {
@@ -166,7 +176,11 @@ def set_page_background(
     objects["background"] = [
         {
             "properties": {
-                "image": _image_block(asset.stem, item_name, scaling),
+                # display name KEEPS the extension (matches the real sample's
+                # 'name.ico' form); the resolver keys off url.ItemName regardless.
+                "image": _image_block(asset.name, item_name, scaling),
+                # explicit opaque transparency ("0D") -- see _OPAQUE.
+                "transparency": _OPAQUE,
             }
         }
     ]
