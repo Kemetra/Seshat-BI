@@ -1,0 +1,9 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/1.0.0/schema.json",
+  "name": "vA",
+  "position": { "x": 100, "y": 100, "z": 1000, "height": 300, "width": 300, "tabOrder": 1000 },
+  "visual": {
+    "visualType": "columnChart",
+    "query": { "queryState": { "Category": { "projections": [ { "field": { "Column": { "Expression": { "SourceRef": { "Entity": "placeholder" } }, "Property": "cat" } }, "queryRef": "placeholder.cat" } ] } } }
+  }
+}

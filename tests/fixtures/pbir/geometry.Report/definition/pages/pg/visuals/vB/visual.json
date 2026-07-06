@@ -1,0 +1,9 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/1.0.0/schema.json",
+  "name": "vB",
+  "position": { "x": 300, "y": 250, "z": 2000, "height": 300, "width": 300, "tabOrder": 2000 },
+  "visual": {
+    "visualType": "card",
+    "query": { "queryState": { "Values": { "projections": [ { "field": { "Measure": { "Expression": { "SourceRef": { "Entity": "placeholder" } }, "Property": "total" } }, "queryRef": "placeholder.total" } ] } } }
+  }
+}
