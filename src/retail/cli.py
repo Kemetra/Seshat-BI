@@ -203,6 +203,29 @@ def _build_parser() -> argparse.ArgumentParser:
         "--force", action="store_true", help="overwrite existing files"
     )
 
+    # Tokens -> theme compile (deterministic; reuses theme-gen's renderer). Reads a
+    # committed design-tokens YAML and writes its matching theme.json. The generator
+    # whose output DL3 checks; removes the hand-edit that desyncs a theme from tokens.
+    themecompile = sub.add_parser(
+        "theme-compile",
+        help="compile a committed design-tokens YAML into its theme.json",
+    )
+    themecompile.add_argument(
+        "--tokens",
+        required=True,
+        metavar="PATH",
+        help="the *-design-tokens.yaml file to compile",
+    )
+    themecompile.add_argument(
+        "--out",
+        default=None,
+        metavar="PATH",
+        help="theme.json output path (default: the tokens' meta.compiles_to)",
+    )
+    themecompile.add_argument(
+        "--force", action="store_true", help="overwrite an existing theme.json"
+    )
+
     # PBIR theme-application (adapter increment A). Applies a theme-gen theme to a
     # committed PBIR report (BaseTheme resource + report.json themeCollection).
     # Companion authoring adapter (ADR 0015): writes committed PBIR, allow-list-only,
@@ -471,6 +494,11 @@ def main(argv: list[str] | None = None) -> int:
         from .theme_gen import theme_gen_main
 
         return theme_gen_main(args)
+
+    if args.command == "theme-compile":
+        from .theme_compile import theme_compile_main
+
+        return theme_compile_main(args)
 
     if args.command == "pbir-apply-theme":
         from .pbir_theme_apply import pbir_apply_main

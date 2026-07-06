@@ -17,6 +17,7 @@ readiness pass and emits no score (rule #9 / Principle V).
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from .color import is_valid_hex
@@ -192,3 +193,24 @@ def compile_theme(tokens_path: Path, out_path: Path | None, force: bool) -> Path
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render_theme_json(palette, seed), encoding="utf-8", newline="\n")
     return out
+
+
+def theme_compile_main(args) -> int:
+    """CLI entry: compile a committed tokens file into its theme.json."""
+    out_override = Path(args.out) if getattr(args, "out", None) else None
+    try:
+        written = compile_theme(
+            Path(args.tokens), out_path=out_override, force=args.force
+        )
+    except ThemeCompileError as exc:
+        print(f"theme-compile: {exc}", file=sys.stderr)
+        return 2
+    except Exception as exc:  # ThemeGenError from the reused contrast/name guards
+        print(f"theme-compile: {exc}", file=sys.stderr)
+        return 2
+    print(f"wrote {written}")
+    print(
+        "reminder: DL3 (fidelity) + DL1 (purity) still gate this theme; "
+        "validate in Power BI Desktop. readiness = warning (no pass claimed)."
+    )
+    return 0
