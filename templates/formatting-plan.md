@@ -95,7 +95,7 @@ knowing the members would be guessing.
 |--------|-----------|-------|----------|-------|------------------|-------------|------------|--------|-----------|
 | `page:overview` | `themeCollection` | `baseTheme` | `name` | `<theme-name>` | `#13` | `design/tokens/<subject>-design-tokens.yaml#palette` | A | proposed | inherit the committed theme instead of a per-visual ad-hoc color |
 | `<visual_id_1>` | `objects` | `labels` | `displayUnits` | `<unit-format-literal>` | `#4` | `design/tokens/<subject>-design-tokens.yaml#number_format.count` | B | proposed | consistent count format per the token, matches every other count visual on the page |
-| `page:overview` | `background` | `canvas` | `image` | `<registered-asset-name>` | `#12` | `design/tokens/<subject>-design-tokens.yaml#background` | C | proposed | static structure only, carries no KPI value baked in |
+| `page:overview` | `background` | `canvas` | `image` | `<registered-asset-name>` | `#12` | `design/tokens/<subject>-design-tokens.yaml#background` | C | needs-owner-decision | static structure only, carries no KPI value; asset choice is the owner's (one of N committed assets fits, or none) |
 | `<visual_id_2>` | `visualContainerObjects` | `title` | `show` | `true` | `#8` | `design/tokens/<subject>-design-tokens.yaml#data_colors` | B | needs-owner-decision | category color pin needs a committed member enumeration -- absent one, owner decides |
 | `<visual_id_3>` | (none) | (none) | (none) | (none) | `#7` | `design/tokens/<subject>-design-tokens.yaml#layout` | handoff-only | proposed | no clear top-left headline on this page; geometry fix needs a human/Desktop, no property this layer can set |
 

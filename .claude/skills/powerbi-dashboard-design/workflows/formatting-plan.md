@@ -69,6 +69,27 @@ Slice-1 applyable set:
   exists, emit the #8 rows at `status: needs-owner-decision` (never auto-`proposed`);
   the layer must not guess members.
 
+### 2b. Emit a background row as `needs-owner-decision` -- never choose the asset
+
+If the page could carry a static page background (**#12** background-carries-no-data),
+emit ONE verb-C row proposing the *slot*, never the choice of asset:
+
+- `target: page:<name>`, `container: background`, `group: canvas`, `property: image`,
+  `value:` the committed asset's registered name IF and only if exactly the intended
+  asset is already unambiguous from a committed source; otherwise leave it as the
+  placeholder the owner fills.
+- `principle_cited: #12`, `token_cited:` the background token path, `apply_verb: C`.
+- `status: needs-owner-decision` -- **always**, in this slice. Choosing a background
+  image where more than one committed asset fits (or none vs one) is a Principle-V call
+  (step 5); the layer proposes the slot + the citation, never the asset. Do not emit a
+  background row at `proposed` unless a committed owner ruling authorizes a specific
+  asset (no such ruling exists in this slice).
+- `rationale:` words only -- e.g. "static structure only, carries no KPI value; asset
+  choice is the owner's (one of N committed assets fits, or none)".
+
+This mirrors the #8 category-color hold (step 2): the mechanism ships (`pbir-set-page-
+background`), but the meaning-carrying choice stays the owner's until a ruling exists.
+
 ### 3. Emit detect-only findings as `handoff-only`
 
 The render-only anti-patterns -- **#1** too many visuals, **#5** slicers dominating,
