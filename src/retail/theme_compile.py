@@ -59,59 +59,66 @@ _DL3_DEFERRED_FIELDS = (
 )
 
 
-def palette_from_tokens(tokens_doc: dict) -> dict:
-    """Rebuild build_palette's output shape purely from committed token values."""
-    if not isinstance(tokens_doc, dict):
-        raise ThemeCompileError("tokens document is not a mapping")
-    colors = tokens_doc.get("colors")
-    if not isinstance(colors, dict):
-        raise ThemeCompileError("tokens missing required field: colors")
-    text = colors.get("text")
-    sentiment = colors.get("sentiment")
-    if not isinstance(text, dict):
-        raise ThemeCompileError("tokens missing required field: colors.text")
-    if not isinstance(sentiment, dict):
-        raise ThemeCompileError("tokens missing required field: colors.sentiment")
+def _require_mapping(value: object, label: str) -> dict:
+    """Return ``value`` as a dict, or raise naming the missing/mistyped field."""
+    if not isinstance(value, dict):
+        raise ThemeCompileError(f"tokens missing required field: {label}")
+    return value
+
+
+def _require_hex(value: object, label: str) -> str:
+    """Return ``value`` as a validated #RRGGBB hex, or raise naming the field."""
+    if value is None:
+        raise ThemeCompileError(f"tokens missing required field: {label}")
+    if not is_valid_hex(value):
+        raise ThemeCompileError(f"{label} is not a #RRGGBB hex: {value!r}")
+    return value
+
+
+def _require_data_colors(colors: dict) -> list[str]:
+    """Return a validated non-empty list of #RRGGBB data colors, or raise."""
     dc = colors.get("data_colors")
     if not isinstance(dc, list) or not dc:
         raise ThemeCompileError("tokens missing a non-empty colors.data_colors list")
-    fields = {
-        "colors.primary": colors.get("primary"),
-        "colors.secondary": colors.get("secondary"),
-        "colors.background": colors.get("background"),
-        "colors.text.primary": text.get("primary"),
-        "colors.text.secondary": text.get("secondary"),
-        "colors.text.muted": text.get("muted"),
-        "colors.sentiment.success": sentiment.get("success"),
-        "colors.sentiment.warning": sentiment.get("warning"),
-        "colors.sentiment.danger": sentiment.get("danger"),
-    }
-    for label, val in fields.items():
-        if val is None:
-            raise ThemeCompileError(f"tokens missing required field: {label}")
-        if not is_valid_hex(val):
-            raise ThemeCompileError(f"{label} is not a #RRGGBB hex: {val!r}")
     for c in dc:
         if not is_valid_hex(c):
             raise ThemeCompileError(
                 f"colors.data_colors entry is not a #RRGGBB hex: {c!r}"
             )
+    return list(dc)
+
+
+def palette_from_tokens(tokens_doc: dict) -> dict:
+    """Rebuild build_palette's output shape purely from committed token values."""
+    colors = _require_mapping(
+        _require_mapping(tokens_doc, "root").get("colors"), "colors"
+    )
+    text = _require_mapping(colors.get("text"), "colors.text")
+    sentiment = _require_mapping(colors.get("sentiment"), "colors.sentiment")
     return {
         "colors": {
-            "primary": colors["primary"],
-            "secondary": colors["secondary"],
-            "background": colors["background"],
+            "primary": _require_hex(colors.get("primary"), "colors.primary"),
+            "secondary": _require_hex(colors.get("secondary"), "colors.secondary"),
+            "background": _require_hex(colors.get("background"), "colors.background"),
             "text": {
-                "primary": text["primary"],
-                "secondary": text["secondary"],
-                "muted": text["muted"],
+                "primary": _require_hex(text.get("primary"), "colors.text.primary"),
+                "secondary": _require_hex(
+                    text.get("secondary"), "colors.text.secondary"
+                ),
+                "muted": _require_hex(text.get("muted"), "colors.text.muted"),
             },
             "sentiment": {
-                "success": sentiment["success"],
-                "warning": sentiment["warning"],
-                "danger": sentiment["danger"],
+                "success": _require_hex(
+                    sentiment.get("success"), "colors.sentiment.success"
+                ),
+                "warning": _require_hex(
+                    sentiment.get("warning"), "colors.sentiment.warning"
+                ),
+                "danger": _require_hex(
+                    sentiment.get("danger"), "colors.sentiment.danger"
+                ),
             },
-            "data_colors": list(dc),
+            "data_colors": _require_data_colors(colors),
         }
     }
 
