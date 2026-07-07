@@ -4,12 +4,24 @@
 
 **Created**: 2026-07-07
 
-**Status**: **DRAFT — SPEC ONLY, NOT BUILT.** Authored autonomously (2026-07-07 overnight
-run) and HELD for owner review before any implementation. This is net-new *runtime* —
-per the overnight build discipline, net-new runtime waits for human eyes. Not gated on
-the A-vs-B fork (`docs/roadmap/decisions/cli-verbs-vs-skill-driven.md`): a workspace
-scaffolder is packaging, not a capability verb. See
+**Status**: **BUILT.** Implemented 2026-07-07 on branch `feat/107-user-workspace-init`
+(TDD; see `tasks.md` for what was done, including a recorded deviation from
+`plan.md`'s proposed shape). Not gated on the A-vs-B fork
+(`docs/roadmap/decisions/cli-verbs-vs-skill-driven.md`): a workspace scaffolder is
+packaging, not a capability verb. See
 `docs/roadmap/seshat-bi-agent-controlled-user-tool-roadmap.md` M3.
+
+**Owner-review flag**: this spec was originally authored autonomously and HELD pending
+owner review. It has since been implemented per an explicit build instruction; the
+owner should still review the recorded deviation in `tasks.md`. All FRs are satisfied
+as written -- FR-002 says the workspace "MAY reuse [`retail init`'s] `.seshat/`
+bootstrap internally", not MUST, so not reusing it is compliant. The deviation is from
+`plan.md`'s proposed shape/step-1 (HELD/DRAFT, not a spec requirement): a spike proved
+that reusing the bootstrap breaks FR-006 (see tasks.md), so the shipped workspace omits
+`.seshat/` entirely. Consequence for a later milestone: as shipped, a generated
+workspace cannot itself later run `retail init` (`kit_init.bootstrap` needs a
+`.seshat/kit-source.yaml` to project from) -- out of M3's "empty container only" scope,
+but worth the owner knowing before M6+ builds on this.
 
 **Input**: Roadmap M3 — "User Workspace Mode": a `seshat init-project <name>` command that
 scaffolds a fresh, empty Retail-BI *project workspace* for a new user, distinct from the
@@ -61,7 +73,9 @@ milestone assumes.
   gated on the A-vs-B ruling. M3 creates the empty container only.
 - Publishing/distribution of the tool itself — that is M2/M11.
 
-## Held-decision notes
-This spec is written; it is NOT to be implemented until the owner reviews it. No `tasks.md`
-is generated yet — task breakdown follows owner approval of this spec (avoids manufacturing
-build momentum for unreviewed runtime).
+## Held-decision notes (historical)
+This spec was originally written and held: NOT to be implemented until the owner
+reviewed it, with no `tasks.md` generated (avoiding manufactured build momentum for
+unreviewed runtime). It was subsequently implemented on explicit build instruction; see
+`tasks.md` for the task breakdown and the recorded spike/deviation that superseded this
+hold.
