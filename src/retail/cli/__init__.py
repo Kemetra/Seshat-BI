@@ -11,25 +11,35 @@ Structure:
     subcommands in add-order and every flag's metavar/help must stay
     byte-identical; centralizing assembly is lower-risk than scattering
     ordered ``add_*_parser`` calls across many modules).
-  - ``commands/*.py``: one handler per subcommand, each imported LAZILY inside
-    ``main``'s dispatch (mirrors the pre-split lazy-import discipline, e.g.
-    ``from .theme_gen import theme_gen_main``).
+  - ``commands/*.py``: one handler per subcommand. ``main`` dispatches through
+    ``_DISPATCH``, a ``{command_name: handler}`` table, instead of an
+    if/elif chain, so a new subcommand adds one table row and does NOT grow
+    ``main``'s cyclomatic complexity. Each non-uniform handler is imported
+    LAZILY -- via ``_lazy(module_path, func_name)``, which defers the import
+    to call time -- mirroring the pre-split lazy-import discipline (e.g.
+    ``from .theme_gen import theme_gen_main``): ``retail check`` / CI never
+    loads driver-touching or PBIR/demo modules it doesn't need.
   - The seams below (``_ensure_driver``, ``_make_runner``, ``_load_targets``,
     ``_current_engine``, ``_safe_target_label``, ``_redact_dsn``) stay defined
     HERE (not relocated into a handler module) because the test suite patches
     them as ``retail.cli.<name>`` and handler modules read them back via
     ``from retail import cli; cli.<name>(...)`` -- module-attribute lookup at
     call time, so a monkeypatch on this module is always visible to callers.
-  - The ``check`` branch stays inline in ``main`` (unextracted): it is tightly
-    coupled to ``build_context`` / ``run`` / ``run_json`` / ``all_rules``,
-    which are also patched directly as ``retail.cli.build_context`` /
-    ``retail.cli.run`` by the test suite, and it carries none of the CC/LOC
-    hotspot weight the other handlers do.
+  - ``_run_check`` and ``_run_doctor`` are the two non-uniform dispatch
+    entries, kept as small wrapper functions in THIS module (not lazy
+    factories) because they are not a plain ``handler(args)`` call:
+      - ``_run_check`` is tightly coupled to ``build_context`` / ``run`` /
+        ``run_json`` / ``all_rules``, which the test suite patches directly
+        as ``retail.cli.build_context`` / ``retail.cli.run``; it carries none
+        of the CC/LOC hotspot weight the other handlers do.
+      - ``_run_doctor`` adapts the table's uniform ``handler(args)`` shape to
+        ``run_doctor``'s actual signature, ``run_doctor(repo_root, strict=)``.
 """
 
 from __future__ import annotations
 
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -47,6 +57,93 @@ if TYPE_CHECKING:
     from ..validate_targets import ValidationTargets
 
 
+def _run_check(args: object) -> int:
+    """Handler for ``check``. Kept as a wrapper (not a lazy-imported handler)
+    -- see the module docstring for why: it reads ``build_context`` / ``run``
+    / ``run_json`` / ``all_rules`` as bare module globals so test-suite
+    monkeypatches on ``retail.cli.*`` stay visible."""
+    commit_message: str | None = None
+    if args.commit_msg_file is not None:  # type: ignore[attr-defined]
+        try:
+            raw = Path(args.commit_msg_file).read_text(encoding="utf-8")  # type: ignore[attr-defined]
+        except FileNotFoundError:
+            print(
+                f"error: commit message file not found: {args.commit_msg_file}",  # type: ignore[attr-defined]
+                file=sys.stderr,
+            )
+            return 1  # main() is -> int; the __main__ guard does sys.exit(main())
+        # git's COMMIT_EDITMSG ends in a trailing newline (\r\n on Windows) —
+        # strip it so the message passed to rules is the bare text.
+        commit_message = raw.rstrip("\r\n")
+
+    ctx = build_context(
+        Path(args.repo),  # type: ignore[attr-defined]
+        commit_range=args.commit_range,  # type: ignore[attr-defined]
+        commit_message=commit_message,
+    )
+    # Spec A drop-in fitness: in a repo the kit was merely downloaded into
+    # (not bootstrapped), KIT_SELF rules SKIP (INFO) instead of ERROR-ing on
+    # internal manifests that repo can't have. The kit's own repo IS
+    # bootstrapped, so nothing skips there -- behavior is unchanged.
+    from ..kit_lint import is_bootstrapped
+
+    bootstrapped = is_bootstrapped(Path(args.repo))  # type: ignore[attr-defined]
+    # Default 'text' calls the unchanged run(); 'json' is the opt-in path.
+    if args.output_format == "json":  # type: ignore[attr-defined]
+        return run_json(all_rules(), ctx, bootstrapped=bootstrapped)
+    return run(all_rules(), ctx, bootstrapped=bootstrapped)
+
+
+def _run_doctor(args: object) -> int:
+    """Handler for ``doctor``. Kept as a wrapper because ``run_doctor``'s
+    signature (``repo_root, strict=``) isn't the table's uniform
+    ``handler(args)`` shape."""
+    from ..doctor import run_doctor
+
+    return run_doctor(Path(args.repo), strict=args.strict)  # type: ignore[attr-defined]
+
+
+def _lazy(module_path: str, func_name: str):
+    """Build a dispatch-table handler that imports ``func_name`` from
+    ``module_path`` at CALL time, not at table-construction time. This is
+    what keeps the lazy-import discipline intact: building ``_DISPATCH`` as a
+    module-level dict must NOT force-import every command module (drivers,
+    PBIR, demo, ...) just because ``retail.cli`` was imported.
+    """
+
+    def handler(args: object) -> int:
+        import importlib
+
+        module = importlib.import_module(module_path, package=__name__)
+        func = getattr(module, func_name)
+        return func(args)
+
+    return handler
+
+
+_DISPATCH: dict[str, Callable[[object], int]] = {
+    "check": _run_check,
+    "validate": _lazy(".commands.validate", "run_validate"),
+    "semantic-check": _lazy(".commands.semantic", "run_semantic_check"),
+    "value-check": _lazy(".commands.value_check", "run_value_check"),
+    "generate": _lazy(".commands.generate", "run_generate"),
+    "theme-gen": _lazy("..theme_gen", "theme_gen_main"),
+    "theme-compile": _lazy("..theme_compile", "theme_compile_main"),
+    "pbir-apply-theme": _lazy("..pbir_theme_apply", "pbir_apply_main"),
+    "pbir-format-visual": _lazy("..pbir_visual_format", "pbir_format_main"),
+    "pbir-set-page-background": _lazy("..pbir_page_background", "pbir_page_bg_main"),
+    "pbir-set-geometry": _lazy("..pbir_geometry", "pbir_geometry_main"),
+    "manifest": _lazy(".commands.manifest", "run_manifest"),
+    "severity-posture": _lazy(".commands.severity_posture", "run_severity_posture"),
+    "scaffold": _lazy(".commands.scaffold", "run_scaffold"),
+    "init": _lazy(".commands.init", "run_init"),
+    "init-project": _lazy(".commands.init_project", "init_project_main"),
+    "kit-lint": _lazy(".commands.kit_lint", "run_kit_lint"),
+    "doctor": _run_doctor,
+    "demo": _lazy("..demo", "run_demo"),
+}
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         args = _build_parser().parse_args(argv)
@@ -55,129 +152,10 @@ def main(argv: list[str] | None = None) -> int:
         # as a return code rather than letting it propagate.
         return int(exc.code or 0)
 
-    if args.command == "check":
-        commit_message: str | None = None
-        if args.commit_msg_file is not None:
-            try:
-                raw = Path(args.commit_msg_file).read_text(encoding="utf-8")
-            except FileNotFoundError:
-                print(
-                    f"error: commit message file not found: {args.commit_msg_file}",
-                    file=sys.stderr,
-                )
-                return 1  # main() is -> int; the __main__ guard does sys.exit(main())
-            # git's COMMIT_EDITMSG ends in a trailing newline (\r\n on Windows) —
-            # strip it so the message passed to rules is the bare text.
-            commit_message = raw.rstrip("\r\n")
-
-        ctx = build_context(
-            Path(args.repo),
-            commit_range=args.commit_range,
-            commit_message=commit_message,
-        )
-        # Spec A drop-in fitness: in a repo the kit was merely downloaded into
-        # (not bootstrapped), KIT_SELF rules SKIP (INFO) instead of ERROR-ing on
-        # internal manifests that repo can't have. The kit's own repo IS
-        # bootstrapped, so nothing skips there -- behavior is unchanged.
-        from ..kit_lint import is_bootstrapped
-
-        bootstrapped = is_bootstrapped(Path(args.repo))
-        # Default 'text' calls the unchanged run(); 'json' is the opt-in path.
-        if args.output_format == "json":
-            return run_json(all_rules(), ctx, bootstrapped=bootstrapped)
-        return run(all_rules(), ctx, bootstrapped=bootstrapped)
-
-    if args.command == "validate":
-        from .commands.validate import run_validate
-
-        return run_validate(args)
-
-    if args.command == "semantic-check":
-        from .commands.semantic import run_semantic_check
-
-        return run_semantic_check(args)
-
-    if args.command == "value-check":
-        from .commands.value_check import run_value_check
-
-        return run_value_check(args)
-
-    if args.command == "generate":
-        from .commands.generate import run_generate
-
-        return run_generate(args)
-
-    if args.command == "theme-gen":
-        from ..theme_gen import theme_gen_main
-
-        return theme_gen_main(args)
-
-    if args.command == "theme-compile":
-        from ..theme_compile import theme_compile_main
-
-        return theme_compile_main(args)
-
-    if args.command == "pbir-apply-theme":
-        from ..pbir_theme_apply import pbir_apply_main
-
-        return pbir_apply_main(args)
-
-    if args.command == "pbir-format-visual":
-        from ..pbir_visual_format import pbir_format_main
-
-        return pbir_format_main(args)
-
-    if args.command == "pbir-set-page-background":
-        from ..pbir_page_background import pbir_page_bg_main
-
-        return pbir_page_bg_main(args)
-
-    if args.command == "pbir-set-geometry":
-        from ..pbir_geometry import pbir_geometry_main
-
-        return pbir_geometry_main(args)
-
-    if args.command == "manifest":
-        from .commands.manifest import run_manifest
-
-        return run_manifest(args)
-
-    if args.command == "severity-posture":
-        from .commands.severity_posture import run_severity_posture
-
-        return run_severity_posture(args)
-
-    if args.command == "scaffold":
-        from .commands.scaffold import run_scaffold
-
-        return run_scaffold(args)
-
-    if args.command == "init":
-        from .commands.init import run_init
-
-        return run_init(args)
-
-    if args.command == "init-project":
-        from .commands.init_project import init_project_main
-
-        return init_project_main(args)
-
-    if args.command == "kit-lint":
-        from .commands.kit_lint import run_kit_lint
-
-        return run_kit_lint(args)
-
-    if args.command == "doctor":
-        from ..doctor import run_doctor
-
-        return run_doctor(Path(args.repo), strict=args.strict)
-
-    if args.command == "demo":
-        from ..demo import run_demo
-
-        return run_demo(args)
-
-    return 0
+    handler = _DISPATCH.get(args.command)
+    if handler is None:
+        return 0
+    return handler(args)
 
 
 def _safe_target_label(engine: str, config: object) -> str:
