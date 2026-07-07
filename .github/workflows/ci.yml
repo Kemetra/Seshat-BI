@@ -68,3 +68,21 @@ jobs:
         # canonical source (i.e. someone edited the source but forgot `retail init`).
         # Read-only; reads no constitution. On an un-bootstrapped repo it exits 0.
         run: retail kit-lint --repo .
+
+  smoke:
+    # Install smoke test (spec 108, FR-003/FR-005). A SEPARATE job from `check`
+    # above -- it does not edit or depend on it (`needs:` intentionally omitted so
+    # both run in parallel). Builds a wheel, installs it into a clean throwaway
+    # venv, and asserts both console scripts (`retail`, `seshat`) resolve and
+    # `check --help` exits 0. No `fetch-depth: 0` (no git-metadata rule runs here).
+    # No publish step, no registry token, no secret of any kind (FR-004).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install smoke test (build + clean-venv install + console-script check)
+        run: python scripts/install_smoke_test.py

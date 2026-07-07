@@ -4,9 +4,11 @@
 
 **Created**: 2026-07-07
 
-**Status**: **DRAFT — SPEC ONLY, NOT BUILT.** Authored autonomously (2026-07-07 overnight
-run) and HELD for owner review. Touches CI/packaging — per the overnight discipline, CI
-changes wait for human eyes. Not gated on the A-vs-B fork. See
+**Status**: **BUILT.** Authored autonomously (2026-07-07 overnight run), then HELD for
+owner review because it touches CI/packaging. The owner directed the build on branch
+`feat/108-release-distribution-maturity` (2026-07-07); all three FRs (versioning policy,
+changelog, install smoke test + CI job) are built and gate-verified — see
+`tasks.md` for the FR-to-evidence mapping. Not gated on the A-vs-B fork. See
 `docs/roadmap/seshat-bi-agent-controlled-user-tool-roadmap.md` M11.
 
 **Input**: Roadmap M11 — "Distribution and Release Maturity": the changelog, versioning
@@ -50,7 +52,13 @@ command (`seshat --help` exits 0, `seshat check` runs) in a clean environment.
 - Automated release cutting (tag→publish automation) — a later increment once the manual
   policy is proven.
 
-## Held-decision notes
-Spec only. CI/workflow changes (`.github/workflows/*`) and a publish story are exactly the
-kind of change that deserves human review before landing — no `tasks.md`, no CI edits until
-the owner approves this spec.
+## Held-decision notes (resolved)
+This spec was HELD specifically because it touches CI/workflow files
+(`.github/workflows/*`), which per the overnight-run discipline wait for human eyes before
+landing. **The owner directed the build** on `feat/108-release-distribution-maturity`
+(2026-07-07), so the hold is lifted for this spec's scope only. The CI change made is
+additive and minimal by construction (see `tasks.md`): a new, independent `smoke` job is
+appended to `.github/workflows/ci.yml`; the existing `check` job's steps are byte-identical
+before and after (verified by diff — only new lines were added, none changed or removed).
+No publish step, no registry token, and no secret was added (FR-004) — the publish
+decision itself remains a separate, still-unmade owner call (see "Out of scope" above).
