@@ -157,6 +157,11 @@ def main(argv: list[str] | None = None) -> int:
 
         return run_init(args)
 
+    if args.command == "init-project":
+        from .commands.init_project import init_project_main
+
+        return init_project_main(args)
+
     if args.command == "kit-lint":
         from .commands.kit_lint import run_kit_lint
 

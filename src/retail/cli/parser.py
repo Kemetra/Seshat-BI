@@ -13,6 +13,35 @@ from __future__ import annotations
 import argparse
 
 
+def _add_init_project_parser(sub: argparse._SubParsersAction) -> None:
+    """`init-project` (spec 107, roadmap M3): scaffold a FRESH, empty Retail-BI
+    project workspace for a new user -- distinct from `init` (which bootstraps
+    `.seshat/` into an EXISTING repo). Pure stdlib filesystem; no DB/network;
+    never prompts. Deliberately does NOT bootstrap `.seshat/` (see
+    src/retail/workspace_init.py for why). Extracted to keep `_build_parser`
+    from growing (CodeScene large-method guard)."""
+    p = sub.add_parser(
+        "init-project",
+        help=(
+            "scaffold a fresh, empty Retail-BI project workspace for a new user "
+            "(mappings/, warehouse/{bronze,silver,gold}/, powerbi/, reports/, "
+            "evidence/, README.md, .env.example) -- no wizard"
+        ),
+    )
+    p.add_argument(
+        "name", metavar="NAME", help="workspace directory to create (under the CWD)"
+    )
+    p.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "scaffold into an existing non-empty target; overwrites only the "
+            "scaffold's own files (README.md, .env.example, .gitignore, "
+            ".gitattributes, .gitkeep), never touches or deletes any other file"
+        ),
+    )
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Build the CLI argument parser.
 
@@ -388,6 +417,8 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
     init_p.add_argument("--repo", default=".", help="repo root to bootstrap")
+
+    _add_init_project_parser(sub)
 
     # `kit-lint` (feature 072): standalone Maintenance-Automation step (NOT a `retail
     # check` rule -- it parses yaml). Fails loud (exit 1) when a compass PROJECTION
