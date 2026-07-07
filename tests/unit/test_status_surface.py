@@ -211,6 +211,55 @@ def test_malformed_yaml_is_skipped_not_fatal(tmp_path: Path) -> None:
     assert tables == ["silver.orders"]
 
 
+def test_malformed_stage_is_skipped_not_masked(tmp_path: Path) -> None:
+    """A file that parses fine but has ONE bad stage block (non-string status /
+    non-dict block): the bad stage is dropped from `stages`, the good stage still
+    projects, and `current_stage` is passed through verbatim (never cross-validated
+    or defaulted -- that would be new logic RS1 owns, not this projection)."""
+    rel = Path("mappings") / "partial" / "readiness-status.yaml"
+    path = tmp_path / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        """\
+table: "silver.partial"
+current_stage: "mapping_ready"
+stages:
+  source_ready:
+    status: "pass"
+    evidence: ["profiled.md"]
+  mapping_ready:
+    status: 42
+  broken_block: "not-a-mapping"
+""",
+        encoding="utf-8",
+    )
+    result = build_status_projection(tmp_path)
+    table = result["tables"][0]
+    # current_stage passed through verbatim, NOT reconciled against the dropped stage
+    assert table["current_stage"] == "mapping_ready"
+    # the good stage projects
+    assert "source_ready" in table["stages"]
+    assert table["stages"]["source_ready"]["status"] == "pass"
+    # the malformed stages are ABSENT (skipped), not defaulted to a fabricated status
+    assert "mapping_ready" not in table["stages"]
+    assert "broken_block" not in table["stages"]
+    # and the whole projection still validates against the committed schema
+    assert_matches_schema(result, _load_schema())
+
+
+def test_non_dict_stages_block_projects_empty(tmp_path: Path) -> None:
+    """A `stages:` that is not a mapping (e.g. a scalar/list) yields an empty
+    stages projection, not a crash."""
+    rel = Path("mappings") / "weird" / "readiness-status.yaml"
+    path = tmp_path / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        'table: "silver.weird"\nstages: "not-a-mapping"\n', encoding="utf-8"
+    )
+    result = build_status_projection(tmp_path)
+    assert result["tables"][0]["stages"] == {}
+
+
 def test_missing_current_stage_and_next_action_project_as_null(tmp_path: Path) -> None:
     rel = Path("mappings") / "sparse" / "readiness-status.yaml"
     path = tmp_path / rel
