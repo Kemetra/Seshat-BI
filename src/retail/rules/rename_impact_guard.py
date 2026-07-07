@@ -167,10 +167,54 @@ def _build_model(ctx: RuleContext) -> _Model:
     return model
 
 
-def _check_metric_contracts(ctx: RuleContext, model: _Model) -> list[Finding]:
-    """FR-003: binds_to.columns entries resolve to a column in the cited gold table."""
+def _metric_binds(text: str, model: _Model) -> tuple[str, list, set] | None:
+    """Parse a metric YAML and return (gold_table, columns, known-column-set), or
+    None when any guard fails (bad YAML, no binds_to, or no TMDL for the table)."""
     import yaml  # lazy
 
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    binds = data.get("binds_to")
+    if not isinstance(binds, dict):
+        return None
+    gold_table = binds.get("gold_table")
+    cols = binds.get("columns")
+    if not isinstance(gold_table, str) or not isinstance(cols, list):
+        return None
+    known = model.columns_by_bare.get(_strip_table_prefix(gold_table))
+    if known is None:
+        return None  # no TMDL for this table yet -> FR-007 no-op
+    return gold_table, cols, known
+
+
+def _orphan_col_findings(
+    rel: str, gold_table: str, cols: list, known: set
+) -> list[Finding]:
+    findings: list[Finding] = []
+    for col in cols:
+        if isinstance(col, str) and col not in known:
+            findings.append(
+                Finding(
+                    rule_id=RULE_ID,
+                    severity=Severity.ERROR,
+                    message=(
+                        f"metric contract binds_to column {col!r} does not "
+                        f"resolve to any column of {gold_table} in the "
+                        "committed TMDL (orphaned reference -- a rename left it "
+                        "dangling)"
+                    ),
+                    locator=f"{rel}:{col}",
+                )
+            )
+    return findings
+
+
+def _check_metric_contracts(ctx: RuleContext, model: _Model) -> list[Finding]:
+    """FR-003: binds_to.columns entries resolve to a column in the cited gold table."""
     findings: list[Finding] = []
     for rel in sorted(ctx.tracked_files):
         if is_test_path(rel) or not _METRIC_RE.match(rel):
@@ -178,38 +222,55 @@ def _check_metric_contracts(ctx: RuleContext, model: _Model) -> list[Finding]:
         text = _read(ctx, rel)
         if text is None:
             continue
-        try:
-            data = yaml.safe_load(text)
-        except yaml.YAMLError:
+        binds = _metric_binds(text, model)
+        if binds is None:
             continue
-        if not isinstance(data, dict):
-            continue
-        binds = data.get("binds_to")
-        if not isinstance(binds, dict):
-            continue
-        gold_table = binds.get("gold_table")
-        cols = binds.get("columns")
-        if not isinstance(gold_table, str) or not isinstance(cols, list):
-            continue
-        bare = _strip_table_prefix(gold_table)
-        known = model.columns_by_bare.get(bare)
-        if known is None:
-            continue  # no TMDL for this table yet -> FR-007 no-op
-        for col in cols:
-            if isinstance(col, str) and col not in known:
-                findings.append(
-                    Finding(
-                        rule_id=RULE_ID,
-                        severity=Severity.ERROR,
-                        message=(
-                            f"metric contract binds_to column {col!r} does not "
-                            f"resolve to any column of {gold_table} in the "
-                            "committed TMDL (orphaned reference -- a rename left it "
-                            "dangling)"
-                        ),
-                        locator=f"{rel}:{col}",
-                    )
+        gold_table, cols, known = binds
+        findings.extend(_orphan_col_findings(rel, gold_table, cols, known))
+    return findings
+
+
+def _qualified_ref_findings(rel: str, text: str, model: _Model) -> list[Finding]:
+    # resolve qualified 'table'[col] against that table's columns.
+    findings: list[Finding] = []
+    for qm in _QUALIFIED_REF.finditer(text):
+        qtable, qcol = qm.group(1), qm.group(2)
+        known = model.columns_by_table.get(qtable)
+        if known is not None and qcol not in known:
+            findings.append(
+                Finding(
+                    rule_id=RULE_ID,
+                    severity=Severity.ERROR,
+                    message=(
+                        f"TMDL DAX reference {qtable!r}[{qcol}] does not resolve "
+                        f"to a column of {qtable!r} (orphaned reference)"
+                    ),
+                    locator=f"{rel}:{qcol}",
                 )
+            )
+    return findings
+
+
+def _bare_measure_findings(rel: str, blanked: str, model: _Model) -> list[Finding]:
+    # bare [X] against the model-wide measure set (skipping column names to avoid
+    # flagging a bare [col] that is really a same-line measure ref target).
+    findings: list[Finding] = []
+    for bm in _BARE_MEASURE_REF.finditer(blanked):
+        ref = bm.group(1).strip()
+        if not ref:
+            continue
+        if ref not in model.measures and ref not in _all_columns(model):
+            findings.append(
+                Finding(
+                    rule_id=RULE_ID,
+                    severity=Severity.ERROR,
+                    message=(
+                        f"TMDL DAX reference [{ref}] does not resolve to any "
+                        "measure in the model (orphaned reference)"
+                    ),
+                    locator=f"{rel}:{ref}",
+                )
+            )
     return findings
 
 
@@ -225,43 +286,11 @@ def _check_tmdl_dax(ctx: RuleContext, model: _Model) -> list[Finding]:
         # scope to measure DAX ONLY -- never the partition/source M block, whose
         # [Field] accessors are M syntax, not DAX measure refs (FR-004).
         text = _measure_expressions(full)
-        # resolve qualified 'table'[col] against that table's columns, bare [X]
-        # against the model-wide measure set (skipping column names to avoid
-        # flagging a bare [col] that is really a same-line measure ref target).
-        for qm in _QUALIFIED_REF.finditer(text):
-            qtable, qcol = qm.group(1), qm.group(2)
-            known = model.columns_by_table.get(qtable)
-            if known is not None and qcol not in known:
-                findings.append(
-                    Finding(
-                        rule_id=RULE_ID,
-                        severity=Severity.ERROR,
-                        message=(
-                            f"TMDL DAX reference {qtable!r}[{qcol}] does not resolve "
-                            f"to a column of {qtable!r} (orphaned reference)"
-                        ),
-                        locator=f"{rel}:{qcol}",
-                    )
-                )
+        findings.extend(_qualified_ref_findings(rel, text, model))
         # bare [Measure] refs: blank out qualified refs first so 'table'[col]'s
         # [col] is not re-read as a bare measure token.
         blanked = _QUALIFIED_REF.sub("''[]", text)
-        for bm in _BARE_MEASURE_REF.finditer(blanked):
-            ref = bm.group(1).strip()
-            if not ref:
-                continue
-            if ref not in model.measures and ref not in _all_columns(model):
-                findings.append(
-                    Finding(
-                        rule_id=RULE_ID,
-                        severity=Severity.ERROR,
-                        message=(
-                            f"TMDL DAX reference [{ref}] does not resolve to any "
-                            "measure in the model (orphaned reference)"
-                        ),
-                        locator=f"{rel}:{ref}",
-                    )
-                )
+        findings.extend(_bare_measure_findings(rel, blanked, model))
     return findings
 
 
@@ -270,6 +299,56 @@ def _all_columns(model: _Model) -> set[str]:
     for cols in model.columns_by_table.values():
         out |= cols
     return out
+
+
+def _resolve_qualified(
+    rel: str, qtable: str, qcol: str, model: _Model, seen: set
+) -> Finding | None:
+    # resolve against the named table's columns; a binding map uses the
+    # bare table token (dim_product_rss), so match columns_by_bare too.
+    known = model.columns_by_table.get(qtable)
+    if known is None:
+        known = model.columns_by_bare.get(_strip_table_prefix(qtable))
+    if known is None:
+        return None
+    if qcol in known:
+        return None
+    if (qtable, qcol) in seen:
+        return None
+    seen.add((qtable, qcol))
+    return Finding(
+        rule_id=RULE_ID,
+        severity=Severity.ERROR,
+        message=(
+            f"dashboard binding references {qtable}[{qcol}], which "
+            "does not resolve to a committed column (orphaned)"
+        ),
+        locator=f"{rel}:{qcol}",
+    )
+
+
+def _check_bare_measure_refs(
+    rel: str, blanked: str, model: _Model, all_cols: set[str], seen: set
+) -> list[Finding]:
+    findings: list[Finding] = []
+    for bm in _BARE_MEASURE_REF.finditer(blanked):
+        ref = bm.group(1).strip()
+        if not ref or ref in seen:
+            continue
+        if ref not in model.measures and ref not in all_cols:
+            seen.add(ref)
+            findings.append(
+                Finding(
+                    rule_id=RULE_ID,
+                    severity=Severity.ERROR,
+                    message=(
+                        f"dashboard binding references [{ref}], which does not "
+                        "resolve to any committed measure (orphaned)"
+                    ),
+                    locator=f"{rel}:{ref}",
+                )
+            )
+    return findings
 
 
 def _check_binding_maps(ctx: RuleContext, model: _Model) -> list[Finding]:
@@ -284,50 +363,18 @@ def _check_binding_maps(ctx: RuleContext, model: _Model) -> list[Finding]:
             continue
         seen: set = set()
 
-        def _resolve_qualified(qtable: str, qcol: str) -> None:
-            # resolve against the named table's columns; a binding map uses the
-            # bare table token (dim_product_rss), so match columns_by_bare too.
-            known = model.columns_by_table.get(qtable)
-            if known is None:
-                known = model.columns_by_bare.get(_strip_table_prefix(qtable))
-            if known is not None and qcol not in known and (qtable, qcol) not in seen:
-                seen.add((qtable, qcol))
-                findings.append(
-                    Finding(
-                        rule_id=RULE_ID,
-                        severity=Severity.ERROR,
-                        message=(
-                            f"dashboard binding references {qtable}[{qcol}], which "
-                            "does not resolve to a committed column (orphaned)"
-                        ),
-                        locator=f"{rel}:{qcol}",
-                    )
-                )
-
         # quoted 'table'[column] AND unquoted table[column] (both binding idioms)
         for qm in _QUALIFIED_REF.finditer(text):
-            _resolve_qualified(qm.group(1), qm.group(2))
+            finding = _resolve_qualified(rel, qm.group(1), qm.group(2), model, seen)
+            if finding is not None:
+                findings.append(finding)
         for qm in _UNQUOTED_QUALIFIED_REF.finditer(text):
-            _resolve_qualified(qm.group(1), qm.group(2))
+            finding = _resolve_qualified(rel, qm.group(1), qm.group(2), model, seen)
+            if finding is not None:
+                findings.append(finding)
         # blank BOTH qualified forms so their [col] is not re-read as a bare measure
         blanked = _UNQUOTED_QUALIFIED_REF.sub("x[]", _QUALIFIED_REF.sub("''[]", text))
-        for bm in _BARE_MEASURE_REF.finditer(blanked):
-            ref = bm.group(1).strip()
-            if not ref or ref in seen:
-                continue
-            if ref not in model.measures and ref not in all_cols:
-                seen.add(ref)
-                findings.append(
-                    Finding(
-                        rule_id=RULE_ID,
-                        severity=Severity.ERROR,
-                        message=(
-                            f"dashboard binding references [{ref}], which does not "
-                            "resolve to any committed measure (orphaned)"
-                        ),
-                        locator=f"{rel}:{ref}",
-                    )
-                )
+        findings.extend(_check_bare_measure_refs(rel, blanked, model, all_cols, seen))
     return findings
 
 
