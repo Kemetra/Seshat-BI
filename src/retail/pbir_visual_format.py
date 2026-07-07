@@ -71,19 +71,13 @@ def _literal(value: object) -> dict:
     return {"expr": {"Literal": {"Value": v}}}
 
 
-def apply_visual_format(
-    visual_json: Path, formatting: dict, force: bool = False
-) -> Path:
-    """Apply allow-listed ``formatting`` to the visual at ``visual_json``.
+def _load_visual_doc(visual_json: Path) -> tuple[dict, dict]:
+    """Load and validate the visual document at ``visual_json``.
 
-    ``formatting`` maps container -> group -> {property: scalar}, e.g.
-    ``{"visualContainerObjects": {"title": {"show": True, "text": "Sales"}}}``.
-    Sets each property (expr/Literal wrapped) under the group, preserving the
-    visual's data binding byte-for-byte. Raises PbirFormatError on a bad path, an
-    out-of-allow-list target, or if the edit would alter query/visualType.
-    Returns the written path.
+    Enforces the file guards (exists, inside a *.Report/ tree), reads it as
+    utf-8-sig JSON, and confirms the ``visual`` object is present. Returns the
+    ``(doc, visual)`` pair; raises PbirFormatError exactly as the checks demand.
     """
-    visual_json = Path(visual_json)
     if not visual_json.is_file():
         raise PbirFormatError(f"visual.json not found: {visual_json}")
     # Guard: the file must live under a *.Report/ tree (never write elsewhere).
@@ -99,14 +93,18 @@ def apply_visual_format(
         ) from exc
     if not isinstance(doc, dict) or not isinstance(doc.get("visual"), dict):
         raise PbirFormatError("visual.json has no 'visual' object")
-    visual = doc["visual"]
+    return doc, doc["visual"]
 
-    # Snapshot the data binding BEFORE editing -- the FR-003 oracle.
-    binding_before = _dump(
+
+def _binding_snapshot(visual: dict) -> str:
+    """Serialize the FR-003 data-binding oracle (query + visualType) for compare."""
+    return _dump(
         {"query": visual.get("query"), "visualType": visual.get("visualType")}
     )
 
-    # Validate the requested formatting against the allow-list up front.
+
+def _validate_formatting(formatting: dict) -> None:
+    """Check every requested container/group against the allow-list up front."""
     for container, groups in formatting.items():
         if container not in _ALLOWED_CONTAINERS:
             raise PbirFormatError(
@@ -122,9 +120,27 @@ def apply_visual_format(
                     f"(allowed: {sorted(_ALLOWED_CONTAINERS[container])})"
                 )
 
-    # Refuse to clobber existing formatting unless force (idempotent re-set is fine
-    # since we write the same expr/Literal; force gates a DIFFERENT value).
-    # Apply: for each container/group, set the named properties.
+
+def _set_property(
+    props_bag: dict, container: str, group: str, prop: str, value: object, force: bool
+) -> None:
+    """Set one property in ``props_bag`` (expr/Literal wrapped), honouring force.
+
+    An idempotent re-set of the same value is always allowed; overwriting a
+    DIFFERENT existing value is refused unless ``force`` is set.
+    """
+    new_val = _literal(value)
+    is_conflicting_overwrite = prop in props_bag and props_bag[prop] != new_val
+    if is_conflicting_overwrite and not force:
+        raise PbirFormatError(
+            f"{container}.{group}.{prop} already set to a different "
+            f"value -- use force=True to overwrite"
+        )
+    props_bag[prop] = new_val
+
+
+def _apply_formatting(visual: dict, formatting: dict, force: bool) -> None:
+    """Apply the allow-listed formatting: for each container/group set its props."""
     for container, groups in formatting.items():
         cont = visual.setdefault(container, {})
         if not isinstance(cont, dict):
@@ -138,18 +154,37 @@ def apply_visual_format(
                 cont[group] = entries
             props_bag = entries[0].setdefault("properties", {})
             for prop, value in props.items():
-                new_val = _literal(value)
-                if prop in props_bag and props_bag[prop] != new_val and not force:
-                    raise PbirFormatError(
-                        f"{container}.{group}.{prop} already set to a different "
-                        f"value -- use force=True to overwrite"
-                    )
-                props_bag[prop] = new_val
+                _set_property(props_bag, container, group, prop, value, force)
+
+
+def apply_visual_format(
+    visual_json: Path, formatting: dict, force: bool = False
+) -> Path:
+    """Apply allow-listed ``formatting`` to the visual at ``visual_json``.
+
+    ``formatting`` maps container -> group -> {property: scalar}, e.g.
+    ``{"visualContainerObjects": {"title": {"show": True, "text": "Sales"}}}``.
+    Sets each property (expr/Literal wrapped) under the group, preserving the
+    visual's data binding byte-for-byte. Raises PbirFormatError on a bad path, an
+    out-of-allow-list target, or if the edit would alter query/visualType.
+    Returns the written path.
+    """
+    visual_json = Path(visual_json)
+    doc, visual = _load_visual_doc(visual_json)
+
+    # Snapshot the data binding BEFORE editing -- the FR-003 oracle.
+    binding_before = _binding_snapshot(visual)
+
+    # Validate the requested formatting against the allow-list up front.
+    _validate_formatting(formatting)
+
+    # Refuse to clobber existing formatting unless force (idempotent re-set is fine
+    # since we write the same expr/Literal; force gates a DIFFERENT value).
+    # Apply: for each container/group, set the named properties.
+    _apply_formatting(visual, formatting, force)
 
     # THE FR-003 GUARANTEE: the data binding must be byte-identical after the edit.
-    binding_after = _dump(
-        {"query": visual.get("query"), "visualType": visual.get("visualType")}
-    )
+    binding_after = _binding_snapshot(visual)
     if binding_after != binding_before:
         raise PbirFormatError(
             "refusing to write: the edit would alter the visual's data binding "
