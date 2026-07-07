@@ -23,12 +23,49 @@ from ..sql import stale_schema_tokens
 from ..tmdl import (
     DATE_TABLE_MARKER,
     TI_TRIGGER_FUNCTIONS,
+    TmdlColumn,
+    TmdlMeasure,
+    TmdlTable,
     iter_m_sources,
     iter_model_files,
     normalize_measure_body,
     parse_relationships,
     parse_tmdl,
 )
+
+# ---------------------------------------------------------------------------
+# Shared scaffold — iterate parseable TMDL tables' measures / columns
+# ---------------------------------------------------------------------------
+
+
+def _iter_measures(ctx: RuleContext) -> Iterable[tuple[str, TmdlMeasure]]:
+    """Yield ``(repo_relative_path, measure)`` for every measure in every
+    parseable ``.tmdl`` table file.
+
+    Folds the shared scaffold — ``iter_model_files`` → ``parse_tmdl`` →
+    skip-None → ``table.measures`` — so per-measure rules reduce to one
+    non-nested loop. Iteration order matches ``iter_model_files`` (file order)
+    then ``table.measures`` (declaration order).
+    """
+    for rel, text in iter_model_files(ctx, ".tmdl"):
+        table = parse_tmdl(text)
+        if table is None:
+            continue
+        for m in table.measures:
+            yield rel, m
+
+
+def _iter_columns(ctx: RuleContext) -> Iterable[tuple[str, TmdlColumn]]:
+    """Yield ``(repo_relative_path, column)`` for every column in every
+    parseable ``.tmdl`` table file (sibling of :func:`_iter_measures`, for D5).
+    """
+    for rel, text in iter_model_files(ctx, ".tmdl"):
+        table = parse_tmdl(text)
+        if table is None:
+            continue
+        for c in table.columns:
+            yield rel, c
+
 
 # ---------------------------------------------------------------------------
 # D1 — PascalCase measure names
@@ -40,20 +77,16 @@ _PASCAL = re.compile(r"^[A-Z][A-Za-z0-9]*$")
 @register("D1", "Measure names must be PascalCase")
 def d1_pascalcase_measures(ctx: RuleContext) -> Iterable[Finding]:
     """Flag any measure whose name does not match ``^[A-Z][A-Za-z0-9]*$``."""
-    for rel, text in iter_model_files(ctx, ".tmdl"):
-        table = parse_tmdl(text)
-        if table is None:
-            continue
-        for m in table.measures:
-            if not _PASCAL.match(m.name):
-                yield Finding(
-                    rule_id="D1",
-                    severity=Severity.ERROR,
-                    message=(
-                        f"Measure '{m.name}' is not PascalCase (^[A-Z][A-Za-z0-9]*$)"
-                    ),
-                    locator=f"{rel}:{m.line}",
-                )
+    for rel, m in _iter_measures(ctx):
+        if not _PASCAL.match(m.name):
+            yield Finding(
+                rule_id="D1",
+                severity=Severity.ERROR,
+                message=(
+                    f"Measure '{m.name}' is not PascalCase (^[A-Z][A-Za-z0-9]*$)"
+                ),
+                locator=f"{rel}:{m.line}",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -70,18 +103,14 @@ def d2_display_folder(ctx: RuleContext) -> Iterable[Finding]:
     different state and is NOT flagged here (the ``is None`` guard documents
     this distinction).
     """
-    for rel, text in iter_model_files(ctx, ".tmdl"):
-        table = parse_tmdl(text)
-        if table is None:
-            continue
-        for m in table.measures:
-            if m.display_folder is None:
-                yield Finding(
-                    rule_id="D2",
-                    severity=Severity.ERROR,
-                    message=f"Measure '{m.name}' has no displayFolder",
-                    locator=f"{rel}:{m.line}",
-                )
+    for rel, m in _iter_measures(ctx):
+        if m.display_folder is None:
+            yield Finding(
+                rule_id="D2",
+                severity=Severity.ERROR,
+                message=f"Measure '{m.name}' has no displayFolder",
+                locator=f"{rel}:{m.line}",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -99,27 +128,23 @@ def d3_no_duplicate_logic(ctx: RuleContext) -> Iterable[Finding]:
     locator.
     """
     seen: dict[str, tuple[str, str, int]] = {}  # norm -> (rel, name, line)
-    for rel, text in iter_model_files(ctx, ".tmdl"):
-        table = parse_tmdl(text)
-        if table is None:
+    for rel, m in _iter_measures(ctx):
+        norm = normalize_measure_body(m.expression)
+        if not norm:
             continue
-        for m in table.measures:
-            norm = normalize_measure_body(m.expression)
-            if not norm:
-                continue
-            if norm in seen:
-                prev_rel, prev_name, prev_line = seen[norm]
-                yield Finding(
-                    rule_id="D3",
-                    severity=Severity.ERROR,
-                    message=(
-                        f"Measure '{m.name}' duplicates logic of "
-                        f"'{prev_name}' (identical normalized body)"
-                    ),
-                    locator=f"{rel}:{m.line}",
-                )
-            else:
-                seen[norm] = (rel, m.name, m.line)
+        if norm in seen:
+            prev_rel, prev_name, prev_line = seen[norm]
+            yield Finding(
+                rule_id="D3",
+                severity=Severity.ERROR,
+                message=(
+                    f"Measure '{m.name}' duplicates logic of "
+                    f"'{prev_name}' (identical normalized body)"
+                ),
+                locator=f"{rel}:{m.line}",
+            )
+        else:
+            seen[norm] = (rel, m.name, m.line)
 
 
 # ---------------------------------------------------------------------------
@@ -147,19 +172,15 @@ def _strip_dax_comments_and_strings(expr: str) -> str:
 @register("D4", "Use DIVIDE() not the / operator")
 def d4_divide_not_slash(ctx: RuleContext) -> Iterable[Finding]:
     """Flag any measure expression containing a bare ``/`` after stripping comments."""
-    for rel, text in iter_model_files(ctx, ".tmdl"):
-        table = parse_tmdl(text)
-        if table is None:
-            continue
-        for m in table.measures:
-            cleaned = _strip_dax_comments_and_strings(m.expression)
-            if "/" in cleaned:
-                yield Finding(
-                    rule_id="D4",
-                    severity=Severity.ERROR,
-                    message=f"Measure '{m.name}' uses '/'; use DIVIDE() instead",
-                    locator=f"{rel}:{m.line}",
-                )
+    for rel, m in _iter_measures(ctx):
+        cleaned = _strip_dax_comments_and_strings(m.expression)
+        if "/" in cleaned:
+            yield Finding(
+                rule_id="D4",
+                severity=Severity.ERROR,
+                message=f"Measure '{m.name}' uses '/'; use DIVIDE() instead",
+                locator=f"{rel}:{m.line}",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -178,24 +199,20 @@ def d5_explicit_aggregation(ctx: RuleContext) -> Iterable[Finding]:
     is only flagged when explicitly present and != ``none``; absent property is
     treated as acceptable (conservative: missing != implicit sum).
     """
-    for rel, text in iter_model_files(ctx, ".tmdl"):
-        table = parse_tmdl(text)
-        if table is None:
-            continue
-        for c in table.columns:
-            dt = (c.data_type or "").lower()
-            sb = (c.summarize_by or "none").lower()
-            if dt in _NUMERIC_TYPES and sb != "none":
-                yield Finding(
-                    rule_id="D5",
-                    severity=Severity.WARNING,
-                    message=(
-                        f"Numeric column '{c.name}' has"
-                        f" summarizeBy='{c.summarize_by}';"
-                        " prefer explicit measures (summarizeBy: none)"
-                    ),
-                    locator=f"{rel}:{c.line}",
-                )
+    for rel, c in _iter_columns(ctx):
+        dt = (c.data_type or "").lower()
+        sb = (c.summarize_by or "none").lower()
+        if dt in _NUMERIC_TYPES and sb != "none":
+            yield Finding(
+                rule_id="D5",
+                severity=Severity.WARNING,
+                message=(
+                    f"Numeric column '{c.name}' has"
+                    f" summarizeBy='{c.summarize_by}';"
+                    " prefer explicit measures (summarizeBy: none)"
+                ),
+                locator=f"{rel}:{c.line}",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -236,6 +253,32 @@ def d6_no_bidir_relationships(ctx: RuleContext) -> Iterable[Finding]:
 _TI_IDENT = re.compile(r"[A-Za-z_]\w*")
 
 
+def _table_is_marked_date_table(table: TmdlTable) -> bool:
+    """True if ``table`` carries either accepted date-table marker.
+
+    A table counts as a marked date table if EITHER:
+    (a) it carries the ``DATE_TABLE_MARKER`` annotation, OR
+    (b) it has table-level ``dataCategory: Time`` AND at least one column
+        flagged ``isKey`` -- the real "Mark as Date Table" marker Power BI
+        writes (TOM ``Table.DataCategory = "Time"`` + a key column). Table-
+        level ``dataCategory: Time`` WITHOUT a key column is not sufficient.
+    """
+    if any(ann.strip() == DATE_TABLE_MARKER for ann in table.annotations):
+        return True
+    return table.data_category == "Time" and any(c.is_key for c in table.columns)
+
+
+def _measure_uses_ti(expression: str) -> bool:
+    """True if ``expression`` invokes a time-intelligence trigger function.
+
+    Strips comments and string literals, tokenizes identifiers, uppercases, and
+    intersects with ``TI_TRIGGER_FUNCTIONS``.
+    """
+    cleaned = _strip_dax_comments_and_strings(expression)
+    idents = {tok.upper() for tok in _TI_IDENT.findall(cleaned)}
+    return bool(idents & TI_TRIGGER_FUNCTIONS)
+
+
 @register("D7", "Time-intelligence requires a date-table marker")
 def d7_ti_needs_date_marker(ctx: RuleContext) -> Iterable[Finding]:
     """Flag if any measure uses a time-intelligence function but no table carries
@@ -245,14 +288,9 @@ def d7_ti_needs_date_marker(ctx: RuleContext) -> Iterable[Finding]:
     most one finding (a missing marker affects the whole model, not one file).
 
     Detection:
-    - Strip comments and string literals from each measure expression, then
-      tokenize identifiers, uppercase, and intersect with ``TI_TRIGGER_FUNCTIONS``.
-    - A table counts as a marked date table if EITHER:
-        (a) it carries the ``DATE_TABLE_MARKER`` annotation, OR
-        (b) it has table-level ``dataCategory: Time`` AND at least one column
-            flagged ``isKey`` -- the real "Mark as Date Table" marker Power BI
-            writes (TOM ``Table.DataCategory = "Time"`` + a key column). Table-
-            level ``dataCategory: Time`` WITHOUT a key column is not sufficient.
+    - ``_measure_uses_ti`` flags any measure that invokes a TI trigger function.
+    - ``_table_is_marked_date_table`` flags any table carrying an accepted
+      date-table marker.
     """
     any_ti_use = False
     any_date_marker = False
@@ -262,19 +300,10 @@ def d7_ti_needs_date_marker(ctx: RuleContext) -> Iterable[Finding]:
         table = parse_tmdl(text)
         if table is None:
             continue
-        # (a) date-table marker via annotation
-        for ann in table.annotations:
-            if ann.strip() == DATE_TABLE_MARKER:
-                any_date_marker = True
-        # (b) the real marker: table dataCategory: Time + a key column
-        if table.data_category == "Time" and any(c.is_key for c in table.columns):
-            any_date_marker = True
+        any_date_marker |= _table_is_marked_date_table(table)
 
-        # Check for TI function usage in measures
         for m in table.measures:
-            cleaned = _strip_dax_comments_and_strings(m.expression)
-            idents = {tok.upper() for tok in _TI_IDENT.findall(cleaned)}
-            if idents & TI_TRIGGER_FUNCTIONS:
+            if _measure_uses_ti(m.expression):
                 any_ti_use = True
                 if not ti_locator:
                     ti_locator = f"{rel}:{m.line}"
@@ -322,73 +351,92 @@ def _extract_m_string_bodies(m_text: str) -> list[str]:
     return [body.replace('""', '"') for body in _M_STRING_LITERAL.findall(m_text)]
 
 
+def _yield_d8(
+    seen: set[str], token: str, locator: str, message: str
+) -> Iterable[Finding]:
+    """Emit a D8 Finding for ``token`` unless it was already reported for this block.
+
+    Owns the dedup+construct logic shared by the three scan strategies: a token
+    already in ``seen`` is skipped, so the first strategy to report a token wins
+    (its ``message`` is the one emitted).
+    """
+    if token not in seen:
+        seen.add(token)
+        yield Finding(
+            rule_id="D8",
+            severity=Severity.ERROR,
+            message=message,
+            locator=locator,
+        )
+
+
+def _scan_outer_text(text: str) -> Iterable[tuple[str, str]]:
+    """Yield (token, message) for non-gold schema tokens in the raw M text.
+
+    Catches schema-qualifying positions (``FROM bronze.x``, ``bronze.obj``,
+    ``CREATE SCHEMA bronze``) via ``stale_schema_tokens``.
+    """
+    for token, _line in stale_schema_tokens(text):
+        yield token, (
+            f"Partition source references non-gold schema '{token}';"
+            " all sources must use the gold schema"
+        )
+
+
+def _scan_string_bodies(text: str) -> Iterable[tuple[str, str]]:
+    """Yield (token, message) for non-gold schema tokens inside string literals.
+
+    Catches SQL embedded in ``Value.NativeQuery(Src, "SELECT * FROM bronze.obj")``;
+    ``tokenize_sql`` strips string contents so the raw text alone misses it.
+    """
+    for body in _extract_m_string_bodies(text):
+        for token, _line in stale_schema_tokens(body):
+            yield token, (
+                "Partition source native SQL references non-gold"
+                f" schema '{token}';"
+                " all sources must use the gold schema"
+            )
+
+
+def _scan_schema_option(text: str) -> Iterable[tuple[str, str]]:
+    """Yield (token, message) for the M connection option ``[Schema="bronze"]``.
+
+    A lone ``"bronze"`` body has no qualifying predecessor, so the outer-text
+    and string-body scans both miss it, yet the spec lists M ``Schema="…"`` as a
+    schema-qualifying position D8 MUST flag. The dedup token is the lowercased
+    value; the message embeds the original-case value.
+    """
+    for value in _M_SCHEMA_OPTION.findall(text):
+        token = value.lower()
+        if token in _STALE_SCHEMAS:
+            yield token, (
+                f"Partition source uses non-gold schema option"
+                f' Schema="{value}";'
+                " all sources must use the gold schema"
+            )
+
+
 @register("D8", "Partitions must source from gold schema only")
 def d8_gold_only_sourcing(ctx: RuleContext) -> Iterable[Finding]:
     """Flag any M partition source or shared expression that references a
     non-gold schema token (raw, marts, bronze, silver).
 
-    Three scan strategies per source block (de-duplicated by token):
-    1. Outer M text via ``stale_schema_tokens`` — catches schema-qualifying
-       positions (``FROM bronze.x``, ``bronze.obj``, ``CREATE SCHEMA bronze``).
-    2. Double-quoted string-literal bodies via ``stale_schema_tokens`` — catches
-       SQL embedded in ``Value.NativeQuery(Src, "SELECT * FROM bronze.obj")``;
-       ``tokenize_sql`` strips string contents so the raw text alone misses it.
-    3. The M connection option ``[Schema="bronze"]`` via ``_M_SCHEMA_OPTION`` —
-       a lone ``"bronze"`` body has no qualifying predecessor, so strategies 1
-       and 2 both miss it, yet the spec lists M ``Schema="…"`` as a
-       schema-qualifying position D8 MUST flag.
+    Three scan strategies per source block (de-duplicated by token, run in
+    order so the first strategy to report a token wins):
+    1. ``_scan_outer_text`` — the raw M text via ``stale_schema_tokens``.
+    2. ``_scan_string_bodies`` — double-quoted string-literal bodies via
+       ``stale_schema_tokens``.
+    3. ``_scan_schema_option`` — the M connection option ``[Schema="bronze"]``.
 
     Strategies 1 and 2 reuse ``stale_schema_tokens`` from ``retail.sql``.
     A given (locator, schema-token) is reported at most once per block.
     """
     for msrc in iter_m_sources(ctx.repo_root, ctx.tracked_files):
         seen: set[str] = set()  # schema tokens already reported for this block
-
-        # Strategy 1: outer M text
-        for token, _line in stale_schema_tokens(msrc.text):
-            if token not in seen:
-                seen.add(token)
-                yield Finding(
-                    rule_id="D8",
-                    severity=Severity.ERROR,
-                    message=(
-                        f"Partition source references non-gold schema '{token}';"
-                        " all sources must use the gold schema"
-                    ),
-                    locator=msrc.locator,
-                )
-
-        # Strategy 2: string literal bodies (SQL in NativeQuery / Value.NativeQuery)
-        for body in _extract_m_string_bodies(msrc.text):
-            for token, _line in stale_schema_tokens(body):
-                if token not in seen:
-                    seen.add(token)
-                    yield Finding(
-                        rule_id="D8",
-                        severity=Severity.ERROR,
-                        message=(
-                            "Partition source native SQL references non-gold"
-                            f" schema '{token}';"
-                            " all sources must use the gold schema"
-                        ),
-                        locator=msrc.locator,
-                    )
-
-        # Strategy 3: M connection option ``[Schema="bronze"]``
-        for value in _M_SCHEMA_OPTION.findall(msrc.text):
-            token = value.lower()
-            if token in _STALE_SCHEMAS and token not in seen:
-                seen.add(token)
-                yield Finding(
-                    rule_id="D8",
-                    severity=Severity.ERROR,
-                    message=(
-                        f"Partition source uses non-gold schema option"
-                        f' Schema="{value}";'
-                        " all sources must use the gold schema"
-                    ),
-                    locator=msrc.locator,
-                )
+        scanners = (_scan_outer_text, _scan_string_bodies, _scan_schema_option)
+        for scan in scanners:
+            for token, message in scan(msrc.text):
+                yield from _yield_d8(seen, token, msrc.locator, message)
 
 
 # ---------------------------------------------------------------------------
@@ -410,22 +458,18 @@ def d9_no_hardcoded_dates(ctx: RuleContext) -> Iterable[Finding]:
     table and freeze the logic. Comments and string literals are stripped first so
     a date mentioned in a comment/string is not flagged.
     """
-    for rel, text in iter_model_files(ctx, ".tmdl"):
-        table = parse_tmdl(text)
-        if table is None:
-            continue
-        for m in table.measures:
-            cleaned = _strip_dax_comments_and_strings(m.expression)
-            if _DATE_LITERAL.search(cleaned):
-                yield Finding(
-                    rule_id="D9",
-                    severity=Severity.WARNING,
-                    message=(
-                        f"Measure '{m.name}' embeds a hardcoded date literal;"
-                        " use the date dimension instead"
-                    ),
-                    locator=f"{rel}:{m.line}",
-                )
+    for rel, m in _iter_measures(ctx):
+        cleaned = _strip_dax_comments_and_strings(m.expression)
+        if _DATE_LITERAL.search(cleaned):
+            yield Finding(
+                rule_id="D9",
+                severity=Severity.WARNING,
+                message=(
+                    f"Measure '{m.name}' embeds a hardcoded date literal;"
+                    " use the date dimension instead"
+                ),
+                locator=f"{rel}:{m.line}",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -450,22 +494,18 @@ def d10_no_filter_all(ctx: RuleContext) -> Iterable[Finding]:
     in live DAX, not in a comment or string. Severity is WARNING: ALLSELECTED inside
     FILTER has legitimate percent-of-selection uses, so this guides rather than blocks.
     """
-    for rel, text in iter_model_files(ctx, ".tmdl"):
-        table = parse_tmdl(text)
-        if table is None:
-            continue
-        for m in table.measures:
-            cleaned = _strip_dax_comments_and_strings(m.expression)
-            if _FILTER_ALL.search(cleaned):
-                yield Finding(
-                    rule_id="D10",
-                    severity=Severity.WARNING,
-                    message=(
-                        f"Measure '{m.name}' uses FILTER(ALL/ALLSELECTED/ALLEXCEPT"
-                        "(...)); prefer a column filter inside CALCULATE"
-                    ),
-                    locator=f"{rel}:{m.line}",
-                )
+    for rel, m in _iter_measures(ctx):
+        cleaned = _strip_dax_comments_and_strings(m.expression)
+        if _FILTER_ALL.search(cleaned):
+            yield Finding(
+                rule_id="D10",
+                severity=Severity.WARNING,
+                message=(
+                    f"Measure '{m.name}' uses FILTER(ALL/ALLSELECTED/ALLEXCEPT"
+                    "(...)); prefer a column filter inside CALCULATE"
+                ),
+                locator=f"{rel}:{m.line}",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -516,6 +556,21 @@ _DB_CALL = re.compile(
 _STRING_ARG = re.compile(r'^\s*"')
 
 
+def _first_literal_arg(args_raw: str) -> str | None:
+    """Return the first of the host/database args that is a string literal, else None.
+
+    Splits ``args_raw`` on the first comma to isolate the host and database
+    arguments, and checks each against ``_STRING_ARG``. The return value is only
+    a truthiness signal for the caller (the Finding message uses the full call
+    text, not this arg).
+    """
+    parts = args_raw.split(",", 1)
+    for part in parts[:2]:
+        if _STRING_ARG.match(part):
+            return part
+    return None
+
+
 @register("C1", "Connection must use parameter identifiers, not string literals")
 def c1_parameterized_connection(ctx: RuleContext) -> Iterable[Finding]:
     """Flag any ``.Database(…)`` call whose first or second argument is a
@@ -531,19 +586,14 @@ def c1_parameterized_connection(ctx: RuleContext) -> Iterable[Finding]:
     """
     for msrc in iter_m_sources(ctx.repo_root, ctx.tracked_files):
         for match in _DB_CALL.finditer(msrc.text):
-            args_raw = match.group(1)
-            # Split on the first comma to get the host and database args.
-            parts = args_raw.split(",", 1)
-            for part in parts[:2]:
-                if _STRING_ARG.match(part):
-                    yield Finding(
-                        rule_id="C1",
-                        severity=Severity.ERROR,
-                        message=(
-                            "Connection uses a string literal for server/database;"
-                            " use Power BI parameters instead"
-                            f" (found: {match.group(0)!r})"
-                        ),
-                        locator=msrc.locator,
-                    )
-                    break  # one finding per .Database() call
+            if _first_literal_arg(match.group(1)) is not None:
+                yield Finding(
+                    rule_id="C1",
+                    severity=Severity.ERROR,
+                    message=(
+                        "Connection uses a string literal for server/database;"
+                        " use Power BI parameters instead"
+                        f" (found: {match.group(0)!r})"
+                    ),
+                    locator=msrc.locator,
+                )
