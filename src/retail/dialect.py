@@ -122,10 +122,74 @@ class PostgresDialect:
         return value
 
 
+class _CursorRunner:
+    """Shared QueryRunner over a DB-API connection: cursor-per-call, no
+    transaction management beyond what the caller's connect() already set
+    (autocommit). Module scope is safe here -- this class touches no driver,
+    it only wraps whatever connection object a dialect's lazy connect already
+    produced (B1/B3: importing this module still opens nothing)."""
+
+    def __init__(self, conn: object) -> None:
+        self._conn = conn
+
+    def run(self, sql: str, params: tuple = ()) -> list[tuple]:
+        cur = self._conn.cursor()
+        cur.execute(sql, params)
+        return list(cur.fetchall())
+
+
+class _LazyDriverDialect:
+    """Template-method base for the three "kwargs/DSN + lazy driver" dialects
+    (SqlServer, MySQL, Snowflake). ``connect()`` is identical in shape across
+    all three -- open a connection, wrap it in a cursor-per-call runner -- so
+    it lives here once; each subclass supplies only its driver-specific
+    ``_raw_connect`` (the lazy import + the actual ``.connect(...)`` call,
+    which differs in call convention: positional config for pyodbc, **kwargs
+    for mysql.connector/snowflake.connector)."""
+
+    def _raw_connect(self, config: object) -> object:
+        raise NotImplementedError
+
+    def connect(self, config: object) -> object:
+        conn = self._raw_connect(config)
+        return _CursorRunner(conn)
+
+    def count_where(self, predicate: str) -> str:
+        return f"COUNT(CASE WHEN {predicate} THEN 1 END)"
+
+    def distinct_tuple_count(
+        self, cols: tuple[str, ...], table: str, where: str | None = None
+    ) -> str:
+        joined = ", ".join(cols)
+        w = f" WHERE {where}" if where else ""
+        return (
+            f"(SELECT COUNT(*) FROM (SELECT DISTINCT {joined} FROM {table}{w}) AS sub)"
+        )
+
+
+class _DictConfigDialect(_LazyDriverDialect):
+    """Shared ``redact()`` for dialects whose resolved config is a flat kwargs
+    dict (MySQL, Snowflake): scrub each configured secret key's value out of
+    the message, longest key list first isn't needed here since callers
+    supply their own ``_secret_keys`` order and values are replaced
+    independently (unlike SqlServer's DSN string, there's no token parsing --
+    each dict value is looked up and replaced directly)."""
+
+    _secret_keys: tuple[str, ...] = ()
+
+    def redact(self, message: object, config: dict[str, object]) -> str:
+        text = str(message)
+        for key in self._secret_keys:
+            value = (config or {}).get(key)
+            if value:
+                text = text.replace(str(value), "<redacted>")
+        return text
+
+
 _MSSQL_TEXT_TYPES = frozenset({"varchar", "nvarchar", "char", "nchar", "text", "ntext"})
 
 
-class SqlServerDialect:
+class SqlServerDialect(_LazyDriverDialect):
     name = "sqlserver"
 
     def resolve_config(self, env: dict[str, str]) -> str | None:
@@ -168,20 +232,12 @@ class SqlServerDialect:
             parts.append("TrustServerCertificate=yes")
         return ";".join(parts)
 
-    def connect(self, config: str) -> object:
+    def _raw_connect(self, config: str) -> object:
         """Connect via pyodbc (lazy import). Read-only posture: use a
         SELECT-only DB user; autocommit avoids holding an open transaction."""
         import pyodbc  # lazy: only on a real live run
 
-        conn = pyodbc.connect(config, autocommit=True)
-
-        class _Runner:
-            def run(self, sql: str, params: tuple = ()) -> list[tuple]:
-                cur = conn.cursor()
-                cur.execute(sql, params)
-                return list(cur.fetchall())
-
-        return _Runner()
+        return pyodbc.connect(config, autocommit=True)
 
     def redact(self, message: object, config: str) -> str:
         """Scrub PWD/UID/SERVER/DATABASE values from an error message.
@@ -321,18 +377,6 @@ class SqlServerDialect:
         )
         return ".".join(f"[{p}]" for p in validated.split("."))
 
-    def count_where(self, predicate: str) -> str:
-        return f"COUNT(CASE WHEN {predicate} THEN 1 END)"
-
-    def distinct_tuple_count(
-        self, cols: tuple[str, ...], table: str, where: str | None = None
-    ) -> str:
-        joined = ", ".join(cols)
-        w = f" WHERE {where}" if where else ""
-        return (
-            f"(SELECT COUNT(*) FROM (SELECT DISTINCT {joined} FROM {table}{w}) AS sub)"
-        )
-
     def is_text_type(self, data_type: str) -> bool:
         return data_type.lower() in _MSSQL_TEXT_TYPES
 
@@ -363,8 +407,9 @@ _MYSQL_TEXT_TYPES = frozenset(
 _MYSQL_SECRET_KEYS = ("password", "user", "host")
 
 
-class MySqlDialect:
+class MySqlDialect(_DictConfigDialect):
     name = "mysql"
+    _secret_keys = _MYSQL_SECRET_KEYS
 
     def resolve_config(self, env: dict[str, str]) -> dict[str, object] | None:
         """Build a mysql.connector kwargs dict from ANALYTICS_DB_* env vars."""
@@ -383,28 +428,11 @@ class MySqlDialect:
             config["database"] = env["ANALYTICS_DB_NAME"]
         return config
 
-    def connect(self, config: dict[str, object]) -> object:
+    def _raw_connect(self, config: dict[str, object]) -> object:
         """Connect via mysql.connector (lazy import), read-only-posture autocommit."""
         import mysql.connector  # lazy: only on a real live run
 
-        conn = mysql.connector.connect(autocommit=True, **config)
-
-        class _Runner:
-            def run(self, sql: str, params: tuple = ()) -> list[tuple]:
-                cur = conn.cursor()
-                cur.execute(sql, params)
-                return list(cur.fetchall())
-
-        return _Runner()
-
-    def redact(self, message: object, config: dict[str, object]) -> str:
-        """Scrub each secret config value (password/user/host) from a message."""
-        text = str(message)
-        for key in _MYSQL_SECRET_KEYS:
-            value = (config or {}).get(key)
-            if value:
-                text = text.replace(str(value), "<redacted>")
-        return text
+        return mysql.connector.connect(autocommit=True, **config)
 
     def quote_ident(self, name: str, *, context: str = "identifier") -> str:
         return f"`{validate_identifier(name, context=context)}`"
@@ -416,18 +444,6 @@ class MySqlDialect:
             name, context=context, min_parts=min_parts, max_parts=max_parts
         )
         return ".".join(f"`{p}`" for p in validated.split("."))
-
-    def count_where(self, predicate: str) -> str:
-        return f"COUNT(CASE WHEN {predicate} THEN 1 END)"
-
-    def distinct_tuple_count(
-        self, cols: tuple[str, ...], table: str, where: str | None = None
-    ) -> str:
-        joined = ", ".join(cols)
-        w = f" WHERE {where}" if where else ""
-        return (
-            f"(SELECT COUNT(*) FROM (SELECT DISTINCT {joined} FROM {table}{w}) AS sub)"
-        )
 
     def is_text_type(self, data_type: str) -> bool:
         return data_type.lower() in _MYSQL_TEXT_TYPES
@@ -452,8 +468,9 @@ class MySqlDialect:
 _SNOWFLAKE_SECRET_KEYS = ("password", "user", "account", "token", "host")
 
 
-class SnowflakeDialect:
+class SnowflakeDialect(_DictConfigDialect):
     name = "snowflake"
+    _secret_keys = _SNOWFLAKE_SECRET_KEYS
 
     def resolve_config(self, env: dict[str, str]) -> dict[str, object] | None:
         """Build a snowflake.connector kwargs dict from ANALYTICS_DB_* env vars."""
@@ -475,28 +492,11 @@ class SnowflakeDialect:
             config["schema"] = env["ANALYTICS_DB_SCHEMA"]
         return config
 
-    def connect(self, config: dict[str, object]) -> object:
+    def _raw_connect(self, config: dict[str, object]) -> object:
         """Connect via snowflake.connector (lazy import), autocommit posture."""
         import snowflake.connector  # lazy: only on a real live run
 
-        conn = snowflake.connector.connect(autocommit=True, **config)
-
-        class _Runner:
-            def run(self, sql: str, params: tuple = ()) -> list[tuple]:
-                cur = conn.cursor()
-                cur.execute(sql, params)
-                return list(cur.fetchall())
-
-        return _Runner()
-
-    def redact(self, message: object, config: dict[str, object]) -> str:
-        """Scrub each secret config value (password/user/account/token/host)."""
-        text = str(message)
-        for key in _SNOWFLAKE_SECRET_KEYS:
-            value = (config or {}).get(key)
-            if value:
-                text = text.replace(str(value), "<redacted>")
-        return text
+        return snowflake.connector.connect(autocommit=True, **config)
 
     def quote_ident(self, name: str, *, context: str = "identifier") -> str:
         # Validate the RAW name, then fold to Snowflake's stored (upper) case (R1).
@@ -510,18 +510,6 @@ class SnowflakeDialect:
             name, context=context, min_parts=min_parts, max_parts=max_parts
         )
         return ".".join(f'"{p.upper()}"' for p in validated.split("."))
-
-    def count_where(self, predicate: str) -> str:
-        return f"COUNT(CASE WHEN {predicate} THEN 1 END)"
-
-    def distinct_tuple_count(
-        self, cols: tuple[str, ...], table: str, where: str | None = None
-    ) -> str:
-        joined = ", ".join(cols)
-        w = f" WHERE {where}" if where else ""
-        return (
-            f"(SELECT COUNT(*) FROM (SELECT DISTINCT {joined} FROM {table}{w}) AS sub)"
-        )
 
     def is_text_type(self, data_type: str) -> bool:
         # Snowflake collapses VARCHAR/STRING/CHAR/... to DATA_TYPE = 'TEXT'.
