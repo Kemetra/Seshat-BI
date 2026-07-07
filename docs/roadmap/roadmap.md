@@ -307,3 +307,8 @@ existing constitution (Principles I, IV, V, VIII), they do not replace it:
   `docs/architecture/tower-bi-agent-kit.md` (the kit).
 - Foundation: `.specify/memory/constitution.md`, `specs/001-retail-bi-agent-kit/`,
   `docs/medallion-playbook.md`, and a filled worked example under `docs/worked-examples/`.
+- **Proposed (not ratified, not part of this delivered ledger):**
+  `docs/roadmap/seshat-bi-agent-controlled-user-tool-roadmap.md` — a forward-looking
+  product-direction proposal to make Seshat BI an installable, distributable
+  agent-controlled tool (M0–M12). Draft/Proposed only; each milestone needs the
+  normal spec/owner-ratification path before it is built.
