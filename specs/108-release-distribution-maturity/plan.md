@@ -1,9 +1,11 @@
-# Implementation Plan: Release & distribution maturity (roadmap M11) — HELD
+# Implementation Plan: Release & distribution maturity (roadmap M11) — BUILT
 
-**Branch**: `108-release-distribution-maturity` | **Date**: 2026-07-07 | **Spec**: `spec.md`
+**Branch**: `feat/108-release-distribution-maturity` | **Date**: 2026-07-07 | **Spec**: `spec.md`
 
-**Status: HELD — plan only, not executed.** Awaiting owner review. No `tasks.md` and no CI
-edits until approved (CI/packaging changes need human eyes).
+**Status: BUILT.** Owner-directed build executed on this branch 2026-07-07; see
+`tasks.md` for the task-by-task record and FR-to-evidence mapping. The approach below
+was followed as originally planned, with the CI addition landing as a single new
+`smoke` job (Approach step 4), not an edit to the existing `check` job.
 
 ## Summary
 
