@@ -310,19 +310,40 @@ class SqlServerDialect(_LazyDriverDialect):
         return text
 
     @staticmethod
-    def _parse_tokens(config: str) -> list[tuple[str, str]]:
+    def _scan_braced_value(config: str, start: int) -> tuple[str, int]:
+        """Scan a brace-quoted value starting just AFTER its opening ``{``.
+
+        Returns the unescaped value (``}}`` -> ``}``) and the index just past
+        the terminating single ``}``. ODBC brace-quoting is NON-NESTABLE: an
+        interior ``{`` is just a literal character; a doubled ``}}`` is a
+        literal ``}`` (part of the value); the first SINGLE ``}`` (not
+        followed by another ``}``) terminates the value.
+        """
+        n = len(config)
+        chars: list[str] = []
+        j = start
+        while j < n:
+            if config[j] != "}":
+                chars.append(config[j])
+                j += 1
+                continue
+            if j + 1 < n and config[j + 1] == "}":
+                chars.append("}")
+                j += 2
+                continue
+            j += 1  # consume the terminating brace
+            break
+        return "".join(chars), j
+
+    @classmethod
+    def _parse_tokens(cls, config: str) -> list[tuple[str, str]]:
         """Split an ODBC keyword string into (KEYWORD, value) pairs.
 
         Unlike a naive ``config.split(";")``, this splits on ``;`` only
         OUTSIDE of a brace-wrapped value (``KEY={...}``) -- a brace-wrapped
         value may legitimately contain a literal ``;`` (that is the whole
         point of the ODBC brace-escape), and a blind split truncates it.
-
-        ODBC brace-quoting is NON-NESTABLE, so this is a char-scan, not
-        depth-counting: once a value opens with ``{``, an interior ``{`` is
-        just a literal character; a doubled ``}}`` is a literal ``}`` (part
-        of the value); the first SINGLE ``}`` (not followed by another ``}``)
-        terminates the value. The returned value is unescaped (``}}`` -> ``}``).
+        See ``_scan_braced_value`` for the brace-quote scan itself.
         """
         pairs: list[tuple[str, str]] = []
         i = 0
@@ -341,20 +362,8 @@ class SqlServerDialect(_LazyDriverDialect):
             val_start = sep + 1
 
             if val_start < n and config[val_start] == "{":
-                # Brace-quoted value: scan for the terminating single '}'.
-                chars: list[str] = []
-                j = val_start + 1
-                while j < n:
-                    if config[j] == "}":
-                        if j + 1 < n and config[j + 1] == "}":
-                            chars.append("}")
-                            j += 2
-                            continue
-                        j += 1  # consume the terminating brace
-                        break
-                    chars.append(config[j])
-                    j += 1
-                pairs.append((kw, "".join(chars)))
+                value, j = cls._scan_braced_value(config, val_start + 1)
+                pairs.append((kw, value))
                 # After the closing brace, skip to just past the next ';'.
                 next_semi = config.find(";", j)
                 i = next_semi + 1 if next_semi != -1 else n
