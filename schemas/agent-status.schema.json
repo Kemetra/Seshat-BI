@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seshat-bi.internal/schemas/agent-status.schema.json",
+  "title": "Seshat BI agent-control status surface",
+  "description": "The stable JSON contract for `retail status --format json` (spec 109, roadmap M4, Option B). A READ-ONLY projection of the committed `mappings/*/readiness-status.yaml` state -- categorical status + named evidence/blockers only, never a numeric confidence/health/maturity score (Principle V).",
+  "type": "object",
+  "required": ["tables"],
+  "additionalProperties": false,
+  "properties": {
+    "tables": {
+      "type": "array",
+      "description": "One entry per committed mappings/<table>/readiness-status.yaml. Empty when no readiness-status.yaml is committed (a fresh repo) -- NOT an error.",
+      "items": { "$ref": "#/$defs/tableStatus" }
+    }
+  },
+  "$defs": {
+    "stageStatus": {
+      "type": "object",
+      "required": ["status", "evidence", "blocking_reasons"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["not_started", "blocked", "warning", "pass"],
+          "description": "Categorical status only -- never a numeric score (hard rule #9, Principle V)."
+        },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "blocking_reasons": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "tableStatus": {
+      "type": "object",
+      "required": [
+        "table",
+        "source_path",
+        "current_stage",
+        "stages",
+        "blocking_reasons",
+        "next_action"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "table": {
+          "type": "string",
+          "description": "The table identity from readiness-status.yaml's `table` field."
+        },
+        "source_path": {
+          "type": "string",
+          "description": "Repo-relative path of the readiness-status.yaml this entry projects (evidence of provenance, not new logic)."
+        },
+        "current_stage": {
+          "type": ["string", "null"],
+          "description": "The committed current_stage; null if the source file omits it."
+        },
+        "stages": {
+          "type": "object",
+          "description": "Per-stage projection, keyed by stage name (e.g. mapping_ready). Only stages present and well-formed in the source file are projected.",
+          "additionalProperties": { "$ref": "#/$defs/stageStatus" }
+        },
+        "blocking_reasons": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Top-level (cross-stage) blocking_reasons rollup from the committed file."
+        },
+        "next_action": {
+          "type": ["string", "null"],
+          "description": "The committed next_action; null if the source file omits it."
+        }
+      }
+    }
+  }
+}

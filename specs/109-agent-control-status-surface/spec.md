@@ -4,11 +4,14 @@
 
 **Created**: 2026-07-07
 
-**Status**: **DRAFT — SPEC ONLY, HELD.** Authored after the A-vs-B ratification
-(Option B, owner 2026-07-07, `docs/roadmap/decisions/cli-verbs-vs-skill-driven.md`).
-Under B this is NOT a broad verb surface — it is the ONE deliberate CLI addition B
-allows: a small machine-readable status surface. Net-new runtime + a JSON schema =
-**HELD for owner review** before build (overnight discipline: runtime waits for eyes).
+**Status**: **BUILT.** Authored after the A-vs-B ratification (Option B, owner
+2026-07-07, `docs/roadmap/decisions/cli-verbs-vs-skill-driven.md`). Under B this is
+NOT a broad verb surface — it is the ONE deliberate CLI addition B allows: a small
+machine-readable status surface. Implemented TDD on `feat/109-agent-control-status-
+surface`: `src/retail/status_surface.py` (the pure, read-only projection),
+`schemas/agent-status.schema.json` (the committed contract), `src/retail/cli/
+commands/status.py` + the `status` subcommand (wired into the existing dispatch
+table / parser, `main()` unchanged). All FRs verified; see `tasks.md`.
 
 **Input**: Roadmap M4 "Agent Control Protocol" — a stable machine-readable way for an
 agent/host to read readiness state (`status`, `next-action`, `blockers`).

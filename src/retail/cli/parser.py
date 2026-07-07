@@ -1,11 +1,16 @@
 """CLI argument-parser construction.
 
 Extracted verbatim from the former ``retail/cli.py`` (CodeScene hotspot split).
-Kept as ONE function (not per-command factories) because top-level ``--help``
-lists subcommands in add-order and every flag's order/metavar/help text must
-stay byte-for-byte identical; centralizing assembly here is lower-risk than
-scattering ordered ``add_*_parser`` calls across many modules. argparse-only
-(stdlib), so importing this at ``cli/__init__.py`` module scope stays pure.
+``_build_parser`` assembles the subcommands by calling one ``_add_*_parser(sub)``
+helper per subcommand (or per small related group), in the exact order they must
+appear on top-level ``--help`` -- add-order and every flag's order/metavar/help
+text stay byte-for-byte identical to the pre-split monolith. The helpers exist
+because ``_build_parser`` itself is a standing CodeScene Large-Method hotspot
+(70-line threshold): each new subcommand (spec 109's ``status`` is the latest)
+gets its own ``_add_status_parser``-shaped helper instead of growing the body of
+``_build_parser`` inline, which is what keeps the change-set delta from
+re-degrading it. argparse-only (stdlib), so importing this at ``cli/__init__.py``
+module scope stays pure.
 """
 
 from __future__ import annotations
@@ -42,18 +47,38 @@ def _add_init_project_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    """Build the CLI argument parser.
-
-    Exposed (not inlined in ``main``) so flag->field mapping is unit-testable
-    without executing any rules. The two commit-aware flags live UNDER the
-    ``check`` subcommand alongside ``--repo``.
-    """
-    parser = argparse.ArgumentParser(
-        prog="retail",
-        description="Static governance checks for committed Power BI artifacts.",
+def _add_status_parser(sub: argparse._SubParsersAction) -> None:
+    """`status` (spec 109, roadmap M4, under ratified Option B): the ONE
+    sanctioned CLI addition -- a thin, READ-ONLY JSON projection of committed
+    ``mappings/*/readiness-status.yaml`` state. NOT a new computation; NOT a
+    broad verb surface. Extracted (mirrors ``_add_init_project_parser``) to
+    keep ``_build_parser`` from growing (CodeScene large-method guard)."""
+    p = sub.add_parser(
+        "status",
+        help=(
+            "read-only projection of committed readiness state (per-table "
+            "current_stage, evidence[], blocking_reasons[], next_action) -- "
+            "the agent-control status surface (spec 109)"
+        ),
     )
-    sub = parser.add_subparsers(dest="command", required=True)
+    p.add_argument("--repo", default=".", help="repo root to project status from")
+    p.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("text", "json"),
+        default="text",
+        help=(
+            "'text' (default) is human-readable and additive. 'json' emits the "
+            "stable machine surface validated by "
+            "schemas/agent-status.schema.json -- never a numeric score."
+        ),
+    )
+
+
+def _add_check_parser(sub: argparse._SubParsersAction) -> None:
+    """`check`: static governance checks. Extracted from ``_build_parser`` (with
+    ``validate``/``semantic-check``/``value-check``/``demo``) to shrink the
+    CodeScene Large-Method hotspot without changing any flag/help text."""
     check = sub.add_parser("check", help="run static governance checks")
     check.add_argument("--repo", default=".", help="repo root to check")
     check.add_argument(
@@ -82,11 +107,14 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
 
-    # LIVE validators (feature 004). Needs a running DB + the optional `db` extra
-    # (psycopg2). The driver is imported LAZILY in _run_validate, never here, so
-    # `retail check` and CI (no driver installed) never import it.
-    # Connection is host-agnostic: ANY Postgres (local / remote / DigitalOcean /
-    # other) via a DSN -- from --dsn, or DATABASE_URL, or the ANALYTICS_DB_* parts.
+
+def _add_validate_parser(sub: argparse._SubParsersAction) -> None:
+    """`validate`: LIVE data checks (feature 004). Needs a running DB + the
+    optional `db` extra (psycopg2). The driver is imported LAZILY in
+    _run_validate, never here, so `retail check` and CI (no driver installed)
+    never import it. Connection is host-agnostic: ANY Postgres (local / remote /
+    DigitalOcean / other) via a DSN -- from --dsn, or DATABASE_URL, or the
+    ANALYTICS_DB_* parts."""
     validate = sub.add_parser(
         "validate",
         help="run LIVE data checks against any Postgres DB (needs the 'db' extra)",
@@ -112,9 +140,13 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
 
-    # L3 semantic / contract<->DAX drift gate (feature: DAX fortification Phase 1).
-    # Parses metric-contract YAML (lazy yaml inside the handler) -- NOT in the
-    # stdlib-only `retail check` core chain.
+
+def _add_semantic_and_value_check_parsers(sub: argparse._SubParsersAction) -> None:
+    """`semantic-check` (L3 contract<->DAX drift, DAX fortification Phase 1) and
+    `value-check` (L4 value proxy, DAX fortification #4). Both parse metric-
+    contract YAML lazily inside their handlers -- NOT in the stdlib-only
+    `retail check` core chain. value-check reuses the validate path's lazy
+    psycopg2 import; live-deferred by repo YAGNI: needs a DSN + the `db` extra."""
     semantic = sub.add_parser(
         "semantic-check",
         help="L3 contract<->DAX denominator drift on committed metric contracts",
@@ -128,11 +160,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="root dir holding <dataset>/metrics/<Measure>.yaml contracts",
     )
 
-    # L4 value proxy (DAX fortification #4). Recomputes each metric contract's
-    # `definition.expected_value` against the live gold table and asserts it still
-    # equals the approved number, within tolerance. Lazy psycopg2 inside the handler
-    # (reusing the validate path), so the stdlib-only `retail check` chain never
-    # imports a driver. Live-deferred by repo YAGNI: needs a DSN + the `db` extra.
     value_check = sub.add_parser(
         "value-check",
         help="L4: recompute metric values live and compare to the approved value",
@@ -156,6 +183,62 @@ def _build_parser() -> argparse.ArgumentParser:
             "or the ANALYTICS_DB_* env vars are used. NEVER commit a real DSN."
         ),
     )
+
+
+def _add_demo_parser(sub: argparse._SubParsersAction) -> None:
+    """`demo` verb group (spec 083): prove the readiness spine on a generic
+    sample. Extracted (with `check`/`validate`/`semantic-check`/`value-check`)
+    to shrink the CodeScene Large-Method hotspot in ``_build_parser``."""
+    demo_p = sub.add_parser(
+        "demo",
+        help="local demo harness: prove the readiness spine on a generic sample",
+    )
+    demo_sub = demo_p.add_subparsers(dest="demo_command", required=True)
+
+    demo_init = demo_sub.add_parser(
+        "init", help="materialize the demo fixtures into .demo-work/ (idempotent)"
+    )
+    demo_init.add_argument("--repo", default=".", help="repo root")
+    demo_init.add_argument(
+        "--force", action="store_true", help="refresh an existing working dir"
+    )
+
+    demo_load = demo_sub.add_parser(
+        "load", help="offline: skip with reason; live: write demo-scoped sample"
+    )
+    demo_load.add_argument("--repo", default=".", help="repo root")
+    demo_load.add_argument("--dsn", default=None, help="Postgres DSN for the live leg")
+
+    demo_run = demo_sub.add_parser(
+        "run", help="recompute per-stage readiness status (no separate state engine)"
+    )
+    demo_run.add_argument("--repo", default=".", help="repo root")
+    demo_run.add_argument("--dsn", default=None, help="Postgres DSN for the live leg")
+
+    demo_report = demo_sub.add_parser(
+        "report", help="render status + evidence + blockers (never a score/dashboard)"
+    )
+    demo_report.add_argument("--repo", default=".", help="repo root")
+    demo_report.add_argument(
+        "--format", choices=["text", "json"], default="text", help="output format"
+    )
+
+
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the CLI argument parser.
+
+    Exposed (not inlined in ``main``) so flag->field mapping is unit-testable
+    without executing any rules. The two commit-aware flags live UNDER the
+    ``check`` subcommand alongside ``--repo``.
+    """
+    parser = argparse.ArgumentParser(
+        prog="retail",
+        description="Static governance checks for committed Power BI artifacts.",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+    _add_check_parser(sub)
+    _add_validate_parser(sub)
+    _add_semantic_and_value_check_parsers(sub)
 
     # DAX generator (Task 7). Lazy imports inside _run_generate keep dax_gen/yaml
     # out of the `retail check` import chain (mirrors the validate / semantic-check
@@ -419,6 +502,7 @@ def _build_parser() -> argparse.ArgumentParser:
     init_p.add_argument("--repo", default=".", help="repo root to bootstrap")
 
     _add_init_project_parser(sub)
+    _add_status_parser(sub)
 
     # `kit-lint` (feature 072): standalone Maintenance-Automation step (NOT a `retail
     # check` rule -- it parses yaml). Fails loud (exit 1) when a compass PROJECTION
@@ -446,39 +530,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="exit non-zero if any finding is present (default: advisory, exit 0)",
     )
 
-    # `demo` verb group (spec 083): prove the readiness spine on a generic sample.
-    demo_p = sub.add_parser(
-        "demo",
-        help="local demo harness: prove the readiness spine on a generic sample",
-    )
-    demo_sub = demo_p.add_subparsers(dest="demo_command", required=True)
-
-    demo_init = demo_sub.add_parser(
-        "init", help="materialize the demo fixtures into .demo-work/ (idempotent)"
-    )
-    demo_init.add_argument("--repo", default=".", help="repo root")
-    demo_init.add_argument(
-        "--force", action="store_true", help="refresh an existing working dir"
-    )
-
-    demo_load = demo_sub.add_parser(
-        "load", help="offline: skip with reason; live: write demo-scoped sample"
-    )
-    demo_load.add_argument("--repo", default=".", help="repo root")
-    demo_load.add_argument("--dsn", default=None, help="Postgres DSN for the live leg")
-
-    demo_run = demo_sub.add_parser(
-        "run", help="recompute per-stage readiness status (no separate state engine)"
-    )
-    demo_run.add_argument("--repo", default=".", help="repo root")
-    demo_run.add_argument("--dsn", default=None, help="Postgres DSN for the live leg")
-
-    demo_report = demo_sub.add_parser(
-        "report", help="render status + evidence + blockers (never a score/dashboard)"
-    )
-    demo_report.add_argument("--repo", default=".", help="repo root")
-    demo_report.add_argument(
-        "--format", choices=["text", "json"], default="text", help="output format"
-    )
+    _add_demo_parser(sub)
 
     return parser
