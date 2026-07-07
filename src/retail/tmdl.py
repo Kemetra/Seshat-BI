@@ -208,6 +208,142 @@ def _strip_bom(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _continues_block(lines: list[str], j: int, n: int, parent_ind: int) -> bool:
+    """True while line ``j`` is still inside a block opened at ``parent_ind``.
+
+    A block continues across blank lines and any line indented deeper than
+    ``parent_ind``. Shared by the indentation-driven block scanners in this
+    module (measure/column/source bodies) so the "is this line still part of
+    the block?" test has exactly one definition.
+    """
+    return j < n and (not lines[j].strip() or _indent(lines[j]) > parent_ind)
+
+
+def _find_table_header(lines: list[str]) -> tuple[str | None, int]:
+    """Locate the top-level ``table <name>`` header line.
+
+    Returns ``(name, 1-based line number)``, or ``(None, 0)`` if no such
+    header exists (e.g. ``relationships.tmdl``, header-only ``model.tmdl``).
+    """
+    for i, raw in enumerate(lines, start=1):
+        m = re.match(r"table\s+('?)(?P<name>[^'\n]+?)\1\s*$", raw.strip())
+        if raw and _indent(raw) == 0 and m:
+            return m.group("name"), i
+    return None, 0
+
+
+def _parse_measure_block(
+    lines: list[str], i: int, n: int, match: re.Match[str]
+) -> tuple[TmdlMeasure, int]:
+    """Parse a ``measure`` block starting at line ``i`` (0-based).
+
+    ``match`` is the already-matched header regex. Returns the parsed
+    :class:`TmdlMeasure` and the index of the first line past the block.
+
+    KNOWN GAP (audit 2026-06-26 #32, none-today): the name class `[^'=]+?`
+    excludes `=`, so a single-quoted measure name CONTAINING `=` would be
+    truncated at the `=`. No committed measure has `=` in its name; widening
+    the regex risks re-testing all TMDL parsing for a zero-trigger case, so
+    this is documented, not changed.
+    """
+    ind = _indent(lines[i])
+    name = match.group("name").strip()
+    expr_parts = [match.group("expr").rstrip()]
+    df: str | None = None
+    j = i + 1
+    while _continues_block(lines, j, n, ind):
+        child = lines[j].strip()
+        dfm = re.match(r"displayFolder:\s*(?P<v>.+)$", child)
+        if dfm:
+            df = dfm.group("v").strip()
+        elif child and not re.match(r"\w+:\s", child):
+            # continuation of a multi-line expression
+            expr_parts.append(child)
+        j += 1
+    measure = TmdlMeasure(
+        name=name,
+        expression=" ".join(expr_parts).strip(),
+        display_folder=df,
+        line=i + 1,
+    )
+    return measure, j
+
+
+def _parse_column_block(
+    lines: list[str], i: int, n: int, match: re.Match[str]
+) -> tuple[TmdlColumn, int]:
+    """Parse a ``column`` block starting at line ``i`` (0-based).
+
+    ``match`` is the already-matched header regex. Returns the parsed
+    :class:`TmdlColumn` and the index of the first line past the block.
+
+    KNOWN GAP (audit 2026-06-26 #31, none-today): an UNQUOTED calculated
+    column `column Name = expr` would let the name class absorb ` = expr`.
+    No committed model has a calc column in this form; documented, not changed
+    (a regex tweak here would re-test all column parsing for a zero trigger).
+    """
+    ind = _indent(lines[i])
+    name = match.group("name").strip()
+    dt: str | None = None
+    sb: str | None = None
+    is_key = False
+    j = i + 1
+    while _continues_block(lines, j, n, ind):
+        child = lines[j].strip()
+        d = re.match(r"dataType:\s*(?P<v>.+)$", child)
+        s = re.match(r"summarizeBy:\s*(?P<v>.+)$", child)
+        if d:
+            dt = d.group("v").strip()
+        if s:
+            sb = s.group("v").strip()
+        # ``isKey`` is a bare flag line (no value) in TMDL.
+        if child == "isKey":
+            is_key = True
+        j += 1
+    column = TmdlColumn(
+        name=name, data_type=dt, summarize_by=sb, line=i + 1, is_key=is_key
+    )
+    return column, j
+
+
+def _parse_source_block(
+    lines: list[str], i: int, n: int, stripped: str
+) -> tuple[str, int]:
+    """Parse a ``source =`` / ``partition <name> =`` block starting at line ``i``.
+
+    Returns the joined (space-separated, blank-lines-skipped) raw M body text
+    and the index of the first line past the block.
+    """
+    ind = _indent(lines[i])
+    body = [stripped.split("=", 1)[1].strip()]
+    j = i + 1
+    while _continues_block(lines, j, n, ind):
+        if lines[j].strip():
+            body.append(lines[j].strip())
+        j += 1
+    source_text = " ".join(p for p in body if p).strip()
+    return source_text, j
+
+
+def _is_measure_header(stripped: str) -> re.Match[str] | None:
+    """Match a ``measure <name> = <expr>`` header line, or None."""
+    return re.match(r"measure\s+('?)(?P<name>[^'=]+?)\1\s*=\s*(?P<expr>.*)$", stripped)
+
+
+def _is_column_header(stripped: str) -> re.Match[str] | None:
+    """Match a ``column <name>`` header line, or None."""
+    return re.match(r"column\s+('?)(?P<name>[^'\n]+?)\1\s*$", stripped)
+
+
+def _is_source_header(stripped: str) -> bool:
+    """True for a real ``source =`` / ``partition <name> =`` assignment header.
+
+    The anchored form avoids matching column-property lines such as
+    ``source_type = ...`` that merely start with the word "source".
+    """
+    return bool(re.match(r"(source\s*=|partition\s+\S+\s*=)", stripped))
+
+
 def parse_tmdl(text: str) -> TmdlTable | None:
     """Parse a single TMDL *table* file's text and return a :class:`TmdlTable`.
 
@@ -221,16 +357,7 @@ def parse_tmdl(text: str) -> TmdlTable | None:
     - All ``annotation`` lines at indent level <= 1 (raw text for D7).
     """
     lines = _strip_bom(text).splitlines()
-    table_name: str | None = None
-    table_line = 0
-
-    # Find the top-level ``table <name>`` header.
-    for i, raw in enumerate(lines, start=1):
-        m = re.match(r"table\s+('?)(?P<name>[^'\n]+?)\1\s*$", raw.strip())
-        if raw and _indent(raw) == 0 and m:
-            table_name = m.group("name")
-            table_line = i
-            break
+    table_name, table_line = _find_table_header(lines)
 
     if table_name is None:
         return None
@@ -249,83 +376,25 @@ def parse_tmdl(text: str) -> TmdlTable | None:
         ind = _indent(raw)
 
         # --- measure block ---
-        # KNOWN GAP (audit 2026-06-26 #32, none-today): the name class `[^'=]+?`
-        # excludes `=`, so a single-quoted measure name CONTAINING `=` would be
-        # truncated at the `=`. No committed measure has `=` in its name; widening
-        # the regex risks re-testing all TMDL parsing for a zero-trigger case, so
-        # this is documented, not changed.
-        mm = re.match(
-            r"measure\s+('?)(?P<name>[^'=]+?)\1\s*=\s*(?P<expr>.*)$", stripped
-        )
+        mm = _is_measure_header(stripped)
         if mm and ind == 1:
-            name = mm.group("name").strip()
-            expr_parts = [mm.group("expr").rstrip()]
-            df: str | None = None
-            j = i + 1
-            while j < n and (not lines[j].strip() or _indent(lines[j]) > ind):
-                child = lines[j].strip()
-                dfm = re.match(r"displayFolder:\s*(?P<v>.+)$", child)
-                if dfm:
-                    df = dfm.group("v").strip()
-                elif child and not re.match(r"\w+:\s", child):
-                    # continuation of a multi-line expression
-                    expr_parts.append(child)
-                j += 1
-            measures.append(
-                TmdlMeasure(
-                    name=name,
-                    expression=" ".join(expr_parts).strip(),
-                    display_folder=df,
-                    line=i + 1,
-                )
-            )
+            measure, j = _parse_measure_block(lines, i, n, mm)
+            measures.append(measure)
             i = j
             continue
 
         # --- column block ---
-        # KNOWN GAP (audit 2026-06-26 #31, none-today): an UNQUOTED calculated
-        # column `column Name = expr` would let the name class absorb ` = expr`.
-        # No committed model has a calc column in this form; documented, not changed
-        # (a regex tweak here would re-test all column parsing for a zero trigger).
-        cm = re.match(r"column\s+('?)(?P<name>[^'\n]+?)\1\s*$", stripped)
+        cm = _is_column_header(stripped)
         if cm and ind == 1:
-            name = cm.group("name").strip()
-            dt: str | None = None
-            sb: str | None = None
-            is_key = False
-            j = i + 1
-            while j < n and (not lines[j].strip() or _indent(lines[j]) > ind):
-                child = lines[j].strip()
-                d = re.match(r"dataType:\s*(?P<v>.+)$", child)
-                s = re.match(r"summarizeBy:\s*(?P<v>.+)$", child)
-                if d:
-                    dt = d.group("v").strip()
-                if s:
-                    sb = s.group("v").strip()
-                # ``isKey`` is a bare flag line (no value) in TMDL.
-                if child == "isKey":
-                    is_key = True
-                j += 1
-            columns.append(
-                TmdlColumn(
-                    name=name, data_type=dt, summarize_by=sb, line=i + 1, is_key=is_key
-                )
-            )
+            column, j = _parse_column_block(lines, i, n, cm)
+            columns.append(column)
             i = j
             continue
 
         # --- partition / source block (raw M body for D8) ---
-        # Require a real assignment header: ``source =`` or ``partition <name> =``.
-        # The anchored form avoids matching column-property lines such as
-        # ``source_type = ...`` that merely start with the word "source".
-        if re.match(r"(source\s*=|partition\s+\S+\s*=)", stripped):
-            body = [stripped.split("=", 1)[1].strip()]
-            j = i + 1
-            while j < n and (not lines[j].strip() or _indent(lines[j]) > ind):
-                if lines[j].strip():
-                    body.append(lines[j].strip())
-                j += 1
-            sources.append(" ".join(p for p in body if p).strip())
+        if _is_source_header(stripped):
+            source_text, j = _parse_source_block(lines, i, n, stripped)
+            sources.append(source_text)
             i = j
             continue
 
@@ -371,7 +440,7 @@ def parse_relationships(text: str) -> tuple[TmdlRelationship, ...]:
             name = rm.group("name").strip()
             cfb: str | None = None
             j = i + 1
-            while j < n and (not lines[j].strip() or _indent(lines[j]) > 0):
+            while _continues_block(lines, j, n, 0):
                 c = re.match(r"crossFilteringBehavior:\s*(?P<v>.+)$", lines[j].strip())
                 if c:
                     cfb = c.group("v").strip()
@@ -446,6 +515,48 @@ class MSource:
     locator: str
 
 
+def _is_shared_expression_header(stripped: str, ind: int) -> bool:
+    """True for a top-level ``expression <name> = …`` shared-M-expression header."""
+    return bool(re.match(r"expression\s+\S", stripped)) and ind == 0
+
+
+def _parse_m_partition_source(
+    lines: list[str], i: int, n: int, ind: int, stripped: str
+) -> tuple[str, int]:
+    """Parse a partition-source block for :func:`iter_m_sources`.
+
+    Returns the raw (unstripped, newline-joined) multi-line body text and the
+    index of the first line past the block. NOTE: unlike
+    :func:`_parse_source_block` (used by ``parse_tmdl``), this preserves
+    original line whitespace and blank lines in the body — callers need the
+    raw M text to run ``stale_schema_tokens`` and inspect ``.Database(`` call
+    arguments.
+    """
+    body_lines = [stripped.split("=", 1)[1].strip()]
+    j = i + 1
+    while _continues_block(lines, j, n, ind):
+        body_lines.append(lines[j])
+        j += 1
+    return "\n".join(body_lines).strip(), j
+
+
+def _parse_m_shared_expression(
+    lines: list[str], i: int, n: int, stripped: str
+) -> tuple[str, int]:
+    """Parse a top-level shared ``expression <name> = …`` block.
+
+    Returns the raw (unstripped, newline-joined) multi-line body text and the
+    index of the first line past the block.
+    """
+    first = stripped.split("=", 1)[1].strip() if "=" in stripped else ""
+    body_lines = [first]
+    j = i + 1
+    while _continues_block(lines, j, n, 0):
+        body_lines.append(lines[j])
+        j += 1
+    return "\n".join(body_lines).strip(), j
+
+
 def iter_m_sources(
     repo_root: Path, tracked_files: tuple[str, ...]
 ) -> Iterable[MSource]:
@@ -489,31 +600,16 @@ def iter_m_sources(
             ind = _indent(raw)
 
             # Partition source block: ``source =`` or ``partition <name> =``
-            if re.match(r"(source\s*=|partition\s+\S+\s*=)", stripped):
-                body_lines = [stripped.split("=", 1)[1].strip()]
-                j = i + 1
-                while j < n and (not lines[j].strip() or _indent(lines[j]) > ind):
-                    body_lines.append(lines[j])
-                    j += 1
-                yield MSource(
-                    text="\n".join(body_lines).strip(),
-                    locator=rel,
-                )
+            if _is_source_header(stripped):
+                source_text, j = _parse_m_partition_source(lines, i, n, ind, stripped)
+                yield MSource(text=source_text, locator=rel)
                 i = j
                 continue
 
             # Shared expression block: top-level ``expression <name> = …``
-            if re.match(r"expression\s+\S", stripped) and ind == 0:
-                first = stripped.split("=", 1)[1].strip() if "=" in stripped else ""
-                body_lines = [first]
-                j = i + 1
-                while j < n and (not lines[j].strip() or _indent(lines[j]) > 0):
-                    body_lines.append(lines[j])
-                    j += 1
-                yield MSource(
-                    text="\n".join(body_lines).strip(),
-                    locator=rel,
-                )
+            if _is_shared_expression_header(stripped, ind):
+                source_text, j = _parse_m_shared_expression(lines, i, n, stripped)
+                yield MSource(text=source_text, locator=rel)
                 i = j
                 continue
 
