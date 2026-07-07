@@ -4,8 +4,10 @@
 
 **Created**: 2026-07-07
 
-**Status**: **DRAFT — SPEC ONLY, HELD.** Under Option B (owner-ratified 2026-07-07).
-Packaging/discovery over shipped skills, not a new verb. Held for owner review.
+**Status**: **BUILT** (docs-only) 2026-07-07 on branch `feat/111-mapping-review-packaging`.
+Under Option B: a review-flow walkthrough over the shipped `source-mapping` +
+`grain-confidence-reviewer` skills — NO new CLI verb, NO new capability. Deliverable:
+`docs/user/mapping-review.md`.
 
 **Input**: Roadmap M7 "Mapping Review UX".
 
