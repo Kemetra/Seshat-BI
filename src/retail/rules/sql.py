@@ -27,6 +27,23 @@ def _read(ctx: RuleContext, rel: str) -> str:
     return (ctx.repo_root / rel).read_text(encoding="utf-8")
 
 
+def _tokens(ctx: RuleContext, rel: str) -> list[SqlToken]:
+    """Non-empty (comment/string-stripped) tokens for `rel`. Shared by the
+    token-based rules (S3/S4b/S5/S7) so each stops re-deriving this filter.
+    """
+    return [t for t in tokenize_sql(_read(ctx, rel)) if t.text]
+
+
+def _live_sql_files(ctx: RuleContext) -> list[str]:
+    """Tracked warehouse SQL files, excluding committed test fixtures.
+
+    Shared preamble for the "live scan" rules (S5/S6/S7/S8): each rule skips
+    `tests/` paths before scanning. S4b intentionally does NOT use this -- it
+    has no `is_test_path` skip of its own -- so it keeps its own iteration.
+    """
+    return [rel for rel in iter_sql_files(ctx) if not is_test_path(rel)]
+
+
 @register("S1", "snake_case SQL identifiers")
 def s1_snake_case_identifiers(ctx: RuleContext) -> list[Finding]:
     findings: list[Finding] = []
@@ -74,7 +91,7 @@ def s2_medallion_schemas(ctx: RuleContext) -> list[Finding]:
 def s3_vw_prefix(ctx: RuleContext) -> list[Finding]:
     findings: list[Finding] = []
     for rel in iter_sql_files(ctx):
-        toks = [t for t in tokenize_sql(_read(ctx, rel)) if t.text]
+        toks = _tokens(ctx, rel)
         for idx, tok in enumerate(toks):
             if tok.text.upper() != "VIEW":
                 continue
@@ -171,6 +188,107 @@ def _is_guarded(toks: list[SqlToken], idx: int) -> bool:
     return False
 
 
+_DDL_VERBS = frozenset({"CREATE", "ALTER", "DROP"})
+
+
+_TXN_BOUNDARY_VERBS = frozenset({"BEGIN", "START", "COMMIT", "ROLLBACK"})
+
+
+def _txn_boundary_state(toks: list[SqlToken], idx: int, in_txn: bool) -> bool | None:
+    """If toks[idx] is a transaction-boundary keyword, return the (possibly
+    unchanged) `in_txn` state to carry forward; otherwise return None (not a
+    boundary token -- caller proceeds to the DDL-verb check).
+
+    `BEGIN` opens a txn; `START` only opens one when followed by `TRANSACTION`
+    -- a bare `START` (e.g. `CREATE SEQUENCE ... START WITH 1`) must NOT
+    suppress later bare-DDL findings (audit 2026-06-26 false-negative), so a
+    bare `START` returns the state UNCHANGED (still a boundary -- it must not
+    fall through to the DDL check). `COMMIT`/`ROLLBACK` close a txn.
+    """
+    upper = toks[idx].text.upper()
+    if upper not in _TXN_BOUNDARY_VERBS:
+        return None
+    if upper == "BEGIN":
+        return True
+    if upper == "START":
+        nxt = toks[idx + 1].text.upper() if idx + 1 < len(toks) else ""
+        return True if nxt == "TRANSACTION" else in_txn
+    return False  # COMMIT / ROLLBACK
+
+
+def _s4b_finding_for_bare_ddl(
+    rel: str, tok: SqlToken, upper: str, zone: str
+) -> Finding:
+    """Build the S4b Finding for a bare (unguarded) DDL verb outside bronze's
+    ERROR path -- i.e. the silver/gold-no-txn WARNING or the unknown/
+    unqualified fail-closed WARNING. Bronze's ERROR is built by the caller.
+    """
+    if zone in ("silver", "gold"):
+        message = (
+            f"S4b {zone}.* bare {upper} not in a transaction; "
+            "wrap in BEGIN/COMMIT or use a guarded form "
+            "(IF [NOT] EXISTS / OR REPLACE VIEW)"
+        )
+    else:
+        message = (
+            f"S4b bare {upper}: target schema undetermined "
+            "(unqualified or search_path); use a qualified "
+            "name + guarded form, or wrap in BEGIN/COMMIT"
+        )
+    return Finding(
+        rule_id="S4b",
+        severity=Severity.WARNING,
+        message=message,
+        locator=f"{rel}:{tok.line}",
+    )
+
+
+def _s4b_findings_for_file(rel: str, toks: list[SqlToken]) -> list[Finding]:
+    """S4b findings for one file's already-tokenized content."""
+    findings: list[Finding] = []
+    in_txn = False  # stateful flag toggled by BEGIN / COMMIT / ROLLBACK
+
+    for idx, tok in enumerate(toks):
+        upper = tok.text.upper()
+
+        boundary_state = _txn_boundary_state(toks, idx, in_txn)
+        if boundary_state is not None:
+            in_txn = boundary_state
+            continue
+
+        if upper not in _DDL_VERBS:
+            continue
+
+        # Guarded forms pass unconditionally (any zone).
+        if _is_guarded(toks, idx):
+            continue
+
+        zone = schema_zone(toks, idx)
+
+        if zone == "bronze":
+            findings.append(
+                Finding(
+                    rule_id="S4b",
+                    severity=Severity.ERROR,
+                    message=(
+                        f"S4b bronze.* bare {upper} destroys/clobbers "
+                        "source-of-truth; use a guarded form "
+                        "(IF [NOT] EXISTS)"
+                    ),
+                    locator=f"{rel}:{tok.line}",
+                )
+            )
+            continue
+
+        if zone in ("silver", "gold") and in_txn:
+            # DROP+CREATE-in-transaction pattern: PASS (idempotent rebuild).
+            continue
+
+        findings.append(_s4b_finding_for_bare_ddl(rel, tok, upper, zone))
+
+    return findings
+
+
 @register("S4b", "migration guard form")
 def s4b_guard_form(ctx: RuleContext) -> list[Finding]:
     """Layer-aware guard-form check.
@@ -183,83 +301,8 @@ def s4b_guard_form(ctx: RuleContext) -> list[Finding]:
       - unknown/unqualified bare -> WARNING (fail-closed).
     """
     findings: list[Finding] = []
-    _DDL_VERBS = frozenset({"CREATE", "ALTER", "DROP"})
-
     for rel in iter_sql_files(ctx):
-        toks = [t for t in tokenize_sql(_read(ctx, rel)) if t.text]
-        in_txn = False  # stateful flag toggled by BEGIN / COMMIT / ROLLBACK
-
-        for idx, tok in enumerate(toks):
-            upper = tok.text.upper()
-
-            # Track transaction boundaries. `BEGIN` opens a txn; `START` only
-            # opens one when followed by `TRANSACTION` -- a bare `START` (e.g.
-            # `CREATE SEQUENCE ... START WITH 1`) must NOT suppress later bare-DDL
-            # findings (audit 2026-06-26 false-negative).
-            if upper == "BEGIN":
-                in_txn = True
-                continue
-            if upper == "START":
-                nxt = toks[idx + 1].text.upper() if idx + 1 < len(toks) else ""
-                if nxt == "TRANSACTION":
-                    in_txn = True
-                continue
-            if upper in ("COMMIT", "ROLLBACK"):
-                in_txn = False
-                continue
-
-            if upper not in _DDL_VERBS:
-                continue
-
-            # Guarded forms pass unconditionally (any zone).
-            if _is_guarded(toks, idx):
-                continue
-
-            zone = schema_zone(toks, idx)
-
-            if zone == "bronze":
-                findings.append(
-                    Finding(
-                        rule_id="S4b",
-                        severity=Severity.ERROR,
-                        message=(
-                            f"S4b bronze.* bare {upper} destroys/clobbers "
-                            "source-of-truth; use a guarded form "
-                            "(IF [NOT] EXISTS)"
-                        ),
-                        locator=f"{rel}:{tok.line}",
-                    )
-                )
-            elif zone in ("silver", "gold"):
-                if in_txn:
-                    # DROP+CREATE-in-transaction pattern: PASS (idempotent rebuild).
-                    continue
-                findings.append(
-                    Finding(
-                        rule_id="S4b",
-                        severity=Severity.WARNING,
-                        message=(
-                            f"S4b {zone}.* bare {upper} not in a transaction; "
-                            "wrap in BEGIN/COMMIT or use a guarded form "
-                            "(IF [NOT] EXISTS / OR REPLACE VIEW)"
-                        ),
-                        locator=f"{rel}:{tok.line}",
-                    )
-                )
-            else:
-                # unknown / unqualified -> fail-closed WARNING.
-                findings.append(
-                    Finding(
-                        rule_id="S4b",
-                        severity=Severity.WARNING,
-                        message=(
-                            f"S4b bare {upper}: target schema undetermined "
-                            "(unqualified or search_path); use a qualified "
-                            "name + guarded form, or wrap in BEGIN/COMMIT"
-                        ),
-                        locator=f"{rel}:{tok.line}",
-                    )
-                )
+        findings.extend(_s4b_findings_for_file(rel, _tokens(ctx, rel)))
     return findings
 
 
@@ -289,6 +332,47 @@ def _is_id_like(name: str) -> bool:
     return any(low.endswith(s) for s in _ID_SUFFIXES)
 
 
+def _s5_cast_source(toks: list[SqlToken], idx: int) -> tuple[str, bool]:
+    """Return (cast source identifier text, is_cast_position) for toks[idx].
+
+    The cast source is the identifier right before the type token, or (for
+    `CAST(x AS t)`) the token two back, after an AS.
+    """
+    prev = toks[idx - 1].text if idx else ""
+    is_cast_position = bool(prev) and prev not in ("(", ",", ";", ")")
+    if prev.upper() == "AS":
+        src = toks[idx - 2].text if idx >= 2 else ""
+    else:
+        src = prev
+    return src, is_cast_position
+
+
+def _s5_finding_for_cast(rel: str, tok: SqlToken, src: str) -> Finding | None:
+    """S5 Finding for a type-token cast, or None if it's not a flagged cast."""
+    low = tok.text.lower()
+    if low in _FLOAT_TYPES:
+        return Finding(
+            rule_id="S5",
+            severity=Severity.WARNING,
+            message=(
+                f"{src or 'value'} cast to {tok.text}; money/quantities "
+                "must be exact NUMERIC, never float (enforces RC7)"
+            ),
+            locator=f"{rel}:{tok.line}",
+        )
+    if low in _INT_TYPES and _is_id_like(src):
+        return Finding(
+            rule_id="S5",
+            severity=Severity.WARNING,
+            message=(
+                f"{src} cast to {tok.text}; id-like columns may have "
+                "leading zeros and must stay TEXT (enforces RC7)"
+            ),
+            locator=f"{rel}:{tok.line}",
+        )
+    return None
+
+
 @register("S5", "type discipline (enforces ADR RC7)")
 def s5_type_discipline(ctx: RuleContext) -> list[Finding]:
     """Flag money/qty cast to a float type, or an id-like column cast to integer.
@@ -300,45 +384,15 @@ def s5_type_discipline(ctx: RuleContext) -> list[Finding]:
     numbers cast to int are an accepted false-positive the warning prompts review of.
     """
     findings: list[Finding] = []
-    for rel in iter_sql_files(ctx):
-        if is_test_path(rel):
-            continue
-        toks = [t for t in tokenize_sql(_read(ctx, rel)) if t.text]
+    for rel in _live_sql_files(ctx):
+        toks = _tokens(ctx, rel)
         for idx, tok in enumerate(toks):
-            low = tok.text.lower()
-            prev = toks[idx - 1].text if idx else ""
-            prev_up = prev.upper()
-            # The cast source is the identifier right before the type token,
-            # or (for CAST(x AS t)) the token two back, after an AS.
-            is_cast_position = bool(prev) and prev not in ("(", ",", ";", ")")
-            if prev_up == "AS":
-                src = toks[idx - 2].text if idx >= 2 else ""
-            else:
-                src = prev
-            if low in _FLOAT_TYPES and is_cast_position:
-                findings.append(
-                    Finding(
-                        rule_id="S5",
-                        severity=Severity.WARNING,
-                        message=(
-                            f"{src or 'value'} cast to {tok.text}; money/quantities "
-                            "must be exact NUMERIC, never float (enforces RC7)"
-                        ),
-                        locator=f"{rel}:{tok.line}",
-                    )
-                )
-            elif low in _INT_TYPES and is_cast_position and _is_id_like(src):
-                findings.append(
-                    Finding(
-                        rule_id="S5",
-                        severity=Severity.WARNING,
-                        message=(
-                            f"{src} cast to {tok.text}; id-like columns may have "
-                            "leading zeros and must stay TEXT (enforces RC7)"
-                        ),
-                        locator=f"{rel}:{tok.line}",
-                    )
-                )
+            src, is_cast_position = _s5_cast_source(toks, idx)
+            if not is_cast_position:
+                continue
+            finding = _s5_finding_for_cast(rel, tok, src)
+            if finding is not None:
+                findings.append(finding)
     return findings
 
 
@@ -411,6 +465,16 @@ _INSERT_GOLD_DIM_MINUS1 = re.compile(
 )
 
 
+def _line_at(clean: str, offset: int) -> int:
+    """1-based line number of `offset` in noise-stripped text `clean`."""
+    return clean.count("\n", 0, offset) + 1
+
+
+def _dims_with_minus1_member(clean: str) -> set[str]:
+    """Lowercased `dim_*` names that receive a -1-member INSERT in `clean`."""
+    return {m.group(1).lower() for m in _INSERT_GOLD_DIM_MINUS1.finditer(clean)}
+
+
 @register("S6", "gold dim -1 unknown member (enforces ADR RC14)")
 def s6_gold_unknown_member(ctx: RuleContext) -> list[Finding]:
     """Each `gold.dim_*` should carry a `-1` unknown member (RC14).
@@ -422,14 +486,9 @@ def s6_gold_unknown_member(ctx: RuleContext) -> list[Finding]:
     `-1` is invisible in token space. WARNING (reviewable; never blocks).
     """
     findings: list[Finding] = []
-    for rel in iter_sql_files(ctx):
-        if is_test_path(rel):
-            continue
+    for rel in _live_sql_files(ctx):
         clean = _strip_sql_noise(_read(ctx, rel))
-        # dims that receive a -1 member insert
-        with_member = {
-            m.group(1).lower() for m in _INSERT_GOLD_DIM_MINUS1.finditer(clean)
-        }
+        with_member = _dims_with_minus1_member(clean)
         for m in _CREATE_GOLD_DIM.finditer(clean):
             dim = m.group(1).lower()
             # A date dim is the documented EXCEPTION (S8): it becomes a marked date
@@ -439,7 +498,6 @@ def s6_gold_unknown_member(ctx: RuleContext) -> list[Finding]:
                 continue
             if dim in with_member:
                 continue
-            line = clean.count("\n", 0, m.start()) + 1
             findings.append(
                 Finding(
                     rule_id="S6",
@@ -448,7 +506,7 @@ def s6_gold_unknown_member(ctx: RuleContext) -> list[Finding]:
                         f"gold.{dim} has no -1 unknown-member INSERT; a Kimball dim "
                         "should carry an unknown member at _sk = -1 (enforces RC14)"
                     ),
-                    locator=f"{rel}:{line}",
+                    locator=f"{rel}:{_line_at(clean, m.start())}",
                 )
             )
     return findings
@@ -474,15 +532,12 @@ def s8_date_dim_no_unknown_member(ctx: RuleContext) -> list[Finding]:
     polluting the date table -- see ADR 0006.
     """
     findings: list[Finding] = []
-    for rel in iter_sql_files(ctx):
-        if is_test_path(rel):
-            continue
+    for rel in _live_sql_files(ctx):
         clean = _strip_sql_noise(_read(ctx, rel))
         for m in _INSERT_GOLD_DIM_MINUS1.finditer(clean):
             dim = m.group(1).lower()
             if not dim.startswith("dim_date"):
                 continue
-            line = clean.count("\n", 0, m.start()) + 1
             findings.append(
                 Finding(
                     rule_id="S8",
@@ -494,10 +549,34 @@ def s8_date_dim_no_unknown_member(ctx: RuleContext) -> list[Finding]:
                         "time-intelligence. Handle unmatched fact dates outside the "
                         "calendar (fail-loud or nullable FK), not with a -1 member."
                     ),
-                    locator=f"{rel}:{line}",
+                    locator=f"{rel}:{_line_at(clean, m.start())}",
                 )
             )
     return findings
+
+
+def _statement_tokens(toks: list[SqlToken], start_idx: int) -> list[SqlToken]:
+    """This statement's tokens starting at `start_idx`, up to (not including)
+    the next `;`.
+    """
+    stmt: list[SqlToken] = []
+    for j in range(start_idx, len(toks)):
+        if toks[j].text == ";":
+            break
+        stmt.append(toks[j])
+    return stmt
+
+
+def _s7_is_gappy_date_dim_insert(stmt: list[SqlToken]) -> bool:
+    """True if `stmt` is an INSERT targeting dim_date built via SELECT DISTINCT
+    (gappy) rather than generate_series (contiguous).
+    """
+    if not any(t.text.lower().startswith("dim_date") for t in stmt):
+        return False
+    up = [t.text.upper() for t in stmt]
+    has_distinct = "SELECT" in up and "DISTINCT" in up
+    has_genseries = any(t.text.lower() == "generate_series" for t in stmt)
+    return has_distinct and not has_genseries
 
 
 @register("S7", "contiguous date dim (enforces ADR RC15)")
@@ -509,36 +588,24 @@ def s7_contiguous_date_dim(ctx: RuleContext) -> list[Finding]:
     SELECT DISTINCT populating some other dim does not trigger. WARNING.
     """
     findings: list[Finding] = []
-    for rel in iter_sql_files(ctx):
-        if is_test_path(rel):
-            continue
-        toks = [t for t in tokenize_sql(_read(ctx, rel)) if t.text]
+    for rel in _live_sql_files(ctx):
+        toks = _tokens(ctx, rel)
         for idx, tok in enumerate(toks):
             if tok.text.upper() != "INSERT":
                 continue
-            # collect this statement's tokens (up to next ';')
-            stmt: list[SqlToken] = []
-            for j in range(idx, len(toks)):
-                if toks[j].text == ";":
-                    break
-                stmt.append(toks[j])
-            up = [t.text.upper() for t in stmt]
-            targets_dim_date = any(t.text.lower().startswith("dim_date") for t in stmt)
-            if not targets_dim_date:
+            stmt = _statement_tokens(toks, idx)
+            if not _s7_is_gappy_date_dim_insert(stmt):
                 continue
-            has_distinct = "SELECT" in up and "DISTINCT" in up
-            has_genseries = any(t.text.lower() == "generate_series" for t in stmt)
-            if has_distinct and not has_genseries:
-                findings.append(
-                    Finding(
-                        rule_id="S7",
-                        severity=Severity.WARNING,
-                        message=(
-                            "dim_date built from SELECT DISTINCT; use a contiguous "
-                            "generate_series calendar over the full span (enforces "
-                            "RC15) -- missing days break time-intelligence"
-                        ),
-                        locator=f"{rel}:{tok.line}",
-                    )
+            findings.append(
+                Finding(
+                    rule_id="S7",
+                    severity=Severity.WARNING,
+                    message=(
+                        "dim_date built from SELECT DISTINCT; use a contiguous "
+                        "generate_series calendar over the full span (enforces "
+                        "RC15) -- missing days break time-intelligence"
+                    ),
+                    locator=f"{rel}:{tok.line}",
                 )
+            )
     return findings
