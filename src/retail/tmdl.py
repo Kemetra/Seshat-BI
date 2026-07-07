@@ -219,6 +219,24 @@ def _continues_block(lines: list[str], j: int, n: int, parent_ind: int) -> bool:
     return j < n and (not lines[j].strip() or _indent(lines[j]) > parent_ind)
 
 
+def _block_body_lines(
+    lines: list[str], i: int, n: int, ind: int
+) -> tuple[list[str], int]:
+    """Collect the RAW child lines of the block whose header is at line ``i``.
+
+    Walks forward from ``i + 1`` while :func:`_continues_block` holds for the
+    parent indent ``ind`` and returns ``(raw_child_lines, next_index)`` — the
+    unmodified lines strictly inside the block and the index of the first line
+    past it. Callers decide how to seed, strip, filter blanks, and join; this
+    only owns the shared indentation walk so every block parser scans blocks
+    identically.
+    """
+    j = i + 1
+    while _continues_block(lines, j, n, ind):
+        j += 1
+    return lines[i + 1 : j], j
+
+
 def _find_table_header(lines: list[str]) -> tuple[str | None, int]:
     """Locate the top-level ``table <name>`` header line.
 
@@ -315,12 +333,9 @@ def _parse_source_block(
     and the index of the first line past the block.
     """
     ind = _indent(lines[i])
+    children, j = _block_body_lines(lines, i, n, ind)
     body = [stripped.split("=", 1)[1].strip()]
-    j = i + 1
-    while _continues_block(lines, j, n, ind):
-        if lines[j].strip():
-            body.append(lines[j].strip())
-        j += 1
+    body.extend(child.strip() for child in children if child.strip())
     source_text = " ".join(p for p in body if p).strip()
     return source_text, j
 
@@ -342,6 +357,59 @@ def _is_source_header(stripped: str) -> bool:
     ``source_type = ...`` that merely start with the word "source".
     """
     return bool(re.match(r"(source\s*=|partition\s+\S+\s*=)", stripped))
+
+
+def _parse_data_category(stripped: str, ind: int) -> str | None:
+    """Return the table-level ``dataCategory:`` value on this line, or None.
+
+    Only the TABLE-level property counts (``ind == 1``, outside any column
+    block); a column-level ``dataCategory: Time`` is intentionally NOT the
+    date-table marker. Returns None for any non-matching or wrongly-indented
+    line, so callers keep a previously captured value (last match wins).
+    """
+    if ind != 1:
+        return None
+    dcm = re.match(r"dataCategory:\s*(?P<v>.+)$", stripped)
+    return dcm.group("v").strip() if dcm else None
+
+
+def _collect_annotation(stripped: str, ind: int) -> str | None:
+    """Return the raw ``annotation <name> = <value>`` line (for D7), or None.
+
+    Annotations count at the table level or one deeper (``ind <= 1``). Returns
+    None for any non-annotation or too-deep line.
+    """
+    if ind <= 1 and re.match(r"annotation\s+.+", stripped):
+        return stripped
+    return None
+
+
+def _parse_table_block(
+    lines: list[str], i: int, n: int, stripped: str, ind: int
+) -> tuple[str, TmdlMeasure | TmdlColumn | str, int] | None:
+    """Dispatch a single multi-line table block starting at line ``i``.
+
+    Recognizes the three block kinds :func:`parse_tmdl` consumes as whole
+    blocks — ``measure``/``column`` (indent level 1) and ``partition``/``source``
+    (raw M body). Returns ``(kind, parsed_item, next_index)`` where ``kind`` is
+    ``"measure"``, ``"column"`` or ``"source"``, or ``None`` if the line is not
+    a block header (leaving single-line collectors to the caller).
+    """
+    measure_header = _is_measure_header(stripped)
+    if measure_header and ind == 1:
+        measure, j = _parse_measure_block(lines, i, n, measure_header)
+        return "measure", measure, j
+
+    column_header = _is_column_header(stripped)
+    if column_header and ind == 1:
+        column, j = _parse_column_block(lines, i, n, column_header)
+        return "column", column, j
+
+    if _is_source_header(stripped):
+        source_text, j = _parse_source_block(lines, i, n, stripped)
+        return "source", source_text, j
+
+    return None
 
 
 def parse_tmdl(text: str) -> TmdlTable | None:
@@ -371,44 +439,30 @@ def parse_tmdl(text: str) -> TmdlTable | None:
     n = len(lines)
     i = 0
     while i < n:
-        raw = lines[i]
-        stripped = raw.strip()
-        ind = _indent(raw)
+        stripped = lines[i].strip()
+        ind = _indent(lines[i])
 
-        # --- measure block ---
-        mm = _is_measure_header(stripped)
-        if mm and ind == 1:
-            measure, j = _parse_measure_block(lines, i, n, mm)
-            measures.append(measure)
+        # A measure / column / source block spans multiple lines: record it in
+        # its target list and jump past the whole block.
+        block = _parse_table_block(lines, i, n, stripped, ind)
+        if block is not None:
+            kind, item, j = block
+            if kind == "measure":
+                measures.append(item)
+            elif kind == "column":
+                columns.append(item)
+            else:
+                sources.append(item)
             i = j
             continue
 
-        # --- column block ---
-        cm = _is_column_header(stripped)
-        if cm and ind == 1:
-            column, j = _parse_column_block(lines, i, n, cm)
-            columns.append(column)
-            i = j
-            continue
-
-        # --- partition / source block (raw M body for D8) ---
-        if _is_source_header(stripped):
-            source_text, j = _parse_source_block(lines, i, n, stripped)
-            sources.append(source_text)
-            i = j
-            continue
-
-        # --- table-level dataCategory (e.g. ``dataCategory: Time`` for date tables) ---
-        # Only the TABLE-level property counts (ind == 1, outside any column block).
-        # Column-level ``dataCategory: Time`` alone is intentionally NOT the marker.
-        if ind == 1:
-            dcm = re.match(r"dataCategory:\s*(?P<v>.+)$", stripped)
-            if dcm:
-                data_category = dcm.group("v").strip()
-
-        # --- annotation lines ---
-        if re.match(r"annotation\s+.+", stripped) and ind <= 1:
-            annotations.append(stripped)
+        # Single-line collectors record and fall through to the next line.
+        data_category_value = _parse_data_category(stripped, ind)
+        if data_category_value is not None:
+            data_category = data_category_value
+        annotation = _collect_annotation(stripped, ind)
+        if annotation is not None:
+            annotations.append(annotation)
 
         i += 1
 
@@ -521,7 +575,7 @@ def _is_shared_expression_header(stripped: str, ind: int) -> bool:
 
 
 def _parse_m_partition_source(
-    lines: list[str], i: int, n: int, ind: int, stripped: str
+    lines: list[str], i: int, n: int
 ) -> tuple[str, int]:
     """Parse a partition-source block for :func:`iter_m_sources`.
 
@@ -532,11 +586,9 @@ def _parse_m_partition_source(
     raw M text to run ``stale_schema_tokens`` and inspect ``.Database(`` call
     arguments.
     """
-    body_lines = [stripped.split("=", 1)[1].strip()]
-    j = i + 1
-    while _continues_block(lines, j, n, ind):
-        body_lines.append(lines[j])
-        j += 1
+    ind = _indent(lines[i])
+    children, j = _block_body_lines(lines, i, n, ind)
+    body_lines = [lines[i].strip().split("=", 1)[1].strip(), *children]
     return "\n".join(body_lines).strip(), j
 
 
@@ -549,12 +601,63 @@ def _parse_m_shared_expression(
     index of the first line past the block.
     """
     first = stripped.split("=", 1)[1].strip() if "=" in stripped else ""
-    body_lines = [first]
-    j = i + 1
-    while _continues_block(lines, j, n, 0):
-        body_lines.append(lines[j])
-        j += 1
+    children, j = _block_body_lines(lines, i, n, 0)
+    body_lines = [first, *children]
     return "\n".join(body_lines).strip(), j
+
+
+def _tmdl_files_to_scan(
+    repo_root: Path, tracked_files: tuple[str, ...]
+) -> Iterable[tuple[str, str]]:
+    """Yield ``(rel, text)`` for each tracked TMDL file eligible for M scanning.
+
+    Applies the same file-selection guards as :func:`iter_model_files`: skip
+    ``tests/`` paths, require the ``*.SemanticModel/definition/`` segment and a
+    ``.tmdl`` suffix (case-insensitive), and silently skip files that cannot be
+    read. Text is read ``encoding="utf-8-sig"`` (BOM-tolerant).
+    """
+    for rel in tracked_files:
+        if is_test_path(rel):
+            continue
+        if ".SemanticModel/definition/" not in rel:
+            continue
+        if not rel.lower().endswith(".tmdl"):
+            continue
+        try:
+            text = (repo_root / Path(rel)).read_text(encoding="utf-8-sig")
+        except OSError:
+            continue
+        yield rel, text
+
+
+def _iter_m_sources_in_file(text: str, rel: str) -> Iterable[MSource]:
+    """Yield every M partition-source and shared-expression block in one file.
+
+    ``rel`` is the repo-relative path used as each :class:`MSource` locator.
+    Scans ``text`` line by line, jumping past each recognized block.
+    """
+    lines = text.splitlines()
+    n = len(lines)
+    i = 0
+    while i < n:
+        stripped = lines[i].strip()
+        ind = _indent(lines[i])
+
+        # Partition source block: ``source =`` or ``partition <name> =``
+        if _is_source_header(stripped):
+            source_text, j = _parse_m_partition_source(lines, i, n)
+            yield MSource(text=source_text, locator=rel)
+            i = j
+            continue
+
+        # Shared expression block: top-level ``expression <name> = …``
+        if _is_shared_expression_header(stripped, ind):
+            source_text, j = _parse_m_shared_expression(lines, i, n, stripped)
+            yield MSource(text=source_text, locator=rel)
+            i = j
+            continue
+
+        i += 1
 
 
 def iter_m_sources(
@@ -579,41 +682,8 @@ def iter_m_sources(
     embedded in the M code (D8) and to inspect ``.Database(`` call arguments
     (C1).
     """
-    for rel in tracked_files:
-        if is_test_path(rel):
-            continue
-        if ".SemanticModel/definition/" not in rel:
-            continue
-        if not rel.lower().endswith(".tmdl"):
-            continue
-        path = repo_root / Path(rel)
-        try:
-            text = path.read_text(encoding="utf-8-sig")
-        except OSError:
-            continue
-        lines = text.splitlines()
-        n = len(lines)
-        i = 0
-        while i < n:
-            raw = lines[i]
-            stripped = raw.strip()
-            ind = _indent(raw)
-
-            # Partition source block: ``source =`` or ``partition <name> =``
-            if _is_source_header(stripped):
-                source_text, j = _parse_m_partition_source(lines, i, n, ind, stripped)
-                yield MSource(text=source_text, locator=rel)
-                i = j
-                continue
-
-            # Shared expression block: top-level ``expression <name> = …``
-            if _is_shared_expression_header(stripped, ind):
-                source_text, j = _parse_m_shared_expression(lines, i, n, stripped)
-                yield MSource(text=source_text, locator=rel)
-                i = j
-                continue
-
-            i += 1
+    for rel, text in _tmdl_files_to_scan(repo_root, tracked_files):
+        yield from _iter_m_sources_in_file(text, rel)
 
 
 def top_level_blocks(text: str) -> list[str]:
