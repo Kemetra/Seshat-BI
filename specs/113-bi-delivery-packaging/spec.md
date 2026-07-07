@@ -4,8 +4,10 @@
 
 **Created**: 2026-07-07
 
-**Status**: **DRAFT — SPEC ONLY, HELD.** Under Option B (owner-ratified 2026-07-07).
-Packaging/discovery over shipped skills, not a new verb. Held for owner review.
+**Status**: **BUILT** (docs-only) 2026-07-07 on branch `feat/113-bi-delivery-packaging`.
+Under Option B: a delivery-flow walkthrough over the shipped dashboard-design skills +
+PBIR authoring adapters — NO new CLI verb, NO new capability; publish stays gated (F016).
+Deliverable: `docs/user/bi-delivery.md`.
 
 **Input**: Roadmap M10 "BI Delivery Layer".
 
