@@ -51,44 +51,55 @@ def _is_pbip_signature(path: str) -> bool:
     return any(marker in path for marker in PBIP_DIR_MARKERS)
 
 
+def _missing_required_layout(tracked: set[str]) -> list[Finding]:
+    return [
+        Finding(
+            rule_id="P1",
+            severity=Severity.ERROR,
+            message=f"required layout path is missing: {required}",
+            locator=required,
+        )
+        for required in REQUIRED_PATHS
+        if required not in tracked
+    ]
+
+
+def _pbip_placement_finding(path: str) -> Finding | None:
+    if _is_pbip_signature(path) and not path.startswith("powerbi/"):
+        return Finding(
+            rule_id="P1",
+            severity=Severity.ERROR,
+            message="PBIP artifact must live under powerbi/",
+            locator=path,
+        )
+    return None
+
+
+def _sql_placement_finding(path: str) -> Finding | None:
+    if path.endswith(".sql") and not path.startswith("warehouse/"):
+        return Finding(
+            rule_id="P1",
+            severity=Severity.ERROR,
+            message="*.sql must live under warehouse/",
+            locator=path,
+        )
+    return None
+
+
 @register("P1", "Approach-A layout")
 def rule_p1_layout(ctx: RuleContext) -> Iterable[Finding]:
-    tracked = set(ctx.tracked_files)
-    findings: list[Finding] = []
-    for required in REQUIRED_PATHS:
-        if required not in tracked:
-            findings.append(
-                Finding(
-                    rule_id="P1",
-                    severity=Severity.ERROR,
-                    message=f"required layout path is missing: {required}",
-                    locator=required,
-                )
-            )
+    findings = _missing_required_layout(set(ctx.tracked_files))
     for path in ctx.tracked_files:
         # Committed test fixtures (e.g. tests/fixtures/golden_pbip/*.pbip and any
         # test *.sql) are not the live model and must not be forced under
         # powerbi/ or warehouse/. Skip them before the production-layout checks.
         if is_test_path(path):
             continue
-        if _is_pbip_signature(path) and not path.startswith("powerbi/"):
-            findings.append(
-                Finding(
-                    rule_id="P1",
-                    severity=Severity.ERROR,
-                    message="PBIP artifact must live under powerbi/",
-                    locator=path,
-                )
-            )
-        if path.endswith(".sql") and not path.startswith("warehouse/"):
-            findings.append(
-                Finding(
-                    rule_id="P1",
-                    severity=Severity.ERROR,
-                    message="*.sql must live under warehouse/",
-                    locator=path,
-                )
-            )
+        # A single path can trip both checks (a PBIP-signature *.sql outside both
+        # trees) -> emit both, PBIP finding first, matching the original order.
+        for finding in (_pbip_placement_finding(path), _sql_placement_finding(path)):
+            if finding is not None:
+                findings.append(finding)
     return findings
 
 
@@ -108,39 +119,44 @@ DEFINITION_PROBE_PATHS = (
 )
 
 
+def _missing_required_ignores(lines: set[str]) -> list[Finding]:
+    return [
+        Finding(
+            rule_id="G1",
+            severity=Severity.ERROR,
+            message=f".gitignore must contain '{required}'",
+            locator=".gitignore",
+        )
+        for required in REQUIRED_IGNORES
+        if required not in lines
+    ]
+
+
+def _ignored_definition_findings(ctx: RuleContext) -> list[Finding]:
+    return [
+        Finding(
+            rule_id="G1",
+            severity=Severity.ERROR,
+            message=(
+                "a .gitignore pattern ignores a PBIP definition/ path "
+                "(the model must never be ignored)"
+            ),
+            locator=probe,
+        )
+        for probe in DEFINITION_PROBE_PATHS
+        if gitutil.git_check_ignore(ctx.repo_root, probe)
+    ]
+
+
 @register("G1", ".gitignore correctness")
 def rule_g1_gitignore_correctness(ctx: RuleContext) -> Iterable[Finding]:
-    findings: list[Finding] = []
     gitignore = ctx.repo_root / ".gitignore"
     lines = (
         {line.strip() for line in gitignore.read_text(encoding="utf-8").splitlines()}
         if gitignore.exists()
         else set()
     )
-    for required in REQUIRED_IGNORES:
-        if required not in lines:
-            findings.append(
-                Finding(
-                    rule_id="G1",
-                    severity=Severity.ERROR,
-                    message=f".gitignore must contain '{required}'",
-                    locator=".gitignore",
-                )
-            )
-    for probe in DEFINITION_PROBE_PATHS:
-        if gitutil.git_check_ignore(ctx.repo_root, probe):
-            findings.append(
-                Finding(
-                    rule_id="G1",
-                    severity=Severity.ERROR,
-                    message=(
-                        "a .gitignore pattern ignores a PBIP definition/ path "
-                        "(the model must never be ignored)"
-                    ),
-                    locator=probe,
-                )
-            )
-    return findings
+    return [*_missing_required_ignores(lines), *_ignored_definition_findings(ctx)]
 
 
 # ---------------------------------------------------------------------------
@@ -170,28 +186,36 @@ def rule_g2_definition_committed(ctx: RuleContext) -> Iterable[Finding]:
                 locator=".",
             )
         ]
-    findings: list[Finding] = []
-    for path in ctx.tracked_files:
-        if path.endswith(FORBIDDEN_TRACKED):
-            findings.append(
-                Finding(
-                    rule_id="G2",
-                    severity=Severity.ERROR,
-                    message="Desktop-local PBIP file must not be tracked",
-                    locator=path,
-                )
-            )
-    for path in pbip_paths:
-        if gitutil.git_check_ignore(ctx.repo_root, path):
-            findings.append(
-                Finding(
-                    rule_id="G2",
-                    severity=Severity.ERROR,
-                    message="tracked PBIP artifact is also gitignored",
-                    locator=path,
-                )
-            )
-    return findings
+    return [
+        *_forbidden_tracked_findings(ctx),
+        *_gitignored_pbip_findings(ctx, pbip_paths),
+    ]
+
+
+def _forbidden_tracked_findings(ctx: RuleContext) -> list[Finding]:
+    return [
+        Finding(
+            rule_id="G2",
+            severity=Severity.ERROR,
+            message="Desktop-local PBIP file must not be tracked",
+            locator=path,
+        )
+        for path in ctx.tracked_files
+        if path.endswith(FORBIDDEN_TRACKED)
+    ]
+
+
+def _gitignored_pbip_findings(ctx: RuleContext, pbip_paths: list[str]) -> list[Finding]:
+    return [
+        Finding(
+            rule_id="G2",
+            severity=Severity.ERROR,
+            message="tracked PBIP artifact is also gitignored",
+            locator=path,
+        )
+        for path in pbip_paths
+        if gitutil.git_check_ignore(ctx.repo_root, path)
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -240,54 +264,70 @@ SUBJECT_RE = re.compile(r"^(?:" + "|".join(_P2_TYPES) + r"): .+")
 DEFAULT_RANGE = "HEAD~1..HEAD"
 
 
-@register("P2", "commit-message convention")
-def rule_p2_commit_subjects(ctx: RuleContext) -> Iterable[Finding]:
-    # Source the subjects to validate from the contract-v2 invocation fields:
+def _load_subjects(ctx: RuleContext) -> tuple[list[str], list[Finding]]:
+    """Resolve the commit subjects to validate for the contract-v2 invocation.
+
+    Returns ``(subjects, findings)``: on a malformed/unsafe/empty range the
+    subjects list is empty and ``findings`` carries the single ERROR (so no
+    subject validation runs), mirroring the original short-circuit ``return``.
+    """
     #   commit-msg-hook mode -> the single incoming message;
     #   CI mode             -> every subject in the supplied commit range,
     #                          used VERBATIM (e.g. "origin/main..HEAD");
     #   local fallback       -> just the current/incoming commit (DEFAULT_RANGE).
     if ctx.commit_message is not None:
-        subjects = [ctx.commit_message.splitlines()[0] if ctx.commit_message else ""]
-    else:
-        # --commit-range is a full revision range; never append "..HEAD".
-        range_expr = ctx.commit_range if ctx.commit_range is not None else DEFAULT_RANGE
-        try:
-            subjects = gitutil.git_log_subjects(ctx.repo_root, range_expr)
-        except (RuntimeError, ValueError) as exc:
-            # A malformed/unsafe/empty range must surface as a clean ERROR Finding,
-            # not a traceback (the runner does not wrap rules in try/except).
-            # ValueError = rejected by validate_commit_range (option injection);
-            # RuntimeError = git rejected a safe-shaped range.
-            return [
+        return ([ctx.commit_message.splitlines()[0] if ctx.commit_message else ""], [])
+    # --commit-range is a full revision range; never append "..HEAD".
+    range_expr = ctx.commit_range if ctx.commit_range is not None else DEFAULT_RANGE
+    try:
+        return (gitutil.git_log_subjects(ctx.repo_root, range_expr), [])
+    except (RuntimeError, ValueError) as exc:
+        # A malformed/unsafe/empty range must surface as a clean ERROR Finding,
+        # not a traceback (the runner does not wrap rules in try/except).
+        # ValueError = rejected by validate_commit_range (option injection);
+        # RuntimeError = git rejected a safe-shaped range.
+        return (
+            [],
+            [
                 Finding(
                     rule_id="P2",
                     severity=Severity.ERROR,
                     message=f"could not read commit range {range_expr!r}: {exc}",
                     locator=range_expr,
                 )
-            ]
-    findings: list[Finding] = []
-    for subject in subjects:
-        # Automated/tool-generated subjects (leading `[name]` prefix) are exempt
-        # from the human convention -- the kit does not control their format.
-        if _BOT_PREFIX_RE.match(subject):
-            continue
-        if not SUBJECT_RE.match(subject):
-            findings.append(
-                Finding(
-                    rule_id="P2",
-                    severity=Severity.ERROR,
-                    message=(
-                        "commit subject must match '<type>: <desc>' "
-                        "(" + "|".join(_P2_TYPES) + "); "
-                        "scopes are not allowed (use 'docs:' not 'docs(018):'); "
-                        "automated '[bot] ...' subjects are exempt"
-                    ),
-                    locator=subject,
-                )
-            )
-    return findings
+            ],
+        )
+
+
+def _subject_ok(subject: str) -> bool:
+    # Automated/tool-generated subjects (leading `[name]` prefix) are exempt
+    # from the human convention -- the kit does not control their format.
+    return bool(_BOT_PREFIX_RE.match(subject)) or bool(SUBJECT_RE.match(subject))
+
+
+def _invalid_subject_findings(subjects: list[str]) -> list[Finding]:
+    return [
+        Finding(
+            rule_id="P2",
+            severity=Severity.ERROR,
+            message=(
+                "commit subject must match '<type>: <desc>' "
+                "(" + "|".join(_P2_TYPES) + "); "
+                "scopes are not allowed (use 'docs:' not 'docs(018):'); "
+                "automated '[bot] ...' subjects are exempt"
+            ),
+            locator=subject,
+        )
+        for subject in subjects
+        if not _subject_ok(subject)
+    ]
+
+
+@register("P2", "commit-message convention")
+def rule_p2_commit_subjects(ctx: RuleContext) -> Iterable[Finding]:
+    # Source the subjects to validate from the contract-v2 invocation fields.
+    subjects, load_findings = _load_subjects(ctx)
+    return [*load_findings, *_invalid_subject_findings(subjects)]
 
 
 # ---------------------------------------------------------------------------
@@ -372,7 +412,10 @@ _SNOWFLAKE_KV_RE = re.compile(
 def _snowflake_kv_is_real(quote: str, value: str, line: str, end_pos: int) -> bool:
     if not value:
         return False
-    if not quote and end_pos < len(line) and line[end_pos] in ".(":
+    is_unquoted = not quote
+    has_next_char = end_pos < len(line)
+    next_is_ref = has_next_char and line[end_pos] in ".("
+    if is_unquoted and next_is_ref:
         return False  # unquoted + followed by '.'/'(' -> a name/call reference
     return True
 
@@ -442,8 +485,45 @@ def _check_env_file(ctx: RuleContext) -> list[Finding]:
     return findings
 
 
+def _parse_env_pairs(text: str) -> dict[str, str]:
+    """Parse ``KEY=value`` lines of a .env-style file, skipping comments/blanks."""
+    pairs: dict[str, str] = {}
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, _, value = stripped.partition("=")
+        pairs[key.strip()] = value.strip()
+    return pairs
+
+
+def _missing_required_keys(pairs: dict[str, str]) -> list[Finding]:
+    return [
+        Finding(
+            rule_id="C2",
+            severity=Severity.ERROR,
+            message=f".env.example missing key {key}",
+            locator=".env.example",
+        )
+        for key in REQUIRED_ENV_KEYS
+        if key not in pairs
+    ]
+
+
+def _nonempty_must_be_empty(pairs: dict[str, str]) -> list[Finding]:
+    return [
+        Finding(
+            rule_id="C2",
+            severity=Severity.ERROR,
+            message=f".env.example {key} must be empty (no committed value)",
+            locator=".env.example",
+        )
+        for key in MUST_BE_EMPTY
+        if pairs.get(key)
+    ]
+
+
 def _check_env_example(ctx: RuleContext) -> list[Finding]:
-    findings: list[Finding] = []
     example = ctx.repo_root / ".env.example"
     if not example.exists():
         return [
@@ -454,34 +534,8 @@ def _check_env_example(ctx: RuleContext) -> list[Finding]:
                 locator=".env.example",
             )
         ]
-    pairs: dict[str, str] = {}
-    for line in example.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if stripped.startswith("#") or "=" not in stripped:
-            continue
-        key, _, value = stripped.partition("=")
-        pairs[key.strip()] = value.strip()
-    for key in REQUIRED_ENV_KEYS:
-        if key not in pairs:
-            findings.append(
-                Finding(
-                    rule_id="C2",
-                    severity=Severity.ERROR,
-                    message=f".env.example missing key {key}",
-                    locator=".env.example",
-                )
-            )
-    for key in MUST_BE_EMPTY:
-        if pairs.get(key):
-            findings.append(
-                Finding(
-                    rule_id="C2",
-                    severity=Severity.ERROR,
-                    message=f".env.example {key} must be empty (no committed value)",
-                    locator=".env.example",
-                )
-            )
-    return findings
+    pairs = _parse_env_pairs(example.read_text(encoding="utf-8"))
+    return [*_missing_required_keys(pairs), *_nonempty_must_be_empty(pairs)]
 
 
 def _scan_line_for_secret(line: str) -> bool:
@@ -511,6 +565,43 @@ def _scan_line_for_secret(line: str) -> bool:
     )
 
 
+def _scan_file_lines(path: str, text: str) -> list[Finding]:
+    """Findings for one file's content, one entry per offending line.
+
+    Flattens the per-line scan out of ``_scan_contents`` so the outer loop
+    over tracked files stays shallow. A secret-shaped line and a cluster-slug
+    line are reported with distinct messages (the slug is real connection
+    context, not a secret), preserving the original per-line precedence.
+    """
+    findings: list[Finding] = []
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        if _scan_line_for_secret(line):
+            findings.append(
+                Finding(
+                    rule_id="C2",
+                    severity=Severity.ERROR,
+                    message="possible committed connection string / secret",
+                    locator=f"{path}:{lineno}",
+                )
+            )
+        # A committed DO cluster slug is real connection context (not a secret,
+        # but a real value the hard rule forbids). Reported separately so the
+        # message does not overstate it as a "secret".
+        elif DO_CLUSTER_SLUG_RE.search(line):
+            findings.append(
+                Finding(
+                    rule_id="C2",
+                    severity=Severity.ERROR,
+                    message=(
+                        "committed DigitalOcean cluster slug (real connection "
+                        "context) -- move it to the gitignored .env"
+                    ),
+                    locator=f"{path}:{lineno}",
+                )
+            )
+    return findings
+
+
 def _scan_contents(ctx: RuleContext) -> list[Finding]:
     findings: list[Finding] = []
     for path in ctx.tracked_files:
@@ -521,31 +612,7 @@ def _scan_contents(ctx: RuleContext) -> list[Finding]:
             text = full.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        for lineno, line in enumerate(text.splitlines(), start=1):
-            if _scan_line_for_secret(line):
-                findings.append(
-                    Finding(
-                        rule_id="C2",
-                        severity=Severity.ERROR,
-                        message="possible committed connection string / secret",
-                        locator=f"{path}:{lineno}",
-                    )
-                )
-            # A committed DO cluster slug is real connection context (not a secret,
-            # but a real value the hard rule forbids). Reported separately so the
-            # message does not overstate it as a "secret".
-            elif DO_CLUSTER_SLUG_RE.search(line):
-                findings.append(
-                    Finding(
-                        rule_id="C2",
-                        severity=Severity.ERROR,
-                        message=(
-                            "committed DigitalOcean cluster slug (real connection "
-                            "context) -- move it to the gitignored .env"
-                        ),
-                        locator=f"{path}:{lineno}",
-                    )
-                )
+        findings.extend(_scan_file_lines(path, text))
     return findings
 
 
@@ -619,26 +686,25 @@ _G4_REQUIRED: tuple[tuple[str, str], ...] = (
 )
 
 
-@register("G4", ".gitattributes EOL policy")
-def check_gitattributes_eol(ctx: RuleContext) -> Iterable[Finding]:
-    """G4: each REQUIRED glob in .gitattributes must carry its eol/binary token.
+def _index_gitattributes(path: Path) -> dict[str, tuple[int, set[str]]]:
+    """Index a .gitattributes file: glob -> (1-based line number, remaining tokens).
 
-    Subset (MUST-CONTAIN) check: extra benign entries are permitted. Matching is
-    by exact first-token equality, never glob expansion, so the `* text=auto`
-    catch-all does not satisfy any required glob.
+    Blank and comment lines are skipped. A missing file yields an empty index.
     """
-    path = ctx.repo_root / ".gitattributes"
-    # Index: glob token -> (1-based line number, set of remaining tokens on that line).
     declared: dict[str, tuple[int, set[str]]] = {}
-    if path.exists():
-        for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            line = raw.strip()
-            if not line or line.startswith("#"):
-                continue
-            tokens = line.split()
-            glob = tokens[0]
-            declared[glob] = (lineno, set(tokens[1:]))
+    if not path.exists():
+        return declared
+    for lineno, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        tokens = line.split()
+        glob = tokens[0]
+        declared[glob] = (lineno, set(tokens[1:]))
+    return declared
 
+
+def _g4_required_findings(declared: dict[str, tuple[int, set[str]]]) -> list[Finding]:
     findings: list[Finding] = []
     for glob, required_token in _G4_REQUIRED:
         entry = declared.get(glob)
@@ -666,3 +732,15 @@ def check_gitattributes_eol(ctx: RuleContext) -> Iterable[Finding]:
                 )
             )
     return findings
+
+
+@register("G4", ".gitattributes EOL policy")
+def check_gitattributes_eol(ctx: RuleContext) -> Iterable[Finding]:
+    """G4: each REQUIRED glob in .gitattributes must carry its eol/binary token.
+
+    Subset (MUST-CONTAIN) check: extra benign entries are permitted. Matching is
+    by exact first-token equality, never glob expansion, so the `* text=auto`
+    catch-all does not satisfy any required glob.
+    """
+    declared = _index_gitattributes(ctx.repo_root / ".gitattributes")
+    return _g4_required_findings(declared)
