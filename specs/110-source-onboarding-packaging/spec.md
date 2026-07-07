@@ -4,8 +4,10 @@
 
 **Created**: 2026-07-07
 
-**Status**: **DRAFT — SPEC ONLY, HELD.** Under Option B (owner-ratified 2026-07-07). NOT a
-new CLI verb — a discovery/packaging story over the shipped skills. Held for owner review.
+**Status**: **BUILT** (docs-only) 2026-07-07 on branch `feat/110-source-onboarding-packaging`.
+Under Option B (owner-ratified 2026-07-07): a discovery/packaging story over the shipped
+`retail-onboard-table` + `source-mapping` skills — NO new CLI verb, NO new capability.
+Deliverable: `docs/user/source-onboarding.md`.
 
 **Input**: Roadmap M6 "Source Onboarding v1".
 
