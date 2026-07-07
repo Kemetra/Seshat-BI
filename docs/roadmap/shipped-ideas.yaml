@@ -276,3 +276,23 @@ I3:
   status: shipped
   pr_sha: "PR #182 a5d6f21 @register SF1 src/retail/rules/rule_sf1.py -- cross-layer checklist fork detector (spec 086, ratified 2026-07-04); globs skills/**/checklists/*.md and reconciles against the owner-authored docs/quality/shared-spine.yaml fork contract (shared=byte-identical, distinct=may differ); registry -> 55"
   f_row: none
+
+# --- 2026-07-07 residue-audit reconciliation (A9, E3 were shipped but never ledgered;
+# H6 built this session). A multi-agent residue audit against live source found the
+# design-ideas-decisions.md BLOCKED bucket listed A9/E3/H6 as open when A9+E3 had
+# shipped and H6's prerequisite time-intel contracts had landed. Recorded here + the
+# decisions doc BLOCKED section corrected in the same change (ledger-gap closure per
+# this file's header: a discrepancy is surfaced, not silently left). Keyed by snapshot
+# short-code; none collides with an earlier ship.
+A9:
+  status: shipped
+  pr_sha: "PR #180 0bb0e22 @register DL6 src/retail/rules/design_visual_selfcheck.py -- visual-spec anti-pattern self-check (single-spec existence pairing; cross-file key-set reconcile stays with B1). Reads visual-spec.yaml (surface-1), never the #144-removed visual.json corpus, so the 'no live target' blocker never applied."
+  f_row: none
+E3:
+  status: shipped
+  pr_sha: "never_execute.py governs rule modules by the src/retail/rules/ PREFIX over git ls-files (never a hardcoded list); tests/unit/test_never_execute.py globs every rule module to prove B1/B3 coverage. The auditor's 'hardcoded list' blocker does not hold against live source -- E3's deliverable already exists."
+  f_row: none
+H6:
+  status: shipped
+  pr_sha: "2026-07-07 @register CB1 src/retail/rules/comparison_baseline.py + tests/unit/test_comparison_baseline.py (idea H6, comparison-baseline declaration guard). A growth/comparison contract (detected by title only) must declare a baseline (ruled OR honestly owner-pending -- Principle V) + a primary date field; silent omission ERRORs. Live target: the time-intel contracts landed PR #193/#200 (net-sales-growth/same-store/ytd). Registry -> 56 (manifest 67); zero findings on the committed corpus."
+  f_row: none

@@ -44,6 +44,10 @@
     "title": "no committed secrets"
   },
   {
+    "id": "CB1",
+    "title": "Comparison/growth metric contract declares a baseline and a primary date field"
+  },
+  {
     "id": "CT1",
     "title": "Token text/background color pairs meet the declared WCAG contrast floor"
   },

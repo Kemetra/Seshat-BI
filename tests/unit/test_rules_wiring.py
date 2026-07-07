@@ -88,6 +88,7 @@ EXPECTED_RULE_IDS = frozenset(
         "SL1",  # coverage-scorecard linter: scorecard is structurally well-formed
         "AL1",  # assumption-ledger: unresolved-assumption marker + a settled binding
         "AL2",  # assumption-coherence: contradictory decided rulings on one gold table
+        "CB1",  # comparison-baseline: growth contract declares baseline + date field
         "DL1",  # design-lint: theme JSON purity (styling defaults only, no logic)
         "DL2",  # design-lint: background-spec purity (no baked-in dynamic content)
         "DL3",  # design-lint: token->theme fidelity (declared values match)

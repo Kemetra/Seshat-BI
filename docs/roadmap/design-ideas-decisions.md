@@ -103,10 +103,25 @@ with git, git wins.**_
 
 ## BLOCKED — inert until content lands (no live target)
 
-`A4 / A5 / A9 / A11` need filled visual-specs or `visual.json` (the #144 pure-kit
-extraction removed the c086 corpus). `H6 / H7 / H8 / H9 / H10 / H11` need KPI /
-time-intelligence contracts to land first. `E3` needs `B1`/`B3` module-selection
-made introspectable. `K1` needs a third gate's emission format to stabilize.
+`A4 / A5 / A11` need filled visual-specs or `visual.json` (the #144 pure-kit
+extraction removed the c086 corpus). `H7 / H8 / H9 / H10 / H11` need KPI /
+time-intelligence contracts to land first. `K1` needs a third gate's emission
+format to stabilize.
+
+> **Corrected 2026-07-07 (git-reconciliation, this section lagged git — git wins).**
+> Three ideas above were stale-listed as BLOCKED but were in fact already resolved:
+> - **A9** SHIPPED as rule **`DL6`** (`design_visual_selfcheck.py`, PR #180) — a
+>   visual-spec self-check that reads `visual-spec.yaml`, so it never depended on the
+>   removed `visual.json` corpus.
+> - **E3** SHIPPED — `never_execute.py` already governs rule modules by a
+>   `src/retail/rules/` PREFIX over `git ls-files` (not a hardcoded list), and
+>   `tests/unit/test_never_execute.py` globs every rule module to prove B1/B3
+>   coverage. The "hardcoded list" blocker does not hold against live source.
+> - **H6** SHIPPED as rule **`CB1`** (`comparison_baseline.py`, 2026-07-07) — the
+>   time-intelligence comparison contracts it needed landed (PR #193/#200:
+>   `contracts/net-sales-growth.md`, `same-store-sales-growth.md`, `ytd.md`), so
+>   H6 had a live target. CB1 asserts a growth/comparison contract declares a
+>   baseline (ruled OR honestly owner-pending) + a primary date field.
 
 ## HELD — gap #6 (accessibility self-assertion) — TEMPLATE FIXED, rule held
 
