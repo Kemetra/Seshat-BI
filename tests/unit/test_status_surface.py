@@ -54,42 +54,85 @@ def _check_type(value: object, types: object) -> bool:
     return any(checks[t](value) for t in allowed)
 
 
+def _check_required(value: dict, schema: dict, path: str) -> list[str]:
+    return [
+        f"{path}: missing required key {key!r}"
+        for key in schema.get("required", [])
+        if key not in value
+    ]
+
+
+def _check_no_extra_keys(value: dict, schema: dict, path: str) -> list[str]:
+    if schema.get("additionalProperties") is not False:
+        return []
+    allowed = set(schema.get("properties", {}))
+    return [f"{path}: unexpected key {key!r}" for key in value if key not in allowed]
+
+
+def _validate_named_props(
+    value: dict, schema: dict, root: dict, path: str
+) -> list[str]:
+    props = schema.get("properties", {})
+    return [
+        e
+        for key, subschema in props.items()
+        if key in value
+        for e in _validate(value[key], subschema, root, f"{path}.{key}")
+    ]
+
+
+def _validate_additional_props(
+    value: dict, schema: dict, root: dict, path: str
+) -> list[str]:
+    additional = schema.get("additionalProperties")
+    if not isinstance(additional, dict):
+        return []
+    props = schema.get("properties", {})
+    return [
+        e
+        for key, val in value.items()
+        if key not in props
+        for e in _validate(val, additional, root, f"{path}.{key}")
+    ]
+
+
+def _validate_object(value: dict, schema: dict, root: dict, path: str) -> list[str]:
+    return (
+        _check_required(value, schema, path)
+        + _check_no_extra_keys(value, schema, path)
+        + _validate_named_props(value, schema, root, path)
+        + _validate_additional_props(value, schema, root, path)
+    )
+
+
+def _validate_items(value: list, schema: dict, root: dict, path: str) -> list[str]:
+    if "items" not in schema:
+        return []
+    return [
+        e
+        for i, item in enumerate(value)
+        for e in _validate(item, schema["items"], root, f"{path}[{i}]")
+    ]
+
+
+def _validate_enum(value: object, schema: dict, path: str) -> list[str]:
+    if "enum" in schema and value not in schema["enum"]:
+        return [f"{path}: {value!r} not in enum {schema['enum']}"]
+    return []
+
+
 def _validate(value: object, schema: dict, root: dict, path: str = "$") -> list[str]:
     schema = _resolve_ref(schema, root)
-    errors: list[str] = []
 
     if "type" in schema and not _check_type(value, schema["type"]):
         got = type(value).__name__
-        errors.append(f"{path}: expected type {schema['type']}, got {got}")
-        return errors  # type mismatch makes deeper checks meaningless
+        return [f"{path}: expected type {schema['type']}, got {got}"]
 
-    if "enum" in schema and value not in schema["enum"]:
-        errors.append(f"{path}: {value!r} not in enum {schema['enum']}")
-
+    errors = _validate_enum(value, schema, path)
     if isinstance(value, dict):
-        required = schema.get("required", [])
-        for key in required:
-            if key not in value:
-                errors.append(f"{path}: missing required key {key!r}")
-        props = schema.get("properties", {})
-        if schema.get("additionalProperties") is False:
-            allowed_keys = set(props.keys())
-            for key in value:
-                if key not in allowed_keys:
-                    errors.append(f"{path}: unexpected key {key!r}")
-        for key, subschema in props.items():
-            if key in value:
-                errors += _validate(value[key], subschema, root, f"{path}.{key}")
-        additional = schema.get("additionalProperties")
-        if isinstance(additional, dict):
-            for key, val in value.items():
-                if key not in props:
-                    errors += _validate(val, additional, root, f"{path}.{key}")
-
-    if isinstance(value, list) and "items" in schema:
-        for i, item in enumerate(value):
-            errors += _validate(item, schema["items"], root, f"{path}[{i}]")
-
+        errors += _validate_object(value, schema, root, path)
+    elif isinstance(value, list):
+        errors += _validate_items(value, schema, root, path)
     return errors
 
 
