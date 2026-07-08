@@ -452,6 +452,34 @@ def generate(seed: ThemeSeed, repo_root: Path, force: bool = False) -> list[Path
     return _write_targets(_validate_and_collect(seed, repo_root, force))
 
 
+def generate_pair(
+    light: ThemeSeed, repo_root: Path, force: bool = False
+) -> tuple[list[Path], list[Path]]:
+    """Derive a dark seed from ``light`` and write both, all-or-nothing.
+
+    Both seeds are fully validated (contrast + font floor + distinctness +
+    ramp deltaE + collision) BEFORE either is written, so a dark-side failure
+    or a file collision on either seed leaves the working tree untouched --
+    never a half-written pair.
+    """
+    if light.mode != "light":
+        raise ThemeGenError(
+            f"--pair requires a light-mode seed, got mode={light.mode!r} -- "
+            "refusing to double-invert an already-dark seed"
+        )
+    if light.name.endswith("-dark"):
+        raise ThemeGenError(
+            f"--pair derives '{light.name}-dark' from --name -- a name "
+            f"already ending in '-dark' ({light.name!r}) would collide"
+        )
+    light_targets = _validate_and_collect(light, repo_root, force)
+    dark = derive_dark_seed(light)
+    dark_targets = _validate_and_collect(dark, repo_root, force)
+    light_written = _write_targets(light_targets)
+    dark_written = _write_targets(dark_targets)
+    return light_written, dark_written
+
+
 def _parse_data_colors(raw: str | None) -> tuple[str, ...] | None:
     """Split a ``--data-colors`` CSV into a tuple, or None to derive a ramp.
 
@@ -523,7 +551,13 @@ def theme_gen_main(args) -> int:
     """CLI entry: assemble a ThemeSeed from argparse args, generate, report."""
     seed = _seed_from_args(args)
     try:
-        written = generate(seed, Path(args.repo), force=args.force)
+        if args.pair:
+            light_written, dark_written = generate_pair(
+                seed, Path(args.repo), force=args.force
+            )
+            written = light_written + dark_written
+        else:
+            written = generate(seed, Path(args.repo), force=args.force)
     except ThemeGenError as exc:
         print(f"theme-gen: {exc}", file=sys.stderr)
         return 2

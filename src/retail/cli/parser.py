@@ -455,6 +455,11 @@ def _build_parser() -> argparse.ArgumentParser:
     themegen.add_argument(
         "--force", action="store_true", help="overwrite existing files"
     )
+    themegen.add_argument(
+        "--pair",
+        action="store_true",
+        help="also derive and write a dark-mode pair from a light --mode seed",
+    )
 
     # Tokens -> theme compile (deterministic; reuses theme-gen's renderer). Reads a
     # committed design-tokens YAML and writes its matching theme.json. Repairs

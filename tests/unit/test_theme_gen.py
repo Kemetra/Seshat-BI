@@ -98,6 +98,50 @@ def test_derive_dark_seed_rejects_non_light_input() -> None:
         derive_dark_seed(_seed())  # DARK fixture: mode="dark"
 
 
+def test_generate_pair_writes_six_files(tmp_path: Path) -> None:
+    from retail.theme_gen import generate_pair
+
+    light_written, dark_written = generate_pair(_light_seed(), repo_root=tmp_path)
+    assert len(light_written) == 3
+    assert len(dark_written) == 3
+    dark_rels = sorted(
+        str(p.relative_to(tmp_path)).replace("\\", "/") for p in dark_written
+    )
+    assert dark_rels == [
+        "design/tokens/executive-light-dark-design-tokens.yaml",
+        "themes/executive-light-dark.theme-spec.md",
+        "themes/executive-light-dark.theme.json",
+    ]
+
+
+def test_generate_pair_rejects_dark_mode_input(tmp_path: Path) -> None:
+    from retail.theme_gen import generate_pair
+
+    with pytest.raises(ThemeGenError, match="mode"):
+        generate_pair(_seed(), repo_root=tmp_path)  # DARK fixture: mode="dark"
+    assert list(tmp_path.rglob("*.theme.json")) == []
+
+
+def test_generate_pair_rejects_name_already_ending_in_dark(tmp_path: Path) -> None:
+    from retail.theme_gen import generate_pair
+
+    with pytest.raises(ThemeGenError, match="dark"):
+        generate_pair(_light_seed(name="foo-dark"), repo_root=tmp_path)
+    assert list(tmp_path.rglob("*.theme.json")) == []
+
+
+def test_generate_pair_writes_nothing_if_dark_side_fails_aa(tmp_path: Path) -> None:
+    from retail.theme_gen import generate_pair
+
+    # text_muted picked so the LIGHT side clears AA but the lightness-inverted
+    # DARK side (1.0 - L) collapses contrast against the inverted background.
+    light = _light_seed(text_muted="#EDEFF2")
+    with pytest.raises(ThemeGenError, match="contrast"):
+        generate_pair(light, repo_root=tmp_path)
+    assert list(tmp_path.rglob("*.theme.json")) == []
+    assert list(tmp_path.rglob("*.theme-spec.md")) == []
+
+
 def test_derive_ramp_is_monotonic_lightness() -> None:
     from retail.color import relative_luminance
 
@@ -328,6 +372,7 @@ def _cli_args(**over) -> Namespace:
         label_font_pt=None,
         repo=".",
         force=False,
+        pair=False,
     )
     return Namespace(**{**base, **over})
 
