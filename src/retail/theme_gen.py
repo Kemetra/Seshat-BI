@@ -248,10 +248,9 @@ def render_spec_md(palette: dict, seed: ThemeSeed) -> str:
     )
 
 
-def generate(seed: ThemeSeed, repo_root: Path, force: bool = False) -> list[Path]:
-    palette = build_palette(seed)
-    check_contrast_or_raise(palette)
-    targets = {
+def _targets_for(seed: ThemeSeed, repo_root: Path, palette: dict) -> dict[Path, str]:
+    """Pure: theme output path -> rendered file content. No I/O, no validation."""
+    return {
         repo_root
         / "design"
         / "tokens"
@@ -263,18 +262,42 @@ def generate(seed: ThemeSeed, repo_root: Path, force: bool = False) -> list[Path
             palette, seed
         ),
     }
+
+
+def _validate_and_collect(
+    seed: ThemeSeed, repo_root: Path, force: bool
+) -> dict[Path, str]:
+    """Run every self-check + build the target set; raise before any write.
+
+    This is the single choke point for pre-write gates: contrast today, and
+    the future font-floor / categorical-distinctness / ramp-deltaE self-checks
+    slot in here too, so a caller validating multiple seeds (e.g. a light/dark
+    pair) can validate all of them before writing any of them.
+    """
+    palette = build_palette(seed)
+    check_contrast_or_raise(palette)
+    targets = _targets_for(seed, repo_root, palette)
     if not force:
         for p in targets:
             if p.exists():
                 raise ThemeGenError(
                     f"{p} exists -- refusing to overwrite (use --force)"
                 )
+    return targets
+
+
+def _write_targets(targets: dict[Path, str]) -> list[Path]:
+    """Write-only phase: no validation, assumes targets already cleared."""
     written: list[Path] = []
     for p, content in targets.items():
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8", newline="\n")
         written.append(p)
     return written
+
+
+def generate(seed: ThemeSeed, repo_root: Path, force: bool = False) -> list[Path]:
+    return _write_targets(_validate_and_collect(seed, repo_root, force))
 
 
 def theme_gen_main(args) -> int:

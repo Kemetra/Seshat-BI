@@ -169,3 +169,18 @@ def test_empty_data_colors_is_clean_error(tmp_path: Path) -> None:
     # traceback (the module's "never a traceback" contract).
     with pytest.raises(ThemeGenError, match="empty"):
         generate(_seed(data_colors=()), repo_root=tmp_path)
+
+
+def test_targets_for_returns_expected_three_paths(tmp_path: Path) -> None:
+    from retail.theme_gen import _targets_for, build_palette
+
+    seed = _seed()
+    palette = build_palette(seed)
+    targets = _targets_for(seed, tmp_path, palette)
+    rels = sorted(str(p.relative_to(tmp_path)).replace("\\", "/") for p in targets)
+    assert rels == [
+        "design/tokens/executive-dark-design-tokens.yaml",
+        "themes/executive-dark.theme-spec.md",
+        "themes/executive-dark.theme.json",
+    ]
+    assert all(isinstance(v, str) and v for v in targets.values())
