@@ -97,6 +97,7 @@ EXPECTED_RULE_IDS = frozenset(
         "DL6",  # design-lint: visual-spec self-attested anti-pattern carries a reason
         "DL7",  # design-lint: formatting-plan ledger well-formedness
         "CT1",  # contrast: token text/background pairs meet the declared WCAG floor
+        "CT3",  # categorical distinctness: whole-set data_colors dE76 floor (opt-in)
         "AD1",  # additivity-consistency: no illegal additivity composition in lineage
         "AQ1",  # answerability: domain decision-question routes resolve or are planned
         "HR1",  # conformed-dimension: same-named cross-star dims are ruled + conform
