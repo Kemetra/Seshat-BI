@@ -100,6 +100,44 @@ def test_no_shift_when_equal():
     assert classify_drift(base, obs) == []
 
 
+def test_no_missingness_shift_when_rounded_values_are_equal():
+    from retail.drift import classify_drift
+
+    # Sub-cent-of-a-percent float delta must not produce a finding whose
+    # rendered before/after strings are identical (e.g. "3.00%" -> "3.00%").
+    base = _profile([_col("a", missing_pct=3.001, card=5)])
+    obs = _profile([_col("a", missing_pct=3.004, card=5)])
+    assert classify_drift(base, obs) == []
+
+
+def test_shift_findings_are_deterministically_ordered_by_column():
+    from retail.drift import classify_drift
+
+    base = _profile(
+        [
+            _col("z", missing_pct=1.0, card=1),
+            _col("m", missing_pct=1.0, card=1),
+            _col("b", missing_pct=1.0, card=1),
+        ]
+    )
+    obs = _profile(
+        [
+            _col("z", missing_pct=2.0, card=2),
+            _col("m", missing_pct=2.0, card=2),
+            _col("b", missing_pct=2.0, card=2),
+        ]
+    )
+    findings = classify_drift(base, obs)
+    shift_columns = [
+        f.column
+        for f in findings
+        if f.drift_class in ("missingness_shift", "cardinality_shift")
+    ]
+    # Both shift kinds are reported per column in sorted column order:
+    # b's findings before m's before z's.
+    assert shift_columns == ["b", "b", "m", "m", "z", "z"]
+
+
 def test_grain_pk_drift_is_blocked_and_principle_v():
     from retail.drift import classify_drift
 

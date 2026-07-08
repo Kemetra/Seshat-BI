@@ -78,16 +78,18 @@ def classify_drift(
         )
 
     # Per-surviving-column shifts (columns present in BOTH).
-    for name in base_cols.keys() & obs_cols.keys():
+    for name in sorted(base_cols.keys() & obs_cols.keys()):
         b = base_cols[name]
         o = obs_cols[name]
-        if b.missing_pct != o.missing_pct:
+        before_missing = f"{b.missing_pct:.2f}%"
+        after_missing = f"{o.missing_pct:.2f}%"
+        if before_missing != after_missing:
             findings.append(
                 DriftFinding(
                     drift_class="missingness_shift",
                     column=name,
-                    before=f"{b.missing_pct:.2f}%",
-                    after=f"{o.missing_pct:.2f}%",
+                    before=before_missing,
+                    after=after_missing,
                     severity="warning",
                     principle_v=False,
                 )
