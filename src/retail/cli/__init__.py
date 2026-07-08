@@ -124,6 +124,7 @@ def _lazy(module_path: str, func_name: str):
 _DISPATCH: dict[str, Callable[[object], int]] = {
     "check": _run_check,
     "validate": _lazy(".commands.validate", "run_validate"),
+    "drift": _lazy(".commands.drift", "run_drift"),
     "semantic-check": _lazy(".commands.semantic", "run_semantic_check"),
     "value-check": _lazy(".commands.value_check", "run_value_check"),
     "generate": _lazy(".commands.generate", "run_generate"),

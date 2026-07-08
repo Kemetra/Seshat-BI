@@ -141,6 +141,42 @@ def _add_validate_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_drift_parser(sub: argparse._SubParsersAction) -> None:
+    """`drift` (F014): compare a committed baseline source-profile.md against a
+    live observed re-profile and emit source-drift-findings. Two-mode like
+    `validate`: without --dsn (no observed re-profile) it reports the deferred
+    [PENDING LIVE RE-PROFILE] state + warning, never a fabricated diff. The DB
+    driver is imported LAZILY in run_drift, never here. Extracted (not inlined
+    into `_build_parser`) to keep that CodeScene Large-Method hotspot from
+    growing."""
+    drift = sub.add_parser(
+        "drift",
+        help="compare a baseline source-profile.md vs a live re-profile (F014); "
+        "needs --dsn + the 'db' extra for the live leg",
+    )
+    drift.add_argument(
+        "--baseline",
+        required=True,
+        metavar="PATH",
+        help="path to the committed source-profile.md that earned Source Ready pass",
+    )
+    drift.add_argument(
+        "--dsn",
+        default=None,
+        metavar="postgresql://...",
+        help="Postgres DSN for the live re-profile. Without it, drift reports the "
+        "deferred [PENDING LIVE RE-PROFILE] state. NEVER commit a real DSN.",
+    )
+    drift.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("text", "json"),
+        default="text",
+        help="'text' (default) human summary; 'json' emits the "
+        "source-drift-findings.schema.json document.",
+    )
+
+
 def _add_semantic_and_value_check_parsers(sub: argparse._SubParsersAction) -> None:
     """`semantic-check` (L3 contract<->DAX drift, DAX fortification Phase 1) and
     `value-check` (L4 value proxy, DAX fortification #4). Both parse metric-
@@ -238,6 +274,7 @@ def _build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     _add_check_parser(sub)
     _add_validate_parser(sub)
+    _add_drift_parser(sub)
     _add_semantic_and_value_check_parsers(sub)
 
     # DAX generator (Task 7). Lazy imports inside _run_generate keep dax_gen/yaml

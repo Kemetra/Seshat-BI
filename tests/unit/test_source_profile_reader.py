@@ -1,6 +1,7 @@
 # tests/unit/test_source_profile_reader.py
-import pytest
 from pathlib import Path
+
+import pytest
 
 pytestmark = pytest.mark.unit
 
@@ -9,7 +10,10 @@ _ROOT = Path(__file__).resolve().parents[2]
 
 def test_reads_template_conformant_profile():
     from retail.source_profile_reader import read_source_profile
-    parsed = read_source_profile(_ROOT / "mappings" / "retail_store_sales" / "source-profile.md")
+
+    parsed = read_source_profile(
+        _ROOT / "mappings" / "retail_store_sales" / "source-profile.md"
+    )
     assert parsed.uncomparable is None
     p = parsed.profile
     assert p.table == "retail_store_sales"
@@ -24,7 +28,13 @@ def test_reads_template_conformant_profile():
 
 def test_nonconformant_profile_reported_uncomparable():
     from retail.source_profile_reader import read_source_profile
-    parsed = read_source_profile(_ROOT / "mappings" / "demo_sample_orders" / "source-profile.md")
+
+    parsed = read_source_profile(
+        _ROOT / "mappings" / "demo_sample_orders" / "source-profile.md"
+    )
     assert parsed.uncomparable is not None
-    assert "per-column" in parsed.uncomparable.lower() or "table" in parsed.uncomparable.lower()
+    assert (
+        "per-column" in parsed.uncomparable.lower()
+        or "table" in parsed.uncomparable.lower()
+    )
     assert parsed.profile is None
