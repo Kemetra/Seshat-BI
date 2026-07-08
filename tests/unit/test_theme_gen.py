@@ -184,3 +184,34 @@ def test_targets_for_returns_expected_three_paths(tmp_path: Path) -> None:
         "themes/executive-dark.theme.json",
     ]
     assert all(isinstance(v, str) and v for v in targets.values())
+
+
+def test_check_font_floor_raises_below_title_floor() -> None:
+    from retail.theme_gen import ThemeGenError, check_font_floor_or_raise
+
+    seed = _seed(title_font_pt=11.9)
+    with pytest.raises(ThemeGenError, match="title_font_pt"):
+        check_font_floor_or_raise(seed)
+
+
+def test_check_font_floor_raises_below_label_floor() -> None:
+    from retail.theme_gen import ThemeGenError, check_font_floor_or_raise
+
+    seed = _seed(label_font_pt=8.9)
+    with pytest.raises(ThemeGenError, match="label_font_pt"):
+        check_font_floor_or_raise(seed)
+
+
+def test_check_font_floor_passes_at_exact_floor() -> None:
+    from retail.theme_gen import check_font_floor_or_raise
+
+    seed = _seed(title_font_pt=12.0, label_font_pt=9.0)
+    check_font_floor_or_raise(seed)  # no raise
+
+
+def test_font_floor_constants_are_fixed_values() -> None:
+    from retail.theme_gen import MIN_LABEL_FONT_PT, MIN_TITLE_FONT_PT, TAP_TARGET_MIN_PX
+
+    assert MIN_TITLE_FONT_PT == 12.0
+    assert MIN_LABEL_FONT_PT == 9.0
+    assert TAP_TARGET_MIN_PX == 44

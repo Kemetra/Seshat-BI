@@ -24,6 +24,9 @@ from pathlib import Path
 from .color import contrast_ratio, is_valid_hex
 
 AA_FLOOR = 4.5
+MIN_TITLE_FONT_PT = 12.0
+MIN_LABEL_FONT_PT = 9.0
+TAP_TARGET_MIN_PX = 44  # doc-only floor (WCAG 2.5.8); never written to any artifact
 _TEXT_ROLES = ("primary", "secondary", "muted")
 
 # A theme name is a filesystem-safe slug: it becomes a filename under themes/ and
@@ -55,6 +58,8 @@ class ThemeSeed:
     good: str
     neutral: str
     bad: str
+    title_font_pt: float = 12.0
+    label_font_pt: float = 9.0
 
 
 def _hex_to_hls(h: str) -> tuple[float, float, float]:
@@ -153,6 +158,26 @@ def check_contrast_or_raise(palette: dict, floor: float = AA_FLOOR) -> None:
                 f"{ratio:.2f}:1, below the {floor:g}:1 AA floor -- refusing "
                 f"to write (would fail CT1)"
             )
+
+
+def check_font_floor_or_raise(seed: ThemeSeed) -> None:
+    """Refuse a title/label font size below the fixed accessibility floor.
+
+    The floors (MIN_TITLE_FONT_PT, MIN_LABEL_FONT_PT) are fixed module
+    constants -- never CLI-settable, never read from tokens -- so this check
+    cannot be tuned away by a caller (a settable floor of 0 would make the
+    refusal decorative).
+    """
+    if seed.title_font_pt < MIN_TITLE_FONT_PT:
+        raise ThemeGenError(
+            f"title_font_pt {seed.title_font_pt:g} is below the "
+            f"{MIN_TITLE_FONT_PT:g}pt accessibility floor -- refusing to write"
+        )
+    if seed.label_font_pt < MIN_LABEL_FONT_PT:
+        raise ThemeGenError(
+            f"label_font_pt {seed.label_font_pt:g} is below the "
+            f"{MIN_LABEL_FONT_PT:g}pt accessibility floor -- refusing to write"
+        )
 
 
 def render_tokens_yaml(palette: dict, seed: ThemeSeed) -> str:
