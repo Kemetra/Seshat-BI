@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seshat-bi.internal/schemas/source-drift-findings.schema.json",
+  "title": "Seshat BI source-drift findings contract",
+  "description": "The machine-readable output contract for the F014 source-drift detector (roadmap F014, spec 015, taxonomy `docs/readiness/source-drift.md`). SEAM ONLY: this schema pins the SHAPE a future detector emits; no detector runtime exists yet and none is wired to this file. It is the machine-readable counterpart of the human `templates/source-drift-report.md` and carries the SAME two firm rules: (1) findings carry the MEASURED before/after magnitude + class + status + blocking reasons, NEVER a rolled-up numeric drift 'score' (hard rule #9, Principle V); (2) grain/PK, returns-rule, PII-surface and identity-bearing semantic-pair drift are Principle-V human seams the detector MEASURES and CLASSIFIES and raises as a blocker, but NEVER re-decides. A drift comparison runs only against a committed baseline profile; absent a live re-profile the report is marked pending, never a fabricated diff.",
+  "type": "object",
+  "required": ["table", "baseline", "observed", "findings", "status", "blocking_reasons", "evidence", "principle_v_handoff"],
+  "additionalProperties": false,
+  "properties": {
+    "table": {
+      "type": "string",
+      "description": "The `<schema>.<table>` identity being compared (matches the baseline source-profile's table)."
+    },
+    "baseline": {
+      "type": "string",
+      "description": "Repo-relative path (+ optional @commit/date) of the committed source-profile that earned Source Ready `pass` -- the baseline the observed re-profile is compared against."
+    },
+    "observed": {
+      "$ref": "#/$defs/observed"
+    },
+    "findings": {
+      "type": "array",
+      "description": "One entry per drift class that fired. A class that did not fire is omitted (not recorded as a null/zero finding). Empty array = no material drift observed against the baseline.",
+      "items": { "$ref": "#/$defs/finding" }
+    },
+    "status": {
+      "$ref": "#/$defs/status",
+      "description": "The resulting Source Ready status for the table AFTER this comparison. Derived from the fired classes' severities per the taxonomy status mapping -- NOT a numeric score."
+    },
+    "blocking_reasons": {
+      "type": "array",
+      "description": "One human-readable reason per fatal (`blocked`) finding: the class + column + measured fact. Enumerated, never rolled up. Empty unless status is `blocked`.",
+      "items": { "type": "string" }
+    },
+    "evidence": {
+      "type": "array",
+      "description": "Named evidence backing this report -- typically this findings file, the baseline profile, and the observed re-profile. Provenance, never new logic.",
+      "items": { "type": "string" }
+    },
+    "principle_v_handoff": {
+      "type": "array",
+      "description": "One open question per HARD-STOP (Principle-V) finding raised to a named human owner. The detector raises; the owner decides. NEVER auto-resolved here. Empty when no Principle-V class fired.",
+      "items": { "$ref": "#/$defs/handoffQuestion" }
+    }
+  },
+  "$defs": {
+    "driftClass": {
+      "type": "string",
+      "description": "The nine drift classes of the F014 taxonomy (docs/readiness/source-drift.md). The three always-Principle-V classes are grain_pk_drift, returns_rule_drift, pii_surface_drift; semantic_pair_drift is Principle-V only when it underpins identity.",
+      "enum": [
+        "column_added",
+        "column_removed",
+        "column_retyped",
+        "missingness_shift",
+        "cardinality_shift",
+        "grain_pk_drift",
+        "returns_rule_drift",
+        "semantic_pair_drift",
+        "pii_surface_drift"
+      ]
+    },
+    "severity": {
+      "type": "string",
+      "description": "Categorical severity of a single finding -- the class default per the taxonomy, escalated where the doc allows (e.g. column_retyped -> blocked when it touches a key/measure). Categorical only; never a numeric score (hard rule #9).",
+      "enum": ["warning", "blocked"]
+    },
+    "status": {
+      "type": "string",
+      "description": "Source Ready spine status. `pass` = no material drift; `warning` = only non-fatal classes fired (does NOT auto-promote); `blocked` = at least one fatal class fired; `not_started` = no baseline, so the detector did not run; `pending_live_reprofile` = no live re-profile available (no DSN / `db` extra), recorded alongside `warning`, never a fabricated comparison.",
+      "enum": ["not_started", "pending_live_reprofile", "pass", "warning", "blocked"]
+    },
+    "observed": {
+      "type": "object",
+      "description": "Provenance of the observed re-profile the baseline was compared against.",
+      "required": ["available"],
+      "additionalProperties": false,
+      "properties": {
+        "available": {
+          "type": "boolean",
+          "description": "Whether a live re-profile was actually obtained. false => status must be pending_live_reprofile (+ warning); findings must NOT fabricate a diff."
+        },
+        "reprofiled_at": {
+          "type": ["string", "null"],
+          "description": "ISO date of the observed re-profile; null when unavailable. Stamped by the runtime, not baked into this schema."
+        },
+        "reprofiled_by": {
+          "type": ["string", "null"],
+          "description": "Who/what produced the observed re-profile (analyst / agent / runtime); null when unavailable."
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "description": "A single drift-class finding. Carries the MEASURED before/after magnitude as strings (e.g. \"3.1%\" -> \"11.7%\", \"TEXT\" -> \"numeric\", \"N distinct\" -> \"M distinct\") -- numbers, not adjectives. There is deliberately NO per-finding score and NO rolled-up score field.",
+      "required": ["drift_class", "column", "before", "after", "severity", "principle_v"],
+      "additionalProperties": false,
+      "properties": {
+        "drift_class": { "$ref": "#/$defs/driftClass" },
+        "column": {
+          "type": "string",
+          "description": "The column/field (or PK column set) the drift was observed on."
+        },
+        "before": {
+          "type": "string",
+          "description": "The MEASURED baseline value as a string (e.g. \"absent\", \"TEXT\", \"3.1%\", \"is_unique=true\"). A measurement, never an adjective."
+        },
+        "after": {
+          "type": "string",
+          "description": "The MEASURED observed value as a string (e.g. \"present (numeric)\", \"11.7%\", \"COUNT(*) != COUNT(DISTINCT pk)\"). A measurement, never an adjective."
+        },
+        "severity": { "$ref": "#/$defs/severity" },
+        "principle_v": {
+          "type": "boolean",
+          "description": "true when this finding is a Principle-V human seam (grain/PK, returns-rule, PII-surface, or identity-bearing semantic-pair) that MUST appear in principle_v_handoff and MUST NOT be re-decided by the detector."
+        },
+        "note": {
+          "type": ["string", "null"],
+          "description": "Optional short qualifier (e.g. \"escalated: touches a key\", \"provable rename -> mapping review only\"). Never a verdict on a Principle-V seam."
+        }
+      }
+    },
+    "handoffQuestion": {
+      "type": "object",
+      "description": "An open question raised to a named human owner for one Principle-V finding. The detector states the measured fact and the question; it does not answer it.",
+      "required": ["question", "drift_class", "measured_fact", "owner"],
+      "additionalProperties": false,
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "The decision the human owner must make (e.g. \"is the new grain acceptable, or is dedup a defect?\")."
+        },
+        "drift_class": { "$ref": "#/$defs/driftClass" },
+        "measured_fact": {
+          "type": "string",
+          "description": "The measured signal that triggered the question (e.g. a duplicate count, a missingness magnitude, a reappeared column name)."
+        },
+        "owner": {
+          "type": "string",
+          "description": "The role that decides (e.g. analyst, governance). Named, not resolved."
+        }
+      }
+    }
+  }
+}

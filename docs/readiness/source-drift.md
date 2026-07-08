@@ -96,6 +96,9 @@ The detector FLAGS this; it MUST NOT silently demote or auto-`pass` any downstre
   sequence: `readiness-pipeline.md`.
 - The blank a drift run fills: `../../templates/source-drift-report.md`; the
   re-profile/compare checklist: `../checklists/source-drift.md`.
+- The machine-readable findings contract (seam only; the JSON shape a future detector
+  emits -- same nine classes, same forbid-score / Principle-V rules, no runtime wired to
+  it yet): `../../schemas/source-drift-findings.schema.json`.
 - The baseline it drifts FROM: `../../templates/source-profile.md` (its "Cross-file
   schema drift" check is the narrow seed this generalizes); the Principle-V handoff:
   `../../templates/unresolved-questions.md`.

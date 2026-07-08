@@ -86,6 +86,9 @@ auto-resolved here.
 ## See also
 
 - The taxonomy + status mapping: `../docs/readiness/source-drift.md`.
+- The machine-readable counterpart of this report: `../schemas/source-drift-findings.schema.json`
+  (the JSON findings contract a future detector emits -- same classes, same forbid-score /
+  Principle-V rules, seam only: no detector runtime is wired to it yet).
 - The baseline it compares: `source-profile.md`; the Principle-V handoff:
   `unresolved-questions.md`; the spine: `../docs/readiness/readiness-model.md`.
 - A cited filled baseline is not the schema: see a filled worked example under `../docs/worked-examples/`.
