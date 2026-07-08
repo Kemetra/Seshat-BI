@@ -230,3 +230,104 @@ def test_full_report_schema_valid_with_findings_and_handoff():
     assert any(h["drift_class"] == "grain_pk_drift" for h in doc["principle_v_handoff"])
     assert doc["blocking_reasons"]  # non-empty
     _validate(doc)
+
+
+# --- returns_rule_drift + pii_surface_drift (Principle-V escalations) ---------
+# Both are RE-CLASSIFICATIONS of an already-detected shape change, keyed on a
+# semantic role that arrives via the optional DriftSemantics param. They are
+# NEVER auto-resolved -- measured + raised to a named owner (returns->analyst,
+# pii->governance). semantics=None => neither fires (the pre-existing behavior).
+
+
+def test_no_semantics_means_no_returns_or_pii_findings():
+    # Regression guard: without semantics, the two new classes never fire, so
+    # every prior caller (and the 14 earlier tests) behaves exactly as before.
+    from retail.drift import classify_drift
+
+    base = _profile([_col("is_return"), _col("email")])
+    obs = _profile([_col("email")])  # is_return removed; would-be PII 'email' stays
+    findings = classify_drift(base, obs)  # no semantics
+    classes = {f.drift_class for f in findings}
+    assert "returns_rule_drift" not in classes
+    assert "pii_surface_drift" not in classes
+    # the plain column_removed still fires (unchanged)
+    assert any(f.drift_class == "column_removed" for f in findings)
+
+
+def test_returns_column_removed_is_returns_rule_drift():
+    from retail.drift import DriftSemantics, classify_drift
+
+    base = _profile([_col("is_return"), _col("amount")])
+    obs = _profile([_col("amount")])  # the authoritative returns column disappeared
+    findings = classify_drift(base, obs, DriftSemantics(returns_column="is_return"))
+    rr = [f for f in findings if f.drift_class == "returns_rule_drift"]
+    assert len(rr) == 1
+    assert rr[0].severity == "blocked"
+    assert rr[0].principle_v is True
+    assert rr[0].column == "is_return"
+
+
+def test_returns_column_shift_is_returns_rule_drift():
+    from retail.drift import DriftSemantics, classify_drift
+
+    base = _profile([_col("is_return", missing_pct=1.0, card=2)])
+    obs = _profile([_col("is_return", missing_pct=9.0, card=2)])  # population moved
+    findings = classify_drift(base, obs, DriftSemantics(returns_column="is_return"))
+    rr = [f for f in findings if f.drift_class == "returns_rule_drift"]
+    assert len(rr) == 1
+    assert rr[0].severity == "blocked"
+    assert rr[0].principle_v is True
+
+
+def test_dropped_pii_column_reappearing_is_pii_surface_drift():
+    from retail.drift import DriftSemantics, classify_drift
+
+    base = _profile([_col("amount")])
+    obs = _profile([_col("amount"), _col("ssn")])  # a dropped-PII column returns
+    findings = classify_drift(
+        base, obs, DriftSemantics(dropped_pii_columns=frozenset({"ssn"}))
+    )
+    pii = [f for f in findings if f.drift_class == "pii_surface_drift"]
+    assert len(pii) == 1
+    assert pii[0].severity == "blocked"
+    assert pii[0].principle_v is True
+    assert pii[0].column == "ssn"
+
+
+def test_new_nonpii_column_is_not_pii_surface_drift():
+    # Deterministic scope: only a column in the dropped-PII set escalates. A
+    # brand-new column NOT in that set is a plain column_added, never PII drift
+    # (no name-guessing -- publish-safety is never auto-decided).
+    from retail.drift import DriftSemantics, classify_drift
+
+    base = _profile([_col("amount")])
+    obs = _profile([_col("amount"), _col("region")])
+    findings = classify_drift(
+        base, obs, DriftSemantics(dropped_pii_columns=frozenset({"ssn"}))
+    )
+    assert not any(f.drift_class == "pii_surface_drift" for f in findings)
+    added = [f for f in findings if f.drift_class == "column_added"]
+    assert [f.column for f in added] == ["region"]
+
+
+def test_returns_and_pii_handoffs_are_schema_valid():
+    from retail.drift import DriftSemantics, ReportContext, to_findings_dict
+
+    base = _profile([_col("is_return"), _col("amount")])
+    obs = _profile([_col("amount"), _col("ssn")])  # returns removed + PII reappears
+    doc = to_findings_dict(
+        base,
+        obs,
+        ReportContext(
+            baseline_ref="mappings/t/source-profile.md@abc",
+            evidence=["mappings/t/source-drift-report.md"],
+        ),
+        semantics=DriftSemantics(
+            returns_column="is_return", dropped_pii_columns=frozenset({"ssn"})
+        ),
+    )
+    assert doc["status"] == "blocked"
+    owners = {h["drift_class"]: h["owner"] for h in doc["principle_v_handoff"]}
+    assert owners.get("returns_rule_drift") == "analyst"
+    assert owners.get("pii_surface_drift") == "governance"
+    _validate(doc)

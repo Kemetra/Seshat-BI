@@ -13,7 +13,7 @@ classifies, and raises a handoff for a named owner.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .profile import ProfileResult
 
@@ -35,6 +35,19 @@ class HandoffQuestion:
     drift_class: str
     measured_fact: str
     owner: str
+
+
+@dataclass(frozen=True)
+class DriftSemantics:
+    """The SEMANTIC column-roles a mechanical ProfileResult cannot carry, needed
+    to raise the Principle-V escalations. These are RULINGS recorded in the
+    baseline's source-map.yaml (the authoritative returns column; the columns
+    dropped as PII), passed IN so the pure comparator never re-decides them --
+    it only re-classifies an already-measured shape change AS returns/PII drift.
+    Absent (the default), those two classes do not fire."""
+
+    returns_column: str | None = None
+    dropped_pii_columns: frozenset[str] = field(default_factory=frozenset)
 
 
 def _column_set_findings(base_cols: dict, obs_cols: dict) -> list[DriftFinding]:
@@ -129,40 +142,112 @@ def _grain_pk_findings(
     ]
 
 
+def _returns_rule_findings(
+    base_cols: dict, obs_cols: dict, returns_column: str | None
+) -> list[DriftFinding]:
+    """Returns-rule drift -- a Principle-V seam. The AUTHORITATIVE returns column
+    (a source-map ruling, RC8) disappeared, or its population moved. Not a new
+    measurement: it re-classifies the removal / missingness / cardinality change
+    ALREADY on that column AS returns drift. The returns identity is never
+    re-picked here -- it is raised for the analyst."""
+    if returns_column is None or returns_column not in base_cols:
+        return []
+    b = base_cols[returns_column]
+    if returns_column not in obs_cols:
+        before, after = "present (authoritative returns column)", "absent"
+    else:
+        o = obs_cols[returns_column]
+        before = f"missing={b.missing_pct:.2f}%, {b.distinct_cardinality} distinct"
+        after = f"missing={o.missing_pct:.2f}%, {o.distinct_cardinality} distinct"
+        if before == after:
+            return []
+    return [
+        DriftFinding(
+            drift_class="returns_rule_drift",
+            column=returns_column,
+            before=before,
+            after=after,
+            severity="blocked",
+            principle_v=True,
+            note="returns identity is never re-picked; raise for the analyst",
+        )
+    ]
+
+
+def _pii_surface_findings(
+    base_cols: dict, obs_cols: dict, dropped_pii_columns: frozenset[str]
+) -> list[DriftFinding]:
+    """PII surface drift -- a Principle-V seam. A column DROPPED as PII in the
+    baseline has REAPPEARED in the observed re-profile (the most dangerous case;
+    the default stays drop). Deterministic: fires only for a name in the recorded
+    dropped-PII set -- never a name-pattern guess. Publish-safety is never
+    auto-decided; raised for governance. Deterministic (sorted)."""
+    reappeared = sorted((obs_cols.keys() - base_cols.keys()) & dropped_pii_columns)
+    return [
+        DriftFinding(
+            drift_class="pii_surface_drift",
+            column=name,
+            before="dropped as PII (absent)",
+            after="present",
+            severity="blocked",
+            principle_v=True,
+            note="a dropped-PII column reappeared; publish-safety is never "
+            "auto-decided -- default stays drop, raise for governance",
+        )
+        for name in reappeared
+    ]
+
+
 def classify_drift(
-    baseline: ProfileResult, observed: ProfileResult | None
+    baseline: ProfileResult,
+    observed: ProfileResult | None,
+    semantics: DriftSemantics | None = None,
 ) -> list[DriftFinding]:
     """Classify the differences between baseline and observed into drift findings.
 
     observed=None is the deferred-live case: no comparison is possible, so NO
     findings are fabricated (the caller maps this to pending_live_reprofile).
+
+    semantics (optional) carries the column-roles a mechanical ProfileResult
+    cannot: the authoritative returns column and the dropped-PII set. Absent, the
+    returns_rule_drift / pii_surface_drift classes do not fire.
     """
     if observed is None:
         return []
     base_cols = {c.name: c for c in baseline.columns}
     obs_cols = {c.name: c for c in observed.columns}
+    sem = semantics or DriftSemantics()
     return [
         *_column_set_findings(base_cols, obs_cols),
         *_surviving_column_findings(base_cols, obs_cols),
         *_grain_pk_findings(baseline, observed),
+        *_returns_rule_findings(base_cols, obs_cols, sem.returns_column),
+        *_pii_surface_findings(base_cols, obs_cols, sem.dropped_pii_columns),
     ]
 
 
 # Scoped to the drift classes classify_drift() actually emits with
-# principle_v=True today (grain_pk_drift only). returns_rule_drift,
-# pii_surface_drift, and semantic_pair_drift are not yet classified anywhere
-# in this module (see classify_drift docstring / TODO in the taxonomy) --
-# adding their entries here ahead of that work would be untested, unreachable
-# dict entries. Add each class's entry in the SAME task that wires it into
-# classify_drift(). Until then, a future principle_v=True finding for an
-# unmapped class fails loudly with KeyError in _handoffs() rather than
-# silently -- that is the intended safety net, not a bug.
+# principle_v=True. grain_pk_drift always fires; returns_rule_drift /
+# pii_surface_drift fire only when DriftSemantics supplies the role. The fourth
+# Principle-V class, semantic_pair_drift, is NOT yet classified anywhere in this
+# module (it needs a baseline 1:1 code/label pair the mechanical ProfileResult
+# doesn't carry) -- adding its entry here ahead of that work would be an
+# untested, unreachable dict entry. Add each remaining class's entry in the SAME
+# task that wires it into classify_drift(). Until then, a principle_v=True
+# finding for an unmapped class fails loudly with KeyError in _handoffs() rather
+# than silently -- that is the intended safety net, not a bug.
 _DEFAULT_OWNER = {
     "grain_pk_drift": "analyst",
+    "returns_rule_drift": "analyst",
+    "pii_surface_drift": "governance",
 }
 
 _HANDOFF_QUESTION = {
     "grain_pk_drift": "is the new grain acceptable, or is dedup a defect?",
+    "returns_rule_drift": "which column is now authoritative for returns, "
+    "or is the change a defect?",
+    "pii_surface_drift": "is the reappeared dropped-PII column publish-safe? "
+    "(default stays drop)",
 }
 
 
@@ -206,9 +291,10 @@ def to_findings_dict(
     baseline: ProfileResult,
     observed: ProfileResult | None,
     context: ReportContext,
+    semantics: DriftSemantics | None = None,
 ) -> dict:
     """Serialize a drift comparison to the source-drift-findings.schema.json shape."""
-    findings = classify_drift(baseline, observed)
+    findings = classify_drift(baseline, observed, semantics)
     available = observed is not None
     status = derive_status(findings, observed_available=available)
     blocking = [
