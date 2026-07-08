@@ -13,13 +13,14 @@ invents a mapping a human owns:
     by the tokens comment "theme dataColors compiles from THIS list" (T029).
   * ``colors.background`` == theme ``background`` -- identity-named.
 
-DELIBERATELY OUT OF SCOPE (a human ruling gates them, not this rule):
+DELIBERATELY OUT OF SCOPE for DL3 (a human ruling gates them, not this rule):
   * sentiment fidelity (tokens ``success``/``warning``/``danger`` vs theme
     ``good``/``neutral``/``bad``). The theme's middle slot is an amber that
     matches tokens ``warning`` BY COLOR but tokens ``neutral`` BY NAME -- a 4->3
-    correspondence that is a genuine Principle-V ambiguity. DL3 surfaces the need
-    for a ruling; it does not pick. When a human freezes that map (as DL1 froze
-    its vocabulary), a follow-on rule can carry it.
+    correspondence that is a genuine Principle-V ambiguity. DL3 never picks it.
+    The follow-on rule DL8 (below) carries it once a human freezes the map: DL8
+    reads an opt-in ``meta.sentiment_map`` a human has committed and FLAGS any
+    drift, staying provably inert (no finding, ever) until that map exists.
   * ``text.primary`` -> theme ``foreground`` (same: no committed correspondence).
 
 The pairing is generic: DL3 finds the tokens file by its ``meta.compiles_to``
@@ -203,4 +204,123 @@ def check_theme_fidelity(ctx: RuleContext) -> Iterable[Finding]:
         if theme_rel is None:
             continue
         findings.extend(_reconcile(tokens_rel, theme_rel, ctx))
+    return findings
+
+
+# --- DL8: sentiment 4->3 fidelity (opt-in, human-declared correspondence) -----
+#
+# DL3 above deliberately never reconciles sentiment (a 4->3 naming ambiguity a
+# human must resolve). DL8 is the follow-on rule that ruling unlocks: it reads
+# an opt-in ``meta.sentiment_map`` -- a human-frozen ``{tokens_key: theme_key}``
+# correspondence -- and FLAGS any mismatch. Absent the map, DL8 is provably
+# inert (no finding, ever): it never guesses which tokens sentiment key
+# corresponds to which theme key. Own rule id (Principle V hard rule #9: two
+# rules must never share one id) -- DL8, not DL3.
+
+SENTIMENT_RULE_ID = "DL8"
+
+
+def _sentiment_map_for(tokens_doc: Any) -> dict[str, str] | None:
+    """The human-declared ``{tokens_sentiment_key: theme_key}`` map, or None.
+
+    None means "no map declared" -- the caller must skip with zero findings.
+    DL8 never infers this map from color proximity or key names; it only
+    reads what a human has already written to ``meta.sentiment_map``.
+    """
+    if not isinstance(tokens_doc, dict):
+        return None
+    meta = tokens_doc.get("meta")
+    if not isinstance(meta, dict):
+        return None
+    raw = meta.get("sentiment_map")
+    if not isinstance(raw, dict) or not raw:
+        return None
+    if not all(isinstance(k, str) and isinstance(v, str) for k, v in raw.items()):
+        return None
+    return raw
+
+
+def _reconcile_sentiment(
+    tokens_rel: str, theme_rel: str, ctx: RuleContext
+) -> Iterable[Finding]:
+    tokens_doc, terr = _load_yaml(ctx.repo_root / tokens_rel)
+    if terr is not None:
+        yield Finding(
+            SENTIMENT_RULE_ID,
+            Severity.ERROR,
+            f"design-tokens file could not be parsed ({terr}); sentiment "
+            f"fidelity cannot be verified",
+            f"{tokens_rel}#/",
+        )
+        return
+    sentiment_map = _sentiment_map_for(tokens_doc)
+    if sentiment_map is None:
+        return  # no declared correspondence -- refuse to invent one
+
+    theme_doc, herr = _load_json(ctx.repo_root / theme_rel)
+    if herr is not None:
+        yield Finding(
+            SENTIMENT_RULE_ID,
+            Severity.ERROR,
+            f"theme file could not be parsed ({herr}); sentiment fidelity "
+            f"cannot be verified",
+            f"{theme_rel}#/",
+        )
+        return
+
+    colors = tokens_doc.get("colors", {}) if isinstance(tokens_doc, dict) else {}
+    tok_sentiment = colors.get("sentiment", {})
+    tok_sentiment = tok_sentiment if isinstance(tok_sentiment, dict) else {}
+    theme = theme_doc if isinstance(theme_doc, dict) else {}
+
+    for tok_key, thm_key in sentiment_map.items():
+        tok_val = tok_sentiment.get(tok_key)
+        thm_val = theme.get(thm_key)
+        if tok_val is None or thm_val is None:
+            yield Finding(
+                SENTIMENT_RULE_ID,
+                Severity.ERROR,
+                f"declared sentiment_map entry {tok_key!r} -> {thm_key!r} "
+                f"cannot be reconciled: "
+                f"colors.sentiment.{tok_key} is "
+                f"{'absent' if tok_val is None else tok_val!r}, "
+                f"theme.{thm_key} is "
+                f"{'absent' if thm_val is None else thm_val!r}",
+                f"{theme_rel}#/{thm_key}",
+            )
+            continue
+        if tok_val != thm_val:
+            yield Finding(
+                SENTIMENT_RULE_ID,
+                Severity.ERROR,
+                f"theme {thm_key} {thm_val!r} does not match the token "
+                f"declared sentiment.{tok_key} value {tok_val!r} "
+                f"(declared correspondence {tok_key!r} -> {thm_key!r})",
+                f"{theme_rel}#/{thm_key}",
+            )
+
+
+@register(
+    SENTIMENT_RULE_ID,
+    "Theme sentiment colors are faithful to a human-declared sentiment_map",
+)
+def check_sentiment_fidelity(ctx: RuleContext) -> Iterable[Finding]:
+    findings: list[Finding] = []
+    for tokens_rel in _iter_tokens_files(ctx):
+        tokens_doc, terr = _load_yaml(ctx.repo_root / tokens_rel)
+        if terr is not None:
+            findings.append(
+                Finding(
+                    SENTIMENT_RULE_ID,
+                    Severity.ERROR,
+                    f"design-tokens file could not be parsed ({terr}); "
+                    f"sentiment fidelity cannot be verified",
+                    f"{tokens_rel}#/",
+                )
+            )
+            continue
+        theme_rel = _theme_rel_for(tokens_rel, tokens_doc, ctx)
+        if theme_rel is None:
+            continue
+        findings.extend(_reconcile_sentiment(tokens_rel, theme_rel, ctx))
     return findings

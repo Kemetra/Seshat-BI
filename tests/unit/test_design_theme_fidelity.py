@@ -163,3 +163,111 @@ def test_no_tenant_or_example_literal_in_rule_source() -> None:
     # The generic theme key names are allowed; tenant/example literals are not.
     for banned in ("pharmacy", "c086", "ezaby"):
         assert banned not in src.lower()
+
+
+# --- DL8: sentiment 4->3 fidelity (opt-in, inert until owner declares the map) --
+
+from retail.rules.design_theme_fidelity import (  # noqa: E402
+    SENTIMENT_RULE_ID,
+    check_sentiment_fidelity,
+)
+
+
+def test_sentiment_map_absent_is_zero_findings_refuse_to_invent() -> None:
+    """No meta.sentiment_map -- DL8 must never guess a correspondence
+    (Principle V). Reuses the DL3 sentiment-drift fixture, which has
+    colors.sentiment but no map."""
+    findings = list(
+        check_sentiment_fidelity(
+            _ctx("sentiment_only_drift/tokens.yaml", "sentiment_only_drift/theme.json")
+        )
+    )
+    assert findings == []
+
+
+def test_sentiment_map_faithful_is_zero_findings() -> None:
+    findings = list(
+        check_sentiment_fidelity(
+            _ctx(
+                "sentiment_map_faithful/tokens.yaml",
+                "sentiment_map_faithful/theme.json",
+            )
+        )
+    )
+    assert findings == []
+
+
+def test_sentiment_map_drift_is_error_with_locator() -> None:
+    findings = list(
+        check_sentiment_fidelity(
+            _ctx("sentiment_map_drift/tokens.yaml", "sentiment_map_drift/theme.json")
+        )
+    )
+    assert len(findings) >= 1
+    assert all(f.severity is Severity.ERROR for f in findings)
+    assert all(f.rule_id == SENTIMENT_RULE_ID for f in findings)
+    assert any("sentiment" in f.locator for f in findings)
+
+
+def test_sentiment_map_missing_key_is_error() -> None:
+    """A declared map key with no counterpart on either side ERRORs (never
+    silently drops the mapping)."""
+    findings = list(
+        check_sentiment_fidelity(
+            _ctx(
+                "sentiment_map_missing_key/tokens.yaml",
+                "sentiment_map_missing_key/theme.json",
+            )
+        )
+    )
+    assert len(findings) >= 1
+    assert all(f.severity is Severity.ERROR for f in findings)
+
+
+def test_sentiment_map_malformed_tokens_is_error_not_crash() -> None:
+    findings = list(
+        check_sentiment_fidelity(
+            _ctx(
+                "sentiment_map_malformed/tokens.yaml",
+                "sentiment_map_malformed/theme.json",
+            )
+        )
+    )
+    assert len(findings) >= 1
+    assert any("could not be parsed" in f.message.lower() for f in findings)
+
+
+def test_sentiment_rule_id_is_dl8_not_dl3() -> None:
+    assert SENTIMENT_RULE_ID == "DL8"
+
+
+def test_dl3_still_ignores_sentiment_after_dl8_lands() -> None:
+    """Regression guard: adding DL8 must not change check_theme_fidelity's
+    behavior -- DL3 stays sentiment-blind."""
+    from retail.rules.design_theme_fidelity import check_theme_fidelity
+
+    findings = list(
+        check_theme_fidelity(
+            _ctx("sentiment_only_drift/tokens.yaml", "sentiment_only_drift/theme.json")
+        )
+    )
+    assert findings == []
+
+
+def test_sentiment_live_pair_inert_on_main() -> None:
+    """emits-on-main guard: neither committed tokens file declares
+    meta.sentiment_map today, so DL8 is silent on both -- including
+    tower-retail, whose sentiment colors actually drift (proving DL8 is
+    inert-by-absence, not accidentally-passing)."""
+    exec_dark = _ctx(
+        "design/tokens/executive-dark-design-tokens.yaml",
+        "themes/executive-dark.theme.json",
+        repo_root=REPO_ROOT,
+    )
+    tower = _ctx(
+        "design/tokens/tower-retail-design-tokens.yaml",
+        "themes/tower-retail.theme.json",
+        repo_root=REPO_ROOT,
+    )
+    assert list(check_sentiment_fidelity(exec_dark)) == []
+    assert list(check_sentiment_fidelity(tower)) == []

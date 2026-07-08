@@ -218,6 +218,13 @@ _YAML_DL3_TOKENS = (
 )
 _JSON_DL3_THEME = '{"dataColors": ["#999999"]}\n'
 
+# tokens declare a sentiment_map but the theme drifts on it -> DL8 ERRORs.
+_YAML_DL8_TOKENS = (
+    "meta: { compiles_to: demo.theme.json, sentiment_map: { success: good } }\n"
+    "colors:\n  sentiment:\n    success: '#2E7D5B'\n"
+)
+_JSON_DL8_THEME = '{"good": "#000000"}\n'
+
 # A design-review evidence record missing a required field -> DL4 ERRORs.
 _MD_DL4 = "## Record\n\n- **page_id:** `p01`\n"
 
@@ -411,6 +418,12 @@ _RULE_FIXTURES: dict[str, _Fixture] = {
         files=(
             ("design/tokens/demo-design-tokens.yaml", _YAML_DL3_TOKENS),
             ("demo.theme.json", _JSON_DL3_THEME),
+        )
+    ),
+    "DL8": _Fixture(
+        files=(
+            ("design/tokens/demo-design-tokens.yaml", _YAML_DL8_TOKENS),
+            ("demo.theme.json", _JSON_DL8_THEME),
         )
     ),
     "DL4": _Fixture(files=(("reports/demo/design-review-evidence.md", _MD_DL4),)),

@@ -136,6 +136,10 @@
     "title": "Formatting-plan ledger is well-formed (citations resolve, allow-list, no score)"
   },
   {
+    "id": "DL8",
+    "title": "Theme sentiment colors are faithful to a human-declared sentiment_map"
+  },
+  {
     "id": "DR1",
     "title": "Design-layer route path foot-gun + stale-phrase guard"
   },
