@@ -220,19 +220,33 @@ def check_theme_fidelity(ctx: RuleContext) -> Iterable[Finding]:
 SENTIMENT_RULE_ID = "DL8"
 
 
-def _sentiment_map_for(tokens_doc: Any) -> dict[str, str] | None:
-    """The human-declared ``{tokens_sentiment_key: theme_key}`` map, or None.
+def _raw_sentiment_map(tokens_doc: Any) -> Any:
+    """The raw ``meta.sentiment_map`` value as committed, or None if the key is
+    absent entirely.
 
-    None means "no map declared" -- the caller must skip with zero findings.
-    DL8 never infers this map from color proximity or key names; it only
-    reads what a human has already written to ``meta.sentiment_map``.
+    Lets the caller tell "no map declared" (None) apart from "map declared but
+    malformed" (a present-but-invalid value) -- the latter must ERROR, never be
+    silently swallowed. Only ``meta.sentiment_map`` being wholly absent (or an
+    unusable ``meta``) reads as "no opt-in".
     """
     if not isinstance(tokens_doc, dict):
         return None
     meta = tokens_doc.get("meta")
     if not isinstance(meta, dict):
         return None
-    raw = meta.get("sentiment_map")
+    return meta.get("sentiment_map")
+
+
+def _sentiment_map_for(tokens_doc: Any) -> dict[str, str] | None:
+    """The human-declared ``{tokens_sentiment_key: theme_key}`` map, or None.
+
+    None means "no usable map" -- EITHER no map declared OR one declared but
+    malformed. Callers that must distinguish the two (to ERROR on a botched
+    opt-in rather than silently skip) pair this with ``_raw_sentiment_map``.
+    DL8 never infers this map from color proximity or key names; it only
+    reads what a human has already written to ``meta.sentiment_map``.
+    """
+    raw = _raw_sentiment_map(tokens_doc)
     if not isinstance(raw, dict) or not raw:
         return None
     if not all(isinstance(k, str) and isinstance(v, str) for k, v in raw.items()):
@@ -255,6 +269,21 @@ def _reconcile_sentiment(
         return
     sentiment_map = _sentiment_map_for(tokens_doc)
     if sentiment_map is None:
+        # Distinguish "no map declared" (inert, refuse to invent one) from "map
+        # declared but malformed". A human who opts in but botches a value (a
+        # blank/non-string entry, an empty map) must get an ERROR -- silently
+        # treating a broken opt-in as absent would disable the guard the author
+        # asked for while the theme-spec still claims fidelity is verified.
+        raw = _raw_sentiment_map(tokens_doc)
+        if raw is not None:
+            yield Finding(
+                SENTIMENT_RULE_ID,
+                Severity.ERROR,
+                f"meta.sentiment_map is declared but malformed -- it must be a "
+                f"non-empty mapping of string tokens-key -> string theme-key, "
+                f"got {raw!r}; sentiment fidelity cannot be verified",
+                f"{tokens_rel}#/meta/sentiment_map",
+            )
         return  # no declared correspondence -- refuse to invent one
 
     theme_doc, herr = _load_json(ctx.repo_root / theme_rel)

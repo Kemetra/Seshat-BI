@@ -185,6 +185,24 @@ def test_sentiment_map_absent_is_zero_findings_refuse_to_invent() -> None:
     assert findings == []
 
 
+def test_sentiment_map_declared_but_malformed_is_error_not_silent() -> None:
+    """A botched opt-in (a declared meta.sentiment_map with a blank/non-string
+    value) must ERROR -- silently treating it as 'no map' would disable the
+    guard the author asked for while the spec still claims fidelity is verified.
+    """
+    findings = list(
+        check_sentiment_fidelity(
+            _ctx(
+                "sentiment_map_bad_value/tokens.yaml",
+                "sentiment_map_bad_value/theme.json",
+            )
+        )
+    )
+    assert len(findings) >= 1
+    assert all(f.severity is Severity.ERROR for f in findings)
+    assert any("malformed" in f.message.lower() for f in findings)
+
+
 def test_sentiment_map_faithful_is_zero_findings() -> None:
     findings = list(
         check_sentiment_fidelity(
