@@ -59,3 +59,62 @@ def test_drift_live_db_error_is_scrubbed_not_leaked(capsys, monkeypatch):
     assert rc == 1
     assert "s3cr3t_pw" not in combined
     assert "connection failed" not in combined or "s3cr3t_pw" not in combined
+
+
+def test_drift_live_loads_sibling_source_map(monkeypatch):
+    # The live leg auto-discovers the sibling source-map.yaml and threads its
+    # semantics into the comparison. Patched so no real DB is touched.
+    import retail.cli.commands.drift as drift_cmd
+    from retail import cli
+    from retail.drift import DriftSemantics
+    from retail.profile import PkProof, ProfileResult
+
+    calls = {}
+
+    monkeypatch.setattr(cli, "_ensure_driver", lambda: True)
+    monkeypatch.setattr(cli, "_make_runner", lambda config: "RUNNER")
+
+    def fake_loader(path):
+        calls["path"] = str(path)
+        return DriftSemantics()
+
+    monkeypatch.setattr(drift_cmd, "load_drift_semantics", fake_loader, raising=False)
+
+    def fake_profile(runner, table, pk):
+        return ProfileResult(
+            table=table,
+            row_count=1,
+            column_count=0,
+            columns=(),
+            pk=PkProof(total=1, distinct_pk=1, null_pk=0, is_unique=True),
+        )
+
+    monkeypatch.setattr("retail.profile.profile", fake_profile)
+
+    main(["drift", "--baseline", _CONFORMANT, "--dsn", "postgresql://u@h/db"])
+    # the sibling source-map.yaml next to the baseline was the loaded path
+    assert (
+        calls["path"]
+        .replace("\\", "/")
+        .endswith("mappings/retail_store_sales/source-map.yaml")
+    )
+
+
+def test_drift_source_map_flag_missing_file_is_clean_error(capsys, monkeypatch):
+    from retail import cli
+
+    monkeypatch.setattr(cli, "_ensure_driver", lambda: True)
+    rc = main(
+        [
+            "drift",
+            "--baseline",
+            _CONFORMANT,
+            "--dsn",
+            "postgresql://u@h/db",
+            "--source-map",
+            "does/not/exist.yaml",
+        ]
+    )
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert "source-map" in err.lower()

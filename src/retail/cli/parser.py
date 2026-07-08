@@ -262,6 +262,15 @@ def _add_drift_parser(sub: argparse._SubParsersAction) -> None:
         "deferred [PENDING LIVE RE-PROFILE] state. NEVER commit a real DSN.",
     )
     drift.add_argument(
+        "--source-map",
+        dest="source_map",
+        default=None,
+        metavar="PATH",
+        help="path to the table's source-map.yaml (returns/PII rulings for the "
+        "live leg). Default: the source-map.yaml sibling of --baseline. Absent "
+        "=> the returns/PII drift classes stay silent.",
+    )
+    drift.add_argument(
         "--format",
         dest="output_format",
         choices=("text", "json"),

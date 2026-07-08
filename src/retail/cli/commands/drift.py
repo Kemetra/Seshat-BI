@@ -14,6 +14,19 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
+
+# Module-level so the test suite can monkeypatch ``drift.load_drift_semantics``.
+# SAFE for the lazy-import discipline: this imports only the FUNCTION NAME; the
+# actual pyyaml import lives INSIDE load_drift_semantics, so importing this
+# module (e.g. via `retail check`'s dispatch table build) never loads yaml.
+from retail.drift_semantics import load_drift_semantics
+
+
+class _SemanticsError(Exception):
+    """A --source-map path the user NAMED could not be read/parsed. Carries a
+    clean, already-formatted message; the live leg turns it into stderr + rc 1
+    (never a raw traceback)."""
 
 
 def run_drift(args: argparse.Namespace) -> int:
@@ -90,6 +103,26 @@ def _resolve_live_config(args: argparse.Namespace, cli: object, dialect: object)
     return dialect.resolve_config(dict(os.environ))
 
 
+def _resolve_semantics(args: argparse.Namespace):
+    """Load returns/PII semantics for the live leg: --source-map if given, else
+    the source-map.yaml sibling of --baseline. Absent -> None (those classes stay
+    silent). A NAMED path that is missing/unreadable raises _SemanticsError (a
+    clean error, not a silent skip). Returns DriftSemantics | None."""
+    sm_arg = getattr(args, "source_map", None)
+    if sm_arg is not None:
+        sm_path = Path(sm_arg)
+        if not sm_path.is_file():
+            raise _SemanticsError(f"--source-map file not found: {sm_arg}")
+    else:
+        sm_path = Path(args.baseline).parent / "source-map.yaml"
+        if not sm_path.is_file():
+            return None
+    try:
+        return load_drift_semantics(sm_path)
+    except (OSError, ValueError) as exc:
+        raise _SemanticsError(f"cannot load source-map {sm_path}: {exc}") from exc
+
+
 def _run_live_drift(args: argparse.Namespace, parsed: object) -> int:
     """Live leg: re-profile the SAME table on the baseline's STATED PK, diff, emit.
 
@@ -143,6 +176,13 @@ def _run_live_drift(args: argparse.Namespace, parsed: object) -> int:
         )
         return 1
 
+    # Returns/PII semantics from the source-map (flag > sibling; absent -> None).
+    try:
+        semantics = _resolve_semantics(args)
+    except _SemanticsError as exc:
+        print(f"retail drift: {exc}", file=sys.stderr)
+        return 1
+
     try:
         runner = cli._make_runner(config)
         observed = run_profile(runner, parsed.landed_table, parsed.pk_columns)
@@ -162,6 +202,7 @@ def _run_live_drift(args: argparse.Namespace, parsed: object) -> int:
             evidence=[str(args.baseline)],
             reprofiled_by="agent (retail.profile, read-only session)",
         ),
+        semantics=semantics,
     )
     _emit(doc, getattr(args, "output_format", "text"))
     return 0 if doc["status"] in ("pass", "warning") else 1
