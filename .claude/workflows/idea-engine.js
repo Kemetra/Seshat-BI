@@ -27,7 +27,21 @@ const normKey = t => {
   const s = String(t || '').trim()
   const m = s.match(/^#?\s*(\d+)\s*[.:)]/)          // "#41.", "41.", "41)", "41:"
   if (m) return 'n' + m[1]
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()   // fallback: normalized prose
+  // UNNUMBERED-TITLE COLLISION FIX. The number branch above only merges same-idea variants
+  // that carry a shared leading #N. When the synthesizer/panel emit an idea as prose WITHOUT
+  // a number (e.g. "retail drift -- the missing runtime seam ..." vs the same title suffixed
+  // "(PROTECTED user idea)", or "Publish-Readiness Preflight Card -- ...before deferred F016"
+  // vs "...before the deferred F016 adapter"), the whole-string normalize below treated each
+  // phrasing as a DISTINCT idea. That over-split the panel (one idea -> 2-3 rows with divergent
+  // scores) AND mis-fired the skeptic-coverage clamp (the skeptic challenged one phrasing;
+  // the other phrasing's key was absent from challengedTitles -> falsely "uncovered" -> killed
+  // + DEGRADED banner). Titles here follow "<Idea Name> -- <varying description>", so the
+  // canonical identity is the HEAD segment before the first ' -- '/' - '/' : ' separator.
+  // Keying on that head merges the variants of one idea while keeping genuinely different
+  // ideas apart. The number branch is untouched, so the documented number-collision over-count
+  // guard is unaffected (numbered titles never reach this fallback).
+  const head = s.split(/\s+[—–]\s+|\s+-\s+|\s+:\s+/)[0]
+  return head.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 }
 // proseKey: user-idea matching ONLY. normKey collapses a numbered title ("#41. Foo") to "n41"
 // for PANEL GROUPING -- correct there (reviewers keep the number, reword the trailing title), but
@@ -37,6 +51,13 @@ const normKey = t => {
 // in aggregatePanel (that would resurrect the number-collision over-count the file warns about).
 const proseKey = t => String(t || '').trim()
   .replace(/^#?\s*\d+\s*[.:)]\s*/, '')                 // drop a leading "#41." / "41)" / "41:" prefix
+  .replace(/\s*\([^()]*\)\s*$/, '')                    // drop a TRAILING "(...)" suffix, e.g. the
+  // "(PROTECTED user idea)" tag the re-injection step (sec. 6b) appends to a dropped user idea's
+  // title. Without this, the interpreter's original title ("... taxonomy") and the re-injected
+  // display title ("... taxonomy (PROTECTED user idea)") normalize to DIFFERENT keys, so the
+  // render-side origin re-assert (userKeySet.has(proseKey(title))) misses -> the idea's origin
+  // flips to 'engine' and the "Your Ideas" lane empties (a NEW degradation introduced by the
+  // normKey head-merge, since the merged group can keep the suffixed variant as its display title).
   .toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 
 // Device-portable: never hardcode a machine path. The agents that consume REPO resolve
