@@ -37,21 +37,9 @@ class HandoffQuestion:
     owner: str
 
 
-def classify_drift(
-    baseline: ProfileResult, observed: ProfileResult | None
-) -> list[DriftFinding]:
-    """Classify the differences between baseline and observed into drift findings.
-
-    observed=None is the deferred-live case: no comparison is possible, so NO
-    findings are fabricated (the caller maps this to pending_live_reprofile).
-    """
-    if observed is None:
-        return []
-
+def _column_set_findings(base_cols: dict, obs_cols: dict) -> list[DriftFinding]:
+    """Columns added (warning) or removed (blocked). Deterministic (sorted)."""
     findings: list[DriftFinding] = []
-    base_cols = {c.name: c for c in baseline.columns}
-    obs_cols = {c.name: c for c in observed.columns}
-
     for name in sorted(obs_cols.keys() - base_cols.keys()):
         findings.append(
             DriftFinding(
@@ -76,8 +64,12 @@ def classify_drift(
                 note="any mapping/silver reference is now broken",
             )
         )
+    return findings
 
-    # Per-surviving-column shifts (columns present in BOTH).
+
+def _surviving_column_findings(base_cols: dict, obs_cols: dict) -> list[DriftFinding]:
+    """Missingness / cardinality shifts on columns present in BOTH. Deterministic."""
+    findings: list[DriftFinding] = []
     for name in sorted(base_cols.keys() & obs_cols.keys()):
         b = base_cols[name]
         o = obs_cols[name]
@@ -105,27 +97,55 @@ def classify_drift(
                     principle_v=False,
                 )
             )
-
-    # Grain / PK drift -- a Principle-V human seam. The candidate PK that was
-    # unique on the baseline is no longer unique, or NULLs appeared in the PK.
-    if baseline.pk.is_unique and (not observed.pk.is_unique or observed.pk.null_pk > 0):
-        before = f"is_unique=true, null_pk={baseline.pk.null_pk}"
-        after = (
-            f"is_unique={str(observed.pk.is_unique).lower()}, "
-            f"null_pk={observed.pk.null_pk}"
-        )
-        findings.append(
-            DriftFinding(
-                drift_class="grain_pk_drift",
-                column="(candidate PK)",
-                before=before,
-                after=after,
-                severity="blocked",
-                principle_v=True,
-                note="grain is never auto-rejudged; raise for the analyst",
-            )
-        )
     return findings
+
+
+def _grain_pk_broke(baseline: ProfileResult, observed: ProfileResult) -> bool:
+    """The baseline PK was unique but the observed re-profile no longer proves it."""
+    return baseline.pk.is_unique and (
+        not observed.pk.is_unique or observed.pk.null_pk > 0
+    )
+
+
+def _grain_pk_findings(
+    baseline: ProfileResult, observed: ProfileResult
+) -> list[DriftFinding]:
+    """Grain / PK drift -- a Principle-V human seam, never auto-rejudged."""
+    if not _grain_pk_broke(baseline, observed):
+        return []
+    after = (
+        f"is_unique={str(observed.pk.is_unique).lower()}, null_pk={observed.pk.null_pk}"
+    )
+    return [
+        DriftFinding(
+            drift_class="grain_pk_drift",
+            column="(candidate PK)",
+            before=f"is_unique=true, null_pk={baseline.pk.null_pk}",
+            after=after,
+            severity="blocked",
+            principle_v=True,
+            note="grain is never auto-rejudged; raise for the analyst",
+        )
+    ]
+
+
+def classify_drift(
+    baseline: ProfileResult, observed: ProfileResult | None
+) -> list[DriftFinding]:
+    """Classify the differences between baseline and observed into drift findings.
+
+    observed=None is the deferred-live case: no comparison is possible, so NO
+    findings are fabricated (the caller maps this to pending_live_reprofile).
+    """
+    if observed is None:
+        return []
+    base_cols = {c.name: c for c in baseline.columns}
+    obs_cols = {c.name: c for c in observed.columns}
+    return [
+        *_column_set_findings(base_cols, obs_cols),
+        *_surviving_column_findings(base_cols, obs_cols),
+        *_grain_pk_findings(baseline, observed),
+    ]
 
 
 # Scoped to the drift classes classify_drift() actually emits with
@@ -170,14 +190,22 @@ def _handoffs(findings: list[DriftFinding]) -> list[HandoffQuestion]:
     ]
 
 
+@dataclass(frozen=True)
+class ReportContext:
+    """Provenance metadata for a drift report -- where the baseline came from,
+    the evidence trail, and when/who took the observed re-profile. Bundled so
+    to_findings_dict keeps a small, cohesive signature (data in, provenance in)."""
+
+    baseline_ref: str
+    evidence: list[str]
+    reprofiled_at: str | None = None
+    reprofiled_by: str | None = None
+
+
 def to_findings_dict(
-    *,
     baseline: ProfileResult,
     observed: ProfileResult | None,
-    baseline_ref: str,
-    evidence: list[str],
-    reprofiled_at: str | None = None,
-    reprofiled_by: str | None = None,
+    context: ReportContext,
 ) -> dict:
     """Serialize a drift comparison to the source-drift-findings.schema.json shape."""
     findings = classify_drift(baseline, observed)
@@ -190,11 +218,11 @@ def to_findings_dict(
     ]
     return {
         "table": baseline.table,
-        "baseline": baseline_ref,
+        "baseline": context.baseline_ref,
         "observed": {
             "available": available,
-            "reprofiled_at": reprofiled_at,
-            "reprofiled_by": reprofiled_by,
+            "reprofiled_at": context.reprofiled_at,
+            "reprofiled_by": context.reprofiled_by,
         },
         "findings": [
             {
@@ -210,7 +238,7 @@ def to_findings_dict(
         ],
         "status": status,
         "blocking_reasons": blocking,
-        "evidence": list(evidence),
+        "evidence": list(context.evidence),
         "principle_v_handoff": [
             {
                 "question": h.question,

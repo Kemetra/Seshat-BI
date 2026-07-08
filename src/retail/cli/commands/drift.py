@@ -17,6 +17,11 @@ import sys
 
 
 def run_drift(args: argparse.Namespace) -> int:
+    """Dispatch: read the baseline, then route to the deferred or live leg.
+
+    Kept thin (each leg is its own function) so the guard-heavy live path does
+    not turn this into a Bumpy Road / Complex Method.
+    """
     from retail.source_profile_reader import read_source_profile
 
     # A missing/unreadable --baseline path is a distinct failure from a
@@ -36,49 +41,71 @@ def run_drift(args: argparse.Namespace) -> int:
         return 1
 
     if not args.dsn:
-        # Deferred-live: emit a schema-valid pending document; never a fake diff.
-        from retail.drift import to_findings_dict
+        return _run_deferred_drift(args, parsed)
+    return _run_live_drift(args, parsed)
 
-        doc = to_findings_dict(
-            baseline=parsed.profile,
-            observed=None,
+
+def _emit(doc: dict, output_format: str) -> None:
+    """Shared output: JSON document, or a human status + blocking-reason lines."""
+    if output_format == "json":
+        print(json.dumps(doc, indent=2))
+        return
+    n = len(doc["findings"])
+    print(f"retail drift: status={doc['status']}; {n} finding(s)")
+    for r in doc["blocking_reasons"]:
+        print(f"  blocking_reason: {r}")
+
+
+def _run_deferred_drift(args: argparse.Namespace, parsed: object) -> int:
+    """No --dsn: emit a schema-valid pending document; never a fabricated diff."""
+    from retail.drift import ReportContext, to_findings_dict
+
+    doc = to_findings_dict(
+        parsed.profile,
+        None,
+        ReportContext(
             baseline_ref=str(args.baseline),
             evidence=[str(args.baseline)],
-        )
-        if getattr(args, "output_format", "text") == "json":
-            print(json.dumps(doc, indent=2))
-        print(
-            "retail drift: [PENDING LIVE RE-PROFILE] -- no --dsn given, so no "
-            "observed re-profile was taken. status=pending_live_reprofile + "
-            "warning; no comparison fabricated. Pass --dsn to run the live leg.",
-            file=sys.stderr,
-        )
-        return 1
+        ),
+    )
+    if getattr(args, "output_format", "text") == "json":
+        _emit(doc, "json")
+    print(
+        "retail drift: [PENDING LIVE RE-PROFILE] -- no --dsn given, so no "
+        "observed re-profile was taken. status=pending_live_reprofile + "
+        "warning; no comparison fabricated. Pass --dsn to run the live leg.",
+        file=sys.stderr,
+    )
+    return 1
 
-    # Live leg: build the read-only runner via the cli seam (patched in tests),
-    # re-profile the SAME table, diff, emit.
-    #
-    # Mirrors run_validate's DB-boundary discipline: resolve the engine config,
-    # gate on the lazy driver, and scrub every DB-boundary exception through
-    # dialect.redact(exc, config) so a DSN (user/host/password) NEVER leaks in a
-    # traceback. The observed re-profile runs on the PK the baseline STATES
-    # (parsed.pk_columns) -- NOT a guessed column -- so baseline.pk and
-    # observed.pk describe the same key and grain_pk_drift can't be fabricated.
+
+def _resolve_live_config(args: argparse.Namespace, cli: object, dialect: object):
+    """Resolve the engine's DB config (Postgres: --dsn wins; else env). None-safe."""
     import os
 
-    from retail import cli
-    from retail.dialect import get_dialect
-    from retail.drift import to_findings_dict
-    from retail.profile import profile as run_profile
     from retail.validate import resolve_dsn
 
-    engine = cli._current_engine()
-    dialect = get_dialect(engine)
-    if engine == "postgres":
-        env = {**os.environ, "DATABASE_URL": args.dsn}
-        config = resolve_dsn(env)
-    else:
-        config = dialect.resolve_config(dict(os.environ))
+    if cli._current_engine() == "postgres":
+        return resolve_dsn({**os.environ, "DATABASE_URL": args.dsn})
+    return dialect.resolve_config(dict(os.environ))
+
+
+def _run_live_drift(args: argparse.Namespace, parsed: object) -> int:
+    """Live leg: re-profile the SAME table on the baseline's STATED PK, diff, emit.
+
+    Mirrors run_validate's DB-boundary discipline -- gate on the lazy driver and
+    scrub every DB-boundary exception through dialect.redact(exc, config) so a DSN
+    (user/host/password) NEVER leaks in a traceback. Profiling on parsed.pk_columns
+    (not a guessed column) keeps baseline.pk and observed.pk on the same key, so
+    grain_pk_drift can't be fabricated.
+    """
+    from retail import cli
+    from retail.dialect import get_dialect
+    from retail.drift import ReportContext, to_findings_dict
+    from retail.profile import profile as run_profile
+
+    dialect = get_dialect(cli._current_engine())
+    config = _resolve_live_config(args, cli, dialect)
     if config is None:
         print(
             "retail drift: no database connection configured for the live "
@@ -118,17 +145,13 @@ def run_drift(args: argparse.Namespace) -> int:
         return 1
 
     doc = to_findings_dict(
-        baseline=parsed.profile,
-        observed=observed,
-        baseline_ref=str(args.baseline),
-        evidence=[str(args.baseline)],
-        reprofiled_by="agent (retail.profile, read-only session)",
+        parsed.profile,
+        observed,
+        ReportContext(
+            baseline_ref=str(args.baseline),
+            evidence=[str(args.baseline)],
+            reprofiled_by="agent (retail.profile, read-only session)",
+        ),
     )
-    if getattr(args, "output_format", "text") == "json":
-        print(json.dumps(doc, indent=2))
-    else:
-        n = len(doc["findings"])
-        print(f"retail drift: status={doc['status']}; {n} finding(s)")
-        for r in doc["blocking_reasons"]:
-            print(f"  blocking_reason: {r}")
+    _emit(doc, getattr(args, "output_format", "text"))
     return 0 if doc["status"] in ("pass", "warning") else 1

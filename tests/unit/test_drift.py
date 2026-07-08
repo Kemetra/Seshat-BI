@@ -32,13 +32,15 @@ def _col(name, missing_pct=0.0, card=10):
     )
 
 
-def _profile(cols, *, table="bronze.t", rows=100, is_unique=True, null_pk=0):
+def _profile(cols, *, table="bronze.t", rows=100, is_unique=True):
+    # null_pk stays 0 here; the grain-PK tests express "PK broke" via is_unique
+    # (a non-unique observed PK is the drift the comparator keys on).
     return ProfileResult(
         table=table,
         row_count=rows,
         column_count=len(cols),
         columns=tuple(cols),
-        pk=PkProof(total=rows, distinct_pk=rows, null_pk=null_pk, is_unique=is_unique),
+        pk=PkProof(total=rows, distinct_pk=rows, null_pk=0, is_unique=is_unique),
     )
 
 
@@ -151,8 +153,8 @@ def test_shift_findings_are_deterministically_ordered_by_column():
 def test_grain_pk_drift_is_blocked_and_principle_v():
     from retail.drift import classify_drift
 
-    base = _profile([_col("a")], is_unique=True, null_pk=0)
-    obs = _profile([_col("a")], is_unique=False, null_pk=0)
+    base = _profile([_col("a")], is_unique=True)
+    obs = _profile([_col("a")], is_unique=False)
     findings = classify_drift(base, obs)
     g = [f for f in findings if f.drift_class == "grain_pk_drift"]
     assert len(g) == 1
@@ -194,14 +196,16 @@ def test_derive_status_pass_when_no_findings():
 
 
 def test_deferred_live_is_pending_and_schema_valid():
-    from retail.drift import to_findings_dict
+    from retail.drift import ReportContext, to_findings_dict
 
     base = _profile([_col("a")])
     doc = to_findings_dict(
-        baseline=base,
-        observed=None,
-        baseline_ref="mappings/t/source-profile.md@abc",
-        evidence=["mappings/t/source-drift-report.md"],
+        base,
+        None,
+        ReportContext(
+            baseline_ref="mappings/t/source-profile.md@abc",
+            evidence=["mappings/t/source-drift-report.md"],
+        ),
     )
     assert doc["status"] == "pending_live_reprofile"
     assert doc["observed"]["available"] is False
@@ -210,15 +214,17 @@ def test_deferred_live_is_pending_and_schema_valid():
 
 
 def test_full_report_schema_valid_with_findings_and_handoff():
-    from retail.drift import to_findings_dict
+    from retail.drift import ReportContext, to_findings_dict
 
     base = _profile([_col("a")], is_unique=True)
     obs = _profile([_col("a")], is_unique=False)  # grain_pk_drift -> handoff
     doc = to_findings_dict(
-        baseline=base,
-        observed=obs,
-        baseline_ref="mappings/t/source-profile.md@abc",
-        evidence=["mappings/t/source-drift-report.md"],
+        base,
+        obs,
+        ReportContext(
+            baseline_ref="mappings/t/source-profile.md@abc",
+            evidence=["mappings/t/source-drift-report.md"],
+        ),
     )
     assert doc["status"] == "blocked"
     assert any(h["drift_class"] == "grain_pk_drift" for h in doc["principle_v_handoff"])

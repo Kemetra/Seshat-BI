@@ -96,23 +96,31 @@ def _parse_pk(text: str, row_count: int) -> PkProof:
     )
 
 
+def _missing_template_sections(
+    table: str | None, row_count: int | None, columns: list[ColumnProfile]
+) -> list[str]:
+    """Names of the template sections a comparable baseline needs but lacks."""
+    missing = []
+    if table is None:
+        missing.append("Header 'Table id'")
+    if row_count is None:
+        missing.append("Shape 'Row count'")
+    if not columns:
+        missing.append(
+            "a template 'Per-column profile' table with measured "
+            "missingness/cardinality"
+        )
+    return missing
+
+
 def read_source_profile(path: str | Path) -> ParsedBaseline:
     text = Path(path).read_text(encoding="utf-8")
     table = _find_table_id(text)
     row_count = _find_row_count(text)
     columns = _parse_columns(text)
 
-    if table is None or row_count is None or not columns:
-        missing = []
-        if table is None:
-            missing.append("Header 'Table id'")
-        if row_count is None:
-            missing.append("Shape 'Row count'")
-        if not columns:
-            missing.append(
-                "a template 'Per-column profile' table with measured "
-                "missingness/cardinality"
-            )
+    missing = _missing_template_sections(table, row_count, columns)
+    if missing:
         return ParsedBaseline(
             profile=None,
             uncomparable=(
