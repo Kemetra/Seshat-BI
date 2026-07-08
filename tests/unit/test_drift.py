@@ -1,4 +1,14 @@
-# tests/unit/test_drift.py
+"""TDD tests for the F014 source-drift comparator (src/retail/drift.py).
+
+Task 1 scope: classify_drift() diffs a baseline ProfileResult against an
+observed ProfileResult and reports column_added / column_removed findings.
+Findings must be emitted in a deterministic order (sorted by column name) so
+the schema-shaped output stays diffable and snapshot-testable -- set
+iteration order over string keys is not stable across process hash seeds.
+"""
+
+from __future__ import annotations
+
 import pytest
 
 from retail.profile import ColumnProfile, PkProof, ProfileResult
@@ -45,3 +55,13 @@ def test_column_removed_is_blocked():
     assert len(removed) == 1
     assert removed[0].column == "b"
     assert removed[0].severity == "blocked"
+
+
+def test_findings_are_deterministically_ordered():
+    from retail.drift import classify_drift
+
+    base = _profile([_col("a")])
+    obs = _profile([_col("a"), _col("z"), _col("m"), _col("b")])
+    findings = classify_drift(base, obs)
+    added = [f.column for f in findings if f.drift_class == "column_added"]
+    assert added == sorted(added)

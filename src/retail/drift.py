@@ -17,12 +17,6 @@ from dataclasses import dataclass
 
 from .profile import ProfileResult
 
-# The three always-Principle-V classes (semantic_pair_drift is Principle-V only
-# when it underpins identity -- not measured mechanically here).
-_ALWAYS_PRINCIPLE_V = frozenset(
-    {"grain_pk_drift", "returns_rule_drift", "pii_surface_drift"}
-)
-
 
 @dataclass(frozen=True)
 class DriftFinding:
@@ -58,7 +52,7 @@ def classify_drift(
     base_cols = {c.name: c for c in baseline.columns}
     obs_cols = {c.name: c for c in observed.columns}
 
-    for name in obs_cols.keys() - base_cols.keys():
+    for name in sorted(obs_cols.keys() - base_cols.keys()):
         findings.append(
             DriftFinding(
                 drift_class="column_added",
@@ -70,7 +64,7 @@ def classify_drift(
                 note="not yet mapped; review for adoption",
             )
         )
-    for name in base_cols.keys() - obs_cols.keys():
+    for name in sorted(base_cols.keys() - obs_cols.keys()):
         findings.append(
             DriftFinding(
                 drift_class="column_removed",
