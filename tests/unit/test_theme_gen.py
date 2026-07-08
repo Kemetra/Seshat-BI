@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from argparse import Namespace
 from pathlib import Path
 
 import pytest
@@ -252,3 +253,40 @@ def test_spec_md_has_font_floor_line_and_tap_target_is_doc_only() -> None:
     assert "[x]" in spec and "Font floor" in spec
     assert "tap" in spec.lower() or "Tap" in spec
     assert '"tapTarget"' not in spec
+
+
+def _cli_args(**over) -> Namespace:
+    base = dict(
+        name="executive-dark",
+        mode="dark",
+        accent="#2FB6C4",
+        background="#12263A",
+        text_primary="#F2F6FA",
+        text_secondary=None,
+        text_muted=None,
+        data_colors=None,
+        good=None,
+        neutral=None,
+        bad=None,
+        title_font_pt=None,
+        label_font_pt=None,
+        repo=".",
+        force=False,
+    )
+    return Namespace(**{**base, **over})
+
+
+def test_seed_from_args_omitted_font_flags_use_min_floor_defaults() -> None:
+    from retail.theme_gen import MIN_LABEL_FONT_PT, MIN_TITLE_FONT_PT, _seed_from_args
+
+    seed = _seed_from_args(_cli_args())
+    assert seed.title_font_pt == MIN_TITLE_FONT_PT == 12.0
+    assert seed.label_font_pt == MIN_LABEL_FONT_PT == 9.0
+
+
+def test_seed_from_args_provided_font_flags_pass_through() -> None:
+    from retail.theme_gen import _seed_from_args
+
+    seed = _seed_from_args(_cli_args(title_font_pt=14.0, label_font_pt=10.0))
+    assert seed.title_font_pt == 14.0
+    assert seed.label_font_pt == 10.0

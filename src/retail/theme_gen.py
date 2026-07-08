@@ -342,30 +342,76 @@ def generate(seed: ThemeSeed, repo_root: Path, force: bool = False) -> list[Path
     return _write_targets(_validate_and_collect(seed, repo_root, force))
 
 
-def theme_gen_main(args) -> int:
-    """CLI entry: assemble a ThemeSeed from argparse args, generate, report."""
-    dcs: tuple[str, ...] | None = (
-        tuple(s.strip() for s in args.data_colors.split(",") if s.strip())
-        if args.data_colors
-        else None
+def _parse_data_colors(raw: str | None) -> tuple[str, ...] | None:
+    """Split a ``--data-colors`` CSV into a tuple, or None to derive a ramp.
+
+    An absent flag or an all-blank value (``""``, ``" , "``) both mean "derive
+    the ramp from the accent" -- neither is a real caller-supplied palette.
+    """
+    if not raw:
+        return None
+    dcs = tuple(s.strip() for s in raw.split(",") if s.strip())
+    return dcs or None
+
+
+def _text_roles_from_args(args) -> tuple[str, str, str]:
+    """Resolve (primary, secondary, muted) text colors with cascading fallback.
+
+    Each unset role falls back to the next-more-prominent one, so a caller
+    only has to supply --text-primary and still gets a coherent triad.
+    """
+    primary = args.text_primary
+    secondary = args.text_secondary or primary
+    muted = args.text_muted or secondary
+    return primary, secondary, muted
+
+
+def _sentiment_from_args(args) -> tuple[str, str, str]:
+    """Resolve (good, neutral, bad) sentiment colors, defaulting per-role."""
+    return (
+        args.good or _DEFAULT_SENTIMENT["good"],
+        args.neutral or _DEFAULT_SENTIMENT["neutral"],
+        args.bad or _DEFAULT_SENTIMENT["bad"],
     )
-    if dcs == ():  # an all-blank --data-colors -> derive from accent, not empty
-        dcs = None
-    seed = ThemeSeed(
+
+
+def _font_pt_from_args(args) -> tuple[float, float]:
+    """Resolve (title, label) font sizes, defaulting to the MIN_* floors.
+
+    References MIN_TITLE_FONT_PT / MIN_LABEL_FONT_PT rather than
+    re-hardcoding 12.0/9.0: those constants equal ThemeSeed's own field
+    defaults, so this is a single source of truth, not a coincidence.
+    """
+    title = args.title_font_pt if args.title_font_pt is not None else MIN_TITLE_FONT_PT
+    label = args.label_font_pt if args.label_font_pt is not None else MIN_LABEL_FONT_PT
+    return title, label
+
+
+def _seed_from_args(args) -> ThemeSeed:
+    """Assemble a ThemeSeed from argparse ``theme-gen`` args (pure, no I/O)."""
+    text_primary, text_secondary, text_muted = _text_roles_from_args(args)
+    good, neutral, bad = _sentiment_from_args(args)
+    title_font_pt, label_font_pt = _font_pt_from_args(args)
+    return ThemeSeed(
         name=args.name,
         mode=args.mode,
         accent=args.accent,
         background=args.background,
-        text_primary=args.text_primary,
-        text_secondary=args.text_secondary or args.text_primary,
-        text_muted=args.text_muted or args.text_secondary or args.text_primary,
-        data_colors=dcs,
-        good=args.good or _DEFAULT_SENTIMENT["good"],
-        neutral=args.neutral or _DEFAULT_SENTIMENT["neutral"],
-        bad=args.bad or _DEFAULT_SENTIMENT["bad"],
-        title_font_pt=(args.title_font_pt if args.title_font_pt is not None else 12.0),
-        label_font_pt=(args.label_font_pt if args.label_font_pt is not None else 9.0),
+        text_primary=text_primary,
+        text_secondary=text_secondary,
+        text_muted=text_muted,
+        data_colors=_parse_data_colors(args.data_colors),
+        good=good,
+        neutral=neutral,
+        bad=bad,
+        title_font_pt=title_font_pt,
+        label_font_pt=label_font_pt,
     )
+
+
+def theme_gen_main(args) -> int:
+    """CLI entry: assemble a ThemeSeed from argparse args, generate, report."""
+    seed = _seed_from_args(args)
     try:
         written = generate(seed, Path(args.repo), force=args.force)
     except ThemeGenError as exc:
