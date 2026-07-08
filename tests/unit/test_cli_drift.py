@@ -118,3 +118,57 @@ def test_drift_source_map_flag_missing_file_is_clean_error(capsys, monkeypatch):
     err = capsys.readouterr().err
     assert rc == 1
     assert "source-map" in err.lower()
+
+
+def test_drift_source_map_flag_overrides_the_sibling(monkeypatch, tmp_path):
+    # --source-map wins over the auto-discovered sibling. _CONFORMANT has a real
+    # sibling (mappings/retail_store_sales/source-map.yaml); the flag must be the
+    # loaded path, not the sibling. Inverting the precedence in _source_map_path
+    # must fail this.
+    import retail.cli.commands.drift as drift_cmd
+    from retail import cli
+    from retail.drift import DriftSemantics
+    from retail.profile import PkProof, ProfileResult
+
+    explicit = tmp_path / "explicit-map.yaml"
+    explicit.write_text("columns: []\n", encoding="utf-8")
+    calls = {}
+
+    monkeypatch.setattr(cli, "_ensure_driver", lambda: True)
+    monkeypatch.setattr(cli, "_make_runner", lambda config: "RUNNER")
+
+    def fake_loader(path):
+        calls["path"] = str(path)
+        return DriftSemantics()
+
+    monkeypatch.setattr(drift_cmd, "load_drift_semantics", fake_loader, raising=False)
+
+    def fake_profile(runner, table, pk):
+        return ProfileResult(
+            table=table,
+            row_count=1,
+            column_count=0,
+            columns=(),
+            pk=PkProof(total=1, distinct_pk=1, null_pk=0, is_unique=True),
+        )
+
+    monkeypatch.setattr("retail.profile.profile", fake_profile)
+
+    main(
+        [
+            "drift",
+            "--baseline",
+            _CONFORMANT,  # has a real sibling source-map.yaml
+            "--dsn",
+            "postgresql://u@h/db",
+            "--source-map",
+            str(explicit),
+        ]
+    )
+    # the EXPLICIT flag path was loaded, not the sibling
+    assert calls["path"] == str(explicit)
+    assert (
+        not calls["path"]
+        .replace("\\", "/")
+        .endswith("mappings/retail_store_sales/source-map.yaml")
+    )
