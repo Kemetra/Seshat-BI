@@ -14,6 +14,19 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
+
+# Module-level so the test suite can monkeypatch ``drift.load_drift_semantics``.
+# SAFE for the lazy-import discipline: this imports only the FUNCTION NAME; the
+# actual pyyaml import lives INSIDE load_drift_semantics, so importing this
+# module (e.g. via `retail check`'s dispatch table build) never loads yaml.
+from retail.drift_semantics import load_drift_semantics
+
+
+class _SemanticsError(Exception):
+    """A --source-map path the user NAMED could not be read/parsed. Carries a
+    clean, already-formatted message; the live leg turns it into stderr + rc 1
+    (never a raw traceback)."""
 
 
 def run_drift(args: argparse.Namespace) -> int:
@@ -90,6 +103,51 @@ def _resolve_live_config(args: argparse.Namespace, cli: object, dialect: object)
     return dialect.resolve_config(dict(os.environ))
 
 
+def _source_map_path(args: argparse.Namespace) -> Path | None:
+    """Which source-map.yaml to load: --source-map if given (must exist, else
+    _SemanticsError), else the sibling of --baseline (None if that has none)."""
+    sm_arg = getattr(args, "source_map", None)
+    if sm_arg is not None:
+        path = Path(sm_arg)
+        if not path.is_file():
+            raise _SemanticsError(f"--source-map file not found: {sm_arg}")
+        return path
+    sibling = Path(args.baseline).parent / "source-map.yaml"
+    return sibling if sibling.is_file() else None
+
+
+def _resolve_semantics(args: argparse.Namespace):
+    """Load returns/PII semantics for the live leg. None when no source-map is
+    present (those classes stay silent). A NAMED-but-missing/malformed path
+    raises _SemanticsError (a clean error, not a silent skip)."""
+    path = _source_map_path(args)
+    if path is None:
+        return None
+    try:
+        return load_drift_semantics(path)
+    except (OSError, ValueError) as exc:
+        raise _SemanticsError(f"cannot load source-map {path}: {exc}") from exc
+
+
+def _uncomparable_precondition(parsed: object) -> str | None:
+    """The baseline-shape reasons a live re-profile can't run: no stated PK to
+    re-prove grain on, or no schema-qualified landed table to connect to. Returns
+    the reason (caller reports it + rc 1), or None when the baseline is usable."""
+    if not parsed.pk_columns:
+        return (
+            "baseline states no candidate PK column set, so the live re-profile "
+            "cannot re-prove grain on the same key. Treated as uncomparable "
+            "rather than guessing a key."
+        )
+    if not parsed.landed_table:
+        return (
+            "baseline states no schema-qualified 'Landed location', so the live "
+            "re-profile has no connectable target. Treated as uncomparable rather "
+            "than guessing the schema (a bare name would mistarget `public`)."
+        )
+    return None
+
+
 def _run_live_drift(args: argparse.Namespace, parsed: object) -> int:
     """Live leg: re-profile the SAME table on the baseline's STATED PK, diff, emit.
 
@@ -124,23 +182,16 @@ def _run_live_drift(args: argparse.Namespace, parsed: object) -> int:
         )
         return 1
 
-    if not parsed.pk_columns:
-        print(
-            "retail drift: baseline states no candidate PK column set, so the "
-            "live re-profile cannot re-prove grain on the same key. Treated as "
-            "uncomparable rather than guessing a key.",
-            file=sys.stderr,
-        )
+    reason = _uncomparable_precondition(parsed)
+    if reason is not None:
+        print(f"retail drift: {reason}", file=sys.stderr)
         return 1
 
-    if not parsed.landed_table:
-        print(
-            "retail drift: baseline states no schema-qualified 'Landed location', "
-            "so the live re-profile has no connectable target. Treated as "
-            "uncomparable rather than guessing the schema (a bare name would "
-            "mistarget the `public` schema).",
-            file=sys.stderr,
-        )
+    # Returns/PII semantics from the source-map (flag > sibling; absent -> None).
+    try:
+        semantics = _resolve_semantics(args)
+    except _SemanticsError as exc:
+        print(f"retail drift: {exc}", file=sys.stderr)
         return 1
 
     try:
@@ -162,6 +213,7 @@ def _run_live_drift(args: argparse.Namespace, parsed: object) -> int:
             evidence=[str(args.baseline)],
             reprofiled_by="agent (retail.profile, read-only session)",
         ),
+        semantics=semantics,
     )
     _emit(doc, getattr(args, "output_format", "text"))
     return 0 if doc["status"] in ("pass", "warning") else 1
