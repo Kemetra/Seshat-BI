@@ -82,7 +82,9 @@ def _parse_fixture_keys(binding: str) -> set[tuple[str, str]]:
     SEPARATE reader (not the classifier), so V2/V3 sit on the risk."""
     keys: set[tuple[str, str]] = set()
     for line in binding.splitlines():
-        if "|" not in line or "TotalRevenue" not in line and "OrderCount" not in line:
+        if "|" not in line:
+            continue
+        if "TotalRevenue" not in line and "OrderCount" not in line:
             continue
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
         contract = next((c for c in cells if c in ("TotalRevenue", "OrderCount")), None)

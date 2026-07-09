@@ -116,25 +116,42 @@ def _binding_rows(text: str) -> list[dict[str, str]]:
         headers = _cells(line)
         if headers is None:
             continue
-        i_id = _header_index(headers, _H_ROW_ID)
-        i_contract = _header_index(headers, _H_CONTRACT)
-        if i_id is None or i_contract is None:
+        cols = {
+            "id": _header_index(headers, _H_ROW_ID),
+            "contract": _header_index(headers, _H_CONTRACT),
+            "question": _header_index(headers, _H_QUESTION),
+            "field": _header_index(headers, _H_FIELD),
+            "page": _header_index(headers, _H_PAGE),
+        }
+        if cols["id"] is None or cols["contract"] is None:
             continue
-        i_q = _header_index(headers, _H_QUESTION)
-        i_field = _header_index(headers, _H_FIELD)
-        i_page = _header_index(headers, _H_PAGE)
-        return _rows_after(lines[start + 1 :], i_id, i_contract, i_q, i_field, i_page)
+        return _rows_after(lines[start + 1 :], cols)
     return []
 
 
-def _rows_after(
-    lines: list[str],
-    i_id: int,
-    i_contract: int,
-    i_q: int | None,
-    i_field: int | None,
-    i_page: int | None,
-) -> list[dict[str, str]]:
+def _cell_at(cells: list[str], idx: int | None) -> str:
+    """Whitespace-trimmed cell at ``idx``; ``""`` if the column is absent."""
+    if idx is None or idx >= len(cells):
+        return ""
+    return cells[idx].strip()
+
+
+def _col(cells: list[str], idx: int | None) -> str:
+    """Like :func:`_cell_at` but also strips markdown backticks (id/page/contract)."""
+    return _cell_at(cells, idx).strip("`").strip()
+
+
+def _row_dict(cells: list[str], cols: dict[str, int | None]) -> dict[str, str]:
+    return {
+        "page": _col(cells, cols["page"]),
+        "row_id": _col(cells, cols["id"]),
+        "question": _cell_at(cells, cols["question"]),
+        "contract": _col(cells, cols["contract"]),
+        "dimension": _dimension_from_field(_cell_at(cells, cols["field"])),
+    }
+
+
+def _rows_after(lines: list[str], cols: dict[str, int | None]) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
     for line in lines:
         cells = _cells(line)
@@ -142,25 +159,9 @@ def _rows_after(
             break  # table ends at the first non-pipe line
         if _is_separator(cells):
             continue
-        if len(cells) <= max(i_id, i_contract):
+        if not _col(cells, cols["contract"]):
             continue
-        contract = cells[i_contract].strip().strip("`").strip()
-        if not contract:
-            continue
-        field = cells[i_field] if i_field is not None and i_field < len(cells) else ""
-        rows.append(
-            {
-                "page": cells[i_page].strip().strip("`").strip()
-                if i_page is not None and i_page < len(cells)
-                else "",
-                "row_id": cells[i_id].strip().strip("`").strip(),
-                "question": cells[i_q].strip()
-                if i_q is not None and i_q < len(cells)
-                else "",
-                "contract": contract,
-                "dimension": _dimension_from_field(field),
-            }
-        )
+        rows.append(_row_dict(cells, cols))
     return rows
 
 
@@ -295,28 +296,33 @@ def _added_tuples(
     page: dict[str, Any],
     pages: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Proposal tuples absent from the matched page, with cross-page coverage."""
+    """Proposal tuples absent from the matched page, with cross-page coverage.
+
+    One flat pass: skip tuples the page covers and de-dup repeats in the same
+    guard (a proposal may repeat a tuple), preserving first-seen order.
+    """
     added: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
     for tup in proposal:
-        if _key(tup) in page["keys"]:
+        marker = _key(tup)
+        if marker in page["keys"] or marker in seen:
             continue
-        elsewhere = sorted(p["name"] for p in pages if _key(tup) in p["keys"])
+        seen.add(marker)
         added.append(
             {
                 "contract": tup["contract"],
                 "dimension": tup["dimension"],
-                "also_covered_on": elsewhere,
+                "also_covered_on": _covered_elsewhere(marker, pages),
             }
         )
-    # de-dup preserving order (a proposal may repeat a tuple)
-    seen: set[tuple[str, str]] = set()
-    unique: list[dict[str, Any]] = []
-    for item in added:
-        marker = (item["contract"], item["dimension"])
-        if marker not in seen:
-            seen.add(marker)
-            unique.append(item)
-    return unique
+    return added
+
+
+def _covered_elsewhere(
+    marker: tuple[str, str], pages: list[dict[str, Any]]
+) -> list[str]:
+    """Names of committed pages (sorted) whose tuple-set covers ``marker``."""
+    return sorted(p["name"] for p in pages if marker in p["keys"])
 
 
 def _relate(
@@ -343,18 +349,14 @@ def _neg_lex(name: str) -> tuple[int, ...]:
     return tuple(-ord(ch) for ch in name)
 
 
-def _decide(
-    corpus: dict[str, Any],
-    proposal: list[dict[str, str]],
-    source_file: str,
-) -> dict[str, Any]:
-    if not corpus["present"]:
-        return {"verdict": "new", "reason": "absent", "matched_page": None}
-    if not proposal:
-        return {"verdict": "new", "reason": "empty_proposal", "matched_page": None}
+def _new_verdict(reason: str) -> dict[str, Any]:
+    return {"verdict": "new", "reason": reason, "matched_page": None}
 
-    proposal_keys = {_key(t) for t in proposal}
-    pages = corpus["pages"]
+
+def _partition_pages(
+    pages: list[dict[str, Any]], proposal_keys: set[tuple[str, str]]
+) -> tuple[list, list]:
+    """Split pages into duplicate-candidates and extends-candidates."""
     dup: list[tuple[dict[str, Any], set]] = []
     ext: list[tuple[dict[str, Any], set]] = []
     for page in pages:
@@ -363,6 +365,22 @@ def _decide(
             dup.append((page, shared))
         elif relation == "extends":
             ext.append((page, shared))
+    return dup, ext
+
+
+def _decide(
+    corpus: dict[str, Any],
+    proposal: list[dict[str, str]],
+    source_file: str,
+) -> dict[str, Any]:
+    if not corpus["present"]:
+        return _new_verdict("absent")
+    if not proposal:
+        return _new_verdict("empty_proposal")
+
+    proposal_keys = {_key(t) for t in proposal}
+    pages = corpus["pages"]
+    dup, ext = _partition_pages(pages, proposal_keys)
 
     if dup:
         page, shared = _strongest(dup)
@@ -382,7 +400,7 @@ def _decide(
             "matched_rows": _cited_rows(page, shared, source_file),
             "added_tuples": _added_tuples(proposal, page, pages),
         }
-    return {"verdict": "new", "reason": "disjoint", "matched_page": None}
+    return _new_verdict("disjoint")
 
 
 def classify_proposal(
