@@ -92,21 +92,22 @@ VISUAL_LIST_PAGES = """# Visual list -- widget_sales
 
 
 def _make_corpus(
-    root: Path,
-    table: str,
-    binding: str | None,
-    layout: str = LAYOUT,
-    visual_list: str | None = None,
+    root: Path, table: str, binding: str | None, extra: dict[str, str] | None = None
 ) -> None:
+    """Write a design corpus. ``extra`` optionally overrides the layout
+    (``{"layout": ...}``) and/or adds a visual-list (``{"visual_list": ...}``)."""
+    extra = extra or {}
     design = root / "mappings" / table / "design"
     design.mkdir(parents=True, exist_ok=True)
-    (design / "dashboard-layout.md").write_text(layout, encoding="utf-8")
+    (design / "dashboard-layout.md").write_text(
+        extra.get("layout", LAYOUT), encoding="utf-8"
+    )
     if binding is not None:
         (design / "visual-contract-binding-map.md").write_text(
             binding, encoding="utf-8"
         )
-    if visual_list is not None:
-        (design / "visual-list.md").write_text(visual_list, encoding="utf-8")
+    if "visual_list" in extra:
+        (design / "visual-list.md").write_text(extra["visual_list"], encoding="utf-8")
 
 
 def _parse_fixture_keys(binding: str) -> set[tuple[str, str]]:
@@ -234,7 +235,7 @@ def test_page_ownership_from_visual_list(tmp_path):
     # into pages -- so a proposal spanning two pages is `extends`, never a false
     # `duplicate`. (region is intra-page and must NOT split the page.)
     _make_corpus(
-        tmp_path, "widget_sales", NO_PAGE_BINDING, visual_list=VISUAL_LIST_PAGES
+        tmp_path, "widget_sales", NO_PAGE_BINDING, {"visual_list": VISUAL_LIST_PAGES}
     )
     proposal = {
         "tuples": [("Q1", "TotalRevenue", "region"), ("Q2", "OrderCount", "channel")]
