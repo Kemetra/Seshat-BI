@@ -217,6 +217,22 @@ def test_new_verdict(tmp_path):
     assert_verdict_is_faithful(verdict, _parse_fixture_keys(HAS_PAGE_BINDING))
 
 
+def test_free_text_newline_separated_tuples(tmp_path):
+    # a one-tuple-per-line @file/pasted proposal must read EVERY line, not just
+    # the first (Codex P2): shares one committed cut + adds one -> extends.
+    _make_corpus(tmp_path, "widget_sales", HAS_PAGE_BINDING)
+    verdict = classify_proposal(
+        tmp_path,
+        "widget_sales",
+        {"description": "TotalRevenue by region\nAvgOrderValue by region"},
+    )
+    assert verdict["verdict"] == "extends"
+    contracts = {t["contract"] for t in verdict["proposal"]}
+    assert contracts == {"TotalRevenue", "AvgOrderValue"}
+    added = {(a["contract"], a["dimension"]) for a in verdict["added_tuples"]}
+    assert ("AvgOrderValue", "region") in added
+
+
 def test_free_text_strips_sentence_punctuation(tmp_path):
     # a natural-sentence free-text proposal ending in '?' must still match the
     # committed `category` cut, not read as a distinct `category?` (Codex P2).

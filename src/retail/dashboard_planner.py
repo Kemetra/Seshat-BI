@@ -314,12 +314,14 @@ def _proposal_tuple(
 def _tuples_from_free_text(description: str) -> list[dict[str, str]]:
     """Read ``<contract> by <dimension>`` clauses from free text, as given.
 
-    Splits on ``,``/``;``/`` and `` then reads a ``by`` clause per clause. Reads
-    ONLY what is tuple-shaped; infers no measure/dimension the caller did not
-    state (the free-text edge case). Nothing tuple-shaped -> no tuple.
+    Splits on ``,``/``;``/newline/`` and `` (so a one-tuple-per-line ``@file`` or
+    pasted list is read in full, not just its first line) then reads a ``by``
+    clause per clause. Reads ONLY what is tuple-shaped; infers no measure/dimension
+    the caller did not state (the free-text edge case). Nothing tuple-shaped -> no
+    tuple.
     """
     tuples: list[dict[str, str]] = []
-    for clause in re.split(r"[,;]|\band\b", description):
+    for clause in re.split(r"[,;\r\n]|\band\b", description):
         match = re.search(r"([A-Za-z_]\w*)\s+by\s+(.+)", clause.strip())
         if match:
             tuples.append(
