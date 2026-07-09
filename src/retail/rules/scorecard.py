@@ -37,6 +37,12 @@ import re
 from typing import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
+
+# _ENUM (the five closed coverage statuses) + _norm were extracted to
+# coverage_status.py (spec 117) so the read-only gap_detector surface shares the
+# SAME vocabulary without co-location. Behavior is unchanged: _ENUM/_norm are
+# identical, so this rule's output stays byte-identical (regression-locked).
+from ..coverage_status import _ENUM, _norm
 from ..registry import register
 
 # Per-table scorecard instances live under mappings/<table>/ and end with this suffix.
@@ -45,18 +51,6 @@ from ..registry import register
 _INSTANCE_RE = re.compile(r"^mappings/[^/]+/.*coverage-scorecard\.md$")
 _TEMPLATE_PATH = (
     "skills/retail-kpi-knowledge/references/kpi-coverage-scorecard-template.md"
-)
-
-# The five closed coverage statuses (F8 vocabulary). Compared after dash-normalization
-# so an ASCII "--" and a unicode em-dash "—" both match.
-_ENUM: frozenset[str] = frozenset(
-    {
-        "covered",
-        "blocked -- missing field",
-        "blocked -- needs business definition",
-        "planned",
-        "out of scope",
-    }
 )
 
 # The status table is anchored by its per-table caption so only THIS table's rows are
@@ -86,14 +80,6 @@ def _iter_scorecards(ctx: RuleContext) -> list[str]:
         for p in ctx.tracked_files
         if _INSTANCE_RE.match(p) and p != _TEMPLATE_PATH and not is_test_path(p)
     ]
-
-
-def _norm(cell: str) -> str:
-    """Lower-case, strip backticks, and normalize dashes for the enum compare."""
-    s = cell.strip().strip("`").strip().lower()
-    s = s.replace("—", "--").replace("–", "--")  # em/en dash -> --
-    s = re.sub(r"\s*--\s*", " -- ", s)  # collapse spacing around --
-    return re.sub(r"\s+", " ", s).strip()
 
 
 def _is_dash(cell: str) -> bool:

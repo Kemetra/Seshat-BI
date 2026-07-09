@@ -25,7 +25,7 @@ mandates TDD, so tests precede code.
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 [P] Add fixtures under `tests/unit/fixtures/gap_detector/`:
+- [x] T001 [P] Add fixtures under `tests/unit/fixtures/gap_detector/`:
   `mixed/` (a page-intent naming required metrics + dimensions, and a target
   table whose `metrics/` has one `pass` contract [-> Covered], one present-but-
   `not_started` contract [-> Blocked -- needs business definition], and a
@@ -45,7 +45,7 @@ mandates TDD, so tests precede code.
   directory); `missing_questions/` (page-intent present, no
   `unresolved-questions.md`); and a `second_table/` distinct conformant table for
   the generic proof. ASCII, UTF-8 no BOM. (FR-001..FR-006, FR-013, FR-014)
-- [ ] T002 Create the composer skeleton `src/retail/gap_detector.py` with
+- [x] T002 Create the composer skeleton `src/retail/gap_detector.py` with
   `build_gap_inventory(repo_root, table, page_intent) -> dict` and
   `render_view(view) -> str` (raise `NotImplementedError`), reusing the
   `_load_yaml_mapping` idiom and a small committed-markdown-table parser for the
@@ -60,16 +60,16 @@ mandates TDD, so tests precede code.
 
 CRITICAL: the shared status-enum extraction + the independent-oracle verifier gate every story.
 
-- [ ] T003 Extract the shared status vocabulary: create
+- [x] T003 Extract the shared status vocabulary: create
   `src/retail/coverage_status.py` holding `_ENUM` (the closed five-value set) +
   a `_norm(cell)` membership/normalize helper, MOVED verbatim from
   `src/retail/rules/scorecard.py`; update `scorecard.py` to import them.
   Behavior-preserving move-refactor (plan Structure Decision). (FR-002, FR-008)
-- [ ] T004 [P] Regression-lock: confirm/extend `tests/unit/test_scorecard.py`
+- [x] T004 [P] Regression-lock: confirm/extend `tests/unit/test_scorecard.py`
   asserts `check_coverage_scorecard` output is BYTE-IDENTICAL after T003 (SL1
   Findings unchanged; the rule still emits on the same fixtures). Must be green
   before proceeding. (FR-008)
-- [ ] T005 [US-shared] Write the independent-oracle status verifier
+- [x] T005 [US-shared] Write the independent-oracle status verifier
   `assert_status_inventory_sound(view, expected_status_by_item)` in
   `tests/unit/test_gap_detector.py`: (V1) every emitted per-item status is a
   member of `coverage_status._ENUM` (imported directly -- proves "matches SL1");
@@ -82,7 +82,7 @@ CRITICAL: the shared status-enum extraction + the independent-oracle verifier ga
   numeric token (score / percentage / count) appears anywhere in `render_view`
   output. TEST-only -- NO `@register` rule, NO manifest change (FR-008). (FR-002,
   FR-007, FR-011)
-- [ ] T006 Implement the classification core in `src/retail/gap_detector.py`:
+- [x] T006 Implement the classification core in `src/retail/gap_detector.py`:
   read the page-intent + the three committed inputs; for each required METRIC,
   classify by `metrics/<Metric>.yaml` `readiness.status` (pass -> Covered;
   present-but-not-pass OR blocked-by-open-decision -> Blocked -- needs business
@@ -114,7 +114,7 @@ all fixtures; verifier importable and passing V1/V2 on `mixed/`.
 
 ### Tests for User Story 1 (write first, must FAIL)
 
-- [ ] T007 [P] [US1] In `tests/unit/test_gap_detector.py`, add
+- [x] T007 [P] [US1] In `tests/unit/test_gap_detector.py`, add
   `test_mixed_statuses` and `test_all_covered_nothing_blocks`: compose for
   `mixed/` and a clean page-intent over `all_answered/`, run
   `assert_status_inventory_sound` with the hand-declared oracle; assert the five
@@ -130,17 +130,17 @@ all fixtures; verifier importable and passing V1/V2 on `mixed/`.
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] Implement `render_view` for the ordered per-item inventory
+- [x] T008 [US1] Implement `render_view` for the ordered per-item inventory
   (status + named blocker per required item) + the "nothing blocks design" empty
   case, per plan. Ordering, if any, uses a FIXED key (e.g. item order in the
   page-intent, then a fixed status order), never a computed score. ASCII
   `--`/`->`, no glyphs, no numeric token, ASCII status strings
   (`Blocked -- missing field`). (FR-007, FR-011, FR-015)
-- [ ] T009 [US1] Add the CLI verb `src/retail/cli/commands/gap_detector.py`
+- [x] T009 [US1] Add the CLI verb `src/retail/cli/commands/gap_detector.py`
   (`retail dashboard-gaps --table <t> --page-intent <path> [--format text|json]`)
   mirroring `cli/commands/blockers.py`; no `--write` (FR-010); always exit 0 (no
   gate; FR-008). (FR-001, FR-008, FR-010)
-- [ ] T010 [US1] Register + dispatch the `dashboard-gaps` subcommand in
+- [x] T010 [US1] Register + dispatch the `dashboard-gaps` subcommand in
   `src/retail/cli/parser.py` and the CLI dispatch table
   (`src/retail/cli/__init__.py`). (FR-008)
 
@@ -158,7 +158,7 @@ regression-lock green.
 
 ### Tests for User Story 2 (write first, must FAIL)
 
-- [ ] T011 [P] [US2] In `tests/unit/test_gap_detector.py`, add
+- [x] T011 [P] [US2] In `tests/unit/test_gap_detector.py`, add
   `test_open_decision_blocks_dependent_metric` (OPEN row -> dependent required
   metric is Blocked -- needs business definition, blocker names owner + verbatim
   question + `unresolved-questions.md` path; unrecognized owner echoed verbatim)
@@ -170,7 +170,7 @@ regression-lock green.
 
 ### Implementation for User Story 2
 
-- [ ] T012 [US2] Wire the Open-questions parse + owner echo into the classifier
+- [x] T012 [US2] Wire the Open-questions parse + owner echo into the classifier
   and `render_view`: a required item that depends on an OPEN row (Status !=
   answered AND doc Gate status != CLEARED) -> `Blocked -- needs business
   definition`; the blocker names the row's `Who must answer` owner (verbatim,
@@ -190,7 +190,7 @@ regression-lock green.
 
 ### Tests for User Story 3 (write first, must FAIL)
 
-- [ ] T013 [P] [US3] In `tests/unit/test_gap_detector.py`, add
+- [x] T013 [P] [US3] In `tests/unit/test_gap_detector.py`, add
   `test_no_page_intent_document_gap` (no page-intent -> document-level GAP naming
   the missing input, no fabricated required list, no "nothing blocks design")
   and `test_missing_source_map_not_covered` (page-intent present but
@@ -204,7 +204,7 @@ regression-lock green.
 
 ### Implementation for User Story 3
 
-- [ ] T014 [US3] Extend `build_gap_inventory`/`render_view` for input absence:
+- [x] T014 [US3] Extend `build_gap_inventory`/`render_view` for input absence:
   populate `document_gaps[]` and render an "Inputs not available" section naming
   each missing/unreadable path; when page-intent is absent, emit the
   document-level GAP and classify nothing; when a committed input is absent, mark
@@ -217,21 +217,21 @@ regression-lock green.
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T015 [P] Add the tool doc `docs/tools/dashboard-gap-detector.md` mirroring
+- [x] T015 [P] Add the tool doc `docs/tools/dashboard-gap-detector.md` mirroring
   `docs/tools/blocker-explainer.md`: what it is, how to run, the scope wall, and
   the explicit boundaries against SL1 (vocabulary reuse, not the rule),
   `dashboard-design` (pre-design inventory vs the gated per-visual verb), and
   consumer-data-dictionary (design-coverage gap vs meaning-citation gap); what it
   will NOT do (no gate, no pass, no write, no score). (FR-007, FR-008)
-- [ ] T016 [P] [US-shared] Add the no-write proof test (SC-007): grep the module
+- [x] T016 [P] [US-shared] Add the no-write proof test (SC-007): grep the module
   for zero write calls; a default run changes no tracked file (`git status`
   clean); `build_gap_inventory` triggers no DB/network import. (FR-009, FR-010)
-- [ ] T017 [P] [US-shared] Add the generic proof test (SC-010): run the SAME
+- [x] T017 [P] [US-shared] Add the generic proof test (SC-010): run the SAME
   composer over the `mixed/` table and `second_table/` with no per-table branch;
   and the vocabulary-parity test (SC-002): assert the detector's status set
   equals `coverage_status._ENUM` (imported), proving it matches SL1 with no
   minted status. (FR-002, FR-014)
-- [ ] T018 Final gate: run `ruff format --check src tests` + `ruff check src
+- [x] T018 Final gate: run `ruff format --check src tests` + `ruff check src
   tests` + `pytest tests/unit/test_gap_detector.py tests/unit/test_scorecard.py
   -q`; confirm `retail check` still exits as before and the rules-manifest count
   is UNCHANGED (no gate added, FR-008/SC-009), and SL1's output is unchanged

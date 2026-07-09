@@ -281,6 +281,46 @@ def _add_dashboard_planner_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_gap_detector_parser(sub: argparse._SubParsersAction) -> None:
+    """`dashboard-gaps` (spec 117): read-only pre-design gap inventory. Given a
+    human-supplied page-intent (business questions + their required metrics/
+    dimensions), classifies each required item against the table's committed
+    metric contracts, gold_star dimensions, and open owner decisions into ONE of
+    SL1's five coverage statuses plus a named blocker. Writes nothing, records no
+    pass, adds no gate, emits no score."""
+    p = sub.add_parser(
+        "dashboard-gaps",
+        help=(
+            "read-only pre-design gap inventory for one table + a supplied "
+            "page-intent; per-item coverage status + named blocker, no score"
+        ),
+    )
+    p.add_argument("--repo", default=".", help="repo root to read from")
+    p.add_argument(
+        "--table",
+        required=True,
+        help="table identity (the mappings/<table>/ directory name)",
+    )
+    p.add_argument(
+        "--page-intent",
+        dest="page_intent",
+        default=None,
+        metavar="PATH",
+        help=(
+            "path to the human-supplied page-intent YAML (business questions with "
+            "their required metrics/dimensions); without it, a document-level GAP "
+            "is reported and nothing is classified"
+        ),
+    )
+    p.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("text", "json"),
+        default="text",
+        help="'text' (default) is human-readable; 'json' emits the inventory document.",
+    )
+
+
 def _add_check_parser(sub: argparse._SubParsersAction) -> None:
     """`check`: static governance checks. Extracted from ``_build_parser`` (with
     ``validate``/``semantic-check``/``value-check``/``demo``) to shrink the
@@ -799,6 +839,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_pii_notice_parser(sub)
     _add_approver_view_parser(sub)
     _add_dashboard_planner_parser(sub)
+    _add_gap_detector_parser(sub)
 
     # `kit-lint` (feature 072): standalone Maintenance-Automation step (NOT a `retail
     # check` rule -- it parses yaml). Fails loud (exit 1) when a compass PROJECTION
