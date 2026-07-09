@@ -22,16 +22,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-# Closed set of clearance tokens the composer must NEVER author in its own voice
-# (they may appear ONLY inside a verbatim-quoted committed disposition). The
-# verifier (tests) enforces this against a GAP line.
-_CLEARANCE_TOKENS: tuple[str, ...] = (
-    "safe",
-    "cleared",
-    "no pii risk",
-    "approved",
-    "ok to publish",
-)
+# The composer NEVER authors a clearance verdict ("safe"/"cleared"/etc.) in its
+# own voice -- the only evaluative text is a verbatim, attributed echo of a
+# committed disposition. That invariant is enforced mechanically by the verifier
+# (tests/unit/test_pii_notice.py, V3), which owns the closed clearance denylist.
 
 
 def _load_yaml_mapping(path: Path) -> dict[str, Any] | None:
@@ -66,52 +60,52 @@ def _deviation_reason_by_id(data: dict[str, Any], ref: str) -> str | None:
     return None
 
 
+def _drop_finding(column: str, col: dict[str, Any]) -> dict[str, Any]:
+    """A dropped pii:true column: its own ``reason`` is the disposition."""
+    reason = col.get("reason")
+    disposition = reason if isinstance(reason, str) and reason else None
+    return {
+        "column": column,
+        "decision": "drop",
+        "state": "decided_dropped" if disposition else "undecided",
+        "disposition": disposition,
+        "disposition_source": f"columns[{column}].reason" if disposition else None,
+    }
+
+
+def _keep_finding(
+    column: str, col: dict[str, Any], data: dict[str, Any]
+) -> dict[str, Any]:
+    """A kept pii:true column: disposition is the deviation whose id EXACTLY
+    matches ``deviation_ref``. No match -> undecided (never a prose guess)."""
+    ref = col.get("deviation_ref")
+    disposition = (
+        _deviation_reason_by_id(data, ref) if isinstance(ref, str) and ref else None
+    )
+    return {
+        "column": column,
+        "decision": "keep",
+        "state": "decided_kept" if disposition else "undecided",
+        "disposition": disposition,
+        "disposition_source": (
+            f"defaults.deviations[{ref}].reason" if disposition else None
+        ),
+    }
+
+
 def _finding_for_column(col: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
     """Resolve one pii:true column to a finding (data-model.md).
 
     drop -> decided_dropped (own reason). keep -> decided_kept IFF a deviation_ref
-    exactly matches a deviation id carrying a reason; else undecided. An
-    intra-file contradiction (kept but also among drop signals) -> inconsistent.
+    exactly matches a deviation id carrying a reason; else undecided. Any other
+    decision -> undecided (never a guess).
     """
     column = str(col.get("source_name", ""))
     decision = col.get("decision")
-
     if decision == "drop":
-        reason = col.get("reason")
-        disposition = reason if isinstance(reason, str) and reason else None
-        return {
-            "column": column,
-            "decision": "drop",
-            "state": "decided_dropped" if disposition else "undecided",
-            "disposition": disposition,
-            "disposition_source": (
-                f"columns[{column}].reason" if disposition else None
-            ),
-        }
-
+        return _drop_finding(column, col)
     if decision == "keep":
-        ref = col.get("deviation_ref")
-        disposition = (
-            _deviation_reason_by_id(data, ref) if isinstance(ref, str) and ref else None
-        )
-        if disposition is not None:
-            return {
-                "column": column,
-                "decision": "keep",
-                "state": "decided_kept",
-                "disposition": disposition,
-                "disposition_source": f"defaults.deviations[{ref}].reason",
-            }
-        return {
-            "column": column,
-            "decision": "keep",
-            "state": "undecided",
-            "disposition": None,
-            "disposition_source": None,
-        }
-
-    # No / unrecognized decision on a pii:true column: treat as undecided (never
-    # a guess); a real inconsistency (kept AND dropped) is caught by the caller.
+        return _keep_finding(column, col, data)
     return {
         "column": column,
         "decision": decision if isinstance(decision, str) else None,
@@ -197,11 +191,8 @@ def _render_finding(finding: dict[str, Any], source_path: str) -> str:
     )
 
 
-def render_markdown(notice: dict[str, Any]) -> str:
-    """Render the notice model to the ASCII markdown notice body (UTF-8 no BOM)."""
-    table = notice["table"]
-    source_path = notice["source_path"]
-    lines = [
+def _header_lines(table: str, source_path: str) -> list[str]:
+    return [
         f"# Personal-Data-Touch Notice -- {table}",
         "",
         f"Source: {source_path}",
@@ -210,6 +201,28 @@ def render_markdown(notice: dict[str, Any]) -> str:
         "",
     ]
 
+
+def _flagged_column_lines(notice: dict[str, Any], source_path: str) -> list[str]:
+    """The PII-flagged-columns section body: decided disclosure lines, then a
+    Gaps section for undecided ones. Assumes at least one pii:true column."""
+    findings = notice["findings"]
+    decided = [f for f in findings if f["state"] != "undecided"]
+    gaps = [f for f in findings if f["state"] == "undecided"]
+
+    lines = [_render_finding(f, source_path) for f in decided]
+    if not decided:
+        lines.append("No PII-flagged column has a recorded decision yet.")
+    if gaps:
+        lines += ["", "## Gaps", ""]
+        lines += [_render_finding(f, source_path) for f in gaps]
+    return lines
+
+
+def render_markdown(notice: dict[str, Any]) -> str:
+    """Render the notice model to the ASCII markdown notice body (UTF-8 no BOM)."""
+    source_path = notice["source_path"]
+    lines = _header_lines(notice["table"], source_path)
+
     if notice["document_gap"] is not None:
         lines.append(
             f"GAP: document -- {notice['document_gap']}. "
@@ -217,8 +230,7 @@ def render_markdown(notice: dict[str, Any]) -> str:
         )
         return "\n".join(lines) + "\n"
 
-    lines.append("## PII-flagged columns")
-    lines.append("")
+    lines += ["## PII-flagged columns", ""]
     if notice["no_pii"]:
         lines.append(
             "No column in this table is flagged as personal data (pii:true) "
@@ -226,20 +238,6 @@ def render_markdown(notice: dict[str, Any]) -> str:
         )
         return "\n".join(lines) + "\n"
 
-    decided = [f for f in notice["findings"] if f["state"] != "undecided"]
-    gaps = [f for f in notice["findings"] if f["state"] == "undecided"]
-
-    if decided:
-        for finding in decided:
-            lines.append(_render_finding(finding, source_path))
-    else:
-        lines.append("No PII-flagged column has a recorded decision yet.")
-
-    if gaps:
-        lines.append("")
-        lines.append("## Gaps")
-        lines.append("")
-        for finding in gaps:
-            lines.append(_render_finding(finding, source_path))
+    lines += _flagged_column_lines(notice, source_path)
 
     return "\n".join(lines) + "\n"
