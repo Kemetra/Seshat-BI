@@ -53,9 +53,13 @@ One per `pii: true` column. The unit the notice renders.
   guesses -- an unlinked kept-PII column is a GAP, never a false clearance
   (Principle-V hazard). The matched deviation's `reason` is the authoritative
   disposition text (not the column's own `reason`).
-- Column both `pii: true`+`keep` AND appearing among drop signals, or other
-  intra-file contradiction -> `state` = `inconsistent` (GAP naming both loci,
-  FR-010).
+- A `pii: true` column whose `source_name` appears in `columns[]` with BOTH a
+  `keep` and a `drop` decision (an intra-file contradiction) -> `state` =
+  `inconsistent`, rendered as a GAP naming both in-file loci and marked "NOT
+  cleared" -- never a silent pick, never a decided disclosure (FR-010).
+  Implemented: `_conflicting_columns` computes the contradicted `source_name`
+  set; `_finding_for_column` marks those `inconsistent` BEFORE the keep/drop
+  branches.
 
 ### PiiNotice (the output model)
 

@@ -10,6 +10,7 @@ a GAP line (V3), no score appears (V4), and the join is by deviation_ref not pro
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -90,6 +91,20 @@ columns:
     pii: false
 """
 
+# inconsistent (FR-010): the SAME source_name appears with BOTH keep and drop --
+# a contradictory intra-file decision the notice must GAP, never silently pick.
+INCONSISTENT = """
+columns:
+  - source_name: "customer_id"
+    decision: "keep"
+    pii: true
+    deviation_ref: "RC4"
+  - source_name: "customer_id"
+    decision: "drop"
+    reason: "also listed as a drop -- contradicts the keep entry."
+    pii: true
+"""
+
 
 # --------------------------------------------------------------------------- #
 # the verifier (T003) -- V1/V2/V3/V4/V7
@@ -115,15 +130,14 @@ def assert_notice_is_faithful(notice_text: str, source_map: dict) -> None:
             f"V2: pii:true column {c['source_name']!r} missing from notice"
         )
 
-    # V4 no-score: no digit-bearing score/count/percentage token authored.
-    # (Dates inside a quoted disposition are fine; we forbid a bare "N of M" /
-    # percent the composer would author -- none of our fixtures' authored text
-    # contains one, so assert the composer adds no '%' and no 'N of'.)
-    assert "%" not in notice_text.replace("Q1", ""), "V4: authored a percent token"
-    assert (
-        " of " not in notice_text.lower().split("## gaps")[0].replace("records no", "")
-        or "N of M" not in notice_text
-    ), "V4: authored an N-of-M count"
+    # V4 no-score: no numeric score/count/percentage token in COMPOSER-AUTHORED
+    # text. A committed disposition may itself contain "%" or a number (e.g. a
+    # date) -- that is an attributed echo, not an authored score -- so strip the
+    # double-quoted disposition spans before scanning (same authored-vs-echoed
+    # distinction V3 makes for clearance tokens).
+    authored = re.sub(r'"[^"]*"', "", notice_text)
+    assert "%" not in authored, "V4: authored a percent token"
+    assert "N of M" not in authored, "V4: authored an N-of-M count"
 
     # V1 verbatim + V3 never-clear, per line.
     for raw in notice_text.splitlines():
@@ -230,6 +244,19 @@ def test_keep_without_deviation_ref_is_gap(tmp_path):
     assert "GAP: customer_id" in body
 
 
+def test_inconsistent_gaps_both_loci(tmp_path):
+    # FR-010: a source_name with BOTH keep and drop -> inconsistent GAP, never a
+    # silent pick. The notice must NOT present it as decided/cleared.
+    notice, body, sm = _compose(tmp_path, "t", INCONSISTENT)
+    states = {f["state"] for f in notice["findings"]}
+    assert "inconsistent" in states
+    assert "CONTRADICTORY decisions" in body
+    assert "NOT cleared" in body
+    # never emits a decided disclosure for the contradicted column
+    assert "Recorded disposition" not in body
+    assert_notice_is_faithful(body, sm)
+
+
 # --------------------------------------------------------------------------- #
 # US3 -- missing / unreadable input surfaced, not fabricated
 # --------------------------------------------------------------------------- #
@@ -279,3 +306,28 @@ def test_generic_two_tables(tmp_path):
     n2 = build_pii_notice(tmp_path, "table_two")
     assert n1["findings"][0]["state"] == "decided_kept"
     assert n2["findings"][0]["state"] == "decided_dropped"
+
+
+def test_cli_write_touches_only_the_notice_file(tmp_path):
+    # SC-005 exercised through the CLI handler (where the ONLY write lives, not
+    # the composer): --write creates exactly mappings/<table>/pii-touch-notice.md
+    # and mutates no other file in the table dir.
+    import argparse
+
+    from retail.cli.commands.pii_notice import pii_notice_main
+
+    _write_source_map(tmp_path, "t", DECIDED_KEPT)
+    tdir = tmp_path / "mappings" / "t"
+    before = {p.name for p in tdir.iterdir()}
+
+    args = argparse.Namespace(
+        repo=str(tmp_path), table="t", output_format="text", write=True
+    )
+    rc = pii_notice_main(args)
+    assert rc == 0
+
+    after = {p.name for p in tdir.iterdir()}
+    new = after - before
+    assert new == {"pii-touch-notice.md"}, f"expected only the notice, got {new}"
+    # the source-map it read is byte-unchanged
+    assert (tdir / "source-map.yaml").read_text(encoding="utf-8") == DECIDED_KEPT

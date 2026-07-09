@@ -93,14 +93,46 @@ def _keep_finding(
     }
 
 
-def _finding_for_column(col: dict[str, Any], data: dict[str, Any]) -> dict[str, Any]:
+def _conflicting_columns(columns: list[Any]) -> set[str]:
+    """source_names that appear with BOTH a keep and a drop decision within the
+    same file -- an intra-file contradiction the notice must GAP (FR-010), never
+    silently resolve. Returns the set of contradicted names."""
+    decisions: dict[str, set[str]] = {}
+    for col in columns:
+        if not isinstance(col, dict):
+            continue
+        name = col.get("source_name")
+        decision = col.get("decision")
+        if isinstance(name, str) and isinstance(decision, str):
+            decisions.setdefault(name, set()).add(decision)
+    return {name for name, ds in decisions.items() if {"keep", "drop"} <= ds}
+
+
+def _inconsistent_finding(column: str) -> dict[str, Any]:
+    """A pii:true column with contradictory decisions in the same file (FR-010).
+    Rendered as a GAP naming both in-file loci; never a silent pick."""
+    return {
+        "column": column,
+        "decision": "keep/drop conflict",
+        "state": "inconsistent",
+        "disposition": None,
+        "disposition_source": f"columns[{column}] (both keep and drop entries)",
+    }
+
+
+def _finding_for_column(
+    col: dict[str, Any], data: dict[str, Any], conflicts: set[str]
+) -> dict[str, Any]:
     """Resolve one pii:true column to a finding (data-model.md).
 
-    drop -> decided_dropped (own reason). keep -> decided_kept IFF a deviation_ref
-    exactly matches a deviation id carrying a reason; else undecided. Any other
-    decision -> undecided (never a guess).
+    A source_name with contradictory decisions in the same file -> inconsistent
+    (GAP, FR-010). Else drop -> decided_dropped (own reason); keep ->
+    decided_kept IFF a deviation_ref exactly matches a deviation id carrying a
+    reason, else undecided; any other decision -> undecided (never a guess).
     """
     column = str(col.get("source_name", ""))
+    if column in conflicts:
+        return _inconsistent_finding(column)
     decision = col.get("decision")
     if decision == "drop":
         return _drop_finding(column, col)
@@ -151,8 +183,9 @@ def build_pii_notice(repo_root: Path | str, table: str) -> dict[str, Any]:
             "read_only_proof": True,
         }
 
+    conflicts = _conflicting_columns(columns)
     findings = [
-        _finding_for_column(col, data)
+        _finding_for_column(col, data, conflicts)
         for col in columns
         if isinstance(col, dict) and col.get("pii") is True
     ]
@@ -183,6 +216,14 @@ def _render_finding(finding: dict[str, Any], source_path: str) -> str:
             f'"{finding["disposition"]}" '
             f"({source_path}, {finding['disposition_source']})."
         )
+    if state == "inconsistent":
+        # FR-010: contradictory decisions in the same file -> GAP naming both
+        # loci; never a silent pick, never implied clearance.
+        return (
+            f"- GAP: {column} -- pii:true with CONTRADICTORY decisions "
+            f"(checked: {source_path} {finding['disposition_source']}). "
+            f"This column is NOT cleared; the keep/drop conflict must be resolved."
+        )
     # undecided -> GAP, always "NOT cleared", never a clearance token.
     return (
         f"- GAP: {column} -- pii:true with NO recorded governance disposition "
@@ -202,12 +243,15 @@ def _header_lines(table: str, source_path: str) -> list[str]:
     ]
 
 
+_GAP_STATES = frozenset({"undecided", "inconsistent"})
+
+
 def _flagged_column_lines(notice: dict[str, Any], source_path: str) -> list[str]:
     """The PII-flagged-columns section body: decided disclosure lines, then a
-    Gaps section for undecided ones. Assumes at least one pii:true column."""
+    Gaps section for undecided/inconsistent ones. Assumes >=1 pii:true column."""
     findings = notice["findings"]
-    decided = [f for f in findings if f["state"] != "undecided"]
-    gaps = [f for f in findings if f["state"] == "undecided"]
+    decided = [f for f in findings if f["state"] not in _GAP_STATES]
+    gaps = [f for f in findings if f["state"] in _GAP_STATES]
 
     lines = [_render_finding(f, source_path) for f in decided]
     if not decided:
