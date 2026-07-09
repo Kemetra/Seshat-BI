@@ -129,6 +129,15 @@ def assert_refusal_case_complete(
         assert f"question {qid}" in refusal_srcs, (
             f"V1: open question {qid} missing from refusal case"
         )
+    # COUNT check (both directions, from the independent hand-authored oracle):
+    # too few = a dropped open question; too MANY = a leaked ANSWERED question
+    # (the backtick-parse bug the real fixture exposed). This is the assertion
+    # that makes V2 non-vacuous for questions -- the guarantee sits ON the risk.
+    question_items = [i for i in refusal if "question " in i["source"]]
+    assert len(question_items) == len(expected_open_question_ids), (
+        f"V2: question refusal count {len(question_items)} != expected open "
+        f"{len(expected_open_question_ids)} (dropped-open or leaked-answered)"
+    )
 
     # V2 correct-side: reassurance holds no blocked/warning reason.
     reassurance_text = " ".join(str(r) for r in reassurance)
