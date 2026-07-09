@@ -372,6 +372,37 @@ def test_missing_questions_file_not_no_decisions(tmp_path):
     assert any("unresolved-questions.md" in g for g in view["document_gaps"])
 
 
+def test_missing_ledger_named_even_without_deps(tmp_path):
+    # Codex P2 / SC-008: a missing unresolved-questions.md must be NAMED even when
+    # no item depends on it -- never a silent "nothing blocks design".
+    _write_table(
+        tmp_path,
+        "widget",
+        {"A": _metric_yaml("A", "pass", ["amount"])},
+        {"questions": None},
+    )
+    intent = _write_intent(
+        tmp_path,
+        "nd.yaml",
+        "questions:\n  - question: Q\n    metrics: [A]\n    dimensions: [region]\n",
+    )
+    view = build_gap_inventory(tmp_path, "widget", intent)
+    assert any("unresolved-questions.md" in g for g in view["document_gaps"])
+    assert "Nothing blocks design" not in render_view(view)
+
+
+def test_unreadable_contract_is_unverifiable(tmp_path):
+    # Codex P2 / FR-013: a present-but-unreadable metric contract is reported
+    # unverifiable, never silently "Planned" (which hides a broken committed file).
+    _write_table(tmp_path, "widget", {"M": "[ this is not valid yaml\n"})
+    intent = _write_intent(
+        tmp_path, "ur.yaml", "questions:\n  - question: Q\n    metrics: [M]\n"
+    )
+    view = build_gap_inventory(tmp_path, "widget", intent)
+    assert view["items"][0]["status"] == "Blocked -- needs business definition"
+    assert "unreadable" in view["items"][0]["blocker"].lower()
+
+
 # --------------------------------------------------------------------------- #
 # cross-cutting: no-write proof (SC-007), vocabulary parity (SC-002), generic
 # --------------------------------------------------------------------------- #

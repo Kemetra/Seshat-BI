@@ -42,6 +42,7 @@ from .coverage_status import (
 )
 
 _ANSWERED = "answered"
+_UNREADABLE = "<unreadable>"
 
 
 def _load_yaml_mapping(path: Path) -> dict[str, Any] | None:
@@ -127,6 +128,14 @@ def _load_contracts(metrics_dir: Path) -> dict[str, dict[str, Any]] | None:
     for path in sorted(metrics_dir.glob("*.yaml")):
         data = _load_yaml_mapping(path)
         if data is None:
+            # Present but unreadable / invalid YAML: record by filename stem so a
+            # required metric of that name is reported UNVERIFIABLE, never silently
+            # "Planned" (which would hide a broken committed contract).
+            contracts[path.stem] = {
+                "status": _UNREADABLE,
+                "columns": [],
+                "rel": path.name,
+            }
             continue
         name = str(data.get("name", path.stem)).strip()
         readiness = data.get("readiness")
@@ -304,6 +313,12 @@ def _metric_contract_status(
             f"{metrics_rel}{item['name']}.yaml",
         )
     rel = f"{metrics_rel}{contract['rel']}"
+    if contract["status"] == _UNREADABLE:
+        return _blocker(
+            BLOCKED_NEEDS_DEFINITION,
+            "contract file present but unreadable or invalid YAML",
+            rel,
+        )
     if contract["status"] != "pass":
         return _blocker(
             BLOCKED_NEEDS_DEFINITION,
@@ -407,7 +422,11 @@ def _document_gaps(
             "bindings unverifiable",
         ),
         (
-            any(i["depends_on"] for i in items),
+            # ALWAYS relevant once a page is being assessed: SC-008 requires a
+            # missing owner-decision ledger to be NAMED, never silently treated as
+            # 'no open decisions' (which would let "nothing blocks design" print
+            # without the ledger having been read).
+            bool(items),
             ctx["decisions"] is None,
             f"mappings/{table}/unresolved-questions.md not found -- owner decisions "
             "unverifiable (NOT the same as 'no open decisions')",
