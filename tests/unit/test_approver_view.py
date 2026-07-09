@@ -89,64 +89,77 @@ QUESTIONS_AWKWARD = """
 
 
 # --------------------------------------------------------------------------- #
-# the completeness verifier (V1/V2/V3/V5) -- question oracle is HAND-AUTHORED
+# the completeness verifier (V1/V2/V3/V5), split into focused checks.
+# The question-side oracle is HAND-AUTHORED (never the production parser output).
 # --------------------------------------------------------------------------- #
-def assert_refusal_case_complete(
-    view: dict,
-    status_yaml: dict,
-    expected_open_question_ids: set[str],
-) -> None:
-    """V1 completeness + V2 correct-side. `expected_open_question_ids` is the
-    hand-authored ground truth (NOT the production parser's output)."""
-    refusal = view["refusal_case"]
-    reassurance = view["reassurance"]
+_APPROVAL_STAGES = (
+    "mapping_ready",
+    "semantic_model_ready",
+    "dashboard_ready",
+    "publish_ready",
+)
 
-    # V1 (stages): every blocked/warning reason + every unmet approval present.
-    stages = status_yaml.get("stages") or {}
-    approvals = status_yaml.get("approvals") or []
-    approved_stages = {a.get("stage") for a in approvals if isinstance(a, dict)}
-    refusal_reasons = [i["reason"] for i in refusal]
-    for stage, block in stages.items():
+
+def _assert_blocked_reasons_present(block: dict, refusal_reasons: list[str]) -> None:
+    if block.get("status") not in ("blocked", "warning"):
+        return
+    for reason in block.get("blocking_reasons") or []:
+        assert reason in refusal_reasons, f"V1: dropped stage reason {reason!r}"
+
+
+def _assert_unmet_approval_present(
+    stage: str, block: dict, approved: set, refusal: list[dict]
+) -> None:
+    unmet = (
+        block.get("status") == "pass"
+        and stage in _APPROVAL_STAGES
+        and stage not in approved
+    )
+    if unmet:
+        assert any(stage in i["source"] for i in refusal), (
+            f"V1: unmet approval for {stage} missing from refusal case"
+        )
+
+
+def _check_v1_stages(refusal: list[dict], status_yaml: dict) -> None:
+    """Every blocked/warning reason + every unmet approval is in the refusal case."""
+    approved = {
+        a.get("stage")
+        for a in (status_yaml.get("approvals") or [])
+        if isinstance(a, dict)
+    }
+    reasons = [i["reason"] for i in refusal]
+    for stage, block in (status_yaml.get("stages") or {}).items():
         if not isinstance(block, dict):
             continue
-        if block.get("status") in ("blocked", "warning"):
-            for reason in block.get("blocking_reasons") or []:
-                assert reason in refusal_reasons, f"V1: dropped stage reason {reason!r}"
-        if block.get("status") == "pass" and stage in (
-            "mapping_ready",
-            "semantic_model_ready",
-            "dashboard_ready",
-            "publish_ready",
-        ):
-            if stage not in approved_stages:
-                assert any(stage in i["source"] for i in refusal), (
-                    f"V1: unmet approval for {stage} missing from refusal case"
-                )
+        _assert_blocked_reasons_present(block, reasons)
+        _assert_unmet_approval_present(stage, block, approved, refusal)
 
-    # V1 (questions): every hand-authored OPEN id present; V2: no answered id.
-    refusal_srcs = " ".join(i["source"] for i in refusal)
-    for qid in expected_open_question_ids:
-        assert f"question {qid}" in refusal_srcs, (
+
+def _check_v1_v2_questions(refusal: list[dict], expected_open_ids: set[str]) -> None:
+    """V1: every hand-authored OPEN id present. V2 (non-vacuous): the question-
+    sourced refusal COUNT equals the expected-open count -- too few = a dropped
+    open, too many = a leaked ANSWERED (the backtick-parse bug the real fixture
+    exposed). The guarantee sits ON the risk, not beside it."""
+    srcs = " ".join(i["source"] for i in refusal)
+    for qid in expected_open_ids:
+        assert f"question {qid}" in srcs, (
             f"V1: open question {qid} missing from refusal case"
         )
-    # COUNT check (both directions, from the independent hand-authored oracle):
-    # too few = a dropped open question; too MANY = a leaked ANSWERED question
-    # (the backtick-parse bug the real fixture exposed). This is the assertion
-    # that makes V2 non-vacuous for questions -- the guarantee sits ON the risk.
     question_items = [i for i in refusal if "question " in i["source"]]
-    assert len(question_items) == len(expected_open_question_ids), (
+    assert len(question_items) == len(expected_open_ids), (
         f"V2: question refusal count {len(question_items)} != expected open "
-        f"{len(expected_open_question_ids)} (dropped-open or leaked-answered)"
+        f"{len(expected_open_ids)} (dropped-open or leaked-answered)"
     )
 
-    # V2 correct-side: reassurance holds no blocked/warning reason.
-    reassurance_text = " ".join(str(r) for r in reassurance)
-    for reason in refusal_reasons:
-        assert reason not in reassurance_text, (
-            f"V2: refusal item in reassurance: {reason!r}"
-        )
 
-    # V3 fixed-rank order: refusal sorted by CATEGORY_RANK index, no computed value.
+def _check_v2_correct_side(refusal: list[dict], reassurance: list[dict]) -> None:
+    text = " ".join(str(r) for r in reassurance)
+    for reason in (i["reason"] for i in refusal):
+        assert reason not in text, f"V2: refusal item in reassurance: {reason!r}"
+
+
+def _check_v3_order(refusal: list[dict]) -> None:
     ranks = [i["rank"] for i in refusal]
     assert ranks == sorted(ranks), "V3: refusal not in fixed-rank order"
     for i in refusal:
@@ -154,10 +167,25 @@ def assert_refusal_case_complete(
             "V3: rank is not the enum index"
         )
 
-    # V5 no-score: no numeric score/percent/'N of M' in composer-authored text.
-    body = render_view(view)
-    authored = re.sub(r'"[^"]*"', "", body)
+
+def _check_v5_no_score(view: dict) -> None:
+    authored = re.sub(r'"[^"]*"', "", render_view(view))
     assert "N of M" not in authored, "V5: authored an N-of-M count"
+
+
+def assert_refusal_case_complete(
+    view: dict,
+    status_yaml: dict,
+    expected_open_question_ids: set[str],
+) -> None:
+    """V1 completeness + V2 correct-side + V3 order + V5 no-score.
+    `expected_open_question_ids` is the hand-authored ground truth."""
+    refusal = view["refusal_case"]
+    _check_v1_stages(refusal, status_yaml)
+    _check_v1_v2_questions(refusal, expected_open_question_ids)
+    _check_v2_correct_side(refusal, view["reassurance"])
+    _check_v3_order(refusal)
+    _check_v5_no_score(view)
 
 
 # --------------------------------------------------------------------------- #
