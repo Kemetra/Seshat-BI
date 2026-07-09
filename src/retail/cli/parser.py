@@ -169,6 +169,42 @@ def _add_blockers_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_pii_notice_parser(sub: argparse._SubParsersAction) -> None:
+    """`pii-notice` (spec 114): read-only per-column PII-disclosure notice from a
+    table's committed source-map.yaml. Echoes each pii:true column's flag +
+    recorded governance disposition verbatim (joined by the column's
+    deviation_ref); GAP-marks any pii:true column with no recorded decision.
+    Renders no publish-safety verdict, emits no score, adds no gate."""
+    p = sub.add_parser(
+        "pii-notice",
+        help=(
+            "read-only per-column PII-disclosure notice for one table from its "
+            "source-map.yaml; echoes recorded dispositions, GAP-marks undecided"
+        ),
+    )
+    p.add_argument("--repo", default=".", help="repo root to read from")
+    p.add_argument(
+        "--table",
+        required=True,
+        help="table identity (the mappings/<table>/ directory name)",
+    )
+    p.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("text", "json"),
+        default="text",
+        help="'text' (default) is human-readable; 'json' emits the notice document.",
+    )
+    p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "write the notice to mappings/<table>/pii-touch-notice.md (the only "
+            "file it writes); without it, the notice is printed"
+        ),
+    )
+
+
 def _add_check_parser(sub: argparse._SubParsersAction) -> None:
     """`check`: static governance checks. Extracted from ``_build_parser`` (with
     ``validate``/``semantic-check``/``value-check``/``demo``) to shrink the
@@ -684,6 +720,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_approvals_parser(sub)
     _add_evidence_pack_parser(sub)
     _add_blockers_parser(sub)
+    _add_pii_notice_parser(sub)
 
     # `kit-lint` (feature 072): standalone Maintenance-Automation step (NOT a `retail
     # check` rule -- it parses yaml). Fails loud (exit 1) when a compass PROJECTION

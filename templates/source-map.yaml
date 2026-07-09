@@ -122,11 +122,18 @@ defaults:
 #   silver_type   RC7: money/qty -> numeric(p,s); date -> date;
 #                 leading-zero id -> text; ordinal -> smallint
 #   missing_policy  null  (RC5 default)  |  "sentinel:'UNKNOWN'" (RC6, grouping dims ONLY)
-#   pii           true|false. If true -> decision MUST be drop (RC4, before BI layer).
+#   pii           true|false. If true -> decision MUST be drop (RC4, before BI layer)
+#                 UNLESS governance signs off to KEEP it (recorded as a deviation).
+#   deviation_ref (optional) when a pii:true column is KEPT by a governance ruling,
+#                 name the deviation id that records that ruling (matches an id under
+#                 defaults.deviations[]). A read-only PII-disclosure notice joins the
+#                 column to its governance disposition by EXACT id-match on this field
+#                 (never by scanning prose); a kept pii:true column with no
+#                 deviation_ref is reported as UNDECIDED, never as cleared.
 #   gold_placement  fact_measure | "dim:<dim_name>.<attr>" | degenerate_dim | dropped
 #                 (dim_name MUST match a name under gold_star.dimensions)
 #
-# The 4 placeholder columns below show the four shapes a column can take.
+# The 5 placeholder columns below show the shapes a column can take.
 # A real table has many more; these are obvious placeholders, NOT C086.
 # -----------------------------------------------------------------------------
 columns:
@@ -176,6 +183,17 @@ columns:
     missing_policy: null
     pii: true                            # pii:true REQUIRES decision: drop (unless governance sign-off)
     gold_placement: "dropped"
+
+  # (5) PII KEPT by a governance ruling (RC4 deviation) -- names its deviation
+  - source_name: "<SRC_PII_KEPT_COL>"    # e.g. a pseudonymous customer surrogate
+    decision: "keep"
+    reason: "kept as a dimension by governance sign-off; see the named deviation"
+    rename_to: "<entity_b>"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: true                            # KEPT only because a deviation records the ruling
+    deviation_ref: "<Dn>"                # MUST match a defaults.deviations[].id (e.g. RC4)
+    gold_placement: "dim:dim_<entity_b>.<entity_b>"
 
   # (5) a transaction identifier -> degenerate dimension on the fact (RC14)
   - source_name: "<SRC_TXN_ID>"          # e.g. an invoice/order id (often a PK part)

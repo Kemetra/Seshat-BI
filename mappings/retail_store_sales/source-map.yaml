@@ -67,6 +67,7 @@ columns:
     silver_type: "text"
     missing_policy: "null"
     pii: true                              # flagged; governance decides publish-safety (Q1)
+    deviation_ref: "RC4"                   # KEPT by the RC4 governance ruling (Q1 resolved); names its deviation
     gold_placement: "dim:dim_customer.customer_id"
 
   - source_name: "category"
