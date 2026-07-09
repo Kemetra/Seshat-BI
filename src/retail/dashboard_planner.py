@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any
 
 _BINDING_MAP = "visual-contract-binding-map.md"
+_VISUAL_LIST = "visual-list.md"
 _LAYOUT = "dashboard-layout.md"
 
 # Header substrings that identify each authoritative binding-map column. The
@@ -60,9 +61,11 @@ def _normalize_dimension(raw: str) -> str:
     ``dim_product_rss[category]`` -> ``category``; a bare ``category`` -> itself.
     Exact committed VALUE (no lowercasing, no fuzzy equate -- Clarification Q2 /
     the near-match edge case); only structural wrappers (brackets, backticks,
-    surrounding whitespace) are stripped.
+    surrounding whitespace) and trailing sentence punctuation from a free-text
+    clause (e.g. ``category?`` -> ``category``) are stripped. Committed dimension
+    tokens are punctuation-free identifiers, so this never over-strips them.
     """
-    text = raw.strip().strip("`").strip()
+    text = raw.strip().strip("`").strip().strip(".,;:!?\"'").strip()
     bracket = re.findall(r"\[([^\]]+)\]", text)
     if bracket:
         return bracket[-1].strip()
@@ -209,10 +212,68 @@ def _load_design_corpus(design_dir: Path, checked_path: str) -> dict[str, Any]:
     rows = _binding_rows(binding_text)
     if not rows:
         return corpus
+    # Page ownership: the binding-map `page` column wins; else an explicit `page`
+    # column in visual-list.md (joined by visual_id); else one page. `region` is
+    # an INTRA-page zone, never a page key -- so a single executive page with
+    # regions stays one page (no false cross-region split).
+    _apply_page_ownership(rows, _visual_page_map(design_dir))
     default_page = _subject_area(_read_text(design_dir / _LAYOUT) or binding_text)
     corpus["pages"] = _pages_from_rows(rows, default_page)
     corpus["present"] = bool(corpus["pages"])
     return corpus
+
+
+def _table_pairs(
+    text: str, left: tuple[str, ...], right: tuple[str, ...]
+) -> list[tuple[str, str]]:
+    """(left, right) cell pairs from the FIRST table carrying both columns."""
+    lines = text.splitlines()
+    for start, line in enumerate(lines):
+        headers = _cells(line)
+        if headers is None:
+            continue
+        i_left = _header_index(headers, left)
+        i_right = _header_index(headers, right)
+        if i_left is None or i_right is None:
+            continue
+        return _pairs_after(lines[start + 1 :], i_left, i_right)
+    return []
+
+
+def _pairs_after(lines: list[str], i_left: int, i_right: int) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    for line in lines:
+        cells = _cells(line)
+        if cells is None:
+            break
+        if _is_separator(cells):
+            continue
+        left, right = _col(cells, i_left), _col(cells, i_right)
+        if left and right:
+            pairs.append((left, right))
+    return pairs
+
+
+def _visual_page_map(design_dir: Path) -> dict[str, str]:
+    """visual_id -> page from visual-list.md's explicit ``page`` column, if any.
+
+    Region is intra-page and is NOT a page key; ``{}`` when no page column exists
+    (the shipped single-page corpus), leaving grouping to the single-page default.
+    """
+    text = _read_text(design_dir / _VISUAL_LIST)
+    if text is None:
+        return {}
+    return dict(_table_pairs(text, _H_ROW_ID, _H_PAGE))
+
+
+def _apply_page_ownership(
+    rows: list[dict[str, str]], ownership: dict[str, str]
+) -> None:
+    """Fill each row's page from visual-list ownership when the binding map's own
+    ``page`` column left it empty (in place; binding-map page always wins)."""
+    for row in rows:
+        if not row["page"]:
+            row["page"] = ownership.get(row["row_id"], "")
 
 
 # --------------------------------------------------------------------------- #

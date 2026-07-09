@@ -64,9 +64,39 @@ LAYOUT = """# Dashboard layout plan -- widget_sales
 - subject_area: `WidgetSales`
 """
 
+# a binding map with NO page column (single-page shape) whose two visuals belong
+# to DIFFERENT pages recorded in visual-list.md (Codex P1 cross-page case)
+NO_PAGE_BINDING = """# binding map -- widget_sales
+
+## Subject area
+
+- subject_area: `WidgetSales`
+
+## Binding map
+
+| visual_id | business_question | bound_contract | field |
+|-----------|-------------------|----------------|-------|
+| v01 | Q1 | TotalRevenue | `[TotalRevenue]` by `dim_geo[region]` |
+| v02 | Q2 | OrderCount | `[OrderCount]` by `dim_channel[channel]` |
+"""
+
+# visual-list.md carrying an explicit `page` column (joined by visual_id); the
+# `region` column is intra-page and must NOT be treated as a page key
+VISUAL_LIST_PAGES = """# Visual list -- widget_sales
+
+| page | visual_id | region | measure |
+|------|-----------|--------|---------|
+| PageA | v01 | main | TotalRevenue |
+| PageB | v02 | main | OrderCount |
+"""
+
 
 def _make_corpus(
-    root: Path, table: str, binding: str | None, layout: str = LAYOUT
+    root: Path,
+    table: str,
+    binding: str | None,
+    layout: str = LAYOUT,
+    visual_list: str | None = None,
 ) -> None:
     design = root / "mappings" / table / "design"
     design.mkdir(parents=True, exist_ok=True)
@@ -75,6 +105,8 @@ def _make_corpus(
         (design / "visual-contract-binding-map.md").write_text(
             binding, encoding="utf-8"
         )
+    if visual_list is not None:
+        (design / "visual-list.md").write_text(visual_list, encoding="utf-8")
 
 
 def _parse_fixture_keys(binding: str) -> set[tuple[str, str]]:
@@ -182,6 +214,34 @@ def test_new_verdict(tmp_path):
     assert verdict["reason"] == "disjoint"
     assert verdict["matched_rows"] == []
     assert_verdict_is_faithful(verdict, _parse_fixture_keys(HAS_PAGE_BINDING))
+
+
+def test_free_text_strips_sentence_punctuation(tmp_path):
+    # a natural-sentence free-text proposal ending in '?' must still match the
+    # committed `category` cut, not read as a distinct `category?` (Codex P2).
+    _make_corpus(tmp_path, "widget_sales", HAS_PAGE_BINDING)
+    verdict = classify_proposal(
+        tmp_path, "widget_sales", {"description": "Can we add TotalRevenue by region?"}
+    )
+    assert verdict["verdict"] == "duplicate"
+    assert verdict["proposal"][0]["dimension"] in ("region", "region?")
+    assert_verdict_is_faithful(verdict, _parse_fixture_keys(HAS_PAGE_BINDING))
+
+
+def test_page_ownership_from_visual_list(tmp_path):
+    # Codex P1: when pages are recorded in visual-list.md (an explicit `page`
+    # column) rather than a binding-map page column, the corpus must still split
+    # into pages -- so a proposal spanning two pages is `extends`, never a false
+    # `duplicate`. (region is intra-page and must NOT split the page.)
+    _make_corpus(
+        tmp_path, "widget_sales", NO_PAGE_BINDING, visual_list=VISUAL_LIST_PAGES
+    )
+    proposal = {
+        "tuples": [("Q1", "TotalRevenue", "region"), ("Q2", "OrderCount", "channel")]
+    }
+    verdict = classify_proposal(tmp_path, "widget_sales", proposal)
+    assert verdict["verdict"] == "extends"  # no single page covers both
+    assert verdict["matched_page"] in ("PageA", "PageB")
 
 
 def test_multi_page_precedence(tmp_path):
