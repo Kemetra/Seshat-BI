@@ -370,10 +370,23 @@ def _all_triples(
 
 
 def _entry_matching(
-    entries: list[dict[str, Any]], table: str, response: dict[str, Any]
+    root: Path,
+    entries: list[dict[str, Any]],
+    table: str,
+    response: dict[str, Any],
 ) -> dict[str, Any] | None:
-    """Find the projection entry behind a --table response: by the recorded
-    table name, or by the mappings/<dir>/ directory identity."""
+    """Find the projection entry behind a --table response. The authoritative
+    match is the FILE run-next itself resolved (its ``_find_status_data``
+    matches dir name / recorded table / source_id -- reused, not re-derived),
+    keyed by source path; the name comparison stays as a fallback."""
+    from retail.run_next import _find_status_data
+
+    status_path, _data, _error = _find_status_data(root, table)
+    if status_path is not None:
+        source_path = status_path.relative_to(root).as_posix()
+        for entry in entries:
+            if entry["source_path"] == source_path:
+                return entry
     for entry in entries:
         names = {entry.get("table"), _dir_name(entry["source_path"])}
         if names & {response.get("table"), table}:
@@ -401,7 +414,7 @@ def build_agent_next_document(
 
     if table is not None:
         response = build_run_next_response(root, table)
-        entry = _entry_matching(entries, table, response)
+        entry = _entry_matching(root, entries, table, response)
         return _compose(response, entry, _summaries(triples))
 
     if not triples:

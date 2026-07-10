@@ -224,6 +224,23 @@ def test_table_argument_focuses_that_table(tmp_path: Path) -> None:
     assert document["current_stage"] == "mapping_ready"
 
 
+def test_table_argument_matches_source_id_and_keeps_evidence(
+    tmp_path: Path,
+) -> None:
+    """--table <source_id> on a file with no string `table:` field must still
+    surface the recorded stages and evidence (the CLI help promises source_id
+    matching)."""
+    body = _MAPPING_NOT_STARTED.replace(
+        'table: "silver.orders"\n', 'source_id: "src-042"\n'
+    )
+    _write_status(tmp_path, "orders", body)
+    document = build_agent_next_document(tmp_path, "src-042")
+    assert document["current_stage"] == "mapping_ready"
+    assert document["readiness_state"] == "not_started"
+    assert document["evidence"][0]["stage"] == "source_ready"
+    assert document["evidence"][0]["items"] == ["mappings/orders/source-profile.md"]
+
+
 def test_validation_commands_are_present_and_runnable_shapes(
     tmp_path: Path,
 ) -> None:
