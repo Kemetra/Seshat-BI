@@ -212,9 +212,7 @@ def _next_allowed_action(response: dict[str, Any]) -> str:
         )
     if outcome == "terminal_pass":
         return "No pipeline action: all seven readiness stages pass for this table."
-    return (
-        "Repair the readiness-status.yaml input defect before any pipeline work."
-    )
+    return "Repair the readiness-status.yaml input defect before any pipeline work."
 
 
 def _readiness_state(

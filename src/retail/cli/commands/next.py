@@ -69,9 +69,7 @@ def _render_agent_text(document: dict) -> str:
     lines += _agent_list_lines("blocking_reasons", document["blocking_reasons"])
     lines.append(f"next_allowed_action: {document['next_allowed_action']}")
     lines += _agent_list_lines("forbidden_scope", document["forbidden_scope"])
-    lines += _agent_list_lines(
-        "validation_commands", document["validation_commands"]
-    )
+    lines += _agent_list_lines("validation_commands", document["validation_commands"])
     lines.append(f"stop_point: {document['stop_point']}")
     for caveat in document.get("caveats", []):
         lines.append(f"caveat: {caveat.get('kind')}: {caveat.get('detail')}")

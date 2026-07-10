@@ -117,9 +117,7 @@ def test_gate_rule_no_silver_before_mapping_ready(tmp_path: Path) -> None:
     assert "No silver work" in joined
     # The recorded Source Ready evidence is surfaced verbatim.
     assert document["evidence"][0]["stage"] == "source_ready"
-    assert document["evidence"][0]["items"] == [
-        "mappings/orders/source-profile.md"
-    ]
+    assert document["evidence"][0]["items"] == ["mappings/orders/source-profile.md"]
 
 
 def test_blocked_table_surfaces_verbatim_reasons_and_stops(tmp_path: Path) -> None:
@@ -214,8 +212,15 @@ def test_per_table_json_path_is_unchanged(tmp_path: Path, capsys) -> None:
     original spec-080 response shape."""
     _write_status(tmp_path, "orders", _MAPPING_NOT_STARTED)
     exit_code = main(
-        ["next", "--repo", str(tmp_path), "--table", "silver.orders",
-         "--format", "json"]
+        [
+            "next",
+            "--repo",
+            str(tmp_path),
+            "--table",
+            "silver.orders",
+            "--format",
+            "json",
+        ]
     )
     assert exit_code == 0
     parsed = json.loads(capsys.readouterr().out)
