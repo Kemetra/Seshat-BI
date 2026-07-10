@@ -76,31 +76,40 @@ def _add_status_parser(sub: argparse._SubParsersAction) -> None:
 
 
 def _add_next_parser(sub: argparse._SubParsersAction) -> None:
-    """`next` (spec 080): read-only run-next readiness answer for ONE table.
-    Computes the earliest allowed action from the seven stage statuses; it never
-    writes, executes, approves, or emits a numeric score."""
+    """`next` (spec 080 + Agent-Driven v0.1): read-only run-next readiness
+    answer. With --table (text/json) it is the original per-table response;
+    without --table, or with --format agent, it emits the agent-facing
+    next-action document (current_stage, readiness_state, evidence,
+    blocking_reasons, next_allowed_action, forbidden_scope,
+    validation_commands, stop_point). It never writes, executes, approves, or
+    emits a numeric readiness value."""
     p = sub.add_parser(
         "next",
         help=(
-            "read-only run-next answer for one table: next action, blocker, "
-            "approval requirement, terminal pass, or input defect"
+            "read-only run-next answer: next action, blocker, approval "
+            "requirement, terminal pass, or input defect; without --table (or "
+            "with --format agent) emits the agent-facing next-action document"
         ),
     )
     p.add_argument("--repo", default=".", help="repo root to read from")
     p.add_argument(
         "--table",
-        required=True,
+        default=None,
         help=(
             "table identity to inspect (matches readiness-status table, source_id, "
-            "or mappings/<table>/ directory)"
+            "or mappings/<table>/ directory); omit for the repo-level agent "
+            "document focused on the most urgent table"
         ),
     )
     p.add_argument(
         "--format",
         dest="output_format",
-        choices=("text", "json"),
+        choices=("text", "json", "agent"),
         default="text",
-        help="'text' (default) is human-readable; 'json' emits the stable response.",
+        help=(
+            "'text' (default) is human-readable; 'json' emits the stable "
+            "response; 'agent' emits the guarded agent-facing document"
+        ),
     )
 
 

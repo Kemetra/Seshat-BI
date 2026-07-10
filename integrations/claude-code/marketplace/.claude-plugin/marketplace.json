@@ -1,0 +1,17 @@
+{
+  "name": "seshat-bi-marketplace",
+  "owner": {
+    "name": "Ahmed Shaaban"
+  },
+  "metadata": {
+    "description": "DRAFT marketplace configuration for the Seshat BI Claude Code plugin. Not publicly released; schema and install flow must be verified against current Claude Code documentation before publication.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "seshat-bi",
+      "source": "../seshat-bi",
+      "description": "Guarded BI readiness workflow for Claude Code: drive the Seshat BI seven-stage readiness spine through its CLI, one allowed action at a time, stopping at every human gate."
+    }
+  ]
+}
