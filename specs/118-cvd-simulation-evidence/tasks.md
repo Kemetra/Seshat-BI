@@ -72,7 +72,7 @@ CRITICAL: no user-story test can assert evidence until the transforms, the measu
 ### Implementation for User Story 1
 
 - [ ] T010 [US1] Implement `render` in `src/retail/cvd_evidence.py` for text/markdown + `--format json`: a section per simulation type (simulated swatches + per-pair deltaE, closest-collapsing pairs first as a reading aid), a distinct ramp-stops section when present, an explicit "measured evidence for a human decision" preamble naming the `- [ ] **CVD distinguishability** -- OPEN` checkbox and the theme path it supports, and the BLANK reviewer/decision slot. ASCII `--`/`->`, no glyphs, no rolled-up-score/verdict/ranking token (FR-004/FR-014).
-- [ ] T011 [US1] Add the CLI verb `src/retail/cli/commands/cvd_evidence.py` (`retail cvd-evidence --theme <path> [--format text|json] [--out <path>]`) mirroring `cli/commands/pii_notice.py` / `approver_view.py` (the durable-evidence-writer verbs); it composes + renders + writes the SINGLE evidence file (default `mappings/<table>/design/cvd-simulation-evidence.md`, resolved from the theme path), and always returns exit 0 (FR-009). It ticks no checkbox, sets no theme value, touches no `readiness-status.yaml` (FR-005).
+- [ ] T011 [US1] Add the CLI verb `src/retail/cli/commands/cvd_evidence.py` (`retail cvd-evidence --theme <path> [--format text|json] [--out <path>]`) mirroring `cli/commands/pii_notice.py` / `approver_view.py` (the durable-evidence-writer verbs); it composes + renders + writes the SINGLE evidence file to the THEME-ADJACENT default path `themes/<theme-name>.cvd-simulation-evidence.md` (derived from the theme filename, NOT from a table -- there is no theme -> table resolution, Clarification Q4/FR-006), or to `--out <path>` when supplied (e.g. a reviewer placing it into `mappings/<table>/design/`); always returns exit 0 (FR-009). It ticks no checkbox, sets no theme value, touches no `readiness-status.yaml` (FR-005).
 - [ ] T012 [US1] Register + dispatch the `cvd-evidence` subcommand in `src/retail/cli/parser.py` and the CLI dispatch table (`src/retail/cli/__init__.py`), following the shipped `pii-notice`/`approver-view` wiring.
 
 **Checkpoint**: MVP -- `retail cvd-evidence --theme themes/<t>.theme.json` writes the evidence file with all three simulations + per-pair deltaE and a blank reviewer slot; US1 tests green.
@@ -83,12 +83,12 @@ CRITICAL: no user-story test can assert evidence until the transforms, the measu
 
 **Goal**: exactly one durable companion evidence file is written with a BLANK named-reviewer/decision slot; every measured value is corpus-derived and reproducible; two runs are byte-identical.
 
-**Independent Test**: run the aid; confirm exactly one file at `mappings/<table>/design/cvd-simulation-evidence.md`, a blank reviewer slot (no pre-filled verdict), every deltaE reproducible from the named theme colours, and a byte-identical second run.
+**Independent Test**: run the aid; confirm exactly one file at the theme-adjacent default `themes/<theme-name>.cvd-simulation-evidence.md` (or the `--out` path when supplied), a blank reviewer slot (no pre-filled verdict), every deltaE reproducible from the named theme colours, and a byte-identical second run.
 
 ### Tests for User Story 2 (write first, must FAIL)
 
 - [ ] T013 [P] [US2] In `tests/unit/test_cvd_evidence.py`, add `test_single_durable_file_blank_slot` (FR-006 / SC-003): the aid writes exactly one evidence file (+ optional json), the reviewer/decision slot is blank, no pass/verdict/score is pre-filled, and no OTHER file is written (the theme, `readiness-status.yaml`, and the checkbox are untouched). Assert FAIL before T015.
-- [ ] T014 [P] [US2] Add `test_deterministic_byte_identical` (FR-012 / SC-007): two runs on the unchanged theme produce byte-identical evidence files (no randomness, no wall-clock timestamp in the measured body; tie ordering uses a fixed lexical secondary order). Assert FAIL before T015.
+- [ ] T014 [P] [US2] Add `test_deterministic_byte_identical` (FR-012 / SC-007): two runs on the unchanged theme produce byte-identical evidence files (no randomness, no wall-clock timestamp in the measured body; every `delta_e76` value formatted at a FIXED decimal precision so byte-identity holds across platforms; tie ordering uses a fixed lexical secondary order). Assert FAIL before T015.
 
 ### Implementation for User Story 2
 

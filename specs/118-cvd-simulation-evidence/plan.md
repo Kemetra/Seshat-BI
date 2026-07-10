@@ -12,9 +12,10 @@ tritanope) to the theme's declared `dataColors` categorical palette (and any
 declared sequential/diverging ramp stops), then reuse the shipped `delta_e76`
 perceptual-distance function (`src/retail/color.py:83`) to MEASURE the pairwise
 distance between every colour pair AFTER each simulation. Write ONE durable
-companion evidence file under the theme's design directory containing the
-simulated swatches, the under-simulation pairwise deltaE, and a BLANK
-named-reviewer/decision slot, so a human reviewer can fill the literal
+companion evidence file (theme-adjacent by default, or at a reviewer-supplied
+`--out` path) containing the simulated swatches, the under-simulation pairwise
+deltaE, and a BLANK named-reviewer/decision slot, so a human reviewer can fill the
+literal
 `- [ ] **CVD distinguishability** -- OPEN` checkbox that `theme_gen.py:569`
 leaves open. The aid emits EVIDENCE for a human: it computes NO rolled-up score
 and NO safe/unsafe verdict (hard rule #9), ticks NO checkbox and moves NO stage
@@ -46,9 +47,15 @@ is read with stdlib `json`. No new dependency is added.
 
 **Storage**: reads ONE committed theme JSON at a caller-supplied path (the
 `themes/*.theme.json` shape the shipped `theme-compile` / `pbir-apply-theme` verbs
-read). Writes exactly ONE durable companion evidence file under the theme's design
-directory (`mappings/<table>/design/cvd-simulation-evidence.md`, plus an optional
-`--format json` shape). No DB, no network, no other write.
+read). Writes exactly ONE durable companion evidence file, THEME-ADJACENT by default
+(`themes/<theme-name>.cvd-simulation-evidence.md`, plus an optional `--format json`
+shape), or at a reviewer-supplied `--out` path. NOTE (Clarification Q4): the theme
+input is repo-global and NOT 1:1 with a table -- a theme (e.g.
+`themes/tower-retail.theme.json`) can back MANY tables (referenced by each table's
+design artifacts as `palette_source`), so there is NO deterministic theme -> table
+resolution; the default output is theme-adjacent, and placing it into a specific
+`mappings/<table>/design/` review record is an explicit `--out` choice the reviewer
+makes, never inferred. No DB, no network, no other write.
 
 **Testing**: pytest, `@pytest.mark.unit`. Fixtures under `tests/` covering: a
 palette with a red/green pair whose under-deuteranope `delta_e76` is materially
@@ -183,7 +190,13 @@ DL4 design-review-evidence artifact (`templates/design-review-evidence.md` +
 `src/retail/rules/design_review_evidence.py`), which is the durable-disclosure
 precedent. The zero-write guarantee is therefore SCOPED: structurally, the ONLY
 write call is the single evidence file; the theme JSON, `readiness-status.yaml`, and
-the OPEN checkbox are never written (verifier-asserted, SC-003).
+the OPEN checkbox are never written (verifier-asserted, SC-003). The evidence path
+is THEME-ADJACENT by default (`themes/<theme-name>.cvd-simulation-evidence.md`) --
+NOT a per-table default -- because the theme input is repo-global and not 1:1 with a
+table (Clarification Q4); a `--out` override places it into a table's design review
+record only when the reviewer asks, never by inference. This keeps the aid generic
+over any committed theme (Principle VII) and removes the underivable theme -> table
+resolution.
 
 A runtime-module shape (over a skill-only shape) is required because
 FR-002/FR-003/FR-004/FR-007/FR-012 need MECHANICAL guarantees -- deterministic

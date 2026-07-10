@@ -44,17 +44,26 @@
   each simulation as an ORDERED-BY-MEASURED-DISTANCE reading aid (the ordering is a
   presentation of the measured deltaE values, never a new computed rank); the human
   reviewer reads the evidence and decides.
-- Q: What is the output vehicle -- printed or a written companion file? -> A: A
-  written companion evidence file under the theme's design directory
-  (`mappings/<table>/design/cvd-simulation-evidence.md`) with an optional
+- Q: What is the output vehicle -- printed or a written companion file, and WHERE
+  is it written? -> A: A written companion evidence file, with an optional
   `--format json` machine shape, MIRRORING the shipped DL4 design-review-evidence
   precedent (which writes a review-evidence markdown a human cites), NOT the
   print-only posture of specs 115/116. Rationale: the CVD evidence is a DURABLE
   design-review artifact a named reviewer cites when filling the OPEN checkbox
   (exactly F035/DL4/spec-114 territory: durable disclosure -> companion file),
-  whereas 115/116 are transient triage answers -> print-only. The written file is
-  EVIDENCE with a BLANK reviewer slot; it is never `readiness-status.yaml`, never
-  the theme, and never the checkbox itself.
+  whereas 115/116 are transient triage answers -> print-only. LOCATION: because the
+  INPUT is a repo-global theme (`themes/*.theme.json`) and a theme is NOT 1:1 with a
+  table -- a single theme (e.g. `themes/tower-retail.theme.json`) can back MANY
+  tables, referenced by each table's design artifacts as `palette_source` -- there
+  is NO deterministic theme -> table resolution, so the evidence MUST NOT default to
+  a per-table path. The DEFAULT output is THEME-ADJACENT
+  (`themes/<theme-name>.cvd-simulation-evidence.md`), matching the theme-scoped input
+  and keeping the aid generic over any committed theme (Principle VII). A `--out
+  <path>` override lets a reviewer place the evidence into a specific table's design
+  review record (`mappings/<table>/design/`) WHEN they choose to; the aid never
+  infers that table itself. The written file is EVIDENCE with a BLANK reviewer slot;
+  it is never `readiness-status.yaml`, never the theme, and never the checkbox
+  itself.
 - Q: Does the aid check the OPEN box or advance any stage? -> A: NO. The literal
   `- [ ] **CVD distinguishability** -- OPEN` checkbox that `theme_gen.py:569`
   renders stays a BLANK human field. This aid produces the evidence a named
@@ -175,12 +184,12 @@ that no rolled-up "CVD score" or safe/unsafe verdict appears anywhere.
 ### User Story 2 - The evidence is a durable review artifact with a blank reviewer slot (Priority: P1)
 
 The reviewer must be able to CITE the evidence when they fill the OPEN checkbox, so
-the aid writes a durable companion evidence file under the theme's design directory
-containing the simulated swatches, the under-simulation pairwise deltaE, and a
-BLANK named-reviewer slot (mirroring the shipped DL4 design-review-evidence
-artifact). Every measured value in the file must be traceable to the committed
-theme colour it was computed from; the aid composes nothing beyond the simulation
-maths and the reused `delta_e76`.
+the aid writes a durable companion evidence file (theme-adjacent by default, or at a
+reviewer-supplied `--out` path) containing the simulated swatches, the
+under-simulation pairwise deltaE, and a BLANK named-reviewer slot (mirroring the
+shipped DL4 design-review-evidence artifact). Every measured value in the file must
+be traceable to the committed theme colour it was computed from; the aid composes
+nothing beyond the simulation maths and the reused `delta_e76`.
 
 **Why this priority**: Equal-P1 with Story 1. A transient printed answer could not
 be cited as design-review evidence; the durable, blank-slot companion file is what
@@ -188,9 +197,10 @@ makes the evidence usable in the review record and keeps the reviewer decision a
 human action (the slot is theirs to fill, not the aid's).
 
 **Independent Test**: Run the aid and confirm it writes exactly one companion file
-at the theme's design directory, that the file carries a blank named-reviewer /
-decision slot (no pre-filled verdict), that every reported deltaE is reproducible
-by re-computing `delta_e76` on the simulated colours of the named theme pair, and
+at the theme-adjacent default path (or the `--out` path when supplied), that the
+file carries a blank named-reviewer / decision slot (no pre-filled verdict), that
+every reported deltaE is reproducible by re-computing `delta_e76` on the simulated
+colours of the named theme pair, and
 that a second run on the unchanged theme produces a byte-identical file.
 
 **Acceptance Scenarios**:
@@ -288,11 +298,17 @@ or deltaE, and never presents the absence as a distinguishability result.
   checkbox, MUST NOT set `colorblind_considerate_categoricals` or any theme value,
   MUST NOT edit the theme JSON, and MUST move no readiness stage or touch
   `readiness-status.yaml` (Principle V, `never_self_grant_approval`).
-- **FR-006**: The aid MUST write exactly one durable companion evidence file under
-  the theme's design directory (with an optional machine `--format json` shape)
-  containing the simulated swatches, the under-simulation pairwise `delta_e76`
-  values, and a BLANK named-reviewer/decision slot with no pre-filled pass,
-  verdict, or score (DL4 design-review-evidence posture).
+- **FR-006**: The aid MUST write exactly one durable companion evidence file (with
+  an optional machine `--format json` shape) containing the simulated swatches, the
+  under-simulation pairwise `delta_e76` values, and a BLANK named-reviewer/decision
+  slot with no pre-filled pass, verdict, or score (DL4 design-review-evidence
+  posture). The DEFAULT location MUST be theme-adjacent
+  (`themes/<theme-name>.cvd-simulation-evidence.md`) because the theme input is
+  repo-global and NOT 1:1 with a table (Clarification Q4); the aid MUST NOT infer a
+  `<table>` from a theme path or default to a per-table location. A `--out <path>`
+  override MUST be supported so a reviewer MAY place the evidence into a specific
+  table's design review record; the aid writes only the one file (the chosen
+  location), and no other.
 - **FR-007**: Every reported simulated swatch and every reported under-simulation
   deltaE MUST be 100% derived from the committed theme colours it names -- auditably
   reproducible by applying the named simulation transform and `delta_e76` to the
@@ -315,9 +331,11 @@ or deltaE, and never presents the absence as a distinguishability result.
   committed theme it is given.
 - **FR-012**: The evidence MUST be deterministic and stable: re-running on an
   unchanged theme yields a byte-identical evidence file (no randomness, no wall-clock
-  timestamp, no data-dependent content in the measured body); tie ordering among
-  equal measured distances MUST use a fixed lexical secondary order so no computed
-  value is needed to break ties.
+  timestamp, no data-dependent content in the measured body). Every reported
+  `delta_e76` value MUST be formatted at a FIXED decimal precision so byte-identical
+  output holds across platforms (float formatting is pinned, not left to the
+  platform default). Tie ordering among equal measured distances MUST use a fixed
+  lexical secondary order so no computed value is needed to break ties.
 - **FR-013**: The aid MUST be distinct from and additive to the shipped CT-family
   rules (CT1 contrast, CT2 categorical distinctness, CT3 ramp deltaE), all of which
   operate on normal-vision colour maths; it MUST NOT restate them or add a competing
@@ -338,9 +356,12 @@ or deltaE, and never presents the absence as a distinguishability result.
   palette colours, the `delta_e76` perceptual distance between their SIMULATED
   values -- a measurement (allowed), never a rolled-up score.
 - **Evidence artifact (output)**: the durable companion markdown (with optional
-  JSON shape) written under the theme's design directory: simulated swatches +
-  under-simulation pairwise deltaE + a BLANK named-reviewer/decision slot. Never the
-  theme, never `readiness-status.yaml`, never the checkbox itself.
+  JSON shape) written theme-adjacent by default
+  (`themes/<theme-name>.cvd-simulation-evidence.md`), or at a reviewer-supplied
+  `--out` path (e.g. into a table's `mappings/<table>/design/` review record):
+  simulated swatches + under-simulation pairwise deltaE + a BLANK
+  named-reviewer/decision slot. Never the theme, never `readiness-status.yaml`,
+  never the checkbox itself.
 
 ## Success Criteria *(mandatory)*
 
@@ -393,11 +414,12 @@ or deltaE, and never presents the absence as a distinguishability result.
 - The aid is an OPTIONAL design-review evidence companion following the shipped DL4
   design-review-evidence and spec-114 durable-disclosure posture; it is never a
   prerequisite for any readiness stage and is gate-agnostic.
-- The OUTPUT VEHICLE (a durable companion file under the theme's design directory)
-  is fixed by Clarification Q4; the EXACT surface mechanism (a standalone read-only
-  runtime module + CLI verb beside the shipped design-evidence surfaces vs a skill),
-  the precise companion-file path convention, and the exact machine `--format json`
-  shape are implementation decisions for the plan phase. The spec fixes the BEHAVIOUR
+- The OUTPUT VEHICLE (a durable companion file, theme-adjacent by default with a
+  `--out` override, NOT a per-table default -- there is no theme -> table
+  resolution) is fixed by Clarification Q4; the EXACT surface mechanism (a
+  standalone read-only runtime module + CLI verb beside the shipped design-evidence
+  surfaces vs a skill), the exact theme-adjacent filename convention, and the exact
+  machine `--format json` shape are implementation decisions for the plan phase. The spec fixes the BEHAVIOUR
   (three deterministic simulations, per-pair `delta_e76` measurement, no rolled-up
   score, no checkbox tick, durable blank-slot evidence, honest absence), not the
   mechanism.
