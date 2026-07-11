@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seshat-bi/121/decision-store",
+  "title": "Seshat BI Decision Store file",
+  "description": "Shape of each of the three store files (.seshat/semantic-decisions.yaml, .seshat/kpi-contracts.yaml, .seshat/cleaning-rules.yaml): a top-level object holding decision records and batch approval sets. Fail closed: a file or record that does not validate is treated as unresolved and blocks dependent stages.",
+  "type": "object",
+  "required": ["decisions"],
+  "additionalProperties": false,
+  "properties": {
+    "decisions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/decision" }
+    },
+    "batches": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/batch" }
+    }
+  },
+  "$defs": {
+    "decision": {
+      "type": "object",
+      "required": ["id", "decision_type", "statement", "scope", "status", "evidence", "proposed_by", "proposed_at"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9_]+\\.[a-z0-9][a-z0-9.-]*$",
+          "description": "Stable slug: <decision_type>.<scope-slug>[.<n>]; unique within the project store."
+        },
+        "decision_type": {
+          "type": "string",
+          "description": "Critical types listed in enum; non-critical free types allowed via the pattern branch (only non-critical types may be batch-approved, DS3).",
+          "anyOf": [
+            {
+              "enum": [
+                "kpi_definition",
+                "pii_handling",
+                "table_grain",
+                "primary_key",
+                "relationship_cardinality",
+                "missing_value_rule",
+                "data_exclusion",
+                "policy_ruling",
+                "dashboard_blueprint_approval",
+                "publish_export"
+              ]
+            },
+            { "pattern": "^[a-z][a-z0-9_]*$" }
+          ]
+        },
+        "statement": { "type": "string", "minLength": 1 },
+        "scope": { "$ref": "#/$defs/scope_selector" },
+        "status": {
+          "enum": ["proposed", "approved", "rejected", "pending", "needs_user_input", "needs_sample", "blocked", "deferred", "superseded"]
+        },
+        "confidence": {
+          "enum": ["low", "medium", "high"],
+          "description": "Agent proposal confidence only. Never approval; never surfaced as a readiness signal."
+        },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Repo-relative paths or artifact ids. Raw suspected-PII values are forbidden in committed artifacts."
+        },
+        "proposed_by": { "type": "string", "minLength": 1 },
+        "proposed_at": { "type": "string", "format": "date" },
+        "approval": { "$ref": "#/$defs/approval" },
+        "supersedes": { "type": "string" },
+        "superseded_by": { "type": "string" },
+        "batch_id": { "type": "string" },
+        "notes": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "approved" } } },
+          "then": { "required": ["approval"] }
+        },
+        {
+          "if": { "properties": { "status": { "const": "superseded" } } },
+          "then": { "required": ["superseded_by"] }
+        },
+        {
+          "if": { "properties": { "status": { "const": "proposed" } } },
+          "then": { "required": ["confidence"] }
+        }
+      ]
+    },
+    "scope_selector": {
+      "type": "object",
+      "description": "At least one list must be non-empty. Used for both a decision's scope and an approval's reviewed_scope.",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "tables": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "columns": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "kpis": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "artifacts": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "description": "Valid only when ALL fields are present, evidence resolves, and the approver's authority class is eligible for the decision_type per contracts/knowledge/approval-authority.yaml. An agent identity never satisfies approved_by.",
+      "required": ["approved_by", "approved_at", "source", "evidence", "evidence_identity", "reviewed_scope"],
+      "additionalProperties": false,
+      "properties": {
+        "approved_by": {
+          "type": "string",
+          "pattern": "^.+ \\([a-z][a-z0-9_-]*\\)$",
+          "description": "Named human plus authority class token, e.g. \"Ahmed Shaaban (data_owner)\" (RS1 shape)."
+        },
+        "approved_at": { "type": "string", "format": "date" },
+        "source": { "enum": ["interview", "review", "batch", "owner_ruling"] },
+        "evidence": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "evidence_identity": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "type": "string" },
+          "description": "Map of each cited evidence ref to its content identity (hash or revision) captured at approval time. Staleness (clarify Q1) = an artifact's current identity differs from the recorded one."
+        },
+        "reviewed_scope": {
+          "$ref": "#/$defs/scope_selector",
+          "description": "What the approver actually reviewed; must cover the record's scope."
+        }
+      }
+    },
+    "batch": {
+      "type": "object",
+      "description": "One low-risk batch confirmation. Critical decision types are never members (DS3); excluded items become individual pending questions (clarify Q4).",
+      "required": ["batch_id", "presented_at", "members", "confirmed_by", "confirmed_at", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "batch_id": {
+          "type": "string",
+          "pattern": "^batch\\.[a-z0-9][a-z0-9.-]*$"
+        },
+        "presented_at": { "type": "string", "format": "date" },
+        "members": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Decision ids approved by this batch."
+        },
+        "excluded": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Decision ids the owner pulled out before confirming; each becomes an individual pending question."
+        },
+        "confirmed_by": {
+          "type": "string",
+          "pattern": "^.+ \\([a-z][a-z0-9_-]*\\)$",
+          "description": "Named human plus authority class token (RS1 shape)."
+        },
+        "confirmed_at": { "type": "string", "format": "date" },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "What the batch presented to the owner."
+        }
+      }
+    }
+  }
+}

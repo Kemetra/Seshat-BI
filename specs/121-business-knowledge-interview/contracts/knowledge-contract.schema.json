@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seshat-bi/121/knowledge-contract",
+  "title": "Seshat BI Knowledge Contract (per flow stage)",
+  "description": "One stage entry in contracts/knowledge/database-to-pbip-flow.yaml (and the interview/report contract files). Contracts reference existing knowledge-map routes; they never duplicate knowledge-base content.",
+  "type": "object",
+  "required": ["stage", "allowed_routes", "required_inputs", "required_outputs", "stop_rules", "blocking_decision_categories", "handoff", "non_goals", "evidence_requirements"],
+  "additionalProperties": false,
+  "properties": {
+    "stage": {
+      "enum": [
+        "discovery",
+        "domain_guess",
+        "scope_proposal",
+        "business_knowledge_interview",
+        "kpi_contracts",
+        "silver_gold_model_planning",
+        "semantic_model_dax",
+        "report_intent",
+        "dashboard_blueprint",
+        "pbip_prototype_readiness",
+        "evidence_pack"
+      ]
+    },
+    "allowed_routes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "enum": ["readiness", "retail_kpi", "sql", "dax", "python", "bigdata", "dashboard_design", "compass"]
+      },
+      "description": "Existing knowledge-map routes only. Invariants enforced across entries: KPI-meaning questions route to retail_kpi from ANY stage; bigdata requires recorded scale evidence (else python); execution adapters appear in NO stage's routes for meaning/mapping/metric/semantic/approval work."
+    },
+    "required_inputs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Artifacts and decision categories that must exist before entry; critical categories must be approved, not merely proposed."
+    },
+    "required_outputs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "stop_rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["condition", "unblocked_by"],
+        "additionalProperties": false,
+        "properties": {
+          "condition": { "type": "string" },
+          "unblocked_by": { "type": "string" }
+        }
+      },
+      "description": "Each stop rule names the halting condition AND what concretely unblocks it (FR-030)."
+    },
+    "blocking_decision_categories": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "decision_type values that, while unresolved in scope, make this stage's verdict blocked."
+    },
+    "handoff": { "type": "string", "minLength": 1 },
+    "non_goals": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "evidence_requirements": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+  }
+}
