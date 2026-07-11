@@ -25,17 +25,17 @@
 ## File Structure
 
 **Source (modified):**
-- `src/retail/color.py` -- shared stdlib color math; gains `hex_to_lab`, `delta_e76`, `_lab_f`, `composite_over`, `format_pt`.
-- `src/retail/theme_gen.py` -- generator; gains font fields + floor constants on `ThemeSeed`, `check_font_floor_or_raise`, `check_categorical_distinctness_or_raise` + `min_categorical_delta_e`, `check_ramp_deltae_or_raise` + `MIN_ADJACENT_DELTAE`, `check_composite_contrast_or_raise`, `_targets_for`/`_validate_and_collect`/`_write_targets` split, `derive_dark_seed` + `_invert_lightness`, `generate_pair`; renders seed fonts + typography block.
-- `src/retail/theme_compile.py` -- compile leg; `seed_from_tokens` reads typography per-key, `compile_theme` calls the font-floor gate.
-- `src/retail/cli/parser.py` -- theme-gen subparser; gains `--pair`, `--title-font-pt`, `--label-font-pt`.
-- `src/retail/severity_posture.py` -- posture fixtures for CT2, CT3, DL8.
-- `src/retail/rules/__init__.py` -- import tuple + `__all__` gain `design_categorical_distinctness` and `design_ramp_deltae` (DL8 skips: `design_theme_fidelity` already imported).
+- `src/seshat/color.py` -- shared stdlib color math; gains `hex_to_lab`, `delta_e76`, `_lab_f`, `composite_over`, `format_pt`.
+- `src/seshat/theme_gen.py` -- generator; gains font fields + floor constants on `ThemeSeed`, `check_font_floor_or_raise`, `check_categorical_distinctness_or_raise` + `min_categorical_delta_e`, `check_ramp_deltae_or_raise` + `MIN_ADJACENT_DELTAE`, `check_composite_contrast_or_raise`, `_targets_for`/`_validate_and_collect`/`_write_targets` split, `derive_dark_seed` + `_invert_lightness`, `generate_pair`; renders seed fonts + typography block.
+- `src/seshat/theme_compile.py` -- compile leg; `seed_from_tokens` reads typography per-key, `compile_theme` calls the font-floor gate.
+- `src/seshat/cli/parser.py` -- theme-gen subparser; gains `--pair`, `--title-font-pt`, `--label-font-pt`.
+- `src/seshat/severity_posture.py` -- posture fixtures for CT2, CT3, DL8.
+- `src/seshat/rules/__init__.py` -- import tuple + `__all__` gain `design_categorical_distinctness` and `design_ramp_deltae` (DL8 skips: `design_theme_fidelity` already imported).
 
 **Source (created):**
-- `src/retail/rules/design_ramp_deltae.py` -- rule **CT2**: adjacent `data_colors` deltaE76 near-collapse guard.
-- `src/retail/rules/design_categorical_distinctness.py` -- rule **CT3**: whole-set `data_colors` deltaE76 distinctness guard.
-- `src/retail/rules/design_theme_fidelity.py` -- gains a second `@register` fn for **DL8** (sentiment 4->3 fidelity); existing `RULE_ID = "DL3"` untouched.
+- `src/seshat/rules/design_ramp_deltae.py` -- rule **CT2**: adjacent `data_colors` deltaE76 near-collapse guard.
+- `src/seshat/rules/design_categorical_distinctness.py` -- rule **CT3**: whole-set `data_colors` deltaE76 distinctness guard.
+- `src/seshat/rules/design_theme_fidelity.py` -- gains a second `@register` fn for **DL8** (sentiment 4->3 fidelity); existing `RULE_ID = "DL3"` untouched.
 
 **Tests (modified/created):**
 - `tests/unit/test_color.py` -- deltaE76, composite_over, format_pt cases.
@@ -65,7 +65,7 @@ The build is mostly serial because ideas 1/3/4/5 all edit the same `generate()` 
 ### Task 1: color.py -- add `hex_to_lab` + `delta_e76` (CIE76 shared deltaE primitive)
 
 **Files:**
-- Modify: `src/retail/color.py` -- add two module-level functions directly below `contrast_ratio` (after line 46).
+- Modify: `src/seshat/color.py` -- add two module-level functions directly below `contrast_ratio` (after line 46).
 - Modify: `tests/unit/test_color.py` -- extend the `from retail.color import ...` line (line 7) and append new test functions.
 
 **Interfaces:**
@@ -126,7 +126,7 @@ pytest tests/unit/test_color.py::test_hex_to_lab_black_is_origin -v
 
 Expected FAIL reason: `ImportError: cannot import name 'hex_to_lab' from 'retail.color'` (collection error -- the whole module fails to import since `delta_e76`/`hex_to_lab` are missing from the import line).
 
-- [ ] 3. Minimal implementation -- add to `src/retail/color.py` directly after `contrast_ratio` (after line 46):
+- [ ] 3. Minimal implementation -- add to `src/seshat/color.py` directly after `contrast_ratio` (after line 46):
 
 ```python
 def _lab_f(t: float) -> float:
@@ -181,9 +181,9 @@ Expected: all tests in the file PASS, including the 6 new ones (`test_hex_to_lab
 - [ ] 5. Format, lint, commit:
 
 ```
-ruff format src/retail/color.py tests/unit/test_color.py
-ruff check src/retail/color.py tests/unit/test_color.py
-git add src/retail/color.py tests/unit/test_color.py
+ruff format src/seshat/color.py tests/unit/test_color.py
+ruff check src/seshat/color.py tests/unit/test_color.py
+git add src/seshat/color.py tests/unit/test_color.py
 git commit -m "feat: color.py -- add hex_to_lab + delta_e76 (CIE76) shared primitive"
 ```
 
@@ -192,7 +192,7 @@ git commit -m "feat: color.py -- add hex_to_lab + delta_e76 (CIE76) shared primi
 ### Task 2: color.py -- add `composite_over` (alpha-compositing primitive)
 
 **Files:**
-- Modify: `src/retail/color.py` -- add one function directly below `delta_e76` (added in the prior task).
+- Modify: `src/seshat/color.py` -- add one function directly below `delta_e76` (added in the prior task).
 - Modify: `tests/unit/test_color.py` -- extend the import line and append new test functions.
 
 **Interfaces:**
@@ -252,7 +252,7 @@ pytest tests/unit/test_color.py::test_composite_over_50pct_black_over_white_is_g
 
 Expected FAIL reason: `ImportError: cannot import name 'composite_over' from 'retail.color'` (collection error, same failure mode as Task 1).
 
-- [ ] 3. Minimal implementation -- add to `src/retail/color.py` directly after `delta_e76`:
+- [ ] 3. Minimal implementation -- add to `src/seshat/color.py` directly after `delta_e76`:
 
 ```python
 def composite_over(fg: str, bg: str, transparency_pct: float) -> str:
@@ -296,10 +296,10 @@ Expected: all tests in the file PASS (pre-existing + Task 1's 6 + these 6 compos
 - [ ] 5. Format, lint, run the full unit suite as a regression check, and commit:
 
 ```
-ruff format src/retail/color.py tests/unit/test_color.py
-ruff check src/retail/color.py tests/unit/test_color.py
+ruff format src/seshat/color.py tests/unit/test_color.py
+ruff check src/seshat/color.py tests/unit/test_color.py
 pytest -m unit -x -q
-git add src/retail/color.py tests/unit/test_color.py
+git add src/seshat/color.py tests/unit/test_color.py
 git commit -m "feat: color.py -- add composite_over alpha-compositing primitive"
 ```
 
@@ -310,7 +310,7 @@ git commit -m "feat: color.py -- add composite_over alpha-compositing primitive"
 ### Task 3: color.py -- add `format_pt` (int-safe pt formatting helper)
 
 **Files:**
-- Modify: `src/retail/color.py` -- add helper after `composite_over` (end of file).
+- Modify: `src/seshat/color.py` -- add helper after `composite_over` (end of file).
 - Modify: `tests/unit/test_color.py` -- extend the import line and append new test functions.
 
 **Interfaces:**
@@ -354,7 +354,7 @@ pytest tests/unit/test_color.py::test_format_pt_collapses_integral_float_to_int 
 ```
 Expected: `ImportError: cannot import name 'format_pt' from 'retail.color'`.
 
-- [ ] 3. Minimal implementation. Append to `src/retail/color.py`:
+- [ ] 3. Minimal implementation. Append to `src/seshat/color.py`:
 
 ```python
 def format_pt(value: float) -> float | int:
@@ -377,9 +377,9 @@ Expected: all PASS, including the two new tests.
 - [ ] 5. Format, lint, commit:
 
 ```
-ruff format src/retail/color.py tests/unit/test_color.py
-ruff check src/retail/color.py tests/unit/test_color.py
-git add src/retail/color.py tests/unit/test_color.py
+ruff format src/seshat/color.py tests/unit/test_color.py
+ruff check src/seshat/color.py tests/unit/test_color.py
+git add src/seshat/color.py tests/unit/test_color.py
 git commit -m "feat: color.py format_pt helper -- integral pt sizes render as int, not float"
 ```
 
@@ -388,7 +388,7 @@ git commit -m "feat: color.py format_pt helper -- integral pt sizes render as in
 ### Task 4: Extract `_targets_for` and split `generate()` into validate/write phases (no behavior change)
 
 **Files:**
-- Modify: `src/retail/theme_gen.py` (lines 251-277 -- `generate()`; this task restructures it into three helpers and a thin composing `generate()`)
+- Modify: `src/seshat/theme_gen.py` (lines 251-277 -- `generate()`; this task restructures it into three helpers and a thin composing `generate()`)
 - Modify: `tests/unit/test_theme_gen.py` (add one new test near the bottom; do NOT rewrite `test_generate_writes_three_artifacts` -- it is the regression pin)
 
 **Interfaces:**
@@ -483,14 +483,14 @@ def generate(seed: ThemeSeed, repo_root: Path, force: bool = False) -> list[Path
 - [ ] 4. Run the whole file plus lint/format to prove no behavior change (this, not the new test, is the regression proof -- `test_generate_writes_three_artifacts` is the pin that must stay green untouched):
 ```
 pytest tests/unit/test_theme_gen.py -q
-ruff format --check src/retail/theme_gen.py tests/unit/test_theme_gen.py
-ruff check src/retail/theme_gen.py tests/unit/test_theme_gen.py
+ruff format --check src/seshat/theme_gen.py tests/unit/test_theme_gen.py
+ruff check src/seshat/theme_gen.py tests/unit/test_theme_gen.py
 ```
 Expected PASS: all tests green (including the new `test_targets_for_returns_expected_three_paths` and the untouched `test_generate_writes_three_artifacts`), ruff clean.
 
 - [ ] 5. Commit:
 ```
-git add src/retail/theme_gen.py tests/unit/test_theme_gen.py && git commit -m "refactor: split theme_gen.generate() into validate/collect/write phases"
+git add src/seshat/theme_gen.py tests/unit/test_theme_gen.py && git commit -m "refactor: split theme_gen.generate() into validate/collect/write phases"
 ```
 
 ---
@@ -498,7 +498,7 @@ git add src/retail/theme_gen.py tests/unit/test_theme_gen.py && git commit -m "r
 ### Task 5: `ThemeSeed` font fields + module font-floor constants + `check_font_floor_or_raise`
 
 **Files:**
-- Modify: `src/retail/theme_gen.py` -- `ThemeSeed` dataclass (append fields after `bad`); add constants near `AA_FLOOR` (line 26); add `check_font_floor_or_raise` after `check_contrast_or_raise` (after line 155)
+- Modify: `src/seshat/theme_gen.py` -- `ThemeSeed` dataclass (append fields after `bad`); add constants near `AA_FLOOR` (line 26); add `check_font_floor_or_raise` after `check_contrast_or_raise` (after line 155)
 - Modify: `tests/unit/test_theme_gen.py` -- add new test functions (the `DARK` seed dict needs no new keys; fields have defaults)
 
 **Interfaces:**
@@ -549,7 +549,7 @@ pytest tests/unit/test_theme_gen.py::test_check_font_floor_raises_below_title_fl
 ```
 Expected: `TypeError: ThemeSeed.__init__() got an unexpected keyword argument 'title_font_pt'` (the field does not exist yet).
 
-- [ ] 3. Minimal implementation. In `src/retail/theme_gen.py`:
+- [ ] 3. Minimal implementation. In `src/seshat/theme_gen.py`:
 
 Edit the constants block (after line 26 `AA_FLOOR = 4.5`):
 
@@ -614,7 +614,7 @@ Expected: all PASS (new font-floor tests + all pre-existing `test_theme_gen.py` 
 - [ ] 5. Commit:
 
 ```
-git add src/retail/theme_gen.py tests/unit/test_theme_gen.py
+git add src/seshat/theme_gen.py tests/unit/test_theme_gen.py
 git commit -m "feat: ThemeSeed title/label font-pt fields + fixed accessibility floor check"
 ```
 
@@ -623,7 +623,7 @@ git commit -m "feat: ThemeSeed title/label font-pt fields + fixed accessibility 
 ### Task 6: wire `check_font_floor_or_raise` into `generate()`, render fonts from the seed, emit typography block in tokens YAML
 
 **Files:**
-- Modify: `src/retail/theme_gen.py` -- `render_theme_json` (font literals at 205-206); `render_tokens_yaml` (add typography block before `accessibility:`); `_validate_and_collect()` (add the call right after `check_contrast_or_raise`); `render_spec_md` (add the `[x]` Font floor line + tap-target `[ ]` doc note); import `format_pt`
+- Modify: `src/seshat/theme_gen.py` -- `render_theme_json` (font literals at 205-206); `render_tokens_yaml` (add typography block before `accessibility:`); `_validate_and_collect()` (add the call right after `check_contrast_or_raise`); `render_spec_md` (add the `[x]` Font floor line + tap-target `[ ]` doc note); import `format_pt`
 - Modify: `tests/unit/test_theme_gen.py`
 
 **Interfaces:**
@@ -773,7 +773,7 @@ Expected: PASS.
 - [ ] 5. Commit:
 
 ```
-git add src/retail/theme_gen.py tests/unit/test_theme_gen.py
+git add src/seshat/theme_gen.py tests/unit/test_theme_gen.py
 git commit -m "feat: theme-gen renders seed font sizes + refuses sub-floor fonts before write"
 ```
 
@@ -782,8 +782,8 @@ git commit -m "feat: theme-gen renders seed font sizes + refuses sub-floor fonts
 ### Task 7: `--title-font-pt` / `--label-font-pt` CLI flags
 
 **Files:**
-- Modify: `src/retail/cli/parser.py` -- theme-gen subparser, add two `add_argument` calls after `--bad` and before `--repo`/`--force`
-- Modify: `src/retail/theme_gen.py` -- `theme_gen_main` (lines 289-301), read the two new args into the `ThemeSeed` call
+- Modify: `src/seshat/cli/parser.py` -- theme-gen subparser, add two `add_argument` calls after `--bad` and before `--repo`/`--force`
+- Modify: `src/seshat/theme_gen.py` -- `theme_gen_main` (lines 289-301), read the two new args into the `ThemeSeed` call
 - Modify: `tests/unit/test_cli_parser.py` (check the parser factory name first)
 
 **Interfaces:**
@@ -860,7 +860,7 @@ Expected: `AttributeError: 'Namespace' object has no attribute 'title_font_pt'`.
 
 - [ ] 4. Minimal implementation.
 
-Edit `src/retail/cli/parser.py` -- insert after the `--bad` line and before `--repo`:
+Edit `src/seshat/cli/parser.py` -- insert after the `--bad` line and before `--repo`:
 
 ```python
     themegen.add_argument(
@@ -879,7 +879,7 @@ Edit `src/retail/cli/parser.py` -- insert after the `--bad` line and before `--r
     )
 ```
 
-Edit `theme_gen_main` in `src/retail/theme_gen.py` (lines 289-301) to thread the two new args through the `ThemeSeed` call, appending after `bad=...`:
+Edit `theme_gen_main` in `src/seshat/theme_gen.py` (lines 289-301) to thread the two new args through the `ThemeSeed` call, appending after `bad=...`:
 
 ```python
         bad=args.bad or _DEFAULT_SENTIMENT["bad"],
@@ -899,7 +899,7 @@ Expected: all PASS.
 - [ ] 6. Commit:
 
 ```
-git add src/retail/cli/parser.py src/retail/theme_gen.py tests/unit/test_cli_parser.py
+git add src/seshat/cli/parser.py src/seshat/theme_gen.py tests/unit/test_cli_parser.py
 git commit -m "feat: theme-gen CLI gains --title-font-pt / --label-font-pt (floor is fixed, not CLI-settable)"
 ```
 
@@ -908,7 +908,7 @@ git commit -m "feat: theme-gen CLI gains --title-font-pt / --label-font-pt (floo
 ### Task 8: `seed_from_tokens` per-key typography fallback + `check_font_floor_or_raise` wired into `compile_theme`
 
 **Files:**
-- Modify: `src/retail/theme_compile.py` -- `seed_from_tokens` (lines 150-171); `compile_theme` (add the call right after `check_contrast_or_raise`); import list (lines 29-35)
+- Modify: `src/seshat/theme_compile.py` -- `seed_from_tokens` (lines 150-171); `compile_theme` (add the call right after `check_contrast_or_raise`); import list (lines 29-35)
 - Modify: `tests/unit/test_theme_compile.py`
 
 **Interfaces:**
@@ -995,7 +995,7 @@ Expected FAIL: `AssertionError: assert 12.0 == 14.0` (seed_from_tokens ignores t
 
 - [ ] 3. Minimal implementation.
 
-Edit imports in `src/retail/theme_compile.py` (lines 29-35) to add `MIN_LABEL_FONT_PT`, `MIN_TITLE_FONT_PT`, `check_font_floor_or_raise`:
+Edit imports in `src/seshat/theme_compile.py` (lines 29-35) to add `MIN_LABEL_FONT_PT`, `MIN_TITLE_FONT_PT`, `check_font_floor_or_raise`:
 
 ```python
 from .theme_gen import (
@@ -1063,7 +1063,7 @@ Expected: all PASS.
 - [ ] 6. Commit:
 
 ```
-git add src/retail/theme_compile.py tests/unit/test_theme_compile.py
+git add src/seshat/theme_compile.py tests/unit/test_theme_compile.py
 git commit -m "fix: theme-compile reads typography per-key (not per-block) + refuses sub-floor fonts"
 ```
 
@@ -1080,8 +1080,8 @@ Steps:
 - [ ] 1. Run the mandatory local verification gate:
 
 ```
-ruff format --check src/retail/color.py src/retail/theme_gen.py src/retail/theme_compile.py src/retail/cli/parser.py tests/unit/test_color.py tests/unit/test_theme_gen.py tests/unit/test_theme_compile.py tests/unit/test_cli_parser.py
-ruff check src/retail/color.py src/retail/theme_gen.py src/retail/theme_compile.py src/retail/cli/parser.py tests/unit/test_color.py tests/unit/test_theme_gen.py tests/unit/test_theme_compile.py tests/unit/test_cli_parser.py
+ruff format --check src/seshat/color.py src/seshat/theme_gen.py src/seshat/theme_compile.py src/seshat/cli/parser.py tests/unit/test_color.py tests/unit/test_theme_gen.py tests/unit/test_theme_compile.py tests/unit/test_cli_parser.py
+ruff check src/seshat/color.py src/seshat/theme_gen.py src/seshat/theme_compile.py src/seshat/cli/parser.py tests/unit/test_color.py tests/unit/test_theme_gen.py tests/unit/test_theme_compile.py tests/unit/test_cli_parser.py
 ```
 Expected: both commands print nothing / exit 0. If `ruff format --check` fails, run `ruff format <same paths>` and re-diff before committing.
 
@@ -1099,14 +1099,14 @@ pytest tests/unit/test_rules_manifest_snapshot.py tests/unit/test_rules_wiring.p
 ```
 Expected: all PASS unchanged (these files are not touched by Idea 4's edits).
 
-**OWNER STOP:** present the diff for `src/retail/theme_gen.py`, `src/retail/theme_compile.py`, `src/retail/cli/parser.py`, `src/retail/color.py`, the new typography-block shape in `render_tokens_yaml`'s output, and the two new CLI flags. The build halts here because: (a) this is the first PR-sized slice and the owner has not yet ratified that `render_tokens_yaml`'s new `typography:` block placement (between `data_colors` and `accessibility`) is the desired committed-tokens shape going forward -- every future `retail theme-gen` run will now always emit this block, a permanent format change; (b) run the CodeScene new-code health gate (10.0) on the touched functions (`render_theme_json`, `render_tokens_yaml`, `seed_from_tokens`, `compile_theme`) per the `codescene-new-code-health-gate` memory before opening a PR -- do not self-grant a clean bill.
+**OWNER STOP:** present the diff for `src/seshat/theme_gen.py`, `src/seshat/theme_compile.py`, `src/seshat/cli/parser.py`, `src/seshat/color.py`, the new typography-block shape in `render_tokens_yaml`'s output, and the two new CLI flags. The build halts here because: (a) this is the first PR-sized slice and the owner has not yet ratified that `render_tokens_yaml`'s new `typography:` block placement (between `data_colors` and `accessibility`) is the desired committed-tokens shape going forward -- every future `retail theme-gen` run will now always emit this block, a permanent format change; (b) run the CodeScene new-code health gate (10.0) on the touched functions (`render_theme_json`, `render_tokens_yaml`, `seed_from_tokens`, `compile_theme`) per the `codescene-new-code-health-gate` memory before opening a PR -- do not self-grant a clean bill.
 
 ---
 
 ### Task 10: Categorical distinctness self-check in theme_gen (min pairwise deltaE76)
 
 **Files:**
-- Modify: `src/retail/theme_gen.py` -- add `MIN_CATEGORICAL_DELTAE = 2.0` constant near `AA_FLOOR`; add `min_categorical_delta_e(data_colors: tuple[str, ...]) -> float` and `check_categorical_distinctness_or_raise(palette: dict, floor: float = MIN_CATEGORICAL_DELTAE) -> None` after `check_contrast_or_raise`; call the new check in `_validate_and_collect()` right after `check_contrast_or_raise(palette)`; add an `[x]` evidence line to `render_spec_md` directly under the existing CT1 contrast `[x]` block; update the color import to add `delta_e76`.
+- Modify: `src/seshat/theme_gen.py` -- add `MIN_CATEGORICAL_DELTAE = 2.0` constant near `AA_FLOOR`; add `min_categorical_delta_e(data_colors: tuple[str, ...]) -> float` and `check_categorical_distinctness_or_raise(palette: dict, floor: float = MIN_CATEGORICAL_DELTAE) -> None` after `check_contrast_or_raise`; call the new check in `_validate_and_collect()` right after `check_contrast_or_raise(palette)`; add an `[x]` evidence line to `render_spec_md` directly under the existing CT1 contrast `[x]` block; update the color import to add `delta_e76`.
 - Modify: `tests/unit/test_theme_gen.py` -- add tests using the existing `DARK`/`_seed()` fixtures.
 
 **Interfaces:**
@@ -1263,7 +1263,7 @@ Expected PASS: all `test_theme_gen.py` tests green, including the four new ones.
 
 - [ ] 5. Commit:
 ```
-git add src/retail/theme_gen.py tests/unit/test_theme_gen.py
+git add src/seshat/theme_gen.py tests/unit/test_theme_gen.py
 git commit -m "feat: theme_gen categorical distinctness self-check (whole-set dE76 floor)"
 ```
 
@@ -1272,11 +1272,11 @@ git commit -m "feat: theme_gen categorical distinctness self-check (whole-set dE
 ### Task 11: CT3 static rule -- categorical distinctness governance + full wiring
 
 **Files:**
-- Create: `src/retail/rules/design_categorical_distinctness.py` (mirrors `src/retail/rules/design_contrast.py`).
+- Create: `src/seshat/rules/design_categorical_distinctness.py` (mirrors `src/seshat/rules/design_contrast.py`).
 - Create: `tests/unit/test_design_categorical_distinctness.py` (mirrors `tests/unit/test_design_contrast.py`).
-- Modify: `src/retail/rules/__init__.py` -- add `design_categorical_distinctness` to the import tuple (alphabetically between `design_background` and `design_contrast`) and to `__all__` in the same slot.
+- Modify: `src/seshat/rules/__init__.py` -- add `design_categorical_distinctness` to the import tuple (alphabetically between `design_background` and `design_contrast`) and to `__all__` in the same slot.
 - Modify: `tests/unit/test_rules_wiring.py` -- add `"CT3"` to `EXPECTED_RULE_IDS` (near the existing `"CT1"`).
-- Modify: `src/retail/severity_posture.py` -- add a `_YAML_CT3` fixture (near `_YAML_CT1`) and a `"CT3": _Fixture(...)` entry in `_RULE_FIXTURES`.
+- Modify: `src/seshat/severity_posture.py` -- add a `_YAML_CT3` fixture (near `_YAML_CT1`) and a `"CT3": _Fixture(...)` entry in `_RULE_FIXTURES`.
 - Modify: `docs/glossary.md` -- add `CT3` to the `**CT**` family row and update the rule-count line.
 - Modify: `docs/quality/rule-count-claims.yaml` -- update `anchor` + `claimed-count` to match.
 - Regenerate: `docs/rules/rules-manifest.json` (via `retail manifest`, never hand-edited).
@@ -1398,7 +1398,7 @@ pytest tests/unit/test_design_categorical_distinctness.py::test_ct3_id_is_regist
 ```
 Expected FAIL: `ModuleNotFoundError: No module named 'retail.rules.design_categorical_distinctness'`.
 
-- [ ] 3. Minimal implementation. Create `src/retail/rules/design_categorical_distinctness.py`:
+- [ ] 3. Minimal implementation. Create `src/seshat/rules/design_categorical_distinctness.py`:
 
 ```python
 """Design-lint rule CT3: categorical distinctness whole-set pre-check.
@@ -1538,7 +1538,7 @@ def check_categorical_distinctness(ctx: RuleContext) -> Iterable[Finding]:
     return findings
 ```
 
-Wire the import in `src/retail/rules/__init__.py` (insert alphabetically between `design_background` and `design_contrast`):
+Wire the import in `src/seshat/rules/__init__.py` (insert alphabetically between `design_background` and `design_contrast`):
 
 ```python
     design_background,
@@ -1573,7 +1573,7 @@ pytest tests/unit/test_rules_wiring.py::test_registered_rule_ids_match_expected_
 ```
 Expected PASS: registered ids now include `CT3` and match `EXPECTED_RULE_IDS` exactly.
 
-- [ ] 6. Add the severity-posture fixture. In `src/retail/severity_posture.py`, add near `_YAML_CT1`:
+- [ ] 6. Add the severity-posture fixture. In `src/seshat/severity_posture.py`, add near `_YAML_CT1`:
 
 ```python
 # data_colors declared without a min_categorical_deltae floor -> CT3 opt-in
@@ -1635,8 +1635,8 @@ Expected: no ERROR findings for `CT3`, `SC1`, `SC2`, `DL3` introduced by this ch
 
 - [ ] 12. Run the full unit suite and formatting/lint gates:
 ```
-ruff format --check src/retail/rules/design_categorical_distinctness.py src/retail/severity_posture.py tests/unit/test_design_categorical_distinctness.py tests/unit/test_rules_wiring.py
-ruff check src/retail/rules/design_categorical_distinctness.py src/retail/rules/__init__.py src/retail/severity_posture.py tests/unit/test_design_categorical_distinctness.py tests/unit/test_rules_wiring.py
+ruff format --check src/seshat/rules/design_categorical_distinctness.py src/seshat/severity_posture.py tests/unit/test_design_categorical_distinctness.py tests/unit/test_rules_wiring.py
+ruff check src/seshat/rules/design_categorical_distinctness.py src/seshat/rules/__init__.py src/seshat/severity_posture.py tests/unit/test_design_categorical_distinctness.py tests/unit/test_rules_wiring.py
 pytest -m unit -x -q
 ```
 Expected PASS: clean format/lint, full unit suite green.
@@ -1645,7 +1645,7 @@ Expected PASS: clean format/lint, full unit suite green.
 
 - [ ] 13. Commit:
 ```
-git add src/retail/rules/design_categorical_distinctness.py src/retail/rules/__init__.py tests/unit/test_design_categorical_distinctness.py tests/unit/test_rules_wiring.py src/retail/severity_posture.py docs/rules/rules-manifest.json docs/rules/severity-posture.json docs/glossary.md docs/quality/rule-count-claims.yaml
+git add src/seshat/rules/design_categorical_distinctness.py src/seshat/rules/__init__.py tests/unit/test_design_categorical_distinctness.py tests/unit/test_rules_wiring.py src/seshat/severity_posture.py docs/rules/rules-manifest.json docs/rules/severity-posture.json docs/glossary.md docs/quality/rule-count-claims.yaml
 git commit -m "feat: CT3 -- categorical distinctness whole-set governance rule (dE76 floor, opt-in silent-skip)"
 ```
 
@@ -1654,7 +1654,7 @@ git commit -m "feat: CT3 -- categorical distinctness whole-set governance rule (
 ### Task 12: Idea 1 -- adjacent ramp deltaE floor, standalone self-check (CT2 part A)
 
 **Files:**
-- Modify: `src/retail/theme_gen.py` -- add `check_ramp_deltae_or_raise(palette, floor) -> None` near `check_contrast_or_raise`; NOT called from `_validate_and_collect()` yet (that wait is Tasks 14-15).
+- Modify: `src/seshat/theme_gen.py` -- add `check_ramp_deltae_or_raise(palette, floor) -> None` near `check_contrast_or_raise`; NOT called from `_validate_and_collect()` yet (that wait is Tasks 14-15).
 - Modify: `tests/unit/test_theme_gen.py` -- new test functions using the existing `DARK` dict / `_seed()` helper.
 
 **Interfaces:**
@@ -1742,7 +1742,7 @@ Expected: all 4 new tests PASS.
 
 - [ ] 5. Commit:
 ```
-git add src/retail/theme_gen.py tests/unit/test_theme_gen.py
+git add src/seshat/theme_gen.py tests/unit/test_theme_gen.py
 git commit -m "feat: standalone check_ramp_deltae_or_raise self-check (CT2 prep, unwired)"
 ```
 
@@ -1751,11 +1751,11 @@ git commit -m "feat: standalone check_ramp_deltae_or_raise self-check (CT2 prep,
 ### Task 13: Idea 1 -- CT2 static rule, full wiring
 
 **Files:**
-- Create: `src/retail/rules/design_ramp_deltae.py` (mirrors `src/retail/rules/design_contrast.py` shape).
+- Create: `src/seshat/rules/design_ramp_deltae.py` (mirrors `src/seshat/rules/design_contrast.py` shape).
 - Create: `tests/unit/test_design_ramp_deltae.py`.
-- Modify: `src/retail/rules/__init__.py` -- add `design_ramp_deltae` to the `from . import (...)` tuple (alphabetically between `design_grid_closure` and `design_review_evidence`) AND to `__all__` (same slot).
+- Modify: `src/seshat/rules/__init__.py` -- add `design_ramp_deltae` to the `from . import (...)` tuple (alphabetically between `design_grid_closure` and `design_review_evidence`) AND to `__all__` (same slot).
 - Modify: `tests/unit/test_rules_wiring.py` -- add `"CT2"` to `EXPECTED_RULE_IDS` (near the existing `"CT1"`/`"CT3"`).
-- Modify: `src/retail/severity_posture.py` -- add `"CT2": _Fixture()` to `_RULE_FIXTURES` (near `"CT1"`); no committed tokens file declares `min_adjacent_delta_e`, so CT2 is `<no-finding>` everywhere.
+- Modify: `src/seshat/severity_posture.py` -- add `"CT2": _Fixture()` to `_RULE_FIXTURES` (near `"CT1"`); no committed tokens file declares `min_adjacent_delta_e`, so CT2 is `<no-finding>` everywhere.
 - Regenerate: `docs/rules/rules-manifest.json` via `retail manifest`; `docs/rules/severity-posture.json` via `retail severity-posture`.
 - Modify: `docs/glossary.md` -- CT row gets a new clause for `CT2`; rule-count line.
 - Modify: `docs/quality/rule-count-claims.yaml` -- `anchor` + `claimed-count`, synced to the regenerated manifest length.
@@ -1821,7 +1821,7 @@ def test_ct2_missing_declared_floor_is_silent_skip(tmp_path) -> None:
     findings = list(check_ramp_deltae(ctx))
     assert findings == []
 ```
-(Match `RuleContext`'s real constructor -- if it differs, read `src/retail/core.py`'s `RuleContext` definition first and adjust the `RuleContext(...)` calls; keep the two test bodies' intent unchanged.)
+(Match `RuleContext`'s real constructor -- if it differs, read `src/seshat/core.py`'s `RuleContext` definition first and adjust the `RuleContext(...)` calls; keep the two test bodies' intent unchanged.)
 
 - [ ] 2. Run it and confirm the expected failure:
 ```
@@ -1829,7 +1829,7 @@ pytest tests/unit/test_design_ramp_deltae.py -v
 ```
 Expected FAIL reason: `ModuleNotFoundError: No module named 'retail.rules.design_ramp_deltae'`.
 
-- [ ] 3. Minimal implementation. Create `src/retail/rules/design_ramp_deltae.py`:
+- [ ] 3. Minimal implementation. Create `src/seshat/rules/design_ramp_deltae.py`:
 ```python
 """Design-lint rule CT2: adjacent data_colors/ramp deltaE76 near-collapse guard.
 
@@ -1942,7 +1942,7 @@ def check_ramp_deltae(ctx: RuleContext) -> Iterable[Finding]:
         findings.extend(_check_tokens(rel, doc))
     return findings
 ```
-Add the import wiring in `src/retail/rules/__init__.py`:
+Add the import wiring in `src/seshat/rules/__init__.py`:
 ```python
     design_grid_closure,
     design_ramp_deltae,
@@ -1974,7 +1974,7 @@ Expected PASS.
 
 - [ ] 6. Verify emits-on-main is clean (neither committed tokens file declares `min_adjacent_delta_e`, so this must show zero findings):
 ```
-python -m retail.cli check --rules CT2
+python -m seshat.cli check --rules CT2
 ```
 Expected: exit 0, zero CT2 findings on both `design/tokens/executive-dark-design-tokens.yaml` and `design/tokens/tower-retail-design-tokens.yaml`.
 
@@ -1982,7 +1982,7 @@ Expected: exit 0, zero CT2 findings on both `design/tokens/executive-dark-design
 ```
 retail manifest --repo .
 ```
-Add a `"CT2": _Fixture()` entry to `_RULE_FIXTURES` in `src/retail/severity_posture.py` (near `"CT1"`) -- an empty/default `_Fixture()` falls through to the no-finding marker:
+Add a `"CT2": _Fixture()` entry to `_RULE_FIXTURES` in `src/seshat/severity_posture.py` (near `"CT1"`) -- an empty/default `_Fixture()` falls through to the no-finding marker:
 ```python
     "CT1": _Fixture(...),
     "CT2": _Fixture(),
@@ -2005,17 +2005,17 @@ In `docs/quality/rule-count-claims.yaml`, edit `anchor` + `claimed-count` so bot
 - [ ] 9. Run the full cross-cutting verification:
 ```
 pytest tests/unit/test_rules_manifest_snapshot.py tests/unit/test_glossary_rule_table.py -v
-ruff format --check src/retail/rules/design_ramp_deltae.py tests/unit/test_design_ramp_deltae.py
-ruff check src/retail/rules/design_ramp_deltae.py tests/unit/test_design_ramp_deltae.py
+ruff format --check src/seshat/rules/design_ramp_deltae.py tests/unit/test_design_ramp_deltae.py
+ruff check src/seshat/rules/design_ramp_deltae.py tests/unit/test_design_ramp_deltae.py
 pytest -m unit -x -q
 ```
 Expected: all PASS, no formatting/lint diffs, full unit suite green.
 
 - [ ] 10. Commit:
 ```
-git add src/retail/rules/design_ramp_deltae.py tests/unit/test_design_ramp_deltae.py \
-        src/retail/rules/__init__.py tests/unit/test_rules_wiring.py \
-        src/retail/severity_posture.py docs/rules/rules-manifest.json \
+git add src/seshat/rules/design_ramp_deltae.py tests/unit/test_design_ramp_deltae.py \
+        src/seshat/rules/__init__.py tests/unit/test_rules_wiring.py \
+        src/seshat/severity_posture.py docs/rules/rules-manifest.json \
         docs/rules/severity-posture.json docs/glossary.md \
         docs/quality/rule-count-claims.yaml
 git commit -m "feat: CT2 static rule -- adjacent data_colors deltaE76 near-collapse guard"
@@ -2072,7 +2072,7 @@ for path in ['design/tokens/executive-dark-design-tokens.yaml', 'design/tokens/t
 ### Task 15: Idea 1 -- wire the ratified floor into `generate()` (post-OWNER-STOP)
 
 **Files:**
-- Modify: `src/retail/theme_gen.py` -- add `MIN_ADJACENT_DELTAE = <OWNER_RATIFIED_VALUE>` module constant near `AA_FLOOR`; call `check_ramp_deltae_or_raise(palette, MIN_ADJACENT_DELTAE)` inside `_validate_and_collect()` immediately after `check_categorical_distinctness_or_raise(palette)`.
+- Modify: `src/seshat/theme_gen.py` -- add `MIN_ADJACENT_DELTAE = <OWNER_RATIFIED_VALUE>` module constant near `AA_FLOOR`; call `check_ramp_deltae_or_raise(palette, MIN_ADJACENT_DELTAE)` inside `_validate_and_collect()` immediately after `check_categorical_distinctness_or_raise(palette)`.
 - Modify: `tests/unit/test_theme_gen.py` -- add a `generate()`-level regression test proving the shipping default still passes end-to-end.
 
 **Interfaces:**
@@ -2137,7 +2137,7 @@ Expected: full file passes, including both new tests and every pre-existing `tes
 
 - [ ] 5. Commit:
 ```
-git add src/retail/theme_gen.py tests/unit/test_theme_gen.py
+git add src/seshat/theme_gen.py tests/unit/test_theme_gen.py
 git commit -m "feat: wire OWNER-ratified adjacent-ramp deltaE floor into generate()"
 ```
 
@@ -2146,7 +2146,7 @@ git commit -m "feat: wire OWNER-ratified adjacent-ramp deltaE floor into generat
 ### Task 16: `derive_dark_seed` -- derive a dark `ThemeSeed` from a light one
 
 **Files:**
-- Modify: `src/retail/theme_gen.py` (add near `_hex_to_hls`/`_hls_to_hex`, and after `derive_ramp`; update the `dataclasses` import at line 21)
+- Modify: `src/seshat/theme_gen.py` (add near `_hex_to_hls`/`_hls_to_hex`, and after `derive_ramp`; update the `dataclasses` import at line 21)
 - Modify: `tests/unit/test_theme_gen.py` (add a `LIGHT` fixture dict alongside `DARK`, and new tests)
 
 **Interfaces:**
@@ -2260,8 +2260,8 @@ def derive_dark_seed(light: ThemeSeed) -> ThemeSeed:
 - [ ] 4. Run tests:
 ```
 pytest tests/unit/test_theme_gen.py -q
-ruff format --check src/retail/theme_gen.py tests/unit/test_theme_gen.py
-ruff check src/retail/theme_gen.py tests/unit/test_theme_gen.py
+ruff format --check src/seshat/theme_gen.py tests/unit/test_theme_gen.py
+ruff check src/seshat/theme_gen.py tests/unit/test_theme_gen.py
 ```
 Expected PASS: all green, including the new derive-dark tests and the full pre-existing suite.
 
@@ -2269,7 +2269,7 @@ Note: if `test_derive_dark_seed_clears_contrast_floor` fails because the inverte
 
 - [ ] 5. Commit:
 ```
-git add src/retail/theme_gen.py tests/unit/test_theme_gen.py && git commit -m "feat: derive_dark_seed -- invert bg/text lightness for a light seed"
+git add src/seshat/theme_gen.py tests/unit/test_theme_gen.py && git commit -m "feat: derive_dark_seed -- invert bg/text lightness for a light seed"
 ```
 
 ---
@@ -2277,8 +2277,8 @@ git add src/retail/theme_gen.py tests/unit/test_theme_gen.py && git commit -m "f
 ### Task 17: `generate_pair` + `--pair` CLI flag (all-or-nothing light/dark write)
 
 **Files:**
-- Modify: `src/retail/theme_gen.py` (add after `generate()`; modify `theme_gen_main`)
-- Modify: `src/retail/cli/parser.py` (theme-gen subparser -- add `--pair` after `--force`)
+- Modify: `src/seshat/theme_gen.py` (add after `generate()`; modify `theme_gen_main`)
+- Modify: `src/seshat/cli/parser.py` (theme-gen subparser -- add `--pair` after `--force`)
 - Modify: `tests/unit/test_theme_gen.py` (new tests using the `LIGHT`/`_light_seed` fixtures from Task 16)
 
 **Interfaces:**
@@ -2403,8 +2403,8 @@ Add the CLI flag in `cli/parser.py` right after `--force`:
 ```
 pytest tests/unit/test_theme_gen.py -q
 pytest tests/unit -k theme -q
-ruff format --check src/retail/theme_gen.py src/retail/cli/parser.py tests/unit/test_theme_gen.py
-ruff check src/retail/theme_gen.py src/retail/cli/parser.py tests/unit/test_theme_gen.py
+ruff format --check src/seshat/theme_gen.py src/seshat/cli/parser.py tests/unit/test_theme_gen.py
+ruff check src/seshat/theme_gen.py src/seshat/cli/parser.py tests/unit/test_theme_gen.py
 ```
 Expected PASS: all green, including the four new `generate_pair` tests, all prior theme_gen tests unaffected, and existing CLI parser tests still passing since `--pair` is additive/optional.
 
@@ -2412,7 +2412,7 @@ Expected PASS: all green, including the four new `generate_pair` tests, all prio
 
 - [ ] 5. Commit:
 ```
-git add src/retail/theme_gen.py src/retail/cli/parser.py tests/unit/test_theme_gen.py && git commit -m "feat: generate_pair + --pair -- all-or-nothing light/dark theme write"
+git add src/seshat/theme_gen.py src/seshat/cli/parser.py tests/unit/test_theme_gen.py && git commit -m "feat: generate_pair + --pair -- all-or-nothing light/dark theme write"
 ```
 
 ---
@@ -2420,7 +2420,7 @@ git add src/retail/theme_gen.py src/retail/cli/parser.py tests/unit/test_theme_g
 ### Task 18: Idea 2 -- gated composite-transparency contrast check (standalone, unwired)
 
 **Files:**
-- Modify: `src/retail/theme_gen.py` -- add `check_composite_contrast_or_raise(palette: dict, floor: float = AA_FLOOR) -> None` near `check_contrast_or_raise`, importing `composite_over` alongside the existing color imports. **Do NOT call it from `_validate_and_collect()` / `generate()`** -- no alpha fields exist on `ThemeSeed`, so wiring would be dead code per the design doc's OWNER STOP.
+- Modify: `src/seshat/theme_gen.py` -- add `check_composite_contrast_or_raise(palette: dict, floor: float = AA_FLOOR) -> None` near `check_contrast_or_raise`, importing `composite_over` alongside the existing color imports. **Do NOT call it from `_validate_and_collect()` / `generate()`** -- no alpha fields exist on `ThemeSeed`, so wiring would be dead code per the design doc's OWNER STOP.
 - Modify: `tests/unit/test_theme_gen.py` -- add `check_composite_contrast_or_raise` tests.
 
 **Interfaces:**
@@ -2518,18 +2518,18 @@ Expected: all listed tests pass; no regression in the full files.
 
 - [ ] 5. Verify non-wiring and gate compliance:
 ```
-grep -n "check_composite_contrast_or_raise" src/retail/theme_gen.py
+grep -n "check_composite_contrast_or_raise" src/seshat/theme_gen.py
 ```
 Expected: exactly one match (the `def` line) -- zero call sites inside `_validate_and_collect` / `generate` / `generate_pair`. If a second match appears, remove it; wiring is explicitly out of scope.
 ```
-grep -rn "check_composite_contrast_or_raise" src/retail/theme_compile.py src/retail/cli/
+grep -rn "check_composite_contrast_or_raise" src/seshat/theme_compile.py src/seshat/cli/
 ```
 Expected: no matches (not exposed via CLI, not called from `theme_compile.py`).
 
 - [ ] 6. Run full quality gates:
 ```
-ruff format --check src/retail/theme_gen.py tests/unit/test_theme_gen.py
-ruff check src/retail/theme_gen.py tests/unit/test_theme_gen.py
+ruff format --check src/seshat/theme_gen.py tests/unit/test_theme_gen.py
+ruff check src/seshat/theme_gen.py tests/unit/test_theme_gen.py
 pytest -m unit -x -q
 ```
 Expected: clean format, no lint errors, full unit suite green.
@@ -2538,7 +2538,7 @@ Expected: clean format, no lint errors, full unit suite green.
 
 - [ ] 7. Commit:
 ```
-git add src/retail/theme_gen.py tests/unit/test_theme_gen.py
+git add src/seshat/theme_gen.py tests/unit/test_theme_gen.py
 git commit -m "feat: composite-transparency AA proof (idea 2) -- standalone, unwired"
 ```
 
@@ -2547,7 +2547,7 @@ git commit -m "feat: composite-transparency AA proof (idea 2) -- standalone, unw
 ### Task 19: Idea 6 -- DL8 sentiment 4->3 fidelity rule (inert shell, owner-gated map)
 
 **Files:**
-- Modify: `src/retail/rules/design_theme_fidelity.py` (add second `@register` fn; existing `RULE_ID = "DL3"` / `check_theme_fidelity` untouched)
+- Modify: `src/seshat/rules/design_theme_fidelity.py` (add second `@register` fn; existing `RULE_ID = "DL3"` / `check_theme_fidelity` untouched)
 - Modify: `tests/unit/test_design_theme_fidelity.py` (add DL8 test cases; existing DL3 tests untouched)
 - Create: `tests/fixtures/theme_fidelity/sentiment_map_faithful/tokens.yaml`, `.../theme.json`
 - Create: `tests/fixtures/theme_fidelity/sentiment_map_drift/tokens.yaml`, `.../theme.json`
@@ -2555,11 +2555,11 @@ git commit -m "feat: composite-transparency AA proof (idea 2) -- standalone, unw
 - Create: `tests/fixtures/theme_fidelity/sentiment_map_malformed/tokens.yaml` (unparseable YAML), `.../theme.json`
 - Reuse fixture: `tests/fixtures/theme_fidelity/sentiment_only_drift/tokens.yaml` (has `colors.sentiment`, no `meta.sentiment_map` -- the map-absent trip-wire)
 - Modify: `tests/unit/test_rules_wiring.py` (`EXPECTED_RULE_IDS` += `"DL8"`, next to the `DL7` entry)
-- Modify: `src/retail/severity_posture.py` (`_RULE_FIXTURES` dict, alongside the `"DL3"` entry; new `_YAML_DL8_TOKENS` / `_JSON_DL8_THEME` constants near `_YAML_DL3_TOKENS`)
+- Modify: `src/seshat/severity_posture.py` (`_RULE_FIXTURES` dict, alongside the `"DL3"` entry; new `_YAML_DL8_TOKENS` / `_JSON_DL8_THEME` constants near `_YAML_DL3_TOKENS`)
 - Regenerate (never hand-edit): `docs/rules/rules-manifest.json`, `docs/rules/severity-posture.json`
 - Modify: `docs/glossary.md` (DL row -- append ` - DL8 sentiment fidelity ...`; rule-count line)
 - Modify: `docs/quality/rule-count-claims.yaml` (`anchor` + `claimed-count`, computed not hardcoded)
-- NOT modified: `src/retail/rules/__init__.py` (module already imported for DL3)
+- NOT modified: `src/seshat/rules/__init__.py` (module already imported for DL3)
 
 **Interfaces:**
 - Consumes: `RuleContext`, `Finding`, `Severity` from `..core`; `register` from `..registry`; module-private `_iter_tokens_files(ctx) -> list[str]`, `_theme_rel_for(tokens_rel, tokens_doc, ctx) -> str | None`, `_load_yaml(path) -> tuple[Any, str | None]`, `_load_json(path) -> tuple[Any, str | None]` (all already defined in this module for DL3, reused as-is).
@@ -2785,7 +2785,7 @@ pytest tests/unit/test_design_theme_fidelity.py::test_sentiment_map_absent_is_ze
 ```
 Expected FAIL: `ImportError: cannot import name 'check_sentiment_fidelity' from 'retail.rules.design_theme_fidelity'`.
 
-- [ ] 3. Minimal implementation. In `src/retail/rules/design_theme_fidelity.py`, first update the module docstring's "DELIBERATELY OUT OF SCOPE" section so it names DL8 as the follow-on rule (replace the sentiment-fidelity paragraph that currently claims it is permanently unowned with a paragraph pointing to DL8 reading an opt-in `meta.sentiment_map`).
+- [ ] 3. Minimal implementation. In `src/seshat/rules/design_theme_fidelity.py`, first update the module docstring's "DELIBERATELY OUT OF SCOPE" section so it names DL8 as the follow-on rule (replace the sentiment-fidelity paragraph that currently claims it is permanently unowned with a paragraph pointing to DL8 reading an opt-in `meta.sentiment_map`).
 
 Then append at the end of the file (after `check_theme_fidelity`):
 
@@ -2936,7 +2936,7 @@ pytest tests/unit/test_rules_manifest_snapshot.py -v
 ```
 Expected PASS: `docs/rules/rules-manifest.json` now contains a DL8 entry and the snapshot test is green.
 
-- [ ] 7. Add the severity-posture fixture (use a drifting fixture so the generator observes DL8's real active posture, mirroring DL3). In `src/retail/severity_posture.py`, add constants near `_YAML_DL3_TOKENS`/`_JSON_DL3_THEME`:
+- [ ] 7. Add the severity-posture fixture (use a drifting fixture so the generator observes DL8's real active posture, mirroring DL3). In `src/seshat/severity_posture.py`, add constants near `_YAML_DL3_TOKENS`/`_JSON_DL3_THEME`:
 ```python
 _YAML_DL8_TOKENS = (
     "meta: { compiles_to: demo.theme.json, sentiment_map: { success: good } }\n"
@@ -2978,15 +2978,15 @@ Expected PASS: every live registered rule id (including `DL8`) appears in the gl
 
 - [ ] 10. Full verification sweep:
 ```
-ruff format --check src/retail/rules/design_theme_fidelity.py src/retail/severity_posture.py tests/unit/test_design_theme_fidelity.py tests/unit/test_rules_wiring.py
-ruff check src/retail/rules/design_theme_fidelity.py src/retail/severity_posture.py tests/unit/test_design_theme_fidelity.py tests/unit/test_rules_wiring.py
+ruff format --check src/seshat/rules/design_theme_fidelity.py src/seshat/severity_posture.py tests/unit/test_design_theme_fidelity.py tests/unit/test_rules_wiring.py
+ruff check src/seshat/rules/design_theme_fidelity.py src/seshat/severity_posture.py tests/unit/test_design_theme_fidelity.py tests/unit/test_rules_wiring.py
 pytest -m unit -x -q
 ```
 Expected: all green, including `test_rules_manifest_snapshot.py`, `test_severity_posture_snapshot.py`, `test_glossary_rule_table.py`, `test_rules_wiring.py`, `test_design_theme_fidelity.py`, and `test_sentiment_live_pair_inert_on_main` (the emits-on-main guard).
 
 - [ ] 11. Commit:
 ```
-git add src/retail/rules/design_theme_fidelity.py tests/unit/test_design_theme_fidelity.py tests/fixtures/theme_fidelity/sentiment_map_faithful tests/fixtures/theme_fidelity/sentiment_map_drift tests/fixtures/theme_fidelity/sentiment_map_missing_key tests/fixtures/theme_fidelity/sentiment_map_malformed tests/unit/test_rules_wiring.py src/retail/severity_posture.py docs/rules/rules-manifest.json docs/rules/severity-posture.json docs/glossary.md docs/quality/rule-count-claims.yaml
+git add src/seshat/rules/design_theme_fidelity.py tests/unit/test_design_theme_fidelity.py tests/fixtures/theme_fidelity/sentiment_map_faithful tests/fixtures/theme_fidelity/sentiment_map_drift tests/fixtures/theme_fidelity/sentiment_map_missing_key tests/fixtures/theme_fidelity/sentiment_map_malformed tests/unit/test_rules_wiring.py src/seshat/severity_posture.py docs/rules/rules-manifest.json docs/rules/severity-posture.json docs/glossary.md docs/quality/rule-count-claims.yaml
 git commit -m "feat: DL8 sentiment 4->3 fidelity rule -- inert shell until owner declares meta.sentiment_map"
 ```
 
@@ -3037,7 +3037,7 @@ No `<TODO>` / `TBD` / bare-`...` placeholders remain in any implementation body.
 
 ### (c) Type-consistency check across tasks -- issues found and fixed inline
 
-1. **Palette key path (fixed).** The Idea-1 draft used `palette["data_colors"]`; the real `build_palette` returns `palette["colors"]["data_colors"]` (verified against `src/retail/theme_gen.py` line 139), and Idea 3's self-check already used the correct nested path. I corrected `check_ramp_deltae_or_raise` in Task 12 to read `palette["colors"]["data_colors"]`, with an inline note flagging the drafting slip.
+1. **Palette key path (fixed).** The Idea-1 draft used `palette["data_colors"]`; the real `build_palette` returns `palette["colors"]["data_colors"]` (verified against `src/seshat/theme_gen.py` line 139), and Idea 3's self-check already used the correct nested path. I corrected `check_ramp_deltae_or_raise` in Task 12 to read `palette["colors"]["data_colors"]`, with an inline note flagging the drafting slip.
 2. **`generate()` call-site drift (fixed).** Several idea drafts said "call the check in `generate()` at line 253." After Task 4 refactors `generate()` into `_write_targets(_validate_and_collect(...))`, that inline body no longer exists. I retargeted every later self-check wiring (Tasks 6, 10, 15) to `_validate_and_collect()` -- the single choke point -- and stated so explicitly in each task, so the checks compose in one place: contrast, font floor, categorical distinctness, ramp deltaE.
 3. **`delta_e76` import duplication (fixed).** Idea 1 and Idea 3 both add `delta_e76` to `theme_gen`'s color import. Task 10 (Idea 3) lands first and adds it to the single `from .color import contrast_ratio, delta_e76, format_pt, is_valid_hex` line; Task 12 (Idea 1) explicitly does NOT re-import. Task 18 extends the same line with `composite_over`. One import line, evolved additively.
 4. **`derive_dark_seed` and the new font fields (fixed).** Task 16 uses `dataclasses.replace`, which preserves `title_font_pt`/`label_font_pt` automatically; I updated the interface note and docstring to say fonts pass through, avoiding a stale "accent/data_colors/sentiment only" claim now that `ThemeSeed` has two more fields.

@@ -1,10 +1,10 @@
-"""Unit tests for the shared WCAG color helper (retail.color)."""
+"""Unit tests for the shared WCAG color helper (seshat.color)."""
 
 from __future__ import annotations
 
 import pytest
 
-from retail.color import (
+from seshat.color import (
     composite_over,
     contrast_ratio,
     delta_e76,

@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.design_routes import _STALE_MANIFEST, check_design_routes
+from seshat.core import RuleContext, Severity
+from seshat.rules.design_routes import _STALE_MANIFEST, check_design_routes
 
 pytestmark = pytest.mark.unit
 

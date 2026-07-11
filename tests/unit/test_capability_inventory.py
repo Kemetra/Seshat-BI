@@ -20,8 +20,8 @@ from pathlib import Path
 
 import pytest
 
-from retail import capability_feeders as feeders
-from retail.capability_inventory import build_inventory, render_human, render_json
+from seshat import capability_feeders as feeders
+from seshat.capability_inventory import build_inventory, render_human, render_json
 from tests.unit import _capability_oracle as oracle
 
 pytestmark = pytest.mark.unit
@@ -40,22 +40,22 @@ def _assert_closed_schema(records: list[dict]) -> None:
 # ---------------------------------------------------------------------------
 
 
-_BANNED_UNDER_TEST = {"retail.capability_feeders", "retail.capability_inventory"}
+_BANNED_UNDER_TEST = {"seshat.capability_feeders", "seshat.capability_inventory"}
 _BANNED_SUBMODULES = {"capability_feeders", "capability_inventory"}
 
 
 def _imported_module_targets(node: ast.AST) -> set[str]:
     """The set of import targets a single AST import node names, normalized so a
-    ``from retail import capability_feeders`` reads as ``retail.capability_feeders``
-    (matching the dotted ``import retail.capability_feeders`` / ``from
-    retail.capability_feeders import x`` shapes)."""
+    ``from seshat import capability_feeders`` reads as ``seshat.capability_feeders``
+    (matching the dotted ``import seshat.capability_feeders`` / ``from
+    seshat.capability_feeders import x`` shapes)."""
     if isinstance(node, ast.Import):
         return {alias.name for alias in node.names}
     if isinstance(node, ast.ImportFrom) and node.module:
         base = {node.module}
         if node.module == "retail":
             base |= {
-                f"retail.{a.name}" for a in node.names if a.name in _BANNED_SUBMODULES
+                f"seshat.{a.name}" for a in node.names if a.name in _BANNED_SUBMODULES
             }
         return base
     return set()
@@ -381,8 +381,8 @@ def test_provenance_verbatim_never_upgraded() -> None:
 
 
 def test_no_new_cli_verb() -> None:
-    from retail.cli import _DISPATCH
-    from retail.cli.parser import _build_parser
+    from seshat.cli import _DISPATCH
+    from seshat.cli.parser import _build_parser
 
     assert "capabilities" not in _DISPATCH
     assert "capabilities" not in _build_parser().format_help()
@@ -442,8 +442,8 @@ def _assert_no_driver_imports(tree: ast.Module, mod_name: str) -> None:
 
 
 def test_no_write_no_db() -> None:
-    import retail.capability_feeders as feeders_module
-    import retail.capability_inventory as module
+    import seshat.capability_feeders as feeders_module
+    import seshat.capability_inventory as module
 
     for mod in (module, feeders_module):
         tree = ast.parse(Path(mod.__file__).read_text(encoding="utf-8"))
@@ -456,8 +456,8 @@ def test_reads_no_readiness_state() -> None:
     run-state. ``templates/readiness-status.yaml`` (the stage-token vocabulary,
     D5) is a different, sanctioned file. The banned marker is the per-table glob
     + the run-state keys every readiness-consuming surface uses."""
-    import retail.capability_feeders as feeders_module
-    import retail.capability_inventory as module
+    import seshat.capability_feeders as feeders_module
+    import seshat.capability_inventory as module
 
     for mod in (module, feeders_module):
         source = Path(mod.__file__).read_text(encoding="utf-8")

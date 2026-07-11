@@ -4,7 +4,7 @@
 
 **Goal:** Widen the L3 contract↔DAX drift checker to recognize 4 more predicate spellings and guard additive measures, then promote it to a CI gate via a new `retail semantic-check` subcommand (drift=ERROR, escalate=WARNING) — without polluting the stdlib-only `retail check` core.
 
-**Architecture:** L3 lives in the lazy module `src/retail/metric_drift.py` (parses YAML, never in the `retail check` import chain). Phase 1 hardens that module, then adds a new CLI subcommand `retail semantic-check` that loads metric contracts + measure DAX, runs `check_measure_drift`, maps `Verdict` → `Finding`, and exits 1 on any drift. yaml is imported lazily inside the handler only.
+**Architecture:** L3 lives in the lazy module `src/seshat/metric_drift.py` (parses YAML, never in the `retail check` import chain). Phase 1 hardens that module, then adds a new CLI subcommand `retail semantic-check` that loads metric contracts + measure DAX, runs `check_measure_drift`, maps `Verdict` → `Finding`, and exits 1 on any drift. yaml is imported lazily inside the handler only.
 
 **Tech Stack:** Python 3.13 (stdlib only for the core; `pyyaml` is a dev/optional dep used lazily), pytest, argparse CLI, GitHub Actions CI.
 
@@ -25,11 +25,11 @@
 ## File Map
 
 - `tests/unit/test_rules_wiring.py` — MODIFY (Task 1): fix G6 wiring symmetry.
-- `src/retail/metric_drift.py` — MODIFY (Tasks 2, 3): +4 predicates, +additive guard.
+- `src/seshat/metric_drift.py` — MODIFY (Tasks 2, 3): +4 predicates, +additive guard.
 - `tests/unit/test_metric_drift.py` — MODIFY (Tasks 2, 3): predicate + additive tests.
-- `src/retail/semantic.py` — CREATE (Task 4): pure Verdict→Finding mapping + measure/contract pairing (kept out of cli.py so it is unit-testable and small).
+- `src/seshat/semantic.py` — CREATE (Task 4): pure Verdict→Finding mapping + measure/contract pairing (kept out of cli.py so it is unit-testable and small).
 - `tests/unit/test_semantic.py` — CREATE (Task 4): mapping + pairing tests.
-- `src/retail/cli.py` — MODIFY (Task 5): `semantic-check` parser + dispatch + `_run_semantic_check` handler (lazy imports).
+- `src/seshat/cli.py` — MODIFY (Task 5): `semantic-check` parser + dispatch + `_run_semantic_check` handler (lazy imports).
 - `tests/unit/test_cli_semantic.py` — CREATE (Task 5): subcommand + stdlib-guard tests.
 - `.github/workflows/ci.yml` — MODIFY (Task 6): new gated step.
 
@@ -37,7 +37,7 @@
 
 ## Task 1: Fix the G6 wiring-test symmetry (precondition)
 
-**Why:** G6 is registered (`src/retail/rules/g6.py:49`) and imported (`src/retail/rules/__init__.py:14`), so the live registry has 28 rules. But `EXPECTED_RULE_IDS` omits `"G6"` AND the reload loop / importability tuple omit `"g6"`. The suite passes only by omission symmetry. Phase 2 will edit these structures; fix the gap first so the wiring test actually validates all 28 rules.
+**Why:** G6 is registered (`src/seshat/rules/g6.py:49`) and imported (`src/seshat/rules/__init__.py:14`), so the live registry has 28 rules. But `EXPECTED_RULE_IDS` omits `"G6"` AND the reload loop / importability tuple omit `"g6"`. The suite passes only by omission symmetry. Phase 2 will edit these structures; fix the gap first so the wiring test actually validates all 28 rules.
 
 **Files:**
 - Modify: `tests/unit/test_rules_wiring.py`
@@ -111,7 +111,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 **Why:** Today only `NOT(ISBLANK(col))` → is_not_null and `col = TRUE()` → is_true are recognized; everything else escalates. Add 4 tight, type-knowledge-free equivalents so common valid spellings get a confident verdict instead of escalating.
 
 **Files:**
-- Modify: `src/retail/metric_drift.py` (the predicate regexes ~lines 67-75 and `_recognize_filter` ~lines 172-188)
+- Modify: `src/seshat/metric_drift.py` (the predicate regexes ~lines 67-75 and `_recognize_filter` ~lines 172-188)
 - Test: `tests/unit/test_metric_drift.py`
 
 **Interfaces:**
@@ -270,7 +270,7 @@ Expected: PASS (all metric_drift tests).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/retail/metric_drift.py tests/unit/test_metric_drift.py
+git add src/seshat/metric_drift.py tests/unit/test_metric_drift.py
 git commit -m "feat: widen L3 predicate whitelist (+4 recognized spellings)
 
 Recognize col<>BLANK(), ISBLANK(col)=FALSE() (is_not_null) and
@@ -288,7 +288,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 **Why:** `check_measure_drift` never reads `definition['additive']`. A measure marked `additive: true` would be wrongly run through ratio/denominator logic. Escalate it instead.
 
 **Files:**
-- Modify: `src/retail/metric_drift.py` (`check_measure_drift`, after the existing `skip` check ~line 213)
+- Modify: `src/seshat/metric_drift.py` (`check_measure_drift`, after the existing `skip` check ~line 213)
 - Test: `tests/unit/test_metric_drift.py`
 
 **Interfaces:**
@@ -333,7 +333,7 @@ Expected: FAIL (2 failed) — current code ignores `additive`, so `DAX_AVG` agai
 
 - [ ] **Step 3: Add the guard in `check_measure_drift`**
 
-In `src/retail/metric_drift.py`, immediately AFTER the existing skip check (the block that returns `Verdict("skip", ...)` when there is no `definition` or no `"denominator"`), add:
+In `src/seshat/metric_drift.py`, immediately AFTER the existing skip check (the block that returns `Verdict("skip", ...)` when there is no `definition` or no `"denominator"`), add:
 
 ```python
     # Additive measures are not ratios; denominator filter-set logic does not apply.
@@ -359,7 +359,7 @@ Expected: PASS (all, including `test_shipped_discounted_rate_passes` / `test_shi
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/retail/metric_drift.py tests/unit/test_metric_drift.py
+git add src/seshat/metric_drift.py tests/unit/test_metric_drift.py
 git commit -m "feat: escalate additive measures in L3 drift check
 
 check_measure_drift now requires an explicit additive: false; a measure
@@ -377,7 +377,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 **Why:** Keep the pairing logic (measure DAX ↔ contract) and the Verdict→Finding mapping in a small, unit-testable module separate from `cli.py`. This module is stdlib-only at import (it does NOT import yaml — the caller passes already-loaded definitions), and it is NEVER imported by `retail.rules`.
 
 **Files:**
-- Create: `src/retail/semantic.py`
+- Create: `src/seshat/semantic.py`
 - Test: `tests/unit/test_semantic.py`
 
 **Interfaces:**
@@ -392,7 +392,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 Create `tests/unit/test_semantic.py`:
 
 ```python
-"""Unit tests for the L3 semantic-check core (src/retail/semantic.py)."""
+"""Unit tests for the L3 semantic-check core (src/seshat/semantic.py)."""
 
 from __future__ import annotations
 
@@ -485,7 +485,7 @@ def test_run_pairs_escalate_warns_but_exits_zero() -> None:
 Run: `./.venv/Scripts/python.exe -m pytest tests/unit/test_semantic.py -q --no-cov`
 Expected: FAIL with `ModuleNotFoundError: No module named 'retail.semantic'`.
 
-- [ ] **Step 3: Create `src/retail/semantic.py`**
+- [ ] **Step 3: Create `src/seshat/semantic.py`**
 
 ```python
 """L3 semantic-check core: pair measures with contracts, map Verdicts to Findings.
@@ -573,10 +573,10 @@ Expected: PASS (8 passed).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/semantic.py tests/unit/test_semantic.py
+git add src/seshat/semantic.py tests/unit/test_semantic.py
 git commit -m "feat: add L3 semantic-check core (pairing + Verdict->Finding)
 
-src/retail/semantic.py maps drift->ERROR, escalate->WARNING, pass/skip->
+src/seshat/semantic.py maps drift->ERROR, escalate->WARNING, pass/skip->
 none, and runs the drift check over measure/contract pairs returning
 (findings, exit_code). Stdlib-only at import; never imported by
 retail.rules.
@@ -591,7 +591,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 **Why:** Expose L3 as a CI-gating subcommand. The handler loads metric contracts (lazy yaml), pairs each with its measure's DAX from TMDL (via the existing `parse_tmdl`), runs `run_semantic_pairs`, prints findings, and returns the exit code. yaml + semantic + metric_drift are imported INSIDE the handler only.
 
 **Files:**
-- Modify: `src/retail/cli.py` (parser ~after line 70; dispatch ~after line 105; new `_run_semantic_check`)
+- Modify: `src/seshat/cli.py` (parser ~after line 70; dispatch ~after line 105; new `_run_semantic_check`)
 - Test: `tests/unit/test_cli_semantic.py`
 
 **Interfaces:**
@@ -709,7 +709,7 @@ Expected: FAIL — `main(["semantic-check", ...])` is unknown (argparse error / 
 
 - [ ] **Step 3: Add the parser branch in `_build_parser` (after the `validate` block, before `return parser`)**
 
-In `src/retail/cli.py`, before `return parser` (currently line 71):
+In `src/seshat/cli.py`, before `return parser` (currently line 71):
 
 ```python
     # L3 semantic / contract<->DAX drift gate (feature: DAX fortification Phase 1).
@@ -731,7 +731,7 @@ In `src/retail/cli.py`, before `return parser` (currently line 71):
 
 - [ ] **Step 4: Add the dispatch branch in `main` (after the `validate` branch, before `return 0`)**
 
-In `src/retail/cli.py`, after the `if args.command == "validate": return _run_validate(args)` block (line 105), add:
+In `src/seshat/cli.py`, after the `if args.command == "validate": return _run_validate(args)` block (line 105), add:
 
 ```python
     if args.command == "semantic-check":
@@ -740,7 +740,7 @@ In `src/retail/cli.py`, after the `if args.command == "validate": return _run_va
 
 - [ ] **Step 5: Add the `_run_semantic_check` handler (lazy imports inside)**
 
-Append to `src/retail/cli.py` (before the `if __name__ == "__main__":` guard):
+Append to `src/seshat/cli.py` (before the `if __name__ == "__main__":` guard):
 
 ```python
 def _run_semantic_check(args) -> int:
@@ -814,7 +814,7 @@ Expected: PASS — `retail.rules` still pulls neither metric_drift nor yaml (the
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/retail/cli.py tests/unit/test_cli_semantic.py
+git add src/seshat/cli.py tests/unit/test_cli_semantic.py
 git commit -m "feat: add 'retail semantic-check' CLI subcommand (L3 gate)
 
 New subcommand pairs committed measures (TMDL) with metric-contract
@@ -893,8 +893,8 @@ Expected: PASS — prior 307 + G6 path + new metric_drift/semantic/cli tests, 0 
 
 - [ ] **Step 2: Run ruff + black to confirm style compliance**
 
-Run: `./.venv/Scripts/python.exe -m ruff check src/retail/metric_drift.py src/retail/semantic.py src/retail/cli.py tests/unit/test_semantic.py tests/unit/test_cli_semantic.py tests/unit/test_metric_drift.py tests/unit/test_rules_wiring.py`
-Then: `./.venv/Scripts/python.exe -m black --check src/retail/ tests/unit/`
+Run: `./.venv/Scripts/python.exe -m ruff check src/seshat/metric_drift.py src/seshat/semantic.py src/seshat/cli.py tests/unit/test_semantic.py tests/unit/test_cli_semantic.py tests/unit/test_metric_drift.py tests/unit/test_rules_wiring.py`
+Then: `./.venv/Scripts/python.exe -m black --check src/seshat/ tests/unit/`
 Expected: both clean (no errors, no reformatting needed). If black reports changes, run without `--check`, re-run the suite, and amend the relevant commit.
 
 - [ ] **Step 3: Final confirmation message**

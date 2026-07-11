@@ -5,7 +5,7 @@ re-verifies as `pass` under `check_measure_drift`. It does NOT assert what the
 emitted DAX text actually IS. This module adds that byte-level pin: for a fixed
 set of contract fixtures, `generate_measure(load_contract(...))` -- using the
 SAME argument mapping `retail generate`'s CLI path uses
-(`src/retail/cli.py::_run_generate`) -- must emit `dax` / `tmdl_block` (success
+(`src/seshat/cli.py::_run_generate`) -- must emit `dax` / `tmdl_block` (success
 cases) or `reason` (the one refusal case) text identical to a committed golden
 file. Any drift, intended or not, fails with a visible diff.
 
@@ -26,7 +26,7 @@ from pathlib import Path
 
 import pytest
 
-from retail.dax_gen import generate_measure, load_contract
+from seshat.dax_gen import generate_measure, load_contract
 
 pytestmark = pytest.mark.unit
 

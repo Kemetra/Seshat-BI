@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from retail.pbir_theme_apply import PbirApplyError, apply_theme
+from seshat.pbir_theme_apply import PbirApplyError, apply_theme
 
 pytestmark = pytest.mark.unit
 

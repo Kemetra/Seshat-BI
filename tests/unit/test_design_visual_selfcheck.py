@@ -18,8 +18,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.design_visual_selfcheck import check_visual_spec_selfcheck
+from seshat.core import RuleContext, Severity
+from seshat.rules.design_visual_selfcheck import check_visual_spec_selfcheck
 
 pytestmark = pytest.mark.unit
 
@@ -113,7 +113,7 @@ def test_placeholder_reason_does_not_count_as_filled() -> None:
 
 
 def test_no_tenant_or_example_literal_in_rule_source() -> None:
-    from retail.rules import design_visual_selfcheck
+    from seshat.rules import design_visual_selfcheck
 
     src = Path(design_visual_selfcheck.__file__).read_text(encoding="utf-8")
     for banned in ("pharmacy", "c086", "ezaby"):

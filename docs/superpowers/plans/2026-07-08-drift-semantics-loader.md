@@ -4,7 +4,7 @@
 
 **Goal:** Extract the returns/PII semantic rulings from `source-map.yaml` into a `DriftSemantics`, and wire it into `retail drift`'s live leg so the `returns_rule_drift` / `pii_surface_drift` classes can fire end-to-end.
 
-**Architecture:** A new lazy-pyyaml module `src/retail/drift_semantics.py` (mirrors `validate_targets.py`) exposing `load_drift_semantics(path) -> DriftSemantics`. The CLI live leg resolves a source-map path (`--source-map` override, else the sibling of `--baseline`), loads semantics if the file exists, and threads it into `to_findings_dict`. The pure `drift.py` is unchanged; only the CLI grows a wiring step.
+**Architecture:** A new lazy-pyyaml module `src/seshat/drift_semantics.py` (mirrors `validate_targets.py`) exposing `load_drift_semantics(path) -> DriftSemantics`. The CLI live leg resolves a source-map path (`--source-map` override, else the sibling of `--baseline`), loads semantics if the file exists, and threads it into `to_findings_dict`. The pure `drift.py` is unchanged; only the CLI grows a wiring step.
 
 **Tech Stack:** Python 3.13, pyyaml (lazy import — optional dep, never on the static-core import path), frozen dataclasses, argparse, pytest (`pytest.mark.unit`), ruff.
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- `src/retail/drift.py` stays PURE + stdlib-only; the yaml dep is lazy-imported inside the loader, never at `drift.py`/CLI module scope (mirrors `validate_targets` + the psycopg2 lazy pattern).
+- `src/seshat/drift.py` stays PURE + stdlib-only; the yaml dep is lazy-imported inside the loader, never at `drift.py`/CLI module scope (mirrors `validate_targets` + the psycopg2 lazy pattern).
 - Never fabricate a PII-drop the map did not state; a missing `pii` field is `false`, a missing `decision` is not-drop, a placeholder `derived_from` (`<...>`) is None.
 - Deterministic output: `dropped_pii_columns` is a `frozenset` (order-independent by construction).
 - ASCII, UTF-8 no BOM. Test with `PYTHONPATH=src python -m pytest ... -q --no-cov`.
@@ -22,7 +22,7 @@
 
 ## Interfaces this plan builds against (verbatim, from the tree)
 
-From `src/retail/drift.py` (shipped, PR #231):
+From `src/seshat/drift.py` (shipped, PR #231):
 
 ```python
 @dataclass(frozen=True)
@@ -43,16 +43,16 @@ derived_columns:          # may be [] (RC8 deviation)
     derived_from: "<authoritative_type_col>"   # the AUTHORITATIVE source column
 ```
 
-CLI live-leg wiring point — `src/retail/cli/commands/drift.py`, inside `_run_live_drift`, the `to_findings_dict(...)` call currently passes no `semantics`. The parser (`_add_drift_parser` in `src/retail/cli/parser.py`) already has `--baseline`, `--dsn`, `--format`; this plan adds `--source-map`.
+CLI live-leg wiring point — `src/seshat/cli/commands/drift.py`, inside `_run_live_drift`, the `to_findings_dict(...)` call currently passes no `semantics`. The parser (`_add_drift_parser` in `src/seshat/cli/parser.py`) already has `--baseline`, `--dsn`, `--format`; this plan adds `--source-map`.
 
 ---
 
 ## File Structure
 
-- **Create** `src/retail/drift_semantics.py` — `load_drift_semantics(path) -> DriftSemantics`; private `_dropped_pii(columns)`, `_returns_column(doc)`. Lazy pyyaml.
+- **Create** `src/seshat/drift_semantics.py` — `load_drift_semantics(path) -> DriftSemantics`; private `_dropped_pii(columns)`, `_returns_column(doc)`. Lazy pyyaml.
 - **Create** `tests/unit/test_drift_semantics.py` — synthetic-yaml + real-mapping unit tests.
-- **Modify** `src/retail/cli/parser.py` — add `--source-map` to `_add_drift_parser`.
-- **Modify** `src/retail/cli/commands/drift.py` — resolve path + load + thread `semantics` into `_run_live_drift`.
+- **Modify** `src/seshat/cli/parser.py` — add `--source-map` to `_add_drift_parser`.
+- **Modify** `src/seshat/cli/commands/drift.py` — resolve path + load + thread `semantics` into `_run_live_drift`.
 - **Modify** `tests/unit/test_cli_drift.py` — CLI wiring tests (monkeypatched, no DB).
 
 ---
@@ -60,7 +60,7 @@ CLI live-leg wiring point — `src/retail/cli/commands/drift.py`, inside `_run_l
 ## Task 1: the loader module (source-map.yaml -> DriftSemantics)
 
 **Files:**
-- Create: `src/retail/drift_semantics.py`
+- Create: `src/seshat/drift_semantics.py`
 - Test: `tests/unit/test_drift_semantics.py`
 
 **Interfaces:**
@@ -130,7 +130,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'retail.drift_semantics
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# src/retail/drift_semantics.py
+# src/seshat/drift_semantics.py
 """Extract the returns/PII semantic rulings from a source-map.yaml into a
 retail.drift.DriftSemantics, so retail drift's live leg can fire the
 returns_rule_drift / pii_surface_drift classes.
@@ -206,7 +206,7 @@ Expected: PASS (2 passed). If pyyaml is missing: `python -m pip install pyyaml` 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/drift_semantics.py tests/unit/test_drift_semantics.py
+git add src/seshat/drift_semantics.py tests/unit/test_drift_semantics.py
 git commit -m "feat: source-map.yaml -> DriftSemantics loader (returns derived_from + dropped-PII)"
 ```
 
@@ -215,7 +215,7 @@ git commit -m "feat: source-map.yaml -> DriftSemantics loader (returns derived_f
 ## Task 2: edge cases + the real-mapping no-op guard
 
 **Files:**
-- Modify: `src/retail/drift_semantics.py` (only if an edge case reveals a bug)
+- Modify: `src/seshat/drift_semantics.py` (only if an edge case reveals a bug)
 - Test: `tests/unit/test_drift_semantics.py`
 
 **Interfaces:**
@@ -289,8 +289,8 @@ git commit -m "test: drift-semantics loader edge cases + real-mapping no-op guar
 ## Task 3: wire the loader into the retail drift CLI live leg
 
 **Files:**
-- Modify: `src/retail/cli/parser.py` (add `--source-map` to `_add_drift_parser`)
-- Modify: `src/retail/cli/commands/drift.py` (resolve path + load + thread semantics)
+- Modify: `src/seshat/cli/parser.py` (add `--source-map` to `_add_drift_parser`)
+- Modify: `src/seshat/cli/commands/drift.py` (resolve path + load + thread semantics)
 - Test: `tests/unit/test_cli_drift.py`
 
 **Interfaces:**
@@ -353,7 +353,7 @@ def test_drift_source_map_flag_missing_file_is_clean_error(capsys, monkeypatch):
 Run: `PYTHONPATH=src python -m pytest tests/unit/test_cli_drift.py -q --no-cov`
 Expected: FAIL — argparse rejects `--source-map` (rc 2), and `load_drift_semantics` is not imported in `drift.py`.
 
-- [ ] **Step 3a: Add the `--source-map` argument** — in `src/retail/cli/parser.py`, inside `_add_drift_parser`, after the `--dsn` argument:
+- [ ] **Step 3a: Add the `--source-map` argument** — in `src/seshat/cli/parser.py`, inside `_add_drift_parser`, after the `--dsn` argument:
 
 ```python
     drift.add_argument(
@@ -367,7 +367,7 @@ Expected: FAIL — argparse rejects `--source-map` (rc 2), and `load_drift_seman
     )
 ```
 
-- [ ] **Step 3b: Thread semantics into the live leg** — in `src/retail/cli/commands/drift.py` `_run_live_drift`, add a module-level lazy import inside the function's import block and resolve+load before the `to_findings_dict` call. Add near the other `from retail...` imports inside `_run_live_drift`:
+- [ ] **Step 3b: Thread semantics into the live leg** — in `src/seshat/cli/commands/drift.py` `_run_live_drift`, add a module-level lazy import inside the function's import block and resolve+load before the `to_findings_dict` call. Add near the other `from retail...` imports inside `_run_live_drift`:
 
 ```python
     from pathlib import Path as _Path
@@ -423,7 +423,7 @@ Expected: PASS. Run the full drift trio too:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/cli/parser.py src/retail/cli/commands/drift.py tests/unit/test_cli_drift.py
+git add src/seshat/cli/parser.py src/seshat/cli/commands/drift.py tests/unit/test_cli_drift.py
 git commit -m "feat: retail drift --source-map + auto-discover sibling; thread DriftSemantics into the live leg"
 ```
 
@@ -440,7 +440,7 @@ Expected: clean. If format differs: `ruff format src tests` then re-commit.
 
 - [ ] **Step 2: CodeScene health on the new + modified files**
 
-Verify `src/retail/drift_semantics.py` and `src/retail/cli/commands/drift.py` are >= threshold (ideally 10.0) via the CodeScene MCP `code_health_review`. `_run_live_drift` grew — if it trips Bumpy Road / Complex Method, extract the semantics-resolution block into a `_resolve_semantics(args) -> DriftSemantics | None | int` helper (return an int rc to signal the clean-error early-return) or a small helper that raises a typed sentinel; keep the guard flat.
+Verify `src/seshat/drift_semantics.py` and `src/seshat/cli/commands/drift.py` are >= threshold (ideally 10.0) via the CodeScene MCP `code_health_review`. `_run_live_drift` grew — if it trips Bumpy Road / Complex Method, extract the semantics-resolution block into a `_resolve_semantics(args) -> DriftSemantics | None | int` helper (return an int rc to signal the clean-error early-return) or a small helper that raises a typed sentinel; keep the guard flat.
 
 - [ ] **Step 3: full unit suite**
 

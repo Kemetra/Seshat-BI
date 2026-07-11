@@ -4,7 +4,7 @@
 
 **Goal:** Add a self-contained `retail theme-gen` verb that turns a caller-supplied palette into a gated Power BI theme artifact set (tokens + theme JSON + filled spec), stdlib-only, self-checking CT1 before writing.
 
-**Architecture:** Extract the WCAG contrast math from `design_contrast.py` into a shared `src/retail/color.py` (CT1 re-exports it so its test is unchanged). New `src/retail/theme_gen.py` assembles the palette, derives a monochromatic `dataColors` ramp with stdlib `colorsys` when none is given, self-checks contrast via the shared helper, and writes three artifacts by construction-fidelity (DL1-clean, DL3-faithful). New `retail theme-gen` CLI verb dispatches to it.
+**Architecture:** Extract the WCAG contrast math from `design_contrast.py` into a shared `src/seshat/color.py` (CT1 re-exports it so its test is unchanged). New `src/seshat/theme_gen.py` assembles the palette, derives a monochromatic `dataColors` ramp with stdlib `colorsys` when none is given, self-checks contrast via the shared helper, and writes three artifacts by construction-fidelity (DL1-clean, DL3-faithful). New `retail theme-gen` CLI verb dispatches to it.
 
 **Tech Stack:** Python 3.13, stdlib only (`json`, `colorsys`, `pathlib`, `argparse`), `pyyaml` (already a dep) for tokens/spec YAML/text output, `pytest` (`@pytest.mark.unit`).
 
@@ -24,8 +24,8 @@
 ### Task 1: Extract shared WCAG color helper (`color.py`)
 
 **Files:**
-- Create: `src/retail/color.py`
-- Modify: `src/retail/rules/design_contrast.py:51-75` (replace defs with a re-export)
+- Create: `src/seshat/color.py`
+- Modify: `src/seshat/rules/design_contrast.py:51-75` (replace defs with a re-export)
 - Test: `tests/unit/test_color.py` (new); `tests/unit/test_design_contrast.py` (must still pass unchanged)
 
 **Interfaces:**
@@ -77,7 +77,7 @@ def test_bad_hex_raises() -> None:
 Run: `pytest tests/unit/test_color.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'retail.color'`
 
-- [ ] **Step 3: Write `src/retail/color.py`**
+- [ ] **Step 3: Write `src/seshat/color.py`**
 
 ```python
 """Shared, stdlib-only sRGB/WCAG color math.
@@ -130,7 +130,7 @@ def contrast_ratio(a: str, b: str) -> float:
 
 - [ ] **Step 4: Re-export from `design_contrast.py` so CT1 + its test are unchanged**
 
-Replace the three private defs at `src/retail/rules/design_contrast.py:51-75` with:
+Replace the three private defs at `src/seshat/rules/design_contrast.py:51-75` with:
 
 ```python
 # WCAG math now lives in the shared helper so the CT1 rule and the theme
@@ -153,7 +153,7 @@ Expected: PASS (new helper tests pass; every existing CT1 test still passes unch
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/retail/color.py src/retail/rules/design_contrast.py tests/unit/test_color.py
+git add src/seshat/color.py src/seshat/rules/design_contrast.py tests/unit/test_color.py
 git commit -m "$(printf 'refactor: extract shared WCAG color helper (retail.color)\n\nCT1 re-exports it so its behavior + tests are unchanged; the theme\ngenerator will import the same arithmetic for its pre-write self-check.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>')"
 ```
 
@@ -162,7 +162,7 @@ git commit -m "$(printf 'refactor: extract shared WCAG color helper (retail.colo
 ### Task 2: Theme generator core (`theme_gen.py`)
 
 **Files:**
-- Create: `src/retail/theme_gen.py`
+- Create: `src/seshat/theme_gen.py`
 - Test: `tests/unit/test_theme_gen.py`
 
 **Interfaces:**
@@ -316,7 +316,7 @@ def test_refuses_overwrite_without_force(tmp_path: Path) -> None:
 Run: `pytest tests/unit/test_theme_gen.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'retail.theme_gen'`
 
-- [ ] **Step 3: Write `src/retail/theme_gen.py`**
+- [ ] **Step 3: Write `src/seshat/theme_gen.py`**
 
 ```python
 """Theme generator (Slice 1, DEFINE-only).
@@ -575,7 +575,7 @@ Expected: PASS (all 11 tests).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/theme_gen.py tests/unit/test_theme_gen.py
+git add src/seshat/theme_gen.py tests/unit/test_theme_gen.py
 git commit -m "$(printf 'feat: theme generator core (retail.theme_gen, Slice 1)\n\nFull-multi-input palette -> tokens+theme+spec, stdlib-only; derives a\nmonochromatic dataColors ramp via colorsys when none given; self-checks\nCT1 before writing and refuses a below-floor theme; DL1-clean + DL3-\nfaithful by construction; readiness = warning (never self-pass).\n\nDEFINE-only: no PBIR, no FR-008/009 lift, no pbi-cli.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>')"
 ```
 
@@ -584,7 +584,7 @@ git commit -m "$(printf 'feat: theme generator core (retail.theme_gen, Slice 1)\
 ### Task 3: CLI verb `retail theme-gen`
 
 **Files:**
-- Modify: `src/retail/cli.py` (add `theme-gen` subparser near the `generate` verb ~line 166; add dispatch in the command switch)
+- Modify: `src/seshat/cli.py` (add `theme-gen` subparser near the `generate` verb ~line 166; add dispatch in the command switch)
 - Test: `tests/unit/test_theme_gen_cli.py`
 
 **Interfaces:**
@@ -728,7 +728,7 @@ Expected: PASS (both tests).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/retail/cli.py src/retail/theme_gen.py tests/unit/test_theme_gen_cli.py
+git add src/seshat/cli.py src/seshat/theme_gen.py tests/unit/test_theme_gen_cli.py
 git commit -m "$(printf 'feat: retail theme-gen CLI verb (Slice 1)\n\nWires the theme generator as a stdlib-only kit verb: assembles a\nThemeSeed from args, generates the gated triplet, prints written paths +\na suggested README line; exit 2 on a clean ThemeGenError.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>')"
 ```
 

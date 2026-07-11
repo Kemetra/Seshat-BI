@@ -17,8 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.rule_ap1 import (
+from seshat.core import RuleContext, Severity
+from seshat.rules.rule_ap1 import (
     DASHBOARD_QA_REL,
     VISUAL_QA_REL,
     _extract_headings,

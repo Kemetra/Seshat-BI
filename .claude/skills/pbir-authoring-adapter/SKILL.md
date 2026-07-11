@@ -47,7 +47,7 @@ this bounded adapter only* -- the static core stays forbidden from writing PBIR.
    it moves NO readiness stage and emits NO score (hard rule #9). The
    `dashboard_ready` / design-review sign-off stays a named human's decision.
 5. **The core polices; the adapter writes.** `retail check` R2 is the read-only core
-   lint over the written report; the writer (`src/retail/pbir_theme_apply.py`) is the
+   lint over the written report; the writer (`src/seshat/pbir_theme_apply.py`) is the
    adapter. The core never writes PBIR (ADR 0015 decision 1).
 
 ## Increment A -- apply a generated theme (SHIPPED)
@@ -93,7 +93,7 @@ existed).
 - Spec / plan / tasks: `specs/106-pbir-authoring-adapter/{spec,plan,tasks}.md`.
 - The contract: `templates/pbir-adapter-contract.md`.
 - The enumerated shape + allow-list: `docs/integrations/pbir-adapter.md`.
-- The writer + verb: `src/retail/pbir_theme_apply.py` (`retail pbir-apply-theme`).
-- The core lint: `src/retail/rules/pbir.py` (R2).
-- The theme source consumed: `src/retail/theme_gen.py` (`retail theme-gen`, Slice 1).
+- The writer + verb: `src/seshat/pbir_theme_apply.py` (`retail pbir-apply-theme`).
+- The core lint: `src/seshat/rules/pbir.py` (R2).
+- The theme source consumed: `src/seshat/theme_gen.py` (`retail theme-gen`, Slice 1).
 - The parked publish adapter (separate): F016.

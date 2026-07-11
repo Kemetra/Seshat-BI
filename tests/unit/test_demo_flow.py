@@ -18,7 +18,7 @@ _REPO = Path(__file__).resolve().parents[2]
 
 def test_demo_init_idempotent(tmp_path):
     """T010: demo init materializes fixtures and is idempotent without --force."""
-    from retail.demo import fixtures
+    from seshat.demo import fixtures
 
     # Seed a tmp "repo" with just the committed fixture files the demo reads.
     _seed_repo(tmp_path)
@@ -39,7 +39,7 @@ def test_demo_load_offline_skips_and_exits_zero(tmp_path, capsys):
         repo = str(tmp_path)
         dsn = None
 
-    from retail.demo.load import run_load
+    from seshat.demo.load import run_load
 
     assert run_load(_Args()) == 0
     assert "offline" in capsys.readouterr().out.lower()
@@ -53,7 +53,7 @@ def test_demo_run_offline_ceiling(tmp_path, capsys):
         repo = str(tmp_path)
         dsn = None
 
-    from retail.demo.run import run_run
+    from seshat.demo.run import run_run
 
     assert run_run(_Args()) == 0
     snap = json.loads(
@@ -82,8 +82,8 @@ def test_demo_report_no_score_and_names_next_action(tmp_path, capsys):
         dsn = None
         format = "text"
 
-    from retail.demo.report import run_report
-    from retail.demo.run import run_run
+    from seshat.demo.report import run_report
+    from seshat.demo.run import run_run
 
     run_run(_Args())  # produce a snapshot first
     assert run_report(_Args()) == 0
@@ -110,8 +110,8 @@ def test_demo_report_labels_illustrative_approval(tmp_path, capsys):
         dsn = None
         format = "text"
 
-    from retail.demo.report import run_report
-    from retail.demo.run import run_run
+    from seshat.demo.report import run_report
+    from seshat.demo.run import run_run
 
     run_run(_Args())
     run_report(_Args())
@@ -131,9 +131,9 @@ def test_demo_never_writes_tracked_readiness_fixture(tmp_path):
         format = "text"
         force = False
 
-    from retail.demo.init import run_init
-    from retail.demo.report import run_report
-    from retail.demo.run import run_run
+    from seshat.demo.init import run_init
+    from seshat.demo.report import run_report
+    from seshat.demo.run import run_run
 
     run_init(_Args())
     run_run(_Args())

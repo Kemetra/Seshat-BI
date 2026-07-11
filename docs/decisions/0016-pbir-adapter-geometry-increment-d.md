@@ -84,7 +84,7 @@ category-colors and the verb-C background row already follow.
 ### 6. Authoring, NOT publishing; core stays forbidden (unchanged from 0015 1+6)
 
 The lift is a narrow carve-out for this one bounded adapter. The static DEFINE/CHECK
-core (`src/retail/` rules, `retail check`) remains forbidden from writing any PBIR. The
+core (`src/seshat/` rules, `retail check`) remains forbidden from writing any PBIR. The
 adapter writes committed PBIR and stops; live publish is the separately-parked F016.
 
 ### 7. Docs-first; this decision ships NO geometry writer
@@ -159,7 +159,7 @@ multi-visual report lands (same posture as A/B/C and the smart-formatting layer)
 ## See also
 
 - The precedent it extends: `docs/decisions/0015-pbir-authoring-adapter-lifts-fr008-fr009.md`.
-- The refusal it would lift: `src/retail/pbir_visual_format.py` (FR-003 snapshot);
+- The refusal it would lift: `src/seshat/pbir_visual_format.py` (FR-003 snapshot);
   `.claude/skills/pbir-authoring-adapter/SKILL.md` ("no page.json geometry");
   the `handoff-only` routing in
   `.claude/skills/powerbi-dashboard-design/workflows/formatting-plan.md` step 3.

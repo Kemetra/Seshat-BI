@@ -7,7 +7,7 @@
 # frontmatter; verbs in .seshat/kit-source.yaml; F-numbered ship status in
 # docs/roadmap/roadmap.md; doc-anchored claims in docs/quality/status-claims.yaml;
 # parked-on edges in docs/quality/parked-on.yaml; wired commands in
-# src/retail/cli/__init__.py _DISPATCH).
+# src/seshat/cli/__init__.py _DISPATCH).
 #
 # Scope of "covered skill" (O2): a REPO skill is a `.claude/skills/*/SKILL.md` file
 # tracked by git at the repo top level (verified via `git ls-files`), regardless of

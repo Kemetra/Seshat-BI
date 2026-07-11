@@ -24,7 +24,7 @@ of this capture is the real "Mark as Date Table" TMDL literal — D7's anchor).
 ## After capture — reconcile and verify
 
 1. Open the real `*.SemanticModel/definition/*.tmdl` and compare each pinned literal in
-   `src/retail/tmdl.py`'s docstring against the real text. The likely mismatch is the
+   `src/seshat/tmdl.py`'s docstring against the real text. The likely mismatch is the
    date-table marker (table-level annotation vs `dataCategory: Time`). Update the
    docstring literal, the fixture, AND the `test_model_pins_provisional_date_table_marker`
    assertion in `tests/unit/test_tmdl.py`. Remove the `*** PROVISIONAL ***` banner once

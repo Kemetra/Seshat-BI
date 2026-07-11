@@ -21,9 +21,9 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.sql import s4b_guard_form
-from retail.sql import schema_zone, tokenize_sql
+from seshat.core import RuleContext, Severity
+from seshat.rules.sql import s4b_guard_form
+from seshat.sql import schema_zone, tokenize_sql
 
 pytestmark = pytest.mark.unit
 

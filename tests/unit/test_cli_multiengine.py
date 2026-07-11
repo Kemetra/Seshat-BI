@@ -22,8 +22,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.cli import _safe_target_label
-from retail.cli import main as main_under_test
+from seshat.cli import _safe_target_label
+from seshat.cli import main as main_under_test
 
 pytestmark = pytest.mark.unit
 
@@ -34,7 +34,7 @@ def _setup_sqlserver_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ANALYTICS_DB_USER", "svc")
     monkeypatch.setenv("ANALYTICS_DB_PASSWORD", "hunter2")
     monkeypatch.delenv("DATABASE_URL", raising=False)
-    monkeypatch.setattr("retail.cli._ensure_driver", lambda: True)
+    monkeypatch.setattr("seshat.cli._ensure_driver", lambda: True)
 
 
 def test_safe_target_label_sqlserver_odbc_string_never_echoes_credentials() -> None:
@@ -73,7 +73,7 @@ def test_validate_sqlserver_engine_emits_sqlserver_sql_not_postgres(
     FILTER (WHERE ...), count(DISTINCT (...)))."""
     _setup_sqlserver_env(monkeypatch)
 
-    from retail.validate import (
+    from seshat.validate import (
         DateCoverageTarget,
         OrphanTarget,
         PkTarget,
@@ -92,7 +92,7 @@ def test_validate_sqlserver_engine_emits_sqlserver_sql_not_postgres(
         orphans=OrphanTarget(fact="gold.f", fks=()),
         reconcile=ReconcileTarget(silver="silver.t", gold="gold.f", measures=()),
     )
-    monkeypatch.setattr("retail.cli._load_targets", lambda path: fake_targets)
+    monkeypatch.setattr("seshat.cli._load_targets", lambda path: fake_targets)
 
     captured_sql: list[str] = []
 
@@ -103,7 +103,7 @@ def test_validate_sqlserver_engine_emits_sqlserver_sql_not_postgres(
                 return [(5, 5, 0)]
             return [(0,)]
 
-    monkeypatch.setattr("retail.cli._make_runner", lambda config: FakeRunner())
+    monkeypatch.setattr("seshat.cli._make_runner", lambda config: FakeRunner())
 
     rc = main_under_test(["validate", "--source-map", "mappings/t/source-map.yaml"])
     assert rc == 0
@@ -162,7 +162,7 @@ def test_value_check_sqlserver_engine_emits_sqlserver_sql_not_postgres(
     """`retail value-check` with ANALYTICS_DB_ENGINE=sqlserver must generate
     SQL-Server-dialect SQL for the ratio numerator/denominator filters built
     via `_filter_to_sql` -- bracket-quoted identifiers, not the hardcoded
-    Postgres double-quote form from `retail.identifiers.quote_identifier`
+    Postgres double-quote form from `seshat.identifiers.quote_identifier`
     (FIX 4: the ratio-filter quoter must be dialect-aware)."""
     _setup_sqlserver_env(monkeypatch)
     _write_contract(tmp_path, "DiscountedTransactionRate", _RATIO_CONTRACT)
@@ -176,7 +176,7 @@ def test_value_check_sqlserver_engine_emits_sqlserver_sql_not_postgres(
                 return [(8376,)]
             return [(4219,)]
 
-    monkeypatch.setattr("retail.cli._make_runner", lambda config: FakeRunner())
+    monkeypatch.setattr("seshat.cli._make_runner", lambda config: FakeRunner())
 
     rc = main_under_test(
         ["value-check", "--repo", str(tmp_path), "--metrics-dir", str(tmp_path)]
@@ -205,9 +205,9 @@ def test_validate_postgres_engine_unchanged(monkeypatch: pytest.MonkeyPatch) -> 
     -- FILTER (WHERE ...), count(DISTINCT (...)), double-quoted identifiers."""
     monkeypatch.delenv("ANALYTICS_DB_ENGINE", raising=False)
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@h:5432/db")
-    monkeypatch.setattr("retail.cli._ensure_driver", lambda: True)
+    monkeypatch.setattr("seshat.cli._ensure_driver", lambda: True)
 
-    from retail.validate import (
+    from seshat.validate import (
         DateCoverageTarget,
         OrphanTarget,
         PkTarget,
@@ -226,7 +226,7 @@ def test_validate_postgres_engine_unchanged(monkeypatch: pytest.MonkeyPatch) -> 
         orphans=OrphanTarget(fact="gold.f", fks=()),
         reconcile=ReconcileTarget(silver="silver.t", gold="gold.f", measures=()),
     )
-    monkeypatch.setattr("retail.cli._load_targets", lambda path: fake_targets)
+    monkeypatch.setattr("seshat.cli._load_targets", lambda path: fake_targets)
 
     captured_sql: list[str] = []
 
@@ -237,7 +237,7 @@ def test_validate_postgres_engine_unchanged(monkeypatch: pytest.MonkeyPatch) -> 
                 return [(5, 5, 0)]
             return [(0,)]
 
-    monkeypatch.setattr("retail.cli._make_runner", lambda dsn: FakeRunner())
+    monkeypatch.setattr("seshat.cli._make_runner", lambda dsn: FakeRunner())
 
     rc = main_under_test(["validate", "--source-map", "mappings/t/source-map.yaml"])
     assert rc == 0

@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import pytest
 
-from retail.core import Finding, Severity
-from retail.readiness_evidence import build_gold_ready_block
+from seshat.core import Finding, Severity
+from seshat.readiness_evidence import build_gold_ready_block
 
 pytestmark = pytest.mark.unit
 

@@ -70,19 +70,35 @@ jobs:
         run: retail kit-lint --repo .
 
   smoke:
-    # Install smoke test (spec 108, FR-003/FR-005). A SEPARATE job from `check`
-    # above -- it does not edit or depend on it (`needs:` intentionally omitted so
-    # both run in parallel). Builds a wheel, installs it into a clean throwaway
-    # venv, and asserts both console scripts (`retail`, `seshat`) resolve and
-    # `check --help` exits 0. No `fetch-depth: 0` (no git-metadata rule runs here).
-    # No publish step, no registry token, no secret of any kind (FR-004).
-    runs-on: ubuntu-latest
+    # Windows is the release gate for the first-success journey. The test builds both
+    # package artifacts, installs the wheel with pipx in a throwaway location, then
+    # exercises seshat help/init-project/status/next/check with no optional extras.
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
-
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+      - name: Install smoke harness tools
+        run: python -m pip install build pipx
+      - name: Windows first-success smoke
+        run: python scripts/install_smoke_test.py
 
-      - name: Install smoke test (build + clean-venv install + console-script check)
+  smoke-unix:
+    # Best-effort beta coverage for the documented macOS/Linux journey. It is kept
+    # non-blocking by design; Windows remains the release gate.
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install smoke harness tools
+        run: python -m pip install build pipx
+      - name: Best-effort first-success smoke
         run: python scripts/install_smoke_test.py

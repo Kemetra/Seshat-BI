@@ -24,7 +24,7 @@
 
 ## File Structure
 
-- `src/retail/profile.py` **[CREATE]** -- the mechanical profiling helper. `ProfileResult` dataclass + `profile(runner, table, candidate_pk)`. Driver-free; reuses `retail.validate.QueryRunner`.
+- `src/seshat/profile.py` **[CREATE]** -- the mechanical profiling helper. `ProfileResult` dataclass + `profile(runner, table, candidate_pk)`. Driver-free; reuses `retail.validate.QueryRunner`.
 - `tests/unit/test_profile.py` **[CREATE]** -- unit tests with a `FakeRunner` (copy the pattern from `test_validate.py`): row/col count, `''OR NULL` missingness, cardinality, PK proof, and the driver-free guard.
 - `tests/fixtures/` -- reuse existing patterns; no new fixture files needed (canned rows are inline in the test).
 - `templates/source-map.yaml:96-97` **[MODIFY]** -- correct the stale namespace note.
@@ -66,7 +66,7 @@ Replace those two comment lines with:
 
 - [ ] **Step 3: Verify the checker stays green**
 
-Run: `PYTHONPATH=src python -m retail.cli check`
+Run: `PYTHONPATH=src python -m seshat.cli check`
 Expected: exit 0; "26 rules" reported; no new finding (YAML is still valid; comment-only change).
 
 - [ ] **Step 4: Commit**
@@ -83,7 +83,7 @@ git commit -m "fix: correct stale RC/checker namespace note in source-map.yaml (
 The helper `source-mapping` calls to get the numbers the source-profile artifact rests on. Mirrors `validate.py`: driver-free, runs against a `QueryRunner`, mechanical numbers ONLY (no semantic heuristics -- those are Principle-V judgment calls the agent proposes and a human confirms).
 
 **Files:**
-- Create: `src/retail/profile.py`
+- Create: `src/seshat/profile.py`
 - Test: `tests/unit/test_profile.py`
 
 **Interfaces:**
@@ -154,7 +154,7 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'retail.profile'`.
 
 - [ ] **Step 3: Write the minimal implementation**
 
-Create `src/retail/profile.py`:
+Create `src/seshat/profile.py`:
 ```python
 """Mechanical profiling of a landed (bronze) source table.
 
@@ -358,13 +358,13 @@ Expected: all PASS (5 tests).
 
 - [ ] **Step 11: Run the whole suite + the checker to confirm no regression**
 
-Run: `PYTHONPATH=src pytest tests/ -q && PYTHONPATH=src python -m retail.cli check`
+Run: `PYTHONPATH=src pytest tests/ -q && PYTHONPATH=src python -m seshat.cli check`
 Expected: all tests green; checker exit 0, 26 rules.
 
 - [ ] **Step 12: Commit**
 
 ```bash
-git add src/retail/profile.py tests/unit/test_profile.py
+git add src/seshat/profile.py tests/unit/test_profile.py
 git commit -m "feat: add mechanical profiling helper (profile.py) for the source-mapping gate"
 ```
 
@@ -516,7 +516,7 @@ Expected: all six paths listed (no "No such file"). If `0003` differs, correct t
 
 - [ ] **Step 4: Run the checker (skill files are under .claude/, not model artifacts)**
 
-Run: `PYTHONPATH=src python -m retail.cli check`
+Run: `PYTHONPATH=src python -m seshat.cli check`
 Expected: exit 0, 26 rules (no new finding).
 
 - [ ] **Step 5: Commit**
@@ -560,7 +560,7 @@ description: >-
 
 `retail check` proves everything provable from committed text. `retail validate`
 proves the four things only a running database can show, on the MATERIALIZED rows
-(constitution Principle VIII; `src/retail/validate.py`). This skill runs it and
+(constitution Principle VIII; `src/seshat/validate.py`). This skill runs it and
 maps each finding to the one place to fix it -- the live sibling of
 `retail-govern`.
 
@@ -627,8 +627,8 @@ confirm green is the user's next call, not a loop this skill performs.
 
 ## See also
 
-- The checks: `src/retail/validate.py`; target sourcing:
-  `src/retail/validate_targets.py`.
+- The checks: `src/seshat/validate.py`; target sourcing:
+  `src/seshat/validate_targets.py`.
 - Principle VIII (static-first, live deferred): `.specify/memory/constitution.md`.
 - The static sibling: the `retail-govern` skill.
 - The blank the run fills: `templates/reconciliation-report.md`.
@@ -641,12 +641,12 @@ Expected: `ascii+no-BOM OK`.
 
 - [ ] **Step 3: Verify cross-linked paths resolve**
 
-Run: `ls src/retail/validate.py src/retail/validate_targets.py .specify/memory/constitution.md templates/reconciliation-report.md .claude/skills/retail-govern/SKILL.md`
+Run: `ls src/seshat/validate.py src/seshat/validate_targets.py .specify/memory/constitution.md templates/reconciliation-report.md .claude/skills/retail-govern/SKILL.md`
 Expected: all five paths listed.
 
 - [ ] **Step 4: Run the checker + full suite**
 
-Run: `PYTHONPATH=src python -m retail.cli check && PYTHONPATH=src pytest tests/ -q`
+Run: `PYTHONPATH=src python -m seshat.cli check && PYTHONPATH=src pytest tests/ -q`
 Expected: checker exit 0 (26 rules); all tests green.
 
 - [ ] **Step 5: Commit**

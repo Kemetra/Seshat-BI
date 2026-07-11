@@ -18,7 +18,7 @@ SCOPE GUARD (FR-004, FR-005; Principle VIII): this module opens no database
 connection, invokes no `retail-build-warehouse` skill step, and calls no CLI --
 it only reads two already-committed migration files and their golden copies as
 plain text. That is a structural property of the module as written: no
-`psycopg2`/`retail.validate`/subprocess import appears anywhere below.
+`psycopg2`/`seshat.validate`/subprocess import appears anywhere below.
 """
 
 from __future__ import annotations
@@ -98,7 +98,7 @@ def test_missing_golden_fails_closed_never_skips(tmp_path: Path) -> None:
 
 def test_no_live_db_or_skill_invocation_in_this_module() -> None:
     """Structural guard (FR-004, FR-005): this test file reads committed text
-    only. It never IMPORTS a DB driver, the live `retail.validate` module, or
+    only. It never IMPORTS a DB driver, the live `seshat.validate` module, or
     `subprocess` -- confirmed here by parsing this module's own source with
     `ast` and inspecting its import statements only (not prose in comments or
     docstrings, which would otherwise self-flag), so a future edit that
@@ -115,7 +115,7 @@ def test_no_live_db_or_skill_invocation_in_this_module() -> None:
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported.add(node.module)
 
-    forbidden_modules = ("psycopg2", "pyodbc", "subprocess", "retail.validate")
+    forbidden_modules = ("psycopg2", "pyodbc", "subprocess", "seshat.validate")
     found = [m for m in forbidden_modules if m in imported]
     assert not found, (
         f"test_warehouse_sql_golden.py must stay a pure text-comparison module; "

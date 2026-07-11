@@ -34,7 +34,7 @@ Two facts, verified against the live tree, bound this slice tightly:
 1. **`theme_gen.render_theme_json(palette, seed)`** already turns a resolved palette
    into the exact theme JSON we want. The compile verb REUSES it verbatim -- it invents
    no new rendering, no new color, no new key.
-2. **DL3 (`src/retail/rules/design_theme_fidelity.py`) already CHECKS this loop.** It
+2. **DL3 (`src/seshat/rules/design_theme_fidelity.py`) already CHECKS this loop.** It
    reconciles `colors.background` and positional `colors.data_colors[i]` between a
    committed tokens YAML and its `meta.compiles_to` theme. So drift is *already caught*:
    a hand-edited `theme.json` out of sync with its tokens is a DL3 error today.
@@ -154,8 +154,8 @@ carries no irreversible surface.
 
 ## See also
 
-- The renderer it reuses: `src/retail/theme_gen.py` (`render_theme_json`, `build_palette`).
-- The checker it feeds: `src/retail/rules/design_theme_fidelity.py` (DL3) + `design_theme.py` (DL1).
+- The renderer it reuses: `src/seshat/theme_gen.py` (`render_theme_json`, `build_palette`).
+- The checker it feeds: `src/seshat/rules/design_theme_fidelity.py` (DL3) + `design_theme.py` (DL1).
 - The circular framing it replaces: `docs/superpowers/specs/2026-07-06-smart-formatting-layer-design.md`
   (deferred list: "theme *generation* from the plan").
 - Tokens format: `design/tokens/executive-dark-design-tokens.yaml`.

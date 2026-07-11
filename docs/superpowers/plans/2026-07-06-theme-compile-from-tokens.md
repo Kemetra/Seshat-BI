@@ -4,7 +4,7 @@
 
 **Goal:** Add a deterministic `retail theme-compile` verb that reads a committed design-tokens YAML and writes its matching Power BI `theme.json`, reusing the existing theme renderer so the output is byte-identical to what `theme-gen` produced.
 
-**Architecture:** One thin new module `src/retail/theme_compile.py` reconstructs a `palette` dict and a `ThemeSeed` **purely from values already committed in the tokens YAML**, then delegates to the existing `theme_gen.render_theme_json`. It chooses no color and invents no rendering. A new `theme-compile` CLI subcommand dispatches to it. The existing DL3 (fidelity) and DL1 (purity) rules already check the written pair — no new rule.
+**Architecture:** One thin new module `src/seshat/theme_compile.py` reconstructs a `palette` dict and a `ThemeSeed` **purely from values already committed in the tokens YAML**, then delegates to the existing `theme_gen.render_theme_json`. It chooses no color and invents no rendering. A new `theme-compile` CLI subcommand dispatches to it. The existing DL3 (fidelity) and DL1 (purity) rules already check the written pair — no new rule.
 
 **Tech Stack:** Python 3.13, stdlib only (`json`, `re`, `sys`, `pathlib`) + `PyYAML` (already a dependency, imported lazily like DL3 does) + the existing `retail.color` and `retail.theme_gen` modules. pytest (`@pytest.mark.unit`).
 
@@ -23,8 +23,8 @@
 
 ## File Structure
 
-- **Create `src/retail/theme_compile.py`** — the whole feature. Responsibilities: parse tokens YAML → `palette` + `ThemeSeed`; validate; delegate to `render_theme_json`; write with overwrite guard; a `theme_compile_main(args)` CLI entry. One clear purpose; ~120 lines.
-- **Modify `src/retail/cli.py`** — add the `theme-compile` subparser (near the `theme-gen` parser, ~line 205) and its dispatch branch (near the `theme-gen` dispatch, ~line 470).
+- **Create `src/seshat/theme_compile.py`** — the whole feature. Responsibilities: parse tokens YAML → `palette` + `ThemeSeed`; validate; delegate to `render_theme_json`; write with overwrite guard; a `theme_compile_main(args)` CLI entry. One clear purpose; ~120 lines.
+- **Modify `src/seshat/cli.py`** — add the `theme-compile` subparser (near the `theme-gen` parser, ~line 205) and its dispatch branch (near the `theme-gen` dispatch, ~line 470).
 - **Create `tests/unit/test_theme_compile.py`** — module-level tests (round-trip byte-identity, palette rebuild, error paths, overwrite guard).
 - **Create `tests/unit/test_theme_compile_cli.py`** — CLI-level tests (exit 0 on success, exit 2 on bad tokens), mirroring `test_theme_gen_cli.py`.
 
@@ -33,7 +33,7 @@
 ### Task 1: The `theme_compile` module — palette rebuild + compile core
 
 **Files:**
-- Create: `src/retail/theme_compile.py`
+- Create: `src/seshat/theme_compile.py`
 - Test: `tests/unit/test_theme_compile.py`
 
 **Interfaces:**
@@ -109,7 +109,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'retail.theme_compile'`
 - [ ] **Step 3: Write the module — docstring, error, and `palette_from_tokens`**
 
 ```python
-# src/retail/theme_compile.py
+# src/seshat/theme_compile.py
 """Tokens -> theme compiler (DEFINE-only).
 
 Reconstructs a Power BI ``theme.json`` from a *committed* design-tokens YAML by
@@ -238,7 +238,7 @@ Expected: FAIL — `seed_from_tokens` not defined.
 
 - [ ] **Step 7: Add `_derive_name`, `_mode_from_style`, and `seed_from_tokens`**
 
-Append to `src/retail/theme_compile.py`:
+Append to `src/seshat/theme_compile.py`:
 
 ```python
 def _derive_name(tokens_doc: dict) -> str:
@@ -347,7 +347,7 @@ Expected: FAIL — `compile_theme` not defined.
 
 - [ ] **Step 11: Add `_resolve_out`, `_load_tokens`, and `compile_theme`**
 
-Append to `src/retail/theme_compile.py`:
+Append to `src/seshat/theme_compile.py`:
 
 ```python
 def _load_tokens(tokens_path: Path) -> dict:
@@ -464,7 +464,7 @@ Expected: all PASS.
 - [ ] **Step 15: Commit**
 
 ```bash
-git add src/retail/theme_compile.py tests/unit/test_theme_compile.py
+git add src/seshat/theme_compile.py tests/unit/test_theme_compile.py
 git commit -m "feat: theme-compile core -- deterministic tokens->theme (reuses render_theme_json)"
 ```
 
@@ -473,7 +473,7 @@ git commit -m "feat: theme-compile core -- deterministic tokens->theme (reuses r
 ### Task 2: CLI subcommand `theme-compile`
 
 **Files:**
-- Modify: `src/retail/cli.py` (add subparser near line 205; add dispatch near line 470)
+- Modify: `src/seshat/cli.py` (add subparser near line 205; add dispatch near line 470)
 - Create: `tests/unit/test_theme_compile_cli.py`
 
 **Interfaces:**
@@ -527,7 +527,7 @@ Expected: FAIL — `theme-compile` is not a valid subcommand (argparse `SystemEx
 
 - [ ] **Step 3: Add `theme_compile_main` to the module**
 
-Append to `src/retail/theme_compile.py`:
+Append to `src/seshat/theme_compile.py`:
 
 ```python
 def theme_compile_main(args) -> int:
@@ -555,7 +555,7 @@ Note: the broad `except Exception` is intentional and narrow in effect — the o
 
 - [ ] **Step 4: Add the subparser in `cli.py`**
 
-In `src/retail/cli.py`, immediately after the `theme-gen` parser block (after line 204, the `themegen.add_argument("--force", ...)` call), add:
+In `src/seshat/cli.py`, immediately after the `theme-gen` parser block (after line 204, the `themegen.add_argument("--force", ...)` call), add:
 
 ```python
     # Tokens -> theme compile (deterministic; reuses theme-gen's renderer). Reads a
@@ -580,7 +580,7 @@ In `src/retail/cli.py`, immediately after the `theme-gen` parser block (after li
 
 - [ ] **Step 5: Add the dispatch branch in `cli.py`**
 
-In `src/retail/cli.py`, immediately after the `theme-gen` dispatch block (after the `return theme_gen_main(args)` at ~line 473), add:
+In `src/seshat/cli.py`, immediately after the `theme-gen` dispatch block (after the `return theme_gen_main(args)` at ~line 473), add:
 
 ```python
     if args.command == "theme-compile":
@@ -597,7 +597,7 @@ Expected: 2 PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/retail/cli.py src/retail/theme_compile.py tests/unit/test_theme_compile_cli.py
+git add src/seshat/cli.py src/seshat/theme_compile.py tests/unit/test_theme_compile_cli.py
 git commit -m "feat: wire theme-compile CLI subcommand"
 ```
 

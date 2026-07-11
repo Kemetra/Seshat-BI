@@ -107,7 +107,7 @@ does not:
    value disagrees with the stored string it reports BOTH and flags the
    disagreement (a `next_action_disagreement` caveat) rather than silently
    picking one. Cross-table aggregation stays F012/F026 territory.
-3. **vs. RS1 (`src/retail/rules/readiness_status.py`).** RS1 is the static
+3. **vs. RS1 (`src/seshat/rules/readiness_status.py`).** RS1 is the static
    consistency LINTER wired into `retail check` (invalid status values, `pass`
    without evidence, `blocked` without reasons, invalid approval-owner shape,
    `current_stage` skipping a blocker). This skill applies the SAME
@@ -194,7 +194,7 @@ file-source special case):
 
 **Approval-shape check (cite, do not re-derive).** An `approvals[]` entry counts
 as "shape-valid" only if it satisfies the SAME rule RS1 enforces --
-`src/retail/rules/readiness_status.py::_owner_is_valid`. Restating its shape
+`src/seshat/rules/readiness_status.py::_owner_is_valid`. Restating its shape
 (verify against the live source at build time, since RS1 may change):
 
 - `owner` must match `Person Name (authority_class)` -- a non-empty name part,
@@ -303,7 +303,7 @@ empty after any such walk.
 
 - The response contract: `specs/080-run-next-readiness-state-machine/contracts/run-next-response.md`.
 - The walk + entities: that spec's `data-model.md`; the 15 cases: its `quickstart.md`.
-- The approval-shape rule it cites: `src/retail/rules/readiness_status.py::_owner_is_valid`.
+- The approval-shape rule it cites: `src/seshat/rules/readiness_status.py::_owner_is_valid`.
 - Neighbors: `.claude/skills/retail-orchestrate/SKILL.md` (executes),
   `.claude/skills/readiness-viewer/SKILL.md` (renders many), RS1 (lints).
 - Usage + boundary doc: `docs/tools/run-next-readiness.md`.

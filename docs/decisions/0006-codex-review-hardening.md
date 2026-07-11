@@ -80,7 +80,7 @@
 - The worked instance + PR: `mappings/retail_store_sales/` (the `training` DB run),
   PR #23 on `feat/training-e2e-and-tool-maturity`.
 - The first hardening wave: `docs/decisions/0005-live-surface-hardening.md`.
-- The new rule + its inverse: `S8`/`S6` in `src/retail/rules/sql.py`; the wiring
+- The new rule + its inverse: `S8`/`S6` in `src/seshat/rules/sql.py`; the wiring
   guard `tests/unit/test_rules_wiring.py`; the date-model authority
   `docs/readiness/semantic-model-ready.md`.
 - The generalized traps: `docs/medallion-playbook.md` Appendix A (17-20).

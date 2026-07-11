@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from retail import kit_lint
+from seshat import kit_lint
 
 pytestmark = pytest.mark.unit
 
@@ -31,7 +31,7 @@ SOURCE_REL = ".seshat/kit-source.yaml"
 
 def _bootstrap(tmp_path: Path) -> Path:
     """Copy the real source + minimal governed files, then project via retail init."""
-    from retail import kit_init
+    from seshat import kit_init
 
     (tmp_path / ".seshat").mkdir()
     shutil.copyfile(REPO_ROOT / SOURCE_REL, tmp_path / SOURCE_REL)

@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.coverage_status import _ENUM, STATUSES, is_member
-from retail.gap_detector import build_gap_inventory, render_view
+from seshat.coverage_status import _ENUM, STATUSES, is_member
+from seshat.gap_detector import build_gap_inventory, render_view
 
 pytestmark = pytest.mark.unit
 
@@ -407,14 +407,14 @@ def test_unreadable_contract_is_unverifiable(tmp_path):
 # cross-cutting: no-write proof (SC-007), vocabulary parity (SC-002), generic
 # --------------------------------------------------------------------------- #
 def test_module_has_no_write_call():
-    src = Path("src/retail/gap_detector.py").read_text(encoding="utf-8")
+    src = Path("src/seshat/gap_detector.py").read_text(encoding="utf-8")
     assert "write_text" not in src
     assert ".write(" not in src
     assert "open(" not in src  # reads use Path.read_text, not open()
 
 
 def test_cli_writes_nothing(tmp_path):
-    from retail.cli.commands.gap_detector import gap_detector_main
+    from seshat.cli.commands.gap_detector import gap_detector_main
 
     _write_table(tmp_path, "widget", MIXED_METRICS)
     intent = _write_intent(tmp_path, "intent.yaml", MIXED_INTENT)
@@ -433,7 +433,7 @@ def test_vocabulary_is_exactly_sl1(tmp_path):
     intent = _write_intent(tmp_path, "intent.yaml", MIXED_INTENT)
     view = build_gap_inventory(tmp_path, "widget", intent)
     assert {is_member(i["status"]) for i in view["items"]} == {True}
-    from retail.coverage_status import _norm
+    from seshat.coverage_status import _norm
 
     assert {_norm(s) for s in STATUSES} == _ENUM
 

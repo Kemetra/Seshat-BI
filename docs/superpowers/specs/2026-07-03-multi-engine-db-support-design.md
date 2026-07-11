@@ -50,7 +50,7 @@ Dialect       (NEW)        — "how do I phrase it": quoting, params, fragments,
    └─ SnowflakeDialect
 ```
 
-**New module:** `src/retail/dialect.py`. It holds the `Dialect` Protocol + the four concrete dialects. It is imported by the CLI seam and by the three DB modules for fragment building. Concrete `connect()` implementations lazy-import their driver **inside the method**, never at module scope — preserving the driver-free import invariant (B1/B3) exactly as `make_psycopg2_runner` does today.
+**New module:** `src/seshat/dialect.py`. It holds the `Dialect` Protocol + the four concrete dialects. It is imported by the CLI seam and by the three DB modules for fragment building. Concrete `connect()` implementations lazy-import their driver **inside the method**, never at module scope — preserving the driver-free import invariant (B1/B3) exactly as `make_psycopg2_runner` does today.
 
 ---
 

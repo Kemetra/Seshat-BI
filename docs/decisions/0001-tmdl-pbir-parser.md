@@ -8,7 +8,7 @@
 
 ## Decision
 
-- **TMDL → hand-rolled indentation/block tokenizer** in `src/retail/tmdl.py`.
+- **TMDL → hand-rolled indentation/block tokenizer** in `src/seshat/tmdl.py`.
 - **PBIR / report JSON → stdlib `json`**, opened `encoding="utf-8-sig"` (Power BI
   writes UTF-8-with-BOM; a plain `json.load` raises on the BOM).
 

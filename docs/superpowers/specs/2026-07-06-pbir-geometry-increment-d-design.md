@@ -40,7 +40,7 @@ literals never inlined -- Principle VII):
 
 | Role | Where | What | New? |
 |------|-------|------|------|
-| EXECUTE (apply) | `retail pbir-set-geometry` -> `src/retail/pbir_geometry.py` | write a visual's `position` rectangle, preserving binding (FR-003) + validating on-canvas | new verb |
+| EXECUTE (apply) | `retail pbir-set-geometry` -> `src/seshat/pbir_geometry.py` | write a visual's `position` rectangle, preserving binding (FR-003) + validating on-canvas | new verb |
 | CHECK | a geometry guard INSIDE the writer (pre-write) + the existing R1/authoring-lint family | reject off-canvas / negative / non-numeric rectangles, read REAL canvas dims | new guard |
 | PROPOSE | `formatting-plan.md` workflow (`apply_verb: D` rows) | later: emit D rows (out of THIS slice; slice = the writer + guard) | deferred |
 
@@ -119,8 +119,8 @@ the owner's un-blocker, not this slice's claim.
 ## See also
 
 - The authorization: `docs/decisions/0016-pbir-adapter-geometry-increment-d.md` (ratified).
-- The pattern it mirrors: `src/retail/pbir_visual_format.py` (increment B).
-- The `page.json` path convention it reuses: `src/retail/pbir_page_background.py`.
+- The pattern it mirrors: `src/seshat/pbir_visual_format.py` (increment B).
+- The `page.json` path convention it reuses: `src/seshat/pbir_page_background.py`.
 - The proposer that will later emit `apply_verb: D` rows:
   `.claude/skills/powerbi-dashboard-design/workflows/formatting-plan.md`.
 - `.specify/memory/constitution.md` (Principles III, IV, V, VII; hard rule #9).

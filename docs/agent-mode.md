@@ -77,7 +77,7 @@ evidence-first action (go profile, go record status) -- never an assumed
 | `seshat validate` | LIVE data checks -- only when a database is configured (`db` extra + DSN); otherwise it reports the deferred state honestly. |
 
 `retail` is the canonical dev alias of `seshat`; with the package installed,
-`python -m retail.cli <verb>` runs every verb without the console script (from
+`python -m seshat.cli <verb>` runs every verb without the console script (from
 a bare uninstalled clone, prefix with `PYTHONPATH=src`).
 
 ## How Claude Code should use Seshat safely

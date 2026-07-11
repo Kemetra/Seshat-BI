@@ -4,7 +4,7 @@
 
 **Goal:** Add `retail pbir-set-geometry` — a writer that sets an existing visual's `position` rectangle (x/y/width/height/z/tabOrder), preserving its data binding (FR-003) and refusing off-canvas rectangles read from the real `page.json` canvas.
 
-**Architecture:** A new `src/retail/pbir_geometry.py` mirrors `pbir_visual_format.py` (allow-list, binding snapshot-preserve, round-trip check, clean `PbirGeometryError`, `_main`). It adds an on-canvas guard that reads the REAL `page.json` `width`/`height` (never hardcoded). A dedicated generic fixture with a non-default 1600×900 canvas enforces the read-real-dims invariant.
+**Architecture:** A new `src/seshat/pbir_geometry.py` mirrors `pbir_visual_format.py` (allow-list, binding snapshot-preserve, round-trip check, clean `PbirGeometryError`, `_main`). It adds an on-canvas guard that reads the REAL `page.json` `width`/`height` (never hardcoded). A dedicated generic fixture with a non-default 1600×900 canvas enforces the read-real-dims invariant.
 
 **Tech Stack:** Python 3.13, stdlib only (`json`, `pathlib`, `sys`). pytest (`@pytest.mark.unit`).
 
@@ -26,8 +26,8 @@
 ## File Structure
 
 - **Create `tests/fixtures/pbir/geometry.Report/`** — a minimal generic PBIR report: one `page.json` (canvas 1600×900) + two `visual.json` files with `position` blocks. The test substrate.
-- **Create `src/retail/pbir_geometry.py`** — the writer + on-canvas guard + `pbir_geometry_main`. ~140 lines.
-- **Modify `src/retail/cli.py`** — add the `pbir-set-geometry` subparser (after the `pbir-set-page-background` parser block) + its dispatch branch (after that verb's dispatch).
+- **Create `src/seshat/pbir_geometry.py`** — the writer + on-canvas guard + `pbir_geometry_main`. ~140 lines.
+- **Modify `src/seshat/cli.py`** — add the `pbir-set-geometry` subparser (after the `pbir-set-page-background` parser block) + its dispatch branch (after that verb's dispatch).
 - **Create `tests/unit/test_pbir_geometry.py`** — module tests (valid write, FR-003, allow-list, off-canvas incl. the non-default-canvas decoy, overlap-allowed, missing page.json, repeated-move-no-force-gate).
 - **Create `tests/unit/test_pbir_geometry_cli.py`** — CLI exit 0/2.
 
@@ -104,7 +104,7 @@ git commit -m "test: generic geometry fixture (1600x900 canvas, two positioned v
 ### Task 2: The geometry writer + on-canvas guard
 
 **Files:**
-- Create: `src/retail/pbir_geometry.py`
+- Create: `src/seshat/pbir_geometry.py`
 - Test: `tests/unit/test_pbir_geometry.py`
 
 **Interfaces:**
@@ -172,7 +172,7 @@ Expected: FAIL — `No module named 'retail.pbir_geometry'`.
 - [ ] **Step 3: Write the module**
 
 ```python
-# src/retail/pbir_geometry.py
+# src/seshat/pbir_geometry.py
 """PBIR visual geometry writer (adapter increment D).
 
 Sets an existing, binding-mapped visual's ``position`` rectangle -- ``x``, ``y``,
@@ -409,7 +409,7 @@ Expected: all PASS. (If `test_offcanvas...REAL...` fails, the guard is hardcodin
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/retail/pbir_geometry.py tests/unit/test_pbir_geometry.py
+git add src/seshat/pbir_geometry.py tests/unit/test_pbir_geometry.py
 git commit -m "feat: pbir geometry writer -- position rectangle, binding-safe, on-canvas (increment D)"
 ```
 
@@ -418,8 +418,8 @@ git commit -m "feat: pbir geometry writer -- position rectangle, binding-safe, o
 ### Task 3: CLI subcommand `pbir-set-geometry`
 
 **Files:**
-- Modify: `src/retail/cli.py`
-- Modify: `src/retail/pbir_geometry.py` (add `pbir_geometry_main`)
+- Modify: `src/seshat/cli.py`
+- Modify: `src/seshat/pbir_geometry.py` (add `pbir_geometry_main`)
 - Create: `tests/unit/test_pbir_geometry_cli.py`
 
 **Interfaces:**
@@ -479,7 +479,7 @@ Expected: FAIL — `pbir-set-geometry` unknown subcommand.
 
 - [ ] **Step 3: Add `pbir_geometry_main` to the module**
 
-Append to `src/retail/pbir_geometry.py`:
+Append to `src/seshat/pbir_geometry.py`:
 ```python
 def pbir_geometry_main(args) -> int:
     """CLI entry: set a visual's position rectangle from a JSON string/file."""
@@ -509,7 +509,7 @@ def pbir_geometry_main(args) -> int:
 
 - [ ] **Step 4: Add the subparser in cli.py**
 
-In `src/retail/cli.py`, immediately AFTER the `pbir-set-page-background` subparser block (after its last `.add_argument(...)`, before the next `sub.add_parser(...)` — e.g. `manifest`), add:
+In `src/seshat/cli.py`, immediately AFTER the `pbir-set-page-background` subparser block (after its last `.add_argument(...)`, before the next `sub.add_parser(...)` — e.g. `manifest`), add:
 ```python
     # PBIR visual geometry (adapter increment D). Sets a visual's position rectangle
     # (x/y/width/height/z/tabOrder), preserving its data binding (FR-003) and refusing
@@ -532,7 +532,7 @@ In `src/retail/cli.py`, immediately AFTER the `pbir-set-page-background` subpars
 
 - [ ] **Step 5: Add the dispatch branch in cli.py**
 
-In `src/retail/cli.py`, immediately AFTER the `pbir-set-page-background` dispatch (`return pbir_page_bg_main(args)`), add:
+In `src/seshat/cli.py`, immediately AFTER the `pbir-set-page-background` dispatch (`return pbir_page_bg_main(args)`), add:
 ```python
     if args.command == "pbir-set-geometry":
         from .pbir_geometry import pbir_geometry_main
@@ -548,7 +548,7 @@ Expected: 3 PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/retail/cli.py src/retail/pbir_geometry.py tests/unit/test_pbir_geometry_cli.py
+git add src/seshat/cli.py src/seshat/pbir_geometry.py tests/unit/test_pbir_geometry_cli.py
 git commit -m "feat: wire pbir-set-geometry CLI subcommand (increment D)"
 ```
 

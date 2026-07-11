@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from retail.pbir_geometry import PbirGeometryError, set_geometry
+from seshat.pbir_geometry import PbirGeometryError, set_geometry
 
 pytestmark = pytest.mark.unit
 

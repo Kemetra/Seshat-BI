@@ -53,7 +53,7 @@ not sufficient; semantic correctness needs the live boundary. See `docs/glossary
 **`retail check` flagged a rule id like `S4b` / `D7` / `G6`. What do I do?**
 The `retail-govern` skill maps each id to its meaning and fix; `docs/glossary.md` lists the
 families (S = SQL, D = DAX/TMDL, C = connection/secrets, R = PBIR, G = git hygiene,
-P = process). The live registry in `src/retail/rules/` is authoritative.
+P = process). The live registry in `src/seshat/rules/` is authoritative.
 
 **Why did `RC7` and `D7` used to collide?**
 They didn't really — `RC1–RC16` are ADR-0002 *cleaning defaults*; `D1…`, `S1…` are

@@ -17,8 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.design_categorical_distinctness import (
+from seshat.core import RuleContext, Severity
+from seshat.rules.design_categorical_distinctness import (
     RULE_ID,
     check_categorical_distinctness,
 )

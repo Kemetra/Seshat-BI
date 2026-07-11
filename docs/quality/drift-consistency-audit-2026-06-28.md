@@ -25,10 +25,10 @@ re-verification of every headline claim against the source code** before any edi
 | Fact | Verified value | How verified |
 |------|----------------|--------------|
 | Static `retail check` rule count | **33** | `@register(` count = 33; distinct ids = 33 |
-| Distinct rule ids | `A1 B1 C1 C2 D1–D11 G1–G6 P1 P2 R1 S1–S8` | grep of `src/retail/rules/` |
+| Distinct rule ids | `A1 B1 C1 C2 D1–D11 G1–G6 P1 P2 R1 S1–S8` | grep of `src/seshat/rules/` |
 | Rule **families** (letter prefixes) | **8** — S, D, C, R, G, P, **A**, **B** | distinct id prefixes |
-| `A1` | "route-registry targets resolve or are honestly marked planned" | `src/retail/rules/routes.py` |
-| `B1` | "no module-scope DB/network import in the static core (never-execute)" | `src/retail/rules/never_execute.py` |
+| `A1` | "route-registry targets resolve or are honestly marked planned" | `src/seshat/rules/routes.py` |
+| `B1` | "no module-scope DB/network import in the static core (never-execute)" | `src/seshat/rules/never_execute.py` |
 
 > Two of the four automated passes mis-stated the count as **34** and the families
 > as ambiguous. Independent verification corrects this to **33 / 8 families**.
@@ -40,7 +40,7 @@ re-verification of every headline claim against the source code** before any edi
 | File | Was | Now | Why |
 |------|-----|-----|-----|
 | `docs/worked-examples/c086-pharmacy.md` | "the 23-rule static gate" (line 17) | "the 33-rule static gate" | Self-contradicted line 182 of the same file, which already says 33 |
-| `docs/architecture/tower-bi-agent-kit.md` | "(`src/retail/`, 31 static rules)" (line 51) | "33 static rules" | Inconsistent with the same doc's own "33 rules" at lines 85/167 |
+| `docs/architecture/tower-bi-agent-kit.md` | "(`src/seshat/`, 31 static rules)" (line 51) | "33 static rules" | Inconsistent with the same doc's own "33 rules" at lines 85/167 |
 | `docs/architecture/tower-bi-agent-kit.md` | `[ADR 0003](decisions/0003-…)` (line 125) | `[ADR 0003](../decisions/0003-…)` | Broken relative link — missing parent prefix |
 | `CONTRIBUTING.md` | "the 6 rule families" (line 51) | "the 8 rule families" | A and B families (idea-bank rules) were added; 6 is stale |
 | `docs/glossary.md` | family table listed 6 (S D C R G P) | added **A** (route registry) and **B** (never-execute) rows | The canonical family list was missing the two idea-bank families |

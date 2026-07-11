@@ -22,8 +22,8 @@ from __future__ import annotations
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.answerability_reconciler import (
+from seshat.core import RuleContext, Severity
+from seshat.rules.answerability_reconciler import (
     RULE_ID,
     check_answerability,
 )

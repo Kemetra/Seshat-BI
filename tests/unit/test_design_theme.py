@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.design_theme import RULE_ID, check_theme_purity
+from seshat.core import RuleContext, Severity
+from seshat.rules.design_theme import RULE_ID, check_theme_purity
 
 pytestmark = pytest.mark.unit
 
@@ -73,7 +73,7 @@ def test_c5_sentiment_color_allowed_zero_findings() -> None:
 def test_c6_current_committed_starter_theme_zero_findings() -> None:
     # The live starter theme, discovered via its real tracked path, must stay
     # green (SC-003): the rule does not break the current build.
-    ctx = _ctx("themes/tower-retail.theme.json", repo_root=REPO_ROOT)
+    ctx = _ctx("themes/tower-seshat.theme.json", repo_root=REPO_ROOT)
     assert list(check_theme_purity(ctx)) == []
 
 
@@ -124,7 +124,7 @@ def test_no_tenant_or_example_literal_in_vocabulary() -> None:
     # SC-005 / Principle VII: the rule's vocabulary carries no tenant/example/
     # brand-specific literal. The forbidden/allowed sets are generic contract
     # terms only.
-    from retail.rules import design_theme
+    from seshat.rules import design_theme
 
     joined = " ".join(design_theme._FORBIDDEN_TOKENS) + " ".join(
         design_theme._ALLOWED_KEYS

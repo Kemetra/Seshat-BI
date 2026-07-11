@@ -31,9 +31,9 @@ statically, that is stated; nothing here is presented as an executed run.
 
 | PR | Idea | Feature | Integration responsibility |
 |----|------|---------|----------------------------|
-| #62 | A1 | Route Registry Manifest (`docs/routing/routes.yaml` + `src/retail/rules/routes.py`) | Routes are machine-checkable and honest — a `built` target resolves to a real tracked file; a `planned` target must not yet exist. |
+| #62 | A1 | Route Registry Manifest (`docs/routing/routes.yaml` + `src/seshat/rules/routes.py`) | Routes are machine-checkable and honest — a `built` target resolves to a real tracked file; a `planned` target must not yet exist. |
 | #63 | B2 | Structured Findings Output (`retail check --format {text,json}`) | Findings can be emitted in structured form (opt-in JSON) without changing the default text output. |
-| #64 | B1 | Never-Execute Invariant Guard (`src/retail/rules/never_execute.py`) | Module-scope DB/network import creep is blocked; legitimate lazy in-handler imports are allowed. |
+| #64 | B1 | Never-Execute Invariant Guard (`src/seshat/rules/never_execute.py`) | Module-scope DB/network import creep is blocked; legitimate lazy in-handler imports are allowed. |
 | #65 | F7 | KPI Decision-Question Index (`skills/retail-kpi-knowledge/domains/*.md`) | Business questions route to a real KPI contract or an honest planned/deferred marker. |
 | #66 | F8 | KPI Coverage Scorecard (`skills/retail-kpi-knowledge/references/kpi-coverage-scorecard-template.md`) | Table-to-KPI support is status/blocker-based, never score-based. |
 
@@ -276,15 +276,15 @@ docs-only smoke test.
 
 ### Evidence reviewed
 
-- **A1:** `docs/routing/routes.yaml`; `src/retail/rules/routes.py`;
+- **A1:** `docs/routing/routes.yaml`; `src/seshat/rules/routes.py`;
   `tests/unit/test_routes.py`; `docs/knowledge-map.md`; wiring in
-  `src/retail/rules/__init__.py` + `tests/unit/test_rules_wiring.py`. An in-process
+  `src/seshat/rules/__init__.py` + `tests/unit/test_rules_wiring.py`. An in-process
   run of `check_routes_resolve` over `git ls-files` returned 0 findings.
-- **B2:** `src/retail/runner.py` (`run`, `run_json`, `_collect`, `_exit_code`);
-  `src/retail/cli.py` (`--format` flag + dispatch); `src/retail/core.py`
+- **B2:** `src/seshat/runner.py` (`run`, `run_json`, `_collect`, `_exit_code`);
+  `src/seshat/cli.py` (`--format` flag + dispatch); `src/seshat/core.py`
   (`Finding.to_dict`, `FindingDict`); `tests/unit/test_runner.py`,
   `tests/unit/test_cli.py`.
-- **B1:** `src/retail/rules/never_execute.py`; `tests/unit/test_never_execute.py`;
+- **B1:** `src/seshat/rules/never_execute.py`; `tests/unit/test_never_execute.py`;
   wiring; a static scan of the 12 governed modules returned zero offenders.
 - **F7:** all 11 `skills/retail-kpi-knowledge/domains/*.md`; `INDEX.md`; the
   `contracts/` directory (10 files).

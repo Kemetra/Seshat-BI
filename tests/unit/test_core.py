@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import Finding, RegisteredRule, RuleContext, Severity
+from seshat.core import Finding, RegisteredRule, RuleContext, Severity
 
 
 @pytest.mark.unit

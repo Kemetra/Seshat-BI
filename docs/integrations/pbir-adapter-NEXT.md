@@ -14,12 +14,12 @@ Power BI report's visuals -- writing the PBIR/PBIP JSON directly, no external to
 
 | Piece | Status | Verb / where |
 |-------|--------|--------------|
-| Slice 1 -- theme generator | **SHIPPED** (PR #204) | `retail theme-gen` -> `src/retail/theme_gen.py` |
-| Adapter A -- apply theme to a report | **SHIPPED** (PR #206) | `retail pbir-apply-theme` -> `src/retail/pbir_theme_apply.py` |
-| Adapter B -- format cards/charts | **SHIPPED** (PR #207) | `retail pbir-format-visual` -> `src/retail/pbir_visual_format.py` |
-| Adapter C -- page background image | **SHIPPED** (2026-07-06, from a real owner sample) | `retail pbir-set-page-background` -> `src/retail/pbir_page_background.py` |
-| Adapter D -- visual geometry (position/size/z) | **SHIPPED** (2026-07-06, PR #216) | `retail pbir-set-geometry` -> `src/retail/pbir_geometry.py` |
-| Core lint R2 (polices written report.json) | SHIPPED | `src/retail/rules/pbir.py` |
+| Slice 1 -- theme generator | **SHIPPED** (PR #204) | `retail theme-gen` -> `src/seshat/theme_gen.py` |
+| Adapter A -- apply theme to a report | **SHIPPED** (PR #206) | `retail pbir-apply-theme` -> `src/seshat/pbir_theme_apply.py` |
+| Adapter B -- format cards/charts | **SHIPPED** (PR #207) | `retail pbir-format-visual` -> `src/seshat/pbir_visual_format.py` |
+| Adapter C -- page background image | **SHIPPED** (2026-07-06, from a real owner sample) | `retail pbir-set-page-background` -> `src/seshat/pbir_page_background.py` |
+| Adapter D -- visual geometry (position/size/z) | **SHIPPED** (2026-07-06, PR #216) | `retail pbir-set-geometry` -> `src/seshat/pbir_geometry.py` |
+| Core lint R2 (polices written report.json) | SHIPPED | `src/seshat/rules/pbir.py` |
 
 Everything above is green on `main` (`retail check` exit 0; full `pytest -m unit`
 passing). The four verbs chain: generate a theme -> apply it to a report -> format

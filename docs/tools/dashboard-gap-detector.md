@@ -84,7 +84,7 @@ never a silent `Covered`.
   number, or "N of M" count (hard rule #9). The per-item categorical status plus
   its named blocker is the only answer.
 - **Adds no `retail check` rule and is not SL1's runtime.** SL1
-  (`src/retail/rules/scorecard.py`) is the static rule that gates a committed
+  (`src/seshat/rules/scorecard.py`) is the static rule that gates a committed
   scorecard's STRUCTURE; this surface reuses SL1's status VOCABULARY only (via the
   shared `coverage_status` constant) and adds no gate.
 - **Designs nothing and executes nothing.** It authors no layout plan, visual

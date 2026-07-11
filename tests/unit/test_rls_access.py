@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.rls_access import check_rls_role_bindings
+from seshat.core import RuleContext, Severity
+from seshat.rules.rls_access import check_rls_role_bindings
 
 pytestmark = pytest.mark.unit
 

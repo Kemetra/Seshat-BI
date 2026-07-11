@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from retail.pbir_page_background import PbirPageBgError, set_page_background
+from seshat.pbir_page_background import PbirPageBgError, set_page_background
 
 pytestmark = pytest.mark.unit
 

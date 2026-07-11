@@ -27,7 +27,7 @@ adds NO new gate. See `docs/readiness/source-drift.md` for the taxonomy. ASCII o
   - [ ] returns population from the AUTHORITATIVE billing column (RC8), never a measure sign.
 - [ ] If the DSN / `db` extra is absent: STOP the live step; mark the report
       `[PENDING LIVE RE-PROFILE]` and record `warning` -- never fabricate a comparison
-      (Principle VIII). The runtime, when built, reuses `src/retail/profile.py`.
+      (Principle VIII). The runtime, when built, reuses `src/seshat/profile.py`.
 
 ## 3. Classify each difference
 
@@ -69,6 +69,6 @@ adds NO new gate. See `docs/readiness/source-drift.md` for the taxonomy. ASCII o
   `../../templates/source-profile.md`; the Principle-V handoff:
   `../../templates/unresolved-questions.md`.
 - The measures reused: `../decisions/0002-retail-cleaning-defaults.md` (RC2/RC5/RC8); the
-  deferred-live profiler: `../../src/retail/profile.py`.
+  deferred-live profiler: `../../src/seshat/profile.py`.
 - The roadmap row: `../roadmap/roadmap.md` (F014). A filled worked example lives under
   `../worked-examples/`.

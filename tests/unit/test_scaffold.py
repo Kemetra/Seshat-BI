@@ -22,8 +22,8 @@ from pathlib import Path
 
 import pytest
 
-from retail import scaffold
-from retail.scaffold import (
+from seshat import scaffold
+from seshat.scaffold import (
     FIVE_PLACES,
     MISSING,
     PRESENT,
@@ -153,7 +153,7 @@ def test_scaffold_refuses_when_id_already_in_expected_set_but_module_absent(
 def test_scaffold_refuses_when_stub_module_exists(tmp_path: Path) -> None:
     repo = _fixture_repo(tmp_path)
     # Pre-create the stub module the helper would write.
-    existing = repo / "src/retail/rules/rule_znew.py"
+    existing = repo / "src/seshat/rules/rule_znew.py"
     existing.parent.mkdir(parents=True, exist_ok=True)
     existing.write_text("# pre-existing\n", encoding="utf-8")
     result = scaffold.scaffold(repo, "Znew", "A title")
@@ -174,7 +174,7 @@ def test_scaffold_writes_exactly_three_targets(tmp_path: Path) -> None:
     result = scaffold.scaffold(repo, "Znew", "A brand new rule")
     assert result.ok
     assert set(result.written) == {
-        "src/retail/rules/rule_znew.py",
+        "src/seshat/rules/rule_znew.py",
         "tests/unit/test_rule_znew.py",
         "tests/unit/test_rules_wiring.py",
     }
@@ -233,7 +233,7 @@ def test_scaffold_inserts_id_into_expected_set(tmp_path: Path) -> None:
 def test_generated_stub_is_generic(tmp_path: Path) -> None:
     repo = _fixture_repo(tmp_path)
     scaffold.scaffold(repo, "Znew", "A brand new rule")
-    module = (repo / "src/retail/rules/rule_znew.py").read_text(encoding="utf-8")
+    module = (repo / "src/seshat/rules/rule_znew.py").read_text(encoding="utf-8")
     test = (repo / "tests/unit/test_rule_znew.py").read_text(encoding="utf-8")
     # No worked-example tokens (case-insensitive) leak into generated files.
     banned = ["c086", "pharmacy", "ezaby", "el ezaby", "fct_sales", "dim_product"]
@@ -341,7 +341,7 @@ def test_doctor_flags_synthetic_glossary_gap(tmp_path: Path) -> None:
     # The detector's ABILITY to flag a glossary gap, proven on a synthetic id that
     # is deliberately absent from the fixture glossary -- so the invariant test
     # above (which asserts ZERO real gaps) is not vacuous.
-    from retail.scaffold import check_glossary
+    from seshat.scaffold import check_glossary
 
     repo = _fixture_repo(tmp_path)
     assert check_glossary(repo, "ZZ99") == MISSING
@@ -382,21 +382,21 @@ def test_doctor_writes_nothing(tmp_path: Path) -> None:
 
 
 def test_scaffold_module_imports_no_third_party_or_driver() -> None:
-    from retail.rules.never_execute import module_scope_violations
+    from seshat.rules.never_execute import module_scope_violations
 
-    src = (REPO_ROOT / "src/retail/scaffold.py").read_text(encoding="utf-8")
+    src = (REPO_ROOT / "src/seshat/scaffold.py").read_text(encoding="utf-8")
     assert module_scope_violations(src) == []
 
 
 def test_scaffold_module_imports_only_stdlib_and_local() -> None:
-    src = (REPO_ROOT / "src/retail/scaffold.py").read_text(encoding="utf-8")
+    src = (REPO_ROOT / "src/seshat/scaffold.py").read_text(encoding="utf-8")
     tree = ast.parse(src)
     stdlib_roots = {"json", "re", "dataclasses", "pathlib", "typing", "__future__"}
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
                 root = alias.name.split(".")[0]
-                # `import retail.rules` is a local package import (lazy, in-function)
+                # `import seshat.rules` is a local package import (lazy, in-function)
                 # -- allowed; anything else must be stdlib.
                 assert root in stdlib_roots or root == "retail", (
                     f"unexpected import: {alias.name}"
@@ -417,7 +417,7 @@ def test_scaffold_module_imports_only_stdlib_and_local() -> None:
 
 
 def test_cli_author_mode_writes_and_prints(tmp_path: Path, capsys) -> None:
-    from retail import cli
+    from seshat import cli
 
     repo = _fixture_repo(tmp_path)
     rc = cli.main(
@@ -425,13 +425,13 @@ def test_cli_author_mode_writes_and_prints(tmp_path: Path, capsys) -> None:
     )
     assert rc == 0
     out = capsys.readouterr().out
-    assert "wrote src/retail/rules/rule_znew.py" in out
+    assert "wrote src/seshat/rules/rule_znew.py" in out
     assert "retail manifest" in out
-    assert (repo / "src/retail/rules/rule_znew.py").exists()
+    assert (repo / "src/seshat/rules/rule_znew.py").exists()
 
 
 def test_cli_author_mode_missing_title_returns_2(tmp_path: Path) -> None:
-    from retail import cli
+    from seshat import cli
 
     repo = _fixture_repo(tmp_path)
     rc = cli.main(["scaffold", "--repo", str(repo), "--id", "Znew"])
@@ -439,7 +439,7 @@ def test_cli_author_mode_missing_title_returns_2(tmp_path: Path) -> None:
 
 
 def test_cli_author_mode_refusal_returns_1(tmp_path: Path) -> None:
-    from retail import cli
+    from seshat import cli
 
     repo = _fixture_repo(tmp_path)
     rc = cli.main(
@@ -449,7 +449,7 @@ def test_cli_author_mode_refusal_returns_1(tmp_path: Path) -> None:
 
 
 def test_cli_doctor_clean_id_returns_0(capsys) -> None:
-    from retail import cli
+    from seshat import cli
 
     rc = cli.main(["scaffold", "--repo", str(REPO_ROOT), "--doctor", "--id", "S1"])
     assert rc == 0
@@ -457,7 +457,7 @@ def test_cli_doctor_clean_id_returns_0(capsys) -> None:
 
 
 def test_cli_doctor_drift_id_returns_1(capsys) -> None:
-    from retail import cli
+    from seshat import cli
 
     rc = cli.main(["scaffold", "--repo", str(REPO_ROOT), "--doctor", "--id", "ZZ999"])
     assert rc == 1
@@ -477,11 +477,11 @@ def _fixture_repo(tmp_path: Path) -> Path:
     (the copy is for the text-scanned places).
     """
     repo = tmp_path / "repo"
-    (repo / "src/retail/rules").mkdir(parents=True)
+    (repo / "src/seshat/rules").mkdir(parents=True)
     (repo / "tests/unit").mkdir(parents=True)
     (repo / "docs/rules").mkdir(parents=True)
     for rel in (
-        "src/retail/rules/__init__.py",
+        "src/seshat/rules/__init__.py",
         "tests/unit/test_rules_wiring.py",
         "docs/rules/rules-manifest.json",
         "docs/rules/severity-posture.json",
@@ -494,7 +494,7 @@ def _fixture_repo(tmp_path: Path) -> Path:
 
 
 def _no_new_rule_files(repo: Path) -> bool:
-    rules = repo / "src/retail/rules"
+    rules = repo / "src/seshat/rules"
     names = {p.name for p in rules.glob("*.py")}
     return names == {"__init__.py"}
 

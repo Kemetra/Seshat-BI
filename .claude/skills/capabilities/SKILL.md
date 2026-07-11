@@ -46,7 +46,7 @@ python -m retail.capability_inventory --format json
 
 There is no `retail capabilities` / `seshat capabilities` CLI verb -- this is a
 deliberate, ratified choice (`docs/roadmap/decisions/cli-verbs-vs-skill-driven.md`,
-Option B). Do not add one; do not touch `src/retail/cli/parser.py` or
+Option B). Do not add one; do not touch `src/seshat/cli/parser.py` or
 `_DISPATCH` to "wire this up". Simply run the module command above and relay
 its output.
 

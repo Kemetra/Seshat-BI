@@ -19,9 +19,9 @@ live Power BI.
 ADR 0015 forbids the static DEFINE/CHECK core from writing PBIR, so the capability is
 split:
 
-- **The writer (companion adapter, MAY write PBIR):** `src/retail/pbir_theme_apply.py`
+- **The writer (companion adapter, MAY write PBIR):** `src/seshat/pbir_theme_apply.py`
   + the `retail pbir-apply-theme` verb + this skill/contract.
-- **The lint (core, READ-ONLY, polices the write):** `src/retail/rules/pbir.py` R2.
+- **The lint (core, READ-ONLY, polices the write):** `src/seshat/rules/pbir.py` R2.
 
 ## Enumerated increments
 
@@ -128,7 +128,7 @@ report theme; it does not populate an empty page or author visuals.
 - Spec / plan / tasks: `specs/106-pbir-authoring-adapter/{spec,plan,tasks}.md`.
 - Skill: `.claude/skills/pbir-authoring-adapter/SKILL.md`.
 - Contract: `templates/pbir-adapter-contract.md`.
-- Writer + verb: `src/retail/pbir_theme_apply.py` (`retail pbir-apply-theme`).
-- Core lint: `src/retail/rules/pbir.py` (R2).
-- Theme source: `src/retail/theme_gen.py` (`retail theme-gen`, Slice 1, PR #204).
+- Writer + verb: `src/seshat/pbir_theme_apply.py` (`retail pbir-apply-theme`).
+- Core lint: `src/seshat/rules/pbir.py` (R2).
+- Theme source: `src/seshat/theme_gen.py` (`retail theme-gen`, Slice 1, PR #204).
 - Companion-adapter precedents: `docs/integrations/dbt-adapter.md` (F029), ADR 0009/0010.

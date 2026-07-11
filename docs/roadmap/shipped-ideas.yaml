@@ -33,7 +33,7 @@ A1:
   f_row: none
 B1:
   status: shipped
-  pr_sha: "PR #181 a136f47 (+ #183 16f2bac fix) @register AP1 src/retail/rules/rule_ap1.py -- visual-qa <-> dashboard-qa anti-pattern parity (spec 085, ratified 2026-07-04); two format-specific extractors (### headings vs pipe table), fail-closed on count/number->name/name divergence; registry -> 54. CORRECTED 2026-07-04: prior value 'PR #64 9d12589' was a mis-mapping (that PR is the never-execute-invariant test, unrelated to anti-pattern parity)."
+  pr_sha: "PR #181 a136f47 (+ #183 16f2bac fix) @register AP1 src/seshat/rules/rule_ap1.py -- visual-qa <-> dashboard-qa anti-pattern parity (spec 085, ratified 2026-07-04); two format-specific extractors (### headings vs pipe table), fail-closed on count/number->name/name divergence; registry -> 54. CORRECTED 2026-07-04: prior value 'PR #64 9d12589' was a mis-mapping (that PR is the never-execute-invariant test, unrelated to anti-pattern parity)."
   f_row: none
 B2:
   status: shipped
@@ -105,7 +105,7 @@ FHC:
   f_row: none
 LVR:
   status: shipped
-  pr_sha: "PR #105 (spec 057 live-validation-evidence-recorder; src/retail/readiness_evidence.py)"
+  pr_sha: "PR #105 (spec 057 live-validation-evidence-recorder; src/seshat/readiness_evidence.py)"
   f_row: none
 ADL:
   status: shipped
@@ -122,11 +122,11 @@ ADL:
 # (background, #124). See the DL2 entry below.
 DL1:
   status: shipped
-  pr_sha: "PR #119 (spec 060 theme-json-purity-linter; snapshot A2) src/retail/rules/design_theme.py @register DL1"
+  pr_sha: "PR #119 (spec 060 theme-json-purity-linter; snapshot A2) src/seshat/rules/design_theme.py @register DL1"
   f_row: none
 SC2:
   status: shipped
-  pr_sha: "PR #125 (spec 065 rule-count-reconciler; snapshot F4) @register SC2 src/retail/rules/rule_count_claims.py"
+  pr_sha: "PR #125 (spec 065 rule-count-reconciler; snapshot F4) @register SC2 src/seshat/rules/rule_count_claims.py"
   f_row: none
 G1:
   status: shipped
@@ -144,11 +144,11 @@ E1:
   f_row: none
 E6:
   status: shipped
-  pr_sha: "PR #122 (spec 062 scaffold-rule-generator) src/retail/scaffold.py + cli.py `scaffold`/--doctor"
+  pr_sha: "PR #122 (spec 062 scaffold-rule-generator) src/seshat/scaffold.py + cli.py `scaffold`/--doctor"
   f_row: none
 DL2:
   status: shipped
-  pr_sha: "PR #124 (spec 064 background-spec-purity; snapshot A8) src/retail/rules/design_background.py @register DL2"
+  pr_sha: "PR #124 (spec 064 background-spec-purity; snapshot A8) src/seshat/rules/design_background.py @register DL2"
   f_row: none
 J1:
   status: shipped
@@ -161,11 +161,11 @@ J1:
 # NOT spec-driven: its commit tag "(067, H2)" cites a bare "067" matching NEITHER
 # committed 067 dir (067-bi-python-cleaning-artifacts, 067-seed-route-honesty-rule).
 # There is NO committed spec for AL2 -- acknowledged provenance debt (see C5 / the
-# docstring in src/retail/rules/assumption_coherence.py and specs/README.md). Keyed by
+# docstring in src/seshat/rules/assumption_coherence.py and specs/README.md). Keyed by
 # the H-code "H2" to match the H1/H3 keying convention; recorded here for honest history.
 H2:
   status: shipped
-  pr_sha: "PR #129 cc606b8 (@register AL2 src/retail/rules/assumption_coherence.py; hand-built, NO committed spec -- bare '067' tag matches no 067 dir; provenance debt per C5)"
+  pr_sha: "PR #129 cc606b8 (@register AL2 src/seshat/rules/assumption_coherence.py; hand-built, NO committed spec -- bare '067' tag matches no 067 dir; provenance debt per C5)"
   f_row: none
 
 # --- 2026-07-02 deferred-ADOPT resolution wave (H1, H3 built; E4 dropped; H4 held) ---
@@ -176,11 +176,11 @@ H2:
 # H3 == snapshot short-code H3.
 H1:
   status: shipped
-  pr_sha: "PR #133 (spec 068 additivity-consistency-rule) @register AD1 src/retail/rules/additivity_consistency.py; registry 45->46"
+  pr_sha: "PR #133 (spec 068 additivity-consistency-rule) @register AD1 src/seshat/rules/additivity_consistency.py; registry 45->46"
   f_row: none
 H3:
   status: shipped
-  pr_sha: "PR #134 (spec 069 answerability-reconciler) @register AQ1 src/retail/rules/answerability_reconciler.py; registry 46->47; also normalized customer.md placeholder --> em-dash"
+  pr_sha: "PR #134 (spec 069 answerability-reconciler) @register AQ1 src/seshat/rules/answerability_reconciler.py; registry 46->47; also normalized customer.md placeholder --> em-dash"
   f_row: none
 E4:
   status: settled
@@ -207,19 +207,19 @@ E4:
 # The design snapshot's A1/A3/C1/A7/D2 map to DL3/CT1/DL4/DL5/(D2 test) 1:1.
 DL3:
   status: shipped
-  pr_sha: "PR #146 (design arc; snapshot A1) @register DL3 src/retail/rules/design_theme_fidelity.py -- token->theme fidelity; owner ruled tokens canonical (2026-07-03), theme dataColors reconciled to the categorical token palette. Hardened in #149 (missing-dataColors now ERRORs)."
+  pr_sha: "PR #146 (design arc; snapshot A1) @register DL3 src/seshat/rules/design_theme_fidelity.py -- token->theme fidelity; owner ruled tokens canonical (2026-07-03), theme dataColors reconciled to the categorical token palette. Hardened in #149 (missing-dataColors now ERRORs)."
   f_row: none
 CT1:
   status: shipped
-  pr_sha: "PR #146 (design arc; snapshot A3) @register CT1 src/retail/rules/design_contrast.py -- WCAG contrast pre-check, deterministic sRGB ratio vs the token-declared floor (new CT family)."
+  pr_sha: "PR #146 (design arc; snapshot A3) @register CT1 src/seshat/rules/design_contrast.py -- WCAG contrast pre-check, deterministic sRGB ratio vs the token-declared floor (new CT family)."
   f_row: none
 DL4:
   status: shipped
-  pr_sha: "PR #146 (design arc; snapshot C1) @register DL4 src/retail/rules/design_review_evidence.py + templates/design-review-evidence.md -- design-review evidence well-formedness (verify-slot-only, distinct from RS1). Hardened in #149 (placeholder-only list-section now ERRORs)."
+  pr_sha: "PR #146 (design arc; snapshot C1) @register DL4 src/seshat/rules/design_review_evidence.py + templates/design-review-evidence.md -- design-review evidence well-formedness (verify-slot-only, distinct from RS1). Hardened in #149 (placeholder-only list-section now ERRORs)."
   f_row: none
 DL5:
   status: shipped
-  pr_sha: "PR #147 (snapshot A7) @register DL5 src/retail/rules/design_grid_closure.py -- grid arithmetic-closure self-check; live 16x9 grid closes (green on main). Severity-posture DL5 case added in #149."
+  pr_sha: "PR #147 (snapshot A7) @register DL5 src/seshat/rules/design_grid_closure.py -- grid arithmetic-closure self-check; live 16x9 grid closes (green on main). Severity-posture DL5 case added in #149."
   f_row: none
 D2:
   status: shipped
@@ -236,7 +236,7 @@ D2:
 # short-code (I1/I2/F1); none of these three keys collides with an earlier ship.
 I1:
   status: shipped
-  pr_sha: "PR #132 661800e (spec 067-seed-route-honesty-rule; snapshot I1) A1 route rule gains a 'seed' status state -- src/retail/rules/routes.py (_VALID_STATUS/_MUST_RESOLVE include 'seed'); no new @register id, extends shipped A1"
+  pr_sha: "PR #132 661800e (spec 067-seed-route-honesty-rule; snapshot I1) A1 route rule gains a 'seed' status state -- src/seshat/rules/routes.py (_VALID_STATUS/_MUST_RESOLVE include 'seed'); no new @register id, extends shipped A1"
   f_row: none
 I2:
   status: shipped
@@ -258,7 +258,7 @@ F1:
 # snapshot short-code; none collides with an earlier ship.
 D1:
   status: shipped
-  pr_sha: "PR #158 c98f5a3 (snapshot D1) @register DR1 src/retail/rules/design_routes.py -- design-layer route path foot-gun + stale-phrase guard (scoped: path + stale-phrase, boundary.yaml deferred per owner ruling); registry -> 52"
+  pr_sha: "PR #158 c98f5a3 (snapshot D1) @register DR1 src/seshat/rules/design_routes.py -- design-layer route path foot-gun + stale-phrase guard (scoped: path + stale-phrase, boundary.yaml deferred per owner ruling); registry -> 52"
   f_row: none
 E2:
   status: shipped
@@ -266,7 +266,7 @@ E2:
   f_row: none
 E7:
   status: shipped
-  pr_sha: "PR #160 6cbc099 (snapshot E7) src/retail/doctor.py + `retail doctor` -- read-only repo-wide drift digest aggregating A3 routes_coverage + SC1 status_claims (broader than scaffold --doctor's wiring-only lockstep); no @register rule, no score, never self-grants"
+  pr_sha: "PR #160 6cbc099 (snapshot E7) src/seshat/doctor.py + `retail doctor` -- read-only repo-wide drift digest aggregating A3 routes_coverage + SC1 status_claims (broader than scaffold --doctor's wiring-only lockstep); no @register rule, no score, never self-grants"
   f_row: none
 H4:
   status: shipped
@@ -274,7 +274,7 @@ H4:
   f_row: none
 I3:
   status: shipped
-  pr_sha: "PR #182 a5d6f21 @register SF1 src/retail/rules/rule_sf1.py -- cross-layer checklist fork detector (spec 086, ratified 2026-07-04); globs skills/**/checklists/*.md and reconciles against the owner-authored docs/quality/shared-spine.yaml fork contract (shared=byte-identical, distinct=may differ); registry -> 55"
+  pr_sha: "PR #182 a5d6f21 @register SF1 src/seshat/rules/rule_sf1.py -- cross-layer checklist fork detector (spec 086, ratified 2026-07-04); globs skills/**/checklists/*.md and reconciles against the owner-authored docs/quality/shared-spine.yaml fork contract (shared=byte-identical, distinct=may differ); registry -> 55"
   f_row: none
 
 # --- 2026-07-07 residue-audit reconciliation (A9, E3 were shipped but never ledgered;
@@ -286,13 +286,13 @@ I3:
 # short-code; none collides with an earlier ship.
 A9:
   status: shipped
-  pr_sha: "PR #180 0bb0e22 @register DL6 src/retail/rules/design_visual_selfcheck.py -- visual-spec anti-pattern self-check (single-spec existence pairing; cross-file key-set reconcile stays with B1). Reads visual-spec.yaml (surface-1), never the #144-removed visual.json corpus, so the 'no live target' blocker never applied."
+  pr_sha: "PR #180 0bb0e22 @register DL6 src/seshat/rules/design_visual_selfcheck.py -- visual-spec anti-pattern self-check (single-spec existence pairing; cross-file key-set reconcile stays with B1). Reads visual-spec.yaml (surface-1), never the #144-removed visual.json corpus, so the 'no live target' blocker never applied."
   f_row: none
 E3:
   status: shipped
-  pr_sha: "never_execute.py governs rule modules by the src/retail/rules/ PREFIX over git ls-files (never a hardcoded list); tests/unit/test_never_execute.py globs every rule module to prove B1/B3 coverage. The auditor's 'hardcoded list' blocker does not hold against live source -- E3's deliverable already exists."
+  pr_sha: "never_execute.py governs rule modules by the src/seshat/rules/ PREFIX over git ls-files (never a hardcoded list); tests/unit/test_never_execute.py globs every rule module to prove B1/B3 coverage. The auditor's 'hardcoded list' blocker does not hold against live source -- E3's deliverable already exists."
   f_row: none
 H6:
   status: shipped
-  pr_sha: "2026-07-07 @register CB1 src/retail/rules/comparison_baseline.py + tests/unit/test_comparison_baseline.py (idea H6, comparison-baseline declaration guard). A growth/comparison contract (detected by title only) must declare a baseline (ruled OR honestly owner-pending -- Principle V) + a primary date field; silent omission ERRORs. Live target: the time-intel contracts landed PR #193/#200 (net-sales-growth/same-store/ytd). Registry -> 56 (manifest 67); zero findings on the committed corpus."
+  pr_sha: "2026-07-07 @register CB1 src/seshat/rules/comparison_baseline.py + tests/unit/test_comparison_baseline.py (idea H6, comparison-baseline declaration guard). A growth/comparison contract (detected by title only) must declare a baseline (ruled OR honestly owner-pending -- Principle V) + a primary date field; silent omission ERRORs. Live target: the time-intel contracts landed PR #193/#200 (net-sales-growth/same-store/ytd). Registry -> 56 (manifest 67); zero findings on the committed corpus."
   f_row: none

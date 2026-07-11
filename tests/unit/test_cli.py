@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from retail import cli, registry
+from seshat import cli, registry
 
 
 @pytest.fixture(autouse=True)
@@ -35,7 +35,7 @@ def test_check_returns_0_when_no_rules(tmp_path):
 @pytest.mark.unit
 def test_check_returns_1_when_a_rule_errors(tmp_path):
     _init_repo(tmp_path)
-    from retail.core import Finding, RuleContext, Severity
+    from seshat.core import Finding, RuleContext, Severity
 
     @registry.register("E9", "always errors")
     def boom(ctx: RuleContext):
@@ -55,7 +55,7 @@ def test_check_default_format_is_text_and_unchanged(tmp_path, capsys):
     # B2 backward-compat guard: `check` with NO --format must produce the exact
     # legacy text line, byte-for-byte. A regression here breaks existing consumers.
     _init_repo(tmp_path)
-    from retail.core import Finding, RuleContext, Severity
+    from seshat.core import Finding, RuleContext, Severity
 
     @registry.register("E9", "always errors")
     def boom(ctx: RuleContext):
@@ -71,7 +71,7 @@ def test_check_default_format_is_text_and_unchanged(tmp_path, capsys):
 def test_check_format_text_explicit_equals_default(tmp_path, capsys):
     # --format text is identical to omitting the flag.
     _init_repo(tmp_path)
-    from retail.core import Finding, RuleContext, Severity
+    from seshat.core import Finding, RuleContext, Severity
 
     @registry.register("E9", "always errors")
     def boom(ctx: RuleContext):
@@ -86,7 +86,7 @@ def test_check_format_json_emits_structured_output(tmp_path, capsys):
     import json
 
     _init_repo(tmp_path)
-    from retail.core import Finding, RuleContext, Severity
+    from seshat.core import Finding, RuleContext, Severity
 
     @registry.register("E9", "always errors")
     def boom(ctx: RuleContext):

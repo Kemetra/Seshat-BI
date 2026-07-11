@@ -195,3 +195,14 @@ discipline (SC-008) throughout.
 
 - [Create and distribute a plugin marketplace — Claude Code Docs](https://code.claude.com/docs/en/plugin-marketplaces)
 - [Discover and install prebuilt plugins — Claude Code Docs](https://code.claude.com/docs/en/discover-plugins)
+
+---
+
+## Implementation reuse and decision ledger (2026-07-11)
+
+- **T001 / Spec 108 reuse:** `docs/operations/versioning-policy.md`, `CHANGELOG.md`, and the CI smoke job are reused. The smoke harness now builds both wheel and sdist, performs an isolated `pipx` installation, exercises C1/C4/C5/C6, and asserts that developer, live-test, DB-driver, and file-reader modules are absent from the normal install.
+- **T003 / extras boundary:** `db`, `mssql`, `mysql`, `snowflake`, and `files` remain user-path optional extras. `dev` and `livetest` remain contributor-only. No extra changed its dependency list.
+- **T014 / R4 decision:** choose **option (a), repository-root manifest**. `.claude-plugin/marketplace.json` is canonical in `Seshat_BI` and references `./integrations/claude-code/seshat-bi`. This follows the documented root-manifest discovery rule, keeps one authoritative repository, and requires no mirror repository or publication action.
+- **T019:** not applicable under the root-manifest decision; no mirror exists. If a future mirror is needed, it must be generated one-way from this repository and all plugin references regenerated from source.
+- **T030:** the constitution Scope-Boundaries "NO CLI installer" follow-up remains explicitly flagged for human amendment/ratification. This implementation does not edit `constitution.md`.
+- **Version record:** the distribution rename is listed under `CHANGELOG.md` Unreleased. The on-disk version remains `0.1.0` pending the owner’s required version-bump decision; the agent did not self-grant that approval.

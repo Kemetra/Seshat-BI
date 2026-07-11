@@ -26,9 +26,9 @@ diff/classify/emit logic, and **(c)** the CLI surface.
 ## 2. Scope
 
 **In scope (this build, full end-to-end per owner instruction):**
-1. `src/retail/drift.py` — the pure, I/O-free comparator + classifier + schema
+1. `src/seshat/drift.py` — the pure, I/O-free comparator + classifier + schema
    emitter. `ProfileResult × (ProfileResult | None) → findings dict`.
-2. `src/retail/source_profile_reader.py` — parses a **template-conformant**
+2. `src/seshat/source_profile_reader.py` — parses a **template-conformant**
    committed `source-profile.md` into a `ProfileResult`-equivalent baseline.
 3. `retail drift` CLI command — `cli/commands/drift.py` + parser + dispatch row,
    mirroring `validate`'s two-mode (deferred-live vs live) structure.

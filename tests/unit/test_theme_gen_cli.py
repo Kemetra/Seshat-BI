@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from retail.cli import main
+from seshat.cli import main
 
 pytestmark = pytest.mark.unit
 
@@ -48,7 +48,7 @@ def test_cli_bad_hex_exits_two(tmp_path: Path) -> None:
 
 
 def test_theme_gen_parser_accepts_font_pt_flags() -> None:
-    from retail.cli.parser import _build_parser
+    from seshat.cli.parser import _build_parser
 
     parser = _build_parser()
     args = parser.parse_args(
@@ -75,7 +75,7 @@ def test_theme_gen_parser_accepts_font_pt_flags() -> None:
 
 
 def test_theme_gen_parser_font_pt_flags_default_none() -> None:
-    from retail.cli.parser import _build_parser
+    from seshat.cli.parser import _build_parser
 
     parser = _build_parser()
     args = parser.parse_args(

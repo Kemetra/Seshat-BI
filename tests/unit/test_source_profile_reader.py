@@ -9,7 +9,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_reads_template_conformant_profile():
-    from retail.source_profile_reader import read_source_profile
+    from seshat.source_profile_reader import read_source_profile
 
     parsed = read_source_profile(
         _ROOT / "mappings" / "retail_store_sales" / "source-profile.md"
@@ -34,7 +34,7 @@ def test_reads_stated_candidate_pk_columns():
     # column (guessing profiles observed.pk on a DIFFERENT column than the
     # baseline proof describes -> an invalid comparison that fabricates a false
     # blocked grain_pk_drift).
-    from retail.source_profile_reader import read_source_profile
+    from seshat.source_profile_reader import read_source_profile
 
     parsed = read_source_profile(
         _ROOT / "mappings" / "retail_store_sales" / "source-profile.md"
@@ -49,7 +49,7 @@ def test_landed_table_is_schema_qualified_not_the_bare_display_id():
     # default to schema `public` and mistarget (wrong table / UndefinedTable).
     # ProfileResult.table stays the display id (the emitted doc's "table" field);
     # landed_table carries the connectable identity.
-    from retail.source_profile_reader import read_source_profile
+    from seshat.source_profile_reader import read_source_profile
 
     parsed = read_source_profile(
         _ROOT / "mappings" / "retail_store_sales" / "source-profile.md"
@@ -59,7 +59,7 @@ def test_landed_table_is_schema_qualified_not_the_bare_display_id():
 
 
 def test_nonconformant_profile_reported_uncomparable():
-    from retail.source_profile_reader import read_source_profile
+    from seshat.source_profile_reader import read_source_profile
 
     parsed = read_source_profile(
         _ROOT / "mappings" / "demo_sample_orders" / "source-profile.md"

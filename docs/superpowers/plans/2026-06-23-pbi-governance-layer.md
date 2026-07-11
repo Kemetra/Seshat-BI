@@ -4,7 +4,7 @@
 
 **Goal:** Build `retail check` — a dependency-light Python CLI that parses committed TMDL/PBIR/SQL/git artifacts and fails the build on any violation of Retail Tower's Power BI conventions, turning advisory prose into an enforced gate.
 
-**Architecture:** A new `src/retail/` package (src-layout) with a rule-registry runner: each rule is a small function returning `Finding`s; the runner aggregates them and sets the exit code. Static checks only this pass — no `pbi-cli`, no Power BI Desktop, no .NET, no network. TMDL is parsed by a hand-rolled indentation/block tokenizer; PBIR/JSON via stdlib `json` (BOM-tolerant); SQL by a lightweight lexer; git rules shell out to `git`.
+**Architecture:** A new `src/seshat/` package (src-layout) with a rule-registry runner: each rule is a small function returning `Finding`s; the runner aggregates them and sets the exit code. Static checks only this pass — no `pbi-cli`, no Power BI Desktop, no .NET, no network. TMDL is parsed by a hand-rolled indentation/block tokenizer; PBIR/JSON via stdlib `json` (BOM-tolerant); SQL by a lightweight lexer; git rules shell out to `git`.
 
 **Tech Stack:** Python 3.13, pytest (+pytest-cov), ruff + black (line-length 88), stdlib `json`/`re`/`subprocess`/`pathlib`. No runtime dependency on `pbi-cli`.
 
@@ -14,7 +14,7 @@
 
 - **No `pbi-cli` / Desktop / .NET / network dependency** in the `retail` package — it must run headless in CI on any OS.
 - **Python ≥ 3.13** (machine interpreter: miniforge3 3.13.12). Type annotations on every function signature.
-- **src-layout:** package at `src/retail/`, tests at `tests/` (with `tests/unit/` + `tests/integration/`). Matches the global verify commands (`ruff … src tests`, `pytest --cov=src`).
+- **src-layout:** package at `src/seshat/`, tests at `tests/` (with `tests/unit/` + `tests/integration/`). Matches the global verify commands (`ruff … src tests`, `pytest --cov=src`).
 - **Line length 88** (ruff default); `ruff` for lint+isort, `black` for format.
 - **Immutable DTOs:** `@dataclass(frozen=True)` for `Finding` and rule metadata.
 - **TMDL parsed hand-rolled** (no PyPI TMDL lib — all are immature; TOM/sempy are .NET/Fabric → disqualified). **PBIR via stdlib `json` opened `encoding="utf-8-sig"`** (Power BI writes UTF-8-with-BOM; `json.load` chokes on a BOM).
@@ -27,10 +27,10 @@
 
 ## The runner contract (every rule depends on this — defined once here)
 
-All rule tasks import from `src/retail/core.py`. These are the exact shared types; later tasks reference them verbatim.
+All rule tasks import from `src/seshat/core.py`. These are the exact shared types; later tasks reference them verbatim.
 
 ```python
-# src/retail/core.py
+# src/seshat/core.py
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -79,7 +79,7 @@ class RegisteredRule:
 ```
 
 ```python
-# src/retail/registry.py  — rules self-register here; the runner iterates this list.
+# src/seshat/registry.py  — rules self-register here; the runner iterates this list.
 from __future__ import annotations
 
 from .core import RegisteredRule, Rule
@@ -96,11 +96,11 @@ def all_rules() -> tuple[RegisteredRule, ...]:
     return tuple(_RULES)
 ```
 
-The runner (`src/retail/runner.py`) builds a `RuleContext`, runs every registered rule, prints findings, and exits non-zero iff any `Finding.severity is Severity.ERROR`.
+The runner (`src/seshat/runner.py`) builds a `RuleContext`, runs every registered rule, prints findings, and exits non-zero iff any `Finding.severity is Severity.ERROR`.
 
 **`build_context` is mode-aware:** `build_context(repo_root, commit_range=None, commit_message=None)` populates the v2 fields from CLI flags. The CLI grows two flags: `--commit-range ORIGIN..HEAD` (CI mode for P2) and `--commit-msg-file PATH` (commit-msg-hook mode; reads the message from the file). When neither is given, both fields are `None` and P2 no-ops.
 
-**Registry wiring (required — else the registry runs empty):** `src/retail/rules/__init__.py` imports every rule module so the `@register` decorators fire. The runner imports `retail.rules` once at startup. The Final Integration Gate (after M5) asserts `all_rules()` equals the 23-element `EXPECTED_RULE_IDS` set — keyed to `len(EXPECTED_RULE_IDS)`, never a hard-coded number, so the id-set is the single source of truth.
+**Registry wiring (required — else the registry runs empty):** `src/seshat/rules/__init__.py` imports every rule module so the `@register` decorators fire. The runner imports `retail.rules` once at startup. The Final Integration Gate (after M5) asserts `all_rules()` equals the 23-element `EXPECTED_RULE_IDS` set — keyed to `len(EXPECTED_RULE_IDS)`, never a hard-coded number, so the id-set is the single source of truth.
 
 **Dependency boundary (important):** the `retail` package has **no runtime dependencies** beyond the standard library. Polars / PyArrow / DuckDB are **data-pipeline** dependencies (Spec 2 / `pipelines/`), NOT checker dependencies — they live in a separate `[project.optional-dependencies] data` group and are never imported by `retail/`. The checker stays stdlib-only so it runs anywhere.
 
@@ -144,7 +144,7 @@ The runner (`src/retail/runner.py`) builds a `RuleContext`, runs every registere
   ]
 
   [tool.hatch.build.targets.wheel]
-  packages = ["src/retail"]
+  packages = ["src/seshat"]
 
   [tool.ruff]
   line-length = 88
@@ -161,13 +161,13 @@ The runner (`src/retail/runner.py`) builds a `RuleContext`, runs every registere
   pythonpath = ["src"]
   addopts = "--cov=src --cov-report=term-missing"
   ```
-  (`[tool.hatch.build.targets.wheel] packages = ["src/retail"]` is required so hatchling locates the package under src-layout; without it the editable install fails with "Unable to determine which files to ship".)
+  (`[tool.hatch.build.targets.wheel] packages = ["src/seshat"]` is required so hatchling locates the package under src-layout; without it the editable install fails with "Unable to determine which files to ship".)
 
 - [ ] **Step 2: Run-to-pass — install the package editable.** From the repo root run:
   ```
   pip install -e .[dev]
   ```
-  Expect the install to finish with a line like `Successfully installed retail-0.1.0` (plus pytest/pytest-cov/ruff/black). It will fail here only if `pyproject.toml` is malformed — fix the TOML and re-run before continuing. Note: `src/retail/` does not exist yet, but hatchling builds an editable mapping to the declared path without requiring files to be present, so this succeeds. (If your environment objects to the empty package, proceed to Task M1.2 Step 2 which creates `src/retail/__init__.py`, then re-run this command — it will pass.)
+  Expect the install to finish with a line like `Successfully installed retail-0.1.0` (plus pytest/pytest-cov/ruff/black). It will fail here only if `pyproject.toml` is malformed — fix the TOML and re-run before continuing. Note: `src/seshat/` does not exist yet, but hatchling builds an editable mapping to the declared path without requiring files to be present, so this succeeds. (If your environment objects to the empty package, proceed to Task M1.2 Step 2 which creates `src/seshat/__init__.py`, then re-run this command — it will pass.)
 
 - [ ] **Step 3: Append the Python build/test ignore entries to `.gitignore`.** The file currently ends after the OS/editor block. Add a new section at the end (after line 24, `!.vscode/extensions.json`):
   ```
@@ -293,7 +293,7 @@ The runner (`src/retail/runner.py`) builds a `RuleContext`, runs every registere
   ```
   pytest -m unit tests/unit/test_core.py -v
   ```
-  Expect a collection error: `ModuleNotFoundError: No module named 'retail'` (neither `src/retail/__init__.py` nor `core.py` exists yet).
+  Expect a collection error: `ModuleNotFoundError: No module named 'retail'` (neither `src/seshat/__init__.py` nor `core.py` exists yet).
 
 - [ ] **Step 3: Create the package marker.** Create `C:\Users\user\Documents\GitHub\Retail_Tower_analytics\src\retail\__init__.py` with exactly:
   ```python
@@ -351,7 +351,7 @@ The runner (`src/retail/runner.py`) builds a `RuleContext`, runs every registere
 
 - [ ] **Step 6: Commit.** From the repo root:
   ```
-  git add src/retail/__init__.py src/retail/core.py tests/unit/test_core.py
+  git add src/seshat/__init__.py src/seshat/core.py tests/unit/test_core.py
   git commit -m "feat: add retail.core contract types (Severity, Finding, RuleContext, Rule)"
   ```
 
@@ -455,7 +455,7 @@ The runner (`src/retail/runner.py`) builds a `RuleContext`, runs every registere
 
 - [ ] **Step 5: Commit.** From the repo root:
   ```
-  git add src/retail/registry.py tests/unit/test_registry.py
+  git add src/seshat/registry.py tests/unit/test_registry.py
   git commit -m "feat: add retail.registry (register decorator, all_rules)"
   ```
 
@@ -609,7 +609,7 @@ The runner (`src/retail/runner.py`) builds a `RuleContext`, runs every registere
 
 - [ ] **Step 5: Commit.** From the repo root:
   ```
-  git add src/retail/runner.py tests/unit/test_runner.py
+  git add src/seshat/runner.py tests/unit/test_runner.py
   git commit -m "feat: add retail.runner (build_context, run with ERROR-gated exit code)"
   ```
 
@@ -726,7 +726,7 @@ The runner (`src/retail/runner.py`) builds a `RuleContext`, runs every registere
   ```
   black --check src tests
   ruff check src tests
-  git add src/retail/cli.py tests/unit/test_cli.py
+  git add src/seshat/cli.py tests/unit/test_cli.py
   git commit -m "feat: add retail.cli check entrypoint (argparse, ERROR-gated exit)"
   ```
   `black --check` reports `All done!` / `would reformat 0 files`; `ruff check` reports `All checks passed!`. If either reports issues, run `black src tests` / `ruff check --fix src tests`, re-run the unit suite, then commit.
@@ -736,7 +736,7 @@ The runner (`src/retail/runner.py`) builds a `RuleContext`, runs every registere
 
 ## M1 — contract-v2 revisions
 
-> These tasks **augment** the existing M1 core tasks (M1.1–M1.5, which already define `src/retail/core.py`, `src/retail/registry.py`, `src/retail/runner.py`, and `src/retail/cli.py`). They do **not** restate that code. They add the registry import-wiring seam (M1.6) and make context-building mode-aware with the two new CLI flags (M1.7).
+> These tasks **augment** the existing M1 core tasks (M1.1–M1.5, which already define `src/seshat/core.py`, `src/seshat/registry.py`, `src/seshat/runner.py`, and `src/seshat/cli.py`). They do **not** restate that code. They add the registry import-wiring seam (M1.6) and make context-building mode-aware with the two new CLI flags (M1.7).
 
 > **RESOLVED (count = 23):** an earlier draft said "22 rules"; that predated the adversarial review splitting S4 into S4a + S4b. The enumerated id-set `{S1,S2,S3,S4a,S4b,D1,D2,D3,D4,D5,D6,D7,D8,R1,C1,C2,G1,G2,G3,G4,G5,P1,P2}` has **23** ids (S=5, D=8, R=1, C=2, G=5, P=2 = 23) and is the single source of truth. The Final Integration Gate asserts set-equality with `EXPECTED_RULE_IDS` and keys any count to `len(EXPECTED_RULE_IDS)` — never a hard-coded number. Spec + plan headers now both say 23.
 
@@ -755,8 +755,8 @@ The runner (`src/retail/runner.py`) builds a `RuleContext`, runs every registere
 **Interfaces:**
 - Consumes (from M1.2 registry, already exists — exact signatures): `retail.registry.register(rule_id: str, title: str) -> Callable[[Rule], Rule]` and `retail.registry.all_rules() -> tuple[RegisteredRule, ...]`; `RegisteredRule(id: str, rule: Rule, title: str)` from `retail.core`.
 - Produces:
-  - `src/retail/rules/__init__.py` — importing `retail.rules` triggers `from . import git_meta, sql, dax, pbir`, so every `@register` decorator in those submodules fires exactly once at import time. The runner (M1.5) does `import retail.rules` at startup before calling `all_rules()`.
-  - Four submodules `git_meta.py`, `sql.py`, `dax.py`, `pbir.py` — created here as **stubs** so the explicit imports resolve and this task's commit is green. M2–M5 fill them with `@register(...)`-decorated rule functions in `src/retail/rules/<group>.py`.
+  - `src/seshat/rules/__init__.py` — importing `retail.rules` triggers `from . import git_meta, sql, dax, pbir`, so every `@register` decorator in those submodules fires exactly once at import time. The runner (M1.5) does `import retail.rules` at startup before calling `all_rules()`.
+  - Four submodules `git_meta.py`, `sql.py`, `dax.py`, `pbir.py` — created here as **stubs** so the explicit imports resolve and this task's commit is green. M2–M5 fill them with `@register(...)`-decorated rule functions in `src/seshat/rules/<group>.py`.
 - **Scope note:** This task's own test is the *wiring smoke test* (importing `retail.rules` succeeds and `all_rules()` is a tuple). The "exactly N rules / exact id-set" assertion is **NOT** here — it is the separate **Final Integration Gate (after M5)** at the end of this file, because it can only pass once all 23 rule functions exist.
 
 - [ ] **Step 1: Write the failing smoke test**
@@ -864,20 +864,20 @@ Expected: PASS — 3 passed. (`all_rules()` may return an empty tuple at this mi
 
 - [ ] **Step 6: Confirm the runner imports the package at startup**
 
-The runner (`src/retail/runner.py`, from M1.5) must `import retail.rules` before it calls `all_rules()`, else the registry is empty. Verify the line is present:
+The runner (`src/seshat/runner.py`, from M1.5) must `import retail.rules` before it calls `all_rules()`, else the registry is empty. Verify the line is present:
 
-Run: `python -c "import pathlib,sys; t=pathlib.Path('src/retail/runner.py').read_text(encoding='utf-8'); sys.exit(0 if 'import retail.rules' in t else 1)"`
+Run: `python -c "import pathlib,sys; t=pathlib.Path('src/seshat/runner.py').read_text(encoding='utf-8'); sys.exit(0 if 'import retail.rules' in t else 1)"`
 Expected: exit code 0 (the import line is present). If it exits 1, add `import retail.rules  # noqa: F401` near the top of `runner.py` (just before `all_rules()` is first used) and re-run this step until it exits 0.
 
 - [ ] **Step 7: Lint and format the new files**
 
-Run: `ruff check src/retail/rules tests/unit/test_rules_wiring.py && black --check src/retail/rules tests/unit/test_rules_wiring.py`
-Expected: `All checks passed!` from ruff and `4 files would be left unchanged.` / `All done!` from black. If black reports reformatting, run `black src/retail/rules tests/unit/test_rules_wiring.py` then re-run the check.
+Run: `ruff check src/seshat/rules tests/unit/test_rules_wiring.py && black --check src/seshat/rules tests/unit/test_rules_wiring.py`
+Expected: `All checks passed!` from ruff and `4 files would be left unchanged.` / `All done!` from black. If black reports reformatting, run `black src/seshat/rules tests/unit/test_rules_wiring.py` then re-run the check.
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/retail/rules/__init__.py src/retail/rules/git_meta.py src/retail/rules/sql.py src/retail/rules/dax.py src/retail/rules/pbir.py tests/unit/test_rules_wiring.py
+git add src/seshat/rules/__init__.py src/seshat/rules/git_meta.py src/seshat/rules/sql.py src/seshat/rules/dax.py src/seshat/rules/pbir.py tests/unit/test_rules_wiring.py
 git commit -m "feat: wire rule-package imports so @register fires on retail.rules import"
 ```
 
@@ -893,7 +893,7 @@ git commit -m "feat: wire rule-package imports so @register fires on retail.rule
 **Interfaces:**
 - Consumes:
   - `retail.core.RuleContext(repo_root: Path, tracked_files: tuple[str, ...], commit_range: str | None = None, commit_message: str | None = None)` — the contract-v2 frozen DTO (from M1.1, already exists). The two v2 fields default to `None`.
-  - **Assumption (pinned because M1.1–M1.5 are not in this plan file):** `build_context` lives in `src/retail/runner.py` (M1.4) and `main` lives in `src/retail/cli.py` (M1.5), per the plan header (runner builds the context, line 99; CLI owns `main`). M1.4's `build_context` already returns a `RuleContext`; this task widens its signature and threads the two new fields through.
+  - **Assumption (pinned because M1.1–M1.5 are not in this plan file):** `build_context` lives in `src/seshat/runner.py` (M1.4) and `main` lives in `src/seshat/cli.py` (M1.5), per the plan header (runner builds the context, line 99; CLI owns `main`). M1.4's `build_context` already returns a `RuleContext`; this task widens its signature and threads the two new fields through.
 - Produces:
   - `build_context(repo_root: Path, commit_range: str | None = None, commit_message: str | None = None) -> RuleContext` — populates `RuleContext.commit_range` and `RuleContext.commit_message` from its arguments (both default `None`, preserving existing callers).
   - `_build_parser() -> argparse.ArgumentParser` in `cli.py` — exposes the argument parser so flag→field mapping is unit-testable without executing the registry. **Retains** M1.5's `check` subcommand and its `--repo PATH` (default `"."`); **adds**, under that same `check` subparser, `--commit-range` (stored as `commit_range`, default `None`) and `--commit-msg-file` (stored as `commit_msg_file`, a path, default `None`). Because the flags live under `check`, parser tests must invoke `parse_args(["check", ...])`.
@@ -1130,13 +1130,13 @@ Expected: all unit tests pass (the widened `build_context` signature is backward
 
 - [ ] **Step 7: Lint and format**
 
-Run: `ruff check src/retail/cli.py src/retail/runner.py tests/unit/test_cli_context.py && black --check src/retail/cli.py src/retail/runner.py tests/unit/test_cli_context.py`
-Expected: `All checks passed!` and `All done!`. If black reformats, run `black src/retail/cli.py src/retail/runner.py tests/unit/test_cli_context.py` then re-run the check.
+Run: `ruff check src/seshat/cli.py src/seshat/runner.py tests/unit/test_cli_context.py && black --check src/seshat/cli.py src/seshat/runner.py tests/unit/test_cli_context.py`
+Expected: `All checks passed!` and `All done!`. If black reformats, run `black src/seshat/cli.py src/seshat/runner.py tests/unit/test_cli_context.py` then re-run the check.
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/retail/runner.py src/retail/cli.py tests/unit/test_cli_context.py
+git add src/seshat/runner.py src/seshat/cli.py tests/unit/test_cli_context.py
 git commit -m "feat: make build_context mode-aware with --commit-range and --commit-msg-file flags"
 ```
 
@@ -1224,7 +1224,7 @@ search-first parser decision (TMDL hand-rolled; PBIR stdlib `json` `utf-8-sig`).
 stub ships a real minimal slice (`top_level_blocks`) so the M0.2 smoke test has
 something to call — not `NotImplementedError`. The docstring pins the observed TMDL
 token literals as the regression anchor for M4/M5. Runs AFTER M1 (which created
-`src/retail/`); GATES M4/M5.
+`src/seshat/`); GATES M4/M5.
 
 **Files:**
 - Create: `C:\Users\user\Documents\GitHub\Retail_Tower_analytics\src\retail\tmdl.py`
@@ -1238,7 +1238,7 @@ token literals as the regression anchor for M4/M5. Runs AFTER M1 (which created
   extends this module with nested-block / key-value parsing; this name is stable and
   inherited by M4.
 
-- [ ] **Step 1: Write the parser-decision docstring + minimal stub in `src/retail/tmdl.py`**
+- [ ] **Step 1: Write the parser-decision docstring + minimal stub in `src/seshat/tmdl.py`**
 
 ```python
 """Hand-rolled TMDL (Tabular Model Definition Language) parser.
@@ -1298,7 +1298,7 @@ python -c "from retail.tmdl import top_level_blocks; print(top_level_blocks('tab
 Expected stdout (exact): `['table Sales', 'table Date']`
 
 ```bash
-grep -c "crossFilteringBehavior: bothDirections" src/retail/tmdl.py
+grep -c "crossFilteringBehavior: bothDirections" src/seshat/tmdl.py
 ```
 Expected stdout (exact): `1`
 
@@ -1315,7 +1315,7 @@ Expected stdout (exact): `1`
 
 ## Decision
 
-- **TMDL → hand-rolled indentation/block tokenizer** in `src/retail/tmdl.py`.
+- **TMDL → hand-rolled indentation/block tokenizer** in `src/seshat/tmdl.py`.
 - **PBIR / report JSON → stdlib `json`**, opened `encoding="utf-8-sig"` (Power BI
   writes UTF-8-with-BOM; a plain `json.load` raises on the BOM).
 
@@ -1337,14 +1337,14 @@ and locked by `tests/fixtures/golden_pbip/` (Task M0.2).
 - [ ] **Step 4: Run lint/format on the new module**
 
 ```bash
-ruff format --check src/retail/tmdl.py && ruff check src/retail/tmdl.py
+ruff format --check src/seshat/tmdl.py && ruff check src/seshat/tmdl.py
 ```
 Expected: ruff reports `1 file already formatted` and `All checks passed!` (exit 0).
 
 - [ ] **Step 5: Commit the stub + decision doc**
 
 ```bash
-git add src/retail/tmdl.py docs/decisions/0001-tmdl-pbir-parser.md
+git add src/seshat/tmdl.py docs/decisions/0001-tmdl-pbir-parser.md
 git commit -m "feat: add TMDL parser stub and record TMDL/PBIR parser decision"
 ```
 
@@ -1375,7 +1375,7 @@ leading BOM and this anchor must be G3-clean). The smoke test reads the PBIR wit
 - Test: `C:\Users\user\Documents\GitHub\Retail_Tower_analytics\tests\unit\test_tmdl.py`
 
 **Interfaces:**
-- Consumes: `top_level_blocks` from `src/retail/tmdl.py` (Task M0.1); stdlib `json`.
+- Consumes: `top_level_blocks` from `src/seshat/tmdl.py` (Task M0.1); stdlib `json`.
 - Produces: `GOLDEN_PBIP_ROOT` (module-level `Path` constant in `tests/unit/test_tmdl.py`,
   repo-relative `tests/fixtures/golden_pbip`) — M4/M5 import or re-derive this path to
   locate the fixture.
@@ -1559,7 +1559,7 @@ TMDL/PBIR rules (M4/M5). It is intentionally NOT globally clean: the `bothDirect
 relationship (a D6 violation) and `summarizeBy: sum` (a D5 warning) are deliberate
 anchors. Per-rule pass/fail fixtures live with the rules, not here.
 
-The pinned literals are listed in `src/retail/tmdl.py`'s module docstring. If you edit
+The pinned literals are listed in `src/seshat/tmdl.py`'s module docstring. If you edit
 this fixture and a pinned token disappears, `tests/unit/test_tmdl.py` fails — that is
 the anchor doing its job. The date-table marker (`annotation PBI_DateTable = true`) is
 **PROVISIONAL** until replaced by a real Power BI capture (see Task M0.3).
@@ -1636,7 +1636,7 @@ of this capture is the real "Mark as Date Table" TMDL literal — D7's anchor).
 ## After capture — reconcile and verify
 
 1. Open the real `*.SemanticModel/definition/*.tmdl` and compare each pinned literal in
-   `src/retail/tmdl.py`'s docstring against the real text. The likely mismatch is the
+   `src/seshat/tmdl.py`'s docstring against the real text. The likely mismatch is the
    date-table marker (table-level annotation vs `dataCategory: Time`). Update the
    docstring literal, the fixture, AND the `test_model_pins_provisional_date_table_marker`
    assertion in `tests/unit/test_tmdl.py`. Remove the `*** PROVISIONAL ***` banner once
@@ -1681,9 +1681,9 @@ git commit -m "docs: add manual local-capture instructions for the real golden P
 
 ## Milestone M2 — Git-metadata rules (6 rules live today)
 
-These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-ignore` / `git log` and on a handful of repo-relative paths — they have real artifacts to check on the current repo. All rules live in `src/retail/rules/git_meta.py`; tests in `tests/unit/test_git_meta.py`. A shared subprocess helper (`src/retail/gitutil.py`) and a test fixture helper (`tests/unit/_gitfix.py`) are introduced here because the runner contract does not provide them.
+These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-ignore` / `git log` and on a handful of repo-relative paths — they have real artifacts to check on the current repo. All rules live in `src/seshat/rules/git_meta.py`; tests in `tests/unit/test_git_meta.py`. A shared subprocess helper (`src/seshat/gitutil.py`) and a test fixture helper (`tests/unit/_gitfix.py`) are introduced here because the runner contract does not provide them.
 
-> Contract names consumed verbatim (from `src/retail/core.py` / `src/retail/registry.py`): `Severity`, `Finding`, `RuleContext`, `register`. `RuleContext(repo_root: Path, tracked_files: tuple[str, ...])`.
+> Contract names consumed verbatim (from `src/seshat/core.py` / `src/seshat/registry.py`): `Severity`, `Finding`, `RuleContext`, `register`. `RuleContext(repo_root: Path, tracked_files: tuple[str, ...])`.
 
 ---
 
@@ -1763,7 +1763,7 @@ These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-
   Expected fail: `ModuleNotFoundError: No module named 'retail.gitutil'` (or `ImportError`).
 
 - [ ] **Step 4: Implement `gitutil.py` minimally.**
-  Create `src/retail/gitutil.py`:
+  Create `src/seshat/gitutil.py`:
   ```python
   from __future__ import annotations
 
@@ -1812,7 +1812,7 @@ These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-
   Expected: `test_git_check_ignore_respects_gitignore PASSED` (1 passed).
 
 - [ ] **Step 6: Commit.**
-  Command: `git add src/retail/gitutil.py tests/unit/_gitfix.py tests/unit/test_git_meta.py && git commit -m "feat: add git subprocess helper for git-metadata rules"`
+  Command: `git add src/seshat/gitutil.py tests/unit/_gitfix.py tests/unit/test_git_meta.py && git commit -m "feat: add git subprocess helper for git-metadata rules"`
 
 ---
 
@@ -1859,7 +1859,7 @@ These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-
   Expected fail: `ModuleNotFoundError: No module named 'retail.rules.git_meta'`.
 
 - [ ] **Step 3: Implement G5 (create the group module).**
-  Create `src/retail/rules/git_meta.py`:
+  Create `src/seshat/rules/git_meta.py`:
   ```python
   from __future__ import annotations
 
@@ -1895,7 +1895,7 @@ These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-
   Expected: `test_g5_flags_long_path PASSED`, `test_g5_passes_short_paths PASSED` (3 passed total).
 
 - [ ] **Step 5: Commit.**
-  Command: `git add src/retail/rules/git_meta.py tests/unit/test_git_meta.py && git commit -m "feat: add G5 path-length rule"`
+  Command: `git add src/seshat/rules/git_meta.py tests/unit/test_git_meta.py && git commit -m "feat: add G5 path-length rule"`
 
 ---
 
@@ -1952,7 +1952,7 @@ These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-
   Expected fail: `ImportError: cannot import name 'rule_p1_layout' from 'retail.rules.git_meta'`.
 
 - [ ] **Step 3: Implement P1.**
-  Append to `src/retail/rules/git_meta.py`:
+  Append to `src/seshat/rules/git_meta.py`:
   ```python
   REQUIRED_PATHS = ("README.md", "warehouse/README.md", "powerbi/README.md")
   PBIP_SIGNATURES = (".pbip", "definition.pbir")
@@ -2006,7 +2006,7 @@ These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-
   Expected: `test_p1_accepts_good_layout`, `test_p1_flags_misplaced_sql_and_pbip`, `test_p1_flags_missing_required_dir` all PASSED (6 passed total).
 
 - [ ] **Step 5: Commit.**
-  Command: `git add src/retail/rules/git_meta.py tests/unit/test_git_meta.py && git commit -m "feat: add P1 Approach-A layout rule"`
+  Command: `git add src/seshat/rules/git_meta.py tests/unit/test_git_meta.py && git commit -m "feat: add P1 Approach-A layout rule"`
 
 ---
 
@@ -2067,7 +2067,7 @@ These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-
   Expected fail: `ImportError: cannot import name 'rule_g1_gitignore_correctness' from 'retail.rules.git_meta'`.
 
 - [ ] **Step 3: Implement G1.**
-  Append to `src/retail/rules/git_meta.py` (add `from .. import gitutil` to the imports at the top — combine with existing import edits in one save):
+  Append to `src/seshat/rules/git_meta.py` (add `from .. import gitutil` to the imports at the top — combine with existing import edits in one save):
   ```python
   REQUIRED_IGNORES = (
       "**/.pbi/localSettings.json",
@@ -2121,7 +2121,7 @@ These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-
   Expected: `test_g1_accepts_correct_gitignore`, `test_g1_flags_missing_required_entry`, `test_g1_flags_ignored_definition_path` PASSED (9 passed total).
 
 - [ ] **Step 5: Commit.**
-  Command: `git add src/retail/rules/git_meta.py tests/unit/test_git_meta.py && git commit -m "feat: add G1 gitignore-correctness rule"`
+  Command: `git add src/seshat/rules/git_meta.py tests/unit/test_git_meta.py && git commit -m "feat: add G1 gitignore-correctness rule"`
 
 ---
 
@@ -2173,7 +2173,7 @@ These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-
   Expected fail: `ImportError: cannot import name 'rule_g2_definition_committed' from 'retail.rules.git_meta'`.
 
 - [ ] **Step 3: Implement G2.**
-  Append to `src/retail/rules/git_meta.py`:
+  Append to `src/seshat/rules/git_meta.py`:
   ```python
   FORBIDDEN_TRACKED = (".pbi/localSettings.json", ".pbi/cache.abf")
 
@@ -2219,7 +2219,7 @@ These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-
   Expected: `test_g2_emits_info_when_no_pbip`, `test_g2_flags_tracked_cache_abf` PASSED (11 passed total).
 
 - [ ] **Step 5: Commit.**
-  Command: `git add src/retail/rules/git_meta.py tests/unit/test_git_meta.py && git commit -m "feat: add G2 definition-committed rule with INFO empty-case"`
+  Command: `git add src/seshat/rules/git_meta.py tests/unit/test_git_meta.py && git commit -m "feat: add G2 definition-committed rule with INFO empty-case"`
 
 ---
 
@@ -2314,7 +2314,7 @@ These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-
   Expected fail: `ImportError: cannot import name 'rule_p2_commit_subjects' from 'retail.rules.git_meta'`.
 
 - [ ] **Step 3: Implement P2.**
-  Append to `src/retail/rules/git_meta.py` (add `import re` to the top imports in the same save — no `import os`; the base ref now comes from `RuleContext`, never the environment):
+  Append to `src/seshat/rules/git_meta.py` (add `import re` to the top imports in the same save — no `import os`; the base ref now comes from `RuleContext`, never the environment):
   ```python
   SUBJECT_RE = re.compile(r"^(feat|fix|refactor|docs|chore): .+")
   DEFAULT_BASE_REF = "HEAD~20"
@@ -2353,7 +2353,7 @@ These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-
   Expected: `test_p2_flags_bad_subject`, `test_p2_validates_single_commit_message`, `test_p2_exempts_merge_commits` PASSED (14 passed total).
 
 - [ ] **Step 5: Commit.**
-  Command: `git add src/retail/rules/git_meta.py tests/unit/test_git_meta.py && git commit -m "feat: add P2 commit-subject convention rule"`
+  Command: `git add src/seshat/rules/git_meta.py tests/unit/test_git_meta.py && git commit -m "feat: add P2 commit-subject convention rule"`
 
 ---
 
@@ -2468,7 +2468,7 @@ These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-
   Expected fail: `ImportError: cannot import name 'rule_c2_no_committed_secrets' from 'retail.rules.git_meta'`.
 
 - [ ] **Step 3: Implement C2.**
-  Append to `src/retail/rules/git_meta.py`:
+  Append to `src/seshat/rules/git_meta.py`:
   ```python
   # A real DigitalOcean endpoint: a concrete subdomain label (alnum start, then
   # alnum/hyphen) directly before `.db.ondigitalocean.com`. `>` from an
@@ -2600,11 +2600,11 @@ These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-
   Expected: all six C2 tests PASSED — `test_c2_clean_repo_passes`, `test_c2_flags_real_endpoint_in_scanned_file`, `test_c2_ignores_angle_bracket_placeholder_in_scanned_file`, `test_c2_skips_docs_and_example_files`, `test_c2_flags_tracked_env`, `test_c2_flags_env_example_with_filled_secret` (20 passed total — includes the extra P2 commit-message test).
 
 - [ ] **Step 5: Run full quality gate for the group.**
-  Command: `ruff check src/retail/rules/git_meta.py src/retail/gitutil.py tests/unit/test_git_meta.py tests/unit/_gitfix.py && black --check src/retail tests && pytest -m unit tests/unit/test_git_meta.py -v`
+  Command: `ruff check src/seshat/rules/git_meta.py src/seshat/gitutil.py tests/unit/test_git_meta.py tests/unit/_gitfix.py && black --check src/seshat tests && pytest -m unit tests/unit/test_git_meta.py -v`
   Expected: ruff `All checks passed!`, black `would reformat 0 files` / `4 files would be left unchanged`, pytest `20 passed`.
 
 - [ ] **Step 6: Commit.**
-  Command: `git add src/retail/rules/git_meta.py tests/unit/test_git_meta.py && git commit -m "feat: add C2 no-committed-secrets rule with placeholder-safe endpoint scan"`
+  Command: `git add src/seshat/rules/git_meta.py tests/unit/test_git_meta.py && git commit -m "feat: add C2 no-committed-secrets rule with placeholder-safe endpoint scan"`
 
 
 ---
@@ -2618,7 +2618,7 @@ These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-
 - Modify: `C:\Users\user\Documents\GitHub\Retail_Tower_analytics\src\retail\rules\git_meta.py` — add `_read_leading_bytes` helper and `g3_no_bom` rule.
 - Test: `C:\Users\user\Documents\GitHub\Retail_Tower_analytics\tests\unit\test_git_meta.py` — add the G3 test cases (file already exists from G1/G2).
 
-> Do **not** create `src/retail/core.py`, `src/retail/registry.py`, or `src/retail/rules/__init__.py` — they exist from M1 + earlier M2 tasks. Do **not** redefine `Finding`, `Severity`, `RuleContext`, or `register` — import them (contract v2).
+> Do **not** create `src/seshat/core.py`, `src/seshat/registry.py`, or `src/seshat/rules/__init__.py` — they exist from M1 + earlier M2 tasks. Do **not** redefine `Finding`, `Severity`, `RuleContext`, or `register` — import them (contract v2).
 
 **Interfaces:**
 
@@ -2698,7 +2698,7 @@ These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-
 
   Expected: collection/run fails with `ImportError: cannot import name 'g3_no_bom' from 'retail.rules.git_meta'` (and `_read_leading_bytes` likewise) — the new symbols do not exist yet, so the five new tests error at import.
 
-- [ ] **Step 3: Write minimal implementation (GREEN).** Add to `src/retail/rules/git_meta.py`. Reuse the existing module imports if `Finding`/`Severity`/`RuleContext`/`register`/`Path`/`Iterable` are already imported by G1/G2; otherwise add only the missing ones. Do not duplicate existing import lines.
+- [ ] **Step 3: Write minimal implementation (GREEN).** Add to `src/seshat/rules/git_meta.py`. Reuse the existing module imports if `Finding`/`Severity`/`RuleContext`/`register`/`Path`/`Iterable` are already imported by G1/G2; otherwise add only the missing ones. Do not duplicate existing import lines.
 
   ```python
   # --- add near the other imports if not already present ---
@@ -2750,16 +2750,16 @@ These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-
 - [ ] **Step 5: Lint + format.** Exact commands (must pass clean before commit):
 
   ```
-  ruff check src/retail/rules/git_meta.py tests/unit/test_git_meta.py
-  black --check src/retail/rules/git_meta.py tests/unit/test_git_meta.py
+  ruff check src/seshat/rules/git_meta.py tests/unit/test_git_meta.py
+  black --check src/seshat/rules/git_meta.py tests/unit/test_git_meta.py
   ```
 
-  Expected: `All checks passed!` from ruff and `2 files would be left unchanged.` from black. If black reports reformatting, run `black src/retail/rules/git_meta.py tests/unit/test_git_meta.py` and re-run Step 4.
+  Expected: `All checks passed!` from ruff and `2 files would be left unchanged.` from black. If black reports reformatting, run `black src/seshat/rules/git_meta.py tests/unit/test_git_meta.py` and re-run Step 4.
 
 - [ ] **Step 6: Commit.** Exact command (conventional message, type ∈ {feat,fix,refactor,docs,chore}):
 
   ```
-  git add src/retail/rules/git_meta.py tests/unit/test_git_meta.py && git commit -m "feat: add G3 UTF-8 no-BOM rule"
+  git add src/seshat/rules/git_meta.py tests/unit/test_git_meta.py && git commit -m "feat: add G3 UTF-8 no-BOM rule"
   ```
 
   Expected: one commit recorded touching exactly those two files.
@@ -2769,17 +2769,17 @@ These six rules (C2, G1, G2, G5, P1, P2) operate on `git ls-files` / `git check-
 ### Task M2.G4: G4 — `.gitattributes` EOL policy (MUST-CONTAIN subset)
 
 **Files:**
-- Modify: `C:\Users\user\Documents\GitHub\Retail_Tower_analytics\src\retail\rules\git_meta.py` (append rule `check_gitattributes_eol`; group module already exists and is already imported by `src/retail/rules/__init__.py` from the G1–G3 tasks, so the `@register` decorator fires without any `__init__.py` change)
+- Modify: `C:\Users\user\Documents\GitHub\Retail_Tower_analytics\src\retail\rules\git_meta.py` (append rule `check_gitattributes_eol`; group module already exists and is already imported by `src/seshat/rules/__init__.py` from the G1–G3 tasks, so the `@register` decorator fires without any `__init__.py` change)
 - Test: `C:\Users\user\Documents\GitHub\Retail_Tower_analytics\tests\unit\test_git_meta.py` (append G4 tests; file already exists from prior G-rule tasks)
 
 **Interfaces:**
-- Consumes (from `src/retail/core.py`, contract v2 — verbatim):
+- Consumes (from `src/seshat/core.py`, contract v2 — verbatim):
   - `Severity` (`str`, `Enum`): `ERROR` / `WARNING` / `INFO`.
   - `@dataclass(frozen=True) Finding(rule_id: str, severity: Severity, message: str, locator: str)`.
   - `@dataclass(frozen=True) RuleContext(repo_root: Path, tracked_files: tuple[str, ...], commit_range: str | None = None, commit_message: str | None = None)`.
   - `Rule = Callable[[RuleContext], Iterable[Finding]]`.
-- Consumes (from `src/retail/registry.py`): `register(rule_id: str, title: str)` decorator.
-- Consumes (assumption): `src/retail/rules/git_meta.py` exists with `from __future__ import annotations`, and `src/retail/rules/__init__.py` already contains `from . import git_meta` (added by the G1/G2/G3 tasks earlier in M2). This task is purely additive — it appends one function; it does **not** create the module or edit `__init__.py`.
+- Consumes (from `src/seshat/registry.py`): `register(rule_id: str, title: str)` decorator.
+- Consumes (assumption): `src/seshat/rules/git_meta.py` exists with `from __future__ import annotations`, and `src/seshat/rules/__init__.py` already contains `from . import git_meta` (added by the G1/G2/G3 tasks earlier in M2). This task is purely additive — it appends one function; it does **not** create the module or edit `__init__.py`.
 - Produces (later tasks / the registry rely on this exact name):
   - `check_gitattributes_eol(ctx: RuleContext) -> Iterable[Finding]` — registered as rule id `"G4"`, title `".gitattributes EOL policy"`, severity `Severity.ERROR`.
 
@@ -2974,16 +2974,16 @@ Expected: PASS — `test_g4_passes_when_all_required_mappings_present`, `test_g4
 Run:
 ```bash
 cd C:\Users\user\Documents\GitHub\Retail_Tower_analytics
-ruff check src/retail/rules/git_meta.py tests/unit/test_git_meta.py
-black --check src/retail/rules/git_meta.py tests/unit/test_git_meta.py
+ruff check src/seshat/rules/git_meta.py tests/unit/test_git_meta.py
+black --check src/seshat/rules/git_meta.py tests/unit/test_git_meta.py
 ```
-Expected: ruff reports `All checks passed!`; black reports the files are already formatted (`2 files would be left unchanged`). If black reports it would reformat, run `black src/retail/rules/git_meta.py tests/unit/test_git_meta.py` and re-run the tests from Step 4.
+Expected: ruff reports `All checks passed!`; black reports the files are already formatted (`2 files would be left unchanged`). If black reports it would reformat, run `black src/seshat/rules/git_meta.py tests/unit/test_git_meta.py` and re-run the tests from Step 4.
 
 - [ ] **Step 6: Commit**
 
 ```bash
 cd C:\Users\user\Documents\GitHub\Retail_Tower_analytics
-git add src/retail/rules/git_meta.py tests/unit/test_git_meta.py
+git add src/seshat/rules/git_meta.py tests/unit/test_git_meta.py
 git commit -m "feat: add G4 .gitattributes EOL policy subset rule"
 ```
 
@@ -2991,7 +2991,7 @@ git commit -m "feat: add G4 .gitattributes EOL policy subset rule"
 
 ## Milestone 3 — SQL Rules
 
-### Task M3.1: SQL lexer + file iterator (`src/retail/sql.py`)
+### Task M3.1: SQL lexer + file iterator (`src/seshat/sql.py`)
 
 The shared substrate every SQL rule consumes. A line-tracking tokenizer that strips comments and string literals (so `S2`/`S3`/`S4b` never match inside a comment or a quoted string), a `.sql` file iterator scoped to `warehouse/**`, and the **schema-position matcher** that `S2` uses now and `D8` (M4) reuses verbatim.
 
@@ -3000,7 +3000,7 @@ The shared substrate every SQL rule consumes. A line-tracking tokenizer that str
 - Test: `C:\Users\user\Documents\GitHub\Retail_Tower_analytics\tests\unit\test_sql_lexer.py` (lexer/helpers; rule tests live in `tests/unit/test_sql.py`, Task M3.2+)
 
 **Interfaces:**
-- Consumes: `RuleContext` (from `src/retail/core.py` — `repo_root: Path`, `tracked_files: tuple[str, ...]`).
+- Consumes: `RuleContext` (from `src/seshat/core.py` — `repo_root: Path`, `tracked_files: tuple[str, ...]`).
 - Produces:
   - `@dataclass(frozen=True) class SqlToken: text: str; line: int` — one significant token with its 1-based source line.
   - `def tokenize_sql(text: str) -> list[SqlToken]` — strips `--` line comments and `/* */` block comments and the *contents* of `'...'`/`"..."` literals (the literal collapses to an empty `SqlToken` placeholder so positions are preserved but no inner word leaks); identifiers, schema-qualified names split on `.`, punctuation, and keywords each become a token carrying their line.
@@ -3055,7 +3055,7 @@ The shared substrate every SQL rule consumes. A line-tracking tokenizer that str
   Expected: collection/import error — `ModuleNotFoundError: No module named 'retail.sql'` (the module does not exist yet).
 
 - [ ] **Step 3: Implement the lexer + helpers.**
-  Create `src/retail/sql.py`:
+  Create `src/seshat/sql.py`:
   ```python
   from __future__ import annotations
 
@@ -3150,11 +3150,11 @@ The shared substrate every SQL rule consumes. A line-tracking tokenizer that str
   Expected: `6 passed`.
 
 - [ ] **Step 5: Commit.**
-  Command: `git add src/retail/sql.py tests/unit/test_sql_lexer.py && git commit -m "feat: add SQL lexer and schema-position matcher for retail check"`
+  Command: `git add src/seshat/sql.py tests/unit/test_sql_lexer.py && git commit -m "feat: add SQL lexer and schema-position matcher for retail check"`
 
 ---
 
-### Task M3.2: S1 snake_case + S2 medallion schema rules (`src/retail/rules/sql.py`)
+### Task M3.2: S1 snake_case + S2 medallion schema rules (`src/seshat/rules/sql.py`)
 
 S1 flags declaration-position identifiers that are not `snake_case` (quoted/bracketed identifiers with uppercase or spaces). S2 reuses `stale_schema_tokens` to flag stale `raw`/`marts` schema tokens, exempting `warehouse/README.md` (which is `.md`, already outside the glob — the exemption is an explicit belt-and-braces guard).
 
@@ -3267,7 +3267,7 @@ S1 flags declaration-position identifiers that are not `snake_case` (quoted/brac
   Expected: `ModuleNotFoundError: No module named 'retail.rules.sql'`.
 
 - [ ] **Step 4: Implement S1 + S2.**
-  Create `src/retail/rules/sql.py`:
+  Create `src/seshat/rules/sql.py`:
   ```python
   from __future__ import annotations
 
@@ -3333,7 +3333,7 @@ S1 flags declaration-position identifiers that are not `snake_case` (quoted/brac
   Expected: `5 passed`.
 
 - [ ] **Step 6: Commit.**
-  Command: `git add src/retail/rules/sql.py tests/unit/test_sql.py tests/fixtures/sql && git commit -m "feat: add S1 snake_case and S2 medallion-schema SQL rules"`
+  Command: `git add src/seshat/rules/sql.py tests/unit/test_sql.py tests/fixtures/sql && git commit -m "feat: add S1 snake_case and S2 medallion-schema SQL rules"`
 
 ---
 
@@ -3393,7 +3393,7 @@ S1 flags declaration-position identifiers that are not `snake_case` (quoted/brac
   Command: `pytest -m unit tests/unit/test_sql.py -v`
   Expected: `ImportError: cannot import name 's3_vw_prefix' from 'retail.rules.sql'`.
 
-- [ ] **Step 4: Implement S3.** Append to `src/retail/rules/sql.py`:
+- [ ] **Step 4: Implement S3.** Append to `src/seshat/rules/sql.py`:
   ```python
   @register("S3", "vw_ prefix on views")
   def s3_vw_prefix(ctx: RuleContext) -> list[Finding]:
@@ -3429,7 +3429,7 @@ S1 flags declaration-position identifiers that are not `snake_case` (quoted/brac
   Expected: `7 passed`.
 
 - [ ] **Step 6: Commit.**
-  Command: `git add src/retail/rules/sql.py tests/unit/test_sql.py tests/fixtures/sql && git commit -m "feat: add S3 vw_ view-prefix SQL rule"`
+  Command: `git add src/seshat/rules/sql.py tests/unit/test_sql.py tests/fixtures/sql && git commit -m "feat: add S3 vw_ view-prefix SQL rule"`
 
 ---
 
@@ -3488,7 +3488,7 @@ Migration filenames under `warehouse/migrations/` must match `^\d{4}_.+\.sql$`; 
   Command: `pytest -m unit tests/unit/test_sql.py -v`
   Expected: `ImportError: cannot import name 's4a_migration_numbering' from 'retail.rules.sql'`.
 
-- [ ] **Step 3: Implement S4a.** Append to `src/retail/rules/sql.py` (add `from pathlib import PurePosixPath` to the imports at the top of the file):
+- [ ] **Step 3: Implement S4a.** Append to `src/seshat/rules/sql.py` (add `from pathlib import PurePosixPath` to the imports at the top of the file):
   ```python
   _MIGRATION_NAME = re.compile(r"^\d{4}_.+\.sql$")
 
@@ -3549,7 +3549,7 @@ Migration filenames under `warehouse/migrations/` must match `^\d{4}_.+\.sql$`; 
   Expected: `11 passed`.
 
 - [ ] **Step 5: Commit.**
-  Command: `git add src/retail/rules/sql.py tests/unit/test_sql.py && git commit -m "feat: add S4a migration filename and numbering SQL rule"`
+  Command: `git add src/seshat/rules/sql.py tests/unit/test_sql.py && git commit -m "feat: add S4a migration filename and numbering SQL rule"`
 
 ---
 
@@ -3606,7 +3606,7 @@ Bare `CREATE`/`ALTER` outside the accepted guarded forms (`CREATE TABLE … IF N
   Command: `pytest -m unit tests/unit/test_sql.py -v`
   Expected: `ImportError: cannot import name 's4b_guard_form' from 'retail.rules.sql'`.
 
-- [ ] **Step 4: Implement S4b.** Append to `src/retail/rules/sql.py`:
+- [ ] **Step 4: Implement S4b.** Append to `src/seshat/rules/sql.py`:
   ```python
   def _is_guarded(toks: list, idx: int) -> bool:
       """True if the CREATE/ALTER/DROP at toks[idx] is an accepted guarded form."""
@@ -3654,14 +3654,14 @@ Bare `CREATE`/`ALTER` outside the accepted guarded forms (`CREATE TABLE … IF N
 - [ ] **Step 6: Verify the whole SQL surface together and commit.**
   Command: `ruff check src tests && black --check src tests && pytest -m unit tests/unit/test_sql.py tests/unit/test_sql_lexer.py -v`
   Expected: ruff/black clean; `19 passed` (6 lexer + 13 rule tests).
-  Command: `git add src/retail/rules/sql.py tests/unit/test_sql.py tests/fixtures/sql && git commit -m "feat: add S4b migration guard-form SQL warning rule"`
+  Command: `git add src/seshat/rules/sql.py tests/unit/test_sql.py tests/fixtures/sql && git commit -m "feat: add S4b migration guard-form SQL warning rule"`
 
 
 ---
 
 ## Milestone 4 — TMDL + M Rules
 
-### Task M4.1: Hand-rolled TMDL parser (`src/retail/tmdl.py`)
+### Task M4.1: Hand-rolled TMDL parser (`src/seshat/tmdl.py`)
 
 The indentation/block parser every D-rule consumes. It exposes BOTH the raw expression text (D4 must lex and strip comments/strings from un-normalized source) AND structured fields (name, displayFolder, dataType, summarizeBy — D1/D2/D5). D3 gets normalization via `normalize_measure_body`. D8 needs partition `source` M bodies; this parser captures them as raw text on the table.
 
@@ -3732,7 +3732,7 @@ def test_parse_tmdl_reads_columns() -> None:
 ```
 - [ ] **Step 2: Run to fail.** `pytest -m unit tests/unit/test_tmdl.py -v` → `ModuleNotFoundError: No module named 'retail.tmdl'`.
 - [ ] **Step 3: Minimal impl — dataclasses + block parser.**
-  Create `src/retail/tmdl.py`:
+  Create `src/seshat/tmdl.py`:
 ```python
 from __future__ import annotations
 
@@ -3992,8 +3992,8 @@ def test_normalize_measure_body_strips_comments_and_case() -> None:
 ```
 - [ ] **Step 6: Run to pass.** `pytest -m unit tests/unit/test_tmdl.py -v` → all 5 tests PASS (impl already covers these; if `parse_relationships` import or source-capture fails, fix `tmdl.py` until green).
 - [ ] **Step 7: Format + lint + commit.**
-  `black src/retail/tmdl.py tests/unit/test_tmdl.py && ruff check src/retail/tmdl.py tests/unit/test_tmdl.py && pytest -m unit tests/unit/test_tmdl.py -v`
-  then `git add src/retail/tmdl.py tests/unit/test_tmdl.py && git commit -m "feat: hand-rolled TMDL block parser for model rules"`
+  `black src/seshat/tmdl.py tests/unit/test_tmdl.py && ruff check src/seshat/tmdl.py tests/unit/test_tmdl.py && pytest -m unit tests/unit/test_tmdl.py -v`
+  then `git add src/seshat/tmdl.py tests/unit/test_tmdl.py && git commit -m "feat: hand-rolled TMDL block parser for model rules"`
 
 ---
 
@@ -4197,7 +4197,7 @@ def test_d2_flags_missing_folder(tmp_path: Path) -> None:
     assert "Revenue" in findings[0].message
 ```
 - [ ] **Step 3: Run to fail.** `pytest -m unit tests/unit/test_dax.py -v` → `ModuleNotFoundError: No module named 'retail.rules.dax'`.
-- [ ] **Step 4: Minimal impl.** Create `src/retail/rules/dax.py`:
+- [ ] **Step 4: Minimal impl.** Create `src/seshat/rules/dax.py`:
 ```python
 from __future__ import annotations
 
@@ -4242,9 +4242,9 @@ def d2_display_folder(ctx: RuleContext) -> Iterable[Finding]:
                     locator=f"{rel}:{m.line}",
                 )
 ```
-  `src/retail/rules/__init__.py` already exists from M1.6 with `from . import dax, git_meta, pbir, sql` — do NOT recreate or empty it; the @register side-effect imports must stay. This task only ADDS rule functions to dax.py.
+  `src/seshat/rules/__init__.py` already exists from M1.6 with `from . import dax, git_meta, pbir, sql` — do NOT recreate or empty it; the @register side-effect imports must stay. This task only ADDS rule functions to dax.py.
 - [ ] **Step 5: Run to pass.** `pytest -m unit tests/unit/test_dax.py -v` → all D1/D2 tests PASS.
-- [ ] **Step 6: Commit.** `black src/retail/rules/dax.py tests/unit/test_dax.py && ruff check src/retail/rules/dax.py tests/unit/test_dax.py && pytest -m unit tests/unit/test_dax.py -v` then `git add src/retail/rules/dax.py tests/unit/test_dax.py tests/fixtures/tmdl/bad_no_folder.tmdl && git commit -m "feat: add D1 PascalCase and D2 displayFolder measure rules"`
+- [ ] **Step 6: Commit.** `black src/seshat/rules/dax.py tests/unit/test_dax.py && ruff check src/seshat/rules/dax.py tests/unit/test_dax.py && pytest -m unit tests/unit/test_dax.py -v` then `git add src/seshat/rules/dax.py tests/unit/test_dax.py tests/fixtures/tmdl/bad_no_folder.tmdl && git commit -m "feat: add D1 PascalCase and D2 displayFolder measure rules"`
 
 ---
 
@@ -4286,7 +4286,7 @@ def test_d4_passes_clean(tmp_path: Path) -> None:
     assert list(d4_divide_not_slash(_ctx(tmp_path, "clean_sales.tmdl"))) == []
 ```
 - [ ] **Step 2: Run to fail.** `pytest -m unit tests/unit/test_dax.py -v` → `ImportError: cannot import name 'd3_no_duplicate_logic'`.
-- [ ] **Step 3: Minimal impl.** Append to `src/retail/rules/dax.py`:
+- [ ] **Step 3: Minimal impl.** Append to `src/seshat/rules/dax.py`:
 ```python
 from ..tmdl import normalize_measure_body
 
@@ -4340,7 +4340,7 @@ def d4_divide_not_slash(ctx: RuleContext) -> Iterable[Finding]:
                 )
 ```
 - [ ] **Step 4: Run to pass.** `pytest -m unit tests/unit/test_dax.py -v` → all D3/D4 tests PASS.
-- [ ] **Step 5: Commit.** `black src/retail/rules/dax.py tests/unit/test_dax.py && ruff check src/retail/rules/dax.py tests/unit/test_dax.py && pytest -m unit tests/unit/test_dax.py -v` then `git add src/retail/rules/dax.py tests/unit/test_dax.py && git commit -m "feat: add D3 duplicate-logic and D4 DIVIDE rules"`
+- [ ] **Step 5: Commit.** `black src/seshat/rules/dax.py tests/unit/test_dax.py && ruff check src/seshat/rules/dax.py tests/unit/test_dax.py && pytest -m unit tests/unit/test_dax.py -v` then `git add src/seshat/rules/dax.py tests/unit/test_dax.py && git commit -m "feat: add D3 duplicate-logic and D4 DIVIDE rules"`
 
 ---
 
@@ -4372,7 +4372,7 @@ def test_d5_passes_when_summarize_none(tmp_path: Path) -> None:
     assert list(d5_explicit_aggregation(_ctx(tmp_path, "clean_sales.tmdl"))) == []
 ```
 - [ ] **Step 2: Run to fail.** `pytest -m unit tests/unit/test_dax.py -v` → `ImportError: cannot import name 'd5_explicit_aggregation'`.
-- [ ] **Step 3: Minimal impl.** Append to `src/retail/rules/dax.py`:
+- [ ] **Step 3: Minimal impl.** Append to `src/seshat/rules/dax.py`:
 ```python
 _NUMERIC_TYPES = frozenset({"int64", "decimal", "double", "int", "currency"})
 
@@ -4398,7 +4398,7 @@ def d5_explicit_aggregation(ctx: RuleContext) -> Iterable[Finding]:
                 )
 ```
 - [ ] **Step 4: Run to pass.** `pytest -m unit tests/unit/test_dax.py -v` → D5 tests PASS.
-- [ ] **Step 5: Commit.** `black src/retail/rules/dax.py tests/unit/test_dax.py && ruff check src/retail/rules/dax.py tests/unit/test_dax.py && pytest -m unit tests/unit/test_dax.py -v` then `git add src/retail/rules/dax.py tests/unit/test_dax.py && git commit -m "feat: add D5 implicit-aggregation warning rule"`
+- [ ] **Step 5: Commit.** `black src/seshat/rules/dax.py tests/unit/test_dax.py && ruff check src/seshat/rules/dax.py tests/unit/test_dax.py && pytest -m unit tests/unit/test_dax.py -v` then `git add src/seshat/rules/dax.py tests/unit/test_dax.py && git commit -m "feat: add D5 implicit-aggregation warning rule"`
 
 ---
 
@@ -4436,7 +4436,7 @@ def test_d6_passes_clean(tmp_path: Path) -> None:
     assert list(d6_single_direction(_rel_ctx(tmp_path, "clean_relationships.tmdl"))) == []
 ```
 - [ ] **Step 2: Run to fail.** `pytest -m unit tests/unit/test_dax.py -v` → `ImportError: cannot import name 'd6_single_direction'`.
-- [ ] **Step 3: Minimal impl.** Append to `src/retail/rules/dax.py`:
+- [ ] **Step 3: Minimal impl.** Append to `src/seshat/rules/dax.py`:
 ```python
 from ..tmdl import parse_relationships
 
@@ -4457,7 +4457,7 @@ def d6_single_direction(ctx: RuleContext) -> Iterable[Finding]:
                 )
 ```
 - [ ] **Step 4: Run to pass.** `pytest -m unit tests/unit/test_dax.py -v` → D6 tests PASS.
-- [ ] **Step 5: Commit.** `black src/retail/rules/dax.py tests/unit/test_dax.py && ruff check src/retail/rules/dax.py tests/unit/test_dax.py && pytest -m unit tests/unit/test_dax.py -v` then `git add src/retail/rules/dax.py tests/unit/test_dax.py && git commit -m "feat: add D6 single-direction relationship rule"`
+- [ ] **Step 5: Commit.** `black src/seshat/rules/dax.py tests/unit/test_dax.py && ruff check src/seshat/rules/dax.py tests/unit/test_dax.py && pytest -m unit tests/unit/test_dax.py -v` then `git add src/seshat/rules/dax.py tests/unit/test_dax.py && git commit -m "feat: add D6 single-direction relationship rule"`
 
 ---
 
@@ -4504,7 +4504,7 @@ def test_d7_passes_when_no_ti_used(tmp_path: Path) -> None:
     assert list(d7_time_intelligence_marker(_multi_ctx(tmp_path, "clean_sales.tmdl"))) == []
 ```
 - [ ] **Step 2: Run to fail.** `pytest -m unit tests/unit/test_dax.py -v` → `ImportError: cannot import name 'd7_time_intelligence_marker'`.
-- [ ] **Step 3: Minimal impl.** Append to `src/retail/rules/dax.py`:
+- [ ] **Step 3: Minimal impl.** Append to `src/seshat/rules/dax.py`:
 ```python
 from ..tmdl import DATE_TABLE_MARKER, TI_TRIGGER_FUNCTIONS
 
@@ -4542,7 +4542,7 @@ def d7_time_intelligence_marker(ctx: RuleContext) -> Iterable[Finding]:
         )
 ```
 - [ ] **Step 4: Run to pass.** `pytest -m unit tests/unit/test_dax.py -v` → D7 tests PASS.
-- [ ] **Step 5: Commit.** `black src/retail/rules/dax.py tests/unit/test_dax.py && ruff check src/retail/rules/dax.py tests/unit/test_dax.py && pytest -m unit tests/unit/test_dax.py -v` then `git add src/retail/rules/dax.py tests/unit/test_dax.py && git commit -m "feat: add D7 time-intelligence date-marker rule"`
+- [ ] **Step 5: Commit.** `black src/seshat/rules/dax.py tests/unit/test_dax.py && ruff check src/seshat/rules/dax.py tests/unit/test_dax.py && pytest -m unit tests/unit/test_dax.py -v` then `git add src/seshat/rules/dax.py tests/unit/test_dax.py && git commit -m "feat: add D7 time-intelligence date-marker rule"`
 
 ---
 
@@ -4573,7 +4573,7 @@ def test_d8_passes_gold_source(tmp_path: Path) -> None:
     assert list(d8_gold_only_source(_ctx(tmp_path, "clean_sales.tmdl"))) == []
 ```
 - [ ] **Step 2: Run to fail.** `pytest -m unit tests/unit/test_dax.py -v` → `ImportError: cannot import name 'd8_gold_only_source'`.
-- [ ] **Step 3: Minimal impl.** Append to `src/retail/rules/dax.py`.
+- [ ] **Step 3: Minimal impl.** Append to `src/seshat/rules/dax.py`.
 
   **Produces (consumed by D8 itself and reused verbatim by M4.C1):** the shared
   M-source iterator. It walks every `*.SemanticModel/definition/**` TMDL file and
@@ -4650,8 +4650,8 @@ def test_d8_passes_gold_source(tmp_path: Path) -> None:
   ```
 - [ ] **Step 4: Run to pass.** `pytest -m unit tests/unit/test_dax.py -v` → D8 tests PASS. (Depends on M3.1's `stale_schema_tokens` already existing; if M3 is not yet merged, this task is blocked on it.)
 - [ ] **Step 5: Full M4 gate + commit.** Run the whole DAX suite + parser suite together:
-  `black src/retail tests/unit && ruff check src/retail tests/unit && pytest -m unit tests/unit/test_tmdl.py tests/unit/test_dax.py -v`
-  → all tests PASS, no ruff errors. Then `git add src/retail/rules/dax.py tests/unit/test_dax.py && git commit -m "feat: add D8 gold-only sourcing rule"`
+  `black src/seshat tests/unit && ruff check src/seshat tests/unit && pytest -m unit tests/unit/test_tmdl.py tests/unit/test_dax.py -v`
+  → all tests PASS, no ruff errors. Then `git add src/seshat/rules/dax.py tests/unit/test_dax.py && git commit -m "feat: add D8 gold-only sourcing rule"`
 
 
 ---
@@ -4659,19 +4659,19 @@ def test_d8_passes_gold_source(tmp_path: Path) -> None:
 ### Task M4.C1: C1 parameterized-connection rule
 
 **Files:**
-- Modify: `C:\Users\user\Documents\GitHub\Retail_Tower_analytics\src\retail\rules\dax.py` (append the C1 rule; module already exists from D1–D8 and is already imported by `src/retail/rules/__init__.py`)
+- Modify: `C:\Users\user\Documents\GitHub\Retail_Tower_analytics\src\retail\rules\dax.py` (append the C1 rule; module already exists from D1–D8 and is already imported by `src/seshat/rules/__init__.py`)
 - Test: `C:\Users\user\Documents\GitHub\Retail_Tower_analytics\tests\unit\test_dax.py` (append C1 tests to the existing `dax` group test module)
 
 **Interfaces:**
 
-- Consumes (contract-v2, from `src/retail/core.py`):
+- Consumes (contract-v2, from `src/seshat/core.py`):
   - `Severity` (`str`, `Enum`): `ERROR` / `WARNING` / `INFO`
   - `Finding(rule_id: str, severity: Severity, message: str, locator: str)` — `@dataclass(frozen=True)`
   - `RuleContext(repo_root: Path, tracked_files: tuple[str, ...], commit_range: str | None = None, commit_message: str | None = None)` — `@dataclass(frozen=True)`
   - `Rule = Callable[[RuleContext], Iterable[Finding]]`
-- Consumes (from `src/retail/registry.py`):
+- Consumes (from `src/seshat/registry.py`):
   - `register(rule_id: str, title: str) -> Callable[[Rule], Rule]`
-- Consumes (from **Task M4.8 (D8)**, produced and consumed there, defined in `src/retail/rules/dax.py`): the shared M-source iterator `MSource` / `iter_m_sources` that D8 uses to walk **both** partition `source` M blocks and shared `expression` blocks (a TMDL parameter is a shared `expression` block, so this single helper already reaches parameter defaults). C1 imports nothing new — both symbols already live in `dax.py` from M4.8:
+- Consumes (from **Task M4.8 (D8)**, produced and consumed there, defined in `src/seshat/rules/dax.py`): the shared M-source iterator `MSource` / `iter_m_sources` that D8 uses to walk **both** partition `source` M blocks and shared `expression` blocks (a TMDL parameter is a shared `expression` block, so this single helper already reaches parameter defaults). C1 imports nothing new — both symbols already live in `dax.py` from M4.8:
 
   ```python
   # Defined in M4.8 (D8) — reused verbatim by C1, NOT re-derived here.
@@ -4989,15 +4989,15 @@ Expected: PASS — all 7 selected tests green (`test_split_top_level_args_ignore
 Run:
 ```bash
 C:/Users/user/miniforge3/python.exe -m pytest tests/unit/test_dax.py -q
-C:/Users/user/miniforge3/python.exe -m ruff check src/retail/rules/dax.py tests/unit/test_dax.py
-C:/Users/user/miniforge3/python.exe -m black --check src/retail/rules/dax.py tests/unit/test_dax.py
+C:/Users/user/miniforge3/python.exe -m ruff check src/seshat/rules/dax.py tests/unit/test_dax.py
+C:/Users/user/miniforge3/python.exe -m black --check src/seshat/rules/dax.py tests/unit/test_dax.py
 ```
-Expected: pytest reports all dax-group tests passing (D1–D8 plus the 6 new C1 tests + the splitter test); `ruff check` prints `All checks passed!`; `black --check` reports the two files `would be left unchanged`. (If black reports it would reformat, run `C:/Users/user/miniforge3/python.exe -m black src/retail/rules/dax.py tests/unit/test_dax.py` and re-run the checks.)
+Expected: pytest reports all dax-group tests passing (D1–D8 plus the 6 new C1 tests + the splitter test); `ruff check` prints `All checks passed!`; `black --check` reports the two files `would be left unchanged`. (If black reports it would reformat, run `C:/Users/user/miniforge3/python.exe -m black src/seshat/rules/dax.py tests/unit/test_dax.py` and re-run the checks.)
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/retail/rules/dax.py tests/unit/test_dax.py
+git add src/seshat/rules/dax.py tests/unit/test_dax.py
 git commit -m "feat: add C1 parameterized-connection rule"
 ```
 
@@ -5005,7 +5005,7 @@ git commit -m "feat: add C1 parameterized-connection rule"
 
 ## Milestone 5 — PBIR Rule
 
-### Task M5.1: PBIR rule R1 — relative model reference (`src/retail/rules/pbir.py`)
+### Task M5.1: PBIR rule R1 — relative model reference (`src/seshat/rules/pbir.py`)
 
 Implements spec §5.3 R1: in every `*.Report/definition.pbir`, `datasetReference.byPath.path` must be a relative path. Flag an absolute path (`^[A-Za-z]:`, `^\\`, `^/`) or an unexpected `byConnection`. PBIR files are stdlib `json` opened `encoding="utf-8-sig"` (Power BI writes a BOM). Locator is `"definition.pbir"` plus a JSON pointer to the offending node.
 
@@ -5018,7 +5018,7 @@ Implements spec §5.3 R1: in every `*.Report/definition.pbir`, `datasetReference
 - Test: `C:\Users\user\Documents\GitHub\Retail_Tower_analytics\tests\unit\test_pbir.py`
 
 **Interfaces:**
-- Consumes (from `src/retail/core.py`, verbatim): `Finding`, `Severity`, `RuleContext`. From `src/retail/registry.py`: `register`.
+- Consumes (from `src/seshat/core.py`, verbatim): `Finding`, `Severity`, `RuleContext`. From `src/seshat/registry.py`: `register`.
 - Produces:
   - `@register("R1", "PBIR model reference must be relative")` `def check_pbir_relative_reference(ctx: RuleContext) -> Iterable[Finding]: ...`
   - helper `def _iter_pbir_files(ctx: RuleContext) -> list[str]:` — returns repo-relative POSIX paths in `ctx.tracked_files` ending `.Report/definition.pbir`.
@@ -5197,18 +5197,18 @@ The fixtures live under `tests/fixtures/` and are read directly by the unit test
 - [ ] **Step M5.1.8: Lint and format the new module and test.**
   Commands (from repo root):
   ```
-  ruff format --check src/retail/rules/pbir.py tests/unit/test_pbir.py
-  ruff check src/retail/rules/pbir.py tests/unit/test_pbir.py
+  ruff format --check src/seshat/rules/pbir.py tests/unit/test_pbir.py
+  ruff check src/seshat/rules/pbir.py tests/unit/test_pbir.py
   ```
-  Expected: `ruff format` prints `1 file already formatted` style output with no diff; `ruff check` prints `All checks passed!`. If format reports a would-reformat, run `ruff format src/retail/rules/pbir.py tests/unit/test_pbir.py` and re-run the checks.
+  Expected: `ruff format` prints `1 file already formatted` style output with no diff; `ruff check` prints `All checks passed!`. If format reports a would-reformat, run `ruff format src/seshat/rules/pbir.py tests/unit/test_pbir.py` and re-run the checks.
 
 - [ ] **Step M5.1.9: Commit.**
   Command (from repo root):
   ```
-  git add src/retail/rules/pbir.py tests/unit/test_pbir.py tests/fixtures/pbir/
+  git add src/seshat/rules/pbir.py tests/unit/test_pbir.py tests/fixtures/pbir/
   git commit -m "feat: add PBIR rule R1 (relative model reference) with fixtures"
   ```
-  Expected: commit succeeds; `git show --stat HEAD` lists `src/retail/rules/pbir.py`, `tests/unit/test_pbir.py`, and the three `tests/fixtures/pbir/*.Report/definition.pbir` files.
+  Expected: commit succeeds; `git show --stat HEAD` lists `src/seshat/rules/pbir.py`, `tests/unit/test_pbir.py`, and the three `tests/fixtures/pbir/*.Report/definition.pbir` files.
 
 
 ---
@@ -5496,7 +5496,7 @@ This milestone wires the `retail check` checker (the `retail` console script pro
 
 Rationale: spec §13 routes "reconcile the `powerbi-analyst` agent prompt … point them at the rule ids" into this §9-step-7 D-seam. The current file (`powerbi-analyst.md:3,17,25,45`) preaches "read `marts` only (never `raw`)", which contradicts the gold-only checker (D8 flags `marts`/`raw`/`silver`/`bronze`). The edit must **replace** the marts-only prose, not append beside it.
 
-- [ ] **Step 1: Write the failing test for the agent artifact.** Create `tests/unit/test_dseam.py` with a test asserting the agent file references the checker, names at least two rule ids, and no longer carries a marts-only claim. Use the repo root resolved from the test file location (the package is `src/retail/`, tests at `tests/unit/`, so repo root is `parents[2]`).
+- [ ] **Step 1: Write the failing test for the agent artifact.** Create `tests/unit/test_dseam.py` with a test asserting the agent file references the checker, names at least two rule ids, and no longer carries a marts-only claim. Use the repo root resolved from the test file location (the package is `src/seshat/`, tests at `tests/unit/`, so repo root is `parents[2]`).
 
 ```python
 # tests/unit/test_dseam.py
@@ -5649,7 +5649,7 @@ Expected: `ruff` prints `All checks passed!`, `black` prints `1 file would be le
 - Test: `C:\Users\user\Documents\GitHub\Retail_Tower_analytics\tests\unit\test_dseam.py`
 
 **Interfaces:**
-- Consumes: the `retail check` CLI command name (M1/M6); the rule-id catalog (spec §5); the `Finding` shape (`rule_id`, `severity`, `message`, `locator` — `src/retail/core.py`) so the skill can teach Claude how to read a finding line.
+- Consumes: the `retail check` CLI command name (M1/M6); the rule-id catalog (spec §5); the `Finding` shape (`rule_id`, `severity`, `message`, `locator` — `src/seshat/core.py`) so the skill can teach Claude how to read a finding line.
 - Produces: a new `SKILL.md` with valid YAML frontmatter (`name: retail-govern`, a `description:`) and a body that maps rule id → meaning → fix location, explicitly **bounded to invoke-and-interpret** (no orchestration, no auto-fix). No Python symbols.
 
 Bound (restated from the task and spec §9-step-7): the skill references/invokes the checker and its rule ids **only**. It must NOT orchestrate a build, run `pbi-cli`, or self-heal — those are deferred D work. The boundary is asserted in the body and is part of the deliverable's coherence.

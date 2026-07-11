@@ -2,7 +2,7 @@
 
 - **Date:** 2026-06-26
 - **Method:** 7 parallel review lenses (Sonnet/high) → adversarial verification (Sonnet/high, refute-by-default) → synthesis (Opus/high). 75 raw findings → **59 confirmed, 16 refuted/downgraded**. 83 agents.
-- **Scope:** `src/retail/**`, `tests/unit/**`, `docs/**`, `specs/**`, ADRs, adapter skills.
+- **Scope:** `src/seshat/**`, `tests/unit/**`, `docs/**`, `specs/**`, ADRs, adapter skills.
 
 ## Executive summary
 
@@ -18,16 +18,16 @@ Highest-severity true bugs: `S4b START` false-negative, `S4b CREATE OR REPLACE F
 
 | # | severity | lens | finding | file:line | fix |
 |---|----------|------|---------|-----------|-----|
-| 1 | HIGH | correctness | `START` unconditionally sets `in_txn=True`; any `START` token (e.g. `CREATE SEQUENCE … START WITH 1`) suppresses later bare-DDL findings | src/retail/rules/sql.py:192-194 | require next token `== TRANSACTION` |
-| 2 | HIGH | correctness | `_is_guarded` only matches `OR REPLACE VIEW`; `CREATE OR REPLACE FUNCTION/PROCEDURE` → spurious WARNING | src/retail/rules/sql.py:161-162 | guard on `"OR REPLACE" in joined or "IF NOT EXISTS" in joined` |
-| 3 | HIGH | DAX | L3 escalates valid 3-arg `DIVIDE(num,den,0)` as "not exactly two args" | src/retail/metric_drift.py:263-267 | accept `len in (2,3)`, ignore arg3 |
-| 4 | HIGH | DAX | D4: single-quoted DAX string literals not stripped → bare `/` inside them false-positives | src/retail/rules/dax.py:139 | also strip `'...'` table-name refs before slash scan |
-| 5 | MEDIUM | correctness | `tokenize_sql` no dollar-quote (`$$`) branch; PL/pgSQL bodies leak as tokens, corrupting S3/S4b/S5 | src/retail/sql.py:54 | add `$$`/`$tag$` skip branch |
-| 6 | MEDIUM | correctness/sec | `profile._safe_identifier` uses `.match()` not `.fullmatch()`; `valid_id\n` bypasses | src/retail/profile.py:36 | `.fullmatch` |
-| 7 | MEDIUM | security | Partial DSN redaction — psycopg2 auth errors print username/host verbatim | src/retail/cli.py:156-162,242 | print fixed safe string on connect failure |
-| 8 | MEDIUM | security | C2 secret scan skips all `docs/` and `.superpowers/` — a real DSN in a runbook is invisible | src/retail/rules/git_meta.py:325-329 | scan `docs/`; exclude only `tests/`, or document |
-| 9 | MEDIUM | DAX | D10 only matches `FILTER(ALL(`; misses `ALLSELECTED`/`ALLEXCEPT` | src/retail/rules/dax.py:421 | `FILTER\s*\(\s*ALL(?:SELECTED|EXCEPT)?\s*\(` |
-| 10 | MEDIUM | duplication | `strip_sql_comments` (quote-first) vs `_strip_sql_noise` (comment-first) — latent quote-in-comment FN in S6/S8 | src/retail/sql.py:89; rules/sql.py:333-363 | share one stripper + regression test |
+| 1 | HIGH | correctness | `START` unconditionally sets `in_txn=True`; any `START` token (e.g. `CREATE SEQUENCE … START WITH 1`) suppresses later bare-DDL findings | src/seshat/rules/sql.py:192-194 | require next token `== TRANSACTION` |
+| 2 | HIGH | correctness | `_is_guarded` only matches `OR REPLACE VIEW`; `CREATE OR REPLACE FUNCTION/PROCEDURE` → spurious WARNING | src/seshat/rules/sql.py:161-162 | guard on `"OR REPLACE" in joined or "IF NOT EXISTS" in joined` |
+| 3 | HIGH | DAX | L3 escalates valid 3-arg `DIVIDE(num,den,0)` as "not exactly two args" | src/seshat/metric_drift.py:263-267 | accept `len in (2,3)`, ignore arg3 |
+| 4 | HIGH | DAX | D4: single-quoted DAX string literals not stripped → bare `/` inside them false-positives | src/seshat/rules/dax.py:139 | also strip `'...'` table-name refs before slash scan |
+| 5 | MEDIUM | correctness | `tokenize_sql` no dollar-quote (`$$`) branch; PL/pgSQL bodies leak as tokens, corrupting S3/S4b/S5 | src/seshat/sql.py:54 | add `$$`/`$tag$` skip branch |
+| 6 | MEDIUM | correctness/sec | `profile._safe_identifier` uses `.match()` not `.fullmatch()`; `valid_id\n` bypasses | src/seshat/profile.py:36 | `.fullmatch` |
+| 7 | MEDIUM | security | Partial DSN redaction — psycopg2 auth errors print username/host verbatim | src/seshat/cli.py:156-162,242 | print fixed safe string on connect failure |
+| 8 | MEDIUM | security | C2 secret scan skips all `docs/` and `.superpowers/` — a real DSN in a runbook is invisible | src/seshat/rules/git_meta.py:325-329 | scan `docs/`; exclude only `tests/`, or document |
+| 9 | MEDIUM | DAX | D10 only matches `FILTER(ALL(`; misses `ALLSELECTED`/`ALLEXCEPT` | src/seshat/rules/dax.py:421 | `FILTER\s*\(\s*ALL(?:SELECTED|EXCEPT)?\s*\(` |
+| 10 | MEDIUM | duplication | `strip_sql_comments` (quote-first) vs `_strip_sql_noise` (comment-first) — latent quote-in-comment FN in S6/S8 | src/seshat/sql.py:89; rules/sql.py:333-363 | share one stripper + regression test |
 | 11 | MEDIUM | doc rot | Rule count stale: docs say 27/28, reality 31 | roadmap.md:18,192; readiness-pipeline.md:40; tower-bi-agent-kit.md:51,85,167; ADR-0007:102 | update to 31 |
 | 12 | MEDIUM | doc rot | readiness-pipeline lists Silver Ready as S1-S7 (omits S8) | readiness/readiness-pipeline.md:16; architecture/readiness-pipeline.md:56 | S1-S8 |
 | 13 | MEDIUM | doc rot | Semantic Model Ready lists D1-D8 (omits D9-D11) | readiness-pipeline.md:18; semantic-model-ready.md:34,49; metric-contract-store.md:42 | D1-D11 |
@@ -45,7 +45,7 @@ Highest-severity true bugs: `S4b START` false-negative, `S4b CREATE OR REPLACE F
 | 25 | LOW | security | regex injection latent: `func` interpolated w/o `re.escape` | metric_drift.py:144 | `re.escape(func)` |
 | 26 | LOW | security | path traversal via `--metrics-dir`/`--repo` (no resolve/boundary) | cli.py:278-284,307 | `.resolve()` + `is_relative_to` |
 | 27 | LOW | security | git stderr echoed verbatim into RuntimeError/Finding | gitutil.py:15-17; git_meta.py:254-259 | truncate/sanitize |
-| 28 | LOW | correctness | `cli.main()` (`-> int`) calls `sys.exit(1)` in one branch | src/retail/cli.py:108 | `return 1` |
+| 28 | LOW | correctness | `cli.main()` (`-> int`) calls `sys.exit(1)` in one branch | src/seshat/cli.py:108 | `return 1` |
 | 29 | LOW | DAX | D8 `_M_STRING_LITERAL` mishandles M escaped `""` | rules/dax.py:295 | `r'"(?:[^"]|"")*"'` |
 | 30 | LOW | DAX | D9 ISO branch requires 2-digit m/d; misses `2024-1-1` | rules/dax.py:387 | `\b\d{4}-\d{1,2}-\d{1,2}\b` |
 | 31 | LOW | DAX | TMDL column regex mangles calc columns `column Name = expr` (none today) | tmdl.py:292 | exclude `=` from name |
@@ -98,14 +98,14 @@ design track).
 **Code bugs (TDD, all 8 new tests green):**
 - **#1 S4b `START` false-negative** — `START` now opens a transaction only when followed
   by `TRANSACTION`; a bare `START` (e.g. `CREATE SEQUENCE … START WITH 1`) no longer
-  suppresses later bare-DDL findings. (`src/retail/rules/sql.py`)
+  suppresses later bare-DDL findings. (`src/seshat/rules/sql.py`)
 - **#2 S4b `CREATE OR REPLACE FUNCTION` false-positive** — `_is_guarded` now accepts any
-  `OR REPLACE` form, not just `OR REPLACE VIEW`. (`src/retail/rules/sql.py`)
+  `OR REPLACE` form, not just `OR REPLACE VIEW`. (`src/seshat/rules/sql.py`)
 - **#3 L3 three-arg DIVIDE** — `check_measure_drift` accepts `DIVIDE(num, den, alt)`
   (2 or 3 args), denominator still `args[1]`; drift detection preserved.
-  (`src/retail/metric_drift.py`)
+  (`src/seshat/metric_drift.py`)
 - **#6 `profile._safe_identifier`** — `.match` → `.fullmatch` (defense-in-depth against a
-  newline-terminated identifier). (`src/retail/profile.py`)
+  newline-terminated identifier). (`src/seshat/profile.py`)
 
 **Dead code removed** (grep-verified zero references): `TmdlModel` (`tmdl.py`),
 `_DB_PART_KEYS`, `LIVE_CHECKS` (`validate.py`); tmdl public-API docstring updated.

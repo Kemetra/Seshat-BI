@@ -1,0 +1,17 @@
+{
+  "name": "seshat-bi-marketplace",
+  "owner": {
+    "name": "Ahmed Shaaban"
+  },
+  "metadata": {
+    "description": "Draft Seshat BI marketplace. Canonical source is this repository; publication remains an owner action.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "seshat-bi",
+      "source": "./integrations/claude-code/seshat-bi",
+      "description": "Draft guarded BI readiness workflow for Claude Code."
+    }
+  ]
+}

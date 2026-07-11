@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.dax import (
+from seshat.core import RuleContext, Severity
+from seshat.rules.dax import (
     c1_parameterized_connection,
     d1_pascalcase_measures,
     d2_display_folder,
@@ -19,7 +19,7 @@ from retail.rules.dax import (
     d10_no_filter_all,
     d11_measures_documented,
 )
-from retail.tmdl import TmdlMeasure
+from seshat.tmdl import TmdlMeasure
 
 pytestmark = pytest.mark.unit
 
@@ -116,8 +116,8 @@ def test_d2_does_not_flag_explicitly_empty_folder(
     the rule directly with a constructed measure to lock the is-None contract:
     a falsy-but-not-None folder must NOT be flagged.
     """
-    from retail.rules import dax as dax_mod
-    from retail.tmdl import TmdlTable
+    from seshat.rules import dax as dax_mod
+    from seshat.tmdl import TmdlTable
 
     empty_folder_table = TmdlTable(
         name="T",

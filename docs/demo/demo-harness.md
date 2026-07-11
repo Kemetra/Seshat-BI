@@ -1,7 +1,7 @@
 # Demo Harness -- `retail demo` (spec 083)
 
 - **On-disk spec:** `specs/083-demo-harness/`  **Roadmap feature:** F083.
-- **Skill/surface:** the `retail demo` CLI verb group (`src/retail/demo/`).
+- **Skill/surface:** the `retail demo` CLI verb group (`src/seshat/demo/`).
 - **Sample data:** `tests/fixtures/demo/demo_sample_orders.csv` (GENERIC, invented;
   not client data, not C086). Mapping-gate + readiness fixtures:
   `mappings/demo_sample_orders/`.

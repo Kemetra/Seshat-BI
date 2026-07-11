@@ -1,4 +1,4 @@
-"""TDD tests for the L3 contract<->DAX drift check (src/retail/metric_drift.py).
+"""TDD tests for the L3 contract<->DAX drift check (src/seshat/metric_drift.py).
 
 L3 of the layered DAX governance system: does a DIVIDE-based measure's DENOMINATOR
 apply the filter the approved metric contract's structured `definition` declares? This
@@ -28,7 +28,7 @@ import sys
 
 import pytest
 
-from retail.metric_drift import Verdict, check_measure_drift
+from seshat.metric_drift import Verdict, check_measure_drift
 
 pytestmark = pytest.mark.unit
 
@@ -281,7 +281,7 @@ def test_metric_drift_module_does_not_import_yaml_at_top_level() -> None:
     """
     from pathlib import Path
 
-    import retail.metric_drift as md
+    import seshat.metric_drift as md
 
     src = Path(md.__file__).read_text(encoding="utf-8")
     # the only yaml import must be indented (inside a function), never at column 0
@@ -293,21 +293,21 @@ def test_metric_drift_module_does_not_import_yaml_at_top_level() -> None:
 
 
 def test_importing_retail_rules_does_not_pull_metric_drift() -> None:
-    """The `retail check` core chain (retail.cli -> retail.rules) must NOT import
+    """The `retail check` core chain (seshat.cli -> seshat.rules) must NOT import
     metric_drift -- otherwise its (lazy) yaml dependency rides into the stdlib-only
     gate and a future maintainer could wire it into the registry, reopening the hole.
 
-    Import retail.rules in a CLEAN subprocess and assert retail.metric_drift is absent
+    import seshat.rules in a CLEAN subprocess and assert seshat.metric_drift is absent
     from sys.modules (a subprocess so prior test imports don't pollute the check).
     """
     import subprocess
     import sys
 
     code = (
-        "import sys; import retail.rules; "
-        "assert 'retail.metric_drift' not in sys.modules, "
-        "'retail.rules pulled metric_drift into the core import chain'; "
-        "assert 'yaml' not in sys.modules, 'retail.rules pulled yaml'; "
+        "import sys; import seshat.rules; "
+        "assert 'seshat.metric_drift' not in sys.modules, "
+        "'seshat.rules pulled metric_drift into the core import chain'; "
+        "assert 'yaml' not in sys.modules, 'seshat.rules pulled yaml'; "
         "print('clean')"
     )
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
@@ -502,8 +502,8 @@ def test_retail_rules_pulls_neither_dax_gen_nor_yaml():
     from pathlib import Path
 
     code = (
-        "import sys; import retail.rules; "
-        "assert 'retail.dax_gen' not in sys.modules, 'dax_gen leaked into core'; "
+        "import sys; import seshat.rules; "
+        "assert 'seshat.dax_gen' not in sys.modules, 'dax_gen leaked into core'; "
         "assert 'yaml' not in sys.modules, 'yaml leaked into core'"
     )
     env = os.environ.copy()

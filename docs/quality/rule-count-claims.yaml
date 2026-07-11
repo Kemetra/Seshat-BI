@@ -1,5 +1,5 @@
 # Rule-count-claims manifest -- the single source SC2
-# (src/retail/rules/rule_count_claims.py) reconciles against the AUTHORITATIVE rule
+# (src/seshat/rules/rule_count_claims.py) reconciles against the AUTHORITATIVE rule
 # count. SC2 is the rule-COUNT sibling of SC1 (status-claims.yaml): SC1 checks prose
 # built/planned status claims; SC2 checks the prose "N rules" count claim, the facet
 # SC1 explicitly delegated out of its scope.

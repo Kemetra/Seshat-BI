@@ -3,7 +3,7 @@
 OPTIONAL, HUMAN-RUN ONLY (spec 100-generated-artifact-golden-tests, FR-008). This
 script is NOT a pytest test or fixture, is NOT a `retail` CLI subcommand, is NOT
 wired into `retail check`, and is NEVER invoked by CI. Run it manually after an
-INTENTIONAL change to `src/retail/dax_gen.py`'s emission logic, then review the
+INTENTIONAL change to `src/seshat/dax_gen.py`'s emission logic, then review the
 resulting `git diff tests/fixtures/golden/dax/` yourself before staging/committing
 -- this script asserts nothing and returns no pass/fail signal.
 
@@ -11,7 +11,7 @@ Usage:
     python tests/fixtures/golden/regenerate_dax_golden.py
 
 It reproduces the exact `retail generate` CLI call shape
-(`src/retail/cli.py::_run_generate`):
+(`src/seshat/cli.py::_run_generate`):
 
     generate_measure(contract.get("definition") or {}, name=contract.get("name"),
                       doc_intent=contract.get("formula_intent"))
@@ -43,7 +43,7 @@ _SRC = _REPO_ROOT / "src"
 if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from retail.dax_gen import generate_measure, load_contract  # noqa: E402
+from seshat.dax_gen import generate_measure, load_contract  # noqa: E402
 
 _CONTRACTS_DIR = _REPO_ROOT / "tests" / "fixtures" / "contracts"
 _GOLDEN_DAX_DIR = _REPO_ROOT / "tests" / "fixtures" / "golden" / "dax"

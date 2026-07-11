@@ -23,8 +23,8 @@ from __future__ import annotations
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.additivity_consistency import RULE_ID, check_additivity_consistency
+from seshat.core import RuleContext, Severity
+from seshat.rules.additivity_consistency import RULE_ID, check_additivity_consistency
 
 pytestmark = pytest.mark.unit
 

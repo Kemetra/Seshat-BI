@@ -1,12 +1,12 @@
-"""Unit tests for the L3 semantic-check core (src/retail/semantic.py)."""
+"""Unit tests for the L3 semantic-check core (src/seshat/semantic.py)."""
 
 from __future__ import annotations
 
 import pytest
 
-from retail.core import Severity
-from retail.metric_drift import Verdict
-from retail.semantic import MeasurePair, run_semantic_pairs, verdict_to_finding
+from seshat.core import Severity
+from seshat.metric_drift import Verdict
+from seshat.semantic import MeasurePair, run_semantic_pairs, verdict_to_finding
 
 pytestmark = pytest.mark.unit
 

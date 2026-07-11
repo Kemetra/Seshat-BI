@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from retail.approver_view import build_approver_view, render_view
-from retail.readiness_classify import CATEGORY_RANK
+from seshat.approver_view import build_approver_view, render_view
+from seshat.readiness_classify import CATEGORY_RANK
 
 pytestmark = pytest.mark.unit
 
@@ -270,14 +270,14 @@ def test_missing_questions_not_no_questions(tmp_path):
 # no-write proof (V6) + generic (V8) + CLI
 # --------------------------------------------------------------------------- #
 def test_module_has_no_write_call():
-    src = Path("src/retail/approver_view.py").read_text(encoding="utf-8")
+    src = Path("src/seshat/approver_view.py").read_text(encoding="utf-8")
     assert "write_text" not in src
     assert ".write(" not in src
     assert "open(" not in src  # the read uses Path.read_text, not open()
 
 
 def test_cli_writes_nothing(tmp_path):
-    from retail.cli.commands.approver_view import approver_view_main
+    from seshat.cli.commands.approver_view import approver_view_main
 
     _write(tmp_path, "t", FULL_REFUSAL_STATUS, QUESTIONS_OPEN)
     tdir = tmp_path / "mappings" / "t"

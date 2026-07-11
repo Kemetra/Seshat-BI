@@ -1,7 +1,7 @@
 # tests/unit/test_cli_drift.py
 import pytest
 
-from retail.cli import main
+from seshat.cli import main
 
 pytestmark = pytest.mark.unit
 
@@ -30,7 +30,7 @@ def test_drift_live_missing_driver_is_actionable(capsys, monkeypatch):
     # --dsn given but the optional DB driver is absent: gate like validate does
     # -- an actionable "pip install 'retail[db]'" message + rc 1, never a raw
     # ModuleNotFoundError traceback.
-    from retail import cli
+    from seshat import cli
 
     monkeypatch.setattr(cli, "_ensure_driver", lambda: False)
     rc = main(["drift", "--baseline", _CONFORMANT, "--dsn", "postgresql://x@h/db"])
@@ -43,7 +43,7 @@ def test_drift_live_db_error_is_scrubbed_not_leaked(capsys, monkeypatch):
     # A DB-boundary failure must NOT leak the DSN (user/host/password) verbatim.
     # Mirror validate.py: the exception is caught and run through the dialect
     # redactor before printing. The DSN embeds a password that must not appear.
-    from retail import cli
+    from seshat import cli
 
     secret = "postgresql://admin:s3cr3t_pw@db.internal:5432/prod"
 
@@ -64,10 +64,10 @@ def test_drift_live_db_error_is_scrubbed_not_leaked(capsys, monkeypatch):
 def test_drift_live_loads_sibling_source_map(monkeypatch):
     # The live leg auto-discovers the sibling source-map.yaml and threads its
     # semantics into the comparison. Patched so no real DB is touched.
-    import retail.cli.commands.drift as drift_cmd
-    from retail import cli
-    from retail.drift import DriftSemantics
-    from retail.profile import PkProof, ProfileResult
+    import seshat.cli.commands.drift as drift_cmd
+    from seshat import cli
+    from seshat.drift import DriftSemantics
+    from seshat.profile import PkProof, ProfileResult
 
     calls = {}
 
@@ -89,7 +89,7 @@ def test_drift_live_loads_sibling_source_map(monkeypatch):
             pk=PkProof(total=1, distinct_pk=1, null_pk=0, is_unique=True),
         )
 
-    monkeypatch.setattr("retail.profile.profile", fake_profile)
+    monkeypatch.setattr("seshat.profile.profile", fake_profile)
 
     main(["drift", "--baseline", _CONFORMANT, "--dsn", "postgresql://u@h/db"])
     # the sibling source-map.yaml next to the baseline was the loaded path
@@ -101,7 +101,7 @@ def test_drift_live_loads_sibling_source_map(monkeypatch):
 
 
 def test_drift_source_map_flag_missing_file_is_clean_error(capsys, monkeypatch):
-    from retail import cli
+    from seshat import cli
 
     monkeypatch.setattr(cli, "_ensure_driver", lambda: True)
     rc = main(
@@ -125,10 +125,10 @@ def test_drift_source_map_flag_overrides_the_sibling(monkeypatch, tmp_path):
     # sibling (mappings/retail_store_sales/source-map.yaml); the flag must be the
     # loaded path, not the sibling. Inverting the precedence in _source_map_path
     # must fail this.
-    import retail.cli.commands.drift as drift_cmd
-    from retail import cli
-    from retail.drift import DriftSemantics
-    from retail.profile import PkProof, ProfileResult
+    import seshat.cli.commands.drift as drift_cmd
+    from seshat import cli
+    from seshat.drift import DriftSemantics
+    from seshat.profile import PkProof, ProfileResult
 
     explicit = tmp_path / "explicit-map.yaml"
     explicit.write_text("columns: []\n", encoding="utf-8")
@@ -152,7 +152,7 @@ def test_drift_source_map_flag_overrides_the_sibling(monkeypatch, tmp_path):
             pk=PkProof(total=1, distinct_pk=1, null_pk=0, is_unique=True),
         )
 
-    monkeypatch.setattr("retail.profile.profile", fake_profile)
+    monkeypatch.setattr("seshat.profile.profile", fake_profile)
 
     main(
         [

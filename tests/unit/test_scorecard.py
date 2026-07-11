@@ -18,8 +18,8 @@ from __future__ import annotations
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.scorecard import _TEMPLATE_PATH, check_coverage_scorecard
+from seshat.core import RuleContext, Severity
+from seshat.rules.scorecard import _TEMPLATE_PATH, check_coverage_scorecard
 
 pytestmark = pytest.mark.unit
 

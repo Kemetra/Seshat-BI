@@ -26,8 +26,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.design_grid_closure import check_grid_closure
+from seshat.core import RuleContext, Severity
+from seshat.rules.design_grid_closure import check_grid_closure
 
 pytestmark = pytest.mark.unit
 
@@ -109,7 +109,7 @@ def test_fixture_exemption_excludes_tests_paths() -> None:
 
 
 def test_no_tenant_or_example_literal_in_rule_source() -> None:
-    from retail.rules import design_grid_closure
+    from seshat.rules import design_grid_closure
 
     src = Path(design_grid_closure.__file__).read_text(encoding="utf-8")
     for banned in ("pharmacy", "c086", "ezaby"):

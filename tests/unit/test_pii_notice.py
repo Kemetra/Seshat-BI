@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from retail.pii_notice import build_pii_notice, render_markdown
+from seshat.pii_notice import build_pii_notice, render_markdown
 
 pytestmark = pytest.mark.unit
 
@@ -302,7 +302,7 @@ def test_build_writes_nothing(tmp_path):
 
 def test_composer_has_no_write_call():
     # V6: grep the module source for a file-write call (build/render never write).
-    src = Path("src/retail/pii_notice.py").read_text(encoding="utf-8")
+    src = Path("src/seshat/pii_notice.py").read_text(encoding="utf-8")
     assert "write_text" not in src
     assert ".write(" not in src
     assert "open(" not in src
@@ -324,7 +324,7 @@ def test_cli_write_touches_only_the_notice_file(tmp_path):
     # and mutates no other file in the table dir.
     import argparse
 
-    from retail.cli.commands.pii_notice import pii_notice_main
+    from seshat.cli.commands.pii_notice import pii_notice_main
 
     _write_source_map(tmp_path, "t", DECIDED_KEPT)
     tdir = tmp_path / "mappings" / "t"

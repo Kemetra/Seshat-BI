@@ -5,7 +5,7 @@ import re
 
 import pytest
 
-from retail.review_pack_export import FindingRecord, Pack, Section
+from seshat.review_pack_export import FindingRecord, Pack, Section
 
 pytestmark = pytest.mark.unit
 
@@ -46,7 +46,7 @@ def _contract_pack() -> Pack:
 
 def test_json_roundtrips_and_matches_contract():
     """T008: to_json round-trips and matches json-schema.md field-for-field."""
-    from retail.review_pack_export import to_json
+    from seshat.review_pack_export import to_json
 
     doc = to_json(_contract_pack())
     reloaded = json.loads(json.dumps(doc))
@@ -65,8 +65,8 @@ def test_json_roundtrips_and_matches_contract():
 
 def test_json_embedded_finding_matches_finding_to_dict():
     """T009: an embedded FindingRecord keeps the exact B2 four-field shape."""
-    from retail.core import Finding, Severity
-    from retail.review_pack_export import to_json
+    from seshat.core import Finding, Severity
+    from seshat.review_pack_export import to_json
 
     synthetic = Finding(
         rule_id="S5",
@@ -94,7 +94,7 @@ def test_json_embedded_finding_matches_finding_to_dict():
 
 def test_json_omits_findings_key_when_none():
     """T010: a section with no findings omits the 'findings' key entirely."""
-    from retail.review_pack_export import to_json
+    from seshat.review_pack_export import to_json
 
     pack = Pack(title="t", sections=(Section(name="S", status="pass"),))
     doc = to_json(pack)
@@ -103,7 +103,7 @@ def test_json_omits_findings_key_when_none():
 
 def test_json_no_score_or_count_keys():
     """T011: no key is a score/health/confidence/percentage or completeness count."""
-    from retail.review_pack_export import to_json
+    from seshat.review_pack_export import to_json
 
     doc = to_json(_contract_pack())
     forbidden = re.compile(r".*(_score|_health|_confidence|_of_|_percent|_pct)$")
@@ -124,7 +124,7 @@ def test_json_no_score_or_count_keys():
 
 def test_json_unrecognized_token_carries_recognized_false():
     """T012: an unrecognized status carries recognized:false + the verbatim token."""
-    from retail.review_pack_export import to_json
+    from seshat.review_pack_export import to_json
 
     pack = Pack(title="t", sections=(Section(name="S", status="frobnicated"),))
     doc = to_json(pack)
@@ -135,7 +135,7 @@ def test_json_unrecognized_token_carries_recognized_false():
 
 def test_json_recognized_key_omitted_for_known_token():
     """A recognized token omits the 'recognized' field (present only when false)."""
-    from retail.review_pack_export import to_json
+    from seshat.review_pack_export import to_json
 
     pack = Pack(title="t", sections=(Section(name="S", status="pass"),))
     assert "recognized" not in to_json(pack)["sections"][0]

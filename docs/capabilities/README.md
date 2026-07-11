@@ -13,7 +13,7 @@ feeder POSITIVELY backs that claim:
 
 - an F-numbered row marked SHIPPED in `docs/roadmap/roadmap.md`,
 - a `claimed-status: built` entry in `docs/quality/status-claims.yaml`,
-- a wired command (a real `_DISPATCH` key in `src/retail/cli/__init__.py`), or
+- a wired command (a real `_DISPATCH` key in `src/seshat/cli/__init__.py`), or
 - a committed `SKILL.md` bearing declaring frontmatter (`name` + `description`)
   for a skill-shaped capability.
 

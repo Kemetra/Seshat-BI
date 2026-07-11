@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.agent_next import build_agent_next_document
-from retail.cli import main
+from seshat.agent_next import build_agent_next_document
+from seshat.cli import main
 
 pytestmark = pytest.mark.unit
 
@@ -246,9 +246,9 @@ def test_validation_commands_are_present_and_runnable_shapes(
 ) -> None:
     document = build_agent_next_document(tmp_path)
     commands = document["validation_commands"]
-    assert "python -m retail.cli check --repo ." in commands
-    assert "python -m retail.cli status --repo . --format json" in commands
-    assert "python -m retail.cli next --repo . --format json" in commands
+    assert "python -m seshat.cli check --repo ." in commands
+    assert "python -m seshat.cli status --repo . --format json" in commands
+    assert "python -m seshat.cli next --repo . --format json" in commands
 
 
 def test_agent_document_is_read_only(tmp_path: Path, capsys) -> None:

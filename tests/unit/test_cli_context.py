@@ -6,31 +6,31 @@ from pathlib import Path
 
 import pytest
 
-from retail.cli import _build_parser
-from retail.runner import build_context
+from seshat.cli import _build_parser
+from seshat.runner import build_context
 from tests.unit._gitfix import make_git_repo
 
 pytestmark = pytest.mark.unit
 
 
 def test_python_m_invokes_main_not_a_noop() -> None:
-    """`python -m retail.cli` MUST run main(), not exit 0 as a silent no-op.
+    """`python -m seshat.cli` MUST run main(), not exit 0 as a silent no-op.
 
     Regression guard (2026-06-25 defect): without an `if __name__ == "__main__"`
-    block the module imported and exited 0 without running, so `python -m retail.cli
+    block the module imported and exited 0 without running, so `python -m seshat.cli
     validate` looked like a pass while doing nothing. With the guard, a missing
     subcommand reaches argparse (required=True) and exits 2 -- proof main() ran.
     """
     repo_root = Path(__file__).resolve().parents[2]
     proc = subprocess.run(
-        [sys.executable, "-m", "retail.cli"],
+        [sys.executable, "-m", "seshat.cli"],
         cwd=repo_root / "src",
         capture_output=True,
         text=True,
     )
     # argparse with required subparser -> exit 2 (NOT the old silent 0 no-op).
     assert proc.returncode == 2, (
-        f"python -m retail.cli should run main() and exit 2 on no subcommand, "
+        f"python -m seshat.cli should run main() and exit 2 on no subcommand, "
         f"got {proc.returncode} (stdout={proc.stdout!r} stderr={proc.stderr!r})"
     )
 
@@ -83,7 +83,7 @@ def test_main_commit_msg_file_is_read_and_stripped(
     def fake_build_context(repo_root, commit_range=None, commit_message=None):
         captured["commit_range"] = commit_range
         captured["commit_message"] = commit_message
-        from retail.core import RuleContext
+        from seshat.core import RuleContext
 
         return RuleContext(
             repo_root=repo_root,
@@ -93,8 +93,8 @@ def test_main_commit_msg_file_is_read_and_stripped(
         )
 
     # Patch where cli looks it up, and stub run so no rules execute.
-    monkeypatch.setattr("retail.cli.build_context", fake_build_context)
-    monkeypatch.setattr("retail.cli.run", lambda rules, ctx, **kw: 0)
+    monkeypatch.setattr("seshat.cli.build_context", fake_build_context)
+    monkeypatch.setattr("seshat.cli.run", lambda rules, ctx, **kw: 0)
 
     rc = main_under_test(["check", "--commit-msg-file", str(msg_file)])
 
@@ -111,12 +111,12 @@ def test_main_commit_range_flag_threads_through(
     def fake_build_context(repo_root, commit_range=None, commit_message=None):
         captured["commit_range"] = commit_range
         captured["commit_message"] = commit_message
-        from retail.core import RuleContext
+        from seshat.core import RuleContext
 
         return RuleContext(repo_root=repo_root, tracked_files=())
 
-    monkeypatch.setattr("retail.cli.build_context", fake_build_context)
-    monkeypatch.setattr("retail.cli.run", lambda rules, ctx, **kw: 0)
+    monkeypatch.setattr("seshat.cli.build_context", fake_build_context)
+    monkeypatch.setattr("seshat.cli.run", lambda rules, ctx, **kw: 0)
 
     rc = main_under_test(["check", "--commit-range", "origin/main..HEAD"])
 
@@ -137,12 +137,12 @@ def test_main_commit_msg_file_strips_crlf(
 
     def fake_build_context(repo_root, commit_range=None, commit_message=None):
         captured["commit_message"] = commit_message
-        from retail.core import RuleContext
+        from seshat.core import RuleContext
 
         return RuleContext(repo_root=repo_root, tracked_files=())
 
-    monkeypatch.setattr("retail.cli.build_context", fake_build_context)
-    monkeypatch.setattr("retail.cli.run", lambda rules, ctx, **kw: 0)
+    monkeypatch.setattr("seshat.cli.build_context", fake_build_context)
+    monkeypatch.setattr("seshat.cli.run", lambda rules, ctx, **kw: 0)
 
     rc = main_under_test(["check", "--commit-msg-file", str(msg_file)])
 
@@ -157,7 +157,7 @@ def test_main_missing_commit_msg_file_returns_1_with_message(
     # readable message, not raise SystemExit mid-function (audit #28) nor a raw
     # FileNotFoundError traceback. The __main__ guard does sys.exit(main()).
     missing = tmp_path / "does-not-exist"
-    monkeypatch.setattr("retail.cli.run", lambda rules, ctx, **kw: 0)
+    monkeypatch.setattr("seshat.cli.run", lambda rules, ctx, **kw: 0)
 
     rc = main_under_test(["check", "--commit-msg-file", str(missing)])
 
@@ -168,9 +168,9 @@ def test_main_missing_commit_msg_file_returns_1_with_message(
 
 
 # Imported at module scope after monkeypatch targets above are defined; aliased
-# so the patch sites (retail.cli.build_context / retail.cli.run) are the ones
+# so the patch sites (seshat.cli.build_context / seshat.cli.run) are the ones
 # main() actually calls.
-from retail.cli import main as main_under_test  # noqa: E402, I001
+from seshat.cli import main as main_under_test  # noqa: E402, I001
 
 
 # ---------------------------------------------------------------------------
@@ -278,7 +278,7 @@ def test_validate_no_source_map_stays_deferred(
     # With a DSN + driver but NO --source-map, the handler keeps the deferred
     # message (no targets to run) and returns 1.
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@h:5432/db")
-    monkeypatch.setattr("retail.cli._ensure_driver", lambda: True)
+    monkeypatch.setattr("seshat.cli._ensure_driver", lambda: True)
     rc = main_under_test(["validate"])
     err = capsys.readouterr().err
     assert rc == 1
@@ -292,9 +292,9 @@ def test_validate_with_source_map_runs_live_checks(
     # builds a runner (monkeypatched fake), runs the checks, prints findings, and
     # returns 0 when clean. No real DB is touched.
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@h:5432/db")
-    monkeypatch.setattr("retail.cli._ensure_driver", lambda: True)
+    monkeypatch.setattr("seshat.cli._ensure_driver", lambda: True)
 
-    from retail.validate import (
+    from seshat.validate import (
         DateCoverageTarget,
         OrphanTarget,
         PkTarget,
@@ -313,7 +313,7 @@ def test_validate_with_source_map_runs_live_checks(
         orphans=OrphanTarget(fact="gold.f", fks=()),
         reconcile=ReconcileTarget(silver="silver.t", gold="gold.f", measures=()),
     )
-    monkeypatch.setattr("retail.cli._load_targets", lambda path: fake_targets)
+    monkeypatch.setattr("seshat.cli._load_targets", lambda path: fake_targets)
 
     captured_sql: list[str] = []
 
@@ -325,7 +325,7 @@ def test_validate_with_source_map_runs_live_checks(
                 return [(5, 5, 0)]
             return [(0,)]
 
-    monkeypatch.setattr("retail.cli._make_runner", lambda dsn: FakeRunner())
+    monkeypatch.setattr("seshat.cli._make_runner", lambda dsn: FakeRunner())
 
     rc = main_under_test(["validate", "--source-map", "mappings/t/source-map.yaml"])
     assert rc == 0  # all checks clean
@@ -342,7 +342,7 @@ def test_validate_source_map_no_creds_errors_clearly(
     def _boom(dsn):  # pragma: no cover - must never be called
         raise AssertionError("must not build a runner without creds")
 
-    monkeypatch.setattr("retail.cli._make_runner", _boom)
+    monkeypatch.setattr("seshat.cli._make_runner", _boom)
     rc = main_under_test(["validate", "--source-map", "mappings/t/source-map.yaml"])
     err = capsys.readouterr().err
     assert rc == 1
@@ -353,9 +353,9 @@ def test_validate_source_map_yaml_error_is_clean_cli_message(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@h:5432/db")
-    monkeypatch.setattr("retail.cli._ensure_driver", lambda: True)
+    monkeypatch.setattr("seshat.cli._ensure_driver", lambda: True)
     monkeypatch.setattr(
-        "retail.cli._load_targets",
+        "seshat.cli._load_targets",
         lambda path: (_ for _ in ()).throw(ValueError("invalid YAML in source-map")),
     )
 
@@ -371,9 +371,9 @@ def test_validate_db_boundary_error_is_clean_cli_message(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@h:5432/db")
-    monkeypatch.setattr("retail.cli._ensure_driver", lambda: True)
+    monkeypatch.setattr("seshat.cli._ensure_driver", lambda: True)
 
-    from retail.validate import (
+    from seshat.validate import (
         DateCoverageTarget,
         OrphanTarget,
         PkTarget,
@@ -392,9 +392,9 @@ def test_validate_db_boundary_error_is_clean_cli_message(
         orphans=OrphanTarget(fact="gold.f", fks=()),
         reconcile=ReconcileTarget(silver="silver.t", gold="gold.f", measures=()),
     )
-    monkeypatch.setattr("retail.cli._load_targets", lambda path: fake_targets)
+    monkeypatch.setattr("seshat.cli._load_targets", lambda path: fake_targets)
     monkeypatch.setattr(
-        "retail.cli._make_runner",
+        "seshat.cli._make_runner",
         lambda dsn: (_ for _ in ()).throw(RuntimeError(f"cannot connect to {dsn}")),
     )
 
@@ -412,7 +412,7 @@ def test_redact_dsn_scrubs_psycopg2_reformatted_host_and_user() -> None:
     appears yet the HOST, IP, PORT and USERNAME all leak. A literal-substring
     replace misses this; redaction must scrub the DSN's components (audit #7).
     """
-    from retail.cli import _redact_dsn
+    from seshat.cli import _redact_dsn
 
     dsn = "postgresql://admin:s3cret@db.ondigitalocean.com:25060/prod?sslmode=require"
     # A realistic psycopg2.OperationalError string — the literal dsn is NOT in it.

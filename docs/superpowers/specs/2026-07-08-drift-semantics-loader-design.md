@@ -17,7 +17,7 @@ and wires it into the CLI, completing the live leg.
 
 ## Architecture
 
-A NEW module `src/retail/drift_semantics.py`, mirroring `validate_targets.py`:
+A NEW module `src/seshat/drift_semantics.py`, mirroring `validate_targets.py`:
 
 - Parses `source-map.yaml` with **lazily-imported pyyaml** (an optional/dev dep), so
   it is NEVER on `retail.drift`'s import path — `drift.py` stays pure + stdlib-only,

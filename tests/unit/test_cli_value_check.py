@@ -15,8 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.cli import _build_parser
-from retail.cli import main as main_under_test
+from seshat.cli import _build_parser
+from seshat.cli import main as main_under_test
 
 pytestmark = pytest.mark.unit
 
@@ -55,7 +55,7 @@ def test_value_check_no_dsn_errors_clearly(
     def _boom(dsn):  # pragma: no cover - must never be called
         raise AssertionError("must not build a runner without creds")
 
-    monkeypatch.setattr("retail.cli._make_runner", _boom)
+    monkeypatch.setattr("seshat.cli._make_runner", _boom)
     rc = main_under_test(["value-check"])
     err = capsys.readouterr().err
     assert rc == 1
@@ -66,7 +66,7 @@ def test_value_check_driver_missing_errors_clearly(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@h:5432/db")
-    monkeypatch.setattr("retail.cli._ensure_driver", lambda: False)
+    monkeypatch.setattr("seshat.cli._ensure_driver", lambda: False)
     rc = main_under_test(["value-check"])
     err = capsys.readouterr().err
     assert rc == 1
@@ -125,8 +125,8 @@ definition:
 
 def _setup_live(monkeypatch: pytest.MonkeyPatch, runner) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@h:5432/db")
-    monkeypatch.setattr("retail.cli._ensure_driver", lambda: True)
-    monkeypatch.setattr("retail.cli._make_runner", lambda dsn: runner)
+    monkeypatch.setattr("seshat.cli._ensure_driver", lambda: True)
+    monkeypatch.setattr("seshat.cli._make_runner", lambda dsn: runner)
 
 
 def test_value_check_single_aggregate_match_returns_0(

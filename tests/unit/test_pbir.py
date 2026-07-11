@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.pbir import check_pbir_relative_reference
+from seshat.core import RuleContext, Severity
+from seshat.rules.pbir import check_pbir_relative_reference
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "pbir"
 

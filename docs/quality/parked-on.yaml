@@ -1,5 +1,5 @@
 # Parked-on dependency-edge manifest -- the source DF1
-# (src/retail/rules/parked_on.py) reconciles against tracked-file evidence. Each edge
+# (src/seshat/rules/parked_on.py) reconciles against tracked-file evidence. Each edge
 # records that a feature is PARKED ON a shared blocker (F016, the gated Power BI
 # execution adapter), so the gate fails closed when an edge drifts from reality:
 #   - the cited blocker/evidence is missing or untracked, or

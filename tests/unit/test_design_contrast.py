@@ -24,8 +24,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.design_contrast import (
+from seshat.core import RuleContext, Severity
+from seshat.rules.design_contrast import (
     RULE_ID,
     _contrast_ratio,
     check_contrast,
@@ -122,7 +122,7 @@ def test_fixture_exemption_excludes_tests_paths() -> None:
 
 
 def test_no_tenant_or_example_literal_in_rule_source() -> None:
-    from retail.rules import design_contrast
+    from seshat.rules import design_contrast
 
     src = Path(design_contrast.__file__).read_text(encoding="utf-8")
     for banned in ("pharmacy", "c086", "ezaby"):

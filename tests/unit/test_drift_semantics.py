@@ -35,7 +35,7 @@ def _write(tmp_path, text):
 
 
 def test_dropped_pii_is_pii_true_and_decision_drop_only(tmp_path):
-    from retail.drift_semantics import load_drift_semantics
+    from seshat.drift_semantics import load_drift_semantics
 
     sem = load_drift_semantics(_write(tmp_path, _SYNTH))
     # only dropped_pii qualifies: kept_pii is kept, dropped_plain isn't pii
@@ -43,7 +43,7 @@ def test_dropped_pii_is_pii_true_and_decision_drop_only(tmp_path):
 
 
 def test_returns_column_is_the_derived_from_source_column(tmp_path):
-    from retail.drift_semantics import load_drift_semantics
+    from seshat.drift_semantics import load_drift_semantics
 
     sem = load_drift_semantics(_write(tmp_path, _SYNTH))
     assert sem.returns_column == "txn_type"  # NOT "is_return" (the derived name)
@@ -54,14 +54,14 @@ _ONE_COL = "columns:\n  - source_name: a\n    decision: keep\n    pii: false\n"
 
 
 def test_empty_derived_columns_means_no_returns_column(tmp_path):
-    from retail.drift_semantics import load_drift_semantics
+    from seshat.drift_semantics import load_drift_semantics
 
     sem = load_drift_semantics(_write(tmp_path, _ONE_COL + "derived_columns: []\n"))
     assert sem.returns_column is None
 
 
 def test_placeholder_derived_from_means_no_returns_column(tmp_path):
-    from retail.drift_semantics import load_drift_semantics
+    from seshat.drift_semantics import load_drift_semantics
 
     derived = (
         "derived_columns:\n"
@@ -73,14 +73,14 @@ def test_placeholder_derived_from_means_no_returns_column(tmp_path):
 
 
 def test_missing_columns_key_raises(tmp_path):
-    from retail.drift_semantics import load_drift_semantics
+    from seshat.drift_semantics import load_drift_semantics
 
     with pytest.raises(ValueError, match="columns"):
         load_drift_semantics(_write(tmp_path, "meta:\n  table_id: t\n"))
 
 
 def test_missing_pii_or_decision_fields_are_conservative(tmp_path):
-    from retail.drift_semantics import load_drift_semantics
+    from seshat.drift_semantics import load_drift_semantics
 
     # a column with no pii key and no decision key must NOT count as dropped-PII
     text = "columns:\n  - source_name: bare\n"
@@ -92,7 +92,7 @@ def test_real_retail_store_sales_mapping_is_a_noop(tmp_path):
     # DOCUMENTED no-op: RC8-deviated (derived_columns: []) + the one pii:true
     # column (customer_id) is decision:keep. Guards against a future mapping
     # change silently activating a class.
-    from retail.drift_semantics import load_drift_semantics
+    from seshat.drift_semantics import load_drift_semantics
 
     real = _ROOT / "mappings" / "retail_store_sales" / "source-map.yaml"
     sem = load_drift_semantics(real)

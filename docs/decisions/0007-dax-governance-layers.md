@@ -48,7 +48,7 @@ approval.
 ### 3. L3 is a SKILL-layer check (a lazy module), NOT a static `retail check` D-rule
 
 The drift check reads the contract YAML to know the approved filter-set. A static rule
-in `src/retail/rules/dax.py` would be **eagerly imported by the `retail check` core
+in `src/seshat/rules/dax.py` would be **eagerly imported by the `retail check` core
 chain** (`retail.cli -> retail.rules -> dax`). An `import yaml` there would:
 
 - **ImportError on a bare `dependencies = []` install** (yaml is a dev/optional dep) --
@@ -58,7 +58,7 @@ chain** (`retail.cli -> retail.rules -> dax`). An `import yaml` there would:
   `retail.core` / `retail.rules`.
 
 That is a governance hole masquerading as green. So L3 lives in a SEPARATE lazy module,
-`src/retail/metric_drift.py`, mirroring `validate_targets.py`: `import yaml` is lazy
+`src/seshat/metric_drift.py`, mirroring `validate_targets.py`: `import yaml` is lazy
 (inside the loader only), and the module is NEVER in the `retail check` core import
 chain. The `retail-semantic-check` skill imports it lazily to render per-measure
 verdicts. It is explicitly **NOT** registered as a `D9` rule and **NOT** added to
@@ -115,10 +115,10 @@ aggregation (that is the base measure's own contract's concern). Absence of the 
 
 ## See also
 
-- The module + tests: `src/retail/metric_drift.py`, `tests/unit/test_metric_drift.py`.
+- The module + tests: `src/seshat/metric_drift.py`, `tests/unit/test_metric_drift.py`.
 - The skill that surfaces it: `.claude/skills/retail-semantic-check/SKILL.md`.
 - The L2 optional adapter spike: `specs/038-tabular-editor-bpa-adapter/spec.md`.
 - The contract correction that motivated L3: `mappings/retail_store_sales/metrics/DiscountedTransactionRate.yaml`,
   `unresolved-questions.md` Q2.
-- The stdlib precedent it mirrors: `src/retail/validate_targets.py`; the invariant test
+- The stdlib precedent it mirrors: `src/seshat/validate_targets.py`; the invariant test
   it extends: `tests/unit/test_validate_targets.py::test_validate_module_stays_stdlib_only`.

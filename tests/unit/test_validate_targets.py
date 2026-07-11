@@ -5,8 +5,8 @@ OrphanTarget/ReconcileTarget). This loader DERIVES those targets from a filled
 `source-map.yaml`, so a real `retail validate` run is sourced per-table from the
 mapping artifact instead of hardcoded params.
 
-The loader lives in its own module (`retail.validate_targets`) because it parses
-YAML (pyyaml, a dev/optional dep) -- keeping `retail.validate`'s import path
+The loader lives in its own module (`seshat.validate_targets`) because it parses
+YAML (pyyaml, a dev/optional dep) -- keeping `seshat.validate`'s import path
 stdlib-only so the static core's `dependencies = []` invariant holds.
 """
 
@@ -27,7 +27,7 @@ FIXTURE = (
 
 
 def test_load_targets_returns_all_four() -> None:
-    from retail.validate_targets import ValidationTargets, load_targets
+    from seshat.validate_targets import ValidationTargets, load_targets
 
     targets = load_targets(FIXTURE)
     assert isinstance(targets, ValidationTargets)
@@ -38,7 +38,7 @@ def test_load_targets_returns_all_four() -> None:
 
 
 def test_pk_target_from_meta_primary_key() -> None:
-    from retail.validate_targets import load_targets
+    from seshat.validate_targets import load_targets
 
     pk = load_targets(FIXTURE).pk
     # table is silver.<table_id> by convention (PK verified on the transformed table)
@@ -47,7 +47,7 @@ def test_pk_target_from_meta_primary_key() -> None:
 
 
 def test_reconcile_target_silver_gold_and_measures() -> None:
-    from retail.validate_targets import load_targets
+    from seshat.validate_targets import load_targets
 
     rec = load_targets(FIXTURE).reconcile
     assert rec.silver == "silver.demo_orders"
@@ -56,7 +56,7 @@ def test_reconcile_target_silver_gold_and_measures() -> None:
 
 
 def test_date_coverage_target_from_date_dimension() -> None:
-    from retail.validate_targets import load_targets
+    from seshat.validate_targets import load_targets
 
     dc = load_targets(FIXTURE).date_coverage
     assert dc.fact == "gold.fct_orders"
@@ -67,7 +67,7 @@ def test_date_coverage_target_from_date_dimension() -> None:
 
 
 def test_orphan_target_one_fk_per_dimension() -> None:
-    from retail.validate_targets import load_targets
+    from seshat.validate_targets import load_targets
 
     orphans = load_targets(FIXTURE).orphans
     assert orphans.fact == "gold.fct_orders"
@@ -91,7 +91,7 @@ def test_bare_gold_names_are_schema_qualified_to_gold() -> None:
     """
     import tempfile
 
-    from retail.validate_targets import load_targets
+    from seshat.validate_targets import load_targets
 
     bare = (
         "meta:\n"
@@ -123,7 +123,7 @@ def test_already_qualified_gold_names_are_left_untouched() -> None:
     """An already-`gold.`-qualified gold_star name must NOT be double-qualified."""
     import tempfile
 
-    from retail.validate_targets import load_targets
+    from seshat.validate_targets import load_targets
 
     qualified = (
         "meta:\n"
@@ -149,7 +149,7 @@ def test_already_qualified_gold_names_are_left_untouched() -> None:
 
 
 def test_load_targets_missing_file_raises_clear_error() -> None:
-    from retail.validate_targets import load_targets
+    from seshat.validate_targets import load_targets
 
     with pytest.raises(FileNotFoundError):
         load_targets(FIXTURE.parent / "does_not_exist.source-map.yaml")
@@ -157,7 +157,7 @@ def test_load_targets_missing_file_raises_clear_error() -> None:
 
 def test_load_targets_rejects_map_missing_gold_star(tmp_path: Path) -> None:
     # #21: stage into tmp_path instead of writing into the live fixture tree.
-    from retail.validate_targets import load_targets
+    from seshat.validate_targets import load_targets
 
     bad = tmp_path / "bad_no_gold_star.source-map.yaml"
     bad.write_text("meta:\n  table_id: x\n  primary_key: [a]\n", encoding="utf-8")
@@ -245,7 +245,7 @@ def test_load_targets_rejects_map_missing_gold_star(tmp_path: Path) -> None:
 def test_load_targets_rejects_unsafe_source_map_identifiers(
     tmp_path: Path, yaml_text: str, needle: str
 ) -> None:
-    from retail.validate_targets import load_targets
+    from seshat.validate_targets import load_targets
 
     p = tmp_path / "malicious.source-map.yaml"
     p.write_text(yaml_text, encoding="utf-8")
@@ -256,7 +256,7 @@ def test_load_targets_rejects_unsafe_source_map_identifiers(
 
 
 def test_load_targets_rejects_invalid_yaml_cleanly(tmp_path: Path) -> None:
-    from retail.validate_targets import load_targets
+    from seshat.validate_targets import load_targets
 
     p = tmp_path / "bad.source-map.yaml"
     p.write_text("meta: [unterminated\n", encoding="utf-8")
@@ -266,10 +266,10 @@ def test_load_targets_rejects_invalid_yaml_cleanly(tmp_path: Path) -> None:
 
 
 def test_validate_module_stays_stdlib_only() -> None:
-    # The target LOADER may import yaml, but retail.validate (the check logic)
+    # The target LOADER may import yaml, but seshat.validate (the check logic)
     # must remain importable with no third-party deps. Guard: validate.py source
     # must not import yaml.
-    import retail.validate as v
+    import seshat.validate as v
 
     src = Path(v.__file__).read_text(encoding="utf-8")
     # The invariant is no third-party IMPORT (the word "yaml" may legitimately

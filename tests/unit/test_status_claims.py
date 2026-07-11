@@ -26,8 +26,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.status_claims import _MANIFEST, check_status_claims
+from seshat.core import RuleContext, Severity
+from seshat.rules.status_claims import _MANIFEST, check_status_claims
 
 pytestmark = pytest.mark.unit
 

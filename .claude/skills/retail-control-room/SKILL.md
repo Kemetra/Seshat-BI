@@ -112,7 +112,7 @@ state-mutating `retail check` / `retail validate` run of its own.
   sequence: `docs/readiness/readiness-pipeline.md`.
 - The gates it reads (never re-runs as a new check): the `retail-govern` /
   `retail check` static surface, the `retail-validate` / `retail validate` live surface
-  (`src/retail/validate.py`, V-RC2/V-RC15/V-RC16).
+  (`src/seshat/validate.py`, V-RC2/V-RC15/V-RC16).
 - The conductor it plugs into: `.claude/skills/retail-orchestrate/SKILL.md`.
 - The roadmap row + hard rules: `docs/roadmap/roadmap.md` (F012, Layer 4; #7/#8/#9);
   Principles V, VII, VIII. A filled worked example lives under

@@ -75,7 +75,7 @@ The template + cross-walk are generic (`<schema>.<table>`, `<stage_key>`).
 
 ## Deferred (not built this slice)
 
-- `src/retail/tools/next_step.py` -- a read-only resolver/scaffolder that would compute the
+- `src/seshat/tools/next_step.py` -- a read-only resolver/scaffolder that would compute the
   next-artifact hint in code (still stdlib, read-only). DEFERRED: the MVP is the docs-card slice
   (template + skill + this doc); the code resolver is a later, optional add once the card proves
   useful (hard rule #8, YAGNI). It is intentionally NOT part of this feature.

@@ -23,7 +23,7 @@ skill teaching an agent to use them**:
 | Layer | Artifact / code that exists | Missing skill |
 |-------|-----------------------------|---------------|
 | D -- source-mapping gate | 5 templates, `mappings/<table>/` (ADR 0003), playbook | **`source-mapping`** |
-| A -- live validate | `src/retail/validate.py` (built, fixture-tested) | **`retail-validate`** |
+| A -- live validate | `src/seshat/validate.py` (built, fixture-tested) | **`retail-validate`** |
 
 This design adds those two skills (+ one thin helper, `profile.py`). It does **not**
 build the Layer-D orchestration runtime (open decision #3) -- `source-mapping` is the
@@ -46,7 +46,7 @@ Layer D is the primary surface; Layers A/C are the enforced gates.
 NEW SKILL                       NEW CODE              REUSES (existing, unchanged)
 -----------------------------------------------------------------------------------
 .claude/skills/
-  source-mapping/SKILL.md  -->   src/retail/           src/retail/validate.py
+  source-mapping/SKILL.md  -->   src/seshat/           src/seshat/validate.py
     (verb: profile -> author        profile.py [NEW]     - QueryRunner Protocol
      5 artifacts -> stop-and-ask    (mechanical          - resolve_dsn()
      -> HARD-GATE before silver)     profiling queries    - make_psycopg2_runner (read-only)
@@ -54,8 +54,8 @@ NEW SKILL                       NEW CODE              REUSES (existing, unchange
                                                           mappings/<table>/ (ADR 0003 dest)
                                                           docs/medallion-playbook.md (method)
                                                           docs/decisions/0002-*.md (RC1-RC16)
-  retail-validate/SKILL.md -->   (no new code)          src/retail/validate.py (run_live_checks)
-    (verb: run 4 live checks        reuses validate.py   src/retail/validate_targets.py (load_targets)
+  retail-validate/SKILL.md -->   (no new code)          src/seshat/validate.py (run_live_checks)
+    (verb: run 4 live checks        reuses validate.py   src/seshat/validate_targets.py (load_targets)
      -> read V-findings -> fix)                          retail validate CLI (cli.py handler)
 ```
 
@@ -271,8 +271,8 @@ this branch. One-line doc fix; no behavior change; `retail check` stays green.
   `.claude/skills/pbip-workflow/SKILL.md`.
 - **Templates (the 5 blanks):** `templates/source-profile.md`, `source-map.yaml`,
   `assumptions.md`, `unresolved-questions.md`, `reconciliation-report.md`.
-- **Live surface (the code reused):** `src/retail/validate.py`,
-  `src/retail/validate_targets.py`.
+- **Live surface (the code reused):** `src/seshat/validate.py`,
+  `src/seshat/validate_targets.py`.
 - **Method / defaults / worked example:** `docs/medallion-playbook.md`,
   `docs/decisions/0002-retail-cleaning-defaults.md` (RC1-RC16),
   `docs/worked-examples/c086-pharmacy.md`.

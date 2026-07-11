@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from retail.manifest import MANIFEST_REL_PATH, build_manifest
+from seshat.manifest import MANIFEST_REL_PATH, build_manifest
 
 pytestmark = pytest.mark.unit
 
@@ -39,14 +39,14 @@ def _live_rules():
     # already-imported module, so the @register decorators would NOT re-fire after
     # a clear -- we must importlib.reload each submodule. This mirrors the proven
     # pattern in test_rules_wiring.py (clear + reload) and is order-proof.
-    import retail.rules as rules_pkg
-    from retail import registry
+    import seshat.rules as rules_pkg
+    from seshat import registry
 
     registry._RULES.clear()
     for info in pkgutil.iter_modules(rules_pkg.__path__):
-        importlib.reload(importlib.import_module(f"retail.rules.{info.name}"))
+        importlib.reload(importlib.import_module(f"seshat.rules.{info.name}"))
     rules = registry.all_rules()
-    assert rules, "no rules registered -- retail.rules submodules failed to reload"
+    assert rules, "no rules registered -- seshat.rules submodules failed to reload"
     return rules
 
 
@@ -82,7 +82,7 @@ def test_committed_manifest_matches_live_registry() -> None:
 
 def test_generation_is_idempotent() -> None:
     # Generating twice yields byte-identical data (determinism / SC-002).
-    from retail.manifest import render_manifest
+    from seshat.manifest import render_manifest
 
     assert render_manifest() == render_manifest()
 

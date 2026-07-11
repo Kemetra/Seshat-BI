@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.pbir import check_pbir_report_authoring
+from seshat.core import RuleContext, Severity
+from seshat.rules.pbir import check_pbir_report_authoring
 
 pytestmark = pytest.mark.unit
 

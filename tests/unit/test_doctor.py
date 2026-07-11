@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext
-from retail.doctor import collect_findings, format_digest, run_doctor
+from seshat.core import RuleContext
+from seshat.doctor import collect_findings, format_digest, run_doctor
 
 pytestmark = pytest.mark.unit
 
@@ -65,9 +65,9 @@ def test_doctor_adds_no_register_rule() -> None:
     # E7 is a CLI helper, not a rule: DOCTOR must not appear in the rule registry.
     import importlib
 
-    import retail.rules  # noqa: F401
-    from retail import registry
+    import seshat.rules  # noqa: F401
+    from seshat import registry
 
-    importlib.reload(retail.rules)
+    importlib.reload(seshat.rules)
     ids = {r.id for r in registry.all_rules()}
     assert "DOCTOR" not in ids

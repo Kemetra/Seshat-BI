@@ -48,7 +48,7 @@ to re-describe or re-decide them:
 
 | Existing artifact | What it is | Role in the kit |
 |-------------------|------------|-----------------|
-| **`retail check`** (`src/retail/`) | The shippable governance core -- stdlib-only, CI-able, parses committed TMDL/PBIR/SQL/git text. No `pbi-cli`, no Desktop, no network. | **The enforced gate (Layer A, static surface).** Already on `main`. |
+| **`retail check`** (`src/seshat/`) | The shippable governance core -- stdlib-only, CI-able, parses committed TMDL/PBIR/SQL/git text. No `pbi-cli`, no Desktop, no network. | **The enforced gate (Layer A, static surface).** Already on `main`. |
 | **`docs/medallion-playbook.md`** (7 phases) | The interactive cleaning method: connect & profile -> grain-first cleaning decisions -> ruleset -> review gate -> build silver -> build gold -> data dictionary. | **The process the agent runs.** The source-mapping gate (Sec 5) formalizes its early phases. |
 | **`docs/decisions/0002-retail-cleaning-defaults.md`** (RC1-RC16) | The reusable cleaning/modeling defaults: grain, PII, types, returns, star schema, contiguous date dim, reconciliation. | **The default rulings** every new table starts from. The constitution ratifies their *spirit* as principles. |
 | **A filled worked example** under `docs/worked-examples/` | The first validated medallion table: full ADR-default PASS after live DB validation. | **The first worked example** -- a *filled instance* of every template, cited, never the schema itself. |
@@ -171,7 +171,7 @@ governance spec (Sec 4):
   its RC default.
 - **LIVE validators** -- provable only against a running database; the
   `retail validate` surface (feature 004, **built + fixture-tested**;
-  `src/retail/validate.py`). Checks: **PK uniqueness** on materialized rows (RC2),
+  `src/seshat/validate.py`). Checks: **PK uniqueness** on materialized rows (RC2),
   **date-dim coverage** (calendar spans every real date, RC15), **0 orphan FKs**
   (RC16), and **cross-layer measure reconciliation** (silver -> gold, to the penny,
   RC16). They run over a driver-free `QueryRunner` Protocol; the psycopg2 driver is

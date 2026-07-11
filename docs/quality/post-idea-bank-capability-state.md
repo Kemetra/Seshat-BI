@@ -22,7 +22,7 @@ confirmed from the repo is marked **Not verified**.
   resolves. Read-only.
 - **Structured findings** — Idea B2, a **CLI rendering feature, not a rule**:
   `retail check --format json` is an opt-in JSON rendering (`run_json` in
-  `src/retail/runner.py`); the default text output is unchanged. (There is no
+  `src/seshat/runner.py`); the default text output is unchanged. (There is no
   registered rule id `B2`.)
 - **Never-execute guard** — Idea B1, a **registered rule** (`B1`): a static `ast`
   scan blocks module-scope DB/network imports in the core; lazy in-handler imports
@@ -44,7 +44,7 @@ confirmed from the repo is marked **Not verified**.
 - **Live validation depth** (`retail validate`): the surface is **built and
   fixture-tested**, but a real run needs a running Postgres, the optional `db`
   extra (psycopg2), and a filled `source-map.yaml`; without those it reports the
-  **deferred state** (verified: `src/retail/cli.py` validate handler).
+  **deferred state** (verified: `src/seshat/cli.py` validate handler).
 - **F016 Power BI execution adapter**: NOT built — gated and deliberately last
   (verified: `docs/roadmap/roadmap.md`).
 - **Planned KPI contracts**: KPIs beyond the 10 seeded contracts are marked

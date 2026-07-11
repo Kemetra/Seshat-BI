@@ -18,7 +18,7 @@ def test_validate_commit_range_rejects_leading_dash() -> None:
     """A `--commit-range` value starting with `-` would be parsed by git as an
     OPTION (e.g. `--output=/etc/passwd`), not a revision. It must be rejected
     before reaching git (audit #24)."""
-    from retail.gitutil import validate_commit_range
+    from seshat.gitutil import validate_commit_range
 
     for bad in ("--output=/tmp/x", "-n1", "--upload-pack=evil"):
         with pytest.raises(ValueError):
@@ -27,7 +27,7 @@ def test_validate_commit_range_rejects_leading_dash() -> None:
 
 def test_validate_commit_range_accepts_normal_ranges() -> None:
     """Legitimate revision ranges must pass unchanged."""
-    from retail.gitutil import validate_commit_range
+    from seshat.gitutil import validate_commit_range
 
     for ok in ("origin/main..HEAD", "HEAD~20..HEAD", "abc123", "v1.0...v2.0"):
         assert validate_commit_range(ok) == ok
@@ -37,7 +37,7 @@ def test_validate_commit_range_rejects_trailing_newline() -> None:
     """A trailing newline must be rejected: Python `$` matches before a final `\\n`,
     so a `"a..b\\n"` would otherwise pass and be handed to git verbatim. The regex
     uses `\\Z` to anchor the true end (adversarial pass 2026-06-26)."""
-    from retail.gitutil import validate_commit_range
+    from seshat.gitutil import validate_commit_range
 
     for bad in ("a..b\n", "HEAD\n", "origin/main..HEAD\n"):
         with pytest.raises(ValueError):
@@ -50,7 +50,7 @@ def test_validate_commit_range_rejects_trailing_newline() -> None:
 def test_outer_call_treats_func_literally() -> None:
     """`_outer_call` interpolates `func` into a regex; a func with metacharacters
     must be matched LITERALLY, not as a pattern (audit #25 defense-in-depth)."""
-    from retail.metric_drift import _outer_call
+    from seshat.metric_drift import _outer_call
 
     # A func containing regex metachars must only match that literal name.
     assert _outer_call("A.B(x)", "A.B") == "x"  # the dot is literal, not "any char"
@@ -65,7 +65,7 @@ def test_git_output_error_sanitizes_stderr(monkeypatch: pytest.MonkeyPatch) -> N
     RuntimeError (which a rule then surfaces in a Finding) (audit #27)."""
     import subprocess
 
-    from retail import gitutil
+    from seshat import gitutil
 
     noisy = "fatal: " + "A" * 5000 + "\nsecret-looking-token-xyz"
 

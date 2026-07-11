@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.conformed_dimension import check_hr1
+from seshat.core import RuleContext, Severity
+from seshat.rules.conformed_dimension import check_hr1
 
 pytestmark = pytest.mark.unit
 

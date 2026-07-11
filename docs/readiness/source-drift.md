@@ -16,7 +16,7 @@ blockers that can move a table's Source Ready status from `pass` to `warning` or
   status mapping, and the forbidden-actions list. Reviewable text, no side effects.
 - **Out of scope (deferred seam):** a drift-detection RUNTIME -- opening a connection,
   re-profiling live rows, diffing two profiles programmatically. There is NO `retail
-  drift` CLI and NO comparator in `src/retail/` here. The mechanical re-profile reuses
+  drift` CLI and NO comparator in `src/seshat/` here. The mechanical re-profile reuses
   the existing deferred-live `profile.py` path (Principle VIII) WHEN that seam is built.
   Absent the live boundary, a run is `[PENDING LIVE RE-PROFILE]` + `warning`, never a
   fabricated comparison.
@@ -103,7 +103,7 @@ The detector FLAGS this; it MUST NOT silently demote or auto-`pass` any downstre
   schema drift" check is the narrow seed this generalizes); the Principle-V handoff:
   `../../templates/unresolved-questions.md`.
 - The measures reused: `../decisions/0002-retail-cleaning-defaults.md` (RC2/RC5/RC8); the
-  deferred-live profiler the runtime will reuse: `../../src/retail/profile.py`.
+  deferred-live profiler the runtime will reuse: `../../src/seshat/profile.py`.
 - The roadmap row: `../roadmap/roadmap.md` (F014, Layer 2, "Later"; filed under spec dir
   015). A filled worked example under `../worked-examples/` is a baseline, an example
   not the schema.

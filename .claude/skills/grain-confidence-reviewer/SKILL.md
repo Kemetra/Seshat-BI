@@ -44,7 +44,7 @@ adds no new gate, no new Python, no numeric score.
 
 ### Read the measured signal
 Read the Candidate-grain/PK numbers from `mappings/<table>/source-profile.md`; OR, at
-the deferred live boundary, re-run `src/retail/profile.py` over a READ-ONLY connection
+the deferred live boundary, re-run `src/seshat/profile.py` over a READ-ONLY connection
 (`resolve_dsn` + `make_psycopg2_runner`, the `db` extra). Reuse `PkProof`
 (`total`, `distinct_pk`, `null_pk`, `is_unique`) -- do NOT re-implement the uniqueness
 query.
@@ -155,7 +155,7 @@ C086 is CITED as the first filled instance, never copied inline.
 
 - The stage this advances: `docs/readiness/mapping-ready.md`; the model + "No fake
   confidence" rule: `docs/readiness/readiness-model.md`.
-- The measured signal reused as evidence: `src/retail/profile.py` (`PkProof`); the
+- The measured signal reused as evidence: `src/seshat/profile.py` (`PkProof`); the
   profile artifact: `templates/source-profile.md` (Candidate grain & PK section).
 - The map being diffed + its human seam: `templates/source-map.yaml`,
   `templates/unresolved-questions.md` (`Gate status`); the verdict shape:

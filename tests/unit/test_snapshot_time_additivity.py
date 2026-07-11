@@ -18,8 +18,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.snapshot_time_additivity import (
+from seshat.core import RuleContext, Severity
+from seshat.rules.snapshot_time_additivity import (
     _TEMPLATE_PATH,
     check_snapshot_time_additivity,
 )

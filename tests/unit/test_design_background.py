@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.design_background import RULE_ID, check_background_purity
+from seshat.core import RuleContext, Severity
+from seshat.rules.design_background import RULE_ID, check_background_purity
 
 pytestmark = pytest.mark.unit
 
@@ -166,7 +166,7 @@ def test_c12_malformed_yaml_surfaces_a_finding_no_crash() -> None:
 def test_c13_no_tenant_or_example_literal_in_vocabulary() -> None:
     # C13 / Principle VII: the rule's frozen vocabulary carries no tenant/example/
     # brand literal -- only generic contract terms from the template.
-    from retail.rules import design_background
+    from seshat.rules import design_background
 
     joined = (
         " ".join(design_background._FORBIDDEN_KEYS)
@@ -185,7 +185,7 @@ def test_vocabulary_matches_template_verbatim() -> None:
     # against silent drift between the template contract and the rule vocabulary.
     import yaml
 
-    from retail.rules import design_background
+    from seshat.rules import design_background
 
     doc = yaml.safe_load(
         (REPO_ROOT / "templates" / "background-spec.yaml").read_text(encoding="utf-8")

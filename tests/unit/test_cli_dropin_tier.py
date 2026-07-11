@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from retail.cli import main as main_under_test
+from seshat.cli import main as main_under_test
 from tests.unit._gitfix import make_git_repo
 
 # A rule that reads a kit-internal manifest, so it errors in a foreign repo unless

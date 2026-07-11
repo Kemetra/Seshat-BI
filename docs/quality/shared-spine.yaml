@@ -1,5 +1,5 @@
 # Shared-spine manifest -- the HUMAN-AUTHORED cross-layer checklist contract that
-# rule SF1 (src/retail/rules/rule_sf1.py, spec 086, idea I3) enforces.
+# rule SF1 (src/seshat/rules/rule_sf1.py, spec 086, idea I3) enforces.
 #
 # When a checklist BASENAME appears under 2+ skills/**/checklists/ directories,
 # it is a cross-layer collision that MUST be declared here, exactly once, as:

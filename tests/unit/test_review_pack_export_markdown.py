@@ -2,7 +2,7 @@
 
 import pytest
 
-from retail.review_pack_export import FindingRecord, Pack, Section
+from seshat.review_pack_export import FindingRecord, Pack, Section
 
 pytestmark = pytest.mark.unit
 
@@ -77,14 +77,14 @@ _source: composed by <producer skill/module>, <date>_
 
 def test_markdown_matches_contract_byte_exact():
     """T003: the contracts/markdown.md worked example renders byte-exact."""
-    from retail.review_pack_export import to_markdown
+    from seshat.review_pack_export import to_markdown
 
     assert to_markdown(_contract_pack()) == EXPECTED_MARKDOWN
 
 
 def test_markdown_empty_lists_render_none_recorded():
     """T004: empty evidence/blockers -> explicit 'none recorded', not a blank line."""
-    from retail.review_pack_export import to_markdown
+    from seshat.review_pack_export import to_markdown
 
     pack = Pack(title="t", sections=(Section(name="S", status="pass"),))
     out = to_markdown(pack)
@@ -94,7 +94,7 @@ def test_markdown_empty_lists_render_none_recorded():
 
 def test_markdown_not_applicable_token_verbatim():
     """T005: not_applicable renders that token, never coerced to pass/blocked."""
-    from retail.review_pack_export import to_markdown
+    from seshat.review_pack_export import to_markdown
 
     pack = Pack(title="t", sections=(Section(name="S", status="not_applicable"),))
     out = to_markdown(pack)
@@ -104,7 +104,7 @@ def test_markdown_not_applicable_token_verbatim():
 
 def test_markdown_deterministic():
     """T006: rendering the same Pack twice (no generated_at) is byte-identical."""
-    from retail.review_pack_export import to_markdown
+    from seshat.review_pack_export import to_markdown
 
     pack = _contract_pack()
     assert to_markdown(pack) == to_markdown(pack)
@@ -112,7 +112,7 @@ def test_markdown_deterministic():
 
 def test_markdown_unrecognized_token_flagged():
     """T007: an unrecognized status token is visibly flagged, not shown as known."""
-    from retail.review_pack_export import to_markdown
+    from seshat.review_pack_export import to_markdown
 
     pack = Pack(title="t", sections=(Section(name="S", status="frobnicated"),))
     out = to_markdown(pack)
@@ -123,7 +123,7 @@ def test_markdown_unrecognized_token_flagged():
 
 def test_markdown_omits_generated_at_when_absent():
     """generated_at None -> no timestamp line anywhere (FR-013 determinism)."""
-    from retail.review_pack_export import to_markdown
+    from seshat.review_pack_export import to_markdown
 
     out = to_markdown(_contract_pack())
     assert "generated" not in out.lower()

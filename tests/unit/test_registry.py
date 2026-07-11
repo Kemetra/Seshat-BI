@@ -1,7 +1,7 @@
 import pytest
 
-from retail import registry
-from retail.core import Finding, RuleContext, Severity
+from seshat import registry
+from seshat.core import Finding, RuleContext, Severity
 
 
 @pytest.fixture(autouse=True)

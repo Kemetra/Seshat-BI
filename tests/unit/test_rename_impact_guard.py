@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.rename_impact_guard import check_hr9
+from seshat.core import RuleContext, Severity
+from seshat.rules.rename_impact_guard import check_hr9
 
 pytestmark = pytest.mark.unit
 

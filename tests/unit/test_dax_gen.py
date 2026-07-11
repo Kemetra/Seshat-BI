@@ -1,4 +1,4 @@
-"""Unit tests for the DAX Generator (src/retail/dax_gen.py).
+"""Unit tests for the DAX Generator (src/seshat/dax_gen.py).
 
 Phase 1: kind:base + kind:ratio, generate -> verify -> refuse. The headline
 property is the round-trip: every emitted measure re-verifies as `pass`.
@@ -11,14 +11,14 @@ from pathlib import Path
 
 import pytest
 
-from retail.dax_gen import (
+from seshat.dax_gen import (
     GenResult,
     _emit_base,
     _emit_ratio,
     generate_measure,
     load_contract,
 )
-from retail.metric_drift import check_measure_drift
+from seshat.metric_drift import check_measure_drift
 
 pytestmark = pytest.mark.unit
 
@@ -332,7 +332,7 @@ def test_dax_gen_import_is_stdlib_only():
     import os
 
     code = (
-        "import sys; import retail.dax_gen; "
+        "import sys; import seshat.dax_gen; "
         "assert 'yaml' not in sys.modules, 'yaml imported at module scope'"
     )
     env = os.environ.copy()
@@ -353,7 +353,7 @@ def _run_cli(*argv: str, cwd: str | None = None) -> subprocess.CompletedProcess[
     env = os.environ.copy()
     env["PYTHONPATH"] = _WORKTREE_SRC
     return subprocess.run(
-        [sys.executable, "-m", "retail.cli", *argv],
+        [sys.executable, "-m", "seshat.cli", *argv],
         capture_output=True,
         text=True,
         env=env,

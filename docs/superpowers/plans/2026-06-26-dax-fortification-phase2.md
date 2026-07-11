@@ -4,7 +4,7 @@
 
 **Goal:** Add a batch of stdlib-pure, lexical L2 hygiene rules (WARNING) to the registered `retail check` chain that catch real DAX perf/clarity problems without needing a DAX AST.
 
-**Architecture:** Each rule is a pure `RuleContext -> Iterable[Finding]` function in `src/retail/rules/dax.py`, registered via `@register`, discovered by the existing runner, and scanning committed TMDL via `iter_model_files` (which auto-exempts `tests/`). All findings are WARNING severity. No new dependencies.
+**Architecture:** Each rule is a pure `RuleContext -> Iterable[Finding]` function in `src/seshat/rules/dax.py`, registered via `@register`, discovered by the existing runner, and scanning committed TMDL via `iter_model_files` (which auto-exempts `tests/`). All findings are WARNING severity. No new dependencies.
 
 **Tech Stack:** Python 3.13 (stdlib only), pytest. Reuses the existing `parse_tmdl` / `TmdlMeasure` / `iter_model_files` machinery.
 
@@ -24,7 +24,7 @@
 
 ## File Map
 
-- `src/retail/rules/dax.py` — MODIFY (Tasks 1-3): add D9, D10, D11 rule functions.
+- `src/seshat/rules/dax.py` — MODIFY (Tasks 1-3): add D9, D10, D11 rule functions.
 - `tests/unit/test_dax.py` — MODIFY (Tasks 1-3): 4-test set per rule.
 - `tests/unit/test_rules_wiring.py` — MODIFY (Tasks 1-3): add each id to `EXPECTED_RULE_IDS`.
 - `tests/fixtures/tmdl/` — CREATE (Tasks 1-3): `bad_*` / `clean_*` fixtures per rule.
@@ -43,7 +43,7 @@
 **Why:** `DATE(2024,1,1)` and quoted ISO date literals in a measure bypass the model's date table and bake in fixed dates — a maintainability + correctness smell. Flag them so authors route through the date dimension.
 
 **Files:**
-- Modify: `src/retail/rules/dax.py` (add rule near the other D-rules)
+- Modify: `src/seshat/rules/dax.py` (add rule near the other D-rules)
 - Test: `tests/unit/test_dax.py`
 - Modify: `tests/unit/test_rules_wiring.py` (add `"D9"`)
 - Create: `tests/fixtures/tmdl/bad_date_literal.tmdl`, `tests/fixtures/tmdl/clean_no_date_literal.tmdl`
@@ -113,7 +113,7 @@ Expected: FAIL — `ImportError: cannot import name 'd9_no_hardcoded_dates'`.
 
 - [ ] **Step 4: Implement D9 in `dax.py`**
 
-Add near the other D-rules in `src/retail/rules/dax.py`:
+Add near the other D-rules in `src/seshat/rules/dax.py`:
 
 ```python
 # ---------------------------------------------------------------------------
@@ -168,7 +168,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/retail/rules/dax.py tests/unit/test_dax.py tests/unit/test_rules_wiring.py tests/fixtures/tmdl/bad_date_literal.tmdl tests/fixtures/tmdl/clean_no_date_literal.tmdl
+git add src/seshat/rules/dax.py tests/unit/test_dax.py tests/unit/test_rules_wiring.py tests/fixtures/tmdl/bad_date_literal.tmdl tests/fixtures/tmdl/clean_no_date_literal.tmdl
 git commit -m "feat: add D9 (no hardcoded date literals in measures)
 
 Lexical WARNING rule: flags DATE(y,m,d) / quoted ISO date literals in
@@ -185,7 +185,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 **Why:** `CALCULATE([X], FILTER(ALL('T'), 'T'[c]="v"))` forces a full-table scan where a column filter (`CALCULATE([X], 'T'[c]="v")`) is faster and clearer. Flag the anti-pattern.
 
 **Files:**
-- Modify: `src/retail/rules/dax.py`
+- Modify: `src/seshat/rules/dax.py`
 - Test: `tests/unit/test_dax.py`
 - Modify: `tests/unit/test_rules_wiring.py` (add `"D10"`)
 - Create: `tests/fixtures/tmdl/bad_filter_all.tmdl`, `tests/fixtures/tmdl/clean_column_filter.tmdl`
@@ -304,7 +304,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/retail/rules/dax.py tests/unit/test_dax.py tests/unit/test_rules_wiring.py tests/fixtures/tmdl/bad_filter_all.tmdl tests/fixtures/tmdl/clean_column_filter.tmdl
+git add src/seshat/rules/dax.py tests/unit/test_dax.py tests/unit/test_rules_wiring.py tests/fixtures/tmdl/bad_filter_all.tmdl tests/fixtures/tmdl/clean_column_filter.tmdl
 git commit -m "feat: add D10 (no FILTER(ALL(...)) anti-pattern)
 
 Lexical WARNING rule: flags FILTER(ALL( in measure expressions; prefer
@@ -320,7 +320,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 **Why:** A measure with no description is undocumented analytical truth. TMDL writes measure docs as `///` lines immediately above the `measure` block. Flag measures lacking one. (This requires a small parser extension: `parse_tmdl` does not currently capture the `///` doc line, so D11 re-scans the raw text by line rather than relying on `TmdlMeasure`.)
 
 **Files:**
-- Modify: `src/retail/rules/dax.py`
+- Modify: `src/seshat/rules/dax.py`
 - Test: `tests/unit/test_dax.py`
 - Modify: `tests/unit/test_rules_wiring.py` (add `"D11"`)
 - Create: `tests/fixtures/tmdl/bad_no_doc.tmdl`, `tests/fixtures/tmdl/clean_with_doc.tmdl`
@@ -445,7 +445,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/retail/rules/dax.py tests/unit/test_dax.py tests/unit/test_rules_wiring.py tests/fixtures/tmdl/bad_no_doc.tmdl tests/fixtures/tmdl/clean_with_doc.tmdl
+git add src/seshat/rules/dax.py tests/unit/test_dax.py tests/unit/test_rules_wiring.py tests/fixtures/tmdl/bad_no_doc.tmdl tests/fixtures/tmdl/clean_with_doc.tmdl
 git commit -m "feat: add D11 (every measure must have a /// doc comment)
 
 Lexical WARNING rule: flags measures with no TMDL /// doc line above the
@@ -482,8 +482,8 @@ Expected: PASS — all prior tests plus the 12 new D9–D11 tests (4 each), 0 fa
 
 - [ ] **Step 4: Style check**
 
-Run: `./.venv/Scripts/python.exe -m ruff check src/retail/rules/dax.py tests/unit/test_dax.py tests/unit/test_rules_wiring.py`
-Then: `./.venv/Scripts/python.exe -m black --check src/retail/ tests/unit/`
+Run: `./.venv/Scripts/python.exe -m ruff check src/seshat/rules/dax.py tests/unit/test_dax.py tests/unit/test_rules_wiring.py`
+Then: `./.venv/Scripts/python.exe -m black --check src/seshat/ tests/unit/`
 Expected: clean.
 
 - [ ] **Step 5: Commit any model doc edits (if Step 2 made them)**

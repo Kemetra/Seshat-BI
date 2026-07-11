@@ -2,7 +2,7 @@
 
 - **Date:** 2026-06-26
 - **Status:** Design (approved section-by-section; awaiting spec-review gate before implementation plan)
-- **Builds on:** ADR-0007 (L1–L4 governance model), `src/retail/metric_drift.py` (L3 drift checker, PR #32), `src/retail/rules/dax.py` (D1–D11, C1), F009 metric-contract store.
+- **Builds on:** ADR-0007 (L1–L4 governance model), `src/seshat/metric_drift.py` (L3 drift checker, PR #32), `src/seshat/rules/dax.py` (D1–D11, C1), F009 metric-contract store.
 - **Phase:** 1 of 3. This spec covers the **DAX Generator** only. Phase 2 (Analyzer/Refiner) and Phase 3 (goal-driven live-data layer) are separate specs that plug into the seams documented here.
 
 ---
@@ -48,13 +48,13 @@ This is the **first code in the repo that produces DAX** rather than validating 
 
 ## 3. Architecture & module boundaries
 
-### New module: `src/retail/dax_gen.py`
+### New module: `src/seshat/dax_gen.py`
 A **lazy module**, mirroring `metric_drift.py` exactly:
 - **Stdlib-pure at import.** `yaml` is touched **only** inside the contract loader (`load_contract`), never at module scope.
 - **Never imported by the `retail check` core chain** (`retail.cli → retail.rules`). The guarded stdlib-only invariant (`dependencies = []`) is preserved; a new subprocess test asserts `import retail.rules` pulls in neither `dax_gen` nor `yaml`.
 - Estimated ~250–300 LOC.
 
-### Extended module: `src/retail/metric_drift.py`
+### Extended module: `src/seshat/metric_drift.py`
 Add a `kind: base | ratio` branch to `check_measure_drift`. **Additive and zero-regression:**
 - When `kind` is **absent**, the function behaves exactly as today (the existing path requiring `additive: false` + `denominator`). Existing contracts are byte-for-byte untouched.
 - `kind: ratio` is the new explicit spelling of the existing ratio path. **Resolved ambiguity:** today's code escalates unless `definition.additive is False` (`metric_drift.py:246`). So `kind: ratio` implies the ratio/non-additive semantics — the new branch treats `kind: ratio` as equivalent to `additive: false` for routing into the denominator-filter-set check, and does **not** require the contract to also restate `additive: false`. (A `kind: ratio` contract that *also* sets `additive: true` is contradictory → `escalate`.) This means the generator can verify a `kind: ratio` contract that omits `additive`, where the legacy code alone would have escalated it.
@@ -197,7 +197,7 @@ class GenResult:
 
 ### Internal API (the engine — what Phase 2/3 reuse)
 ```python
-# src/retail/dax_gen.py
+# src/seshat/dax_gen.py
 def generate_measure(definition: dict, *, name: str,
                      format_string: str | None = None,
                      display_folder: str | None = None,
@@ -266,9 +266,9 @@ retail generate --contract <path> [--out <path>] [--format tmdl|json]
 
 ### File plan
 ```
-NEW   src/retail/dax_gen.py            (~250–300 LOC; lazy module, stdlib-pure import)
-EDIT  src/retail/metric_drift.py       (additive kind:base branch + base verify helper)
-EDIT  src/retail/cli.py                (new `generate` subparser + _run_generate handler)
+NEW   src/seshat/dax_gen.py            (~250–300 LOC; lazy module, stdlib-pure import)
+EDIT  src/seshat/metric_drift.py       (additive kind:base branch + base verify helper)
+EDIT  src/seshat/cli.py                (new `generate` subparser + _run_generate handler)
 EDIT  templates/metric-contract.yaml   (document the additive definition.kind schema — comments only)
 NEW   tests/unit/test_dax_gen.py
 EDIT  tests/unit/test_metric_drift.py  (regression + kind:base + stdlib guard)

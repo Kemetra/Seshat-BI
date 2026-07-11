@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.g6 import check_pbip_param_no_real_value
+from seshat.core import RuleContext, Severity
+from seshat.rules.g6 import check_pbip_param_no_real_value
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "pbip_params"
 

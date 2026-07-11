@@ -24,8 +24,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.design_review_evidence import check_design_review_evidence
+from seshat.core import RuleContext, Severity
+from seshat.rules.design_review_evidence import check_design_review_evidence
 
 pytestmark = pytest.mark.unit
 
@@ -138,7 +138,7 @@ def test_approval_slot_is_never_read_as_grant() -> None:
 
 
 def test_no_tenant_or_example_literal_in_rule_source() -> None:
-    from retail.rules import design_review_evidence
+    from seshat.rules import design_review_evidence
 
     src = Path(design_review_evidence.__file__).read_text(encoding="utf-8")
     for banned in ("pharmacy", "c086", "ezaby"):

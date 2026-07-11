@@ -2,7 +2,7 @@
 
 - **Date:** 2026-06-26
 - **Status:** SHIPPED 2026-06-26 (autonomous run; ranked item #4 from ADR-0013 / the autopilot
-  final report). Implemented as `src/retail/value_proxy.py` (driver-free) + `retail value-check`
+  final report). Implemented as `src/seshat/value_proxy.py` (driver-free) + `retail value-check`
   CLI handler + the `DiscountedTransactionRate` contract's `expected_value` block (the
   non-vacuous wiring: owner-approved 50.37% passes, the 33.55% floor-bug fires V-L4). 27 TDD
   tests; full suite 467 passed; `retail check` adds 0 findings; `dependencies = []` unchanged.
@@ -85,14 +85,14 @@ The M2 judge marked L4 DESIGN-ONLY partly because it "needs psycopg2 + live DB; 
 headless." The `validate.py` precedent shows the resolution: **the module is driver-free.**
 
 ```
-src/retail/value_proxy.py            # NEW — stdlib-only at import time, driver-free
+src/seshat/value_proxy.py            # NEW — stdlib-only at import time, driver-free
   @dataclass(frozen=True) ExpectedValue(value, tolerance_abs, aggregation, column, gold_table)
   parse_expected_value(definition, binds_to) -> ExpectedValue | None   # pure; None ⇒ skip
   check_expected_value(runner: QueryRunner, name, expected) -> list[Finding]   # pure
         # builds SELECT <AGG>(<col>) FROM <gold_table>, compares |actual - value| <= tol
   # reuses retail.validate.QueryRunner (the Protocol) + retail.identifiers quoting
 
-src/retail/cli.py                    # NEW subcommand `value-check` (mirrors `validate`)
+src/seshat/cli.py                    # NEW subcommand `value-check` (mirrors `validate`)
   _run_value_check(args):
     - resolve_dsn (reused from validate) ; lazy _ensure_driver ; lazy _make_runner
     - load contracts from --metrics-dir (reuse the semantic-check discovery + confinement)

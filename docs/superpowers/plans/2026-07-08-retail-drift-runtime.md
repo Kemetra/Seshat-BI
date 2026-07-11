@@ -4,7 +4,7 @@
 
 **Goal:** Build the F014 source-drift detector runtime — a pure `ProfileResult`-vs-`ProfileResult` comparator that classifies drift into the nine taxonomy classes, derives a Source-Ready status, emits the `source-drift-findings.schema.json` shape, reads a template-conformant `source-profile.md` baseline, and exposes a fail-closed `retail drift` CLI command.
 
-**Architecture:** Three layers. (1) `src/retail/drift.py` — pure, I/O-free classify + status + emit over `retail.profile` dataclasses. (2) `src/retail/source_profile_reader.py` — parse a template-conformant committed `source-profile.md` into a `ProfileResult`; report non-conformant baselines as uncomparable. (3) `src/retail/cli/commands/drift.py` + parser + dispatch row — mirrors `validate`'s two-mode (deferred-live vs live) posture. The pure core is invariant across any future baseline-I/O decision.
+**Architecture:** Three layers. (1) `src/seshat/drift.py` — pure, I/O-free classify + status + emit over `retail.profile` dataclasses. (2) `src/seshat/source_profile_reader.py` — parse a template-conformant committed `source-profile.md` into a `ProfileResult`; report non-conformant baselines as uncomparable. (3) `src/seshat/cli/commands/drift.py` + parser + dispatch row — mirrors `validate`'s two-mode (deferred-live vs live) posture. The pure core is invariant across any future baseline-I/O decision.
 
 **Tech Stack:** Python 3.13, dataclasses (frozen), argparse dispatch table, pytest (`pytest.mark.unit`), jsonschema (Draft 2020-12), ruff.
 
@@ -14,7 +14,7 @@
 
 ## Interfaces this plan builds against (verbatim, from the tree)
 
-From `src/retail/profile.py`:
+From `src/seshat/profile.py`:
 
 ```python
 @dataclass(frozen=True)
@@ -48,17 +48,17 @@ From `schemas/source-drift-findings.schema.json` — top-level `required`:
 - `principle_v_handoff` item required: `["question", "drift_class", "measured_fact", "owner"]`.
 - `driftClass` enum: `column_added, column_removed, column_retyped, missingness_shift, cardinality_shift, grain_pk_drift, returns_rule_drift, semantic_pair_drift, pii_surface_drift`.
 
-CLI seam: a new command needs a `_lazy(".commands.drift", "run_drift")` row in `src/retail/cli/__init__.py`'s `_DISPATCH`, an `_add_drift_parser(sub)` in `src/retail/cli/parser.py` called from `_build_parser()`, and a `run_drift(args) -> int` handler in `src/retail/cli/commands/drift.py`. Handlers return `int`.
+CLI seam: a new command needs a `_lazy(".commands.drift", "run_drift")` row in `src/seshat/cli/__init__.py`'s `_DISPATCH`, an `_add_drift_parser(sub)` in `src/seshat/cli/parser.py` called from `_build_parser()`, and a `run_drift(args) -> int` handler in `src/seshat/cli/commands/drift.py`. Handlers return `int`.
 
 ---
 
 ## File Structure
 
-- **Create** `src/retail/drift.py` — `DriftFinding`, `HandoffQuestion`, `DriftReport` dataclasses; `classify_drift()`, `derive_status()`, `to_findings_dict()`. Pure.
-- **Create** `src/retail/source_profile_reader.py` — `ParsedBaseline` (a `ProfileResult` + `type_by_column` map + `uncomparable` reason); `read_source_profile(path) -> ParsedBaseline`.
-- **Create** `src/retail/cli/commands/drift.py` — `run_drift(args) -> int`.
-- **Modify** `src/retail/cli/parser.py` — add `_add_drift_parser(sub)`, call it in `_build_parser()`.
-- **Modify** `src/retail/cli/__init__.py:124-145` — add `"drift": _lazy(".commands.drift", "run_drift"),` to `_DISPATCH`.
+- **Create** `src/seshat/drift.py` — `DriftFinding`, `HandoffQuestion`, `DriftReport` dataclasses; `classify_drift()`, `derive_status()`, `to_findings_dict()`. Pure.
+- **Create** `src/seshat/source_profile_reader.py` — `ParsedBaseline` (a `ProfileResult` + `type_by_column` map + `uncomparable` reason); `read_source_profile(path) -> ParsedBaseline`.
+- **Create** `src/seshat/cli/commands/drift.py` — `run_drift(args) -> int`.
+- **Modify** `src/seshat/cli/parser.py` — add `_add_drift_parser(sub)`, call it in `_build_parser()`.
+- **Modify** `src/seshat/cli/__init__.py:124-145` — add `"drift": _lazy(".commands.drift", "run_drift"),` to `_DISPATCH`.
 - **Create** `tests/unit/test_drift.py`, `tests/unit/test_source_profile_reader.py`, `tests/unit/test_cli_drift.py`.
 
 Run tests with: `PYTHONPATH=src python -m pytest tests/unit/test_drift.py -q --no-cov` (adjust path per task).
@@ -68,7 +68,7 @@ Run tests with: `PYTHONPATH=src python -m pytest tests/unit/test_drift.py -q --n
 ## Task 1: drift.py dataclasses + column diff (added/removed)
 
 **Files:**
-- Create: `src/retail/drift.py`
+- Create: `src/seshat/drift.py`
 - Test: `tests/unit/test_drift.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -127,7 +127,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'retail.drift'`.
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# src/retail/drift.py
+# src/seshat/drift.py
 """F014 source-drift detector runtime -- the pure comparator.
 
 Diffs a baseline ProfileResult against an observed re-profile (or None when
@@ -223,7 +223,7 @@ Expected: PASS (2 passed).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/drift.py tests/unit/test_drift.py
+git add src/seshat/drift.py tests/unit/test_drift.py
 git commit -m "feat: drift classifier -- column added/removed (F014 runtime)"
 ```
 
@@ -232,7 +232,7 @@ git commit -m "feat: drift classifier -- column added/removed (F014 runtime)"
 ## Task 2: missingness + cardinality shift, and grain/PK drift (Principle-V)
 
 **Files:**
-- Modify: `src/retail/drift.py`
+- Modify: `src/seshat/drift.py`
 - Test: `tests/unit/test_drift.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -344,7 +344,7 @@ Expected: PASS (all tests to date).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/drift.py tests/unit/test_drift.py
+git add src/seshat/drift.py tests/unit/test_drift.py
 git commit -m "feat: drift classifier -- missingness/cardinality shift + grain-PK (Principle-V)"
 ```
 
@@ -353,7 +353,7 @@ git commit -m "feat: drift classifier -- missingness/cardinality shift + grain-P
 ## Task 3: derive_status + to_findings_dict (schema-shaped emit) + deferred-live
 
 **Files:**
-- Modify: `src/retail/drift.py`
+- Modify: `src/seshat/drift.py`
 - Test: `tests/unit/test_drift.py`
 
 - [ ] **Step 1: Write the failing test** (schema-validating)
@@ -427,7 +427,7 @@ def test_full_report_schema_valid_with_findings_and_handoff():
 Run: `PYTHONPATH=src python -m pytest tests/unit/test_drift.py -q --no-cov`
 Expected: FAIL — `derive_status` / `to_findings_dict` not defined.
 
-- [ ] **Step 3: Write minimal implementation** (append to `src/retail/drift.py`)
+- [ ] **Step 3: Write minimal implementation** (append to `src/seshat/drift.py`)
 
 ```python
 _DEFAULT_OWNER = {
@@ -530,7 +530,7 @@ Expected: PASS (all). If jsonschema is missing: `python -m pip install jsonschem
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/drift.py tests/unit/test_drift.py
+git add src/seshat/drift.py tests/unit/test_drift.py
 git commit -m "feat: drift status derivation + schema-shaped findings emit (fail-closed deferred-live)"
 ```
 
@@ -539,7 +539,7 @@ git commit -m "feat: drift status derivation + schema-shaped findings emit (fail
 ## Task 4: source-profile.md reader (template-conformant; honest-uncomparable)
 
 **Files:**
-- Create: `src/retail/source_profile_reader.py`
+- Create: `src/seshat/source_profile_reader.py`
 - Test: `tests/unit/test_source_profile_reader.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -585,7 +585,7 @@ Expected: FAIL — module not defined.
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# src/retail/source_profile_reader.py
+# src/seshat/source_profile_reader.py
 """Parse a template-conformant committed source-profile.md into a ProfileResult.
 
 The baseline a drift run compares against is the committed source-profile.md that
@@ -709,7 +709,7 @@ Expected: PASS (2 passed).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/source_profile_reader.py tests/unit/test_source_profile_reader.py
+git add src/seshat/source_profile_reader.py tests/unit/test_source_profile_reader.py
 git commit -m "feat: source-profile.md reader -- template-conformant baseline, honest-uncomparable"
 ```
 
@@ -718,9 +718,9 @@ git commit -m "feat: source-profile.md reader -- template-conformant baseline, h
 ## Task 5: `retail drift` CLI command (dispatch + parser, deferred-live fail-closed)
 
 **Files:**
-- Create: `src/retail/cli/commands/drift.py`
-- Modify: `src/retail/cli/parser.py` (add `_add_drift_parser`, call in `_build_parser`)
-- Modify: `src/retail/cli/__init__.py:124-145` (add dispatch row)
+- Create: `src/seshat/cli/commands/drift.py`
+- Modify: `src/seshat/cli/parser.py` (add `_add_drift_parser`, call in `_build_parser`)
+- Modify: `src/seshat/cli/__init__.py:124-145` (add dispatch row)
 - Test: `tests/unit/test_cli_drift.py`
 
 - [ ] **Step 1: Write the failing test**
@@ -753,7 +753,7 @@ def test_drift_nonconformant_baseline_reports_uncomparable(capsys):
 Run: `PYTHONPATH=src python -m pytest tests/unit/test_cli_drift.py -q --no-cov`
 Expected: FAIL — argparse rejects the unknown `drift` command (SystemExit → rc 2), or import error.
 
-- [ ] **Step 3a: Add the parser** — in `src/retail/cli/parser.py`, add this function next to `_add_validate_parser`:
+- [ ] **Step 3a: Add the parser** — in `src/seshat/cli/parser.py`, add this function next to `_add_validate_parser`:
 
 ```python
 def _add_drift_parser(sub: argparse._SubParsersAction) -> None:
@@ -790,19 +790,19 @@ def _add_drift_parser(sub: argparse._SubParsersAction) -> None:
     )
 ```
 
-- [ ] **Step 3b: Register it** — in `_build_parser()` (`src/retail/cli/parser.py`), add after the `_add_validate_parser(sub)` line:
+- [ ] **Step 3b: Register it** — in `_build_parser()` (`src/seshat/cli/parser.py`), add after the `_add_validate_parser(sub)` line:
 
 ```python
     _add_drift_parser(sub)
 ```
 
-- [ ] **Step 3c: Add the dispatch row** — in `src/retail/cli/__init__.py`, inside `_DISPATCH` (after the `"validate": ...` line):
+- [ ] **Step 3c: Add the dispatch row** — in `src/seshat/cli/__init__.py`, inside `_DISPATCH` (after the `"validate": ...` line):
 
 ```python
     "drift": _lazy(".commands.drift", "run_drift"),
 ```
 
-- [ ] **Step 3d: Write the handler** — create `src/retail/cli/commands/drift.py`:
+- [ ] **Step 3d: Write the handler** — create `src/seshat/cli/commands/drift.py`:
 
 ```python
 """`retail drift` handler (F014 source-drift detector runtime).
@@ -885,7 +885,7 @@ Expected: PASS (2 passed). Note: run from the repo root so the relative `mapping
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/cli/commands/drift.py src/retail/cli/parser.py src/retail/cli/__init__.py tests/unit/test_cli_drift.py
+git add src/seshat/cli/commands/drift.py src/seshat/cli/parser.py src/seshat/cli/__init__.py tests/unit/test_cli_drift.py
 git commit -m "feat: retail drift CLI command -- two-mode, deferred-live fail-closed (F014)"
 ```
 

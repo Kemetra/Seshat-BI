@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from retail.dashboard_planner import classify_proposal, render
+from seshat.dashboard_planner import classify_proposal, render
 
 pytestmark = pytest.mark.unit
 
@@ -413,14 +413,14 @@ def test_empty_proposal_is_new(tmp_path):
 # cross-cutting: no-write proof (SC-004), generic (SC-006), CLI
 # --------------------------------------------------------------------------- #
 def test_module_has_no_write_call():
-    src = Path("src/retail/dashboard_planner.py").read_text(encoding="utf-8")
+    src = Path("src/seshat/dashboard_planner.py").read_text(encoding="utf-8")
     assert "write_text" not in src
     assert ".write(" not in src
     assert "open(" not in src  # the read uses Path.read_text, not open()
 
 
 def test_cli_writes_nothing(tmp_path):
-    from retail.cli.commands.dashboard_planner import dashboard_planner_main
+    from seshat.cli.commands.dashboard_planner import dashboard_planner_main
 
     _make_corpus(tmp_path, "widget_sales", HAS_PAGE_BINDING)
     design = tmp_path / "mappings" / "widget_sales" / "design"

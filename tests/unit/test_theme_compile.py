@@ -1,4 +1,4 @@
-"""Unit tests for the tokens->theme compiler (retail.theme_compile)."""
+"""Unit tests for the tokens->theme compiler (seshat.theme_compile)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from retail.theme_compile import (
+from seshat.theme_compile import (
     ThemeCompileError,
     compile_theme,
     palette_from_tokens,
@@ -79,7 +79,7 @@ def _write_tokens(tmp: Path, doc: dict) -> Path:
 
 def test_compile_is_byte_identical_to_theme_gen(tmp_path: Path):
     # 1. theme-gen produces the reference theme.json for a seed.
-    from retail.theme_gen import ThemeSeed, generate
+    from seshat.theme_gen import ThemeSeed, generate
 
     seed = ThemeSeed(
         name="executive-dark",
@@ -118,7 +118,7 @@ def test_compile_is_byte_identical_to_theme_gen(tmp_path: Path):
 def test_compile_round_trips_transparency_overlay(tmp_path: Path):
     """A committed tokens file carrying an opt-in overlay role compiles to the
     same theme.json theme-gen would emit (T18 round-trip)."""
-    from retail.theme_gen import ThemeSeed, generate
+    from seshat.theme_gen import ThemeSeed, generate
 
     seed = ThemeSeed(
         name="executive-dark",
@@ -173,7 +173,7 @@ def test_compile_refuses_failing_overlay(tmp_path: Path):
 
 
 def _generate_executive_dark(tmp_path: Path, **seed_over):
-    from retail.theme_gen import ThemeSeed, generate
+    from seshat.theme_gen import ThemeSeed, generate
 
     seed = ThemeSeed(
         name="executive-dark",
@@ -370,7 +370,7 @@ def test_compile_refuses_sub_floor_title_font(tmp_path: Path) -> None:
 def test_custom_font_pt_round_trips_through_generate_then_compile(tmp_path: Path):
     """Idea 4 round-trip: gen a 14pt title, compile from its own tokens, no
     phantom DL3-deferred conflict, fontSize:14 survives byte-identical."""
-    from retail.theme_gen import ThemeSeed, generate
+    from seshat.theme_gen import ThemeSeed, generate
 
     seed = ThemeSeed(
         name="roundtrip",

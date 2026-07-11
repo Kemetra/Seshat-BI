@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.sql import (
+from seshat.core import RuleContext, Severity
+from seshat.rules.sql import (
     s1_snake_case_identifiers,
     s2_medallion_schemas,
     s3_vw_prefix,
@@ -102,7 +102,7 @@ def test_strip_sql_noise_comment_marker_inside_string_is_data() -> None:
     span parity is even, so no S6/S8 VERDICT changes -- see the §A deferral note in
     rules/sql.py. These cases lock in the behavior that is correct today.)
     """
-    from retail.rules.sql import _strip_sql_noise
+    from seshat.rules.sql import _strip_sql_noise
 
     # A `--` and `/* */` inside string literals must not eat the trailing `-1`.
     assert "-1" in _strip_sql_noise("SELECT '-- x', -1 AS y;")
@@ -121,7 +121,7 @@ def test_strip_sql_comments_preserves_double_dash_inside_string_literal() -> Non
     rest of the line -- hiding any real bad quoted identifier after it. The literal
     body may be collapsed, but text AFTER the closing quote must survive intact.
     """
-    from retail.sql import strip_sql_comments
+    from seshat.sql import strip_sql_comments
 
     src = "SELECT '--' AS x, silver.\"Bad Name\" AS y;\n"
     out = strip_sql_comments(src)
@@ -132,7 +132,7 @@ def test_strip_sql_comments_preserves_double_dash_inside_string_literal() -> Non
 
 def test_strip_sql_comments_double_dash_inside_quoted_identifier() -> None:
     """A `--` inside a "..." quoted identifier is also not a comment start."""
-    from retail.sql import strip_sql_comments
+    from seshat.sql import strip_sql_comments
 
     src = 'CREATE TABLE silver."has--dashes" (x int); -- trailing comment\n'
     out = strip_sql_comments(src)

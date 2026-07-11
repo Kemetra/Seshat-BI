@@ -10,8 +10,8 @@ tested invariant over two properties:
   over the four `FindingDict` fields).
 * US2 -- the exit code is identical (1 iff any `Severity.ERROR`).
 
-It is test-only: it imports `retail.core` + `retail.runner` ONLY (never
-`retail.rules`, never `psycopg2`, never a DB/network), adds no registered rule,
+It is test-only: it imports `seshat.core` + `seshat.runner` ONLY (never
+`seshat.rules`, never `psycopg2`, never a DB/network), adds no registered rule,
 and does not touch `runner.py` / `core.py`. Fixtures are SYNTHETIC and generic
 (no C086/pharmacy specifics) and are constrained so the text shape is
 unambiguously invertible (no `") ("`, no brackets in messages/locators).
@@ -25,8 +25,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import Finding, RegisteredRule, RuleContext, Severity
-from retail.runner import run, run_json
+from seshat.core import Finding, RegisteredRule, RuleContext, Severity
+from seshat.runner import run, run_json
 
 # A (rule_id, severity-value, message, locator) tuple -- the equivalence key,
 # exactly the four fields `Finding.to_dict` / `FindingDict` pin.

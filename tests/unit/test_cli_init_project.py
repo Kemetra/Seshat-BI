@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from retail import cli
+from seshat import cli
 
 pytestmark = pytest.mark.unit
 
@@ -60,7 +60,7 @@ def test_init_project_force_flag_scaffolds_nonempty_target(
 
 
 def test_init_project_subparser_is_registered() -> None:
-    from retail.cli.parser import _build_parser
+    from seshat.cli.parser import _build_parser
 
     parser = _build_parser()
     args = parser.parse_args(["init-project", "some-name"])
@@ -88,7 +88,7 @@ def test_init_project_returns_path_objects_type_from_handler(
     import argparse
 
     monkeypatch.chdir(tmp_path)
-    from retail.cli.commands.init_project import init_project_main
+    from seshat.cli.commands.init_project import init_project_main
 
     target = tmp_path / "direct-handler-ws"
     ns = argparse.Namespace(name=str(target), force=False)

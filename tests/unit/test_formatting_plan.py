@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.formatting_plan import RULE_ID, check_formatting_plan
+from seshat.core import RuleContext, Severity
+from seshat.rules.formatting_plan import RULE_ID, check_formatting_plan
 
 pytestmark = pytest.mark.unit
 

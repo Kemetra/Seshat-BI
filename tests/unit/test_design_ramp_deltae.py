@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.design_ramp_deltae import RULE_ID, check_ramp_deltae
+from seshat.core import RuleContext, Severity
+from seshat.rules.design_ramp_deltae import RULE_ID, check_ramp_deltae
 
 pytestmark = pytest.mark.unit
 

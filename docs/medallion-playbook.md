@@ -319,7 +319,7 @@ these guard the TOOL against arbitrary data, distinct from the cleaning traps ab
     lineage column) -> plain `IS NULL`. (`trim()` on a timestamptz crashes.)
 14. **Never bank a live exit code without its evidence.** A `retail validate` exit 0
     is a pass ONLY with the "running live checks" banner + a per-check result. Run the
-    `retail` console script (not `python -m retail.cli`); export `.env` first. An exit
+    `retail` console script (not `python -m seshat.cli`); export `.env` first. An exit
     code alone is not proof a check ran.
 15. **Schema-resolve artifact names at the read boundary.** A table/object name read
     from a `source-map.yaml` and spliced into SQL must be schema-qualified when read

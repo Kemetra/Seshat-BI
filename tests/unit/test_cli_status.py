@@ -1,6 +1,6 @@
 """Tests for `retail status` (spec 109, roadmap M4, Option B).
 
-The CLI wraps the pure ``retail.status_surface.build_status_projection``
+The CLI wraps the pure ``seshat.status_surface.build_status_projection``
 projection: ``--format text`` (default, human-readable, additive/unchanged
 posture) and ``--format json`` (the machine surface, mirroring
 ``runner.run_json``'s style). Read-only; must degrade gracefully (exit 0,
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from retail.cli import main
+from seshat.cli import main
 
 pytestmark = pytest.mark.unit
 

@@ -1,4 +1,4 @@
-# Status-claims manifest -- the single source SC1 (src/retail/rules/status_claims.py)
+# Status-claims manifest -- the single source SC1 (src/seshat/rules/status_claims.py)
 # reconciles against tracked-file evidence. Each entry records a PROSE status claim a
 # governance/status doc makes, so the gate fails closed when the claim drifts from
 # reality (a "planned" marker on something that shipped, or a "built" claim for a

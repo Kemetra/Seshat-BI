@@ -10,8 +10,8 @@ import pytest
 
 pytest.importorskip("testcontainers")  # collection-skip when livetest extra absent
 
-from retail import validate, value_proxy  # noqa: E402
-from retail.core import Severity  # noqa: E402
+from seshat import validate, value_proxy  # noqa: E402
+from seshat.core import Severity  # noqa: E402
 
 pytestmark = pytest.mark.live_db
 

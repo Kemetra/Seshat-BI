@@ -19,8 +19,8 @@ from __future__ import annotations
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.assumptions import _TEMPLATE_PATH, check_unresolved_assumptions
+from seshat.core import RuleContext, Severity
+from seshat.rules.assumptions import _TEMPLATE_PATH, check_unresolved_assumptions
 
 pytestmark = pytest.mark.unit
 

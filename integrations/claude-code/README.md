@@ -1,40 +1,22 @@
-# Seshat BI -- Claude Code marketplace (verified draft, not released)
+# Seshat BI Claude Code plugin
 
-> **Status: locally verified draft. Not publicly released.** The manifest
-> schema and the end-to-end install flow were verified with the Claude Code
-> CLI (v2.1.206, 2026-07): `claude plugin validate` passes for both
-> manifests, and a local `marketplace add` -> `plugin install` -> component
-> load succeeds. Publication still has NOT happened -- do not treat this as
-> publicly available.
+> **Status: draft.** This directory is the canonical plugin source inside `Seshat_BI`; it is not a separately published marketplace.
 
-## Layout
+When an owner releases the repository-root marketplace, users add and install it with:
 
-This directory is the **marketplace root**: the Claude Code CLI requires
-plugin `source` paths to resolve relative to the directory containing
-`.claude-plugin/` and rejects `..` segments, so the marketplace manifest
-lives here and points at the plugin below it.
-
-| Path | Purpose |
-|------|---------|
-| `.claude-plugin/marketplace.json` | Marketplace manifest (validated). |
-| `seshat-bi/` | The Seshat BI plugin (skill + four `/seshat-*` commands). |
-
-## Verified install flow (local)
-
-```bash
-# from the repo root
-claude plugin validate integrations/claude-code            # marketplace manifest
-claude plugin validate integrations/claude-code/seshat-bi  # plugin manifest
-claude plugin marketplace add ./integrations/claude-code
-claude plugin install seshat-bi@seshat-bi-marketplace
-claude plugin details seshat-bi   # skill + seshat-init/next/check/review load
+```text
+/plugin marketplace add ahmed-shaaban-94/Seshat_BI
+/plugin install seshat-bi@seshat-bi-marketplace
+/plugin marketplace update
 ```
 
-## What must still happen before publication
+The repository-root `.claude-plugin/marketplace.json` uses this directory as its relative plugin source. That keeps the product in one repository and avoids a hand-maintained mirror.
 
-1. Decide whether the plugin + marketplace move to a standalone repository
-   (likely, so consumers do not clone the whole BI kit).
-2. Re-verify against the Claude Code version current at publication time.
+For local development only:
 
-Until then, this stays a verified draft inside the main repo, with no badges,
-links, or claims implying public availability.
+```text
+claude plugin marketplace add ./integrations/claude-code
+/plugin install seshat-bi@seshat-bi-marketplace
+```
+
+The local directory form is not a public install command. The plugin contains the existing Seshat skill and `/seshat-*` commands without adding a CLI verb. Its primary CLI command is `seshat`; `python -m retail.cli` remains a legacy compatibility fallback during the module transition.

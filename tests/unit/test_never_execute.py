@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.never_execute import (
+from seshat.core import RuleContext, Severity
+from seshat.rules.never_execute import (
     _FORBIDDEN_ROOTS,
     _is_governed,
     check_no_module_scope_execution_imports,
@@ -118,12 +118,12 @@ def test_snowflake_and_mysql_connector_are_forbidden_roots() -> None:
 
 
 def test_is_governed_matches_core_and_rules():
-    assert _is_governed("src/retail/cli/__init__.py")
-    assert _is_governed("src/retail/cli/parser.py")
-    assert _is_governed("src/retail/cli/commands/validate.py")
-    assert _is_governed("src/retail/runner.py")
-    assert _is_governed("src/retail/rules/sql.py")
-    assert not _is_governed("src/retail/validate.py")  # live validator, lazily imports
+    assert _is_governed("src/seshat/cli/__init__.py")
+    assert _is_governed("src/seshat/cli/parser.py")
+    assert _is_governed("src/seshat/cli/commands/validate.py")
+    assert _is_governed("src/seshat/runner.py")
+    assert _is_governed("src/seshat/rules/sql.py")
+    assert not _is_governed("src/seshat/validate.py")  # live validator, lazily imports
     assert not _is_governed("tests/unit/test_cli.py")
     assert not _is_governed("docs/routing/routes.yaml")
 
@@ -132,7 +132,7 @@ def test_is_governed_matches_core_and_rules():
 
 
 def test_rule_flags_a_governed_module_with_module_scope_driver(tmp_path: Path):
-    rel = "src/retail/cli/__init__.py"
+    rel = "src/seshat/cli/__init__.py"
     p = tmp_path / rel
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text("import psycopg2\n", encoding="utf-8")
@@ -146,7 +146,7 @@ def test_rule_flags_a_governed_module_with_module_scope_driver(tmp_path: Path):
 
 
 def test_rule_ignores_lazy_import_in_governed_module(tmp_path: Path):
-    rel = "src/retail/rules/sql.py"
+    rel = "src/seshat/rules/sql.py"
     p = tmp_path / rel
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(
@@ -158,7 +158,7 @@ def test_rule_ignores_lazy_import_in_governed_module(tmp_path: Path):
 
 def test_rule_emits_finding_on_unparseable_governed_module(tmp_path: Path):
     # A governed module that won't parse fails loud as a Finding, never crashes.
-    rel = "src/retail/core.py"
+    rel = "src/seshat/core.py"
     p = tmp_path / rel
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text("def broken(:\n", encoding="utf-8")  # syntax error
@@ -172,7 +172,7 @@ def test_rule_emits_finding_on_unparseable_governed_module(tmp_path: Path):
 def test_rule_ignores_non_governed_module(tmp_path: Path):
     # A module-scope driver import in a NON-governed file (e.g. validate.py) is
     # out of scope for B1 (validate is the live path; it imports lazily anyway).
-    rel = "src/retail/validate.py"
+    rel = "src/seshat/validate.py"
     p = tmp_path / rel
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text("import psycopg2\n", encoding="utf-8")

@@ -17,14 +17,14 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext
-from retail.rules.sql import (
+from seshat.core import RuleContext
+from seshat.rules.sql import (
     s1_snake_case_identifiers,
     s4b_guard_form,
     s6_gold_unknown_member,
     s8_date_dim_no_unknown_member,
 )
-from retail.sql import strip_sql_comments, tokenize_sql
+from seshat.sql import strip_sql_comments, tokenize_sql
 
 pytestmark = pytest.mark.unit
 
@@ -199,7 +199,7 @@ def test_strip_sql_comments_dollar_body_does_not_eat_trailing_code() -> None:
 
 def test_strip_sql_noise_removes_minus_one_inside_dollar_body() -> None:
     """A literal `-1` inside a `$$` body must not reach the S6/S8 raw-text scan."""
-    from retail.rules.sql import _strip_sql_noise
+    from seshat.rules.sql import _strip_sql_noise
 
     src = "CREATE FUNCTION f() AS $$ VALUES (-1, 'x') $$ LANGUAGE sql;\n"
     out = _strip_sql_noise(src)
@@ -208,7 +208,7 @@ def test_strip_sql_noise_removes_minus_one_inside_dollar_body() -> None:
 
 def test_strip_sql_noise_dollar_body_preserves_line_count() -> None:
     """Newlines inside a stripped `$$` body are preserved for line accounting."""
-    from retail.rules.sql import _strip_sql_noise
+    from seshat.rules.sql import _strip_sql_noise
 
     src = "line1 $$\nbody2\nbody3\n$$ line4\n"
     out = _strip_sql_noise(src)

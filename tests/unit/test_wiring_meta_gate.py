@@ -54,12 +54,12 @@ def _live_snapshot() -> tuple[frozenset[str], dict[str, str], int]:
     ``len(all_rules())`` (kept separate from ``len(live_ids)`` so C7 can catch a
     duplicate id).
     """
-    import retail.rules as rules_pkg
-    from retail import registry
+    import seshat.rules as rules_pkg
+    from seshat import registry
 
     registry._RULES.clear()
     for info in pkgutil.iter_modules(rules_pkg.__path__):
-        importlib.reload(importlib.import_module(f"retail.rules.{info.name}"))
+        importlib.reload(importlib.import_module(f"seshat.rules.{info.name}"))
 
     rules = registry.all_rules()
     live_ids = frozenset(r.id for r in rules)
@@ -101,17 +101,17 @@ def _package_symmetry_sets() -> tuple[frozenset[str], frozenset[str], frozenset[
       (each side-effecting import binds the submodule as a package attribute).
     - ``dunder_all``: the ``__all__`` export list.
     """
-    import retail.rules as rules_pkg
+    import seshat.rules as rules_pkg
 
     on_disk = frozenset(m.name for m in pkgutil.iter_modules(rules_pkg.__path__))
     dunder_all = frozenset(getattr(rules_pkg, "__all__", ()))
     # The imported-submodule set: names bound on the package that are themselves
-    # submodules (their module __name__ is retail.rules.<name>). This reflects the
+    # submodules (their module __name__ is seshat.rules.<name>). This reflects the
     # side-effecting import list, independently of __all__.
     import_list = frozenset(
         name
         for name in dir(rules_pkg)
-        if getattr(getattr(rules_pkg, name), "__name__", "") == f"retail.rules.{name}"
+        if getattr(getattr(rules_pkg, name), "__name__", "") == f"seshat.rules.{name}"
     )
     return on_disk, import_list, dunder_all
 

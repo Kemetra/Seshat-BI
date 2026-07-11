@@ -1,5 +1,5 @@
 # Conformed-dimension map -- the human-authored declaration HR1
-# (src/retail/rules/conformed_dimension.py) reads.
+# (src/seshat/rules/conformed_dimension.py) reads.
 #
 # Model-level (cross-star) counterpart to the per-table source-mapping gate:
 # when MORE THAN ONE gold star exists, a dimension NAME that appears in 2+ stars

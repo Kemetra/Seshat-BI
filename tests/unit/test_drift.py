@@ -1,4 +1,4 @@
-"""TDD tests for the F014 source-drift comparator (src/retail/drift.py).
+"""TDD tests for the F014 source-drift comparator (src/seshat/drift.py).
 
 Task 1 scope: classify_drift() diffs a baseline ProfileResult against an
 observed ProfileResult and reports column_added / column_removed findings.
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from retail.profile import ColumnProfile, PkProof, ProfileResult
+from seshat.profile import ColumnProfile, PkProof, ProfileResult
 from tests.unit._schema_check import assert_matches_schema
 
 pytestmark = pytest.mark.unit
@@ -49,7 +49,7 @@ def _profile(cols, *, table="bronze.t", rows=100, is_unique=True):
 
 
 def test_column_added_is_warning():
-    from retail.drift import classify_drift
+    from seshat.drift import classify_drift
 
     base = _profile([_col("a")])
     obs = _profile([_col("a"), _col("b")])
@@ -62,7 +62,7 @@ def test_column_added_is_warning():
 
 
 def test_column_removed_is_blocked():
-    from retail.drift import classify_drift
+    from seshat.drift import classify_drift
 
     base = _profile([_col("a"), _col("b")])
     obs = _profile([_col("a")])
@@ -74,7 +74,7 @@ def test_column_removed_is_blocked():
 
 
 def test_findings_are_deterministically_ordered():
-    from retail.drift import classify_drift
+    from seshat.drift import classify_drift
 
     base = _profile([_col("a")])
     obs = _profile([_col("a"), _col("z"), _col("m"), _col("b")])
@@ -84,7 +84,7 @@ def test_findings_are_deterministically_ordered():
 
 
 def test_missingness_shift_reports_measured_before_after():
-    from retail.drift import classify_drift
+    from seshat.drift import classify_drift
 
     base = _profile([_col("a", missing_pct=3.1)])
     obs = _profile([_col("a", missing_pct=11.7)])
@@ -97,7 +97,7 @@ def test_missingness_shift_reports_measured_before_after():
 
 
 def test_cardinality_shift_reported():
-    from retail.drift import classify_drift
+    from seshat.drift import classify_drift
 
     base = _profile([_col("a", card=5)])
     obs = _profile([_col("a", card=42)])
@@ -109,7 +109,7 @@ def test_cardinality_shift_reported():
 
 
 def test_no_shift_when_equal():
-    from retail.drift import classify_drift
+    from seshat.drift import classify_drift
 
     base = _profile([_col("a", missing_pct=3.1, card=5)])
     obs = _profile([_col("a", missing_pct=3.1, card=5)])
@@ -117,7 +117,7 @@ def test_no_shift_when_equal():
 
 
 def test_no_missingness_shift_when_rounded_values_are_equal():
-    from retail.drift import classify_drift
+    from seshat.drift import classify_drift
 
     # Sub-cent-of-a-percent float delta must not produce a finding whose
     # rendered before/after strings are identical (e.g. "3.00%" -> "3.00%").
@@ -127,7 +127,7 @@ def test_no_missingness_shift_when_rounded_values_are_equal():
 
 
 def test_shift_findings_are_deterministically_ordered_by_column():
-    from retail.drift import classify_drift
+    from seshat.drift import classify_drift
 
     base = _profile(
         [
@@ -155,7 +155,7 @@ def test_shift_findings_are_deterministically_ordered_by_column():
 
 
 def test_grain_pk_drift_is_blocked_and_principle_v():
-    from retail.drift import classify_drift
+    from seshat.drift import classify_drift
 
     base = _profile([_col("a")], is_unique=True)
     obs = _profile([_col("a")], is_unique=False)
@@ -172,7 +172,7 @@ def _validate(doc):
 
 
 def test_derive_status_blocked_when_fatal_class_present():
-    from retail.drift import classify_drift, derive_status
+    from seshat.drift import classify_drift, derive_status
 
     base = _profile([_col("a"), _col("b")])
     obs = _profile([_col("a")])  # b removed -> blocked
@@ -182,7 +182,7 @@ def test_derive_status_blocked_when_fatal_class_present():
 
 
 def test_derive_status_warning_when_only_nonfatal():
-    from retail.drift import classify_drift, derive_status
+    from seshat.drift import classify_drift, derive_status
 
     base = _profile([_col("a", missing_pct=1.0)])
     obs = _profile([_col("a", missing_pct=9.0)])  # missingness shift only
@@ -192,7 +192,7 @@ def test_derive_status_warning_when_only_nonfatal():
 
 
 def test_derive_status_pass_when_no_findings():
-    from retail.drift import classify_drift, derive_status
+    from seshat.drift import classify_drift, derive_status
 
     base = _profile([_col("a")])
     obs = _profile([_col("a")])
@@ -200,7 +200,7 @@ def test_derive_status_pass_when_no_findings():
 
 
 def test_deferred_live_is_pending_and_schema_valid():
-    from retail.drift import ReportContext, to_findings_dict
+    from seshat.drift import ReportContext, to_findings_dict
 
     base = _profile([_col("a")])
     doc = to_findings_dict(
@@ -218,7 +218,7 @@ def test_deferred_live_is_pending_and_schema_valid():
 
 
 def test_full_report_schema_valid_with_findings_and_handoff():
-    from retail.drift import ReportContext, to_findings_dict
+    from seshat.drift import ReportContext, to_findings_dict
 
     base = _profile([_col("a")], is_unique=True)
     obs = _profile([_col("a")], is_unique=False)  # grain_pk_drift -> handoff
@@ -246,7 +246,7 @@ def test_full_report_schema_valid_with_findings_and_handoff():
 def test_no_semantics_means_no_returns_or_pii_findings():
     # Regression guard: without semantics, the two new classes never fire, so
     # every prior caller (and the 14 earlier tests) behaves exactly as before.
-    from retail.drift import classify_drift
+    from seshat.drift import classify_drift
 
     base = _profile([_col("is_return"), _col("email")])
     obs = _profile([_col("email")])  # is_return removed; would-be PII 'email' stays
@@ -259,7 +259,7 @@ def test_no_semantics_means_no_returns_or_pii_findings():
 
 
 def test_returns_column_removed_is_returns_rule_drift():
-    from retail.drift import DriftSemantics, classify_drift
+    from seshat.drift import DriftSemantics, classify_drift
 
     base = _profile([_col("is_return"), _col("amount")])
     obs = _profile([_col("amount")])  # the authoritative returns column disappeared
@@ -272,7 +272,7 @@ def test_returns_column_removed_is_returns_rule_drift():
 
 
 def test_returns_column_shift_is_returns_rule_drift():
-    from retail.drift import DriftSemantics, classify_drift
+    from seshat.drift import DriftSemantics, classify_drift
 
     base = _profile([_col("is_return", missing_pct=1.0, card=2)])
     obs = _profile([_col("is_return", missing_pct=9.0, card=2)])  # population moved
@@ -284,7 +284,7 @@ def test_returns_column_shift_is_returns_rule_drift():
 
 
 def test_dropped_pii_column_reappearing_is_pii_surface_drift():
-    from retail.drift import DriftSemantics, classify_drift
+    from seshat.drift import DriftSemantics, classify_drift
 
     base = _profile([_col("amount")])
     obs = _profile([_col("amount"), _col("ssn")])  # a dropped-PII column returns
@@ -302,7 +302,7 @@ def test_new_nonpii_column_is_not_pii_surface_drift():
     # Deterministic scope: only a column in the dropped-PII set escalates. A
     # brand-new column NOT in that set is a plain column_added, never PII drift
     # (no name-guessing -- publish-safety is never auto-decided).
-    from retail.drift import DriftSemantics, classify_drift
+    from seshat.drift import DriftSemantics, classify_drift
 
     base = _profile([_col("amount")])
     obs = _profile([_col("amount"), _col("region")])
@@ -315,7 +315,7 @@ def test_new_nonpii_column_is_not_pii_surface_drift():
 
 
 def test_returns_and_pii_handoffs_are_schema_valid():
-    from retail.drift import DriftSemantics, ReportContext, to_findings_dict
+    from seshat.drift import DriftSemantics, ReportContext, to_findings_dict
 
     base = _profile([_col("is_return"), _col("amount")])
     obs = _profile([_col("amount"), _col("ssn")])  # returns removed + PII reappears
@@ -342,7 +342,7 @@ def test_unchanged_returns_column_is_not_returns_rule_drift():
     # UNCHANGED must not fire returns_rule_drift (else every run of a stable
     # table would raise a false Principle-V blocker). Deleting the
     # `before == after` guard in _returns_rule_findings must fail this.
-    from retail.drift import DriftSemantics, classify_drift
+    from seshat.drift import DriftSemantics, classify_drift
 
     base = _profile([_col("is_return", missing_pct=2.0, card=2)])
     obs = _profile([_col("is_return", missing_pct=2.0, card=2)])  # identical
@@ -355,7 +355,7 @@ def test_dropped_pii_column_present_in_both_is_not_pii_surface_drift():
     # BOTH baseline and observed has NOT reappeared (it never left the profile),
     # so it must not fire. Dropping the `- base_cols.keys()` from the set logic
     # in _pii_surface_findings must fail this.
-    from retail.drift import DriftSemantics, classify_drift
+    from seshat.drift import DriftSemantics, classify_drift
 
     base = _profile([_col("amount"), _col("ssn")])  # ssn already in the baseline
     obs = _profile([_col("amount"), _col("ssn")])
@@ -371,7 +371,7 @@ def test_dropped_pii_column_present_in_both_is_not_pii_surface_drift():
 
 
 def test_column_retyped_is_warning_not_principle_v():
-    from retail.drift import classify_drift
+    from seshat.drift import classify_drift
 
     base = _profile([_col("a", landed_type="text")])
     obs = _profile([_col("a", landed_type="numeric")])
@@ -390,7 +390,7 @@ def test_case_only_type_difference_is_not_retyped(tmp_path=None):
     # information_schema re-profile returns lowercase "text". These are the SAME
     # type -- a naive != would fire column_retyped on every bronze-all-TEXT
     # column (a false-drift storm). The compare must normalize (lowercase+strip).
-    from retail.drift import classify_drift
+    from seshat.drift import classify_drift
 
     base = _profile([_col("a", landed_type="TEXT")])
     obs = _profile([_col("a", landed_type="text")])
@@ -402,7 +402,7 @@ def test_no_retyped_when_landed_type_unknown_on_either_side():
     # Both-known guard: if either side lacks a landed_type (None), we can't prove
     # a retype -> stay silent (honest-skip), rather than fabricate one. This is
     # also what keeps the older _col(landed_type=None) tests free of retype noise.
-    from retail.drift import classify_drift
+    from seshat.drift import classify_drift
 
     base = _profile([_col("a", landed_type=None)])
     obs = _profile([_col("a", landed_type="numeric")])

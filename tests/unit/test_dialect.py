@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from retail.dialect import get_dialect
+from seshat.dialect import get_dialect
 
 pytestmark = pytest.mark.unit
 

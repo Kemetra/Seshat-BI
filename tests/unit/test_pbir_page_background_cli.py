@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from retail.cli import main
+from seshat.cli import main
 
 pytestmark = pytest.mark.unit
 

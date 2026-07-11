@@ -19,8 +19,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.parked_on import _MANIFEST, check_parked_on
+from seshat.core import RuleContext, Severity
+from seshat.rules.parked_on import _MANIFEST, check_parked_on
 
 pytestmark = pytest.mark.unit
 

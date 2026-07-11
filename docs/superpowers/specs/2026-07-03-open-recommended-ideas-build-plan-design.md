@@ -60,14 +60,14 @@ Additionally honored:
 
 ## 3. Shared mechanism (all already shipped — we reuse, not rebuild)
 
-- **`retail scaffold <ID>`** (idea E6, `src/retail/scaffold.py`) does the **5-place
+- **`retail scaffold <ID>`** (idea E6, `src/seshat/scaffold.py`) does the **5-place
   wiring** for a new rule: module stub, `EXPECTED_RULE_IDS` membership in the wiring
   test, glossary rules-table row, `rules-manifest.json` entry, severity-posture entry.
   It prints the two golden-record regen commands. Used by I1, D1.
 - **Rule contract**: `@register(RULE_ID, title)` on a `check(ctx: RuleContext) ->
-  Iterable[Finding]` in `src/retail/rules/<name>.py`. `RuleContext(repo_root,
+  Iterable[Finding]` in `src/seshat/rules/<name>.py`. `RuleContext(repo_root,
   tracked_files)` and `Finding(rule_id, severity, message, locator)` live in
-  `src/retail/core.py`.
+  `src/seshat/core.py`.
 - **Test pattern**: adversarial **good/bad fixture corpus** + a **fail-closed
   locator/severity/count** assertion, mirroring `tests/unit/test_design_*.py`.
 - **Drift manifests**: SC1 status-claims (`docs/quality/status-claims.yaml`) and SC2
@@ -112,7 +112,7 @@ fork).
 **Test**: links resolve; register the "now-live" status in SC1 so the claim can't drift.
 
 ### D1 — Confusable-skill / path foot-gun guard  `[new rule, ~ID "DR1"]` (scoped)
-**Logic**: `src/retail/rules/design_routes.py` with **two** checks (boundary.yaml
+**Logic**: `src/seshat/rules/design_routes.py` with **two** checks (boundary.yaml
 deferred per ruling): (1) **bad-prefix path check** — flag design-skill route targets
 using a known foot-gun path prefix; (2) **curated stale-phrase manifest** (doc + line
 anchored, like SC1's anchor discipline) — flag a committed doc line asserting a stale
@@ -154,7 +154,7 @@ tests, drop it (noted for the plan).
 **Test**: assertion over the design rules' emitted severities.
 
 ### E7 — `retail doctor` drift digest  `[CLI helper, no rule]`
-**Logic**: `src/retail/doctor.py` + a `retail doctor` subcommand that **aggregates
+**Logic**: `src/seshat/doctor.py` + a `retail doctor` subcommand that **aggregates
 existing read-only checks** (rule-manifest snapshot, `routes_coverage`, `status_claims`)
 + lightweight file-existence probes, and prints a **Findings digest**. No new
 `@register` rule; imported lazily like scaffold.

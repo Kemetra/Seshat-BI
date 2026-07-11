@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.source_freshness import check_hr4
+from seshat.core import RuleContext, Severity
+from seshat.rules.source_freshness import check_hr4
 
 pytestmark = pytest.mark.unit
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from retail.fence import (
+from seshat.fence import (
     END,
     START,
     FenceResult,

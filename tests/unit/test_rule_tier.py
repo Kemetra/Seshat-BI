@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import Finding, RegisteredRule, RuleContext, RuleTier, Severity
-from retail.runner import run, run_json
+from seshat.core import Finding, RegisteredRule, RuleContext, RuleTier, Severity
+from seshat.runner import run, run_json
 
 
 def _ctx() -> RuleContext:
@@ -34,7 +34,7 @@ def test_registered_rule_defaults_to_work_repo_tier():
 
 @pytest.mark.unit
 def test_register_threads_tier():
-    from retail import registry
+    from seshat import registry
 
     saved = list(registry._RULES)  # restore on teardown (see test_cli.py)
     registry._RULES.clear()

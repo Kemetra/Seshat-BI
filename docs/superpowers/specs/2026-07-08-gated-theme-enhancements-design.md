@@ -32,7 +32,7 @@ Detects near-duplicate *adjacent* ramp / `data_colors` entries -- a deterministi
 near-collapse bug, NOT a colorblind-safe claim.
 - **Files:** shared `color.py` deltaE helper (Sec 3); `theme_gen.py` adds
   `check_ramp_deltae_or_raise(palette, floor) -> None`; new
-  `src/retail/rules/design_ramp_deltae.py` registered as **`CT2`** (contrast/
+  `src/seshat/rules/design_ramp_deltae.py` registered as **`CT2`** (contrast/
   color-math family, sibling to CT1 -- NOT a `DL-*` slug; DL1-DL7 are exhausted).
 - **Wiring:** called in `generate()` right after `check_contrast_or_raise` (line
   253), before `targets` built. Rule re-reads a DECLARED `min_adjacent_delta_e`
@@ -148,7 +148,7 @@ correspondence; provably inert until the OWNER declares the map.
   correspondence (neutral-by-name vs warning-by-color tie; `neutral` has no theme
   counterpart). The rule only reads its output.
 
-## 3. Shared infrastructure -- `src/retail/color.py`
+## 3. Shared infrastructure -- `src/seshat/color.py`
 
 Pure-stdlib primitives (no numpy/scipy), mirroring `contrast_ratio`'s shape.
 **CVD simulation is deliberately NOT built** -- it stays an OPEN human seam (a

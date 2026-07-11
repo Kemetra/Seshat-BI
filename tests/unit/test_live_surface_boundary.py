@@ -19,13 +19,13 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules import never_execute
-from retail.rules.live_surface_boundary import (
+from seshat.core import RuleContext, Severity
+from seshat.rules import never_execute
+from seshat.rules.live_surface_boundary import (
     _LIVE_SURFACE,
     check_live_surface_imports,
 )
-from retail.rules.never_execute import module_scope_violations
+from seshat.rules.never_execute import module_scope_violations
 
 pytestmark = pytest.mark.unit
 
@@ -136,7 +136,7 @@ def test_urllib_parse_import_passes(tmp_path) -> None:
 
 def test_non_live_surface_file_is_not_scanned(tmp_path) -> None:
     # A bad import in a NON-live-surface file must not be flagged by B3.
-    ctx = _stage(tmp_path, {"src/retail/some_other.py": "import psycopg2\n"})
+    ctx = _stage(tmp_path, {"src/seshat/some_other.py": "import psycopg2\n"})
     assert list(check_live_surface_imports(ctx)) == []
 
 
@@ -158,21 +158,21 @@ def test_live_surface_set_is_disjoint_from_b1_governed(tmp_path) -> None:
 
 
 def test_live_surface_set_is_generic_module_paths(tmp_path) -> None:
-    # Only generic src/retail/*.py module paths -- no domain table/column/KPI token.
+    # Only generic src/seshat/*.py module paths -- no domain table/column/KPI token.
     for member in _LIVE_SURFACE:
-        assert member.startswith("src/retail/")
+        assert member.startswith("src/seshat/")
         assert member.endswith(".py")
 
 
 def test_dialect_module_is_a_live_surface() -> None:
-    assert "src/retail/dialect.py" in _LIVE_SURFACE
+    assert "src/seshat/dialect.py" in _LIVE_SURFACE
 
 
 # --- sentinel: the REAL dialect.py module is import-lazy today (Task 11) -----
 
 
 def test_real_dialect_module_has_no_module_scope_driver_imports() -> None:
-    """Sentinel: the real ``src/retail/dialect.py`` on disk is execution-free.
+    """Sentinel: the real ``src/seshat/dialect.py`` on disk is execution-free.
 
     Task 11 adds per-engine ``connect()`` methods that import pyodbc /
     mysql.connector / snowflake.connector -- this proves those imports are

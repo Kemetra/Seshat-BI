@@ -227,7 +227,7 @@ runner needed):
 ## Scope discipline (YAGNI)
 
 - ~14 static HTML files + one README. No React, no bundler, no npm, no new
-  dependency. Nothing wired into `src/retail/` runtime.
+  dependency. Nothing wired into `src/seshat/` runtime.
 - Does **not** modify `docs/brand/visual-identity.md` or the retail token file —
   it *renders* them.
 - The background conflict is recorded, not fixed in source.

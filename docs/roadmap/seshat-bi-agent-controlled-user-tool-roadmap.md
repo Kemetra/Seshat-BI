@@ -114,7 +114,7 @@ retail value-check
 retail generate
 ```
 
-These are not theoretical; they are implemented in the `src/retail/cli/` package (a dispatch table + per-command handlers under `src/retail/cli/commands/`; the former single-file `cli.py` was split for maintainability). `check` supports `--format json`, `validate` supports DSN/source-map live checks, `semantic-check` checks contract↔DAX drift, `value-check` recomputes approved values live, and `generate` creates verified DAX from metric contracts. A read-only `status --format json` surface (spec 109) has since been added.
+These are not theoretical; they are implemented in the `src/seshat/cli/` package (a dispatch table + per-command handlers under `src/seshat/cli/commands/`; the former single-file `cli.py` was split for maintainability). `check` supports `--format json`, `validate` supports DSN/source-map live checks, `semantic-check` checks contract↔DAX drift, `value-check` recomputes approved values live, and `generate` creates verified DAX from metric contracts. A read-only `status --format json` surface (spec 109) has since been added.
 
 ### 2.5 Power BI / PBIR helper surface already exists
 
@@ -279,7 +279,7 @@ Docs-only.
 
 ### Do Not Touch
 
-* `src/retail/**`
+* `src/seshat/**`
 * `pyproject.toml`
 * tests
 * Power BI files
@@ -1026,7 +1026,7 @@ feat: initialize Seshat BI user workspaces
 **Files**
 
 ```text
-src/retail/...
+src/seshat/...
 templates/workspace/...
 tests/unit/...
 ```
@@ -1056,7 +1056,7 @@ feat: expose agent-readable readiness control output
 ```text
 docs/agent-control/protocol.md
 schemas/...
-src/retail/...
+src/seshat/...
 tests/unit/...
 ```
 
@@ -1111,7 +1111,7 @@ feat: add user-facing source onboarding commands
 **Files**
 
 ```text
-src/retail/...
+src/seshat/...
 docs/readiness/source-ready.md
 tests/unit/...
 ```
@@ -1139,7 +1139,7 @@ feat: export readiness evidence packs
 **Files**
 
 ```text
-src/retail/...
+src/seshat/...
 templates/...
 tests/unit/...
 ```

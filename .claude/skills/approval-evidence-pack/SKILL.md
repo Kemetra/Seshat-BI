@@ -209,7 +209,7 @@ recorded, say so -- do not read absence-of-a-block as readiness.
 Surface the AL1 assumption-ledger signal from `mappings/<table>/metrics/*.yaml`,
 PER offending contract (FR-021): each item names the specific
 `mappings/<table>/metrics/<Metric>.yaml` file and the recorded contradiction. Do
-NOT re-run or re-implement the AL1 rule (`src/retail/rules/assumptions.py`); surface
+NOT re-run or re-implement the AL1 rule (`src/seshat/rules/assumptions.py`); surface
 its recorded result only. Do NOT resolve the assumption (Principle V). An
 unreadable contract -> a BLOCKER naming the path (FR-011).
 
@@ -339,7 +339,7 @@ and opened no DB connection.
   `../../../docs/readiness/`.
 - The state artifact it reads: `../../../templates/readiness-status.yaml` (schema);
   the filled copy lives at `mappings/<table>/readiness-status.yaml` (ADR 0004).
-- The AL1 assumption signal source: `../../../src/retail/rules/assumptions.py`
+- The AL1 assumption signal source: `../../../src/seshat/rules/assumptions.py`
   (surfaced, never re-run). The parked-on map:
   `../../../docs/quality/parked-on.yaml` (DF1).
 - The authority contract: `../../../docs/architecture/product-modules.md` (the five

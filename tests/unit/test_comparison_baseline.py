@@ -23,8 +23,8 @@ from __future__ import annotations
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.comparison_baseline import RULE_ID, check_comparison_baseline
+from seshat.core import RuleContext, Severity
+from seshat.rules.comparison_baseline import RULE_ID, check_comparison_baseline
 
 pytestmark = pytest.mark.unit
 

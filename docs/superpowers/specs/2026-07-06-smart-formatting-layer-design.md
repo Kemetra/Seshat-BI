@@ -33,7 +33,7 @@ deterministic lint.
 |------|-------|------|------|
 | REASON (propose) | a new workflow in the `powerbi-dashboard-design` skill (Opus) | reads approved artifacts + rubric -> emits the ledger | new workflow |
 | ARTIFACT | committed `mappings/<subject>/design/formatting-plan.md` | the git-reviewable ledger; `status: warning`, no score | new template |
-| CHECK | a new **DL7** lint in `src/retail/rules/` (DL1-DL6 exist; DL7 is next free -- confirm against the live registry at build time) | validates ledger *well-formedness* only | new rule |
+| CHECK | a new **DL7** lint in `src/seshat/rules/` (DL1-DL6 exist; DL7 is next free -- confirm against the live registry at build time) | validates ledger *well-formedness* only | new rule |
 | EXECUTE (apply) | the existing 3 `pbir-*` verbs | apply a ratified plan | reused unchanged |
 | APPROVE | the existing DL4 / RS1 / `dashboard-ready.md` gate | human sign-off | reused, no parallel gate |
 
@@ -170,7 +170,7 @@ the plan at `warning` until a human render is recorded.
 
 - The rubric it reasons from: `docs/powerbi/visual-qa.md` (13 anti-patterns).
 - The critique output the human render feeds: `templates/screenshot-review.md`.
-- The verbs that apply the plan: `src/retail/pbir_theme_apply.py`,
+- The verbs that apply the plan: `src/seshat/pbir_theme_apply.py`,
   `pbir_visual_format.py`, `pbir_page_background.py`.
 - The authorization for agent-written PBIR: ADR 0015.
 - Tokens / house style: `design/tokens/`.

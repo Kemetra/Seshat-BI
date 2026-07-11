@@ -24,7 +24,7 @@ BI itself, so a consumer can trust the number.
 ## Where the version lives
 
 The version is the single value at `pyproject.toml` `[project].version`. There is no
-second source of truth -- no `__version__` string duplicated in `src/retail/`, no
+second source of truth -- no `__version__` string duplicated in `src/seshat/`, no
 version baked into a template. A future `seshat --version` (if built) reads this same
 field at runtime rather than hardcoding a copy.
 
@@ -51,7 +51,7 @@ with the bump classification adapted to what actually changes blast radius for a
 | A NEW CLI verb, or a new optional flag on an existing verb, with no change to existing verb behavior | **MINOR** | Additive surface. |
 | A CLI verb's existing flag/output contract changes (e.g. `--format text` output shape changes, a flag is removed or renamed, an exit-code meaning changes) | **MAJOR** | Breaking for any consumer/script parsing that output. |
 | Docs-only change (a `docs/` file, a template, a skill's prose) | **PATCH** | No governed behavior changed. |
-| Tests-only change (new test, refactored test, no `src/retail/` behavior change) | **PATCH** | No governed behavior changed. |
+| Tests-only change (new test, refactored test, no `src/seshat/` behavior change) | **PATCH** | No governed behavior changed. |
 | A bug fix that makes a rule correctly fail something it should already have caught (the rule's *documented* intent did not change; a defect in matching it did) | **PATCH** | Restores intended behavior; still MAY newly fail a repo that was accidentally passing due to the bug -- if that blast radius is judged large, the owner may instead classify it MINOR or MAJOR at their discretion (this table states the default, not an unbreakable formula). |
 | A dependency bump inside `pyproject.toml` (`pyyaml`, an optional extra's driver) | **PATCH** unless the dependency bump itself is Lane B/C under `docs/operations/dependency-update-policy.md`, in which case it is at minimum **MINOR** and the lane's required review applies first. | Mirrors the existing dependency-update lane table; this policy does not re-derive it. |
 

@@ -23,9 +23,9 @@ from pathlib import Path
 
 import pytest
 
-from retail import kit_init
-from retail.compass_project import check_prose_drift, load_source
-from retail.fence import read_fence_body
+from seshat import kit_init
+from seshat.compass_project import check_prose_drift, load_source
+from seshat.fence import read_fence_body
 
 pytestmark = pytest.mark.unit
 

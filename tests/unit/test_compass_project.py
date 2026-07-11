@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from retail.compass_project import (
+from seshat.compass_project import (
     check_prose_drift,
     check_yaml_drift,
     load_source,

@@ -22,8 +22,8 @@ from __future__ import annotations
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.assumption_coherence import _TEMPLATE_PATH, check_assumption_coherence
+from seshat.core import RuleContext, Severity
+from seshat.rules.assumption_coherence import _TEMPLATE_PATH, check_assumption_coherence
 
 pytestmark = pytest.mark.unit
 

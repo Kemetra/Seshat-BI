@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.approval_inbox import build_approval_inbox
-from retail.cli import main
+from seshat.approval_inbox import build_approval_inbox
+from seshat.cli import main
 
 pytestmark = pytest.mark.unit
 

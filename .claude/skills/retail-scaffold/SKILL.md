@@ -44,7 +44,7 @@ when you are ADDING a rule or checking whether one is fully wired.
 - **Invoke-and-interpret only.** This skill runs `retail scaffold` and reads its
   output; it does not hand-edit the five places itself.
 - **The CLI (not this skill) is the source of the five wiring places.** They are
-  declared in `src/retail/scaffold.py` (`FIVE_PLACES`); this skill points at that
+  declared in `src/seshat/scaffold.py` (`FIVE_PLACES`); this skill points at that
   authority and never re-enumerates a competing list (anti-fork).
 - **Never invents rule intent (DEC-1).** The author supplies the id, the title, and
   the real check logic. The generated stub yields no findings until the author fills
@@ -64,14 +64,14 @@ retail scaffold --id <RULE_ID> --title "<one-line title>"
 ```
 
 WRITES exactly three targets:
-1. a generic stub rule module under `src/retail/rules/` (registered no-op body);
+1. a generic stub rule module under `src/seshat/rules/` (registered no-op body);
 2. a matching failing test stub under `tests/unit/` (honest red);
 3. the insertion of `<RULE_ID>` into `EXPECTED_RULE_IDS` in the wiring test.
 
 PRINTS (for the human to run / apply -- never written by the helper):
 - the golden-record regen commands (`retail manifest`, `retail severity-posture`);
 - a suggested glossary row to paste into `docs/glossary.md`;
-- the import + `__all__` edit for `src/retail/rules/__init__.py`.
+- the import + `__all__` edit for `src/seshat/rules/__init__.py`.
 
 Then: fill the stub with real logic, replace the failing test with a real one, run the
 printed regen commands, apply the printed edits, and let `retail check` + the suite
@@ -98,7 +98,7 @@ this skill's.
 
 ## See also
 
-- The CLI verb + write/print helper: `src/retail/scaffold.py` (`FIVE_PLACES` is the
+- The CLI verb + write/print helper: `src/seshat/scaffold.py` (`FIVE_PLACES` is the
   authoritative wiring-place list); the spec: `specs/062-scaffold-rule-generator/`.
 - The interpret sibling: `.claude/skills/retail-govern/SKILL.md` (map a rule id → fix).
 - Rule families + ids: `docs/glossary.md`; the gate: the `retail check` static surface.

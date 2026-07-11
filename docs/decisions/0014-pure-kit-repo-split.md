@@ -23,7 +23,7 @@ repo); it only ever applied to purging the OLD history, which this ADR does not 
 
 ### 1. Adopt the split -- this supersedes 076 DEC-1
 
-Seshat_BI = the pure tool (`src/retail/`, `.claude/skills/`, `.seshat/kit-source.yaml`,
+Seshat_BI = the pure tool (`src/seshat/`, `.claude/skills/`, `.seshat/kit-source.yaml`,
 the gates, `tests/`). The BI repo (`github.com/ahmed-shaaban-94/BI`) = the
 analysis/examples playground -- real client work, exploratory notebooks, one-off
 dashboards, and anything that is data/analysis rather than tool. New example or analysis

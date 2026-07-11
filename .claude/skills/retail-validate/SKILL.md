@@ -13,7 +13,7 @@ description: >-
 
 `retail check` proves everything provable from committed text. `retail validate`
 proves the four things only a running database can show, on the MATERIALIZED rows
-(constitution Principle VIII; `src/retail/validate.py`). This skill runs it and
+(constitution Principle VIII; `src/seshat/validate.py`). This skill runs it and
 maps each finding to the one place to fix it -- the live sibling of
 `retail-govern`.
 
@@ -80,8 +80,8 @@ confirm green is the user's next call, not a loop this skill performs.
 
 ## See also
 
-- The checks: `src/retail/validate.py`; target sourcing:
-  `src/retail/validate_targets.py`.
+- The checks: `src/seshat/validate.py`; target sourcing:
+  `src/seshat/validate_targets.py`.
 - Principle VIII (static-first, live deferred): `.specify/memory/constitution.md`.
 - The static sibling: the `retail-govern` skill.
 - The blank the run fills: `templates/reconciliation-report.md`.

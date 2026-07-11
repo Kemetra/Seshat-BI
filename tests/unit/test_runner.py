@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import Finding, RegisteredRule, RuleContext, Severity
-from retail.runner import build_context, run, run_json
+from seshat.core import Finding, RegisteredRule, RuleContext, Severity
+from seshat.runner import build_context, run, run_json
 
 
 def _ctx() -> RuleContext:
@@ -158,7 +158,7 @@ def test_build_context_uses_git_ls_files(tmp_path):
 @pytest.mark.unit
 def test_git_ls_files_returns_empty_on_not_a_repo(tmp_path):
     # A bare, non-git directory: git exits 128 -> () (the expected non-repo case).
-    from retail.runner import _git_ls_files
+    from seshat.runner import _git_ls_files
 
     assert _git_ls_files(tmp_path) == ()
 
@@ -169,7 +169,7 @@ def test_git_ls_files_raises_on_non_128_failure(monkeypatch, tmp_path):
     # fail LOUD with RuntimeError, never silently return () (vacuous green gate).
     import subprocess
 
-    from retail import runner
+    from seshat import runner
 
     def fake_run(*args, **kwargs):
         return subprocess.CompletedProcess(
@@ -187,17 +187,17 @@ def test_git_ls_files_raises_on_non_128_failure(monkeypatch, tmp_path):
 @pytest.mark.unit
 def test_importing_runner_does_not_import_rules_package():
     # The low-level runner must NOT depend on the rules package; the CLI
-    # (composition root) owns `import retail.rules`. Importing the runner alone
+    # (composition root) owns `import seshat.rules`. Importing the runner alone
     # must not pull in the rules package as a side effect.
     import importlib
     import sys
 
     # Drop any cached rules modules, then import runner in isolation.
     for name in list(sys.modules):
-        if name == "retail.rules" or name.startswith("retail.rules."):
+        if name == "seshat.rules" or name.startswith("seshat.rules."):
             del sys.modules[name]
-    sys.modules.pop("retail.runner", None)
+    sys.modules.pop("seshat.runner", None)
 
-    importlib.import_module("retail.runner")
+    importlib.import_module("seshat.runner")
 
-    assert "retail.rules" not in sys.modules
+    assert "seshat.rules" not in sys.modules

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from retail import cli
+from seshat import cli
 
 pytestmark = pytest.mark.unit
 

@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from retail.severity_posture import (
+from seshat.severity_posture import (
     L3_KEY,
     NO_FINDING_MARKER,
     RECORD_REL_PATH,

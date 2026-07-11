@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.blocker_explainer import build_blocker_explanations
-from retail.cli import main
+from seshat.blocker_explainer import build_blocker_explanations
+from seshat.cli import main
 
 pytestmark = pytest.mark.unit
 
@@ -25,7 +25,7 @@ def test_classifier_extraction_is_behavior_preserving() -> None:
     (category, explanation, next_surface) the blocker explainer relied on. If a
     future edit to the shared classifier drifts, this fails BEFORE it can silently
     change blocker_explainer's shipped output."""
-    from retail.readiness_classify import CATEGORY_RANK, classify
+    from seshat.readiness_classify import CATEGORY_RANK, classify
 
     # the five categories, in the fixed rank order, each via a marker word
     assert classify("missing named approval")[0] == "approval"
@@ -42,7 +42,7 @@ def test_classifier_extraction_is_behavior_preserving() -> None:
         "readiness",
     )
     # blocker_explainer imports THIS classify (not a private copy)
-    from retail import blocker_explainer
+    from seshat import blocker_explainer
 
     assert blocker_explainer._classify is classify
 

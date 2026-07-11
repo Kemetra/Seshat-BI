@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.date_spine import check_hr8
+from seshat.core import RuleContext, Severity
+from seshat.rules.date_spine import check_hr8
 
 pytestmark = pytest.mark.unit
 
@@ -230,7 +230,7 @@ def test_hr8_module_imports_no_database_driver_or_validate() -> None:
         ".connect(",
         "DSN",
         "from ..validate",
-        "from retail.validate",
+        "from seshat.validate",
         "import validate",
     ):
         assert forbidden not in src

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.cli import main
-from retail.theme_gen import ThemeSeed, generate
+from seshat.cli import main
+from seshat.theme_gen import ThemeSeed, generate
 
 pytestmark = pytest.mark.unit
 

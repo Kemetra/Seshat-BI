@@ -3,7 +3,7 @@
 - **On-disk spec:** `specs/080-run-next-readiness-state-machine/`  **Roadmap feature:** F080
   (the roadmap F-number is authoritative when the two disagree).
 - **Status:** Runtime slice shipped: `retail next` wraps the pure read-only helper
-  in `src/retail/run_next.py`.
+  in `src/seshat/run_next.py`.
 - **Authority category:** Product Module / `read-only` (F024 Companion Tools
   Architecture -- see `../architecture/product-modules.md`).
 - **Skill:** `../../.claude/skills/run-next-readiness/SKILL.md`.
@@ -60,7 +60,7 @@ trusting the stored string.
   reference docs; writes NOTHING. The proof is `git status --short` empty after
   any invocation (SC-003).
 - Applies the SAME approval-shape rule as the gate
-  (`src/retail/rules/readiness_status.py::_owner_is_valid`) so its notion of
+  (`src/seshat/rules/readiness_status.py::_owner_is_valid`) so its notion of
   "approved" agrees with `retail check` -- but it does not call RS1, add a rule
   ID, or require RS1-clean input first (it degrades gracefully on a dirty file).
 - Emits no numeric confidence / health / percent-ready score (hard rule #9).

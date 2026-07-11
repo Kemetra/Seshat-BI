@@ -1,9 +1,9 @@
 """Live-Surface Protocol conformance test (feature 044) -- TEST-ONLY.
 
-Exercises ``check_reconciliation`` (src/retail/validate.py) and
-``check_expected_value`` (src/retail/value_proxy.py) WITHOUT a database. It is the
+Exercises ``check_reconciliation`` (src/seshat/validate.py) and
+``check_expected_value`` (src/seshat/value_proxy.py) WITHOUT a database. It is the
 runtime/dynamic complement to the static AST guard in
-``src/retail/rules/never_execute.py`` (the "B1" module-scope-import guard): where
+``src/seshat/rules/never_execute.py`` (the "B1" module-scope-import guard): where
 B1 proves no driver is imported at module scope, this module proves at runtime
 that the live call-sites talk to the injected runner only through the
 ``QueryRunner`` Protocol method ``.run()`` -- so the surface opens nothing.
@@ -21,9 +21,9 @@ from decimal import Decimal
 
 import pytest
 
-from retail.core import Finding, Severity
-from retail.validate import ReconcileTarget, check_reconciliation
-from retail.value_proxy import ExpectedValue, check_expected_value
+from seshat.core import Finding, Severity
+from seshat.validate import ReconcileTarget, check_reconciliation
+from seshat.value_proxy import ExpectedValue, check_expected_value
 
 pytestmark = pytest.mark.unit
 

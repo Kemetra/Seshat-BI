@@ -15,7 +15,7 @@ Seshat BI's conventions are enforced by a static checker, `retail check`. This
 skill teaches you to **run it, read its findings, and map each rule id to the file
 and fix it points at**. The authoritative catalog is `docs/glossary.md` (the
 "Static check rules" section), which mirrors the live registry in
-`src/retail/rules/`; `docs/rules/rules-manifest.json` is the machine-readable
+`src/seshat/rules/`; `docs/rules/rules-manifest.json` is the machine-readable
 inventory. (An older 23-rule spec, `docs/superpowers/specs/2026-06-23-pbi-governance-layer-design.md` §5,
 is a historical design doc, NOT the current count -- do not cite it for the catalog.)
 
@@ -38,7 +38,7 @@ retail check
 It parses the committed TMDL / PBIR / SQL / git text — **no Power BI Desktop, no
 `pbi-cli`, no network** — and exits non-zero if any `error`-severity finding exists.
 `warning` and `info` findings are printed but do not fail the build. Severity is
-layer-aware (see `src/retail/severity_posture.py` + `docs/rules/severity-posture.json`
+layer-aware (see `src/seshat/severity_posture.py` + `docs/rules/severity-posture.json`
 for the observed per-rule posture), so treat that record — not a hardcoded list here —
 as the source of truth for which ids warn vs error. (`G2` emits an `info` "no PBIP
 project present" when the repo has no model yet.)
@@ -55,7 +55,7 @@ locator; the rule id tells you which fix below applies.
 
 This table covers **all 47 rules** (mirrors `docs/glossary.md`; source module in the
 Fix column). Meanings are the glossary's; verify the source module by its `RULE_ID`
-under `src/retail/rules/`.
+under `src/seshat/rules/`.
 
 | Rule | Means | Fix at (source module) |
 |------|-------|--------|

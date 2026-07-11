@@ -77,61 +77,68 @@ The ordering is non-negotiable, and the gates are the product:
 
 ## Quickstart
 
-Seshat BI ships a Python package exposing two console commands -- `retail` (the
-canonical dev name) and `seshat` (the product-brand alias); both dispatch the same
-entry point, so every command below works under either name.
+Seshat BI gives an agent one truthful next action for turning raw retail data into governed BI. Your first run needs neither a database nor Power BI Desktop.
 
-```bash
-# clone
-git clone https://github.com/ahmed-shaaban-94/Seshat_BI.git
-cd Seshat_BI
+> [!NOTE]
+> `seshat-bi` is the intended distribution name, but it is **not published yet**. The install commands below are the public-beta target, not a claim that an artifact is currently available.
 
-# install (editable, with dev extras)
-python -m venv .venv
-. .venv/Scripts/activate          # Windows Git Bash / PowerShell: use the matching activate
-pip install -e ".[dev]"
+### Three steps to first success
 
-# run the static governance gate over the whole repo
-retail check                       # exit 0 == the repo is governance-clean
-seshat check                       # same command, product-brand alias
+1. `pipx install seshat-bi` *(target — not yet published)*
+2. `seshat init-project my-bi`
+3. `cd my-bi`, run `git init`, then `seshat check`
+
+### Try without a database
+
+#### Windows (release-gated path)
+
+```powershell
+pipx install seshat-bi           # target — not yet published
+pipx ensurepath                  # reopen PowerShell if seshat is not found
+seshat --help
+seshat init-project my-bi
+cd my-bi
+git init
+seshat status --format json      # expected: {"tables": []}
+seshat next --format agent       # truthful Source Ready onboarding action
+seshat check                     # expected: exit 0
 ```
 
-> New user starting a fresh project? `seshat init-project my-retail-bi` scaffolds an
-> empty workspace. Install-path details: [`docs/install/user-install.md`](docs/install/user-install.md).
-
-No console script? With the package installed, the checker also runs as a
-module -- and from a bare uninstalled clone, prefix with `PYTHONPATH=src`:
+#### macOS / Linux (documented; best-effort tested)
 
 ```bash
-python -m retail.cli check --repo .
-PYTHONPATH=src python -m retail.cli check --repo .   # bare clone, no install
+pipx install seshat-bi           # target — not yet published
+pipx ensurepath                  # reopen your shell if seshat is not found
+seshat --help
+seshat init-project my-bi
+cd my-bi
+git init
+seshat status --format json      # expected: {"tables": []}
+seshat next --format agent       # truthful Source Ready onboarding action
+seshat check                     # expected: exit 0
 ```
 
-Tests:
+A successful first run lists `init-project`, `status`, `next`, and `check` in `seshat --help`. The `next` result says `not_started`, includes evidence and blockers, and never invents a pass or a numeric score.
+
+If `seshat` is not on PATH after installation, run `pipx ensurepath`, reopen the shell, or use `python -m seshat.cli <verb>`. The legacy fallback `python -m retail.cli <verb>` remains available for one deprecation cycle.
+
+| Problem | What to do |
+|---|---|
+| `python` or `pipx` is missing | Install Python 3.13 and `pipx`, then retry. |
+| `seshat` is not found | Run `pipx ensurepath`, reopen the shell, or use `python -m seshat.cli <verb>`. |
+| `check` or `next` says Git is unavailable / the directory is not a repo | Install Git if needed, then run `git init` in the new workspace. |
+| Plugin installation fails | Confirm the marketplace is publicly released; the local-path flow is development-only. |
+
+### Connect a database later
+
+A normal install brings no database, file, test, or lint dependency. When live validation is needed, install only the relevant extra:
 
 ```bash
-pytest -m unit -q                  # fast unit suite
+pipx inject seshat-bi psycopg2-binary  # or install "seshat-bi[db]" (target — not yet published)
+seshat validate --source-map mappings/<table>/source-map.yaml
 ```
 
-Live validation and the DAX/value surfaces run only when a database connection
-is configured (the driver import is lazy, so the rest of the kit works with no
-DB):
-
-```bash
-pip install -e ".[db]"
-retail validate       --source-map mappings/<table>/source-map.yaml   # gold-layer live checks
-retail semantic-check --repo .                                        # L3 contract<->DAX drift
-retail value-check    --repo .                                        # L4 value proxy (approved value vs live aggregate)
-```
-
-> [!IMPORTANT]
-> Secrets live only in `.env` (git-ignored). Never commit a real database host,
-> DSN, password, or Power BI connection string. Copy `.env.example` to `.env` and
-> fill local values; if no DSN is available, the agent stays useful by authoring
-> artifact structure and marking live values as pending -- it never fakes a pass.
-
----
-
+`mssql`, `mysql`, `snowflake`, and `files` are additional user-path extras. Put credentials only in the git-ignored `.env` file. See [the complete user install guide](docs/install/user-install.md) and [the Claude Code guide](docs/install/agent-install.md).
 ## What is built today
 
 Everything below is on `main`, each with a written spec (under `specs/` or
@@ -247,7 +254,7 @@ read readiness status
 |------|---------|
 | `AGENTS.md` | Operating contract for AI agents. Read first. |
 | `.specify/` | Spec-Kit constitution and governance memory. |
-| `src/retail/` | The `retail` CLI package: static + live governance surfaces. |
+| `src/seshat/` | The `retail` CLI package: static + live governance surfaces. |
 | `warehouse/` | Tool-agnostic medallion SQL: `bronze` / `silver` / `gold` + migrations. |
 | `powerbi/` | Power BI PBIP artifacts. Power BI reads `gold` only. |
 | `specs/` | Feature specs, plans, tasks, checklists (one directory per feature; see `specs/README.md`). |

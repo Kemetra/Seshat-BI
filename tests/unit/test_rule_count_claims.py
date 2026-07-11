@@ -1,6 +1,6 @@
 """TDD tests for SC2 -- prose rule-count claim reconciler.
 
-SC2 is the rule-COUNT sibling of SC1 (``src/retail/rules/status_claims.py``). SC1
+SC2 is the rule-COUNT sibling of SC1 (``src/seshat/rules/status_claims.py``). SC1
 reconciles prose status claims (built/planned) against tracked-file evidence; SC2
 reconciles a prose "N rules" count claim against the AUTHORITATIVE rule count.
 
@@ -26,8 +26,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.rule_count_claims import (
+from seshat.core import RuleContext, Severity
+from seshat.rules.rule_count_claims import (
     _COUNT_SOURCE,
     _MANIFEST,
     check_rule_count_claims,

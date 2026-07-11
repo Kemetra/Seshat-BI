@@ -6,7 +6,7 @@ are grouped, then alphabetical within a group.
 
 > **Authoritative sources** (this page summarizes, it does not replace them): the spine
 > — `docs/readiness/readiness-model.md`; the cleaning defaults —
-> `docs/decisions/0002-retail-cleaning-defaults.md`; the static rules — `src/retail/rules/` (live
+> `docs/decisions/0002-retail-cleaning-defaults.md`; the static rules — `src/seshat/rules/` (live
 > registry) and the `retail-govern` skill (id → fix); the method —
 > `docs/medallion-playbook.md`.
 
@@ -96,7 +96,7 @@ idempotent migration · **RC14** Kimball star + `-1` member · **RC15** contiguo
 ## Static check rules (`retail check`)
 
 This catalog is the **single source of truth for `retail check`'s rule count.**
-The **live registry in `src/retail/rules/` is authoritative**; the table below
+The **live registry in `src/seshat/rules/` is authoritative**; the table below
 mirrors it and the `retail-govern` skill maps each id to its fix.
 
 > **Currently 70 rules in 23 families** (S, D, C, R, RS, G, P, A, B, PP, SC, DF, SL, AL, AD, AQ, CB, DL, CT, DR, AP, SF, HR).
@@ -148,5 +148,5 @@ mirrors it and the `retail-govern` skill maps each id to its fix.
 - The spine: `docs/readiness/readiness-model.md` and the seven `docs/readiness/<stage>-ready.md` docs.
 - The worked examples: `docs/worked-examples/README.md`.
 - The cleaning defaults: `docs/decisions/0002-retail-cleaning-defaults.md`.
-- The rules: `src/retail/rules/` + the `retail-govern` skill.
+- The rules: `src/seshat/rules/` + the `retail-govern` skill.
 - The roadmap + hard rules: `docs/roadmap/roadmap.md`.

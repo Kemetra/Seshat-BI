@@ -8,9 +8,9 @@ guard (FR-011) is a pure function, fully tested here.
 
 import pytest
 
-from retail.demo import DEMO_MARKER
-from retail.demo.live import apply_ddl, demo_scoped_ddl
-from retail.demo.load import target_is_demo_scoped
+from seshat.demo import DEMO_MARKER
+from seshat.demo.live import apply_ddl, demo_scoped_ddl
+from seshat.demo.load import target_is_demo_scoped
 
 pytestmark = pytest.mark.unit
 

@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.readiness_status import check_readiness_status_consistency
+from seshat.core import RuleContext, Severity
+from seshat.rules.readiness_status import check_readiness_status_consistency
 
 pytestmark = pytest.mark.unit
 

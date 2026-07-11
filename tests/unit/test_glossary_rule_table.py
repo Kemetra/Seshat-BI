@@ -37,10 +37,10 @@ _PROSE_TOKENS = frozenset({"S4"})
 
 
 def _live_rule_ids() -> set[str]:
-    import retail.rules  # noqa: F401
+    import seshat.rules  # noqa: F401
 
-    importlib.reload(retail.rules)  # re-fire @register after any sibling clear
-    from retail import registry
+    importlib.reload(seshat.rules)  # re-fire @register after any sibling clear
+    from seshat import registry
 
     return {r.id for r in registry.all_rules()}
 

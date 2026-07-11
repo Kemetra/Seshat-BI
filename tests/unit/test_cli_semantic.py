@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from retail.cli import main
+from seshat.cli import main
 
 pytestmark = pytest.mark.unit
 
@@ -181,8 +181,8 @@ _FORBIDDEN_MODULE_SCOPE_IMPORTS = (
     "from yaml",
     "from .metric_drift",
     "from .semantic",
-    "import retail.metric_drift",
-    "import retail.semantic",
+    "import seshat.metric_drift",
+    "import seshat.semantic",
 )
 
 
@@ -192,7 +192,7 @@ def _imports_forbidden_module(stripped: str) -> bool:
 
 def test_cli_does_not_import_yaml_or_metric_drift_at_module_scope() -> None:
     """cli.py must keep yaml + L3 modules out of its module scope (stdlib core)."""
-    import retail.cli as cli_mod
+    import seshat.cli as cli_mod
 
     src = Path(cli_mod.__file__).read_text(encoding="utf-8")
     for line in src.splitlines():

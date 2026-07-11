@@ -9,7 +9,7 @@ import pytest
 
 pytest.importorskip("testcontainers")  # collection-skip when livetest extra absent
 
-from retail import readiness_evidence, validate  # noqa: E402
+from seshat import readiness_evidence, validate  # noqa: E402
 
 pytestmark = pytest.mark.live_db
 

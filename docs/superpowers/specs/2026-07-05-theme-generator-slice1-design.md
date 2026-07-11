@@ -66,14 +66,14 @@ prose); it prints a suggested README line for the human to add.
 
 ## Architecture
 
-- New module `src/retail/theme_gen.py` -- the palette assembly + derivation + the
+- New module `src/seshat/theme_gen.py` -- the palette assembly + derivation + the
   three artifact writers. Pure functions where possible; one `generate(args) ->
   written_paths` entry.
-- New CLI verb in `src/retail/cli.py`: `retail theme-gen ...` (an `add_parser`
+- New CLI verb in `src/seshat/cli.py`: `retail theme-gen ...` (an `add_parser`
   sibling of `gen`/`scaffold`), dispatching to `theme_gen.main`.
 - **Reuse, don't duplicate, the WCAG math.** `design_contrast.py` already has
   `_channel_luminance`/`_relative_luminance`/`_contrast_ratio`. Extract these into a
-  small shared helper (e.g. `src/retail/color.py`) and have BOTH the CT1 rule and the
+  small shared helper (e.g. `src/seshat/color.py`) and have BOTH the CT1 rule and the
   generator import it -- so the generator's self-check uses the *exact* arithmetic the
   gate will later apply. This is a targeted, in-scope improvement (removes a
   copy-paste risk), not unrelated refactoring.
@@ -140,5 +140,5 @@ before implementation. See memory `pbir-authoring-adapter-authorized`.
   (DL3), `design_contrast.py` (CT1)
 - Seed reference: `design/tokens/tower-retail-design-tokens.yaml`,
   `themes/tower-retail.theme.json`, `templates/theme-json-spec.md`
-- CLI/verb precedent: `src/retail/cli.py`, `src/retail/dax_gen.py`,
-  `src/retail/scaffold.py`
+- CLI/verb precedent: `src/seshat/cli.py`, `src/seshat/dax_gen.py`,
+  `src/seshat/scaffold.py`

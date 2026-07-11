@@ -7,7 +7,7 @@ asserts against them.
 
 ANTI-CIRCULARITY (load-bearing, repo lesson ``verifier-must-sit-on-the-risk``):
 this module reads the FEEDER sources DIRECTLY and re-implements every reader.
-It MUST NOT import ``retail.capability_feeders`` or ``retail.capability_inventory``
+It MUST NOT import ``seshat.capability_feeders`` or ``seshat.capability_inventory``
 -- the oracle must never learn what a feeder says by calling the code under
 test, or a builder bug that hides drift on both sides would pass vacuously.
 The ``import``-free-of-those-modules property is asserted by the test module.

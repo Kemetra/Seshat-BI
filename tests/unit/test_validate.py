@@ -14,8 +14,8 @@ from __future__ import annotations
 
 import pytest
 
-from retail.core import Severity
-from retail.validate import (
+from seshat.core import Severity
+from seshat.validate import (
     DateCoverageTarget,
     OrphanTarget,
     PkTarget,
@@ -204,7 +204,7 @@ def test_reconciliation_null_total_is_error_not_crash() -> None:
 
 
 def test_resolve_dsn_prefers_database_url() -> None:
-    from retail.validate import resolve_dsn
+    from seshat.validate import resolve_dsn
 
     env = {"DATABASE_URL": "postgresql://u:p@somehost:5432/db?sslmode=require"}
     dsn = resolve_dsn(env)
@@ -212,7 +212,7 @@ def test_resolve_dsn_prefers_database_url() -> None:
 
 
 def test_resolve_dsn_builds_from_analytics_db_parts() -> None:
-    from retail.validate import resolve_dsn
+    from seshat.validate import resolve_dsn
 
     env = {
         "ANALYTICS_DB_HOST": "local.example",
@@ -230,7 +230,7 @@ def test_resolve_dsn_builds_from_analytics_db_parts() -> None:
 
 
 def test_resolve_dsn_local_no_ssl_no_password() -> None:
-    from retail.validate import resolve_dsn
+    from seshat.validate import resolve_dsn
 
     # a local DB: no password, no sslmode -> still a valid DSN
     env = {
@@ -243,7 +243,7 @@ def test_resolve_dsn_local_no_ssl_no_password() -> None:
 
 
 def test_resolve_dsn_missing_config_returns_none() -> None:
-    from retail.validate import resolve_dsn
+    from seshat.validate import resolve_dsn
 
     # no DATABASE_URL and no host -> cannot resolve -> None (handler errors clearly)
     assert resolve_dsn({}) is None
@@ -253,16 +253,16 @@ def test_validate_imports_without_psycopg2() -> None:
     import importlib
 
     # If psycopg2 were imported at module scope, this would already have failed
-    # at the top-of-file `from retail.validate import ...`. Re-import explicitly
+    # at the top-of-file `from seshat.validate import ...`. Re-import explicitly
     # to lock the contract.
-    mod = importlib.import_module("retail.validate")
+    mod = importlib.import_module("seshat.validate")
     assert hasattr(mod, "check_pk_uniqueness")
 
 
 def test_cli_imports_without_psycopg2() -> None:
     import importlib
 
-    cli = importlib.import_module("retail.cli")
+    cli = importlib.import_module("seshat.cli")
     assert hasattr(cli, "main")
     # The validate subcommand must be registered without importing a DB driver.
     parser = cli._build_parser()
@@ -298,7 +298,7 @@ def _clean_targets():
 
 
 def test_run_live_checks_all_clean_returns_no_findings() -> None:
-    from retail.validate import ValidationTargets, run_live_checks
+    from seshat.validate import ValidationTargets, run_live_checks
 
     pk, dc, orph, rec = _clean_targets()
     targets = ValidationTargets(pk=pk, date_coverage=dc, orphans=orph, reconcile=rec)
@@ -309,7 +309,7 @@ def test_run_live_checks_all_clean_returns_no_findings() -> None:
 
 
 def test_run_live_checks_aggregates_findings_across_checks() -> None:
-    from retail.validate import ValidationTargets, run_live_checks
+    from seshat.validate import ValidationTargets, run_live_checks
 
     pk, dc, orph, rec = _clean_targets()
     targets = ValidationTargets(pk=pk, date_coverage=dc, orphans=orph, reconcile=rec)

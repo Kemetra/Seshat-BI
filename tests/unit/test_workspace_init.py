@@ -31,8 +31,8 @@ from pathlib import Path
 
 import pytest
 
-from retail import cli
-from retail.workspace_init import init_project
+from seshat import cli
+from seshat.workspace_init import init_project
 
 pytestmark = pytest.mark.unit
 
@@ -263,7 +263,7 @@ def test_allows_absolute_path_that_is_under_cwd(tmp_path, monkeypatch) -> None:
 def test_module_has_no_module_scope_db_or_network_import() -> None:
     import inspect
 
-    from retail import workspace_init as wi
+    from seshat import workspace_init as wi
 
     src = inspect.getsource(wi)
     for forbidden in ("import psycopg2", "import requests", "import socket"):

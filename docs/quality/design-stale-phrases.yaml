@@ -1,5 +1,5 @@
 # Design stale-phrase manifest -- the source DR1
-# (src/retail/rules/design_routes.py) reconciles against committed doc text. Each
+# (src/seshat/rules/design_routes.py) reconciles against committed doc text. Each
 # entry records a prose phrase that is KNOWN STALE (a superseded verb, a "spec-only"
 # claim about a shipped surface, a renamed design token). DR1 is the INVERSE of SC1:
 # SC1 requires an anchor to be PRESENT (a moved/removed anchor is flagged); DR1 flags

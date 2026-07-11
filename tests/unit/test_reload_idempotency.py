@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.reload_idempotency import check_hr7
+from seshat.core import RuleContext, Severity
+from seshat.rules.reload_idempotency import check_hr7
 
 pytestmark = pytest.mark.unit
 

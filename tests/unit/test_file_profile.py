@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from retail.file_profile import (
+from seshat.file_profile import (
     _MaterializedReader,
     make_csv_reader,
     make_excel_reader,

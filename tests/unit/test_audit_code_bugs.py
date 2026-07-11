@@ -7,8 +7,8 @@ from __future__ import annotations
 
 import pytest
 
-from retail.metric_drift import check_measure_drift
-from retail.rules.dax import (
+from seshat.metric_drift import check_measure_drift
+from seshat.rules.dax import (
     _DATE_LITERAL,
     _M_STRING_LITERAL,
     _extract_m_string_bodies,

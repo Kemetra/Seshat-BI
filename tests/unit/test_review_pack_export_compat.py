@@ -4,7 +4,7 @@ import inspect
 
 import pytest
 
-from retail.review_pack_export import Pack, Section
+from seshat.review_pack_export import Pack, Section
 
 pytestmark = pytest.mark.unit
 
@@ -16,7 +16,7 @@ def test_v1_0_consumer_fields_survive_a_minor_bump():
     "1.1" doc adds one OPTIONAL field, and a "1.0" consumer ignoring the unknown
     field still finds every field it was written against.
     """
-    from retail.review_pack_export import to_json
+    from seshat.review_pack_export import to_json
 
     v10 = to_json(
         Pack(
@@ -53,7 +53,7 @@ def test_v1_0_consumer_fields_survive_a_minor_bump():
 
 def test_module_docstring_states_additive_only_rule():
     """T019: the additive-only rule lives adjacent to the code for future editors."""
-    import retail.review_pack_export as mod
+    import seshat.review_pack_export as mod
 
     doc = (inspect.getdoc(mod) or "").lower()
     assert "additive" in doc

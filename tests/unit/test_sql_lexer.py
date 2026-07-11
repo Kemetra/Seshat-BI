@@ -1,6 +1,6 @@
 import pytest
 
-from retail.sql import stale_schema_tokens, tokenize_sql
+from seshat.sql import stale_schema_tokens, tokenize_sql
 
 pytestmark = pytest.mark.unit
 

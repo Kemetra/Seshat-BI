@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.publish_pack import (
+from seshat.core import RuleContext, Severity
+from seshat.rules.publish_pack import (
     _PACK_GLOB_SUFFIX,
     _REQUIRED_SECTIONS,
     check_publish_pack_complete,

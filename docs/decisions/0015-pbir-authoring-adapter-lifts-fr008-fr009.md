@@ -27,7 +27,7 @@
 
 Agent-authored PBIR is permitted **exclusively** through the companion adapter
 specified in `specs/106-pbir-authoring-adapter/` and bound by its FR-001..FR-011.
-The static DEFINE/CHECK core (`src/retail/` rules, `retail check`) **remains
+The static DEFINE/CHECK core (`src/seshat/` rules, `retail check`) **remains
 forbidden** from writing any PBIR/report file. The lift is a narrow carve-out, not
 a general permission: outside this adapter, FR-008/FR-009 stand unchanged.
 
@@ -135,6 +135,6 @@ plan/tasks AFTER this ratification. No PBIR is written by this decision.
 - The companion-adapter precedents: ADR 0009 (dbt), ADR 0010 (Dagster);
   `docs/architecture/product-modules.md`.
 - The styling source this adapter consumes: the `retail theme-gen` verb
-  (`src/retail/theme_gen.py`) + `themes/` (Slice 1, PR #204).
+  (`src/seshat/theme_gen.py`) + `themes/` (Slice 1, PR #204).
 - The parked publish adapter (separate, never overlapping): F016.
 - `.specify/memory/constitution.md` (Principles III, IV, V, VIII, IX; hard rule #9).

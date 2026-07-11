@@ -126,7 +126,7 @@ source-mapping workflow to author the source-map decisions.
 - `../source-intelligence.md` -- Layer 2: how the OPTIONAL registry + dictionary feed this stage's evidence.
 - `../../templates/business-meaning-registry.md`, `../../templates/retail-term-dictionary.md` -- the OPTIONAL semantic-proposal artifacts.
 - `../../.claude/skills/source-mapping/SKILL.md` -- the skill that runs this stage; calls `profile.py` as the mechanical profiler.
-- `../../src/retail/profile.py` -- the mechanical profiler for a DB table (row/col counts, `'' OR NULL` missingness, candidate-PK proof).
-- `../../src/retail/file_profile.py` -- the mechanical profiler for a CSV/Excel file source (same measures, driver-free; CSV on the stdlib, Excel via the `files` extra).
+- `../../src/seshat/profile.py` -- the mechanical profiler for a DB table (row/col counts, `'' OR NULL` missingness, candidate-PK proof).
+- `../../src/seshat/file_profile.py` -- the mechanical profiler for a CSV/Excel file source (same measures, driver-free; CSV on the stdlib, Excel via the `files` extra).
 - `../medallion-playbook.md` -- Phase 1, which this stage maps to.
 - A filled worked example under `../worked-examples/` shows a completed instance, not the schema.

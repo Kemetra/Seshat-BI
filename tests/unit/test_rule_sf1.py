@@ -16,8 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.rule_sf1 import check_sf1
+from seshat.core import RuleContext, Severity
+from seshat.rules.rule_sf1 import check_sf1
 
 pytestmark = pytest.mark.unit
 

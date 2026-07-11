@@ -53,8 +53,8 @@ git commit -m "$(printf 'docs: formatting-plan.md ledger template (smart-formatt
 ### Task 2: The DL7 ledger-well-formedness lint
 
 **Files:**
-- Create: `src/retail/rules/formatting_plan.py`
-- Modify: `src/retail/rules/__init__.py` (add `formatting_plan` to the import block ~line 30 and to `__all__` ~line 55, both alphabetically → after `date_spine`/before `dax` is wrong; it sorts after `design_*` — insert `formatting_plan` after `dax` and before `design_background`? No: alphabetical `f` > `design_*` and > `dax`, < `g6`. Insert `formatting_plan,` between `dax,`… actually between the `design_*` group and `g6`. Place it immediately before `g6` in both lists.)
+- Create: `src/seshat/rules/formatting_plan.py`
+- Modify: `src/seshat/rules/__init__.py` (add `formatting_plan` to the import block ~line 30 and to `__all__` ~line 55, both alphabetically → after `date_spine`/before `dax` is wrong; it sorts after `design_*` — insert `formatting_plan` after `dax` and before `design_background`? No: alphabetical `f` > `design_*` and > `dax`, < `g6`. Insert `formatting_plan,` between `dax,`… actually between the `design_*` group and `g6`. Place it immediately before `g6` in both lists.)
 - Modify: `tests/unit/test_rules_wiring.py` (add `"DL7",` to `EXPECTED_RULE_IDS` after `"DL6"`)
 - Modify (regen, do not hand-edit): `docs/rules/rules-manifest.json`, `docs/rules/severity-posture.json`
 - Modify: `docs/glossary.md` (DL family row: append DL7; bump the rule count) + `docs/quality/rule-count-claims.yaml` (anchor + count)
@@ -145,7 +145,7 @@ def test_test_fixtures_are_exempt_when_under_tests_path() -> None:
 Run: `PYTHONPATH=src python -m pytest tests/unit/test_formatting_plan.py -q --no-cov`
 Expected: FAIL — `ModuleNotFoundError: No module named 'retail.rules.formatting_plan'`
 
-- [ ] **Step 4: Write `src/retail/rules/formatting_plan.py`**
+- [ ] **Step 4: Write `src/seshat/rules/formatting_plan.py`**
 
 ```python
 """Design-lint rule DL7: formatting-plan ledger well-formedness.
@@ -327,7 +327,7 @@ def check_formatting_plan(ctx: RuleContext) -> Iterable[Finding]:
 
 - [ ] **Step 5: Wire DL7 into the registry (`__init__.py`)**
 
-In `src/retail/rules/__init__.py`, add `formatting_plan,` to the import block (immediately before `g6,`) and `"formatting_plan",` to `__all__` (immediately before `"g6",`).
+In `src/seshat/rules/__init__.py`, add `formatting_plan,` to the import block (immediately before `g6,`) and `"formatting_plan",` to `__all__` (immediately before `"g6",`).
 
 - [ ] **Step 6: Add DL7 to `EXPECTED_RULE_IDS`**
 
@@ -357,11 +357,11 @@ PYTHONPATH=src python -c "import json;print(len(json.load(open('docs/rules/rules
 
 - [ ] **Step 10: Full gate → green, then commit**
 
-Run: `ruff format src/retail/rules/formatting_plan.py tests/unit/test_formatting_plan.py` then `ruff check src tests` then `PYTHONPATH=src python -m pytest -m unit -q --no-cov` then `retail check`.
+Run: `ruff format src/seshat/rules/formatting_plan.py tests/unit/test_formatting_plan.py` then `ruff check src tests` then `PYTHONPATH=src python -m pytest -m unit -q --no-cov` then `retail check`.
 Expected: all green (DL7 clean on its own clean fixture; SC2 count reconciled).
 
 ```bash
-git add src/retail/rules/formatting_plan.py src/retail/rules/__init__.py tests/unit/test_formatting_plan.py tests/unit/test_rules_wiring.py tests/fixtures/formatting_plan/ docs/rules/rules-manifest.json docs/rules/severity-posture.json docs/glossary.md docs/quality/rule-count-claims.yaml
+git add src/seshat/rules/formatting_plan.py src/seshat/rules/__init__.py tests/unit/test_formatting_plan.py tests/unit/test_rules_wiring.py tests/fixtures/formatting_plan/ docs/rules/rules-manifest.json docs/rules/severity-posture.json docs/glossary.md docs/quality/rule-count-claims.yaml
 git commit -m "$(printf 'feat: DL7 formatting-plan ledger well-formedness lint\n\nValidates a committed formatting-plan.md shape: every row cites a\nresolvable visual-qa.md anti-pattern + a token; no applyable row claims a\nrender-only anti-pattern (#1/#5/#6/#7) resolved; no score field; the\nagent has not self-ratified; container is allow-listed. Read-only,\nstdlib-only. Wired into the registry + golden manifests; rule count bumped.\n\nCo-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>')"
 ```
 

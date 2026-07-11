@@ -2,7 +2,7 @@
 #
 # This file makes the two-hop routing contract VERIFIABLE. Each route mirrors a
 # row of `docs/knowledge-map.md` "Route by task" (and the COMPASS fast-routing
-# table). The A1 rule (`src/retail/rules/routes.py`) reads this manifest and
+# table). The A1 rule (`src/seshat/rules/routes.py`) reads this manifest and
 # fails the gate when a route's contract is broken.
 #
 # Contract per route:

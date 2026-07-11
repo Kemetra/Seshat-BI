@@ -111,7 +111,7 @@ never inlined (Principle VII).
 
 ## Deferred (enumerated, NOT built this slice)
 
-- **`src/retail/tools/readiness_viewer.py`** -- an OPTIONAL future read-only CLI
+- **`src/seshat/tools/readiness_viewer.py`** -- an OPTIONAL future read-only CLI
   renderer that would parse the per-item files and emit the matrix if item volume
   outgrows hand-rendering. It is still a read-only reporter (NO new validator, NO new
   `retail check` rule, NO DB read). It is ENUMERATED here only; nothing in this slice

@@ -4,13 +4,13 @@
 
 **Goal:** Let the read-only profile + validate seam connect to SQL Server, MySQL, and Snowflake (in addition to the default Postgres) via a thin `Dialect` abstraction over the existing `QueryRunner` Protocol.
 
-**Architecture:** A new `src/retail/dialect.py` holds a `Dialect` Protocol + four concrete dialects. `PostgresDialect` emits **today's exact SQL** (so the 897-test suite stays a true regression oracle); the three new dialects emit portable/native forms. The three DB modules (`profile.py`, `validate.py`, `value_proxy.py`) stop hardcoding Postgres SQL and route fragment-building through a dialect. Drivers are lazy optional extras. The work ends at a Principle III ratify ledger — no merge to `main`.
+**Architecture:** A new `src/seshat/dialect.py` holds a `Dialect` Protocol + four concrete dialects. `PostgresDialect` emits **today's exact SQL** (so the 897-test suite stays a true regression oracle); the three new dialects emit portable/native forms. The three DB modules (`profile.py`, `validate.py`, `value_proxy.py`) stop hardcoding Postgres SQL and route fragment-building through a dialect. Drivers are lazy optional extras. The work ends at a Principle III ratify ledger — no merge to `main`.
 
 **Tech Stack:** Python 3.13, stdlib-only static core, pytest (unit), `ast`-based governance rules. New optional drivers: pyodbc (SQL Server), mysql-connector-python (MySQL), snowflake-connector-python (Snowflake). psycopg2 unchanged (Postgres, default).
 
 ## Global Constraints
 
-- **Driver-free import path:** no module-scope import of any DB driver in any `src/retail/*.py`. Every driver import is LAZY, inside the `connect()` method that uses it. (Enforced by B1/B3; extended in this plan.)
+- **Driver-free import path:** no module-scope import of any DB driver in any `src/seshat/*.py`. Every driver import is LAZY, inside the `connect()` method that uses it. (Enforced by B1/B3; extended in this plan.)
 - **Static core stays `dependencies = []`:** new drivers are OPTIONAL extras, never added to `dev`. CI installs none of them; the suite passing proves the seam is driver-free.
 - **`PostgresDialect` is behavior-preserving:** it emits byte-identical SQL to today's hardcoded strings. The existing 897 tests MUST stay green after every consumer refactor task.
 - **Identifier validation is mandatory at every boundary:** splitting validation (shared) from quoting (Dialect) MUST NOT drop the validate step. Every dynamic identifier is validated (raises `ValueError` BEFORE any SQL is built) then quoted. This is a SQL-injection boundary.
@@ -26,15 +26,15 @@
 
 | File | Responsibility | New/Modified |
 |---|---|---|
-| `src/retail/dialect.py` | `Dialect` Protocol + `PostgresDialect`, `SqlServerDialect`, `MySqlDialect`, `SnowflakeDialect`; `get_dialect(name)` factory | **Create** |
+| `src/seshat/dialect.py` | `Dialect` Protocol + `PostgresDialect`, `SqlServerDialect`, `MySqlDialect`, `SnowflakeDialect`; `get_dialect(name)` factory | **Create** |
 | `tests/unit/test_dialect.py` | String-assertion tests for every dialect's fragment builders + the 4 silent-failure risks | **Create** |
-| `src/retail/profile.py` | Route SQL through a dialect (was hardcoded PG) | Modify |
-| `src/retail/validate.py` | Route SQL + connect + resolve-config through a dialect | Modify |
-| `src/retail/value_proxy.py` | Route aggregate SQL through a dialect | Modify |
-| `src/retail/cli.py` | `_make_runner`/`_ensure_driver`/`_redact_dsn` become engine-aware | Modify |
-| `src/retail/rules/never_execute.py` | Add `mysql`/`snowflake` to `_FORBIDDEN_ROOTS` | Modify |
-| `src/retail/rules/live_surface_boundary.py` | Add `src/retail/dialect.py` to `_LIVE_SURFACE` | Modify |
-| `src/retail/rules/git_meta.py` | Extend C2 secret-scan to ODBC/Snowflake/MySQL connection shapes | Modify |
+| `src/seshat/profile.py` | Route SQL through a dialect (was hardcoded PG) | Modify |
+| `src/seshat/validate.py` | Route SQL + connect + resolve-config through a dialect | Modify |
+| `src/seshat/value_proxy.py` | Route aggregate SQL through a dialect | Modify |
+| `src/seshat/cli.py` | `_make_runner`/`_ensure_driver`/`_redact_dsn` become engine-aware | Modify |
+| `src/seshat/rules/never_execute.py` | Add `mysql`/`snowflake` to `_FORBIDDEN_ROOTS` | Modify |
+| `src/seshat/rules/live_surface_boundary.py` | Add `src/seshat/dialect.py` to `_LIVE_SURFACE` | Modify |
+| `src/seshat/rules/git_meta.py` | Extend C2 secret-scan to ODBC/Snowflake/MySQL connection shapes | Modify |
 | `pyproject.toml` | Add `mssql`, `mysql`, `snowflake` optional extras | Modify |
 | `.env.example` | Add `ANALYTICS_DB_ENGINE` + per-engine keys (empty values) | Modify |
 | `docs/superpowers/specs/2026-07-03-multi-engine-db-support-design.md` | Fix the "byte-identical" line to state PG keeps FILTER/row-value | Modify |
@@ -47,7 +47,7 @@
 ## Task 1: `Dialect` Protocol + `PostgresDialect` (purely additive)
 
 **Files:**
-- Create: `src/retail/dialect.py`
+- Create: `src/seshat/dialect.py`
 - Test: `tests/unit/test_dialect.py`
 
 **Interfaces:**
@@ -106,7 +106,7 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'retail.dialect'`
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# src/retail/dialect.py
+# src/seshat/dialect.py
 """Per-engine SQL dialect seam for the read-only profile + validate surface.
 
 The QueryRunner Protocol answers "how do I execute"; a Dialect answers "how do I
@@ -206,7 +206,7 @@ Expected: PASS (4 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/dialect.py tests/unit/test_dialect.py
+git add src/seshat/dialect.py tests/unit/test_dialect.py
 git commit -m "feat: add Dialect Protocol + PostgresDialect (additive, PG SQL unchanged)"
 ```
 
@@ -215,7 +215,7 @@ git commit -m "feat: add Dialect Protocol + PostgresDialect (additive, PG SQL un
 ## Task 2: PostgresDialect `distinct_tuple_count` full-subquery variant + `columns_query`
 
 **Files:**
-- Modify: `src/retail/dialect.py`
+- Modify: `src/seshat/dialect.py`
 - Test: `tests/unit/test_dialect.py`
 
 **Interfaces:**
@@ -267,7 +267,7 @@ Expected: PASS (6 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/dialect.py tests/unit/test_dialect.py
+git add src/seshat/dialect.py tests/unit/test_dialect.py
 git commit -m "feat: PostgresDialect columns_query + distinct_tuple_count (PG-exact)"
 ```
 
@@ -276,7 +276,7 @@ git commit -m "feat: PostgresDialect columns_query + distinct_tuple_count (PG-ex
 ## Task 3: Refactor `profile.py` to route through a dialect (897 stay green)
 
 **Files:**
-- Modify: `src/retail/profile.py`
+- Modify: `src/seshat/profile.py`
 - Test: `tests/unit/test_profile.py` (existing — must stay green), `tests/unit/test_dialect.py`
 
 **Interfaces:**
@@ -356,7 +356,7 @@ Expected: PASS (897 passed, 1 skipped) — same as baseline
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/profile.py
+git add src/seshat/profile.py
 git commit -m "refactor: route profile.py SQL through a dialect (PG default, 897 green)"
 ```
 
@@ -365,7 +365,7 @@ git commit -m "refactor: route profile.py SQL through a dialect (PG default, 897
 ## Task 4: Refactor `validate.py` to route through a dialect
 
 **Files:**
-- Modify: `src/retail/validate.py`
+- Modify: `src/seshat/validate.py`
 - Test: `tests/unit/test_validate.py`, `tests/unit/test_live_surface_boundary.py` (both must stay green)
 
 **Interfaces:**
@@ -396,7 +396,7 @@ Expected: PASS (897 passed, 1 skipped)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/validate.py
+git add src/seshat/validate.py
 git commit -m "refactor: route validate.py checks through a dialect (PG default, green)"
 ```
 
@@ -405,7 +405,7 @@ git commit -m "refactor: route validate.py checks through a dialect (PG default,
 ## Task 5: Refactor `value_proxy.py` to route through a dialect
 
 **Files:**
-- Modify: `src/retail/value_proxy.py`
+- Modify: `src/seshat/value_proxy.py`
 - Test: `tests/unit/test_value_proxy.py`
 
 **Interfaces:**
@@ -434,7 +434,7 @@ Expected: PASS (897 passed, 1 skipped)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/value_proxy.py
+git add src/seshat/value_proxy.py
 git commit -m "refactor: route value_proxy.py aggregate SQL through a dialect (green)"
 ```
 
@@ -443,7 +443,7 @@ git commit -m "refactor: route value_proxy.py aggregate SQL through a dialect (g
 ## Task 6: `SqlServerDialect` (T-SQL, pyodbc) — the fragments
 
 **Files:**
-- Modify: `src/retail/dialect.py`
+- Modify: `src/seshat/dialect.py`
 - Test: `tests/unit/test_dialect.py`
 
 **Interfaces:**
@@ -552,7 +552,7 @@ Expected: PASS (6 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/dialect.py tests/unit/test_dialect.py
+git add src/seshat/dialect.py tests/unit/test_dialect.py
 git commit -m "feat: SqlServerDialect T-SQL fragments (COUNT(CASE), brackets, qmark)"
 ```
 
@@ -561,7 +561,7 @@ git commit -m "feat: SqlServerDialect T-SQL fragments (COUNT(CASE), brackets, qm
 ## Task 7: `MySqlDialect` — the fragments
 
 **Files:**
-- Modify: `src/retail/dialect.py`
+- Modify: `src/seshat/dialect.py`
 - Test: `tests/unit/test_dialect.py`
 
 **Interfaces:**
@@ -660,7 +660,7 @@ Expected: PASS (5 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/dialect.py tests/unit/test_dialect.py
+git add src/seshat/dialect.py tests/unit/test_dialect.py
 git commit -m "feat: MySqlDialect fragments (COUNT(CASE), backticks, pyformat)"
 ```
 
@@ -669,7 +669,7 @@ git commit -m "feat: MySqlDialect fragments (COUNT(CASE), backticks, pyformat)"
 ## Task 8: `SnowflakeDialect` — the fragments + folding rule (R1)
 
 **Files:**
-- Modify: `src/retail/dialect.py`
+- Modify: `src/seshat/dialect.py`
 - Test: `tests/unit/test_dialect.py`
 
 **Interfaces:**
@@ -778,7 +778,7 @@ Expected: PASS (5 tests)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/dialect.py tests/unit/test_dialect.py src/retail/profile.py
+git add src/seshat/dialect.py tests/unit/test_dialect.py src/seshat/profile.py
 git commit -m "feat: SnowflakeDialect + R1 folding normalization (uppercase idents)"
 ```
 
@@ -846,7 +846,7 @@ git commit -m "test: lock in R1-R3 silent-failure regressions across all four di
 ## Task 10: Extend B1/B3 guards for the new drivers + `dialect.py`
 
 **Files:**
-- Modify: `src/retail/rules/never_execute.py`, `src/retail/rules/live_surface_boundary.py`
+- Modify: `src/seshat/rules/never_execute.py`, `src/seshat/rules/live_surface_boundary.py`
 - Test: `tests/unit/test_never_execute.py`, `tests/unit/test_live_surface_boundary.py`
 
 **Interfaces:** none exported; these are governance-rule edits.
@@ -864,7 +864,7 @@ def test_snowflake_and_mysql_connector_are_forbidden_roots() -> None:
 # test_live_surface_boundary.py — add:
 def test_dialect_module_is_a_live_surface() -> None:
     from retail.rules.live_surface_boundary import _LIVE_SURFACE
-    assert "src/retail/dialect.py" in _LIVE_SURFACE
+    assert "src/seshat/dialect.py" in _LIVE_SURFACE
 ```
 
 - [ ] **Step 2: Run to verify failure**
@@ -876,7 +876,7 @@ Expected: FAIL (`AssertionError`)
 
 In `never_execute.py`, add to `_FORBIDDEN_ROOTS`: `"mysql"` (covers `mysql.connector`), `"snowflake"` (covers `snowflake.connector`). (`pyodbc`, `pymysql` already present.)
 
-In `live_surface_boundary.py`, add `"src/retail/dialect.py"` to `_LIVE_SURFACE`.
+In `live_surface_boundary.py`, add `"src/seshat/dialect.py"` to `_LIVE_SURFACE`.
 
 - [ ] **Step 4: Run to verify pass + the disjointness wiring test**
 
@@ -886,7 +886,7 @@ Expected: PASS (including `test_live_surface_set_is_disjoint_from_b1_governed`)
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/rules/never_execute.py src/retail/rules/live_surface_boundary.py tests/unit/test_never_execute.py tests/unit/test_live_surface_boundary.py
+git add src/seshat/rules/never_execute.py src/seshat/rules/live_surface_boundary.py tests/unit/test_never_execute.py tests/unit/test_live_surface_boundary.py
 git commit -m "feat: B1/B3 guard the new drivers (mysql/snowflake) + dialect.py live-surface"
 ```
 
@@ -895,7 +895,7 @@ git commit -m "feat: B1/B3 guard the new drivers (mysql/snowflake) + dialect.py 
 ## Task 11: Engine-aware connect, config resolution, redaction (R4) + C2 extension + packaging
 
 **Files:**
-- Modify: `src/retail/dialect.py` (add per-engine `connect`, `resolve_config`, `redact`), `src/retail/cli.py` (engine-aware `_make_runner`/`_ensure_driver`/`_redact_dsn`), `src/retail/rules/git_meta.py` (C2), `pyproject.toml`, `.env.example`
+- Modify: `src/seshat/dialect.py` (add per-engine `connect`, `resolve_config`, `redact`), `src/seshat/cli.py` (engine-aware `_make_runner`/`_ensure_driver`/`_redact_dsn`), `src/seshat/rules/git_meta.py` (C2), `pyproject.toml`, `.env.example`
 - Test: `tests/unit/test_dialect.py`, `tests/unit/test_git_meta.py`, `tests/unit/test_cli_context.py`
 
 **Interfaces:**
@@ -1028,13 +1028,13 @@ Expected: PASS (897 + new tests; the Postgres path unchanged)
 
 - [ ] **Step 5: Run the static gate end-to-end**
 
-Run: `python -m retail.cli check` (or `retail check`)
+Run: `python -m seshat.cli check` (or `retail check`)
 Expected: exit 0, rule count unchanged (no new rule added; B1/B3/C2 edits are within existing rules)
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add src/retail/dialect.py src/retail/cli.py src/retail/rules/git_meta.py pyproject.toml .env.example tests/unit/
+git add src/seshat/dialect.py src/seshat/cli.py src/seshat/rules/git_meta.py pyproject.toml .env.example tests/unit/
 git commit -m "feat: engine-aware connect/config/redaction (R4), C2 multi-shape scan, extras"
 ```
 
@@ -1058,7 +1058,7 @@ Create the ledger naming: the decision (widen Principle III to allow the read-on
 
 - [ ] **Step 3: Verify the full suite + gate one final time**
 
-Run: `python -m pytest tests/unit -q --no-cov && python -m retail.cli check`
+Run: `python -m pytest tests/unit -q --no-cov && python -m seshat.cli check`
 Expected: all tests pass; `retail check` exit 0.
 
 - [ ] **Step 4: Commit the governance artifacts**

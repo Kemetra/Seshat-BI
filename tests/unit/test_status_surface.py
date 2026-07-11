@@ -1,4 +1,4 @@
-"""Tests for `retail.status_surface` (spec 109, roadmap M4, Option B).
+"""Tests for `seshat.status_surface` (spec 109, roadmap M4, Option B).
 
 The status surface is a READ-ONLY projection of committed
 ``mappings/<table>/readiness-status.yaml`` state -- it introduces no new
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from retail.status_surface import build_status_projection
+from seshat.status_surface import build_status_projection
 
 pytestmark = pytest.mark.unit
 

@@ -114,7 +114,7 @@ format to stabilize.
 >   visual-spec self-check that reads `visual-spec.yaml`, so it never depended on the
 >   removed `visual.json` corpus.
 > - **E3** SHIPPED — `never_execute.py` already governs rule modules by a
->   `src/retail/rules/` PREFIX over `git ls-files` (not a hardcoded list), and
+>   `src/seshat/rules/` PREFIX over `git ls-files` (not a hardcoded list), and
 >   `tests/unit/test_never_execute.py` globs every rule module to prove B1/B3
 >   coverage. The "hardcoded list" blocker does not hold against live source.
 > - **H6** SHIPPED as rule **`CB1`** (`comparison_baseline.py`, 2026-07-07) — the

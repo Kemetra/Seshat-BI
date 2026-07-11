@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "retail"
+name = "seshat-bi"
 version = "0.1.0"
 license = "Apache-2.0"
 description = "Seshat BI: agent-first Retail BI readiness checker (static retail check + live retail validate over the medallion warehouse and Power BI conventions)."
@@ -20,12 +20,12 @@ dependencies = [
 ]
 
 [project.scripts]
-retail = "retail.cli:main"
+retail = "seshat.cli:main"
 # `seshat` is the product-brand alias of `retail` (roadmap M1). Both console
 # scripts dispatch the same entry point; `retail` stays the canonical dev name.
 # Exposing the `seshat` command requires a `pip install -e .` reinstall; the test
 # suite and `retail check` call the module directly, so they are unaffected.
-seshat = "retail.cli:main"
+seshat = "seshat.cli:main"
 
 [project.optional-dependencies]
 dev = [
@@ -75,7 +75,7 @@ livetest = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/retail"]
+packages = ["src/seshat", "src/retail"]
 
 [tool.ruff]
 line-length = 88

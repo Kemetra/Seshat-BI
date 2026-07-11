@@ -1,4 +1,4 @@
-"""Unit tests for the theme generator (retail.theme_gen), Slice 1."""
+"""Unit tests for the theme generator (seshat.theme_gen), Slice 1."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from retail.theme_gen import (
+from seshat.theme_gen import (
     ThemeGenError,
     ThemeSeed,
     build_palette,
@@ -64,7 +64,7 @@ def _light_seed(**over) -> ThemeSeed:
 
 
 def test_derive_dark_seed_inverts_background_and_text_only() -> None:
-    from retail.theme_gen import derive_dark_seed
+    from seshat.theme_gen import derive_dark_seed
 
     light = _light_seed()
     dark = derive_dark_seed(light)
@@ -81,7 +81,7 @@ def test_derive_dark_seed_inverts_background_and_text_only() -> None:
 
 
 def test_derive_dark_seed_clears_contrast_floor(tmp_path: Path) -> None:
-    from retail.theme_gen import (
+    from seshat.theme_gen import (
         build_palette,
         check_contrast_or_raise,
         derive_dark_seed,
@@ -93,14 +93,14 @@ def test_derive_dark_seed_clears_contrast_floor(tmp_path: Path) -> None:
 
 
 def test_derive_dark_seed_rejects_non_light_input() -> None:
-    from retail.theme_gen import derive_dark_seed
+    from seshat.theme_gen import derive_dark_seed
 
     with pytest.raises(ThemeGenError, match="mode"):
         derive_dark_seed(_seed())  # DARK fixture: mode="dark"
 
 
 def test_generate_pair_writes_six_files(tmp_path: Path) -> None:
-    from retail.theme_gen import generate_pair
+    from seshat.theme_gen import generate_pair
 
     light_written, dark_written = generate_pair(_light_seed(), repo_root=tmp_path)
     assert len(light_written) == 3
@@ -116,7 +116,7 @@ def test_generate_pair_writes_six_files(tmp_path: Path) -> None:
 
 
 def test_generate_pair_rejects_dark_mode_input(tmp_path: Path) -> None:
-    from retail.theme_gen import generate_pair
+    from seshat.theme_gen import generate_pair
 
     with pytest.raises(ThemeGenError, match="mode"):
         generate_pair(_seed(), repo_root=tmp_path)  # DARK fixture: mode="dark"
@@ -124,7 +124,7 @@ def test_generate_pair_rejects_dark_mode_input(tmp_path: Path) -> None:
 
 
 def test_generate_pair_rejects_name_already_ending_in_dark(tmp_path: Path) -> None:
-    from retail.theme_gen import generate_pair
+    from seshat.theme_gen import generate_pair
 
     with pytest.raises(ThemeGenError, match="dark"):
         generate_pair(_light_seed(name="foo-dark"), repo_root=tmp_path)
@@ -132,7 +132,7 @@ def test_generate_pair_rejects_name_already_ending_in_dark(tmp_path: Path) -> No
 
 
 def test_generate_pair_writes_nothing_if_dark_side_fails_aa(tmp_path: Path) -> None:
-    from retail.theme_gen import generate_pair
+    from seshat.theme_gen import generate_pair
 
     # text_muted picked so the LIGHT side clears AA but the lightness-inverted
     # DARK side (1.0 - L) collapses contrast against the inverted background.
@@ -233,7 +233,7 @@ def test_build_palette_rejects_partial_overlay_missing_pct() -> None:
 
 
 def test_seed_from_args_builds_overlay_from_flags() -> None:
-    from retail.theme_gen import _seed_from_args
+    from seshat.theme_gen import _seed_from_args
 
     seed = _seed_from_args(
         _cli_args(overlay_fg="#F2F6FA", overlay_transparency_pct=20.0)
@@ -242,13 +242,13 @@ def test_seed_from_args_builds_overlay_from_flags() -> None:
 
 
 def test_seed_from_args_no_overlay_flags_is_none() -> None:
-    from retail.theme_gen import _seed_from_args
+    from seshat.theme_gen import _seed_from_args
 
     assert _seed_from_args(_cli_args()).transparency is None
 
 
 def test_derive_dark_seed_passes_transparency_through() -> None:
-    from retail.theme_gen import derive_dark_seed
+    from seshat.theme_gen import derive_dark_seed
 
     light = _light_seed(
         transparency={"overlay": {"fg": "#1A2430", "transparency_pct": 10.0}}
@@ -258,7 +258,7 @@ def test_derive_dark_seed_passes_transparency_through() -> None:
 
 
 def test_derive_ramp_is_monotonic_lightness() -> None:
-    from retail.color import relative_luminance
+    from seshat.color import relative_luminance
 
     ramp = derive_ramp("#2FB6C4", n=6)
     assert len(ramp) == 6
@@ -391,7 +391,7 @@ def test_empty_data_colors_is_clean_error(tmp_path: Path) -> None:
 
 
 def test_targets_for_returns_expected_three_paths(tmp_path: Path) -> None:
-    from retail.theme_gen import _targets_for, build_palette
+    from seshat.theme_gen import _targets_for, build_palette
 
     seed = _seed()
     palette = build_palette(seed)
@@ -406,7 +406,7 @@ def test_targets_for_returns_expected_three_paths(tmp_path: Path) -> None:
 
 
 def test_check_font_floor_raises_below_title_floor() -> None:
-    from retail.theme_gen import ThemeGenError, check_font_floor_or_raise
+    from seshat.theme_gen import ThemeGenError, check_font_floor_or_raise
 
     seed = _seed(title_font_pt=11.9)
     with pytest.raises(ThemeGenError, match="title_font_pt"):
@@ -414,7 +414,7 @@ def test_check_font_floor_raises_below_title_floor() -> None:
 
 
 def test_check_font_floor_raises_below_label_floor() -> None:
-    from retail.theme_gen import ThemeGenError, check_font_floor_or_raise
+    from seshat.theme_gen import ThemeGenError, check_font_floor_or_raise
 
     seed = _seed(label_font_pt=8.9)
     with pytest.raises(ThemeGenError, match="label_font_pt"):
@@ -422,14 +422,14 @@ def test_check_font_floor_raises_below_label_floor() -> None:
 
 
 def test_check_font_floor_passes_at_exact_floor() -> None:
-    from retail.theme_gen import check_font_floor_or_raise
+    from seshat.theme_gen import check_font_floor_or_raise
 
     seed = _seed(title_font_pt=12.0, label_font_pt=9.0)
     check_font_floor_or_raise(seed)  # no raise
 
 
 def test_font_floor_constants_are_fixed_values() -> None:
-    from retail.theme_gen import MIN_LABEL_FONT_PT, MIN_TITLE_FONT_PT, TAP_TARGET_MIN_PX
+    from seshat.theme_gen import MIN_LABEL_FONT_PT, MIN_TITLE_FONT_PT, TAP_TARGET_MIN_PX
 
     assert MIN_TITLE_FONT_PT == 12.0
     assert MIN_LABEL_FONT_PT == 9.0
@@ -495,7 +495,7 @@ def _cli_args(**over) -> Namespace:
 
 
 def test_seed_from_args_omitted_font_flags_use_min_floor_defaults() -> None:
-    from retail.theme_gen import MIN_LABEL_FONT_PT, MIN_TITLE_FONT_PT, _seed_from_args
+    from seshat.theme_gen import MIN_LABEL_FONT_PT, MIN_TITLE_FONT_PT, _seed_from_args
 
     seed = _seed_from_args(_cli_args())
     assert seed.title_font_pt == MIN_TITLE_FONT_PT == 12.0
@@ -503,7 +503,7 @@ def test_seed_from_args_omitted_font_flags_use_min_floor_defaults() -> None:
 
 
 def test_seed_from_args_provided_font_flags_pass_through() -> None:
-    from retail.theme_gen import _seed_from_args
+    from seshat.theme_gen import _seed_from_args
 
     seed = _seed_from_args(_cli_args(title_font_pt=14.0, label_font_pt=10.0))
     assert seed.title_font_pt == 14.0
@@ -511,7 +511,7 @@ def test_seed_from_args_provided_font_flags_pass_through() -> None:
 
 
 def test_min_categorical_delta_e_default_ramp_passes_floor() -> None:
-    from retail.theme_gen import MIN_CATEGORICAL_DELTAE, min_categorical_delta_e
+    from seshat.theme_gen import MIN_CATEGORICAL_DELTAE, min_categorical_delta_e
 
     palette = build_palette(_seed())
     got = min_categorical_delta_e(tuple(palette["colors"]["data_colors"]))
@@ -519,7 +519,7 @@ def test_min_categorical_delta_e_default_ramp_passes_floor() -> None:
 
 
 def test_check_categorical_distinctness_or_raise_flags_near_identical_pair() -> None:
-    from retail.theme_gen import check_categorical_distinctness_or_raise
+    from seshat.theme_gen import check_categorical_distinctness_or_raise
 
     palette = build_palette(_seed())
     palette["colors"]["data_colors"] = ["#2FB6C4", "#2FB6C5", "#12263A"]
@@ -533,7 +533,7 @@ def test_check_categorical_distinctness_or_raise_flags_near_identical_pair() -> 
 def test_check_categorical_distinctness_or_raise_flags_nonadjacent_pair() -> None:
     # The near-identical pair sits at indices 0 and 2, not adjacent -- proves
     # the check is whole-set (all i<j pairs), not just neighboring entries.
-    from retail.theme_gen import check_categorical_distinctness_or_raise
+    from seshat.theme_gen import check_categorical_distinctness_or_raise
 
     palette = build_palette(_seed())
     palette["colors"]["data_colors"] = ["#2FB6C4", "#12263A", "#2FB6C5"]
@@ -545,7 +545,7 @@ def test_check_categorical_distinctness_or_raise_flags_nonadjacent_pair() -> Non
 
 
 def test_check_categorical_distinctness_or_raise_honors_floor_param() -> None:
-    from retail.theme_gen import check_categorical_distinctness_or_raise
+    from seshat.theme_gen import check_categorical_distinctness_or_raise
 
     palette = build_palette(_seed())
     palette["colors"]["data_colors"] = ["#2FB6C4", "#2FB6C5"]
@@ -553,7 +553,7 @@ def test_check_categorical_distinctness_or_raise_honors_floor_param() -> None:
 
 
 def test_min_categorical_delta_e_single_color_is_noop() -> None:
-    from retail.theme_gen import (
+    from seshat.theme_gen import (
         check_categorical_distinctness_or_raise,
         min_categorical_delta_e,
     )
@@ -565,7 +565,7 @@ def test_min_categorical_delta_e_single_color_is_noop() -> None:
 
 
 def test_check_ramp_deltae_raises_below_floor() -> None:
-    from retail.theme_gen import (
+    from seshat.theme_gen import (
         ThemeGenError,
         build_palette,
         check_ramp_deltae_or_raise,
@@ -579,7 +579,7 @@ def test_check_ramp_deltae_raises_below_floor() -> None:
 
 
 def test_check_ramp_deltae_names_both_hexes() -> None:
-    from retail.theme_gen import (
+    from seshat.theme_gen import (
         ThemeGenError,
         build_palette,
         check_ramp_deltae_or_raise,
@@ -593,7 +593,7 @@ def test_check_ramp_deltae_names_both_hexes() -> None:
 
 
 def test_check_ramp_deltae_passes_at_or_above_floor() -> None:
-    from retail.theme_gen import build_palette, check_ramp_deltae_or_raise
+    from seshat.theme_gen import build_palette, check_ramp_deltae_or_raise
 
     palette = build_palette(_seed(data_colors=("#000000", "#FFFFFF", "#000000")))
     check_ramp_deltae_or_raise(
@@ -606,7 +606,7 @@ def test_check_ramp_deltae_floor_is_a_real_param() -> None:
     # test_check_ramp_deltae_raises_below_floor / _names_both_hexes tests,
     # which use floor=10.0 and do raise). A floor below that measured value
     # must pass -- proving `floor` is a live parameter, not a fixed constant.
-    from retail.theme_gen import build_palette, check_ramp_deltae_or_raise
+    from seshat.theme_gen import build_palette, check_ramp_deltae_or_raise
 
     palette = build_palette(_seed(data_colors=("#336699", "#346699")))
     check_ramp_deltae_or_raise(palette, floor=0.05)  # very low floor -- pair now passes
@@ -619,7 +619,7 @@ def test_check_ramp_deltae_ignores_nonadjacent_near_duplicate() -> None:
     # unlike check_categorical_distinctness_or_raise's whole-set i<j scan,
     # which WOULD flag this same ramp (see the "_nonadjacent_pair" test
     # above for that whole-set counterpart).
-    from retail.theme_gen import build_palette, check_ramp_deltae_or_raise
+    from seshat.theme_gen import build_palette, check_ramp_deltae_or_raise
 
     palette = build_palette(_seed())
     palette["colors"]["data_colors"] = ["#2FB6C4", "#12263A", "#2FB6C5"]

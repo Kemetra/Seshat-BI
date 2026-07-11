@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from retail.tmdl import (
+from seshat.tmdl import (
     normalize_measure_body,
     parse_relationships,
     parse_tmdl,

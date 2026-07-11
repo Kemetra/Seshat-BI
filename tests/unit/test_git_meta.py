@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from retail import gitutil
-from retail.core import RuleContext, Severity
-from retail.rules.git_meta import (
+from seshat import gitutil
+from seshat.core import RuleContext, Severity
+from seshat.rules.git_meta import (
     _read_leading_bytes,
     _scan_contents,
     _scan_line_for_secret,

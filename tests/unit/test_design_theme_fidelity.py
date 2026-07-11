@@ -24,8 +24,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.design_theme_fidelity import check_theme_fidelity
+from seshat.core import RuleContext, Severity
+from seshat.rules.design_theme_fidelity import check_theme_fidelity
 
 pytestmark = pytest.mark.unit
 
@@ -49,7 +49,7 @@ def test_live_committed_pair_is_faithful() -> None:
     """
     ctx = _ctx(
         "design/tokens/tower-retail-design-tokens.yaml",
-        "themes/tower-retail.theme.json",
+        "themes/tower-seshat.theme.json",
         repo_root=REPO_ROOT,
     )
     assert list(check_theme_fidelity(ctx)) == []
@@ -157,7 +157,7 @@ def test_fixture_exemption_live_scan_excludes_tests_paths() -> None:
 def test_no_tenant_or_example_literal_in_rule_source() -> None:
     """Principle VII: the rule carries no tenant/brand literal -- the field
     mapping is generic key names only."""
-    from retail.rules import design_theme_fidelity
+    from seshat.rules import design_theme_fidelity
 
     src = Path(design_theme_fidelity.__file__).read_text(encoding="utf-8")
     # The generic theme key names are allowed; tenant/example literals are not.
@@ -167,7 +167,7 @@ def test_no_tenant_or_example_literal_in_rule_source() -> None:
 
 # --- DL8: sentiment 4->3 fidelity (opt-in, inert until owner declares the map) --
 
-from retail.rules.design_theme_fidelity import (  # noqa: E402
+from seshat.rules.design_theme_fidelity import (  # noqa: E402
     SENTIMENT_RULE_ID,
     check_sentiment_fidelity,
 )
@@ -262,7 +262,7 @@ def test_sentiment_rule_id_is_dl8_not_dl3() -> None:
 def test_dl3_still_ignores_sentiment_after_dl8_lands() -> None:
     """Regression guard: adding DL8 must not change check_theme_fidelity's
     behavior -- DL3 stays sentiment-blind."""
-    from retail.rules.design_theme_fidelity import check_theme_fidelity
+    from seshat.rules.design_theme_fidelity import check_theme_fidelity
 
     findings = list(
         check_theme_fidelity(
@@ -282,7 +282,7 @@ def test_sentiment_live_pairs_are_green_on_main() -> None:
       the rule refuses to invent a correspondence even though tower's sentiment
       colors actually drift.
     """
-    from retail.rules.design_theme_fidelity import _load_yaml, _sentiment_map_for
+    from seshat.rules.design_theme_fidelity import _load_yaml, _sentiment_map_for
 
     exec_dark = _ctx(
         "design/tokens/executive-dark-design-tokens.yaml",
@@ -291,7 +291,7 @@ def test_sentiment_live_pairs_are_green_on_main() -> None:
     )
     tower = _ctx(
         "design/tokens/tower-retail-design-tokens.yaml",
-        "themes/tower-retail.theme.json",
+        "themes/tower-seshat.theme.json",
         repo_root=REPO_ROOT,
     )
     # executive-dark declares a map and is faithful -> zero findings

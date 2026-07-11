@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.cli import main
-from retail.evidence_pack import build_evidence_pack
+from seshat.cli import main
+from seshat.evidence_pack import build_evidence_pack
 
 pytestmark = pytest.mark.unit
 

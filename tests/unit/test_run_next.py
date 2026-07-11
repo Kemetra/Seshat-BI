@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.cli import main
-from retail.run_next import build_run_next_response
+from seshat.cli import main
+from seshat.run_next import build_run_next_response
 
 pytestmark = pytest.mark.unit
 

@@ -28,7 +28,7 @@ class FakeRunner:
 
 
 def test_profile_discovers_columns_and_counts_rows() -> None:
-    from retail.profile import profile
+    from seshat.profile import profile
 
     runner = FakeRunner(
         [
@@ -57,7 +57,7 @@ def test_non_text_column_uses_is_null_not_trim() -> None:
     text-only; a faithful all-TEXT bronze does not write '' into a timestamptz, so the
     correct missingness for a non-text column is plain IS NULL.
     """
-    from retail.profile import profile
+    from seshat.profile import profile
 
     runner = FakeRunner(
         [
@@ -81,7 +81,7 @@ def test_non_text_column_uses_is_null_not_trim() -> None:
 
 
 def test_missingness_uses_empty_or_null_not_is_null_alone() -> None:
-    from retail.profile import profile
+    from seshat.profile import profile
 
     # A faithful landing wrote '' for missing values. The missingness query must
     # COUNT those '' rows; IS NULL alone would (wrongly) report 0 missing.
@@ -103,7 +103,7 @@ def test_missingness_uses_empty_or_null_not_is_null_alone() -> None:
 
 
 def test_pk_proof_unique_when_distinct_equals_total_and_no_nulls() -> None:
-    from retail.profile import profile
+    from seshat.profile import profile
 
     runner = FakeRunner([[("id", "text")], [(100,)], [(0, 100)], [(100, 100, 0)]])
     pk = profile(runner, "bronze.demo", ("id",)).pk
@@ -111,7 +111,7 @@ def test_pk_proof_unique_when_distinct_equals_total_and_no_nulls() -> None:
 
 
 def test_pk_proof_not_unique_when_duplicates_or_nulls() -> None:
-    from retail.profile import profile
+    from seshat.profile import profile
 
     # 100 rows, 98 distinct -> 2 dupes -> not unique
     dupes = FakeRunner([[("id", "text")], [(100,)], [(0, 100)], [(100, 98, 0)]])
@@ -123,7 +123,7 @@ def test_pk_proof_not_unique_when_duplicates_or_nulls() -> None:
 
 
 def test_profile_rejects_unsafe_table_name() -> None:
-    from retail.profile import profile
+    from seshat.profile import profile
 
     runner = FakeRunner([])
     with pytest.raises(ValueError, match="unsafe SQL identifier"):
@@ -135,10 +135,10 @@ def test_profile_imports_without_psycopg2() -> None:
     import sys
 
     # If psycopg2 were imported at module scope this would already have failed at
-    # the test's `from retail.profile import profile`. Re-import to lock it in.
+    # the test's `from seshat.profile import profile`. Re-import to lock it in.
     # The guard relies on profile.py's module-scope import path being driver-free,
     # so importing it must not pull psycopg2 into sys.modules.
-    mod = importlib.import_module("retail.profile")
+    mod = importlib.import_module("seshat.profile")
     assert hasattr(mod, "profile")
     assert "psycopg2" not in sys.modules
 
@@ -155,13 +155,13 @@ def test_safe_identifier_rejects_embedded_newline() -> None:
     """
     import pytest
 
-    from retail.profile import _safe_identifier
+    from seshat.profile import _safe_identifier
 
     with pytest.raises(ValueError):
         _safe_identifier("valid_id\nDROP TABLE x")
 
 
 def test_safe_identifier_accepts_plain_dotted() -> None:
-    from retail.profile import _safe_identifier
+    from seshat.profile import _safe_identifier
 
     assert _safe_identifier("gold.fct_sales") == "gold.fct_sales"

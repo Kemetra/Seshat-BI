@@ -8,7 +8,7 @@ import re
 
 import pytest
 
-from retail.review_pack_export import Pack, Section
+from seshat.review_pack_export import Pack, Section
 
 pytestmark = pytest.mark.unit
 
@@ -39,7 +39,7 @@ def _blocked_pack() -> Pack:
 
 def test_compact_blocked_shape():
     """T013: worst status blocked -> [BLOCKED] + every worst-rank reason."""
-    from retail.review_pack_export import to_compact_ci_summary
+    from seshat.review_pack_export import to_compact_ci_summary
 
     out = to_compact_ci_summary(_blocked_pack())
     assert out.startswith("[BLOCKED] <TABLE>: <STAGE> review pack")
@@ -49,7 +49,7 @@ def test_compact_blocked_shape():
 
 def test_compact_all_clear_has_pass_and_evidence():
     """T014 (amended): >=1 pass (rest not_applicable) -> [PASS] + evidence."""
-    from retail.review_pack_export import to_compact_ci_summary
+    from seshat.review_pack_export import to_compact_ci_summary
 
     pack = Pack(
         title="<TABLE>: <STAGE> review pack",
@@ -73,7 +73,7 @@ def test_compact_zero_pass_all_not_applicable_reports_not_applicable():
     """Amended data-model.md sec 5: a zero-pass (all not_applicable) pack
     reports [NOT_APPLICABLE], never [PASS] (a pass with no passing section is
     a fabricated pass)."""
-    from retail.review_pack_export import to_compact_ci_summary
+    from seshat.review_pack_export import to_compact_ci_summary
 
     pack = Pack(
         title="<TABLE>: <STAGE> review pack",
@@ -89,7 +89,7 @@ def test_compact_zero_pass_all_not_applicable_reports_not_applicable():
 
 def test_compact_zero_section_pack_no_sections():
     """T015: a zero-section pack renders [NO SECTIONS], never [PASS]."""
-    from retail.review_pack_export import to_compact_ci_summary
+    from seshat.review_pack_export import to_compact_ci_summary
 
     out = to_compact_ci_summary(Pack(title="<TABLE>: <STAGE> review pack", sections=()))
     assert out.startswith("[NO SECTIONS]")
@@ -107,7 +107,7 @@ _FORBIDDEN_PATTERNS = [
 
 
 def _all_fixture_outputs():
-    from retail.review_pack_export import to_compact_ci_summary
+    from seshat.review_pack_export import to_compact_ci_summary
 
     packs = [
         _blocked_pack(),
@@ -141,7 +141,7 @@ def test_compact_never_emits_fake_confidence(pattern, label):
 
 def test_compact_dual_worst_rank_lists_all_reasons():
     """T017: two sections tied at the worst rank each add their reasons."""
-    from retail.review_pack_export import to_compact_ci_summary
+    from seshat.review_pack_export import to_compact_ci_summary
 
     pack = Pack(
         title="t",

@@ -142,7 +142,7 @@ Then STOP and print:
 ## See also
 
 - The ledger template: `templates/formatting-plan.md`.
-- The shape check: DL7 (`src/retail/rules/formatting_plan.py`).
+- The shape check: DL7 (`src/seshat/rules/formatting_plan.py`).
 - The rubric: `docs/powerbi/visual-qa.md`; the human render critique:
   `templates/screenshot-review.md` + `workflows/screenshot-review.md`.
 - The verbs that apply a ratified plan: `retail pbir-apply-theme` /

@@ -88,13 +88,13 @@ Each subsection scopes a *future* PR. None is executed in this document.
   fits the existing pattern) one static rule that fails on an unresolved route.
 - **Proposed branch:** `feat/a1-route-registry`
 - **Allowed files:** a new route manifest (`docs/routing/routes.yaml` or `routes.yaml`,
-  whichever matches repo convention); at most one new rule module under `src/retail/rules/`;
+  whichever matches repo convention); at most one new rule module under `src/seshat/rules/`;
   the `EXPECTED_RULE_IDS` set in `tests/unit/test_rules_wiring.py`; a focused unit test for
   the new rule.
 - **Forbidden files:** any B2/B1/F7/F8 surface; KPI contracts/domains/packs; readiness
   templates; GitHub Actions; unrelated `src/` modules.
 - **Implementation notes:** inspect `COMPASS.md` and `docs/knowledge-map.md` for the routes
-  to mirror; inspect the registry pattern in `src/retail/registry.py` + `src/retail/rules/*.py`
+  to mirror; inspect the registry pattern in `src/seshat/registry.py` + `src/seshat/rules/*.py`
   (rules register via a decorator and are asserted by `EXPECTED_RULE_IDS`). Build the manifest
   first; add the rule *only* if the format is clear and it slots into the existing
   `@register` / `EXPECTED_RULE_IDS` pattern. Every route must resolve to a real file or carry
@@ -118,10 +118,10 @@ Each subsection scopes a *future* PR. None is executed in this document.
 - **Goal:** Add an *optional* structured (JSON-first) output for findings while preserving
   the default human-readable text output exactly.
 - **Proposed branch:** `feat/b2-structured-findings`
-- **Allowed files:** the findings output chokepoint (`src/retail/runner.py` — `_format` /
-  `run`) and the CLI flag plumbing in `src/retail/cli.py`; the `Finding` dataclass in
-  `src/retail/core.py` only if a serializer is needed; a focused test for the JSON output.
-- **Forbidden files:** rule behavior (`src/retail/rules/*`); A1 manifest; KPI/readiness files;
+- **Allowed files:** the findings output chokepoint (`src/seshat/runner.py` — `_format` /
+  `run`) and the CLI flag plumbing in `src/seshat/cli.py`; the `Finding` dataclass in
+  `src/seshat/core.py` only if a serializer is needed; a focused test for the JSON output.
+- **Forbidden files:** rule behavior (`src/seshat/rules/*`); A1 manifest; KPI/readiness files;
   GitHub Actions.
 - **Implementation notes:** preserve the default text output (`runner._format` → `print`)
   byte-for-byte; add optional structured output behind a flag. Prefer **JSON first**; defer
@@ -144,7 +144,7 @@ Each subsection scopes a *future* PR. None is executed in this document.
   module scope, protecting the never-execute invariant.
 - **Proposed branch:** `test/b1-never-execute-guard`
 - **Allowed files:** a new sentinel test under `tests/`; at most one static rule module under
-  `src/retail/rules/` (stdlib `ast` only) with its `EXPECTED_RULE_IDS` entry, *only if* it
+  `src/seshat/rules/` (stdlib `ast` only) with its `EXPECTED_RULE_IDS` entry, *only if* it
   fits the existing pattern.
 - **Forbidden files:** rule *behavior* of existing rules; A1/B2/F7/F8 surfaces; KPI/readiness
   files; dependencies; GitHub Actions.
@@ -237,9 +237,9 @@ Each subsection scopes a *future* PR. None is executed in this document.
 |---|---|---|---|
 | Route references resolve | A1 | Every manifest route points to an existing file | A planned/deferred marker is the only allowed exception |
 | Planned/deferred routes marked honestly | A1, F7 | Unbuilt targets carry a planned marker, never a phantom | Matches the repo's existing `[planned]` honesty pattern |
-| Rule registry updated when a rule is added | A1, B1 | New rule registered via the existing decorator | `src/retail/registry.py` + `src/retail/rules/*` pattern |
+| Rule registry updated when a rule is added | A1, B1 | New rule registered via the existing decorator | `src/seshat/registry.py` + `src/seshat/rules/*` pattern |
 | `EXPECTED_RULE_IDS` includes new rules | A1, B1 | Wiring test passes with the new id present | `tests/unit/test_rules_wiring.py` |
-| Default CLI text output preserved | B2 | Output with no flag is byte-identical to today | `src/retail/runner.py` `_format`/`run` chokepoint |
+| Default CLI text output preserved | B2 | Output with no flag is byte-identical to today | `src/seshat/runner.py` `_format`/`run` chokepoint |
 | JSON output validates | B2 | Structured output parses and round-trips findings | JSON first; SARIF deferred unless trivial |
 | No DB/network imports at module scope | B1 | Sentinel test passes; module scope clean | Lazy in-handler imports remain allowed |
 | KPI questions route to real contracts or planned/deferred notes | F7 | Every question resolves honestly | No fabricated contracts |
@@ -262,12 +262,12 @@ gated on the prior step; run only after its gate condition is met and the plan i
 - **PR title:** `feat: add route registry manifest`
 - **Commit message:** `feat: add route registry manifest`
 - **Allowed files:** route manifest (`docs/routing/routes.yaml` or `routes.yaml` per repo
-  convention); ≤1 new `src/retail/rules/*.py`; `EXPECTED_RULE_IDS` in
+  convention); ≤1 new `src/seshat/rules/*.py`; `EXPECTED_RULE_IDS` in
   `tests/unit/test_rules_wiring.py`; a focused unit test.
 - **Forbidden files:** B2/B1/F7/F8 surfaces; KPI contracts/domains/packs; readiness templates;
   GitHub Actions; unrelated `src/`.
 - **Implementation constraints:** inspect `COMPASS.md`, `docs/knowledge-map.md`, and
-  `src/retail/rules/` first; create the registry only if the format is clear; every route must
+  `src/seshat/rules/` first; create the registry only if the format is clear; every route must
   point to an existing file or a planned/deferred marker; add the rule only if it fits the
   existing `@register` / `EXPECTED_RULE_IDS` pattern; stdlib-only; read-only (no execution).
 - **Validation commands:** `python -m pytest tests/unit/test_rules_wiring.py`; manifest path
@@ -288,9 +288,9 @@ gated on the prior step; run only after its gate condition is met and the plan i
 - **Branch name:** `feat/b2-structured-findings`
 - **PR title:** `feat: add structured findings output`
 - **Commit message:** `feat: add structured findings output`
-- **Allowed files:** `src/retail/runner.py` (output chokepoint), `src/retail/cli.py` (flag),
-  `src/retail/core.py` (`Finding` serializer if needed), a focused JSON-output test.
-- **Forbidden files:** `src/retail/rules/*` behavior; A1 manifest; KPI/readiness files;
+- **Allowed files:** `src/seshat/runner.py` (output chokepoint), `src/seshat/cli.py` (flag),
+  `src/seshat/core.py` (`Finding` serializer if needed), a focused JSON-output test.
+- **Forbidden files:** `src/seshat/rules/*` behavior; A1 manifest; KPI/readiness files;
   GitHub Actions.
 - **Implementation constraints:** preserve default text output byte-for-byte; structured output
   behind a flag; JSON first, SARIF only if trivially clean; reuse the `Finding` dataclass and
@@ -310,7 +310,7 @@ gated on the prior step; run only after its gate condition is met and the plan i
 - **Branch name:** `test/b1-never-execute-guard`
 - **PR title:** `test: guard never-execute invariant`
 - **Commit message:** `test: guard never-execute invariant`
-- **Allowed files:** new sentinel test under `tests/`; ≤1 `src/retail/rules/*.py` (stdlib
+- **Allowed files:** new sentinel test under `tests/`; ≤1 `src/seshat/rules/*.py` (stdlib
   `ast`) + its `EXPECTED_RULE_IDS` entry, only if it fits the pattern.
 - **Forbidden files:** existing rule behavior; A1/B2/F7/F8 surfaces; KPI/readiness files;
   dependencies; GitHub Actions.

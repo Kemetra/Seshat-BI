@@ -139,7 +139,7 @@ FUNCTION`), and the `$$` tokenizer hole is the named next correctness fix.
 ## Recommended next steps (for when you're awake)
 
 1. **Ship the `$$` dollar-quote tokenizer branch** — smallest, most urgent correctness fix
-   (a single regex branch in `src/retail/sql.py`, stdlib-only). The M2 design has the sketch.
+   (a single regex branch in `src/seshat/sql.py`, stdlib-only). The M2 design has the sketch.
 2. **Run the F038 Tabular Editor BPA spike** — prove the six gates against committed TMDL;
    make-or-break is headless TMDL parsing without `.bim`/Desktop.
 3. **Run the pbi-tools extract spike** — confirm the extracted `model.tmdl` parses under

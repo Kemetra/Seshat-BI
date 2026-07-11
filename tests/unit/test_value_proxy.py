@@ -1,4 +1,4 @@
-"""TDD tests for the L4 value proxy (src/retail/value_proxy.py).
+"""TDD tests for the L4 value proxy (src/seshat/value_proxy.py).
 
 L4 re-computes a measure's aggregate against the live gold table and asserts it
 still equals the contract's APPROVED value, within tolerance -- the live
@@ -19,8 +19,8 @@ from decimal import Decimal
 
 import pytest
 
-from retail.core import Severity
-from retail.value_proxy import (
+from seshat.core import Severity
+from seshat.value_proxy import (
     ExpectedValue,
     check_expected_value,
     parse_expected_value,

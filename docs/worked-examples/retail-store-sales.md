@@ -55,7 +55,7 @@ migrations) and the contracts → model → dashboard → handoff half (§§5–
 
 > **Namespace note.** "RC1–RC16" are the **ADR 0002 cleaning defaults**
 > (`docs/decisions/0002-retail-cleaning-defaults.md`). The static governance checker uses a separate
-> `S*`/`D*`/`C*`/`G*`/`R*` rule namespace (in `src/retail/rules/`). A cleaning default
+> `S*`/`D*`/`C*`/`G*`/`R*` rule namespace (in `src/seshat/rules/`). A cleaning default
 > reads `RC<n>`; a checker rule reads e.g. `S8`. The two do not collide (feature 002).
 
 ---
@@ -287,5 +287,5 @@ here by design.
 - Method: `docs/medallion-playbook.md` (the 7 phases).
 - The table's own artifacts: `mappings/retail_store_sales/` and
   `powerbi/RetailStoreSales.SemanticModel`.
-- Governance: `retail check` / `retail validate` (`src/retail/`); the rule meanings:
+- Governance: `retail check` / `retail validate` (`src/seshat/`); the rule meanings:
   the `retail-govern` skill.

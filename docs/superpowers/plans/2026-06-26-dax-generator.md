@@ -4,7 +4,7 @@
 
 **Goal:** Build a deterministic, stdlib-pure DAX Generator that turns a metric contract's structured `definition` block into a verified best-practice DAX measure, refusing to emit anything it cannot prove correct.
 
-**Architecture:** A new lazy module `src/retail/dax_gen.py` (mirroring `metric_drift.py`'s stdlib-pure-import discipline) emits canonical DAX for two `kind`s (`base`, `ratio`), then runs a fail-closed pipeline: validate shape → emit DAX → L3 semantic verify (`check_measure_drift`) → D1–D11 form verify. `metric_drift.check_measure_drift` is extended additively with a `kind: base` branch (the only new reader of the `aggregation` field; the `kind`-absent path stays byte-identical). A `retail generate` CLI subcommand wraps the engine with a stdout-verified-only, never-mutate-the-model contract.
+**Architecture:** A new lazy module `src/seshat/dax_gen.py` (mirroring `metric_drift.py`'s stdlib-pure-import discipline) emits canonical DAX for two `kind`s (`base`, `ratio`), then runs a fail-closed pipeline: validate shape → emit DAX → L3 semantic verify (`check_measure_drift`) → D1–D11 form verify. `metric_drift.check_measure_drift` is extended additively with a `kind: base` branch (the only new reader of the `aggregation` field; the `kind`-absent path stays byte-identical). A `retail generate` CLI subcommand wraps the engine with a stdout-verified-only, never-mutate-the-model contract.
 
 **Tech Stack:** Python 3 (stdlib only in core; `yaml` lazy in loaders), `argparse` CLI, `pytest` (table-driven `parametrize`, no new test deps), `ruff`/`black`.
 
@@ -29,9 +29,9 @@
 
 | File | Responsibility |
 |------|----------------|
-| `src/retail/dax_gen.py` (NEW) | The engine: `GenResult` DTO, `generate_measure()`, shape validators, DAX emit templates, the verify pipeline, `load_contract()`. Lazy `yaml` in `load_contract` only. |
-| `src/retail/metric_drift.py` (MODIFY) | Add `_check_base_drift()` + a `kind` dispatch at the top of `check_measure_drift`. Additive; `kind`-absent path untouched. |
-| `src/retail/cli.py` (MODIFY) | Add `generate` subparser + `_run_generate()` handler (lazy import of `dax_gen`). |
+| `src/seshat/dax_gen.py` (NEW) | The engine: `GenResult` DTO, `generate_measure()`, shape validators, DAX emit templates, the verify pipeline, `load_contract()`. Lazy `yaml` in `load_contract` only. |
+| `src/seshat/metric_drift.py` (MODIFY) | Add `_check_base_drift()` + a `kind` dispatch at the top of `check_measure_drift`. Additive; `kind`-absent path untouched. |
+| `src/seshat/cli.py` (MODIFY) | Add `generate` subparser + `_run_generate()` handler (lazy import of `dax_gen`). |
 | `templates/metric-contract.yaml` (MODIFY) | Document the additive `definition.kind` schema in COMMENTS ONLY. No real contract changes. |
 | `tests/unit/test_dax_gen.py` (NEW) | Round-trip, D-rule cleanliness, refusals, sum-type invariant, doc_intent isolation, CLI behavior, `--out` guards. |
 | `tests/unit/test_metric_drift.py` (MODIFY) | Zero-regression assertion, `kind: base` verify with HAND-AUTHORED fixtures, stdlib guard. |
@@ -44,7 +44,7 @@
 ## Task 1: `GenResult` sum-type DTO
 
 **Files:**
-- Create: `src/retail/dax_gen.py`
+- Create: `src/seshat/dax_gen.py`
 - Test: `tests/unit/test_dax_gen.py`
 
 **Interfaces:**
@@ -54,7 +54,7 @@
 
 ```python
 # tests/unit/test_dax_gen.py
-"""Unit tests for the DAX Generator (src/retail/dax_gen.py).
+"""Unit tests for the DAX Generator (src/seshat/dax_gen.py).
 
 Phase 1: kind:base + kind:ratio, generate -> verify -> refuse. The headline
 property is the round-trip: every emitted measure re-verifies as `pass`.
@@ -101,7 +101,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'retail.dax_gen'` (or I
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# src/retail/dax_gen.py
+# src/seshat/dax_gen.py
 """DAX Generator (Phase 1): contract `definition` -> verified DAX measure.
 
 The INVERSE of metric_drift.check_measure_drift: that answers "does this DAX
@@ -165,7 +165,7 @@ Expected: PASS (4 passed).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/dax_gen.py tests/unit/test_dax_gen.py
+git add src/seshat/dax_gen.py tests/unit/test_dax_gen.py
 git commit --no-gpg-sign -m "feat: GenResult sum-type DTO for DAX generator
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -176,7 +176,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ## Task 2: Base-measure shape validation + DAX emit
 
 **Files:**
-- Modify: `src/retail/dax_gen.py`
+- Modify: `src/seshat/dax_gen.py`
 - Test: `tests/unit/test_dax_gen.py`
 
 **Interfaces:**
@@ -279,7 +279,7 @@ Expected: FAIL — `ImportError: cannot import name '_emit_base'`.
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# add to src/retail/dax_gen.py (after GenResult)
+# add to src/seshat/dax_gen.py (after GenResult)
 
 _AGG_TO_DAX: dict[str, str] = {
     "sum": "SUM",
@@ -360,7 +360,7 @@ Expected: PASS (8 passed).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/dax_gen.py tests/unit/test_dax_gen.py
+git add src/seshat/dax_gen.py tests/unit/test_dax_gen.py
 git commit --no-gpg-sign -m "feat: base-measure shape validation + DAX emit
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -371,7 +371,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ## Task 3: Extend `check_measure_drift` with the `kind: base` verify branch (independent fixtures)
 
 **Files:**
-- Modify: `src/retail/metric_drift.py` (add `_check_base_drift` + a `kind` dispatch at the top of `check_measure_drift`)
+- Modify: `src/seshat/metric_drift.py` (add `_check_base_drift` + a `kind` dispatch at the top of `check_measure_drift`)
 - Test: `tests/unit/test_metric_drift.py` (add base cases with HAND-AUTHORED DAX + zero-regression assertion)
 
 **Interfaces:**
@@ -476,7 +476,7 @@ Expected: FAIL — base cases return `escalate`/`skip` (the `kind` branch does n
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# in src/retail/metric_drift.py
+# in src/seshat/metric_drift.py
 
 # add to the TOP of check_measure_drift, before the existing `if not definition...`:
 def check_measure_drift(dax_expr: str, definition: dict[str, Any] | None) -> Verdict:
@@ -567,7 +567,7 @@ Expected: PASS — all new base cases + both regression tests + ALL pre-existing
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/metric_drift.py tests/unit/test_metric_drift.py
+git add src/seshat/metric_drift.py tests/unit/test_metric_drift.py
 git commit --no-gpg-sign -m "feat: kind:base verify branch in check_measure_drift (additive, zero-regression)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -578,7 +578,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ## Task 4: Ratio-measure shape validation + DAX emit
 
 **Files:**
-- Modify: `src/retail/dax_gen.py`
+- Modify: `src/seshat/dax_gen.py`
 - Test: `tests/unit/test_dax_gen.py`
 
 **Interfaces:**
@@ -630,7 +630,7 @@ Expected: FAIL — `ImportError: cannot import name '_emit_ratio'`.
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# add to src/retail/dax_gen.py
+# add to src/seshat/dax_gen.py
 
 def _emit_side(side: dict) -> tuple[str | None, str | None]:
     """A ratio side is an inline aggregation -- identical rules to a base body."""
@@ -661,7 +661,7 @@ Expected: PASS (2 passed).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/dax_gen.py tests/unit/test_dax_gen.py
+git add src/seshat/dax_gen.py tests/unit/test_dax_gen.py
 git commit --no-gpg-sign -m "feat: ratio-measure shape validation + DAX emit
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -672,7 +672,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ## Task 5: TMDL block builder + the full `generate_measure` pipeline (round-trip)
 
 **Files:**
-- Modify: `src/retail/dax_gen.py`
+- Modify: `src/seshat/dax_gen.py`
 - Test: `tests/unit/test_dax_gen.py`
 
 **Interfaces:**
@@ -751,7 +751,7 @@ Expected: FAIL — `ImportError: cannot import name 'generate_measure'`.
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# add to src/retail/dax_gen.py
+# add to src/seshat/dax_gen.py
 
 _DEFAULT_FORMATS = {  # presentation default by aggregation/kind
     "sum": "#,0", "count": "#,0", "distinct_count": "#,0",
@@ -853,7 +853,7 @@ def generate_measure(
     return GenResult.success(dax=dax, tmdl_block=block, warnings=tuple(warnings))
 ```
 
-> Worker note (verified): `runner._format(finding) -> str` (`src/retail/runner.py:60`) and `registry.all_rules() -> tuple[RegisteredRule, ...]` (`src/retail/registry.py:18`) both exist with these exact signatures. `_format` emits `"[sev] id msg (loc)"`. The temp-TMDL wrapper must parse under `parse_tmdl`; if D2/D11 need specific structure, adjust `_build_tmdl_block` until `test_generated_tmdl_passes_d_rules` is green. The D-rule iteration filters `reg.id.startswith("D")` — confirm whether C1 should also run (it scans `.pbir`/M sources, not measure blocks, so it is correctly excluded).
+> Worker note (verified): `runner._format(finding) -> str` (`src/seshat/runner.py:60`) and `registry.all_rules() -> tuple[RegisteredRule, ...]` (`src/seshat/registry.py:18`) both exist with these exact signatures. `_format` emits `"[sev] id msg (loc)"`. The temp-TMDL wrapper must parse under `parse_tmdl`; if D2/D11 need specific structure, adjust `_build_tmdl_block` until `test_generated_tmdl_passes_d_rules` is green. The D-rule iteration filters `reg.id.startswith("D")` — confirm whether C1 should also run (it scans `.pbir`/M sources, not measure blocks, so it is correctly excluded).
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -863,7 +863,7 @@ Expected: PASS — round-trip (both params), D-rule cleanliness, refusals, doc_i
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/dax_gen.py tests/unit/test_dax_gen.py
+git add src/seshat/dax_gen.py tests/unit/test_dax_gen.py
 git commit --no-gpg-sign -m "feat: generate_measure pipeline + TMDL builder + round-trip property
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -874,7 +874,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ## Task 6: `load_contract` (lazy yaml) + stdlib-only import guard
 
 **Files:**
-- Modify: `src/retail/dax_gen.py`
+- Modify: `src/seshat/dax_gen.py`
 - Test: `tests/unit/test_dax_gen.py` (loader); `tests/unit/test_metric_drift.py` (extend the existing stdlib guard)
 
 **Interfaces:**
@@ -938,7 +938,7 @@ Expected: FAIL — `ImportError: cannot import name 'load_contract'` (loader tes
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# add to src/retail/dax_gen.py
+# add to src/seshat/dax_gen.py
 def load_contract(path: str) -> dict:
     """Read a metric contract YAML and return the whole parsed mapping.
 
@@ -963,7 +963,7 @@ Expected: PASS (all).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/dax_gen.py tests/unit/test_dax_gen.py tests/unit/test_metric_drift.py
+git add src/seshat/dax_gen.py tests/unit/test_dax_gen.py tests/unit/test_metric_drift.py
 git commit --no-gpg-sign -m "feat: load_contract (lazy yaml) + stdlib-only import guards
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -974,7 +974,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 ## Task 7: `retail generate` CLI subcommand (stdout-verified-only, never-mutate-model)
 
 **Files:**
-- Modify: `src/retail/cli.py`
+- Modify: `src/seshat/cli.py`
 - Test: `tests/unit/test_dax_gen.py`
 - Create (fixtures): `tests/fixtures/contracts/base_revenue.yaml`, `tests/fixtures/contracts/ratio_disc.yaml`, `tests/fixtures/contracts/refuse_no_column.yaml`
 
@@ -1090,7 +1090,7 @@ Expected: FAIL — `retail generate` is not a known subcommand (argparse error /
 - [ ] **Step 3: Write minimal implementation**
 
 ```python
-# in src/retail/cli.py _build_parser(), add after the existing subparsers:
+# in src/seshat/cli.py _build_parser(), add after the existing subparsers:
     gen = sub.add_parser(
         "generate",
         help="generate a verified best-practice DAX measure from a metric contract",
@@ -1160,7 +1160,7 @@ def _run_generate(args) -> int:
         return _run_generate(args)
 ```
 
-> Worker note (verified): `main(argv) -> int` (`src/retail/cli.py:90`) returns an int exit code; `__main__` does `sys.exit(main())`, and `[project.scripts]` maps `retail = "retail.cli:main"`. So `python -m retail.cli generate ...` is the correct invocation used by `_run_cli`, and the `generate` dispatch must `return _run_generate(args)` in the same int-returning style as the existing `check`/`validate`/`semantic-check` branches.
+> Worker note (verified): `main(argv) -> int` (`src/seshat/cli.py:90`) returns an int exit code; `__main__` does `sys.exit(main())`, and `[project.scripts]` maps `retail = "retail.cli:main"`. So `python -m seshat.cli generate ...` is the correct invocation used by `_run_cli`, and the `generate` dispatch must `return _run_generate(args)` in the same int-returning style as the existing `check`/`validate`/`semantic-check` branches.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -1170,7 +1170,7 @@ Expected: PASS (6 passed).
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/cli.py tests/unit/test_dax_gen.py tests/fixtures/contracts/
+git add src/seshat/cli.py tests/unit/test_dax_gen.py tests/fixtures/contracts/
 git commit --no-gpg-sign -m "feat: retail generate CLI (stdout-verified-only, never-mutate-model)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -1237,7 +1237,7 @@ Expected: PASS/SKIP; the `../powerbi` and absolute-path cases (Task 7) still PAS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/retail/cli.py tests/unit/test_dax_gen.py
+git add src/seshat/cli.py tests/unit/test_dax_gen.py
 git commit --no-gpg-sign -m "test: platform-safe symlink path-traversal guard for --out
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"

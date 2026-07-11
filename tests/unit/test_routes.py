@@ -18,8 +18,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.routes import _MANIFEST, check_routes_resolve
+from seshat.core import RuleContext, Severity
+from seshat.rules.routes import _MANIFEST, check_routes_resolve
 
 pytestmark = pytest.mark.unit
 

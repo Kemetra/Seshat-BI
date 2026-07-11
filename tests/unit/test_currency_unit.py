@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.currency_unit import check_unit_currency_agreement
+from seshat.core import RuleContext, Severity
+from seshat.rules.currency_unit import check_unit_currency_agreement
 
 pytestmark = pytest.mark.unit
 

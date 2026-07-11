@@ -7,7 +7,7 @@
 > gate") and gives it a generic, agent-followable shape: a `stale_pass`
 > SIGNAL a human or agent can raise by hand today, without a live DB, a
 > drift-detection runtime, or a new `retail check` rule. It is intentionally
-> NOT wired into `src/retail/rules/` here -- the reserved id (`HR3`) and the
+> NOT wired into `src/seshat/rules/` here -- the reserved id (`HR3`) and the
 > mechanical, git-history-backed enforcement of this pattern are a SEPARATE,
 > not-yet-landed piece of work. Treat everything below as the vocabulary and
 > procedure a human/agent applies manually until that enforcement exists.

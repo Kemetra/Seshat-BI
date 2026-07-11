@@ -158,5 +158,5 @@ One PR to `main` on branch `feat/zoomcharts-theme-starters`. Gate before push:
 - Workflow: `.claude/skills/powerbi-dashboard-design/workflows/theme-json-design.md`
 - Existing triplet: `themes/tower-retail.theme.json`,
   `design/tokens/tower-retail-design-tokens.yaml`, `templates/theme-json-spec.md`
-- Rules: `src/retail/rules/design_theme.py` (DL1),
+- Rules: `src/seshat/rules/design_theme.py` (DL1),
   `design_theme_fidelity.py` (DL3), `design_contrast.py` (CT1)

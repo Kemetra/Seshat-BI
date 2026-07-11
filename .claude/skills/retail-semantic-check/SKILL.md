@@ -238,8 +238,8 @@ next call, not a loop this skill performs.
 - The spine: `docs/readiness/readiness-model.md`, `docs/readiness/readiness-pipeline.md`.
 - The contracts it consumes (owned by F009): `templates/metric-contract.yaml`,
   `templates/kpi-pack.yaml`, `docs/metrics/metric-contract-store.md`.
-- The mechanical gate it calls: `retail check` (`D1`-`D8` `src/retail/rules/dax.py`,
-  `C1`/`R1` `src/retail/rules/pbir.py`, `G6` `src/retail/rules/g6.py`); the
+- The mechanical gate it calls: `retail check` (`D1`-`D8` `src/seshat/rules/dax.py`,
+  `C1`/`R1` `src/seshat/rules/pbir.py`, `G6` `src/seshat/rules/g6.py`); the
   `retail-govern` skill for the id -> fix mapping.
 - The live sibling one layer down: the `retail-validate` skill.
 - The model under check: `powerbi/Retailgold.SemanticModel/definition/`.

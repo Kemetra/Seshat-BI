@@ -311,7 +311,7 @@ const BUILD_RESULT = {
         retail_semantic_check_exit: { type: 'number' },
         retail_validate_status: { type: 'string', enum: ['needs-db', 'pass', 'fail'], description: 'needs-db is the EXPECTED deferred state; INFORMATIONAL, never scored' },
         wiring_ok: { type: 'boolean', description: 'EXPECTED_RULE_IDS updated for any added/removed @register rule (test_rules_wiring green)' },
-        never_execute_ok: { type: 'boolean', description: 'B1 sentinel green: no module-scope DB/network import in governed src/retail/' },
+        never_execute_ok: { type: 'boolean', description: 'B1 sentinel green: no module-scope DB/network import in governed src/seshat/' },
         head_branch: { type: 'string', description: 'git rev-parse --abbrev-ref HEAD at verify time; JS asserts != main' },
       },
     },
@@ -373,7 +373,7 @@ const build = await agent(
   `DB/--source-map returns the deferred state; CI does NOT run it; it is INFORMATIONAL, never scored).\n` +
   `  wiring_ok: if any task added/removed a @register rule, the SAME change updated EXPECTED_RULE_IDS in ` +
   `tests/unit/test_rules_wiring.py (the test asserts len(all_rules())==len(EXPECTED_RULE_IDS)); else true.\n` +
-  `  never_execute_ok: any new governed src/retail/ module imports DB/network drivers LAZILY (in-function), ` +
+  `  never_execute_ok: any new governed src/seshat/ module imports DB/network drivers LAZILY (in-function), ` +
   `never at module scope (the B1 invariant); else true.\n` +
   `  head_branch: git rev-parse --abbrev-ref HEAD at verify time.\n\n` +
   `CONSTRAINTS: ASCII + UTF-8 no BOM in any authored file (-- and ->, no glyphs; rule IX). Generic-only ` +

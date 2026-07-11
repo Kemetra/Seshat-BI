@@ -11,8 +11,8 @@ DAX is the analytical backbone — the number a business user reads — and ADR 
 records it as the least-governed layer. Today:
 
 - **L2 (form)** is partial: 8 home-grown lexical rules (D1–D8) + C1, all in
-  `src/retail/rules/dax.py`, registered and CI-gating via `retail check`.
-- **L3 (contract drift)** exists as `src/retail/metric_drift.py` — it catches the
+  `src/seshat/rules/dax.py`, registered and CI-gating via `retail check`.
+- **L3 (contract drift)** exists as `src/seshat/metric_drift.py` — it catches the
   "wrong denominator / wrong KPI number" class (the 50.37-vs-33.55 bug) — but is
   **advisory only** (skill-surfaced, never gating) and recognizes only **2** predicate
   spellings, escalating everything else.
@@ -82,9 +82,9 @@ PHASE 2 — L2 hygiene D-rules (perf/clarity)           → Implementation Plan 
 
 ## Unit 0 — G6 wiring fix (precondition)
 
-**Verified latent gap:** G6 is registered (`src/retail/rules/g6.py:49`,
+**Verified latent gap:** G6 is registered (`src/seshat/rules/g6.py:49`,
 `@register("G6", "No real host/value in committed PBIP parameters")`) and imported
-(`src/retail/rules/__init__.py:14`), so the live registry has **28 rules**. But
+(`src/seshat/rules/__init__.py:14`), so the live registry has **28 rules**. But
 `tests/unit/test_rules_wiring.py`:
 
 - `EXPECTED_RULE_IDS` (lines ~35-65) does **not** list `"G6"`.
@@ -259,10 +259,10 @@ tracked TMDL → iter_model_files (exempts tests/) → parse_tmdl
 | Unit | File(s) | Purpose | Depends on |
 |------|---------|---------|------------|
 | 0 | `tests/unit/test_rules_wiring.py` | Fix G6 wiring symmetry | — |
-| 1a | `src/retail/metric_drift.py` | +4 predicates, +additive guard | — |
-| 1b | `src/retail/cli.py` | `semantic-check` subcommand + Verdict→Finding | 1a |
+| 1a | `src/seshat/metric_drift.py` | +4 predicates, +additive guard | — |
+| 1b | `src/seshat/cli.py` | `semantic-check` subcommand + Verdict→Finding | 1a |
 | 1c | `.github/workflows/ci.yml` | separate gated step | 1b |
-| 2 | `src/retail/rules/dax.py`, `tests/unit/test_dax.py`, `tests/unit/test_rules_wiring.py` | Dn hygiene rules | 0 |
+| 2 | `src/seshat/rules/dax.py`, `tests/unit/test_dax.py`, `tests/unit/test_rules_wiring.py` | Dn hygiene rules | 0 |
 
 ## Consequences
 
@@ -288,9 +288,9 @@ tracked TMDL → iter_model_files (exempts tests/) → parse_tmdl
 ## See also
 
 - ADR 0007: `docs/decisions/0007-dax-governance-layers.md`
-- The module + tests: `src/retail/metric_drift.py`, `tests/unit/test_metric_drift.py`
-- Existing rules + tests: `src/retail/rules/dax.py`, `tests/unit/test_dax.py`
+- The module + tests: `src/seshat/metric_drift.py`, `tests/unit/test_metric_drift.py`
+- Existing rules + tests: `src/seshat/rules/dax.py`, `tests/unit/test_dax.py`
 - Wiring test: `tests/unit/test_rules_wiring.py`
-- Stdlib-pure precedent: `src/retail/validate_targets.py`,
+- Stdlib-pure precedent: `src/seshat/validate_targets.py`,
   `tests/unit/test_validate_targets.py:270-280`
-- CLI + runner: `src/retail/cli.py`, `src/retail/runner.py`, `src/retail/core.py`
+- CLI + runner: `src/seshat/cli.py`, `src/seshat/runner.py`, `src/seshat/core.py`

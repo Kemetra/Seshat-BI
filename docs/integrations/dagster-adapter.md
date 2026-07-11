@@ -190,7 +190,7 @@ orchestration/dagster/
 
 Note the package id stays `src/tower_bi_orchestration/` (the planned package name). The project is
 a SEPARATE top-level `orchestration/dagster/` tree so the adapter stays an upgradeable external
-dependency and the static `src/retail/` gate is left unchanged. None of the above is created now;
+dependency and the static `src/seshat/` gate is left unchanged. None of the above is created now;
 the asset / job / sensor / schedule code is a later implementation slice.
 
 ## Relationship to the other features

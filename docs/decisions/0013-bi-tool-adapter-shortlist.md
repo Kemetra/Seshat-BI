@@ -65,7 +65,7 @@ is parseable by `tmdl.py` (format-drift smoke test). Shares the .NET runtime wit
 None of the pilot tools change the build-vs-buy call on Mission-2's deferrals:
 
 - **`$$` tokenizer hole → BUILD (stdlib), don't buy sqlglot.** The fix is a single
-  dollar-tag regex branch in `tokenize_sql`/`strip_sql_comments` (`src/retail/sql.py`).
+  dollar-tag regex branch in `tokenize_sql`/`strip_sql_comments` (`src/seshat/sql.py`).
   An sqlglot-AST rewrite would re-test all S-rules for a one-branch problem and contradict
   ADR-0001 (hand-rolled tokenizer, no PyPI parsers). sqlglot's only home is `tools/` for a
   future transpile/migration-safety lint.

@@ -2,7 +2,7 @@
 
 - **Date:** 2026-06-26
 - **Status:** Accepted
-- **Context:** P2 ("commit-message convention", `src/retail/rules/git_meta.py`)
+- **Context:** P2 ("commit-message convention", `src/seshat/rules/git_meta.py`)
   enforces the repo's commit-subject form. Its original type whitelist was the
   narrow core set `feat|fix|refactor|docs|chore`. That over-rejected legitimate
   Conventional-Commits types the project already uses in practice (e.g. `build`,
@@ -70,7 +70,7 @@ colliding with that reserved block.
 
 ## See also
 
-- The rule + types: `src/retail/rules/git_meta.py` (`_P2_TYPES`,
+- The rule + types: `src/seshat/rules/git_meta.py` (`_P2_TYPES`,
   `_BOT_PREFIX_RE`, `SUBJECT_RE`, `rule_p2_commit_subjects`).
 - The tests: `tests/unit/test_git_meta.py`.
 - The reserved-numbering source: `docs/roadmap/roadmap.md`.

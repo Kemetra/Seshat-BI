@@ -15,7 +15,7 @@ ADR-0013 frames pbi-tools as closing **the one path `retail check` can't handle:
 an opaque binary `.pbix` instead of a committed PBIP `definition/` folder.** The
 spike's job is to prove that `pbi-tools extract` turns that binary into TMDL
 **fully headless**, and that the emitted `model.tmdl` **parses under
-`src/retail/tmdl.py`** (a format-drift smoke test). Two independent facts block that
+`src/seshat/tmdl.py`** (a format-drift smoke test). Two independent facts block that
 proof here:
 
 | Fact | Probe result (2026-06-26) | Consequence |
@@ -39,7 +39,7 @@ committed file back tests the parser against the format it was built for, so it
 output ≠ the committed file. A non-circular parse-back requires a **genuinely
 pbi-tools-emitted** `model.tmdl`, which requires actually running the tool.
 
-What *was* confirmed (a real but partial result): `src/retail/tmdl.py` parses the
+What *was* confirmed (a real but partial result): `src/seshat/tmdl.py` parses the
 committed `powerbi/Retailgold.SemanticModel/definition/` cleanly — 7 table files,
 14 measures on `fct_sales`, and `model.tmdl` correctly returns `None` (a
 header-only file) without raising. This establishes the parser handles the

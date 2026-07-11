@@ -20,8 +20,8 @@ from pathlib import Path
 
 import pytest
 
-from retail.core import RuleContext, Severity
-from retail.rules.routes_coverage import _MANIFEST, _MAP, check_route_coverage
+from seshat.core import RuleContext, Severity
+from seshat.rules.routes_coverage import _MANIFEST, _MAP, check_route_coverage
 
 pytestmark = pytest.mark.unit
 

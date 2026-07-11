@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from retail.pbir_visual_format import PbirFormatError, apply_visual_format
+from seshat.pbir_visual_format import PbirFormatError, apply_visual_format
 
 pytestmark = pytest.mark.unit
 

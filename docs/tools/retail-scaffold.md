@@ -7,7 +7,7 @@ a new static governance rule and for VERIFYING an existing rule's wiring.
 ## What it is
 
 A thin skill that runs `retail scaffold` and interprets its output. The mechanical work
-lives in `src/retail/scaffold.py`; the skill makes that verb reachable through the
+lives in `src/seshat/scaffold.py`; the skill makes that verb reachable through the
 normal agent-routing surface (its `description:` frontmatter carries the trigger
 phrases) instead of being CLI-only and undiscoverable.
 
@@ -32,7 +32,7 @@ phrases) instead of being CLI-only and undiscoverable.
 ## The five wiring places (authoritative in code, not here)
 
 The five places a rule id must appear in are declared as `FIVE_PLACES` in
-`src/retail/scaffold.py` -- that is the single source of truth. This doc and the skill
+`src/seshat/scaffold.py` -- that is the single source of truth. This doc and the skill
 point at it; they do not re-list it as a competing authority (anti-fork).
 
 ## Boundary discipline
@@ -47,4 +47,4 @@ point at it; they do not re-list it as a competing authority (anti-fork).
 
 - The skill: `.claude/skills/retail-scaffold/SKILL.md`.
 - The interpret sibling: `.claude/skills/retail-govern/SKILL.md`.
-- The helper + its spec: `src/retail/scaffold.py`; `specs/062-scaffold-rule-generator/`.
+- The helper + its spec: `src/seshat/scaffold.py`; `specs/062-scaffold-rule-generator/`.
