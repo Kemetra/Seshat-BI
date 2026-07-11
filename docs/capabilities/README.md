@@ -64,6 +64,6 @@ list again.
 Run the module (there is no CLI verb -- see `.claude/skills/capabilities/SKILL.md`):
 
 ```
-python -m retail.capability_inventory
-python -m retail.capability_inventory --format json
+python -m seshat.capability_inventory
+python -m seshat.capability_inventory --format json
 ```

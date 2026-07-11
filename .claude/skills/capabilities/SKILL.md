@@ -40,8 +40,8 @@ status, and `docs/quality/status-claims.yaml` -- then renders:
 Run the module directly from the repo root:
 
 ```
-python -m retail.capability_inventory
-python -m retail.capability_inventory --format json
+python -m seshat.capability_inventory
+python -m seshat.capability_inventory --format json
 ```
 
 There is no `retail capabilities` / `seshat capabilities` CLI verb -- this is a

@@ -37,7 +37,9 @@ kit for an AI agent (or a BI developer) that refuses to skip a step. Readiness i
 never a faked confidence score -- it is `status` + `evidence` + `blocking_reasons`.
 
 > [!NOTE]
-> **Naming.** The product is **Seshat BI** (CLI / package alias `Seshat_BI`).
+> **Naming.** The product is **Seshat BI**. The distribution is `seshat-bi` and the
+> import module is `seshat`; `seshat` is also the primary command, with `retail`
+> kept as a deprecated compatibility command/module for one deprecation cycle.
 > It was previously developed under the internal name *Tower BI Agent Kit*; the
 > governance spine is still called the **Readiness System**. Same product, one brand.
 

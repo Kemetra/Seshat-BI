@@ -20,12 +20,12 @@ dependencies = [
 ]
 
 [project.scripts]
-retail = "seshat.cli:main"
-# `seshat` is the product-brand alias of `retail` (roadmap M1). Both console
-# scripts dispatch the same entry point; `retail` stays the canonical dev name.
-# Exposing the `seshat` command requires a `pip install -e .` reinstall; the test
-# suite and `retail check` call the module directly, so they are unaffected.
+# `seshat` is the primary command; `retail` is a deprecated compatibility alias
+# kept for one deprecation cycle (roadmap M1). Both console scripts dispatch the
+# same entry point. Exposing either command requires a `pip install -e .`
+# reinstall; the test suite calls the module directly, so it is unaffected.
 seshat = "seshat.cli:main"
+retail = "seshat.cli:main"
 
 [project.optional-dependencies]
 dev = [
