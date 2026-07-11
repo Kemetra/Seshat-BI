@@ -1,0 +1,44 @@
+# =============================================================================
+# approval-authority.yaml  --  decision_type -> eligible authority class(es)
+# =============================================================================
+# Spec 121 (Business Knowledge Interview). The SINGLE SOURCE OF TRUTH for which
+# named-human authority class may approve each critical decision type (FR-021).
+#
+# HOW IT IS USED (DS2, the approval-metadata rule)
+#   1. Parse a decision's approval.approved_by with the readiness owner-shape rule
+#      -> (name, authority_class)   e.g. "Ahmed Shaaban (data_owner)".
+#   2. Look up the decision's decision_type below -> its eligible classes.
+#   3. class in eligible -> approval valid; else INVALID (decision stays unresolved).
+#   A typo'd or unknown class simply matches no eligible set and fails -- closed
+#   vocabulary without a second hardcoded list.
+#
+# AUTHORITY CLASSES (normalized snake_case tokens; the readiness owner-shape rule
+# recognizes analyst | governance | data_owner | metric_owner today). report_owner
+# is declared here for the FUTURE dashboard-blueprint stage; see the follow-up note.
+#
+# NO SELF-GRANT: an agent identity never satisfies approved_by (Principle V).
+# =============================================================================
+
+version: 1
+
+# Each critical decision type maps to the authority class(es) allowed to approve it.
+# A decision whose approval class is not listed for its type is invalid.
+eligibility:
+  kpi_definition: [metric_owner]
+  policy_ruling: [metric_owner]            # VAT / returns / discount / cost
+  missing_value_rule: [metric_owner, data_owner]
+  table_grain: [data_owner, analyst]
+  primary_key: [data_owner, analyst]
+  relationship_cardinality: [data_owner, analyst]
+  pii_handling: [data_owner, governance]
+  data_exclusion: [data_owner, governance]
+  publish_export: [data_owner, governance]
+  dashboard_blueprint_approval: [report_owner]
+
+# FOLLOW-UP (flagged, not fixed in this slice): the readiness owner-shape rule (RS1)
+# recognizes only {analyst, governance, data_owner, metric_owner}. `report_owner`
+# used by dashboard_blueprint_approval is a FUTURE-stage class; docs/readiness/
+# readiness-model.md already implies a "report owner" sign-off for Dashboard Ready,
+# so RS1's class set is a pre-existing gap to reconcile when that stage is built.
+# This slice only needs the eligibility row to exist for the future slice to inherit;
+# nothing here exercises a live report_owner approval.

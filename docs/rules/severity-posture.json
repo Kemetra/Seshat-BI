@@ -114,6 +114,22 @@
     "DR1": [
       "error"
     ],
+    "DS1": [
+      "error",
+      "warning"
+    ],
+    "DS2": [
+      "error"
+    ],
+    "DS3": [
+      "error"
+    ],
+    "DS4": [
+      "error"
+    ],
+    "DS5": [
+      "error"
+    ],
     "G1": [
       "error"
     ],

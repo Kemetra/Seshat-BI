@@ -144,6 +144,26 @@
     "title": "Design-layer route path foot-gun + stale-phrase guard"
   },
   {
+    "id": "DS1",
+    "title": "decision store layout, status, id and scope validity"
+  },
+  {
+    "id": "DS2",
+    "title": "decision approval metadata is complete and eligible"
+  },
+  {
+    "id": "DS3",
+    "title": "decision batch integrity (no critical types; valid confirmation)"
+  },
+  {
+    "id": "DS4",
+    "title": "decision supersession integrity and no scope conflicts"
+  },
+  {
+    "id": "DS5",
+    "title": "decision gate verdict consistency invariants"
+  },
+  {
     "id": "G1",
     "title": ".gitignore correctness"
   },

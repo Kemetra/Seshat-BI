@@ -1,10 +1,10 @@
 kit: seshat-bi
 files:
 - path: .seshat/kit-source.yaml
-  checksum: cb11de382403b5368af7effa2a331819cf8fafed10047763fa9d705a7a2383a8
+  checksum: 3f5b0b80b4b1ae22f4d3f70e5764326ff04d06b9cc2202530264cf91b1bb24f6
 - path: .seshat/compass.yaml
-  checksum: f8234c22fb0813a798ff534f2bf39e1ce8267098bafae4621e4f7da4aa97ee8f
+  checksum: 0702d0a2da4d7eb71a7b3d0a2464ba79f6af3b828c66d84920bc189f966a0737
 - path: .seshat/integrations/claude.json
-  checksum: 6172c77414da8b11fd5f70d4ee70d2666be75d4be06069123cced6e46d31166f
+  checksum: 6391b81e0b54f7cd9e3a1d0b9391ec43c66412319b946f8159c3ddb6ba07b607
 - path: .seshat/integrations/codex.json
-  checksum: efe9f405d0df594ae00703159846dea8aa42f7fa7f31fd762906298cc4eac455
+  checksum: 5b8da5c3a9e334772ea2298857f153d5961e867250a494c728ae59e5a3ffcc52

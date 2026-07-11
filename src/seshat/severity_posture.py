@@ -163,6 +163,94 @@ _PY_B1 = "import socket\n\n\ndef f():\n    return 1\n"
 # A PBIR with byConnection -> R1 ERROR.
 _PBIR_R1 = '{"datasetReference": {"byConnection": {"connectionString": "x"}}}\n'
 
+# Decision-store fixtures (DS family). Planted at the canonical .seshat/ store path.
+# DS1: a decision with an invalid status (ERROR) AND a raw-email statement (WARNING)
+# -> the rule emits BOTH classes.
+_DS1_STORE = (
+    "decisions:\n"
+    "  - id: pii_handling.c\n"
+    "    decision_type: pii_handling\n"
+    '    statement: "sample is a@b.co"\n'
+    "    scope: {columns: [t.c]}\n"
+    "    status: not_a_status\n"
+    "    evidence: [x.md]\n"
+    "    proposed_by: agent\n"
+    '    proposed_at: "2026-01-01"\n'
+)
+# DS2: an approved critical decision with a bare-role approver -> ERROR.
+_DS2_STORE = (
+    "decisions:\n"
+    "  - id: kpi_definition.k\n"
+    "    decision_type: kpi_definition\n"
+    "    statement: s\n"
+    "    scope: {kpis: [k]}\n"
+    "    status: approved\n"
+    "    evidence: [x.md]\n"
+    "    proposed_by: agent\n"
+    '    proposed_at: "2026-01-01"\n'
+    "    approval:\n"
+    "      approved_by: metric_owner\n"
+    '      approved_at: "2026-01-02"\n'
+    "      source: interview\n"
+    "      evidence: [x.md]\n"
+    "      evidence_identity: {x.md: abc}\n"
+    "      reviewed_scope: {kpis: [k]}\n"
+)
+# DS3: a critical decision placed in a batch -> ERROR.
+_DS3_STORE = (
+    "decisions:\n"
+    "  - id: pii_handling.c\n"
+    "    decision_type: pii_handling\n"
+    "    statement: s\n"
+    "    scope: {columns: [t.c]}\n"
+    "    status: approved\n"
+    "    evidence: [x.md]\n"
+    "    proposed_by: agent\n"
+    '    proposed_at: "2026-01-01"\n'
+    "    batch_id: batch.a\n"
+    "batches:\n"
+    "  - batch_id: batch.a\n"
+    '    presented_at: "2026-01-01"\n'
+    "    members: [pii_handling.c]\n"
+    '    confirmed_by: "A. Owner (data_owner)"\n'
+    '    confirmed_at: "2026-01-01"\n'
+    "    evidence: [x.md]\n"
+)
+# DS4: a superseded record with no superseded_by -> ERROR.
+_DS4_STORE = (
+    "decisions:\n"
+    "  - id: table_grain.t\n"
+    "    decision_type: table_grain\n"
+    "    statement: s\n"
+    "    scope: {tables: [t]}\n"
+    "    status: superseded\n"
+    "    evidence: [x.md]\n"
+    "    proposed_by: agent\n"
+    '    proposed_at: "2026-01-01"\n'
+)
+# DS5: an approved decision with empty evidence -> ERROR.
+_DS5_STORE = (
+    "decisions:\n"
+    "  - id: kpi_definition.k\n"
+    "    decision_type: kpi_definition\n"
+    "    statement: s\n"
+    "    scope: {kpis: [k]}\n"
+    "    status: approved\n"
+    "    evidence: []\n"
+    "    proposed_by: agent\n"
+    '    proposed_at: "2026-01-01"\n'
+    "    approval:\n"
+    '      approved_by: "A. Owner (metric_owner)"\n'
+    '      approved_at: "2026-01-02"\n'
+    "      source: interview\n"
+    "      evidence: []\n"
+    "      evidence_identity: {}\n"
+    "      reviewed_scope: {kpis: [k]}\n"
+)
+# DS2 needs the eligibility contract present to reach the eligibility branch; a
+# minimal generic copy is planted alongside.
+_DS_AUTHORITY = "version: 1\neligibility:\n  kpi_definition: [metric_owner]\n"
+
 # An expressions.tmdl with a real (non-placeholder) parameter value -> G6 ERROR.
 _EXPR_G6 = 'expression Server = "a-real-host" meta [IsParameterQuery=true]\n'
 
@@ -438,6 +526,17 @@ _RULE_FIXTURES: dict[str, _Fixture] = {
     "CT1": _Fixture(files=(("design/tokens/demo-design-tokens.yaml", _YAML_CT1),)),
     "CT2": _Fixture(),
     "CT3": _Fixture(files=(("design/tokens/demo-design-tokens.yaml", _YAML_CT3),)),
+    # DS family: plant a .seshat store with the class-specific violation.
+    "DS1": _Fixture(files=((".seshat/semantic-decisions.yaml", _DS1_STORE),)),
+    "DS2": _Fixture(
+        files=(
+            (".seshat/kpi-contracts.yaml", _DS2_STORE),
+            ("contracts/knowledge/approval-authority.yaml", _DS_AUTHORITY),
+        )
+    ),
+    "DS3": _Fixture(files=((".seshat/semantic-decisions.yaml", _DS3_STORE),)),
+    "DS4": _Fixture(files=((".seshat/semantic-decisions.yaml", _DS4_STORE),)),
+    "DS5": _Fixture(files=((".seshat/kpi-contracts.yaml", _DS5_STORE),)),
 }
 
 

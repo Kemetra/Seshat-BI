@@ -1,0 +1,37 @@
+# =============================================================================
+# dashboard-blueprint.yaml  --  the dashboard-blueprint stage contract (spec 121)
+# =============================================================================
+# The blueprint-approval stage that GATES the future PBIP prototype. This slice
+# defines the gate only; it builds no visuals and no PBIP. Future PBIP work is
+# Blueprint -> Compiler -> Validation, never freehand (FR-036..038). Publish/
+# export remains a separate human decision; F016 stays deferred and gated.
+#
+# Shape: specs/121-business-knowledge-interview/contracts/knowledge-contract.schema.json
+# =============================================================================
+
+version: 1
+
+stages:
+  - stage: dashboard_blueprint
+    allowed_routes: [dashboard_design, retail_kpi, readiness]
+    required_inputs:
+      - "a recorded report intent"
+      - "approved metric contracts for every metric a visual binds to"
+    required_outputs:
+      - "a dashboard blueprint (pages, visuals) bound to approved contracts"
+      - "a dashboard_blueprint_approval decision (report_owner)"
+    stop_rules:
+      - condition: "a visual binds to a metric with no approved contract"
+        unblocked_by: "an approved metric contract for that metric (no contract = no visual)"
+      - condition: "the blueprint is not owner-approved"
+        unblocked_by: "an approved dashboard_blueprint_approval decision by the report owner"
+    blocking_decision_categories: [dashboard_blueprint_approval, kpi_definition, pii_handling]
+    handoff: pbip_prototype_readiness
+    non_goals:
+      - "building the PBIP prototype (future Blueprint -> Compiler -> Validation)"
+      - "authoring report visuals in this slice"
+      - "publishing or exporting"
+      - "defining KPI meaning (route to retail_kpi)"
+    evidence_requirements:
+      - "the approved metric contract each visual binds to"
+      - "the report_owner approval receipt for the blueprint"

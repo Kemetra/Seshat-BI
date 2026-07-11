@@ -1,0 +1,69 @@
+# =============================================================================
+# business-knowledge-interview.yaml  --  the interview stage behavior contract
+# =============================================================================
+# Spec 121. The Business Knowledge Interview is conducted CONVERSATIONALLY by the
+# agent (agent-first, Principle I) under this contract. The static DS1-DS5 rules
+# verify the RECORDED OUTCOME in the Decision Store, not the conversation. This
+# file is the single declaration of how the interview must behave.
+#
+# Shape: specs/121-business-knowledge-interview/contracts/knowledge-contract.schema.json
+# Protocol detail: specs/121-business-knowledge-interview/contracts/interview-protocol.md
+# =============================================================================
+
+version: 1
+
+stages:
+  - stage: business_knowledge_interview
+    allowed_routes: [readiness, retail_kpi, sql, python]
+    required_inputs:
+      - "a committed discovery profile (Stage-1 read-only profile of retail-onboard-table or equivalent)"
+      - "a proposed scope"
+      - "the existing Decision Store, loaded first (existing decisions are presented for confirmation or supersession, never overwritten)"
+    required_outputs:
+      - "decisions recorded in the Decision Store for every interview outcome"
+      - "a regenerated evidence/business-interview-review.md"
+    stop_rules:
+      - condition: "no committed discovery profile exists"
+        unblocked_by: "a completed discovery profile"
+      - condition: "a suspected-PII column would be shown raw"
+        unblocked_by: "a masked sample, or an explicit owner unmasking decision recorded as pii_handling"
+      - condition: "a critical decision is unresolved but the agent would proceed"
+        unblocked_by: "an explicit named-human approval for that decision"
+    blocking_decision_categories: []  # the interview PRODUCES decisions; it does not gate on them
+    handoff: kpi_contracts
+    non_goals:
+      - "walking every column one-by-one unless the owner asks or ambiguity requires"
+      - "batch-approving any critical decision type"
+      - "defining the metric contract or DAX (KPI meaning routes to retail_kpi)"
+      - "self-granting any approval"
+      - "emitting a numeric confidence score"
+      - "displaying raw suspected-PII values by default"
+    evidence_requirements:
+      - "each decision cites profile summaries and/or masked samples"
+
+# --- interview behavior (read by the agent, beyond the generic stage shape) ---
+behavior:
+  question_grouping:
+    batch:
+      description: "obvious low-risk interpretations grouped into ONE owner confirmation"
+      critical_types_forbidden: true          # DS3
+      item_level_exclusion: true               # owner may exclude items; each becomes a pending question
+    critical:
+      description: "critical decisions asked individually, explicit per-decision approval"
+      requires_named_human_approval: true      # authority class per approval-authority.yaml
+  masking:
+    suspected_pii_masked_by_default: true
+    unmask_requires: "explicit owner instruction, recorded as a pii_handling decision"
+    committed_artifacts_never_contain_raw_pii: true   # FR-005
+  effort_bound: "question rounds <= (count of critical decisions) + 1 batch round"  # NFR-003
+  pause_resume:
+    interruption_approves_nothing: true
+    unanswered_left_as: [pending, needs_user_input]
+  focus:
+    - kpi_inputs
+    - pii
+    - table_grain
+    - keys
+    - relationships
+    - missing_value_rules
+    - ambiguous_financial_quantity_date_columns

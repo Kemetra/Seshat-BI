@@ -1,0 +1,51 @@
+# =============================================================================
+# semantic-decisions.yaml  --  the project Decision Store (semantic decisions)
+# =============================================================================
+# Spec 121 (Business Knowledge Interview + Decision Store). A GENERIC, copy-me
+# blank. The FILLED copy lives in the project workspace at
+# `.seshat/semantic-decisions.yaml` and records grain, primary key,
+# relationship/cardinality, PII handling, data exclusion, dashboard-blueprint
+# approval, and publish/export decisions.
+#
+# SHAPE (see specs/121-business-knowledge-interview/contracts/decision-record.schema.json)
+#   top level: { decisions: [ ... ], batches: [ ... ] }   # batches optional here
+#
+# THE NINE STATUSES: proposed | approved | rejected | pending | needs_user_input
+#                    | needs_sample | blocked | deferred | superseded
+#   - confidence (low|medium|high) is the agent's PROPOSAL confidence ONLY; it is
+#     never approval and never a readiness signal.
+#   - approved records are IMMUTABLE: change them only by a superseding record.
+#   - an approved critical decision MUST carry full approval metadata incl.
+#     evidence_identity captured at approval time (the staleness comparator).
+#
+# NO RAW PII: never write a raw suspected-PII value into this file; cite masked
+# evidence artifacts instead.
+#
+# C086 IS A FILLED INSTANCE, NEVER THE SCHEMA: the record below is an obvious
+# placeholder. Do not copy any worked-example specifics.
+# =============================================================================
+
+decisions:
+  - id: table_grain.fct_example
+    decision_type: table_grain
+    statement: "One row of fct_example represents <one placeholder business event>."
+    scope:
+      tables: ["fct_example"]
+    status: proposed
+    confidence: medium
+    evidence:
+      - "mappings/fct_example/source-profile.md"
+    proposed_by: "agent"
+    proposed_at: "2026-01-01"
+    # When an owner approves, replace status with `approved` and add:
+    # approval:
+    #   approved_by: "A. Owner (data_owner)"
+    #   approved_at: "2026-01-02"
+    #   source: interview
+    #   evidence: ["mappings/fct_example/source-profile.md"]
+    #   evidence_identity:
+    #     "mappings/fct_example/source-profile.md": "<sha256 at approval time>"
+    #   reviewed_scope:
+    #     tables: ["fct_example"]
+
+batches: []

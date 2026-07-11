@@ -590,6 +590,21 @@ capabilities:
       skill: "retail-onboard-table"
       verb: "retail-onboard-table"
 
+  - id: business-knowledge-interview
+    name: "business-knowledge-interview"
+    summary: "After DB discovery, interview the owner into the Decision Store (batch low-risk, explicit critical); records decisions, never self-grants approval."
+    state: shipped
+    authority: advisory
+    surface: skill
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: mapping_ready
+    command: null
+    documentation: ".claude/skills/business-knowledge-interview/SKILL.md"
+    references:
+      skill: "business-knowledge-interview"
+      verb: "business-knowledge-interview"
+
   - id: source-mapping
     name: "source-mapping"
     summary: "The mapping gate -- profiles a source, decides grain/PK, and fills the five mapping artifacts; produces source-map.yaml."

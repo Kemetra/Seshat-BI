@@ -1,0 +1,34 @@
+# =============================================================================
+# cleaning-rules.yaml  --  the project Decision Store (cleaning + missing-value)
+# =============================================================================
+# Spec 121 (Business Knowledge Interview + Decision Store). A GENERIC, copy-me
+# blank. The FILLED copy lives at `.seshat/cleaning-rules.yaml` and records
+# missing-value rules and cleaning rulings.
+#
+# START FROM THE DEFAULTS: every cleaning ruling starts from the ADR 0002
+# cleaning/modeling defaults (RC1-RC16). Record only DEVIATIONS, and every
+# deviation MUST cite the triggering DATA FACT that justified it (Principle VI).
+# A deviation without a recorded triggering data fact is a defect.
+#
+# SHAPE / STATUSES / IMMUTABILITY / NO-RAW-PII: identical to
+# templates/semantic-decisions.yaml (see that banner and the schema).
+#   critical decision_type here: missing_value_rule (treated as critical for ALL
+#   fields -- a deliberate conservative superset of the KPI/financial/quantity/
+#   date scoping; fail-closed direction).
+#
+# C086 IS A FILLED INSTANCE, NEVER THE SCHEMA: placeholders only.
+# =============================================================================
+
+decisions:
+  - id: missing_value_rule.fct_example.amount
+    decision_type: missing_value_rule
+    statement: "Missing `amount` is <placeholder: treated as NULL | 0 | excluded> (RC-default vs deviation + data fact)."
+    scope:
+      columns: ["fct_example.amount"]
+    status: pending
+    evidence:
+      - "mappings/fct_example/source-profile.md"
+    proposed_by: "agent"
+    proposed_at: "2026-01-01"
+
+batches: []
