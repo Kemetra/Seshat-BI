@@ -1,0 +1,30 @@
+schema_version: "1.0"
+pack_id: seshat.reference.source-vocabulary-basic
+version: "1.0.0"
+category: source_vocabulary
+owner: "Seshat BI maintainers"
+description: >-
+  Generic retail source vocabulary: common raw column spellings with
+  suggested snake_case names and mapping notes. Suggestions inform the
+  mapping gate; the named human reviewer still decides per table.
+core_compatibility: "1.x"
+provides:
+  - retail-order-terms
+  - retail-product-terms
+requires: []
+conflicts: []
+artifacts:
+  - path: artifacts/order-terms.yaml
+    purpose: "Order/transaction raw-header vocabulary with suggested names."
+  - path: artifacts/product-terms.yaml
+    purpose: "Product/item raw-header vocabulary with suggested names."
+human_decisions:
+  - "The mapping reviewer decides the final column name and meaning per table; vocabulary entries are suggestions, not rulings."
+fixtures:
+  - fixtures/synthetic-headers.csv
+verification:
+  - "retail pack validate --repo . --pack packs/reference/source-vocabulary-basic/seshat-pack.yaml"
+non_goals:
+  - "Does not fill or approve a source-map.yaml."
+  - "Does not execute code, change stage order, or grant any approval."
+  - "Does not claim to fit every client schema."

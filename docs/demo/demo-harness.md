@@ -8,16 +8,29 @@
 
 ## What it is
 
-A local, offline-first demo that proves the readiness spine end-to-end on a small,
-invented, generic sample dataset -- so an evaluator can see the kit work on a fresh
-clone without a database, secrets, or cloud. Four verbs:
+A local, offline-first demo that proves the readiness spine on a small, invented,
+generic sample dataset -- so an evaluator can see the kit work from an installed
+wheel or a fresh clone without a database, secrets, or cloud. Four verbs:
 
 ```bash
 retail demo init      # materialize the committed fixtures into .demo-work/ (git-ignored)
 retail demo load      # offline: skip with a reason; live: write demo-scoped tables
 retail demo run       # recompute per-stage readiness status (offline, or live if a DSN resolves)
-retail demo report    # render status + evidence + blockers (text | json)
+retail demo report    # render status + evidence + blockers (text | json | html)
 ```
+
+The product-brand alias is equivalent. The shortest visual proof is:
+
+```bash
+seshat demo init
+seshat demo run
+seshat demo report --format html
+```
+
+HTML defaults to `.seshat-output/demo/index.html`. Use `--output` only for another
+path below `.seshat-output/`; the command refuses arbitrary filesystem writes.
+The report is self-contained, deterministic, responsive, and usable without a
+server. It embeds the packaged brand asset and contains no external requests.
 
 ## The honest spine (what the demo demonstrates)
 
@@ -36,8 +49,8 @@ real live evidence.
 
 ## What it is NOT
 
-- **NOT a dashboard generator.** `demo report` renders status/evidence/blockers
-  only -- never a chart, image, or Power BI artifact (the release-notes non-goal;
+- **NOT a dashboard generator.** `demo report` renders a readiness proof only --
+  never a business chart or Power BI artifact (the release-notes non-goal;
   Principle II). Dashboards are designed from approved metric contracts, not
   auto-invented.
 - **NOT a second state engine.** `demo run` recomputes from committed artifacts +

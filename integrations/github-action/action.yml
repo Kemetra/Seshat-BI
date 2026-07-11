@@ -1,0 +1,50 @@
+name: Seshat BI readiness review
+description: Run evidence-backed static readiness governance in a checked-out repository
+inputs:
+  seshat-version:
+    description: Exact seshat-bi package version (for example 0.1.0; ranges are refused)
+    required: true
+  repo:
+    description: Checked-out repository root
+    required: false
+    default: .
+  commit-range:
+    description: Optional base..head range for changed-state reporting
+    required: false
+    default: ""
+  sarif:
+    description: Emit SARIF (auto, true, or false)
+    required: false
+    default: auto
+outputs:
+  outcome:
+    description: ok, blocked, or input_defect
+    value: ${{ steps.review.outputs.outcome }}
+  digest:
+    description: Stable material-result digest
+    value: ${{ steps.review.outputs.digest }}
+  review-json:
+    description: Path to retained review JSON
+    value: ${{ steps.review.outputs.review-json }}
+  sarif-file:
+    description: SARIF path when emitted
+    value: ${{ steps.review.outputs.sarif-file }}
+runs:
+  using: composite
+  steps:
+    - id: review
+      shell: pwsh
+      env:
+        SESHAT_VERSION: ${{ inputs.seshat-version }}
+        SESHAT_REPO: ${{ inputs.repo }}
+        SESHAT_COMMIT_RANGE: ${{ inputs.commit-range }}
+        SESHAT_SARIF: ${{ inputs.sarif }}
+      run: ${{ github.action_path }}/entrypoint.ps1
+    - name: Retain review evidence
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: seshat-review
+        path: .seshat-output/review/
+        if-no-files-found: error
+        retention-days: 14

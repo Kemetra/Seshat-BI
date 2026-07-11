@@ -412,6 +412,19 @@ def _entry_matching(
     return _entry_by_name(entries, {response.get("table"), table})
 
 
+def build_table_next_document(repo_root: Path | str, table: str) -> dict[str, Any]:
+    """Single-table next-action document WITHOUT the portfolio summaries.
+
+    Same composed shape as :func:`build_agent_next_document`, but it reads
+    only this table's readiness file (one run-next response) instead of
+    re-projecting every table -- O(1) file reads, which keeps portfolio-wide
+    consumers (the shared readiness projection, spec 120) linear instead of
+    quadratic. ``tables`` is empty and the entry-derived fields
+    (``readiness_state``/``evidence``) degrade conservatively; callers that
+    need those use the full document."""
+    return _compose(build_run_next_response(Path(repo_root), table), None, [])
+
+
 def build_agent_next_document(
     repo_root: Path | str, table: str | None = None
 ) -> dict[str, Any]:

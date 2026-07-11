@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: First contribution guide
+    url: https://github.com/ahmed-shaaban-94/Seshat_BI/blob/main/docs/contributing/first-contribution.md
+    about: The three-document newcomer path into a bounded starter lane.

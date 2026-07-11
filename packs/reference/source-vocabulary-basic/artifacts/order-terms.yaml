@@ -1,0 +1,15 @@
+# Common raw order/transaction headers -> suggested snake_case names.
+# Suggestions only; the mapping gate decides per table.
+terms:
+  - raw: "Transaction ID"
+    suggested: transaction_id
+    note: "Often the candidate PK; confirm uniqueness before declaring grain."
+  - raw: "Order Date"
+    suggested: order_date
+    note: "Confirm timezone and whether it is order placement or fulfilment."
+  - raw: "Qty"
+    suggested: quantity
+    note: "Confirm sign convention for returns."
+  - raw: "Unit Price"
+    suggested: unit_price
+    note: "Confirm currency and tax inclusion with the owner."

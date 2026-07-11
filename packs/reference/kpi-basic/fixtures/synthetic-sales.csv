@@ -1,0 +1,4 @@
+order_id,line_number,quantity,unit_price,line_amount
+SYN-0001,1,2,10.00,20.00
+SYN-0001,2,1,5.50,5.50
+SYN-0002,1,3,4.00,12.00

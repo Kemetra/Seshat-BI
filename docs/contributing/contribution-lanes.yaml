@@ -1,0 +1,128 @@
+# Starter contribution lanes (spec 120, US6, FR-036).
+#
+# Each lane is a bounded first contribution: narrow write scope, an
+# independent acceptance test, explicit verification commands, forbidden
+# scope, and the maintainer response a contributor can expect. A starter
+# issue (.github/ISSUE_TEMPLATE/starter.yml) instantiates one lane.
+#
+# UTF-8, no BOM, ASCII only. Difficulty is a label, never a score.
+version: 1
+maintainer_response:
+  first_reply_within: "7 days"
+  review_within: "14 days of a passing PR"
+lanes:
+
+  - id: kpi-contract-templates
+    intended_contributor: "Analyst comfortable writing KPI definitions in YAML."
+    summary: >-
+      Add or improve a declarative KPI template in the generic reference KPI
+      pack, so more teams start their metric contracts from a sound shape.
+    owned_files:
+      - packs/reference/kpi-basic/artifacts/
+      - packs/reference/kpi-basic/seshat-pack.yaml
+    forbidden_scope:
+      - "mappings/**  (real table contracts are owner-approved, not starter work)"
+      - "src/**       (no core code)"
+      - "Any client-specific schema or data"
+    prerequisites:
+      - "Read docs/ecosystem/extension-packs.md (pack trust boundary)."
+    acceptance:
+      - "The new template names its business question, grain note, and required owner decisions."
+      - "`retail pack validate` passes for the kpi-basic pack with the template declared."
+    verification:
+      - "retail pack validate --repo . --pack packs/reference/kpi-basic/seshat-pack.yaml"
+      - "pytest tests/integration/test_pack_cli.py -q"
+    expected_evidence:
+      - "Validate output showing result: pass"
+    difficulty: gentle
+
+  - id: synthetic-fixtures
+    intended_contributor: "Anyone who can craft small, realistic-but-fake CSV data."
+    summary: >-
+      Improve or extend the synthetic fixtures used by tests and reference
+      packs -- more edge shapes (returns, blanks, duplicates) without any
+      real data.
+    owned_files:
+      - tests/fixtures/
+      - packs/reference/*/fixtures/
+    forbidden_scope:
+      - "data/raw/  (raw client data is never committed)"
+      - "src/**     (no core code)"
+      - "Any real customer, store, or transaction values"
+    prerequisites:
+      - "Read the fixture you extend and the test that consumes it."
+    acceptance:
+      - "The fixture stays synthetic and small (tens of rows, not thousands)."
+      - "Every test that reads the fixture still passes."
+    verification:
+      - "pytest -m unit -q"
+    expected_evidence:
+      - "Passing test run naming the affected test files"
+    difficulty: gentle
+
+  - id: dialect-renderings
+    intended_contributor: "SQL-savvy contributor familiar with one non-Postgres warehouse."
+    summary: >-
+      Document how a silver/gold SQL convention renders in another warehouse
+      dialect inside the warehouse-compatibility pack category (notes, not
+      executable SQL migrations).
+    owned_files:
+      - packs/reference/  (a new warehouse_compatibility pack or its artifacts)
+    forbidden_scope:
+      - "warehouse/migrations/**  (real migrations follow the mapping gate)"
+      - "src/seshat/dialect.py and other core code"
+    prerequisites:
+      - "Read docs/ecosystem/extension-packs.md and one reference pack."
+    acceptance:
+      - "Each note names the convention, the dialect, and the rendering difference."
+      - "`retail pack validate` passes for the pack."
+    verification:
+      - "retail pack validate --repo . --pack <your-pack>/seshat-pack.yaml"
+    expected_evidence:
+      - "Validate output showing result: pass"
+    difficulty: moderate
+
+  - id: accessibility-checks
+    intended_contributor: "Contributor with accessibility or design-review experience."
+    summary: >-
+      Extend the accessibility reference pack's checklists (contrast,
+      keyboard, legibility) with concrete, verifiable review items.
+    owned_files:
+      - packs/reference/accessibility-basic/
+    forbidden_scope:
+      - "powerbi/**  (no report edits)"
+      - "src/**      (no scanner code; checklists inform humans)"
+    prerequisites:
+      - "Read packs/reference/accessibility-basic/ as it stands."
+    acceptance:
+      - "Each new item is checkable by a human reviewer without special tooling."
+      - "`retail pack validate` passes for the accessibility-basic pack."
+    verification:
+      - "retail pack validate --repo . --pack packs/reference/accessibility-basic/seshat-pack.yaml"
+    expected_evidence:
+      - "Validate output showing result: pass"
+    difficulty: gentle
+
+  - id: blocker-explanations
+    intended_contributor: "Writer who can turn terse blockers into plain-language explanations."
+    summary: >-
+      Improve the wording the blocker explainer emits for a recorded blocker
+      category, so a non-expert understands what is blocked and who unblocks
+      it.
+    owned_files:
+      - src/seshat/blocker_explainer.py  (wording tables/strings only)
+      - tests/unit/test_blocker_explainer.py
+    forbidden_scope:
+      - "Any change to blocker DETECTION or readiness semantics"
+      - "Adding a score, confidence value, or new gate"
+    prerequisites:
+      - "Run `retail blockers --repo .` and read its output once."
+    acceptance:
+      - "Each improved message names the blocker, its category, and the human surface that resolves it."
+      - "The blocker-explainer unit tests pass, updated alongside the wording."
+    verification:
+      - "pytest tests/unit/test_blocker_explainer.py -q"
+      - "retail check"
+    expected_evidence:
+      - "Passing test run + before/after output of `retail blockers`"
+    difficulty: moderate

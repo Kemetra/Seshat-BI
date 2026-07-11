@@ -1,0 +1,14 @@
+# Declarative KPI template -- adapt, then take through the normal metric
+# contract path. Suggestion only: nothing here is an approved definition.
+kpi: net-sales
+question: "What revenue remains after returns and discounts for the period?"
+grain_note: "Aggregates a line-item sales fact; confirm the table's approved grain first."
+shape:
+  numerator: "sum of extended line amount"
+  exclusions_to_decide:
+    - "returns / negative quantities"
+    - "cancelled orders"
+    - "tax and shipping"
+required_decisions:
+  - "Named owner confirms which exclusions apply."
+  - "Named owner confirms the currency and rounding treatment."

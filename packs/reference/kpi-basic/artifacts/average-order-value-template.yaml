@@ -1,0 +1,11 @@
+# Declarative KPI template -- adapt, then take through the normal metric
+# contract path. Suggestion only: nothing here is an approved definition.
+kpi: average-order-value
+question: "How much does a typical order spend in the period?"
+grain_note: "Ratio of a sales aggregate to a distinct order count; both need the approved grain."
+shape:
+  numerator: "net sales for the period"
+  denominator: "distinct order identifiers for the same period and filters"
+required_decisions:
+  - "Named owner confirms whether the denominator counts orders or transactions."
+  - "Named owner confirms that numerator and denominator share identical filters."

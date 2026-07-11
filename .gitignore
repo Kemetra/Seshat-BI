@@ -79,3 +79,7 @@ specs/038-tabular-editor-bpa-adapter/evidence/smoke-*.md
 # committed sample fixtures here for a throwaway run; the durable source is the
 # committed mappings/demo_sample_orders/ + tests/fixtures/demo/. Never committed.
 .demo-work/
+
+# Generated ecosystem output (passports, benchmark runs, demo HTML, explorer).
+# Durable reference fixtures live in tracked source directories, never here.
+.seshat-output/

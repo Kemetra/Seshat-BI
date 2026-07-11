@@ -1,0 +1,55 @@
+name: Extension-pack proposal
+description: Propose a declarative extension pack (KPI templates, vocabulary, accessibility, ...).
+title: "[pack]: "
+labels: ["extension-pack", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Packs are data and prose, never code: no executable content, no stage
+        changes, no approval authority, no universal-schema claims. See
+        docs/ecosystem/extension-packs.md before proposing.
+  - type: input
+    id: pack-id
+    attributes:
+      label: Proposed pack id
+      description: Owner-qualified lowercase namespace.
+      placeholder: "acme.retail-kpis"
+    validations:
+      required: true
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - kpi
+        - source_vocabulary
+        - warehouse_compatibility
+        - regional_policy
+        - accessibility
+        - dashboard_blueprint
+    validations:
+      required: true
+  - type: textarea
+    id: contents
+    attributes:
+      label: What the pack provides
+      description: The declarative content and who it helps. List the provided ids.
+    validations:
+      required: true
+  - type: textarea
+    id: decisions
+    attributes:
+      label: Required human decisions
+      description: Which judgment calls must a named human still make when using this content?
+    validations:
+      required: true
+  - type: checkboxes
+    id: conformance
+    attributes:
+      label: Conformance
+      options:
+        - label: The pack passes `retail pack validate` with synthetic fixtures only.
+          required: true
+        - label: The pack contains no secrets, real client data, PII, or client-specific schema claims.
+          required: true

@@ -46,7 +46,7 @@ from typing import TYPE_CHECKING
 import seshat.rules  # noqa: F401  (import for side effects: fires every @register)
 
 from ..registry import all_rules
-from ..runner import build_context, run, run_json
+from ..runner import build_context, run, run_json, run_review, run_sarif
 from .parser import _build_parser
 
 if TYPE_CHECKING:
@@ -91,6 +91,10 @@ def _run_check(args: object) -> int:
     # Default 'text' calls the unchanged run(); 'json' is the opt-in path.
     if args.output_format == "json":  # type: ignore[attr-defined]
         return run_json(all_rules(), ctx, bootstrapped=bootstrapped)
+    if args.output_format == "review":  # type: ignore[attr-defined]
+        return run_review(all_rules(), ctx, bootstrapped=bootstrapped)
+    if args.output_format == "sarif":  # type: ignore[attr-defined]
+        return run_sarif(all_rules(), ctx, bootstrapped=bootstrapped)
     return run(all_rules(), ctx, bootstrapped=bootstrapped)
 
 
@@ -101,6 +105,20 @@ def _run_doctor(args: object) -> int:
     from ..doctor import run_doctor
 
     return run_doctor(Path(args.repo), strict=args.strict)  # type: ignore[attr-defined]
+
+
+def _run_mcp(args: object) -> int:
+    try:
+        from ..governor.mcp_server import run_stdio
+    except ImportError:
+        print(
+            "error: MCP support is optional; install with "
+            "`pip install 'seshat-bi[mcp]'`.",
+            file=sys.stderr,
+        )
+        return 2
+    run_stdio(Path(args.repo))  # type: ignore[attr-defined]
+    return 0
 
 
 def _lazy(module_path: str, func_name: str):
@@ -151,6 +169,11 @@ _DISPATCH: dict[str, Callable[[object], int]] = {
     "dashboard-gaps": _lazy(".commands.gap_detector", "gap_detector_main"),
     "doctor": _run_doctor,
     "demo": _lazy("..demo", "run_demo"),
+    "passport": _lazy(".commands.passport", "passport_main"),
+    "pack": _lazy(".commands.pack", "pack_main"),
+    "benchmark": _lazy(".commands.benchmark", "benchmark_main"),
+    "explorer": _lazy(".commands.explorer", "explorer_main"),
+    "mcp": _run_mcp,
 }
 
 
@@ -287,5 +310,7 @@ __all__ = [
     "build_context",
     "run",
     "run_json",
+    "run_review",
+    "run_sarif",
     "all_rules",
 ]

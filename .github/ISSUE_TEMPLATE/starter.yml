@@ -1,0 +1,42 @@
+name: Starter contribution claim
+description: Claim a bounded starter lane for your first contribution.
+title: "[starter]: "
+labels: ["starter-contribution", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Pick a lane from docs/contributing/contribution-lanes.yaml and read
+        docs/contributing/first-contribution.md (those two plus this form are
+        the whole required reading). Each lane declares its owned files,
+        forbidden scope, verification commands, and what response to expect.
+  - type: dropdown
+    id: lane
+    attributes:
+      label: Lane
+      options:
+        - kpi-contract-templates
+        - synthetic-fixtures
+        - dialect-renderings
+        - accessibility-checks
+        - blocker-explanations
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: What you intend to add or change
+      description: One or two sentences; stay within the lane's owned files.
+    validations:
+      required: true
+  - type: checkboxes
+    id: contract
+    attributes:
+      label: Lane contract
+      options:
+        - label: I will stay within the lane's owned files and respect its forbidden scope.
+          required: true
+        - label: I will run the lane's verification commands before opening the PR.
+          required: true
+        - label: My contribution uses synthetic data only -- no secrets, client data, or PII.
+          required: true

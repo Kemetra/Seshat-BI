@@ -1,0 +1,12 @@
+# Common raw product/item headers -> suggested snake_case names.
+# Suggestions only; the mapping gate decides per table.
+terms:
+  - raw: "SKU"
+    suggested: sku
+    note: "Product identity is a Principle-V judgment call; never assume."
+  - raw: "Item Name"
+    suggested: item_name
+    note: "Free-text names drift; prefer an identifier for joins."
+  - raw: "Category"
+    suggested: category
+    note: "Confirm whether the hierarchy is stable or point-in-time."

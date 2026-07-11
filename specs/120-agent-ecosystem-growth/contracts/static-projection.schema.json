@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seshat-bi.dev/schemas/static-readiness-projection-1.0.json",
+  "title": "Seshat BI Static Readiness Projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "workspace", "tables", "lineage", "disclosure"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "workspace": {"type": "object", "required": ["label"], "properties": {"label": {"type": "string"}, "source_revision": {"type": ["string", "null"]}}},
+    "tables": {"type": "array", "items": {"type": "object"}},
+    "lineage": {"type": "object", "required": ["nodes", "edges"], "properties": {"nodes": {"type": "array", "items": {"type": "object"}}, "edges": {"type": "array", "items": {"type": "object"}}}},
+    "generated_at": {"type": ["string", "null"], "format": "date-time"},
+    "disclosure": {"type": "object", "required": ["status", "findings"], "properties": {"status": {"enum": ["pass", "blocked"]}, "findings": {"type": "array", "items": {"type": "object"}}}}
+  }
+}

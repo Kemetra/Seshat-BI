@@ -1,0 +1,75 @@
+:root {
+  color-scheme: light;
+  --navy: #001e35;
+  --gold: #c69214;
+  --teal: #0b7f80;
+  --ivory: #f7f1e7;
+  --paper: #ffffff;
+  --ink: #14222e;
+  --muted: #5d6972;
+  --line: #d7d9d7;
+  --blocked: #a9343a;
+  --warning: #8a6200;
+  --idle: #64717a;
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--ink); }
+button { font: inherit; letter-spacing: 0; }
+.product-header {
+  min-height: 150px; padding: 28px clamp(20px, 5vw, 72px); background: var(--navy);
+  color: var(--ivory); display: grid; grid-template-columns: 78px 1fr auto;
+  align-items: center; gap: 20px; border-bottom: 4px solid var(--gold);
+}
+.product-header img { width: 72px; height: 72px; object-fit: contain; }
+.product-name, .eyebrow, .stage-kicker { margin: 0 0 5px; font-size: .76rem; font-weight: 700; text-transform: uppercase; color: var(--teal); }
+.product-header .product-name { color: #6fd0cc; }
+h1, h2, h3, p { letter-spacing: 0; }
+h1 { margin: 0; font-size: clamp(1.8rem, 4vw, 3rem); }
+.mode-badge, .status-pill { border: 1px solid currentColor; border-radius: 4px; padding: 7px 10px; font-size: .78rem; font-weight: 700; text-transform: uppercase; }
+main { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+.summary-band { display: grid; grid-template-columns: minmax(220px, .8fr) 2fr; gap: 32px; padding: 30px 0; border-bottom: 1px solid var(--line); }
+.summary-band h2 { margin: 0; font-size: 1.45rem; overflow-wrap: anywhere; }
+.next-action p:last-child { margin: 0; line-height: 1.55; }
+.stage-rail { display: grid; grid-template-columns: repeat(7, minmax(112px, 1fr)); overflow-x: auto; padding: 20px 0; gap: 6px; }
+.stage-tab { min-height: 94px; background: var(--paper); border: 1px solid var(--line); border-top: 4px solid var(--idle); border-radius: 4px; padding: 10px; color: var(--ink); text-align: left; cursor: pointer; }
+.stage-tab:hover, .stage-tab:focus-visible { outline: 3px solid rgba(11, 127, 128, .28); outline-offset: 1px; }
+.stage-number, .stage-label, .status-label { display: block; }
+.stage-number { color: var(--muted); font-size: .72rem; }
+.stage-label { min-height: 34px; margin: 5px 0; font-weight: 700; }
+.status-label { color: var(--muted); font-size: .7rem; text-transform: uppercase; }
+.status-pass { border-top-color: var(--teal); }
+.status-blocked { border-top-color: var(--blocked); }
+.status-warning { border-top-color: var(--gold); }
+.stage-detail { padding: 28px 0; border-top: 1px solid var(--line); scroll-margin-top: 10px; }
+.stage-detail.is-focused { background: #f3f8f7; margin-inline: -18px; padding-inline: 18px; }
+.stage-heading { display: grid; grid-template-columns: 52px 1fr auto; gap: 14px; align-items: center; }
+.stage-index { color: var(--gold); font-size: 1.2rem; font-weight: 800; }
+.stage-heading h2 { margin: 0; font-size: 1.35rem; }
+.status-pill { color: var(--idle); }
+.status-pill.status-pass { color: var(--teal); }
+.status-pill.status-blocked { color: var(--blocked); }
+.status-pill.status-warning { color: var(--warning); }
+.stage-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; margin: 24px 0 0 66px; }
+.stage-columns h3 { margin: 0 0 10px; font-size: .82rem; text-transform: uppercase; }
+ul { margin: 0; padding-left: 19px; }
+li { margin: 0 0 8px; line-height: 1.45; overflow-wrap: anywhere; }
+.empty { color: var(--muted); font-style: italic; }
+.approval-row { margin: 18px 0 0 66px; padding: 14px 16px; border-left: 4px solid var(--gold); background: var(--ivory); display: grid; grid-template-columns: 90px 1fr; gap: 4px 14px; }
+.approval-row small { grid-column: 2; color: var(--muted); }
+footer { display: flex; justify-content: space-between; gap: 20px; padding: 22px clamp(20px, 5vw, 72px); color: var(--ivory); background: var(--navy); font-size: .78rem; }
+
+@media (max-width: 720px) {
+  .product-header { grid-template-columns: 58px 1fr; min-height: 126px; padding: 22px 20px; }
+  .product-header img { width: 54px; height: 54px; }
+  .mode-badge { grid-column: 2; justify-self: start; }
+  main { width: min(100% - 28px, 1180px); }
+  .summary-band, .stage-columns { grid-template-columns: 1fr; gap: 18px; }
+  .stage-heading { grid-template-columns: 40px 1fr; }
+  .status-pill { grid-column: 2; justify-self: start; }
+  .stage-columns, .approval-row { margin-left: 0; }
+  .approval-row { grid-template-columns: 1fr; }
+  .approval-row small { grid-column: 1; }
+}
+

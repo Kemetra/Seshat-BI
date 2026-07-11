@@ -81,6 +81,22 @@ The ordering is non-negotiable, and the gates are the product:
 
 Seshat BI gives an agent one truthful next action for turning raw retail data into governed BI. Your first run needs neither a database nor Power BI Desktop.
 
+### See the readiness proof
+
+Run the bundled, invented retail fixture entirely offline:
+
+```bash
+seshat demo init
+seshat demo run
+seshat demo report --format html
+```
+
+The report is written to `.seshat-output/demo/index.html`. It shows the evidence,
+blockers, approvals, and next allowed action for all seven stages. Offline proof
+stops honestly at Gold Ready because the live validation boundary needs a database.
+
+![Seshat BI readiness proof showing seven evidence-backed readiness stages](assets/demo/readiness-proof.png)
+
 > [!NOTE]
 > `seshat-bi` is the intended distribution name, but it is **not published yet**. The install commands below are the public-beta target, not a claim that an artifact is currently available.
 
@@ -165,6 +181,14 @@ planned but not yet built, see the [Roadmap](#roadmap).)
 | **F034 authoring slice** | The trace template, Dashboard Ready evidence item, and the read-only visual-implementation-review workflow (the built page itself stays a human Power BI Desktop action). |
 | **C086 pharmacy worked example** | A complete, filled run of the pipeline -- proof of the pattern, not the universal schema. |
 | **retail_store_sales worked example** | The validated worked example -- traverses the full seven-stage spine (to Dashboard Ready, Publish Ready `warning`) -- proves the generic playbook (no returns; PII kept; English-only). |
+| **Offline readiness proof (HTML)** | `seshat demo report --format html` renders the seven-stage proof as a static, disclosure-safe page -- evidence, blockers, approvals, next action; honest stop at the live boundary (spec 120 US1). |
+| **Review integration (`--format review`/`sarif` + GitHub action)** | Stable review JSON with changed-state digest, optional SARIF 2.1.0, and a read-only composite action under `integrations/github-action/` (spec 120 US2). |
+| **`seshat mcp` (read-only agent governor)** | Optional stable MCP v1 stdio adapter exposing six read-only governance tools; refuses execution and approval by construction ([docs](docs/ecosystem/agent-governor.md), spec 120 US3). |
+| **`seshat passport export/verify`** | Portable, disclosure-safe readiness evidence snapshots with content-hash verification (verified/changed/missing/incompatible/unavailable) -- records approvals, never grants them ([docs](docs/ecosystem/readiness-passport.md), spec 120 US4). |
+| **`seshat pack scaffold/validate`** | Governed, declarative local extension packs across six knowledge categories, with fail-closed validation and three generic reference packs ([docs](docs/ecosystem/extension-packs.md), spec 120 US5). |
+| **Contributor surfaces** | Five structured issue forms, an evidence-prompting PR template, and five bounded starter lanes reachable through three documents ([start here](docs/contributing/first-contribution.md), spec 120 US6). |
+| **`seshat benchmark run/report`** | Vendor-neutral categorical agent safety benchmark with a deterministic scripted reference participant and disclosed run conditions -- never a score or leaderboard ([docs](docs/ecosystem/agent-safety-benchmark.md), spec 120 US7). |
+| **`seshat explorer build`** | Self-contained offline HTML portfolio explorer: table-by-stage status, evidence availability, blockers, approvals, metric lineage; disclosure-gated generation ([docs](docs/ecosystem/readiness-explorer.md), spec 120 US8). |
 
 A green static check is necessary but not sufficient: semantic correctness needs
 the live validation boundary when a database is available.
@@ -353,6 +377,7 @@ Palette: `deep_navy #001E35` | `rich_gold #C69214` | `teal #0B9A9A` | `ivory #F7
 - Conventions: [`docs/conventions.md`](docs/conventions.md).
 - Glossary (terms, abbreviations, rule ids): [`docs/glossary.md`](docs/glossary.md).
 - Contributing (setup, local checks, PR flow): [`CONTRIBUTING.md`](CONTRIBUTING.md).
+- First contribution (three-document newcomer path + bounded starter lanes): [`docs/contributing/first-contribution.md`](docs/contributing/first-contribution.md).
 - FAQ (common questions, with sources): [`docs/faq.md`](docs/faq.md).
 - Release notes: [`RELEASE_NOTES.md`](RELEASE_NOTES.md) -- and the v0.1 snapshot [`docs/releases/v0.1.md`](docs/releases/v0.1.md).
 - Local verification (mirrors CI intent): [`docs/quality/local-verification.md`](docs/quality/local-verification.md).

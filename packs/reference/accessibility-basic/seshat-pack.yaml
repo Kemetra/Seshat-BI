@@ -1,0 +1,30 @@
+schema_version: "1.0"
+pack_id: seshat.reference.accessibility-basic
+version: "1.0.0"
+category: accessibility
+owner: "Seshat BI maintainers"
+description: >-
+  Baseline accessibility guidance for report design review: contrast,
+  keyboard reachability, and legibility checklists. Guidance informs the
+  human design review; it grants no readiness pass.
+core_compatibility: "1.x"
+provides:
+  - contrast-guidance
+  - keyboard-guidance
+requires: []
+conflicts: []
+artifacts:
+  - path: artifacts/contrast-checklist.md
+    purpose: "Contrast and color-independence review checklist."
+  - path: artifacts/keyboard-checklist.md
+    purpose: "Keyboard and focus-order review checklist."
+human_decisions:
+  - "The design reviewer records which checklist items were verified and which were waived, with a reason."
+fixtures:
+  - fixtures/synthetic-palette.csv
+verification:
+  - "retail pack validate --repo . --pack packs/reference/accessibility-basic/seshat-pack.yaml"
+non_goals:
+  - "Does not edit PBIR/theme files or run any accessibility scanner."
+  - "Does not execute code, change stage order, or grant any approval."
+  - "Does not claim to fit every client schema."

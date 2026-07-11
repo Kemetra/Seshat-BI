@@ -1,0 +1,60 @@
+name: Defect report
+description: Something Seshat BI does is wrong, misleading, or broken.
+title: "[bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Thanks for the report. Never paste secrets, real connection strings,
+        client data, or PII into an issue -- reproduce with synthetic data.
+  - type: input
+    id: version
+    attributes:
+      label: Seshat BI version
+      description: Output of `pip show seshat-bi` or the commit you run from.
+      placeholder: "0.1.0 / commit abc1234"
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: "Windows 11 / macOS 15 / Ubuntu 24.04, Python 3.13"
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Exact command or surface
+      description: The command, skill, or generated page where the defect appears.
+      placeholder: "retail passport verify --repo . --passport ..."
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps with synthetic data
+      description: Smallest sequence that reproduces the defect from a clean workspace.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: Paste the (redacted) output. Include exit codes if relevant.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Data safety
+      options:
+        - label: This report contains no secrets, real connection strings, client data, or PII.
+          required: true

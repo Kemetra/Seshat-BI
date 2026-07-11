@@ -31,6 +31,35 @@ Option B ratified 2026-07-07) that has merged to `main` but not yet been bundled
 an owner-approved version bump:
 
 ### Added
+- **Spec 120 -- agent ecosystem growth** (eight independently releasable phases, all
+  merged to this arc's feature branch):
+  - **US1 -- offline HTML readiness proof** (`02271e9`): `seshat demo report
+    --format html` renders the seven-stage proof as a deterministic,
+    disclosure-safe static page with the honest live boundary.
+  - **US2 -- reusable review integration** (`d0316ec`): `retail check --format
+    review` (changed-state digest, stable JSON) and `--format sarif`
+    (SARIF 2.1.0), plus the read-only composite GitHub action under
+    `integrations/github-action/`.
+  - **US3 -- read-only agent governor** (`a9b126c`): `seshat mcp`, an optional
+    stable MCP v1 stdio adapter exposing six read-only governance tools over
+    existing services; hard stops enforced in the transport-neutral service.
+  - **US4 -- readiness passports** (`7fb9639`): `seshat passport export|verify`;
+    portable disclosure-safe evidence snapshots with categorical content-hash
+    verification; records approvals, never grants them.
+  - **US5 -- extension packs** (`61dbaf9`): `seshat pack scaffold|validate`;
+    declarative local packs across six categories with fail-closed validation,
+    selection-graph conflict detection, and three generic reference packs.
+  - **US6 -- contributor surfaces** (`722e539`): five structured issue forms, an
+    evidence-prompting PR template, five bounded starter lanes, and the
+    three-document newcomer path.
+  - **US7 -- agent safety benchmark** (`fa8a39d`): `seshat benchmark run|report`;
+    vendor-neutral categorical scenarios (all named hard stops + six retail
+    semantic failure classes), deterministic scripted reference participant,
+    FR-041 run disclosure, no aggregate score/rank/leaderboard.
+  - **US8 -- static readiness explorer** (`ba25a8c`): `seshat explorer build`;
+    self-contained offline HTML portfolio explorer with evidence availability,
+    approvals, metric lineage, explicit input-defect reporting, and fail-closed
+    disclosure gating.
 - **M1 -- `seshat` brand alias** (roadmap M1): `seshat` added to `[project.scripts]`
   alongside `retail`; both resolve to the same `retail.cli:main` entry point. No
   behavior change (`ca0d76c`).

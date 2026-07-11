@@ -1,0 +1,53 @@
+name: Capability proposal
+description: Propose a new capability or an extension of an existing one.
+title: "[feature]: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Seshat BI adds seams, not implementations, until a capability is
+        explicitly needed (YAGNI). Proposals that respect the readiness
+        spine's hard stops are much easier to accept.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What real task is blocked or painful today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed capability
+      description: What would exist afterwards? Name the command/skill/artifact shape if you can.
+    validations:
+      required: true
+  - type: dropdown
+    id: authority
+    attributes:
+      label: Authority expectation
+      description: Every capability is classified; which fits your proposal?
+      options:
+        - Read-only projection (renders committed state)
+        - Artifact-writing (writes reviewable files, stops at human gates)
+        - Execution adapter (runs approved steps behind a gate)
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Boundary check
+      description: >-
+        How does the proposal avoid self-approval, numeric scores, stage
+        reordering, and secret disclosure? "It doesn't touch these" is fine.
+    validations:
+      required: true
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Data safety
+      options:
+        - label: This proposal contains no secrets, real client data, or PII.
+          required: true

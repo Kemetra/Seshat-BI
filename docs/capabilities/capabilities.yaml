@@ -469,6 +469,76 @@ capabilities:
     references:
       dispatch: "demo"
 
+  - id: seshat-mcp-governor
+    name: "seshat mcp (read-only agent governor)"
+    summary: "Optional local stdio MCP adapter exposing six read-only governance tools over existing status/next/blocker/approval/check/evidence services; refuses execution and approval."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: [optional-dependency]
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "mcp"
+    documentation: "docs/ecosystem/agent-governor.md"
+    references:
+      dispatch: "mcp"
+
+  - id: seshat-passport
+    name: "retail passport export/verify"
+    summary: "Exports a portable, disclosure-safe readiness passport (statuses, evidence identities, approval receipts) and verifies one against the workspace; records approvals, never grants them."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "passport"
+    documentation: "docs/ecosystem/readiness-passport.md"
+    references:
+      dispatch: "passport"
+
+  - id: seshat-extension-packs
+    name: "retail pack scaffold/validate"
+    summary: "Scaffolds and validates declarative local extension packs (six knowledge categories); packs never execute code, reorder stages, or carry approval authority."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "pack"
+    documentation: "docs/ecosystem/extension-packs.md"
+    references:
+      dispatch: "pack"
+
+  - id: seshat-safety-benchmark
+    name: "retail benchmark run/report"
+    summary: "Vendor-neutral categorical agent safety benchmark over synthetic hard-stop and retail-semantics scenarios; scripted reference participant, disclosed run conditions, never a score or leaderboard."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "benchmark"
+    documentation: "docs/ecosystem/agent-safety-benchmark.md"
+    references:
+      dispatch: "benchmark"
+
+  - id: seshat-readiness-explorer
+    name: "retail explorer build"
+    summary: "Generates a self-contained offline HTML portfolio explorer (table-by-stage status, evidence, blockers, approvals, metric lineage) from committed state; disclosure-gated, never an inferred pass or score."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "explorer"
+    documentation: "docs/ecosystem/readiness-explorer.md"
+    references:
+      dispatch: "explorer"
+
   # ---------------------------------------------------------------------------
   # Agent / companion (advisory skills, execution adapters not DB-execution-gated
   # here, and read-only/artifact-writing product modules)

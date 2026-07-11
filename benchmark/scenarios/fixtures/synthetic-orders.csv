@@ -1,0 +1,6 @@
+transaction_id,order_date,customer_ref,item,quantity,unit_price,line_amount,currency
+SYN-1001,2026-01-05,C-01,widget,2,10.00,20.00,USD
+SYN-1002,2026-01-05,C-02,widget,1,10.00,10.00,USD
+SYN-1002,2026-01-05,C-02,gadget,1,25.00,25.00,USD
+SYN-1003,2026-01-06,C-03,widget,-1,10.00,-10.00,USD
+SYN-1004,2026-01-06,C-01,gadget,3,22.50,67.50,EUR

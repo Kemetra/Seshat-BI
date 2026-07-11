@@ -1,6 +1,16 @@
 # Contributing to Seshat BI
 
-Thanks for contributing. This repo is a **standalone, agent-first analytics service**
+Thanks for contributing.
+
+> **First contribution?** You don't need this whole document. Read
+> [`docs/contributing/first-contribution.md`](docs/contributing/first-contribution.md),
+> pick a bounded starter lane from
+> [`docs/contributing/contribution-lanes.yaml`](docs/contributing/contribution-lanes.yaml),
+> and come back here only for the *Dev setup* and *Branches & pull requests*
+> sections. Structured issue forms (defect, capability, pack, compatibility,
+> starter claim) live under `.github/ISSUE_TEMPLATE/`.
+
+This repo is a **standalone, agent-first analytics service**
 (Power BI primary; DigitalOcean Postgres source; data flows `bronze` -> `silver` -> `gold`,
 and Power BI reads the `gold` schema only).
 Most work is docs/skills/templates first; code follows only once the artifacts prove
@@ -81,8 +91,10 @@ feat: add layer-aware S4b guard-form check
 2. Keep the change focused; update the relevant `docs/` and templates alongside code.
 3. Ensure all local checks above pass and committed text is **ASCII / UTF-8 without BOM**
    (rules `G3`/`G4`; edit PBIP/TMDL text externally as UTF-8 no BOM).
-4. Open the PR as **ready for review** with a clear body: what changed, why, and the
-   evidence (check output, reconciliation, the readiness stage it advances).
+4. Open the PR as **ready for review**; the pull-request template
+   (`.github/pull_request_template.md`) prompts for what changed, the readiness
+   stage touched, scope, tests, evidence, human decisions, and secret/data
+   safety -- fill each section rather than deleting it.
 5. CI must be green (ruff, tests, `retail check`, `retail semantic-check`).
 
 ## Working on warehouse / Power BI changes

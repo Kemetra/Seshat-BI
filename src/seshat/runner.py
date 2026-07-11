@@ -124,6 +124,13 @@ def _collect(
     ]
 
 
+def collect_findings(
+    rules: tuple[RegisteredRule, ...], ctx: RuleContext, *, bootstrapped: bool = True
+) -> list[Finding]:
+    """Public in-memory finding seam for read-only protocol integrations."""
+    return _collect(rules, ctx, bootstrapped=bootstrapped)
+
+
 def _exit_code(findings: list[Finding]) -> int:
     """1 if any ERROR finding is present, else 0 (WARNING/INFO never fail)."""
     return 1 if any(f.severity is Severity.ERROR for f in findings) else 0
@@ -168,3 +175,53 @@ def run_json(
         )
     )
     return exit_code
+
+
+def run_sarif(
+    rules: tuple[RegisteredRule, ...], ctx: RuleContext, *, bootstrapped: bool = True
+) -> int:
+    """Emit SARIF 2.1.0 with the same findings and exit policy as text/JSON."""
+    from .sarif import sarif_document
+
+    findings = _collect(rules, ctx, bootstrapped=bootstrapped)
+    print(json.dumps(sarif_document(findings), indent=2))
+    return _exit_code(findings)
+
+
+def run_review(
+    rules: tuple[RegisteredRule, ...], ctx: RuleContext, *, bootstrapped: bool = True
+) -> int:
+    """Emit the stable change-review envelope without expanding gate authority."""
+    from .review_integration import build_review_result
+    from .status_surface import build_status_projection
+
+    findings = _collect(rules, ctx, bootstrapped=bootstrapped)
+    status = build_status_projection(ctx.repo_root)
+    next_actions = [
+        table["next_action"]
+        for table in status["tables"]
+        if isinstance(table.get("next_action"), str) and table["next_action"]
+    ]
+    try:
+        result = build_review_result(
+            findings,
+            repo_root=ctx.repo_root,
+            commit_range=ctx.commit_range,
+            next_actions=next_actions,
+        )
+    except ValueError as exc:
+        print(
+            json.dumps(
+                {
+                    "schema_version": "1.0",
+                    "outcome": "input_defect",
+                    "error": str(exc),
+                    "exit_code": 2,
+                },
+                indent=2,
+            )
+        )
+        return 2
+    result["exit_code"] = _exit_code(findings)
+    print(json.dumps(result, indent=2))
+    return result["exit_code"]

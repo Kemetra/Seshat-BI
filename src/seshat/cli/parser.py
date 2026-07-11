@@ -9,13 +9,23 @@ because ``_build_parser`` itself is a standing CodeScene Large-Method hotspot
 (70-line threshold): each new subcommand (spec 109's ``status`` is the latest)
 gets its own ``_add_status_parser``-shaped helper instead of growing the body of
 ``_build_parser`` inline, which is what keeps the change-set delta from
-re-degrading it. argparse-only (stdlib), so importing this at ``cli/__init__.py``
-module scope stays pure.
+re-degrading it. The spec-120 ecosystem verb groups (passport/pack/benchmark/
+explorer) live in ``parser_ecosystem.py`` for the same reason at file scope
+(the Lines-of-Code hotspot); ``_build_parser`` still owns their add-order.
+argparse-only (stdlib), so importing this at ``cli/__init__.py`` module scope
+stays pure.
 """
 
 from __future__ import annotations
 
 import argparse
+
+from .parser_ecosystem import (
+    _add_benchmark_parser,
+    _add_explorer_parser,
+    _add_pack_parser,
+    _add_passport_parser,
+)
 
 
 def _add_init_project_parser(sub: argparse._SubParsersAction) -> None:
@@ -353,12 +363,13 @@ def _add_check_parser(sub: argparse._SubParsersAction) -> None:
     check.add_argument(
         "--format",
         dest="output_format",
-        choices=("text", "json"),
+        choices=("text", "json", "review", "sarif"),
         default="text",
         help=(
             "findings output format. 'text' (default) is the human-readable "
             "[severity] id message (locator) lines, unchanged. 'json' emits one "
-            "structured document for tooling; the exit code is identical."
+            "structured document for tooling; 'review' adds changed-state and a "
+            "stable digest; 'sarif' emits SARIF 2.1.0. Exit policy is identical."
         ),
     )
 
@@ -520,7 +531,31 @@ def _add_demo_parser(sub: argparse._SubParsersAction) -> None:
     )
     demo_report.add_argument("--repo", default=".", help="repo root")
     demo_report.add_argument(
-        "--format", choices=["text", "json"], default="text", help="output format"
+        "--format",
+        choices=["text", "json", "html"],
+        default="text",
+        help="output format",
+    )
+    demo_report.add_argument(
+        "--output",
+        default=None,
+        metavar="PATH",
+        help=(
+            "HTML output under .seshat-output/ "
+            "(default: .seshat-output/demo/index.html)"
+        ),
+    )
+
+
+def _add_mcp_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "mcp",
+        help="run the optional read-only Seshat agent governor over local stdio",
+    )
+    p.add_argument(
+        "--repo",
+        default=".",
+        help="single local repository root exposed to governor reads",
     )
 
 
@@ -925,5 +960,10 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_kit_lint_parser(sub)
     _add_doctor_parser(sub)
     _add_demo_parser(sub)
+    _add_passport_parser(sub)
+    _add_pack_parser(sub)
+    _add_benchmark_parser(sub)
+    _add_explorer_parser(sub)
+    _add_mcp_parser(sub)
 
     return parser

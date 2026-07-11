@@ -1,0 +1,31 @@
+schema_version: "1.0"
+pack_id: seshat.reference.kpi-basic
+version: "1.0.0"
+category: kpi
+owner: "Seshat BI maintainers"
+description: >-
+  Generic starter KPI templates (net sales, average order value) that a team
+  adapts to its own approved metric contracts. Synthetic and client-neutral;
+  no C086 or other client schema is assumed.
+core_compatibility: "1.x"
+provides:
+  - net-sales-template
+  - average-order-value-template
+requires: []
+conflicts: []
+artifacts:
+  - path: artifacts/net-sales-template.yaml
+    purpose: "Declarative net-sales KPI template with required owner decisions."
+  - path: artifacts/average-order-value-template.yaml
+    purpose: "Declarative AOV KPI template with required owner decisions."
+human_decisions:
+  - "A named data owner approves each KPI's business definition, denominator, and filters before a metric contract is created from these templates."
+  - "A named data owner decides how returns and cancellations affect net sales."
+fixtures:
+  - fixtures/synthetic-sales.csv
+verification:
+  - "retail pack validate --repo . --pack packs/reference/kpi-basic/seshat-pack.yaml"
+non_goals:
+  - "Does not create, approve, or bind metric contracts."
+  - "Does not execute code, change stage order, or grant any approval."
+  - "Does not claim to fit every client schema."

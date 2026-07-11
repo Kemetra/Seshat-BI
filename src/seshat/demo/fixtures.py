@@ -8,10 +8,13 @@ operates on a throwaway copy and NEVER writes a tracked file (FR-010).
 
 from __future__ import annotations
 
-import shutil
+from importlib.resources import files
 from pathlib import Path
+from typing import BinaryIO, Protocol
 
 from . import MAPPINGS_DIR, SAMPLE_CSV, SAMPLE_NAME, WORK_DIR
+
+_SOURCE_ROOT = Path(__file__).resolve().parents[3]
 
 
 def work_dir(repo: Path) -> Path:
@@ -19,9 +22,42 @@ def work_dir(repo: Path) -> Path:
     return repo / WORK_DIR
 
 
-def committed_readiness_status(repo: Path) -> Path:
-    """The COMMITTED, tracked readiness-status fixture (never written by a run)."""
-    return repo / MAPPINGS_DIR / "readiness-status.yaml"
+class _Resource(Protocol):
+    def read_bytes(self) -> bytes: ...
+
+    def read_text(self, encoding: str = "utf-8") -> str: ...
+
+    def open(self, mode: str = "rb") -> BinaryIO: ...
+
+
+def _packaged_resource(*parts: str) -> _Resource:
+    resource = files("seshat").joinpath("demo", "resources", *parts)
+    return resource  # type: ignore[return-value]
+
+
+def _mapping_source(repo: Path, name: str) -> Path | _Resource:
+    local = repo / MAPPINGS_DIR / name
+    if local.is_file():
+        return local
+    source_checkout = _SOURCE_ROOT / MAPPINGS_DIR / name
+    if source_checkout.is_file():
+        return source_checkout
+    return _packaged_resource("demo_sample_orders", name)
+
+
+def committed_readiness_status(repo: Path) -> Path | _Resource:
+    """Tracked source fixture, falling back to the wheel's bundled copy."""
+    return _mapping_source(repo, "readiness-status.yaml")
+
+
+def packaged_brand_asset(repo: Path) -> Path | _Resource:
+    local = repo / "assets" / "brand" / "seshat-seven-star.svg"
+    if local.is_file():
+        return local
+    source_checkout = _SOURCE_ROOT / "assets" / "brand" / "seshat-seven-star.svg"
+    if source_checkout.is_file():
+        return source_checkout
+    return _packaged_resource("seshat-seven-star.svg")
 
 
 def materialize(repo: Path, *, force: bool = False) -> Path:
@@ -41,7 +77,6 @@ def materialize(repo: Path, *, force: bool = False) -> Path:
     sample_dir.mkdir(parents=True, exist_ok=True)
 
     # Copy the mapping-gate + readiness fixtures.
-    src_mappings = repo / MAPPINGS_DIR
     for name in (
         "source-profile.md",
         "source-map.yaml",
@@ -49,13 +84,18 @@ def materialize(repo: Path, *, force: bool = False) -> Path:
         "unresolved-questions.md",
         "readiness-status.yaml",
     ):
-        src = src_mappings / name
-        if src.exists():
-            shutil.copyfile(src, sample_dir / name)
+        src = _mapping_source(repo, name)
+        (sample_dir / name).write_bytes(src.read_bytes())
 
     # Copy the sample CSV.
     csv_src = repo / SAMPLE_CSV
-    if csv_src.exists():
-        shutil.copyfile(csv_src, sample_dir / "demo_sample_orders.csv")
+    checkout_csv = _SOURCE_ROOT / SAMPLE_CSV
+    if csv_src.is_file():
+        csv_resource: Path | _Resource = csv_src
+    elif checkout_csv.is_file():
+        csv_resource = checkout_csv
+    else:
+        csv_resource = _packaged_resource("demo_sample_orders.csv")
+    (sample_dir / "demo_sample_orders.csv").write_bytes(csv_resource.read_bytes())
 
     return wd

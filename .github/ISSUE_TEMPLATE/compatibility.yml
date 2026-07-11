@@ -1,0 +1,54 @@
+name: Compatibility report
+description: A platform, Python, Power BI, warehouse, or MCP-host combination that works or fails.
+title: "[compat]: "
+labels: ["compatibility", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Both success and failure reports are valuable; availability claims in
+        the README stay truthful only when they trace to reports like this.
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: "Windows 11, Python 3.13.2, Power BI Desktop 2026-06"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Seshat BI version
+    validations:
+      required: true
+  - type: dropdown
+    id: outcome
+    attributes:
+      label: Outcome
+      options:
+        - Works as documented
+        - Works with a workaround (describe below)
+        - Fails (describe below)
+    validations:
+      required: true
+  - type: textarea
+    id: surface
+    attributes:
+      label: Surface tested
+      description: Which commands/flows you exercised (e.g. demo init/run/report, pack validate, mcp).
+    validations:
+      required: true
+  - type: textarea
+    id: detail
+    attributes:
+      label: Details
+      description: Redacted output, workaround, or failure detail.
+    validations:
+      required: false
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Data safety
+      options:
+        - label: This report contains no secrets, real connection strings, client data, or PII.
+          required: true
