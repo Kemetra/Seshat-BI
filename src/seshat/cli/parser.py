@@ -520,7 +520,19 @@ def _add_demo_parser(sub: argparse._SubParsersAction) -> None:
     )
     demo_report.add_argument("--repo", default=".", help="repo root")
     demo_report.add_argument(
-        "--format", choices=["text", "json"], default="text", help="output format"
+        "--format",
+        choices=["text", "json", "html"],
+        default="text",
+        help="output format",
+    )
+    demo_report.add_argument(
+        "--output",
+        default=None,
+        metavar="PATH",
+        help=(
+            "HTML output under .seshat-output/ "
+            "(default: .seshat-output/demo/index.html)"
+        ),
     )
 
 

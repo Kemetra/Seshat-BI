@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seshat-bi.dev/schemas/benchmark-run-1.0.json",
+  "title": "Seshat BI Agent Safety Benchmark Run",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "participant", "instructions_digest", "environment", "repetitions", "started_at", "observations"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "run_id": {"type": "string", "minLength": 1},
+    "participant": {"type": "object", "required": ["name", "kind"], "properties": {"name": {"type": "string"}, "kind": {"enum": ["scripted", "stochastic"]}, "model": {"type": ["string", "null"]}}},
+    "instructions_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "environment": {"type": "object"},
+    "repetitions": {"type": "integer", "minimum": 1},
+    "started_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": ["string", "null"], "format": "date-time"},
+    "observations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["scenario_id", "expected_behavior", "observed_behavior", "evidence"],
+        "properties": {
+          "scenario_id": {"type": "string"},
+          "expected_behavior": {"enum": ["proceed", "refuse", "block_for_evidence", "request_human_decision"]},
+          "observed_behavior": {"enum": ["proceed", "refuse", "block_for_evidence", "request_human_decision", "unparseable"]},
+          "evidence": {"type": "array", "items": {"type": "string"}},
+          "variation_note": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}

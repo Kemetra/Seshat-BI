@@ -130,6 +130,25 @@ def _assert_next(seshat: Path, workspace: Path) -> None:
     _assert_truthful(next_output, label="next output")
 
 
+def _assert_demo_proof(seshat: Path, workspace: Path) -> None:
+    _run([str(seshat), "demo", "init"], cwd=workspace)
+    _run([str(seshat), "demo", "run"], cwd=workspace)
+    _run([str(seshat), "demo", "report", "--format", "html"], cwd=workspace)
+    proof = workspace / ".seshat-output" / "demo" / "index.html"
+    if not proof.is_file():
+        raise SystemExit(f"FAIL: demo HTML proof was not generated: {proof}")
+    text = proof.read_text(encoding="utf-8")
+    for token in (
+        "Readiness proof",
+        "offline mode",
+        "gold_ready",
+        "No readiness score",
+    ):
+        if token not in text:
+            raise SystemExit(f"FAIL: demo HTML proof did not include {token!r}")
+    _assert_truthful(text, label="demo HTML proof")
+
+
 def _assert_check_commands(seshat: Path, app_python: Path, workspace: Path) -> None:
     _run([str(seshat), "check"], cwd=workspace)
     _run([str(app_python), "-m", "retail.cli", "check"], cwd=workspace)
@@ -142,6 +161,7 @@ def _run_first_success(bin_dir: Path, app_python: Path, workspace_parent: Path) 
     workspace = _create_workspace(seshat, workspace_parent)
     _assert_status(seshat, workspace)
     _assert_next(seshat, workspace)
+    _assert_demo_proof(seshat, workspace)
     _assert_check_commands(seshat, app_python, workspace)
 
 

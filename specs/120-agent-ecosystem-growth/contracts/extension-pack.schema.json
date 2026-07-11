@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seshat-bi.dev/schemas/extension-pack-1.0.json",
+  "title": "Seshat BI Extension Pack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "pack_id", "version", "category", "owner", "description", "core_compatibility", "provides", "requires", "conflicts", "artifacts", "human_decisions", "fixtures", "verification", "non_goals"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "pack_id": {"type": "string", "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)+$"},
+    "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "category": {"enum": ["kpi", "source_vocabulary", "warehouse_compatibility", "regional_policy", "accessibility", "dashboard_blueprint"]},
+    "owner": {"type": "string", "minLength": 1},
+    "description": {"type": "string", "minLength": 1},
+    "core_compatibility": {"type": "string", "minLength": 1},
+    "provides": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "requires": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "conflicts": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "artifacts": {"type": "array", "items": {"type": "object"}},
+    "human_decisions": {"type": "array", "items": {"type": "string"}},
+    "fixtures": {"type": "array", "items": {"type": "string"}},
+    "verification": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "non_goals": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+  }
+}

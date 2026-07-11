@@ -14,6 +14,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from seshat.cli.guards import resolve_local_output
+from seshat.disclosure import scan_disclosure
+
 from .fixtures import work_dir
 from .run import _SNAPSHOT_NAME, _load_committed_status, compute_offline_status
 
@@ -101,13 +104,30 @@ def render_json(snapshot: dict) -> str:
 
 
 def run_report(args) -> int:
-    """Render the report (text|json). Exit 0 for any well-formed readiness state."""
-    repo = Path(getattr(args, "repo", "."))
+    """Render text/JSON to stdout or write the disclosure-safe HTML proof."""
+    repo = Path(getattr(args, "repo", ".")).resolve()
     fmt = getattr(args, "format", "text")
     try:
         snapshot = _load_snapshot(repo)
     except Exception as exc:  # malformed committed fixture -> a real usage error
         print(f"error: could not render report: {exc}")
         return 1
+    if fmt == "html":
+        from .html_report import render_html
+
+        disclosure = scan_disclosure(snapshot)
+        if disclosure["status"] != "pass":
+            print("error: disclosure checks blocked the HTML report")
+            return 1
+        raw_output = getattr(args, "output", None) or (".seshat-output/demo/index.html")
+        try:
+            output = resolve_local_output(repo, raw_output)
+        except ValueError as exc:
+            print(f"error: {exc}")
+            return 2
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(render_html(snapshot, repo=repo), encoding="utf-8")
+        print(f"HTML readiness proof: {output.relative_to(repo).as_posix()}")
+        return 0
     print(render_json(snapshot) if fmt == "json" else render_text(snapshot))
     return 0

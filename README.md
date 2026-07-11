@@ -79,6 +79,22 @@ The ordering is non-negotiable, and the gates are the product:
 
 Seshat BI gives an agent one truthful next action for turning raw retail data into governed BI. Your first run needs neither a database nor Power BI Desktop.
 
+### See the readiness proof
+
+Run the bundled, invented retail fixture entirely offline:
+
+```bash
+seshat demo init
+seshat demo run
+seshat demo report --format html
+```
+
+The report is written to `.seshat-output/demo/index.html`. It shows the evidence,
+blockers, approvals, and next allowed action for all seven stages. Offline proof
+stops honestly at Gold Ready because the live validation boundary needs a database.
+
+![Seshat BI readiness proof showing seven evidence-backed readiness stages](assets/demo/readiness-proof.png)
+
 > [!NOTE]
 > `seshat-bi` is the intended distribution name, but it is **not published yet**. The install commands below are the public-beta target, not a claim that an artifact is currently available.
 
