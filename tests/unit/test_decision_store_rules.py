@@ -78,6 +78,22 @@ def _store(*decisions: str) -> str:
     return "decisions:\n" + "".join(decisions)
 
 
+_BATCH_DEFAULTS: dict[str, str] = {
+    "batch_id": "batch.a",
+    "presented_at": '"2026-01-01"',
+    "members": "[naming.x]",
+    "confirmed_by": '"A. Owner (data_owner)"',
+    "confirmed_at": '"2026-01-01"',
+    "evidence": "[x.md]",
+}
+
+
+def _batch(**overrides: object) -> str:
+    fields = {**_BATCH_DEFAULTS, **overrides}
+    lines = [f"    {k}: {v}" for k, v in fields.items() if v is not None]
+    return "batches:\n  - " + lines[0].lstrip() + "\n" + "\n".join(lines[1:]) + "\n"
+
+
 def _ds1(tmp_path: Path, *decisions: str) -> list:
     return _ids(check_ds1(_ctx(tmp_path, {_SEMANTIC: _store(*decisions)})), "DS1")
 
@@ -127,21 +143,16 @@ def test_ds1_duplicate_id_errors(tmp_path: Path) -> None:
     assert any("appears 2 times" in f.message for f in fs)
 
 
-def test_ds1_pii_shape_is_warning(tmp_path: Path) -> None:
-    body = (
-        "decisions:\n"
-        "  - id: pii_handling.email\n"
-        "    decision_type: pii_handling\n"
-        '    statement: "sample value is jane.doe@example.com"\n'
-        "    scope: {columns: [c.email]}\n"
-        "    status: pending\n"
-        "    evidence: [x.md]\n"
-        "    proposed_by: agent\n"
-        '    proposed_at: "2026-01-01"\n'
-    )
-    fs = _ids(check_ds1(_ctx(tmp_path, {_SEMANTIC: body})), "DS1")
+def test_ds1_pii_shape_in_freetext_is_warning(tmp_path: Path) -> None:
+    fs = _ds1(tmp_path, _decision(statement='"sample value is jane.doe@example.com"'))
     pii = [f for f in fs if "raw suspected-PII" in f.message]
     assert pii and all(f.severity is Severity.WARNING for f in pii)
+
+
+def test_ds1_secret_in_freetext_is_error(tmp_path: Path) -> None:
+    fs = _ds1(tmp_path, _decision(statement='"connect with password=Sup3rSecret"'))
+    hits = [f for f in fs if "secret/credential" in f.message]
+    assert hits and all(f.severity is Severity.ERROR for f in hits)
 
 
 def test_ds1_pii_in_identity_field_is_error(tmp_path: Path) -> None:
@@ -168,23 +179,6 @@ def test_ds1_pii_in_identity_field_is_error(tmp_path: Path) -> None:
     )
     fs = _ids(check_ds1(_ctx(tmp_path, {_SEMANTIC: body})), "DS1")
     hits = [f for f in fs if "approved_by" in f.message and "PII" in f.message]
-    assert hits and all(f.severity is Severity.ERROR for f in hits)
-
-
-def test_ds1_secret_in_field_is_error(tmp_path: Path) -> None:
-    body = (
-        "decisions:\n"
-        "  - id: table_grain.x\n"
-        "    decision_type: table_grain\n"
-        '    statement: "connect with password=Sup3rSecret per owner"\n'
-        "    scope: {tables: [x]}\n"
-        "    status: pending\n"
-        "    evidence: [x.md]\n"
-        "    proposed_by: agent\n"
-        '    proposed_at: "2026-01-01"\n'
-    )
-    fs = _ids(check_ds1(_ctx(tmp_path, {_SEMANTIC: body})), "DS1")
-    hits = [f for f in fs if "secret/credential" in f.message]
     assert hits and all(f.severity is Severity.ERROR for f in hits)
 
 
@@ -263,52 +257,23 @@ def test_ds2_approved_without_approval_block_errors(tmp_path: Path) -> None:
 # ---- DS3: batch integrity -------------------------------------------------
 
 
+def _ds3(tmp_path: Path, decisions: str, batch: str) -> list:
+    return _ids(check_ds3(_ctx(tmp_path, {_SEMANTIC: decisions + batch})), "DS3")
+
+
+_NAMING = _decision(id="naming.x", decision_type="naming", scope="{columns: [c]}",
+                    status="approved", confidence="high")
+
+
 def test_ds3_critical_type_in_batch_errors(tmp_path: Path) -> None:
-    body = (
-        "decisions:\n"
-        "  - id: pii_handling.x\n"
-        "    decision_type: pii_handling\n"
-        "    statement: s\n"
-        "    scope: {columns: [c]}\n"
-        "    status: approved\n"
-        "    confidence: high\n"
-        "    evidence: [x.md]\n"
-        "    proposed_by: agent\n"
-        '    proposed_at: "2026-01-01"\n'
-        "    batch_id: batch.lowrisk\n"
-        "batches:\n"
-        "  - batch_id: batch.lowrisk\n"
-        '    presented_at: "2026-01-01"\n'
-        "    members: [pii_handling.x]\n"
-        '    confirmed_by: "A. Owner (data_owner)"\n'
-        '    confirmed_at: "2026-01-01"\n'
-        "    evidence: [x.md]\n"
-    )
-    fs = _ids(check_ds3(_ctx(tmp_path, {_SEMANTIC: body})), "DS3")
+    critical = _decision(id="pii_handling.x", decision_type="pii_handling",
+                         scope="{columns: [c]}", status="approved", confidence="high")
+    fs = _ds3(tmp_path, _store(critical), _batch(members="[pii_handling.x]"))
     assert any("critical decision" in f.message for f in fs)
 
 
 def test_ds3_invalid_confirmed_by_errors(tmp_path: Path) -> None:
-    body = (
-        "decisions:\n"
-        "  - id: naming.x\n"
-        "    decision_type: naming\n"
-        "    statement: s\n"
-        "    scope: {columns: [c]}\n"
-        "    status: approved\n"
-        "    confidence: high\n"
-        "    evidence: [x.md]\n"
-        "    proposed_by: agent\n"
-        '    proposed_at: "2026-01-01"\n'
-        "batches:\n"
-        "  - batch_id: batch.a\n"
-        '    presented_at: "2026-01-01"\n'
-        "    members: [naming.x]\n"
-        "    confirmed_by: owner\n"
-        '    confirmed_at: "2026-01-01"\n'
-        "    evidence: [x.md]\n"
-    )
-    fs = _ids(check_ds3(_ctx(tmp_path, {_SEMANTIC: body})), "DS3")
+    fs = _ds3(tmp_path, _store(_NAMING), _batch(confirmed_by="owner"))
     assert any("invalid confirmed_by" in f.message for f in fs)
 
 
@@ -408,39 +373,11 @@ def test_ds2_each_missing_required_key_errors(tmp_path: Path, key: str) -> None:
 
 
 def test_ds3_unhashable_member_does_not_crash(tmp_path: Path) -> None:
-    body = (
-        "decisions: []\n"
-        "batches:\n"
-        "  - batch_id: batch.a\n"
-        '    presented_at: "2026-01-01"\n'
-        "    members: [[nested, list]]\n"
-        '    confirmed_by: "A. Owner (data_owner)"\n'
-        '    confirmed_at: "2026-01-01"\n'
-        "    evidence: [x.md]\n"
-    )
     # Must not raise -- a non-string member is flagged, not crashed on.
-    fs = _ids(check_ds3(_ctx(tmp_path, {_SEMANTIC: body})), "DS3")
+    fs = _ds3(tmp_path, "decisions: []\n", _batch(members="[[nested, list]]"))
     assert any("not a string id" in f.message for f in fs)
 
 
 def test_ds3_batch_missing_evidence_errors(tmp_path: Path) -> None:
-    body = (
-        "decisions:\n"
-        "  - id: naming.x\n"
-        "    decision_type: naming\n"
-        "    statement: s\n"
-        "    scope: {columns: [c]}\n"
-        "    status: approved\n"
-        "    confidence: high\n"
-        "    evidence: [x.md]\n"
-        "    proposed_by: agent\n"
-        '    proposed_at: "2026-01-01"\n'
-        "batches:\n"
-        "  - batch_id: batch.a\n"
-        '    presented_at: "2026-01-01"\n'
-        "    members: [naming.x]\n"
-        '    confirmed_by: "A. Owner (data_owner)"\n'
-        '    confirmed_at: "2026-01-01"\n'
-    )
-    fs = _ids(check_ds3(_ctx(tmp_path, {_SEMANTIC: body})), "DS3")
+    fs = _ds3(tmp_path, _store(_NAMING), _batch(evidence=None))
     assert any("records no presented evidence" in f.message for f in fs)
