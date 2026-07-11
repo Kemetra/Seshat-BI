@@ -31,12 +31,8 @@ def _load_yaml_mapping(path: Path) -> dict | None:
     import yaml  # lazy: keep this module's import path stdlib-light
 
     try:
-        raw = path.read_text(encoding="utf-8-sig")
-    except (OSError, UnicodeDecodeError):
-        return None
-    try:
-        data = yaml.safe_load(raw)
-    except yaml.YAMLError:
+        data = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
         return None
     return data if isinstance(data, dict) else None
 
@@ -51,13 +47,13 @@ def read_rule_titles(repo_root: Path) -> dict[str, str]:
         return {}
     if not isinstance(data, list):
         return {}
-    titles: dict[str, str] = {}
-    for row in data:
-        if isinstance(row, dict) and isinstance(row.get("id"), str):
-            title = row.get("title")
-            if isinstance(title, str):
-                titles[row["id"]] = title
-    return titles
+    return {
+        row["id"]: row["title"]
+        for row in data
+        if isinstance(row, dict)
+        and isinstance(row.get("id"), str)
+        and isinstance(row.get("title"), str)
+    }
 
 
 def _name_from_fence_line(fence: str) -> str | None:
