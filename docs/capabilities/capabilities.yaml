@@ -320,6 +320,34 @@ capabilities:
     references:
       dispatch: "blockers"
 
+  - id: retail-dashboard-planner
+    name: "retail dashboard-planner"
+    summary: "Read-only categorical new/extends/duplicate verdict on a proposed dashboard idea against the committed dashboard set."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "dashboard-planner"
+    documentation: "docs/tools/dashboard-planner.md"
+    references:
+      dispatch: "dashboard-planner"
+
+  - id: retail-dashboard-gaps
+    name: "retail dashboard-gaps"
+    summary: "Read-only pre-design inventory of design-blocking gaps for a proposed dashboard."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "dashboard-gaps"
+    documentation: "docs/tools/dashboard-gap-detector.md"
+    references:
+      dispatch: "dashboard-gaps"
+
   - id: retail-evidence-pack
     name: "retail evidence-pack"
     summary: "Read-only preview of the 10-section pre-publish evidence pack for one table."

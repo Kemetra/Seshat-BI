@@ -175,6 +175,21 @@ def test_semantic_check_measure_without_contract_is_skipped(
     assert "L3" not in out
 
 
+# Import prefixes cli.py must NOT carry at module scope (yaml + L3 modules).
+_FORBIDDEN_MODULE_SCOPE_IMPORTS = (
+    "import yaml",
+    "from yaml",
+    "from .metric_drift",
+    "from .semantic",
+    "import retail.metric_drift",
+    "import retail.semantic",
+)
+
+
+def _imports_forbidden_module(stripped: str) -> bool:
+    return any(stripped.startswith(p) for p in _FORBIDDEN_MODULE_SCOPE_IMPORTS)
+
+
 def test_cli_does_not_import_yaml_or_metric_drift_at_module_scope() -> None:
     """cli.py must keep yaml + L3 modules out of its module scope (stdlib core)."""
     import retail.cli as cli_mod
@@ -183,12 +198,5 @@ def test_cli_does_not_import_yaml_or_metric_drift_at_module_scope() -> None:
     for line in src.splitlines():
         stripped = line.lstrip()
         is_top_level = line == stripped  # column 0 == module scope
-        if is_top_level and (
-            stripped.startswith("import yaml")
-            or stripped.startswith("from yaml")
-            or stripped.startswith("from .metric_drift")
-            or stripped.startswith("from .semantic")
-            or stripped.startswith("import retail.metric_drift")
-            or stripped.startswith("import retail.semantic")
-        ):
+        if is_top_level and _imports_forbidden_module(stripped):
             raise AssertionError(f"cli.py imports L3/yaml at module scope: {line!r}")

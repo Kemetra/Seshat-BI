@@ -99,10 +99,12 @@ seshat check                       # same command, product-brand alias
 > New user starting a fresh project? `seshat init-project my-retail-bi` scaffolds an
 > empty workspace. Install-path details: [`docs/install/user-install.md`](docs/install/user-install.md).
 
-Not installing the package? Run the checker straight from source:
+No console script? With the package installed, the checker also runs as a
+module -- and from a bare uninstalled clone, prefix with `PYTHONPATH=src`:
 
 ```bash
 python -m retail.cli check --repo .
+PYTHONPATH=src python -m retail.cli check --repo .   # bare clone, no install
 ```
 
 Tests:
@@ -201,6 +203,13 @@ source of truth.
 ---
 
 ## Start here as an agent
+
+**Agent Mode** -- the guarded loop (inspect -> `seshat status` -> `seshat next`
+-> do only the next allowed action -> `seshat check` -> stop at the gate) is
+documented in [`docs/agent-mode.md`](docs/agent-mode.md). `seshat next
+--format agent` (or `--format json` for hosts) answers: current stage,
+readiness state, evidence, blockers, next allowed action, forbidden scope,
+validation commands, and the stop point.
 
 Read in this order, then act on the target's readiness state -- and only the next
 allowed action:

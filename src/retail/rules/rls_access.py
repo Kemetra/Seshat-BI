@@ -83,7 +83,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
@@ -147,8 +147,8 @@ def _find_matching_paren(text: str, open_idx: int) -> int:
             depth += 1
         elif text[i] == ")":
             depth -= 1
-            if depth == 0:
-                return i
+        if depth == 0:
+            return i
     return n
 
 
@@ -271,11 +271,19 @@ def _extract_declared_fields(
     return findings, name, gold_table, column
 
 
+class _Binding(NamedTuple):
+    """The contract-derived binding fields checked against gold structure --
+    bundled so ``_check_binding`` takes one cohesive binding plus the schema
+    rather than four loose scalars."""
+
+    rel: str
+    role_label: str
+    gold_table: str | None
+    column: str | None
+
+
 def _check_binding(
-    rel: str,
-    role_label: str,
-    gold_table: str | None,
-    column: str | None,
+    binding: _Binding,
     schema: dict[str, _GoldTable],
 ) -> list[Finding]:
     """Resolve the declared ``filter.gold_table``/``filter.column`` binding
@@ -283,6 +291,8 @@ def _check_binding(
     defect: a non-gold (silver/bronze) table, a gold table absent from the
     committed migrations, a fact-classified table, or a column not on the
     resolved table."""
+    rel, role_label = binding.rel, binding.role_label
+    gold_table = binding.gold_table
     if not gold_table:
         return []
 
@@ -307,6 +317,15 @@ def _check_binding(
             )
         ]
 
+    return _resolved_table_findings(binding, table)
+
+
+def _resolved_table_findings(binding: _Binding, table: _GoldTable) -> list[Finding]:
+    """Fact/dim and column checks once the gold table has resolved. Appends the
+    dim-classification defect before the column-absence defect (finding order
+    is contractual)."""
+    rel, role_label = binding.rel, binding.role_label
+    gold_table, column = binding.gold_table, binding.column
     findings: list[Finding] = []
     if not table.is_dim:
         kind = "a fact" if table.is_fact else "neither a dim nor a fact"
@@ -363,7 +382,8 @@ def _check_one_contract(
 
     findings, name, gold_table, column = _extract_declared_fields(rel, data)
     role_label = name if name else "<unnamed role>"
-    findings.extend(_check_binding(rel, role_label, gold_table, column, schema))
+    binding = _Binding(rel, role_label, gold_table, column)
+    findings.extend(_check_binding(binding, schema))
     findings.extend(_check_readiness(rel, role_label, data))
 
     return findings, name

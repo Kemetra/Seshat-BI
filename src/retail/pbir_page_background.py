@@ -91,6 +91,108 @@ def _image_block(display_name: str, item_name: str, scaling: str) -> dict:
     }
 
 
+def _safe_item_name(asset: Path) -> str:
+    """The asset's bare file name, refusing any path separator or ``..`` traversal."""
+    item_name = asset.name
+    if any(sep in item_name for sep in ("/", "\\", "..")):
+        raise PbirPageBgError(f"asset name is not a safe file name: {item_name!r}")
+    return item_name
+
+
+def _validate_inputs(asset: Path, report_dir: Path, scaling: str) -> None:
+    """Guard the caller's asset/report_dir/scaling before any file is opened."""
+    if not asset.is_file():
+        raise PbirPageBgError(f"background asset not found: {asset}")
+    if not report_dir.is_dir():
+        raise PbirPageBgError(f"report dir not found: {report_dir}")
+    if scaling not in _VALID_SCALING:
+        raise PbirPageBgError(
+            f"scaling must be one of {_VALID_SCALING}, got {scaling!r}"
+        )
+
+
+def _load_report_and_page(report_dir: Path, page_name: str) -> tuple[dict, dict]:
+    """Resolve + load the report.json / page.json pair as JSON objects."""
+    report_json_path = report_dir / "definition" / "report.json"
+    page_json_path = report_dir / "definition" / "pages" / page_name / "page.json"
+    if not report_json_path.is_file():
+        raise PbirPageBgError(f"report.json not found under {report_dir}")
+    if not page_json_path.is_file():
+        raise PbirPageBgError(
+            f"page.json not found for page {page_name!r} under {report_dir}"
+        )
+    report = _load_json(report_json_path)
+    page = _load_json(page_json_path)
+    if not isinstance(report, dict) or not isinstance(page, dict):
+        raise PbirPageBgError("report.json / page.json is not a JSON object")
+    return report, page
+
+
+def _reg_package(report: dict, item_name: str) -> dict:
+    """The RegisteredResources package with ``item_name`` present exactly once.
+
+    Any prior entry for the same name is dropped and re-appended (idempotent), while
+    every sibling item in an existing package is preserved.
+    """
+    existing = next(
+        (
+            p
+            for p in report.get("resourcePackages", [])
+            if isinstance(p, dict) and p.get("name") == _REG
+        ),
+        {"name": _REG, "type": _REG, "items": []},
+    )
+    items = [
+        it
+        for it in existing.get("items", [])
+        if isinstance(it, dict) and it.get("name") != item_name
+    ]
+    items.append({"name": item_name, "path": item_name, "type": "Image"})
+    return {"name": _REG, "type": _REG, "items": items}
+
+
+def _stage_report(report: dict, item_name: str) -> dict:
+    """A copy of report.json with the RegisteredResources package/item ensured."""
+    staged = dict(report)
+    packages = [
+        p
+        for p in staged.get("resourcePackages", [])
+        if not (isinstance(p, dict) and p.get("name") == _REG)
+    ]
+    packages.append(_reg_package(report, item_name))
+    staged["resourcePackages"] = packages
+    return staged
+
+
+def _stage_page(page: dict, display_name: str, item_name: str, scaling: str) -> dict:
+    """A copy of page.json with ONLY ``objects.background`` set (rest preserved)."""
+    staged = dict(page)
+    objects = dict(staged.get("objects", {}))
+    objects["background"] = [
+        {
+            "properties": {
+                # display name KEEPS the extension (matches the real sample's
+                # 'name.ico' form); the resolver keys off url.ItemName regardless.
+                "image": _image_block(display_name, item_name, scaling),
+                # explicit opaque transparency ("0D") -- see _OPAQUE.
+                "transparency": _OPAQUE,
+            }
+        }
+    ]
+    staged["objects"] = objects
+    return staged
+
+
+def _staged_text(label: str, before: dict, after: dict) -> str:
+    """Serialize a staged doc, asserting $schema is kept and the dump round-trips."""
+    if before.get("$schema") != after.get("$schema"):
+        raise PbirPageBgError(f"staged {label} would lose its $schema")
+    text = _dump(after)
+    if _dump(json.loads(text)) != text:
+        raise PbirPageBgError(f"staged {label} is not round-trip stable")
+    return text
+
+
 def set_page_background(
     asset: Path,
     report_dir: Path,
@@ -108,98 +210,29 @@ def set_page_background(
     """
     asset = Path(asset)
     report_dir = Path(report_dir)
-    if not asset.is_file():
-        raise PbirPageBgError(f"background asset not found: {asset}")
-    if not report_dir.is_dir():
-        raise PbirPageBgError(f"report dir not found: {report_dir}")
-    if scaling not in _VALID_SCALING:
-        raise PbirPageBgError(
-            f"scaling must be one of {_VALID_SCALING}, got {scaling!r}"
-        )
+    _validate_inputs(asset, report_dir, scaling)
+    item_name = _safe_item_name(asset)
+    report, page = _load_report_and_page(report_dir, page_name)
 
-    item_name = asset.name
-    if "/" in item_name or "\\" in item_name or ".." in item_name:
-        raise PbirPageBgError(f"asset name is not a safe file name: {item_name!r}")
-
-    report_json_path = report_dir / "definition" / "report.json"
-    page_json_path = report_dir / "definition" / "pages" / page_name / "page.json"
-    if not report_json_path.is_file():
-        raise PbirPageBgError(f"report.json not found under {report_dir}")
-    if not page_json_path.is_file():
-        raise PbirPageBgError(
-            f"page.json not found for page {page_name!r} under {report_dir}"
-        )
-    report = _load_json(report_json_path)
-    page = _load_json(page_json_path)
-    if not isinstance(report, dict) or not isinstance(page, dict):
-        raise PbirPageBgError("report.json / page.json is not a JSON object")
-
-    dest_asset = report_dir / "StaticResources" / _REG / item_name
     # Refuse to overwrite an existing DIFFERENT background on this page w/o force.
-    existing_bg = (
-        page.get("objects", {}).get("background") if isinstance(page, dict) else None
-    )
-    if existing_bg and not force:
+    if page.get("objects", {}).get("background") and not force:
         raise PbirPageBgError(
             f"page {page_name!r} already has a background -- use force=True to "
             f"replace it"
         )
 
-    # --- stage report.json: ensure the RegisteredResources package + item ---
-    staged_report = dict(report)
-    packages = [
-        p
-        for p in staged_report.get("resourcePackages", [])
-        if not (isinstance(p, dict) and p.get("name") == _REG)
-    ]
-    reg_pkg = next(
-        (
-            p
-            for p in staged_report.get("resourcePackages", [])
-            if isinstance(p, dict) and p.get("name") == _REG
-        ),
-        {"name": _REG, "type": _REG, "items": []},
-    )
-    items = [
-        it
-        for it in reg_pkg.get("items", [])
-        if isinstance(it, dict) and it.get("name") != item_name
-    ]
-    items.append({"name": item_name, "path": item_name, "type": "Image"})
-    reg_pkg = {"name": _REG, "type": _REG, "items": items}
-    packages.append(reg_pkg)
-    staged_report["resourcePackages"] = packages
+    # Stage both docs (report.json package/item + page.json objects.background).
+    staged_report = _stage_report(report, item_name)
+    staged_page = _stage_page(page, asset.name, item_name, scaling)
 
-    # --- stage page.json: set ONLY objects.background (preserve everything else) ---
-    staged_page = dict(page)
-    objects = dict(staged_page.get("objects", {}))
-    objects["background"] = [
-        {
-            "properties": {
-                # display name KEEPS the extension (matches the real sample's
-                # 'name.ico' form); the resolver keys off url.ItemName regardless.
-                "image": _image_block(asset.name, item_name, scaling),
-                # explicit opaque transparency ("0D") -- see _OPAQUE.
-                "transparency": _OPAQUE,
-            }
-        }
-    ]
-    staged_page["objects"] = objects
+    # Validate + serialize BEFORE writing anything (all-or-nothing).
+    report_text = _staged_text("report.json", report, staged_report)
+    page_text = _staged_text("page.json", page, staged_page)
 
-    # --- validate BEFORE writing anything ---
-    for label, before, after in (
-        ("report.json", report, staged_report),
-        ("page.json", page, staged_page),
-    ):
-        if before.get("$schema") != after.get("$schema"):
-            raise PbirPageBgError(f"staged {label} would lose its $schema")
-    report_text = _dump(staged_report)
-    page_text = _dump(staged_page)
-    for label, text in (("report.json", report_text), ("page.json", page_text)):
-        if _dump(json.loads(text)) != text:
-            raise PbirPageBgError(f"staged {label} is not round-trip stable")
-
-    # --- commit: copy asset, then both JSON files ---
+    # Commit: copy asset, then both JSON files (order preserved for atomicity).
+    report_json_path = report_dir / "definition" / "report.json"
+    page_json_path = report_dir / "definition" / "pages" / page_name / "page.json"
+    dest_asset = report_dir / "StaticResources" / _REG / item_name
     dest_asset.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(asset, dest_asset)
     report_json_path.write_text(report_text, encoding="utf-8", newline="\n")

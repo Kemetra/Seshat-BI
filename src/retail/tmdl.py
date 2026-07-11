@@ -244,8 +244,12 @@ def _find_table_header(lines: list[str]) -> tuple[str | None, int]:
     header exists (e.g. ``relationships.tmdl``, header-only ``model.tmdl``).
     """
     for i, raw in enumerate(lines, start=1):
+        # Only a column-0 line can be the top-level table header; skip the rest
+        # before the regex (an empty ``raw`` never matches the header pattern).
+        if _indent(raw) != 0:
+            continue
         m = re.match(r"table\s+('?)(?P<name>[^'\n]+?)\1\s*$", raw.strip())
-        if raw and _indent(raw) == 0 and m:
+        if m:
             return m.group("name"), i
     return None, 0
 
@@ -385,7 +389,7 @@ def _collect_annotation(stripped: str, ind: int) -> str | None:
 
 
 def _parse_table_block(
-    lines: list[str], i: int, n: int, stripped: str, ind: int
+    lines: list[str], i: int, n: int
 ) -> tuple[str, TmdlMeasure | TmdlColumn | str, int] | None:
     """Dispatch a single multi-line table block starting at line ``i``.
 
@@ -395,6 +399,8 @@ def _parse_table_block(
     ``"measure"``, ``"column"`` or ``"source"``, or ``None`` if the line is not
     a block header (leaving single-line collectors to the caller).
     """
+    stripped = lines[i].strip()
+    ind = _indent(lines[i])
     measure_header = _is_measure_header(stripped)
     if measure_header and ind == 1:
         measure, j = _parse_measure_block(lines, i, n, measure_header)
@@ -436,6 +442,14 @@ def parse_tmdl(text: str) -> TmdlTable | None:
     annotations: list[str] = []
     data_category: str | None = None
 
+    # Maps each block kind reported by ``_parse_table_block`` to the list that
+    # collects it, so the dispatch is a single lookup rather than a branch chain.
+    buckets: dict[str, list] = {
+        "measure": measures,
+        "column": columns,
+        "source": sources,
+    }
+
     n = len(lines)
     i = 0
     while i < n:
@@ -444,15 +458,10 @@ def parse_tmdl(text: str) -> TmdlTable | None:
 
         # A measure / column / source block spans multiple lines: record it in
         # its target list and jump past the whole block.
-        block = _parse_table_block(lines, i, n, stripped, ind)
+        block = _parse_table_block(lines, i, n)
         if block is not None:
             kind, item, j = block
-            if kind == "measure":
-                measures.append(item)
-            elif kind == "column":
-                columns.append(item)
-            else:
-                sources.append(item)
+            buckets[kind].append(item)
             i = j
             continue
 
@@ -477,6 +486,38 @@ def parse_tmdl(text: str) -> TmdlTable | None:
     )
 
 
+def _is_relationship_header(raw: str) -> re.Match[str] | None:
+    """Match a top-level ``relationship <name>`` header line, or None.
+
+    Only a column-0 line qualifies; a deeper-indented ``relationship`` word is
+    not a top-level block header.
+    """
+    if _indent(raw) != 0:
+        return None
+    return re.match(r"relationship\s+('?)(?P<name>[^'\n]+?)\1\s*$", raw.strip())
+
+
+def _parse_relationship_block(
+    lines: list[str], i: int, n: int, match: re.Match[str]
+) -> tuple[TmdlRelationship, int]:
+    """Parse a top-level ``relationship`` block starting at line ``i`` (0-based).
+
+    ``match`` is the already-matched header regex. Returns the parsed
+    :class:`TmdlRelationship` and the index of the first line past the block,
+    capturing the ``crossFilteringBehavior`` property (or ``None`` if absent).
+    """
+    name = match.group("name").strip()
+    cfb: str | None = None
+    j = i + 1
+    while _continues_block(lines, j, n, 0):
+        c = re.match(r"crossFilteringBehavior:\s*(?P<v>.+)$", lines[j].strip())
+        if c:
+            cfb = c.group("v").strip()
+        j += 1
+    relationship = TmdlRelationship(name=name, cross_filtering_behavior=cfb, line=i + 1)
+    return relationship, j
+
+
 def parse_relationships(text: str) -> tuple[TmdlRelationship, ...]:
     """Parse a ``relationships.tmdl`` file and return all relationship blocks.
 
@@ -484,27 +525,15 @@ def parse_relationships(text: str) -> tuple[TmdlRelationship, ...]:
     ``crossFilteringBehavior`` property (or ``None`` if absent).
     """
     lines = _strip_bom(text).splitlines()
-    rels: list[TmdlRelationship] = []
     n = len(lines)
-    i = 0
-    while i < n:
-        stripped = lines[i].strip()
-        rm = re.match(r"relationship\s+('?)(?P<name>[^'\n]+?)\1\s*$", stripped)
-        if rm and _indent(lines[i]) == 0:
-            name = rm.group("name").strip()
-            cfb: str | None = None
-            j = i + 1
-            while _continues_block(lines, j, n, 0):
-                c = re.match(r"crossFilteringBehavior:\s*(?P<v>.+)$", lines[j].strip())
-                if c:
-                    cfb = c.group("v").strip()
-                j += 1
-            rels.append(
-                TmdlRelationship(name=name, cross_filtering_behavior=cfb, line=i + 1)
-            )
-            i = j
-            continue
-        i += 1
+    # A linear scan over every line is equivalent to skipping past each parsed
+    # block: block-continuation lines are deeper-indented (or blank), so
+    # _is_relationship_header can never match inside a block.
+    rels = [
+        _parse_relationship_block(lines, i, n, rm)[0]
+        for i, raw in enumerate(lines)
+        if (rm := _is_relationship_header(raw)) is not None
+    ]
     return tuple(rels)
 
 

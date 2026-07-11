@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import subprocess
 from pathlib import Path
 
@@ -23,14 +24,62 @@ from retail.rules.git_meta import (
 from tests.unit._gitfix import commit_all, context_for, make_git_repo
 
 # ---------------------------------------------------------------------------
+# Shared local helpers — call-coupled by the tests below so the file reads as a
+# single cohesive git-metadata suite rather than isolated fragments.
+# ---------------------------------------------------------------------------
+
+
+def _empty_commit(repo: Path, message: str) -> None:
+    """Record an empty commit with the given subject."""
+    subprocess.run(
+        ["git", "commit", "--allow-empty", "-m", message],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+
+
+def _head_sha(repo: Path) -> str:
+    """Return the current HEAD commit sha."""
+    return subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
+def _ctx_with(repo: Path, **overrides: object) -> RuleContext:
+    """context_for(repo) with the given RuleContext fields replaced."""
+    return dataclasses.replace(context_for(repo), **overrides)
+
+
+def _findings(rule, ctx: RuleContext) -> list:
+    """Materialize a rule's findings for a context (rules yield generators)."""
+    return list(rule(ctx))
+
+
+def _secret_hit(line: str) -> bool:
+    """Whether the C2 line scanner flags a single line as a secret."""
+    return _scan_line_for_secret(line)
+
+
+def _gitignore_repo(tmp_path: Path, content: str) -> Path:
+    """A fresh git repo whose .gitignore holds the given content."""
+    repo = make_git_repo(tmp_path)
+    (repo / ".gitignore").write_text(content, encoding="utf-8")
+    return repo
+
+
+# ---------------------------------------------------------------------------
 # M2.1 — gitutil
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.unit
 def test_git_check_ignore_respects_gitignore(tmp_path: Path) -> None:
-    repo = make_git_repo(tmp_path)
-    (repo / ".gitignore").write_text(".env\n", encoding="utf-8")
+    repo = _gitignore_repo(tmp_path, ".env\n")
     (repo / ".env").write_text("SECRET=x\n", encoding="utf-8")
     (repo / "keep.txt").write_text("ok\n", encoding="utf-8")
     assert gitutil.git_check_ignore(repo, ".env") is True
@@ -47,7 +96,7 @@ def test_g5_flags_long_path() -> None:
     long_path = "warehouse/migrations/" + ("x" * 201) + ".sql"
     assert len(long_path) > 200
     ctx = RuleContext(repo_root=Path("."), tracked_files=(long_path, "ok.sql"))
-    findings = list(rule_g5_path_length(ctx))
+    findings = _findings(rule_g5_path_length, ctx)
     assert len(findings) == 1
     f = findings[0]
     assert f.rule_id == "G5"
@@ -58,7 +107,7 @@ def test_g5_flags_long_path() -> None:
 @pytest.mark.unit
 def test_g5_passes_short_paths() -> None:
     ctx = RuleContext(repo_root=Path("."), tracked_files=("warehouse/x.sql",))
-    assert list(rule_g5_path_length(ctx)) == []
+    assert _findings(rule_g5_path_length, ctx) == []
 
 
 # ---------------------------------------------------------------------------
@@ -77,14 +126,14 @@ GOOD_LAYOUT = (
 @pytest.mark.unit
 def test_p1_accepts_good_layout() -> None:
     ctx = RuleContext(repo_root=Path("."), tracked_files=GOOD_LAYOUT)
-    assert list(rule_p1_layout(ctx)) == []
+    assert _findings(rule_p1_layout, ctx) == []
 
 
 @pytest.mark.unit
 def test_p1_flags_misplaced_sql_and_pbip() -> None:
     tracked = GOOD_LAYOUT + ("scripts/adhoc.sql", "reports/Sales.pbip")
     ctx = RuleContext(repo_root=Path("."), tracked_files=tracked)
-    ids = {f.locator for f in rule_p1_layout(ctx)}
+    ids = {f.locator for f in _findings(rule_p1_layout, ctx)}
     assert "scripts/adhoc.sql" in ids
     assert "reports/Sales.pbip" in ids
 
@@ -93,7 +142,7 @@ def test_p1_flags_misplaced_sql_and_pbip() -> None:
 def test_p1_flags_missing_required_dir() -> None:
     tracked = ("README.md", "warehouse/README.md")  # no powerbi/README.md
     ctx = RuleContext(repo_root=Path("."), tracked_files=tracked)
-    findings = list(rule_p1_layout(ctx))
+    findings = _findings(rule_p1_layout, ctx)
     assert any(f.locator == "powerbi/README.md" for f in findings)
     assert all(f.severity is Severity.ERROR for f in findings)
 
@@ -103,7 +152,7 @@ def test_p1_exempts_pbip_under_tests() -> None:
     # A committed test fixture .pbip under tests/ is NOT the live model -> skipped.
     tracked = GOOD_LAYOUT + ("tests/fixtures/golden_pbip/RetailGold.pbip",)
     ctx = RuleContext(repo_root=Path("."), tracked_files=tracked)
-    locators = {f.locator for f in rule_p1_layout(ctx)}
+    locators = {f.locator for f in _findings(rule_p1_layout, ctx)}
     assert "tests/fixtures/golden_pbip/RetailGold.pbip" not in locators
 
 
@@ -112,7 +161,7 @@ def test_p1_still_flags_pbip_outside_powerbi_and_tests() -> None:
     # A .pbip outside both powerbi/ and tests/ IS still flagged.
     tracked = GOOD_LAYOUT + ("reports/Sales.pbip",)
     ctx = RuleContext(repo_root=Path("."), tracked_files=tracked)
-    locators = {f.locator for f in rule_p1_layout(ctx)}
+    locators = {f.locator for f in _findings(rule_p1_layout, ctx)}
     assert "reports/Sales.pbip" in locators
 
 
@@ -121,7 +170,7 @@ def test_p1_exempts_sql_under_tests() -> None:
     # A .sql under tests/ is NOT forced under warehouse/ -> skipped.
     tracked = GOOD_LAYOUT + ("tests/fixtures/seed.sql",)
     ctx = RuleContext(repo_root=Path("."), tracked_files=tracked)
-    locators = {f.locator for f in rule_p1_layout(ctx)}
+    locators = {f.locator for f in _findings(rule_p1_layout, ctx)}
     assert "tests/fixtures/seed.sql" not in locators
 
 
@@ -130,7 +179,7 @@ def test_p1_still_flags_sql_outside_warehouse_and_tests() -> None:
     # A .sql outside both warehouse/ and tests/ IS still flagged.
     tracked = GOOD_LAYOUT + ("scripts/adhoc.sql",)
     ctx = RuleContext(repo_root=Path("."), tracked_files=tracked)
-    locators = {f.locator for f in rule_p1_layout(ctx)}
+    locators = {f.locator for f in _findings(rule_p1_layout, ctx)}
     assert "scripts/adhoc.sql" in locators
 
 
@@ -148,28 +197,25 @@ GOOD_GITIGNORE = (
 
 @pytest.mark.unit
 def test_g1_accepts_correct_gitignore(tmp_path: Path) -> None:
-    repo = make_git_repo(tmp_path)
-    (repo / ".gitignore").write_text(GOOD_GITIGNORE, encoding="utf-8")
+    repo = _gitignore_repo(tmp_path, GOOD_GITIGNORE)
     commit_all(repo, "chore: add gitignore")
-    assert list(rule_g1_gitignore_correctness(context_for(repo))) == []
+    assert _findings(rule_g1_gitignore_correctness, context_for(repo)) == []
 
 
 @pytest.mark.unit
 def test_g1_flags_missing_required_entry(tmp_path: Path) -> None:
-    repo = make_git_repo(tmp_path)
-    (repo / ".gitignore").write_text("**/.pbi/cache.abf\n.env\n", encoding="utf-8")
+    repo = _gitignore_repo(tmp_path, "**/.pbi/cache.abf\n.env\n")
     commit_all(repo, "chore: add gitignore")
-    findings = list(rule_g1_gitignore_correctness(context_for(repo)))
+    findings = _findings(rule_g1_gitignore_correctness, context_for(repo))
     assert any("localSettings.json" in f.message for f in findings)
     assert all(f.severity is Severity.ERROR for f in findings)
 
 
 @pytest.mark.unit
 def test_g1_flags_ignored_definition_path(tmp_path: Path) -> None:
-    repo = make_git_repo(tmp_path)
-    (repo / ".gitignore").write_text(GOOD_GITIGNORE + "definition/\n", encoding="utf-8")
+    repo = _gitignore_repo(tmp_path, GOOD_GITIGNORE + "definition/\n")
     commit_all(repo, "chore: add gitignore")
-    findings = list(rule_g1_gitignore_correctness(context_for(repo)))
+    findings = _findings(rule_g1_gitignore_correctness, context_for(repo))
     assert any("definition" in f.locator for f in findings)
 
 
@@ -186,16 +232,15 @@ def test_g2_clean_pbip_passes(tmp_path: Path) -> None:
     cache files (.pbi/cache.abf, .pbi/localSettings.json) are NOT tracked.
     G2 must return an empty findings list (not the INFO branch, not an ERROR).
     """
-    repo = make_git_repo(tmp_path)
     # Use a .gitignore that covers the forbidden paths so git_check_ignore won't fire.
-    (repo / ".gitignore").write_text(GOOD_GITIGNORE, encoding="utf-8")
+    repo = _gitignore_repo(tmp_path, GOOD_GITIGNORE)
     pbip_dir = repo / "powerbi" / "Sales.SemanticModel" / "definition"
     pbip_dir.mkdir(parents=True)
     (pbip_dir / "model.tmdl").write_text("model\n", encoding="utf-8")
     (repo / "powerbi" / "Sales.pbip").write_text("{}\n", encoding="utf-8")
     # No .pbi/cache.abf or .pbi/localSettings.json is committed.
     commit_all(repo, "feat: clean pbip")
-    findings = list(rule_g2_definition_committed(context_for(repo)))
+    findings = _findings(rule_g2_definition_committed, context_for(repo))
     # Not the INFO branch (real PBIP is present) and no ERROR (no forbidden files).
     assert findings == [], f"expected no G2 findings on a clean PBIP, got: {findings}"
 
@@ -205,7 +250,7 @@ def test_g2_emits_info_when_no_pbip(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path)
     (repo / "README.md").write_text("hi\n", encoding="utf-8")
     commit_all(repo, "docs: readme")
-    findings = list(rule_g2_definition_committed(context_for(repo)))
+    findings = _findings(rule_g2_definition_committed, context_for(repo))
     assert len(findings) == 1
     assert findings[0].severity is Severity.INFO
     assert findings[0].message == "no PBIP project present"
@@ -222,7 +267,7 @@ def test_g2_flags_tracked_cache_abf(tmp_path: Path) -> None:
     pbi_dir.mkdir(parents=True)
     (pbi_dir / "cache.abf").write_text("x\n", encoding="utf-8")
     commit_all(repo, "feat: add pbip with stray cache")
-    findings = list(rule_g2_definition_committed(context_for(repo)))
+    findings = _findings(rule_g2_definition_committed, context_for(repo))
     assert any(
         "cache.abf" in f.locator and f.severity is Severity.ERROR for f in findings
     )
@@ -234,44 +279,21 @@ def test_g2_flags_tracked_cache_abf(tmp_path: Path) -> None:
 
 
 def _build_p2_history(repo: Path) -> str:
-    subprocess.run(
-        ["git", "commit", "--allow-empty", "-m", "feat: base"],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-    )
-    base = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
-    subprocess.run(
-        ["git", "commit", "--allow-empty", "-m", "fix: ok change"],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-    )
-    subprocess.run(
-        ["git", "commit", "--allow-empty", "-m", "bad subject here"],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-    )
+    _empty_commit(repo, "feat: base")
+    base = _head_sha(repo)
+    _empty_commit(repo, "fix: ok change")
+    _empty_commit(repo, "bad subject here")
     return base
 
 
 @pytest.mark.unit
 def test_p2_flags_bad_subject(tmp_path: Path) -> None:
-    import dataclasses
-
     repo = make_git_repo(tmp_path)
     base = _build_p2_history(repo)
     # CI mode: --commit-range is a VERBATIM revision range (contract v2),
     # e.g. "origin/main..HEAD"; here "<base-sha>..HEAD".
-    ctx = dataclasses.replace(context_for(repo), commit_range=f"{base}..HEAD")
-    findings = list(rule_p2_commit_subjects(ctx))
+    ctx = _ctx_with(repo, commit_range=f"{base}..HEAD")
+    findings = _findings(rule_p2_commit_subjects, ctx)
     assert len(findings) == 1
     assert findings[0].rule_id == "P2"
     assert findings[0].locator == "bad subject here"
@@ -284,48 +306,28 @@ def test_p2_local_fallback_scopes_to_current_commit_only(tmp_path: Path) -> None
     current/incoming commit via DEFAULT_RANGE, so an aged-out non-conforming
     subject one commit back does NOT trip the local gate (#112). Locks Option A:
     a future widening of DEFAULT_RANGE back to a multi-commit window fails here."""
-    import dataclasses
-
     repo = make_git_repo(tmp_path)
     # HEAD~1 is non-conforming; HEAD is compliant. This mirrors the real repo,
     # where a historical scoped subject sat behind a clean current commit.
-    subprocess.run(
-        [
-            "git",
-            "commit",
-            "--allow-empty",
-            "-m",
-            "feat(046): scoped historical subject",
-        ],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-    )
-    subprocess.run(
-        ["git", "commit", "--allow-empty", "-m", "feat: current compliant change"],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-    )
+    _empty_commit(repo, "feat(046): scoped historical subject")
+    _empty_commit(repo, "feat: current compliant change")
     # Bare-fallback mode: neither commit_range nor commit_message is supplied, so
     # rule_p2 falls back to DEFAULT_RANGE (HEAD~1..HEAD) -> only the compliant tip.
-    ctx = dataclasses.replace(context_for(repo), commit_range=None, commit_message=None)
-    assert list(rule_p2_commit_subjects(ctx)) == []
+    ctx = _ctx_with(repo, commit_range=None, commit_message=None)
+    assert _findings(rule_p2_commit_subjects, ctx) == []
 
 
 @pytest.mark.unit
 def test_p2_validates_single_commit_message(tmp_path: Path) -> None:
-    import dataclasses
-
     repo = make_git_repo(tmp_path)
     # commit-msg-hook mode: a single incoming subject via ctx.commit_message.
-    ctx = dataclasses.replace(context_for(repo), commit_message="bad subject here")
-    findings = list(rule_p2_commit_subjects(ctx))
+    ctx = _ctx_with(repo, commit_message="bad subject here")
+    findings = _findings(rule_p2_commit_subjects, ctx)
     assert len(findings) == 1
     assert findings[0].locator == "bad subject here"
     # A conforming message yields no findings.
-    ok = dataclasses.replace(context_for(repo), commit_message="feat: a thing")
-    assert list(rule_p2_commit_subjects(ok)) == []
+    ok = _ctx_with(repo, commit_message="feat: a thing")
+    assert _findings(rule_p2_commit_subjects, ok) == []
 
 
 @pytest.mark.unit
@@ -333,13 +335,11 @@ def test_p2_accepts_extended_types_bot_prefix_and_rejects_scopes(
     tmp_path: Path,
 ) -> None:
     """P2 accepts extended types + optional [bot] prefix; still rejects scopes."""
-    import dataclasses
-
     repo = make_git_repo(tmp_path)
 
     def findings_for(subject: str) -> list:
-        ctx = dataclasses.replace(context_for(repo), commit_message=subject)
-        return list(rule_p2_commit_subjects(ctx))
+        ctx = _ctx_with(repo, commit_message=subject)
+        return _findings(rule_p2_commit_subjects, ctx)
 
     # Newly-allowed: conventional types, the project `brand` type, and an
     # optional automation prefix carried by squash merges of bot PRs.
@@ -366,31 +366,13 @@ def test_p2_accepts_extended_types_bot_prefix_and_rejects_scopes(
 
 @pytest.mark.unit
 def test_p2_exempts_merge_commits(tmp_path: Path) -> None:
-    import dataclasses
-
     repo = make_git_repo(tmp_path)
-    subprocess.run(
-        ["git", "commit", "--allow-empty", "-m", "feat: base"],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-    )
-    base = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
+    _empty_commit(repo, "feat: base")
+    base = _head_sha(repo)
     subprocess.run(
         ["git", "checkout", "-b", "side"], cwd=repo, check=True, capture_output=True
     )
-    subprocess.run(
-        ["git", "commit", "--allow-empty", "-m", "feat: side work"],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-    )
+    _empty_commit(repo, "feat: side work")
     subprocess.run(
         ["git", "checkout", "main"], cwd=repo, check=True, capture_output=True
     )
@@ -400,8 +382,8 @@ def test_p2_exempts_merge_commits(tmp_path: Path) -> None:
         check=True,
         capture_output=True,
     )
-    ctx = dataclasses.replace(context_for(repo), commit_range=f"{base}..HEAD")
-    assert list(rule_p2_commit_subjects(ctx)) == []
+    ctx = _ctx_with(repo, commit_range=f"{base}..HEAD")
+    assert _findings(rule_p2_commit_subjects, ctx) == []
 
 
 # ---------------------------------------------------------------------------
@@ -418,42 +400,41 @@ GOOD_ENV_EXAMPLE = (
 )
 
 
-def _seed_c2_repo(repo: Path) -> None:
-    (repo / ".gitignore").write_text(".env\n", encoding="utf-8")
+def _seed_c2_repo(tmp_path: Path) -> Path:
+    """A repo with .env ignored and a clean .env.example -- the C2 baseline."""
+    repo = _gitignore_repo(tmp_path, ".env\n")
     (repo / ".env.example").write_text(GOOD_ENV_EXAMPLE, encoding="utf-8")
+    return repo
 
 
 @pytest.mark.unit
 def test_c2_clean_repo_passes(tmp_path: Path) -> None:
-    repo = make_git_repo(tmp_path)
-    _seed_c2_repo(repo)
+    repo = _seed_c2_repo(tmp_path)
     commit_all(repo, "chore: seed env example")
-    assert list(rule_c2_no_committed_secrets(context_for(repo))) == []
+    assert _findings(rule_c2_no_committed_secrets, context_for(repo)) == []
 
 
 @pytest.mark.unit
 def test_c2_flags_real_endpoint_in_scanned_file(tmp_path: Path) -> None:
-    repo = make_git_repo(tmp_path)
-    _seed_c2_repo(repo)
+    repo = _seed_c2_repo(tmp_path)
     (repo / "config.txt").write_text(
         "host = db-prod-01.db.ondigitalocean.com\n", encoding="utf-8"
     )
     commit_all(repo, "chore: add config")
-    findings = list(rule_c2_no_committed_secrets(context_for(repo)))
+    findings = _findings(rule_c2_no_committed_secrets, context_for(repo))
     assert any(f.locator.startswith("config.txt:") for f in findings)
 
 
 @pytest.mark.unit
 def test_c2_ignores_angle_bracket_placeholder_in_scanned_file(tmp_path: Path) -> None:
-    repo = make_git_repo(tmp_path)
-    _seed_c2_repo(repo)
+    repo = _seed_c2_repo(tmp_path)
     # ROOT-level scanned file (not docs/, not *.example) — exercises the REGEX
     # exclusion, not the path exclusion.
     (repo / "config.txt").write_text(
         "host = <your-db-host>.db.ondigitalocean.com\n", encoding="utf-8"
     )
     commit_all(repo, "chore: add placeholder config")
-    assert list(rule_c2_no_committed_secrets(context_for(repo))) == []
+    assert _findings(rule_c2_no_committed_secrets, context_for(repo)) == []
 
 
 @pytest.mark.unit
@@ -461,8 +442,7 @@ def test_c2_skips_superpowers_scratch_and_example_files(tmp_path: Path) -> None:
     """docs/superpowers/ (SDD scratch that quotes fixture DSNs) and *.example are
     excluded from the content scan (audit #8: the exclusion is scoped, not all of
     docs/)."""
-    repo = make_git_repo(tmp_path)
-    _seed_c2_repo(repo)
+    repo = _seed_c2_repo(tmp_path)
     scratch = repo / "docs" / "superpowers" / "plans"
     scratch.mkdir(parents=True)
     (scratch / "plan.md").write_text(
@@ -474,7 +454,7 @@ def test_c2_skips_superpowers_scratch_and_example_files(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     commit_all(repo, "docs: add connection placeholders")
-    assert list(rule_c2_no_committed_secrets(context_for(repo))) == []
+    assert _findings(rule_c2_no_committed_secrets, context_for(repo)) == []
 
 
 @pytest.mark.unit
@@ -482,8 +462,7 @@ def test_c2_scans_real_docs_runbook(tmp_path: Path) -> None:
     """A real DSN in an operational doc/runbook (docs/ outside superpowers/) MUST
     be flagged -- this is exactly the gap audit #8 says the old broad docs/
     exclusion left invisible."""
-    repo = make_git_repo(tmp_path)
-    _seed_c2_repo(repo)
+    repo = _seed_c2_repo(tmp_path)
     runbook = repo / "docs" / "operations"
     runbook.mkdir(parents=True)
     (runbook / "deploy.md").write_text(
@@ -491,7 +470,7 @@ def test_c2_scans_real_docs_runbook(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     commit_all(repo, "docs: add runbook")
-    findings = list(rule_c2_no_committed_secrets(context_for(repo)))
+    findings = _findings(rule_c2_no_committed_secrets, context_for(repo))
     assert any(f.locator.startswith("docs/operations/deploy.md:") for f in findings)
 
 
@@ -499,8 +478,7 @@ def test_c2_scans_real_docs_runbook(tmp_path: Path) -> None:
 def test_c2_skips_tests_path_fixtures(tmp_path: Path) -> None:
     # Test fixtures under tests/ intentionally carry secret-LOOKING literals to
     # exercise the scanner itself; the C2 content scan must not flag them.
-    repo = make_git_repo(tmp_path)
-    _seed_c2_repo(repo)
+    repo = _seed_c2_repo(tmp_path)
     fixtures = repo / "tests" / "unit"
     fixtures.mkdir(parents=True)
     (fixtures / "test_scanner.py").write_text(
@@ -509,32 +487,30 @@ def test_c2_skips_tests_path_fixtures(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     commit_all(repo, "test: add scanner fixtures")
-    assert list(rule_c2_no_committed_secrets(context_for(repo))) == []
+    assert _findings(rule_c2_no_committed_secrets, context_for(repo)) == []
 
 
 @pytest.mark.unit
 def test_c2_flags_tracked_env(tmp_path: Path) -> None:
-    repo = make_git_repo(tmp_path)
-    _seed_c2_repo(repo)
+    repo = _seed_c2_repo(tmp_path)
     (repo / ".env").write_text("ANALYTICS_DB_PASSWORD=hunter2\n", encoding="utf-8")
     subprocess.run(
         ["git", "add", "-f", ".env"], cwd=repo, check=True, capture_output=True
     )
     commit_all(repo, "chore: oops env")
-    findings = list(rule_c2_no_committed_secrets(context_for(repo)))
+    findings = _findings(rule_c2_no_committed_secrets, context_for(repo))
     assert any(f.locator == ".env" for f in findings)
 
 
 @pytest.mark.unit
 def test_c2_flags_env_example_with_filled_secret(tmp_path: Path) -> None:
-    repo = make_git_repo(tmp_path)
-    (repo / ".gitignore").write_text(".env\n", encoding="utf-8")
+    repo = _gitignore_repo(tmp_path, ".env\n")
     bad = GOOD_ENV_EXAMPLE.replace(
         "ANALYTICS_DB_PASSWORD=\n", "ANALYTICS_DB_PASSWORD=secret\n"
     )
     (repo / ".env.example").write_text(bad, encoding="utf-8")
     commit_all(repo, "chore: bad example")
-    findings = list(rule_c2_no_committed_secrets(context_for(repo)))
+    findings = _findings(rule_c2_no_committed_secrets, context_for(repo))
     assert any("ANALYTICS_DB_PASSWORD" in f.message for f in findings)
 
 
@@ -547,54 +523,48 @@ def test_c2_flags_env_example_with_filled_secret(tmp_path: Path) -> None:
 
 @pytest.mark.unit
 def test_c2_flags_odbc_password_string() -> None:
-    hit = _scan_line_for_secret("DRIVER={ODBC Driver 18 for SQL Server};PWD=realpw;")
+    hit = _secret_hit("DRIVER={ODBC Driver 18 for SQL Server};PWD=realpw;")
     assert hit is True
 
 
 @pytest.mark.unit
 def test_c2_ignores_placeholder_odbc() -> None:
-    assert _scan_line_for_secret("DRIVER={...};PWD=<your-password>;") is False
+    assert _secret_hit("DRIVER={...};PWD=<your-password>;") is False
 
 
 @pytest.mark.unit
 def test_c2_flags_odbc_uid_string() -> None:
-    assert _scan_line_for_secret("SERVER=h;UID=realuser;PWD=<placeholder>") is True
+    assert _secret_hit("SERVER=h;UID=realuser;PWD=<placeholder>") is True
 
 
 @pytest.mark.unit
 def test_c2_ignores_fstring_interpolated_pwd_uid() -> None:
     # dialect.py's own SqlServerDialect.resolve_config builds these lines --
     # the scanner must not self-trip on the source that CONSTRUCTS the string.
-    assert (
-        _scan_line_for_secret("parts.append(f\"PWD={env['ANALYTICS_DB_PASSWORD']}\")")
-        is False
-    )
-    assert (
-        _scan_line_for_secret("parts.append(f\"UID={env['ANALYTICS_DB_USER']}\")")
-        is False
-    )
+    assert _secret_hit("parts.append(f\"PWD={env['ANALYTICS_DB_PASSWORD']}\")") is False
+    assert _secret_hit("parts.append(f\"UID={env['ANALYTICS_DB_USER']}\")") is False
 
 
 @pytest.mark.unit
 def test_c2_flags_mysql_uri() -> None:
-    assert _scan_line_for_secret("mysql://user:pw@real-host.example.com/db") is True
+    assert _secret_hit("mysql://user:pw@real-host.example.com/db") is True
 
 
 @pytest.mark.unit
 def test_c2_ignores_mysql_uri_placeholder() -> None:
-    assert _scan_line_for_secret("mysql://<user>:<pw>@<host>/db") is False
+    assert _secret_hit("mysql://<user>:<pw>@<host>/db") is False
 
 
 @pytest.mark.unit
 def test_c2_flags_snowflake_account_password_pair() -> None:
     line = 'cfg = {"account": "acme-prod", "password": "hunter2"}'
-    assert _scan_line_for_secret(line) is True
+    assert _secret_hit(line) is True
 
 
 @pytest.mark.unit
 def test_c2_ignores_snowflake_account_alone() -> None:
     # account with no password is not connection context on its own.
-    assert _scan_line_for_secret('cfg = {"account": "acme-prod"}') is False
+    assert _secret_hit('cfg = {"account": "acme-prod"}') is False
 
 
 @pytest.mark.unit
@@ -605,19 +575,18 @@ def test_c2_ignores_snowflake_env_lookup_source() -> None:
         'config["account"] = env.get("ANALYTICS_DB_ACCOUNT")\n'
         'config["password"] = env.get("ANALYTICS_DB_PASSWORD")'
     )
-    assert _scan_line_for_secret(line) is False
+    assert _secret_hit(line) is False
 
 
 @pytest.mark.unit
 def test_c2_end_to_end_flags_committed_odbc_secret(tmp_path: Path) -> None:
-    repo = make_git_repo(tmp_path)
-    _seed_c2_repo(repo)
+    repo = _seed_c2_repo(tmp_path)
     (repo / "config.txt").write_text(
         "DRIVER={ODBC Driver 18 for SQL Server};SERVER=h;UID=admin;PWD=realsecret;\n",
         encoding="utf-8",
     )
     commit_all(repo, "chore: add sqlserver config")
-    findings = list(rule_c2_no_committed_secrets(context_for(repo)))
+    findings = _findings(rule_c2_no_committed_secrets, context_for(repo))
     assert any(f.locator.startswith("config.txt:") for f in findings)
 
 
@@ -642,7 +611,7 @@ def test_c2_sentinel_real_repo_source_does_not_self_trip() -> None:
         hits = [
             f"{lineno}: {line}"
             for lineno, line in enumerate(text.splitlines(), start=1)
-            if _scan_line_for_secret(line)
+            if _secret_hit(line)
         ]
         if hits:
             offenders[str(path.relative_to(repo_root))] = hits
@@ -663,14 +632,14 @@ def _write(path: Path, prefix: bytes, text: str) -> None:
 @pytest.mark.unit
 def test_read_leading_bytes_returns_first_three_bytes(tmp_path: Path) -> None:
     f = tmp_path / "x.tmdl"
-    f.write_bytes(BOM + b"table Sales")
+    _write(f, BOM, "table Sales")
     assert _read_leading_bytes(f) == BOM
 
 
 @pytest.mark.unit
 def test_read_leading_bytes_short_file_returns_fewer(tmp_path: Path) -> None:
     f = tmp_path / "x.tmdl"
-    f.write_bytes(b"ab")
+    _write(f, b"ab", "")
     assert _read_leading_bytes(f) == b"ab"
 
 
@@ -678,7 +647,7 @@ def test_read_leading_bytes_short_file_returns_fewer(tmp_path: Path) -> None:
 def test_g3_flags_tmdl_with_bom(tmp_path: Path) -> None:
     _write(tmp_path / "withbom.tmdl", BOM, "table Sales")
     ctx = RuleContext(repo_root=tmp_path, tracked_files=("withbom.tmdl",))
-    findings = list(rule_g3_no_bom(ctx))
+    findings = _findings(rule_g3_no_bom, ctx)
     assert len(findings) == 1
     f = findings[0]
     assert f.rule_id == "G3"
@@ -690,7 +659,7 @@ def test_g3_flags_tmdl_with_bom(tmp_path: Path) -> None:
 def test_g3_passes_tmdl_without_bom(tmp_path: Path) -> None:
     _write(tmp_path / "clean.tmdl", b"", "table Sales")
     ctx = RuleContext(repo_root=tmp_path, tracked_files=("clean.tmdl",))
-    assert list(rule_g3_no_bom(ctx)) == []
+    assert _findings(rule_g3_no_bom, ctx) == []
 
 
 @pytest.mark.unit
@@ -699,7 +668,7 @@ def test_g3_ignores_non_target_extension_with_bom(tmp_path: Path) -> None:
     # *.tmdl/*.pbir/*.json/*.pbism. This keeps the extension filter load-bearing.
     _write(tmp_path / "ddl.sql", BOM, "select 1")
     ctx = RuleContext(repo_root=tmp_path, tracked_files=("ddl.sql",))
-    assert list(rule_g3_no_bom(ctx)) == []
+    assert _findings(rule_g3_no_bom, ctx) == []
 
 
 # ---------------------------------------------------------------------------
@@ -735,7 +704,7 @@ _PASSING_GITATTRIBUTES = """\
 @pytest.mark.unit
 def test_g4_passes_when_all_required_mappings_present(tmp_path: Path) -> None:
     (tmp_path / ".gitattributes").write_text(_PASSING_GITATTRIBUTES, encoding="utf-8")
-    findings = list(check_gitattributes_eol(_ctx_g4(tmp_path)))
+    findings = _findings(check_gitattributes_eol, _ctx_g4(tmp_path))
     assert findings == []
 
 
@@ -744,7 +713,7 @@ def test_g4_flags_missing_tmdl_crlf(tmp_path: Path) -> None:
     # Drop the *.tmdl line entirely -> required glob absent.
     content = _PASSING_GITATTRIBUTES.replace("*.tmdl   text eol=crlf\n", "")
     (tmp_path / ".gitattributes").write_text(content, encoding="utf-8")
-    findings = list(check_gitattributes_eol(_ctx_g4(tmp_path)))
+    findings = _findings(check_gitattributes_eol, _ctx_g4(tmp_path))
     assert len(findings) == 1
     f = findings[0]
     assert f.rule_id == "G4"
@@ -762,7 +731,7 @@ def test_g4_flags_contradicting_token_with_line_locator(tmp_path: Path) -> None:
         "*.sql    text eol=lf", "*.sql    text eol=crlf"
     )
     (tmp_path / ".gitattributes").write_text(content, encoding="utf-8")
-    findings = list(check_gitattributes_eol(_ctx_g4(tmp_path)))
+    findings = _findings(check_gitattributes_eol, _ctx_g4(tmp_path))
     assert len(findings) == 1
     f = findings[0]
     assert f.rule_id == "G4"
@@ -775,7 +744,7 @@ def test_g4_flags_contradicting_token_with_line_locator(tmp_path: Path) -> None:
 @pytest.mark.unit
 def test_g4_flags_all_when_file_absent(tmp_path: Path) -> None:
     # No .gitattributes at all -> every required glob missing, no silent pass.
-    findings = list(check_gitattributes_eol(_ctx_g4(tmp_path)))
+    findings = _findings(check_gitattributes_eol, _ctx_g4(tmp_path))
     assert len(findings) == 10
     assert all(f.severity is Severity.ERROR for f in findings)
     assert all(f.locator == ".gitattributes" for f in findings)
@@ -801,7 +770,7 @@ def test_g2_only_test_fixtures_emit_info(tmp_path: Path) -> None:
             "tests/fixtures/golden_pbip/RetailGold.SemanticModel/definition/model.tmdl",
         ),
     )
-    findings = list(rule_g2_definition_committed(ctx))
+    findings = _findings(rule_g2_definition_committed, ctx)
     assert len(findings) == 1
     assert findings[0].severity is Severity.INFO
     assert findings[0].message == "no PBIP project present"
@@ -820,7 +789,7 @@ def test_g2_real_non_tests_pbip_is_validated(tmp_path: Path) -> None:
     pbi_dir.mkdir(parents=True)
     (pbi_dir / "cache.abf").write_text("x\n", encoding="utf-8")
     commit_all(repo, "feat: real pbip with stray cache")
-    findings = list(rule_g2_definition_committed(context_for(repo)))
+    findings = _findings(rule_g2_definition_committed, context_for(repo))
     # Not the INFO branch: a real model is present and validated.
     assert not any(f.severity is Severity.INFO for f in findings)
     assert any(
@@ -843,7 +812,7 @@ def test_g3_exempts_tests_fixture_with_bom(tmp_path: Path) -> None:
         repo_root=tmp_path,
         tracked_files=("tests/fixtures/bom.json", "powerbi/model.json"),
     )
-    findings = list(rule_g3_no_bom(ctx))
+    findings = _findings(rule_g3_no_bom, ctx)
     assert len(findings) == 1
     assert findings[0].rule_id == "G3"
     assert findings[0].locator == "powerbi/model.json"
@@ -862,7 +831,7 @@ def test_c2_long_benign_line_is_not_flagged(tmp_path: Path) -> None:
     target.parent.mkdir(parents=True)
     target.write_text(f"-- {long_line}\nselect 1;\n", encoding="utf-8")
     ctx = RuleContext(repo_root=tmp_path, tracked_files=("warehouse/big.sql",))
-    assert _scan_contents(ctx) == []
+    assert _findings(_scan_contents, ctx) == []
 
 
 @pytest.mark.unit
@@ -875,7 +844,7 @@ def test_c2_real_do_endpoint_still_flagged(tmp_path: Path) -> None:
         "-- host = dbcluster-1.db.ondigitalocean.com\nselect 1;\n", encoding="utf-8"
     )
     ctx = RuleContext(repo_root=tmp_path, tracked_files=("warehouse/leak.sql",))
-    findings = _scan_contents(ctx)
+    findings = _findings(_scan_contents, ctx)
     assert len(findings) == 1
     assert findings[0].rule_id == "C2"
     assert findings[0].locator == "warehouse/leak.sql:1"
@@ -900,7 +869,7 @@ def test_c2_pathological_label_then_literal_returns_fast(tmp_path: Path) -> None
     )
     ctx = RuleContext(repo_root=tmp_path, tracked_files=("warehouse/evil.sql",))
     start = time.monotonic()
-    findings = _scan_contents(ctx)
+    findings = _findings(_scan_contents, ctx)
     elapsed = time.monotonic() - start
     assert elapsed < 5.0, f"DO_ENDPOINT_RE backtracked ({elapsed:.2f}s) — ReDoS"
     # The line does contain a valid endpoint (label + literal), so it IS flagged.
@@ -923,7 +892,7 @@ def test_c2_flags_do_cluster_slug(tmp_path: Path) -> None:
     target.parent.mkdir(parents=True)
     target.write_text("cluster db-pgsql-ams3-10101 holds the data\n", encoding="utf-8")
     ctx = RuleContext(repo_root=tmp_path, tracked_files=("docs/runbook.md",))
-    findings = _scan_contents(ctx)
+    findings = _findings(_scan_contents, ctx)
     assert len(findings) == 1
     assert findings[0].rule_id == "C2"
     assert findings[0].locator == "docs/runbook.md:1"
@@ -941,4 +910,4 @@ def test_c2_cluster_slug_placeholder_not_flagged(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     ctx = RuleContext(repo_root=tmp_path, tracked_files=("docs/conn.md",))
-    assert _scan_contents(ctx) == []
+    assert _findings(_scan_contents, ctx) == []

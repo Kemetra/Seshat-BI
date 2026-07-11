@@ -144,6 +144,24 @@ def _parse_date_literal(text: str) -> datetime.date | None:
         return None
 
 
+def _skip_string_literal(text: str, i: int) -> int:
+    """Given ``text[i] == "'"``, return the index just past the closing quote
+    (or ``len(text)`` if unterminated). Shared by both balanced-scan helpers so
+    the quote-skipping rule is authored once, not copy-pasted."""
+    j = text.find("'", i + 1)
+    return len(text) if j == -1 else j + 1
+
+
+def _paren_delta(ch: str) -> int:
+    """Nesting-depth change contributed by ``ch``: +1 for ``(``, -1 for ``)``,
+    0 otherwise. Isolates the paren-counting branch from the scan loop."""
+    if ch == "(":
+        return 1
+    if ch == ")":
+        return -1
+    return 0
+
+
 def _split_top_level_args(arg_text: str) -> list[str]:
     """Balanced-parenthesis top-level comma split of a call's argument list.
 
@@ -159,31 +177,41 @@ def _split_top_level_args(arg_text: str) -> list[str]:
     while i < n:
         ch = arg_text[i]
         if ch == "'":
-            j = arg_text.find("'", i + 1)
-            end = n if j == -1 else j + 1
+            end = _skip_string_literal(arg_text, i)
             current.append(arg_text[i:end])
             i = end
-            continue
-        if ch == "(":
-            depth += 1
-            current.append(ch)
-            i += 1
-            continue
-        if ch == ")":
-            depth -= 1
-            current.append(ch)
-            i += 1
             continue
         if ch == "," and depth == 0:
             args.append("".join(current))
             current = []
             i += 1
             continue
+        depth += _paren_delta(ch)
         current.append(ch)
         i += 1
     if current:
         args.append("".join(current))
     return [a.strip() for a in args]
+
+
+def _scan_balanced_paren(text: str, start: int) -> int | None:
+    """Scan from ``start`` (just past a ``(`` opened at depth 1) to the matching
+    close paren; return the index just past that ``)``, or ``None`` if the call
+    is unterminated. Honors quoted string literals so a paren inside a string is
+    not counted."""
+    depth = 1
+    i, n = start, len(text)
+    while i < n and depth > 0:
+        ch = text[i]
+        if ch == "'":
+            i = _skip_string_literal(text, i)
+            continue
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        i += 1
+    return None if depth != 0 else i
 
 
 def _find_generate_series_call(clean_slice: str) -> tuple[str, int] | None:
@@ -196,31 +224,63 @@ def _find_generate_series_call(clean_slice: str) -> tuple[str, int] | None:
     m = re.search(r"generate_series\s*\(", clean_slice, re.IGNORECASE)
     if m is None:
         return None
-    start = m.end()  # just past the opening "("
-    depth = 1
-    i = start
-    n = len(clean_slice)
-    while i < n and depth > 0:
-        ch = clean_slice[i]
-        if ch == "'":
-            j = clean_slice.find("'", i + 1)
-            i = n if j == -1 else j + 1
-            continue
-        if ch == "(":
-            depth += 1
-        elif ch == ")":
-            depth -= 1
-        i += 1
-    if depth != 0:
-        return (
-            None  # unterminated call -- fail-open (no finding), not our text to guess
-        )
-    inner = clean_slice[start : i - 1]
+    end = _scan_balanced_paren(clean_slice, m.end())
+    if end is None:
+        # unterminated call -- fail-open (no finding), not our text to guess
+        return None
+    inner = clean_slice[m.end() : end - 1]
     return inner, m.start()
 
 
 def _read(ctx: RuleContext, rel: str) -> str:
     return (ctx.repo_root / rel).read_text(encoding="utf-8")
+
+
+def _line_start_offsets(raw_text: str) -> tuple[list[int], int]:
+    """Build the 1-based line-start character-offset map for ``raw_text``.
+
+    Returns ``(line_start_offset, total_len)`` where
+    ``line_start_offset[i]`` = character offset where line ``i`` (1-based)
+    begins, and ``line_start_offset[len(lines) + 1] = total_len`` so that "one
+    past the last line" resolves to EOF rather than a stale default of 0.
+
+    tokenize_sql does not expose offsets, only line numbers, so we operate on
+    line spans instead of char offsets -- Finding locators are file:line and
+    strip_sql_comments preserves lines.
+    """
+    lines = raw_text.splitlines(keepends=True)
+    total_len = len(raw_text)
+    line_start_offset = [0] * (len(lines) + 2)
+    acc = 0
+    for idx, ln in enumerate(lines, start=1):
+        line_start_offset[idx] = acc
+        acc += len(ln)
+    line_start_offset[len(lines) + 1] = total_len
+    return line_start_offset, total_len
+
+
+def _collect_statement(toks: list[SqlToken], idx: int) -> tuple[list[SqlToken], int]:
+    """Collect the tokens of the statement starting at ``toks[idx]`` up to (but
+    not including) its terminating ``;`` -- returns ``(stmt_tokens, end_idx)``
+    where ``end_idx`` indexes the terminating ``;`` when present, else the last
+    token of the input (an unterminated trailing statement)."""
+    stmt: list[SqlToken] = []
+    end_idx = idx
+    for j in range(idx, len(toks)):
+        if toks[j].text == ";":
+            end_idx = j
+            break
+        stmt.append(toks[j])
+        end_idx = j
+    return stmt, end_idx
+
+
+def _is_qualifying_statement(stmt: list[SqlToken]) -> bool:
+    """HR8's precondition (same discovery shape as S7): the statement targets a
+    ``dim_date`` name AND contains a ``generate_series`` token."""
+    targets_dim_date = any(t.text.lower().startswith("dim_date") for t in stmt)
+    has_genseries = any(t.text.lower() == "generate_series" for t in stmt)
+    return targets_dim_date and has_genseries
 
 
 def _qualifying_statement_spans(rel: str, raw_text: str) -> list[tuple[int, int]]:
@@ -233,43 +293,16 @@ def _qualifying_statement_spans(rel: str, raw_text: str) -> list[tuple[int, int]
     token -- HR8's own precondition, same as S7's discovery shape.
     """
     toks = [t for t in tokenize_sql(raw_text) if t.text]
-    spans: list[tuple[int, int]] = []
     if not toks:
-        return spans
+        return []
 
-    # Map each token to its character offset in raw_text by re-scanning:
-    # tokenize_sql does not expose offsets, only line numbers, so recover
-    # offsets by locating each token's line start and searching within it.
-    # Simpler + robust: operate on line spans instead of char offsets, since
-    # Finding locators are file:line and strip_sql_comments preserves lines.
-    lines = raw_text.splitlines(keepends=True)
-    total_len = len(raw_text)
-    # line_start_offset[i] = character offset where line i (1-based) begins;
-    # line_start_offset[len(lines) + 1] = total_len, so "one past the last
-    # line" resolves to EOF rather than a stale default of 0.
-    line_start_offset = [0] * (len(lines) + 2)
-    acc = 0
-    for idx, ln in enumerate(lines, start=1):
-        line_start_offset[idx] = acc
-        acc += len(ln)
-    line_start_offset[len(lines) + 1] = total_len
-
+    line_start_offset, total_len = _line_start_offsets(raw_text)
+    spans: list[tuple[int, int]] = []
     for idx, tok in enumerate(toks):
         if tok.text.upper() != "INSERT":
             continue
-        stmt: list[SqlToken] = []
-        end_idx = idx
-        for j in range(idx, len(toks)):
-            if toks[j].text == ";":
-                end_idx = j
-                break
-            stmt.append(toks[j])
-            end_idx = j
-        targets_dim_date = any(t.text.lower().startswith("dim_date") for t in stmt)
-        if not targets_dim_date:
-            continue
-        has_genseries = any(t.text.lower() == "generate_series" for t in stmt)
-        if not has_genseries:
+        stmt, end_idx = _collect_statement(toks, idx)
+        if not _is_qualifying_statement(stmt):
             continue
         start_line = tok.line
         end_line = toks[end_idx].line
@@ -287,83 +320,92 @@ def _qualifying_statement_spans(rel: str, raw_text: str) -> list[tuple[int, int]
     return spans
 
 
+def _step_findings(step_arg: str, locator: str) -> list[Finding]:
+    """Step classification (FR-003 / FR-004) for one generate_series call."""
+    daily_span = _classify_interval_literal(step_arg)
+    if daily_span is not None:
+        if daily_span in _DAILY_SPANS:
+            return []
+        return [
+            Finding(
+                rule_id=RULE_ID,
+                severity=Severity.ERROR,
+                message=(
+                    f"dim_date generate_series step is '{step_arg.strip()}', "
+                    "not a one-day step; a non-daily step leaves every day "
+                    "between generated rows absent from the calendar and "
+                    "breaks DAX time-intelligence measures -- use "
+                    "INTERVAL '1 day' (or '1 day'::interval)"
+                ),
+                locator=locator,
+            )
+        ]
+    return [
+        Finding(
+            rule_id=RULE_ID,
+            severity=Severity.ERROR,
+            message=(
+                f"dim_date generate_series step '{step_arg.strip()}' is not a "
+                "classifiable literal INTERVAL (INTERVAL '1 day' or "
+                "'1 day'::interval); an unclassifiable step cannot be proven "
+                "daily and must not pass by default"
+            ),
+            locator=locator,
+        )
+    ]
+
+
+def _bounds_findings(start_arg: str, end_arg: str, locator: str) -> list[Finding]:
+    """Bounds-order check (FR-005) -- only when BOTH bounds are literal dates.
+
+    Compare CHRONOLOGICALLY (parsed dates), never lexically: PostgreSQL accepts
+    non-zero-padded literals (2022-1-9) whose string order != date order.
+    """
+    start_date = _parse_date_literal(start_arg)
+    end_date = _parse_date_literal(end_arg)
+    both_literal = start_date is not None and end_date is not None
+    if not both_literal or start_date <= end_date:
+        return []
+    start_raw = _classify_date_literal(start_arg)
+    end_raw = _classify_date_literal(end_arg)
+    return [
+        Finding(
+            rule_id=RULE_ID,
+            severity=Severity.ERROR,
+            message=(
+                f"dim_date generate_series bounds are reversed: start "
+                f"'{start_raw}' is after end '{end_raw}' -- an inverted "
+                "literal range silently produces zero rows in PostgreSQL"
+            ),
+            locator=locator,
+        )
+    ]
+
+
 def _check_statement(
     rel: str, raw_text: str, start_off: int, end_off: int
 ) -> list[Finding]:
     """Inspect one qualifying statement span's generate_series call."""
-    findings: list[Finding] = []
-
     # Literal-preserving text for this statement's span, comments blanked.
     full_clean = strip_sql_comments(raw_text)
     clean_slice = full_clean[start_off:end_off]
 
     call = _find_generate_series_call(clean_slice)
     if call is None:
-        return findings
+        return []
     inner, call_rel_offset = call
     call_abs_offset = start_off + call_rel_offset
     call_line = raw_text.count("\n", 0, call_abs_offset) + 1
 
     args = _split_top_level_args(inner)
     if len(args) < 3:
-        return findings  # not a well-formed 3-arg call -- nothing HR8 can classify
+        return []  # not a well-formed 3-arg call -- nothing HR8 can classify
     start_arg, end_arg, step_arg = args[0], args[1], args[2]
 
-    # --- step classification (FR-003 / FR-004) ---
-    daily_span = _classify_interval_literal(step_arg)
-    if daily_span is not None:
-        if daily_span not in _DAILY_SPANS:
-            findings.append(
-                Finding(
-                    rule_id=RULE_ID,
-                    severity=Severity.ERROR,
-                    message=(
-                        f"dim_date generate_series step is '{step_arg.strip()}', "
-                        "not a one-day step; a non-daily step leaves every day "
-                        "between generated rows absent from the calendar and "
-                        "breaks DAX time-intelligence measures -- use "
-                        "INTERVAL '1 day' (or '1 day'::interval)"
-                    ),
-                    locator=f"{rel}:{call_line}",
-                )
-            )
-    else:
-        findings.append(
-            Finding(
-                rule_id=RULE_ID,
-                severity=Severity.ERROR,
-                message=(
-                    f"dim_date generate_series step '{step_arg.strip()}' is not a "
-                    "classifiable literal INTERVAL (INTERVAL '1 day' or "
-                    "'1 day'::interval); an unclassifiable step cannot be proven "
-                    "daily and must not pass by default"
-                ),
-                locator=f"{rel}:{call_line}",
-            )
-        )
-
-    # --- bounds-order check (FR-005) -- only when BOTH bounds are literal dates ---
-    # Compare CHRONOLOGICALLY (parsed dates), never lexically: PostgreSQL accepts
-    # non-zero-padded literals (2022-1-9) whose string order != date order.
-    start_raw = _classify_date_literal(start_arg)
-    end_raw = _classify_date_literal(end_arg)
-    start_date = _parse_date_literal(start_arg)
-    end_date = _parse_date_literal(end_arg)
-    if start_date is not None and end_date is not None:
-        if start_date > end_date:
-            findings.append(
-                Finding(
-                    rule_id=RULE_ID,
-                    severity=Severity.ERROR,
-                    message=(
-                        f"dim_date generate_series bounds are reversed: start "
-                        f"'{start_raw}' is after end '{end_raw}' -- an inverted "
-                        "literal range silently produces zero rows in PostgreSQL"
-                    ),
-                    locator=f"{rel}:{call_line}",
-                )
-            )
-
+    locator = f"{rel}:{call_line}"
+    findings: list[Finding] = []
+    findings.extend(_step_findings(step_arg, locator))
+    findings.extend(_bounds_findings(start_arg, end_arg, locator))
     return findings
 
 

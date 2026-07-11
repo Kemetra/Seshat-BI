@@ -113,6 +113,43 @@ def _is_real_bool(value: Any, expected: bool) -> bool:
     return isinstance(value, bool) and value is expected
 
 
+def _is_placeholder(value: Any) -> bool:
+    """True when ``value`` is the still-unfilled ``<true|false>`` placeholder.
+
+    A filled spec must carry a real boolean; a value that is still the template
+    placeholder string is malformed (FR: Q1/Q3). Shared by both the forbidden and
+    qa checks so the placeholder test lives in exactly one place.
+    """
+    return isinstance(value, str) and value.strip() == _PLACEHOLDER
+
+
+def _is_valid_reason(text: Any) -> bool:
+    """True when ``text`` is a present, non-empty, non-placeholder reason string.
+
+    Reason PRESENCE only -- never adequacy (Principle V, Clarifications Q3).
+    """
+    if not isinstance(text, str):
+        return False
+    stripped = text.strip()
+    return bool(stripped) and stripped != _PLACEHOLDER
+
+
+def _inline_reason_present(value: Any) -> bool:
+    """Inline shape: the item value is a mapping carrying a reason/warning field."""
+    if not isinstance(value, dict):
+        return False
+    return any(_is_valid_reason(value.get(key)) for key in ("reason", "warning"))
+
+
+def _sibling_reason_present(qa_block: dict, item: str) -> bool:
+    """Sibling shape: a reasons/warnings mapping keyed by the item name."""
+    for reason_key in _REASON_KEYS:
+        sibling = qa_block.get(reason_key)
+        if isinstance(sibling, dict) and _is_valid_reason(sibling.get(item)):
+            return True
+    return False
+
+
 def _reason_present(qa_block: dict, item: str, value: Any) -> bool:
     """True if a present, non-empty, non-placeholder reason accompanies ``item``.
 
@@ -121,25 +158,7 @@ def _reason_present(qa_block: dict, item: str, value: Any) -> bool:
     value is a mapping carrying ``reason``) or under a sibling reasons/warnings
     mapping keyed by the item name.
     """
-
-    def _valid(text: Any) -> bool:
-        if not isinstance(text, str):
-            return False
-        stripped = text.strip()
-        return bool(stripped) and stripped != _PLACEHOLDER
-
-    # Inline shape: the item value is a mapping with a reason field.
-    if isinstance(value, dict):
-        for key in ("reason", "warning"):
-            if _valid(value.get(key)):
-                return True
-
-    # Sibling shape: a reasons/warnings mapping keyed by the item name.
-    for reason_key in _REASON_KEYS:
-        sibling = qa_block.get(reason_key)
-        if isinstance(sibling, dict) and _valid(sibling.get(item)):
-            return True
-    return False
+    return _inline_reason_present(value) or _sibling_reason_present(qa_block, item)
 
 
 def _check_forbidden(block: Any, rel: str) -> Iterable[Finding]:
@@ -175,7 +194,7 @@ def _check_forbidden(block: Any, rel: str) -> Iterable[Finding]:
                 ),
                 locator=pointer,
             )
-        elif isinstance(value, str) and value.strip() == _PLACEHOLDER:
+        elif _is_placeholder(value):
             yield Finding(
                 rule_id=RULE_ID,
                 severity=Severity.ERROR,
@@ -198,6 +217,66 @@ def _check_forbidden(block: Any, rel: str) -> Iterable[Finding]:
             )
 
 
+def _qa_false_finding(
+    block: dict, item: str, value: Any, pointer: str
+) -> Finding | None:
+    """Finding for a real-``false`` qa item, or ``None`` when a reason is recorded.
+
+    A false value is accepted only when a reason is recorded in the sibling
+    reasons/warnings mapping (the shape the template documents); reason PRESENCE
+    only, never adequacy (Principle V).
+    """
+    if _reason_present(block, item, value):
+        return None  # a reasoned warning is accepted (reason PRESENCE only)
+    return Finding(
+        rule_id=RULE_ID,
+        severity=Severity.ERROR,
+        message=(
+            f"qa item {item!r} is false with no recorded reason -- a false "
+            f"item must carry a blocking reason or a recorded warning + "
+            f"reason (see templates/background-spec.yaml)"
+        ),
+        locator=pointer,
+    )
+
+
+def _qa_item_finding(
+    block: dict, item: str, value: Any, pointer: str
+) -> Finding | None:
+    """Classify one qa item's value into its single finding (or ``None`` if OK).
+
+    A qa item is a real boolean; a false value is accepted only when a reason is
+    recorded in the sibling reasons/warnings mapping (the shape the template
+    documents). Any other shape (dict, placeholder, other scalar) falls through to
+    a non-boolean finding -- mirroring _check_forbidden, which also treats a
+    non-boolean value as a defect.
+    """
+    if _is_real_bool(value, True):
+        return None  # compliant
+    if _is_real_bool(value, False):
+        return _qa_false_finding(block, item, value, pointer)
+    if _is_placeholder(value):
+        return Finding(
+            rule_id=RULE_ID,
+            severity=Severity.ERROR,
+            message=(
+                f"qa item {item!r} is not filled: still the '{_PLACEHOLDER}' "
+                f"placeholder -- a discovered filled spec must declare a real "
+                f"boolean"
+            ),
+            locator=pointer,
+        )
+    return Finding(
+        rule_id=RULE_ID,
+        severity=Severity.ERROR,
+        message=(
+            f"qa item {item!r} has a non-boolean value {value!r} -- it must "
+            f"be a real true/false against the declared contract"
+        ),
+        locator=pointer,
+    )
+
+
 def _check_qa(block: Any, rel: str) -> Iterable[Finding]:
     """Assert every declared qa item is real ``true`` or ``false``+reason (FR-001)."""
     if not isinstance(block, dict):
@@ -215,49 +294,10 @@ def _check_qa(block: Any, rel: str) -> Iterable[Finding]:
     for item in _QA_ITEMS:
         if item not in block:
             continue  # a missing item cannot be asserted (parse-contract detail)
-        value = block[item]
         pointer = f"{rel}#/qa_checklist/{item}"
-        # A qa item is a real boolean; a false value is accepted only when a
-        # reason is recorded in the sibling reasons/warnings mapping (the shape the
-        # template documents). Any other shape (dict, placeholder, other scalar)
-        # falls through to a non-boolean finding below -- mirroring _check_forbidden,
-        # which also treats a non-boolean value as a defect.
-        if _is_real_bool(value, True):
-            continue  # compliant
-        if _is_real_bool(value, False):
-            if _reason_present(block, item, value):
-                continue  # a reasoned warning is accepted (reason PRESENCE only)
-            yield Finding(
-                rule_id=RULE_ID,
-                severity=Severity.ERROR,
-                message=(
-                    f"qa item {item!r} is false with no recorded reason -- a false "
-                    f"item must carry a blocking reason or a recorded warning + "
-                    f"reason (see templates/background-spec.yaml)"
-                ),
-                locator=pointer,
-            )
-        elif isinstance(value, str) and value.strip() == _PLACEHOLDER:
-            yield Finding(
-                rule_id=RULE_ID,
-                severity=Severity.ERROR,
-                message=(
-                    f"qa item {item!r} is not filled: still the '{_PLACEHOLDER}' "
-                    f"placeholder -- a discovered filled spec must declare a real "
-                    f"boolean"
-                ),
-                locator=pointer,
-            )
-        else:
-            yield Finding(
-                rule_id=RULE_ID,
-                severity=Severity.ERROR,
-                message=(
-                    f"qa item {item!r} has a non-boolean value {value!r} -- it must "
-                    f"be a real true/false against the declared contract"
-                ),
-                locator=pointer,
-            )
+        finding = _qa_item_finding(block, item, block[item], pointer)
+        if finding is not None:
+            yield finding
 
 
 @register(RULE_ID, "Background spec declares no baked-in dynamic content")

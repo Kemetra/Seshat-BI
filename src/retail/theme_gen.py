@@ -146,6 +146,51 @@ def _validate_name(name: str) -> None:
         )
 
 
+# Validate and return one spec's ``fg`` (T18 schema: #RRGGBB hex).
+def _validated_transparency_fg(role: str, spec: dict) -> object:
+    fg = spec.get("fg")
+    if not is_valid_hex(fg):
+        raise ThemeGenError(
+            f"transparency role {role!r} fg is not a #RRGGBB hex: {fg!r}"
+        )
+    return fg
+
+
+# Validate and return one spec's ``transparency_pct`` (T18: number in [0, 100]).
+def _validated_transparency_pct(role: str, spec: dict) -> float:
+    pct = spec.get("transparency_pct")
+    if not isinstance(pct, (int, float)) or isinstance(pct, bool):
+        raise ThemeGenError(
+            f"transparency role {role!r} transparency_pct must be a number, got {pct!r}"
+        )
+    if not (0.0 <= float(pct) <= 100.0):
+        raise ThemeGenError(
+            f"transparency role {role!r} transparency_pct {pct!r} is out of "
+            f"range -- must be in [0, 100]"
+        )
+    return float(pct)
+
+
+# Validate one transparency ``role``/``spec`` pair; return its clean spec.
+#
+# Split out of ``_validate_transparency`` so the per-role guard clauses (the
+# ratified T18 schema: allowed role, dict spec, #RRGGBB fg, numeric pct in
+# [0, 100]) live in low-complexity helpers; fg is still checked before pct.
+# Raises ThemeGenError (never a bare ValueError/KeyError) on any violation.
+def _validate_transparency_role(role: str, spec: object) -> dict:
+    if role not in _ALLOWED_TRANSPARENCY_ROLES:
+        raise ThemeGenError(
+            f"transparency role {role!r} is not allowed -- the ratified "
+            f"schema permits only {list(_ALLOWED_TRANSPARENCY_ROLES)}"
+        )
+    if not isinstance(spec, dict):
+        raise ThemeGenError(f"transparency role {role!r} spec must be a dict")
+    return {
+        "fg": _validated_transparency_fg(role, spec),
+        "transparency_pct": _validated_transparency_pct(role, spec),
+    }
+
+
 def _validate_transparency(transparency: dict | None) -> dict | None:
     """Validate an opt-in transparency block; None passes through as None.
 
@@ -160,38 +205,20 @@ def _validate_transparency(transparency: dict | None) -> dict | None:
             f"transparency must be a non-empty dict of {{role: spec}}, got "
             f"{transparency!r}"
         )
-    clean: dict = {}
-    for role, spec in transparency.items():
-        if role not in _ALLOWED_TRANSPARENCY_ROLES:
-            raise ThemeGenError(
-                f"transparency role {role!r} is not allowed -- the ratified "
-                f"schema permits only {list(_ALLOWED_TRANSPARENCY_ROLES)}"
-            )
-        if not isinstance(spec, dict):
-            raise ThemeGenError(f"transparency role {role!r} spec must be a dict")
-        fg = spec.get("fg")
-        pct = spec.get("transparency_pct")
-        if not is_valid_hex(fg):
-            raise ThemeGenError(
-                f"transparency role {role!r} fg is not a #RRGGBB hex: {fg!r}"
-            )
-        if not isinstance(pct, (int, float)) or isinstance(pct, bool):
-            raise ThemeGenError(
-                f"transparency role {role!r} transparency_pct must be a number, "
-                f"got {pct!r}"
-            )
-        if not (0.0 <= float(pct) <= 100.0):
-            raise ThemeGenError(
-                f"transparency role {role!r} transparency_pct {pct!r} is out of "
-                f"range -- must be in [0, 100]"
-            )
-        clean[role] = {"fg": fg, "transparency_pct": float(pct)}
-    return clean
+    return {
+        role: _validate_transparency_role(role, spec)
+        for role, spec in transparency.items()
+    }
 
 
-def build_palette(seed: ThemeSeed) -> dict:
-    """Resolve the seed into a full palette dict (fills ramp if none given)."""
-    _validate_name(seed.name)
+def _validate_palette_colors(seed: ThemeSeed) -> None:
+    """Raise on the first non-#RRGGBB single-color role in ``seed``.
+
+    The eight scalar color roles (accent, background, the text triad, the
+    sentiment triad) are checked in a fixed order so the surfaced ThemeGenError
+    names the first offending role deterministically. data_colors are validated
+    separately in ``_resolve_ramp`` (they may be absent and derived instead).
+    """
     for label, val in (
         ("accent", seed.accent),
         ("background", seed.background),
@@ -204,6 +231,16 @@ def build_palette(seed: ThemeSeed) -> dict:
     ):
         if not is_valid_hex(val):
             raise ThemeGenError(f"{label} is not a #RRGGBB hex: {val!r}")
+
+
+def _resolve_ramp(seed: ThemeSeed) -> list[str]:
+    """The data_colors ramp: caller-supplied (validated) or derived from accent.
+
+    A ``None`` data_colors derives a monochromatic ramp from the accent; an
+    explicit list is validated hex-by-hex. An empty result is refused *after*
+    resolution so an all-blank ``--data-colors`` gets the actionable message
+    rather than silently deriving.
+    """
     if seed.data_colors is None:
         ramp = list(derive_ramp(seed.accent))
     else:
@@ -216,6 +253,14 @@ def build_palette(seed: ThemeSeed) -> dict:
             "data_colors is empty -- supply at least one #RRGGBB, or omit "
             "--data-colors to derive a ramp from the accent"
         )
+    return ramp
+
+
+def build_palette(seed: ThemeSeed) -> dict:
+    """Resolve the seed into a full palette dict (fills ramp if none given)."""
+    _validate_name(seed.name)
+    _validate_palette_colors(seed)
+    ramp = _resolve_ramp(seed)
     palette: dict = {
         "colors": {
             "primary": seed.accent,
@@ -302,22 +347,35 @@ def check_ramp_deltae_or_raise(palette: dict, floor: float) -> None:
             )
 
 
+def _worst_categorical_pair(
+    data_colors: tuple[str, ...],
+) -> tuple[float, tuple[str, str] | None]:
+    """The closest (min CIE76 dE76) i<j pair in ``data_colors``.
+
+    Returns ``(distance, pair)``; ``(float("inf"), None)`` when fewer than 2
+    colors are present (no pair to compare). Single source of truth for the
+    whole-set pairwise scan shared by ``min_categorical_delta_e`` (distance
+    only) and ``check_categorical_distinctness_or_raise`` (distance + pair).
+    """
+    n = len(data_colors)
+    worst = float("inf")
+    worst_pair: tuple[str, str] | None = None
+    for i in range(n):
+        for j in range(i + 1, n):
+            d = delta_e76(data_colors[i], data_colors[j])
+            if d < worst:
+                worst = d
+                worst_pair = (data_colors[i], data_colors[j])
+    return worst, worst_pair
+
+
 def min_categorical_delta_e(data_colors: tuple[str, ...]) -> float:
     """Minimum CIE76 deltaE76 over all i<j pairs in data_colors.
 
     Returns float("inf") when fewer than 2 colors are present (no pair to
     compare, so nothing can violate a distinctness floor).
     """
-    n = len(data_colors)
-    if n < 2:
-        return float("inf")
-    best = float("inf")
-    for i in range(n):
-        for j in range(i + 1, n):
-            d = delta_e76(data_colors[i], data_colors[j])
-            if d < best:
-                best = d
-    return best
+    return _worst_categorical_pair(data_colors)[0]
 
 
 def check_categorical_distinctness_or_raise(
@@ -331,17 +389,7 @@ def check_categorical_distinctness_or_raise(
     correction can't be justified CVD-safe without a named reviewer).
     """
     data_colors = tuple(palette["colors"].get("data_colors") or ())
-    n = len(data_colors)
-    if n < 2:
-        return
-    worst_pair: tuple[str, str] | None = None
-    worst = float("inf")
-    for i in range(n):
-        for j in range(i + 1, n):
-            d = delta_e76(data_colors[i], data_colors[j])
-            if d < worst:
-                worst = d
-                worst_pair = (data_colors[i], data_colors[j])
+    worst, worst_pair = _worst_categorical_pair(data_colors)
     if worst < floor and worst_pair is not None:
         raise ThemeGenError(
             f"categorical distinctness: data_colors {worst_pair[0]} and "

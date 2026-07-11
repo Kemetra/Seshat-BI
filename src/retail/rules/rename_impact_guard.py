@@ -45,6 +45,8 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from itertools import chain
+from typing import NamedTuple
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 
@@ -301,21 +303,32 @@ def _all_columns(model: _Model) -> set[str]:
     return out
 
 
-def _resolve_qualified(
-    rel: str, qtable: str, qcol: str, model: _Model, seen: set
-) -> Finding | None:
+class _BindingScan(NamedTuple):
+    """Per-binding-map invariants threaded through the resolution helpers.
+
+    ``rel``/``model``/``all_cols`` are fixed for one file; ``seen`` dedupes
+    across all three reference forms (mutated in place through this reference).
+    """
+
+    rel: str
+    model: _Model
+    all_cols: set[str]
+    seen: set
+
+
+def _resolve_qualified(scan: _BindingScan, qtable: str, qcol: str) -> Finding | None:
     # resolve against the named table's columns; a binding map uses the
     # bare table token (dim_product_rss), so match columns_by_bare too.
-    known = model.columns_by_table.get(qtable)
+    known = scan.model.columns_by_table.get(qtable)
     if known is None:
-        known = model.columns_by_bare.get(_strip_table_prefix(qtable))
+        known = scan.model.columns_by_bare.get(_strip_table_prefix(qtable))
     if known is None:
         return None
     if qcol in known:
         return None
-    if (qtable, qcol) in seen:
+    if (qtable, qcol) in scan.seen:
         return None
-    seen.add((qtable, qcol))
+    scan.seen.add((qtable, qcol))
     return Finding(
         rule_id=RULE_ID,
         severity=Severity.ERROR,
@@ -323,20 +336,18 @@ def _resolve_qualified(
             f"dashboard binding references {qtable}[{qcol}], which "
             "does not resolve to a committed column (orphaned)"
         ),
-        locator=f"{rel}:{qcol}",
+        locator=f"{scan.rel}:{qcol}",
     )
 
 
-def _check_bare_measure_refs(
-    rel: str, blanked: str, model: _Model, all_cols: set[str], seen: set
-) -> list[Finding]:
+def _check_bare_measure_refs(scan: _BindingScan, blanked: str) -> list[Finding]:
     findings: list[Finding] = []
     for bm in _BARE_MEASURE_REF.finditer(blanked):
         ref = bm.group(1).strip()
-        if not ref or ref in seen:
+        if not ref or ref in scan.seen:
             continue
-        if ref not in model.measures and ref not in all_cols:
-            seen.add(ref)
+        if ref not in scan.model.measures and ref not in scan.all_cols:
+            scan.seen.add(ref)
             findings.append(
                 Finding(
                     rule_id=RULE_ID,
@@ -345,9 +356,24 @@ def _check_bare_measure_refs(
                         f"dashboard binding references [{ref}], which does not "
                         "resolve to any committed measure (orphaned)"
                     ),
-                    locator=f"{rel}:{ref}",
+                    locator=f"{scan.rel}:{ref}",
                 )
             )
+    return findings
+
+
+def _check_one_binding_map(scan: _BindingScan, text: str) -> list[Finding]:
+    findings: list[Finding] = []
+    # quoted 'table'[column] THEN unquoted table[column] (both binding idioms);
+    # order-preserving across the two forms.
+    quals = chain(_QUALIFIED_REF.finditer(text), _UNQUOTED_QUALIFIED_REF.finditer(text))
+    for qm in quals:
+        finding = _resolve_qualified(scan, qm.group(1), qm.group(2))
+        if finding is not None:
+            findings.append(finding)
+    # blank BOTH qualified forms so their [col] is not re-read as a bare measure
+    blanked = _UNQUOTED_QUALIFIED_REF.sub("x[]", _QUALIFIED_REF.sub("''[]", text))
+    findings.extend(_check_bare_measure_refs(scan, blanked))
     return findings
 
 
@@ -361,20 +387,8 @@ def _check_binding_maps(ctx: RuleContext, model: _Model) -> list[Finding]:
         text = _read(ctx, rel)
         if text is None:
             continue
-        seen: set = set()
-
-        # quoted 'table'[column] AND unquoted table[column] (both binding idioms)
-        for qm in _QUALIFIED_REF.finditer(text):
-            finding = _resolve_qualified(rel, qm.group(1), qm.group(2), model, seen)
-            if finding is not None:
-                findings.append(finding)
-        for qm in _UNQUOTED_QUALIFIED_REF.finditer(text):
-            finding = _resolve_qualified(rel, qm.group(1), qm.group(2), model, seen)
-            if finding is not None:
-                findings.append(finding)
-        # blank BOTH qualified forms so their [col] is not re-read as a bare measure
-        blanked = _UNQUOTED_QUALIFIED_REF.sub("x[]", _QUALIFIED_REF.sub("''[]", text))
-        findings.extend(_check_bare_measure_refs(rel, blanked, model, all_cols, seen))
+        scan = _BindingScan(rel, model, all_cols, set())
+        findings.extend(_check_one_binding_map(scan, text))
     return findings
 
 

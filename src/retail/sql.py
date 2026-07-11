@@ -165,6 +165,31 @@ def _scan_dollar_token(
     return SqlToken("", new_line), new_line, end
 
 
+_WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|[().,;*]")
+
+
+def _scan_span(
+    text: str, i: int, ch: str, line: int
+) -> tuple[SqlToken | None, int, int] | None:
+    """Consume a comment/quote/dollar span opening at ``text[i]``, if any.
+
+    Returns ``(token_or_None, new_line, next_i)`` when a span was consumed
+    (``next_i > i``); the token is the placeholder to emit, or ``None`` for a span
+    that emits nothing (a comment). Returns ``None`` (the outer sentinel) when no
+    span opens here -- including the dollar non-opener case (e.g. ``$1``) where the
+    producer declines to consume -- so the caller falls through to word-matching.
+    Flattening the "producer exists" + "producer consumed" decision into this one
+    helper keeps the main scan loop shallow.
+    """
+    producer = _tokenize_producer(text, i, ch)
+    if producer is None:
+        return None
+    tok, new_line, next_i = producer(text, i, line)
+    if next_i == i:
+        return None  # producer declined (e.g. `$1`); fall through to word-matching
+    return tok, new_line, next_i
+
+
 def tokenize_sql(text: str) -> list[SqlToken]:
     """Tokenize SQL, dropping comments and string-literal contents.
 
@@ -174,37 +199,49 @@ def tokenize_sql(text: str) -> list[SqlToken]:
     """
     tokens: list[SqlToken] = []
     i, line, n = 0, 1, len(text)
-    word = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|[().,;*]")
     while i < n:
         ch = text[i]
-        if ch == "\n":
-            line += 1
-            i += 1
-            continue
-        if ch.isspace():
-            i += 1
+
+        skip = _skip_whitespace(ch, line, i)
+        if skip is not None:
+            line, i = skip
             continue
 
-        # Dispatch the span-producing branches. Each producer returns
-        # (token_or_None, new_line, next_i); a producer that does not consume its
-        # opener (dollar non-opener) returns next_i == i so we fall through.
-        producer = _tokenize_producer(text, i, ch)
-        if producer is not None:
-            tok, line, next_i = producer(text, i, line)
-            if next_i != i:
-                if tok is not None:
-                    tokens.append(tok)
-                i = next_i
-                continue
-            # not consumed (e.g. `$1`); fall through to word-matching.
+        # Comment/quote/dollar spans are dispatched here; the helper returns None
+        # when no span opens (or a dollar non-opener declines) so we word-match.
+        span = _scan_span(text, i, ch, line)
+        if span is not None:
+            tok, line, i = span
+            _append_if_token(tokens, tok)  # comments emit no token; append the rest
+            continue
 
-        m = word.match(text, i)
+        m = _WORD.match(text, i)
         if m:
             tokens.append(SqlToken(m.group(0), line))
             i = m.end()
             continue
         i += 1
     return tokens
+
+
+def _append_if_token(tokens: list[SqlToken], tok: SqlToken | None) -> None:
+    """Append ``tok`` unless it is ``None`` (a comment span emits no token)."""
+    if tok is not None:
+        tokens.append(tok)
+
+
+def _skip_whitespace(ch: str, line: int, i: int) -> tuple[int, int] | None:
+    """Advance past a single whitespace char at index ``i``.
+
+    Returns the updated ``(line, next_i)`` when ``ch`` is whitespace -- a newline
+    bumps ``line``; any other whitespace only advances ``i`` -- or ``None`` (the
+    sentinel) when ``ch`` is not whitespace and the caller should keep classifying.
+    """
+    if ch == "\n":
+        return line + 1, i + 1
+    if ch.isspace():
+        return line, i + 1
+    return None
 
 
 # Producer type: (text, i, line) -> (token_or_None, new_line, next_i).
@@ -247,38 +284,47 @@ def strip_sql_comments(text: str) -> str:
     out: list[str] = []
     i, n = 0, len(text)
     while i < n:
-        ch = text[i]
-        # Inside a quoted span, copy through until the matching close quote; never
-        # interpret a comment marker here.
-        if ch in ("'", '"'):
-            end = _quoted_span_end(text, i)
-            out.append(text[i:end])
-            i = end
+        span = _strip_span(text, i)
+        if span is None:
+            out.append(text[i])  # ordinary char (or a `$1`-style non-opener `$`)
+            i += 1
             continue
-        if ch == "$":
-            end = _dollar_quote_end(text, i)
-            if end is not None:
-                # Blank a PL/pgSQL body (a `--`/quoted-ident inside it is data, not
-                # code) but keep columns + newlines so line numbers downstream hold.
-                out.append(_blank_span(text[i:end]))
-                i = end
-                continue
-            # not a dollar-quote opener (e.g. `$1`); copy the `$` through below.
-        if text.startswith("--", i):
-            end = _line_comment_end(text, i)
-            # keep columns; the newline (if any) is copied through next loop
-            out.append(" " * (end - i))
-            i = end
-            continue
-        if text.startswith("/*", i):
-            end = _block_comment_end(text, i)
-            # preserve newlines inside the block so line numbers downstream hold
-            out.append(_blank_span(text[i:end]))
-            i = end
-            continue
-        out.append(ch)
-        i += 1
+        emitted, i = span
+        out.append(emitted)
     return "".join(out)
+
+
+def _strip_span(text: str, i: int) -> tuple[str, int] | None:
+    """Emit the replacement text for a span opening at ``text[i]``, comment-aware.
+
+    Returns ``(emitted_text, next_i)`` for a recognized span, or ``None`` (the
+    sentinel) when ``text[i]`` is an ordinary character the caller should copy
+    through verbatim -- including a ``$`` that is NOT a dollar-quote opener (e.g.
+    ``$1``). Kept in dispatch order so a comment marker inside a quoted span is
+    data, never a comment. Mirrors ``_scan_span`` so ``strip_sql_comments`` stays a
+    flat dispatcher instead of a bumpy chain of nested branches.
+    """
+    ch = text[i]
+    # Inside a quoted span, copy through until the matching close quote; never
+    # interpret a comment marker here.
+    if ch in ("'", '"'):
+        end = _quoted_span_end(text, i)
+        return text[i:end], end
+    if ch == "$":
+        end = _dollar_quote_end(text, i)
+        if end is None:
+            return None  # not a dollar-quote opener (e.g. `$1`); copy the `$` through
+        # Blank a PL/pgSQL body (a `--`/quoted-ident inside it is data, not code)
+        # but keep columns + newlines so line numbers downstream hold.
+        return _blank_span(text[i:end]), end
+    if text.startswith("--", i):
+        end = _line_comment_end(text, i)
+        return " " * (end - i), end  # keep columns; a trailing newline is copied next
+    if text.startswith("/*", i):
+        end = _block_comment_end(text, i)
+        # preserve newlines inside the block so line numbers downstream hold
+        return _blank_span(text[i:end]), end
+    return None
 
 
 def iter_sql_files(ctx: RuleContext) -> list[str]:
@@ -288,6 +334,23 @@ def iter_sql_files(ctx: RuleContext) -> list[str]:
         for p in ctx.tracked_files
         if p.startswith("warehouse/") and p.endswith(".sql")
     )
+
+
+def _is_schema_qualifying_position(prev: str, prev2: str, nxt: str) -> bool:
+    """True when a schema token at this position is used as an actual schema.
+
+    ``prev``/``prev2`` are the two preceding tokens (upper-cased); ``nxt`` is the
+    following token. A token qualifies when it is a ``<schema>.<name>`` qualifier,
+    the object of ``FROM``/``JOIN``, or the target of ``CREATE SCHEMA``. Written as
+    guard clauses so no single branch expression combines logical operators.
+    """
+    if nxt == ".":  # `<schema>.<name>` qualifier
+        return True
+    if prev in ("FROM", "JOIN"):  # `FROM <schema>` / `JOIN <schema>`
+        return True
+    if prev != "SCHEMA":  # `CREATE SCHEMA <schema>` is the only remaining form
+        return False
+    return prev2 == "CREATE"
 
 
 def stale_schema_tokens(text: str) -> list[tuple[str, int]]:
@@ -301,10 +364,7 @@ def stale_schema_tokens(text: str) -> list[tuple[str, int]]:
         prev = toks[idx - 1].text.upper() if idx else ""
         prev2 = toks[idx - 2].text.upper() if idx >= 2 else ""
         nxt = toks[idx + 1].text if idx + 1 < len(toks) else ""
-        after_create_schema = prev == "SCHEMA" and prev2 == "CREATE"
-        after_from_join = prev in ("FROM", "JOIN")
-        schema_qualifier = nxt == "."
-        if after_create_schema or after_from_join or schema_qualifier:
+        if _is_schema_qualifying_position(prev, prev2, nxt):
             hits.append((low, tok.line))
     return hits
 

@@ -325,6 +325,121 @@ const DISSENT_SCHEMA = {
   },
 }
 
+// ---- aggregatePanel reducer helpers (module scope, pure, no closure state) ----------
+// higher = wins a no-majority tie. SHIPPED is a CLOSED outcome (already-shipped, do not
+// relitigate) and must outrank the open verdicts: when the shipped-duplication auditor
+// alone recognizes a duplicate and the other two split on open verdicts, the candidate
+// closes as SHIPPED, not an open section. REJECT still tops it (a hard-principle kill
+// beats "we already shipped it").
+const CAUTION_RANK = { REJECT: 5, SHIPPED: 4, PARK: 3, CONSIDER: 2, ADOPT: 1 }
+const DISP_RANK = { killed: 3, weakened: 2, survived: 1 }                       // worst-seen wins
+const CONS_RANK = { conflict: 3, 'minor-tension': 2, consistent: 1 }
+
+function panelMedian(nums) {
+  const a = nums.filter(n => Number.isFinite(n)).slice().sort((x, y) => x - y)
+  if (!a.length) return 1
+  const m = Math.floor(a.length / 2)
+  return a.length % 2 ? a[m] : Math.round((a[m - 1] + a[m]) / 2)
+}
+// pick the highest-ranked value present (worst-seen wins), else fallback. Shared by the
+// disposition + consistency reductions and the no-majority verdict tie-break. `unknownRank`
+// is the rank an out-of-map value sorts at -- the verdict tie-break historically treats an
+// unknown verdict as mid (2), the disp/consistency reductions as lowest (0); preserved exactly.
+function worstBy(values, rank, fallback, unknownRank = 0) {
+  return values.slice().sort((a, b) => (rank[b] ?? unknownRank) - (rank[a] ?? unknownRank))[0] || fallback
+}
+// eligibility gate: pass only when every reviewer ruled eligible AND the panel was full;
+// fail when none did; split otherwise (incl. a unanimous-but-SHORT panel -> needs review).
+function eligibilityGate(eligibleCount, n, fullPanel) {
+  let gate = eligibleCount === n ? 'pass' : (eligibleCount === 0 ? 'fail' : 'split')
+  if (gate === 'pass' && !fullPanel) gate = 'split'
+  return gate
+}
+// majority verdict if 2+ agree; else the MORE CAUTIOUS of those present.
+function majorityVerdict(rows) {
+  const counts = {}
+  for (const r of rows) counts[r.verdict] = (counts[r.verdict] || 0) + 1
+  let verdict = null, best = 0
+  for (const v of Object.keys(counts)) if (counts[v] > best) { best = counts[v]; verdict = v }
+  if (best < 2) verdict = worstBy(rows.map(r => r.verdict), CAUTION_RANK, undefined, 2)  // no majority
+  return verdict
+}
+// demote-only clamp by the eligibility gate (can only move toward caution). fail = all
+// reviewers ineligible -> REJECT outright (a hard-principle failure does not get to sit in
+// PARK). split = mixed/short panel -> at most CONSIDER, never ADOPT.
+function clampByGate(verdict, gate) {
+  if (gate === 'fail' && verdict !== 'REJECT') return 'REJECT'
+  if (gate === 'split' && verdict === 'ADOPT') return 'CONSIDER'
+  return verdict
+}
+function scoreSpread(rows) {
+  const vs = rows.map(r => r.value_score).filter(Number.isFinite)
+  const fs = rows.map(r => r.feasibility_score).filter(Number.isFinite)
+  return Math.max(
+    vs.length ? Math.max(...vs) - Math.min(...vs) : 0,
+    fs.length ? Math.max(...fs) - Math.min(...fs) : 0
+  )
+}
+function firstTruthy(rows, field, fallback) {
+  return rows.map(r => r[field]).find(Boolean) || fallback
+}
+// reduce one grouped idea (its reviewer rows) to a single verdict record. Returns the
+// idea PLUS whether the skeptic left it uncovered (so the caller tallies without a closure).
+function reduceGroupedIdea(title, rows, expected, challenged) {
+  const n = rows.length
+  const eligibleCount = rows.filter(r => r.eligible === true).length
+  const eligibility_gate = eligibilityGate(eligibleCount, n, n >= expected)
+  const value_score = panelMedian(rows.map(r => r.value_score))
+  const feasibility_score = panelMedian(rows.map(r => r.feasibility_score))
+  const score_spread = scoreSpread(rows)
+  let verdict = clampByGate(majorityVerdict(rows), eligibility_gate)
+  let survived_verification = worstBy(rows.map(r => r.survived_verification), DISP_RANK, 'survived')
+  // skeptic-coverage clamp: an idea the adversarial skeptic never challenged has UNPROVEN
+  // coverage -> treat it as killed and demote it out of ADOPT (mirrors the eligibility
+  // clamp; demote-only, never promotes). This is what actually enforces the every-candidate
+  // contract -- without it an omitted idea could ride through as a survived ADOPT.
+  let uncovered = 0
+  if (!challenged) {
+    uncovered = 1
+    survived_verification = 'killed'
+    if (verdict === 'ADOPT') verdict = 'CONSIDER'
+  }
+  const consistency = worstBy(rows.map(r => r.consistency), CONS_RANK, 'consistent')
+  const first_step = (rows.map(r => r.first_step).find(s => s && String(s).trim())) || 'None.'
+  // rationale: concatenate each reviewer's one-liner with its standpoint
+  const rationale = rows.map(r => `[${r.reviewer_standpoint || S(114,101,118,105,101,119,101,114)}] ${r.rationale || S()}`.trim()).join(' ')
+  const idea = {
+    title,
+    horizon: firstTruthy(rows, 'horizon', 'NOW'),
+    consistency, value_score, feasibility_score, score_spread,
+    eligibility_gate, verdict, survived_verification, first_step, rationale,
+    strengthens_layer: firstTruthy(rows, 'strengthens_layer', 'none'),
+    serves: firstTruthy(rows, 'serves', 'tool_internal'),
+    origin: firstTruthy(rows, 'origin', 'engine'),
+    _per_reviewer: rows.map(r => ({ standpoint: r.reviewer_standpoint, eligible: r.eligible, verdict: r.verdict, v: r.value_score, f: r.feasibility_score })),
+  }
+  return { idea, uncovered }
+}
+// group reviewer rows by stable key, first-seen order preserved (reviewer 0 then 1 then 2).
+// Carry each reviewer's standpoint DOWN onto its rows so attribution survives grouping, and
+// keep the first-seen title as the row group's DISPLAY title.
+// add one scored idea to the grouping accumulator: register its stable key on first sight
+// (preserving first-seen order + display title), then append its row under that key.
+function addReviewerRow(acc, si, standpoint) {
+  if (!si || !si.title) return
+  const key = normKey(si.title)
+  if (!acc.seen.has(key)) { acc.seen.add(key); acc.order.push(key); acc.displayTitle[key] = si.title }
+  ;(acc.byTitle[key] = acc.byTitle[key] || []).push({ ...si, reviewer_standpoint: si.reviewer_standpoint || standpoint })
+}
+function groupReviewerRows(live) {
+  const acc = { order: [], seen: new Set(), byTitle: {}, displayTitle: {} }
+  for (const reviewer of live) {
+    const standpoint = reviewer.reviewer_standpoint || reviewer._key || 'reviewer'
+    for (const si of (reviewer.scored_ideas || [])) addReviewerRow(acc, si, standpoint)
+  }
+  return { order: acc.order, byTitle: acc.byTitle, displayTitle: acc.displayTitle }
+}
+
 // aggregatePanel: PURE JS. Matches ideas by title across the 3 reviewer records and
 // reduces to one verdict per idea. Median scores; eligibility gate (pass/fail/split);
 // demote-only clamp (fail -> REJECT, split -> at most CONSIDER); majority verdict else
@@ -340,121 +455,25 @@ function aggregatePanel(panel, expectedReviewers, verifyRec) {
   // (e.g. "#41. Symptom Concierge (which-layer-owns-this-symptom router)" vs "41. Symptom
   // Concierge -- cross-layer ... router") but PHRASE the trailing title differently. Grouping
   // on the raw free-text title therefore SPLIT one idea into 2-3 rows with divergent scores
-  // (the 62-vs-42 over-count). groupKey() collapses each title to its canonical identity: the
-  // leading #N / N. number when present, else a lowercased, punctuation/whitespace-normalized
-  // form so near-identical prose still merges. Display keeps the first-seen human title.
-  // Defined BEFORE challengedTitles so the skeptic set is normalized on the same key -- else
-  // the coverage clamp would mis-fire on the skeptic's differently-phrased titles.
-  const groupKey = normKey   // panel grouping uses the number-aware key; user-match uses proseKey
+  // (the 62-vs-42 over-count). groupReviewerRows uses normKey() to collapse each title to its
+  // canonical identity: the leading #N / N. number when present, else a lowercased,
+  // punctuation/whitespace-normalized form so near-identical prose still merges. Display keeps
+  // the first-seen human title. challengedTitles is normalized on the SAME key so the skeptic
+  // coverage clamp does not mis-fire on the skeptic's differently-phrased titles.
   // The skeptic's "challenge EVERY candidate" contract is enforced HERE in JS, not by the
   // schema (which only requires an array) or the prompt (a request). An idea the skeptic
   // silently omitted from challenged[] is treated as if it FAILED the gate: marked killed
   // and demoted out of ADOPT, mirroring the demote-only eligibility clamp. Unchallenged !=
   // safe -- it means coverage was not proven, so it must not read as a survived ADOPT.
-  // Keyed via groupKey so the skeptic's title phrasing matches the reviewers' grouping.
   const challengedTitles = new Set(((verifyRec && Array.isArray(verifyRec.challenged) ? verifyRec.challenged : []))
-    .map(ch => ch && ch.title).filter(Boolean).map(groupKey))
+    .map(ch => ch && ch.title).filter(Boolean).map(normKey))
+  const { order, byTitle, displayTitle } = groupReviewerRows(live)
+
   let uncovered = 0
-  // union of ideas by stable key, first-seen order preserved (reviewer 0 then 1 then 2). Carry
-  // each reviewer's standpoint DOWN onto its rows so attribution survives grouping, and keep the
-  // first-seen title as the row group's DISPLAY title.
-  const order = []                 // stable keys, in first-seen order
-  const seen = new Set()
-  const byTitle = {}               // key -> reviewer rows
-  const displayTitle = {}          // key -> first-seen human-readable title
-  for (const reviewer of live) {
-    const standpoint = reviewer.reviewer_standpoint || reviewer._key || 'reviewer'
-    for (const si of (reviewer.scored_ideas || [])) {
-      if (!si || !si.title) continue
-      const key = groupKey(si.title)
-      if (!seen.has(key)) { seen.add(key); order.push(key); displayTitle[key] = si.title }
-      ;(byTitle[key] = byTitle[key] || []).push({ ...si, reviewer_standpoint: si.reviewer_standpoint || standpoint })
-    }
-  }
-  const median = nums => {
-    const a = nums.filter(n => Number.isFinite(n)).slice().sort((x, y) => x - y)
-    if (!a.length) return 1
-    const m = Math.floor(a.length / 2)
-    return a.length % 2 ? a[m] : Math.round((a[m - 1] + a[m]) / 2)
-  }
-  // higher = wins a no-majority tie. SHIPPED is a CLOSED outcome (already-shipped, do not
-  // relitigate) and must outrank the open verdicts: when the shipped-duplication auditor
-  // alone recognizes a duplicate and the other two split on open verdicts, the candidate
-  // closes as SHIPPED, not an open section. REJECT still tops it (a hard-principle kill
-  // beats "we already shipped it").
-  const cautionRank = { REJECT: 5, SHIPPED: 4, PARK: 3, CONSIDER: 2, ADOPT: 1 }
-  const dispRank = { killed: 3, weakened: 2, survived: 1 }                       // worst-seen wins
-
   const ideas = order.map(key => {
-    const rows = byTitle[key]
-    const title = displayTitle[key]
-    const n = rows.length
-    const eligibleCount = rows.filter(r => r.eligible === true).length
-    // A row count short of the expected panel means a reviewer (possibly the principle
-    // auditor) never ruled -> this is NOT a clean pass. Unanimous-eligible among a SHORT
-    // panel is downgraded to 'split' (needs human review) so a missing auditor can never
-    // let an idea through the gate as if fully cleared.
-    const fullPanel = n >= expected
-    let eligibility_gate = eligibleCount === n ? 'pass' : (eligibleCount === 0 ? 'fail' : 'split')
-    if (eligibility_gate === 'pass' && !fullPanel) eligibility_gate = 'split'
-
-    const value_score = median(rows.map(r => r.value_score))
-    const feasibility_score = median(rows.map(r => r.feasibility_score))
-    const vs = rows.map(r => r.value_score).filter(Number.isFinite)
-    const fs = rows.map(r => r.feasibility_score).filter(Number.isFinite)
-    const score_spread = Math.max(
-      vs.length ? Math.max(...vs) - Math.min(...vs) : 0,
-      fs.length ? Math.max(...fs) - Math.min(...fs) : 0
-    )
-
-    // majority verdict if 2+ agree; else the MORE CAUTIOUS of those present.
-    const counts = {}
-    for (const r of rows) counts[r.verdict] = (counts[r.verdict] || 0) + 1
-    let verdict = null, best = 0
-    for (const v of Object.keys(counts)) if (counts[v] > best) { best = counts[v]; verdict = v }
-    if (best < 2) {  // no majority -> most cautious present
-      verdict = rows.map(r => r.verdict).sort((a, b) => (cautionRank[b] ?? 2) - (cautionRank[a] ?? 2))[0]
-    }
-    // demote-only clamp by the eligibility gate (can only move toward caution).
-    // fail = all reviewers ineligible -> REJECT outright (a hard-principle failure does
-    // not get to sit in PARK; the contract is fail -> REJECT). split = mixed/short panel
-    // -> at most CONSIDER, never ADOPT.
-    if (eligibility_gate === 'fail' && verdict !== 'REJECT') verdict = 'REJECT'
-    if (eligibility_gate === 'split' && verdict === 'ADOPT') verdict = 'CONSIDER'
-
-    // worst disposition any reviewer recorded
-    let survived_verification = rows.map(r => r.survived_verification)
-      .sort((a, b) => (dispRank[b] || 0) - (dispRank[a] || 0))[0] || 'survived'
-
-    // skeptic-coverage clamp: an idea the adversarial skeptic never challenged has UNPROVEN
-    // coverage -> treat it as killed and demote it out of ADOPT (mirrors the eligibility
-    // clamp; demote-only, never promotes). This is what actually enforces the every-candidate
-    // contract -- without it an omitted idea could ride through as a survived ADOPT.
-    if (!challengedTitles.has(key)) {
-      uncovered++
-      survived_verification = 'killed'
-      if (verdict === 'ADOPT') verdict = 'CONSIDER'
-    }
-
-    // most cautious consistency present
-    const consRank = { conflict: 3, 'minor-tension': 2, consistent: 1 }
-    const consistency = rows.map(r => r.consistency)
-      .sort((a, b) => (consRank[b] || 0) - (consRank[a] || 0))[0] || 'consistent'
-
-    // first non-empty first_step; horizon = majority/first
-    const first_step = (rows.map(r => r.first_step).find(s => s && String(s).trim())) || 'None.'
-    const horizon = rows.map(r => r.horizon).find(Boolean) || 'NOW'
-    const strengthens_layer = rows.map(r => r.strengthens_layer).find(Boolean) || 'none'
-    const serves = rows.map(r => r.serves).find(Boolean) || 'tool_internal'
-    const origin = rows.map(r => r.origin).find(Boolean) || 'engine'
-    // rationale: concatenate each reviewer's one-liner with its standpoint
-    const rationale = rows.map(r => `[${r.reviewer_standpoint || S(114,101,118,105,101,119,101,114)}] ${r.rationale || S()}`.trim()).join(' ')
-
-    return {
-      title, horizon, consistency, value_score, feasibility_score, score_spread,
-      eligibility_gate, verdict, survived_verification, first_step, rationale, strengthens_layer, serves, origin,
-      _per_reviewer: rows.map(r => ({ standpoint: r.reviewer_standpoint, eligible: r.eligible, verdict: r.verdict, v: r.value_score, f: r.feasibility_score })),
-    }
+    const res = reduceGroupedIdea(displayTitle[key], byTitle[key], expected, challengedTitles.has(key))
+    uncovered += res.uncovered
+    return res.idea
   })
   const splits = ideas.filter(i => i.eligibility_gate === 'split' || i.score_spread >= 4).map(i => i.title)
   return { ideas, splits, panel_failed, reviewers_seen: live.length, reviewers_expected: expected, uncovered_by_skeptic: uncovered }
@@ -579,6 +598,27 @@ ship_status (feature_id + status from the shared enum + evidence_path), and unre
 // Pure-JS merge: union notes/tensions (dedupe by exact string), collect ship-status
 // by feature_id, flag contradictions, and record dead explorers. No Date/random;
 // deterministic order by explorer index.
+// group ship-status rows by feature_id (dropping rows with no feature_id), carrying the
+// source explorer key on each row so disagreements can be attributed.
+function groupShipStatusByFeature(live) {
+  const byFeature = {}
+  for (const m of live) {
+    for (const row of (m.ship_status || [])) {
+      if (!row || !row.feature_id) continue
+      ;(byFeature[row.feature_id] = byFeature[row.feature_id] || []).push({ ...row, _from: m._key })
+    }
+  }
+  return byFeature
+}
+// a feature_id whose explorers disagreed on status is a contradiction to reconcile.
+function findContradictions(byFeature) {
+  const contradictions = []
+  for (const fid of Object.keys(byFeature)) {
+    const statuses = new Set(byFeature[fid].map(r => r.status))
+    if (statuses.size > 1) contradictions.push({ feature_id: fid, rows: byFeature[fid] })
+  }
+  return contradictions
+}
 function mergeSubmaps(maps) {
   const live = maps.filter(Boolean)
   const expected = EXPLORERS.map(e => e.key)
@@ -590,19 +630,8 @@ function mergeSubmaps(maps) {
   const tensions = dedupe(live.flatMap(m => m.tensions || []))
   const unreadable = dedupe(live.flatMap(m => m.unreadable || []))
 
-  // group ship-status rows by feature_id to surface disagreements
-  const byFeature = {}
-  for (const m of live) {
-    for (const row of (m.ship_status || [])) {
-      if (!row || !row.feature_id) continue
-      ;(byFeature[row.feature_id] = byFeature[row.feature_id] || []).push({ ...row, _from: m._key })
-    }
-  }
-  const contradictions = []
-  for (const fid of Object.keys(byFeature)) {
-    const statuses = new Set(byFeature[fid].map(r => r.status))
-    if (statuses.size > 1) contradictions.push({ feature_id: fid, rows: byFeature[fid] })
-  }
+  const byFeature = groupShipStatusByFeature(live)
+  const contradictions = findContradictions(byFeature)
   return { capability_notes, tensions, unreadable, byFeature, contradictions, missing_subsystems }
 }
 const merged = mergeSubmaps(submaps)
@@ -662,36 +691,32 @@ const explore_map = groundFailed
     }
   : explore
 
+// renderMap section helpers: each returns the lines it contributes ([] when its data is
+// empty, so nothing is emitted). A non-empty list section is `header + bullets + ''`
+// (trailing blank line); the callers below keep the exact push order and blank lines.
+function mapListSection(arr, header, fmt) {
+  if (!Array.isArray(arr) || !arr.length) return []
+  return [header, ...arr.map(fmt), '']
+}
 // renderMap: turn the structured MERGED MAP back into the prose+table substrate the
 // downstream stages interpolate (they used a single prose string before). Deterministic.
 function renderMap(m) {
   if (!m || typeof m !== 'object') return String(m || '')
-  const lines = []
-  lines.push('=== CAPABILITY MAP ===', m.capability_map || '', '')
-  if (Array.isArray(m.tensions) && m.tensions.length) {
-    lines.push('=== TENSIONS / FRICTION ===')
-    m.tensions.forEach(t => lines.push(`- ${t}`))
-    lines.push('')
-  }
-  if (Array.isArray(m.ship_status) && m.ship_status.length) {
-    lines.push('=== SHIP STATUS (feature -> status [evidence]) ===')
-    m.ship_status.forEach(r => lines.push(`- ${r.feature_id}: ${r.status} [${r.evidence_path}]${r.verifier_opened_evidence ? S() : S(32,40,85,78,86,69,82,73,70,73,69,68,45,101,118,105,100,101,110,99,101,41)}`))
-    lines.push('')
-  }
-  if (Array.isArray(m.reconciliation_ledger) && m.reconciliation_ledger.length) {
-    lines.push('=== RECONCILED CONTRADICTIONS ===')
-    m.reconciliation_ledger.forEach(r => lines.push(`- ${r.feature_id}: ruled ${r.ruling} (${r.winning_evidence})`))
-    lines.push('')
-  }
-  if (Array.isArray(m.missing_subsystems) && m.missing_subsystems.length) {
-    lines.push(`=== DEGRADED: missing subsystem explorers: ${m.missing_subsystems.join(S(44,32))} ===`, '')
-  }
-  if (Array.isArray(m.principles) && m.principles.length) {
-    lines.push('=== PRINCIPLES (an idea must respect) ===')
-    m.principles.forEach(p => lines.push(`- ${p}`))
-    lines.push('')
-  }
-  if (m.verification_notes) lines.push('=== VERIFICATION NOTES ===', m.verification_notes)
+  const missing = (Array.isArray(m.missing_subsystems) && m.missing_subsystems.length)
+    ? [`=== DEGRADED: missing subsystem explorers: ${m.missing_subsystems.join(S(44,32))} ===`, '']
+    : []
+  const notes = m.verification_notes ? ['=== VERIFICATION NOTES ===', m.verification_notes] : []
+  const lines = [
+    '=== CAPABILITY MAP ===', m.capability_map || '', '',
+    ...mapListSection(m.tensions, '=== TENSIONS / FRICTION ===', t => `- ${t}`),
+    ...mapListSection(m.ship_status, '=== SHIP STATUS (feature -> status [evidence]) ===',
+      r => `- ${r.feature_id}: ${r.status} [${r.evidence_path}]${r.verifier_opened_evidence ? S() : S(32,40,85,78,86,69,82,73,70,73,69,68,45,101,118,105,100,101,110,99,101,41)}`),
+    ...mapListSection(m.reconciliation_ledger, '=== RECONCILED CONTRADICTIONS ===',
+      r => `- ${r.feature_id}: ruled ${r.ruling} (${r.winning_evidence})`),
+    ...missing,
+    ...mapListSection(m.principles, '=== PRINCIPLES (an idea must respect) ===', p => `- ${p}`),
+    ...notes,
+  ]
   return lines.join('\n')
 }
 const exploreMap = renderMap(explore_map)
@@ -1319,23 +1344,14 @@ function tally(ideas) {
   return { v, h }
 }
 
-// selfMetrics: PURE JS rollup of the run's OWN quality -- counts over data already in
-// memory, fabricating nothing. Reports how the run did, not just what it produced.
-function selfMetrics(reviewObj, rawCount, runHealth) {
-  const ideas = (reviewObj && Array.isArray(reviewObj.scored_ideas)) ? reviewObj.scored_ideas : []
-  const scored = ideas.length
-  const { v } = tally(ideas)
-  // gate failures (all reviewers ineligible) AND splits (a reviewer dissented) are both
-  // "not a clean eligibility pass" -- counted apart so a split is not hidden as clean.
-  const gateOf = i => i.eligibility_gate || (i.eligible === false ? 'fail' : 'pass')
-  const ineligible = ideas.filter(i => gateOf(i) === 'fail').length
-  const eligibility_split = ideas.filter(i => gateOf(i) === 'split').length
+// Roll the per-idea categorical tallies (consistency / disposition / layer / serves) in one
+// pass. serves is the meta-bloat tally -- how many ideas serve the end user / an operator /
+// the tool itself; a run heavy on tool_internal is over-producing bookkeeping (the central
+// review finding), so the ratio is a durable, self-correcting signal each run.
+function countMixes(ideas) {
   const cons = { consistent: 0, 'minor-tension': 0, conflict: 0 }
   const disp = { survived: 0, weakened: 0, killed: 0 }
   const layers = {}
-  // serves: the meta-bloat tally -- how many ideas serve the end user / an operator / the
-  // tool itself. A run heavy on tool_internal is over-producing bookkeeping (the central
-  // review finding). Rendered so the ratio is a durable, self-correcting signal each run.
   const serves = { end_user: 0, operator: 0, tool_internal: 0 }
   for (const i of ideas) {
     if (i.consistency in cons) cons[i.consistency]++
@@ -1345,6 +1361,19 @@ function selfMetrics(reviewObj, rawCount, runHealth) {
     const sv = i.serves || 'tool_internal'
     if (sv in serves) serves[sv]++
   }
+  return { cons, disp, layers, serves }
+}
+// selfMetrics: PURE JS rollup of the run's OWN quality -- counts over data already in
+// memory, fabricating nothing. Reports how the run did, not just what it produced.
+function selfMetrics(reviewObj, rawCount, runHealth) {
+  const ideas = (reviewObj && Array.isArray(reviewObj.scored_ideas)) ? reviewObj.scored_ideas : []
+  const scored = ideas.length
+  const { v } = tally(ideas)
+  // gate failures (all reviewers ineligible) AND splits (a reviewer dissented) are both
+  // "not a clean eligibility pass" -- counted apart so a split is not hidden as clean.
+  const ineligible = ideas.filter(i => gateOf(i) === 'fail').length
+  const eligibility_split = ideas.filter(i => gateOf(i) === 'split').length
+  const { cons, disp, layers, serves } = countMixes(ideas)
   const pct = (n, d) => d ? Math.round((n / d) * 100) : 0
   return {
     yield_funnel: { raw_pre_dedupe: rawCount, scored, adopt: v.ADOPT, consider: v.CONSIDER, park: v.PARK, reject: v.REJECT, shipped: v.SHIPPED },
@@ -1364,15 +1393,16 @@ function selfMetrics(reviewObj, rawCount, runHealth) {
 //   **Why this verdict:** <rationale>
 //   **Panel dissent:** <dissent>        (only when the panel disagreed)
 //   **First step:** <first_step or 'None.'>
+// Three-state eligibility tag for a full idea block: a 2-1 split is NOT a clean pass -- it
+// reads as needs-human-review, not "respects principles", so a dissenting hard-principle
+// finding stays visible. gateOf() is the shared three-state derivation (see below).
+const IDEA_ELIG_TAG = {
+  fail: '**INELIGIBLE -- violates a hard principle**',
+  split: '**ELIGIBILITY SPLIT -- a reviewer flagged a hard-principle concern; needs human review**',
+  pass: 'respects principles',
+}
 function renderIdea(i) {
-  // Three-state eligibility: a 2-1 split is NOT a clean pass -- it reads as needs-human-review,
-  // not "respects principles", so a dissenting hard-principle finding stays visible.
-  const gate = i.eligibility_gate || (i.eligible === false ? 'fail' : 'pass')
-  const eligTag = gate === 'fail'
-    ? '**INELIGIBLE -- violates a hard principle**'
-    : (gate === 'split'
-      ? '**ELIGIBILITY SPLIT -- a reviewer flagged a hard-principle concern; needs human review**'
-      : 'respects principles')
+  const eligTag = IDEA_ELIG_TAG[gateOf(i)]
   const meta = `\`${i.horizon}\` - **V${i.value_score} / F${i.feasibility_score}** - consistency: ${norm(i.consistency)} - ${eligTag}`
   const lines = [
     `### ${norm(i.title)}`,
@@ -1393,17 +1423,19 @@ function renderIdea(i) {
 // shipped/settled prior ideas are rendered as a SHIPPED / SETTLED appendix so the live
 // ADOPT/CONSIDER/PARK/REJECT body stays about OPEN ideas. Matching is read from Memory's
 // own citations -- title is NOT a reliable cross-run join key, so no fuzzy matcher here.
-function renderBacklog(review, opts) {
+// --- renderBacklog section builders (extracted; each returns a byte-identical string,
+// or null for an omittable section). renderBacklog composes them in fixed order. ---
+
+function renderHeaderBlock(review, opts) {
   const ideas = (review && Array.isArray(review.scored_ideas)) ? review.scored_ideas : []
   const { v, h } = tally(ideas)
   const dateLine = opts.date ? `Generated on ${opts.date}.` : 'Generated on (date pending).'
   const rawN = opts.rawCount, scoredM = ideas.length, rounds = opts.rounds
-
   // History-aware contract (the run is now memory-aware; see PR4). Still an idea BANK,
   // never a roadmap: a SHIPPED tag only records a human already took an equivalent idea
   // through the normal process -- the engine never promotes anything itself.
   const shippedSuffix = v.SHIPPED ? ', SHIPPED ' + v.SHIPPED : ''   // de-nested: no `` inside ${}
-  const HEADER = [
+  return [
     '# Seshat BI -- Idea Bank',
     '',
     '> **This is a future-idea bank, not a roadmap and not a commitment.** Nothing here is',
@@ -1428,10 +1460,14 @@ function renderBacklog(review, opts) {
     // count stays equal to the rendered sections (no scored idea silently disappears).
     `**${scoredM} ideas scored** (generated across ${rounds} rounds; raw pre-dedupe ${rawN}). Verdicts: ADOPT ${v.ADOPT}, CONSIDER ${v.CONSIDER}, PARK ${v.PARK}, REJECT ${v.REJECT}${shippedSuffix}. Horizon: NOW ${h.NOW}, HORIZON ${h.HORIZON}.`,
   ].join('\n')
+}
 
-  const PORTFOLIO = ['## Reviewer portfolio verdict', '', `> ${norm((review && review.summary) || S())}`].join('\n')
+function renderPortfolioBlock(review) {
+  return ['## Reviewer portfolio verdict', '', `> ${norm((review && review.summary) || S())}`].join('\n')
+}
 
-  const LEGEND = [
+function renderLegendBlock() {
+  return [
     '## Legend',
     '',
     '- **Verdict** (reviewer\'s *triage opinion only* -- not a decision to build) -- ADOPT (worth a closer look first; eligible, consistent, high value) - CONSIDER (interesting; needs a decision or dependency) - PARK (horizon / later) - REJECT (ineligible or conflicts -- kept for the record).',
@@ -1440,18 +1476,20 @@ function renderBacklog(review, opts) {
     '- **V / F** -- value / feasibility (1-10), reviewer-assigned.',
     '- **SHIPPED / SETTLED** -- a prior idea Memory matched to shipped work or a settled rejection; kept for the record, not an open candidate.',
   ].join('\n')
+}
 
-  // Design-foundation lane (G1, spec-dir 066): a first-class CATEGORICAL cohort view of
-  // the design layer. It groups ideas by their EXISTING `strengthens_layer === 'design-system'`
-  // signal (the design lens + design-foundation reviewer already emit it) and renders them as
-  // a cross-reference list -- title + the existing categorical verdict + horizon only. It is
-  // ROUTING/RENDERING ONLY: it attaches NO computed or ranked numeric score (roadmap hard
-  // rule #9), never promotes an idea onto the roadmap or assigns an F-row (Principle V), and
-  // does not touch scoring, the Memory contract, or any authoring. The cohort renders
-  // PRESENT-BUT-EMPTY so the design layer stays a visible first-class cohort even on a run
-  // with zero design ideas. Non-design ideas are never forced in (strict signal match).
+// Design-foundation lane (G1, spec-dir 066): a first-class CATEGORICAL cohort view of
+// the design layer. It groups ideas by their EXISTING `strengthens_layer === 'design-system'`
+// signal (the design lens + design-foundation reviewer already emit it) and renders them as
+// a cross-reference list -- title + the existing categorical verdict + horizon only. It is
+// ROUTING/RENDERING ONLY: it attaches NO computed or ranked numeric score (roadmap hard
+// rule #9), never promotes an idea onto the roadmap or assigns an F-row (Principle V), and
+// does not touch scoring, the Memory contract, or any authoring. The cohort renders
+// PRESENT-BUT-EMPTY so the design layer stays a visible first-class cohort even on a run
+// with zero design ideas. Non-design ideas are never forced in (strict signal match).
+function renderDesignLane(ideas) {
   const designCohort = ideas.filter(i => i.strengthens_layer === 'design-system')
-  const DESIGN_LANE = [
+  return [
     '## Design Foundation',
     '',
     '_A first-class CATEGORICAL cohort of the Power BI presentation FOUNDATION layer',
@@ -1466,102 +1504,132 @@ function renderBacklog(review, opts) {
       ? designCohort.map(i => `- **${norm(i.title)}** -- ${norm(i.verdict)} - \`${norm(i.horizon)}\``).join('\n')
       : '_(No design-foundation ideas in this run. The lane stays present as a first-class cohort.)_',
   ].join('\n')
+}
 
-  // YOUR IDEAS lane: the load-bearing traceability surface for the user-idea feature. Modeled
-  // exactly on the Design Foundation cohort, but it renders the FULL per-idea verdict (V/F,
-  // eligibility, verdict) PLUS the interpreter's note (original words -> chosen reading, and the
-  // readings it rejected) so the user can (a) find their own idea instantly at the TOP, whatever
-  // the verdict, and (b) catch a misread. Rendered ONLY when the user supplied ideas; omitted
-  // entirely otherwise (the lane never shows on an ordinary generation run). Cross-reference view:
-  // no re-score -- each idea keeps its verdict and also appears in its verdict section below.
-  // userNotes is keyed by the interpreter's ORIGINAL title; the panel may have reworded the row,
-  // so look notes up by normalized key (same identity origin was re-asserted on) -- an exact-title
-  // lookup would drop the "Your words / Read as" lines whenever the title drifted.
+// YOUR IDEAS lane: the load-bearing traceability surface for the user-idea feature. Modeled
+// exactly on the Design Foundation cohort, but it renders the FULL per-idea verdict (V/F,
+// eligibility, verdict) PLUS the interpreter's note (original words -> chosen reading, and the
+// readings it rejected) so the user can (a) find their own idea instantly at the TOP, whatever
+// the verdict, and (b) catch a misread. Rendered ONLY when the user supplied ideas; omitted
+// entirely otherwise (the lane never shows on an ordinary generation run). Cross-reference view:
+// no re-score -- each idea keeps its verdict and also appears in its verdict section below.
+// userNotes is keyed by the interpreter's ORIGINAL title; the panel may have reworded the row,
+// so look notes up by normalized key (same identity origin was re-asserted on) -- an exact-title
+// lookup would drop the "Your words / Read as" lines whenever the title drifted.
+// gate of a scored idea (three-state): explicit eligibility_gate, else derived from the
+// legacy boolean `eligible` (false -> fail, else pass). Shared by every eligibility tag.
+function gateOf(i) {
+  return i.eligibility_gate || (i.eligible === false ? 'fail' : 'pass')
+}
+const USER_ELIG_TAG = { fail: 'INELIGIBLE', split: 'eligibility split -- needs human review', pass: 'respects principles' }
+// the interpreter's note lines (Your words / Read as / other readings), omitted when absent.
+function userNoteLines(n) {
+  const lines = []
+  if (n.original_words) lines.push(`  - Your words: "${norm(n.original_words)}"`)
+  if (n.chosen_reading) lines.push(`  - Read as: ${norm(n.chosen_reading)}`)
+  const rej = Array.isArray(n.rejected_readings) ? n.rejected_readings.filter(Boolean) : []
+  if (rej.length) lines.push(`  - Other readings not taken (tell me if I misread you): ${rej.map(norm).join('; ')}`)
+  return lines
+}
+function renderUserIdeaRow(i, userNotes) {
+  const eligTag = USER_ELIG_TAG[gateOf(i)]
+  const n = userNotes[proseKey(i.title)] || {}
+  const head = `- **${norm(i.title)}** -- ${norm(i.verdict)} - \`${norm(i.horizon)}\` - V${i.value_score} / F${i.feasibility_score} - ${eligTag}`
+  return [head, ...userNoteLines(n)].join('\n')
+}
+function renderYourIdeas(ideas, opts) {
   const userNotesRaw = opts.userNotes || {}
   const userNotes = {}
   for (const k of Object.keys(userNotesRaw)) userNotes[proseKey(k)] = userNotesRaw[k]
   const userCohort = ideas.filter(i => i.origin === 'user')
-  const YOUR_IDEAS = userCohort.length
-    ? ['## Your Ideas (expanded + reviewed)', '',
-       '_Your own idea(s), grown from your words into a reviewable shape and run through the same',
-       'skeptic + reviewer panel as every other idea. Each shows how the engine READ your words (so',
-       'you can catch a misread), the verdict, and V/F scores. The verdict is a triage opinion, never',
-       'a decision to build. A rejected idea stays here (not hidden below) with its reason -- and gets',
-       'a steelman note in the Rescue section if a narrower eligible version exists._', '',
-       userCohort.map(i => {
-         const gate = i.eligibility_gate || (i.eligible === false ? 'fail' : 'pass')
-         const eligTag = gate === 'fail' ? 'INELIGIBLE' : (gate === 'split' ? 'eligibility split -- needs human review' : 'respects principles')
-         const n = userNotes[proseKey(i.title)] || {}
-         const lines = [`- **${norm(i.title)}** -- ${norm(i.verdict)} - \`${norm(i.horizon)}\` - V${i.value_score} / F${i.feasibility_score} - ${eligTag}`]
-         if (n.original_words) lines.push(`  - Your words: "${norm(n.original_words)}"`)
-         if (n.chosen_reading) lines.push(`  - Read as: ${norm(n.chosen_reading)}`)
-         const rej = Array.isArray(n.rejected_readings) ? n.rejected_readings.filter(Boolean) : []
-         if (rej.length) lines.push(`  - Other readings not taken (tell me if I misread you): ${rej.map(norm).join('; ')}`)
-         return lines.join('\n')
-       }).join('\n')].join('\n')
-    : null
+  if (!userCohort.length) return null
+  return ['## Your Ideas (expanded + reviewed)', '',
+    '_Your own idea(s), grown from your words into a reviewable shape and run through the same',
+    'skeptic + reviewer panel as every other idea. Each shows how the engine READ your words (so',
+    'you can catch a misread), the verdict, and V/F scores. The verdict is a triage opinion, never',
+    'a decision to build. A rejected idea stays here (not hidden below) with its reason -- and gets',
+    'a steelman note in the Rescue section if a narrower eligible version exists._', '',
+    userCohort.map(i => renderUserIdeaRow(i, userNotes)).join('\n')].join('\n')
+}
 
-  // Sections in fixed order; preserve input order within each (no sort, no RNG).
-  // Empty sections are omitted. SHIPPED is included so a panel-detected duplicate-of-
-  // shipped candidate is never silently dropped from the rendered set (it is scored, so
-  // it must appear somewhere); it renders last as a distinct "already shipped" bucket.
-  const SECTION_TITLES = {
-    ADOPT: '## ADOPT', CONSIDER: '## CONSIDER', PARK: '## PARK', REJECT: '## REJECT',
-    SHIPPED: '## SHIPPED (panel judged this a duplicate of shipped work)',
-  }
-  const SECTIONS = ['ADOPT', 'CONSIDER', 'PARK', 'REJECT', 'SHIPPED'].map(verdict => {
+// Sections in fixed order; preserve input order within each (no sort, no RNG).
+// Empty sections are omitted. SHIPPED is included so a panel-detected duplicate-of-
+// shipped candidate is never silently dropped from the rendered set (it is scored, so
+// it must appear somewhere); it renders last as a distinct "already shipped" bucket.
+const SECTION_TITLES = {
+  ADOPT: '## ADOPT', CONSIDER: '## CONSIDER', PARK: '## PARK', REJECT: '## REJECT',
+  SHIPPED: '## SHIPPED (panel judged this a duplicate of shipped work)',
+}
+function renderSections(ideas) {
+  return ['ADOPT', 'CONSIDER', 'PARK', 'REJECT', 'SHIPPED'].map(verdict => {
     const group = ideas.filter(i => i.verdict === verdict)
     if (!group.length) return null
     return [SECTION_TITLES[verdict], '', group.map(renderIdea).join('\n\n')].join('\n')
   }).filter(Boolean)
+}
 
-  // SHIPPED / SETTLED appendix from Memory (prior ideas no longer open). Omitted when
-  // Memory is absent (first run) or found nothing shipped/settled.
+// SHIPPED / SETTLED appendix from Memory (prior ideas no longer open). Omitted when
+// Memory is absent (first run) or found nothing shipped/settled.
+function renderAppendix(opts) {
   const priorIdeas = (opts.prior && Array.isArray(opts.prior.prior_ideas)) ? opts.prior.prior_ideas : []
   const closed = priorIdeas.filter(p => p.current_state === 'shipped' || p.current_state === 'rejected-settled')
-  const APPENDIX = closed.length
-    ? ['## SHIPPED / SETTLED (prior ideas, for the record)', '',
-       closed.map(p => {
-         const tag = p.current_state === 'shipped' ? 'SHIPPED' : 'SETTLED (rejected)'
-         return `- **${norm(p.prior_id)} ${norm(p.prior_title)}** -- ${tag}. ${norm(p.state_citation || S())}`
-       }).join('\n')].join('\n')
-    : null
+  if (!closed.length) return null
+  return ['## SHIPPED / SETTLED (prior ideas, for the record)', '',
+    closed.map(p => {
+      const tag = p.current_state === 'shipped' ? 'SHIPPED' : 'SETTLED (rejected)'
+      return `- **${norm(p.prior_id)} ${norm(p.prior_title)}** -- ${tag}. ${norm(p.state_citation || S())}`
+    }).join('\n')].join('\n')
+}
 
-  // Rescue notes: for each not-adopted idea, the steelman's reframing or the irreducible
-  // blocker. Reasons only -- never a re-score. Omitted on a clean run (nothing rejected).
+// Rescue notes: for each not-adopted idea, the steelman's reframing or the irreducible
+// blocker. Reasons only -- never a re-score. Omitted on a clean run (nothing rejected).
+function renderRescueRow(r) {
+  const head = `- **${norm(r.title)}** -- ${r.rescue_possible ? S(114,101,115,99,117,101,32,112,111,115,115,105,98,108,101) : S(110,111,32,114,101,115,99,117,101)}.`
+  const seamNote = r.narrowed_seam ? ' Narrowed seam: ' + norm(r.narrowed_seam) : ''   // de-nested
+  const body = r.rescue_possible
+    ? ` ${norm(r.reframed_pitch || S())}${seamNote}`
+    : ` ${norm(r.residual_blocker || S())}`
+  return head + body
+}
+function renderRescue(opts) {
   const rescues = (opts.rescue && Array.isArray(opts.rescue.rescues)) ? opts.rescue.rescues : []
-  const RESCUE = rescues.length
-    ? ['## Rescue notes (steelman of the not-adopted)', '',
-       '_A reframing that MIGHT make an idea eligible later, or the irreducible reason it stays out. A reason for a human to weigh next run -- never a verdict; the gate already ruled._', '',
-       rescues.map(r => {
-         const head = `- **${norm(r.title)}** -- ${r.rescue_possible ? S(114,101,115,99,117,101,32,112,111,115,115,105,98,108,101) : S(110,111,32,114,101,115,99,117,101)}.`
-         const seamNote = r.narrowed_seam ? ' Narrowed seam: ' + norm(r.narrowed_seam) : ''   // de-nested
-         const body = r.rescue_possible
-           ? ` ${norm(r.reframed_pitch || S())}${seamNote}`
-           : ` ${norm(r.residual_blocker || S())}`
-         return head + body
-       }).join('\n')].join('\n')
-    : null
+  if (!rescues.length) return null
+  return ['## Rescue notes (steelman of the not-adopted)', '',
+    '_A reframing that MIGHT make an idea eligible later, or the irreducible reason it stays out. A reason for a human to weigh next run -- never a verdict; the gate already ruled._', '',
+    rescues.map(renderRescueRow).join('\n')].join('\n')
+}
 
-  // Run health & self-metrics: how this run did (deterministic counts). Written into the
-  // file so it is a durable signal, not an editor-optional header.
+// Run health & self-metrics: how this run did (deterministic counts). Written into the
+// file so it is a durable signal, not an editor-optional header.
+function renderMetrics(opts) {
   const m = opts.metrics
-  const METRICS = m ? (() => {
-    const yf = m.yield_funnel
-    const layerPairs = Object.entries(m.layer_coverage || {}).map(([k, n]) => k + ' ' + n).join(', ')   // de-nested
-    const layerLine = Object.keys(m.layer_coverage || {}).length > 1 || (m.layer_coverage && !m.layer_coverage.none)
-      ? `\n- Layer coverage: ${layerPairs}`
-      : ''
-    return ['## Run health & self-metrics', '',
-      `- Yield: ${yf.raw_pre_dedupe} raw -> ${yf.scored} scored (ADOPT ${yf.adopt}, CONSIDER ${yf.consider}, PARK ${yf.park}, REJECT ${yf.reject}).`,
-      `- Eligibility-rejection rate: ${m.eligibility_rejection_rate_pct}%.`,
-      `- Consistency: ${m.consistency_mix.consistent} consistent, ${m.consistency_mix[S(109,105,110,111,114,45,116,101,110,115,105,111,110)]} minor-tension, ${m.consistency_mix.conflict} conflict.`,
-      `- Verification: ${m.survived_verification_mix.survived} survived, ${m.survived_verification_mix.weakened} weakened, ${m.survived_verification_mix.killed} killed.${layerLine}`,
-      `- Who it serves (meta-bloat signal): end-user ${m.serves_mix.end_user}, operator ${m.serves_mix.operator}, tool-internal ${m.serves_mix.tool_internal}. A run heavy on tool-internal is over-producing self-checking; prefer ideas that reach the end user or the operator.`,
-      `- Run health: ${m.degraded ? S(68,69,71,82,65,68,69,68,32,40,115,101,101,32,98,97,110,110,101,114,32,97,98,111,118,101,41) : S(97,108,108,32,108,101,110,115,101,115,32,114,101,112,111,114,116,101,100)}.`,
-    ].join('\n')
-  })() : null
+  if (!m) return null
+  const yf = m.yield_funnel
+  const layerPairs = Object.entries(m.layer_coverage || {}).map(([k, n]) => k + ' ' + n).join(', ')   // de-nested
+  const layerLine = Object.keys(m.layer_coverage || {}).length > 1 || (m.layer_coverage && !m.layer_coverage.none)
+    ? `\n- Layer coverage: ${layerPairs}`
+    : ''
+  return ['## Run health & self-metrics', '',
+    `- Yield: ${yf.raw_pre_dedupe} raw -> ${yf.scored} scored (ADOPT ${yf.adopt}, CONSIDER ${yf.consider}, PARK ${yf.park}, REJECT ${yf.reject}).`,
+    `- Eligibility-rejection rate: ${m.eligibility_rejection_rate_pct}%.`,
+    `- Consistency: ${m.consistency_mix.consistent} consistent, ${m.consistency_mix[S(109,105,110,111,114,45,116,101,110,115,105,111,110)]} minor-tension, ${m.consistency_mix.conflict} conflict.`,
+    `- Verification: ${m.survived_verification_mix.survived} survived, ${m.survived_verification_mix.weakened} weakened, ${m.survived_verification_mix.killed} killed.${layerLine}`,
+    `- Who it serves (meta-bloat signal): end-user ${m.serves_mix.end_user}, operator ${m.serves_mix.operator}, tool-internal ${m.serves_mix.tool_internal}. A run heavy on tool-internal is over-producing self-checking; prefer ideas that reach the end user or the operator.`,
+    `- Run health: ${m.degraded ? S(68,69,71,82,65,68,69,68,32,40,115,101,101,32,98,97,110,110,101,114,32,97,98,111,118,101,41) : S(97,108,108,32,108,101,110,115,101,115,32,114,101,112,111,114,116,101,100)}.`,
+  ].join('\n')
+}
 
+function renderBacklog(review, opts) {
+  const ideas = (review && Array.isArray(review.scored_ideas)) ? review.scored_ideas : []
+  const HEADER = renderHeaderBlock(review, opts)
+  const YOUR_IDEAS = renderYourIdeas(ideas, opts)
+  const PORTFOLIO = renderPortfolioBlock(review)
+  const LEGEND = renderLegendBlock()
+  const DESIGN_LANE = renderDesignLane(ideas)
+  const SECTIONS = renderSections(ideas)
+  const APPENDIX = renderAppendix(opts)
+  const RESCUE = renderRescue(opts)
+  const METRICS = renderMetrics(opts)
   // YOUR_IDEAS leads (right after the header block) so the user finds their reviewed idea first.
   return [HEADER, ...(YOUR_IDEAS ? [YOUR_IDEAS] : []), PORTFOLIO, LEGEND, DESIGN_LANE, ...SECTIONS, ...(RESCUE ? [RESCUE] : []), ...(APPENDIX ? [APPENDIX] : []), ...(METRICS ? [METRICS] : [])].join('\n\n') + '\n'
 }

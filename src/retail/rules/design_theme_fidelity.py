@@ -32,8 +32,9 @@ tenant/example/brand literal appears here (Principle VII); the field names
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
@@ -80,6 +81,44 @@ def _load_json(path: Path) -> tuple[Any, str | None]:
         return None, exc.__class__.__name__
 
 
+def _declared_compiles_to(tokens_doc: Any) -> str | None:
+    """The tokens' own ``meta.compiles_to`` target string, or None if absent."""
+    if not isinstance(tokens_doc, dict):
+        return None
+    meta = tokens_doc.get("meta")
+    if not isinstance(meta, dict):
+        return None
+    compiles_to = meta.get("compiles_to")
+    return compiles_to if isinstance(compiles_to, str) and compiles_to else None
+
+
+def _resolve_compiles_to(compiles_to: str, tokens_rel: str, ctx: RuleContext) -> str:
+    """Pick the on-disk path for a declared ``compiles_to``.
+
+    A compiles_to may be repo-relative (live) or dir-relative (fixture): prefer
+    whichever candidate exists, else fall back to the raw value as declared.
+    """
+    parent = tokens_rel.rsplit("/", 1)[0] if "/" in tokens_rel else ""
+    candidates = [compiles_to]
+    if parent:
+        candidates.append(f"{parent}/{compiles_to}")
+    for cand in candidates:
+        if (ctx.repo_root / cand).exists():
+            return cand
+    return compiles_to
+
+
+def _sole_committed_theme(ctx: RuleContext) -> str | None:
+    """The single committed ``*.theme.json`` (fixtures exempted), or None when
+    there is not exactly one to pair unambiguously."""
+    themes = [
+        p
+        for p in ctx.tracked_files
+        if p.endswith(_THEME_SUFFIX) and not is_test_path(p)
+    ]
+    return themes[0] if len(themes) == 1 else None
+
+
 def _theme_rel_for(tokens_rel: str, tokens_doc: Any, ctx: RuleContext) -> str | None:
     """Resolve the theme file this tokens file compiles to.
 
@@ -87,27 +126,72 @@ def _theme_rel_for(tokens_rel: str, tokens_doc: Any, ctx: RuleContext) -> str | 
     resolved relative to the tokens file's directory). Falls back to a single
     committed ``*.theme.json`` when compiles_to is absent.
     """
-    compiles_to = None
-    if isinstance(tokens_doc, dict):
-        meta = tokens_doc.get("meta")
-        if isinstance(meta, dict):
-            compiles_to = meta.get("compiles_to")
-    if isinstance(compiles_to, str) and compiles_to:
-        parent = tokens_rel.rsplit("/", 1)[0] if "/" in tokens_rel else ""
-        # A compiles_to may be repo-relative (live) or dir-relative (fixture).
-        candidates = [compiles_to]
-        if parent:
-            candidates.append(f"{parent}/{compiles_to}")
-        for cand in candidates:
-            if (ctx.repo_root / cand).exists():
-                return cand
-        return compiles_to
-    themes = [
-        p
-        for p in ctx.tracked_files
-        if p.endswith(_THEME_SUFFIX) and not is_test_path(p)
-    ]
-    return themes[0] if len(themes) == 1 else None
+    compiles_to = _declared_compiles_to(tokens_doc)
+    if compiles_to is not None:
+        return _resolve_compiles_to(compiles_to, tokens_rel, ctx)
+    return _sole_committed_theme(ctx)
+
+
+def _background_findings(
+    colors: dict, theme: dict, theme_rel: str
+) -> Iterable[Finding]:
+    """Reconcile the identity-named ``background`` correspondence, if both sides
+    declare it -- a missing value on either side is out of scope, not drift."""
+    tok_bg = colors.get("background")
+    thm_bg = theme.get("background")
+    if tok_bg is None or thm_bg is None:
+        return
+    if tok_bg == thm_bg:
+        return
+    yield Finding(
+        RULE_ID,
+        Severity.ERROR,
+        f"theme background {thm_bg!r} does not match the token "
+        f"declared value {tok_bg!r}",
+        f"{theme_rel}#/background",
+    )
+
+
+def _data_colors_findings(
+    colors: dict, theme: dict, theme_rel: str
+) -> Iterable[Finding]:
+    """Reconcile the positional, T029-declared ``data_colors`` correspondence."""
+    tok_dc = colors.get("data_colors")
+    thm_dc = theme.get("dataColors")
+    if not isinstance(tok_dc, list):
+        return  # tokens declare no palette -- nothing to reconcile
+    if not isinstance(thm_dc, list):
+        # The tokens DECLARE data_colors compiles into the theme (T029); a theme
+        # that drops dataColors (or gives it a non-list type) has no categorical
+        # palette to reconcile -- a fidelity failure, not a silent pass.
+        yield Finding(
+            RULE_ID,
+            Severity.ERROR,
+            f"tokens declare {len(tok_dc)} data_colors but the theme has no "
+            f"dataColors list (missing or not a list); the compiled palette is "
+            f"absent and fidelity cannot be reconciled",
+            f"{theme_rel}#/dataColors",
+        )
+        return
+    if len(tok_dc) != len(thm_dc):
+        yield Finding(
+            RULE_ID,
+            Severity.ERROR,
+            f"data_colors length {len(tok_dc)} does not match theme "
+            f"dataColors length {len(thm_dc)}; the positional "
+            f"correspondence cannot be reconciled",
+            f"{theme_rel}#/dataColors",
+        )
+        return
+    for i, (tok, thm) in enumerate(zip(tok_dc, thm_dc)):
+        if tok != thm:
+            yield Finding(
+                RULE_ID,
+                Severity.ERROR,
+                f"theme dataColors[{i}] {thm!r} does not match "
+                f"the token declared value {tok!r}",
+                f"{theme_rel}#/dataColors/{i}",
+            )
 
 
 def _reconcile(tokens_rel: str, theme_rel: str, ctx: RuleContext) -> Iterable[Finding]:
@@ -132,70 +216,33 @@ def _reconcile(tokens_rel: str, theme_rel: str, ctx: RuleContext) -> Iterable[Fi
         return
     colors = tokens_doc.get("colors", {}) if isinstance(tokens_doc, dict) else {}
     theme = theme_doc if isinstance(theme_doc, dict) else {}
-
-    # --- background (identity-named correspondence) ---
-    tok_bg = colors.get("background")
-    thm_bg = theme.get("background")
-    if tok_bg is not None and thm_bg is not None and tok_bg != thm_bg:
-        yield Finding(
-            RULE_ID,
-            Severity.ERROR,
-            f"theme background {thm_bg!r} does not match the token "
-            f"declared value {tok_bg!r}",
-            f"{theme_rel}#/background",
-        )
-
-    # --- data_colors (positional, T029-declared correspondence) ---
-    tok_dc = colors.get("data_colors")
-    thm_dc = theme.get("dataColors")
-    if isinstance(tok_dc, list) and not isinstance(thm_dc, list):
-        # The tokens DECLARE data_colors compiles into the theme (T029); a theme
-        # that drops dataColors (or gives it a non-list type) has no categorical
-        # palette to reconcile -- a fidelity failure, not a silent pass.
-        yield Finding(
-            RULE_ID,
-            Severity.ERROR,
-            f"tokens declare {len(tok_dc)} data_colors but the theme has no "
-            f"dataColors list (missing or not a list); the compiled palette is "
-            f"absent and fidelity cannot be reconciled",
-            f"{theme_rel}#/dataColors",
-        )
-    elif isinstance(tok_dc, list) and isinstance(thm_dc, list):
-        if len(tok_dc) != len(thm_dc):
-            yield Finding(
-                RULE_ID,
-                Severity.ERROR,
-                f"data_colors length {len(tok_dc)} does not match theme "
-                f"dataColors length {len(thm_dc)}; the positional "
-                f"correspondence cannot be reconciled",
-                f"{theme_rel}#/dataColors",
-            )
-        else:
-            for i, (tok, thm) in enumerate(zip(tok_dc, thm_dc)):
-                if tok != thm:
-                    yield Finding(
-                        RULE_ID,
-                        Severity.ERROR,
-                        f"theme dataColors[{i}] {thm!r} does not match "
-                        f"the token declared value {tok!r}",
-                        f"{theme_rel}#/dataColors/{i}",
-                    )
+    yield from _background_findings(colors, theme, theme_rel)
+    yield from _data_colors_findings(colors, theme, theme_rel)
 
 
-@register(
-    RULE_ID, "Theme styling values are faithful to the design tokens they compile from"
-)
-def check_theme_fidelity(ctx: RuleContext) -> Iterable[Finding]:
+def _run_fidelity_check(
+    ctx: RuleContext,
+    rule_id: str,
+    parse_error_suffix: str,
+    reconcile: Callable[[str, str, RuleContext], Iterable[Finding]],
+) -> list[Finding]:
+    """Drive a fidelity rule over every committed tokens file.
+
+    Shared by DL3 and DL8: for each tokens file, ERROR if it will not parse,
+    else pair it to its theme and delegate to ``reconcile``. The only per-rule
+    variation is the ``rule_id`` stamped on findings and the ``parse_error_suffix``
+    naming which fidelity the failed parse blocks.
+    """
     findings: list[Finding] = []
     for tokens_rel in _iter_tokens_files(ctx):
         tokens_doc, terr = _load_yaml(ctx.repo_root / tokens_rel)
         if terr is not None:
             findings.append(
                 Finding(
-                    RULE_ID,
+                    rule_id,
                     Severity.ERROR,
                     f"design-tokens file could not be parsed ({terr}); "
-                    f"fidelity cannot be verified",
+                    f"{parse_error_suffix}",
                     f"{tokens_rel}#/",
                 )
             )
@@ -203,8 +250,15 @@ def check_theme_fidelity(ctx: RuleContext) -> Iterable[Finding]:
         theme_rel = _theme_rel_for(tokens_rel, tokens_doc, ctx)
         if theme_rel is None:
             continue
-        findings.extend(_reconcile(tokens_rel, theme_rel, ctx))
+        findings.extend(reconcile(tokens_rel, theme_rel, ctx))
     return findings
+
+
+@register(
+    RULE_ID, "Theme styling values are faithful to the design tokens they compile from"
+)
+def check_theme_fidelity(ctx: RuleContext) -> Iterable[Finding]:
+    return _run_fidelity_check(ctx, RULE_ID, "fidelity cannot be verified", _reconcile)
 
 
 # --- DL8: sentiment 4->3 fidelity (opt-in, human-declared correspondence) -----
@@ -278,12 +332,22 @@ def _malformed_sentiment_map_findings(
     )
 
 
+@dataclass(frozen=True)
+class _SentimentSides:
+    """The two value sources plus locator base a sentiment_map entry reconciles
+    against -- the loop-invariant context shared across every declared entry."""
+
+    tok_sentiment: dict
+    theme: dict
+    theme_rel: str
+
+
 def _sentiment_entry_findings(
-    tok_key: str, thm_key: str, tok_sentiment: dict, theme: dict, theme_rel: str
+    tok_key: str, thm_key: str, sides: _SentimentSides
 ) -> Iterable[Finding]:
     """One ERROR when a single declared map entry fails to reconcile, else none."""
-    tok_val = tok_sentiment.get(tok_key)
-    thm_val = theme.get(thm_key)
+    tok_val = sides.tok_sentiment.get(tok_key)
+    thm_val = sides.theme.get(thm_key)
     if tok_val is None or thm_val is None:
         yield Finding(
             SENTIMENT_RULE_ID,
@@ -294,7 +358,7 @@ def _sentiment_entry_findings(
             f"{'absent' if tok_val is None else tok_val!r}, "
             f"theme.{thm_key} is "
             f"{'absent' if thm_val is None else thm_val!r}",
-            f"{theme_rel}#/{thm_key}",
+            f"{sides.theme_rel}#/{thm_key}",
         )
         return
     if tok_val != thm_val:
@@ -304,7 +368,7 @@ def _sentiment_entry_findings(
             f"theme {thm_key} {thm_val!r} does not match the token "
             f"declared sentiment.{tok_key} value {tok_val!r} "
             f"(declared correspondence {tok_key!r} -> {thm_key!r})",
-            f"{theme_rel}#/{thm_key}",
+            f"{sides.theme_rel}#/{thm_key}",
         )
 
 
@@ -339,10 +403,9 @@ def _reconcile_sentiment(
     tok_sentiment = colors.get("sentiment", {})
     tok_sentiment = tok_sentiment if isinstance(tok_sentiment, dict) else {}
     theme = theme_doc if isinstance(theme_doc, dict) else {}
+    sides = _SentimentSides(tok_sentiment, theme, theme_rel)
     for tok_key, thm_key in sentiment_map.items():
-        yield from _sentiment_entry_findings(
-            tok_key, thm_key, tok_sentiment, theme, theme_rel
-        )
+        yield from _sentiment_entry_findings(tok_key, thm_key, sides)
 
 
 @register(
@@ -350,22 +413,9 @@ def _reconcile_sentiment(
     "Theme sentiment colors are faithful to a human-declared sentiment_map",
 )
 def check_sentiment_fidelity(ctx: RuleContext) -> Iterable[Finding]:
-    findings: list[Finding] = []
-    for tokens_rel in _iter_tokens_files(ctx):
-        tokens_doc, terr = _load_yaml(ctx.repo_root / tokens_rel)
-        if terr is not None:
-            findings.append(
-                Finding(
-                    SENTIMENT_RULE_ID,
-                    Severity.ERROR,
-                    f"design-tokens file could not be parsed ({terr}); "
-                    f"sentiment fidelity cannot be verified",
-                    f"{tokens_rel}#/",
-                )
-            )
-            continue
-        theme_rel = _theme_rel_for(tokens_rel, tokens_doc, ctx)
-        if theme_rel is None:
-            continue
-        findings.extend(_reconcile_sentiment(tokens_rel, theme_rel, ctx))
-    return findings
+    return _run_fidelity_check(
+        ctx,
+        SENTIMENT_RULE_ID,
+        "sentiment fidelity cannot be verified",
+        _reconcile_sentiment,
+    )

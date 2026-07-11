@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import NamedTuple
 
 # Allow-list: the two formatting containers this increment may write, and which
 # property groups inside each. Anything outside this map is refused (ADR 0015
@@ -45,45 +46,46 @@ def _dump(doc: object) -> str:
     return json.dumps(doc, indent=2, sort_keys=True) + "\n"
 
 
-def _literal(value: object) -> dict:
-    """Wrap a scalar in the PBIR expr/Literal value shape.
+def _encode_literal_value(value: object) -> str:
+    """Encode a scalar to its PBIR literal string (no expr/Literal wrapper).
 
     Matches the wire format proven by the Microsoft PBIP sample fixture:
-    - bool  -> ``true`` / ``false``
+    - bool  -> ``true`` / ``false`` (checked first: bool is a subclass of int)
     - int   -> a DAX long literal with the ``L`` suffix (e.g. ``70L``, ``0L``)
     - float -> the plain number (e.g. ``0.5``)
     - str   -> a single-quoted literal with embedded ``'`` doubled (e.g.
       ``'Today''s Sales'``) -- an unescaped quote is malformed PBIR.
     """
     if isinstance(value, bool):
-        v = "true" if value else "false"
-    elif isinstance(value, int):
-        v = f"{value}L"  # PBIR integer literals carry the DAX long suffix
-    elif isinstance(value, float):
-        v = f"{value}"
-    elif isinstance(value, str):
-        v = "'" + value.replace("'", "''") + "'"  # double embedded quotes
-    else:
-        raise PbirFormatError(
-            f"formatting value must be a bool/int/float/str, got "
-            f"{type(value).__name__}: {value!r}"
-        )
-    return {"expr": {"Literal": {"Value": v}}}
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return f"{value}L"  # PBIR integer literals carry the DAX long suffix
+    if isinstance(value, float):
+        return f"{value}"
+    if isinstance(value, str):
+        return "'" + value.replace("'", "''") + "'"  # double embedded quotes
+    raise PbirFormatError(
+        f"formatting value must be a bool/int/float/str, got "
+        f"{type(value).__name__}: {value!r}"
+    )
 
 
-def _load_visual_doc(visual_json: Path) -> tuple[dict, dict]:
-    """Load and validate the visual document at ``visual_json``.
+def _literal(value: object) -> dict:
+    """Wrap a scalar in the PBIR expr/Literal value shape."""
+    return {"expr": {"Literal": {"Value": _encode_literal_value(value)}}}
 
-    Enforces the file guards (exists, inside a *.Report/ tree), reads it as
-    utf-8-sig JSON, and confirms the ``visual`` object is present. Returns the
-    ``(doc, visual)`` pair; raises PbirFormatError exactly as the checks demand.
-    """
+
+def _guard_visual_path(visual_json: Path) -> None:
+    """Enforce the file guards: it exists and lives under a *.Report/ tree."""
     if not visual_json.is_file():
         raise PbirFormatError(f"visual.json not found: {visual_json}")
     # Guard: the file must live under a *.Report/ tree (never write elsewhere).
     if ".Report" not in str(visual_json.resolve()):
         raise PbirFormatError("target is not inside a *.Report/ tree")
 
+
+def _parse_visual_doc(visual_json: Path) -> dict:
+    """Read ``visual_json`` as utf-8-sig JSON and confirm the ``visual`` object."""
     try:
         with visual_json.open(encoding="utf-8-sig") as fh:
             doc = json.load(fh)
@@ -93,6 +95,18 @@ def _load_visual_doc(visual_json: Path) -> tuple[dict, dict]:
         ) from exc
     if not isinstance(doc, dict) or not isinstance(doc.get("visual"), dict):
         raise PbirFormatError("visual.json has no 'visual' object")
+    return doc
+
+
+def _load_visual_doc(visual_json: Path) -> tuple[dict, dict]:
+    """Load and validate the visual document at ``visual_json``.
+
+    Enforces the file guards (exists, inside a *.Report/ tree), reads it as
+    utf-8-sig JSON, and confirms the ``visual`` object is present. Returns the
+    ``(doc, visual)`` pair; raises PbirFormatError exactly as the checks demand.
+    """
+    _guard_visual_path(visual_json)
+    doc = _parse_visual_doc(visual_json)
     return doc, doc["visual"]
 
 
@@ -101,40 +115,79 @@ def _binding_snapshot(visual: dict) -> str:
     return _dump({"query": visual.get("query"), "visualType": visual.get("visualType")})
 
 
+def _validate_container(container: str, groups: object) -> None:
+    """Check one requested container and its groups against the allow-list."""
+    if container not in _ALLOWED_CONTAINERS:
+        raise PbirFormatError(
+            f"container {container!r} is not in the formatting allow-list "
+            f"(allowed: {sorted(_ALLOWED_CONTAINERS)})"
+        )
+    if not isinstance(groups, dict):
+        raise PbirFormatError(f"{container} must map group -> properties")
+    allowed_groups = _ALLOWED_CONTAINERS[container]
+    for group in groups:
+        if group not in allowed_groups:
+            raise PbirFormatError(
+                f"group {container}.{group!r} is not in the allow-list "
+                f"(allowed: {sorted(allowed_groups)})"
+            )
+
+
 def _validate_formatting(formatting: dict) -> None:
     """Check every requested container/group against the allow-list up front."""
     for container, groups in formatting.items():
-        if container not in _ALLOWED_CONTAINERS:
-            raise PbirFormatError(
-                f"container {container!r} is not in the formatting allow-list "
-                f"(allowed: {sorted(_ALLOWED_CONTAINERS)})"
-            )
-        if not isinstance(groups, dict):
-            raise PbirFormatError(f"{container} must map group -> properties")
-        for group in groups:
-            if group not in _ALLOWED_CONTAINERS[container]:
-                raise PbirFormatError(
-                    f"group {container}.{group!r} is not in the allow-list "
-                    f"(allowed: {sorted(_ALLOWED_CONTAINERS[container])})"
-                )
+        _validate_container(container, groups)
 
 
-def _set_property(
-    props_bag: dict, container: str, group: str, prop: str, value: object, force: bool
-) -> None:
+class _SetCtx(NamedTuple):
+    """The invariant context for a group's property writes (container/group/force).
+
+    Bundles the three values that don't change across one group's properties so a
+    single property write needs just ``(props_bag, prop, value, ctx)``.
+    """
+
+    container: str
+    group: str
+    force: bool
+
+
+def _set_property(props_bag: dict, prop: str, value: object, ctx: _SetCtx) -> None:
     """Set one property in ``props_bag`` (expr/Literal wrapped), honouring force.
 
     An idempotent re-set of the same value is always allowed; overwriting a
-    DIFFERENT existing value is refused unless ``force`` is set.
+    DIFFERENT existing value is refused unless ``ctx.force`` is set.
     """
     new_val = _literal(value)
     is_conflicting_overwrite = prop in props_bag and props_bag[prop] != new_val
-    if is_conflicting_overwrite and not force:
+    if is_conflicting_overwrite and not ctx.force:
         raise PbirFormatError(
-            f"{container}.{group}.{prop} already set to a different "
+            f"{ctx.container}.{ctx.group}.{prop} already set to a different "
             f"value -- use force=True to overwrite"
         )
     props_bag[prop] = new_val
+
+
+def _group_props_bag(cont: dict, group: str) -> dict:
+    """Return the mutable ``properties`` bag for ``group`` under container ``cont``.
+
+    PBIR stores each group as a one-element list of objects; the writer targets
+    ``entries[0].properties``. A missing or malformed entry list is re-initialised
+    to the canonical ``[{}]`` shape before the properties bag is resolved.
+    """
+    entries = cont.setdefault(group, [{}])
+    if not (isinstance(entries, list) and entries):
+        entries = [{}]
+        cont[group] = entries
+    return entries[0].setdefault("properties", {})
+
+
+def _apply_group(cont: dict, group: str, props: object, ctx: _SetCtx) -> None:
+    """Set every property of one allow-listed group under container ``cont``."""
+    if not isinstance(props, dict):
+        raise PbirFormatError(f"{ctx.container}.{group} must be a property map")
+    props_bag = _group_props_bag(cont, group)
+    for prop, value in props.items():
+        _set_property(props_bag, prop, value, ctx)
 
 
 def _apply_formatting(visual: dict, formatting: dict, force: bool) -> None:
@@ -144,15 +197,7 @@ def _apply_formatting(visual: dict, formatting: dict, force: bool) -> None:
         if not isinstance(cont, dict):
             raise PbirFormatError(f"visual.{container} is not an object")
         for group, props in groups.items():
-            if not isinstance(props, dict):
-                raise PbirFormatError(f"{container}.{group} must be a property map")
-            entries = cont.setdefault(group, [{}])
-            if not (isinstance(entries, list) and entries):
-                entries = [{}]
-                cont[group] = entries
-            props_bag = entries[0].setdefault("properties", {})
-            for prop, value in props.items():
-                _set_property(props_bag, container, group, prop, value, force)
+            _apply_group(cont, group, props, _SetCtx(container, group, force))
 
 
 def apply_visual_format(

@@ -111,6 +111,15 @@ def _strip_column_qualification(colref: str) -> str:
     return m.group(1).strip() if m else ""
 
 
+def _paren_delta(ch: str) -> int:
+    """Nesting change for one char: +1 for `(`, -1 for `)`, 0 otherwise."""
+    if ch == "(":
+        return 1
+    if ch == ")":
+        return -1
+    return 0
+
+
 def _split_balanced(args: str) -> list[str] | None:
     """Split a comma-separated DAX arg list at top-level commas only (paren-aware).
 
@@ -120,15 +129,10 @@ def _split_balanced(args: str) -> list[str] | None:
     depth = 0
     cur: list[str] = []
     for ch in args:
-        if ch == "(":
-            depth += 1
-            cur.append(ch)
-        elif ch == ")":
-            depth -= 1
-            if depth < 0:
-                return None
-            cur.append(ch)
-        elif ch == "," and depth == 0:
+        depth += _paren_delta(ch)
+        if depth < 0:
+            return None  # a `)` with no matching `(` -- unbalanced
+        if ch == "," and depth == 0:
             parts.append("".join(cur).strip())
             cur = []
         else:
@@ -156,19 +160,25 @@ def _outer_call(expr: str, func: str) -> str | None:
     if not m:
         return None
     inner_start = m.end()
+    close = _matching_close_paren(expr, inner_start)
+    if close is None:
+        return None  # unbalanced
+    # the close of the opening `(` must be the LAST char (a single top-level call,
+    # no trailing tokens); otherwise this is not a single top-level call to `func`.
+    return expr[inner_start:close] if close == len(expr) - 1 else None
+
+
+def _matching_close_paren(expr: str, inner_start: int) -> int | None:
+    """Index of the `)` closing the `(` before `inner_start`, or None if unbalanced.
+
+    Scans from `inner_start` with the opening paren already counted (depth starts at 1).
+    """
     depth = 1
-    i = inner_start
-    while i < len(expr):
-        c = expr[i]
-        if c == "(":
-            depth += 1
-        elif c == ")":
-            depth -= 1
-            if depth == 0:
-                # must be the LAST char (a single top-level call, no trailing tokens)
-                return expr[inner_start:i] if i == len(expr) - 1 else None
-        i += 1
-    return None  # unbalanced
+    for i in range(inner_start, len(expr)):
+        depth += _paren_delta(expr[i])
+        if depth == 0:
+            return i
+    return None
 
 
 def _normalize_denominator(expr: str) -> tuple[str, list[str]] | None:
@@ -299,16 +309,46 @@ def _recognize_filters(
     return frozenset(recognized)
 
 
-def _check_base_drift(dax_expr: str, definition: dict[str, Any]) -> Verdict:
-    """Verify a kind:base measure's aggregation + filter-set vs its contract.
+def _base_dax_filters(expr: str, want_func: str) -> frozenset[Filter] | Verdict:
+    """Resolve a base measure's DAX filter-set, checking its aggregation en route.
 
     Recognizes exactly two shapes (mirroring the generator's emit templates):
       AGG( <col-or-table> )                          -> no filter
       CALCULATE( AGG( <col-or-table> ), p1, p2, ... ) -> wrapped + filters
-    ESCALATE for anything else; never guesses. The base measure is its OWN
+    Returns the recognized filter-set, or a Verdict (escalate/drift) to short-circuit
+    on. ESCALATE for anything else; never guesses. The base measure is its OWN
     contract, so its aggregation IS checked (unlike a referenced measure).
     """
-    expr = dax_expr.strip()
+    inner = _outer_call(expr, "CALCULATE")
+    if inner is None:
+        # bare aggregation, no filter
+        _func, verdict = _check_agg(
+            expr,
+            want_func,
+            unrecognized_detail="measure is not a recognized AGG(col) shape",
+        )
+        return verdict if verdict is not None else frozenset()
+
+    parts = _split_balanced(inner)
+    if parts is None or not parts:
+        return Verdict("escalate", "CALCULATE arguments unbalanced")
+    _func, verdict = _check_agg(
+        parts[0].strip(),
+        want_func,
+        unrecognized_detail="CALCULATE inner is not a recognized AGG(col)",
+    )
+    if verdict is not None:
+        return verdict
+    return _recognize_filters(parts[1:], detail_noun="predicate")
+
+
+def _check_base_drift(dax_expr: str, definition: dict[str, Any]) -> Verdict:
+    """Verify a kind:base measure's aggregation + filter-set vs its contract.
+
+    Resolves the contract's declared aggregation + filter-set, then compares them to
+    the DAX filter-set (recognized by `_base_dax_filters`). ESCALATE is the default for
+    anything not confidently recognized.
+    """
     agg = definition.get("aggregation")
     want_func = _BASE_AGG_FUNC.get(agg) if agg else None
     if want_func is None:
@@ -319,32 +359,9 @@ def _check_base_drift(dax_expr: str, definition: dict[str, Any]) -> Verdict:
     if contract_filters is None:
         return Verdict("escalate", "contract filter is malformed or uses an unknown op")
 
-    inner = _outer_call(expr, "CALCULATE")
-    if inner is None:
-        # bare aggregation, no filter
-        _func, verdict = _check_agg(
-            expr,
-            want_func,
-            unrecognized_detail="measure is not a recognized AGG(col) shape",
-        )
-        if verdict is not None:
-            return verdict
-        dax_filters: frozenset[Filter] = frozenset()
-    else:
-        parts = _split_balanced(inner)
-        if parts is None or not parts:
-            return Verdict("escalate", "CALCULATE arguments unbalanced")
-        _func, verdict = _check_agg(
-            parts[0].strip(),
-            want_func,
-            unrecognized_detail="CALCULATE inner is not a recognized AGG(col)",
-        )
-        if verdict is not None:
-            return verdict
-        filters = _recognize_filters(parts[1:], detail_noun="predicate")
-        if isinstance(filters, Verdict):
-            return filters
-        dax_filters = filters
+    dax_filters = _base_dax_filters(dax_expr.strip(), want_func)
+    if isinstance(dax_filters, Verdict):
+        return dax_filters
 
     if dax_filters == contract_filters:
         return Verdict("pass", "base aggregation + filter-set matches the contract")

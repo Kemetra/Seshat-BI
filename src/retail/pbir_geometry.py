@@ -39,6 +39,17 @@ class PbirGeometryError(Exception):
     """A geometry input/output problem surfaced cleanly (never a traceback)."""
 
 
+def _is_number(v: object) -> bool:
+    """A real number, not a bool -- ``bool`` is an ``int`` subclass we must reject."""
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def _require_object_member(doc: dict, name: str) -> None:
+    """Guard that ``doc[name]`` is a JSON object; raise the same message otherwise."""
+    if not isinstance(doc.get(name), dict):
+        raise PbirGeometryError(f"visual.json has no '{name}' object")
+
+
 def _dump(doc: object) -> str:
     return json.dumps(doc, indent=2, sort_keys=True) + "\n"
 
@@ -70,12 +81,7 @@ def _canvas_dims(visual_json: Path) -> tuple[float, float]:
         )
     page = _load_json(page_json, "page.json")
     w, h = page.get("width"), page.get("height")
-    if (
-        isinstance(w, bool)
-        or isinstance(h, bool)
-        or not isinstance(w, (int, float))
-        or not isinstance(h, (int, float))
-    ):
+    if not _is_number(w) or not _is_number(h):
         raise PbirGeometryError(
             f"page.json has no numeric width/height ({page_json}); cannot validate "
             f"on-canvas"
@@ -90,11 +96,26 @@ def _load_visual(visual_json: Path) -> dict:
     if ".Report" not in str(visual_json.resolve()):
         raise PbirGeometryError("target is not inside a *.Report/ tree")
     doc = _load_json(visual_json, "visual.json")
-    if not isinstance(doc.get("visual"), dict):
-        raise PbirGeometryError("visual.json has no 'visual' object")
-    if not isinstance(doc.get("position"), dict):
-        raise PbirGeometryError("visual.json has no 'position' object")
+    _require_object_member(doc, "visual")
+    _require_object_member(doc, "position")
     return doc
+
+
+def _validate_key_value(key: str, val: object) -> None:
+    """Reject one request entry -- the allow-list check MUST precede the numeric one.
+
+    Order matters: a key like ``visualType`` is both out-of-list AND non-numeric;
+    checking the key first is what makes it surface as an allow-list error.
+    """
+    if key not in _ALLOWED_KEYS:
+        raise PbirGeometryError(
+            f"position key {key!r} is not in the geometry allow-list "
+            f"(allowed: {sorted(_ALLOWED_KEYS)})"
+        )
+    if not _is_number(val):
+        raise PbirGeometryError(
+            f"position.{key} must be a number, got {type(val).__name__}: {val!r}"
+        )
 
 
 def _validate_requested(position: dict) -> None:
@@ -102,24 +123,33 @@ def _validate_requested(position: dict) -> None:
     if not isinstance(position, dict) or not position:
         raise PbirGeometryError("position must be a non-empty object")
     for key, val in position.items():
-        if key not in _ALLOWED_KEYS:
-            raise PbirGeometryError(
-                f"position key {key!r} is not in the geometry allow-list "
-                f"(allowed: {sorted(_ALLOWED_KEYS)})"
-            )
-        if isinstance(val, bool) or not isinstance(val, (int, float)):
-            raise PbirGeometryError(
-                f"position.{key} must be a number, got {type(val).__name__}: {val!r}"
-            )
+        _validate_key_value(key, val)
+
+
+def _rect_off_canvas(
+    rect: tuple[float, float, float, float], canvas: tuple[float, float]
+) -> bool:
+    """True when the rectangle's origin is negative or it overruns the canvas edge."""
+    rx, ry, rw, rh = rect
+    canvas_w, canvas_h = canvas
+    return rx < 0 or ry < 0 or rx + rw > canvas_w or ry + rh > canvas_h
+
+
+def _require_numeric_rect(
+    result: dict,
+) -> tuple[float, float, float, float]:
+    """Guard that x/y/width/height are numeric; return them (defaulting to 0)."""
+    rx, ry = result.get("x", 0), result.get("y", 0)
+    rw, rh = result.get("width", 0), result.get("height", 0)
+    for label, v in (("x", rx), ("y", ry), ("width", rw), ("height", rh)):
+        if not _is_number(v):
+            raise PbirGeometryError(f"result {label} is not numeric: {v!r}")
+    return rx, ry, rw, rh
 
 
 def _validate_on_canvas(result: dict, canvas_w: float, canvas_h: float) -> None:
     """Reject a result rectangle that is non-numeric, non-positive, or off-canvas."""
-    rx, ry = result.get("x", 0), result.get("y", 0)
-    rw, rh = result.get("width", 0), result.get("height", 0)
-    for label, v in (("x", rx), ("y", ry), ("width", rw), ("height", rh)):
-        if isinstance(v, bool) or not isinstance(v, (int, float)):
-            raise PbirGeometryError(f"result {label} is not numeric: {v!r}")
+    rx, ry, rw, rh = _require_numeric_rect(result)
     # A non-positive width/height is degenerate (zero-size is invisible; negative
     # is nonsensical) AND, left unchecked, a negative dimension can shrink x+w or
     # y+h enough to defeat the overrun half of the off-canvas check below while the
@@ -129,7 +159,7 @@ def _validate_on_canvas(result: dict, canvas_w: float, canvas_h: float) -> None:
             f"result rectangle width={rw} height={rh} must be positive "
             f"(non-positive width/height is a degenerate rectangle); refusing to write"
         )
-    if rx < 0 or ry < 0 or rx + rw > canvas_w or ry + rh > canvas_h:
+    if _rect_off_canvas((rx, ry, rw, rh), (canvas_w, canvas_h)):
         raise PbirGeometryError(
             f"result rectangle x={rx} y={ry} w={rw} h={rh} is off-canvas "
             f"(canvas {canvas_w}x{canvas_h}); refusing to write"

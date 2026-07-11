@@ -87,6 +87,58 @@ def _decimal(raw: object, *, field: str) -> Decimal:
         raise ValueError(f"expected_value.{field} is not numeric: {raw!r}") from exc
 
 
+def _expected_value_block(definition: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Pull the ``expected_value`` mapping out of a contract definition.
+
+    Returns None when there is no block (the caller SKIPS -- nothing to check).
+    Raises ValueError when the block is present but not a mapping.
+    """
+    if not definition:
+        return None
+    block = definition.get("expected_value")
+    if block is None:
+        return None
+    if not isinstance(block, dict):
+        raise ValueError("expected_value must be a mapping")
+    return block
+
+
+def _validated_aggregation(block: dict[str, Any]) -> str:
+    """Return the block's ``aggregation``, or raise if it is not a recognized name."""
+    aggregation = block.get("aggregation")
+    if aggregation not in _AGG_SQL and aggregation != "ratio":
+        raise ValueError(
+            f"expected_value.aggregation {aggregation!r} not recognized "
+            f"(one of {sorted(_AGG_SQL)} or 'ratio')"
+        )
+    return aggregation
+
+
+def _required_gold_table(binds_to: dict[str, Any] | None) -> str:
+    """Return ``binds_to.gold_table``, or raise if it is missing (fail-closed)."""
+    gold_table = (binds_to or {}).get("gold_table")
+    if not gold_table:
+        raise ValueError(
+            "expected_value needs binds_to.gold_table to recompute against"
+        )
+    return str(gold_table)
+
+
+def _resolved_column(aggregation: str, block: dict[str, Any]) -> str | None:
+    """Return the aggregate's ``column`` as a str (or None).
+
+    A column is required for the column aggregates (sum/average/count/distinct_count)
+    but NOT for count_rows or ratio; a missing required column raises ValueError.
+    """
+    column = block.get("column")
+    needs_column = aggregation in ("sum", "average", "count", "distinct_count")
+    if needs_column and not column:
+        raise ValueError(
+            f"expected_value.aggregation {aggregation!r} requires a `column`"
+        )
+    return str(column) if column else None
+
+
 def parse_expected_value(
     definition: dict[str, Any] | None, binds_to: dict[str, Any] | None
 ) -> ExpectedValue | None:
@@ -97,45 +149,22 @@ def parse_expected_value(
     missing column for a column-aggregate, non-numeric value/tolerance, or a missing
     gold_table. A malformed check is a defect, never a silent skip.
     """
-    if not definition:
-        return None
-    block = definition.get("expected_value")
+    block = _expected_value_block(definition)
     if block is None:
         return None
-    if not isinstance(block, dict):
-        raise ValueError("expected_value must be a mapping")
 
-    aggregation = block.get("aggregation")
-    if aggregation not in _AGG_SQL and aggregation != "ratio":
-        raise ValueError(
-            f"expected_value.aggregation {aggregation!r} not recognized "
-            f"(one of {sorted(_AGG_SQL)} or 'ratio')"
-        )
-
+    aggregation = _validated_aggregation(block)
     value = _decimal(block.get("value"), field="value")
     tolerance_abs = _decimal(block.get("tolerance_abs", "0"), field="tolerance_abs")
-
-    gold_table = (binds_to or {}).get("gold_table")
-    if not gold_table:
-        raise ValueError(
-            "expected_value needs binds_to.gold_table to recompute against"
-        )
-
-    # A column is required for the column aggregates (sum/average/count/distinct_count)
-    # but NOT for count_rows or ratio.
-    column = block.get("column")
-    needs_column = aggregation in ("sum", "average", "count", "distinct_count")
-    if needs_column and not column:
-        raise ValueError(
-            f"expected_value.aggregation {aggregation!r} requires a `column`"
-        )
+    gold_table = _required_gold_table(binds_to)
+    column = _resolved_column(aggregation, block)
 
     return ExpectedValue(
         value=value,
         tolerance_abs=tolerance_abs,
         aggregation=aggregation,
-        column=str(column) if column else None,
-        gold_table=str(gold_table),
+        column=column,
+        gold_table=gold_table,
     )
 
 
@@ -204,15 +233,28 @@ def _check_single(
     return []
 
 
+def _first_scalar(rows: list[tuple] | None) -> object | None:
+    """First cell of the first row, or None when the result set is empty/NULL.
+
+    Collapses the empty-result-set, empty-row, and NULL-cell cases into a single
+    None so a scalar-count caller has one guard to check instead of a chained
+    complex conditional.
+    """
+    if not rows or not rows[0]:
+        return None
+    return rows[0][0]
+
+
 def _count(
     runner: QueryRunner, table: str, where_sql: str, *, dialect: Dialect
 ) -> int | None:
     del dialect  # unused today: the count(*) ... WHERE ... form is engine-portable
     rows = runner.run(f"SELECT count(*) FROM {table} WHERE {where_sql}")
-    if not rows or not rows[0] or rows[0][0] is None:
+    scalar = _first_scalar(rows)
+    if scalar is None:
         return None
     try:
-        return int(rows[0][0])
+        return int(scalar)
     except (TypeError, ValueError):
         return None
 

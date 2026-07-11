@@ -32,6 +32,7 @@ subfolder. On the current committed corpus the rule finds nothing.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import Iterable
 
 from ..core import Finding, RuleContext, RuleTier, Severity, is_test_path
@@ -88,6 +89,121 @@ def _is_header(cells: list[str]) -> bool:
     return cells and cells[0].lower().startswith("decision question")
 
 
+def _no_corpus_finding() -> Finding:
+    # FR-013: an absent corpus fails loud, never a vacuous pass.
+    return Finding(
+        rule_id=RULE_ID,
+        severity=Severity.ERROR,
+        message=(
+            "no KPI domain corpus found to check "
+            f"({_SKILL_ROOT}/domains/*.md) -- cannot pass vacuously"
+        ),
+        locator=f"{_SKILL_ROOT}/domains",
+    )
+
+
+def _contract_exists(ctx: RuleContext, contract: str) -> bool:
+    return (ctx.repo_root / _SKILL_ROOT / contract).exists()
+
+
+def _malformed_finding(rel: str, raw: str) -> Finding:
+    # FR-014: a row that does not parse into three columns is reported.
+    return Finding(
+        rule_id=RULE_ID,
+        severity=Severity.WARNING,
+        message=(f"malformed decision-question row (expected 3 columns): {raw}"),
+        locator=rel,
+    )
+
+
+@dataclass(frozen=True)
+class _Row:
+    """One parsed decision-question row: locator + its three parsed cells."""
+
+    rel: str
+    question: str
+    status: str
+    path_match: re.Match[str] | None
+    route_is_placeholder: bool
+
+
+def _classify_seeded(ctx: RuleContext, row: _Row) -> Finding | None:
+    if row.path_match is None:
+        # Seeded but no contract path to resolve -> neither category.
+        return _warn_neither(row.rel, row.question, row.status)
+    contract = row.path_match.group(1).strip()
+    if _contract_exists(ctx, contract):
+        return None
+    return Finding(
+        rule_id=RULE_ID,
+        severity=Severity.ERROR,
+        message=(
+            f"dangling route: question '{row.question}' is marked"
+            f" Seeded but its contract '{contract}' does not exist"
+            " -- fix the route or re-mark the row honestly"
+        ),
+        locator=row.rel,
+    )
+
+
+def _classify_planned(ctx: RuleContext, row: _Row) -> Finding | None:
+    if row.route_is_placeholder:
+        return None  # FR-005: honest planned row, no finding.
+    if row.path_match is not None and _contract_exists(
+        ctx, row.path_match.group(1).strip()
+    ):
+        # FR-017: contract was built but the row was never flipped.
+        return Finding(
+            rule_id=RULE_ID,
+            severity=Severity.ERROR,
+            message=(
+                f"stale planned marker: question '{row.question}' is"
+                " marked Planned but its contract"
+                f" '{row.path_match.group(1).strip()}' now exists --"
+                " flip the row to Seeded"
+            ),
+            locator=row.rel,
+        )
+    return _warn_neither(row.rel, row.question, row.status)
+
+
+def _classify_row(ctx: RuleContext, rel: str, raw: str) -> Finding | None:
+    """Classify one raw table row into at most one Finding (or None to pass)."""
+    cells = [c.strip() for c in raw.strip("|").split("|")]
+    if _is_separator(cells) or _is_header(cells):
+        return None
+    if len(cells) != 3:
+        return _malformed_finding(rel, raw)
+
+    question, routes, status = cells
+    path_match = _BACKTICK_PATH_RE.search(routes)
+    row = _Row(
+        rel=rel,
+        question=question,
+        status=status,
+        path_match=path_match,
+        route_is_placeholder=_PLACEHOLDER in routes and path_match is None,
+    )
+
+    if status.startswith("Seeded"):
+        return _classify_seeded(ctx, row)
+    if status.startswith("Planned"):
+        return _classify_planned(ctx, row)
+    return _warn_neither(rel, question, status)
+
+
+def _read_domain(ctx: RuleContext, rel: str) -> tuple[str | None, Finding | None]:
+    try:
+        return (ctx.repo_root / rel).read_text(encoding="utf-8-sig"), None
+    except (OSError, UnicodeDecodeError) as exc:
+        return None, Finding(
+            rule_id=RULE_ID,
+            severity=Severity.ERROR,
+            message=f"could not read domain file: {exc}",
+            locator=rel,
+        )
+
+
 @register(
     RULE_ID,
     "Domain decision-question routes resolve or are honestly marked planned",
@@ -98,102 +214,18 @@ def check_answerability(ctx: RuleContext) -> Iterable[Finding]:
     domains = sorted(_iter_domains(ctx))
 
     if not domains:
-        # FR-013: an absent corpus fails loud, never a vacuous pass.
-        return [
-            Finding(
-                rule_id=RULE_ID,
-                severity=Severity.ERROR,
-                message=(
-                    "no KPI domain corpus found to check "
-                    f"({_SKILL_ROOT}/domains/*.md) -- cannot pass vacuously"
-                ),
-                locator=f"{_SKILL_ROOT}/domains",
-            )
-        ]
+        return [_no_corpus_finding()]
 
     for rel in domains:
-        try:
-            text = (ctx.repo_root / rel).read_text(encoding="utf-8-sig")
-        except (OSError, UnicodeDecodeError) as exc:
-            findings.append(
-                Finding(
-                    rule_id=RULE_ID,
-                    severity=Severity.ERROR,
-                    message=f"could not read domain file: {exc}",
-                    locator=rel,
-                )
-            )
+        text, read_error = _read_domain(ctx, rel)
+        if read_error is not None:
+            findings.append(read_error)
             continue
 
         for raw in _table_rows(text):
-            cells = [c.strip() for c in raw.strip("|").split("|")]
-            if _is_separator(cells) or _is_header(cells):
-                continue
-            if len(cells) != 3:
-                # FR-014: a row that does not parse into three columns is reported.
-                findings.append(
-                    Finding(
-                        rule_id=RULE_ID,
-                        severity=Severity.WARNING,
-                        message=(
-                            "malformed decision-question row"
-                            f" (expected 3 columns): {raw}"
-                        ),
-                        locator=rel,
-                    )
-                )
-                continue
-
-            question, routes, status = cells
-            path_match = _BACKTICK_PATH_RE.search(routes)
-            route_is_placeholder = _PLACEHOLDER in routes and path_match is None
-
-            if status.startswith("Seeded"):
-                if path_match is None:
-                    # Seeded but no contract path to resolve -> neither category.
-                    findings.append(_warn_neither(rel, question, status))
-                    continue
-                contract = path_match.group(1).strip()
-                if not (ctx.repo_root / _SKILL_ROOT / contract).exists():
-                    findings.append(
-                        Finding(
-                            rule_id=RULE_ID,
-                            severity=Severity.ERROR,
-                            message=(
-                                f"dangling route: question '{question}' is marked"
-                                f" Seeded but its contract '{contract}' does not exist"
-                                " -- fix the route or re-mark the row honestly"
-                            ),
-                            locator=rel,
-                        )
-                    )
-            elif status.startswith("Planned"):
-                if route_is_placeholder:
-                    continue  # FR-005: honest planned row, no finding.
-                if (
-                    path_match is not None
-                    and (
-                        ctx.repo_root / _SKILL_ROOT / path_match.group(1).strip()
-                    ).exists()
-                ):
-                    # FR-017: contract was built but the row was never flipped.
-                    findings.append(
-                        Finding(
-                            rule_id=RULE_ID,
-                            severity=Severity.ERROR,
-                            message=(
-                                f"stale planned marker: question '{question}' is"
-                                " marked Planned but its contract"
-                                f" '{path_match.group(1).strip()}' now exists --"
-                                " flip the row to Seeded"
-                            ),
-                            locator=rel,
-                        )
-                    )
-                else:
-                    findings.append(_warn_neither(rel, question, status))
-            else:
-                findings.append(_warn_neither(rel, question, status))
+            finding = _classify_row(ctx, rel, raw)
+            if finding is not None:
+                findings.append(finding)
     return findings
 
 

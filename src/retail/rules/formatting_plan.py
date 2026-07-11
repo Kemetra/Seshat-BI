@@ -117,6 +117,159 @@ def _row(cells: list[str]) -> dict[str, str]:
     return {_COLS[i]: (cells[i] if i < len(cells) else "") for i in range(len(_COLS))}
 
 
+def _err(message: str, loc: str) -> Finding:
+    return Finding(RULE_ID, Severity.ERROR, message, loc)
+
+
+def _read_error_finding(rel: str, exc: OSError) -> Finding:
+    return _err(f"ledger could not be read ({exc.__class__.__name__})", f"{rel}#/")
+
+
+# Footer-level check. Line-anchored, so no exemption is needed: prose mentioning
+# "score" in a rationale cell no longer trips it.
+def _score_findings(text: str, rel: str) -> list[Finding]:
+    if not _SCORE_RE.search(text):
+        return []
+    return [
+        _err(
+            "ledger contains a score/confidence field; a formatting "
+            "plan is words-only, never a numeric score (rule #9)",
+            f"{rel}#score",
+        )
+    ]
+
+
+# Footer-level check (whole document): the agent is structurally forbidden to
+# self-ratify (Principle V).
+def _ratified_findings(text: str, rel: str) -> list[Finding]:
+    m = _RATIFIED_RE.search(text)
+    if not m:
+        return []
+    val = m.group(1).strip().strip("'\"`")
+    if not (val and _AGENT_RATIFIER_RE.search(val)):
+        return []
+    return [
+        _err(
+            f"ratification.ratified_by is agent-filled ({val!r}); "
+            f"the agent may not self-ratify (Principle V)",
+            f"{rel}#ratified_by",
+        )
+    ]
+
+
+def _principle_findings(r: dict[str, str], loc: str) -> list[Finding]:
+    principle = r["principle_cited"]
+    if not principle:
+        return [
+            _err(
+                "row is missing principle_cited (every decision must cite a "
+                "visual-qa.md anti-pattern)",
+                loc,
+            )
+        ]
+    if principle not in _ALL_PRINCIPLES:
+        return [
+            _err(
+                f"principle_cited {principle!r} does not resolve to a real "
+                f"anti-pattern (#1-#13 in docs/powerbi/visual-qa.md)",
+                loc,
+            )
+        ]
+    return []
+
+
+def _token_findings(r: dict[str, str], loc: str) -> list[Finding]:
+    if r["token_cited"]:
+        return []
+    return [
+        _err(
+            "row is missing token_cited (every decision must draw from a "
+            "committed design token)",
+            loc,
+        )
+    ]
+
+
+# A row may never self-declare a human-render OUTCOME status (the agent cannot
+# call the result good -- that is a human render + critique outcome;
+# never_self_grant_approval / Principle V). Applies to EVERY row, not just
+# render-only ones.
+def _status_findings(r: dict[str, str], loc: str) -> list[Finding]:
+    if r["status"].lower() not in _OUTCOME_STATUSES:
+        return []
+    return [
+        _err(
+            f"row status {r['status']!r} self-declares a human-render "
+            f"outcome; a plan row may only be proposed / "
+            f"needs-owner-decision / blocked-orphan -- resolution is a "
+            f"human render + critique, never self-declared (Principle V)",
+            loc,
+        )
+    ]
+
+
+# Render-only anti-pattern cited as resolved/proposed by an applyable row.
+def _render_only_findings(r: dict[str, str], loc: str) -> list[Finding]:
+    if r["apply_verb"] not in ("A", "B", "C"):
+        return []
+    if r["status"].lower() not in ("resolved", "proposed"):
+        return []
+    principle = r["principle_cited"]
+    if principle not in _RENDER_ONLY:
+        return []
+    return [
+        _err(
+            f"applyable row cites render-only anti-pattern {principle} as "
+            f"{r['status']}; #1/#5/#6/#7 are geometry -- handoff-only, an "
+            f"apply verb cannot resolve them",
+            loc,
+        )
+    ]
+
+
+# Container allow-list (empty container = a page/theme-level row is ok only when
+# apply_verb is A/C; a B row must name an allowed container).
+def _container_findings(r: dict[str, str], loc: str) -> list[Finding]:
+    cont = r["container"]
+    if not cont or cont in _ALLOWED_CONTAINERS:
+        return []
+    return [
+        _err(
+            f"container {cont!r} is not in the formatting allow-list "
+            f"{sorted(_ALLOWED_CONTAINERS)}",
+            loc,
+        )
+    ]
+
+
+# Row-level checks, in emission order. Each returns its findings for one row.
+_ROW_CHECKS = (
+    _principle_findings,
+    _token_findings,
+    _status_findings,
+    _render_only_findings,
+    _container_findings,
+)
+
+
+def _row_findings(cells: list[str], rel: str, i: int) -> list[Finding]:
+    r = _row(cells)
+    loc = f"{rel}#row{i + 1}"
+    findings: list[Finding] = []
+    for check in _ROW_CHECKS:
+        findings.extend(check(r, loc))
+    return findings
+
+
+def _ledger_findings(text: str, rel: str) -> list[Finding]:
+    findings: list[Finding] = []
+    findings.extend(_score_findings(text, rel))
+    findings.extend(_ratified_findings(text, rel))
+    for i, cells in enumerate(_table_rows(text)):
+        findings.extend(_row_findings(cells, rel, i))
+    return findings
+
+
 @register(
     RULE_ID,
     "Formatting-plan ledger is well-formed (citations resolve, allow-list, no score)",
@@ -128,119 +281,7 @@ def check_formatting_plan(ctx: RuleContext) -> Iterable[Finding]:
         try:
             text = path.read_text(encoding="utf-8-sig")
         except OSError as exc:
-            findings.append(
-                Finding(
-                    RULE_ID,
-                    Severity.ERROR,
-                    f"ledger could not be read ({exc.__class__.__name__})",
-                    f"{rel}#/",
-                )
-            )
+            findings.append(_read_error_finding(rel, exc))
             continue
-
-        # footer-level checks (whole document). Line-anchored, so no exemption is
-        # needed: prose mentioning "score" in a rationale cell no longer trips it.
-        if _SCORE_RE.search(text):
-            findings.append(
-                Finding(
-                    RULE_ID,
-                    Severity.ERROR,
-                    "ledger contains a score/confidence field; a formatting "
-                    "plan is words-only, never a numeric score (rule #9)",
-                    f"{rel}#score",
-                )
-            )
-        m = _RATIFIED_RE.search(text)
-        if m:
-            val = m.group(1).strip().strip("'\"`")
-            if val and _AGENT_RATIFIER_RE.search(val):
-                findings.append(
-                    Finding(
-                        RULE_ID,
-                        Severity.ERROR,
-                        f"ratification.ratified_by is agent-filled ({val!r}); "
-                        f"the agent may not self-ratify (Principle V)",
-                        f"{rel}#ratified_by",
-                    )
-                )
-
-        # row-level checks
-        for i, cells in enumerate(_table_rows(text)):
-            r = _row(cells)
-            loc = f"{rel}#row{i + 1}"
-            principle = r["principle_cited"]
-            if not principle:
-                findings.append(
-                    Finding(
-                        RULE_ID,
-                        Severity.ERROR,
-                        "row is missing principle_cited (every decision must cite a "
-                        "visual-qa.md anti-pattern)",
-                        loc,
-                    )
-                )
-            elif principle not in _ALL_PRINCIPLES:
-                findings.append(
-                    Finding(
-                        RULE_ID,
-                        Severity.ERROR,
-                        f"principle_cited {principle!r} does not resolve to a real "
-                        f"anti-pattern (#1-#13 in docs/powerbi/visual-qa.md)",
-                        loc,
-                    )
-                )
-            if not r["token_cited"]:
-                findings.append(
-                    Finding(
-                        RULE_ID,
-                        Severity.ERROR,
-                        "row is missing token_cited (every decision must draw from a "
-                        "committed design token)",
-                        loc,
-                    )
-                )
-            # A row may never self-declare a human-render OUTCOME status (the agent
-            # cannot call the result good -- that is a human render + critique
-            # outcome; never_self_grant_approval / Principle V). Applies to EVERY
-            # row, not just render-only ones.
-            status = r["status"].lower()
-            if status in _OUTCOME_STATUSES:
-                findings.append(
-                    Finding(
-                        RULE_ID,
-                        Severity.ERROR,
-                        f"row status {r['status']!r} self-declares a human-render "
-                        f"outcome; a plan row may only be proposed / "
-                        f"needs-owner-decision / blocked-orphan -- resolution is a "
-                        f"human render + critique, never self-declared (Principle V)",
-                        loc,
-                    )
-                )
-            # render-only anti-pattern cited as resolved/proposed by an applyable row
-            applyable = r["apply_verb"] in ("A", "B", "C")
-            proposed = status in ("resolved", "proposed")
-            if applyable and proposed and principle in _RENDER_ONLY:
-                findings.append(
-                    Finding(
-                        RULE_ID,
-                        Severity.ERROR,
-                        f"applyable row cites render-only anti-pattern {principle} as "
-                        f"{r['status']}; #1/#5/#6/#7 are geometry -- handoff-only, an "
-                        f"apply verb cannot resolve them",
-                        loc,
-                    )
-                )
-            # container allow-list (empty container = a page/theme-level row is ok
-            # only when apply_verb is A/C; a B row must name an allowed container)
-            cont = r["container"]
-            if cont and cont not in _ALLOWED_CONTAINERS:
-                findings.append(
-                    Finding(
-                        RULE_ID,
-                        Severity.ERROR,
-                        f"container {cont!r} is not in the formatting allow-list "
-                        f"{sorted(_ALLOWED_CONTAINERS)}",
-                        loc,
-                    )
-                )
+        findings.extend(_ledger_findings(text, rel))
     return findings

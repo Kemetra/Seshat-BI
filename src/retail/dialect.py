@@ -168,14 +168,40 @@ class _LazyDriverDialect:
 
 
 class _DictConfigDialect(_LazyDriverDialect):
-    """Shared ``redact()`` for dialects whose resolved config is a flat kwargs
-    dict (MySQL, Snowflake): scrub each configured secret key's value out of
-    the message, longest key list first isn't needed here since callers
-    supply their own ``_secret_keys`` order and values are replaced
-    independently (unlike SqlServer's DSN string, there's no token parsing --
-    each dict value is looked up and replaced directly)."""
+    """Shared ``resolve_config()``/``redact()`` for dialects whose resolved
+    config is a flat kwargs dict (MySQL, Snowflake), both driven by per-engine
+    CLASS DATA -- a subclass adds an engine by declaring data, not by copying
+    a near-identical method body:
+
+    - ``_anchor``: required (env_key, config_key); when its env var is absent,
+      resolve_config returns None instead of a half-built dict, so the
+      caller's "no connection configured" error path is reused verbatim.
+    - ``_optional``: ordered (env_key, config_key) copies, taken only when the
+      env var is truthy; the order fixes each engine's dict order.
+    - ``_int_keys``: env keys whose value is int()-coerced (e.g. PORT).
+    - ``_secret_keys``: dict keys whose values ``redact`` scrubs from error
+      text. No longest-first ordering is needed here: unlike SqlServer's DSN
+      string there is no token parsing -- each dict value is looked up and
+      replaced independently, in the subclass-declared key order."""
 
     _secret_keys: tuple[str, ...] = ()
+    _anchor: tuple[str, str] = ("", "")
+    _optional: tuple[tuple[str, str], ...] = ()
+    _int_keys: frozenset[str] = frozenset()
+
+    # Build the connector kwargs dict from ANALYTICS_DB_* env vars per this
+    # engine's class data (see the class docstring).
+    def resolve_config(self, env: dict[str, str]) -> dict[str, object] | None:
+        anchor_env, anchor_key = self._anchor
+        anchor_val = env.get(anchor_env)
+        if not anchor_val:
+            return None
+        config: dict[str, object] = {anchor_key: anchor_val}
+        for env_key, config_key in self._optional:
+            value = env.get(env_key)
+            if value:
+                config[config_key] = int(value) if env_key in self._int_keys else value
+        return config
 
     def redact(self, message: object, config: dict[str, object]) -> str:
         text = str(message)
@@ -192,27 +218,19 @@ _MSSQL_TEXT_TYPES = frozenset({"varchar", "nvarchar", "char", "nchar", "text", "
 class SqlServerDialect(_LazyDriverDialect):
     name = "sqlserver"
 
+    # Build an ODBC connection keyword string from ANALYTICS_DB_* env vars.
+    #
+    # Returns None (no host configured) rather than a half-built string, so
+    # the caller's "no connection configured" error path is reused verbatim.
+    #
+    # UID/PWD values are brace-wrapped (ODBC's documented escaping form,
+    # `KEYWORD={value}`) so an embedded `;` stays unambiguous to both the
+    # driver and `redact()`, and a literal `}` inside a value is DOUBLED
+    # (`}}`) per full ODBC brace-escaping -- without these, such a password
+    # would both build a malformed connection string pyodbc's ODBC parser
+    # cannot round-trip AND fail to scrub fully from error text.
+    # `_parse_tokens` / `_scan_braced_value` parse these exact rules back (R4).
     def resolve_config(self, env: dict[str, str]) -> str | None:
-        """Build an ODBC connection keyword string from ANALYTICS_DB_* env vars.
-
-        Returns None (no host configured) rather than a half-built string, so
-        the caller's "no connection configured" error path is reused verbatim.
-
-        UID/PWD values are brace-wrapped (ODBC's documented escaping form,
-        `KEYWORD={value}`) so a `;` inside a password/username is unambiguous
-        both to the driver and to `redact()` -- without bracing, a `;` inside
-        the value is indistinguishable from the next `KEYWORD=` separator and
-        `config.split(";")` truncates the value (R4).
-
-        A literal `}` inside the value is escaped by DOUBLING it (`}}`) before
-        wrapping, per full ODBC brace-escaping rules -- a brace-quoted value
-        starts after the opening `{` and ends at the first `}` that is NOT
-        doubled; a `{` inside the value is just a literal character (bracing
-        is not nestable). Without doubling, a password containing `}` would
-        both (a) build a malformed connection string pyodbc's ODBC parser
-        cannot round-trip, and (b) fail to fully scrub in `redact()` via
-        `_parse_tokens`, which now parses these exact rules (R4).
-        """
         driver = env.get("ANALYTICS_DB_ODBC_DRIVER") or "ODBC Driver 18 for SQL Server"
         host = env.get("ANALYTICS_DB_HOST")
         if not host:
@@ -239,68 +257,74 @@ class SqlServerDialect(_LazyDriverDialect):
 
         return pyodbc.connect(config, autocommit=True)
 
+    # Scrub PWD/UID/SERVER/DATABASE values from an error message.
+    #
+    # Two passes, mirroring `_redact_dsn`'s component-level scrub for
+    # psycopg2, and ORDER MATTERS -- the authoritative pass runs first:
+    #
+    # 1. `_scrub_component_values`: re-derive each secret VALUE from the
+    #    config (via `_parse_tokens`, so a brace-wrapped value with an
+    #    embedded `;` is never truncated the way a naive `split(";")` would
+    #    be) and replace it verbatim wherever it appears. This is what
+    #    catches the driver reformatting the error into its own text, e.g.
+    #    FreeTDS "TCP Provider: host 'X' not found" -- no "SERVER=" and no
+    #    port anywhere in the message.
+    # 2. `_scrub_kw_value_backstop`: a best-effort `KW=value` regex pass,
+    #    defence-in-depth only.
+    #
+    # Regex-first would leak: a password itself containing a literal
+    # `KEYWORD=` (e.g. `secret;DATABASE=x`) would get rewritten mid-value by
+    # the regex, so the later verbatim whole-value replace would no longer
+    # match and the password prefix (`secret`) would survive. Running the
+    # exact-value replace first scrubs the whole credential intact.
     def redact(self, message: object, config: str) -> str:
-        """Scrub PWD/UID/SERVER/DATABASE values from an error message.
-
-        A naive `config.split(";")` is ambiguous: a `;` INSIDE a password (or
-        any value) is indistinguishable from the separator between keywords,
-        so a plain split silently truncates the value at the first embedded
-        `;`. resolve_config now brace-wraps PWD/UID (`KEY={value}`, the ODBC-
-        documented escape), which makes those two values unambiguous; this
-        method parses brace-wrapped tokens as a single unit instead of
-        splitting on every `;` blindly.
-
-        Two passes, mirroring `_redact_dsn`'s component-level scrub for
-        psycopg2. ORDER MATTERS: (1) the AUTHORITATIVE component-level pass
-        runs FIRST -- it re-derives each secret VALUE from the config string
-        (unwrapping braces, and splitting SERVER on the LAST `,` to isolate the
-        bare host) and replaces it verbatim wherever it appears; this is what
-        catches the driver reformatting the error into its own text (e.g.
-        FreeTDS "TCP Provider: host 'X' not found", which never contains
-        "SERVER=" or the port at all). Component values are scrubbed
-        longest-first so a short value (e.g. a username that is a substring of
-        the host) cannot pre-empt a longer overlapping match, matching
-        `_redact_dsn`'s discipline. (2) a best-effort `KW=value` regex pass
-        runs SECOND as a defence-in-depth backstop (covers brace and bare
-        forms, stops at a following `;` OR `}`).
-
-        The component pass MUST precede the regex pass: if a password itself
-        contains a literal `KEYWORD=` (e.g. `secret;DATABASE=x`), a regex-first
-        order would rewrite the `DATABASE=x` fragment INSIDE the password text,
-        so the later verbatim whole-value replace no longer matches and the
-        password prefix (`secret`) leaks. Running the exact-value replace first
-        scrubs the whole credential before the regex can mangle it.
-        """
         text = str(message)
+        text = self._scrub_component_values(text, config or "")
+        text = self._scrub_kw_value_backstop(text)
+        return text
 
-        # Pass 1 (authoritative): exact-value component scrub, longest-first.
-        # The yes/no skip is scoped to the BOOLEAN keywords only (Encrypt,
-        # TrustServerCertificate) -- it exists to avoid over-redacting those
-        # non-secret flags. It must NOT apply keyword-agnostically: a PWD/UID/
-        # DATABASE/SERVER value that happens to literally equal "yes"/"no"
-        # is still a real credential and must be scrubbed (security over
-        # cosmetic over-redaction).
-        _BOOLEAN_KEYWORDS = ("ENCRYPT", "TRUSTSERVERCERTIFICATE")
+    # Non-secret boolean flags; see _token_secret_values for the yes/no skip.
+    _BOOLEAN_KEYWORDS = ("ENCRYPT", "TRUSTSERVERCERTIFICATE")
+
+    # The secret value(s) a single (KEYWORD, value) token contributes to the
+    # scrub set -- empty when the token carries no secret.
+    #
+    # A `SERVER=host,port` token contributes BOTH the full value and the bare
+    # host, since the driver may print the host alone with no port and no
+    # prefix. A `_BOOLEAN_KEYWORDS` flag equal to "yes"/"no" contributes
+    # nothing (avoids over-redacting non-secret flags); that skip is scoped
+    # to those keywords ONLY, never to the value text -- a credential that
+    # happens to literally equal "yes"/"no" is still a credential and must be
+    # scrubbed (security over cosmetic over-redaction).
+    @classmethod
+    def _token_secret_values(cls, kw: str, val: str) -> tuple[str, ...]:
+        if not val:
+            return ()
+        if kw in cls._BOOLEAN_KEYWORDS and val.lower() in ("yes", "no"):
+            return ()
+        if kw == "SERVER":
+            host = val.rsplit(",", 1)[0]
+            return (val, host) if host else (val,)
+        return (val,)
+
+    # Pass 1 of `redact`: replace every parsed secret value verbatim,
+    # longest-first so a short value (e.g. a username that is a substring of
+    # the host) cannot pre-empt a longer overlapping match, matching
+    # `_redact_dsn`'s discipline.
+    @classmethod
+    def _scrub_component_values(cls, text: str, config: str) -> str:
         secrets: set[str] = set()
-        for kw, val in self._parse_tokens(config or ""):
-            if not val:
-                continue
-            if kw in _BOOLEAN_KEYWORDS and val.lower() in ("yes", "no"):
-                continue
-            if kw == "SERVER":
-                # SERVER=host,port -- scrub the bare host independently, since
-                # the driver may print it alone with no port and no prefix.
-                host = val.rsplit(",", 1)[0]
-                if host:
-                    secrets.add(host)
-                secrets.add(val)
-            else:
-                secrets.add(val)
+        for kw, val in cls._parse_tokens(config):
+            secrets.update(cls._token_secret_values(kw, val))
 
         for secret in sorted(secrets, key=len, reverse=True):
             text = text.replace(secret, "<redacted>")
+        return text
 
-        # Pass 2 (defence-in-depth backstop): KW=value regex on the message.
+    # Pass 2 of `redact`: KW=value regex on the message, covering brace and
+    # bare forms (stops at a following `;` OR `}`).
+    @staticmethod
+    def _scrub_kw_value_backstop(text: str) -> str:
         for kw in ("PWD", "UID"):
             # Brace form first (value may legitimately contain ';'), then bare.
             text = re.sub(rf"({kw}=)\{{[^}}]*\}}", r"\1<redacted>", text)
@@ -309,16 +333,13 @@ class SqlServerDialect(_LazyDriverDialect):
             text = re.sub(rf"({kw}=)[^;]*", r"\1<redacted>", text)
         return text
 
+    # Scan a brace-quoted value starting just AFTER its opening `{`; return
+    # the unescaped value (`}}` -> `}`) and the index just past the
+    # terminating single `}`. ODBC brace-quoting is NON-NESTABLE: an interior
+    # `{` is a plain literal, a doubled `}}` is a literal `}`, and the first
+    # `}` not followed by another terminates.
     @staticmethod
     def _scan_braced_value(config: str, start: int) -> tuple[str, int]:
-        """Scan a brace-quoted value starting just AFTER its opening ``{``.
-
-        Returns the unescaped value (``}}`` -> ``}``) and the index just past
-        the terminating single ``}``. ODBC brace-quoting is NON-NESTABLE: an
-        interior ``{`` is just a literal character; a doubled ``}}`` is a
-        literal ``}`` (part of the value); the first SINGLE ``}`` (not
-        followed by another ``}``) terminates the value.
-        """
         n = len(config)
         chars: list[str] = []
         j = start
@@ -335,43 +356,54 @@ class SqlServerDialect(_LazyDriverDialect):
             break
         return "".join(chars), j
 
+    # True when the segment starting here is NOT a `KEYWORD=value` token: no
+    # `=` at all (sep == -1), or the next `;` arrives before the next `=`.
+    # Named to keep the `_parse_tokens` loop flat.
+    @staticmethod
+    def _segment_is_not_keyword_pair(sep: int, semi: int) -> bool:
+        return sep == -1 or (semi != -1 and semi < sep)
+
+    # Parse the single `KEYWORD=value` token at index `i` into
+    # (keyword, value, next_i), where next_i is where the following token
+    # begins. The caller has already established, via
+    # `_segment_is_not_keyword_pair`, that a `=` precedes the next `;`; a
+    # brace-wrapped value is scanned as ONE unit (`_scan_braced_value`) so an
+    # embedded literal `;` does not truncate it.
+    @classmethod
+    def _parse_one_token(cls, config: str, i: int) -> tuple[str, str, int]:
+        n = len(config)
+        sep = config.find("=", i)
+        semi = config.find(";", i)
+        kw = config[i:sep].strip().upper()
+        val_start = sep + 1
+
+        if val_start < n and config[val_start] == "{":
+            value, j = cls._scan_braced_value(config, val_start + 1)
+            # After the closing brace, skip to just past the next ';'.
+            next_semi = config.find(";", j)
+            return kw, value, (next_semi + 1 if next_semi != -1 else n)
+
+        # Bare (unbraced) value: terminated by ';' or end-of-string.
+        end = semi if semi != -1 else n
+        return kw, config[val_start:end], end + 1
+
+    # Split an ODBC keyword string into (KEYWORD, value) pairs, splitting on
+    # `;` only OUTSIDE a brace-wrapped value -- that is the whole point of
+    # the ODBC brace-escape (see `_parse_one_token` for the scan).
     @classmethod
     def _parse_tokens(cls, config: str) -> list[tuple[str, str]]:
-        """Split an ODBC keyword string into (KEYWORD, value) pairs.
-
-        Unlike a naive ``config.split(";")``, this splits on ``;`` only
-        OUTSIDE of a brace-wrapped value (``KEY={...}``) -- a brace-wrapped
-        value may legitimately contain a literal ``;`` (that is the whole
-        point of the ODBC brace-escape), and a blind split truncates it.
-        See ``_scan_braced_value`` for the brace-quote scan itself.
-        """
         pairs: list[tuple[str, str]] = []
         i = 0
         n = len(config)
         while i < n:
-            # Find the end of this token's KEYWORD= prefix (up to '=' or ';').
             sep = config.find("=", i)
             semi = config.find(";", i)
-            if sep == -1 or (semi != -1 and semi < sep):
-                # No '=' before the next ';' (or no '=' at all) -- not a
-                # KEYWORD=value token; skip past this segment.
+            if cls._segment_is_not_keyword_pair(sep, semi):
+                # Skip past this non-token segment (up to the next ';', or end).
                 i = semi + 1 if semi != -1 else n
                 continue
-
-            kw = config[i:sep].strip().upper()
-            val_start = sep + 1
-
-            if val_start < n and config[val_start] == "{":
-                value, j = cls._scan_braced_value(config, val_start + 1)
-                pairs.append((kw, value))
-                # After the closing brace, skip to just past the next ';'.
-                next_semi = config.find(";", j)
-                i = next_semi + 1 if next_semi != -1 else n
-            else:
-                # Bare (unbraced) value: terminated by ';' or end-of-string.
-                end = semi if semi != -1 else n
-                pairs.append((kw, config[val_start:end]))
-                i = end + 1
+            kw, value, i = cls._parse_one_token(config, i)
+            pairs.append((kw, value))
         return pairs
 
     def quote_ident(self, name: str, *, context: str = "identifier") -> str:
@@ -420,22 +452,16 @@ class MySqlDialect(_DictConfigDialect):
     name = "mysql"
     _secret_keys = _MYSQL_SECRET_KEYS
 
-    def resolve_config(self, env: dict[str, str]) -> dict[str, object] | None:
-        """Build a mysql.connector kwargs dict from ANALYTICS_DB_* env vars."""
-        host = env.get("ANALYTICS_DB_HOST")
-        if not host:
-            return None
-        config: dict[str, object] = {"host": host}
-        port = env.get("ANALYTICS_DB_PORT")
-        if port:
-            config["port"] = int(port)
-        if env.get("ANALYTICS_DB_USER"):
-            config["user"] = env["ANALYTICS_DB_USER"]
-        if env.get("ANALYTICS_DB_PASSWORD"):
-            config["password"] = env["ANALYTICS_DB_PASSWORD"]
-        if env.get("ANALYTICS_DB_NAME"):
-            config["database"] = env["ANALYTICS_DB_NAME"]
-        return config
+    # mysql.connector kwargs dict: PORT is int-coerced (the connector expects
+    # an int port). resolve_config is inherited from _DictConfigDialect.
+    _anchor = ("ANALYTICS_DB_HOST", "host")
+    _optional = (
+        ("ANALYTICS_DB_PORT", "port"),
+        ("ANALYTICS_DB_USER", "user"),
+        ("ANALYTICS_DB_PASSWORD", "password"),
+        ("ANALYTICS_DB_NAME", "database"),
+    )
+    _int_keys = frozenset({"ANALYTICS_DB_PORT"})
 
     def _raw_connect(self, config: dict[str, object]) -> object:
         """Connect via mysql.connector (lazy import), read-only-posture autocommit."""
@@ -481,25 +507,17 @@ class SnowflakeDialect(_DictConfigDialect):
     name = "snowflake"
     _secret_keys = _SNOWFLAKE_SECRET_KEYS
 
-    def resolve_config(self, env: dict[str, str]) -> dict[str, object] | None:
-        """Build a snowflake.connector kwargs dict from ANALYTICS_DB_* env vars."""
-        account = env.get("ANALYTICS_DB_ACCOUNT")
-        if not account:
-            return None
-        config: dict[str, object] = {"account": account}
-        if env.get("ANALYTICS_DB_USER"):
-            config["user"] = env["ANALYTICS_DB_USER"]
-        if env.get("ANALYTICS_DB_PASSWORD"):
-            config["password"] = env["ANALYTICS_DB_PASSWORD"]
-        if env.get("ANALYTICS_DB_WAREHOUSE"):
-            config["warehouse"] = env["ANALYTICS_DB_WAREHOUSE"]
-        if env.get("ANALYTICS_DB_ROLE"):
-            config["role"] = env["ANALYTICS_DB_ROLE"]
-        if env.get("ANALYTICS_DB_NAME"):
-            config["database"] = env["ANALYTICS_DB_NAME"]
-        if env.get("ANALYTICS_DB_SCHEMA"):
-            config["schema"] = env["ANALYTICS_DB_SCHEMA"]
-        return config
+    # snowflake.connector kwargs dict (all values are strings).
+    # resolve_config is inherited from _DictConfigDialect.
+    _anchor = ("ANALYTICS_DB_ACCOUNT", "account")
+    _optional = (
+        ("ANALYTICS_DB_USER", "user"),
+        ("ANALYTICS_DB_PASSWORD", "password"),
+        ("ANALYTICS_DB_WAREHOUSE", "warehouse"),
+        ("ANALYTICS_DB_ROLE", "role"),
+        ("ANALYTICS_DB_NAME", "database"),
+        ("ANALYTICS_DB_SCHEMA", "schema"),
+    )
 
     def _raw_connect(self, config: dict[str, object]) -> object:
         """Connect via snowflake.connector (lazy import), autocommit posture."""
