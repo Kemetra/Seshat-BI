@@ -152,7 +152,9 @@ def _confidence_findings(
 ) -> list[Finding]:
     """A proposal MUST carry a valid confidence; any other record may omit it but
     must not carry an invalid one."""
-    if status == "proposed" and not _confidence_ok(conf):
+    if status == "proposed":
+        if _confidence_ok(conf):
+            return []
         return [
             _err(
                 "DS1",
@@ -161,7 +163,8 @@ def _confidence_findings(
                 loc,
             )
         ]
-    if status != "proposed" and conf is not None and not _confidence_ok(conf):
+    # Non-proposed: confidence is optional but, if present, must be valid.
+    if conf is not None and not _confidence_ok(conf):
         return [_err("DS1", f"decision {did!r} has invalid confidence {conf!r}", loc)]
     return []
 

@@ -252,16 +252,9 @@ def test_ds2_missing_evidence_identity_errors(tmp_path: Path) -> None:
 
 
 def test_ds2_approved_without_approval_block_errors(tmp_path: Path) -> None:
-    body = (
-        "decisions:\n"
-        "  - id: kpi_definition.net\n"
-        "    decision_type: kpi_definition\n"
-        "    statement: s\n"
-        "    scope: {kpis: [k]}\n"
-        "    status: approved\n"
-        "    evidence: [x.md]\n"
-        "    proposed_by: agent\n"
-        '    proposed_at: "2026-01-01"\n'
+    body = _store(
+        _decision(id="kpi_definition.net", decision_type="kpi_definition",
+                  scope="{kpis: [k]}", status="approved")
     )
     fs = _ids(check_ds2(_repo_ctx(tmp_path, {_KPI: body})), "DS2")
     assert any("no approval block" in f.message for f in fs)
@@ -322,22 +315,25 @@ def test_ds3_invalid_confirmed_by_errors(tmp_path: Path) -> None:
 # ---- DS4: supersession + conflicts ----------------------------------------
 
 
-def test_ds4_unresolved_supersede_ref_errors(tmp_path: Path) -> None:
-    body = (
-        "decisions:\n"
-        "  - id: table_grain.x.2\n"
-        "    decision_type: table_grain\n"
-        "    statement: s\n"
-        "    scope: {tables: [x]}\n"
-        "    status: proposed\n"
-        "    confidence: high\n"
-        "    evidence: [x.md]\n"
-        "    proposed_by: agent\n"
-        '    proposed_at: "2026-01-01"\n'
-        "    supersedes: table_grain.x.does_not_exist\n"
+@pytest.mark.parametrize(
+    "overrides, expected",
+    [
+        ({"id": "table_grain.x.2", "status": "proposed", "confidence": "high",
+          "supersedes": "table_grain.does_not_exist"}, "does not resolve"),
+        ({"status": "proposed", "confidence": "high",
+          "superseded_by": "table_grain.nope"}, "does not resolve"),
+        ({"status": "superseded"}, "no superseded_by"),
+        ({"status": "proposed", "confidence": "high", "supersedes": "[a, b]"},
+         "must be a string id"),
+    ],
+)
+def test_ds4_supersession_ref_errors(
+    tmp_path: Path, overrides: dict, expected: str
+) -> None:
+    fs = _ids(
+        check_ds4(_ctx(tmp_path, {_SEMANTIC: _store(_decision(**overrides))})), "DS4"
     )
-    fs = _ids(check_ds4(_ctx(tmp_path, {_SEMANTIC: body})), "DS4")
-    assert any("does not resolve" in f.message for f in fs)
+    assert any(expected in f.message for f in fs), (overrides, [f.message for f in fs])
 
 
 def test_ds4_conflicting_active_records_errors(tmp_path: Path) -> None:
@@ -359,22 +355,6 @@ def test_ds4_conflicting_active_records_errors(tmp_path: Path) -> None:
     )
     fs = _ids(check_ds4(_ctx(tmp_path, {_SEMANTIC: body})), "DS4")
     assert any("conflicting active" in f.message for f in fs)
-
-
-def test_ds4_superseded_without_ref_errors(tmp_path: Path) -> None:
-    body = (
-        "decisions:\n"
-        "  - id: table_grain.x\n"
-        "    decision_type: table_grain\n"
-        "    statement: s\n"
-        "    scope: {tables: [x]}\n"
-        "    status: superseded\n"
-        "    evidence: [x.md]\n"
-        "    proposed_by: agent\n"
-        '    proposed_at: "2026-01-01"\n'
-    )
-    fs = _ids(check_ds4(_ctx(tmp_path, {_SEMANTIC: body})), "DS4")
-    assert any("no superseded_by" in f.message for f in fs)
 
 
 # ---- DS5: verdict-consistency store invariant -----------------------------
@@ -427,24 +407,6 @@ def test_ds2_each_missing_required_key_errors(tmp_path: Path, key: str) -> None:
     assert any(key in f.message for f in fs), key
 
 
-def test_ds4_dangling_superseded_by_errors(tmp_path: Path) -> None:
-    body = (
-        "decisions:\n"
-        "  - id: table_grain.x\n"
-        "    decision_type: table_grain\n"
-        "    statement: s\n"
-        "    scope: {tables: [x]}\n"
-        "    status: proposed\n"
-        "    confidence: high\n"
-        "    evidence: [x.md]\n"
-        "    proposed_by: agent\n"
-        '    proposed_at: "2026-01-01"\n'
-        "    superseded_by: table_grain.nope\n"
-    )
-    fs = _ids(check_ds4(_ctx(tmp_path, {_SEMANTIC: body})), "DS4")
-    assert any("does not resolve" in f.message for f in fs)
-
-
 def test_ds3_unhashable_member_does_not_crash(tmp_path: Path) -> None:
     body = (
         "decisions: []\n"
@@ -459,24 +421,6 @@ def test_ds3_unhashable_member_does_not_crash(tmp_path: Path) -> None:
     # Must not raise -- a non-string member is flagged, not crashed on.
     fs = _ids(check_ds3(_ctx(tmp_path, {_SEMANTIC: body})), "DS3")
     assert any("not a string id" in f.message for f in fs)
-
-
-def test_ds4_unhashable_supersedes_does_not_crash(tmp_path: Path) -> None:
-    body = (
-        "decisions:\n"
-        "  - id: table_grain.x\n"
-        "    decision_type: table_grain\n"
-        "    statement: s\n"
-        "    scope: {tables: [x]}\n"
-        "    status: proposed\n"
-        "    confidence: high\n"
-        "    evidence: [x.md]\n"
-        "    proposed_by: agent\n"
-        '    proposed_at: "2026-01-01"\n'
-        "    supersedes: [a, b]\n"
-    )
-    fs = _ids(check_ds4(_ctx(tmp_path, {_SEMANTIC: body})), "DS4")
-    assert any("must be a string id" in f.message for f in fs)
 
 
 def test_ds3_batch_missing_evidence_errors(tmp_path: Path) -> None:
