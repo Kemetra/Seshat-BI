@@ -128,24 +128,7 @@ def _check_decision_shape(rec: dict[str, Any], rel: str) -> list[Finding]:
     if not isinstance(dtype, str) or not dtype:
         findings.append(_err("DS1", f"decision {did!r} has no decision_type", loc))
 
-    conf = rec.get("confidence")
-    if status == "proposed" and (
-        not isinstance(conf, str) or conf not in CONFIDENCE_VALUES
-    ):
-        findings.append(
-            _err(
-                "DS1",
-                f"proposed decision {did!r} needs confidence "
-                f"(one of {sorted(CONFIDENCE_VALUES)})",
-                loc,
-            )
-        )
-    elif conf is not None and (
-        not isinstance(conf, str) or conf not in CONFIDENCE_VALUES
-    ):
-        findings.append(
-            _err("DS1", f"decision {did!r} has invalid confidence {conf!r}", loc)
-        )
+    findings += _confidence_findings(rec.get("confidence"), status, did, loc)
 
     scope = rec.get("scope")
     if not _scope_is_nonempty(scope):
@@ -158,6 +141,29 @@ def _check_decision_shape(rec: dict[str, Any], rel: str) -> list[Finding]:
             )
         )
     return findings
+
+
+def _confidence_ok(conf: object) -> bool:
+    return isinstance(conf, str) and conf in CONFIDENCE_VALUES
+
+
+def _confidence_findings(
+    conf: object, status: object, did: object, loc: str
+) -> list[Finding]:
+    """A proposal MUST carry a valid confidence; any other record may omit it but
+    must not carry an invalid one."""
+    if status == "proposed" and not _confidence_ok(conf):
+        return [
+            _err(
+                "DS1",
+                f"proposed decision {did!r} needs confidence "
+                f"(one of {sorted(CONFIDENCE_VALUES)})",
+                loc,
+            )
+        ]
+    if status != "proposed" and conf is not None and not _confidence_ok(conf):
+        return [_err("DS1", f"decision {did!r} has invalid confidence {conf!r}", loc)]
+    return []
 
 
 def _is_nonempty_list(value: object) -> bool:

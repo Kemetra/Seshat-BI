@@ -51,23 +51,44 @@ def _ids(findings, rule_id: str) -> list:
     return fs
 
 
+# Field defaults for a single well-formed decision. A test overrides only the
+# field(s) under test and drops a field by passing it as None -- so each case is a
+# one-liner instead of a repeated 10-line YAML block (removes structural dup).
+_DEFAULTS: dict[str, str] = {
+    "id": "table_grain.x",
+    "decision_type": "table_grain",
+    "statement": "s",
+    "scope": "{tables: [x]}",
+    "status": "pending",
+    "evidence": "[x.md]",
+    "proposed_by": "agent",
+    "proposed_at": '"2026-01-01"',
+}
+
+
+def _decision(**overrides: object) -> str:
+    """One decision YAML block. Pass field=value to override; field=None to drop."""
+    fields = {**_DEFAULTS, **overrides}
+    lines = [f"    {k}: {v}" for k, v in fields.items() if v is not None]
+    first = lines[0].lstrip()
+    return "  - " + first + "\n" + "\n".join(lines[1:]) + "\n"
+
+
+def _store(*decisions: str) -> str:
+    return "decisions:\n" + "".join(decisions)
+
+
+def _ds1(tmp_path: Path, *decisions: str) -> list:
+    return _ids(check_ds1(_ctx(tmp_path, {_SEMANTIC: _store(*decisions)})), "DS1")
+
+
 # ---- DS1: layout / vocabulary / id / scope --------------------------------
 
 
 def test_ds1_clean_store_no_findings(tmp_path: Path) -> None:
-    body = (
-        "decisions:\n"
-        "  - id: table_grain.fct_sales\n"
-        "    decision_type: table_grain\n"
-        '    statement: "one sale line"\n'
-        "    scope: {tables: [fct_sales]}\n"
-        "    status: proposed\n"
-        "    confidence: high\n"
-        "    evidence: [x.md]\n"
-        "    proposed_by: agent\n"
-        '    proposed_at: "2026-01-01"\n'
-    )
-    assert list(check_ds1(_ctx(tmp_path, {_SEMANTIC: body}))) == []
+    clean = _decision(id="table_grain.fct_sales", scope="{tables: [fct_sales]}",
+                      status="proposed", confidence="high")
+    assert list(check_ds1(_ctx(tmp_path, {_SEMANTIC: _store(clean)}))) == []
 
 
 def test_ds1_absent_store_passes(tmp_path: Path) -> None:
@@ -76,75 +97,34 @@ def test_ds1_absent_store_passes(tmp_path: Path) -> None:
     assert list(check_ds1(ctx)) == []
 
 
-def test_ds1_invalid_status_errors(tmp_path: Path) -> None:
-    body = (
-        "decisions:\n"
-        "  - id: table_grain.x\n"
-        "    decision_type: table_grain\n"
-        "    statement: s\n"
-        "    scope: {tables: [x]}\n"
-        "    status: totally_made_up\n"
-        "    evidence: [x.md]\n"
-        "    proposed_by: agent\n"
-        '    proposed_at: "2026-01-01"\n'
-    )
-    fs = _ids(check_ds1(_ctx(tmp_path, {_SEMANTIC: body})), "DS1")
-    assert any("invalid status" in f.message for f in fs)
+# (bad-field, message) cases exercising one DS1 shape branch each.
+@pytest.mark.parametrize(
+    "overrides, expected",
+    [
+        ({"status": "totally_made_up"}, "invalid status"),
+        ({"id": "Not A Slug!"}, "malformed"),
+        ({"scope": "{}"}, "scope must name"),
+        ({"decision_type": None}, "no decision_type"),
+        ({"status": "proposed", "confidence": None}, "needs confidence"),
+        ({"confidence": "sky_high"}, "invalid confidence"),
+    ],
+)
+def test_ds1_shape_branch_errors(
+    tmp_path: Path, overrides: dict, expected: str
+) -> None:
+    fs = _ds1(tmp_path, _decision(**overrides))
+    assert any(expected in f.message for f in fs), (overrides, [f.message for f in fs])
+
+
+def test_ds1_invalid_status_is_error_severity(tmp_path: Path) -> None:
+    fs = _ds1(tmp_path, _decision(status="totally_made_up"))
     assert all(f.severity is Severity.ERROR for f in fs)
 
 
-def test_ds1_malformed_id_errors(tmp_path: Path) -> None:
-    body = (
-        "decisions:\n"
-        "  - id: Not A Slug!\n"
-        "    decision_type: table_grain\n"
-        "    statement: s\n"
-        "    scope: {tables: [x]}\n"
-        "    status: pending\n"
-        "    evidence: [x.md]\n"
-        "    proposed_by: agent\n"
-        '    proposed_at: "2026-01-01"\n'
-    )
-    assert any(
-        "malformed" in f.message
-        for f in _ids(check_ds1(_ctx(tmp_path, {_SEMANTIC: body})), "DS1")
-    )
-
-
-def test_ds1_empty_scope_errors(tmp_path: Path) -> None:
-    body = (
-        "decisions:\n"
-        "  - id: table_grain.x\n"
-        "    decision_type: table_grain\n"
-        "    statement: s\n"
-        "    scope: {}\n"
-        "    status: pending\n"
-        "    evidence: [x.md]\n"
-        "    proposed_by: agent\n"
-        '    proposed_at: "2026-01-01"\n'
-    )
-    assert any(
-        "scope must name" in f.message
-        for f in _ids(check_ds1(_ctx(tmp_path, {_SEMANTIC: body})), "DS1")
-    )
-
-
 def test_ds1_duplicate_id_errors(tmp_path: Path) -> None:
-    one = (
-        "  - id: table_grain.x\n"
-        "    decision_type: table_grain\n"
-        "    statement: s\n"
-        "    scope: {tables: [x]}\n"
-        "    status: pending\n"
-        "    evidence: [x.md]\n"
-        "    proposed_by: agent\n"
-        '    proposed_at: "2026-01-01"\n'
-    )
-    body = "decisions:\n" + one + one
-    assert any(
-        "appears 2 times" in f.message
-        for f in _ids(check_ds1(_ctx(tmp_path, {_SEMANTIC: body})), "DS1")
-    )
+    dup = _decision(id="table_grain.x")
+    fs = _ds1(tmp_path, dup, dup)
+    assert any("appears 2 times" in f.message for f in fs)
 
 
 def test_ds1_pii_shape_is_warning(tmp_path: Path) -> None:
@@ -463,54 +443,6 @@ def test_ds4_dangling_superseded_by_errors(tmp_path: Path) -> None:
     )
     fs = _ids(check_ds4(_ctx(tmp_path, {_SEMANTIC: body})), "DS4")
     assert any("does not resolve" in f.message for f in fs)
-
-
-def test_ds1_missing_decision_type_errors(tmp_path: Path) -> None:
-    body = (
-        "decisions:\n"
-        "  - id: table_grain.x\n"
-        "    statement: s\n"
-        "    scope: {tables: [x]}\n"
-        "    status: pending\n"
-        "    evidence: [x.md]\n"
-        "    proposed_by: agent\n"
-        '    proposed_at: "2026-01-01"\n'
-    )
-    fs = _ids(check_ds1(_ctx(tmp_path, {_SEMANTIC: body})), "DS1")
-    assert any("no decision_type" in f.message for f in fs)
-
-
-def test_ds1_proposed_without_confidence_errors(tmp_path: Path) -> None:
-    body = (
-        "decisions:\n"
-        "  - id: table_grain.x\n"
-        "    decision_type: table_grain\n"
-        "    statement: s\n"
-        "    scope: {tables: [x]}\n"
-        "    status: proposed\n"
-        "    evidence: [x.md]\n"
-        "    proposed_by: agent\n"
-        '    proposed_at: "2026-01-01"\n'
-    )
-    fs = _ids(check_ds1(_ctx(tmp_path, {_SEMANTIC: body})), "DS1")
-    assert any("needs confidence" in f.message for f in fs)
-
-
-def test_ds1_invalid_confidence_on_nonproposed_errors(tmp_path: Path) -> None:
-    body = (
-        "decisions:\n"
-        "  - id: table_grain.x\n"
-        "    decision_type: table_grain\n"
-        "    statement: s\n"
-        "    scope: {tables: [x]}\n"
-        "    status: pending\n"
-        "    confidence: sky_high\n"
-        "    evidence: [x.md]\n"
-        "    proposed_by: agent\n"
-        '    proposed_at: "2026-01-01"\n'
-    )
-    fs = _ids(check_ds1(_ctx(tmp_path, {_SEMANTIC: body})), "DS1")
-    assert any("invalid confidence" in f.message for f in fs)
 
 
 def test_ds3_unhashable_member_does_not_crash(tmp_path: Path) -> None:
