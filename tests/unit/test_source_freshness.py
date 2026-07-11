@@ -273,7 +273,7 @@ def test_hr4_multiple_tables_only_flags_the_offender(tmp_path: Path) -> None:
 
 
 def test_hr4_module_imports_no_database_or_network_driver() -> None:
-    src = (_REPO / "src" / "retail" / "rules" / "source_freshness.py").read_text(
+    src = (_REPO / "src" / "seshat" / "rules" / "source_freshness.py").read_text(
         encoding="utf-8"
     )
     for forbidden in (
@@ -290,7 +290,7 @@ def test_hr4_module_imports_no_database_or_network_driver() -> None:
 
 
 def test_hr4_module_never_writes_mapping_or_readiness_artifacts() -> None:
-    src = (_REPO / "src" / "retail" / "rules" / "source_freshness.py").read_text(
+    src = (_REPO / "src" / "seshat" / "rules" / "source_freshness.py").read_text(
         encoding="utf-8"
     )
     for forbidden in ("open(", '"w")', "write_text(", ".write("):

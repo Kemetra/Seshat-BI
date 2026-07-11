@@ -249,7 +249,7 @@ def test_passes_against_real_committed_contracts() -> None:
 
 def test_module_imports_no_database_driver() -> None:
     src = (
-        _REPO / "src" / "retail" / "rules" / "snapshot_time_additivity.py"
+        _REPO / "src" / "seshat" / "rules" / "snapshot_time_additivity.py"
     ).read_text(encoding="utf-8")
     for forbidden in ("import psycopg", "import sqlalchemy", ".connect(", "DSN"):
         assert forbidden not in src
@@ -258,7 +258,7 @@ def test_module_imports_no_database_driver() -> None:
 def test_no_module_scope_yaml_import() -> None:
     """Lazy import only -- the module stays stdlib-only at import scope (B1/B3)."""
     src = (
-        _REPO / "src" / "retail" / "rules" / "snapshot_time_additivity.py"
+        _REPO / "src" / "seshat" / "rules" / "snapshot_time_additivity.py"
     ).read_text(encoding="utf-8")
     lines = [ln.strip() for ln in src.splitlines()]
     assert "import yaml" not in lines  # top-level statement form would match exactly

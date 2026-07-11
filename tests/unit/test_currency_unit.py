@@ -368,7 +368,7 @@ def test_unit_and_currency_clash_are_independent_findings(tmp_path: Path) -> Non
 
 
 def test_hr11_module_imports_no_database_driver() -> None:
-    src = (_REPO / "src" / "retail" / "rules" / "currency_unit.py").read_text(
+    src = (_REPO / "src" / "seshat" / "rules" / "currency_unit.py").read_text(
         encoding="utf-8"
     )
     for forbidden in ("import psycopg", "import sqlalchemy", ".connect(", "DSN"):

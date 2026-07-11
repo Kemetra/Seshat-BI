@@ -300,7 +300,7 @@ def test_not_started_and_blocked_are_not_treated_as_findings_on_their_own(
 
 
 def test_module_imports_no_database_driver() -> None:
-    src = (_REPO / "src" / "retail" / "rules" / "rls_access.py").read_text(
+    src = (_REPO / "src" / "seshat" / "rules" / "rls_access.py").read_text(
         encoding="utf-8"
     )
     for forbidden in ("import psycopg", "import sqlalchemy", ".connect(", "DSN"):
@@ -348,7 +348,7 @@ def re_has_bare_number_confidence(message: str) -> bool:
 
 
 def test_no_c086_specific_token_in_rule_source() -> None:
-    src = (_REPO / "src" / "retail" / "rules" / "rls_access.py").read_text(
+    src = (_REPO / "src" / "seshat" / "rules" / "rls_access.py").read_text(
         encoding="utf-8"
     )
     for token in ("retail_store_sales", "_rss", "dim_location_rss", "dim_customer_rss"):

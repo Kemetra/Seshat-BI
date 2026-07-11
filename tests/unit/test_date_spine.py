@@ -221,7 +221,7 @@ def test_hr8_passes_against_real_committed_migrations() -> None:
 
 
 def test_hr8_module_imports_no_database_driver_or_validate() -> None:
-    src = (_REPO / "src" / "retail" / "rules" / "date_spine.py").read_text(
+    src = (_REPO / "src" / "seshat" / "rules" / "date_spine.py").read_text(
         encoding="utf-8"
     )
     for forbidden in (
@@ -256,7 +256,7 @@ def test_hr8_message_has_no_numeric_score(tmp_path: Path) -> None:
 
 
 def test_hr8_does_not_import_or_call_s7() -> None:
-    src = (_REPO / "src" / "retail" / "rules" / "date_spine.py").read_text(
+    src = (_REPO / "src" / "seshat" / "rules" / "date_spine.py").read_text(
         encoding="utf-8"
     )
     for forbidden in (

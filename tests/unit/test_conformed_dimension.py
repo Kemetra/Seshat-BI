@@ -241,7 +241,7 @@ def test_hr1_clean_on_real_committed_tree() -> None:
 
 
 def test_hr1_module_imports_no_database_driver() -> None:
-    src = (_REPO / "src" / "retail" / "rules" / "conformed_dimension.py").read_text(
+    src = (_REPO / "src" / "seshat" / "rules" / "conformed_dimension.py").read_text(
         encoding="utf-8"
     )
     for forbidden in ("import psycopg", "import sqlalchemy", ".connect(", "DSN"):

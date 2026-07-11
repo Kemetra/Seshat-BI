@@ -73,7 +73,7 @@ def test_c5_sentiment_color_allowed_zero_findings() -> None:
 def test_c6_current_committed_starter_theme_zero_findings() -> None:
     # The live starter theme, discovered via its real tracked path, must stay
     # green (SC-003): the rule does not break the current build.
-    ctx = _ctx("themes/tower-seshat.theme.json", repo_root=REPO_ROOT)
+    ctx = _ctx("themes/tower-retail.theme.json", repo_root=REPO_ROOT)
     assert list(check_theme_purity(ctx)) == []
 
 

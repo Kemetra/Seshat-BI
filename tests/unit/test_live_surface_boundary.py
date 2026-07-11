@@ -184,6 +184,6 @@ def test_real_dialect_module_has_no_module_scope_driver_imports() -> None:
     only this test (running against THIS worktree's source) does.
     """
     repo_root = Path(__file__).resolve().parents[2]
-    dialect_path = repo_root / "src" / "retail" / "dialect.py"
+    dialect_path = repo_root / "src" / "seshat" / "dialect.py"
     source = dialect_path.read_text(encoding="utf-8")
     assert module_scope_violations(source) == []

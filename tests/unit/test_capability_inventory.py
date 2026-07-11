@@ -53,7 +53,7 @@ def _imported_module_targets(node: ast.AST) -> set[str]:
         return {alias.name for alias in node.names}
     if isinstance(node, ast.ImportFrom) and node.module:
         base = {node.module}
-        if node.module == "retail":
+        if node.module == "seshat":
             base |= {
                 f"seshat.{a.name}" for a in node.names if a.name in _BANNED_SUBMODULES
             }
@@ -476,7 +476,7 @@ def test_generic_no_hardcoded_table() -> None:
     banned_tokens = ("c086", "C086", "retail_store_sales")
     sources = [
         Path(feeders.__file__).read_text(encoding="utf-8"),
-        (_REPO_ROOT / "src" / "retail" / "capability_inventory.py").read_text(
+        (_REPO_ROOT / "src" / "seshat" / "capability_inventory.py").read_text(
             encoding="utf-8"
         ),
         (_REPO_ROOT / "docs" / "capabilities" / "capabilities.yaml").read_text(

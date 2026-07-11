@@ -196,7 +196,7 @@ def test_hr12_multiple_incomplete_sections_each_named_individually(
 
 
 def test_hr12_module_imports_no_database_driver() -> None:
-    src = (_REPO / "src" / "retail" / "rules" / "source_data_contract.py").read_text(
+    src = (_REPO / "src" / "seshat" / "rules" / "source_data_contract.py").read_text(
         encoding="utf-8"
     )
     for forbidden in ("import psycopg", "import sqlalchemy", ".connect(", "DSN"):

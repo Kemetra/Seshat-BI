@@ -190,7 +190,7 @@ def test_real_core_modules_have_no_module_scope_execution_imports():
     registry or any rule module, this fails loud.
     """
     repo_root = Path(__file__).resolve().parents[2]
-    src_root = repo_root / "src" / "retail"
+    src_root = repo_root / "src" / "seshat"
     governed = [
         src_root / "runner.py",
         src_root / "core.py",

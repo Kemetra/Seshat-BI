@@ -246,7 +246,7 @@ def test_hr9_clean_on_real_committed_tree() -> None:
 
 
 def test_hr9_module_imports_no_database_driver() -> None:
-    src = (_REPO / "src" / "retail" / "rules" / "rename_impact_guard.py").read_text(
+    src = (_REPO / "src" / "seshat" / "rules" / "rename_impact_guard.py").read_text(
         encoding="utf-8"
     )
     for forbidden in ("import psycopg", "import sqlalchemy", ".connect(", "DSN"):

@@ -207,7 +207,7 @@ def test_hr7_sibling_upsert_does_not_clear_a_bare_append(tmp_path: Path) -> None
 
 
 def test_hr7_module_imports_no_database_driver() -> None:
-    src = (_REPO / "src" / "retail" / "rules" / "reload_idempotency.py").read_text(
+    src = (_REPO / "src" / "seshat" / "rules" / "reload_idempotency.py").read_text(
         encoding="utf-8"
     )
     for forbidden in ("import psycopg", "import sqlalchemy", ".connect(", "DSN"):

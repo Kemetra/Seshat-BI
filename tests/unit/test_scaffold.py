@@ -398,7 +398,7 @@ def test_scaffold_module_imports_only_stdlib_and_local() -> None:
                 root = alias.name.split(".")[0]
                 # `import seshat.rules` is a local package import (lazy, in-function)
                 # -- allowed; anything else must be stdlib.
-                assert root in stdlib_roots or root == "retail", (
+                assert root in stdlib_roots or root == "seshat", (
                     f"unexpected import: {alias.name}"
                 )
         elif isinstance(node, ast.ImportFrom):
@@ -406,7 +406,7 @@ def test_scaffold_module_imports_only_stdlib_and_local() -> None:
                 continue  # local relative import (.registry, .core) is fine
             root = (node.module or "").split(".")[0]
             # module-scope from-imports are all stdlib; local ones are relative.
-            assert root in stdlib_roots or root == "retail", (
+            assert root in stdlib_roots or root == "seshat", (
                 f"unexpected from-import: {node.module}"
             )
 

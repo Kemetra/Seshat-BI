@@ -78,7 +78,7 @@ def _is_dispatch_assign(node: ast.AST) -> bool:
 def dispatch_keys_via_ast(repo_root: Path) -> set[str]:
     """Independent AST read of _DISPATCH -- duplicated from capability_feeders
     on purpose (anti-circularity)."""
-    path = repo_root / "src" / "retail" / "cli" / "__init__.py"
+    path = repo_root / "src" / "seshat" / "cli" / "__init__.py"
     if not path.exists():
         return set()
     tree = ast.parse(path.read_text(encoding="utf-8-sig"))
