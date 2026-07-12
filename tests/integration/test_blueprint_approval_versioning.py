@@ -31,7 +31,7 @@ import pytest
 from seshat.decision_gate import verdict_for
 from seshat.rules.decision_store import check_ds4
 
-pytestmark = pytest.mark.integration
+pytestmark = pytest.mark.unit
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _FLOW_REL = "contracts/knowledge/database-to-pbip-flow.yaml"
