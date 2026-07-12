@@ -98,6 +98,72 @@ def test_cli_unapproved_visual_exit_one(tmp_path: Path):
     assert rc == 1
 
 
+def test_cli_blocks_on_missing_binding_map(tmp_path: Path):
+    # M1 fail-open regression (FR-030/FR-034): a blueprint that DECLARES visuals,
+    # a NONEXISTENT binding map, and an empty report dir previously rolled up to
+    # pass/exit 0 (no bindings -> no missing_elements detected). A check surface
+    # must fail CLOSED on an unreadable required expected-source.
+    report_dir = tmp_path / "Empty.Report"
+    report_dir.mkdir()
+    blueprint = tmp_path / "dashboard-page-blueprint.branch_perf.yaml"
+    blueprint.write_text(_BLUEPRINT_YAML, encoding="utf-8")
+    missing_binding = tmp_path / "does-not-exist.md"
+
+    rc = main(
+        [
+            "pbir-validate-blueprint",
+            "--report",
+            str(report_dir),
+            "--blueprint",
+            str(blueprint),
+            "--binding-map",
+            str(missing_binding),
+        ]
+    )
+    assert rc == 1
+
+
+def test_cli_blocks_on_missing_blueprint(tmp_path: Path):
+    report_dir, _blueprint, binding_map = _setup(tmp_path)
+    missing_blueprint = tmp_path / "no-such-blueprint.yaml"
+
+    rc = main(
+        [
+            "pbir-validate-blueprint",
+            "--report",
+            str(report_dir),
+            "--blueprint",
+            str(missing_blueprint),
+            "--binding-map",
+            str(binding_map),
+        ]
+    )
+    assert rc == 1
+
+
+def test_blocked_result_names_the_unreadable_source(tmp_path: Path):
+    # The blocked verdict must NAME the unreadable source (FR-034) and grant nothing.
+    from seshat.pbir_validate_blueprint import validate_blueprint
+
+    report_dir = tmp_path / "Empty.Report"
+    report_dir.mkdir()
+    blueprint = tmp_path / "dashboard-page-blueprint.branch_perf.yaml"
+    blueprint.write_text(_BLUEPRINT_YAML, encoding="utf-8")
+    missing_binding = tmp_path / "does-not-exist.md"
+
+    result = validate_blueprint(
+        report_dir=report_dir,
+        blueprint_path=blueprint,
+        binding_map_path=missing_binding,
+    )
+    assert result.status == "blocked"
+    assert result.grants_approval is False
+    assert any(
+        d.dimension == "unreadable_source" and str(missing_binding) in d.locator
+        for d in result.deviations
+    )
+
+
 def test_cli_writes_no_files(tmp_path: Path):
     report_dir, blueprint, binding_map = _setup(tmp_path)
     before = {p for p in report_dir.rglob("*") if p.is_file()}
