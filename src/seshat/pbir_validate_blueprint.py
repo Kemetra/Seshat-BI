@@ -114,6 +114,47 @@ def _read_text(path: Path) -> str | None:
         return None
 
 
+def _unreadable_source_blockers(
+    blueprint: dict[str, Any] | None,
+    blueprint_path: Path,
+    binding_text: str | None,
+    binding_map_path: Path,
+) -> list[Deviation]:
+    """A ``blocked`` deviation for each REQUIRED expected-source that is missing,
+    unreadable, or malformed (FR-030/FR-034). ``None`` from ``_load_yaml_mapping``
+    (absent file / non-mapping YAML) or ``_read_text`` (absent/undecodable file)
+    is fail-closed here rather than coerced to empty -- a validator with no
+    approved design to compare against must BLOCK, not silently pass."""
+    blockers: list[Deviation] = []
+    if blueprint is None:
+        blockers.append(
+            Deviation(
+                dimension="unreadable_source",
+                locator=str(blueprint_path),
+                message=(
+                    f"approved page blueprint at {blueprint_path} is missing, "
+                    f"unreadable, or not a YAML mapping -- validation blocked "
+                    f"(fail closed); supply the approved blueprint before "
+                    f"validating committed PBIR against it"
+                ),
+            )
+        )
+    if binding_text is None:
+        blockers.append(
+            Deviation(
+                dimension="unreadable_source",
+                locator=str(binding_map_path),
+                message=(
+                    f"approved visual-contract binding map at {binding_map_path} "
+                    f"is missing or unreadable -- validation blocked (fail closed); "
+                    f"supply the approved binding map before validating committed "
+                    f"PBIR against it"
+                ),
+            )
+        )
+    return blockers
+
+
 def _blueprint_visual_ids(blueprint: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """``{visual_id: entry}`` for every visual the approved blueprint declares."""
     visuals = blueprint.get("visuals")
@@ -327,8 +368,25 @@ def validate_blueprint(
         f"PBIR report dir: {report_dir}",
     ]
 
-    blueprint = _load_yaml_mapping(blueprint_path) or {}
-    binding_text = _read_text(binding_map_path) or ""
+    # Fail CLOSED on an unreadable REQUIRED expected-source (FR-030/FR-034). A
+    # check surface pointed at a missing/unreadable blueprint or binding map must
+    # BLOCK naming the source -- never let empty inputs roll up to `pass`/exit 0
+    # (that would report success for a report validated against nothing).
+    blueprint = _load_yaml_mapping(blueprint_path)
+    binding_text = _read_text(binding_map_path)
+    unreadable = _unreadable_source_blockers(
+        blueprint, blueprint_path, binding_text, binding_map_path
+    )
+    if unreadable:
+        return BlueprintValidationResult(
+            status="blocked",
+            deviations=tuple(unreadable),
+            unapproved_additions=(),
+            missing_elements=(),
+            evidence=tuple(evidence),
+            grants_approval=False,
+        )
+
     # Reuse the shipped table parser for identity/contract (never reimplemented);
     # attach the binding-map's own `visual_type` column (FR-030 needs it, the
     # shared parser does not carry it) via a narrow second pass over the SAME

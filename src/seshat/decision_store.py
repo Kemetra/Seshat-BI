@@ -46,7 +46,7 @@ STATUS_VALUES: frozenset[str] = frozenset(
     }
 )
 
-# The ten critical decision types (FR-018). Non-critical types are permitted and
+# The eleven critical decision types (FR-018). Non-critical types are permitted and
 # are the only ones eligible for batches (DS3).
 CRITICAL_DECISION_TYPES: frozenset[str] = frozenset(
     {

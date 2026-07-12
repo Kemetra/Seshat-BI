@@ -166,6 +166,73 @@ def test_compile_page_shell_blocked_with_no_approval_at_all(tmp_path: Path):
     assert _tree_snapshot(report) == before
 
 
+@pytest.mark.parametrize("status", ["superseded", "rejected", "pending", "proposed"])
+def test_compile_page_shell_blocked_when_status_is_not_approved(
+    tmp_path: Path, status: str
+):
+    # H1 (spec 123 US7 AC#5 / FR-023): a blueprint approval carrying a residual
+    # well-formed approval block but a status other than "approved" -- e.g. a DS4
+    # `superseded` record after the blueprint changed -- must BLOCK compilation and
+    # write nothing. approval_is_valid() validates the block but never reads status,
+    # so this branch was previously untested and compiled.
+    stale_approval = {**_VALID_APPROVAL, "status": status}
+    report = _report(tmp_path, _PAGE_SHELL_SAMPLE, "r.Report")
+    before = _tree_snapshot(report)
+    with pytest.raises(PbirCompileError, match=f"status {status!r}, not 'approved'"):
+        compile_page_shell(
+            report,
+            approval=stale_approval,
+            authority=_AUTHORITY,
+            report_id=_REPORT_ID,
+            page_slug="branch_perf",
+            display_name="Branch Performance",
+        )
+    assert _tree_snapshot(report) == before  # writes nothing
+
+
+@pytest.mark.parametrize("status", ["superseded", "rejected", "pending", "proposed"])
+def test_compile_line_chart_blocked_when_status_is_not_approved(
+    tmp_path: Path, status: str
+):
+    stale_approval = {**_VALID_APPROVAL, "status": status}
+    report = _report(tmp_path, _LINECHART_SAMPLE, "r.Report")
+    before = _tree_snapshot(report)
+    with pytest.raises(PbirCompileError, match=f"status {status!r}, not 'approved'"):
+        compile_line_chart(
+            report,
+            approval=stale_approval,
+            authority=_AUTHORITY,
+            report_id=_REPORT_ID,
+            page_name="pg",
+            visual_slug="sales_trend",
+            visual_type="lineChart",
+            binding_map=_BINDING_MAP,
+            binding_key="v05",
+            position={"x": 10, "y": 20, "width": 400, "height": 200},
+        )
+    assert _tree_snapshot(report) == before
+
+
+def test_compile_page_shell_blocked_when_approved_evidence_is_stale(tmp_path: Path):
+    # H1 staleness leg (research R-10): with a repo_root supplied, the compiler
+    # reuses the decision gate's _evidence_stale oracle. _VALID_APPROVAL cites an
+    # evidence file that does not exist under this repo_root, so its recorded
+    # identity cannot be re-verified -> stale -> BLOCK, writing nothing.
+    report = _report(tmp_path, _PAGE_SHELL_SAMPLE, "r.Report")
+    before = _tree_snapshot(report)
+    with pytest.raises(PbirCompileError, match="stale/missing evidence"):
+        compile_page_shell(
+            report,
+            approval=_VALID_APPROVAL,
+            authority=_AUTHORITY,
+            report_id=_REPORT_ID,
+            page_slug="branch_perf",
+            display_name="Branch Performance",
+            repo_root=tmp_path,
+        )
+    assert _tree_snapshot(report) == before
+
+
 def test_compile_visual_blocked_for_a_shape_with_no_verified_sample(tmp_path: Path):
     # KPI cards have no verified Desktop sample (D10) -- must block naming it,
     # write nothing, never fall back to the geometry.Report placeholder.

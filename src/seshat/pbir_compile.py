@@ -12,10 +12,14 @@ container this module created).
 
 THE GATES THIS MODULE ENFORCES (fail-closed, never a self-grant):
 
-1. **Approval gate** (FR-025): compilation runs only against a valid
-   ``dashboard_blueprint_approval`` decision, checked with the shared
-   ``approval_is_valid`` predicate (the SAME oracle DS2 and the readiness gate use --
-   no second approval system). A missing or invalid approval blocks, naming it.
+1. **Approval gate** (FR-023/FR-025): compilation runs only against a
+   ``dashboard_blueprint_approval`` decision whose ``status`` is ``approved``
+   (a post-approval blueprint change is marked ``superseded`` per DS4 and must be
+   re-approved -- FR-023/US7 AC#5), that is valid under the shared
+   ``approval_is_valid`` predicate (the SAME oracle DS2 and the readiness gate use
+   -- no second approval system), and whose cited evidence is not stale (reusing
+   the decision gate's ``_evidence_stale`` oracle when a ``repo_root`` is given).
+   A missing, non-``approved``, invalid, or stale approval blocks, naming it.
 
 2. **Verified-sample gate** (FR-029, D10): an element type may be created ONLY if it
    has an entry in ``_VERIFIED_SAMPLES`` -- today exactly ``page_shell`` (the real
@@ -58,6 +62,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+from .decision_gate import _evidence_stale
 from .decision_store import approval_is_valid
 
 _ID_DIGEST_LEN = 20  # matches the real samples' observed name width (20 hex chars)
@@ -108,12 +113,41 @@ def _require_verified_sample(element_type: str) -> None:
 
 
 def _require_valid_approval(
-    approval: dict[str, Any] | None, authority: dict[str, frozenset[str]] | None
+    approval: dict[str, Any] | None,
+    authority: dict[str, frozenset[str]] | None,
+    repo_root: Path | str | None = None,
 ) -> None:
+    """Fail closed unless ``approval`` is an ``approved``, valid, non-stale
+    ``dashboard_blueprint_approval`` decision.
+
+    Three gates, in order (each names the reason it blocks, FR-034):
+
+    1. **Status** (FR-023 / US7 AC#5): only ``status == "approved"`` may compile.
+       A blueprint changed after approval is marked ``superseded`` (DS4), and a
+       ``rejected`` / ``pending`` / ``proposed`` decision is not an approval --
+       every non-``approved`` status BLOCKS until a renewed approval lands.
+       ``approval_is_valid`` validates the approval *block* but never reads
+       ``status``, so this check is what closes the FR-023 hole.
+    2. **Validity**: the shared ``approval_is_valid`` predicate (the SAME oracle
+       DS2 and the readiness gate use -- an agent identity never satisfies
+       ``approved_by``).
+    3. **Staleness** (research R-10): when a ``repo_root`` is supplied, reuse the
+       decision gate's ``_evidence_stale`` oracle rather than forking it, so the
+       compiler and the gate can never disagree on whether cited evidence still
+       matches its recorded identity."""
     if approval is None:
         raise PbirCompileError(
             "no dashboard_blueprint_approval supplied -- compilation blocked "
             "(FR-025); a named report_owner must approve the blueprint first"
+        )
+    did = approval.get("id", "<no-id>")
+    status = approval.get("status")
+    if status != "approved":
+        raise PbirCompileError(
+            f"dashboard_blueprint_approval {did!r} has status {status!r}, not "
+            f"'approved' -- compilation blocked (FR-023/US7 AC#5); a blueprint "
+            f"changed after approval is superseded and must be re-approved before "
+            f"it can compile"
         )
     ok, reason = approval_is_valid(approval, authority)
     if not ok:
@@ -121,6 +155,14 @@ def _require_valid_approval(
             f"dashboard_blueprint_approval is not valid ({reason}) -- compilation "
             f"blocked (FR-025); an agent identity never satisfies approved_by"
         )
+    if repo_root is not None:
+        stale = _evidence_stale(repo_root, approval.get("approval", {}))
+        if stale:
+            raise PbirCompileError(
+                f"dashboard_blueprint_approval {did!r} cites stale/missing evidence "
+                f"{stale} -- compilation blocked (FR-023); the blueprint's approved "
+                f"evidence changed since sign-off and must be re-approved first"
+            )
 
 
 def _require_mapped_binding(
@@ -340,15 +382,18 @@ def compile_page_shell(
     report_id: str,
     page_slug: str,
     display_name: str,
+    repo_root: Path | str | None = None,
 ) -> list[Path]:
     """Compile Increment 1 (page shells): create one new page, registered in order.
 
-    Fails closed on a missing/invalid approval (FR-025) before touching anything.
-    Grounded in the verified real Desktop-authored empty-page sample (D10). Stages
-    the whole batch, validates it, and commits only if everything passes -- on any
-    failure the real report_dir is untouched (D13)."""
+    Fails closed on an approval that is missing, not ``approved`` (FR-023/US7
+    AC#5), invalid (FR-025), or -- when ``repo_root`` is supplied -- backed by
+    stale evidence (FR-023), before touching anything. Grounded in the verified
+    real Desktop-authored empty-page sample (D10). Stages the whole batch,
+    validates it, and commits only if everything passes -- on any failure the real
+    report_dir is untouched (D13)."""
     report_dir = Path(report_dir)
-    _require_valid_approval(approval, authority)
+    _require_valid_approval(approval, authority, repo_root)
     _require_verified_sample("page_shell")
 
     batch = _StagedBatch(report_dir)
@@ -373,17 +418,19 @@ def compile_line_chart(
     binding_map: dict[str, Any],
     binding_key: str,
     position: dict[str, Any],
+    repo_root: Path | str | None = None,
 ) -> list[Path]:
     """Compile Increment 3's lineChart: create one visual bound to an approved field.
 
-    Fails closed, in order, on: an invalid/missing approval (FR-025); a visual_type
-    with no verified sample (FR-029 -- only ``lineChart`` today); a binding_key
-    absent from the approved binding-map (FR-027, orphan bind). Grounded in the
-    data-goblin ``visual_fmt.Report`` sample's wire format (D10); never copies that
-    sample's own bound content. Same stage -> validate -> commit discipline as
-    ``compile_page_shell``."""
+    Fails closed, in order, on: an approval that is missing, not ``approved``
+    (FR-023/US7 AC#5), invalid (FR-025), or (with ``repo_root``) stale (FR-023); a
+    visual_type with no verified sample (FR-029 -- only ``lineChart`` today); a
+    binding_key absent from the approved binding-map (FR-027, orphan bind).
+    Grounded in the data-goblin ``visual_fmt.Report`` sample's wire format (D10);
+    never copies that sample's own bound content. Same stage -> validate -> commit
+    discipline as ``compile_page_shell``."""
     report_dir = Path(report_dir)
-    _require_valid_approval(approval, authority)
+    _require_valid_approval(approval, authority, repo_root)
     _require_verified_sample(visual_type)
     binding = _require_mapped_binding(binding_map, binding_key)
 
