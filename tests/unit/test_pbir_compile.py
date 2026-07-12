@@ -1,0 +1,428 @@
+"""Unit tests for the PBIR compiler (spec 123, US7, T035/T037/T037a/T038).
+
+Covers the ONE new primitive ADR 0017 authorizes -- ``create_page`` /
+``create_visual_container`` -- orchestrated by ``compile_page_shell`` /
+``compile_line_chart``. Every test sits on the real danger named in the ADR and
+`research.md` D9/D10/D11/D13:
+
+* deterministic ID minting (a pinned hash value, never random/time-based);
+* byte-identical determinism across reruns;
+* no partial write on a mid-batch failure (stage-validate-commit over a temp copy);
+* creation gated on (a) a valid ``dashboard_blueprint_approval`` and (b) a verified
+  Desktop-authored reference sample per element type (page shell / lineChart only --
+  everything else stays BLOCKED, memory: CRITICAL rail on this task);
+* binding only to a field on the approved binding-map (FR-027, no orphan visual);
+* the FR-003 guarantee extended to "nothing pre-existing changed" for a page shell;
+* the compiled lineChart carries the approved binding, not a copy of the
+  ``visual_fmt.Report`` sample's OTD-specific content (proves the sample is used only
+  as the wire-format proof, never as copied business content).
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import shutil
+from pathlib import Path
+
+import pytest
+
+from seshat.pbir_compile import (
+    PbirCompileError,
+    compile_line_chart,
+    compile_page_shell,
+    mint_element_id,
+)
+
+pytestmark = pytest.mark.unit
+
+_FIXTURES = Path(__file__).parent.parent / "fixtures" / "pbir"
+_PAGE_SHELL_SAMPLE = _FIXTURES / "page_shell.Report"
+_LINECHART_SAMPLE = _FIXTURES / "visual_fmt.Report"
+
+_REPORT_ID = "RetailStoreSales"
+
+_VALID_APPROVAL = {
+    "id": "dashboard_blueprint_approval.branch_perf",
+    "decision_type": "dashboard_blueprint_approval",
+    "status": "approved",
+    "approval": {
+        "approved_by": "R. Owner (report_owner)",
+        "approved_at": "2026-07-12",
+        "source": "review",
+        "evidence": ["mappings/retail_store_sales/design/dashboard-layout.md"],
+        "evidence_identity": {
+            "mappings/retail_store_sales/design/dashboard-layout.md": "deadbeef"
+        },
+        "reviewed_scope": "{artifacts: [dashboard_blueprint.branch_perf]}",
+    },
+}
+
+_AGENT_APPROVAL = {
+    "id": "dashboard_blueprint_approval.branch_perf",
+    "decision_type": "dashboard_blueprint_approval",
+    "status": "approved",
+    "approval": {
+        "approved_by": "agent",
+        "approved_at": "2026-07-12",
+        "source": "review",
+        "evidence": ["mappings/retail_store_sales/design/dashboard-layout.md"],
+        "evidence_identity": {
+            "mappings/retail_store_sales/design/dashboard-layout.md": "deadbeef"
+        },
+        "reviewed_scope": "{artifacts: [dashboard_blueprint.branch_perf]}",
+    },
+}
+
+_AUTHORITY = {"dashboard_blueprint_approval": frozenset({"report_owner"})}
+
+_BINDING_MAP = {
+    "v05": {
+        "bound_contract": "TotalSales",
+        "measures": ["fct_sales_rss.total_sales"],
+        "dimensions": ["dim_date_rss.full_date"],
+    }
+}
+
+
+def _report(tmp_path: Path, sample: Path, name: str) -> Path:
+    dst = tmp_path / name
+    shutil.copytree(sample, dst)
+    return dst
+
+
+def _pages_json(report: Path) -> dict:
+    return json.loads(
+        (report / "definition" / "pages" / "pages.json").read_text(encoding="utf-8-sig")
+    )
+
+
+def _tree_snapshot(report: Path) -> dict[str, bytes]:
+    return {
+        str(p.relative_to(report)): p.read_bytes()
+        for p in sorted(report.rglob("*"))
+        if p.is_file()
+    }
+
+
+# ---------------------------------------------------------------------------
+# Deterministic ID minting (FR-027 / US7#4) -- pinned, not just run1==run2
+# ---------------------------------------------------------------------------
+
+
+def test_mint_element_id_matches_the_spec_algorithm():
+    # The algorithm IS the spec: truncated hashlib digest of report_id+slug,
+    # never random/time-based. Pin the exact value for a known input so a
+    # fast time-based implementation cannot slip through a run1==run2 check.
+    expected = hashlib.sha256(f"{_REPORT_ID}branch_perf".encode()).hexdigest()[:20]
+    assert mint_element_id(_REPORT_ID, "branch_perf") == expected
+    assert len(expected) == 20  # matches the real samples' observed id width
+
+
+def test_mint_element_id_is_deterministic_across_calls():
+    a = mint_element_id(_REPORT_ID, "branch_perf")
+    b = mint_element_id(_REPORT_ID, "branch_perf")
+    assert a == b
+
+
+def test_mint_element_id_differs_by_slug():
+    a = mint_element_id(_REPORT_ID, "branch_perf")
+    b = mint_element_id(_REPORT_ID, "exec_summary")
+    assert a != b
+
+
+# ---------------------------------------------------------------------------
+# T037a -- preconditions gate (FR-025/FR-029, US7#2 + US7#5)
+# ---------------------------------------------------------------------------
+
+
+def test_compile_page_shell_blocked_without_valid_approval(tmp_path: Path):
+    report = _report(tmp_path, _PAGE_SHELL_SAMPLE, "r.Report")
+    before = _tree_snapshot(report)
+    with pytest.raises(PbirCompileError, match="dashboard_blueprint_approval"):
+        compile_page_shell(
+            report,
+            approval=_AGENT_APPROVAL,
+            authority=_AUTHORITY,
+            report_id=_REPORT_ID,
+            page_slug="branch_perf",
+            display_name="Branch Performance",
+        )
+    assert _tree_snapshot(report) == before  # writes nothing
+
+
+def test_compile_page_shell_blocked_with_no_approval_at_all(tmp_path: Path):
+    report = _report(tmp_path, _PAGE_SHELL_SAMPLE, "r.Report")
+    before = _tree_snapshot(report)
+    with pytest.raises(PbirCompileError, match="dashboard_blueprint_approval"):
+        compile_page_shell(
+            report,
+            approval=None,
+            authority=_AUTHORITY,
+            report_id=_REPORT_ID,
+            page_slug="branch_perf",
+            display_name="Branch Performance",
+        )
+    assert _tree_snapshot(report) == before
+
+
+def test_compile_visual_blocked_for_a_shape_with_no_verified_sample(tmp_path: Path):
+    # KPI cards have no verified Desktop sample (D10) -- must block naming it,
+    # write nothing, never fall back to the geometry.Report placeholder.
+    report = _report(tmp_path, _LINECHART_SAMPLE, "r.Report")
+    before = _tree_snapshot(report)
+    with pytest.raises(PbirCompileError, match="no verified reference sample"):
+        compile_line_chart(
+            report,
+            approval=_VALID_APPROVAL,
+            authority=_AUTHORITY,
+            report_id=_REPORT_ID,
+            page_name="pg",
+            visual_slug="exec_kpi_sales",
+            visual_type="card",
+            binding_map=_BINDING_MAP,
+            binding_key="v05",
+            position={"x": 0, "y": 0, "width": 200, "height": 120},
+        )
+    assert _tree_snapshot(report) == before
+
+
+def test_compile_visual_blocked_for_unmapped_binding_key(tmp_path: Path):
+    report = _report(tmp_path, _LINECHART_SAMPLE, "r.Report")
+    before = _tree_snapshot(report)
+    with pytest.raises(PbirCompileError, match="not on the approved binding"):
+        compile_line_chart(
+            report,
+            approval=_VALID_APPROVAL,
+            authority=_AUTHORITY,
+            report_id=_REPORT_ID,
+            page_name="pg",
+            visual_slug="trend",
+            visual_type="lineChart",
+            binding_map=_BINDING_MAP,
+            binding_key="v_orphan",  # not in _BINDING_MAP
+            position={"x": 0, "y": 0, "width": 400, "height": 200},
+        )
+    assert _tree_snapshot(report) == before
+
+
+# ---------------------------------------------------------------------------
+# T037 -- Increment 1 page shells (UNBLOCKED)
+# ---------------------------------------------------------------------------
+
+
+def test_compile_page_shell_writes_page_and_registers_it(tmp_path: Path):
+    report = _report(tmp_path, _PAGE_SHELL_SAMPLE, "r.Report")
+    existing_page_dir = report / "definition" / "pages" / "a1b2c3d4e5f600112233"
+    before_existing = _tree_snapshot(existing_page_dir)
+    before_report_json = (report / "definition" / "report.json").read_bytes()
+
+    written = compile_page_shell(
+        report,
+        approval=_VALID_APPROVAL,
+        authority=_AUTHORITY,
+        report_id=_REPORT_ID,
+        page_slug="branch_perf",
+        display_name="Branch Performance",
+    )
+    assert written  # non-empty write list
+
+    expected_name = mint_element_id(_REPORT_ID, "branch_perf")
+    new_page_json = report / "definition" / "pages" / expected_name / "page.json"
+    assert new_page_json.is_file()
+    doc = json.loads(new_page_json.read_text(encoding="utf-8-sig"))
+    assert doc["name"] == expected_name
+    assert doc["displayName"] == "Branch Performance"
+    # grounded in the verified sample's real shape -- same schema + canvas fields
+    assert doc["$schema"].endswith("page/2.1.0/schema.json")
+    assert {"width", "height"} <= doc.keys()
+
+    pages = _pages_json(report)
+    assert expected_name in pages["pageOrder"]
+    assert "a1b2c3d4e5f600112233" in pages["pageOrder"]  # original page kept
+
+    # FR-003 extended: nothing PRE-EXISTING changed.
+    assert _tree_snapshot(existing_page_dir) == before_existing
+    assert (report / "definition" / "report.json").read_bytes() == before_report_json
+
+
+def test_compile_page_shell_is_byte_deterministic_on_rerun(tmp_path: Path):
+    report_a = _report(tmp_path, _PAGE_SHELL_SAMPLE, "a.Report")
+    report_b = _report(tmp_path, _PAGE_SHELL_SAMPLE, "b.Report")
+
+    compile_page_shell(
+        report_a,
+        approval=_VALID_APPROVAL,
+        authority=_AUTHORITY,
+        report_id=_REPORT_ID,
+        page_slug="branch_perf",
+        display_name="Branch Performance",
+    )
+    compile_page_shell(
+        report_b,
+        approval=_VALID_APPROVAL,
+        authority=_AUTHORITY,
+        report_id=_REPORT_ID,
+        page_slug="branch_perf",
+        display_name="Branch Performance",
+    )
+
+    name = mint_element_id(_REPORT_ID, "branch_perf")
+    page_a = report_a / "definition" / "pages" / name / "page.json"
+    page_b = report_b / "definition" / "pages" / name / "page.json"
+    assert page_a.read_bytes() == page_b.read_bytes()
+
+    pages_a = (report_a / "definition" / "pages" / "pages.json").read_bytes()
+    pages_b = (report_b / "definition" / "pages" / "pages.json").read_bytes()
+    assert pages_a == pages_b
+
+
+def test_compile_page_shell_rerun_on_same_report_is_idempotent(tmp_path: Path):
+    report = _report(tmp_path, _PAGE_SHELL_SAMPLE, "r.Report")
+    compile_page_shell(
+        report,
+        approval=_VALID_APPROVAL,
+        authority=_AUTHORITY,
+        report_id=_REPORT_ID,
+        page_slug="branch_perf",
+        display_name="Branch Performance",
+    )
+    name = mint_element_id(_REPORT_ID, "branch_perf")
+    page_json = report / "definition" / "pages" / name / "page.json"
+    first = page_json.read_bytes()
+
+    compile_page_shell(
+        report,
+        approval=_VALID_APPROVAL,
+        authority=_AUTHORITY,
+        report_id=_REPORT_ID,
+        page_slug="branch_perf",
+        display_name="Branch Performance",
+    )
+    assert page_json.read_bytes() == first
+    pages = _pages_json(report)
+    assert pages["pageOrder"].count(name) == 1  # no duplicate entry
+
+
+def test_compile_page_shell_no_partial_write_on_injected_validation_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # Inject a failure INSIDE the validate phase of the staged batch (not an OS
+    # write error) and assert the real report dir is untouched -- proves the
+    # temp-dir stage->validate->commit discipline, not accidental atomicity.
+    report = _report(tmp_path, _PAGE_SHELL_SAMPLE, "r.Report")
+    before = _tree_snapshot(report)
+
+    import seshat.pbir_compile as compile_mod
+
+    def _boom(*_args, **_kwargs):
+        raise PbirCompileError("injected validation failure")
+
+    monkeypatch.setattr(compile_mod, "_validate_staged_batch", _boom)
+
+    with pytest.raises(PbirCompileError, match="injected validation failure"):
+        compile_page_shell(
+            report,
+            approval=_VALID_APPROVAL,
+            authority=_AUTHORITY,
+            report_id=_REPORT_ID,
+            page_slug="branch_perf",
+            display_name="Branch Performance",
+        )
+    assert _tree_snapshot(report) == before  # nothing written
+
+
+# ---------------------------------------------------------------------------
+# T038 -- Increment 3 lineChart (UNBLOCKED, data-goblin visual_fmt.Report sample)
+# ---------------------------------------------------------------------------
+
+
+def test_compile_line_chart_binds_only_to_approved_map_field(tmp_path: Path):
+    report = _report(tmp_path, _LINECHART_SAMPLE, "r.Report")
+
+    written = compile_line_chart(
+        report,
+        approval=_VALID_APPROVAL,
+        authority=_AUTHORITY,
+        report_id=_REPORT_ID,
+        page_name="pg",
+        visual_slug="sales_trend",
+        visual_type="lineChart",
+        binding_map=_BINDING_MAP,
+        binding_key="v05",
+        position={"x": 10, "y": 20, "width": 400, "height": 200},
+    )
+    assert written
+
+    name = mint_element_id(_REPORT_ID, "sales_trend")
+    visual_json = (
+        report / "definition" / "pages" / "pg" / "visuals" / name / "visual.json"
+    )
+    assert visual_json.is_file()
+    doc = json.loads(visual_json.read_text(encoding="utf-8-sig"))
+    assert doc["visual"]["visualType"] == "lineChart"
+    raw = visual_json.read_text(encoding="utf-8-sig")
+
+    # Proves the compiler used the sample only as a WIRE-FORMAT proof: the
+    # approved contract's fields are present...
+    assert "fct_sales_rss" in raw or "total_sales" in raw
+    assert "full_date" in raw
+    # ...and the sample's OTD-specific business content was NOT dragged along
+    # (that would be an orphan bind + FR-027 violation).
+    assert "On-Time Delivery" not in raw
+    assert "OTD" not in raw
+
+
+def test_compile_line_chart_is_byte_deterministic_on_rerun(tmp_path: Path):
+    report_a = _report(tmp_path, _LINECHART_SAMPLE, "a.Report")
+    report_b = _report(tmp_path, _LINECHART_SAMPLE, "b.Report")
+    kwargs = dict(
+        approval=_VALID_APPROVAL,
+        authority=_AUTHORITY,
+        report_id=_REPORT_ID,
+        page_name="pg",
+        visual_slug="sales_trend",
+        visual_type="lineChart",
+        binding_map=_BINDING_MAP,
+        binding_key="v05",
+        position={"x": 10, "y": 20, "width": 400, "height": 200},
+    )
+    compile_line_chart(report_a, **kwargs)
+    compile_line_chart(report_b, **kwargs)
+    name = mint_element_id(_REPORT_ID, "sales_trend")
+    a = (
+        report_a / "definition" / "pages" / "pg" / "visuals" / name / "visual.json"
+    ).read_bytes()
+    b = (
+        report_b / "definition" / "pages" / "pg" / "visuals" / name / "visual.json"
+    ).read_bytes()
+    assert a == b
+
+
+def test_compile_line_chart_no_partial_write_on_injected_validation_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    report = _report(tmp_path, _LINECHART_SAMPLE, "r.Report")
+    before = _tree_snapshot(report)
+
+    import seshat.pbir_compile as compile_mod
+
+    def _boom(*_args, **_kwargs):
+        raise PbirCompileError("injected validation failure")
+
+    monkeypatch.setattr(compile_mod, "_validate_staged_batch", _boom)
+
+    with pytest.raises(PbirCompileError, match="injected validation failure"):
+        compile_line_chart(
+            report,
+            approval=_VALID_APPROVAL,
+            authority=_AUTHORITY,
+            report_id=_REPORT_ID,
+            page_name="pg",
+            visual_slug="sales_trend",
+            visual_type="lineChart",
+            binding_map=_BINDING_MAP,
+            binding_key="v05",
+            position={"x": 10, "y": 20, "width": 400, "height": 200},
+        )
+    assert _tree_snapshot(report) == before
