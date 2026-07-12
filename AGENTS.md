@@ -91,6 +91,7 @@ Verbs the agent drives:
 - `retail-orchestrate` -- conductor -- sequence the medallion verbs, self-heal against the gate
 - `first-hour-compass` -- first-arrival worked-example offer + single-source seam list + single-table orientation card
 - `retail-onboard-table` -- Source->Mapping front door; owns the Stage-1 read-only DB-backed profile (grain candidates, column types)
+- `retail-discover-portfolio` -- metadata-only portfolio discovery -> governed domain/scope proposals -> selected-table onboarding -> interview handoff
 - `business-knowledge-interview` -- after DB discovery, interview the owner into the Decision Store (batch low-risk, explicit critical); records decisions, never self-grants approval
 - `source-mapping` -- the mapping gate -- produces source-map.yaml
 - `retail-build-warehouse` -- author silver/gold SQL; stop before executing

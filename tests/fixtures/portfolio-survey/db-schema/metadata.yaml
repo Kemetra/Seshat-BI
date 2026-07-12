@@ -1,0 +1,32 @@
+source_kind: db-schema
+source_identity: analytics
+tables:
+  - table_id: analytics.orders
+    columns: {order_id: bigint, customer_id: bigint, order_date: date, total_amount: numeric}
+    declared_pk: [order_id]
+    declared_fks: [customer_id -> analytics.customers.customer_id]
+    approx_row_count: 125000
+  - table_id: analytics.order_items
+    columns: {order_item_id: bigint, order_id: bigint, product_id: bigint, quantity: integer}
+    declared_pk: [order_item_id]
+    declared_fks:
+      - order_id -> analytics.orders.order_id
+      - product_id -> analytics.products.product_id
+    approx_row_count: 480000
+  - table_id: analytics.customers
+    columns: {customer_id: bigint, customer_email: varchar, created_at: timestamp}
+    declared_pk: [customer_id]
+    declared_fks: []
+    approx_row_count: 42000
+  - table_id: analytics.products
+    columns: {product_id: bigint, category_id: bigint, product_name: varchar}
+    declared_pk: [product_id]
+    declared_fks: [category_id -> analytics.categories.category_id]
+    approx_row_count: 8500
+  - table_id: analytics.categories
+    columns: {category_id: bigint, category_name: varchar}
+    declared_pk: [category_id]
+    declared_fks: []
+    approx_row_count:
+      unavailable: permission denied for relation statistics
+      enabling_step: grant metadata-statistics access

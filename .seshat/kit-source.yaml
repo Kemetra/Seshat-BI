@@ -22,6 +22,8 @@ verbs:
     purpose: "first-arrival worked-example offer + single-source seam list + single-table orientation card"
   - id: retail-onboard-table
     purpose: "Source->Mapping front door; owns the Stage-1 read-only DB-backed profile (grain candidates, column types)"
+  - id: retail-discover-portfolio
+    purpose: "metadata-only portfolio discovery -> governed domain/scope proposals -> selected-table onboarding -> interview handoff"
   - id: business-knowledge-interview
     purpose: "after DB discovery, interview the owner into the Decision Store (batch low-risk, explicit critical); records decisions, never self-grants approval"
   - id: source-mapping
