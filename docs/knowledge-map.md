@@ -46,6 +46,9 @@ ONLY the file(s) that `INDEX.md` names — never the whole knowledge base.
 | 20. BI handoff pack | Readiness | `docs/readiness/publish-ready.md` | BI handoff pack |
 | 21. Power BI execution adapter | Roadmap (gated) | `docs/roadmap/roadmap.md` | blocked verdict (gated F016 / execution-only / later) |
 | 22. Unknown / ambiguous request | Compass | `COMPASS.md` | clarifying question or blocked verdict |
+| 23. Business knowledge interview (after DB discovery) | Interview | `contracts/interview/business-knowledge-interview.yaml` | decisions recorded in the Decision Store + `evidence/business-interview-review.md` |
+| 24. Record / read a business decision | Decision Store | `.seshat/{semantic-decisions,kpi-contracts,cleaning-rules}.yaml` (blanks in `templates/`) | a proposed/approved/… decision record (DS1-DS5 enforced) |
+| 25. Is a stage ready? (decision gate verdict) | Decision gate | `contracts/knowledge/database-to-pbip-flow.yaml` | pass / warn / blocked verdict with named blocking decisions |
 
 ## Route by symptom (knowledge layer)
 

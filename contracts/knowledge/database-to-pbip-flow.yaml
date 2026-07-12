@@ -1,0 +1,179 @@
+# =============================================================================
+# database-to-pbip-flow.yaml  --  per-stage Knowledge Contracts (spec 121)
+# =============================================================================
+# One entry per stage of the agent-guided Database-to-PBIP flow. Each entry
+# declares the stage's allowed knowledge routes, required inputs/outputs, stop
+# rules (each naming what unblocks it), the decision categories that block it
+# while unresolved, its handoff target, its non-goals, and its evidence
+# requirements. See specs/121-business-knowledge-interview/contracts/
+# knowledge-contract.schema.json for the shape.
+#
+# BOUNDARY INVARIANTS (enforced across entries, not restated per stage):
+#   * a KPI-MEANING question routes to retail_kpi from ANY stage (never invented
+#     in the DAX/semantic stage);
+#   * the bigdata route requires RECORDED scale evidence -- absent it, the route
+#     is python;
+#   * an execution adapter is granted NO authority to define meaning, mapping,
+#     metrics, semantic logic, or approval in any stage.
+#
+# Contracts REFERENCE the knowledge-map routes; they never duplicate or restate
+# the SQL / DAX / Python / Big-data / Retail-KPI knowledge bases (FR-031).
+# =============================================================================
+
+version: 1
+
+stages:
+  - stage: discovery
+    allowed_routes: [readiness]
+    required_inputs: ["a reachable source (read-only profile access)"]
+    required_outputs: ["a committed discovery profile (tables, columns, types, candidate grains)"]
+    stop_rules:
+      - condition: "no source profile can be produced"
+        unblocked_by: "a completed read-only source profile"
+    blocking_decision_categories: []
+    handoff: domain_guess
+    non_goals: ["defining business meaning", "writing any silver SQL", "connecting Power BI"]
+    evidence_requirements: ["the committed source profile artifact"]
+
+  - stage: domain_guess
+    allowed_routes: [readiness, retail_kpi]
+    required_inputs: ["a committed discovery profile"]
+    required_outputs: ["a proposed domain classification (retail sub-domain), recorded as a proposed decision"]
+    stop_rules:
+      - condition: "the profile is missing or empty"
+        unblocked_by: "a discovery profile from the prior stage"
+    blocking_decision_categories: []
+    handoff: scope_proposal
+    non_goals: ["approving the domain", "defining KPIs"]
+    evidence_requirements: ["the profile facts the guess rests on"]
+
+  - stage: scope_proposal
+    allowed_routes: [readiness, retail_kpi]
+    required_inputs: ["a committed discovery profile", "a proposed domain classification"]
+    required_outputs: ["a proposed scope (tables/KPIs in first cut), recorded as proposed decisions"]
+    stop_rules:
+      - condition: "no domain guess exists"
+        unblocked_by: "a recorded domain-guess decision"
+    blocking_decision_categories: []
+    handoff: business_knowledge_interview
+    non_goals: ["approving scope without the owner", "building anything"]
+    evidence_requirements: ["the profile + domain evidence the scope rests on"]
+
+  - stage: business_knowledge_interview
+    allowed_routes: [readiness, retail_kpi, sql, python]
+    required_inputs: ["a committed discovery profile", "a proposed scope"]
+    required_outputs:
+      - "decisions recorded in the Decision Store for KPI meaning, PII, grain, keys, relationships, missing-value rules, and ambiguous financial/quantity/date columns"
+      - "a regenerated evidence/business-interview-review.md"
+    stop_rules:
+      - condition: "no committed discovery profile exists"
+        unblocked_by: "a discovery profile"
+      - condition: "a suspected-PII column would be shown raw"
+        unblocked_by: "a masked sample, or an explicit owner unmasking decision"
+    blocking_decision_categories: []
+    handoff: kpi_contracts
+    non_goals:
+      - "defining the metric contract or DAX (route KPI meaning to retail_kpi)"
+      - "self-granting any approval"
+      - "emitting a numeric confidence score"
+    evidence_requirements: ["profile summaries and masked samples cited by each decision"]
+
+  - stage: kpi_contracts
+    allowed_routes: [retail_kpi, sql]
+    required_inputs: ["approved kpi_definition decisions", "approved policy_ruling decisions where they apply"]
+    required_outputs: ["governed metric contracts for the approved KPI meanings"]
+    stop_rules:
+      - condition: "a KPI's meaning is not approved"
+        unblocked_by: "an approved kpi_definition decision for that KPI"
+      - condition: "a VAT/returns/discount/cost policy affecting the KPI is unresolved"
+        unblocked_by: "an approved policy_ruling decision"
+    blocking_decision_categories: [kpi_definition, policy_ruling, missing_value_rule]
+    handoff: silver_gold_model_planning
+    non_goals: ["inventing KPI meaning (it must already be approved)", "writing DAX"]
+    evidence_requirements: ["the approved decision(s) each contract binds to"]
+
+  - stage: silver_gold_model_planning
+    allowed_routes: [sql, readiness, python, bigdata]
+    required_inputs: ["approved table_grain, primary_key, and relationship_cardinality decisions"]
+    required_outputs: ["a planned silver/gold model (grain, keys, relationships) -- SQL authored, not executed"]
+    stop_rules:
+      - condition: "a table's grain is not approved"
+        unblocked_by: "an approved table_grain decision"
+      - condition: "a primary key or relationship the model depends on is unresolved"
+        unblocked_by: "an approved primary_key / relationship_cardinality decision"
+      - condition: "a scale-out (bigdata) route is proposed without recorded scale evidence"
+        unblocked_by: "recorded evidence the data exceeds single-node capacity (else use python)"
+    blocking_decision_categories:
+      [table_grain, primary_key, relationship_cardinality, data_exclusion, missing_value_rule, pii_handling]
+    handoff: semantic_model_dax
+    non_goals: ["executing SQL", "defining KPI meaning", "scaling out without scale evidence"]
+    evidence_requirements: ["the approved grain/key/relationship decisions the plan rests on"]
+
+  - stage: semantic_model_dax
+    allowed_routes: [dax, retail_kpi, readiness]
+    required_inputs: ["governed metric contracts", "a planned gold model"]
+    required_outputs: ["DAX measures implementing the approved contracts + semantic-model prerequisites"]
+    stop_rules:
+      - condition: "a measure would require a KPI meaning that is not approved"
+        unblocked_by: "route the meaning question to retail_kpi and obtain an approved contract"
+    blocking_decision_categories: [kpi_definition, policy_ruling]
+    handoff: report_intent
+    non_goals:
+      - "defining or redefining a KPI's business meaning (that lives in retail_kpi)"
+      - "designing dashboard visuals"
+    evidence_requirements: ["the approved contract each measure implements"]
+
+  - stage: report_intent
+    allowed_routes: [dashboard_design, retail_kpi, readiness]
+    required_inputs: ["approved metric contracts", "a semantic model"]
+    required_outputs: ["a recorded report intent (questions the report answers)"]
+    stop_rules:
+      - condition: "a metric the report intends to show has no approved contract"
+        unblocked_by: "an approved contract for that metric"
+    blocking_decision_categories: [kpi_definition, pii_handling]
+    handoff: dashboard_blueprint
+    non_goals: ["laying out visuals before intent is agreed", "defining KPI meaning"]
+    evidence_requirements: ["the approved contracts the intent references"]
+
+  - stage: dashboard_blueprint
+    allowed_routes: [dashboard_design, retail_kpi, readiness]
+    required_inputs: ["a recorded report intent", "approved metric contracts"]
+    required_outputs: ["a dashboard blueprint bound to approved contracts", "a dashboard_blueprint_approval decision"]
+    stop_rules:
+      - condition: "a visual binds to a metric with no approved contract"
+        unblocked_by: "an approved contract for that metric (no contract = no visual)"
+    blocking_decision_categories: [dashboard_blueprint_approval, kpi_definition, pii_handling]
+    handoff: pbip_prototype_readiness
+    non_goals: ["building the PBIP prototype", "publishing"]
+    evidence_requirements: ["the approved contracts each visual binds to"]
+
+  - stage: pbip_prototype_readiness
+    allowed_routes: [readiness, retail_kpi]
+    required_inputs:
+      - "approved kpi_definition, table_grain, primary_key, relationship_cardinality, pii_handling, missing_value_rule decisions"
+      - "an approved dashboard_blueprint_approval decision"
+    required_outputs: ["a pass/warn/blocked readiness verdict for the PBIP prototype"]
+    stop_rules:
+      - condition: "any required decision above is unresolved or its approval is invalid"
+        unblocked_by: "resolving/approving the named decision(s)"
+      - condition: "the dashboard blueprint is not approved"
+        unblocked_by: "an approved dashboard_blueprint_approval decision"
+    blocking_decision_categories:
+      [kpi_definition, table_grain, primary_key, relationship_cardinality, pii_handling, missing_value_rule, dashboard_blueprint_approval]
+    handoff: evidence_pack
+    non_goals:
+      - "generating PBIP freehand (future: Blueprint -> Compiler -> Validation)"
+      - "publishing (publish/export is a separate human decision; F016 stays deferred)"
+    evidence_requirements: ["every approved decision the prototype depends on, with valid metadata"]
+
+  - stage: evidence_pack
+    allowed_routes: [readiness]
+    required_inputs: ["the Decision Store", "the interview review artifact", "the readiness verdicts"]
+    required_outputs: ["an evidence pack folding in interview + decision evidence"]
+    stop_rules:
+      - condition: "a referenced decision or verdict is missing"
+        unblocked_by: "the missing artifact"
+    blocking_decision_categories: [publish_export]
+    handoff: none
+    non_goals: ["publishing", "granting approval"]
+    evidence_requirements: ["the committed decisions and verdicts the pack references"]

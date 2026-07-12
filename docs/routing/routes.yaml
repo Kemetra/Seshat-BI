@@ -210,3 +210,22 @@ routes:
     targets:
       - "COMPASS.md"
     status: built
+
+  # --- Business Knowledge Interview + Decision Store (spec 121) --------------
+  - id: "23"
+    task: "Business knowledge interview (after DB discovery)"
+    targets:
+      - "contracts/interview/business-knowledge-interview.yaml"
+    status: built
+  - id: "24"
+    task: "Record / read a business decision"
+    targets:
+      - "templates/semantic-decisions.yaml"
+      - "templates/kpi-contracts.yaml"
+      - "templates/cleaning-rules.yaml"
+    status: built
+  - id: "25"
+    task: "Is a stage ready? (decision gate verdict)"
+    targets:
+      - "contracts/knowledge/database-to-pbip-flow.yaml"
+    status: built

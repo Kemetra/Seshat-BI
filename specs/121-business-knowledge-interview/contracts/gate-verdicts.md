@@ -23,7 +23,7 @@ the spine remains the sole stage-state authority (verdicts contribute
 
 | Unresolved decision (in scope) | Blocks |
 |---|---|
-| `pii_handling` | cleaning of affected columns; ANY report exposure of affected columns |
+| `pii_handling` | cleaning of affected columns (silver_gold_model_planning); ANY report exposure of affected columns (report_intent, dashboard_blueprint); PBIP readiness |
 | `table_grain` | Silver/Gold modeling of the affected table |
 | `primary_key` | modeling that depends on the affected table's key |
 | `relationship_cardinality` | modeling that depends on the affected relationship |

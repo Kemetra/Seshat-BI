@@ -1,0 +1,46 @@
+# =============================================================================
+# kpi-contracts.yaml  --  the project Decision Store (KPI meaning + policy)
+# =============================================================================
+# Spec 121 (Business Knowledge Interview + Decision Store). A GENERIC, copy-me
+# blank. The FILLED copy lives at `.seshat/kpi-contracts.yaml` and records KPI
+# DEFINITION (business meaning) decisions and financial POLICY rulings
+# (VAT / returns / discount / cost) that KPI contracts depend on.
+#
+# BOUNDARY: this file records the DECISION that a KPI means X (the human ruling).
+# It does not define the metric contract or the DAX -- KPI business meaning is
+# owned by the retail-kpi-knowledge layer; DAX implements an approved contract.
+# A KPI-meaning question always routes back to retail-kpi-knowledge (FR-028).
+#
+# SHAPE / STATUSES / IMMUTABILITY / NO-RAW-PII: identical to
+# templates/semantic-decisions.yaml (see that banner and the schema).
+#   critical decision_types here: kpi_definition, policy_ruling,
+#   missing_value_rule (for KPI/financial fields).
+#
+# C086 IS A FILLED INSTANCE, NEVER THE SCHEMA: placeholders only.
+# =============================================================================
+
+decisions:
+  - id: kpi_definition.net_sales
+    decision_type: kpi_definition
+    statement: "Net sales = <placeholder: gross sales minus returns and discounts, VAT-exclusive>."
+    scope:
+      kpis: ["net_sales"]
+    status: proposed
+    confidence: low
+    evidence:
+      - "docs/metrics/retail-kpi-catalog.md"
+    proposed_by: "agent"
+    proposed_at: "2026-01-01"
+
+  - id: policy_ruling.vat_treatment
+    decision_type: policy_ruling
+    statement: "Amounts are recorded <placeholder: VAT-inclusive | VAT-exclusive>."
+    scope:
+      kpis: ["net_sales", "gross_sales"]
+    status: needs_user_input
+    evidence:
+      - "mappings/fct_example/source-profile.md"
+    proposed_by: "agent"
+    proposed_at: "2026-01-01"
+
+batches: []

@@ -111,6 +111,11 @@ EXPECTED_RULE_IDS = frozenset(
         "HR11",  # currency-unit: a summed measure's inputs share a unit
         "HR12",  # source-data-contract: a forward source data-contract is well-formed
         "HR9",  # rename-impact: no orphaned column/measure reference after a rename
+        "DS1",  # decision-store: layout/status/id/scope validity + PII-shape guard
+        "DS2",  # decision-store: approval metadata complete + authority-eligible
+        "DS3",  # decision-store: batch integrity (no critical types; valid confirm)
+        "DS4",  # decision-store: supersession integrity + no scope conflicts
+        "DS5",  # decision-store: verdict-consistency store invariants
     }
 )
 
