@@ -1,0 +1,24 @@
+# Fixture Decision Store (spec 123 US2, T017): a VALID, named-human
+# report_intent_approval recorded by a report_owner. All APPROVAL_REQUIRED_FIELDS
+# present; evidence_identity keys the committed report-intent.yaml by its sha256
+# (the test harness injects the real digest at __EVIDENCE_SHA__ so the shipped
+# decision gate accepts it as fresh, not stale). NO SELF-GRANT: approved_by is a
+# named human of the report_owner authority class -- an agent identity would fail
+# the shared approval_is_valid predicate.
+decisions:
+  - id: report_intent_approval.demo_report_weekly
+    decision_type: report_intent_approval
+    statement: "Report Intent for demo_report_weekly approved for design."
+    scope: {artifacts: [demo_report_weekly]}
+    status: approved
+    proposed_by: agent
+    proposed_at: "2026-07-12"
+    approval:
+      approved_by: "Dana Report (report_owner)"
+      approved_at: "2026-07-12"
+      source: interview
+      evidence:
+        - "mappings/demo_report_area/design/report-intent.yaml"
+      evidence_identity:
+        "mappings/demo_report_area/design/report-intent.yaml": "__EVIDENCE_SHA__"
+      reviewed_scope: {artifacts: [demo_report_weekly]}

@@ -1,0 +1,23 @@
+# Report composition -- demo_report_area (spec 123 US2 fixture).
+# Composes the single executive_overview page into a report. References the page
+# blueprint by path; never inlines its visuals. Zero orphan pages.
+report_name: "DemoReport"
+audience: "branch_manager"
+
+pages:
+  - page_id: "executive_overview"
+    blueprint_ref: "mappings/demo_report_area/design/dashboard-layout.md"
+    order: 1
+
+landing_page: "executive_overview"
+
+navigation: []
+
+cross_page_filters:
+  - "dim_date_demo.full_date"
+
+readiness:
+  status: "warning"
+  evidence:
+    - "single page executive_overview; all visuals trace to approved contracts (visual-contract-binding-map.md)"
+  blocking_reasons: []

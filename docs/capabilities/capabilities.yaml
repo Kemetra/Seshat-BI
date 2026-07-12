@@ -782,6 +782,20 @@ capabilities:
     references:
       skill: "report-intent-interview"
 
+  - id: dashboard-intelligence
+    name: "dashboard-intelligence"
+    summary: "Coordinates the shipped dashboard capabilities from an approved Report Intent into a reviewable design: inspects committed state, picks one next allowed action (dashboard-gaps -> dashboard-planner -> dashboard-design -> compose -> QA), and STOPS at the human blueprint review. Fails closed with a named blocker; never bypasses semantic_model_ready: pass; never self-grants dashboard_ready: pass; adds no new CLI family."
+    state: shipped
+    authority: advisory
+    surface: skill
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: dashboard_ready
+    command: null
+    documentation: ".claude/skills/dashboard-intelligence/SKILL.md"
+    references:
+      skill: "dashboard-intelligence"
+
   - id: dashboard-design
     name: "dashboard design"
     summary: "Designs a Power BI dashboard from approved metric contracts; hard-gated on semantic_model_ready: pass."

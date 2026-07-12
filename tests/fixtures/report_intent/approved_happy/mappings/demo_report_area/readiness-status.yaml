@@ -1,0 +1,40 @@
+# Fixture readiness-status.yaml -- demo_report_area (spec 123 US2, T017).
+# semantic_model_ready is PASS: the hard gate the coordinator must never bypass
+# (FR-010). Only the stages the US2 coordinator reads are filled; earlier stages
+# are marked pass so the semantic gate is legitimately reached.
+table: "bronze.demo_report_area"
+source_id: "demo_report_area"
+current_stage: "semantic_model_ready"
+stages:
+  source_ready:
+    status: "pass"
+    evidence: ["mappings/demo_report_area/source-profile.md"]
+    blocking_reasons: []
+  mapping_ready:
+    status: "pass"
+    evidence: ["mappings/demo_report_area/source-map.yaml"]
+    blocking_reasons: []
+  silver_ready:
+    status: "pass"
+    evidence: ["warehouse/migrations/silver_demo.sql"]
+    blocking_reasons: []
+  gold_ready:
+    status: "pass"
+    evidence: ["warehouse/migrations/gold_demo.sql"]
+    blocking_reasons: []
+  semantic_model_ready:
+    status: "pass"
+    evidence:
+      - "2 metric contracts owner-approved (pass): DemoSales, DemoCount"
+      - "governed PBIP model authored"
+    blocking_reasons: []
+  dashboard_ready:
+    status: "not_started"
+    evidence: []
+    blocking_reasons: []
+  publish_ready:
+    status: "not_started"
+    evidence: []
+    blocking_reasons: []
+evidence: []
+blocking_reasons: []

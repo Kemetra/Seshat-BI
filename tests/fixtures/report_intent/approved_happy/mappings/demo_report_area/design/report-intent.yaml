@@ -1,0 +1,55 @@
+# Hand-authored APPROVED-intent fixture (spec 123 US2, T017).
+# Its own report_intent_approval decision is recorded in the fixture Decision Store
+# (.seshat/kpi-contracts.yaml) by a named report_owner -- the coordinator reads that
+# approval through the shipped decision gate; the agent never self-grants it, so this
+# artifact does NOT claim readiness.status: pass on its own (no self-grant).
+report_id: "demo_report_weekly"
+subject_area: "mappings/demo_report_area"
+
+audience: "branch_manager"
+purpose: "monitoring"
+supported_decision: "which branches need attention this period"
+review_cadence: "weekly"
+
+business_questions:
+  - question_id: "q1"
+    text: "How are we doing overall right now (headline sales + volume)?"
+  - question_id: "q2"
+    text: "How many transactions are we processing?"
+
+outcome_metrics:
+  - name: "DemoSales"
+    store_ref: "mappings/demo_report_area/metrics/DemoSales.yaml"
+    status_required: "pass"
+  - name: "DemoCount"
+    store_ref: "mappings/demo_report_area/metrics/DemoCount.yaml"
+    status_required: "pass"
+driver_metrics: []
+guardrail_metrics: []
+
+comparisons:
+  - "vs prior period"
+dimensions_and_filters:
+  - field: "dim_date_demo.full_date"
+  - field: "dim_product_demo.category"
+expected_actions_and_exceptions:
+  - "flag branches below prior-period sales"
+pages_and_drill_paths:
+  - "executive_overview (single page; KPI strip -> category breakdown)"
+mobile_accessibility_language_rtl:
+  mobile_needs: "none"
+  accessibility_needs: "none"
+  language: "en"
+  rtl_required: "false"
+exclusions_and_non_goals:
+  - "margin/profit (no cost data)"
+
+owner: "Dana Report (report_owner)"
+
+readiness:
+  status: "blocked"
+  evidence:
+    - "both business_questions resolved; both referenced metrics resolve to approved (pass) contracts"
+  blocking_reasons:
+    - "report_intent_approval is recorded in the Decision Store, read via the gate -- this artifact never self-grants pass"
+open_questions: []

@@ -1,0 +1,11 @@
+name: "DemoSales"
+grain: "transaction"
+binds_to:
+  gold_table: "gold.fct_demo"
+  columns:
+    - "total_amount"
+readiness:
+  status: "pass"
+  evidence:
+    - "owner-approved 2026-07-12"
+  blocking_reasons: []
