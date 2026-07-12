@@ -395,75 +395,92 @@ def create_visual_container(
     return visual_name, [visual_rel]
 
 
-def compile_page_shell(
-    report_dir: Path,
-    *,
-    approval: dict[str, Any] | None,
-    authority: dict[str, frozenset[str]] | None,
-    report_id: str,
-    page_slug: str,
-    display_name: str,
-    repo_root: Path | str | None = None,
-) -> list[Path]:
+@dataclass(frozen=True)
+class CompileContext:
+    """The fail-closed gate inputs every compile entry point shares: the report
+    directory to write into, the ``dashboard_blueprint_approval`` decision +
+    authority map the approval gate checks, and an optional ``repo_root`` that
+    enables the evidence-staleness leg (FR-023)."""
+
+    report_dir: Path
+    approval: dict[str, Any] | None
+    authority: dict[str, frozenset[str]] | None
+    repo_root: Path | str | None = None
+
+
+@dataclass(frozen=True)
+class PageShellRequest:
+    """What ``compile_page_shell`` creates: one new page."""
+
+    report_id: str
+    page_slug: str
+    display_name: str
+
+
+@dataclass(frozen=True)
+class LineChartRequest:
+    """What ``compile_line_chart`` creates: one lineChart visual, bound to the
+    approved binding-map entry found at ``binding_key``."""
+
+    report_id: str
+    page_name: str
+    visual_slug: str
+    visual_type: str
+    binding_map: dict[str, Any]
+    binding_key: str
+    position: dict[str, Any]
+
+
+def compile_page_shell(ctx: CompileContext, request: PageShellRequest) -> list[Path]:
     """Compile Increment 1 (page shells): create one new page, registered in order.
 
     Fails closed on an approval that is missing, not ``approved`` (FR-023/US7
-    AC#5), invalid (FR-025), or -- when ``repo_root`` is supplied -- backed by
+    AC#5), invalid (FR-025), or -- when ``ctx.repo_root`` is supplied -- backed by
     stale evidence (FR-023), before touching anything. Grounded in the verified
     real Desktop-authored empty-page sample (D10). Stages the whole batch,
     validates it, and commits only if everything passes -- on any failure the real
     report_dir is untouched (D13)."""
-    report_dir = Path(report_dir)
-    _require_valid_approval(approval, authority, repo_root)
+    report_dir = Path(ctx.report_dir)
+    _require_valid_approval(ctx.approval, ctx.authority, ctx.repo_root)
     _require_verified_sample("page_shell")
 
     batch = _StagedBatch(report_dir)
     try:
         _page_name, written = create_page(
-            batch, report_id=report_id, page_slug=page_slug, display_name=display_name
+            batch,
+            report_id=request.report_id,
+            page_slug=request.page_slug,
+            display_name=request.display_name,
         )
         return batch.commit(written)
     finally:
         batch.cleanup()
 
 
-def compile_line_chart(
-    report_dir: Path,
-    *,
-    approval: dict[str, Any] | None,
-    authority: dict[str, frozenset[str]] | None,
-    report_id: str,
-    page_name: str,
-    visual_slug: str,
-    visual_type: str,
-    binding_map: dict[str, Any],
-    binding_key: str,
-    position: dict[str, Any],
-    repo_root: Path | str | None = None,
-) -> list[Path]:
+def compile_line_chart(ctx: CompileContext, request: LineChartRequest) -> list[Path]:
     """Compile Increment 3's lineChart: create one visual bound to an approved field.
 
     Fails closed, in order, on: an approval that is missing, not ``approved``
-    (FR-023/US7 AC#5), invalid (FR-025), or (with ``repo_root``) stale (FR-023); a
-    visual_type with no verified sample (FR-029 -- only ``lineChart`` today); a
-    binding_key absent from the approved binding-map (FR-027, orphan bind).
-    Grounded in the data-goblin ``visual_fmt.Report`` sample's wire format (D10);
-    never copies that sample's own bound content. Same stage -> validate -> commit
-    discipline as ``compile_page_shell``."""
-    report_dir = Path(report_dir)
-    _require_valid_approval(approval, authority, repo_root)
-    _require_verified_sample(visual_type)
-    binding = _require_mapped_binding(binding_map, binding_key)
+    (FR-023/US7 AC#5), invalid (FR-025), or (with ``ctx.repo_root``) stale
+    (FR-023); a visual_type with no verified sample (FR-029 -- only ``lineChart``
+    today); a binding_key absent from the approved binding-map (FR-027, orphan
+    bind). Grounded in the data-goblin ``visual_fmt.Report`` sample's wire format
+    (D10); never copies that sample's own bound content. Same stage -> validate ->
+    commit discipline as ``compile_page_shell``."""
+    report_dir = Path(ctx.report_dir)
+    _require_valid_approval(ctx.approval, ctx.authority, ctx.repo_root)
+    _require_verified_sample(request.visual_type)
+    binding = _require_mapped_binding(request.binding_map, request.binding_key)
 
     batch = _StagedBatch(report_dir)
     try:
         spec = VisualBuildSpec(
-            report_id=report_id,
-            page_name=page_name,
-            visual_slug=visual_slug,
-            visual_type=visual_type,
+            report_id=request.report_id,
+            page_name=request.page_name,
+            visual_slug=request.visual_slug,
+            visual_type=request.visual_type,
             binding=binding,
-            position=position,
+            position=request.position,
         )
         _visual_name, written = create_visual_container(batch, spec)
         return batch.commit(written)

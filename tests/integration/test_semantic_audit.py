@@ -146,17 +146,26 @@ def test_intent_question_with_no_page_is_missing() -> None:
     assert any("q2" in e for f in missing for e in f.evidence)
 
 
-def test_all_intent_questions_covered_is_covered() -> None:
-    intent = _base_intent()
-    pages = [_page("overview", ["q1", "q2"])]
-    findings = _run(intent, pages)
-
+@pytest.mark.parametrize(
+    ("pages", "check"),
+    [
+        ([_page("overview", ["q1", "q2"])], "every_intent_question_covered"),
+        (
+            [_page("overview", ["q1"]), _page("trend", ["q2"])],
+            "page_single_coherent_purpose",
+        ),
+    ],
+    ids=["all-intent-questions-covered", "one-question-per-page"],
+)
+def test_check_reports_covered(pages: list[dict], check: str) -> None:
+    """A well-formed report reports `covered` on both coherence checks: every intent
+    question traces to a page (US5 AC#1), and each page carries a single business
+    question (US5 AC#3)."""
+    findings = _run(_base_intent(), pages)
     _all_findings_well_formed(findings)
-    coverage_findings = [
-        f for f in findings if f.check == "every_intent_question_covered"
-    ]
-    assert coverage_findings
-    assert all(f.category == "covered" for f in coverage_findings)
+    matched = [f for f in findings if f.check == check]
+    assert matched, f"expected a {check} finding"
+    assert all(f.category == "covered" for f in matched)
 
 
 # --- US5 AC#2: diagnostic report with no driver VISUAL is incomplete --------
@@ -230,19 +239,6 @@ def test_page_with_multiple_business_questions_is_conflicting() -> None:
     conflicting = [f for f in purpose_findings if f.category == "conflicting"]
     assert conflicting, "a page answering >1 distinct question must be 'conflicting'"
     assert any("overview" in e for f in conflicting for e in f.evidence)
-
-
-def test_page_with_one_business_question_is_covered() -> None:
-    intent = _base_intent()
-    pages = [_page("overview", ["q1"]), _page("trend", ["q2"])]
-    findings = _run(intent, pages)
-
-    _all_findings_well_formed(findings)
-    purpose_findings = [
-        f for f in findings if f.check == "page_single_coherent_purpose"
-    ]
-    assert purpose_findings
-    assert all(f.category == "covered" for f in purpose_findings)
 
 
 # --- FR-020: reuse committed outputs, never recompute (planner + a11y) ------

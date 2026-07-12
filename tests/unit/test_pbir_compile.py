@@ -28,6 +28,9 @@ from pathlib import Path
 import pytest
 
 from seshat.pbir_compile import (
+    CompileContext,
+    LineChartRequest,
+    PageShellRequest,
     PbirCompileError,
     compile_line_chart,
     compile_page_shell,
@@ -84,11 +87,53 @@ _BINDING_MAP = {
     }
 }
 
+_POS = {"x": 10, "y": 20, "width": 400, "height": 200}
+
+# The page-shell request never varies across these tests (same slug/display), so
+# it is a shared constant; the compile context does vary (report dir, approval,
+# repo_root) and is built per test via _ctx.
+_PAGE_REQUEST = PageShellRequest(
+    report_id=_REPORT_ID, page_slug="branch_perf", display_name="Branch Performance"
+)
+
+_UNSET = object()
+
 
 def _report(tmp_path: Path, sample: Path, name: str) -> Path:
     dst = tmp_path / name
     shutil.copytree(sample, dst)
     return dst
+
+
+def _ctx(report: Path, approval: object = _UNSET, *, repo_root: Path | None = None):
+    """A CompileContext for ``report``; defaults to the valid approval + the shared
+    authority map. Pass ``approval`` explicitly (incl. ``None``) to exercise the
+    fail-closed gate; pass ``repo_root`` to enable the staleness leg."""
+    resolved = _VALID_APPROVAL if approval is _UNSET else approval
+    return CompileContext(
+        report_dir=report,
+        approval=resolved,
+        authority=_AUTHORITY,
+        repo_root=repo_root,
+    )
+
+
+def _line_request(
+    *,
+    visual_slug: str = "sales_trend",
+    visual_type: str = "lineChart",
+    binding_key: str = "v05",
+    position: dict | None = None,
+) -> LineChartRequest:
+    return LineChartRequest(
+        report_id=_REPORT_ID,
+        page_name="pg",
+        visual_slug=visual_slug,
+        visual_type=visual_type,
+        binding_map=_BINDING_MAP,
+        binding_key=binding_key,
+        position=position or _POS,
+    )
 
 
 def _pages_json(report: Path) -> dict:
@@ -140,14 +185,7 @@ def test_compile_page_shell_blocked_without_valid_approval(tmp_path: Path):
     report = _report(tmp_path, _PAGE_SHELL_SAMPLE, "r.Report")
     before = _tree_snapshot(report)
     with pytest.raises(PbirCompileError, match="dashboard_blueprint_approval"):
-        compile_page_shell(
-            report,
-            approval=_AGENT_APPROVAL,
-            authority=_AUTHORITY,
-            report_id=_REPORT_ID,
-            page_slug="branch_perf",
-            display_name="Branch Performance",
-        )
+        compile_page_shell(_ctx(report, _AGENT_APPROVAL), _PAGE_REQUEST)
     assert _tree_snapshot(report) == before  # writes nothing
 
 
@@ -155,14 +193,7 @@ def test_compile_page_shell_blocked_with_no_approval_at_all(tmp_path: Path):
     report = _report(tmp_path, _PAGE_SHELL_SAMPLE, "r.Report")
     before = _tree_snapshot(report)
     with pytest.raises(PbirCompileError, match="dashboard_blueprint_approval"):
-        compile_page_shell(
-            report,
-            approval=None,
-            authority=_AUTHORITY,
-            report_id=_REPORT_ID,
-            page_slug="branch_perf",
-            display_name="Branch Performance",
-        )
+        compile_page_shell(_ctx(report, None), _PAGE_REQUEST)
     assert _tree_snapshot(report) == before
 
 
@@ -179,14 +210,7 @@ def test_compile_page_shell_blocked_when_status_is_not_approved(
     report = _report(tmp_path, _PAGE_SHELL_SAMPLE, "r.Report")
     before = _tree_snapshot(report)
     with pytest.raises(PbirCompileError, match=f"status {status!r}, not 'approved'"):
-        compile_page_shell(
-            report,
-            approval=stale_approval,
-            authority=_AUTHORITY,
-            report_id=_REPORT_ID,
-            page_slug="branch_perf",
-            display_name="Branch Performance",
-        )
+        compile_page_shell(_ctx(report, stale_approval), _PAGE_REQUEST)
     assert _tree_snapshot(report) == before  # writes nothing
 
 
@@ -198,18 +222,7 @@ def test_compile_line_chart_blocked_when_status_is_not_approved(
     report = _report(tmp_path, _LINECHART_SAMPLE, "r.Report")
     before = _tree_snapshot(report)
     with pytest.raises(PbirCompileError, match=f"status {status!r}, not 'approved'"):
-        compile_line_chart(
-            report,
-            approval=stale_approval,
-            authority=_AUTHORITY,
-            report_id=_REPORT_ID,
-            page_name="pg",
-            visual_slug="sales_trend",
-            visual_type="lineChart",
-            binding_map=_BINDING_MAP,
-            binding_key="v05",
-            position={"x": 10, "y": 20, "width": 400, "height": 200},
-        )
+        compile_line_chart(_ctx(report, stale_approval), _line_request())
     assert _tree_snapshot(report) == before
 
 
@@ -221,15 +234,7 @@ def test_compile_page_shell_blocked_when_approved_evidence_is_stale(tmp_path: Pa
     report = _report(tmp_path, _PAGE_SHELL_SAMPLE, "r.Report")
     before = _tree_snapshot(report)
     with pytest.raises(PbirCompileError, match="stale/missing evidence"):
-        compile_page_shell(
-            report,
-            approval=_VALID_APPROVAL,
-            authority=_AUTHORITY,
-            report_id=_REPORT_ID,
-            page_slug="branch_perf",
-            display_name="Branch Performance",
-            repo_root=tmp_path,
-        )
+        compile_page_shell(_ctx(report, repo_root=tmp_path), _PAGE_REQUEST)
     assert _tree_snapshot(report) == before
 
 
@@ -240,16 +245,12 @@ def test_compile_visual_blocked_for_a_shape_with_no_verified_sample(tmp_path: Pa
     before = _tree_snapshot(report)
     with pytest.raises(PbirCompileError, match="no verified reference sample"):
         compile_line_chart(
-            report,
-            approval=_VALID_APPROVAL,
-            authority=_AUTHORITY,
-            report_id=_REPORT_ID,
-            page_name="pg",
-            visual_slug="exec_kpi_sales",
-            visual_type="card",
-            binding_map=_BINDING_MAP,
-            binding_key="v05",
-            position={"x": 0, "y": 0, "width": 200, "height": 120},
+            _ctx(report),
+            _line_request(
+                visual_slug="exec_kpi_sales",
+                visual_type="card",
+                position={"x": 0, "y": 0, "width": 200, "height": 120},
+            ),
         )
     assert _tree_snapshot(report) == before
 
@@ -259,16 +260,8 @@ def test_compile_visual_blocked_for_unmapped_binding_key(tmp_path: Path):
     before = _tree_snapshot(report)
     with pytest.raises(PbirCompileError, match="not on the approved binding"):
         compile_line_chart(
-            report,
-            approval=_VALID_APPROVAL,
-            authority=_AUTHORITY,
-            report_id=_REPORT_ID,
-            page_name="pg",
-            visual_slug="trend",
-            visual_type="lineChart",
-            binding_map=_BINDING_MAP,
-            binding_key="v_orphan",  # not in _BINDING_MAP
-            position={"x": 0, "y": 0, "width": 400, "height": 200},
+            _ctx(report),
+            _line_request(visual_slug="trend", binding_key="v_orphan"),  # not in map
         )
     assert _tree_snapshot(report) == before
 
@@ -284,14 +277,7 @@ def test_compile_page_shell_writes_page_and_registers_it(tmp_path: Path):
     before_existing = _tree_snapshot(existing_page_dir)
     before_report_json = (report / "definition" / "report.json").read_bytes()
 
-    written = compile_page_shell(
-        report,
-        approval=_VALID_APPROVAL,
-        authority=_AUTHORITY,
-        report_id=_REPORT_ID,
-        page_slug="branch_perf",
-        display_name="Branch Performance",
-    )
+    written = compile_page_shell(_ctx(report), _PAGE_REQUEST)
     assert written  # non-empty write list
 
     expected_name = mint_element_id(_REPORT_ID, "branch_perf")
@@ -317,22 +303,8 @@ def test_compile_page_shell_is_byte_deterministic_on_rerun(tmp_path: Path):
     report_a = _report(tmp_path, _PAGE_SHELL_SAMPLE, "a.Report")
     report_b = _report(tmp_path, _PAGE_SHELL_SAMPLE, "b.Report")
 
-    compile_page_shell(
-        report_a,
-        approval=_VALID_APPROVAL,
-        authority=_AUTHORITY,
-        report_id=_REPORT_ID,
-        page_slug="branch_perf",
-        display_name="Branch Performance",
-    )
-    compile_page_shell(
-        report_b,
-        approval=_VALID_APPROVAL,
-        authority=_AUTHORITY,
-        report_id=_REPORT_ID,
-        page_slug="branch_perf",
-        display_name="Branch Performance",
-    )
+    compile_page_shell(_ctx(report_a), _PAGE_REQUEST)
+    compile_page_shell(_ctx(report_b), _PAGE_REQUEST)
 
     name = mint_element_id(_REPORT_ID, "branch_perf")
     page_a = report_a / "definition" / "pages" / name / "page.json"
@@ -346,26 +318,12 @@ def test_compile_page_shell_is_byte_deterministic_on_rerun(tmp_path: Path):
 
 def test_compile_page_shell_rerun_on_same_report_is_idempotent(tmp_path: Path):
     report = _report(tmp_path, _PAGE_SHELL_SAMPLE, "r.Report")
-    compile_page_shell(
-        report,
-        approval=_VALID_APPROVAL,
-        authority=_AUTHORITY,
-        report_id=_REPORT_ID,
-        page_slug="branch_perf",
-        display_name="Branch Performance",
-    )
+    compile_page_shell(_ctx(report), _PAGE_REQUEST)
     name = mint_element_id(_REPORT_ID, "branch_perf")
     page_json = report / "definition" / "pages" / name / "page.json"
     first = page_json.read_bytes()
 
-    compile_page_shell(
-        report,
-        approval=_VALID_APPROVAL,
-        authority=_AUTHORITY,
-        report_id=_REPORT_ID,
-        page_slug="branch_perf",
-        display_name="Branch Performance",
-    )
+    compile_page_shell(_ctx(report), _PAGE_REQUEST)
     assert page_json.read_bytes() == first
     pages = _pages_json(report)
     assert pages["pageOrder"].count(name) == 1  # no duplicate entry
@@ -388,14 +346,7 @@ def test_compile_page_shell_no_partial_write_on_injected_validation_failure(
     monkeypatch.setattr(compile_mod, "_validate_staged_batch", _boom)
 
     with pytest.raises(PbirCompileError, match="injected validation failure"):
-        compile_page_shell(
-            report,
-            approval=_VALID_APPROVAL,
-            authority=_AUTHORITY,
-            report_id=_REPORT_ID,
-            page_slug="branch_perf",
-            display_name="Branch Performance",
-        )
+        compile_page_shell(_ctx(report), _PAGE_REQUEST)
     assert _tree_snapshot(report) == before  # nothing written
 
 
@@ -407,18 +358,7 @@ def test_compile_page_shell_no_partial_write_on_injected_validation_failure(
 def test_compile_line_chart_binds_only_to_approved_map_field(tmp_path: Path):
     report = _report(tmp_path, _LINECHART_SAMPLE, "r.Report")
 
-    written = compile_line_chart(
-        report,
-        approval=_VALID_APPROVAL,
-        authority=_AUTHORITY,
-        report_id=_REPORT_ID,
-        page_name="pg",
-        visual_slug="sales_trend",
-        visual_type="lineChart",
-        binding_map=_BINDING_MAP,
-        binding_key="v05",
-        position={"x": 10, "y": 20, "width": 400, "height": 200},
-    )
+    written = compile_line_chart(_ctx(report), _line_request())
     assert written
 
     name = mint_element_id(_REPORT_ID, "sales_trend")
@@ -443,19 +383,9 @@ def test_compile_line_chart_binds_only_to_approved_map_field(tmp_path: Path):
 def test_compile_line_chart_is_byte_deterministic_on_rerun(tmp_path: Path):
     report_a = _report(tmp_path, _LINECHART_SAMPLE, "a.Report")
     report_b = _report(tmp_path, _LINECHART_SAMPLE, "b.Report")
-    kwargs = dict(
-        approval=_VALID_APPROVAL,
-        authority=_AUTHORITY,
-        report_id=_REPORT_ID,
-        page_name="pg",
-        visual_slug="sales_trend",
-        visual_type="lineChart",
-        binding_map=_BINDING_MAP,
-        binding_key="v05",
-        position={"x": 10, "y": 20, "width": 400, "height": 200},
-    )
-    compile_line_chart(report_a, **kwargs)
-    compile_line_chart(report_b, **kwargs)
+    request = _line_request()
+    compile_line_chart(_ctx(report_a), request)
+    compile_line_chart(_ctx(report_b), request)
     name = mint_element_id(_REPORT_ID, "sales_trend")
     a = (
         report_a / "definition" / "pages" / "pg" / "visuals" / name / "visual.json"
@@ -480,16 +410,5 @@ def test_compile_line_chart_no_partial_write_on_injected_validation_failure(
     monkeypatch.setattr(compile_mod, "_validate_staged_batch", _boom)
 
     with pytest.raises(PbirCompileError, match="injected validation failure"):
-        compile_line_chart(
-            report,
-            approval=_VALID_APPROVAL,
-            authority=_AUTHORITY,
-            report_id=_REPORT_ID,
-            page_name="pg",
-            visual_slug="sales_trend",
-            visual_type="lineChart",
-            binding_map=_BINDING_MAP,
-            binding_key="v05",
-            position={"x": 10, "y": 20, "width": 400, "height": 200},
-        )
+        compile_line_chart(_ctx(report), _line_request())
     assert _tree_snapshot(report) == before
