@@ -17,6 +17,7 @@ ONLY the file(s) that `INDEX.md` names — never the whole knowledge base.
 
 | Task | Route | Open first | End on |
 |---|---|---|---|
+| 0. Discover an unfamiliar multi-table source | Portfolio discovery | `.claude/skills/retail-discover-portfolio/SKILL.md` | committed Layer-A portfolio survey -> grounded domain/scope proposals -> selected-table onboarding -> interview handoff |
 | 1. Source onboarding | Readiness | `docs/readiness/readiness-model.md` | readiness status + source profile |
 | 2. Source profiling | Readiness | `docs/readiness/source-ready.md` | source profile |
 | 3. Source mapping | Readiness | `docs/readiness/mapping-ready.md` | source map |

@@ -32,6 +32,15 @@ are grouped, then alphabetical within a group.
 | **Approval seam** | a stage that needs a named-human sign-off in `approvals[]`: Mapping, Semantic Model, Dashboard, Publish. The agent never self-grants one (Principle V). |
 | **Readiness decay / `stale_pass`** | a concept (not a `retail check` rule): a stage recorded `pass` may become stale when the evidence it rests on changes (a source drift, or an approval that predates a later edit). The signal is SURFACED as a blocker for a named human to demote — never auto-demoted (`source-drift.md` Downstream section; `docs/patterns/readiness-decay.md`). A `stale_review` reaffirmation entry records a human re-check. |
 
+## Discovery and decisions
+
+| Term | Meaning |
+|------|---------|
+| **Layer A (portfolio metadata survey)** | one metadata-only inventory of every reachable table in a source; it records declared structure and candidate hints, never value-backed measurements or source samples (`templates/portfolio-survey.md`). |
+| **Layer B (deep per-table profile)** | the existing value-backed Source Ready profile for one selected table, owned by `retail-onboard-table` and committed under `mappings/<table>/source-profile.md`. |
+| **Portfolio survey** | the Layer-A committed artifact used to ground a domain proposal and bounded first-delivery scope before selected tables enter Layer B. |
+| **Domain/scope proposal lifecycle** | the agent records a grounded, non-critical `proposed` Decision Store record; a named human confirms through the existing low-risk path, rejects it, or changes it through supersession. Partial scope acceptance creates a bounded successor and marks the original `superseded`; the agent never self-confirms. |
+
 ## Medallion layers
 
 | Term | Meaning |

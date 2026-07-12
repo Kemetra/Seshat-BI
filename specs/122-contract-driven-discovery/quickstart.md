@@ -50,8 +50,9 @@ facts). If ambiguous, it records competing alternatives or an honest "undetermin
 never a confident single guess. A named human confirms it via the existing low-risk
 **batch** path, rejects it (`rejected`), or supersedes it. The agent never self-confirms.
 
-**Stop truthfully** if no survey exists: the `domain_guess` stage's `required_inputs`
-halt it, naming the missing survey.
+**Stop truthfully** if no survey exists: the skill's own local precondition halts it
+and names the missing survey. The inherited gate can pass here because this stage has
+no blocking decision categories; the local stop is deliberately feature-owned.
 
 ## Step 3 -- Scope proposal (P2)
 
@@ -65,8 +66,9 @@ categorically as **cross-boundary** and present narrower coherent options or rec
 `needs_user_input`. No numeric score, table-count threshold, or fabricated rank.
 Partial acceptance produces a bounded superseding proposal (original -> `superseded`).
 
-**Stop truthfully** if no domain proposal exists: the `scope_proposal` stage's
-`required_inputs` halt it, naming the missing domain-guess decision.
+**Stop truthfully** if no domain proposal exists: the skill's own local precondition
+halts it and names the missing domain-guess decision; it does not rely on the inherited
+gate to infer an absent input.
 
 ## Step 4 -- Selected-table onboarding (Layer B)
 
@@ -106,3 +108,11 @@ SC-001 (single reviewable survey), SC-003 (proposals distinct from human confirm
 SC-004 (no raw PII/credentials), SC-005 (bounded-flow local stops), SC-007 (exactly one
 next action within the flow), SC-008 (stops before downstream), SC-009 (no duplicated
 capability).
+
+The synthetic end-to-end evidence lives under `tests/fixtures/portfolio-survey/`:
+golden DB/file surveys, grounded domain and scope records, a Layer-B interview handoff,
+and every bounded routing state. `tests/unit/test_discovery_flow_stops.py` verifies the
+proposal lifecycle, supersession-only changes, exact interview inputs, local-stop
+ownership, unchanged top-level contracts, and the one-next-action projection. Together
+with the survey/enumerator tests, the interview begins from one survey plus a bounded
+set of per-table profiles rather than asking one round per in-scope column.

@@ -23,6 +23,13 @@
 # the SAME change — the A1 gate is the guard that keeps routing honest.
 
 routes:
+  # --- Portfolio discovery -------------------------------------------------
+  - id: "0"
+    task: "Discover an unfamiliar multi-table source"
+    targets:
+      - ".claude/skills/retail-discover-portfolio/SKILL.md"
+    status: built
+
   # --- Readiness routes -----------------------------------------------------
   - id: "1"
     task: "Source onboarding"
