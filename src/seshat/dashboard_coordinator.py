@@ -230,14 +230,16 @@ def _approved_contract_names(metrics_dir: Path) -> set[str]:
 
 
 def _intent_question_ids(intent: dict[str, Any]) -> list[str]:
-    out: list[str] = []
     questions = intent.get("business_questions")
-    if isinstance(questions, list):
-        for q in questions:
-            if isinstance(q, dict):
-                qid = str(q.get("question_id", "")).strip()
-                if qid:
-                    out.append(qid)
+    if not isinstance(questions, list):
+        return []
+    out: list[str] = []
+    for q in questions:
+        if not isinstance(q, dict):
+            continue
+        qid = str(q.get("question_id", "")).strip()
+        if qid:
+            out.append(qid)
     return out
 
 

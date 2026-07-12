@@ -156,13 +156,21 @@ def _require_valid_approval(
             f"blocked (FR-025); an agent identity never satisfies approved_by"
         )
     if repo_root is not None:
-        stale = _evidence_stale(repo_root, approval.get("approval", {}))
-        if stale:
-            raise PbirCompileError(
-                f"dashboard_blueprint_approval {did!r} cites stale/missing evidence "
-                f"{stale} -- compilation blocked (FR-023); the blueprint's approved "
-                f"evidence changed since sign-off and must be re-approved first"
-            )
+        _require_fresh_evidence(did, approval.get("approval", {}), repo_root)
+
+
+def _require_fresh_evidence(
+    did: object, approval_block: dict[str, Any], repo_root: Path | str
+) -> None:
+    """Block when cited evidence is stale/missing, reusing the decision gate's
+    ``_evidence_stale`` oracle so the compiler and gate never disagree (FR-023)."""
+    stale = _evidence_stale(repo_root, approval_block)
+    if stale:
+        raise PbirCompileError(
+            f"dashboard_blueprint_approval {did!r} cites stale/missing evidence "
+            f"{stale} -- compilation blocked (FR-023); the blueprint's approved "
+            f"evidence changed since sign-off and must be re-approved first"
+        )
 
 
 def _require_mapped_binding(

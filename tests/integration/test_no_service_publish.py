@@ -62,25 +62,30 @@ _FORBIDDEN_MODULE_ROOTS = frozenset(
 )
 
 
-def _imported_module_roots(path: Path) -> set[str]:
-    """Every top-level module ROOT this file imports, read structurally via
-    ``ast`` -- never a text/grep scan over docstrings/comments/strings.
+def _node_import_roots(node: ast.AST) -> set[str]:
+    """The module ROOT(s) a single AST node imports (empty for non-import nodes).
 
     A relative ``ImportFrom`` (``level > 0``, e.g. ``from .decision_store import
     ...``) is an intra-package ``seshat`` sibling, not an external dependency --
     it is reported as the literal root ``"seshat"`` rather than the bare module
     name, so it never collides with a same-named third-party package."""
+    if isinstance(node, ast.Import):
+        return {alias.name.split(".")[0] for alias in node.names}
+    if isinstance(node, ast.ImportFrom):
+        if node.level and node.level > 0:
+            return {"seshat"}  # relative import: intra-package sibling
+        if node.module:
+            return {node.module.split(".")[0]}
+    return set()
+
+
+def _imported_module_roots(path: Path) -> set[str]:
+    """Every top-level module ROOT this file imports, read structurally via
+    ``ast`` -- never a text/grep scan over docstrings/comments/strings."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     roots: set[str] = set()
     for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                roots.add(alias.name.split(".")[0])
-        elif isinstance(node, ast.ImportFrom):
-            if node.level and node.level > 0:
-                roots.add("seshat")  # relative import: intra-package sibling
-            elif node.module:
-                roots.add(node.module.split(".")[0])
+        roots |= _node_import_roots(node)
     return roots
 
 

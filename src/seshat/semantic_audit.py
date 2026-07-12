@@ -44,6 +44,7 @@ Generic (Principle VII): no tenant/table literal anywhere in this module.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -233,15 +234,18 @@ def _check_page_single_coherent_purpose(
 # --------------------------------------------------------------------------- #
 # Check 3: diagnostic reports include drivers (US5 AC#2 -- incomplete)
 # --------------------------------------------------------------------------- #
-def _has_driver_visual(pages: list[dict[str, Any]]) -> bool:
+def _iter_page_visuals(pages: list[dict[str, Any]]) -> "Iterator[dict[str, Any]]":
+    """Yield each visual dict across all pages, flattening the page/visuals nesting."""
     for page in pages:
         visuals = page.get("visuals")
-        if not isinstance(visuals, list):
-            continue
-        for v in visuals:
-            if isinstance(v, dict) and v.get("visual_type") in _DRIVER_VISUAL_TYPES:
-                return True
-    return False
+        if isinstance(visuals, list):
+            yield from (v for v in visuals if isinstance(v, dict))
+
+
+def _has_driver_visual(pages: list[dict[str, Any]]) -> bool:
+    return any(
+        v.get("visual_type") in _DRIVER_VISUAL_TYPES for v in _iter_page_visuals(pages)
+    )
 
 
 def _check_diagnostic_has_drivers(
@@ -293,6 +297,38 @@ def _check_diagnostic_has_drivers(
 # Check 4 (FR-020): pages not duplicate -- reads a RECORDED planner verdict,
 # never re-runs dashboard_planner's own set-relation logic.
 # --------------------------------------------------------------------------- #
+def _verdict_finding(
+    entry: dict[str, Any], planner_verdicts_path: str | None, owner: str
+) -> Finding:
+    """Map one recorded dashboard-planner verdict entry to a Finding (a
+    ``duplicate`` verdict -> CONFLICTING, anything else -> COVERED)."""
+    page = str(entry.get("proposal_page", "")).strip() or "(unnamed page)"
+    verdict = str(entry.get("verdict", "")).strip()
+    of_page = str(entry.get("of_page", "")).strip()
+    if verdict == "duplicate":
+        return Finding(
+            check="pages_not_duplicate",
+            category=CONFLICTING,
+            evidence=(
+                f"{planner_verdicts_path}: recorded dashboard-planner "
+                f"verdict for {page!r} is 'duplicate of {of_page}'",
+            ),
+            owner_or_correction=(
+                f"{owner} -- resolve the duplicate: merge or drop "
+                f"page {page!r} (duplicate of {of_page!r})"
+            ),
+        )
+    return Finding(
+        check="pages_not_duplicate",
+        category=COVERED,
+        evidence=(
+            f"{planner_verdicts_path}: recorded dashboard-planner "
+            f"verdict for {page!r} is {verdict!r}",
+        ),
+        owner_or_correction=owner,
+    )
+
+
 def _check_pages_not_duplicate(
     repo_root: Path, planner_verdicts_path: str | None, owner: str
 ) -> list[Finding]:
@@ -323,40 +359,11 @@ def _check_pages_not_duplicate(
         ]
     verdicts = doc.get("verdicts")
     verdicts = verdicts if isinstance(verdicts, list) else []
-    findings: list[Finding] = []
-    for entry in verdicts:
-        if not isinstance(entry, dict):
-            continue
-        page = str(entry.get("proposal_page", "")).strip() or "(unnamed page)"
-        verdict = str(entry.get("verdict", "")).strip()
-        of_page = str(entry.get("of_page", "")).strip()
-        if verdict == "duplicate":
-            findings.append(
-                Finding(
-                    check="pages_not_duplicate",
-                    category=CONFLICTING,
-                    evidence=(
-                        f"{planner_verdicts_path}: recorded dashboard-planner "
-                        f"verdict for {page!r} is 'duplicate of {of_page}'",
-                    ),
-                    owner_or_correction=(
-                        f"{owner} -- resolve the duplicate: merge or drop "
-                        f"page {page!r} (duplicate of {of_page!r})"
-                    ),
-                )
-            )
-        else:
-            findings.append(
-                Finding(
-                    check="pages_not_duplicate",
-                    category=COVERED,
-                    evidence=(
-                        f"{planner_verdicts_path}: recorded dashboard-planner "
-                        f"verdict for {page!r} is {verdict!r}",
-                    ),
-                    owner_or_correction=owner,
-                )
-            )
+    findings: list[Finding] = [
+        _verdict_finding(entry, planner_verdicts_path, owner)
+        for entry in verdicts
+        if isinstance(entry, dict)
+    ]
     if not findings:
         findings.append(
             Finding(
@@ -389,13 +396,14 @@ def _parse_overall_status(text: str) -> str | None:
     ``design/tokens/...`` or re-runs CT1 (design_contrast.py) itself.
     """
     for line in text.splitlines():
-        if _ROLLUP_RE_PREFIX in line and "|" in line:
-            cells = [c.strip() for c in line.strip().strip("|").split("|")]
-            if len(cells) >= 2:
-                value_cell = cells[1]
-                token = value_cell.split("--")[0].strip().strip("`").strip()
-                if token:
-                    return token
+        if _ROLLUP_RE_PREFIX not in line or "|" not in line:
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 2:
+            continue
+        token = cells[1].split("--")[0].strip().strip("`").strip()
+        if token:
+            return token
     return None
 
 

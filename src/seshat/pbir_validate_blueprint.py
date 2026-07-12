@@ -236,6 +236,63 @@ def _relative_ref_deviations(report_dir: Path) -> list[Deviation]:
 # --------------------------------------------------------------------------- #
 # The comparison (expected from blueprint+binding-map, actual from PBIR)
 # --------------------------------------------------------------------------- #
+def _unapproved_additions(
+    committed: dict[str, tuple[Path, dict[str, Any]]],
+    approved_ids: set[str],
+    report_dir: Path,
+) -> list[Deviation]:
+    """A committed visual with NO approved binding-map entry and NO blueprint
+    entry -- a manually-added or rogue visual (T046a)."""
+    return [
+        Deviation(
+            dimension="unapproved_visual",
+            locator=f"{_rel_locator(report_dir, path)}#visual_id={visual_id}",
+            message=(
+                f"visual {visual_id!r} is committed in PBIR but has no "
+                f"entry on the approved binding map or page blueprint -- "
+                f"an unapproved addition"
+            ),
+        )
+        for visual_id, (path, _doc) in committed.items()
+        if visual_id not in approved_ids
+    ]
+
+
+def _missing_deviation(visual_id: str, binding: "_BindingRow") -> Deviation:
+    return Deviation(
+        dimension="missing_visual",
+        locator=f"binding-map#visual_id={visual_id}",
+        message=(
+            f"visual {visual_id!r} (contract {binding.bound_contract!r}) "
+            f"is on the approved binding map but not built in the "
+            f"committed PBIR"
+        ),
+    )
+
+
+def _type_deviation(
+    visual_id: str,
+    binding: "_BindingRow",
+    path: Path,
+    doc: dict[str, Any],
+    report_dir: Path,
+) -> Deviation | None:
+    """A `visual_type` mismatch between the approved binding map and committed
+    PBIR, or ``None`` when both types are present and agree (or either is absent)."""
+    expected_type = binding.visual_type
+    actual_type = _visual_type(doc)
+    if not (expected_type and actual_type and expected_type != actual_type):
+        return None
+    return Deviation(
+        dimension="visual_type",
+        locator=f"{_rel_locator(report_dir, path)}#visual_id={visual_id}",
+        message=(
+            f"visual {visual_id!r} expected type {expected_type!r} "
+            f"(approved binding map) but PBIR has {actual_type!r}"
+        ),
+    )
+
+
 def _compare_visuals(
     blueprint_visuals: dict[str, dict[str, Any]],
     bindings: dict[str, "_BindingRow"],
@@ -243,59 +300,21 @@ def _compare_visuals(
     report_dir: Path,
 ) -> tuple[list[Deviation], list[Deviation], list[Deviation]]:
     """Returns (deviations, unapproved_additions, missing_elements)."""
-    deviations: list[Deviation] = []
-    unapproved: list[Deviation] = []
-    missing: list[Deviation] = []
-
     approved_ids = set(bindings) | set(blueprint_visuals)
+    unapproved = _unapproved_additions(committed, approved_ids, report_dir)
 
-    # Unapproved additions: a committed visual with NO approved binding-map
-    # entry and NO blueprint entry -- a manually-added or rogue visual (T046a).
-    for visual_id, (path, _doc) in committed.items():
-        if visual_id not in approved_ids:
-            unapproved.append(
-                Deviation(
-                    dimension="unapproved_visual",
-                    locator=f"{_rel_locator(report_dir, path)}#visual_id={visual_id}",
-                    message=(
-                        f"visual {visual_id!r} is committed in PBIR but has no "
-                        f"entry on the approved binding map or page blueprint -- "
-                        f"an unapproved addition"
-                    ),
-                )
-            )
-
-    # Missing elements: an approved binding-map entry with no built visual.
+    deviations: list[Deviation] = []
+    missing: list[Deviation] = []
     for visual_id, binding in bindings.items():
         if visual_id not in committed:
-            missing.append(
-                Deviation(
-                    dimension="missing_visual",
-                    locator=f"binding-map#visual_id={visual_id}",
-                    message=(
-                        f"visual {visual_id!r} (contract {binding.bound_contract!r}) "
-                        f"is on the approved binding map but not built in the "
-                        f"committed PBIR"
-                    ),
-                )
-            )
+            missing.append(_missing_deviation(visual_id, binding))
             continue
         # Visual type conformance: blueprint declares the section only; the
         # binding map's `visual_type` column is the type-of-record when present.
         path, doc = committed[visual_id]
-        expected_type = binding.visual_type
-        actual_type = _visual_type(doc)
-        if expected_type and actual_type and expected_type != actual_type:
-            deviations.append(
-                Deviation(
-                    dimension="visual_type",
-                    locator=f"{_rel_locator(report_dir, path)}#visual_id={visual_id}",
-                    message=(
-                        f"visual {visual_id!r} expected type {expected_type!r} "
-                        f"(approved binding map) but PBIR has {actual_type!r}"
-                    ),
-                )
-            )
+        dev = _type_deviation(visual_id, binding, path, doc, report_dir)
+        if dev is not None:
+            deviations.append(dev)
 
     return deviations, unapproved, missing
 
@@ -306,44 +325,107 @@ class _BindingRow(NamedTuple):
     bound_contract: str
 
 
+_SEPARATOR_CELL_CHARS = {"-", ":", " "}
+
+
+def _split_md_row(line: str) -> list[str] | None:
+    """Split a markdown table row into trimmed cells, or ``None`` if not a row."""
+    if "|" not in line:
+        return None
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def _header_type_indices(cells: list[str]) -> tuple[int, int] | None:
+    """The (visual_id, visual_type) column indices in a header row, or ``None``
+    when either column is absent."""
+    lowered = [h.lower() for h in cells]
+    id_idx = next(
+        (j for j, h in enumerate(lowered) if "visual" in h and "id" in h), None
+    )
+    type_idx = next(
+        (j for j, h in enumerate(lowered) if "visual" in h and "type" in h), None
+    )
+    if id_idx is None or type_idx is None:
+        return None
+    return id_idx, type_idx
+
+
+def _row_visual_type(
+    cells: list[str], id_idx: int, type_idx: int
+) -> tuple[str, str] | None:
+    """The (visual_id, visual_type) pair for one data row, or ``None`` for a
+    header-echo / out-of-range row that carries no binding."""
+    if id_idx >= len(cells) or type_idx >= len(cells):
+        return None
+    vid = cells[id_idx].strip("`").strip()
+    if not vid or vid.lower() in ("visual_id", "visual id"):
+        return None
+    return vid, cells[type_idx].strip("`").strip()
+
+
+def _collect_visual_types(
+    rows: list[str], id_idx: int, type_idx: int
+) -> dict[str, str]:
+    """Read ``{visual_id: visual_type}`` from the data rows below a header,
+    stopping at the first non-table line."""
+    out: dict[str, str] = {}
+    for row_line in rows:
+        cells = _split_md_row(row_line)
+        if cells is None:
+            break
+        if all(set(c) <= _SEPARATOR_CELL_CHARS for c in cells):
+            continue
+        pair = _row_visual_type(cells, id_idx, type_idx)
+        if pair is not None:
+            out[pair[0]] = pair[1]
+    return out
+
+
 def _binding_visual_types(text: str) -> dict[str, str]:
     """A second, narrow parse of the SAME binding-map table (reusing
     ``_binding_visuals`` for identity/contract, this local helper for the
     ``visual_type`` column FR-030 additionally needs) -- table selection logic
     is NOT duplicated; only the extra column is read here."""
-    out: dict[str, str] = {}
     lines = text.splitlines()
     for i, line in enumerate(lines):
         if "visual_id" not in line.lower() or "|" not in line:
             continue
-        headers = [c.strip() for c in line.strip().strip("|").split("|")]
-        lowered = [h.lower() for h in headers]
-        try:
-            id_idx = next(
-                j for j, h in enumerate(lowered) if "visual" in h and "id" in h
-            )
-            type_idx = next(
-                j for j, h in enumerate(lowered) if "visual" in h and "type" in h
-            )
-        except StopIteration:
-            return out
-        for row_line in lines[i + 1 :]:
-            cells = (
-                [c.strip() for c in row_line.strip().strip("|").split("|")]
-                if "|" in row_line
-                else None
-            )
-            if cells is None:
-                break
-            if all(set(c) <= {"-", ":", " "} for c in cells):
-                continue
-            if id_idx < len(cells) and type_idx < len(cells):
-                vid = cells[id_idx].strip("`").strip()
-                vtype = cells[type_idx].strip("`").strip()
-                if vid and vid.lower() not in ("visual_id", "visual id"):
-                    out[vid] = vtype
-        return out
-    return out
+        indices = _header_type_indices(_split_md_row(line) or [])
+        if indices is None:
+            return {}
+        return _collect_visual_types(lines[i + 1 :], *indices)
+    return {}
+
+
+def _build_bindings(binding_text: str) -> dict[str, "_BindingRow"]:
+    """Reuse the shipped table parser for identity/contract (never reimplemented);
+    attach the binding-map's own `visual_type` column (FR-030 needs it, the shared
+    parser does not carry it) via a narrow second pass over the SAME table."""
+    visual_types = _binding_visual_types(binding_text)
+    return {
+        b.visual_id: _BindingRow(
+            visual_id=b.visual_id,
+            visual_type=visual_types.get(b.visual_id),
+            bound_contract=b.bound_contract,
+        )
+        for b in _binding_visuals(binding_text)
+    }
+
+
+def _rollup_status(
+    deviations: list[Deviation],
+    unapproved: list[Deviation],
+    missing: list[Deviation],
+    blueprint_visuals: dict[str, dict[str, Any]],
+    bindings: dict[str, "_BindingRow"],
+) -> str:
+    """Worst-first roll-up: any unapproved/missing/deviation blocks; an empty
+    expected design is `not_started`; a clean conformity is `pass`."""
+    if unapproved or missing or deviations:
+        return "blocked"
+    if not blueprint_visuals and not bindings:
+        return "not_started"
+    return "pass"
 
 
 def validate_blueprint(
@@ -387,21 +469,7 @@ def validate_blueprint(
             grants_approval=False,
         )
 
-    # Reuse the shipped table parser for identity/contract (never reimplemented);
-    # attach the binding-map's own `visual_type` column (FR-030 needs it, the
-    # shared parser does not carry it) via a narrow second pass over the SAME
-    # table -- wrap each row in `_BindingRow` so `_expected_visual_type`'s
-    # `getattr(binding, "visual_type", None)` always finds a real attribute.
-    visual_types = _binding_visual_types(binding_text)
-    bindings: dict[str, _BindingRow] = {
-        b.visual_id: _BindingRow(
-            visual_id=b.visual_id,
-            visual_type=visual_types.get(b.visual_id),
-            bound_contract=b.bound_contract,
-        )
-        for b in _binding_visuals(binding_text)
-    }
-
+    bindings = _build_bindings(binding_text)
     blueprint_visuals = _blueprint_visual_ids(blueprint)
     committed = _iter_committed_visuals(report_dir)
 
@@ -410,14 +478,9 @@ def validate_blueprint(
     )
     deviations.extend(_relative_ref_deviations(report_dir))
 
-    if unapproved or any(d.dimension == "missing_visual" for d in missing):
-        status = "blocked"
-    elif deviations:
-        status = "blocked"
-    elif not blueprint_visuals and not bindings:
-        status = "not_started"
-    else:
-        status = "pass"
+    status = _rollup_status(
+        deviations, unapproved, missing, blueprint_visuals, bindings
+    )
 
     return BlueprintValidationResult(
         status=status,

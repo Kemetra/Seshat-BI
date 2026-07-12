@@ -55,23 +55,35 @@ _NAMED_KPI_DENYLIST: tuple[str, ...] = (
 )
 
 
-def _dax_findings(text: str) -> list[str]:
+def _dax_token_findings(text: str) -> list[str]:
     findings: list[str] = []
     for pattern in _DAX_PATTERNS:
         m = pattern.search(text)
         if m:
             findings.append(f"DAX/formula token detected: {m.group(0)!r}")
-    # A bare "<Name> = <expr>" assignment line (not "==", not YAML "key: value").
-    for line in text.splitlines():
-        stripped = line.strip()
-        if (
-            "=" in stripped
-            and "==" not in stripped
-            and not stripped.startswith("#")
-            and re.match(r"^[A-Za-z][A-Za-z0-9 _%]*\s=\s.+", stripped)
-        ):
-            findings.append(f"formula-assignment line detected: {stripped!r}")
     return findings
+
+
+def _is_formula_assignment(stripped: str) -> bool:
+    """A bare "<Name> = <expr>" assignment line (not "==", not YAML "key: value")."""
+    return (
+        "=" in stripped
+        and "==" not in stripped
+        and not stripped.startswith("#")
+        and re.match(r"^[A-Za-z][A-Za-z0-9 _%]*\s=\s.+", stripped) is not None
+    )
+
+
+def _formula_assignment_findings(text: str) -> list[str]:
+    return [
+        f"formula-assignment line detected: {line.strip()!r}"
+        for line in text.splitlines()
+        if _is_formula_assignment(line.strip())
+    ]
+
+
+def _dax_findings(text: str) -> list[str]:
+    return _dax_token_findings(text) + _formula_assignment_findings(text)
 
 
 def _named_kpi_findings(text: str) -> list[str]:

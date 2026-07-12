@@ -98,16 +98,17 @@ def test_cli_unapproved_visual_exit_one(tmp_path: Path):
     assert rc == 1
 
 
-def test_cli_blocks_on_missing_binding_map(tmp_path: Path):
-    # M1 fail-open regression (FR-030/FR-034): a blueprint that DECLARES visuals,
-    # a NONEXISTENT binding map, and an empty report dir previously rolled up to
-    # pass/exit 0 (no bindings -> no missing_elements detected). A check surface
-    # must fail CLOSED on an unreadable required expected-source.
-    report_dir = tmp_path / "Empty.Report"
-    report_dir.mkdir()
-    blueprint = tmp_path / "dashboard-page-blueprint.branch_perf.yaml"
-    blueprint.write_text(_BLUEPRINT_YAML, encoding="utf-8")
-    missing_binding = tmp_path / "does-not-exist.md"
+@pytest.mark.parametrize("missing_source", ["blueprint", "binding_map"])
+def test_cli_blocks_on_unreadable_required_source(tmp_path: Path, missing_source: str):
+    # M1 fail-open regression (FR-030/FR-034): a required expected-source that is
+    # missing/unreadable previously rolled up to pass/exit 0 (empty inputs -> no
+    # missing_elements detected). A check surface must fail CLOSED on either the
+    # blueprint OR the binding map being unreadable.
+    report_dir, blueprint, binding_map = _setup(tmp_path)
+    if missing_source == "blueprint":
+        blueprint = tmp_path / "no-such-blueprint.yaml"
+    else:
+        binding_map = tmp_path / "does-not-exist.md"
 
     rc = main(
         [
@@ -116,24 +117,6 @@ def test_cli_blocks_on_missing_binding_map(tmp_path: Path):
             str(report_dir),
             "--blueprint",
             str(blueprint),
-            "--binding-map",
-            str(missing_binding),
-        ]
-    )
-    assert rc == 1
-
-
-def test_cli_blocks_on_missing_blueprint(tmp_path: Path):
-    report_dir, _blueprint, binding_map = _setup(tmp_path)
-    missing_blueprint = tmp_path / "no-such-blueprint.yaml"
-
-    rc = main(
-        [
-            "pbir-validate-blueprint",
-            "--report",
-            str(report_dir),
-            "--blueprint",
-            str(missing_blueprint),
             "--binding-map",
             str(binding_map),
         ]
