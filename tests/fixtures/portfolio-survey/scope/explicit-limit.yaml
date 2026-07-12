@@ -1,0 +1,14 @@
+decisions:
+  - id: scope_proposal.owner_limited
+    decision_type: scope_proposal
+    statement: "First delivery honors the owner's orders-only limit."
+    scope: {tables: [analytics.orders], kpis: [order_count]}
+    status: proposed
+    confidence: high
+    evidence:
+      - tests/fixtures/portfolio-survey/db-schema/survey.md#candidate-first-scope-tables
+      - domain_classification.orders
+    proposed_by: agent
+    proposed_at: "2026-07-12T12:12:00Z"
+    boundary: coherent
+    owner_limit: [analytics.orders]

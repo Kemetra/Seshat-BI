@@ -1,0 +1,3 @@
+state: {survey: true, domain: true, scope: false, layer_b_complete: false, store_loaded: true}
+expected: "Record the bounded scope proposal."
+

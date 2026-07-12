@@ -1,0 +1,17 @@
+decisions:
+  - id: scope_proposal.order_sales
+    decision_type: scope_proposal
+    statement: "First delivery covers the coherent order-sales process."
+    scope: {tables: [analytics.orders, analytics.order_items], kpis: [gross_sales, order_count]}
+    status: proposed
+    confidence: medium
+    evidence:
+      - tests/fixtures/portfolio-survey/db-schema/survey.md#candidate-first-scope-tables
+      - domain_classification.orders
+    proposed_by: agent
+    proposed_at: "2026-07-12T12:10:00Z"
+    boundary: coherent
+    business_questions: ["How much was ordered by day?"]
+    exclusions: [payments, inventory_snapshots]
+    dependencies: [domain_classification.orders]
+

@@ -1,0 +1,4 @@
+state: {survey: false, domain: false, scope: false, layer_b_complete: false, store_loaded: false}
+expected: "Produce the Layer-A portfolio survey."
+local_stop: "portfolio survey missing; complete Layer-A discovery"
+

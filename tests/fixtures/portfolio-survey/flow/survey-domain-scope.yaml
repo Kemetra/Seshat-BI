@@ -1,0 +1,3 @@
+state: {survey: true, domain: true, scope: true, layer_b_complete: false, store_loaded: true}
+expected: "Invoke retail-onboard-table for the missing Layer-B profile."
+

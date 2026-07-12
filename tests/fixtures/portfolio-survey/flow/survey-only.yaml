@@ -1,0 +1,3 @@
+state: {survey: true, domain: false, scope: false, layer_b_complete: false, store_loaded: false}
+expected: "Record the grounded domain proposal."
+

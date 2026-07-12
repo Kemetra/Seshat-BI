@@ -590,6 +590,21 @@ capabilities:
       skill: "retail-onboard-table"
       verb: "retail-onboard-table"
 
+  - id: retail-discover-portfolio
+    name: "retail-discover-portfolio"
+    summary: "Metadata-only portfolio discovery, governed domain/scope proposals, selected-table onboarding, and interview handoff."
+    state: shipped
+    authority: advisory
+    surface: skill
+    requirements: [database]
+    provenance: locally-verified
+    readiness_stage: source_ready
+    command: null
+    documentation: ".claude/skills/retail-discover-portfolio/SKILL.md"
+    references:
+      skill: "retail-discover-portfolio"
+      verb: "retail-discover-portfolio"
+
   - id: business-knowledge-interview
     name: "business-knowledge-interview"
     summary: "After DB discovery, interview the owner into the Decision Store (batch low-risk, explicit critical); records decisions, never self-grants approval."

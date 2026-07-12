@@ -1,0 +1,13 @@
+decisions:
+  - id: domain_classification.ambiguous
+    decision_type: domain_classification
+    statement: "Domain is undetermined from metadata alone."
+    scope: {tables: [shared.events, shared.entities]}
+    status: proposed
+    confidence: low
+    evidence:
+      - tests/fixtures/portfolio-survey/db-schema/survey.md#coverage-limits
+    proposed_by: agent
+    proposed_at: "2026-07-12T12:01:00Z"
+    alternatives: [sales, inventory, customer_operations]
+

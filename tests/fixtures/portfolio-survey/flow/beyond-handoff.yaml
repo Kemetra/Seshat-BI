@@ -1,0 +1,3 @@
+state: {survey: true, domain: true, scope: true, layer_b_complete: true, store_loaded: true, beyond_handoff: true}
+expected: "STOP; continue under the downstream stage contract, not this skill."
+

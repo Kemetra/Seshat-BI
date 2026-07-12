@@ -1,0 +1,24 @@
+decisions:
+  - id: scope_proposal.order_sales.v1
+    decision_type: scope_proposal
+    statement: "Original order-sales proposal."
+    scope: {tables: [analytics.orders, analytics.order_items], kpis: [gross_sales, order_count]}
+    status: superseded
+    evidence: [tests/fixtures/portfolio-survey/db-schema/survey.md]
+    proposed_by: agent
+    proposed_at: "2026-07-12T12:13:00Z"
+    superseded_by: scope_proposal.order_sales.v2
+  - id: scope_proposal.order_sales.v2
+    decision_type: scope_proposal
+    statement: "Bounded owner-accepted orders-only proposal."
+    scope: {tables: [analytics.orders], kpis: [order_count]}
+    status: proposed
+    confidence: high
+    evidence:
+      - tests/fixtures/portfolio-survey/db-schema/survey.md#candidate-first-scope-tables
+      - domain_classification.orders
+    proposed_by: agent
+    proposed_at: "2026-07-12T12:14:00Z"
+    supersedes: scope_proposal.order_sales.v1
+    boundary: coherent
+

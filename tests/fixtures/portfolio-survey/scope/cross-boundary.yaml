@@ -1,0 +1,16 @@
+decisions:
+  - id: scope_proposal.cross_boundary
+    decision_type: scope_proposal
+    statement: "Order transactions and inventory snapshots cross process and grain boundaries."
+    scope: {tables: [analytics.orders, analytics.inventory_snapshots]}
+    status: needs_user_input
+    evidence:
+      - tests/fixtures/portfolio-survey/db-schema/survey.md#candidate-first-scope-tables
+      - domain_classification.orders
+    proposed_by: agent
+    proposed_at: "2026-07-12T12:11:00Z"
+    boundary: cross-boundary
+    alternatives:
+      - {tables: [analytics.orders, analytics.order_items], process: order_sales}
+      - {tables: [analytics.inventory_snapshots], process: inventory_position}
+

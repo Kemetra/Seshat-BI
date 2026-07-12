@@ -1,0 +1,8 @@
+source_kind: db-schema
+source_identity: synthetic
+tables:
+  - table_id: synthetic.contacts
+    columns:
+      contact_id: bigint
+      email_address: varchar
+      phone_number: varchar

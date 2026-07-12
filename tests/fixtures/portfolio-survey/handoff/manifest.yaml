@@ -1,0 +1,14 @@
+required_inputs:
+  - "a committed discovery profile (Stage-1 read-only profile of retail-onboard-table or equivalent)"
+  - "a proposed scope"
+  - "the existing Decision Store, loaded first (existing decisions are presented for confirmation or supersession, never overwritten)"
+discovery_profiles:
+  - mappings/orders/source-profile.md
+scope_record: scope_proposal.order_sales
+existing_decision_ids: [domain_classification.orders, scope_proposal.order_sales]
+present_existing_for: [confirmation, supersession]
+preserve_existing_records: true
+records_interview_outcomes: false
+grants_approval: false
+kpi_meaning_route: retail_kpi
+

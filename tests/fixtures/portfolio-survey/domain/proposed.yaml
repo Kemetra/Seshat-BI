@@ -1,0 +1,13 @@
+decisions:
+  - id: domain_classification.orders
+    decision_type: domain_classification
+    statement: "Order, customer, product, and payment metadata indicate retail sales."
+    scope: {tables: [analytics.orders, analytics.order_items]}
+    status: proposed
+    confidence: medium
+    evidence:
+      - tests/fixtures/portfolio-survey/db-schema/survey.md#candidate-domain-evidence
+    proposed_by: agent
+    proposed_at: "2026-07-12T12:00:00Z"
+    alternatives: [order_management]
+
