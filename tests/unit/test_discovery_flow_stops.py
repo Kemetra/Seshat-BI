@@ -208,10 +208,15 @@ def test_absent_store_gate_pass_proves_local_stop_is_feature_owned(
 
 
 def test_top_level_contracts_and_authority_map_are_unchanged() -> None:
+    # Baseline re-pinned when spec 123 landed: the governed-dashboard flow added
+    # `report_intent_approval` as a blocking category (+ stop rule) to the report
+    # intent/blueprint stages, and the authority map granted `report_owner` the
+    # `report_intent_approval` class. Both are legitimate spec-123 contract
+    # extensions; these digests guard against UNintended drift from that baseline.
     expected = {
-        FLOW_REL: "ecdb1803392a5791f4589b74c671f109a1849ba3d1461d1f59394fef673e89ee",
+        FLOW_REL: "2cced083e5661a2e25fefd9edf74020a084437b790ec67d3e75a15f0130f7552",
         AUTHORITY_REL: (
-            "3adef32de0a88aa3cb82dc51f246765daa1ab7ca1388de6653d7fddd53a9a376"
+            "a6da9c32629ab5bc368dee7a9fdcd6410fe18747fd170fcd5457ab3dcd78ddc7"
         ),
     }
     for rel, digest in expected.items():
