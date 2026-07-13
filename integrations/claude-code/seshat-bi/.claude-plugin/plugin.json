@@ -1,6 +1,6 @@
 {
   "name": "seshat-bi",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Guarded Seshat BI readiness workflow and public knowledge for Claude Code.",
   "author": {"name": "Ahmed Shaaban"},
   "homepage": "https://github.com/ahmed-shaaban-94/Seshat_BI",

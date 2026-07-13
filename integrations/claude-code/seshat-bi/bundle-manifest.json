@@ -3,7 +3,7 @@
     {
       "classification": "generated_wrapper",
       "destination": ".claude-plugin/plugin.json",
-      "output_sha256": "2473668695337b9e1cc40c4f86cdda497f8c75d463a5d7c0c5f0770794d507ce",
+      "output_sha256": "ca497e7e80d3e48aea7bf6e37d700feaddfdf7bdfb877f95ed86f076c7815af0",
       "source": "distribution/bundle-templates/claude/.claude-plugin/plugin.json",
       "source_id": "claude-manifest",
       "source_sha256": "414f8f2dbdeb715721c0b722ce36e04437d89d70ea4502bed3722821a8dcfe8b",
@@ -1541,10 +1541,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "bdfc4da31b352e78ecc6efb41ef90aa9a4a6db847f9791948126abacff18a9b2",
+  "manifest_digest": "2bd53ced156da2042fcb7f85ccecf7b17724e97ebe6f87290da250a9208616bd",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "12bbf66d3cfe5066b36e6098a2400845dc584898",
+  "source_revision": "48e71f73d5f6e69a214f8e05c3b34517e8acaa68",
   "target": "claude",
-  "version": "0.1.0"
+  "version": "0.2.0"
 }

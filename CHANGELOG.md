@@ -27,6 +27,8 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+## [0.2.0] -- 2026-07-13
+
 Work from the current roadmap arc (`docs/roadmap/seshat-bi-agent-controlled-user-tool-roadmap.md`,
 Option B ratified 2026-07-07) that has merged to `main` but not yet been bundled into
 an owner-approved version bump:
