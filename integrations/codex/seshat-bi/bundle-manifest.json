@@ -1428,7 +1428,7 @@
       "output_sha256": "d41f64e8c36378aafa43eebb66faac022e797a6a117bac62d716db641770e3ef",
       "source": "distribution/bundle-templates/shared/portable-operating-contract.md",
       "source_id": "portable-contract",
-      "source_sha256": "5fb5fb8ae288055fc1d10c4b9e9d518157f2b9585531d30cf7d5c7fcd111a12e",
+      "source_sha256": "d41f64e8c36378aafa43eebb66faac022e797a6a117bac62d716db641770e3ef",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1505,10 +1505,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "72ff7da6a73067ffac891f095b39c0db6e4fada0b7b310fd27ebaeff4e438629",
+  "manifest_digest": "f16e08052e50b900d97f878ce87b0cab4653059f931a3bd9417b327cf659e4bc",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "7f3c87a1eed96f4681360d428073855afbab1f09",
+  "source_revision": "31a640cd4b3b1310e974588a38986afab7b50079",
   "target": "codex",
   "version": "0.1.0"
 }
