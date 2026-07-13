@@ -68,9 +68,7 @@ def test_untrusted_dispatch_ref_is_not_interpolated_into_bash() -> None:
     workflow = _workflow()
     build = workflow["jobs"]["build-validate"]
     identity_step = next(
-        step
-        for step in build["steps"]
-        if step.get("name") == "Verify source identity"
+        step for step in build["steps"] if step.get("name") == "Verify source identity"
     )
     assert identity_step["env"] == {"CANDIDATE_REF": "${{ inputs.candidate_ref }}"}
     assert "${{ inputs.candidate_ref }}" not in identity_step["run"]
