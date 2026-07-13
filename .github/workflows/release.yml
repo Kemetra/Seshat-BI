@@ -38,7 +38,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install build validators
-        run: python -m pip install build twine
+        run: python -m pip install build twine pyyaml
       - name: Verify source identity
         shell: bash
         env:
