@@ -3,8 +3,9 @@
 Route first. Each route opens the fewest files and ends on a checklist, a contract,
 a verdict, or a handoff. Do not scan the whole knowledge base.
 
-Status legend: **[seeded]** file exists in this seed · **[planned]** route named but
-target deferred · resolve **[planned]** routes by returning a planned/deferred note.
+Status legend: **[seeded]** generic knowledge contract exists; **[planned]** route is
+named but has concrete blockers. `registry.yaml` is the authoritative machine-readable
+inventory; this router is a consumer view.
 
 ## 1. Task routes
 
@@ -26,6 +27,9 @@ target deferred · resolve **[planned]** routes by returning a planned/deferred 
 | Confirm required source fields | `references/source-field-requirements.md` | metric-contract-review-checklist |
 | Check if one KPI's contract is complete enough to build | `../../templates/kpi-sufficiency-card.md` | per-KPI sufficiency card (`ready`/`blocked` + named blockers, never a score; grants no readiness) |
 | Assess which KPIs a source table can support | `references/kpi-coverage-scorecard-template.md` + `references/source-field-requirements.md` | per-table coverage scorecard (statuses + named blockers, never a score; grants no readiness) |
+| Produce governed KPI answerability | `registry.yaml` + `references/kpi-coverage-scorecard-template.md` | per-source answerability artifact with evidence + next action |
+| Draft a project metric contract | `registry.yaml` + `../../templates/metric-contract.yaml` | blocked-until-Gold F009 draft with decision and source provenance |
+| Add a generic KPI | `checklists/kpi-extension-checklist.md` + `registry.yaml` | reviewed extension proposal; never an automatic promotion |
 
 ## 2. Symptom routes
 
@@ -81,16 +85,18 @@ skills/retail-kpi-knowledge/
   README.md           seed scope and disclaimers
   knowledge/          cross-cutting reasoning (concepts, contracts, additivity, ambiguity, domains)
   domains/            per-domain KPI overviews (12 files)
-  contracts/          10 seeded metric contracts
+  registry.yaml        authoritative identity, lifecycle, and requirement metadata
+  contracts/           15 generic knowledge contracts (14 seeded, 1 planned)
   packs/              7 KPI pack definitions
   checklists/         contract review, pack review, ambiguity
   references/         template, field requirements, id conventions, derivation lineage, source map, research notes
   patterns/           metric patterns, anti-patterns, candidate KPIs (JSON)
 ```
 
-Seeded contracts (10): gross-sales, net-sales, quantity-sold, transactions-count,
+Seeded contracts (14): gross-sales, net-sales, quantity-sold, transactions-count,
 average-transaction-value, discount-amount, discount-rate, returns-rate-value,
-gross-margin, gross-margin-percent.
+gross-margin, gross-margin-percent, net-sales-growth, ytd, discounted-transaction-rate,
+average-basket-size-units. Same-store-sales-growth remains planned pending owner policy.
 
 ## 6. Stop rules
 

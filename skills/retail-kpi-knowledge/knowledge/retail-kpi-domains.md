@@ -2,7 +2,8 @@
 
 The domains this layer organises KPIs into. Each has a one-file overview in `domains/`.
 Use this page to pick the right domain, then open that domain file. Per-KPI contracts
-live in `contracts/` (10 seeded; the rest planned).
+live in `contracts/` (14 seeded and one planned); `registry.yaml` owns the full
+machine-readable lifecycle inventory.
 
 ## Sales and revenue
 

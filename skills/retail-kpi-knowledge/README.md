@@ -5,7 +5,8 @@ agents. It makes retail KPIs contract-first and governed before any implementati
 
 What it is not:
 
-- It is **not** a full KPI encyclopedia. Only 10 metric contracts are seeded live.
+- It is **not** a full KPI encyclopedia. The registry distinguishes seeded knowledge
+  contracts from planned metadata with concrete blockers.
 - It is **not** DAX. No measures are implemented here.
 - It is **not** SQL transformation or Python prep.
 - It is **not** dashboard design.
@@ -37,7 +38,7 @@ bound to a table → SQL/DAX/Python implement it.** This layer produces a busine
 contract and a handoff note; the F009 YAML is where that meaning is persisted per table.
 A real filled F009 set lives at `mappings/retail_store_sales/metrics/`.
 
-## Current seed coverage
+## Current seeded coverage
 
 Live (seeded) metric contracts:
 
@@ -51,6 +52,10 @@ Live (seeded) metric contracts:
 8. Returns Rate % (Value) — `contracts/returns-rate-value.md`
 9. Gross Margin — `contracts/gross-margin.md`
 10. Gross Margin % — `contracts/gross-margin-percent.md`
+11. Net Sales Growth % - `contracts/net-sales-growth.md`
+12. YTD Net Sales - `contracts/ytd.md`
+13. Discounted Transaction Rate - `contracts/discounted-transaction-rate.md`
+14. Average Basket Size (Units) - `contracts/average-basket-size-units.md`
 
 Also seeded: router/shell files, five knowledge concept files, eleven domain
 overviews, seven KPI packs, three review checklists, six reference files (incl. the
@@ -58,14 +63,13 @@ KPI coverage scorecard template), and three pattern JSON files.
 
 ## Planned / deferred coverage
 
-Named in routes, domains, packs, and `patterns/metric-contract-candidates.json` but
-**not** yet given live contracts in this seed:
+The authoritative lifecycle and blockers live in `registry.yaml`. The following remain
+planned and receive no seeded contract in this feature:
 
-- Net Sales Growth %, Same-Store Sales Growth %, Sales per Square Meter
-- Promotion Uplift %, Returns Rate % (Units)
-- Average Basket Size (Units), Net Sales per Branch, Net Sales by Product
-- Sell-Through Rate %, Inventory Turnover, Out-of-Stock Rate %, GMROI
-- Net Sales vs Target %, YTD Net Sales
+- Same-Store Sales Growth %, Inventory Turnover, Out-of-Stock Rate %, GMROI
+- Customer Retention, Customer Lifetime Value, Net Sales vs Target %, Promotion Uplift
+- Sales per Square Meter, Returns Rate % (Units), Net Sales per Branch, Net Sales by Product
+- Sell-Through Rate %, Missing Key Dimensions Rate %, Late Data Arrival Count
 - Missing Key Dimensions Rate %, Late Data Arrival Count
 - Customer domain KPIs (e.g., Customer Retention Rate %)
 

@@ -1,6 +1,6 @@
 # KPI Derivation Lineage
 
-A static map of which seeded retail KPIs are BASE (computed directly from fact fields)
+A static map of which seeded retail KPIs are BASE (computed directly from logical source fields)
 and which are DERIVED (computed from other KPIs), plus the exact base each derived KPI
 depends on. Every edge below is transcribed from the cited contract's own committed
 "Formula in business terms" prose -- this map computes no value, ranks nothing, and
@@ -9,8 +9,9 @@ contract's own "Additivity" section and knowledge/kpi-additivity-and-grain.md ow
 and the two axes are orthogonal -- a base KPI may be non-additive and a derived KPI may be
 additive).
 
-**Scope**: the 10 existing KPI-MC contracts only (see references/id-conventions.md for the
-ID-to-KPI table). Edges reference stable KPI-MC IDs, never filenames.
+**Scope**: the seeded registry entries with derivation edges (see `registry.yaml` and
+references/id-conventions.md for lifecycle and IDs). Edges reference stable KPI-MC IDs,
+never filenames. Planned entries carry blockers in the registry and are not formulas.
 
 ## Base KPIs (no derives-from edge)
 
@@ -36,6 +37,11 @@ Each row lists the parent KPI-MC IDs and the contract prose the edge was transcr
 | KPI-MC-08 | Returns Rate % (Value) | KPI-MC-02 | "Returns Rate % = Return Value / Net Sales * 100". (Return Value is a field, not a contract node -- no edge to it.) |
 | KPI-MC-09 | Gross Margin (Value) | KPI-MC-02 | "Gross Margin = Net Sales - COGS". (COGS is a field, not a contract node -- no edge to it.) |
 | KPI-MC-10 | Gross Margin % | KPI-MC-09, KPI-MC-02 | "Gross Margin % = Gross Margin / Net Sales * 100". |
+| KPI-MC-11 | Net Sales Growth % | KPI-MC-02 | A comparison-period recompute from Net Sales; the comparison basis is an owner policy slot. |
+| KPI-MC-12 | Same-Store Sales Growth % | KPI-MC-11 | A comparable-store restriction of Net Sales Growth; planned until the required policies are approved. |
+| KPI-MC-13 | YTD Net Sales | KPI-MC-02 | A to-date accumulation from Net Sales; year boundary is an owner policy slot. |
+| KPI-MC-14 | Discounted Transaction Rate | KPI-MC-04 | A policy-defined transaction-population relationship; no denominator is baked into the registry. |
+| KPI-MC-15 | Average Basket Size (Units) | KPI-MC-03, KPI-MC-04 | A units-to-transaction relationship, recomputed at every rollup. |
 
 Note: KPI-MC-02 Net Sales is itself derived (from KPI-MC-01 and KPI-MC-06) AND is the base
 for four downstream KPIs (KPI-MC-05, KPI-MC-08, KPI-MC-09, KPI-MC-10). A node can be both

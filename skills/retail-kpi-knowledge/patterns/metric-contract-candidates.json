@@ -3,20 +3,12 @@
   "description": "Planned KPI candidates recognised from the broader retail catalog but not contracted in this seed. Move into contracts/ as each is contracted and its dependencies are confirmed.",
   "candidates": [
     {
-      "id": "KPI-CAND-01",
-      "name": "Net Sales Growth %",
-      "domain": "sales-and-revenue / time-intelligence",
-      "pattern": "KPI-PAT-04",
-      "depends_on": ["fiscal calendar", "comparison baseline rule (SPLY vs prior period)"],
-      "status": "planned"
-    },
-    {
       "id": "KPI-CAND-02",
       "name": "Same-Store Sales Growth %",
       "domain": "branch-store-performance",
       "pattern": "KPI-PAT-04",
       "depends_on": ["same-store rule (A11)", "store opening/closure/relocation flags"],
-      "status": "needs-business-definition"
+      "status": "planned"
     },
     {
       "id": "KPI-CAND-03",
@@ -64,14 +56,6 @@
       "domain": "inventory / margin-profitability",
       "pattern": "KPI-PAT-04",
       "depends_on": ["gross margin", "average inventory cost", "inventory snapshots (A10)"],
-      "status": "planned"
-    },
-    {
-      "id": "KPI-CAND-09",
-      "name": "YTD Net Sales",
-      "domain": "time-intelligence",
-      "pattern": "KPI-PAT-06",
-      "depends_on": ["marked date table with fiscal attributes"],
       "status": "planned"
     },
     {

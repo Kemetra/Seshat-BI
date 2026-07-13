@@ -228,6 +228,14 @@
     "title": "rename-impact orphaned-reference guard"
   },
   {
+    "id": "KP1",
+    "title": "Project KPI provenance is structurally traceable"
+  },
+  {
+    "id": "KR1",
+    "title": "Generic KPI registry structure and client-free boundary"
+  },
+  {
     "id": "P1",
     "title": "Approach-A layout"
   },

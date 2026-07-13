@@ -8,8 +8,9 @@ description: >-
   ambiguity (gross vs net, VAT, returns, cost method, same-store), choosing an MVP KPI
   pack, reviewing a metric contract for completeness, or preparing a clean handoff to the
   DAX / semantic-model layer. This is a meaning/definition + review layer, not an executor:
-  it does not write DAX/SQL/Python, grant readiness, or design dashboards. Initial seed —
-  see INDEX.md for which routes are live (10 seeded contracts) and which are planned.
+  it does not write DAX/SQL/Python, grant readiness, or design dashboards. See INDEX.md
+  for the live and planned routes; registry.yaml is the authoritative machine-readable
+  inventory.
 ---
 
 # Retail KPI Knowledge Skill

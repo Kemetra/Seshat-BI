@@ -29,6 +29,18 @@ Metric contracts (`KPI-MC-*`):
 | KPI-MC-08 | Returns Rate % (Value) |
 | KPI-MC-09 | Gross Margin (Value) |
 | KPI-MC-10 | Gross Margin % |
+| KPI-MC-11 | Net Sales Growth % |
+| KPI-MC-12 | Same-Store Sales Growth % (planned) |
+| KPI-MC-13 | YTD Net Sales |
+| KPI-MC-14 | Discounted Transaction Rate |
+| KPI-MC-15 | Average Basket Size (Units) |
+| KPI-MC-16 | Inventory Turnover (planned) |
+| KPI-MC-17 | GMROI (planned) |
+| KPI-MC-18 | Out-of-Stock Rate (planned) |
+| KPI-MC-19 | Customer Retention (planned) |
+| KPI-MC-20 | Customer Lifetime Value (planned) |
+| KPI-MC-21 | Net Sales vs Target (planned) |
+| KPI-MC-22 | Promotion Uplift (planned) |
 
 Packs: KPI-PK-01 … KPI-PK-07. Concepts: KPI-CN-01 … KPI-CN-08. Checklists: KPI-CHK-01 …
 KPI-CHK-03. Patterns, anti-patterns, and candidates are numbered inside their JSON files.
@@ -37,6 +49,7 @@ KPI-CHK-03. Patterns, anti-patterns, and candidates are numbered inside their JS
 
 - IDs are permanent. Reusing an ID for a different KPI is forbidden.
 - Cross-references use the ID, never the filename, so files can move.
-- New contracts continue from KPI-MC-11.
+- New contracts continue from KPI-MC-23. The registry owns lifecycle and aliases;
+  this table is an ID-only consumer projection.
 - Ambiguity codes (`A1`…`A11`) are local to `knowledge/kpi-ambiguities.md` and are not in
   the `KPI-*` namespace.

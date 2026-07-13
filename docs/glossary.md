@@ -108,7 +108,7 @@ This catalog is the **single source of truth for `retail check`'s rule count.**
 The **live registry in `src/seshat/rules/` is authoritative**; the table below
 mirrors it and the `retail-govern` skill maps each id to its fix.
 
-> **Currently 76 rules in 24 families** (S, D, C, R, RS, G, P, A, B, PP, SC, DF, SL, AL, AD, AQ, CB, DL, CT, DR, AP, SF, HR, DS).
+> **Currently 78 rules in 26 families** (S, D, C, R, RS, G, P, A, B, PP, SC, DF, SL, KR, KP, AL, AD, AQ, CB, DL, CT, DR, AP, SF, HR, DS).
 > When a rule is added or removed, update the table and this line **together** — and
 > elsewhere refer to "the static `retail check` gate" by name rather than restating a
 > number. Restated counts are exactly what drifted before (see
@@ -130,6 +130,8 @@ mirrors it and the `retail-govern` skill maps each id to its fix.
 | **SC** | status-claim integrity | `SC1` a prose status claim reconciles with tracked-file evidence (no stale planned/built marker) · `SC2` a prose "N rules" count claim reconciles with the authoritative rule count (manifest-anchored, never a free repo scan) |
 | **DF** | dependency-edge integrity | `DF1` parked-on dependency edges reconcile with tracked-file evidence |
 | **SL** | KPI coverage scorecard | `SL1` a committed coverage scorecard is structurally well-formed (status-enum, named blocker, resolving contract, no percentage) |
+| **KR** | generic KPI registry | `KR1` the product registry has unique identity, resolvable knowledge references, valid lifecycle and derivation metadata, and no project binding or worked-example leakage; it validates structure only and grants no readiness |
+| **KP** | project KPI provenance | `KP1` a provenance-linked project contract has exactly one generic reference or custom marker, a resolvable generic id, and well-formed decision and source-evidence references; legacy contracts remain valid and decision approval/freshness stay with the existing gate |
 | **AL** | assumption ledger | `AL1` a metric contract with an unresolved assumption (blocked + reasons) must not also carry a settled gold binding · `AL2` contracts on one gold table record no contradictory decided ambiguity rulings |
 | **AD** | additivity consistency | `AD1` a metric's additivity classification is not composed illegally with its lineage parents (no direct sum of a non-additive/semi-additive metric); absent/ambiguous class is ERRORed, never inferred |
 | **AQ** | answerability | `AQ1` every domain decision-question route resolves to an existing contract (Seeded) or is honestly marked Planned with the placeholder glyph; dangling Seeded routes and stale Planned markers ERROR, ambiguous rows WARN |

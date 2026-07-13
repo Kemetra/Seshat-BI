@@ -21,10 +21,11 @@ sales model) · **assumption** (likely present but must be verified) · **derive
 | category key (via product) | assumption | product/category cuts |
 | channel key | assumption | channel cuts |
 | customer key | assumption | customer KPIs (planned) |
-| quantity sold | confirmed-concept | quantity-sold, basket |
+| quantity sold | confirmed-concept | quantity-sold, average-basket-size-units |
 | gross sales amount (pre-discount, pre-VAT) | assumption | gross-sales |
 | line discount amount | assumption | discount-amount |
 | header discount amount | assumption | discount-amount |
+| discount qualification indicator | assumption | discounted-transaction-rate |
 | net sales amount (pre-tax) | assumption (or derived) | net-sales |
 | tax / VAT amount | assumption | VAT policy (A1) |
 | cost amount (COGS) | assumption | gross-margin |

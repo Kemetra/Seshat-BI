@@ -103,6 +103,19 @@ owner: "<named metric owner>"         # e.g. "Sales Analytics lead"; a named rol
                                       #   not "the agent" and not blank.
 
 # -----------------------------------------------------------------------------
+# provenance -- OPTIONAL, additive links for the governed kpi_contracts flow.
+# Legacy contracts without these fields remain valid. A new provenance-linked contract
+# carries exactly one of generic_kpi_ref or custom: true, plus the approved decision
+# ids and committed source/mapping evidence that justify it. These references are not
+# a second decision store or a readiness engine; validity and freshness stay with the
+# existing Decision Store gate.
+# -----------------------------------------------------------------------------
+generic_kpi_ref: "<KPI-MC-NN or omit>" # a stable id from retail-kpi-knowledge/registry.yaml
+custom: false                           # true only when no generic KPI applies; then omit generic_kpi_ref
+decision_refs: []                       # approved Decision Store ids, e.g. kpi_definition.<scope>
+source_evidence: []                     # repo-relative source-profile/source-map references only
+
+# -----------------------------------------------------------------------------
 # binds_to -- the `gold` table + column(s) the metric reads. GOLD ONLY (Principle
 # III / FR-012): a contract that binds to a silver/bronze object is a defect.
 # If gold provides no clean column for this metric, the contract STOPS and records

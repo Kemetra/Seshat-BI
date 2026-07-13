@@ -41,6 +41,8 @@ def test_all_rules_returns_a_tuple() -> None:
 # len(EXPECTED_RULE_IDS), never a hard-coded number, so it catches silent drift.
 EXPECTED_RULE_IDS = frozenset(
     {
+        "KP1",
+        "KR1",
         "AP1",
         "SF1",
         "DR1",

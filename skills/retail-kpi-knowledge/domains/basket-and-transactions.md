@@ -9,7 +9,7 @@ receipt vs line confusion breaks every metric here.
 |-----|----------|--------|
 | Transactions Count | `contracts/transactions-count.md` | Seeded |
 | Average Transaction Value | `contracts/average-transaction-value.md` | Seeded |
-| Average Basket Size (Units) | — | Planned |
+| Average Basket Size (Units) | `contracts/average-basket-size-units.md` | Seeded |
 
 ## Decision questions this domain answers
 
@@ -20,7 +20,7 @@ planned marker. A question never implies a formula and never invents a contract.
 |-------------------|-----------|--------|
 | How many transactions did we process in the period? | `contracts/transactions-count.md` | Seeded |
 | What does the average customer spend per transaction? | `contracts/average-transaction-value.md` | Seeded |
-| How many units are in a typical basket? | — | Planned (Average Basket Size (Units)) |
+| How many units are in a typical basket? | `contracts/average-basket-size-units.md` | Seeded |
 
 ## Key ambiguities (see knowledge/kpi-ambiguities.md)
 

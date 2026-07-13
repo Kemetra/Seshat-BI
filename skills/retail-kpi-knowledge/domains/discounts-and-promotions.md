@@ -8,6 +8,7 @@ Value given away to customers and the effectiveness of promotional activity.
 |-----|----------|--------|
 | Discount Amount | `contracts/discount-amount.md` | Seeded |
 | Discount Rate % | `contracts/discount-rate.md` | Seeded |
+| Discounted Transaction Rate | `contracts/discounted-transaction-rate.md` | Seeded |
 | Promotion Uplift % | — | Planned (needs promotion dimension + baseline rule) |
 
 ## Decision questions this domain answers
@@ -19,6 +20,7 @@ planned marker. A question never implies a formula and never invents a contract.
 |-------------------|-----------|--------|
 | How much value did we give away in discounts? | `contracts/discount-amount.md` | Seeded |
 | What share of gross sales is discounted? | `contracts/discount-rate.md` | Seeded |
+| How often do qualifying transactions carry a discount? | `contracts/discounted-transaction-rate.md` | Seeded |
 | How much extra did a promotion drive vs baseline? | — | Planned (needs promotion dimension + baseline rule) |
 
 ## Key ambiguities (see knowledge/kpi-ambiguities.md)

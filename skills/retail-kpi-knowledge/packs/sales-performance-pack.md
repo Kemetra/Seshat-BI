@@ -16,19 +16,20 @@ and progress vs target.
 | Average Transaction Value | `contracts/average-transaction-value.md` | Live |
 | Discount Amount | `contracts/discount-amount.md` | Live |
 | Discount Rate % | `contracts/discount-rate.md` | Live |
+| Discounted Transaction Rate | `contracts/discounted-transaction-rate.md` | Live |
 | Returns Rate % (Value) | `contracts/returns-rate-value.md` | Live |
-| Net Sales Growth % | — | Planned |
-| Average Basket Size (Units) | — | Planned |
-| YTD Net Sales | — | Planned |
+| Net Sales Growth % | `contracts/net-sales-growth.md` | Live |
+| Average Basket Size (Units) | `contracts/average-basket-size-units.md` | Live |
+| YTD Net Sales | `contracts/ytd.md` | Live |
 | Net Sales vs Target % | — | Planned |
 
 **Required fields**
-Sales fact (gross, net/discount, transaction id), date dimension. Planned additions:
-fiscal calendar (YTD, growth), target fact (vs target), quantity for basket size.
+Sales fact (gross, net/discount, transaction id), date dimension, and units sold. Planned
+additions: target fact (vs target). Time and discount policy choices remain owner-rules.
 
 **Blocked-by conditions**
-VAT / returns policy confirmed for revenue KPIs; target fact and fiscal calendar for the
-planned items.
+VAT / returns policy confirmed for revenue KPIs; target fact and its alignment policy for
+the planned item.
 
 **Owner**
 Finance and Sales.
@@ -40,5 +41,5 @@ Sales Performance page; executive summary trend tiles.
 Does not imply readiness; Readiness layer decides.
 
 **Handoff notes**
-Seven live contracts ready for DAX handoff; four planned KPIs return to this layer for
-contracting first.
+Eleven live contracts are available for governed handoff; Net Sales vs Target returns to
+this layer for contracting after its target evidence and policy are approved.
