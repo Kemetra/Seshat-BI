@@ -98,11 +98,24 @@ stops honestly at Gold Ready because the live validation boundary needs a databa
 ![Seshat BI readiness proof showing seven evidence-backed readiness stages](assets/demo/readiness-proof.png)
 
 > [!NOTE]
-> `seshat-bi` is the intended distribution name, but it is **not published yet**. The install commands below are the public-beta target, not a claim that an artifact is currently available.
+> `seshat-bi` is the intended distribution name. Repository implementation does
+> not prove public availability; the install commands below become the public path
+> only when the corresponding public-install evidence is recorded.
+
+| Distribution surface | Repository state | Public availability authority |
+|---|---|---|
+| Python (`seshat-bi`) | build/lifecycle validation implemented | public PyPI install evidence |
+| Claude Code GitHub plugin | generated repository bundle | external add/install acceptance plus owner publication |
+| Codex repository plugin | generated repository bundle | external CLI/IDE acceptance |
+| Claude public catalog | separate owner action | catalog install evidence |
+| OpenAI public plugin listing | separate submission/review | accepted listing/install evidence |
+
+Statuses must say `available`, `unavailable`, `unverified`, or a concrete blocked
+reason per surface; one successful surface never implies a coordinated full launch.
 
 ### Three steps to first success
 
-1. `pipx install seshat-bi` *(target — not yet published)*
+1. `pipx install seshat-bi` *(after public availability is verified)*
 2. `seshat init-project my-bi`
 3. `cd my-bi`, run `git init`, then `seshat check`
 
@@ -111,7 +124,7 @@ stops honestly at Gold Ready because the live validation boundary needs a databa
 #### Windows (release-gated path)
 
 ```powershell
-pipx install seshat-bi           # target — not yet published
+pipx install seshat-bi           # after public availability is verified
 pipx ensurepath                  # reopen PowerShell if seshat is not found
 seshat --help
 seshat init-project my-bi
@@ -125,7 +138,7 @@ seshat check                     # expected: exit 0
 #### macOS / Linux (documented; best-effort tested)
 
 ```bash
-pipx install seshat-bi           # target — not yet published
+pipx install seshat-bi           # after public availability is verified
 pipx ensurepath                  # reopen your shell if seshat is not found
 seshat --help
 seshat init-project my-bi
@@ -156,7 +169,7 @@ pipx inject seshat-bi psycopg2-binary  # or install "seshat-bi[db]" (target — 
 seshat validate --source-map mappings/<table>/source-map.yaml
 ```
 
-`mssql`, `mysql`, `snowflake`, and `files` are additional user-path extras. Put credentials only in the git-ignored `.env` file. See [the complete user install guide](docs/install/user-install.md) and [the Claude Code guide](docs/install/agent-install.md).
+`mssql`, `mysql`, `snowflake`, and `files` are additional user-path extras. Put credentials only in the git-ignored `.env` file. See [the complete user install guide](docs/install/user-install.md) and [the Claude Code and Codex guide](docs/install/agent-install.md).
 ## What is built today
 
 Everything below is on `main`, each with a written spec (under `specs/` or

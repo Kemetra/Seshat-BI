@@ -1,0 +1,4 @@
+version: 1
+entries:
+  - id: KPI-MC-15
+    knowledge_contract_ref: skills/retail-kpi-knowledge/contracts/does-not-exist.md

@@ -1,0 +1,8 @@
+{
+  "installed_version": "0.1.0",
+  "cached_version_before_update": "0.0.9",
+  "resolved_version_after_update": "0.0.9",
+  "restart_required": true,
+  "uninstall_removed_plugin": false,
+  "workspace_preserved": true
+}

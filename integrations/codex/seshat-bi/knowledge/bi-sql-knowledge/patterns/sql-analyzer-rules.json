@@ -1,0 +1,240 @@
+{
+  "$schema_version": "1.0-draft",
+  "status": "STATIC DRAFT skill rules -- NOT runtime enforcement. 10 SQL rules promoted from the analyzer_v1 candidates for review. No analyzer/CLI/runtime is wired by this skill; these are reviewable artifacts only.",
+  "description": "Machine-checkable SQL rules graduated from sql-analyzer-rule-candidates.json (future_phase=analyzer_v1: static, low false-positive). Mirrors the bi-dax-knowledge analyzer-rules schema.",
+  "rule_field_spec": [
+    "rule_id",
+    "title",
+    "severity",
+    "category",
+    "detect",
+    "fix",
+    "rationale",
+    "refs",
+    "detectability",
+    "required_inputs",
+    "related_concepts",
+    "promoted_from"
+  ],
+  "promotion_note": "2026-06-26 draft: 10 analyzer_v1 SQL candidates promoted. analyzer_v2 and human_guidance_only candidates remain staged in sql-analyzer-rule-candidates.json.",
+  "rules": [
+    {
+      "rule_id": "SAR-COUNT-01",
+      "title": "COUNT(column) where COUNT(*) or COUNT(DISTINCT) is likely intended",
+      "severity": "info",
+      "category": "correctness",
+      "detect": "COUNT(column) used where COUNT(*) or COUNT(DISTINCT column) is the likely intent (nullable column, or counting entities not rows).",
+      "fix": "Pick deliberately: rows -> COUNT(*); distinct entities -> COUNT(DISTINCT col); non-null values -> COUNT(col).",
+      "rationale": "COUNT variants diverge exactly when data has nulls/duplicates, silently mis-measuring entities like orders.",
+      "refs": [
+        "sql-anti-patterns.md#SQL-AP-004",
+        "sql-aggregation-correctness.md"
+      ],
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "related_concepts": [
+        "SC-006"
+      ],
+      "promoted_from": "SARC-COUNT-01"
+    },
+    {
+      "rule_id": "SAR-HAVING-01",
+      "title": "Aggregate condition placed in WHERE (or row condition in HAVING)",
+      "severity": "warning",
+      "category": "correctness",
+      "detect": "An aggregate condition (SUM/COUNT/AVG ... comparison) placed in WHERE, or a plain row condition placed in HAVING.",
+      "fix": "Filter groups/aggregates in HAVING; keep row-level conditions in WHERE.",
+      "rationale": "Reflects a misunderstanding of logical query processing order; query errors or wrong intent.",
+      "refs": [
+        "sql-anti-patterns.md#SQL-AP-007",
+        "sql-logical-query-processing.md"
+      ],
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "related_concepts": [
+        "SC-002"
+      ],
+      "promoted_from": "SARC-HAVING-01"
+    },
+    {
+      "rule_id": "SAR-NOTIN-01",
+      "title": "NOT IN against a subquery/column that may contain NULL",
+      "severity": "warning",
+      "category": "correctness",
+      "detect": "NOT IN (subquery or list) where the compared column/list can contain NULL.",
+      "fix": "Use NOT EXISTS or LEFT JOIN ... IS NULL; if NOT IN is required, exclude nulls explicitly.",
+      "rationale": "A single NULL makes NOT IN return zero rows silently (three-valued logic).",
+      "refs": [
+        "sql-anti-patterns.md#SQL-AP-011",
+        "sql-grain-and-joins.md"
+      ],
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text",
+        "schema_metadata"
+      ],
+      "related_concepts": [
+        "SC-012",
+        "SC-014",
+        "SC-008"
+      ],
+      "promoted_from": "SARC-NOTIN-01"
+    },
+    {
+      "rule_id": "SAR-LEFTFILTER-01",
+      "title": "Right-table predicate of a LEFT JOIN placed in WHERE",
+      "severity": "warning",
+      "category": "correctness",
+      "detect": "A predicate on the right table of a LEFT JOIN placed in WHERE rather than in the ON clause, excluding unmatched rows.",
+      "fix": "Move the right-table condition into the ON clause to preserve unmatched left rows.",
+      "rationale": "It silently converts a LEFT JOIN into an INNER JOIN, dropping rows and understating totals.",
+      "refs": [
+        "sql-anti-patterns.md#SQL-AP-012",
+        "sql-grain-and-joins.md"
+      ],
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "related_concepts": [
+        "SC-009"
+      ],
+      "promoted_from": "SARC-LEFTFILTER-01"
+    },
+    {
+      "rule_id": "SAR-WINDOW-LASTVAL-01",
+      "title": "LAST_VALUE/FIRST_VALUE without an explicit frame",
+      "severity": "warning",
+      "category": "correctness",
+      "detect": "LAST_VALUE/FIRST_VALUE used with an ORDER BY but no explicit frame clause.",
+      "fix": "Add ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING to read the true partition first/last.",
+      "rationale": "The default frame ends at the current row, so LAST_VALUE returns the current row, not the partition's last.",
+      "refs": [
+        "sql-anti-patterns.md#SQL-AP-018",
+        "sql-window-functions.md"
+      ],
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "related_concepts": [
+        "SC-017",
+        "SC-019"
+      ],
+      "promoted_from": "SARC-WINDOW-LASTVAL-01"
+    },
+    {
+      "rule_id": "SAR-WINDOW-WHERE-01",
+      "title": "Window function referenced in WHERE/GROUP BY/HAVING",
+      "severity": "error",
+      "category": "correctness",
+      "detect": "A window function (OVER(...)) referenced in WHERE, GROUP BY, or HAVING.",
+      "fix": "Compute the window in a subquery/CTE and filter it in an outer query.",
+      "rationale": "Window functions are computed at SELECT (after WHERE/HAVING); using them earlier is invalid.",
+      "refs": [
+        "sql-anti-patterns.md#SQL-AP-019",
+        "sql-window-functions.md"
+      ],
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "related_concepts": [
+        "SC-020",
+        "SC-002"
+      ],
+      "promoted_from": "SARC-WINDOW-WHERE-01"
+    },
+    {
+      "rule_id": "SAR-DATE-SARG-01",
+      "title": "Function wrapped on a date column in WHERE (non-sargable)",
+      "severity": "info",
+      "category": "performance",
+      "detect": "A date/time column wrapped in a function (YEAR/EXTRACT/DATE_TRUNC/CAST) inside a WHERE predicate instead of a bare-column range.",
+      "fix": "Filter the bare column with a range predicate (>= start AND < next_start) instead of YEAR()/DATE_TRUNC() in WHERE.",
+      "rationale": "Wrapping the column prevents index use and is error-prone at boundaries.",
+      "refs": [
+        "sql-anti-patterns.md#SQL-AP-027",
+        "sql-date-time-analysis.md"
+      ],
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "related_concepts": [
+        "SC-024"
+      ],
+      "promoted_from": "SARC-DATE-SARG-01"
+    },
+    {
+      "rule_id": "SAR-SELECTSTAR-01",
+      "title": "SELECT * in a persisted transformation or view",
+      "severity": "info",
+      "category": "maintainability",
+      "detect": "SELECT * in a persisted view / CTAS / transformation step (not ad-hoc exploration).",
+      "fix": "List explicit output columns; declare the step's grain. Reserve SELECT * for ad-hoc exploration.",
+      "rationale": "Reads/stores unneeded columns, breaks on schema drift, and hides the step's grain/contract.",
+      "refs": [
+        "sql-anti-patterns.md#SQL-AP-033",
+        "sql-performance-notes.md"
+      ],
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "related_concepts": [
+        "SC-035",
+        "SC-036"
+      ],
+      "promoted_from": "SARC-SELECTSTAR-01"
+    },
+    {
+      "rule_id": "SAR-CROSSJOIN-01",
+      "title": "Join with no ON condition (implicit cross join)",
+      "severity": "warning",
+      "category": "correctness",
+      "detect": "A JOIN with no ON condition, or comma-separated tables in FROM with no join predicate (implicit cross join).",
+      "fix": "Add an explicit, correct ON condition; if a cross join is intended, write CROSS JOIN deliberately.",
+      "rationale": "A Cartesian product explodes rows and corrupts every aggregate.",
+      "refs": [
+        "sql-anti-patterns.md#SQL-AP-034",
+        "sql-grain-and-joins.md"
+      ],
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "related_concepts": [
+        "SC-009",
+        "SC-037"
+      ],
+      "promoted_from": "SARC-CROSSJOIN-01"
+    },
+    {
+      "rule_id": "SAR-SARG-01",
+      "title": "Non-sargable predicate (function-wrapped column or leading-wildcard LIKE)",
+      "severity": "info",
+      "category": "performance",
+      "detect": "A predicate wraps the filtered column in a function, or a LIKE pattern begins with a wildcard ('%...').",
+      "fix": "Keep the column bare; use range predicates; avoid LIKE '%x'.",
+      "rationale": "Prevents index/zone-map use, forcing full scans.",
+      "refs": [
+        "sql-anti-patterns.md#SQL-AP-035",
+        "sql-performance-notes.md"
+      ],
+      "detectability": "ast",
+      "required_inputs": [
+        "sql_text"
+      ],
+      "related_concepts": [
+        "SC-033",
+        "SC-024"
+      ],
+      "promoted_from": "SARC-SARG-01"
+    }
+  ]
+}

@@ -1,0 +1,97 @@
+{
+  "$schema_note": "Reusable scale-appropriate validation/reconciliation patterns bridging the big-data layer to SQL and readiness. Each pattern is a distributed check that produces evidence; it does not gate. IDs are stable (references/id-conventions.md). Some patterns reuse Python-layer concepts (PY-*).",
+  "version": "1.0.0",
+  "slice_origin": "BD Slice 8",
+  "patterns": [
+    {
+      "id": "BD-VP-001",
+      "name": "Row-count parity vs source (distributed)",
+      "type": "reconciliation",
+      "check": "Loaded/output row count equals the source/expected count, computed as a distributed aggregate (never collect()).",
+      "evidence": "expected_rows, actual_rows, delta",
+      "tolerance": "0",
+      "on_fail": "Localize via per-stage reconciliation points (BD-CN-065).",
+      "refs": ["BD-CN-064", "PY-CN-068"]
+    },
+    {
+      "id": "BD-VP-002",
+      "name": "Grain uniqueness at scale",
+      "type": "validation",
+      "check": "Global distinct grain-key count equals row count (duplicates may hide across partitions).",
+      "evidence": "rows, distinct_keys, duplicate_count",
+      "tolerance": "0",
+      "on_fail": "Global dedup on grain key; check producer retries (BD-CN-017, BD-CN-061).",
+      "refs": ["BD-CN-017", "PY-CN-035"]
+    },
+    {
+      "id": "BD-VP-003",
+      "name": "Control-total parity vs SQL",
+      "type": "reconciliation",
+      "check": "Additive control totals (quantity, revenue) match the SQL/warehouse layer for the same period/filter.",
+      "evidence": "metric, bigdata_total, sql_total, delta",
+      "tolerance": "declared (0 for counts; epsilon for currency)",
+      "on_fail": "Walk reconciliation points; check fan-out/skew/idempotency.",
+      "refs": ["BD-CN-064", "PY-CN-068"]
+    },
+    {
+      "id": "BD-VP-004",
+      "name": "Aggregation conservation (distributed)",
+      "type": "validation",
+      "check": "Additive measure total after groupby equals total before (distributed compute).",
+      "evidence": "pre_total, post_total, delta",
+      "tolerance": "declared",
+      "on_fail": "Dropped null keys or upstream fan-out; see aggregation checklist.",
+      "refs": ["BD-CN-049", "PY-CN-058"]
+    },
+    {
+      "id": "BD-VP-005",
+      "name": "Join row-count reconciliation",
+      "type": "validation",
+      "check": "Post-join row count equals expectation from declared cardinality.",
+      "evidence": "left_rows, right_rows, expected, actual, delta",
+      "tolerance": "0 unless 1:many intended",
+      "on_fail": "Fan-out or skew-related drop/dup; see join-skew checklist.",
+      "refs": ["BD-CN-041", "PY-CN-050"]
+    },
+    {
+      "id": "BD-VP-006",
+      "name": "Idempotency rerun check",
+      "type": "validation",
+      "check": "Running the job twice over the same slice yields identical output (row count + control totals unchanged).",
+      "evidence": "run1_rows, run2_rows, run1_total, run2_total",
+      "tolerance": "0",
+      "on_fail": "Switch append to partition-overwrite/merge; add key dedup (BD-CN-058, BD-CN-061).",
+      "refs": ["BD-CN-057", "BD-CN-062"]
+    },
+    {
+      "id": "BD-VP-007",
+      "name": "Distinct-count method disclosure",
+      "type": "validation",
+      "check": "Each distinct-count output is labeled exact or approximate, with error bound if approximate.",
+      "evidence": "metric, method, error_bound",
+      "tolerance": "declared error bound for approximate",
+      "on_fail": "Switch to exact where precise reconciliation required (BD-CN-045).",
+      "refs": ["BD-CN-045", "BD-CN-068"]
+    },
+    {
+      "id": "BD-VP-008",
+      "name": "Referential integrity at scale",
+      "type": "validation",
+      "check": "Every foreign key value exists in its dimension (orphan count via distributed anti-join).",
+      "evidence": "orphan_count, examples_sample",
+      "tolerance": "0 unless recorded exception",
+      "on_fail": "Report orphans as findings; do not auto-create dimension rows.",
+      "refs": ["PY-CN-071", "BD-CN-067"]
+    },
+    {
+      "id": "BD-VP-009",
+      "name": "Partition-pruning verification",
+      "type": "validation",
+      "check": "Filtered queries actually prune partitions/columns in the plan (not full scan).",
+      "evidence": "partitions_read, partitions_total",
+      "tolerance": "reads only matching partitions",
+      "on_fail": "Make filter pushable / fix layout (BD-CN-032, BD-CN-055).",
+      "refs": ["BD-CN-032", "BD-CN-055"]
+    }
+  ]
+}

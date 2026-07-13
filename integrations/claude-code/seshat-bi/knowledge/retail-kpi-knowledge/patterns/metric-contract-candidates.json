@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "description": "Planned KPI candidates recognised from the broader retail catalog but not contracted in this seed. Move into contracts/ as each is contracted and its dependencies are confirmed.",
+  "candidates": [
+    {
+      "id": "KPI-CAND-02",
+      "name": "Same-Store Sales Growth %",
+      "domain": "branch-store-performance",
+      "pattern": "KPI-PAT-04",
+      "depends_on": ["same-store rule (A11)", "store opening/closure/relocation flags"],
+      "status": "planned"
+    },
+    {
+      "id": "KPI-CAND-03",
+      "name": "Sales per Square Meter",
+      "domain": "branch-store-performance",
+      "pattern": "KPI-PAT-04",
+      "depends_on": ["store floor area (sqm)"],
+      "status": "planned"
+    },
+    {
+      "id": "KPI-CAND-04",
+      "name": "Promotion Uplift %",
+      "domain": "discounts-and-promotions",
+      "pattern": "KPI-PAT-04",
+      "depends_on": ["promotion dimension/fact", "baseline period rule"],
+      "status": "planned"
+    },
+    {
+      "id": "KPI-CAND-05",
+      "name": "Sell-Through Rate %",
+      "domain": "product-category-performance / inventory",
+      "pattern": "KPI-PAT-04",
+      "depends_on": ["beginning inventory units"],
+      "status": "planned"
+    },
+    {
+      "id": "KPI-CAND-06",
+      "name": "Inventory Turnover",
+      "domain": "inventory",
+      "pattern": "KPI-PAT-04",
+      "depends_on": ["COGS", "average inventory cost", "inventory snapshots (A10)", "cost method (A6)"],
+      "status": "planned"
+    },
+    {
+      "id": "KPI-CAND-07",
+      "name": "Out-of-Stock Rate %",
+      "domain": "inventory",
+      "pattern": "KPI-PAT-04",
+      "depends_on": ["stock status", "assortment list per store", "inventory snapshots"],
+      "status": "planned"
+    },
+    {
+      "id": "KPI-CAND-08",
+      "name": "GMROI",
+      "domain": "inventory / margin-profitability",
+      "pattern": "KPI-PAT-04",
+      "depends_on": ["gross margin", "average inventory cost", "inventory snapshots (A10)"],
+      "status": "planned"
+    },
+    {
+      "id": "KPI-CAND-10",
+      "name": "Missing Key Dimensions Rate %",
+      "domain": "data-quality-control",
+      "pattern": "KPI-PAT-04",
+      "depends_on": ["fact keys", "unknown-member classification"],
+      "status": "planned"
+    },
+    {
+      "id": "KPI-CAND-11",
+      "name": "Late Data Arrival Count",
+      "domain": "data-quality-control",
+      "pattern": "KPI-PAT-01",
+      "depends_on": ["load timestamp", "SLA rules", "source-system id"],
+      "status": "planned"
+    }
+  ]
+}

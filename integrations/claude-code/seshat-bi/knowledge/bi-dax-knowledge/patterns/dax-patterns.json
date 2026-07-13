@@ -1,0 +1,551 @@
+{
+  "$schema_version": "1.0",
+  "description": "High-value DAX patterns distilled for teaching a BI agent. Code+key-rules depth (not exhaustive). All examples use the reference retail schema in references/retail-schema.md and are original teaching code, not reproductions.",
+  "pattern_field_spec": [
+    "pattern_id",
+    "topic",
+    "purpose",
+    "dax_shape",
+    "key_rule",
+    "when_to_use",
+    "avoid_when",
+    "common_mistakes",
+    "retail_example",
+    "related_metric_contract",
+    "future_agent_use",
+    "source"
+  ],
+  "default_source": {
+    "primary": "DAX Patterns, 2nd ed., Marco Russo & Alberto Ferrari (SQLBI, 2020)",
+    "supporting": "The Definitive Guide to DAX, 2nd ed., Russo & Ferrari",
+    "note": "Rules and structure are paraphrased; DAX shown is original teaching code on a fictional retail schema. No verbatim book code or sample model is reproduced."
+  },
+  "patterns": [
+    {
+      "pattern_id": "ti-ytd",
+      "topic": "Time intelligence / period-to-date",
+      "purpose": "Accumulate a measure from the start of the year (or quarter/month) to the last visible date.",
+      "dax_shape": "IF ( MIN('Date'[DateWithSales]), CALCULATE ( [BaseMeasure], DATESYTD ( 'Date'[Date] [, fiscalYearEnd] ) ) )",
+      "key_rule": "Time-intelligence TABLE functions (DATESYTD/QTD/MTD) go only in CALCULATE filter args, on a Date table that is Marked as Date Table.",
+      "when_to_use": [
+        "Standard Gregorian or simple fiscal calendar",
+        "Cumulative-within-period KPIs (YTD revenue, MTD units)"
+      ],
+      "avoid_when": [
+        "Non-Gregorian, 4-4-5, or custom-week calendars (use custom/week pattern)",
+        "You need the value past the last date with data without a guard"
+      ],
+      "common_mistakes": [
+        "Using DATESYTD inside an iterator or as a scalar",
+        "Date table not marked -> wrong totals",
+        "No future-date guard so the line flat-lines"
+      ],
+      "retail_example": "Sales YTD := IF ( MIN('Date'[DateWithSales]), CALCULATE ( [Sales Amount], DATESYTD ( 'Date'[Date] ) ) )",
+      "related_metric_contract": "period_to_date",
+      "future_agent_use": [
+        "generator: emit *YTD/QTD/MTD variants from any base measure",
+        "analyzer: flag TI funcs used outside CALCULATE",
+        "model review: verify Date table is marked"
+      ],
+      "source": "DAX Patterns ch. Standard time-related calculations"
+    },
+    {
+      "pattern_id": "ti-py-yoy",
+      "topic": "Time intelligence / period comparison",
+      "purpose": "Compare current period to the same period last year and compute growth.",
+      "dax_shape": "PY := CALCULATE([m], SAMEPERIODLASTYEAR('Date'[Date]))  |  YOY% := DIVIDE([m]-[PY],[PY])",
+      "key_rule": "Build comparison measures by composition (base -> PY -> YOY -> YOY%); always DIVIDE for the ratio.",
+      "when_to_use": [
+        "YoY / PY / growth KPIs",
+        "Standard calendar"
+      ],
+      "avoid_when": [
+        "Custom calendars where SAMEPERIODLASTYEAR misaligns weeks",
+        "Comparing non-comparable partial periods without guarding"
+      ],
+      "common_mistakes": [
+        "Dividing with '/' instead of DIVIDE",
+        "Not handling blank prior period",
+        "Recomputing the base measure repeatedly instead of VAR"
+      ],
+      "retail_example": "Sales PY := CALCULATE([Sales Amount], SAMEPERIODLASTYEAR('Date'[Date]))\nSales YOY % := DIVIDE([Sales Amount]-[Sales PY],[Sales PY])",
+      "related_metric_contract": "period_comparison",
+      "future_agent_use": [
+        "generator: auto-build PY/YOY/YOY% family",
+        "analyzer: flag '/' division and missing blank guards"
+      ],
+      "source": "DAX Patterns ch. Comparing different time periods"
+    },
+    {
+      "pattern_id": "ti-rolling-12",
+      "topic": "Time intelligence / moving annual total",
+      "purpose": "Sum the trailing 12 months ending at the last visible date.",
+      "dax_shape": "VAR last=MAX('Date'[Date]) VAR first=EDATE(last,-12)+1 RETURN CALCULATE([m], DATESBETWEEN('Date'[Date],first,last))",
+      "key_rule": "Use SCALAR date functions (EDATE) to compute boundaries, then a TABLE function (DATESBETWEEN) inside CALCULATE.",
+      "when_to_use": [
+        "Smoothing seasonality",
+        "MAT / trailing-12 KPIs"
+      ],
+      "avoid_when": [
+        "Week-based rolling windows on custom calendars"
+      ],
+      "common_mistakes": [
+        "Using DATEADD/ENDOFMONTH where scalar math is meant",
+        "Off-by-one on the start date (forgetting +1)"
+      ],
+      "retail_example": "Sales MAT := VAR last=MAX('Date'[Date]) VAR first=EDATE(last,-12)+1 RETURN CALCULATE([Sales Amount], DATESBETWEEN('Date'[Date],first,last))",
+      "related_metric_contract": "rolling_window",
+      "future_agent_use": [
+        "generator: parametric trailing-N-month measures",
+        "analyzer: scalar-vs-table TI function misuse"
+      ],
+      "source": "DAX Patterns ch. Custom time-related calculations"
+    },
+    {
+      "pattern_id": "cumulative-running-total",
+      "topic": "Cumulative / running total",
+      "purpose": "Accumulate a measure over a sortable axis (typically date) up to the current row.",
+      "dax_shape": "VAR cutoff=MAX('Date'[Date]) RETURN CALCULATE([m], 'Date'[Date] <= cutoff [, re-apply filters to keep])",
+      "key_rule": "The '<= cutoff' filter replaces the existing axis filter; re-apply any sub-filter (e.g. weekday) that must survive.",
+      "when_to_use": [
+        "Running totals",
+        "Stock/balance from movements",
+        "Cumulative over any sortable column (use Sort-By column)"
+      ],
+      "avoid_when": [
+        "The axis column has no meaningful sort order"
+      ],
+      "common_mistakes": [
+        "Forgetting REMOVEFILTERS when Date isn't marked",
+        "Dropping a slicer filter that should persist",
+        "No future-date guard"
+      ],
+      "retail_example": "Sales RT := VAR cutoff=MAX('Date'[Date]) VAR res=CALCULATE([Sales Amount],'Date'[Date]<=cutoff) RETURN IF(MIN('Date'[Date])<=CALCULATE(MAX('Sales'[OrderDate]),REMOVEFILTERS()),res)",
+      "related_metric_contract": "running_total",
+      "future_agent_use": [
+        "generator: running-total of any base measure over a chosen axis",
+        "analyzer: detect dropped filters / missing guards"
+      ],
+      "source": "DAX Patterns ch. Cumulative total"
+    },
+    {
+      "pattern_id": "semi-additive-balance",
+      "topic": "Semi-additive measures",
+      "purpose": "Aggregate additively across most dimensions but take first/last value across time (stock, balances).",
+      "dax_shape": "CALCULATE ( SUM('Snapshot'[Value]), LASTNONBLANK('Date'[Date], CALCULATE(SUM('Snapshot'[Value]))) )",
+      "key_rule": "Sum across products/stores, but never sum across time; pick the last (or first) non-blank date in context.",
+      "when_to_use": [
+        "Inventory on-hand",
+        "Account balances",
+        "Headcount snapshots"
+      ],
+      "avoid_when": [
+        "Flows/transactions that ARE additive over time (use plain SUM)"
+      ],
+      "common_mistakes": [
+        "Showing the measure summed across months (wrong total)",
+        "Using LASTDATE blindly when some dates are blank"
+      ],
+      "retail_example": "Units On Hand (EOP) := CALCULATE ( SUM('Inventory'[On Hand Quantity]), LASTNONBLANK('Date'[Date], CALCULATE(SUM('Inventory'[On Hand Quantity]))) )",
+      "related_metric_contract": "semi_additive",
+      "future_agent_use": [
+        "model review: flag snapshot facts that must not be summed over time",
+        "generator: opening/closing balance pair"
+      ],
+      "source": "DAX Patterns ch. Semi-additive calculations"
+    },
+    {
+      "pattern_id": "static-segmentation",
+      "topic": "Segmentation / banding (static)",
+      "purpose": "Assign each entity to a fixed band from a configuration table, usable as a slicer axis.",
+      "dax_shape": "Calc column: lookup the config row where Min <= entityValue < Max -> return Segment",
+      "key_rule": "Static band is row-fixed -> implement as a CALCULATED COLUMN so it can group/slice.",
+      "when_to_use": [
+        "Lifetime/stable banding (customer tier by total spend, price bands)"
+      ],
+      "avoid_when": [
+        "The band must react to report filters (use dynamic segmentation)"
+      ],
+      "common_mistakes": [
+        "Overlapping config ranges -> multiple matches/errors",
+        "Implementing as a measure when an axis is needed"
+      ],
+      "retail_example": "Customer[Segment] = VAR s=CALCULATE([Sales Amount],ALLEXCEPT('Customer','Customer'[CustomerKey])) RETURN CALCULATE(VALUES('Customer Segments'[Segment]), FILTER('Customer Segments','Customer Segments'[Min Sales]<=s && 'Customer Segments'[Max Sales]>s))",
+      "related_metric_contract": "segmentation_static",
+      "future_agent_use": [
+        "model review: check config table for overlapping/gapped ranges",
+        "generator: scaffold band column from a config table"
+      ],
+      "source": "DAX Patterns ch. Static segmentation"
+    },
+    {
+      "pattern_id": "dynamic-segmentation",
+      "topic": "Segmentation / banding (dynamic)",
+      "purpose": "Classify entities by a measure value at query time, honoring report filters.",
+      "dax_shape": "SUMX(VALUES(grainCol), VAR set=FILTER(VALUES(entityKey), [m] in [SegMin,SegMax]) RETURN CALCULATE(<agg>, KEEPFILTERS(set)))",
+      "key_rule": "Band depends on a measure -> measure-based; use KEEPFILTERS to intersect the computed set with user filters, and iterate the grain to keep totals correct.",
+      "when_to_use": [
+        "Customer tier by spend in the filtered period",
+        "Product clustering by growth %"
+      ],
+      "avoid_when": [
+        "A stable, filter-independent band is wanted (use static)"
+      ],
+      "common_mistakes": [
+        "Omitting KEEPFILTERS -> set replaces user selection",
+        "Not iterating grain -> wrong non-additive total",
+        "Overlapping config ranges"
+      ],
+      "retail_example": "Customers in Segment := SUMX(VALUES('Date'[Year]), VAR lo=MIN('Customer Segments'[Min Sales]) VAR hi=MAX('Customer Segments'[Max Sales]) VAR set=FILTER(VALUES('Customer'[CustomerKey]), VAR cs=[Sales Amount] RETURN cs>lo && cs<=hi) RETURN CALCULATE(DISTINCTCOUNT('Sales'[CustomerKey]), KEEPFILTERS(set)))",
+      "related_metric_contract": "segmentation_dynamic",
+      "future_agent_use": [
+        "analyzer: flag missing KEEPFILTERS in set-filter measures",
+        "analyzer: detect non-additive totals not aggregated at grain"
+      ],
+      "source": "DAX Patterns ch. Dynamic segmentation"
+    },
+    {
+      "pattern_id": "abc-classification",
+      "topic": "ABC / Pareto classification",
+      "purpose": "Group entities into A/B/C by cumulative contribution to a total (70/20/10).",
+      "dax_shape": "Per entity: cumPct = cumulative(value desc)/grandTotal ; SWITCH(TRUE(), cumPct<=.7,'A', cumPct<=.9,'B','C')",
+      "key_rule": "Static ABC = calculated column (stable axis); dynamic ABC = measures (reacts to filters, slower); per-period = snapshot table.",
+      "when_to_use": [
+        "Identify core products/customers",
+        "Inventory prioritization"
+      ],
+      "avoid_when": [
+        "Thresholds change constantly and must be filter-driven at fine grain without snapshots (watch performance)"
+      ],
+      "common_mistakes": [
+        "Computing cumulative on the wrong sort direction",
+        "Using a calc column when per-year classes are needed (use snapshot)"
+      ],
+      "retail_example": "Product[ABC Class] = VAR ps=CALCULATE([Sales Amount],ALLEXCEPT('Product','Product'[ProductKey])) VAR tot=CALCULATE([Sales Amount],ALL('Product')) VAR cum=CALCULATE([Sales Amount],ALL('Product'),FILTER(ALL('Product'),CALCULATE([Sales Amount],ALLEXCEPT('Product','Product'[ProductKey]))>=ps)) RETURN SWITCH(TRUE(),DIVIDE(cum,tot)<=.7,\"A\",DIVIDE(cum,tot)<=.9,\"B\",\"C\")",
+      "related_metric_contract": "classification_cumulative",
+      "future_agent_use": [
+        "generator: ABC column or snapshot table from a value measure + thresholds",
+        "model review: recommend snapshot when per-period classes requested"
+      ],
+      "source": "DAX Patterns ch. ABC classification"
+    },
+    {
+      "pattern_id": "new-returning-customers",
+      "topic": "Customer dynamics",
+      "purpose": "Count new / returning / lost / recovered customers within a period.",
+      "dax_shape": "new = customers whose global MIN(OrderDate) falls inside the visible period (compare first-ever purchase vs period start)",
+      "key_rule": "Define new/returning/lost precisely FIRST (and whether other filters apply) - it changes both formula and performance.",
+      "when_to_use": [
+        "Acquisition/retention dashboards",
+        "Cohort-style counts"
+      ],
+      "avoid_when": [
+        "Using the most-flexible variant on large data when a simpler definition suffices (it is expensive)"
+      ],
+      "common_mistakes": [
+        "Letting category/store filters silently make a customer 'new' multiple times",
+        "Iterating measures over the whole fact (slow)"
+      ],
+      "retail_example": "New Customers := VAR cust=VALUES('Sales'[CustomerKey]) VAR start=MIN('Date'[Date]) RETURN COUNTROWS(FILTER(cust, VAR first=CALCULATE(MIN('Sales'[OrderDate]),ALLEXCEPT('Sales','Sales'[CustomerKey])) RETURN first>=start))",
+      "related_metric_contract": "customer_dynamics",
+      "future_agent_use": [
+        "generator: new/returning/lost/recovered family from a chosen definition",
+        "analyzer: warn on costly flexible variant at high cardinality"
+      ],
+      "source": "DAX Patterns ch. New and returning customers"
+    },
+    {
+      "pattern_id": "related-distinct-count",
+      "topic": "Distinct count across relationships",
+      "purpose": "Count distinct values of an attribute related through the fact (e.g. distinct categories bought).",
+      "dax_shape": "CALCULATE ( DISTINCTCOUNT ( 'Dim'[Attr] ), 'Sales' )  -- or via TREATAS/bridge depending on direction",
+      "key_rule": "Distinct counts don't naturally flow from many-side to one-side; route the filter explicitly (cross-filter, summarize, or TREATAS).",
+      "when_to_use": [
+        "# distinct products/categories/customers touched",
+        "Breadth metrics"
+      ],
+      "avoid_when": [
+        "A simple DISTINCTCOUNT on the fact key already answers it"
+      ],
+      "common_mistakes": [
+        "Expecting the one-side to be filtered by the many-side without help",
+        "Heavy DISTINCTCOUNT in a hot path without testing alternatives"
+      ],
+      "retail_example": "Distinct Categories Sold := CALCULATE ( DISTINCTCOUNT ( 'Product'[Category] ), 'Sales' )",
+      "related_metric_contract": "distinct_count_related",
+      "future_agent_use": [
+        "analyzer: detect cross-table distinct counts that need explicit propagation",
+        "perf: suggest bridge vs TREATAS test"
+      ],
+      "source": "DAX Patterns ch. Related distinct count"
+    },
+    {
+      "pattern_id": "events-in-progress",
+      "topic": "Events in progress / interval overlap",
+      "purpose": "Count entities active at a reference date (started <= D, not yet ended).",
+      "dax_shape": "VAR d=MAX('Date'[Date]) RETURN CALCULATE(<count>, 'F'[Start]<=d && 'F'[End]>d, REMOVEFILTERS('Date'))",
+      "key_rule": "Turn the Date axis into a single reference point, clear the Date filter, then express the overlap predicate on start/end columns.",
+      "when_to_use": [
+        "Open orders/tickets",
+        "Active subscriptions/contracts",
+        "Occupancy"
+      ],
+      "avoid_when": [
+        "Events have no start/end interval"
+      ],
+      "common_mistakes": [
+        "Leaving the Date relationship filtering the fact (double-counts/misses)",
+        "Using <= on both ends inconsistently"
+      ],
+      "retail_example": "Open Orders := VAR d=MAX('Date'[Date]) RETURN CALCULATE(DISTINCTCOUNT('Sales'[SalesKey]), 'Sales'[OrderDate]<=d && 'Sales'[DeliveryDate]>d, REMOVEFILTERS('Date'))",
+      "related_metric_contract": "interval_overlap",
+      "future_agent_use": [
+        "generator: active-at-date measures from start/end columns",
+        "analyzer: verify Date filter is neutralized"
+      ],
+      "source": "DAX Patterns ch. Events in progress"
+    },
+    {
+      "pattern_id": "ranking",
+      "topic": "Ranking",
+      "purpose": "Rank entities by a measure, statically (fixed) or dynamically (reacts to filters), and filter Top-N.",
+      "dax_shape": "static col: RANKX(ALL('Dim'),[m],,DESC,DENSE)  |  dynamic measure: IF(HASONEVALUE(key), RANKX(ALLSELECTED(attr),[m],,DESC,DENSE))",
+      "key_rule": "Static rank = calculated column over ALL; dynamic rank = measure over ALLSELECTED; always guard the total row.",
+      "when_to_use": [
+        "Leaderboards",
+        "Top/bottom-N visuals",
+        "Rank-within-group"
+      ],
+      "avoid_when": [
+        "You actually need Top-N filtering of values (combine with TOPN + KEEPFILTERS)"
+      ],
+      "common_mistakes": [
+        "Ranking the total row (no HASONEVALUE guard)",
+        "Wrong ties mode (DENSE vs SKIP)",
+        "ALL vs ALLSELECTED confusion"
+      ],
+      "retail_example": "Product Rank := IF ( HASONEVALUE('Product'[ProductKey]), RANKX ( ALLSELECTED('Product'[Product Name]), [Sales Amount],, DESC, DENSE ) )",
+      "related_metric_contract": "ranking",
+      "future_agent_use": [
+        "generator: static/dynamic/within-group rank from a base measure",
+        "analyzer: missing total-row guard or wrong ALL scope"
+      ],
+      "source": "DAX Patterns ch. Ranking"
+    },
+    {
+      "pattern_id": "parameter-table-whatif",
+      "topic": "Parameter table / what-if",
+      "purpose": "Let users drive logic via a disconnected slicer (Top-N, scenario rate, target).",
+      "dax_shape": "VAR p=SELECTEDVALUE('Param'[Value], default) RETURN <expression using p>",
+      "key_rule": "The parameter table has NO relationship; read it with SELECTEDVALUE and provide a default for the no/multi-selection case.",
+      "when_to_use": [
+        "Top-N selector",
+        "Scenario/sensitivity inputs",
+        "User-set thresholds"
+      ],
+      "avoid_when": [
+        "The value can come from a real related dimension instead"
+      ],
+      "common_mistakes": [
+        "No default in SELECTEDVALUE",
+        "Relating the parameter table to the model by mistake",
+        "Forgetting KEEPFILTERS when applying a dynamic set"
+      ],
+      "retail_example": "Sales Top N Products := VAR n=SELECTEDVALUE('Top N Param'[Top N],10) VAR t=TOPN(n,VALUES('Product'[ProductKey]),[Sales Amount],DESC) RETURN CALCULATE([Sales Amount], KEEPFILTERS(t))",
+      "related_metric_contract": "parameterized_metric",
+      "future_agent_use": [
+        "generator: scaffold disconnected param table + measure",
+        "analyzer: flag missing SELECTEDVALUE default"
+      ],
+      "source": "DAX Patterns ch. Parameter table"
+    },
+    {
+      "pattern_id": "currency-conversion",
+      "topic": "Currency conversion",
+      "purpose": "Convert amounts to a reporting currency at the correct-grain exchange rate.",
+      "dax_shape": "SUMX ( VALUES('Date'[Date]), [Amount] * <daily rate for that date> )",
+      "key_rule": "Convert at the transaction-date (or chosen) rate at the right grain, THEN sum; never convert an aggregate at a single rate.",
+      "when_to_use": [
+        "Multi-currency sales",
+        "Consolidated reporting currency"
+      ],
+      "avoid_when": [
+        "Single-currency model"
+      ],
+      "common_mistakes": [
+        "Applying one period-end rate to an already-summed amount",
+        "Missing rate for a date (no fallback)",
+        "Wrong rate direction (multiply vs divide)"
+      ],
+      "retail_example": "Sales (Reporting) := SUMX ( VALUES('Date'[Date]), VAR r=CALCULATE(SELECTEDVALUE('ExchangeRate'[Rate]),'ExchangeRate'[Date]=MAX('Date'[Date])) RETURN [Sales Amount]*r )",
+      "related_metric_contract": "currency_conversion",
+      "future_agent_use": [
+        "model review: detect multi-currency facts needing conversion",
+        "generator: conversion measure with chosen rate policy"
+      ],
+      "source": "DAX Patterns ch. Currency conversion"
+    },
+    {
+      "pattern_id": "week-related-time",
+      "topic": "Time intelligence / custom (week-based) calendar",
+      "purpose": "Time calculations (WTD, prior-week, rolling weeks, YOY by week) on a non-Gregorian / 4-4-5 calendar where built-in TI fails.",
+      "dax_shape": "Navigate via sequential period-index columns on a custom Date table: VAR cur=MAX('Date'[Week Index]) ... CALCULATE([m],'Date'[Week Index] IN GENERATESERIES(cur-N+1,cur))",
+      "key_rule": "Built-in TI functions only work on a standard Gregorian calendar; for weeks/4-4-5 navigate with your own sequential index columns instead.",
+      "when_to_use": [
+        "Retail 4-4-5 calendars",
+        "Week-to-date, prior-week, rolling-N-weeks",
+        "Fiscal weeks not aligned to months"
+      ],
+      "avoid_when": [
+        "A standard Gregorian calendar suffices (use built-in TI)"
+      ],
+      "common_mistakes": [
+        "Using DATESYTD/SAMEPERIODLASTYEAR on a week calendar",
+        "No contiguous week index",
+        "Comparing week 53 across years without handling"
+      ],
+      "retail_example": "Sales WTD := VAR wk=MAX('Date'[Year Week]) RETURN CALCULATE([Sales Amount], 'Date'[Year Week]=wk, 'Date'[Date]<=MAX('Date'[Date]))",
+      "related_metric_contract": "custom_calendar_time",
+      "future_agent_use": [
+        "generator: week/period measures from index columns",
+        "analyzer: flag built-in TI on a custom calendar",
+        "model review: verify contiguous week index"
+      ],
+      "source": "DAX Patterns ch. Week-related calculations"
+    },
+    {
+      "pattern_id": "parent-child-hierarchy",
+      "topic": "Hierarchies / parent-child",
+      "purpose": "Flatten a self-referencing parent-child structure (chart of accounts, org chart) into browsable level columns.",
+      "dax_shape": "Calc columns: Path=PATH(key,parentKey); Level1=LOOKUPVALUE(name, key, PATHITEM(Path,1,INTEGER)); ... plus depth/IsLeaf helpers",
+      "key_rule": "Use PATH/PATHITEM/PATHLENGTH to materialize levels as calculated columns; handle ragged hierarchies by repeating or blanking deeper levels.",
+      "when_to_use": [
+        "Charts of accounts",
+        "Org charts / management rollups",
+        "Bill-of-materials style trees"
+      ],
+      "avoid_when": [
+        "A fixed natural hierarchy already exists as columns"
+      ],
+      "common_mistakes": [
+        "Not handling ragged depths (gaps in the matrix)",
+        "Browsing the raw key/parent instead of flattened levels",
+        "Unbounded depth"
+      ],
+      "retail_example": "Account[Path] = PATH('Account'[AccountKey], 'Account'[ParentAccountKey])\nAccount[Level 1] = LOOKUPVALUE('Account'[Account Name], 'Account'[AccountKey], PATHITEM('Account'[Path], 1, INTEGER))",
+      "related_metric_contract": "parent_child_hierarchy",
+      "future_agent_use": [
+        "generator: scaffold PATH columns + level lookups",
+        "model review: detect self-referencing keys needing flattening"
+      ],
+      "source": "DAX Patterns ch. Parent-child hierarchies"
+    },
+    {
+      "pattern_id": "transition-matrix",
+      "topic": "Transition matrix / movement between classes",
+      "purpose": "Count entities that moved from one class in a prior period to another class in the current period (e.g. segment migration).",
+      "dax_shape": "Two disconnected class axes (From, To); per entity compute class at each period boundary, then count entities matching the (From,To) cell with KEEPFILTERS",
+      "key_rule": "Evaluate each entity's class at the correct period boundaries, then cross-tabulate with disconnected from/to axes applied via TREATAS/KEEPFILTERS.",
+      "when_to_use": [
+        "Customer segment migration month over month",
+        "Risk-band movement",
+        "Status change analysis"
+      ],
+      "avoid_when": [
+        "Only a single-period classification is needed (use segmentation)"
+      ],
+      "common_mistakes": [
+        "Class evaluated in the wrong period context",
+        "Overlapping class ranges",
+        "Counting rows instead of distinct entities"
+      ],
+      "retail_example": "Customers Moved := VAR fromC=SELECTEDVALUE('Seg From'[Segment]) VAR toC=SELECTEDVALUE('Seg To'[Segment]) RETURN COUNTROWS(FILTER(VALUES('Customer'[CustomerKey]), [Segment Prev Year]=fromC && [Segment This Year]=toC))",
+      "related_metric_contract": "transition_matrix",
+      "future_agent_use": [
+        "generator: from/to migration measure from a class measure",
+        "analyzer: verify class evaluated at right boundaries"
+      ],
+      "source": "DAX Patterns ch. Transition matrix"
+    },
+    {
+      "pattern_id": "survey-analysis",
+      "topic": "Survey / many-to-many answers",
+      "purpose": "Analyze survey responses (respondents x questions x answers) with flexible filtering, counting distinct respondents.",
+      "dax_shape": "Bridge between Respondents and Answers; measures use DISTINCTCOUNT(respondent) with filters routed across the many-to-many via the bridge or TREATAS",
+      "key_rule": "Count distinct respondents (not answer rows), and route the many-to-many filter explicitly through the bridge.",
+      "when_to_use": [
+        "Survey / questionnaire analysis",
+        "Tag/attribute many-to-many",
+        "'Customers who chose X and Y'"
+      ],
+      "avoid_when": [
+        "A simple one-to-many answer model suffices"
+      ],
+      "common_mistakes": [
+        "Counting answer rows instead of distinct respondents",
+        "Relying on bidirectional relationships instead of an explicit bridge",
+        "Filters not propagating across the m2m"
+      ],
+      "retail_example": "Respondents := DISTINCTCOUNT('Answers'[RespondentKey])\nRespondents for Answer := CALCULATE([Respondents], TREATAS(VALUES('Answer Filter'[AnswerKey]), 'Answers'[AnswerKey]))",
+      "related_metric_contract": "survey_analysis",
+      "future_agent_use": [
+        "generator: distinct-respondent measures over a bridge",
+        "model review: detect m2m needing a bridge"
+      ],
+      "source": "DAX Patterns ch. Survey"
+    },
+    {
+      "pattern_id": "basket-analysis",
+      "topic": "Basket analysis / products bought together",
+      "purpose": "Find orders that contain product A and also contain product B (market-basket affinity).",
+      "dax_shape": "A second disconnected Product table for the 'and also' role; filter orders containing A, then count orders that also contain the TREATAS-applied B set",
+      "key_rule": "Self-relate the fact through a second (disconnected) product table applied with TREATAS; count distinct orders, and exclude A=B.",
+      "when_to_use": [
+        "Cross-sell / affinity",
+        "'Customers who bought X also bought Y'",
+        "Bundle discovery"
+      ],
+      "avoid_when": [
+        "Simple co-occurrence within one product dimension is enough"
+      ],
+      "common_mistakes": [
+        "Counting lines instead of distinct orders",
+        "Letting A and B be the same product",
+        "Not isolating the second product role"
+      ],
+      "retail_example": "Orders with A and B := VAR ordersWithA=CALCULATETABLE(VALUES('Sales'[OrderKey])) RETURN CALCULATE(DISTINCTCOUNT('Sales'[OrderKey]), ordersWithA, TREATAS(VALUES('Product B'[ProductKey]),'Sales'[ProductKey]))",
+      "related_metric_contract": "basket_analysis",
+      "future_agent_use": [
+        "generator: affinity measure with a second product table",
+        "analyzer: verify distinct-order counting and A!=B"
+      ],
+      "source": "DAX Patterns ch. Basket analysis"
+    },
+    {
+      "pattern_id": "budget-vs-actual",
+      "topic": "Budget vs actual (mixed granularity)",
+      "purpose": "Compare actuals (fine grain) to budget (coarse grain) without breaking when filtering by columns budget lacks.",
+      "dax_shape": "Relate Budget at its grain (e.g. Month, Category); align via shared higher-grain dims (TREATAS if needed); Variance=Actual-Budget; Variance %=DIVIDE(...)",
+      "key_rule": "Filter the budget table only by the dimensions/columns it actually supports; align actuals and budget through shared higher-grain attributes.",
+      "when_to_use": [
+        "Actual vs plan/budget/forecast",
+        "Targets set at month/category but sales at day/product"
+      ],
+      "avoid_when": [
+        "Both facts share the same grain (simple subtraction)"
+      ],
+      "common_mistakes": [
+        "Filtering budget by a column it doesn't have (returns blank/odd)",
+        "Comparing at mismatched grain",
+        "Variance % without DIVIDE"
+      ],
+      "retail_example": "Budget Amount := SUM('Budget'[Budget Amount])\nVariance := [Sales Amount] - [Budget Amount]\nVariance % := DIVIDE([Variance], [Budget Amount])",
+      "related_metric_contract": "budget_vs_actual",
+      "future_agent_use": [
+        "generator: actual/budget/variance family at budget grain",
+        "model review: detect grain mismatch & unsupported filters"
+      ],
+      "source": "DAX Patterns ch. Budget"
+    }
+  ]
+}

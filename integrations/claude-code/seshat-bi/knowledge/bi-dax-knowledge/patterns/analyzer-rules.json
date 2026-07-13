@@ -1,0 +1,438 @@
+{
+  "$schema_version": "1.0",
+  "description": "Machine-checkable, enforceable DAX rules for the BI analyzer. Each rule: detect heuristic, fix, rationale, doc refs, plus operational fields (detectability, required_inputs, related_concepts) and promoted_from provenance for rules graduated from analyzer-rule-candidates.json. Severities: error|warning|info.",
+  "rule_field_spec": [
+    "rule_id",
+    "title",
+    "severity",
+    "category",
+    "detect",
+    "fix",
+    "rationale",
+    "refs",
+    "detectability",
+    "required_inputs",
+    "related_concepts",
+    "promoted_from"
+  ],
+  "rules": [
+    {
+      "rule_id": "AR-TI-001",
+      "title": "Time-intelligence table function used outside CALCULATE filter / VAR",
+      "severity": "error",
+      "category": "correctness",
+      "detect": "DATESYTD|DATESQTD|DATESMTD|SAMEPERIODLASTYEAR|DATEADD|DATESBETWEEN|ENDOFMONTH|PARALLELPERIOD appearing as a scalar expression or inside an iterator (SUMX/FILTER/ADDCOLUMNS) row context rather than as a CALCULATE/CALCULATETABLE filter argument or assigned to a VAR used as a filter.",
+      "fix": "Move the TI function into a CALCULATE filter argument or a VAR; use scalar date funcs (EDATE/EOMONTH/date math) for row-level needs.",
+      "rationale": "TI table funcs depend on filter context; misused they error, mislead, or trigger costly implicit context transitions.",
+      "refs": [
+        "dax-best-practices.md#BP-031",
+        "dax-anti-patterns.md#AP-001",
+        "dax-anti-patterns.md#AP-002"
+      ],
+      "detectability": "ast_required",
+      "required_inputs": [
+        "dax_text"
+      ],
+      "related_concepts": [
+        "CC-005"
+      ],
+      "promoted_from": "ARC-FUNC-01"
+    },
+    {
+      "rule_id": "AR-TI-002",
+      "title": "Date table not marked / calendar not contiguous",
+      "severity": "error",
+      "category": "model",
+      "detect": "Model uses TI functions but the Date table is not Marked as Date Table, or the calendar has gaps / does not span Jan 1..Dec 31 of all referenced years.",
+      "fix": "Mark as Date Table (or add REMOVEFILTERS('Date') to each TI CALCULATE); build a contiguous calendar.",
+      "rationale": "Unmarked/incomplete date tables silently break time intelligence.",
+      "refs": [
+        "dax-best-practices.md#BP-001",
+        "dax-anti-patterns.md#AP-007"
+      ],
+      "detectability": "model_metadata",
+      "required_inputs": [
+        "model_metadata"
+      ],
+      "related_concepts": [],
+      "promoted_from": null
+    },
+    {
+      "rule_id": "AR-TI-003",
+      "title": "Auto Date/Time enabled",
+      "severity": "warning",
+      "category": "model",
+      "detect": "Power BI Auto Date/Time is on, or column-variation syntax ('Date'.[Month]) is used.",
+      "fix": "Disable Auto Date/Time; use one explicit Date table.",
+      "rationale": "Bloats model, fragments time intelligence.",
+      "refs": [
+        "dax-best-practices.md#BP-002"
+      ],
+      "detectability": "model_metadata",
+      "required_inputs": [
+        "model_metadata"
+      ],
+      "related_concepts": [],
+      "promoted_from": null
+    },
+    {
+      "rule_id": "AR-DIV-001",
+      "title": "Division with '/' instead of DIVIDE",
+      "severity": "warning",
+      "category": "correctness",
+      "detect": "A '/' operator between two measure/aggregation expressions without DIVIDE.",
+      "fix": "Use DIVIDE(numerator, denominator [, alternate]).",
+      "rationale": "Guards divide-by-zero, engine-optimized.",
+      "refs": [
+        "dax-best-practices.md#BP-021",
+        "dax-anti-patterns.md#AP-006"
+      ],
+      "detectability": "regex",
+      "required_inputs": [
+        "dax_text"
+      ],
+      "related_concepts": [],
+      "promoted_from": null
+    },
+    {
+      "rule_id": "AR-CALC-001",
+      "title": "Computed filter set without KEEPFILTERS",
+      "severity": "warning",
+      "category": "correctness",
+      "detect": "CALCULATE applies a FILTER/VALUES/TOPN-derived table over a column that the user also slices, without KEEPFILTERS, where intersection (not replacement) is intended.",
+      "fix": "Wrap the computed set in KEEPFILTERS when it must respect the existing selection.",
+      "rationale": "Default CALCULATE filters replace; users expect their slicers to still apply.",
+      "refs": [
+        "dax-best-practices.md#BP-024",
+        "dax-anti-patterns.md#AP-003"
+      ],
+      "detectability": "heuristic",
+      "required_inputs": [
+        "dax_text",
+        "visual_context"
+      ],
+      "related_concepts": [
+        "CC-004",
+        "CC-005"
+      ],
+      "promoted_from": "ARC-CALC-01"
+    },
+    {
+      "rule_id": "AR-ADD-001",
+      "title": "Non-additive measure shown additively / total mismatch",
+      "severity": "warning",
+      "category": "correctness",
+      "detect": "Distinct counts, segmentation, ranking, or running totals where the grand total is left to the engine to sum the visible rows.",
+      "fix": "Aggregate at the correct grain (iterate years/segments and sum) or document the intended non-additive total.",
+      "rationale": "The total of a non-additive measure is not the sum of rows.",
+      "refs": [
+        "dax-anti-patterns.md#AP-005",
+        "metric-contract-patterns.json#segmentation_dynamic"
+      ],
+      "detectability": "heuristic",
+      "required_inputs": [
+        "dax_text",
+        "visual_context"
+      ],
+      "related_concepts": [
+        "CC-001",
+        "CC-009"
+      ],
+      "promoted_from": null
+    },
+    {
+      "rule_id": "AR-PERF-001",
+      "title": "Measure iterated over fact-grain table",
+      "severity": "warning",
+      "category": "performance",
+      "detect": "SUMX/AVERAGEX/etc. iterating the fact table while calling a measure (forcing per-row context transition).",
+      "fix": "Iterate the relevant dimension, or use column arithmetic / a single CALCULATE.",
+      "rationale": "Millions of context transitions are a classic slowdown.",
+      "refs": [
+        "dax-performance-notes.md",
+        "dax-anti-patterns.md#AP-020"
+      ],
+      "detectability": "heuristic",
+      "required_inputs": [
+        "dax_text",
+        "model_metadata"
+      ],
+      "related_concepts": [
+        "CC-003"
+      ],
+      "promoted_from": "ARC-PERF-01"
+    },
+    {
+      "rule_id": "AR-PERF-002",
+      "title": "FILTER over whole table where a column predicate suffices",
+      "severity": "warning",
+      "category": "performance",
+      "detect": "CALCULATE([m], FILTER('Table', 'Table'[Col] = <constant>)) with a single-column constant condition.",
+      "fix": "Use a column predicate: CALCULATE([m], 'Table'[Col] = <constant>); if FILTER is required, filter VALUES(col) or the smallest table.",
+      "rationale": "Column predicate is a storage-engine filter; FILTER(table) materializes more.",
+      "refs": [
+        "dax-best-practices.md#BP-041",
+        "dax-anti-patterns.md#AP-021"
+      ],
+      "detectability": "ast_required",
+      "required_inputs": [
+        "dax_text"
+      ],
+      "related_concepts": [
+        "CC-005",
+        "CC-008"
+      ],
+      "promoted_from": "ARC-PERF-03"
+    },
+    {
+      "rule_id": "AR-PERF-003",
+      "title": "Repeated expensive subexpression not captured in VAR",
+      "severity": "info",
+      "category": "performance",
+      "detect": "Same measure/expression referenced 2+ times within one definition without a VAR.",
+      "fix": "Assign to a VAR once and reuse.",
+      "rationale": "Avoids recomputation; improves readability.",
+      "refs": [
+        "dax-best-practices.md#BP-022",
+        "dax-anti-patterns.md#AP-023"
+      ],
+      "detectability": "regex",
+      "required_inputs": [
+        "dax_text"
+      ],
+      "related_concepts": [
+        "CC-007"
+      ],
+      "promoted_from": null
+    },
+    {
+      "rule_id": "AR-PERF-004",
+      "title": "High-cardinality calculated column",
+      "severity": "warning",
+      "category": "model",
+      "detect": "Calculated column with near-unique values (concatenated keys, full-precision datetime).",
+      "fix": "Split datetime, reduce precision, push to ETL, or compute as a measure.",
+      "rationale": "Destroys VertiPaq compression, bloats model.",
+      "refs": [
+        "dax-performance-notes.md",
+        "dax-anti-patterns.md#AP-022"
+      ],
+      "detectability": "model_metadata",
+      "required_inputs": [
+        "model_metadata"
+      ],
+      "related_concepts": [
+        "CC-014"
+      ],
+      "promoted_from": "ARC-MODEL-02"
+    },
+    {
+      "rule_id": "AR-ALL-001",
+      "title": "Over-broad ALL clearing more than intended",
+      "severity": "warning",
+      "category": "correctness",
+      "detect": "ALL('Table') or ALL('Date') used where only specific column(s) should be cleared.",
+      "fix": "Clear specific columns with REMOVEFILTERS('Table'[Col]) or keep survivors with ALLEXCEPT.",
+      "rationale": "Clearing too much changes results unexpectedly.",
+      "refs": [
+        "dax-best-practices.md#BP-025",
+        "dax-anti-patterns.md#AP-024"
+      ],
+      "detectability": "heuristic",
+      "required_inputs": [
+        "dax_text",
+        "visual_context"
+      ],
+      "related_concepts": [
+        "CC-019",
+        "CC-008"
+      ],
+      "promoted_from": "ARC-ALL-01"
+    },
+    {
+      "rule_id": "AR-BIDI-001",
+      "title": "Bi-directional relationship used as a default",
+      "severity": "warning",
+      "category": "model",
+      "detect": "Bi-directional cross-filter enabled on relationships without a specific documented need.",
+      "fix": "Keep single-direction; apply CROSSFILTER per-measure or use TREATAS for virtual relationships.",
+      "rationale": "Ambiguous paths, surprising totals, perf cliffs.",
+      "refs": [
+        "dax-anti-patterns.md#AP-008"
+      ],
+      "detectability": "model_metadata",
+      "required_inputs": [
+        "model_metadata"
+      ],
+      "related_concepts": [
+        "CC-006",
+        "CC-015"
+      ],
+      "promoted_from": "ARC-MODEL-01"
+    },
+    {
+      "rule_id": "AR-PARAM-001",
+      "title": "SELECTEDVALUE without default on a parameter",
+      "severity": "info",
+      "category": "correctness",
+      "detect": "SELECTEDVALUE('Param'[Col]) reading a disconnected parameter without a default argument.",
+      "fix": "Provide a default for the no-selection / multi-selection case.",
+      "rationale": "Avoids blank/unexpected behavior when nothing or many are selected.",
+      "refs": [
+        "dax-best-practices.md#BP-027",
+        "dax-patterns.json#parameter-table-whatif"
+      ],
+      "detectability": "ast_required",
+      "required_inputs": [
+        "dax_text"
+      ],
+      "related_concepts": [
+        "CC-011"
+      ],
+      "promoted_from": null
+    },
+    {
+      "rule_id": "AR-STYLE-001",
+      "title": "Reference convention violated",
+      "severity": "info",
+      "category": "style",
+      "detect": "Unqualified column reference ([Col]) or qualified measure reference ('Table'[Measure]).",
+      "fix": "Qualify columns ('Table'[Col]); leave measures unqualified ([Measure]).",
+      "rationale": "Disambiguates columns vs measures; prevents name-collision bugs.",
+      "refs": [
+        "dax-best-practices.md#BP-023",
+        "dax-anti-patterns.md#AP-031"
+      ],
+      "detectability": "regex",
+      "required_inputs": [
+        "dax_text"
+      ],
+      "related_concepts": [],
+      "promoted_from": null
+    },
+    {
+      "rule_id": "AR-STYLE-002",
+      "title": "Unformatted / monolithic formula",
+      "severity": "info",
+      "category": "maintainability",
+      "detect": "Long single-line measure, no VARs, no DAX-Formatter-style layout, no intent comments.",
+      "fix": "Format (one filter arg per line), decompose with named VARs, comment intent.",
+      "rationale": "Reviewable, diffable, teachable.",
+      "refs": [
+        "dax-best-practices.md#BP-050",
+        "dax-best-practices.md#BP-051",
+        "dax-anti-patterns.md#AP-032"
+      ],
+      "detectability": "heuristic",
+      "required_inputs": [
+        "dax_text"
+      ],
+      "related_concepts": [],
+      "promoted_from": null
+    },
+    {
+      "rule_id": "AR-STYLE-003",
+      "title": "Implicit measure (auto-aggregated column in a visual)",
+      "severity": "warning",
+      "category": "maintainability",
+      "detect": "A raw fact column dragged into the values area instead of an explicit measure.",
+      "fix": "Define an explicit, named measure.",
+      "rationale": "Hidden, inconsistent logic scattered across visuals.",
+      "refs": [
+        "dax-anti-patterns.md#AP-033"
+      ],
+      "detectability": "model_metadata",
+      "required_inputs": [
+        "model_metadata",
+        "visual_context"
+      ],
+      "related_concepts": [],
+      "promoted_from": null
+    },
+    {
+      "rule_id": "AR-SEG-001",
+      "title": "Segmentation config table with overlapping/gapped ranges",
+      "severity": "error",
+      "category": "model",
+      "detect": "Config table where Min/Max ranges overlap or leave gaps so a value matches 0 or 2+ segments.",
+      "fix": "Make ranges contiguous and non-overlapping (e.g. derive Max from next row's Min).",
+      "rationale": "Causes errors or double-counting in segmentation patterns.",
+      "refs": [
+        "dax-patterns.json#static-segmentation",
+        "dax-patterns.json#dynamic-segmentation"
+      ],
+      "detectability": "model_metadata",
+      "required_inputs": [
+        "model_metadata"
+      ],
+      "related_concepts": [],
+      "promoted_from": null
+    },
+    {
+      "rule_id": "AR-REL-001",
+      "title": "Role-playing date not activated with USERELATIONSHIP",
+      "severity": "warning",
+      "category": "correctness",
+      "detect": "A measure analyzes by a non-active date/role column (e.g. 'Sales'[DeliveryDate]) while an inactive relationship to 'Date' exists, with no USERELATIONSHIP in scope.",
+      "fix": "Wrap the measure in CALCULATE(..., USERELATIONSHIP(factDateColumn, 'Date'[Date])).",
+      "rationale": "Plain measures use only the active relationship; the inactive role silently does not filter.",
+      "refs": [
+        "dax-calculate-deep-dive.md#CC-016",
+        "dax-calculate-deep-dive.md#CC-006",
+        "dax-performance-diagnostics.md#PB-PROPAGATION"
+      ],
+      "detectability": "model_metadata",
+      "required_inputs": [
+        "dax_text",
+        "model_metadata"
+      ],
+      "related_concepts": [
+        "CC-016",
+        "CC-006"
+      ],
+      "promoted_from": "ARC-REL-01"
+    },
+    {
+      "rule_id": "AR-FUNC-001",
+      "title": "Expression computed inside SUMMARIZE instead of ADDCOLUMNS",
+      "severity": "warning",
+      "category": "correctness",
+      "detect": "Aggregations/measures supplied as added columns directly inside SUMMARIZE(...).",
+      "fix": "Use SUMMARIZE only to group; compute expressions with ADDCOLUMNS over the grouping, or use SUMMARIZECOLUMNS.",
+      "rationale": "Computing expressions inside SUMMARIZE sets context in a way that yields subtle wrong results.",
+      "refs": [
+        "dax-function-semantics.md"
+      ],
+      "detectability": "ast_required",
+      "required_inputs": [
+        "dax_text"
+      ],
+      "related_concepts": [
+        "CC-004"
+      ],
+      "promoted_from": "ARC-FUNC-02"
+    },
+    {
+      "rule_id": "AR-STYLE-004",
+      "title": "IF(HASONEVALUE, VALUES) idiom replaceable by SELECTEDVALUE",
+      "severity": "info",
+      "category": "style",
+      "detect": "IF(HASONEVALUE(col), VALUES(col) [, alternate]) pattern.",
+      "fix": "Use SELECTEDVALUE(col, alternate).",
+      "rationale": "Concise and safe when zero or many values are in context.",
+      "refs": [
+        "dax-function-semantics.md",
+        "dax-calculate-deep-dive.md#CC-011"
+      ],
+      "detectability": "ast_required",
+      "required_inputs": [
+        "dax_text"
+      ],
+      "related_concepts": [
+        "CC-011"
+      ],
+      "promoted_from": "ARC-STYLE-01"
+    }
+  ],
+  "promotion_note": "2026-06-26: graduated 10 analyzer_v1 candidates from analyzer-rule-candidates.json. 7 enriched existing rules (see promoted_from); 3 added as new rules (AR-REL-001, AR-FUNC-001, AR-STYLE-004)."
+}

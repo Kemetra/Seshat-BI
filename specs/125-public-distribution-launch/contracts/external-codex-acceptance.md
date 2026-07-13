@@ -79,6 +79,6 @@ As a separate compatibility test inside a clean Seshat_BI checkout, Codex MUST d
 
 Missing evidence blocks the affected Codex surface.
 
-## Public Plugins Directory boundary
+## Public plugin-submission boundary
 
-Passing this contract makes the repository-distributed plugin a candidate for owner review. It does not submit, list, or authorize the plugin in OpenAI's public Plugins Directory.
+Passing this contract makes the repository-distributed plugin a candidate for owner review. It does not submit, list, or authorize the plugin through OpenAI's public plugin process.

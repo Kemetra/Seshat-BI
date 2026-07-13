@@ -191,16 +191,22 @@ A named-human authorization for one exact irreversible action.
 | `approval_id` | string | yes | Unique decision record. |
 | `candidate_id` | reference | yes | Exact immutable candidate. |
 | `version` | SemVer | yes | Exact approved value. |
-| `action` | enum | yes | `create_tag`, `upload_pypi`, `publish_github_release`, `submit_claude_catalog`, `submit_codex_directory`, or specific external configuration action. |
-| `approved_by` | named human | yes | Eligible owner/publisher/reviewer for the action. |
+| `source_revision` | full Git SHA | yes | Exact lowercase source revision reviewed by the owner. |
+| `artifact_digests` | map | yes | Exact SHA-256 artifact/bundle digests authorized for this action. |
+| `action` | enum | yes | `create_release_tag`, `publish_pypi`, `publish_github_release`, `publish_claude_marketplace`, `submit_claude_catalog`, `submit_openai_plugin`, or a specific external configuration/rollback action. |
+| `approver` | named human | yes | Eligible owner/publisher/reviewer for the action. |
 | `approved_at` | UTC timestamp | yes | Decision time. |
+| `expires_at` | UTC timestamp | yes | Later than `approved_at`; prevents indefinite reuse. |
 | `evidence_reviewed` | references | yes | Candidate checks and surface acceptance. |
 | `constraints` | list | yes | Scope, expiry, or staged-launch limitations. |
+| `scope` | string | yes | Human-readable action boundary; never a wildcard release approval. |
+| `status` | enum | yes | Must be `approved` for authorization use. |
+| `authority_disclaimer` | string | yes | States that other actions and changed artifacts are not authorized. |
 
 ### Validation rules
 
 - No wildcard action and no approval “for the release generally.”
-- Candidate, version, and action must match exactly at use time.
+- Candidate, version, full source revision, artifact digests, and action must match exactly at use time.
 - Passing CI, an agent statement, merge approval, or a prior release approval cannot substitute.
 - Approval for one catalog does not authorize another catalog or PyPI.
 
@@ -212,14 +218,17 @@ One surface-specific containment and recovery record.
 |---|---|---:|---|
 | `rollback_id` | string | yes | Unique. |
 | `candidate_id` | reference | yes | Defective candidate. |
-| `affected_surface` | enum | yes | One public surface. |
-| `trigger_evidence` | references | yes | Reproducible defect/public verification failure. |
-| `containment_action` | string | yes | Yank, withdraw, revert pointer, correct wording, etc. |
-| `authorized_by` | named human | when action external/irreversible | Required for owner-only action. |
-| `public_status` | string | yes | Truthful actual availability after containment. |
-| `replacement_version` | proposed SemVer | optional | Must differ when immutable artifacts were published. |
-| `reverification` | acceptance reference | before closure | Clean public-path result. |
-| `state` | enum | yes | `open`, `contained`, `replaced`, `closed`. |
+| `surface` | enum | yes | One of the five public surfaces; the action must match it. |
+| `trigger` | string | yes | Reproducible defect/public verification failure. |
+| `actor` | named human | yes | Owner performing the separately approved containment. |
+| `action` | enum | yes | Surface-specific `rollback_*` action; no cross-surface reuse. |
+| `status` | enum | yes | `blocked` or `completed`, with blockers consistent with status. |
+| `blockers` | list | yes | Concrete facts when blocked; empty only when completed. |
+| `recorded_at` | UTC timestamp | yes | Containment evidence time. |
+| `approval_id` | reference | yes | Fresh action-scoped approval bound to the same candidate. |
+| `public_status` | string | optional follow-up | Truthful availability after containment. |
+| `replacement_version` | proposed SemVer | optional follow-up | Must differ when immutable artifacts were published. |
+| `reverification` | acceptance reference | before replacement closure | Clean public-path result. |
 
 A rollback record contains no implied approval for a replacement publication.
 

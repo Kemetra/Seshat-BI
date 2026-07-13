@@ -3,6 +3,16 @@ name: ci
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      acceptance_mode:
+        description: Credential-free bundle validation or fixture classification
+        required: true
+        default: classify-fixtures
+        type: choice
+        options:
+          - classify-fixtures
+          - validate-bundles
 
 jobs:
   check:
@@ -23,13 +33,33 @@ jobs:
         run: pip install -e ".[dev]"
 
       - name: Ruff format check
-        run: ruff format --check src tests
+        run: ruff format --check src tests scripts
 
       - name: Ruff lint
-        run: ruff check src tests
+        run: ruff check src tests scripts
 
       - name: Unit tests
         run: pytest -m unit
+
+      - name: Public distribution contract tests
+        # Explicit blocking gate for version/evidence/export contract behavior.
+        # The repository may truthfully report a candidate as blocked before an
+        # owner-approved version projection; these tests verify that fail-closed
+        # behavior without consuming credentials or publishing anything.
+        run: >-
+          pytest
+          tests/contract/test_public_knowledge_allowlist.py
+          tests/contract/test_generated_agent_bundles.py
+          tests/contract/test_release_version_sync.py
+          tests/contract/test_release_evidence_models.py
+
+      - name: Generated agent bundle drift
+        run: python scripts/export_agent_bundles.py --check
+
+      - name: Credential-free release candidate audit
+        # Blocks structural regressions while truthfully allowing the report to
+        # retain owner/version/publication blockers before release authorization.
+        run: python scripts/release_candidate_audit.py --repository-check
 
       - name: Retail governance check
         # Scope P2's commit-message check to THIS branch's commits, not an
@@ -102,3 +132,42 @@ jobs:
         run: python -m pip install build pipx
       - name: Best-effort first-success smoke
         run: python scripts/install_smoke_test.py
+
+  agent-distribution:
+    # Credential-free structural and semantic classification. Real external
+    # GitHub install/CLI/IDE observations remain a separately recorded owner
+    # gate; this job neither authenticates nor claims public availability.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: claude-code
+            client: cli
+            transcript: tests/fixtures/public_distribution/claude/acceptance.pass.json
+          - platform: codex
+            client: cli
+            transcript: tests/fixtures/public_distribution/codex/acceptance.cli.pass.json
+          - platform: codex
+            client: ide
+            transcript: tests/fixtures/public_distribution/codex/acceptance.ide.pass.json
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install package
+        run: pip install -e ".[dev]"
+      - name: Validate generated platform bundle
+        run: >-
+          python scripts/external_agent_acceptance.py
+          --platform ${{ matrix.platform }}
+          --client ${{ matrix.client }}
+          --validate-bundle
+      - name: Classify shared synthetic outcome
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.acceptance_mode == 'classify-fixtures' }}
+        run: >-
+          python scripts/external_agent_acceptance.py
+          --platform ${{ matrix.platform }}
+          --client ${{ matrix.client }}
+          --transcript ${{ matrix.transcript }}

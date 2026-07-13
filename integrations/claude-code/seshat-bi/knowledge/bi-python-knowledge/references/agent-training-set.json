@@ -1,0 +1,113 @@
+{
+  "$schema_note": "Machine-readable training/eval set for BI Python reasoning. Fictional retail scenarios only. Score an agent on reasoning match + correct ending artifact. Mirrors references/agent-training-set.md.",
+  "seed_note": "Initial seed. Several items' ends_on targets name artifacts that are planned / not yet implemented in this seed (dataframe-review-checklist, merge-fanout-checklist, validation-reconciliation-checklist, date readiness verdict, performance diagnostic verdict). The shipped checklists are checklists/aggregation-grain-checklist.md and checklists/cleaning-review-checklist.md. Until the others ship, score on reasoning quality and accept the verdict produced inside the live knowledge file as the artifact. This is a seed/eval set, not proof the skill is complete.",
+  "version": "0.1.0",
+  "slice_origin": "Slice 11",
+  "items": [
+    {
+      "id": "PY-QA-001",
+      "question": "store_id loaded as integers and a join to stores dropped rows. Why?",
+      "expected_reasoning": "Numeric keys lose leading zeros and/or mismatch string keys, so matches silently fail; keys must be string-typed.",
+      "ends_on": "dataframe-review-checklist (dtype verdict)",
+      "exercises": ["PY-CN-023", "PY-AP-011"]
+    },
+    {
+      "id": "PY-QA-002",
+      "question": "Revenue is 8% high after joining orders to returns. What happened?",
+      "expected_reasoning": "One-to-many fan-out duplicated order lines; summing revenue double-counts. Aggregate returns to order-line grain, then merge many-to-one.",
+      "ends_on": "merge-fanout-checklist (verdict)",
+      "exercises": ["PY-CN-046", "PY-CN-051", "PY-AR-002"]
+    },
+    {
+      "id": "PY-QA-003",
+      "question": "Should I fillna(0) on discount_amt before averaging?",
+      "expected_reasoning": "No by default; null != zero and it changes the mean. Decide skip vs treat-as-zero explicitly and record; imputation deferred to metric owner.",
+      "ends_on": "cleaning-review-checklist (null policy)",
+      "exercises": ["PY-CN-039", "PY-CN-043", "PY-AP-013"]
+    },
+    {
+      "id": "PY-QA-004",
+      "question": "Number of orders per store - which operation?",
+      "expected_reasoning": "nunique(order_id); frame is order-line grain, so size overcounts.",
+      "ends_on": "aggregation-grain-checklist (verdict)",
+      "exercises": ["PY-CN-055", "PY-AP-017"]
+    },
+    {
+      "id": "PY-QA-005",
+      "question": "Can I sum each region's average basket value to get the company average?",
+      "expected_reasoning": "No; averages are non-additive. Recompute from base totals (weighted average).",
+      "ends_on": "aggregation-grain-checklist (verdict)",
+      "exercises": ["PY-CN-054", "PY-AP-016"]
+    },
+    {
+      "id": "PY-QA-006",
+      "question": "channel shows 6 values but the domain has 3. Fix?",
+      "expected_reasoning": "Trim + lowercase, confirm collapse to exactly {store,web,app}; flag survivors rather than auto-mapping.",
+      "ends_on": "cleaning-review-checklist",
+      "exercises": ["PY-CN-031", "PY-CN-032", "PY-AP-014"]
+    },
+    {
+      "id": "PY-QA-007",
+      "question": "Dates parse differently across files, smearing monthly revenue. Fix?",
+      "expected_reasoning": "Pin format per source, coerce failures to NaT, record parse rate; treat format change as schema drift.",
+      "ends_on": "date readiness verdict",
+      "exercises": ["PY-CN-060", "PY-AP-019"]
+    },
+    {
+      "id": "PY-QA-008",
+      "question": "A join to customers linked many unrelated guest orders. Why?",
+      "expected_reasoning": "Empty-string customer_id keys matched each other; convert empty string to null before joining.",
+      "ends_on": "cleaning-review-checklist + merge-fanout-checklist",
+      "exercises": ["PY-CN-040"]
+    },
+    {
+      "id": "PY-QA-009",
+      "question": "Can I mark the frame reconciled because the numbers look right?",
+      "expected_reasoning": "No; reconciliation needs control-total evidence (expected/actual/delta) with declared tolerance.",
+      "ends_on": "validation-reconciliation-checklist (verdict)",
+      "exercises": ["PY-CN-068", "PY-AP-024", "PY-AR-015"]
+    },
+    {
+      "id": "PY-QA-010",
+      "question": "The notebook is slow with a row loop computing net line value. Fix?",
+      "expected_reasoning": "Vectorize the column expression; diagnose the real constraint first; stop at fast-enough.",
+      "ends_on": "performance diagnostic verdict",
+      "exercises": ["PY-CN-075", "PY-AP-022"]
+    },
+    {
+      "id": "PY-QA-011",
+      "question": "Should I compute YTD revenue in pandas for the dashboard?",
+      "expected_reasoning": "No; period metrics are DAX measures. Python prepares clean datetime and period keys only.",
+      "ends_on": "date readiness verdict + handoff",
+      "exercises": ["PY-CN-064", "PY-AP-021", "PY-AR-012"]
+    },
+    {
+      "id": "PY-QA-012",
+      "question": "Several columns are object dtype in the ready frame. Acceptable?",
+      "expected_reasoning": "No; resolve each to a real dtype or justify it. object means uninferred and costs memory.",
+      "ends_on": "dataframe-review-checklist",
+      "exercises": ["PY-CN-017", "PY-AP-010", "PY-AR-006"]
+    },
+    {
+      "id": "PY-QA-013",
+      "question": "Can I drop_duplicates() to clean up the frame?",
+      "expected_reasoning": "Only after declaring the uniqueness key and measuring duplicates; distinguish exact dupes from key collisions with differing attributes.",
+      "ends_on": "cleaning-review-checklist",
+      "exercises": ["PY-CN-035", "PY-AP-001"]
+    },
+    {
+      "id": "PY-QA-014",
+      "question": "Grouped revenue total is lower than ungrouped. Why?",
+      "expected_reasoning": "Null group keys were dropped from groups; make null explicit or include it; reconcile before/after totals.",
+      "ends_on": "aggregation-grain-checklist (verdict)",
+      "exercises": ["PY-CN-057", "PY-CN-058"]
+    },
+    {
+      "id": "PY-QA-015",
+      "question": "Python validated everything; can I skip the readiness gate?",
+      "expected_reasoning": "No; Python validates and produces a reconciliation record, readiness owns gating. Hand off the record.",
+      "ends_on": "validation-reconciliation-checklist (handoff)",
+      "exercises": ["PY-CN-070", "PY-AP-025", "PY-AR-016"]
+    }
+  ]
+}

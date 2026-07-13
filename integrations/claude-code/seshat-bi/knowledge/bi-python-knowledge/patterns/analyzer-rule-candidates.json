@@ -1,0 +1,56 @@
+{
+  "$schema_note": "Proposed analyzer rules not yet promoted to PY-AR-*. Staging area to keep the active rule set curated. Promote when a candidate is validated against real pipelines; on promotion it receives a PY-AR-* id (or keeps its number if no collision).",
+  "version": "0.1.0",
+  "slice_origin": "Slice 10",
+  "candidates": [
+    {
+      "id": "PY-ARC-001",
+      "name": "inplace= usage discouraged",
+      "rationale": "In-place mutation hides where numbers change and complicates reconciliation (PY-AP-009).",
+      "promote_when": "We can reliably distinguish harmful inplace chains from benign single uses.",
+      "refs": ["PY-CN-004", "PY-AP-009"]
+    },
+    {
+      "id": "PY-ARC-002",
+      "name": "Profiling step absent before transforms",
+      "rationale": "Cleaning/merging without a recorded profile (PY-AP-007).",
+      "promote_when": "We define what evidence counts as 'a profile was run'.",
+      "refs": ["PY-CN-024", "PY-AP-007"]
+    },
+    {
+      "id": "PY-ARC-003",
+      "name": "Meaning inferred from column name",
+      "rationale": "Assuming semantics from names like amount/date/qty (PY-AP-008).",
+      "promote_when": "We can detect unconfirmed semantic assumptions in review context.",
+      "refs": ["PY-CN-008", "PY-AP-008"]
+    },
+    {
+      "id": "PY-ARC-004",
+      "name": "drop_duplicates without subset key",
+      "rationale": "Dedup with no declared uniqueness key risks deleting legitimate rows (PY-AP-001).",
+      "promote_when": "We confirm low false-positive rate flagging legitimate full-row dedup.",
+      "refs": ["PY-CN-035", "PY-AP-001"]
+    },
+    {
+      "id": "PY-ARC-005",
+      "name": "fillna(0) on a measure without recorded rule",
+      "rationale": "Treating null as zero changes sums/means (PY-AP-013).",
+      "promote_when": "We can read whether a recorded imputation rule justifies the fill.",
+      "refs": ["PY-CN-039", "PY-AP-013"]
+    },
+    {
+      "id": "PY-ARC-006",
+      "name": "Excel used as a pipeline intermediate",
+      "rationale": "Excel mangles types and does not scale (PY-AP and PY-CN-080).",
+      "promote_when": "We can distinguish human-interchange I/O from intermediate storage.",
+      "refs": ["PY-CN-080", "PY-CN-079"]
+    },
+    {
+      "id": "PY-ARC-007",
+      "name": "Repeated CSV reads not persisted to Parquet",
+      "rationale": "Re-parsing/re-inferring CSV on hot paths wastes time and risks drift (PY-CN-079).",
+      "promote_when": "We can detect a frame read more than once in a pipeline.",
+      "refs": ["PY-CN-079", "PY-CN-022"]
+    }
+  ]
+}

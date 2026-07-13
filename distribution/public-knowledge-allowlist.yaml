@@ -1,0 +1,1913 @@
+schema_version: 1
+canonical_repository: ahmed-shaaban-94/Seshat_BI
+canonical_roots:
+  - skills/bi-sql-knowledge/SKILL.md
+  - skills/bi-dax-knowledge/SKILL.md
+  - skills/bi-python-knowledge/SKILL.md
+  - skills/bi-bigdata-knowledge/SKILL.md
+  - skills/retail-kpi-knowledge/SKILL.md
+policy:
+  absence_means_excluded: true
+  paths_are_repository_relative_posix: true
+  symlinks_allowed: false
+  executable_sources_allowed: false
+  transforms:
+    - copy-normalized-v1
+    - template-substitute-version-v1
+entries:
+  - entry_id: kb-001
+    source: skills/bi-bigdata-knowledge/INDEX.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/INDEX.md
+      codex: knowledge/bi-bigdata-knowledge/INDEX.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-002
+    source: skills/bi-bigdata-knowledge/README.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/README.md
+      codex: knowledge/bi-bigdata-knowledge/README.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-003
+    source: skills/bi-bigdata-knowledge/SKILL.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/SKILL.md
+      codex: knowledge/bi-bigdata-knowledge/SKILL.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-004
+    source: skills/bi-bigdata-knowledge/checklists/aggregation-grain-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/checklists/aggregation-grain-checklist.md
+      codex: knowledge/bi-bigdata-knowledge/checklists/aggregation-grain-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-005
+    source: skills/bi-bigdata-knowledge/checklists/engine-selection-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/checklists/engine-selection-checklist.md
+      codex: knowledge/bi-bigdata-knowledge/checklists/engine-selection-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-006
+    source: skills/bi-bigdata-knowledge/checklists/join-skew-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/checklists/join-skew-checklist.md
+      codex: knowledge/bi-bigdata-knowledge/checklists/join-skew-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-007
+    source: skills/bi-bigdata-knowledge/checklists/partitioning-shuffle-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/checklists/partitioning-shuffle-checklist.md
+      codex: knowledge/bi-bigdata-knowledge/checklists/partitioning-shuffle-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-008
+    source: skills/bi-bigdata-knowledge/checklists/pipeline-review-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/checklists/pipeline-review-checklist.md
+      codex: knowledge/bi-bigdata-knowledge/checklists/pipeline-review-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-009
+    source: skills/bi-bigdata-knowledge/checklists/validation-reconciliation-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/checklists/validation-reconciliation-checklist.md
+      codex: knowledge/bi-bigdata-knowledge/checklists/validation-reconciliation-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-010
+    source: skills/bi-bigdata-knowledge/knowledge/aggregation-and-grain-at-scale.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/knowledge/aggregation-and-grain-at-scale.md
+      codex: knowledge/bi-bigdata-knowledge/knowledge/aggregation-and-grain-at-scale.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-011
+    source: skills/bi-bigdata-knowledge/knowledge/bigdata-anti-patterns.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/knowledge/bigdata-anti-patterns.md
+      codex: knowledge/bi-bigdata-knowledge/knowledge/bigdata-anti-patterns.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-012
+    source: skills/bi-bigdata-knowledge/knowledge/bigdata-core-concepts-for-bi.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/knowledge/bigdata-core-concepts-for-bi.md
+      codex: knowledge/bi-bigdata-knowledge/knowledge/bigdata-core-concepts-for-bi.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-013
+    source: skills/bi-bigdata-knowledge/knowledge/bigdata-retail-examples.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/knowledge/bigdata-retail-examples.md
+      codex: knowledge/bi-bigdata-knowledge/knowledge/bigdata-retail-examples.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-014
+    source: skills/bi-bigdata-knowledge/knowledge/distributed-dataframe-model.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/knowledge/distributed-dataframe-model.md
+      codex: knowledge/bi-bigdata-knowledge/knowledge/distributed-dataframe-model.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-015
+    source: skills/bi-bigdata-knowledge/knowledge/engine-selection.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/knowledge/engine-selection.md
+      codex: knowledge/bi-bigdata-knowledge/knowledge/engine-selection.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-016
+    source: skills/bi-bigdata-knowledge/knowledge/file-formats-and-storage.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/knowledge/file-formats-and-storage.md
+      codex: knowledge/bi-bigdata-knowledge/knowledge/file-formats-and-storage.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-017
+    source: skills/bi-bigdata-knowledge/knowledge/incremental-and-idempotency.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/knowledge/incremental-and-idempotency.md
+      codex: knowledge/bi-bigdata-knowledge/knowledge/incremental-and-idempotency.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-018
+    source: skills/bi-bigdata-knowledge/knowledge/joins-and-skew.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/knowledge/joins-and-skew.md
+      codex: knowledge/bi-bigdata-knowledge/knowledge/joins-and-skew.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-019
+    source: skills/bi-bigdata-knowledge/knowledge/partitioning-and-shuffle.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/knowledge/partitioning-and-shuffle.md
+      codex: knowledge/bi-bigdata-knowledge/knowledge/partitioning-and-shuffle.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-020
+    source: skills/bi-bigdata-knowledge/knowledge/performance-and-cost.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/knowledge/performance-and-cost.md
+      codex: knowledge/bi-bigdata-knowledge/knowledge/performance-and-cost.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-021
+    source: skills/bi-bigdata-knowledge/knowledge/validation-and-reconciliation-at-scale.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/knowledge/validation-and-reconciliation-at-scale.md
+      codex: knowledge/bi-bigdata-knowledge/knowledge/validation-and-reconciliation-at-scale.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-022
+    source: skills/bi-bigdata-knowledge/patterns/analyzer-rule-candidates.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/patterns/analyzer-rule-candidates.json
+      codex: knowledge/bi-bigdata-knowledge/patterns/analyzer-rule-candidates.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-023
+    source: skills/bi-bigdata-knowledge/patterns/analyzer-rules.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/patterns/analyzer-rules.json
+      codex: knowledge/bi-bigdata-knowledge/patterns/analyzer-rules.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-024
+    source: skills/bi-bigdata-knowledge/patterns/bigdata-patterns.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/patterns/bigdata-patterns.json
+      codex: knowledge/bi-bigdata-knowledge/patterns/bigdata-patterns.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-025
+    source: skills/bi-bigdata-knowledge/patterns/validation-patterns.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/patterns/validation-patterns.json
+      codex: knowledge/bi-bigdata-knowledge/patterns/validation-patterns.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-026
+    source: skills/bi-bigdata-knowledge/references/agent-training-set.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/references/agent-training-set.json
+      codex: knowledge/bi-bigdata-knowledge/references/agent-training-set.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-027
+    source: skills/bi-bigdata-knowledge/references/agent-training-set.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/references/agent-training-set.md
+      codex: knowledge/bi-bigdata-knowledge/references/agent-training-set.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-028
+    source: skills/bi-bigdata-knowledge/references/copyright-and-sources.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/references/copyright-and-sources.md
+      codex: knowledge/bi-bigdata-knowledge/references/copyright-and-sources.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-029
+    source: skills/bi-bigdata-knowledge/references/cross-layer-map.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/references/cross-layer-map.md
+      codex: knowledge/bi-bigdata-knowledge/references/cross-layer-map.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-030
+    source: skills/bi-bigdata-knowledge/references/id-conventions.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/references/id-conventions.md
+      codex: knowledge/bi-bigdata-knowledge/references/id-conventions.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-031
+    source: skills/bi-bigdata-knowledge/references/research-notes.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/references/research-notes.md
+      codex: knowledge/bi-bigdata-knowledge/references/research-notes.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-032
+    source: skills/bi-bigdata-knowledge/references/retail-bigdata-schema.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-bigdata-knowledge/references/retail-bigdata-schema.md
+      codex: knowledge/bi-bigdata-knowledge/references/retail-bigdata-schema.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-033
+    source: skills/bi-dax-knowledge/INDEX.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/INDEX.md
+      codex: knowledge/bi-dax-knowledge/INDEX.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-034
+    source: skills/bi-dax-knowledge/README.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/README.md
+      codex: knowledge/bi-dax-knowledge/README.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-035
+    source: skills/bi-dax-knowledge/SKILL.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/SKILL.md
+      codex: knowledge/bi-dax-knowledge/SKILL.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-036
+    source: skills/bi-dax-knowledge/checklists/dax-measure-review-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/checklists/dax-measure-review-checklist.md
+      codex: knowledge/bi-dax-knowledge/checklists/dax-measure-review-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-037
+    source: skills/bi-dax-knowledge/checklists/dax-model-review-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/checklists/dax-model-review-checklist.md
+      codex: knowledge/bi-dax-knowledge/checklists/dax-model-review-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-038
+    source: skills/bi-dax-knowledge/checklists/metric-contract-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/checklists/metric-contract-checklist.md
+      codex: knowledge/bi-dax-knowledge/checklists/metric-contract-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-039
+    source: skills/bi-dax-knowledge/knowledge/dax-anti-patterns.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/knowledge/dax-anti-patterns.md
+      codex: knowledge/bi-dax-knowledge/knowledge/dax-anti-patterns.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-040
+    source: skills/bi-dax-knowledge/knowledge/dax-best-practices.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/knowledge/dax-best-practices.md
+      codex: knowledge/bi-dax-knowledge/knowledge/dax-best-practices.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-041
+    source: skills/bi-dax-knowledge/knowledge/dax-calculate-deep-dive.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/knowledge/dax-calculate-deep-dive.md
+      codex: knowledge/bi-dax-knowledge/knowledge/dax-calculate-deep-dive.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-042
+    source: skills/bi-dax-knowledge/knowledge/dax-core-concepts.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/knowledge/dax-core-concepts.md
+      codex: knowledge/bi-dax-knowledge/knowledge/dax-core-concepts.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-043
+    source: skills/bi-dax-knowledge/knowledge/dax-engine-internals.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/knowledge/dax-engine-internals.md
+      codex: knowledge/bi-dax-knowledge/knowledge/dax-engine-internals.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-044
+    source: skills/bi-dax-knowledge/knowledge/dax-evaluation-context-deep-dive.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/knowledge/dax-evaluation-context-deep-dive.md
+      codex: knowledge/bi-dax-knowledge/knowledge/dax-evaluation-context-deep-dive.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-045
+    source: skills/bi-dax-knowledge/knowledge/dax-function-semantics.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/knowledge/dax-function-semantics.md
+      codex: knowledge/bi-dax-knowledge/knowledge/dax-function-semantics.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-046
+    source: skills/bi-dax-knowledge/knowledge/dax-performance-diagnostics.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/knowledge/dax-performance-diagnostics.md
+      codex: knowledge/bi-dax-knowledge/knowledge/dax-performance-diagnostics.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-047
+    source: skills/bi-dax-knowledge/knowledge/dax-performance-notes.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/knowledge/dax-performance-notes.md
+      codex: knowledge/bi-dax-knowledge/knowledge/dax-performance-notes.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-048
+    source: skills/bi-dax-knowledge/knowledge/dax-retail-examples.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/knowledge/dax-retail-examples.md
+      codex: knowledge/bi-dax-knowledge/knowledge/dax-retail-examples.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-049
+    source: skills/bi-dax-knowledge/patterns/analyzer-rule-candidates.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/bi-dax-knowledge/patterns/analyzer-rule-candidates.json
+      codex: knowledge/bi-dax-knowledge/patterns/analyzer-rule-candidates.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-050
+    source: skills/bi-dax-knowledge/patterns/analyzer-rules.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/bi-dax-knowledge/patterns/analyzer-rules.json
+      codex: knowledge/bi-dax-knowledge/patterns/analyzer-rules.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-051
+    source: skills/bi-dax-knowledge/patterns/dax-patterns.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/bi-dax-knowledge/patterns/dax-patterns.json
+      codex: knowledge/bi-dax-knowledge/patterns/dax-patterns.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-052
+    source: skills/bi-dax-knowledge/patterns/metric-contract-patterns.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/bi-dax-knowledge/patterns/metric-contract-patterns.json
+      codex: knowledge/bi-dax-knowledge/patterns/metric-contract-patterns.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-053
+    source: skills/bi-dax-knowledge/references/agent-training-set.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/bi-dax-knowledge/references/agent-training-set.json
+      codex: knowledge/bi-dax-knowledge/references/agent-training-set.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-054
+    source: skills/bi-dax-knowledge/references/agent-training-set.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/references/agent-training-set.md
+      codex: knowledge/bi-dax-knowledge/references/agent-training-set.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-055
+    source: skills/bi-dax-knowledge/references/retail-schema.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/references/retail-schema.md
+      codex: knowledge/bi-dax-knowledge/references/retail-schema.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-056
+    source: skills/bi-dax-knowledge/references/source-map.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-dax-knowledge/references/source-map.md
+      codex: knowledge/bi-dax-knowledge/references/source-map.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-057
+    source: skills/bi-python-knowledge/INDEX.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-python-knowledge/INDEX.md
+      codex: knowledge/bi-python-knowledge/INDEX.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-058
+    source: skills/bi-python-knowledge/README.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-python-knowledge/README.md
+      codex: knowledge/bi-python-knowledge/README.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-059
+    source: skills/bi-python-knowledge/SKILL.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-python-knowledge/SKILL.md
+      codex: knowledge/bi-python-knowledge/SKILL.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-060
+    source: skills/bi-python-knowledge/checklists/aggregation-grain-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-python-knowledge/checklists/aggregation-grain-checklist.md
+      codex: knowledge/bi-python-knowledge/checklists/aggregation-grain-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-061
+    source: skills/bi-python-knowledge/checklists/cleaning-review-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-python-knowledge/checklists/cleaning-review-checklist.md
+      codex: knowledge/bi-python-knowledge/checklists/cleaning-review-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-062
+    source: skills/bi-python-knowledge/knowledge/cleaning-and-standardization.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-python-knowledge/knowledge/cleaning-and-standardization.md
+      codex: knowledge/bi-python-knowledge/knowledge/cleaning-and-standardization.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-063
+    source: skills/bi-python-knowledge/knowledge/file-source-grain.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-python-knowledge/knowledge/file-source-grain.md
+      codex: knowledge/bi-python-knowledge/knowledge/file-source-grain.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-064
+    source: skills/bi-python-knowledge/knowledge/groupby-aggregation-and-grain.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-python-knowledge/knowledge/groupby-aggregation-and-grain.md
+      codex: knowledge/bi-python-knowledge/knowledge/groupby-aggregation-and-grain.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-065
+    source: skills/bi-python-knowledge/patterns/analyzer-rule-candidates.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/bi-python-knowledge/patterns/analyzer-rule-candidates.json
+      codex: knowledge/bi-python-knowledge/patterns/analyzer-rule-candidates.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-066
+    source: skills/bi-python-knowledge/references/agent-training-set.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/bi-python-knowledge/references/agent-training-set.json
+      codex: knowledge/bi-python-knowledge/references/agent-training-set.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-067
+    source: skills/bi-python-knowledge/references/agent-training-set.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-python-knowledge/references/agent-training-set.md
+      codex: knowledge/bi-python-knowledge/references/agent-training-set.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-068
+    source: skills/bi-python-knowledge/references/copyright-safety.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-python-knowledge/references/copyright-safety.md
+      codex: knowledge/bi-python-knowledge/references/copyright-safety.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-069
+    source: skills/bi-python-knowledge/references/id-conventions.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-python-knowledge/references/id-conventions.md
+      codex: knowledge/bi-python-knowledge/references/id-conventions.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-070
+    source: skills/bi-python-knowledge/references/retail-dataframe-schema.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-python-knowledge/references/retail-dataframe-schema.md
+      codex: knowledge/bi-python-knowledge/references/retail-dataframe-schema.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-071
+    source: skills/bi-python-knowledge/references/source-map.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-python-knowledge/references/source-map.md
+      codex: knowledge/bi-python-knowledge/references/source-map.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-072
+    source: skills/bi-sql-knowledge/INDEX.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/INDEX.md
+      codex: knowledge/bi-sql-knowledge/INDEX.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-073
+    source: skills/bi-sql-knowledge/README.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/README.md
+      codex: knowledge/bi-sql-knowledge/README.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-074
+    source: skills/bi-sql-knowledge/SKILL.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/SKILL.md
+      codex: knowledge/bi-sql-knowledge/SKILL.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-075
+    source: skills/bi-sql-knowledge/checklists/sql-reconciliation-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/checklists/sql-reconciliation-checklist.md
+      codex: knowledge/bi-sql-knowledge/checklists/sql-reconciliation-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-076
+    source: skills/bi-sql-knowledge/checklists/sql-review-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/checklists/sql-review-checklist.md
+      codex: knowledge/bi-sql-knowledge/checklists/sql-review-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-077
+    source: skills/bi-sql-knowledge/checklists/sql-validation-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/checklists/sql-validation-checklist.md
+      codex: knowledge/bi-sql-knowledge/checklists/sql-validation-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-078
+    source: skills/bi-sql-knowledge/knowledge/sql-aggregation-correctness.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/knowledge/sql-aggregation-correctness.md
+      codex: knowledge/bi-sql-knowledge/knowledge/sql-aggregation-correctness.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-079
+    source: skills/bi-sql-knowledge/knowledge/sql-anti-patterns.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/knowledge/sql-anti-patterns.md
+      codex: knowledge/bi-sql-knowledge/knowledge/sql-anti-patterns.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-080
+    source: skills/bi-sql-knowledge/knowledge/sql-cookbook-extension-notes.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/knowledge/sql-cookbook-extension-notes.md
+      codex: knowledge/bi-sql-knowledge/knowledge/sql-cookbook-extension-notes.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-081
+    source: skills/bi-sql-knowledge/knowledge/sql-core-concepts.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/knowledge/sql-core-concepts.md
+      codex: knowledge/bi-sql-knowledge/knowledge/sql-core-concepts.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-082
+    source: skills/bi-sql-knowledge/knowledge/sql-date-time-analysis.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/knowledge/sql-date-time-analysis.md
+      codex: knowledge/bi-sql-knowledge/knowledge/sql-date-time-analysis.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-083
+    source: skills/bi-sql-knowledge/knowledge/sql-diagnostics-playbook.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/knowledge/sql-diagnostics-playbook.md
+      codex: knowledge/bi-sql-knowledge/knowledge/sql-diagnostics-playbook.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-084
+    source: skills/bi-sql-knowledge/knowledge/sql-grain-and-joins.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/knowledge/sql-grain-and-joins.md
+      codex: knowledge/bi-sql-knowledge/knowledge/sql-grain-and-joins.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-085
+    source: skills/bi-sql-knowledge/knowledge/sql-logical-query-processing.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/knowledge/sql-logical-query-processing.md
+      codex: knowledge/bi-sql-knowledge/knowledge/sql-logical-query-processing.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-086
+    source: skills/bi-sql-knowledge/knowledge/sql-performance-notes.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/knowledge/sql-performance-notes.md
+      codex: knowledge/bi-sql-knowledge/knowledge/sql-performance-notes.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-087
+    source: skills/bi-sql-knowledge/knowledge/sql-reconciliation-playbook.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/knowledge/sql-reconciliation-playbook.md
+      codex: knowledge/bi-sql-knowledge/knowledge/sql-reconciliation-playbook.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-088
+    source: skills/bi-sql-knowledge/knowledge/sql-transformation-patterns.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/knowledge/sql-transformation-patterns.md
+      codex: knowledge/bi-sql-knowledge/knowledge/sql-transformation-patterns.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-089
+    source: skills/bi-sql-knowledge/knowledge/sql-window-functions.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/knowledge/sql-window-functions.md
+      codex: knowledge/bi-sql-knowledge/knowledge/sql-window-functions.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-090
+    source: skills/bi-sql-knowledge/patterns/sql-analyzer-rule-candidates.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/bi-sql-knowledge/patterns/sql-analyzer-rule-candidates.json
+      codex: knowledge/bi-sql-knowledge/patterns/sql-analyzer-rule-candidates.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-091
+    source: skills/bi-sql-knowledge/patterns/sql-analyzer-rules.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/bi-sql-knowledge/patterns/sql-analyzer-rules.json
+      codex: knowledge/bi-sql-knowledge/patterns/sql-analyzer-rules.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-092
+    source: skills/bi-sql-knowledge/patterns/sql-patterns.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/bi-sql-knowledge/patterns/sql-patterns.json
+      codex: knowledge/bi-sql-knowledge/patterns/sql-patterns.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-093
+    source: skills/bi-sql-knowledge/patterns/sql-validation-patterns.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/bi-sql-knowledge/patterns/sql-validation-patterns.json
+      codex: knowledge/bi-sql-knowledge/patterns/sql-validation-patterns.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-094
+    source: skills/bi-sql-knowledge/references/agent-training-set.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/bi-sql-knowledge/references/agent-training-set.json
+      codex: knowledge/bi-sql-knowledge/references/agent-training-set.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-095
+    source: skills/bi-sql-knowledge/references/copyright-safety.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/references/copyright-safety.md
+      codex: knowledge/bi-sql-knowledge/references/copyright-safety.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-096
+    source: skills/bi-sql-knowledge/references/id-conventions.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/references/id-conventions.md
+      codex: knowledge/bi-sql-knowledge/references/id-conventions.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-097
+    source: skills/bi-sql-knowledge/references/source-map.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-sql-knowledge/references/source-map.md
+      codex: knowledge/bi-sql-knowledge/references/source-map.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-098
+    source: skills/retail-kpi-knowledge/INDEX.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/INDEX.md
+      codex: knowledge/retail-kpi-knowledge/INDEX.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-099
+    source: skills/retail-kpi-knowledge/README.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/README.md
+      codex: knowledge/retail-kpi-knowledge/README.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-100
+    source: skills/retail-kpi-knowledge/SKILL.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/SKILL.md
+      codex: knowledge/retail-kpi-knowledge/SKILL.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-101
+    source: skills/retail-kpi-knowledge/checklists/kpi-extension-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/checklists/kpi-extension-checklist.md
+      codex: knowledge/retail-kpi-knowledge/checklists/kpi-extension-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-102
+    source: skills/retail-kpi-knowledge/checklists/kpi-pack-review-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/checklists/kpi-pack-review-checklist.md
+      codex: knowledge/retail-kpi-knowledge/checklists/kpi-pack-review-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-103
+    source: skills/retail-kpi-knowledge/checklists/metric-ambiguity-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/checklists/metric-ambiguity-checklist.md
+      codex: knowledge/retail-kpi-knowledge/checklists/metric-ambiguity-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-104
+    source: skills/retail-kpi-knowledge/checklists/metric-contract-review-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/checklists/metric-contract-review-checklist.md
+      codex: knowledge/retail-kpi-knowledge/checklists/metric-contract-review-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-105
+    source: skills/retail-kpi-knowledge/contracts/average-basket-size-units.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/contracts/average-basket-size-units.md
+      codex: knowledge/retail-kpi-knowledge/contracts/average-basket-size-units.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-106
+    source: skills/retail-kpi-knowledge/contracts/average-transaction-value.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/contracts/average-transaction-value.md
+      codex: knowledge/retail-kpi-knowledge/contracts/average-transaction-value.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-107
+    source: skills/retail-kpi-knowledge/contracts/discount-amount.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/contracts/discount-amount.md
+      codex: knowledge/retail-kpi-knowledge/contracts/discount-amount.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-108
+    source: skills/retail-kpi-knowledge/contracts/discount-rate.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/contracts/discount-rate.md
+      codex: knowledge/retail-kpi-knowledge/contracts/discount-rate.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-109
+    source: skills/retail-kpi-knowledge/contracts/discounted-transaction-rate.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/contracts/discounted-transaction-rate.md
+      codex: knowledge/retail-kpi-knowledge/contracts/discounted-transaction-rate.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-110
+    source: skills/retail-kpi-knowledge/contracts/gross-margin-percent.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/contracts/gross-margin-percent.md
+      codex: knowledge/retail-kpi-knowledge/contracts/gross-margin-percent.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-111
+    source: skills/retail-kpi-knowledge/contracts/gross-margin.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/contracts/gross-margin.md
+      codex: knowledge/retail-kpi-knowledge/contracts/gross-margin.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-112
+    source: skills/retail-kpi-knowledge/contracts/gross-sales.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/contracts/gross-sales.md
+      codex: knowledge/retail-kpi-knowledge/contracts/gross-sales.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-113
+    source: skills/retail-kpi-knowledge/contracts/net-sales-growth.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/contracts/net-sales-growth.md
+      codex: knowledge/retail-kpi-knowledge/contracts/net-sales-growth.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-114
+    source: skills/retail-kpi-knowledge/contracts/net-sales.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/contracts/net-sales.md
+      codex: knowledge/retail-kpi-knowledge/contracts/net-sales.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-115
+    source: skills/retail-kpi-knowledge/contracts/quantity-sold.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/contracts/quantity-sold.md
+      codex: knowledge/retail-kpi-knowledge/contracts/quantity-sold.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-116
+    source: skills/retail-kpi-knowledge/contracts/returns-rate-value.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/contracts/returns-rate-value.md
+      codex: knowledge/retail-kpi-knowledge/contracts/returns-rate-value.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-117
+    source: skills/retail-kpi-knowledge/contracts/same-store-sales-growth.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/contracts/same-store-sales-growth.md
+      codex: knowledge/retail-kpi-knowledge/contracts/same-store-sales-growth.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-118
+    source: skills/retail-kpi-knowledge/contracts/transactions-count.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/contracts/transactions-count.md
+      codex: knowledge/retail-kpi-knowledge/contracts/transactions-count.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-119
+    source: skills/retail-kpi-knowledge/contracts/ytd.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/contracts/ytd.md
+      codex: knowledge/retail-kpi-knowledge/contracts/ytd.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-120
+    source: skills/retail-kpi-knowledge/domains/basket-and-transactions.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/domains/basket-and-transactions.md
+      codex: knowledge/retail-kpi-knowledge/domains/basket-and-transactions.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-121
+    source: skills/retail-kpi-knowledge/domains/branch-store-performance.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/domains/branch-store-performance.md
+      codex: knowledge/retail-kpi-knowledge/domains/branch-store-performance.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-122
+    source: skills/retail-kpi-knowledge/domains/customer.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/domains/customer.md
+      codex: knowledge/retail-kpi-knowledge/domains/customer.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-123
+    source: skills/retail-kpi-knowledge/domains/data-quality-control.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/domains/data-quality-control.md
+      codex: knowledge/retail-kpi-knowledge/domains/data-quality-control.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-124
+    source: skills/retail-kpi-knowledge/domains/discounts-and-promotions.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/domains/discounts-and-promotions.md
+      codex: knowledge/retail-kpi-knowledge/domains/discounts-and-promotions.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-125
+    source: skills/retail-kpi-knowledge/domains/inventory.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/domains/inventory.md
+      codex: knowledge/retail-kpi-knowledge/domains/inventory.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-126
+    source: skills/retail-kpi-knowledge/domains/margin-profitability.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/domains/margin-profitability.md
+      codex: knowledge/retail-kpi-knowledge/domains/margin-profitability.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-127
+    source: skills/retail-kpi-knowledge/domains/product-category-performance.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/domains/product-category-performance.md
+      codex: knowledge/retail-kpi-knowledge/domains/product-category-performance.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-128
+    source: skills/retail-kpi-knowledge/domains/returns.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/domains/returns.md
+      codex: knowledge/retail-kpi-knowledge/domains/returns.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-129
+    source: skills/retail-kpi-knowledge/domains/sales-and-revenue.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/domains/sales-and-revenue.md
+      codex: knowledge/retail-kpi-knowledge/domains/sales-and-revenue.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-130
+    source: skills/retail-kpi-knowledge/domains/targets-and-budgets.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/domains/targets-and-budgets.md
+      codex: knowledge/retail-kpi-knowledge/domains/targets-and-budgets.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-131
+    source: skills/retail-kpi-knowledge/domains/time-intelligence.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/domains/time-intelligence.md
+      codex: knowledge/retail-kpi-knowledge/domains/time-intelligence.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-132
+    source: skills/retail-kpi-knowledge/knowledge/kpi-additivity-and-grain.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/knowledge/kpi-additivity-and-grain.md
+      codex: knowledge/retail-kpi-knowledge/knowledge/kpi-additivity-and-grain.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-133
+    source: skills/retail-kpi-knowledge/knowledge/kpi-ambiguities.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/knowledge/kpi-ambiguities.md
+      codex: knowledge/retail-kpi-knowledge/knowledge/kpi-ambiguities.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-134
+    source: skills/retail-kpi-knowledge/knowledge/kpi-core-concepts.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/knowledge/kpi-core-concepts.md
+      codex: knowledge/retail-kpi-knowledge/knowledge/kpi-core-concepts.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-135
+    source: skills/retail-kpi-knowledge/knowledge/metric-contracts.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/knowledge/metric-contracts.md
+      codex: knowledge/retail-kpi-knowledge/knowledge/metric-contracts.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-136
+    source: skills/retail-kpi-knowledge/knowledge/retail-kpi-domains.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/knowledge/retail-kpi-domains.md
+      codex: knowledge/retail-kpi-knowledge/knowledge/retail-kpi-domains.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-137
+    source: skills/retail-kpi-knowledge/packs/branch-performance-pack.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/packs/branch-performance-pack.md
+      codex: knowledge/retail-kpi-knowledge/packs/branch-performance-pack.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-138
+    source: skills/retail-kpi-knowledge/packs/data-quality-control-room-pack.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/packs/data-quality-control-room-pack.md
+      codex: knowledge/retail-kpi-knowledge/packs/data-quality-control-room-pack.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-139
+    source: skills/retail-kpi-knowledge/packs/inventory-control-pack.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/packs/inventory-control-pack.md
+      codex: knowledge/retail-kpi-knowledge/packs/inventory-control-pack.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-140
+    source: skills/retail-kpi-knowledge/packs/mvp-retail-kpi-pack.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/packs/mvp-retail-kpi-pack.md
+      codex: knowledge/retail-kpi-knowledge/packs/mvp-retail-kpi-pack.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-141
+    source: skills/retail-kpi-knowledge/packs/product-performance-pack.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/packs/product-performance-pack.md
+      codex: knowledge/retail-kpi-knowledge/packs/product-performance-pack.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-142
+    source: skills/retail-kpi-knowledge/packs/returns-exceptions-pack.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/packs/returns-exceptions-pack.md
+      codex: knowledge/retail-kpi-knowledge/packs/returns-exceptions-pack.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-143
+    source: skills/retail-kpi-knowledge/packs/sales-performance-pack.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/packs/sales-performance-pack.md
+      codex: knowledge/retail-kpi-knowledge/packs/sales-performance-pack.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-144
+    source: skills/retail-kpi-knowledge/patterns/metric-anti-patterns.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/retail-kpi-knowledge/patterns/metric-anti-patterns.json
+      codex: knowledge/retail-kpi-knowledge/patterns/metric-anti-patterns.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-145
+    source: skills/retail-kpi-knowledge/patterns/metric-contract-candidates.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/retail-kpi-knowledge/patterns/metric-contract-candidates.json
+      codex: knowledge/retail-kpi-knowledge/patterns/metric-contract-candidates.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-146
+    source: skills/retail-kpi-knowledge/patterns/metric-patterns.json
+    classification: public_knowledge
+    media_type: application/json
+    targets:
+      claude: knowledge/retail-kpi-knowledge/patterns/metric-patterns.json
+      codex: knowledge/retail-kpi-knowledge/patterns/metric-patterns.json
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-147
+    source: skills/retail-kpi-knowledge/references/id-conventions.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/references/id-conventions.md
+      codex: knowledge/retail-kpi-knowledge/references/id-conventions.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-148
+    source: skills/retail-kpi-knowledge/references/kpi-coverage-scorecard-template.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/references/kpi-coverage-scorecard-template.md
+      codex: knowledge/retail-kpi-knowledge/references/kpi-coverage-scorecard-template.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-149
+    source: skills/retail-kpi-knowledge/references/kpi-derivation-lineage.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/references/kpi-derivation-lineage.md
+      codex: knowledge/retail-kpi-knowledge/references/kpi-derivation-lineage.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-150
+    source: skills/retail-kpi-knowledge/references/metric-contract-template.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/references/metric-contract-template.md
+      codex: knowledge/retail-kpi-knowledge/references/metric-contract-template.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-151
+    source: skills/retail-kpi-knowledge/references/planned-kpi-backlog.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/references/planned-kpi-backlog.md
+      codex: knowledge/retail-kpi-knowledge/references/planned-kpi-backlog.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-152
+    source: skills/retail-kpi-knowledge/references/research-notes.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/references/research-notes.md
+      codex: knowledge/retail-kpi-knowledge/references/research-notes.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-153
+    source: skills/retail-kpi-knowledge/references/source-field-requirements.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/references/source-field-requirements.md
+      codex: knowledge/retail-kpi-knowledge/references/source-field-requirements.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-154
+    source: skills/retail-kpi-knowledge/references/source-map.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/references/source-map.md
+      codex: knowledge/retail-kpi-knowledge/references/source-map.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-155
+    source: skills/retail-kpi-knowledge/registry.yaml
+    classification: public_knowledge
+    media_type: application/yaml
+    targets:
+      claude: knowledge/retail-kpi-knowledge/registry.yaml
+      codex: knowledge/retail-kpi-knowledge/registry.yaml
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: shared-kpi-sufficiency-template
+    source: templates/kpi-sufficiency-card.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: templates/kpi-sufficiency-card.md
+      codex: templates/kpi-sufficiency-card.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required by the public retail KPI Knowledge Base route.
+  - entry_id: shared-metric-contract-template
+    source: templates/metric-contract.yaml
+    classification: public_knowledge
+    media_type: application/yaml
+    targets:
+      claude: templates/metric-contract.yaml
+      codex: templates/metric-contract.yaml
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required by the public retail KPI Knowledge Base route.
+  - entry_id: public-license
+    source: LICENSE
+    classification: public_license
+    media_type: text/plain
+    targets:
+      claude: LICENSE
+      codex: LICENSE
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required Apache-2.0 license text for both public bundles.
+template_entries:
+  - template_id: portable-contract
+    source: distribution/bundle-templates/shared/portable-operating-contract.md
+    classification: generated_wrapper
+    media_type: text/markdown
+    targets:
+      claude: portable-operating-contract.md
+      codex: portable-operating-contract.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required platform wrapper or manifest for the generated public bundle.
+  - template_id: router
+    source: distribution/bundle-templates/shared/skills/seshat-bi/SKILL.md
+    classification: generated_wrapper
+    media_type: text/markdown
+    targets:
+      claude: skills/seshat-bi/SKILL.md
+      codex: skills/seshat-bi/SKILL.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required platform wrapper or manifest for the generated public bundle.
+  - template_id: sql-skill
+    source: distribution/bundle-templates/shared/skills/bi-sql-knowledge/SKILL.md
+    classification: generated_wrapper
+    media_type: text/markdown
+    targets:
+      claude: skills/bi-sql-knowledge/SKILL.md
+      codex: skills/bi-sql-knowledge/SKILL.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required platform wrapper or manifest for the generated public bundle.
+  - template_id: dax-skill
+    source: distribution/bundle-templates/shared/skills/bi-dax-knowledge/SKILL.md
+    classification: generated_wrapper
+    media_type: text/markdown
+    targets:
+      claude: skills/bi-dax-knowledge/SKILL.md
+      codex: skills/bi-dax-knowledge/SKILL.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required platform wrapper or manifest for the generated public bundle.
+  - template_id: python-skill
+    source: distribution/bundle-templates/shared/skills/bi-python-knowledge/SKILL.md
+    classification: generated_wrapper
+    media_type: text/markdown
+    targets:
+      claude: skills/bi-python-knowledge/SKILL.md
+      codex: skills/bi-python-knowledge/SKILL.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required platform wrapper or manifest for the generated public bundle.
+  - template_id: bigdata-skill
+    source: distribution/bundle-templates/shared/skills/bi-bigdata-knowledge/SKILL.md
+    classification: generated_wrapper
+    media_type: text/markdown
+    targets:
+      claude: skills/bi-bigdata-knowledge/SKILL.md
+      codex: skills/bi-bigdata-knowledge/SKILL.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required platform wrapper or manifest for the generated public bundle.
+  - template_id: kpi-skill
+    source: distribution/bundle-templates/shared/skills/retail-kpi-knowledge/SKILL.md
+    classification: generated_wrapper
+    media_type: text/markdown
+    targets:
+      claude: skills/retail-kpi-knowledge/SKILL.md
+      codex: skills/retail-kpi-knowledge/SKILL.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required platform wrapper or manifest for the generated public bundle.
+  - template_id: claude-manifest
+    source: distribution/bundle-templates/claude/.claude-plugin/plugin.json
+    classification: generated_wrapper
+    media_type: application/json
+    targets:
+      claude: .claude-plugin/plugin.json
+    transform: template-substitute-version-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required platform wrapper or manifest for the generated public bundle.
+  - template_id: claude-readme
+    source: distribution/bundle-templates/claude/README.md
+    classification: generated_wrapper
+    media_type: text/markdown
+    targets:
+      claude: README.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required platform wrapper or manifest for the generated public bundle.
+  - template_id: claude-init
+    source: distribution/bundle-templates/claude/commands/seshat-init.md
+    classification: generated_wrapper
+    media_type: text/markdown
+    targets:
+      claude: commands/seshat-init.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required platform wrapper or manifest for the generated public bundle.
+  - template_id: claude-next
+    source: distribution/bundle-templates/claude/commands/seshat-next.md
+    classification: generated_wrapper
+    media_type: text/markdown
+    targets:
+      claude: commands/seshat-next.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required platform wrapper or manifest for the generated public bundle.
+  - template_id: claude-check
+    source: distribution/bundle-templates/claude/commands/seshat-check.md
+    classification: generated_wrapper
+    media_type: text/markdown
+    targets:
+      claude: commands/seshat-check.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required platform wrapper or manifest for the generated public bundle.
+  - template_id: claude-review
+    source: distribution/bundle-templates/claude/commands/seshat-review.md
+    classification: generated_wrapper
+    media_type: text/markdown
+    targets:
+      claude: commands/seshat-review.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required platform wrapper or manifest for the generated public bundle.
+  - template_id: codex-manifest
+    source: distribution/bundle-templates/codex/.codex-plugin/plugin.json
+    classification: generated_wrapper
+    media_type: application/json
+    targets:
+      codex: .codex-plugin/plugin.json
+    transform: template-substitute-version-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required platform wrapper or manifest for the generated public bundle.
+  - template_id: codex-readme
+    source: distribution/bundle-templates/codex/README.md
+    classification: generated_wrapper
+    media_type: text/markdown
+    targets:
+      codex: README.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required platform wrapper or manifest for the generated public bundle.

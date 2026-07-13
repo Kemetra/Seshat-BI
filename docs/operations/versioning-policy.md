@@ -28,6 +28,22 @@ second source of truth -- no `__version__` string duplicated in `src/seshat/`, n
 version baked into a template. A future `seshat --version` (if built) reads this same
 field at runtime rather than hardcoding a copy.
 
+For a distribution candidate, that owner-selected value is projected into every
+public surface by deterministic tooling. The governed projections are:
+
+- Python wheel/sdist filenames and core metadata;
+- Claude plugin manifest, root marketplace metadata, and generated bundle manifest;
+- Codex plugin manifest and generated bundle manifest (plus catalog metadata only
+  when the current official schema permits a version field);
+- the exact changelog heading, release-note path/heading, proposed `v<version>` tag,
+  and GitHub Release tag/title.
+
+`scripts/check_release_versions.py` compares these locations and reports concrete
+blockers. A missing field, mismatch, release note, or conflicting existing tag fails
+closed. Its `pass` means only that projections agree; it never selects the version or
+authorizes a tag, upload, release, catalog publication, or OpenAI public plugin
+submission.
+
 ## Who bumps it
 
 **The owner bumps the version.** A version bump is a human, named decision -- never
@@ -35,8 +51,11 @@ self-granted by the agent (Principle V, `never_self_grant_approval`; hard rule #
 applies to version claims exactly as it does to a confidence score: no fabricated
 maturity number). An agent may PROPOSE a bump (stating the scheme rule it believes
 applies and the changes since the last tag) but does not edit `pyproject.toml`'s
-version field on its own authority. The owner's bump is the approval event; there is
-no separate sign-off artifact for it beyond the commit that changes the field.
+version field on its own authority. For Public Beta, the decision record binds the
+selected value to the candidate source revision and validated artifact digests. That
+version decision is distinct from the later, action-scoped approvals to create a tag,
+publish Python artifacts, publish a GitHub Release, publish the Claude catalog, or
+submit/publish through OpenAI's public plugin process.
 
 ## The scheme: semver, kit-specific bump rules
 

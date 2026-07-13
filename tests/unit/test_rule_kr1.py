@@ -141,3 +141,20 @@ def test_product_registry_indexes_existing_contracts_and_has_no_example_leakage(
         "insurance pii",
     ):
         assert not re.search(rf"(?<![a-z0-9_-]){re.escape(token)}(?![a-z0-9_-])", text)
+
+
+def test_kpi_mc_15_exists_exactly_once_and_resolves_to_its_contract() -> None:
+    """Regression for the reported public-beta registry omission."""
+
+    root = Path(__file__).parents[2]
+    registry = yaml.safe_load((root / REGISTRY_REL).read_text(encoding="utf-8"))
+    matches = [entry for entry in registry["entries"] if entry.get("id") == "KPI-MC-15"]
+
+    assert len(matches) == 1
+    entry = matches[0]
+    assert entry["slug"] == "average-basket-size-units"
+    assert entry["canonical_name"] == "Average Basket Size Units"
+    assert entry["derives_from"] == ["KPI-MC-03", "KPI-MC-04"]
+    contract = root / entry["knowledge_contract_ref"]
+    assert contract.is_file()
+    assert "Average Basket Size" in contract.read_text(encoding="utf-8")

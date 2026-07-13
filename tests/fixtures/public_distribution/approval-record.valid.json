@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "approval_id": "approval-pypi-001",
+  "candidate_id": "candidate-0.2.0-0123456789ab",
+  "version": "0.2.0",
+  "source_revision": "0123456789abcdef0123456789abcdef01234567",
+  "artifact_digests": {
+    "seshat_bi-0.2.0-py3-none-any.whl": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "seshat_bi-0.2.0.tar.gz": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "action": "publish_pypi",
+  "approver": "Named Release Owner",
+  "scope": "Publish the two recorded Python artifacts for candidate-0.2.0-0123456789ab to PyPI.",
+  "evidence_reviewed": [
+    "release-candidate.json",
+    "python-artifact-report.json"
+  ],
+  "constraints": [
+    "Only the two recorded artifact digests may be published."
+  ],
+  "approved_at": "2026-07-13T00:10:00Z",
+  "expires_at": "2026-07-14T00:10:00Z",
+  "status": "approved",
+  "authority_disclaimer": "This approval applies only to the exact candidate, version, source revision, artifact digests, and action recorded here."
+}

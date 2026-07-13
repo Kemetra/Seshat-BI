@@ -24,6 +24,13 @@
 # elsewhere still gets CRLF for Power BI Desktop). Placed last: last match wins.
 .seshat/**   text eol=lf
 
+# Public agent bundles and their reviewed templates are byte-for-byte
+# deterministic artifacts. Override the global PBIP-oriented JSON CRLF rule so
+# fresh Linux and Windows checkouts match the exporter's normalized LF output.
+distribution/bundle-templates/**       text eol=lf
+integrations/claude-code/seshat-bi/**  text eol=lf
+integrations/codex/seshat-bi/**        text eol=lf
+
 # Binary artifacts — never normalize.
 *.pbix   binary
 *.abf    binary

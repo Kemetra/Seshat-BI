@@ -1,0 +1,6 @@
+{
+  "candidate_version": "0.1.0",
+  "immutable_package_versions": ["0.1.0"],
+  "expected_status": "blocked",
+  "reason_class": "immutable_package_version_reuse"
+}

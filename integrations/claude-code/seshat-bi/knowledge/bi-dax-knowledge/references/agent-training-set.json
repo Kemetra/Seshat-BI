@@ -1,0 +1,527 @@
+{
+  "$schema_version": "1.0",
+  "description": "Machine-gradeable twin of agent-training-set.md. Each item: prompt, expected_reasoning (the key chain), expected_answer (conclusion), concept_ids, rule_ids, difficulty, optional playbook. Grade 0-3 per the rubric in the .md (3=answer+reasoning+links; pass avg >=2.5, never 0 on basic).",
+  "grading_rubric": {
+    "3": "Full: correct answer and reasoning hits key concept(s) and names fix/rule",
+    "2": "Partial: correct answer, reasoning incomplete",
+    "1": "Shaky: right instinct, wrong reasoning, or right reasoning wrong answer",
+    "0": "Miss: wrong answer and reasoning"
+  },
+  "categories": [
+    "context_reasoning",
+    "calculate_behavior",
+    "function_semantics",
+    "performance_smell",
+    "measure_review",
+    "model_prerequisite",
+    "diagnostic_scenario"
+  ],
+  "items": [
+    {
+      "id": "T-CTX-01",
+      "category": "context_reasoning",
+      "difficulty": "basic",
+      "prompt": "In a matrix with 'Product'[Category] on rows, what does [Sales Amount] return on the Audio row?",
+      "expected_reasoning": "The row adds a filter 'Product'[Category]=\"Audio\" to the filter context; the measure evaluates under it.",
+      "expected_answer": "Audio-only sales.",
+      "concept_ids": [
+        "CC-001"
+      ],
+      "rule_ids": []
+    },
+    {
+      "id": "T-CTX-02",
+      "category": "context_reasoning",
+      "difficulty": "intermediate",
+      "prompt": "Why does SUMX('Sales',[Sales Amount]) differ from SUM and run slowly?",
+      "expected_reasoning": "Referencing a measure inside the iterator triggers context transition per fact row.",
+      "expected_answer": "It transitions per line; usually unintended and expensive. Use column math or iterate a dimension.",
+      "concept_ids": [
+        "CC-003"
+      ],
+      "rule_ids": [
+        "ARC-PERF-01"
+      ]
+    },
+    {
+      "id": "T-CTX-03",
+      "category": "context_reasoning",
+      "difficulty": "intermediate",
+      "prompt": "In a calculated column on 'Product', can a bare row context read matching 'Sales' rows?",
+      "expected_reasoning": "A row context does not cross relationships by itself.",
+      "expected_answer": "No; use RELATEDTABLE/a measure (context transition).",
+      "concept_ids": [
+        "CC-002",
+        "CC-008"
+      ],
+      "rule_ids": [
+        "ARC-CTX-02"
+      ]
+    },
+    {
+      "id": "T-CTX-04",
+      "category": "context_reasoning",
+      "difficulty": "intermediate",
+      "prompt": "A Category x Color matrix of [Sales Amount] omits some pairs. Bug?",
+      "expected_reasoning": "Auto-exist intersects only combinations that occur in the data.",
+      "expected_answer": "Not a bug; expected.",
+      "concept_ids": [
+        "CC-018"
+      ],
+      "rule_ids": []
+    },
+    {
+      "id": "T-CTX-05",
+      "category": "context_reasoning",
+      "difficulty": "advanced",
+      "prompt": "Count each product's higher-selling products in a calculated column without EARLIER. Approach?",
+      "expected_reasoning": "Capture the current row's value in a VAR, then iterate ALL('Product') comparing to it.",
+      "expected_answer": "VAR cur=[Sales Amount] RETURN COUNTROWS(FILTER(ALL('Product'),[Sales Amount]>cur)).",
+      "concept_ids": [
+        "CC-002"
+      ],
+      "rule_ids": []
+    },
+    {
+      "id": "T-CALC-01",
+      "category": "calculate_behavior",
+      "difficulty": "basic",
+      "prompt": "Does CALCULATE([Sales Amount],'Date'[Year]=2025) honor a Year slicer set to 2024?",
+      "expected_reasoning": "The predicate is FILTER(ALL('Date'[Year]),...), which replaces the column filter.",
+      "expected_answer": "No; it overrides to 2025.",
+      "concept_ids": [
+        "CC-004",
+        "CC-005"
+      ],
+      "rule_ids": [
+        "ARC-CALC-01"
+      ]
+    },
+    {
+      "id": "T-CALC-02",
+      "category": "calculate_behavior",
+      "difficulty": "basic",
+      "prompt": "Restrict to Red while keeping the user's other Color selections. How?",
+      "expected_reasoning": "Default filters replace; intersection requires KEEPFILTERS.",
+      "expected_answer": "CALCULATE([Sales Amount],KEEPFILTERS('Product'[Color]=\"Red\")).",
+      "concept_ids": [
+        "CC-006"
+      ],
+      "rule_ids": [
+        "AR-CALC-001",
+        "ARC-CALC-01"
+      ]
+    },
+    {
+      "id": "T-CALC-03",
+      "category": "calculate_behavior",
+      "difficulty": "intermediate",
+      "prompt": "Difference between CALCULATE([m],'Product') and CALCULATE([m],'Product'[Color]=\"Red\")?",
+      "expected_reasoning": "A table filter reapplies the whole expanded table (clears all Product columns); a column predicate touches only Color.",
+      "expected_answer": "The table form clears far more and is usually slower.",
+      "concept_ids": [
+        "CC-005",
+        "CC-008"
+      ],
+      "rule_ids": [
+        "ARC-PERF-03"
+      ]
+    },
+    {
+      "id": "T-CALC-04",
+      "category": "calculate_behavior",
+      "difficulty": "intermediate",
+      "prompt": "Ignore the date but keep the Day-of-Week slicer. Is ALL('Date') correct?",
+      "expected_reasoning": "ALL('Date') clears every Date column including Day of Week.",
+      "expected_answer": "No; use ALLEXCEPT('Date','Date'[Day of Week]) or REMOVEFILTERS('Date'[Date]).",
+      "concept_ids": [
+        "CC-019"
+      ],
+      "rule_ids": [
+        "AR-ALL-001",
+        "ARC-ALL-01"
+      ]
+    },
+    {
+      "id": "T-CALC-05",
+      "category": "calculate_behavior",
+      "difficulty": "intermediate",
+      "prompt": "'Sales by delivery date' returns order-date numbers. Why and fix?",
+      "expected_reasoning": "The DeliveryDate relationship is inactive; plain measures use the active one.",
+      "expected_answer": "CALCULATE([Sales Amount],USERELATIONSHIP('Sales'[DeliveryDate],'Date'[Date])).",
+      "concept_ids": [
+        "CC-016",
+        "CC-006"
+      ],
+      "rule_ids": [
+        "ARC-REL-01"
+      ]
+    },
+    {
+      "id": "T-CALC-06",
+      "category": "calculate_behavior",
+      "difficulty": "advanced",
+      "prompt": "A disconnected 'Category Bucket' applied as a filter does nothing. Why and fix?",
+      "expected_reasoning": "It has no lineage to a model column, so it filters nothing.",
+      "expected_answer": "Apply via TREATAS(VALUES('Category Bucket'[Category]),'Product'[Category]).",
+      "concept_ids": [
+        "CC-010"
+      ],
+      "rule_ids": [
+        "ARC-LINEAGE-01"
+      ]
+    },
+    {
+      "id": "T-FUNC-01",
+      "category": "function_semantics",
+      "difficulty": "basic",
+      "prompt": "Is ENDOFMONTH valid inside scalar date math like an EOMONTH-style expression?",
+      "expected_reasoning": "ENDOFMONTH is a table TI function; scalar math needs a scalar.",
+      "expected_answer": "No; use EOMONTH (scalar); ENDOFMONTH only as a CALCULATE filter.",
+      "concept_ids": [
+        "CC-005"
+      ],
+      "rule_ids": [
+        "AR-TI-001",
+        "ARC-FUNC-01"
+      ]
+    },
+    {
+      "id": "T-FUNC-02",
+      "category": "function_semantics",
+      "difficulty": "intermediate",
+      "prompt": "A distinct count is one higher than expected. VALUES or DISTINCT?",
+      "expected_reasoning": "VALUES includes the blank row added for invalid/missing keys.",
+      "expected_answer": "Use DISTINCT (or fix the missing keys).",
+      "concept_ids": [
+        "CC-011"
+      ],
+      "rule_ids": []
+    },
+    {
+      "id": "T-FUNC-03",
+      "category": "function_semantics",
+      "difficulty": "intermediate",
+      "prompt": "SUMMARIZE with a measure column gives odd subtotals. Fix?",
+      "expected_reasoning": "Computing expressions inside SUMMARIZE has context pitfalls.",
+      "expected_answer": "Group with SUMMARIZE, compute with ADDCOLUMNS (or use SUMMARIZECOLUMNS).",
+      "concept_ids": [
+        "CC-004"
+      ],
+      "rule_ids": [
+        "ARC-FUNC-02"
+      ]
+    },
+    {
+      "id": "T-FUNC-04",
+      "category": "function_semantics",
+      "difficulty": "basic",
+      "prompt": "Why does SELECTEDVALUE('Store'[Channel]) return blank on the total row?",
+      "expected_reasoning": "Multiple values in context, so it returns the alternate (blank if none supplied).",
+      "expected_answer": "Provide a default: SELECTEDVALUE('Store'[Channel],\"All Channels\").",
+      "concept_ids": [
+        "CC-011"
+      ],
+      "rule_ids": [
+        "ARC-STYLE-01"
+      ]
+    },
+    {
+      "id": "T-FUNC-05",
+      "category": "function_semantics",
+      "difficulty": "advanced",
+      "prompt": "ISFILTERED('Product'[Category]) is FALSE but Category affects results. Explanation?",
+      "expected_reasoning": "The column may be cross-filtered via another table, not directly filtered.",
+      "expected_answer": "Check ISCROSSFILTERED; ISFILTERED detects only direct filters.",
+      "concept_ids": [
+        "CC-011"
+      ],
+      "rule_ids": []
+    },
+    {
+      "id": "T-PERF-01",
+      "category": "performance_smell",
+      "difficulty": "intermediate",
+      "prompt": "Slow measure; ~95% Formula Engine and many CallbackDataIDs. Where to look?",
+      "expected_reasoning": "FE-bound with callbacks means per-row logic during the scan.",
+      "expected_answer": "Find a measure/IF inside an iterator; restructure to column math + column filter.",
+      "concept_ids": [
+        "CC-013"
+      ],
+      "rule_ids": [
+        "ARC-PERF-04"
+      ],
+      "playbook": "PB-SLOW-MEASURE"
+    },
+    {
+      "id": "T-PERF-02",
+      "category": "performance_smell",
+      "difficulty": "intermediate",
+      "prompt": "Slow measure but mostly Storage Engine, no callbacks. Rewrite the DAX?",
+      "expected_reasoning": "Work is already in the fast engine; the formula isn't the bottleneck.",
+      "expected_answer": "No; investigate volume/cardinality in the model.",
+      "concept_ids": [
+        "CC-013",
+        "CC-014"
+      ],
+      "rule_ids": []
+    },
+    {
+      "id": "T-PERF-03",
+      "category": "performance_smell",
+      "difficulty": "basic",
+      "prompt": "Model is 4 GB for ~10M fact rows. First thing to inspect?",
+      "expected_reasoning": "Cardinality dominates size and scan cost.",
+      "expected_answer": "Highest-cardinality columns (full datetime, wide keys); split/reduce/drop.",
+      "concept_ids": [
+        "CC-014"
+      ],
+      "rule_ids": [
+        "ARC-MODEL-02",
+        "AR-PERF-004"
+      ]
+    },
+    {
+      "id": "T-PERF-04",
+      "category": "performance_smell",
+      "difficulty": "intermediate",
+      "prompt": "CALCULATE([Sales Amount],FILTER('Sales','Sales'[Net Price]>100)) is slow. Improvement?",
+      "expected_reasoning": "FILTER over the fact materializes a large table in the FE; a column predicate is an SE filter.",
+      "expected_answer": "Use a column predicate, or FILTER(VALUES(...)) on the smallest column.",
+      "concept_ids": [
+        "CC-005",
+        "CC-012"
+      ],
+      "rule_ids": [
+        "AR-PERF-002",
+        "ARC-PERF-03"
+      ]
+    },
+    {
+      "id": "T-PERF-05",
+      "category": "performance_smell",
+      "difficulty": "advanced",
+      "prompt": "DISTINCTCOUNT of customers across a bridge is slow. Options?",
+      "expected_reasoning": "Distinct count is heavier than SUM and sensitive to filter shape/cardinality.",
+      "expected_answer": "Reduce key cardinality; test bridge vs TREATAS on realistic data; measure both.",
+      "concept_ids": [
+        "CC-014"
+      ],
+      "rule_ids": []
+    },
+    {
+      "id": "T-REV-01",
+      "category": "measure_review",
+      "difficulty": "basic",
+      "prompt": "Review: Margin % := [Margin] / [Sales Amount].",
+      "expected_reasoning": "'/' errors on zero and isn't engine-optimized.",
+      "expected_answer": "Use DIVIDE([Margin],[Sales Amount]).",
+      "concept_ids": [],
+      "rule_ids": [
+        "AR-DIV-001",
+        "BP-021"
+      ]
+    },
+    {
+      "id": "T-REV-02",
+      "category": "measure_review",
+      "difficulty": "basic",
+      "prompt": "Review: IF(HASONEVALUE('Store'[Channel]),VALUES('Store'[Channel])).",
+      "expected_reasoning": "Verbose idiom for a single-value read.",
+      "expected_answer": "Replace with SELECTEDVALUE('Store'[Channel],\"All Channels\").",
+      "concept_ids": [
+        "CC-011"
+      ],
+      "rule_ids": [
+        "ARC-STYLE-01"
+      ]
+    },
+    {
+      "id": "T-REV-03",
+      "category": "measure_review",
+      "difficulty": "intermediate",
+      "prompt": "Review: a measure references [Expensive Measure] five times in one expression.",
+      "expected_reasoning": "May be recomputed each time; also hurts readability.",
+      "expected_answer": "Capture once in a VAR and reuse.",
+      "concept_ids": [
+        "CC-007"
+      ],
+      "rule_ids": [
+        "AR-PERF-003",
+        "BP-022"
+      ]
+    },
+    {
+      "id": "T-REV-04",
+      "category": "measure_review",
+      "difficulty": "intermediate",
+      "prompt": "Review: [Net Price] unqualified and 'Sales'[Sales Amount] qualified.",
+      "expected_reasoning": "Convention reversed, inviting column/measure ambiguity bugs.",
+      "expected_answer": "Qualify columns ('Sales'[Net Price]); leave measures unqualified ([Sales Amount]).",
+      "concept_ids": [],
+      "rule_ids": [
+        "AR-STYLE-001",
+        "AP-031"
+      ]
+    },
+    {
+      "id": "T-REV-05",
+      "category": "measure_review",
+      "difficulty": "advanced",
+      "prompt": "Review: running-total clears date with 'Date'[Date]<=cutoff but Day-of-Week slicer no longer applies.",
+      "expected_reasoning": "Replacing the Date filter dropped the weekday filter that should persist.",
+      "expected_answer": "Re-apply the surviving filter (e.g. VALUES('Date'[Day of Week])) or scope the clear.",
+      "concept_ids": [
+        "CC-019"
+      ],
+      "rule_ids": [
+        "AR-ALL-001"
+      ],
+      "playbook": "PB-(cumulative pattern)"
+    },
+    {
+      "id": "T-MODEL-01",
+      "category": "model_prerequisite",
+      "difficulty": "basic",
+      "prompt": "YTD returns odd values. First model check?",
+      "expected_reasoning": "Time intelligence requires a marked, contiguous Date table.",
+      "expected_answer": "Verify Mark as Date Table + complete calendar.",
+      "concept_ids": [],
+      "rule_ids": [
+        "AR-TI-002",
+        "BP-001"
+      ],
+      "playbook": "PB-TI-WRONG"
+    },
+    {
+      "id": "T-MODEL-02",
+      "category": "model_prerequisite",
+      "difficulty": "basic",
+      "prompt": "Analyzing by delivery date won't filter. Likely model cause?",
+      "expected_reasoning": "The delivery relationship is inactive.",
+      "expected_answer": "Activate it per measure with USERELATIONSHIP.",
+      "concept_ids": [
+        "CC-016"
+      ],
+      "rule_ids": [
+        "ARC-REL-01"
+      ]
+    },
+    {
+      "id": "T-MODEL-03",
+      "category": "model_prerequisite",
+      "difficulty": "intermediate",
+      "prompt": "Distinct counts inflate after enabling a bidirectional relationship. Guidance?",
+      "expected_reasoning": "Bidirectional defaults create ambiguous paths and wrong totals.",
+      "expected_answer": "Revert to single-direction; use per-measure CROSSFILTER or TREATAS.",
+      "concept_ids": [
+        "CC-015",
+        "CC-006"
+      ],
+      "rule_ids": [
+        "AR-BIDI-001",
+        "ARC-MODEL-01"
+      ]
+    },
+    {
+      "id": "T-MODEL-04",
+      "category": "model_prerequisite",
+      "difficulty": "intermediate",
+      "prompt": "A calculated column stores full-precision OrderDateTime. Concern?",
+      "expected_reasoning": "Near-unique values destroy VertiPaq compression and bloat the model.",
+      "expected_answer": "Split into OrderDate (+ OrderTime if needed) or push to ETL.",
+      "concept_ids": [
+        "CC-014"
+      ],
+      "rule_ids": [
+        "ARC-MODEL-02",
+        "AP-022"
+      ]
+    },
+    {
+      "id": "T-MODEL-05",
+      "category": "model_prerequisite",
+      "difficulty": "advanced",
+      "prompt": "A segmentation measure throws or double-counts for some customers. Model cause?",
+      "expected_reasoning": "Overlapping/gapped config ranges let a value match 0 or 2+ segments.",
+      "expected_answer": "Make ranges contiguous and non-overlapping (derive Max from next row's Min).",
+      "concept_ids": [],
+      "rule_ids": [
+        "AR-SEG-001"
+      ]
+    },
+    {
+      "id": "T-DIAG-01",
+      "category": "diagnostic_scenario",
+      "difficulty": "intermediate",
+      "prompt": "Matrix '# distinct customers' grand total is smaller than the sum of category rows. Bug?",
+      "expected_reasoning": "Distinct count is non-additive; a customer active in two categories counts once in the total.",
+      "expected_answer": "Not a bug; expected.",
+      "concept_ids": [
+        "CC-001"
+      ],
+      "rule_ids": [
+        "AR-ADD-001"
+      ],
+      "playbook": "PB-WRONG-TOTAL"
+    },
+    {
+      "id": "T-DIAG-02",
+      "category": "diagnostic_scenario",
+      "difficulty": "intermediate",
+      "prompt": "YTD is flat across all of next year. Cause and fix?",
+      "expected_reasoning": "No future-date guard; TI extends past the last real transaction.",
+      "expected_answer": "Guard with DateWithSales/last-date-with-data and return BLANK() beyond it.",
+      "concept_ids": [],
+      "rule_ids": [
+        "AP-006"
+      ],
+      "playbook": "PB-TI-WRONG"
+    },
+    {
+      "id": "T-DIAG-03",
+      "category": "diagnostic_scenario",
+      "difficulty": "advanced",
+      "prompt": "'% of total' sums to far more than 100% across visible categories. Likely cause?",
+      "expected_reasoning": "Denominator scope doesn't match the rows: ALL (grand total) vs ALLSELECTED (visible total) mismatch.",
+      "expected_answer": "Use ALLSELECTED for visible-total percentages; scope cleared columns deliberately.",
+      "concept_ids": [
+        "CC-009",
+        "CC-019"
+      ],
+      "rule_ids": [
+        "ARC-CTX-03"
+      ],
+      "playbook": "PB-PERCENT-OF-TOTAL"
+    },
+    {
+      "id": "T-DIAG-04",
+      "category": "diagnostic_scenario",
+      "difficulty": "advanced",
+      "prompt": "Blank rows appear everywhere after a colleague 'fixed' blanks with + 0. What happened?",
+      "expected_reasoning": "Coalescing BLANK() to 0 defeats deliberate row-hiding (future dates / empty combinations now display).",
+      "expected_answer": "Preserve BLANK() where hiding is intended; coalesce only at the display layer when safe.",
+      "concept_ids": [],
+      "rule_ids": [],
+      "playbook": "PB-BLANK-ZERO"
+    },
+    {
+      "id": "T-DIAG-05",
+      "category": "diagnostic_scenario",
+      "difficulty": "advanced",
+      "prompt": "A filter on a bridge dimension won't reach the fact. Diagnostic path?",
+      "expected_reasoning": "Walk PB-PROPAGATION: relationship exists? direction? active? many->one needs help? bidi ambiguity? disconnected needs TREATAS?",
+      "expected_answer": "Choose explicit propagation (CROSSFILTER/TREATAS/bridge); avoid blanket bidirectional.",
+      "concept_ids": [
+        "CC-015",
+        "CC-010",
+        "CC-016"
+      ],
+      "rule_ids": [
+        "ARC-MODEL-01",
+        "ARC-LINEAGE-01"
+      ],
+      "playbook": "PB-PROPAGATION"
+    }
+  ]
+}

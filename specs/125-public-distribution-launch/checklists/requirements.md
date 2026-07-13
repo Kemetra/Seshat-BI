@@ -6,7 +6,7 @@
 
 ## Content Quality
 
-- [x] No implementation work is performed or authorized by the specification
+- [x] Repository implementation is authorized without authorizing external configuration or irreversible release actions
 - [x] Focused on public user, maintainer, reviewer, and owner outcomes
 - [x] Written so product and release stakeholders can evaluate the release boundary
 - [x] All mandatory specification sections are complete
@@ -27,7 +27,7 @@
 - [x] Repository implementation is separated from external configuration and publication
 - [x] PyPI/GitHub configuration requires an authorized owner
 - [x] Claude repository distribution is separated from optional public-catalog submission
-- [x] Codex repository distribution is separated from Plugins Directory submission
+- [x] Codex repository distribution is separated from OpenAI public plugin submission
 - [x] Tagging, upload, release publication, and catalog submissions remain named-human actions
 - [x] No agent or workflow may self-ratify an approval
 - [x] Readiness is expressed through status, evidence, and blockers rather than a fabricated score
@@ -43,5 +43,6 @@
 ## Validation Notes
 
 - Initial validation passed on 2026-07-13.
+- Repository implementation was subsequently authorized by the owner; the external and irreversible boundaries remain unchanged.
 - The distribution formats and named product surfaces are externally observable requirements supplied by the owner; their implementation shape is deferred to the plan and contracts.
 - No clarification was required because the owner supplied the release boundary, target surfaces, required artifacts, required contracts, acceptance journey, and authorization constraints.

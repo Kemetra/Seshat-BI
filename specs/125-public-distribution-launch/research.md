@@ -112,17 +112,17 @@ Official current guidance distinguishes repository instructions, repository skil
 - A minimal skill is `skills/<skill-name>/SKILL.md` with `name` and `description` frontmatter.
 - CLI/IDE users can explicitly invoke a skill by typing `$` or using `/skills`.
 - A repository catalog is `.agents/plugins/marketplace.json` and resolves plugin source paths relative to repository root.
-- Public review uses the OpenAI **Plugins Directory** submission process.
+- Public review uses OpenAI's current public plugin submission process and portal.
 
 Create `integrations/codex/seshat-bi/` as a skills-only plugin with no implicit MCP server, connector, app, or hook. Add `.agents/plugins/marketplace.json` as the repository catalog. Keep root `AGENTS.md` compatible with Codex repository discovery, but carry the portable Seshat operating contract inside the plugin skill for fresh workspaces.
 
-**Rationale**: A skills-only plugin is the narrowest public reusable unit and avoids unnecessary network/service permissions. It preserves `$` invocation in CLI/IDE and is eligible for separate public-directory submission.
+**Rationale**: A skills-only plugin is the narrowest public reusable unit and avoids unnecessary network/service permissions. It preserves `$` invocation in CLI/IDE and is eligible for a separate owner-approved public plugin submission.
 
 **Rejected alternatives**:
 
 - **Rename/copy Claude plugin**: manifest and component rules differ.
 - **Ship only `AGENTS.md`**: it is repository guidance, not an installable portable bundle.
-- **Call the public destination a marketplace**: current official terminology is Plugins Directory; “marketplace” is retained only for repo/personal catalog commands and files.
+- **Call OpenAI's public process a marketplace or directory**: current official terminology is public plugin submission/review/listing; “marketplace” is retained only for repository/personal catalog commands and files.
 - **Add MCP/app wiring now**: the Knowledge Bases and governed workflow need no remote service, so it would broaden permissions and publication review without user value.
 
 **Official sources**:
@@ -132,7 +132,7 @@ Create `integrations/codex/seshat-bi/` as a skills-only plugin with no implicit 
 - [OpenAI: AGENTS.md discovery](https://developers.openai.com/codex/guides/agents-md)
 - [OpenAI: Submit plugins](https://learn.chatgpt.com/docs/submit-plugins)
 
-### Decision: repository distribution and Plugins Directory submission are separate
+### Decision: repository distribution and OpenAI public plugin submission are separate
 
 The public repository catalog/plugin may be installable before directory review. Submission requires a publisher with Apps Management Write access, a verified individual/business identity, listing and support/privacy/terms data, tests, policy attestations, and review. Those external facts and eligibility must be owner-verified at submission time.
 

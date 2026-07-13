@@ -1,171 +1,109 @@
-# Quickstart: Validate a Public Beta Candidate Without Publishing
+# Quickstart: validate the Public Beta repository candidate without publishing
 
-**Audience**: future implementer/release maintainer
-**Status**: planned workflow; referenced scripts/options do not exist until the tasks are implemented
-**Safety**: this quickstart builds and validates locally/CI only. It does not tag, upload, publish, configure an account, submit a plugin, or record approval.
+**Status:** implemented and locally validated on 2026-07-13.
 
-## 1. Establish the immutable candidate facts
+This path does not configure an account, approve a version, tag, upload,
+publish, submit a plugin, or run a rollback. Expected release blockers remain
+blockers; repository validation is not publication approval.
 
-Start from a clean checkout of the candidate revision and record:
+## 1. Confirm source identity
+
+From a clean checkout of the candidate revision:
 
 ```powershell
 git status --short
 git rev-parse HEAD
 git tag --points-at HEAD
-python -c "import tomllib, pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))['project']['version'])"
+python scripts/release_candidate_audit.py --repository-check --output release-staging/release-candidate.json
 ```
 
-Expected: clean status; a full SHA; one proposed SemVer. A tag is not created by this flow. If `v{version}` already exists at another revision or publication history is unresolved, stop with a concrete blocker.
+The repository check must pass. The overall candidate may truthfully remain
+`blocked`: the current `0.1.0` value already has an immutable historical tag at
+another revision, and no owner has approved a replacement version. Do not move
+that tag or silently choose a version.
 
-Run the planned release-blocker and version checks:
-
-```powershell
-python scripts/check_release_versions.py --check --source-revision (git rev-parse HEAD)
-python -m pytest tests/unit/test_rule_kr1.py -q
-```
-
-Expected: every version projection matches; `KPI-MC-15` exists once and resolves to its canonical contract. No pass is inferred from missing evidence.
-
-## 2. Generate and prove the agent bundles
+## 2. Verify deterministic public knowledge
 
 ```powershell
 python scripts/export_agent_bundles.py --check
 python -m pytest tests/contract/test_public_knowledge_allowlist.py tests/contract/test_generated_agent_bundles.py -q
 ```
 
-Then export twice into two fresh temporary roots and compare the reported file lists and SHA-256 digests:
+Edit only canonical Knowledge Bases, the explicit allowlist, or bundle
+templates; then regenerate. Never repair `integrations/*/seshat-bi/` by hand.
+
+## 3. Validate both native agent distributions
 
 ```powershell
-python scripts/export_agent_bundles.py --output-root "$env:TEMP\seshat-export-a"
-python scripts/export_agent_bundles.py --output-root "$env:TEMP\seshat-export-b"
+claude plugin validate .claude-plugin/marketplace.json --strict
+claude plugin validate integrations/claude-code/seshat-bi --strict
+python scripts/external_agent_acceptance.py --platform claude-code --validate-bundle
+python scripts/external_agent_acceptance.py --platform codex --validate-bundle
+python -m pytest tests/contract/test_claude_plugin_bundle.py tests/contract/test_codex_plugin_bundle.py tests/integration/test_external_agent_acceptance.py -q
 ```
 
-Expected:
+Run the current Codex plugin validator against
+`integrations/codex/seshat-bi` when that validator is installed. Claude and
+Codex must use their own manifests; both must project identical canonical
+knowledge provenance and the same governed outcome class.
 
-- both trees are byte-stable;
-- every output has allowlist or reviewed-template provenance;
-- no symlink, secret, PII/client value, absolute path, cache, or unlisted file appears;
-- all references resolve inside each plugin root;
-- committed generated bundles match regeneration.
+Credential-free fixture classification is CI evidence, not real public-install
+evidence. The latter is recorded only after an external fresh-profile run.
 
-Do not repair drift by editing `integrations/*/seshat-bi/knowledge/`. Edit the canonical source/allowlist/template and regenerate.
-
-## 3. Build and inspect Python artifacts
-
-Use a clean isolated build environment:
+## 4. Build and inspect Python artifacts
 
 ```powershell
-python -m build
+python -m build --wheel --sdist --outdir dist
 python -m twine check --strict dist\*
-python scripts/inspect_release_artifacts.py --dist dist --strict
-python -m pytest tests/contract/test_release_artifact_contents.py -q
+python scripts/inspect_release_artifacts.py --dist dist --output release-staging/python-artifact-report.json
+python -m pytest tests/contract/test_release_artifact_contents.py tests/integration/test_python_release_artifacts.py -q
 ```
 
-Expected: exactly one wheel and one sdist, matching metadata/version, complete readme/license/URLs, only declared runtime dependencies, and no prohibited content.
+The inspector requires exactly one wheel and one sdist, compares their metadata
+and contents, scans prohibited material, and rebuilds the wheel from the sdist
+in isolation by default.
 
-Rebuild from the sdist in another isolated environment and compare governed wheel metadata/content:
+## 5. Exercise the full isolated pipx lifecycle
 
 ```powershell
-python scripts/inspect_release_artifacts.py --dist dist --rebuild-sdist --strict
+python scripts/install_smoke_test.py
 ```
 
-Any extra/missing artifact, Twine warning, rebuild dependency on the checkout, or unexplained content difference blocks the candidate.
+This builds local candidate artifacts in a temporary directory, installs with
+an isolated pipx home, checks both commands and dependencies, creates a new
+project, upgrades, uninstalls, verifies command removal, and proves the project
+is unchanged. Windows is blocking beta evidence; Linux/macOS CI is best effort.
 
-## 4. Exercise clean pipx install, upgrade, and uninstall
-
-Run the blocking Windows lifecycle smoke with throwaway pipx and project roots:
+## 6. Validate authorization and rollback boundaries
 
 ```powershell
-python scripts/install_smoke_test.py --wheel dist\<candidate>.whl --lifecycle --strict
+python -m pytest tests/contract/test_release_workflow.py tests/contract/test_publication_authorization.py tests/integration/test_release_authorization_and_rollback.py -q
 ```
 
-The implemented smoke must prove:
+Expected: validation is the workflow default; build jobs have no OIDC authority;
+publication requires the protected `pypi` environment, exact same-run artifacts,
+matching protected tag/ref, and verified digests. Approval reuse, scope mismatch,
+partial-launch wording, and rollback without reapproval fail.
 
-1. normal install contains no optional database/browser/dev/test engines;
-2. `seshat` and `retail` resolve and report the candidate version;
-3. a new project reports the earliest truthful governed action with evidence/blockers and no score;
-4. upgrade from the prior supported artifact preserves project files;
-5. uninstall removes the package and both commands while leaving the project intact.
+## 7. Run repository gates
 
-The CI policy must label which other operating systems are blocking or informational.
-
-## 5. Run Claude acceptance outside the repository
-
-Create an isolated Claude profile and temporary workspace with no `AGENTS.md`, `CLAUDE.md`, or Seshat checkout. Use the exact current public GitHub marketplace add/install flow documented by implementation.
-
-```text
-add canonical marketplace
-install seshat-bi
-reload/refresh
-discover skill and commands
-inspect distribution/synthetic-retail fixture copied into external workspace
-attempt gate-skipping prompt
-update, then uninstall/rollback
+```powershell
+ruff format --check src tests
+ruff check src tests
+pytest
+seshat check
+seshat semantic-check --repo .
+seshat kit-lint --repo .
 ```
 
-Record the evidence fields in [External Claude Acceptance](contracts/external-claude-acceptance.md). Expected: the plugin loads its own operating contract/knowledge, returns the earliest governed action or concrete stop, and never invents mapping/approval or leaves the plugin root.
+Attach only sanitized status/count evidence to the release checklist. Do not
+commit raw external-agent transcripts, tokens, real PII/client data, DSNs, or
+machine-specific paths.
 
-This pre-release run may use an immutable candidate Git ref through the same external installation mechanism. The post-publication run must use only the documented public source/version.
+## 8. Stop at the owner boundary
 
-## 6. Run Codex CLI and IDE acceptance outside the repository
-
-Create isolated Codex profiles and the same external workspace. Use the current official catalog/plugin flow:
-
-```text
-add/resolve canonical repository catalog
-install seshat-bi
-discover skills
-invoke $seshat-bi
-invoke one exported knowledge skill
-run the synthetic inspection and gate-skipping scenarios in CLI
-repeat in the supported IDE extension
-update, then uninstall/rollback
-```
-
-Record [External Codex Acceptance](contracts/external-codex-acceptance.md), including product versions and `$` invocation evidence. Expected semantic outcome must match Claude even when wording differs.
-
-Do not describe this repository catalog as acceptance into OpenAI's public Plugins Directory.
-
-## 7. Assemble the no-publication evidence pack
-
-The planned evidence pack contains:
-
-- candidate full SHA and proposed version;
-- registry audit including `KPI-MC-15`;
-- version-sync result;
-- wheel/sdist/bundle filenames and SHA-256 digests;
-- metadata/content/sdist-rebuild results;
-- Windows pipx lifecycle result and declared cross-platform status;
-- Claude and Codex external acceptance records/parity matrix;
-- zero unresolved blockers or a concrete blocked result;
-- owner-action checklist with no approval pre-filled.
-
-At this point stop. `validated` is not `approved`.
-
-## 8. Owner-only configuration and release runbook (not executed here)
-
-After separately reviewing the evidence, named owners may perform the distinct actions below under [Publication Authorization Boundary](contracts/publication-authorization-boundary.md):
-
-1. verify the PyPI project name/ownership and configure the exact Trusted Publisher identity;
-2. configure GitHub tag protections and a `pypi` environment with named reviewer approval;
-3. approve the version and immutable candidate;
-4. separately authorize tag creation, PyPI upload, and GitHub Release publication;
-5. separately decide whether/when to submit Claude and Codex to their official public directories.
-
-No step inherits authority from the prior step.
-
-## 9. Post-publication verification and rollback
-
-For each actually published surface, immediately repeat its clean external public path and record exact version/source/timestamp. Documentation must mark unpublished or pending-review surfaces truthfully.
-
-If verification fails:
-
-- stop further surface publication;
-- preserve defect and candidate evidence;
-- obtain owner approval for affected-surface containment;
-- yank/withdraw/revert a pointer or correct public wording as the channel permits;
-- never overwrite a package file or move a tag to new source;
-- choose a new proposed version for replacement;
-- rerun all validation, approval, publication, and public-verification gates.
-
-Rollback grants no approval for the replacement release.
+At this point the implementation can be reviewed and merged. External
+configuration, version selection/projection, tag creation, PyPI/GitHub release,
+public Claude/Codex installation verification, public submission, and rollback
+remain separate named-owner actions. A replacement release requires a new
+version and a complete new gate cycle.

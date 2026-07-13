@@ -1,0 +1,715 @@
+{
+  "$schema_version": "1.0",
+  "description": "Reusable 'metric contract' shapes the BI agent can instantiate when defining a measure. A metric contract is the structured spec of a metric BEFORE code: what it computes, its grain, additivity, required model features, inputs, and validation. Each contract maps to one or more entries in dax-patterns.json via related_metric_contract.",
+  "contract_field_spec": [
+    "contract_id",
+    "intent",
+    "inputs",
+    "grain",
+    "additivity",
+    "filter_behavior",
+    "requires_model_features",
+    "output",
+    "validation_rules",
+    "phase_support",
+    "maps_to_patterns",
+    "concepts"
+  ],
+  "phase_legend": {
+    "generate": "Agent can scaffold/produce DAX for this contract.",
+    "analyze": "Agent can audit existing DAX/measures against this contract's rules.",
+    "model_review": "Agent can inspect the semantic model for prerequisites of this contract."
+  },
+  "contracts": [
+    {
+      "contract_id": "base_aggregation",
+      "intent": "Single additive aggregation over fact rows (sum/avg/count).",
+      "inputs": [
+        "fact_table",
+        "value_expression_or_column",
+        "aggregator"
+      ],
+      "grain": "fact row -> any dimension",
+      "additivity": "fully_additive",
+      "filter_behavior": "respects all filter context",
+      "requires_model_features": [
+        "star schema relationships"
+      ],
+      "output": "scalar measure",
+      "validation_rules": [
+        "use SUMX for row-level products, SUM for single columns",
+        "DIVIDE for any ratio",
+        "qualify columns, unqualify measures"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze"
+      ],
+      "maps_to_patterns": [],
+      "concepts": [
+        "CC-001",
+        "CC-002"
+      ]
+    },
+    {
+      "contract_id": "period_to_date",
+      "intent": "Accumulate a base measure from start of year/quarter/month to last visible date.",
+      "inputs": [
+        "base_measure",
+        "date_table",
+        "period {year|quarter|month}",
+        "fiscal_year_end?"
+      ],
+      "grain": "date -> period",
+      "additivity": "additive within period, resets each period",
+      "filter_behavior": "replaces Date filter with period-to-date range; honors non-date filters",
+      "requires_model_features": [
+        "Date table marked as date table",
+        "contiguous calendar"
+      ],
+      "output": "scalar measure",
+      "validation_rules": [
+        "TI table functions only inside CALCULATE",
+        "future-date guard present",
+        "standard Gregorian calendar"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze",
+        "model_review"
+      ],
+      "maps_to_patterns": [
+        "ti-ytd"
+      ],
+      "concepts": [
+        "CC-004",
+        "CC-005"
+      ]
+    },
+    {
+      "contract_id": "period_comparison",
+      "intent": "Compare base measure to a prior comparable period and compute delta/growth.",
+      "inputs": [
+        "base_measure",
+        "date_table",
+        "offset {prior_year|prior_period}"
+      ],
+      "grain": "current period vs comparable prior period",
+      "additivity": "inherits base measure additivity",
+      "filter_behavior": "shifts Date filter to comparable period",
+      "requires_model_features": [
+        "marked Date table"
+      ],
+      "output": "scalar measure family (PY, delta, delta%)",
+      "validation_rules": [
+        "DIVIDE for growth %",
+        "blank prior-period handled",
+        "VAR-capture base to avoid recompute"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze"
+      ],
+      "maps_to_patterns": [
+        "ti-py-yoy"
+      ],
+      "concepts": [
+        "CC-004",
+        "CC-007"
+      ]
+    },
+    {
+      "contract_id": "rolling_window",
+      "intent": "Aggregate a base measure over a trailing N-period window.",
+      "inputs": [
+        "base_measure",
+        "date_table",
+        "window_length",
+        "window_unit {day|month}"
+      ],
+      "grain": "trailing window ending at last visible date",
+      "additivity": "non-additive across overlapping windows",
+      "filter_behavior": "replaces Date filter with computed window range",
+      "requires_model_features": [
+        "marked Date table"
+      ],
+      "output": "scalar measure",
+      "validation_rules": [
+        "scalar date funcs for boundaries, table func inside CALCULATE",
+        "boundary off-by-one checked"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze"
+      ],
+      "maps_to_patterns": [
+        "ti-rolling-12"
+      ],
+      "concepts": [
+        "CC-004",
+        "CC-007"
+      ]
+    },
+    {
+      "contract_id": "running_total",
+      "intent": "Accumulate a base measure over a sortable axis up to the current row.",
+      "inputs": [
+        "base_measure",
+        "axis_column",
+        "sort_by_column?",
+        "filters_to_preserve[]"
+      ],
+      "grain": "axis row (cumulative)",
+      "additivity": "non-additive (cumulative)",
+      "filter_behavior": "replaces axis filter with <= cutoff; must re-apply preserved filters",
+      "requires_model_features": [
+        "sortable axis",
+        "marked Date table if axis is date"
+      ],
+      "output": "scalar measure",
+      "validation_rules": [
+        "preserved filters re-applied",
+        "future-date guard if date axis",
+        "REMOVEFILTERS handled if Date unmarked"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze"
+      ],
+      "maps_to_patterns": [
+        "cumulative-running-total"
+      ],
+      "concepts": [
+        "CC-004",
+        "CC-019"
+      ]
+    },
+    {
+      "contract_id": "semi_additive",
+      "intent": "Additive across non-time dims, first/last value across time (stock/balance).",
+      "inputs": [
+        "snapshot_fact",
+        "value_column",
+        "date_table",
+        "policy {opening|closing}"
+      ],
+      "grain": "snapshot date -> non-time dims",
+      "additivity": "semi_additive (NOT additive over time)",
+      "filter_behavior": "picks last/first non-blank date in context",
+      "requires_model_features": [
+        "periodic snapshot fact",
+        "marked Date table"
+      ],
+      "output": "scalar measure",
+      "validation_rules": [
+        "never summed across time",
+        "LASTNONBLANK/ FIRSTNONBLANK over plain LASTDATE when blanks exist"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze",
+        "model_review"
+      ],
+      "maps_to_patterns": [
+        "semi-additive-balance"
+      ],
+      "concepts": [
+        "CC-001"
+      ]
+    },
+    {
+      "contract_id": "segmentation_static",
+      "intent": "Assign entities to fixed bands from a config table; usable as slicer axis.",
+      "inputs": [
+        "entity_table",
+        "value_measure",
+        "config_table {segment,min,max}"
+      ],
+      "grain": "entity (row-fixed)",
+      "additivity": "n/a (categorical axis)",
+      "filter_behavior": "filter-independent",
+      "requires_model_features": [
+        "config table (no relationship)"
+      ],
+      "output": "calculated column",
+      "validation_rules": [
+        "config ranges non-overlapping and gap-free",
+        "implemented as column not measure"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze",
+        "model_review"
+      ],
+      "maps_to_patterns": [
+        "static-segmentation"
+      ],
+      "concepts": [
+        "CC-002"
+      ]
+    },
+    {
+      "contract_id": "segmentation_dynamic",
+      "intent": "Classify entities by a measure at query time, honoring filters.",
+      "inputs": [
+        "entity_key",
+        "value_measure",
+        "config_table {segment,min,max}",
+        "aggregation_grain"
+      ],
+      "grain": "entity within aggregation grain",
+      "additivity": "non_additive (aggregate at grain, then sum)",
+      "filter_behavior": "computed set intersected via KEEPFILTERS",
+      "requires_model_features": [
+        "config table (no relationship)"
+      ],
+      "output": "scalar measure",
+      "validation_rules": [
+        "KEEPFILTERS present",
+        "iterates grain for correct total",
+        "config ranges non-overlapping"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze"
+      ],
+      "maps_to_patterns": [
+        "dynamic-segmentation"
+      ],
+      "concepts": [
+        "CC-003",
+        "CC-006"
+      ]
+    },
+    {
+      "contract_id": "classification_cumulative",
+      "intent": "A/B/C (Pareto) grouping by cumulative contribution to a total.",
+      "inputs": [
+        "entity_table",
+        "value_measure",
+        "thresholds[] (e.g. 0.7,0.9)",
+        "scope {static|dynamic|snapshot}"
+      ],
+      "grain": "entity (or entity x period for snapshot)",
+      "additivity": "categorical",
+      "filter_behavior": "static=fixed; dynamic=reacts to filters; snapshot=per period",
+      "requires_model_features": [
+        "snapshot table if per-period"
+      ],
+      "output": "calculated column | measure | snapshot table",
+      "validation_rules": [
+        "cumulative sorted high->low",
+        "snapshot used when per-period classes needed",
+        "thresholds ordered"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze",
+        "model_review"
+      ],
+      "maps_to_patterns": [
+        "abc-classification"
+      ],
+      "concepts": [
+        "CC-002",
+        "CC-019"
+      ]
+    },
+    {
+      "contract_id": "customer_dynamics",
+      "intent": "New / returning / lost / recovered customer counts in a period.",
+      "inputs": [
+        "fact_table",
+        "customer_key",
+        "order_date",
+        "definition {new,returning,lost,recovered}",
+        "lost_threshold?",
+        "filters_affect_definition?"
+      ],
+      "grain": "period",
+      "additivity": "non_additive",
+      "filter_behavior": "first-purchase logic via ALLEXCEPT on customer key; decide if other filters apply",
+      "requires_model_features": [
+        "transaction-level fact with dates"
+      ],
+      "output": "scalar measure family",
+      "validation_rules": [
+        "definition fixed before coding",
+        "avoid most-flexible variant on large data",
+        "decide filter sensitivity explicitly"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze"
+      ],
+      "maps_to_patterns": [
+        "new-returning-customers"
+      ],
+      "concepts": [
+        "CC-003"
+      ]
+    },
+    {
+      "contract_id": "distinct_count_related",
+      "intent": "Distinct count of an attribute reached through the fact.",
+      "inputs": [
+        "target_attribute",
+        "fact_table",
+        "propagation {crossfilter|treatas|bridge}"
+      ],
+      "grain": "filter context",
+      "additivity": "non_additive",
+      "filter_behavior": "explicit propagation to the counted table",
+      "requires_model_features": [
+        "relationship path or bridge"
+      ],
+      "output": "scalar measure",
+      "validation_rules": [
+        "propagation explicit (not assumed)",
+        "perf: test treatas vs bridge"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze",
+        "model_review"
+      ],
+      "maps_to_patterns": [
+        "related-distinct-count"
+      ],
+      "concepts": [
+        "CC-010",
+        "CC-015"
+      ]
+    },
+    {
+      "contract_id": "interval_overlap",
+      "intent": "Count entities active at a reference date (started, not ended).",
+      "inputs": [
+        "fact_table",
+        "start_column",
+        "end_column",
+        "date_table"
+      ],
+      "grain": "reference date",
+      "additivity": "non_additive",
+      "filter_behavior": "Date axis used as reference point; Date relationship neutralized",
+      "requires_model_features": [
+        "start/end columns on fact"
+      ],
+      "output": "scalar measure",
+      "validation_rules": [
+        "Date filter removed/neutralized",
+        "consistent boundary inequalities"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze"
+      ],
+      "maps_to_patterns": [
+        "events-in-progress"
+      ],
+      "concepts": [
+        "CC-004",
+        "CC-019"
+      ]
+    },
+    {
+      "contract_id": "ranking",
+      "intent": "Rank entities by a measure; static, dynamic, or within-group; optional Top-N.",
+      "inputs": [
+        "entity",
+        "base_measure",
+        "scope {static|dynamic}",
+        "group?",
+        "ties {dense|skip}"
+      ],
+      "grain": "entity",
+      "additivity": "n/a",
+      "filter_behavior": "static over ALL; dynamic over ALLSELECTED",
+      "requires_model_features": [],
+      "output": "calculated column | measure",
+      "validation_rules": [
+        "total-row guard (HASONEVALUE)",
+        "correct ALL vs ALLSELECTED",
+        "ties mode chosen"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze"
+      ],
+      "maps_to_patterns": [
+        "ranking"
+      ],
+      "concepts": [
+        "CC-009"
+      ]
+    },
+    {
+      "contract_id": "parameterized_metric",
+      "intent": "Metric driven by a disconnected parameter slicer.",
+      "inputs": [
+        "param_table (disconnected)",
+        "param_column",
+        "default_value",
+        "metric_logic"
+      ],
+      "grain": "filter context",
+      "additivity": "inherits",
+      "filter_behavior": "reads param via SELECTEDVALUE with default",
+      "requires_model_features": [
+        "disconnected parameter table"
+      ],
+      "output": "scalar measure",
+      "validation_rules": [
+        "SELECTEDVALUE has default",
+        "param table truly disconnected",
+        "KEEPFILTERS if applying a dynamic set"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze",
+        "model_review"
+      ],
+      "maps_to_patterns": [
+        "parameter-table-whatif"
+      ],
+      "concepts": [
+        "CC-011",
+        "CC-010"
+      ]
+    },
+    {
+      "contract_id": "currency_conversion",
+      "intent": "Convert amounts to a reporting currency at correct-grain rates.",
+      "inputs": [
+        "amount_measure",
+        "exchange_rate_table",
+        "rate_policy {transaction|period_end}",
+        "date_table"
+      ],
+      "grain": "conversion grain (e.g. daily), then aggregate",
+      "additivity": "additive after conversion",
+      "filter_behavior": "iterate grain, apply rate, then sum",
+      "requires_model_features": [
+        "exchange rate table by date/currency"
+      ],
+      "output": "scalar measure",
+      "validation_rules": [
+        "convert before aggregating",
+        "rate fallback for missing dates",
+        "rate direction correct"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze",
+        "model_review"
+      ],
+      "maps_to_patterns": [
+        "currency-conversion"
+      ],
+      "concepts": [
+        "CC-002",
+        "CC-004"
+      ]
+    },
+    {
+      "contract_id": "custom_calendar_time",
+      "intent": "Time calculations on a non-Gregorian / week-based (e.g. 4-4-5) calendar using a custom date table.",
+      "inputs": [
+        "base_measure",
+        "custom_date_table",
+        "week/period columns",
+        "period offset"
+      ],
+      "grain": "custom period (week / 4-4-5 month)",
+      "additivity": "additive within period",
+      "filter_behavior": "shift filters via custom period columns, not built-in TI",
+      "requires_model_features": [
+        "custom calendar table with sequential week/period keys"
+      ],
+      "output": "scalar measure",
+      "validation_rules": [
+        "do NOT use built-in TI functions",
+        "navigate via period index columns",
+        "contiguous period keys"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze",
+        "model_review"
+      ],
+      "maps_to_patterns": [
+        "week-related-time"
+      ],
+      "concepts": [
+        "CC-004",
+        "CC-005"
+      ]
+    },
+    {
+      "contract_id": "parent_child_hierarchy",
+      "intent": "Flatten a self-referencing parent-child hierarchy (e.g. chart of accounts, org chart) into navigable levels.",
+      "inputs": [
+        "entity_table",
+        "entity_key",
+        "parent_key",
+        "value_measure"
+      ],
+      "grain": "hierarchy node",
+      "additivity": "depends on rollup",
+      "filter_behavior": "PATH-based flattening into level columns; browse by level",
+      "requires_model_features": [
+        "self-referencing key/parent columns"
+      ],
+      "output": "calculated columns (PATH/levels) + measures",
+      "validation_rules": [
+        "use PATH/PATHITEM to flatten",
+        "handle ragged levels (blank/repeat)",
+        "guard depth"
+      ],
+      "phase_support": [
+        "generate",
+        "model_review"
+      ],
+      "maps_to_patterns": [
+        "parent-child-hierarchy"
+      ],
+      "concepts": [
+        "CC-002"
+      ]
+    },
+    {
+      "contract_id": "transition_matrix",
+      "intent": "Classify each entity in two periods and count how many moved between classes (e.g. segment in M-1 vs M).",
+      "inputs": [
+        "entity_key",
+        "class_measure",
+        "two time periods",
+        "config classes"
+      ],
+      "grain": "(from-class, to-class) cell",
+      "additivity": "non_additive",
+      "filter_behavior": "compute class per period, cross-tabulate movement",
+      "requires_model_features": [
+        "disconnected from/to class axes"
+      ],
+      "output": "scalar measure over from/to axes",
+      "validation_rules": [
+        "evaluate class at the right period boundaries",
+        "KEEPFILTERS the entity set",
+        "no overlapping class ranges"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze"
+      ],
+      "maps_to_patterns": [
+        "transition-matrix"
+      ],
+      "concepts": [
+        "CC-003",
+        "CC-010"
+      ]
+    },
+    {
+      "contract_id": "survey_analysis",
+      "intent": "Analyze many-to-many survey answers (respondents x questions x answers) flexibly.",
+      "inputs": [
+        "answers_fact",
+        "respondent_key",
+        "question/answer dims",
+        "bridge"
+      ],
+      "grain": "respondent x question",
+      "additivity": "non_additive (distinct respondents)",
+      "filter_behavior": "route many-to-many via bridge / TREATAS; count distinct respondents",
+      "requires_model_features": [
+        "bridge or many-to-many between respondents and answers"
+      ],
+      "output": "scalar measure (distinct respondents)",
+      "validation_rules": [
+        "count distinct respondents, not answer rows",
+        "explicit propagation across the bridge"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze",
+        "model_review"
+      ],
+      "maps_to_patterns": [
+        "survey-analysis"
+      ],
+      "concepts": [
+        "CC-010",
+        "CC-011"
+      ]
+    },
+    {
+      "contract_id": "basket_analysis",
+      "intent": "Find products frequently bought together (orders containing A that also contain B).",
+      "inputs": [
+        "sales_fact",
+        "order_key",
+        "product_key",
+        "two product roles (A,B)"
+      ],
+      "grain": "product pair",
+      "additivity": "non_additive",
+      "filter_behavior": "self-join via a second disconnected product table applied with TREATAS; count orders",
+      "requires_model_features": [
+        "disconnected second product table for the 'and also' role"
+      ],
+      "output": "scalar measure (orders / pairs)",
+      "validation_rules": [
+        "count distinct orders not lines",
+        "exclude the same product as A and B",
+        "apply second product set via TREATAS"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze"
+      ],
+      "maps_to_patterns": [
+        "basket-analysis"
+      ],
+      "concepts": [
+        "CC-003",
+        "CC-010"
+      ]
+    },
+    {
+      "contract_id": "budget_vs_actual",
+      "intent": "Compare actuals to budget when the two are stored at different granularities.",
+      "inputs": [
+        "actuals_fact",
+        "budget_fact",
+        "shared dims at budget grain",
+        "value measures"
+      ],
+      "grain": "the coarser (budget) grain",
+      "additivity": "additive within grain",
+      "filter_behavior": "align via shared higher-grain dimensions; avoid filtering budget by columns it lacks",
+      "requires_model_features": [
+        "budget table related only at its grain (e.g. month/category, not day/product)"
+      ],
+      "output": "scalar measures (Actual, Budget, Variance)",
+      "validation_rules": [
+        "filter budget only by columns it supports",
+        "use TREATAS/shared dims for alignment",
+        "guard variance % with DIVIDE"
+      ],
+      "phase_support": [
+        "generate",
+        "analyze",
+        "model_review"
+      ],
+      "maps_to_patterns": [
+        "budget-vs-actual"
+      ],
+      "concepts": [
+        "CC-010",
+        "CC-008"
+      ]
+    }
+  ]
+}

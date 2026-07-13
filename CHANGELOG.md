@@ -4,12 +4,13 @@ All notable changes to Seshat BI are documented in this file. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and version numbers follow
 `docs/operations/versioning-policy.md` (semver, adapted for a governance kit).
 
-**This package has never been published to PyPI or any other index.** The version in
-`pyproject.toml` (currently `0.1.0`) has existed only as the on-disk value since the
-repo's first commit -- there is no prior git tag and no prior published release to
-diff against. The `[0.1.0]` section below is therefore a **summary of everything
-shipped to `main` under that version so far**, not a diff since a previous release.
-Dates below are merge-to-main dates, not public-release dates.
+Repository history contains the annotated tag `v0.1.0`, which points to
+`b84be67c0316eecab40d35c13640adb2ac202ab3`. That tag records the first tagged kit
+snapshot; it does not by itself prove PyPI, GitHub Release, Claude, or Codex public
+availability. No index-publication claim is made here without separately captured
+public-install evidence. The `[0.1.0]` section below summarizes the repository state
+associated with that history. Dates below are merge-to-main dates unless an entry
+explicitly identifies a public release event.
 
 ## How to update this changelog
 

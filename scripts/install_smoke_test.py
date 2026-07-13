@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -57,7 +58,7 @@ def _assert_truthful(output: str, *, label: str) -> None:
         raise SystemExit(f"FAIL: {label} fabricates a readiness pass")
 
 
-def _build_artifacts(dist_dir: Path) -> Path:
+def _build_artifacts(dist_dir: Path) -> tuple[Path, Path]:
     print("== Build wheel and source distribution ==", flush=True)
     _run(
         [
@@ -76,7 +77,7 @@ def _build_artifacts(dist_dir: Path) -> Path:
     if len(wheels) != 1 or len(sdists) != 1:
         raise SystemExit("FAIL: expected exactly one wheel and one source distribution")
     print(f"Built {wheels[0].name} and {sdists[0].name}", flush=True)
-    return wheels[0]
+    return wheels[0], sdists[0]
 
 
 def _assert_clean_dependencies(app_python: Path) -> None:
@@ -95,6 +96,14 @@ def _assert_clean_dependencies(app_python: Path) -> None:
             ),
             "sys.exit(message)",
         )
+    )
+    _run([str(app_python), "-c", probe])
+
+
+def _assert_installed_version(app_python: Path, expected: str) -> None:
+    probe = (
+        "from importlib.metadata import version; "
+        f"assert version('seshat-bi') == {expected!r}"
     )
     _run([str(app_python), "-c", probe])
 
@@ -151,10 +160,11 @@ def _assert_demo_proof(seshat: Path, workspace: Path) -> None:
 
 def _assert_check_commands(seshat: Path, app_python: Path, workspace: Path) -> None:
     _run([str(seshat), "check"], cwd=workspace)
+    _run([str(app_python), "-m", "seshat.cli", "check"], cwd=workspace)
     _run([str(app_python), "-m", "retail.cli", "check"], cwd=workspace)
 
 
-def _run_first_success(bin_dir: Path, app_python: Path, workspace_parent: Path) -> None:
+def _run_first_success(bin_dir: Path, app_python: Path, workspace_parent: Path) -> Path:
     workspace_parent.mkdir()
     seshat = _executable(bin_dir, "seshat")
     _assert_help(seshat, workspace_parent)
@@ -163,12 +173,48 @@ def _run_first_success(bin_dir: Path, app_python: Path, workspace_parent: Path) 
     _assert_next(seshat, workspace)
     _assert_demo_proof(seshat, workspace)
     _assert_check_commands(seshat, app_python, workspace)
+    return workspace
 
 
 def _app_python(pipx_home: Path) -> Path:
     bin_name = "Scripts" if sys.platform == "win32" else "bin"
     python_name = "python.exe" if sys.platform == "win32" else "python"
     return pipx_home / "venvs" / "seshat-bi" / bin_name / python_name
+
+
+def _local_upgrade_command(wheel: Path) -> list[str]:
+    """Upgrade the existing pipx venv from the candidate wheel, never an index."""
+
+    return [
+        sys.executable,
+        "-m",
+        "pipx",
+        "runpip",
+        "seshat-bi",
+        "install",
+        "--upgrade",
+        "--force-reinstall",
+        str(wheel),
+    ]
+
+
+def _workspace_digest(workspace: Path) -> str:
+    digest = hashlib.sha256()
+    for path in sorted(workspace.rglob("*")):
+        if not path.is_file() or ".git" in path.relative_to(workspace).parts:
+            continue
+        digest.update(path.relative_to(workspace).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _assert_commands_removed(bin_dir: Path) -> None:
+    for name in _CONSOLE_SCRIPTS:
+        candidate = bin_dir / (f"{name}.exe" if sys.platform == "win32" else name)
+        if candidate.exists():
+            raise SystemExit(f"FAIL: command remained after uninstall: {candidate}")
 
 
 def main() -> int:
@@ -180,7 +226,11 @@ def main() -> int:
         os.environ["PIPX_HOME"] = str(pipx_home)
         os.environ["PIPX_BIN_DIR"] = str(pipx_bin)
 
-        wheel = _build_artifacts(dist_dir)
+        wheel, _sdist = _build_artifacts(dist_dir)
+        version_match = re.search(r"-(\d+\.\d+\.\d+)(?:-|\.whl)", wheel.name)
+        if version_match is None:
+            raise SystemExit(f"FAIL: cannot determine wheel version: {wheel.name}")
+        expected_version = version_match.group(1)
         print("== Install through isolated pipx environment ==", flush=True)
         _run([sys.executable, "-m", "pipx", "install", str(wheel)])
         for script in _CONSOLE_SCRIPTS:
@@ -189,8 +239,31 @@ def main() -> int:
         app_python = _app_python(pipx_home)
         if not app_python.exists():
             raise SystemExit(f"FAIL: pipx app interpreter not found: {app_python}")
+        _assert_installed_version(app_python, expected_version)
         _assert_clean_dependencies(app_python)
-        _run_first_success(pipx_bin, app_python, root / "workspace-parent")
+        workspace = _run_first_success(pipx_bin, app_python, root / "workspace-parent")
+        before = _workspace_digest(workspace)
+
+        print(
+            "== Upgrade the pipx environment from the explicit local wheel ==",
+            flush=True,
+        )
+        _run(_local_upgrade_command(wheel))
+        upgraded_python = _app_python(pipx_home)
+        _assert_installed_version(upgraded_python, expected_version)
+        _assert_help(_executable(pipx_bin, "seshat"), workspace.parent)
+        if _workspace_digest(workspace) != before:
+            raise SystemExit("FAIL: upgrade changed the user's project")
+
+        print("== Uninstall and preserve the user project ==", flush=True)
+        _run([sys.executable, "-m", "pipx", "uninstall", "seshat-bi"])
+        _assert_commands_removed(pipx_bin)
+        if _app_python(pipx_home).exists():
+            raise SystemExit(
+                "FAIL: pipx application environment remained after uninstall"
+            )
+        if not workspace.is_dir() or _workspace_digest(workspace) != before:
+            raise SystemExit("FAIL: uninstall removed or changed the user's project")
 
     print("PASS: clean public-beta install smoke test succeeded.", flush=True)
     return 0

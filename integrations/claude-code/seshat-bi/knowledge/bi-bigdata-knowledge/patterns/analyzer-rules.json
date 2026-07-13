@@ -1,0 +1,227 @@
+{
+  "$schema_note": "Analyzer rules for static review of distributed BI pipelines. Rules REASON and emit verdicts; they do not execute or auto-fix. Each rule names the anti-pattern it detects. IDs are stable (references/id-conventions.md). Some rules reuse Python-layer correctness concepts (PY-*).",
+  "version": "1.0.0",
+  "slice_origin": "BD Slice 10",
+  "rules": [
+    {
+      "id": "BD-AR-001",
+      "name": "Scaling out when single-node would do",
+      "detects": "BD-AP-001",
+      "severity": "medium",
+      "domain": "engine",
+      "signal": "Distributed engine chosen without a post-pruning size estimate showing it exceeds one machine.",
+      "why": "Distribution adds shuffle, scheduling, and cluster cost; single-node is cheaper when data fits.",
+      "verdict_prompt": "Was post-pruning working-set size estimated and shown to exceed a single node?",
+      "refs": ["BD-CN-021", "BD-CN-022"]
+    },
+    {
+      "id": "BD-AR-002",
+      "name": "coalesce(1) to force one file",
+      "detects": "BD-AP-002",
+      "severity": "high",
+      "domain": "partitioning",
+      "signal": "coalesce(1) (or repartition(1)) before a write to produce a single file.",
+      "why": "Funnels all data through one core, killing parallelism and risking OOM.",
+      "verdict_prompt": "Is output file count controlled by right-sizing/compaction rather than coalesce(1)?",
+      "refs": ["BD-CN-030"]
+    },
+    {
+      "id": "BD-AR-003",
+      "name": "Layout serves load step not query step",
+      "detects": "BD-AP-003",
+      "severity": "medium",
+      "domain": "partitioning",
+      "signal": "On-disk partitioning not aligned to the columns BI queries filter/join on.",
+      "why": "Misaligned partitioning forfeits pruning and forces repeated shuffles.",
+      "verdict_prompt": "Does the partition column match the dominant downstream filter/join?",
+      "refs": ["BD-CN-016", "BD-CN-031"]
+    },
+    {
+      "id": "BD-AR-004",
+      "name": "Unjustified wide transform",
+      "detects": "BD-AP-004",
+      "severity": "medium",
+      "domain": "shuffle",
+      "signal": "Join/groupby/distinct/sort with no prior filter, projection, broadcast, or pre-aggregation.",
+      "why": "Every shuffle is costly; many are avoidable.",
+      "verdict_prompt": "Is each wide step justified, with filtering/projection/broadcast applied first?",
+      "refs": ["BD-CN-028"]
+    },
+    {
+      "id": "BD-AR-005",
+      "name": "collect()/toPandas() on a large frame",
+      "detects": "BD-AP-005",
+      "severity": "high",
+      "domain": "driver",
+      "signal": "Distributed result pulled to the driver without a sized, bounded limit.",
+      "why": "Collapses cluster-scale data into one process; OOMs the driver.",
+      "verdict_prompt": "Is the collected result small and bounded, or should this be a distributed op?",
+      "refs": ["BD-CN-010", "BD-CN-073"]
+    },
+    {
+      "id": "BD-AR-006",
+      "name": "Shuffle join where broadcast fits",
+      "detects": "BD-AP-006",
+      "severity": "high",
+      "domain": "join",
+      "signal": "A large table is shuffle-joined to a small dimension that would fit a broadcast.",
+      "why": "Broadcasting the small side avoids shuffling the large side entirely.",
+      "verdict_prompt": "Is the small side (post-pruning) broadcast rather than shuffle-joined?",
+      "refs": ["BD-CN-035", "BD-CN-036"]
+    },
+    {
+      "id": "BD-AR-007",
+      "name": "Known skew ignored",
+      "detects": "BD-AP-007",
+      "severity": "high",
+      "domain": "skew",
+      "signal": "A hot join/group key creates a straggler with no AQE/broadcast/salt mitigation.",
+      "why": "One skewed key makes a single task dominate the whole job.",
+      "verdict_prompt": "Is skew detected and mitigated (AQE skew-join, broadcast, or salting)?",
+      "refs": ["BD-CN-037", "BD-CN-039"]
+    },
+    {
+      "id": "BD-AR-008",
+      "name": "Row-at-a-time UDF for engine-expressible logic",
+      "detects": "BD-AP-008",
+      "severity": "medium",
+      "domain": "performance",
+      "signal": "Python UDF used where a built-in/column expression exists.",
+      "why": "UDFs are opaque to the optimizer and add serialization overhead.",
+      "verdict_prompt": "Can the UDF be replaced by built-in functions or a vectorized UDF?",
+      "refs": ["BD-CN-074", "PY-CN-075"]
+    },
+    {
+      "id": "BD-AR-009",
+      "name": "Read without pruning",
+      "detects": "BD-AP-009",
+      "severity": "high",
+      "domain": "storage",
+      "signal": "Filters not pushed down; plan shows full scan despite a selective filter.",
+      "why": "Reading everything is usually the single biggest avoidable cost.",
+      "verdict_prompt": "Does the plan confirm partition/column pruning for the filter?",
+      "refs": ["BD-CN-032", "BD-CN-055"]
+    },
+    {
+      "id": "BD-AR-010",
+      "name": "Small-files problem",
+      "detects": "BD-AP-010",
+      "severity": "medium",
+      "domain": "storage",
+      "signal": "Output (or input) is thousands of tiny files from over-partitioning/micro-batches.",
+      "why": "Listing/opening many tiny files dominates over reading data.",
+      "verdict_prompt": "Are output files right-sized/compacted (not per-sliver)?",
+      "refs": ["BD-CN-052"]
+    },
+    {
+      "id": "BD-AR-011",
+      "name": "Fan-out at scale (sum after one-to-many join)",
+      "detects": "BD-AP-011",
+      "severity": "high",
+      "domain": "join",
+      "signal": "An additive measure summed after a non-unique-key join.",
+      "why": "Fan-out double-counts and explodes shuffle volume.",
+      "verdict_prompt": "Was the many-side pre-aggregated to the join grain first?",
+      "refs": ["BD-CN-009", "PY-CN-051"]
+    },
+    {
+      "id": "BD-AR-012",
+      "name": "Distinct-count method undisclosed",
+      "detects": "BD-AP-012",
+      "severity": "medium",
+      "domain": "aggregation",
+      "signal": "Distinct count not labeled exact vs approximate, or approximate where exact required.",
+      "why": "Approximate counts carry error that must be disclosed; exact counts are costly.",
+      "verdict_prompt": "Is each distinct count labeled exact/approximate with error bound, and correct for its use?",
+      "refs": ["BD-CN-045", "BD-CN-046"]
+    },
+    {
+      "id": "BD-AR-013",
+      "name": "Non-additive measure summed at scale",
+      "detects": "BD-AP-013",
+      "severity": "high",
+      "domain": "aggregation",
+      "signal": "A ratio/percentage/average/distinct count summed across groups.",
+      "why": "Non-additive measures are wrong when summed and defeat partial aggregation.",
+      "verdict_prompt": "Is each summed measure additive across the group dimensions?",
+      "refs": ["BD-CN-044", "PY-CN-053"]
+    },
+    {
+      "id": "BD-AR-014",
+      "name": "Indiscriminate caching",
+      "detects": "BD-AP-014",
+      "severity": "low",
+      "domain": "performance",
+      "signal": "Frames cached that are not reused across multiple actions; no unpersist.",
+      "why": "Cache competes with shuffle memory and causes spill.",
+      "verdict_prompt": "Is each cache justified by multi-use and released when done?",
+      "refs": ["BD-CN-075", "BD-CN-019"]
+    },
+    {
+      "id": "BD-AR-015",
+      "name": "Append-only (non-idempotent) write",
+      "detects": "BD-AP-015",
+      "severity": "high",
+      "domain": "reliability",
+      "signal": "Job appends output for a slice it may reprocess; rerun would duplicate.",
+      "why": "Reruns and backfills duplicate data.",
+      "verdict_prompt": "Is the write partition-overwrite or merge-on-key, and does a double-run leave output unchanged?",
+      "refs": ["BD-CN-058", "BD-CN-057"]
+    },
+    {
+      "id": "BD-AR-016",
+      "name": "No late-data policy",
+      "detects": "BD-AP-016",
+      "severity": "medium",
+      "domain": "reliability",
+      "signal": "Period totals computed once with no idempotent lookback for late arrivals.",
+      "why": "Late events are silently lost or double-counted.",
+      "verdict_prompt": "Is there an idempotent lookback window absorbing late data?",
+      "refs": ["BD-CN-060"]
+    },
+    {
+      "id": "BD-AR-017",
+      "name": "Per-partition dedup instead of global",
+      "detects": "BD-AP-017",
+      "severity": "high",
+      "domain": "reliability",
+      "signal": "Deduplication applied within partitions only.",
+      "why": "Duplicate keys spanning partitions survive.",
+      "verdict_prompt": "Is dedup global on the grain key?",
+      "refs": ["BD-CN-017", "BD-CN-061"]
+    },
+    {
+      "id": "BD-AR-018",
+      "name": "Job success treated as reconciliation",
+      "detects": "BD-AP-018",
+      "severity": "high",
+      "domain": "validation",
+      "signal": "No control totals; pipeline trusts that the job finished.",
+      "why": "Success is not correctness; only matching totals are evidence.",
+      "verdict_prompt": "Are distributed control totals reconciled to source/SQL?",
+      "refs": ["BD-CN-064", "PY-CN-068"]
+    },
+    {
+      "id": "BD-AR-019",
+      "name": "Sampling passed off as proof",
+      "detects": "BD-AP-019",
+      "severity": "medium",
+      "domain": "validation",
+      "signal": "A sample 'looks fine' substituted for a full-dataset aggregate check.",
+      "why": "A sample can miss systematic errors that totals catch.",
+      "verdict_prompt": "Are full-dataset aggregate checks present, with sampling only supporting?",
+      "refs": ["BD-CN-066"]
+    },
+    {
+      "id": "BD-AR-020",
+      "name": "Bypassing gate or defining metrics in the job",
+      "detects": "BD-AP-020",
+      "severity": "high",
+      "domain": "boundary",
+      "signal": "Job self-approves, or encodes metric/semantic business logic.",
+      "why": "Readiness owns gating; retail-kpi owns metric meaning and DAX owns the measure. This layer reasons and hands off.",
+      "verdict_prompt": "Is the reconciliation record handed to the gate, with no metric/semantic logic encoded here?",
+      "refs": ["BD-CN-069", "PY-CN-070"]
+    }
+  ]
+}

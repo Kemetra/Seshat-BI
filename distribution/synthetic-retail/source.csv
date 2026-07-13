@@ -1,0 +1,5 @@
+row_id,receipt_id,store_code,sale_timestamp,customer_email,sku,quantity,unit_price,discount_amount,returned_flag
+1,R-1001,CAI-01,2026-01-03T09:15:00Z,alex@example.invalid,SKU-TEA-01,2,4.50,0.00,false
+2,R-1001,CAI-01,2026-01-03T09:15:00Z,alex@example.invalid,SKU-MUG-02,1,8.00,1.00,false
+3,R-1002,ALX-02,2026-01-04T13:10:00Z,samir@example.invalid,SKU-TEA-01,1,4.50,0.00,true
+4,R-1003,CAI-01,2026-01-05T17:45:00Z,,SKU-BAG-03,1,12.00,2.00,false

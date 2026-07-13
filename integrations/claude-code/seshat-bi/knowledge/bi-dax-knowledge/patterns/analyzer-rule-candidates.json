@@ -1,0 +1,343 @@
+{
+  "$schema_version": "0.1.0-staged",
+  "status": "CANDIDATES — NOT ENFORCEABLE YET",
+  "description": "Staged analyzer-rule candidates derived from the Definitive Guide enrichment. These are NOT merged into analyzer-rules.json. They carry mixed detectability (regex | heuristic | model_metadata | ast_required | human_review) and must be reviewed before any are promoted to the live rule set. Only candidates with future_phase='analyzer_v1' are promotion targets; 'analyzer_v2' and 'human_guidance_only' stay staged.",
+  "scope": "Slice 1 — evaluation context, row/filter context, context transition, CALCULATE evaluation order, predicate vs table filters, replace vs intersect, KEEPFILTERS, REMOVEFILTERS/ALL, USERELATIONSHIP/CROSSFILTER/TREATAS. Slice 2 — function semantics (return type, blank handling, grouping functions, TI scalar-vs-table). Slice 3 — engine internals / performance diagnostics (SE vs FE, callbacks, cardinality).",
+  "promotion_policy": {
+    "analyzer_v1": "static, low false-positive: candidate for promotion to analyzer-rules.json after review",
+    "analyzer_v2": "needs AST or query-plan/visual context: keep staged",
+    "human_guidance_only": "judgment call: never auto-enforced; used as review narrative"
+  },
+  "candidate_field_spec": [
+    "candidate_id",
+    "title",
+    "category",
+    "severity",
+    "detectability",
+    "false_positive_risk",
+    "required_inputs",
+    "suggested_fix",
+    "future_phase",
+    "related_concepts",
+    "extends_existing_rule"
+  ],
+  "candidates": [
+    {
+      "candidate_id": "ARC-CALC-01",
+      "title": "Computed/predicate filter replaces instead of intersects",
+      "category": "correctness",
+      "severity": "warning",
+      "detectability": "heuristic",
+      "false_positive_risk": "medium",
+      "required_inputs": [
+        "dax_text",
+        "visual_context"
+      ],
+      "suggested_fix": "Wrap the filter in KEEPFILTERS when the user's existing selection on that column must persist.",
+      "future_phase": "analyzer_v1",
+      "related_concepts": [
+        "CC-004",
+        "CC-005"
+      ],
+      "extends_existing_rule": "AR-CALC-001",
+      "promotion_status": "promoted",
+      "promoted_to": "AR-CALC-001"
+    },
+    {
+      "candidate_id": "ARC-CALC-02",
+      "title": "Predicate's implicit ALL(column) likely unintended",
+      "category": "correctness",
+      "severity": "info",
+      "detectability": "heuristic",
+      "false_positive_risk": "high",
+      "required_inputs": [
+        "dax_text",
+        "visual_context"
+      ],
+      "suggested_fix": "Confirm whether the column filter should be cleared; use KEEPFILTERS or restructure if intersection was intended.",
+      "future_phase": "analyzer_v2",
+      "related_concepts": [
+        "CC-005"
+      ],
+      "extends_existing_rule": null,
+      "promotion_status": "staged"
+    },
+    {
+      "candidate_id": "ARC-CTX-01",
+      "title": "Measure correctness depends on an unstated filter-context assumption",
+      "category": "correctness",
+      "severity": "info",
+      "detectability": "human_review",
+      "false_positive_risk": "high",
+      "required_inputs": [
+        "dax_text",
+        "visual_context"
+      ],
+      "suggested_fix": "Document the intended context; verify against the actual visual placement.",
+      "future_phase": "human_guidance_only",
+      "related_concepts": [
+        "CC-001"
+      ],
+      "extends_existing_rule": null,
+      "promotion_status": "staged"
+    },
+    {
+      "candidate_id": "ARC-CTX-02",
+      "title": "Row-context reference assumed to cross-filter another table",
+      "category": "correctness",
+      "severity": "warning",
+      "detectability": "heuristic",
+      "false_positive_risk": "medium",
+      "required_inputs": [
+        "dax_text",
+        "model_metadata"
+      ],
+      "suggested_fix": "Use RELATED/RELATEDTABLE or trigger context transition (measure/CALCULATE) to filter the related table.",
+      "future_phase": "analyzer_v2",
+      "related_concepts": [
+        "CC-002",
+        "CC-008"
+      ],
+      "extends_existing_rule": null,
+      "promotion_status": "staged"
+    },
+    {
+      "candidate_id": "ARC-CTX-03",
+      "title": "ALL vs ALLSELECTED scope mismatch (percent-of-total)",
+      "category": "correctness",
+      "severity": "warning",
+      "detectability": "heuristic",
+      "false_positive_risk": "medium",
+      "required_inputs": [
+        "dax_text",
+        "visual_context"
+      ],
+      "suggested_fix": "Use ALLSELECTED for the visible total, ALL for the grand total; pick deliberately.",
+      "future_phase": "analyzer_v2",
+      "related_concepts": [
+        "CC-009",
+        "CC-019"
+      ],
+      "extends_existing_rule": null,
+      "promotion_status": "staged"
+    },
+    {
+      "candidate_id": "ARC-PERF-01",
+      "title": "Measure iterated at fact grain (context transition per row)",
+      "category": "performance",
+      "severity": "warning",
+      "detectability": "heuristic",
+      "false_positive_risk": "medium",
+      "required_inputs": [
+        "dax_text",
+        "model_metadata"
+      ],
+      "suggested_fix": "Iterate the relevant dimension or use column arithmetic / a single CALCULATE.",
+      "future_phase": "analyzer_v1",
+      "related_concepts": [
+        "CC-003"
+      ],
+      "extends_existing_rule": "AR-PERF-001",
+      "promotion_status": "promoted",
+      "promoted_to": "AR-PERF-001"
+    },
+    {
+      "candidate_id": "ARC-PERF-03",
+      "title": "FILTER(whole table) where a column predicate suffices",
+      "category": "performance",
+      "severity": "warning",
+      "detectability": "ast_required",
+      "false_positive_risk": "low",
+      "required_inputs": [
+        "dax_text"
+      ],
+      "suggested_fix": "Use a column predicate, or FILTER(VALUES(col), ...) on the smallest column.",
+      "future_phase": "analyzer_v1",
+      "related_concepts": [
+        "CC-005",
+        "CC-008"
+      ],
+      "extends_existing_rule": "AR-PERF-002",
+      "promotion_status": "promoted",
+      "promoted_to": "AR-PERF-002"
+    },
+    {
+      "candidate_id": "ARC-PERF-04",
+      "title": "Per-row IF/measure inside an iterator forces callbacks",
+      "category": "performance",
+      "severity": "warning",
+      "detectability": "heuristic",
+      "false_positive_risk": "medium",
+      "required_inputs": [
+        "dax_text",
+        "query_plan"
+      ],
+      "suggested_fix": "Hoist invariant subexpressions into VARs outside the iterator; restructure so the condition is a column filter and the inner expression is pure column math.",
+      "future_phase": "analyzer_v2",
+      "related_concepts": [
+        "CC-013",
+        "CC-003"
+      ],
+      "extends_existing_rule": null,
+      "promotion_status": "staged"
+    },
+    {
+      "candidate_id": "ARC-ALL-01",
+      "title": "Over-broad ALL/table filter clears more than intended",
+      "category": "correctness",
+      "severity": "warning",
+      "detectability": "heuristic",
+      "false_positive_risk": "medium",
+      "required_inputs": [
+        "dax_text",
+        "visual_context"
+      ],
+      "suggested_fix": "Clear specific columns with REMOVEFILTERS(col) or keep survivors with ALLEXCEPT.",
+      "future_phase": "analyzer_v1",
+      "related_concepts": [
+        "CC-019",
+        "CC-008"
+      ],
+      "extends_existing_rule": "AR-ALL-001",
+      "promotion_status": "promoted",
+      "promoted_to": "AR-ALL-001"
+    },
+    {
+      "candidate_id": "ARC-REL-01",
+      "title": "Role-playing date not activated with USERELATIONSHIP",
+      "category": "correctness",
+      "severity": "warning",
+      "detectability": "model_metadata",
+      "false_positive_risk": "low",
+      "required_inputs": [
+        "dax_text",
+        "model_metadata"
+      ],
+      "suggested_fix": "Wrap the measure in CALCULATE(..., USERELATIONSHIP(factDate, 'Date'[Date])).",
+      "future_phase": "analyzer_v1",
+      "related_concepts": [
+        "CC-016",
+        "CC-006"
+      ],
+      "extends_existing_rule": null,
+      "promotion_status": "promoted",
+      "promoted_to": "AR-REL-001"
+    },
+    {
+      "candidate_id": "ARC-MODEL-01",
+      "title": "Bidirectional relationship used as a default",
+      "category": "model",
+      "severity": "warning",
+      "detectability": "model_metadata",
+      "false_positive_risk": "low",
+      "required_inputs": [
+        "model_metadata"
+      ],
+      "suggested_fix": "Keep single-direction; apply CROSSFILTER per-measure or model with TREATAS.",
+      "future_phase": "analyzer_v1",
+      "related_concepts": [
+        "CC-006",
+        "CC-015"
+      ],
+      "extends_existing_rule": "AR-BIDI-001",
+      "promotion_status": "promoted",
+      "promoted_to": "AR-BIDI-001"
+    },
+    {
+      "candidate_id": "ARC-MODEL-02",
+      "title": "High-cardinality calculated column hurts compression",
+      "category": "model",
+      "severity": "warning",
+      "detectability": "model_metadata",
+      "false_positive_risk": "low",
+      "required_inputs": [
+        "model_metadata"
+      ],
+      "suggested_fix": "Split datetime into date/time, reduce decimal precision, push to ETL, or compute as a measure; drop unused columns.",
+      "future_phase": "analyzer_v1",
+      "related_concepts": [
+        "CC-014"
+      ],
+      "extends_existing_rule": "AR-PERF-004",
+      "promotion_status": "promoted",
+      "promoted_to": "AR-PERF-004"
+    },
+    {
+      "candidate_id": "ARC-LINEAGE-01",
+      "title": "Disconnected/config table applied without TREATAS/correct lineage",
+      "category": "correctness",
+      "severity": "warning",
+      "detectability": "heuristic",
+      "false_positive_risk": "medium",
+      "required_inputs": [
+        "dax_text",
+        "model_metadata"
+      ],
+      "suggested_fix": "Apply the disconnected table via TREATAS onto the target model column.",
+      "future_phase": "analyzer_v2",
+      "related_concepts": [
+        "CC-010"
+      ],
+      "extends_existing_rule": null,
+      "promotion_status": "staged"
+    },
+    {
+      "candidate_id": "ARC-FUNC-01",
+      "title": "Time-intelligence function used in the wrong return-type slot (scalar vs table)",
+      "category": "correctness",
+      "severity": "error",
+      "detectability": "ast_required",
+      "false_positive_risk": "low",
+      "required_inputs": [
+        "dax_text"
+      ],
+      "suggested_fix": "Use table TI funcs (ENDOFMONTH/DATESYTD/DATEADD) only as CALCULATE filters; use scalar date funcs (EOMONTH/EDATE) in scalar/row expressions.",
+      "future_phase": "analyzer_v1",
+      "related_concepts": [
+        "CC-005"
+      ],
+      "extends_existing_rule": "AR-TI-001",
+      "promotion_status": "promoted",
+      "promoted_to": "AR-TI-001"
+    },
+    {
+      "candidate_id": "ARC-FUNC-02",
+      "title": "Measure/expression computed inside SUMMARIZE instead of ADDCOLUMNS",
+      "category": "correctness",
+      "severity": "warning",
+      "detectability": "ast_required",
+      "false_positive_risk": "low",
+      "required_inputs": [
+        "dax_text"
+      ],
+      "suggested_fix": "Use SUMMARIZE only to group; compute expressions with ADDCOLUMNS over the grouping (or use SUMMARIZECOLUMNS).",
+      "future_phase": "analyzer_v1",
+      "related_concepts": [
+        "CC-004"
+      ],
+      "extends_existing_rule": null,
+      "promotion_status": "promoted",
+      "promoted_to": "AR-FUNC-001"
+    },
+    {
+      "candidate_id": "ARC-STYLE-01",
+      "title": "IF(HASONEVALUE, VALUES) idiom replaceable by SELECTEDVALUE",
+      "category": "style",
+      "severity": "info",
+      "detectability": "ast_required",
+      "false_positive_risk": "low",
+      "required_inputs": [
+        "dax_text"
+      ],
+      "suggested_fix": "Use SELECTEDVALUE(col, default).",
+      "future_phase": "analyzer_v1",
+      "related_concepts": [
+        "CC-011"
+      ],
+      "extends_existing_rule": null,
+      "promotion_status": "promoted",
+      "promoted_to": "AR-STYLE-004"
+    }
+  ],
+  "promotion_log": "2026-06-26: 10 analyzer_v1 candidates promoted into analyzer-rules.json (see promoted_to). Remaining staged: analyzer_v2 + human_guidance_only."
+}

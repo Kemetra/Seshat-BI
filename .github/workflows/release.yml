@@ -1,0 +1,129 @@
+name: release-candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_ref:
+        description: Exact commit SHA or immutable tag to validate
+        required: true
+        type: string
+      publication_action:
+        description: Validation is the zero-authority default
+        required: true
+        default: validate-only
+        type: choice
+        options:
+          - validate-only
+          - publish-pypi
+
+permissions: {}
+
+concurrency:
+  group: release-candidate-${{ inputs.candidate_ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-validate:
+    name: Build and validate without publication credentials
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.candidate_ref }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install build validators
+        run: python -m pip install build twine
+      - name: Verify source identity
+        shell: bash
+        env:
+          CANDIDATE_REF: ${{ inputs.candidate_ref }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$(git rev-parse --verify "$CANDIDATE_REF^{commit}")"
+          test -z "$(git status --porcelain)"
+      - name: Verify synchronized version and generated bundles
+        run: |
+          python scripts/check_release_versions.py --check
+          python scripts/export_agent_bundles.py --check
+      - name: Build exactly one wheel and one sdist
+        run: python -m build --wheel --sdist --outdir dist
+      - name: Strict metadata, contents, and isolated sdist rebuild
+        run: >-
+          python scripts/inspect_release_artifacts.py
+          --dist dist
+          --output release-staging/python-artifact-report.json
+      - name: Require a release-ready candidate audit
+        run: >-
+          python scripts/release_candidate_audit.py
+          --require-release-ready
+          --output release-staging/release-candidate.json
+      - name: Freeze exact artifact checksums
+        shell: bash
+        run: |
+          git rev-parse HEAD > release-staging/SOURCE_REVISION
+          mkdir -p release-staging/dist
+          sha256sum -- dist/*.whl dist/*.tar.gz > release-staging/SHA256SUMS
+          cp dist/*.whl dist/*.tar.gz release-staging/dist/
+          test "$(find release-staging/dist -maxdepth 1 -name '*.whl' | wc -l)" -eq 1
+          test "$(find release-staging/dist -maxdepth 1 -name '*.tar.gz' | wc -l)" -eq 1
+          test "$(find release-staging/dist -maxdepth 1 -type f | wc -l)" -eq 2
+      - name: Upload immutable candidate handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: seshat-bi-candidate-${{ github.run_id }}
+          path: release-staging/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+  publish-pypi:
+    name: Publish exact validated artifacts to PyPI
+    if: ${{ inputs.publication_action == 'publish-pypi' }}
+    needs: build-validate
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Reject forks and non-tag publication
+        shell: bash
+        env:
+          ACTUAL_REPOSITORY: ${{ github.repository }}
+          CANDIDATE_REF: ${{ inputs.candidate_ref }}
+          REF_PROTECTED: ${{ github.ref_protected }}
+          RUN_REF: ${{ github.ref }}
+        run: |
+          test "$ACTUAL_REPOSITORY" = "ahmed-shaaban-94/Seshat_BI"
+          test "$RUN_REF" = "$CANDIDATE_REF"
+          test "$REF_PROTECTED" = "true"
+          case "$CANDIDATE_REF" in
+            refs/tags/v*) ;;
+            *) echo "Publication requires an immutable refs/tags/v* candidate"; exit 1 ;;
+          esac
+      - name: Download the validated candidate handoff
+        uses: actions/download-artifact@v5
+        with:
+          name: seshat-bi-candidate-${{ github.run_id }}
+          path: release-staging
+      - name: Revalidate exact filenames and digests
+        shell: bash
+        run: |
+          cd release-staging
+          test "$(find dist -maxdepth 1 -name '*.whl' | wc -l)" -eq 1
+          test "$(find dist -maxdepth 1 -name '*.tar.gz' | wc -l)" -eq 1
+          test "$(find dist -maxdepth 1 -type f | wc -l)" -eq 2
+          test "$(wc -c < SOURCE_REVISION)" -eq 41
+          grep -Eq '^[0-9a-f]{40}$' SOURCE_REVISION
+          sha256sum --check SHA256SUMS
+      - name: Trusted Publishing via GitHub OIDC
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: release-staging/dist/
+          attestations: true
+          verbose: true

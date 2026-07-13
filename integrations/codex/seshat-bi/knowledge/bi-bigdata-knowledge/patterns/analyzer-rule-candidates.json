@@ -1,0 +1,49 @@
+{
+  "$schema_note": "Proposed analyzer rules not yet promoted to BD-AR-*. Staging area to keep the active rule set curated. Promote when validated against real pipelines.",
+  "version": "0.1.0",
+  "slice_origin": "BD Slice 10",
+  "candidates": [
+    {
+      "id": "BD-ARC-001",
+      "name": "count() called repeatedly for control flow",
+      "rationale": "Repeated actions re-trigger the DAG; expensive at scale (BD-CN-073 adjacent).",
+      "promote_when": "We can distinguish a single diagnostic count from a loop of counts.",
+      "refs": ["BD-CN-073"]
+    },
+    {
+      "id": "BD-ARC-002",
+      "name": "repartition with a hardcoded small n",
+      "rationale": "Fixed small partition counts ignore data size; risk OOM/under-parallelism (BD-CN-027/030).",
+      "promote_when": "We can read whether n is data-aware or hardcoded.",
+      "refs": ["BD-CN-027", "BD-CN-030"]
+    },
+    {
+      "id": "BD-ARC-003",
+      "name": "Wide transform before filter",
+      "rationale": "Join/groupby placed before an available row filter, shuffling rows later discarded (BD-CN-028/076).",
+      "promote_when": "We can detect filter-after-shuffle reliably in the plan.",
+      "refs": ["BD-CN-028", "BD-CN-076"]
+    },
+    {
+      "id": "BD-ARC-004",
+      "name": "Broadcast hint on a too-large side",
+      "rationale": "Forcing broadcast of a side that won't fit OOMs executors (BD-CN-036).",
+      "promote_when": "We can estimate the hinted side's post-pruning size.",
+      "refs": ["BD-CN-036"]
+    },
+    {
+      "id": "BD-ARC-005",
+      "name": "CSV/JSON used as analytical storage",
+      "rationale": "Row-oriented text re-parsed every read; columnar/table format preferred (BD-CN-050).",
+      "promote_when": "We can distinguish interchange I/O from analytical storage.",
+      "refs": ["BD-CN-050", "BD-CN-053"]
+    },
+    {
+      "id": "BD-ARC-006",
+      "name": "No schema/contract on a recurring source",
+      "rationale": "Re-inference per read invites drift; table-format schema evolution preferred (BD-CN-054).",
+      "promote_when": "We can detect absence of an expected-schema check.",
+      "refs": ["BD-CN-054", "PY-CN-022"]
+    }
+  ]
+}

@@ -2,111 +2,123 @@
 
 **Feature**: `125-public-distribution-launch`
 **Date**: 2026-07-13
-**Scope**: Read-only consistency and quality analysis across `spec.md`, `plan.md`, `research.md`, `data-model.md`, `tasks.md`, `quickstart.md`, `contracts/`, and `checklists/requirements.md`. This file captures the analysis result requested by the owner; no implementation or external action was performed.
+**Scope**: Final non-publishing consistency analysis across the implemented specification, plan, research, data model, contracts, tasks, generated distributions, release controls, acceptance evidence, and requirements checklists.
 
-## 1. Owner-Directed Scope Coverage
+## Verdict
 
-| Owner direction | Realization | Status |
-|---|---|---|
-| One coordinated Python/Claude/Codex/Public GitHub Beta | US1--US6; FR-001--FR-041; plan delivery sequence | COVERED |
-| Treat current `main` as completed baseline | FR-001; research Baseline Findings; T016--T023 | COVERED |
-| Verify reported `KPI-MC-15` omission | FR-003; SC-002; research baseline evidence; T016/T022 | COVERED -- present, no duplicate repair planned |
-| Harden metadata, wheel/sdist, Twine, pipx lifecycle, Windows smoke | FR-006--FR-012; RAC-1; T024--T034 | COVERED |
-| Protected PyPI Trusted Publishing with named-owner approval | FR-032--FR-034; PAB-1; T064/T067/T073--T076 | COVERED |
-| Finalize root Claude marketplace/plugin | FR-019--FR-023; GCB-1/ECA-1; T044--T053 | COVERED |
-| Add first-class Codex integration | FR-024--FR-029; GXB-1/EXA-1; T054--T063 | COVERED |
-| Deliver Knowledge Bases without development clone | FR-013--FR-022/FR-024--FR-028; both bundle/acceptance contracts | COVERED |
-| Keep existing Knowledge Bases canonical; deterministic allowlist exporter | FR-013--FR-018; PKA-1; T006--T012/T035--T043 | COVERED |
-| Synchronize every release version surface | FR-030--FR-031; VSC-1; T008/T013/T084--T086 | COVERED |
-| Define verification and rollback for all surfaces | FR-037--FR-041; RAC-1/ECA-1/EXA-1/PAB-1; T063--T072/T090--T091 | COVERED |
-| Separate five authorization lanes | spec Scope; plan sequence; PAB-1; Tasks Phases 8--12 | COVERED |
-| Stop after validated specification package | spec Out of Scope; plan boundary; tasks future-work boundary | COVERED |
+PASS for repository implementation and pull-request review.
 
-## 2. Mechanical Coverage
+No unresolved CRITICAL, HIGH, or MEDIUM cross-artifact defect remains. This verdict does not approve a version, external configuration, tag, upload, release, catalog entry, OpenAI submission, rollback, or replacement release.
 
-- Functional requirements: 48 unique contiguous IDs (`FR-001`--`FR-048`).
-- Security requirements: 5 unique contiguous IDs (`SEC-001`--`SEC-005`).
-- Success criteria: 12 unique contiguous IDs (`SC-001`--`SC-012`).
-- User stories: 6; each has priority, rationale, independent test, and acceptance scenarios.
-- Planning contracts: 8 of 8 requested, each with a unique contract ID.
-- Tasks: 95 sequential unique IDs (`T001`--`T095`), all conforming to the Spec Kit checkbox/ID/parallel/story format.
-- User-story task references: US1 8, US2 11, US3 13, US4 14, US5 9, US6 21.
-- Requirement-to-task coverage: 100% by the `tasks.md` traceability matrix and linked story checkpoints.
-- Required local Markdown links: all resolve.
-- Unresolved specification placeholders: zero. The only marker scan hit is the quality-checklist sentence asserting that no such marker remains.
+The coordinated public release remains truthfully blocked until the owner-controlled tasks T073--T091 are completed with action-specific evidence. In particular, the existing immutable `v0.1.0` tag points to a different revision than the candidate while the package still declares `0.1.0`; the tag must not be moved or overwritten.
 
-## 3. Contract and Architecture Consistency
+## Mechanical coverage
+
+- 48 contiguous functional requirements: `FR-001`--`FR-048`.
+- 5 contiguous security requirements: `SEC-001`--`SEC-005`.
+- 12 contiguous success criteria: `SC-001`--`SC-012`.
+- 6 independently testable user stories.
+- 8 required contracts: PKA-1, GCB-1, GXB-1, RAC-1, VSC-1, ECA-1, EXA-1, and PAB-1.
+- 95 unique sequential tasks.
+- 76 repository-authorized tasks complete after T094; 19 external/owner-sequenced tasks remain open.
+- Requirement-to-contract-to-task coverage: 100%.
+- Release-requirements checklist: CHK001--CHK096 evaluated and satisfied.
+- Unresolved template or clarification markers: zero.
+
+## Requirement-to-evidence traceability
+
+| Requirement set | Normative contracts | Evidence-producing tasks and checks | Result |
+|---|---|---|---|
+| FR-001--FR-005 baseline/audit | RAC-1, VSC-1 | T016--T023; candidate audit; KPI registry regression | Implemented; `KPI-MC-15` exists exactly once; version/tag conflict blocks release |
+| FR-006--FR-012 Python artifacts | RAC-1 | T024--T034, T092; build, Twine strict, artifact inspector, isolated rebuild, Windows pipx lifecycle | Implemented and passing |
+| FR-013--FR-018 canonical export | PKA-1, GCB-1, GXB-1 | T006--T012, T035--T043, T092; fail-closed allowlist and deterministic drift tests | Implemented and passing |
+| FR-019--FR-023 Claude Code | GCB-1, ECA-1, PAB-1 | T044--T053, T065, T069, T077--T079, T092; strict manifest validator and credential-free acceptance | Repository implementation passing; public catalog actions remain owner-only |
+| FR-024--FR-029 Codex | GXB-1, EXA-1, PAB-1 | T054--T063, T066, T070, T080--T083, T092; official plugin validator and CLI/IDE fixture acceptance | Repository implementation passing; OpenAI submission remains owner-only |
+| FR-030--FR-036 version/publication | VSC-1, PAB-1 | T008, T013, T064, T067, T073--T076, T084--T089, T092; workflow and authorization tests | Controls implemented; external configuration/version/publication intentionally blocked |
+| FR-037--FR-041 verification/rollback | RAC-1, ECA-1, EXA-1, PAB-1 | T026, T045, T055, T063--T072, T090--T092; rollback/approval rejection tests | Procedures implemented; real public evidence and any rollback remain owner-only |
+| FR-042--FR-048 required contracts | all eight contracts | T006--T015 plus contract-linked story tests and T094--T095 | Complete |
+| SEC-001--SEC-005 | PKA-1, GCB-1, GXB-1, RAC-1, PAB-1 | T002--T004, T006--T012, T024, T035--T043, T064--T076, T092 | Implemented; no undeclared service, credential, PII, client, cache, or local-path payload |
+| SC-001--SC-012 | all eight contracts | linked story checkpoints plus T092--T095 | Repository-observable criteria pass; owner/public criteria remain explicitly gated |
+
+## Architecture consistency
 
 | Concern | Result |
 |---|---|
-| Canonical source | Exactly five existing Knowledge Base entrypoints remain canonical under `skills/`; generated copies are projections. |
-| Inclusion control | PKA-1 requires literal tracked files, no recursive globs, path traversal, symlinks, or implicit inclusion. |
-| Determinism | PKA-1 plus both bundle contracts require stable paths, transformations, ordering, and SHA-256 provenance. |
-| Claude format | Root `.claude-plugin/marketplace.json`; plugin `.claude-plugin/plugin.json`; root `skills/` and `commands/`; cache-safe internal references. |
-| Codex format | Repo `.agents/plugins/marketplace.json`; plugin `.codex-plugin/plugin.json`; `skills/<name>/SKILL.md`; `$` invocation; no Claude-field assumption. |
-| Repository guidance | `AGENTS.md` and `.agents/skills/` remain repository-scoped and are not used as portable plugin payloads. |
-| Public terminology | OpenAI public review is consistently called the **Plugins Directory**; marketplace terminology is limited to the repo/personal catalog file and `codex plugin marketplace` command. |
-| Agent parity | ECA-1 and EXA-1 use one fictional source/outcome matrix and compare stage/action/gate classes, not exact prose. |
-| Release identity | VSC-1 projects one approved SemVer across package, both plugins/catalogs where supported, bundle manifests, changelog/note, tag, and GitHub Release. |
-| Credentials | PAB-1 gives OIDC only to the protected publish job after artifact validation and named-environment approval. |
-| Approval | Data model and PAB-1 bind each approval to one named human, action, candidate, version, SHA/digests, and timestamp. |
-| Rollback | Immutable package/tag identity is preserved; containment is surface-specific and replacement requires a new version and full gates. |
+| Canonical knowledge | The five existing Knowledge Base skill trees remain editable sources; generated bundles are projections only. |
+| Inclusion control | The allowlist enumerates literal files and the exporter rejects recursive inclusion, unsafe paths/types, secrets, symlinks, unreviewed files, and transitive-reference escape. |
+| Determinism | Both platform trees and manifests derive from the same reviewed inputs with stable ordering and SHA-256 provenance. |
+| Claude structure | One root marketplace, a native Claude manifest, bundled skills/commands/knowledge, and no workspace `AGENTS.md` or development-clone dependency. |
+| Codex structure | A native `.codex-plugin/plugin.json`, repository `.agents/plugins/marketplace.json`, supported skill layout, explicit `$` invocation, and no Claude-manifest assumptions. |
+| Terminology | Repository Codex catalog/CLI surfaces may use marketplace terminology; OpenAI's external surface is called public plugin submission/review/listing. |
+| Agent behavior | Python, Claude, and Codex use one fictional ambiguity/PII fixture and agree on stage, blocker, named gate, and allowed next-action class without exact-prose coupling. |
+| Publication control | Build/test jobs are uncredentialed; only a protected, named-reviewer publish job may request OIDC and consume same-run verified artifacts. |
+| Rollback | Containment is surface-specific; immutable artifacts/tags are preserved and replacement requires a new owner-approved version and full gates. |
 
-## 4. Baseline Evidence Consistency
+## Findings and resolutions
 
-- `skills/retail-kpi-knowledge/registry.yaml` contains one `KPI-MC-15` entry with slug `average-basket-size-units` and the matching knowledge-contract reference.
-- `skills/retail-kpi-knowledge/references/id-conventions.md` projects `KPI-MC-15`.
-- The plan therefore adds explicit regression/audit coverage and does not recreate the entry.
-- `pyproject.toml` contains version `0.1.0`.
-- An annotated repository tag `v0.1.0` exists and is titled “Seshat BI v0.1.0 -- first tagged release.”
-- `CHANGELOG.md` states there is no prior tag. The specification correctly treats this as a blocker to reconcile rather than silently choosing or moving a version.
-- `0.2.0` appears only as a likely proposal based on additive history; T084 reserves ratification to a named owner.
+| ID | Severity | Finding | Resolution |
+|---|---|---|---|
+| A1 | HIGH | The planning package still described OpenAI's current external plugin process as “Plugins Directory.” | Fixed across spec, plan, research, contracts, tasks, checklists, and public docs; repository marketplace terminology remains correctly scoped. |
+| A2 | MEDIUM | Approval action names drifted between the data model, tasks, publication contract, and executable validator. | Fixed around `create_release_tag`, `publish_pypi`, `submit_claude_catalog`, and `submit_openai_plugin`; obsolete Codex-directory actions were removed. |
+| A3 | MEDIUM | The spec/plan still said implementation was out of scope after the owner later authorized reversible repository implementation. | Fixed: repository work is authorized, while external configuration and irreversible actions remain prohibited without fresh named-owner decisions. |
+| A4 | MEDIUM | The original analysis described only the pre-implementation planning state and obsolete environment limits. | Replaced by this implementation-era analysis with executed evidence and current blockers. |
+| A5 | LOW | Ruff reported five overlong lines plus unused imports/variables in new files. | Fixed and revalidated across all 399 repository Python files. |
+| A6 | ENVIRONMENT | A full local test run initially lacked the declared optional `mcp` extra, causing three MCP contract import failures. | Installed the existing optional test dependency in the isolated local environment; the unchanged suite then passed completely. |
+| A7 | HIGH | The PyPI publish action pointed at a staging directory that also contained evidence JSON, checksums, and source metadata. | Isolated the wheel and sdist under `release-staging/dist/`, asserted an exact count of two distributions, and pointed the trusted-publishing action only at that directory. |
+| A8 | HIGH | Publication approvals were action-scoped but did not bind the exact source SHA and artifact digests. | Made full `source_revision` and exact `artifact_digests` mandatory in approval validation and added changed-revision/digest rejection tests. |
+| A9 | MEDIUM | Rollback actions were allowed globally instead of being enforced against the affected public surface. | Added a surface-to-action map for all five public surfaces and cross-surface rejection coverage. |
+| A10 | MEDIUM | The optional real Claude CLI acceptance path passed the development repository's plugin directory directly to Claude. | Removed the development path; the isolated Claude config must now contain an independently installed plugin, with command-construction regression coverage. |
+| A11 | MEDIUM | The knowledge allowlist could redefine canonical roots and did not reject a symlinked parent component. | Hard-coded the canonical source roots and reject symlinks in every source-path component, with negative contract tests. |
+| A12 | LOW | CI linted `src` and `tests` but omitted release/export/acceptance scripts. | Expanded both Ruff gates to `src tests scripts`, fixed the exposed import/format drift, and revalidated the full set. |
+| A13 | HIGH | The release workflow interpolated the workflow-dispatch candidate ref directly into Bash commands. | Pass all ref/repository/protection contexts through quoted step environment variables and added a contract test prohibiting direct input interpolation in shell bodies. |
 
-## 5. Constitution Check
+Final finding count: 0 unresolved CRITICAL, HIGH, or MEDIUM issues.
 
-- Agent-first interface preserved; release scripts/CLI remain helpers.
-- Both agent acceptances stop before silver when grain/mapping approval is absent.
-- No dashboard/Power BI execution is introduced.
-- Named-human approvals remain explicit; no task or workflow self-grants them.
-- Readiness and release verdicts use status, evidence, blockers, and one next action; no confidence/readiness score is introduced.
-- Live-database absence produces deferred guidance rather than a fabricated pass.
-- Synthetic fixtures are generic and fictional; C086 is not reused as a schema.
-- Secrets, DSNs, hosts, client material, and raw PII are prohibited from artifacts/evidence.
+## Executed repository evidence
 
-Result: PASS before and after design; no constitutional exception is requested.
+- Full pytest suite: 2,235 passed, 9 skipped on Windows/Python 3.13.
+- Ruff format and lint: pass across 399 repository Python files, including all release scripts.
+- `seshat check`, `seshat semantic-check --repo .`, and `seshat kit-lint`: pass.
+- Deterministic Claude/Codex exporter drift check: pass.
+- Claude Code strict marketplace and plugin validation: pass.
+- Codex plugin validation: pass.
+- Credential-free Claude/Codex bundle acceptance and semantic parity: pass.
+- Exactly one wheel and one sdist: built; Twine strict, content inspection, and isolated sdist rebuild pass.
+- Windows isolated pipx install, first success, upgrade, uninstall, command removal, dependency exclusion, and project preservation: pass.
+- Primary install/rollback local-link scan: pass; development-only command scan of public journeys: clean.
+- Credential-free candidate audit: repository checks pass; coordinated release status remains blocked for the exact version/tag and owner/public-evidence reasons above.
 
-## 6. Findings and Resolutions
+## Constitution and authorization check
 
-The first detection pass found two planning-package defects. They were corrected before the final pass.
+- Agent-first interface and the seven-stage readiness order remain unchanged.
+- Ambiguous grain/PII cases stop before silver and name the human decision.
+- No dashboard or Power BI execution path is introduced.
+- No readiness/confidence score is created.
+- No test, workflow, merge, agent statement, or checklist grants an approval.
+- No external account, repository protection, tag, upload, release, catalog submission, OpenAI submission, or rollback was performed.
 
-| ID | Category | Severity | Finding | Resolution |
-|---|---|---|---|---|
-| A1 | Coverage/actionability | MEDIUM | Owner version approval flowed directly to rebuild without a standalone reversible task to project the approved value into all governed locations and create the release note. | FIXED -- T085 now performs the authorized repository projection after T084 and before T086 rebuild. |
-| A2 | Traceability typo | LOW | Contract task range used `T006–T15`, which was not a canonical three-digit task reference. | FIXED -- corrected to `T006–T015`; downstream shifted ranges were rechecked after T085 insertion. |
+Result: PASS with no constitutional exception.
 
-Final pass: 0 CRITICAL, 0 unresolved HIGH, 0 unresolved MEDIUM.
+## Remaining owner-controlled dependency chain
 
-## 7. Known Execution-Time Checks (Not Specification Defects)
+```text
+repository PR + CI + merge
+        |
+        +--> T073--T076  external PyPI/GitHub configuration
+        +--> T077--T079  Claude public-catalog decision/submission
+        +--> T080--T083  OpenAI public-plugin eligibility/submission
+        |
+        +--> T084 version decision
+                 -> T085 authorized version projection
+                 -> T086 final immutable candidate evidence
+                 -> T087 action-approved tag
+                 -> T088/T089 separately approved PyPI/GitHub publication
+                 -> T090 public-source verification
+                 -> T091 surface-specific containment only if needed
+```
 
-1. PyPI `seshat-bi` ownership/availability and actual index publication history require the named owner's authenticated recheck before configuration (T073).
-2. GitHub environment-reviewer eligibility depends on current repository plan/ownership and is an external configuration check (T074).
-3. Claude Code and Codex schemas, CLI/IDE behavior, and directory submission requirements are time-sensitive; research uses current official documentation and tasks require a release-time recheck.
-4. `retail check` could not be run in this shell because neither `python` nor a Python launcher installation is available. The failure was explicit (“No installed Python found”) and is not represented as a pass. Static artifact checks below still completed.
+These branches do not authorize one another. T085 is reversible repository work but cannot begin until the owner records T084 for the exact version and source.
 
-## 8. Validation Results
+## Final analysis conclusion
 
-- Template-marker scan: clean except the self-referential quality-checklist assertion.
-- Requirement/task/contract ID uniqueness and sequencing: clean.
-- Task format scan: clean.
-- Local Markdown link validation: clean.
-- `git diff --check`: clean (Git only reports its normal future LF-to-CRLF warning for `.specify/feature.json`).
-- Working-tree boundary: only `.specify/feature.json` and `specs/125-public-distribution-launch/` are changed.
-- No implementation file, account, tag, release, publication, commit, push, or pull request was created or changed.
-
-## 9. Verdict
-
-The Spec Kit package is internally consistent, fully covers the owner's distribution and authorization boundary, distinguishes Claude and Codex formats/terminology, has complete requirement-to-contract-to-task traceability, and has no unresolved critical/high/medium artifact issue. It is ready for owner review as a **Draft specification and plan**, not ratified and not authorized for implementation or publication by this analysis.
-
-## Stop
-
-This workflow stops after the validated specification package. Do not run `/speckit-implement`, create a tag/release, configure external publishing, submit a plugin, or infer approval from this verdict.
+The repository implementation is internally consistent, contract-complete, test-backed, and ready for independent pull-request review. The Public Beta itself is not approved or released. The remaining open tasks are intentionally external or owner-sequenced and must retain their named-human gates.

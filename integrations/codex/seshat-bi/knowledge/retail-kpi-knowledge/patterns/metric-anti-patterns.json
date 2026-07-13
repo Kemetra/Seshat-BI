@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "description": "Seed anti-patterns: recurring mistakes that corrupt retail KPIs. Detect and block these during contract and pack review.",
+  "anti_patterns": [
+    {
+      "id": "KPI-AP-01",
+      "name": "KPI without owner",
+      "problem": "No accountable business owner, so policy ambiguities cannot be resolved or signed off.",
+      "detect": "Contract Owner field empty.",
+      "fix": "Assign exactly one business owner before the contract reaches Seeded."
+    },
+    {
+      "id": "KPI-AP-02",
+      "name": "KPI without grain",
+      "problem": "Aggregation behaviour is undefined; totals become unpredictable.",
+      "detect": "Contract Grain field missing or vague.",
+      "fix": "Declare computed-from and aggregable-to grain."
+    },
+    {
+      "id": "KPI-AP-03",
+      "name": "DAX before metric contract",
+      "problem": "A measure is written before meaning is agreed, causing duplicated and divergent logic.",
+      "detect": "DAX exists with no passing contract.",
+      "fix": "Write and review the contract first; then hand off to the DAX layer."
+    },
+    {
+      "id": "KPI-AP-04",
+      "name": "Summing percentages",
+      "problem": "Percentages added across levels produce nonsense.",
+      "detect": "A non-additive percentage is SUMmed in a total row.",
+      "fix": "Recompute numerator/denominator at each level (KPI-PAT-04)."
+    },
+    {
+      "id": "KPI-AP-05",
+      "name": "Averaging averages",
+      "problem": "Unweighted average of child averages misweights the result.",
+      "detect": "An average KPI is averaged across groups.",
+      "fix": "Recompute total/count at each level (KPI-PAT-05)."
+    },
+    {
+      "id": "KPI-AP-06",
+      "name": "Gross and net mixed",
+      "problem": "Gross sales and net sales used interchangeably in one measure or visual.",
+      "detect": "A measure mixes pre- and post-discount amounts; discount rate using net denominator.",
+      "fix": "Keep gross and net as distinct KPIs; discount rate uses gross (A4)."
+    },
+    {
+      "id": "KPI-AP-07",
+      "name": "Returns hidden inside sales without policy",
+      "problem": "Returns netted into sales as negative lines, hiding both true sales and true returns.",
+      "detect": "Sales measure silently nets returns; no transaction-type flag or separate fact.",
+      "fix": "Model returns separately or flag transaction type; state the policy (A2)."
+    },
+    {
+      "id": "KPI-AP-08",
+      "name": "VAT ambiguity ignored",
+      "problem": "Tax inclusion mixed across measures/branches, distorting revenue and margin.",
+      "detect": "VAT treatment unstated or inconsistent.",
+      "fix": "Decide pre- vs post-tax once and apply consistently (A1)."
+    },
+    {
+      "id": "KPI-AP-09",
+      "name": "Target grain mismatch",
+      "problem": "Actuals compared with targets defined at a different grain.",
+      "detect": "Detailed actuals vs high-level targets, or misaligned calendars.",
+      "fix": "Align target grain and calendar to the actuals before computing variance."
+    },
+    {
+      "id": "KPI-AP-10",
+      "name": "Inventory snapshot summed over time",
+      "problem": "Point-in-time stock summed across snapshot dates, multiplying the stock.",
+      "detect": "SUM of on-hand qty/cost across dates.",
+      "fix": "Treat as semi-additive: last or average over time, never SUM (A10, KPI-PAT-06)."
+    },
+    {
+      "id": "KPI-AP-11",
+      "name": "Aggregating on name instead of key",
+      "problem": "Grouping by product or branch name breaks when names change or duplicate.",
+      "detect": "Group-by uses a name attribute.",
+      "fix": "Aggregate on the surrogate key; treat name as display only (A8, A9)."
+    }
+  ]
+}

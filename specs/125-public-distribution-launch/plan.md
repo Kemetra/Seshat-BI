@@ -4,11 +4,11 @@
 
 **Input**: Feature specification from `/specs/125-public-distribution-launch/spec.md`
 
-**Boundary**: This document plans future implementation and owner actions. This feature branch does not implement, publish, tag, release, configure an external account, or record an approval.
+**Boundary**: This document governs repository implementation and describes later owner actions. Repository work may implement and validate the candidate, but it does not publish, tag, release, configure an external account, or record an owner approval.
 
 ## Summary
 
-Prepare one coordinated Public Beta release candidate across the `seshat-bi` Python package, Claude Code, Codex, and the canonical repository. Keep the five existing Knowledge Bases canonical, introduce an explicit public-file allowlist plus a deterministic fail-closed exporter, and generate two separate self-contained agent bundles. Harden package metadata and artifact/install lifecycle checks, add a protected GitHub OIDC publication definition, synchronize one owner-approved version across all surfaces, and prove both agents return the same truthful next governed action in fresh external workspaces. Publication and public-directory submission remain separate named-owner gates.
+Prepare one coordinated Public Beta release candidate across the `seshat-bi` Python package, Claude Code, Codex, and the canonical repository. Keep the five existing Knowledge Bases canonical, introduce an explicit public-file allowlist plus a deterministic fail-closed exporter, and generate two separate self-contained agent bundles. Harden package metadata and artifact/install lifecycle checks, add a protected GitHub OIDC publication definition, synchronize one owner-approved version across all surfaces, and prove both agents return the same truthful next governed action in fresh external workspaces. Publication and public plugin submission remain separate named-owner gates.
 
 The narrowest architecture is:
 
@@ -34,7 +34,7 @@ Generated copies are disposable projections. They are never edited or used as a 
 **Target Platform**: blocking Windows release smoke; supported Python environments; Claude Code public GitHub plugin flow; current Codex CLI, IDE, and repository/plugin surfaces
 **Project Type**: Python CLI/package plus generated agent integration bundles and release automation
 **Performance Goals**: two exports from identical source produce identical file lists/digests; fresh Python first-success journey completes within 15 minutes
-**Constraints**: planning only in this feature; no self-approval; no development-repository dependency for public users; no secrets/PII/local paths; no recursive allowlist globs; no readiness score; publication credentials confined to a protected publish job
+**Constraints**: repository implementation only; no self-approval; no development-repository dependency for public users; no secrets/PII/local paths; no recursive allowlist globs; no readiness score; publication credentials confined to a protected publish job
 **Scale/Scope**: one Python wheel, one sdist, two generated agent bundles, five canonical Knowledge Bases, eight normative contracts, three external distribution surfaces, and five authorization lanes
 
 ## Constitution Check
@@ -63,7 +63,7 @@ Research is recorded in [research.md](research.md). The blocking decisions are:
 3. Use one explicit allowlist and one deterministic exporter, with platform-specific bundle templates and a shared public operating contract.
 4. Keep Claude's root `.claude-plugin/marketplace.json`; remove the competing nested marketplace source and make the plugin cache-safe/self-contained.
 5. Add a Codex-native plugin under `integrations/codex/seshat-bi/` and a repo catalog at `.agents/plugins/marketplace.json`. Retain `.agents/skills/` for repository-scoped skills and `AGENTS.md` for repository guidance.
-6. Call the OpenAI public destination the **Plugins Directory**. A repository catalog/marketplace and a public-directory submission are separate surfaces.
+6. Use the current OpenAI terminology: **public plugin submission/review/listing**. A repository catalog/marketplace and OpenAI's public process are separate surfaces.
 7. Build and validate without credentials; publish only validated immutable artifacts through a protected `pypi` environment using GitHub OIDC.
 
 ## Phase 1: Design
@@ -74,7 +74,7 @@ Research is recorded in [research.md](research.md). The blocking decisions are:
 
 ### Contract design
 
-The contracts are normative inputs to future tests and implementation:
+The contracts are normative inputs to tests, implementation, and review:
 
 - [Public Knowledge Allowlist](contracts/public-knowledge-allowlist.md)
 - [Generated Claude Bundle](contracts/generated-claude-bundle.md)
@@ -174,7 +174,7 @@ docs/
 1. **Repository implementation**: fix baseline release claims; add metadata, exporter, bundles, tests, docs, and inert workflow definitions; review and merge normally.
 2. **PyPI/GitHub configuration**: a named owner confirms package ownership/availability, creates the protected `pypi` environment and reviewer rule, registers Trusted Publishing identity, and confirms tag protection.
 3. **Claude publication**: repository marketplace installation becomes usable when merged; a named owner separately decides whether to submit to Anthropic's public catalog.
-4. **Codex publication**: repository catalog/plugin installation becomes usable when merged; an eligible verified publisher separately prepares and submits to OpenAI's Plugins Directory.
+4. **Codex publication**: repository catalog/plugin installation becomes usable when merged; an eligible verified publisher separately prepares and submits through OpenAI's public plugin process.
 5. **Irreversible release**: a named owner approves the exact version and immutable candidate, creates the tag, authorizes upload/GitHub Release, then records external verification. Each public-catalog submission has its own approval.
 
 These lanes may not be collapsed into one inferred approval. A partial launch must be described truthfully by surface.

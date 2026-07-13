@@ -1,0 +1,29 @@
+{
+  "name": "seshat-bi",
+  "version": "0.1.0",
+  "description": "Guarded Seshat BI readiness skills and public knowledge for Codex.",
+  "author": {
+    "name": "Ahmed Shaaban",
+    "url": "https://github.com/ahmed-shaaban-94"
+  },
+  "homepage": "https://github.com/ahmed-shaaban-94/Seshat_BI",
+  "repository": "https://github.com/ahmed-shaaban-94/Seshat_BI",
+  "license": "Apache-2.0",
+  "keywords": [
+    "business-intelligence",
+    "data-governance",
+    "power-bi",
+    "readiness"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Seshat BI",
+    "shortDescription": "Governed BI readiness guidance and public knowledge.",
+    "longDescription": "Inspect BI sources, load reviewed Seshat knowledge, and return the earliest truthful next action while stopping at named-human approval gates.",
+    "developerName": "Ahmed Shaaban",
+    "category": "Productivity",
+    "capabilities": ["Skills", "Read-only guidance"],
+    "websiteURL": "https://github.com/ahmed-shaaban-94/Seshat_BI",
+    "defaultPrompt": "Use $seshat-bi to inspect this project's evidence and return exactly one governed next action or one blocked stop."
+  }
+}

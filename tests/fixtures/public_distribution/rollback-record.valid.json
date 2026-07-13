@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "rollback_id": "rollback-pypi-001",
+  "candidate_id": "candidate-0.2.0-0123456789ab",
+  "surface": "python_pypi",
+  "trigger": "clean public install failed for the published candidate",
+  "actor": "Named Package Owner",
+  "action": "rollback_pypi",
+  "status": "completed",
+  "blockers": [],
+  "recorded_at": "2026-07-13T12:30:00Z",
+  "approval_id": "approval-rollback-pypi-001"
+}

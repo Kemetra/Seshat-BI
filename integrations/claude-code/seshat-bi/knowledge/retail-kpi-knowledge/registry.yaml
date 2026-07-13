@@ -1,0 +1,345 @@
+# The authoritative product-level KPI inventory. Entries contain generic concepts
+# only; project decisions, physical bindings, and project contracts live elsewhere.
+version: 1
+
+drift_reconciliations:
+  - id: seed-count
+    conflicting_files:
+      - skills/retail-kpi-knowledge/SKILL.md
+      - skills/retail-kpi-knowledge/INDEX.md
+      - skills/retail-kpi-knowledge/README.md
+    resolution: Routes now name their individual lifecycle; this registry is the only machine-readable inventory.
+  - id: net-sales-growth-lifecycle
+    conflicting_files:
+      - skills/retail-kpi-knowledge/README.md
+      - skills/retail-kpi-knowledge/packs/sales-performance-pack.md
+      - skills/retail-kpi-knowledge/packs/mvp-retail-kpi-pack.md
+      - skills/retail-kpi-knowledge/patterns/metric-contract-candidates.json
+    resolution: KPI-MC-11 is seeded because its generic knowledge contract exists; its comparison basis remains a project owner policy.
+  - id: ytd-net-sales-lifecycle
+    conflicting_files:
+      - skills/retail-kpi-knowledge/README.md
+      - skills/retail-kpi-knowledge/packs/sales-performance-pack.md
+      - skills/retail-kpi-knowledge/packs/mvp-retail-kpi-pack.md
+      - skills/retail-kpi-knowledge/patterns/metric-contract-candidates.json
+    resolution: KPI-MC-13 is seeded because its generic knowledge contract exists; year boundary remains a project owner policy.
+  - id: same-store-lifecycle
+    conflicting_files:
+      - skills/retail-kpi-knowledge/patterns/metric-contract-candidates.json
+    resolution: KPI-MC-12 is planned until the comparable-store and comparison policies are approved.
+  - id: scorecard-dash-style
+    conflicting_files:
+      - skills/retail-kpi-knowledge/references/kpi-coverage-scorecard-template.md
+      - src/seshat/rules/scorecard.py
+    resolution: Owner-flagged cosmetic drift; the template keeps its shipped em dash while SL1 accepts ASCII double hyphen output.
+
+entries:
+  - id: KPI-MC-01
+    slug: gross-sales
+    canonical_name: Gross Sales
+    aliases: []
+    domain: sales-and-revenue
+    metric_kind: base_metric
+    lifecycle: seeded
+    knowledge_contract_ref: skills/retail-kpi-knowledge/contracts/gross-sales.md
+    derives_from: []
+    required_concepts: [gross_sales_value, sales_date, qualifying_sale]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [sales_fact]
+
+  - id: KPI-MC-02
+    slug: net-sales
+    canonical_name: Net Sales
+    aliases: [realized sales]
+    domain: sales-and-revenue
+    metric_kind: derived_metric
+    lifecycle: seeded
+    knowledge_contract_ref: skills/retail-kpi-knowledge/contracts/net-sales.md
+    derives_from: [KPI-MC-01, KPI-MC-06]
+    required_concepts: [net_sales_value, sales_date, qualifying_sale]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [sales_fact]
+
+  - id: KPI-MC-03
+    slug: units-sold
+    canonical_name: Units Sold
+    aliases: [sales units]
+    domain: sales-and-revenue
+    metric_kind: base_metric
+    lifecycle: seeded
+    knowledge_contract_ref: skills/retail-kpi-knowledge/contracts/quantity-sold.md
+    derives_from: []
+    required_concepts: [units_sold, sales_date, qualifying_sale]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [sales_fact]
+
+  - id: KPI-MC-04
+    slug: transactions-count
+    canonical_name: Transactions Count
+    aliases: [receipt count]
+    domain: basket-and-transactions
+    metric_kind: base_metric
+    lifecycle: seeded
+    knowledge_contract_ref: skills/retail-kpi-knowledge/contracts/transactions-count.md
+    derives_from: []
+    required_concepts: [transaction_identifier, sales_date, qualifying_transaction]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [sales_fact]
+
+  - id: KPI-MC-05
+    slug: average-transaction-value
+    canonical_name: Average Transaction Value
+    aliases: [average receipt value, average basket value currency]
+    domain: basket-and-transactions
+    metric_kind: ratio
+    lifecycle: seeded
+    knowledge_contract_ref: skills/retail-kpi-knowledge/contracts/average-transaction-value.md
+    derives_from: [KPI-MC-02, KPI-MC-04]
+    required_concepts: [net_sales_value, transaction_identifier, qualifying_transaction]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [sales_fact]
+
+  - id: KPI-MC-06
+    slug: discount-amount
+    canonical_name: Discount Amount
+    aliases: [commercial discount value]
+    domain: discounts-and-promotions
+    metric_kind: base_metric
+    lifecycle: seeded
+    knowledge_contract_ref: skills/retail-kpi-knowledge/contracts/discount-amount.md
+    derives_from: []
+    required_concepts: [discount_value, qualifying_sale, sales_date]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [sales_fact]
+
+  - id: KPI-MC-07
+    slug: discount-rate
+    canonical_name: Discount Rate
+    aliases: [discount share]
+    domain: discounts-and-promotions
+    metric_kind: ratio
+    lifecycle: seeded
+    knowledge_contract_ref: skills/retail-kpi-knowledge/contracts/discount-rate.md
+    derives_from: [KPI-MC-06, KPI-MC-01]
+    required_concepts: [discount_value, gross_sales_value, qualifying_sale]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [sales_fact]
+
+  - id: KPI-MC-08
+    slug: returns-rate-value
+    canonical_name: Returns Rate by Value
+    aliases: [value return rate]
+    domain: returns
+    metric_kind: ratio
+    lifecycle: seeded
+    knowledge_contract_ref: skills/retail-kpi-knowledge/contracts/returns-rate-value.md
+    derives_from: [KPI-MC-02]
+    required_concepts: [return_value, net_sales_value, return_date]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [sales_fact, returns_fact]
+
+  - id: KPI-MC-09
+    slug: gross-margin-value
+    canonical_name: Gross Margin Value
+    aliases: [gross profit]
+    domain: margin-profitability
+    metric_kind: derived_metric
+    lifecycle: seeded
+    knowledge_contract_ref: skills/retail-kpi-knowledge/contracts/gross-margin.md
+    derives_from: [KPI-MC-02]
+    required_concepts: [net_sales_value, cost_value, qualifying_sale]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [sales_fact, cost_fact]
+
+  - id: KPI-MC-10
+    slug: gross-margin-rate
+    canonical_name: Gross Margin Rate
+    aliases: [margin rate]
+    domain: margin-profitability
+    metric_kind: ratio
+    lifecycle: seeded
+    knowledge_contract_ref: skills/retail-kpi-knowledge/contracts/gross-margin-percent.md
+    derives_from: [KPI-MC-09, KPI-MC-02]
+    required_concepts: [margin_value, net_sales_value, qualifying_sale]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [sales_fact, cost_fact]
+
+  - id: KPI-MC-11
+    slug: net-sales-growth
+    canonical_name: Net Sales Growth
+    aliases: [sales growth]
+    domain: time-intelligence
+    metric_kind: time_transform
+    lifecycle: seeded
+    knowledge_contract_ref: skills/retail-kpi-knowledge/contracts/net-sales-growth.md
+    derives_from: [KPI-MC-02]
+    required_concepts: [net_sales_value, comparison_period, business_date]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [sales_fact, date_dimension]
+
+  - id: KPI-MC-12
+    slug: same-store-sales-growth
+    canonical_name: Same Store Sales Growth
+    aliases: [like for like sales growth]
+    domain: branch-store-performance
+    metric_kind: time_transform
+    lifecycle: planned
+    blockers:
+      - comparable-store policy is not approved
+      - comparison-period policy is not approved
+    knowledge_contract_ref: skills/retail-kpi-knowledge/contracts/same-store-sales-growth.md
+    derives_from: [KPI-MC-11]
+    required_concepts: [net_sales_value, comparable_store_membership, comparison_period]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [sales_fact, date_dimension, store_dimension]
+
+  - id: KPI-MC-13
+    slug: ytd-net-sales
+    canonical_name: YTD Net Sales
+    aliases: [year to date net sales]
+    domain: time-intelligence
+    metric_kind: time_transform
+    lifecycle: seeded
+    knowledge_contract_ref: skills/retail-kpi-knowledge/contracts/ytd.md
+    derives_from: [KPI-MC-02]
+    required_concepts: [net_sales_value, business_date, year_boundary]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [sales_fact, date_dimension]
+
+  - id: KPI-MC-14
+    slug: discounted-transaction-rate
+    canonical_name: Discounted Transaction Rate
+    aliases: [discounted receipt rate]
+    domain: discounts-and-promotions
+    metric_kind: ratio
+    lifecycle: seeded
+    knowledge_contract_ref: skills/retail-kpi-knowledge/contracts/discounted-transaction-rate.md
+    derives_from: [KPI-MC-04]
+    required_concepts: [transaction_identifier, discount_qualification, eligible_transaction]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [sales_fact]
+
+  - id: KPI-MC-15
+    slug: average-basket-size-units
+    canonical_name: Average Basket Size Units
+    aliases: [units per basket]
+    domain: basket-and-transactions
+    metric_kind: ratio
+    lifecycle: seeded
+    knowledge_contract_ref: skills/retail-kpi-knowledge/contracts/average-basket-size-units.md
+    derives_from: [KPI-MC-03, KPI-MC-04]
+    required_concepts: [units_sold, transaction_identifier, qualifying_transaction]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [sales_fact]
+
+  - id: KPI-MC-16
+    slug: inventory-turnover
+    canonical_name: Inventory Turnover
+    aliases: []
+    domain: inventory
+    metric_kind: ratio
+    lifecycle: planned
+    blockers:
+      - inventory snapshot fact is not mapped
+      - inventory cost policy is not approved
+    knowledge_contract_ref: skills/retail-kpi-knowledge/references/planned-kpi-backlog.md
+    derives_from: [KPI-MC-09]
+    required_concepts: [cost_value, average_inventory_cost, inventory_snapshot]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [cost_fact, inventory_snapshot_fact]
+
+  - id: KPI-MC-17
+    slug: gmroi
+    canonical_name: GMROI
+    aliases: [gross margin return on inventory investment]
+    domain: margin-profitability
+    metric_kind: ratio
+    lifecycle: planned
+    blockers:
+      - inventory snapshot fact is not mapped
+      - inventory cost policy is not approved
+    knowledge_contract_ref: skills/retail-kpi-knowledge/references/planned-kpi-backlog.md
+    derives_from: [KPI-MC-09]
+    required_concepts: [margin_value, average_inventory_cost, inventory_snapshot]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [cost_fact, inventory_snapshot_fact]
+
+  - id: KPI-MC-18
+    slug: out-of-stock-rate
+    canonical_name: Out of Stock Rate
+    aliases: [stockout rate]
+    domain: inventory
+    metric_kind: ratio
+    lifecycle: planned
+    blockers:
+      - inventory availability fact is not mapped
+      - assortment population policy is not approved
+    knowledge_contract_ref: skills/retail-kpi-knowledge/references/planned-kpi-backlog.md
+    derives_from: []
+    required_concepts: [stock_availability, assortment_population, business_date]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [inventory_snapshot_fact, assortment_fact]
+
+  - id: KPI-MC-19
+    slug: customer-retention
+    canonical_name: Customer Retention
+    aliases: [customer repeat rate]
+    domain: customer
+    metric_kind: ratio
+    lifecycle: planned
+    blockers:
+      - customer identity handling is not approved
+      - retention policy is not approved
+    knowledge_contract_ref: skills/retail-kpi-knowledge/references/planned-kpi-backlog.md
+    derives_from: []
+    required_concepts: [customer_identity, repeat_customer, comparison_period]
+    required_decision_types: [kpi_definition, policy_ruling, pii_handling]
+    source_roles: [sales_fact, customer_fact]
+
+  - id: KPI-MC-20
+    slug: customer-lifetime-value
+    canonical_name: Customer Lifetime Value
+    aliases: [clv]
+    domain: customer
+    metric_kind: derived_metric
+    lifecycle: planned
+    blockers:
+      - customer identity handling is not approved
+      - lifecycle value policy is not approved
+    knowledge_contract_ref: skills/retail-kpi-knowledge/references/planned-kpi-backlog.md
+    derives_from: [KPI-MC-02]
+    required_concepts: [customer_identity, net_sales_value, customer_lifecycle]
+    required_decision_types: [kpi_definition, policy_ruling, pii_handling]
+    source_roles: [sales_fact, customer_fact]
+
+  - id: KPI-MC-21
+    slug: net-sales-vs-target
+    canonical_name: Net Sales vs Target
+    aliases: [sales attainment]
+    domain: targets-and-budgets
+    metric_kind: ratio
+    lifecycle: planned
+    blockers:
+      - target fact is not mapped
+      - target alignment policy is not approved
+    knowledge_contract_ref: skills/retail-kpi-knowledge/references/planned-kpi-backlog.md
+    derives_from: [KPI-MC-02]
+    required_concepts: [net_sales_value, target_value, target_grain]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [sales_fact, target_fact]
+
+  - id: KPI-MC-22
+    slug: promotion-uplift
+    canonical_name: Promotion Uplift
+    aliases: [promotion incremental sales]
+    domain: discounts-and-promotions
+    metric_kind: ratio
+    lifecycle: planned
+    blockers:
+      - promotion fact is not mapped
+      - comparison baseline policy is not approved
+    knowledge_contract_ref: skills/retail-kpi-knowledge/references/planned-kpi-backlog.md
+    derives_from: [KPI-MC-02]
+    required_concepts: [net_sales_value, promotion_membership, comparison_period]
+    required_decision_types: [kpi_definition, policy_ruling]
+    source_roles: [sales_fact, promotion_fact, date_dimension]

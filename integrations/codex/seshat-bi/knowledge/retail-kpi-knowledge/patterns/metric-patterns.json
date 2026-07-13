@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "description": "Seed metric patterns for retail KPIs. A pattern classifies a KPI's shape so its additivity and aggregation behaviour are decided consistently.",
+  "patterns": [
+    {
+      "id": "KPI-PAT-01",
+      "name": "Additive currency amount",
+      "shape": "Sum of a monetary fact at line/transaction grain.",
+      "additivity": "fully-additive",
+      "aggregation": "SUM across all dimensions and time.",
+      "examples": ["KPI-MC-01", "KPI-MC-02", "KPI-MC-06", "KPI-MC-09"]
+    },
+    {
+      "id": "KPI-PAT-02",
+      "name": "Additive unit count",
+      "shape": "Sum of a quantity fact at line grain.",
+      "additivity": "fully-additive",
+      "aggregation": "SUM across all dimensions and time; do not net returns silently.",
+      "examples": ["KPI-MC-03"]
+    },
+    {
+      "id": "KPI-PAT-03",
+      "name": "Distinct transaction count",
+      "shape": "Count of distinct receipt/header keys.",
+      "additivity": "semi-additive",
+      "aggregation": "Distinct count; safe to add across branches/days when the key is unique and time-bounded; never count lines.",
+      "examples": ["KPI-MC-04"]
+    },
+    {
+      "id": "KPI-PAT-04",
+      "name": "Non-additive percentage",
+      "shape": "Ratio of two additive bases, expressed as a percent.",
+      "additivity": "non-additive",
+      "aggregation": "Recompute as SUM(numerator)/SUM(denominator) at each level; never sum or average the percentage.",
+      "examples": ["KPI-MC-07", "KPI-MC-08", "KPI-MC-10"]
+    },
+    {
+      "id": "KPI-PAT-05",
+      "name": "Non-additive average",
+      "shape": "Additive total divided by a count.",
+      "additivity": "non-additive",
+      "aggregation": "Recompute as total/count at each level; never average the averages.",
+      "examples": ["KPI-MC-05"]
+    },
+    {
+      "id": "KPI-PAT-06",
+      "name": "Semi-additive inventory snapshot",
+      "shape": "Point-in-time stock state (on-hand qty or cost) captured per snapshot date.",
+      "additivity": "semi-additive",
+      "aggregation": "Additive across products/branches at one date; over time use last or average, never SUM across snapshot dates.",
+      "examples": ["planned: inventory domain KPIs (KPI-CAND-06, KPI-CAND-08)"]
+    }
+  ]
+}

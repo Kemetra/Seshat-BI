@@ -13,7 +13,7 @@ One release candidate MUST produce and validate exactly:
 4. one generated Codex plugin tree and manifest; and
 5. one evidence manifest recording source revision, version, filenames, SHA-256 digests, checks, and sanitized evidence references.
 
-Only the wheel and sdist are uploaded to PyPI. Agent bundles are distributed from the canonical repository/plugin paths unless a separately approved public-directory process creates its own reviewed artifact.
+Only the wheel and sdist are uploaded to PyPI. Agent bundles are distributed from the canonical repository/plugin paths unless a separately approved public plugin process creates its own reviewed artifact.
 
 ## Python metadata requirements
 

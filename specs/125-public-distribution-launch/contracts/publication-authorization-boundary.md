@@ -14,7 +14,7 @@ Repository validation proves facts; a named human grants authority. No agent, me
 | 1. Repository implementation | metadata, exporter, generated bundles, tests, docs, inert workflow definitions | reviewed code/docs, CI and acceptance evidence | normal repository maintainers/reviewers; does not publish |
 | 2. PyPI/GitHub configuration | protected `pypi` environment, named reviewers, Trusted Publisher binding, tag protection | settings screenshots/exports and identity tuple | eligible named repository/PyPI owner |
 | 3. Claude publication | public GitHub marketplace availability; optional official-catalog submission | external Claude acceptance; listing/submission evidence | repository owner for Git distribution; separately eligible publisher for catalog |
-| 4. Codex publication | repository catalog/plugin availability; Plugins Directory submission | external Codex acceptance; eligibility/listing/test/policy evidence | repository owner for Git distribution; separately verified eligible OpenAI publisher |
+| 4. Codex publication | repository catalog/plugin availability; OpenAI public plugin submission | external Codex acceptance; eligibility/listing/test/policy evidence | repository owner for Git distribution; separately verified eligible OpenAI publisher |
 | 5. Irreversible release | version approval, tag, PyPI upload, GitHub Release, catalog submissions | candidate digest pack and action-scoped approval | named owner eligible for each exact action |
 
 ## Actions and gates
@@ -25,11 +25,11 @@ Repository validation proves facts; a named human grants authority. No agent, me
 | Configure GitHub `pypi` environment | owner identity and reviewer plan | named repository owner |
 | Register PyPI Trusted Publisher | confirmed project name/owner and exact repo/workflow/environment tuple | named PyPI/project owner |
 | Approve release version | zero blockers, version history reconciled, complete evidence pack | named release owner bound to version/SHA/digests |
-| Create `v{version}` tag | approved version and exact revision | explicit `create_tag` approval |
-| Upload wheel/sdist | protected environment approval, exact validated digests, OIDC identity | explicit `upload_pypi` approval by named environment reviewer/owner |
+| Create `v{version}` tag | approved version and exact revision | explicit `create_release_tag` approval |
+| Upload wheel/sdist | protected environment approval, exact validated digests, OIDC identity | explicit `publish_pypi` approval by named environment reviewer/owner |
 | Publish GitHub Release | tag and public verification evidence as policy requires | explicit `publish_github_release` approval |
 | Submit Claude public catalog | passing Claude acceptance and current submission evidence | explicit `submit_claude_catalog` approval |
-| Submit OpenAI Plugins Directory | passing Codex acceptance, Apps Management Write, verified identity, complete listing/test/policy evidence | explicit `submit_codex_directory` approval |
+| Submit through OpenAI's public plugin process | passing Codex acceptance, Apps Management Write, verified identity, complete listing/test/policy evidence | explicit `submit_openai_plugin` approval |
 | Yank/withdraw/repoint public surface | defect evidence and rollback plan | named owner for affected external surface |
 
 Each approval is action-specific. One row cannot authorize another.
@@ -71,7 +71,7 @@ Before an owner-only action, evidence MUST record:
 
 ## Staged availability
 
-Python, repository Claude, repository Codex, Claude public catalog, and OpenAI Plugins Directory may become available at different times. Documentation and release status MUST name the actual state of every surface. A pass or approval for one surface never permits the others to be described as public.
+Python, repository Claude, repository Codex, Claude public catalog, and OpenAI's public plugin listing may become available at different times. Documentation and release status MUST name the actual state of every surface. A pass or approval for one surface never permits the others to be described as public.
 
 ## Rollback authority
 
@@ -86,6 +86,6 @@ Python, repository Claude, repository Codex, Claude public catalog, and OpenAI P
 - a workflow creating a tag because tests passed without action-scoped approval;
 - giving `id-token: write` to build/test jobs;
 - storing a reusable PyPI token as convenience fallback;
-- treating repository marketplace/catalog availability as official public-directory acceptance;
+- treating repository marketplace/catalog availability as OpenAI public plugin acceptance;
 - reusing a Claude submission approval for Codex, or vice versa;
 - deleting/moving evidence to make a failed release appear never to have occurred.

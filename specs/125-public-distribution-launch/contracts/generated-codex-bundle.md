@@ -45,9 +45,9 @@ Each skill follows the supported `skills/<name>/SKILL.md` structure and has vali
 - point to `./integrations/codex/seshat-bi` relative to repository root;
 - include required installation/authentication policy and category fields;
 - carry synchronized visible metadata; and
-- stay distinct from OpenAI's public Plugins Directory.
+- stay distinct from OpenAI's public plugin submission, review, and listing process.
 
-Documentation may call this file/CLI source a repo marketplace or catalog because current tooling uses `codex plugin marketplace ...`. It MUST call public OpenAI review/submission the **Plugins Directory**, unless official terminology changes and the contract is deliberately updated.
+Documentation may call this file/CLI source a repository marketplace or catalog because current tooling uses `codex plugin marketplace ...`. It MUST call OpenAI's public process **public plugin submission/review/listing** unless official terminology changes and the contract is deliberately updated.
 
 ## Plugin behavior
 
@@ -78,9 +78,9 @@ The release implementation MUST run the current official validator/scaffolding c
 
 Exact syntax and host-version support MUST be rechecked at implementation/release time.
 
-## Public Plugins Directory boundary
+## OpenAI public plugin boundary
 
-Repository installation does not imply public-directory listing. Submission is a separate owner-approved process. Current planned evidence includes:
+Repository installation does not imply an OpenAI public listing. Submission is a separate owner-approved process. Current planned evidence includes:
 
 - eligible submitter with Apps Management Write access;
 - verified developer/business identity matching listing details;
@@ -96,7 +96,7 @@ Repository installation does not imply public-directory listing. Submission is a
 - undeclared app/MCP/connector/hook/network capability;
 - secrets, real PII, client material, or local settings;
 - hand-edited generated knowledge;
-- the term “public marketplace” for the OpenAI Plugins Directory unless official terminology supports it at execution time.
+- the term “public marketplace” or “Plugins Directory” for OpenAI's submission/review process unless official terminology supports it at execution time.
 
 ## Contract tests
 

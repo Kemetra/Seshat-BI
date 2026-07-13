@@ -134,3 +134,16 @@ Follow the medallion playbook and the readiness spine -- do not skip stages:
 - `docs/medallion-playbook.md` -- the 7-phase method + the retail trap-checklist.
 - `docs/worked-examples/README.md` -- two end-to-end examples to copy.
 - License: Apache-2.0 (see `LICENSE`).
+## Generated public agent bundles
+
+The five Knowledge Bases under `skills/` are canonical. Claude and Codex copies are
+generated through the literal policy in
+`distribution/public-knowledge-allowlist.yaml`. Do not hand-edit
+`integrations/claude-code/seshat-bi/` or `integrations/codex/seshat-bi/`.
+
+After changing canonical public knowledge or bundle templates, regenerate with
+`python scripts/export_agent_bundles.py`, then prove a clean tree with
+`python scripts/export_agent_bundles.py --check`. Review the source, allowlist,
+generated diff, and both provenance manifests together. Allowlist review is content
+classification only; it does not approve a version, tag, upload, catalog, directory
+submission, or release.

@@ -84,4 +84,4 @@ The exporter MUST fail before writing a release bundle when:
 
 ## Ownership boundary
 
-Repository reviewers approve allowlist changes through normal review. That review classifies content as eligible for a future public bundle; it does not authorize a tag, upload, release, or public-directory submission.
+Repository reviewers approve allowlist changes through normal review. That review classifies content as eligible for a future public bundle; it does not authorize a tag, upload, release, or public plugin submission.

@@ -1,0 +1,16 @@
+schema_version: "1.0"
+cases:
+  - id: fresh-no-agents
+    workspace_agents_md: false
+    repository_agents_md: false
+    expected_source: installed_plugin
+  - id: seshat-repository
+    workspace_agents_md: true
+    repository_agents_md: true
+    expected_source: repository_and_installed_plugin
+  - id: undeclared-capability
+    workspace_agents_md: false
+    repository_agents_md: false
+    declared_capabilities: []
+    observed_capabilities: [mcp-server]
+    expected_status: fail

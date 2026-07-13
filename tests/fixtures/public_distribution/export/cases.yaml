@@ -1,0 +1,31 @@
+schema_version: "1.0"
+cases:
+  - id: secret-marker
+    path: knowledge/example.md
+    synthetic_fragments: ["ghp", "fictional-value"]
+    expected: blocked
+  - id: pii-client-marker
+    path: knowledge/example.md
+    synthetic_fragments: ["CLIENT", "CONFIDENTIAL"]
+    expected: blocked
+  - id: absolute-path
+    path: "C:/Users/fictional/source.md"
+    expected: blocked
+  - id: traversal
+    path: ../private.md
+    expected: blocked
+  - id: symlink
+    path: knowledge/link.md
+    fixture_kind: declared-symlink
+    expected: blocked
+  - id: executable
+    path: scripts/run.sh
+    media_type: application/x-sh
+    expected: blocked
+  - id: collision
+    sources: [knowledge/a.md, knowledge/b.md]
+    destinations: [knowledge/same.md, knowledge/same.md]
+    expected: blocked
+  - id: nondeterministic-order
+    paths: [knowledge/z.md, knowledge/a.md]
+    expected_output_order: [knowledge/a.md, knowledge/z.md]

@@ -1,0 +1,112 @@
+{
+  "$schema_note": "Machine-readable training/eval set for distributed BI reasoning. Fictional retail-at-scale scenarios only. Score an agent on reasoning match + correct ending artifact. Mirrors references/agent-training-set.md.",
+  "version": "1.0.0",
+  "slice_origin": "BD Slice 11",
+  "items": [
+    {
+      "id": "BD-QA-001",
+      "question": "One month of one region from a date-partitioned billion-row table. Use Spark?",
+      "expected_reasoning": "No; post-pruning it's a few GB. Single-node (DuckDB/Polars) or warehouse query. Single-node first.",
+      "ends_on": "engine-selection-checklist (SINGLE-NODE / push down)",
+      "exercises": ["BD-CN-021", "BD-CN-022", "BD-AP-001"]
+    },
+    {
+      "id": "BD-QA-002",
+      "question": "Joining billion-row orders to the small stores dim - best strategy?",
+      "expected_reasoning": "Broadcast the small dimension so orders is never shuffled.",
+      "ends_on": "join-skew-checklist (BROADCAST)",
+      "exercises": ["BD-CN-035", "BD-AP-006"]
+    },
+    {
+      "id": "BD-QA-003",
+      "question": "Groupby on store_id is 99% done then one task hangs for an hour. Why and fix?",
+      "expected_reasoning": "Flagship-store skew; hot key concentrates on one task. Fix: AQE skew-join, then broadcast other side, then salt the hot key.",
+      "ends_on": "join-skew-checklist (verdict)",
+      "exercises": ["BD-CN-037", "BD-CN-039", "BD-AP-007"]
+    },
+    {
+      "id": "BD-QA-004",
+      "question": "Revenue too high and shuffle huge after joining orders to returns.",
+      "expected_reasoning": "One-to-many fan-out double-counts and inflates shuffle; pre-aggregate returns to order-line grain, then join many-to-one.",
+      "ends_on": "join-skew-checklist (verdict)",
+      "exercises": ["BD-CN-009", "PY-CN-051", "BD-AP-011"]
+    },
+    {
+      "id": "BD-QA-005",
+      "question": "Dashboard needs distinct customers per region; exact count is slow. Approximate OK?",
+      "expected_reasoning": "Yes for a tolerant dashboard; use approx-distinct and label approximate; exact for financial reconciliation.",
+      "ends_on": "aggregation-grain-checklist (verdict)",
+      "exercises": ["BD-CN-045", "BD-AP-012"]
+    },
+    {
+      "id": "BD-QA-006",
+      "question": "Can I .collect() the enriched billion-row frame to check it?",
+      "expected_reasoning": "No; collect funnels everything to the driver and OOMs it. Inspect with count / limit+sample / aggregates.",
+      "ends_on": "performance/cost verdict",
+      "exercises": ["BD-CN-010", "BD-CN-073", "BD-AP-005"]
+    },
+    {
+      "id": "BD-QA-007",
+      "question": "A backfill rerun doubled last week's totals. Why?",
+      "expected_reasoning": "Append-only writes aren't idempotent; use partition-overwrite or merge-on-key; verify with a double-run.",
+      "ends_on": "pipeline-review-checklist (verdict)",
+      "exercises": ["BD-CN-057", "BD-CN-058", "BD-AP-015"]
+    },
+    {
+      "id": "BD-QA-008",
+      "question": "Yesterday's revenue is understated because mobile orders sync late. Fix?",
+      "expected_reasoning": "Add an idempotent late-data lookback window that reprocesses recent partitions.",
+      "ends_on": "pipeline-review-checklist (verdict)",
+      "exercises": ["BD-CN-060", "BD-AP-016"]
+    },
+    {
+      "id": "BD-QA-009",
+      "question": "The job finished successfully - is the result reconciled?",
+      "expected_reasoning": "No; success != correctness. Compute distributed control totals, match to source/SQL, hand record to the gate.",
+      "ends_on": "validation-reconciliation-checklist (verdict)",
+      "exercises": ["BD-CN-064", "BD-CN-069", "BD-AP-018"]
+    },
+    {
+      "id": "BD-QA-010",
+      "question": "Should I coalesce(1) to get a single output file?",
+      "expected_reasoning": "No; it funnels all data through one core, killing parallelism and risking OOM. Right-size partitions or use table-format compaction.",
+      "ends_on": "partitioning-shuffle-checklist (verdict)",
+      "exercises": ["BD-CN-030", "BD-AP-002"]
+    },
+    {
+      "id": "BD-QA-011",
+      "question": "Clickstream partitioned by minute is slow to query. Why and fix?",
+      "expected_reasoning": "Small-files problem from over-partitioning; partition by date/hour and compact.",
+      "ends_on": "partitioning-shuffle-checklist (verdict)",
+      "exercises": ["BD-CN-051", "BD-CN-052", "BD-AP-010"]
+    },
+    {
+      "id": "BD-QA-012",
+      "question": "A selective date filter still scans the whole table. Why?",
+      "expected_reasoning": "Filter not pushed down / layout not date-partitioned; make the filter pushable and verify pruning in the plan.",
+      "ends_on": "partitioning-shuffle-checklist (verdict)",
+      "exercises": ["BD-CN-032", "BD-CN-055", "BD-AP-009"]
+    },
+    {
+      "id": "BD-QA-013",
+      "question": "Is it fine to sum each region's average basket value across regions at scale?",
+      "expected_reasoning": "No; averages are non-additive (PY-CN-054). Recompute weighted at target grain; summing also defeats partial aggregation.",
+      "ends_on": "aggregation-grain-checklist (verdict)",
+      "exercises": ["BD-CN-044", "PY-CN-054", "BD-AP-013"]
+    },
+    {
+      "id": "BD-QA-014",
+      "question": "Duplicate event_ids appear after dedup. What went wrong?",
+      "expected_reasoning": "Dedup was per-partition; duplicates span partitions, so dedup must be global on the grain key.",
+      "ends_on": "pipeline-review-checklist (verdict)",
+      "exercises": ["BD-CN-017", "BD-CN-061", "BD-AP-017"]
+    },
+    {
+      "id": "BD-QA-015",
+      "question": "Engine choice: a heavy join over data already in the warehouse?",
+      "expected_reasoning": "Push the join down to the warehouse (SQL layer) rather than extracting into distributed Python; keeps data in place and respects the boundary.",
+      "ends_on": "engine-selection-checklist (PUSH DOWN)",
+      "exercises": ["BD-CN-024", "cross-layer-map"]
+    }
+  ]
+}

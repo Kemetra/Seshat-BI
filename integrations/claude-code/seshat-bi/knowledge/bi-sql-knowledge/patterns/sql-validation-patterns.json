@@ -1,0 +1,258 @@
+{
+  "$schema_version": "0.1-draft",
+  "status": "DRAFT validation/reconciliation gate shapes for future bi-sql-knowledge (Slice 5). Not executable; reasoning templates only.",
+  "pattern_field_spec": [
+    "pattern_id",
+    "intent",
+    "check_type",
+    "grain",
+    "pass_condition",
+    "inputs",
+    "sql_shape",
+    "severity_if_fail",
+    "phase",
+    "related_concepts"
+  ],
+  "phase_legend": {
+    "source_profiling": "run on raw source",
+    "validation": "gate before promotion",
+    "reconciliation": "cross-layer total tie-out",
+    "silver_gold": "gate before publishing silver/gold"
+  },
+  "patterns": [
+    {
+      "pattern_id": "VP-UNIQUE",
+      "intent": "Assert a key is unique (no duplicate rows per key).",
+      "check_type": "uniqueness",
+      "grain": "one row per key",
+      "pass_condition": "returns 0 rows",
+      "inputs": [
+        "table",
+        "key_columns"
+      ],
+      "sql_shape": "SELECT key, COUNT(*) FROM t GROUP BY key HAVING COUNT(*) > 1",
+      "severity_if_fail": "error",
+      "phase": [
+        "validation",
+        "silver_gold"
+      ],
+      "related_concepts": [
+        "SC-028",
+        "SC-004"
+      ]
+    },
+    {
+      "pattern_id": "VP-NOTNULL",
+      "intent": "Assert required columns are not null.",
+      "check_type": "not_null",
+      "grain": "row",
+      "pass_condition": "returns 0 rows (or count = 0)",
+      "inputs": [
+        "table",
+        "required_columns"
+      ],
+      "sql_shape": "SELECT COUNT(*) FROM t WHERE required_col IS NULL",
+      "severity_if_fail": "error",
+      "phase": [
+        "validation",
+        "silver_gold"
+      ],
+      "related_concepts": [
+        "SC-028",
+        "SC-008"
+      ]
+    },
+    {
+      "pattern_id": "VP-REFINTEGRITY",
+      "intent": "Assert every fact foreign key resolves to a dimension row (no orphans).",
+      "check_type": "referential_integrity",
+      "grain": "fact row",
+      "pass_condition": "returns 0 rows",
+      "inputs": [
+        "fact",
+        "dimension",
+        "key"
+      ],
+      "sql_shape": "SELECT f.* FROM fact f LEFT JOIN dim d ON d.key=f.key WHERE d.key IS NULL",
+      "severity_if_fail": "error",
+      "phase": [
+        "validation",
+        "silver_gold"
+      ],
+      "related_concepts": [
+        "SC-029",
+        "SC-012"
+      ]
+    },
+    {
+      "pattern_id": "VP-ROWCOUNT",
+      "intent": "Assert row count matches an expected value or the prior layer.",
+      "check_type": "row_count",
+      "grain": "table",
+      "pass_condition": "counts equal (within tolerance)",
+      "inputs": [
+        "table_a",
+        "table_b_or_expected"
+      ],
+      "sql_shape": "SELECT (SELECT COUNT(*) FROM a) AS a_rows, (SELECT COUNT(*) FROM b) AS b_rows",
+      "severity_if_fail": "warning",
+      "phase": [
+        "reconciliation"
+      ],
+      "related_concepts": [
+        "SC-030"
+      ]
+    },
+    {
+      "pattern_id": "VP-CONTROLTOTAL",
+      "intent": "Assert a value control total is invariant across layers.",
+      "check_type": "control_total",
+      "grain": "shared grain across layers",
+      "pass_condition": "difference = 0 (within tolerance)",
+      "inputs": [
+        "source",
+        "target",
+        "total_expression"
+      ],
+      "sql_shape": "WITH s AS(SELECT SUM(expr) v FROM source), t AS(SELECT SUM(expr) v FROM target) SELECT s.v-t.v AS diff FROM s CROSS JOIN t",
+      "severity_if_fail": "error",
+      "phase": [
+        "reconciliation"
+      ],
+      "related_concepts": [
+        "SC-030",
+        "SC-005"
+      ]
+    },
+    {
+      "pattern_id": "VP-FRESHNESS",
+      "intent": "Assert the latest data is within the freshness SLA.",
+      "check_type": "freshness",
+      "grain": "table",
+      "pass_condition": "days_stale <= SLA",
+      "inputs": [
+        "table",
+        "date_column",
+        "sla_days"
+      ],
+      "sql_shape": "SELECT CURRENT_DATE - MAX(date_column) AS days_stale FROM t",
+      "severity_if_fail": "warning",
+      "phase": [
+        "validation"
+      ],
+      "related_concepts": [
+        "SC-031"
+      ]
+    },
+    {
+      "pattern_id": "VP-COMPLETENESS",
+      "intent": "Assert every expected period is present (no missing days/months).",
+      "check_type": "completeness",
+      "grain": "period",
+      "pass_condition": "returns 0 missing periods",
+      "inputs": [
+        "date_spine",
+        "fact",
+        "window"
+      ],
+      "sql_shape": "SELECT d.date FROM date d LEFT JOIN fact f ON f.date=d.date WHERE d.date IN window GROUP BY d.date HAVING COUNT(f.key)=0",
+      "severity_if_fail": "warning",
+      "phase": [
+        "validation"
+      ],
+      "related_concepts": [
+        "SC-031",
+        "SC-023"
+      ]
+    },
+    {
+      "pattern_id": "VP-DEDUP",
+      "intent": "Assert one row per key after a dedup step (and idempotency).",
+      "check_type": "dedup_verification",
+      "grain": "one row per key",
+      "pass_condition": "row_count = distinct_key_count",
+      "inputs": [
+        "table",
+        "key_columns"
+      ],
+      "sql_shape": "SELECT COUNT(*) AS rows, COUNT(DISTINCT key) AS keys FROM t",
+      "severity_if_fail": "error",
+      "phase": [
+        "validation",
+        "silver_gold"
+      ],
+      "related_concepts": [
+        "SC-032",
+        "SC-013"
+      ]
+    },
+    {
+      "pattern_id": "VP-RANGE",
+      "intent": "Assert values fall within an expected domain/range (or allowed set).",
+      "check_type": "domain_range",
+      "grain": "row",
+      "pass_condition": "returns 0 out-of-range rows",
+      "inputs": [
+        "table",
+        "column",
+        "bounds_or_set"
+      ],
+      "sql_shape": "SELECT COUNT(*) FROM t WHERE column < min OR column > max  -- or column NOT IN (allowed set)",
+      "severity_if_fail": "warning",
+      "phase": [
+        "source_profiling",
+        "validation"
+      ],
+      "related_concepts": [
+        "SC-031",
+        "SC-008"
+      ]
+    },
+    {
+      "pattern_id": "VP-DIFF",
+      "intent": "Prove two tables hold identical rows (row-level reconciliation).",
+      "check_type": "table_equality",
+      "grain": "row (by identity columns)",
+      "pass_condition": "A EXCEPT B = 0 rows AND B EXCEPT A = 0 rows AND COUNT(*) equal",
+      "inputs": [
+        "table_a",
+        "table_b",
+        "row_identity_columns"
+      ],
+      "sql_shape": "(SELECT cols FROM a EXCEPT SELECT cols FROM b) and (SELECT cols FROM b EXCEPT SELECT cols FROM a) returns nothing; counts equal",
+      "severity_if_fail": "error",
+      "phase": [
+        "reconciliation"
+      ],
+      "related_concepts": [
+        "SC-041",
+        "SC-042",
+        "SC-030"
+      ]
+    },
+    {
+      "pattern_id": "VP-PROFILE",
+      "intent": "Metadata-driven standard column profile across many tables/columns.",
+      "check_type": "profiling",
+      "grain": "column",
+      "pass_condition": "profiles within expected bounds / no unexpected drift vs prior run",
+      "inputs": [
+        "information_schema",
+        "scope (schemas/tables)",
+        "expected_bounds?"
+      ],
+      "sql_shape": "From information_schema.columns, generate per-column: rows, nulls, distinct, min/max; compare to expectations/prior",
+      "severity_if_fail": "warning",
+      "phase": [
+        "source_profiling",
+        "validation"
+      ],
+      "related_concepts": [
+        "SC-068",
+        "SC-069",
+        "SC-070",
+        "SC-031"
+      ]
+    }
+  ]
+}

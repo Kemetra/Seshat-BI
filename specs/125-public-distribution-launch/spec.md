@@ -4,18 +4,18 @@
 
 **Created**: 2026-07-13
 
-**Status**: Draft -- specification and planning only; no publication authorized
+**Status**: Repository implementation authorized; external configuration and publication not authorized
 
-**Input**: Owner-directed request to plan one coordinated Seshat BI Public Beta release across the `seshat-bi` Python package, a Claude Code marketplace/plugin, an OpenAI Codex skills/plugin distribution, and the canonical `ahmed-shaaban-94/Seshat_BI` repository without implementing, publishing, tagging, releasing, or self-ratifying.
+**Input**: Owner-directed request for one coordinated Seshat BI Public Beta release candidate across the `seshat-bi` Python package, a Claude Code marketplace/plugin, an OpenAI Codex skills/plugin distribution, and the canonical `ahmed-shaaban-94/Seshat_BI` repository. The owner subsequently authorized reversible repository implementation while retaining every external, version, publication, and rollback gate.
 
 ## Scope and Authorization Lanes
 
-This feature is a release-plan package, not a release. It separates five lanes that have different authorities and completion evidence:
+This feature prepares a release candidate; it is not itself a release. It separates five lanes that have different authorities and completion evidence:
 
 1. **Repository implementation** -- reversible, reviewable changes to package metadata, deterministic bundle generation, tests, documentation, manifests, and release automation definitions.
 2. **PyPI and GitHub configuration** -- protected environments, named reviewers, Trusted Publishing identity, tag protection, and repository settings performed by an authorized owner.
 3. **Claude publication** -- repository marketplace validation and public installation are repository work; submission to Anthropic's public catalog, if desired, is a separate owner action.
-4. **Codex submission/publication** -- repository and CLI distribution are distinct from submission to OpenAI's public Plugins Directory; public submission requires an eligible, verified publisher.
+4. **Codex submission/publication** -- repository and CLI distribution are distinct from OpenAI's public plugin submission and review process; public submission requires an eligible, verified publisher.
 5. **Irreversible release actions** -- version approval, release tag creation, package upload, GitHub Release publication, and public catalog submissions require a named owner and are never performed or approved by an agent.
 
 ### In Scope
@@ -29,10 +29,9 @@ This feature is a release-plan package, not a release. It separates five lanes t
 
 ### Out of Scope
 
-- Implementing any planned repository change.
 - Creating or changing external accounts, publishers, environments, catalog entries, or repository protections.
 - Uploading to a package index, creating or moving a tag, creating a release, or submitting a public plugin.
-- Committing, pushing, opening a pull request, or ratifying a version or release.
+- Ratifying a version or release through repository implementation, CI, analysis, review, merge, or agent action.
 - Replacing canonical Knowledge Bases with generated copies or creating a second readiness engine.
 - Power BI execution-adapter work, live database provisioning, or any bypass of the existing readiness gates.
 
@@ -104,7 +103,7 @@ A Codex CLI or IDE user installs the Seshat Codex distribution, invokes a Seshat
 2. **Given** a clean Codex CLI session, **When** the user installs the distribution and invokes `$seshat-bi`, **Then** the skill is discovered and loads only the knowledge needed for the task.
 3. **Given** a clean supported IDE session, **When** the same installed distribution is used, **Then** the Seshat skills are available and produce behavior consistent with the CLI acceptance scenario.
 4. **Given** a fresh repository with no Seshat-specific `AGENTS.md`, **When** Codex starts, **Then** the plugin skill carries its own guarded workflow; when a Seshat repository does contain `AGENTS.md`, the file remains compatible with Codex's repository instruction discovery.
-5. **Given** a repository-installable Codex plugin, **When** a public Plugins Directory listing is desired, **Then** submission is treated as a separate owner-approved action with its own eligibility and review evidence, not as an automatic consequence of repository availability.
+5. **Given** a repository-installable Codex plugin, **When** an OpenAI public plugin listing is desired, **Then** submission is treated as a separate owner-approved action with its own eligibility and review evidence, not as an automatic consequence of repository availability.
 
 ---
 
@@ -198,9 +197,9 @@ A named release owner reviews one evidence pack, approves the exact version and 
 - **FR-024**: The repository MUST retain a Codex-compatible `AGENTS.md` for repository work and MUST not treat that file as the portable plugin knowledge payload.
 - **FR-025**: Repository-scoped Codex skills MUST use the supported `.agents/skills/<skill>/SKILL.md` structure, and public reusable distribution MUST use a first-class Codex plugin when current official guidance supports it.
 - **FR-026**: The Codex plugin MUST have its own supported manifest and component layout; Claude manifest fields MUST NOT be assumed compatible.
-- **FR-027**: The repository-scoped Codex plugin catalog MUST use current Codex terminology and supported location; documentation MUST distinguish a repository marketplace/catalog from the official public Plugins Directory.
+- **FR-027**: The repository-scoped Codex plugin catalog MUST use current Codex terminology and supported location; documentation MUST distinguish a repository marketplace/catalog from OpenAI's public plugin submission, review, and listing process.
 - **FR-028**: Codex acceptance MUST cover CLI and IDE skill discovery, explicit `$` invocation, fresh-workspace behavior, generated Knowledge Base access, synthetic-source inspection, truthful next action, and human-gate stop.
-- **FR-029**: Submission to OpenAI's public Plugins Directory MUST be a separate owner-approved action and MUST name the required publisher eligibility, verification, listing, test, policy, and review evidence.
+- **FR-029**: OpenAI public plugin submission MUST be a separate owner-approved action and MUST name the required publisher eligibility, verification, listing, test, policy, and review evidence.
 
 ### Functional Requirements -- Version and publication control
 
@@ -209,7 +208,7 @@ A named release owner reviews one evidence pack, approves the exact version and 
 - **FR-032**: Package publication MUST use short-lived trusted identity credentials bound to the canonical repository, one narrowly scoped release workflow, and a protected environment.
 - **FR-033**: The package publication environment MUST require approval from a named eligible owner and MUST grant identity-token permission only to the publish job.
 - **FR-034**: Build and validation MUST be separated from the credential-bearing publish job; the publish job may consume only previously validated immutable artifacts.
-- **FR-035**: Tag creation, package upload, GitHub Release publication, Claude public-catalog submission, and Codex public-directory submission MUST remain blocked until their specific named-owner approval is recorded.
+- **FR-035**: Tag creation, package upload, GitHub Release publication, Claude public-catalog submission, and OpenAI public plugin submission MUST remain blocked until their specific named-owner approval is recorded.
 - **FR-036**: No agent, test, workflow, or repository merge may self-ratify the release or infer approval from a passing static check.
 
 ### Functional Requirements -- Verification and rollback
@@ -275,6 +274,6 @@ A named release owner reviews one evidence pack, approves the exact version and 
 - `KPI-MC-15` is present in the current authoritative registry and points to the Average Basket Size Units contract; this feature plans verification/regression hardening, not duplication, unless later baseline evidence changes.
 - The five canonical Knowledge Base roots are the SQL, DAX, Python, Big-data, and Retail KPI skills under `skills/`; the implementation plan must enumerate public files explicitly rather than export entire directories implicitly.
 - Claude Code and Codex platform formats and submission requirements can change; implementation must re-check current official documentation at execution time and fail closed on unsupported fields.
-- Repository marketplace/catalog availability is not equivalent to acceptance into Anthropic's or OpenAI's official public directories.
+- Repository marketplace/catalog availability is not equivalent to acceptance into Anthropic's public catalog or OpenAI's public plugin listing.
 - Public Beta may launch repository/Python distribution before either official catalog review completes, provided documentation states each surface's actual availability truthfully and the owner approves that staged availability.
 - Live database acceptance remains deferred unless a DSN and the relevant optional dependency are explicitly supplied; offline acceptance must stop truthfully at the live boundary.

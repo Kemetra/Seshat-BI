@@ -1,19 +1,11 @@
 {
   "name": "seshat-bi",
   "version": "0.1.0",
-  "description": "Guarded BI readiness workflow for Claude Code: drive Seshat BI's seven-stage readiness spine through its CLI (status/next/check), one allowed action at a time, stopping at every human gate. DRAFT -- locally verified (schema + install flow, Claude Code CLI v2.1.206), not publicly released.",
-  "author": {
-    "name": "Ahmed Shaaban"
-  },
+  "description": "Guarded Seshat BI readiness workflow and public knowledge for Claude Code.",
+  "author": {"name": "Ahmed Shaaban"},
   "homepage": "https://github.com/ahmed-shaaban-94/Seshat_BI",
+  "repository": "https://github.com/ahmed-shaaban-94/Seshat_BI",
   "license": "Apache-2.0",
-  "skills": ["skills"],
-  "commands": ["commands"],
-  "keywords": [
-    "bi",
-    "power-bi",
-    "data-governance",
-    "readiness",
-    "medallion"
-  ]
+  "skills": "./skills/",
+  "commands": "./commands/"
 }

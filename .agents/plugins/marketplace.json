@@ -1,0 +1,20 @@
+{
+  "name": "seshat-bi-repository",
+  "interface": {
+    "displayName": "Seshat BI Repository"
+  },
+  "plugins": [
+    {
+      "name": "seshat-bi",
+      "source": {
+        "source": "local",
+        "path": "./integrations/codex/seshat-bi"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

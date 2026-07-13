@@ -1,0 +1,9 @@
+{
+  "candidate_version": "0.1.0",
+  "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "existing_tags": {
+    "v0.1.0": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "expected_status": "blocked",
+  "reason_class": "immutable_tag_conflict"
+}

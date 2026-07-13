@@ -1,0 +1,308 @@
+# =============================================================================
+# metric-contract.yaml  --  the machine-readable DEFINITION of one metric
+# =============================================================================
+# Tower BI Agent Kit  -  Layer 5 (Metrics & Semantic Model), feature F009.
+# See: docs/metrics/metric-contract-store.md (the store + authoring guide),
+#      docs/readiness/semantic-model-ready.md (the stage that READS contracts).
+#
+# WHAT THIS IS
+#   A GENERIC, copy-me template. It DEFINES one metric as a committed, reviewable
+#   contract: its stable name, the grain it is valid at, its formula INTENT (plain
+#   language, NOT DAX), its named owner, and the `gold` column(s) it binds to. A
+#   filled copy is the atomic unit the Semantic Model Ready stage depends on -- a
+#   PBIP measure has nothing to trace to until one of these exists and is approved.
+#
+# THE DEFINE / CHECK BOUNDARY  (verbatim across all F009 artifacts -- do not drift)
+#   This feature DEFINES contracts. It does NOT CHECK a model. Nothing here reads
+#   `powerbi/<Model>.SemanticModel/`, asserts a measure / relationship / marked
+#   date table, or adds a `retail check` rule. CHECKING a PBIP model against these
+#   contracts is the SEPARATE later feature F010 (on-disk feature 011, Semantic
+#   Model Readiness). A contract is INTENT + binding + an explicit readiness
+#   status; it is never the DAX, never a visual, never a check.
+#
+# WHICH PRINCIPLES THIS INSTANTIATES  (cite, do not re-decide)
+#   .specify/memory/constitution.md
+#     III  Medallion, Gold-Only ......... binds_to references `gold` ONLY (a contract
+#                                         binding to silver/bronze is a defect; FR-012).
+#     V    Agent Stops at Judgment Calls  business rollup/segment, grain ambiguity, and
+#                                         PII publish-safety are stop-and-ask
+#                                         blocking_reasons -- never auto-filled (FR-009).
+#     VII  C086 Is An Example ........... every value below is an obvious placeholder;
+#                                         C086 (El Ezaby pharmacy) is CITED as the
+#                                         filled instance, never inlined (FR-006).
+#     IX   Secrets & Reproducibility .... ASCII + UTF-8 no BOM; short repo-relative
+#                                         paths (Windows 260-char PBIP limit); no host.
+#
+# NO FAKE CONFIDENCE  (roadmap rule #9 / readiness-model.md)
+#   Readiness is recorded with EXACTLY the four explicit statuses
+#   (not_started | blocked | warning | pass) + evidence[] + blocking_reasons[].
+#   There is NO numeric score / confidence field anywhere in this template, and a
+#   filled copy MUST NOT add one. A `pass` is owner approval recorded as evidence
+#   (owner name + date), never a number.
+#
+# C086 IS A FILLED INSTANCE, NEVER THE UNIVERSAL SCHEMA
+#   The first table through this kit is C086 (El Ezaby pharmacy sales). Its filled
+#   contracts live alongside its mapping artifacts under mappings/<table>/metrics/.
+#   See a filled worked example under docs/worked-examples/ for that filled instance. Do NOT copy
+#   pharmacy specifics (billing codes, segment rollups, insurance PII, pharmacy
+#   grain keys, real metric names) into this template -- the values below are
+#   deliberately obvious placeholders.
+#
+# WHERE THE FILLED COPY LIVES  (recommended default -- see the store guide, O-1)
+#   mappings/<table>/metrics/<MetricName>.yaml  -- co-located with the table's
+#   mapping + readiness artifacts (ADR 0003 "cohesive per-table working set").
+#   Reusable KPI packs that group contracts live under the top-level metrics/packs/
+#   store (see templates/kpi-pack.yaml). This placement is cheaply reversible.
+#
+# AUTHORING NOTES
+#   - Keep this YAML valid: it is parsed/reviewed as a set, not just read. Quote any
+#     value containing ':' or quotes, and quote dates so they are not auto-typed.
+#   - `name` is PascalCase to match the DAX measure-naming convention
+#     (docs/conventions.md: "Measures in PascalCase") so a measure and its contract
+#     share a name. Keep names SHORT (Windows PBIP path budget).
+#   - `formula_intent` is plain-language INTENT, NEVER DAX/SQL (see the field's note
+#     + the intent-vs-implementation example). Implementation is F010's concern.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# identity -- the stable name a measure (and a KPI pack) reference this contract by.
+# -----------------------------------------------------------------------------
+name: "<MetricName>"                  # PascalCase, e.g. TotalNetSales. Stable; a DAX
+                                      #   measure of the same name traces to this contract.
+                                      #   Must be UNIQUE within the store (a duplicate is a
+                                      #   defect the review catches).
+
+# -----------------------------------------------------------------------------
+# grain -- the grain at which this metric is VALID. Not necessarily the fact's base
+# grain: a ratio or an average may be valid only at a rollup. If the metric's grain
+# differs from the bound fact's base grain, state it here AND flag it for review
+# (Principle V -- grain; do not auto-resolve a grain conflict).
+# -----------------------------------------------------------------------------
+grain: "<the grain this metric is valid at>"   # e.g. "valid at fct_sales line grain
+                                               #   (one row = one invoice line item)";
+                                               #   or "valid only at the daily rollup".
+
+# -----------------------------------------------------------------------------
+# formula_intent -- WHAT the metric MEANS, in plain business language. This is
+# INTENT, explicitly NOT the DAX/SQL that computes it. A non-technical owner must be
+# able to read it and confirm "yes, that is what this number means". The DAX
+# implementation is authored + checked later (F010 / on-disk 011), not here.
+#
+#   INTENT (belongs here):
+#     "The sum of the net (after-discount) money amount across all kept sale lines."
+#   IMPLEMENTATION (does NOT belong here -- F010's concern):
+#     "SUM ( fct_sales[net_amount] )"   <- a DAX expression; reject it in this field.
+# -----------------------------------------------------------------------------
+formula_intent: "<plain-language meaning of the metric; NOT DAX, NOT SQL>"
+
+# -----------------------------------------------------------------------------
+# owner -- the named human who OWNS this metric definition and whose approval
+# promotes it to `pass`. The agent never self-approves (Principle I; see status).
+# -----------------------------------------------------------------------------
+owner: "<named metric owner>"         # e.g. "Sales Analytics lead"; a named role/person,
+                                      #   not "the agent" and not blank.
+
+# -----------------------------------------------------------------------------
+# provenance -- OPTIONAL, additive links for the governed kpi_contracts flow.
+# Legacy contracts without these fields remain valid. A new provenance-linked contract
+# carries exactly one of generic_kpi_ref or custom: true, plus the approved decision
+# ids and committed source/mapping evidence that justify it. These references are not
+# a second decision store or a readiness engine; validity and freshness stay with the
+# existing Decision Store gate.
+# -----------------------------------------------------------------------------
+generic_kpi_ref: "<KPI-MC-NN or omit>" # a stable id from retail-kpi-knowledge/registry.yaml
+custom: false                           # true only when no generic KPI applies; then omit generic_kpi_ref
+decision_refs: []                       # approved Decision Store ids, e.g. kpi_definition.<scope>
+source_evidence: []                     # repo-relative source-profile/source-map references only
+
+# -----------------------------------------------------------------------------
+# binds_to -- the `gold` table + column(s) the metric reads. GOLD ONLY (Principle
+# III / FR-012): a contract that binds to a silver/bronze object is a defect.
+# If gold provides no clean column for this metric, the contract STOPS and records
+# a blocking_reason ("no bound gold column") -- it is not approvable until gold
+# builds the column (Semantic Model Ready is downstream of Gold Ready).
+# -----------------------------------------------------------------------------
+binds_to:
+  gold_table: "gold.<fact_or_dim>"    # e.g. gold.fct_sales -- MUST be the `gold` schema
+  columns:                            # the gold column(s) the metric reads
+    - "<gold_column_a>"               # e.g. net_amount
+    # - "<gold_column_b>"             # add one per column the intent reads
+  pii_sensitive: false                # true if any bound column is PII-derived; a PII
+                                      #   metric defers publish-safety to governance
+                                      #   sign-off (Principle V -- PII) and is NOT
+                                      #   auto-approved. Record the reason in
+                                      #   blocking_reasons until governance signs off.
+
+# -----------------------------------------------------------------------------
+# time_additivity -- how the metric composes over the DATE axis (read by HR5,
+# spec 091). REQUIRED for a metric on a SNAPSHOT-grain fact (e.g. inventory-on-
+# hand), where summing across days is wrong. Owner-DECLARED, never agent-inferred
+# (Principle V). One of: fully | semi | non.
+#   fully  additive over time (sum across days is valid, e.g. sales revenue)
+#   semi   additive across other dims but NOT over time (e.g. stock-on-hand ->
+#          sum across products, but LAST/AVG across days, never SUM)
+#   non    not additive on any axis (e.g. a ratio/percentage)
+# Omit for a transaction-grain fully-additive measure; HR5 only requires it when
+# the bound fact is a snapshot grain.
+time_additivity: "<fully|semi|non, or omit for a transaction-grain measure>"
+
+# unit -- the unit of measure of the metric's value (read by HR11, spec 103).
+# Owner-DECLARED, never agent-inferred (Principle V). HR11 flags a measure whose
+# bound columns carry clashing units/currencies; it NEVER converts. Omit when the
+# metric has no unit dimension (e.g. a transaction count or a ratio).
+unit: "<e.g. EGP, kg, each -- or omit>"
+
+# -----------------------------------------------------------------------------
+# readiness -- the contract's lifecycle state, recorded with the FOUR explicit
+# statuses ONLY. There is NO score field; do not add one (rule #9).
+#   not_started  drafted but not yet reviewed/approved (the default)
+#   blocked      a blocking_reason holds (see the stop-and-ask list below)
+#   warning      reviewable with a recorded non-fatal issue (e.g. an accepted grain
+#                note); never auto-promotes to pass
+#   pass         owner-approved -- REQUIRES an evidence[] entry (owner + date)
+#
+# A `pass` with no evidence is a defect (readiness-model.md). evidence[] for a pass
+# MUST include the owner approval (owner name + approval date). blocking_reasons[]
+# is REQUIRED whenever status is `blocked`.
+# -----------------------------------------------------------------------------
+readiness:
+  status: "not_started"               # not_started | blocked | warning | pass
+  evidence: []                        # for a pass: ["approved by <owner> on <YYYY-MM-DD>"]
+                                      #   plus any committed support (e.g. the source
+                                      #   gold migration that built the bound column).
+  blocking_reasons: []                # required when status is blocked; one entry per
+                                      #   open stop-and-ask item (see list below).
+
+# -----------------------------------------------------------------------------
+# PER-CONTRACT AMBIGUITY DECISION LEDGER (idea-bank DEFINE half; spec 058).
+# Records the human ruling for each kpi-ambiguities.md item (A1..A11) that bears on
+# THIS contract. The agent RECOMMENDS; the named owner DECIDES. An undecided
+# NUMBER-MOVING ambiguity is a blocking_reason it structurally cannot clear.
+#
+#   id             one of A1..A11 (skills/retail-kpi-knowledge/knowledge/kpi-ambiguities.md):
+#                  A1 VAT, A2 returns, A3 date, A4 gross/net, A5 discount line/header,
+#                  A6 cost method, A7 cancelled/void, A8 product key, A9 branch key,
+#                  A10 inventory snapshot, A11 same-store. (Full range A1..A11 -- not A1..A10.)
+#   decision_status  decided | undecided   (NO 5th word, NO numeric confidence -- rule #9)
+#   ruling         the recorded human decision (free text) when decided; "" when undecided
+#   evidence       who ruled + date + a committed reference. REQUIRED (non-empty) whenever
+#                  decision_status is `decided` OR number_moving is `false` on an `undecided`
+#                  entry (that downgrade is itself a human ruling and must carry attribution).
+#                  Left [] ONLY for an `undecided` + `number_moving: true` entry (the honest
+#                  open, blocking state).
+#   number_moving  true if the candidate rulings would change a reported number for this
+#                  contract (FR-013 fail-safe: number_moving + undecided => this contract's
+#                  readiness.status is `blocked` with a matching blocking_reason). A named
+#                  owner may record number_moving:false to make an undecided entry
+#                  non-blocking, but ONLY with evidence[] recording who downgraded it and when
+#                  -- the agent never sets number_moving:false and never downgrades.
+ambiguities: []                       # e.g.:
+                                      # - id: A4
+                                      #   decision_status: undecided
+                                      #   ruling: ""
+                                      #   evidence: []
+                                      #   number_moving: true      # -> forces readiness blocked
+                                      # - id: A1
+                                      #   decision_status: decided
+                                      #   ruling: "VAT excluded from Net Sales denominator"
+                                      #   evidence: ["ruled by <owner> on <YYYY-MM-DD>"]
+                                      #   number_moving: true
+
+# -----------------------------------------------------------------------------
+# DECISION-READINESS (spec 087, decision-aid layer) -- OPTIONAL, additive.
+# Makes a KPI decision-ready: which way is "good", the categorical bands that make
+# a value red/amber/green, and the business action when a band is breached. A
+# downstream KPI card (surface 1) reads these to show a target + sentiment. A
+# contract WITHOUT this block behaves exactly as before (it is not required to be
+# valid). Consumed by the DQ control-room threshold reference and by KPI-card
+# design intent -- never rendered here (F016 owns rendering).
+#
+# PRINCIPLE V -- every value below is a HUMAN business judgment. The agent
+# RECOMMENDS; the named owner DECIDES. Leave the placeholders until the owner
+# supplies them. On a `pass` contract, an unfilled `direction_of_good` or
+# `thresholds.target` is a DISCIPLINE-level open the owner records as a
+# blocking_reason -- it is NOT auto-filled, and (today) NOT machine-enforced by a
+# `retail check` rule (a future optional rule may enforce it; see spec 087 FR-010).
+#
+# NO NUMERIC SCORE (roadmap rule #9 / never_fabricate_a_confidence_score):
+# `thresholds` are NAMED BAND BOUNDARIES expressed in the METRIC'S OWN UNIT
+# (e.g. margin %, days of cover, EGP) -- they are NOT a 0-100 confidence/health
+# score, and a filled copy MUST NOT turn them into one.
+# -----------------------------------------------------------------------------
+
+# direction_of_good -- which way is better for this metric. Owner-decided enum.
+#   higher       larger is better (e.g. Net Sales, Gross Margin %)
+#   lower        smaller is better (e.g. Returns Rate, Stockout %)
+#   target_band  good only INSIDE a range (e.g. days-of-cover, price-index vs
+#                competitor); requires `thresholds` to express a two-sided band.
+direction_of_good: "<higher|lower|target_band>"   # owner-decided; never agent-invented
+
+# thresholds -- the categorical bands, in the metric's OWN UNIT. NOT a score (#9).
+#   target    the goal value the metric is measured against ("none" if the owner
+#             has not set one -- on a `pass` contract that is a blocking open).
+#   good/warn/critical  the band boundaries. For direction_of_good: higher, a
+#             value >= good is green, >= warn is amber, else red; for lower, the
+#             comparison inverts; for target_band, `good` is the acceptable
+#             distance from target and `warn`/`critical` are widening bands.
+thresholds:
+  target: "<value in the metric's own unit | none>"   # e.g. "40 (percent)"; owner-set
+  good: "<band boundary in the metric's own unit>"    # e.g. "38 (percent)"
+  warn: "<band boundary in the metric's own unit>"    # e.g. "35 (percent)"
+  critical: "<band boundary in the metric's own unit>"# e.g. "30 (percent)"
+  # NB: values are units of THIS metric, never a 0-100 confidence score.
+
+# action_on_breach -- the plain-language business action per band. What a reader
+# should DO, not a score. Owner-supplied; placeholder until then (Principle V).
+action_on_breach:
+  warn: "<the business action when the metric enters the warn band>"      # e.g. "flag to branch manager in the weekly review"
+  critical: "<the business action when the metric enters the critical band>"  # e.g. "escalate to regional ops; open a corrective action"
+
+# -----------------------------------------------------------------------------
+# AUTHORING: Principle-V stop-and-ask triggers (verbatim across all F009 artifacts).
+# Each of these is a HUMAN judgment call. The agent RECOMMENDS; the named owner
+# DECIDES. When any holds, record it as a blocking_reason and set status `blocked`
+# -- NEVER invent the answer to fill the field:
+#
+#   1. A business rollup / segment mapping that the analyst has not supplied
+#      (e.g. how raw categories roll into a reporting segment). Do not invent it;
+#      record "rollup mapping not analyst-supplied" and STOP.
+#   2. A grain ambiguity, or a metric defined at a grain FINER than the bound fact
+#      provides. Do not auto-resolve; state the grain in `grain`, record the
+#      conflict, and STOP for human review.
+#   3. A PII publish-safety question (a PII-derived bound column). Set
+#      binds_to.pii_sensitive: true, record the deferral, and STOP for governance
+#      sign-off; never auto-approve a PII metric.
+#
+# REJECT (define/check boundary): a DAX expression, a SQL statement, a visual/page
+# spec, or a `powerbi/` path does NOT belong in any field here. The contract is
+# INTENT + binding, not implementation and not a check.
+# =============================================================================
+
+# =============================================================================
+# OPTIONAL: definition.kind (F-DAXGEN, additive) -- consumed by `retail generate`
+# =============================================================================
+# `formula_intent` above stays plain-language INTENT. The OPTIONAL `definition`
+# block below is IMPLEMENTATION-side structure that the DAX Generator reads to
+# emit + verify a measure. It is NOT required for a contract to be valid, and a
+# contract WITHOUT it behaves exactly as today. Vocabulary is lowercase:
+#   sum | count | distinct_count | average | count_rows   (-> DAX SUM/COUNT/
+#   DISTINCTCOUNT/AVERAGE/COUNTROWS). Filters reuse the tight op whitelist
+#   {is_true, is_not_null}. gold.* tables only.
+#
+# definition:                       # kind:base example
+#   kind: base
+#   aggregation: sum                # column REQUIRED (except count_rows = table only)
+#   source: {table: gold.fct_x, column: amount}
+#   filter: [{column: flag, op: is_true}]   # optional
+#
+# definition:                       # kind:ratio example (inline sides only)
+#   kind: ratio
+#   numerator:   {aggregation: count_rows, source: {table: gold.fct_x},
+#                 filter: [{column: flag, op: is_true}]}
+#   denominator: {aggregation: count_rows, source: {table: gold.fct_x},
+#                 filter: [{column: flag, op: is_not_null}]}
+#
+# The generator REFUSES to emit anything it cannot verify (`retail generate`
+# round-trips its own output through the L3 drift check + D1-D11). A contract
+# with no `definition` is simply not generatable yet -- author one when ready.
+# =============================================================================

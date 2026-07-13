@@ -1,0 +1,1374 @@
+{
+  "$schema_version": "0.1-draft",
+  "scope": "Slices 1-7 training questions (draft for future references/agent-training-set.json)",
+  "grading": "Score each 0-3 per the item rubric; reasoning must be correct, not just the answer.",
+  "categories": [
+    "grain reasoning",
+    "logical query processing",
+    "aggregation correctness",
+    "count semantics",
+    "null handling",
+    "uniqueness assumptions",
+    "diagnostic scenario",
+    "join semantics",
+    "join cardinality",
+    "duplicate amplification",
+    "anti-joins / existence",
+    "deduplication",
+    "window vs group by",
+    "window framing",
+    "ranking functions",
+    "window navigation",
+    "window placement",
+    "date grain / truncation",
+    "time zones",
+    "date spine",
+    "date ranges",
+    "period-over-period",
+    "indexing",
+    "validation gates",
+    "referential integrity",
+    "reconciliation",
+    "freshness / completeness",
+    "idempotency",
+    "sargability",
+    "select-star / columns",
+    "cross join",
+    "cte grain",
+    "filter early",
+    "diagnostic playbook",
+    "integrative reasoning",
+    "set operations",
+    "reconciliation diff",
+    "DML correctness",
+    "idempotent loads",
+    "reshaping / pivot",
+    "subtotals",
+    "string cleaning",
+    "safe parsing",
+    "calendar / dates",
+    "interval overlap",
+    "gaps & islands",
+    "recursive / hierarchy",
+    "metadata profiling",
+    "sql generating sql"
+  ],
+  "items": [
+    {
+      "id": "SQ-GRAIN-01",
+      "category": "grain reasoning",
+      "prompt": "What is the grain of the `sales` table, and why can't you count orders with COUNT(*)?",
+      "ideal_answer": "`sales` grain is one order line; an order spans many lines, so COUNT(*) counts lines, not orders. Use COUNT(DISTINCT order_id).",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-003",
+        "SC-006"
+      ]
+    },
+    {
+      "id": "SQ-GRAIN-02",
+      "category": "grain reasoning",
+      "prompt": "After `GROUP BY store_key, order_date`, what is the result grain, and what risk arises if you then join back to `sales`?",
+      "ideal_answer": "Result grain = one row per store per day. Joining back to line-level `sales` re-inflates the grain and can double-count subsequent aggregates.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-005",
+        "SC-007"
+      ]
+    },
+    {
+      "id": "SQ-GRAIN-03",
+      "category": "grain reasoning",
+      "prompt": "An agent is asked to 'sum revenue by category' and a product can have many tags. What must it check before writing the SUM?",
+      "ideal_answer": "Whether any join (e.g. to product_tag) is one-to-many and would fan out sales rows; verify join-key uniqueness and aggregate to grain before joining.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-007",
+        "SC-004"
+      ]
+    },
+    {
+      "id": "SQ-LQP-01",
+      "category": "logical query processing",
+      "prompt": "Why can't you reference a SELECT alias in the WHERE clause?",
+      "ideal_answer": "WHERE is evaluated before SELECT in logical processing order, so the alias doesn't exist yet. Repeat the expression or use a subquery/CTE.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-002"
+      ]
+    },
+    {
+      "id": "SQ-LQP-02",
+      "category": "logical query processing",
+      "prompt": "Where must a condition like SUM(revenue) > 100000 go, and why?",
+      "ideal_answer": "In HAVING -- aggregates/groups don't exist at the WHERE step. HAVING filters groups after GROUP BY.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-002"
+      ]
+    },
+    {
+      "id": "SQ-LQP-03",
+      "category": "logical query processing",
+      "prompt": "How do you filter rows to 'the latest line per order' using ROW_NUMBER()?",
+      "ideal_answer": "Compute ROW_NUMBER() OVER(PARTITION BY order_id ORDER BY ...) in a subquery/CTE, then filter rn=1 in the outer query -- windows are computed at SELECT, after WHERE.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-002"
+      ]
+    },
+    {
+      "id": "SQ-AGG-01",
+      "category": "aggregation correctness",
+      "prompt": "Revenue doubled after adding a join. What is the most likely cause and first check?",
+      "ideal_answer": "Fan-out from a one-to-many join. First check: compare COUNT(*) before and after the join; uniqueness-check the join key on the one side.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-007",
+        "SC-004"
+      ]
+    },
+    {
+      "id": "SQ-AGG-02",
+      "category": "aggregation correctness",
+      "prompt": "Why is averaging per-store average basket sizes to get a company average usually wrong?",
+      "ideal_answer": "It's an unweighted average of averages, ignoring store sizes. Compute from base grain (SUM/SUM) or weight by group size.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-008"
+      ]
+    },
+    {
+      "id": "SQ-COUNT-01",
+      "category": "count semantics",
+      "prompt": "Distinguish COUNT(*), COUNT(customer_key), COUNT(DISTINCT order_id) on `sales`.",
+      "ideal_answer": "COUNT(*)=order lines; COUNT(customer_key)=lines with non-null customer (excludes guest checkout); COUNT(DISTINCT order_id)=distinct orders.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-006",
+        "SC-008"
+      ]
+    },
+    {
+      "id": "SQ-COUNT-02",
+      "category": "count semantics",
+      "prompt": "A report labeled 'orders' used COUNT(*) on `sales`. What's wrong?",
+      "ideal_answer": "It reports order lines, not orders -- overstating the metric. Use COUNT(DISTINCT order_id).",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-006",
+        "SC-003"
+      ]
+    },
+    {
+      "id": "SQ-NULL-01",
+      "category": "null handling",
+      "prompt": "AVG(discount) seems too high. How do nulls explain it, and how do you fix it if 'no discount' means zero?",
+      "ideal_answer": "AVG ignores null discounts, averaging only discounted lines. If no-discount means zero, use AVG(COALESCE(discount,0)) over all lines.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-008"
+      ]
+    },
+    {
+      "id": "SQ-NULL-02",
+      "category": "null handling",
+      "prompt": "Why might `customer_key NOT IN (SELECT customer_key FROM excluded)` return no rows?",
+      "ideal_answer": "If the subquery contains a NULL, NOT IN evaluates to UNKNOWN for all rows (three-valued logic), returning nothing. Use NOT EXISTS or filter nulls.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-008"
+      ]
+    },
+    {
+      "id": "SQ-KEY-01",
+      "category": "uniqueness assumptions",
+      "prompt": "Before joining `sales` to `product` on product_key, what should the agent verify and how?",
+      "ideal_answer": "That product_key is unique in `product`: GROUP BY product_key HAVING COUNT(*)>1 returns no rows (or row_count = distinct_keys).",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-004"
+      ]
+    },
+    {
+      "id": "SQ-DIAG-01",
+      "category": "diagnostic scenario",
+      "prompt": "Gold revenue doesn't reconcile to source. Outline the diagnostic path.",
+      "ideal_answer": "Declare grain at each layer; pick a control total (revenue, distinct orders); compare source vs silver vs gold; locate the first layer where it diverges; repair the transformation there; if source totals are disputed, stop and request authoritative metadata.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-005",
+        "SC-007"
+      ]
+    },
+    {
+      "id": "SQ-DIAG-02",
+      "category": "diagnostic scenario",
+      "prompt": "GROUP BY by region returns more groups than expected regions. Likely causes and checks?",
+      "ideal_answer": "Nulls forming a group, or case/whitespace variants treated as distinct, or upstream duplicates. Check for a null group and near-duplicate labels; normalize the key (trim/upper/coalesce) and dedup before grouping.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-005",
+        "SC-008"
+      ]
+    },
+    {
+      "id": "SQ-JOIN-01",
+      "category": "join semantics",
+      "prompt": "sales INNER JOIN customer drops guest-checkout lines. Why, and the fix?",
+      "ideal_answer": "Guest lines have NULL customer_key which matches nothing in an inner join, so they're dropped. Use LEFT JOIN to keep them (and handle the null).",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-009",
+        "SC-014"
+      ]
+    },
+    {
+      "id": "SQ-CARD-01",
+      "category": "join cardinality",
+      "prompt": "Before joining sales to product on product_key, what guarantees the join won't inflate rows?",
+      "ideal_answer": "product_key must be unique in product (one row per product) -- a many:1 join. Verify with GROUP BY product_key HAVING COUNT(*)>1 (empty) or row_count = distinct_keys.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-010",
+        "SC-004"
+      ]
+    },
+    {
+      "id": "SQ-FANOUT-01",
+      "category": "duplicate amplification",
+      "prompt": "A revenue SUM tripled after adding a product_tag join. Explain and fix.",
+      "ideal_answer": "product_tag is one-to-many per product, so each sales row was duplicated once per tag and the SUM multiplied. Aggregate sales to grain before joining, or join to a one-row-per-product tag summary; don't use DISTINCT.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-011",
+        "SC-010"
+      ]
+    },
+    {
+      "id": "SQ-FANOUT-02",
+      "category": "duplicate amplification",
+      "prompt": "Does a LEFT JOIN guarantee the row count can't increase?",
+      "ideal_answer": "No. If the right side has duplicate keys, a LEFT JOIN still fans out (preserves and multiplies). Verify right-side uniqueness and compare COUNT(*) before/after.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-011",
+        "SC-010"
+      ]
+    },
+    {
+      "id": "SQ-ANTI-01",
+      "category": "anti-joins / existence",
+      "prompt": "Why might `key NOT IN (SELECT key FROM t)` return no rows, and what's the safe form?",
+      "ideal_answer": "If t.key contains a NULL, NOT IN evaluates UNKNOWN for all rows and returns nothing. Use NOT EXISTS (null-safe) or LEFT JOIN ... WHERE b.key IS NULL.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-012",
+        "SC-014"
+      ]
+    },
+    {
+      "id": "SQ-ANTI-02",
+      "category": "anti-joins / existence",
+      "prompt": "Write the idea of an orphan-fact check: sales lines whose product is missing.",
+      "ideal_answer": "LEFT JOIN sales to product on product_key and keep rows WHERE product.product_key IS NULL -- these are sales with no matching product (a referential-integrity gap).",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-012"
+      ]
+    },
+    {
+      "id": "SQ-LEFT-01",
+      "category": "join semantics",
+      "prompt": "A LEFT JOIN to store still drops rows when filtering region='West' in WHERE. Why and fix?",
+      "ideal_answer": "Unmatched left rows get NULL region, which fails the WHERE test, so they drop -- effectively an inner join. Put `st.region='West'` in the ON clause instead.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-009"
+      ]
+    },
+    {
+      "id": "SQ-DEDUP-01",
+      "category": "deduplication",
+      "prompt": "Why prefer ROW_NUMBER() dedup over SELECT DISTINCT for silver/gold?",
+      "ideal_answer": "ROW_NUMBER() with an explicit ORDER BY chooses a deterministic survivor per key and is explainable; DISTINCT is non-deterministic about which row wins and can mask fan-out.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-013"
+      ]
+    },
+    {
+      "id": "SQ-WIN-01",
+      "category": "window vs group by",
+      "prompt": "When do you use a window function instead of GROUP BY?",
+      "ideal_answer": "When you need per-row detail alongside a group-level value (rank, running total, share of total) without collapsing rows. GROUP BY reduces grain; a window preserves it.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-015",
+        "SC-005"
+      ]
+    },
+    {
+      "id": "SQ-WIN-02",
+      "category": "window framing",
+      "prompt": "A running total ordered by a non-unique date looks wrong. Why and fix?",
+      "ideal_answer": "The default RANGE frame groups all rows with the same date, so the total jumps at ties. Use ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-017"
+      ]
+    },
+    {
+      "id": "SQ-WIN-03",
+      "category": "ranking functions",
+      "prompt": "Difference between ROW_NUMBER, RANK, DENSE_RANK on ties?",
+      "ideal_answer": "ROW_NUMBER gives unique sequential numbers (arbitrary among ties); RANK shares a rank and leaves gaps (1,1,3); DENSE_RANK shares with no gaps (1,1,2).",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-018"
+      ]
+    },
+    {
+      "id": "SQ-WIN-04",
+      "category": "window navigation",
+      "prompt": "Why might LAST_VALUE return the current row's value?",
+      "ideal_answer": "The default frame ends at the current row. Add ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING to get the partition's true last value.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-017",
+        "SC-019"
+      ]
+    },
+    {
+      "id": "SQ-WIN-05",
+      "category": "window placement",
+      "prompt": "Why can't you write WHERE ROW_NUMBER() OVER(...) = 1, and what's the fix?",
+      "ideal_answer": "Window functions are computed at SELECT, after WHERE/HAVING, so they can't be referenced there. Compute in a CTE/subquery and filter rn=1 in the outer query.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-020",
+        "SC-002"
+      ]
+    },
+    {
+      "id": "SQ-WIN-06",
+      "category": "window navigation",
+      "prompt": "MoM change via LAG is wrong for some stores with missing months. Cause and fix?",
+      "ideal_answer": "LAG reads the previous row, not the previous month; with sparse months it compares non-adjacent periods. Build a date spine so months are contiguous before LAG.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-019"
+      ]
+    },
+    {
+      "id": "SQ-WIN-07",
+      "category": "ranking functions",
+      "prompt": "Top product per category keeps changing between runs. Why and fix?",
+      "ideal_answer": "ORDER BY revenue DESC has ties with no tiebreak, so ROW_NUMBER is nondeterministic. Add a deterministic tiebreak (e.g. product_key) to the OVER ORDER BY.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-016",
+        "SC-018"
+      ]
+    },
+    {
+      "id": "SQ-DT-01",
+      "category": "date grain / truncation",
+      "prompt": "Why does GROUP BY order_ts return thousands of groups, and how do you fix it?",
+      "ideal_answer": "Raw timestamps are near-unique, so each instant is its own group. Truncate to the reporting grain (DATE_TRUNC) or group by a date-dimension period.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-021"
+      ]
+    },
+    {
+      "id": "SQ-DT-02",
+      "category": "date ranges",
+      "prompt": "What's wrong with WHERE order_ts BETWEEN '2025-01-01' AND '2025-01-31' and the fix?",
+      "ideal_answer": "BETWEEN includes only up to the Jan-31 00:00 instant, dropping the rest of Jan 31. Use a half-open range: >= '2025-01-01' AND < '2025-02-01'.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-024"
+      ]
+    },
+    {
+      "id": "SQ-DT-03",
+      "category": "time zones",
+      "prompt": "Daily order counts don't match the business day. Likely cause and fix?",
+      "ideal_answer": "Timestamps bucketed in UTC (or mixed zones) shift events across midnight. Convert to the business/local zone before truncating to day.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-022"
+      ]
+    },
+    {
+      "id": "SQ-DT-04",
+      "category": "date spine",
+      "prompt": "A monthly trend is missing months with no sales. How do you guarantee every month appears?",
+      "ideal_answer": "Anchor on a complete date spine (calendar table) and LEFT JOIN sales onto it; COALESCE empty periods to 0.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-023"
+      ]
+    },
+    {
+      "id": "SQ-DT-05",
+      "category": "period-over-period",
+      "prompt": "Why can LAG give wrong MoM values, and what's the prerequisite?",
+      "ideal_answer": "LAG reads the previous row; with missing months it compares non-adjacent periods. Build the series on a date spine so months are contiguous first.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-025",
+        "SC-023"
+      ]
+    },
+    {
+      "id": "SQ-DT-06",
+      "category": "period-over-period",
+      "prompt": "Why is comparing month-to-date against a full prior month misleading?",
+      "ideal_answer": "The periods are unequal lengths, so current looks worse than it is. Compare like-for-like (same-MTD last period) or label the partial comparison.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-026",
+        "SC-025"
+      ]
+    },
+    {
+      "id": "SQ-DT-07",
+      "category": "indexing",
+      "prompt": "How do you index a revenue series so stores of different sizes are comparable?",
+      "ideal_answer": "Rebase to a base period: value / base_value * 100 (e.g. FIRST_VALUE over the ordered series), guarding the division with NULLIF.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-026"
+      ]
+    },
+    {
+      "id": "SQ-VAL-01",
+      "category": "validation gates",
+      "prompt": "What makes a query a 'validation gate' rather than a spot check?",
+      "ideal_answer": "It has a precise, repeatable pass condition (typically returns 0 rows, or two totals are equal) and failing it blocks promotion.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-027"
+      ]
+    },
+    {
+      "id": "SQ-VAL-02",
+      "category": "validation gates",
+      "prompt": "Write the idea of a uniqueness gate for gold.fact_sales on order_line_id.",
+      "ideal_answer": "GROUP BY order_line_id HAVING COUNT(*)>1 must return 0 rows (or COUNT(*)=COUNT(DISTINCT order_line_id)).",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-028",
+        "SC-004"
+      ]
+    },
+    {
+      "id": "SQ-VAL-03",
+      "category": "referential integrity",
+      "prompt": "How do you gate that every sales product_key exists in product, null-safely?",
+      "ideal_answer": "LEFT JOIN sales to product on product_key and require WHERE product.product_key IS NULL returns 0 rows; avoid NOT IN (null trap).",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-029",
+        "SC-012"
+      ]
+    },
+    {
+      "id": "SQ-RECON-01",
+      "category": "reconciliation",
+      "prompt": "Source and gold have equal row counts but you're unsure they're correct. What else must you check?",
+      "ideal_answer": "A value control total (e.g. SUM(quantity*net_price)) and distinct-order counts must also tie out; counts alone miss fan-out and value drift.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-030",
+        "SC-011"
+      ]
+    },
+    {
+      "id": "SQ-RECON-02",
+      "category": "reconciliation",
+      "prompt": "Gold revenue != source revenue. Outline the reconciliation path.",
+      "ideal_answer": "Pick a shared-grain control total; compare source->silver->gold; find the first layer where it diverges; suspect fan-out or a dropped/filtered row there; gate the promotion on diff=0.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-030",
+        "SC-005"
+      ]
+    },
+    {
+      "id": "SQ-FRESH-01",
+      "category": "freshness / completeness",
+      "prompt": "All gates pass but a store's data is missing. Which gate was absent and how is it built?",
+      "ideal_answer": "A completeness gate. Build it against the date spine (and expected-segment list): LEFT JOIN spine to fact and flag periods/segments with zero rows; add a freshness (max-date vs SLA) check.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-031",
+        "SC-023"
+      ]
+    },
+    {
+      "id": "SQ-IDEM-01",
+      "category": "idempotency",
+      "prompt": "A reload doubled the gold rows. What gate catches this and what's the fix?",
+      "ideal_answer": "An idempotency/dedup gate: row_count must equal distinct-key count, and re-running must keep row count and control totals identical. Fix the load to replace/merge rather than append.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-032",
+        "SC-013"
+      ]
+    },
+    {
+      "id": "SQ-PERF-01",
+      "category": "sargability",
+      "prompt": "Why is WHERE YEAR(order_date)=2025 slow, and what's the sargable rewrite?",
+      "ideal_answer": "Wrapping the column in YEAR() prevents index/zone-map use, forcing a full scan. Rewrite as a bare-column range: order_date >= '2025-01-01' AND order_date < '2026-01-01'.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-033",
+        "SC-024"
+      ]
+    },
+    {
+      "id": "SQ-PERF-02",
+      "category": "select-star / columns",
+      "prompt": "Why avoid SELECT * in a silver/gold view, especially on a column-store?",
+      "ideal_answer": "It reads/stores unneeded columns (extra I/O on a column-store), breaks on upstream schema changes, and hides the step's output grain/contract. List explicit columns.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-035",
+        "SC-036"
+      ]
+    },
+    {
+      "id": "SQ-PERF-03",
+      "category": "cross join",
+      "prompt": "FROM sales, store with no condition returns far too many rows. What happened and the fix?",
+      "ideal_answer": "It's an implicit cross join (Cartesian product). Add an explicit ON condition (store_key = store_key); use CROSS JOIN only if intended.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-009",
+        "SC-037"
+      ]
+    },
+    {
+      "id": "SQ-PERF-04",
+      "category": "filter early",
+      "prompt": "A monthly report joins all sales history then filters to one month. How to make it cheaper?",
+      "ideal_answer": "Filter sales to the month first (in a CTE/subquery) before joining dimensions, so far fewer fact rows flow into the joins.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-034",
+        "SC-037"
+      ]
+    },
+    {
+      "id": "SQ-PERF-05",
+      "category": "cte grain",
+      "prompt": "A five-CTE query gives a wrong total and nobody can find why. What discipline prevents this?",
+      "ideal_answer": "Declare each CTE's grain in a one-sentence comment; locate where a join fans out or a GROUP BY collapses. Untracked grain hides fan-out/double-counting.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-038",
+        "SC-005"
+      ]
+    },
+    {
+      "id": "SQ-PERF-06",
+      "category": "sargability",
+      "prompt": "Is LIKE 'phone%' or LIKE '%phone' sargable, and why does it matter?",
+      "ideal_answer": "'phone%' (trailing wildcard) can use an index; '%phone' (leading wildcard) cannot and forces a scan. Prefer anchored patterns when performance matters.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-033"
+      ]
+    },
+    {
+      "id": "SQ-DIAG-10",
+      "category": "diagnostic playbook",
+      "prompt": "An agent is handed a query whose total looks too high. What is the single best first move before any specific check?",
+      "ideal_answer": "State the grain of the result in one sentence ('one row of this is one ___'). Most failures (fan-out, double counting) reveal themselves immediately once grain is named.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-003"
+      ]
+    },
+    {
+      "id": "SQ-DIAG-11",
+      "category": "diagnostic playbook",
+      "prompt": "Gold revenue is 3x source. Walk the diagnostic path.",
+      "ideal_answer": "Suspect fan-out: compare COUNT(*) before/after each join; uniqueness-check right-side keys; find the join that multiplied rows; aggregate to grain before joining. Reconcile a control total source->silver->gold to confirm. (PB-SQL-01/08)",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-011",
+        "SC-030"
+      ]
+    },
+    {
+      "id": "SQ-DIAG-12",
+      "category": "diagnostic playbook",
+      "prompt": "All validation gates pass yet a regional manager says their store is missing. Which gate was absent?",
+      "ideal_answer": "Completeness (and possibly freshness). Build completeness against the date spine and an expected-segment/store list; flag periods/segments with zero rows. (PB-SQL-09)",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-031",
+        "SC-023"
+      ]
+    },
+    {
+      "id": "SQ-INT-01",
+      "category": "integrative reasoning",
+      "prompt": "Before a gold fact table is handed to bi-dax-knowledge for measures, what three properties must this layer have proven?",
+      "ideal_answer": "Known/declared grain, verified key uniqueness (no fan-out), and reconciled control totals (plus not-null on required keys). These let DAX reason about additivity safely.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-003",
+        "SC-004",
+        "SC-030"
+      ]
+    },
+    {
+      "id": "SQ-INT-02",
+      "category": "integrative reasoning",
+      "prompt": "Why is grain the foundational concept of this whole SQL layer (analogous to filter context in DAX)?",
+      "ideal_answer": "Every aggregation, join safety, validation gate, and reconciliation is defined relative to grain; without knowing what one row means you cannot judge correctness anywhere. It threads through Slices 1-6.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-003",
+        "SC-005",
+        "SC-007"
+      ]
+    },
+    {
+      "id": "SQ-INT-03",
+      "category": "integrative reasoning",
+      "prompt": "A request needs YoY revenue % by store on a 4-4-5 calendar from a freshly built gold table. Which slices' concerns apply, in order?",
+      "ideal_answer": "Validate the gold table first (grain, uniqueness, reconciliation - Slice 5); build a complete spine-backed series on the custom calendar (Slice 4); compute period-over-period with windows deterministically (Slice 3); guard division and nulls (Slice 1). Then DAX/dashboard layers consume it.",
+      "scoring_rubric": {
+        "3": "Correct answer with correct reasoning and the right concept(s)/fix named",
+        "2": "Correct answer, reasoning incomplete",
+        "1": "Right instinct, flawed reasoning or wrong answer",
+        "0": "Wrong answer and reasoning"
+      },
+      "related_concepts": [
+        "SC-030",
+        "SC-023",
+        "SC-025",
+        "SC-008"
+      ]
+    },
+    {
+      "id": "SQ-SET-01",
+      "category": "set operations",
+      "prompt": "When should you use UNION ALL instead of UNION, and why does it matter in BI?",
+      "ideal_answer": "Use UNION ALL whenever you don't explicitly need duplicates removed; UNION silently drops identical rows (understating counts/totals) and adds a dedup/sort cost.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-040"
+      ]
+    },
+    {
+      "id": "SQ-SET-02",
+      "category": "reconciliation diff",
+      "prompt": "How do you prove gold holds exactly the same rows as source?",
+      "ideal_answer": "Run A EXCEPT B and B EXCEPT A on the identity columns -- both must return 0 rows -- and confirm COUNT(*) matches (so duplicate counts aren't masked).",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-042",
+        "SC-041"
+      ]
+    },
+    {
+      "id": "SQ-SET-03",
+      "category": "set operations",
+      "prompt": "An EXCEPT comparison reports differences you don't expect. First thing to check?",
+      "ideal_answer": "That both sides project identical columns in the same order/types -- set ops match by position, not name (and nulls compare equal, unlike '=').",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-039",
+        "SC-041"
+      ]
+    },
+    {
+      "id": "SQ-SET-04",
+      "category": "reconciliation diff",
+      "prompt": "Why prefer EXCEPT/INTERSECT over a hand-rolled join to diff two tables?",
+      "ideal_answer": "They express row-level difference directly, handle null-equality, and avoid the fan-out/IS NULL gymnastics a comparison join requires.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-041"
+      ]
+    },
+    {
+      "id": "SQ-DML-01",
+      "category": "idempotent loads",
+      "prompt": "Why prefer MERGE over INSERT for a layer load, and what property does it give you?",
+      "ideal_answer": "MERGE upserts on a unique key, so re-running yields identical rows/totals -- idempotency. Plain INSERT appends duplicates on reload.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-047",
+        "SC-032"
+      ]
+    },
+    {
+      "id": "SQ-DML-02",
+      "category": "DML correctness",
+      "prompt": "What's the danger of update-from a source with multiple rows per target key, and the fix?",
+      "ideal_answer": "The update is ambiguous/nondeterministic (arbitrary match or error). Ensure the source is unique per target key (verify) or pre-aggregate it.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-045",
+        "SC-010"
+      ]
+    },
+    {
+      "id": "SQ-DML-03",
+      "category": "DML correctness",
+      "prompt": "How do you delete duplicates deterministically?",
+      "ideal_answer": "ROW_NUMBER() OVER(PARTITION BY key ORDER BY <tiebreak>) and delete rows where rn>1 -- an explicit survivor rule, not a random one.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-046",
+        "SC-013"
+      ]
+    },
+    {
+      "id": "SQ-DML-04",
+      "category": "DML correctness",
+      "prompt": "A reload doubled gold rows. Which gate and which load change fix it?",
+      "ideal_answer": "VP-DEDUP/idempotency gate (row=key counts, stable totals on re-run) catches it; switch the load from append INSERT to MERGE/replace keyed on a unique key.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-047",
+        "SC-032"
+      ]
+    },
+    {
+      "id": "SQ-RSH-01",
+      "category": "subtotals",
+      "prompt": "How do you produce per-store, per-region subtotal, and grand total in one query?",
+      "ideal_answer": "Use GROUP BY ROLLUP(region, store_key) -- one pass yields store rows, region subtotals, and the grand total.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-051"
+      ]
+    },
+    {
+      "id": "SQ-RSH-02",
+      "category": "subtotals",
+      "prompt": "In a ROLLUP result, how do you tell a subtotal row from a real NULL category, and why care?",
+      "ideal_answer": "Use GROUPING(col)=1 to flag rolled-up rows; otherwise subtotal NULLs look like a real category and can be double-counted downstream.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-052"
+      ]
+    },
+    {
+      "id": "SQ-RSH-03",
+      "category": "reshaping / pivot",
+      "prompt": "When is a CASE-based pivot safe vs needing dynamic SQL?",
+      "ideal_answer": "Safe when the pivot column set is fixed/known at write time; a value-dependent set needs fragile dynamic SQL -- better to keep data tall and pivot in the tool.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-049",
+        "SC-050"
+      ]
+    },
+    {
+      "id": "SQ-RSH-04",
+      "category": "reshaping / pivot",
+      "prompt": "Equal-width price bands put most products in one band. What did you want instead?",
+      "ideal_answer": "Probably equal-count groups -- use NTILE(n) (quartiles/deciles) rather than fixed-width buckets when distribution is skewed.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-053"
+      ]
+    },
+    {
+      "id": "SQ-STR-01",
+      "category": "string cleaning",
+      "prompt": "A customer count is too high because 'Acme ', 'acme', 'ACME' are separate. Fix?",
+      "ideal_answer": "Canonicalize the key before grouping (UPPER(TRIM(...)) / unaccent) or join on a surrogate key; raw-text keys split identical entities.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-054",
+        "SC-008"
+      ]
+    },
+    {
+      "id": "SQ-STR-02",
+      "category": "string cleaning",
+      "prompt": "Why is matching a multi-valued tags field with LIKE '%sale%' risky, and the better approach?",
+      "ideal_answer": "LIKE matches substrings of other values (false hits) and is non-sargable; split the field into one tag per row and match exactly.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-055"
+      ]
+    },
+    {
+      "id": "SQ-STR-03",
+      "category": "safe parsing",
+      "prompt": "A load aborts on CAST(raw_qty AS INT). What's the robust pattern?",
+      "ideal_answer": "Use TRY_CAST (or a numeric-pattern check) and route unparseable rows to a quarantine with a quality flag, rather than hard-casting.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-058"
+      ]
+    },
+    {
+      "id": "SQ-STR-04",
+      "category": "string cleaning",
+      "prompt": "When is SOUNDEX/fuzzy matching appropriate in a pipeline?",
+      "ideal_answer": "To surface likely duplicate spellings for review -- never as a join key or for silent auto-merge.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-057",
+        "SC-013"
+      ]
+    },
+    {
+      "id": "SQ-DTR-01",
+      "category": "calendar / dates",
+      "prompt": "How do you guarantee a daily trend shows every day, including zero-sales days?",
+      "ideal_answer": "Generate a contiguous calendar (recursive CTE / numbers table) and LEFT JOIN sales to it, COALESCE empty days to 0 -- don't trend off the fact.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-059",
+        "SC-060"
+      ]
+    },
+    {
+      "id": "SQ-DTR-02",
+      "category": "interval overlap",
+      "prompt": "What's the canonical test for two date ranges overlapping?",
+      "ideal_answer": "a_start < b_end AND b_start < a_end (half-open) -- consistent and avoids double-counting touching intervals.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-062",
+        "SC-024"
+      ]
+    },
+    {
+      "id": "SQ-DTR-03",
+      "category": "calendar / dates",
+      "prompt": "Why is end_date - start_date wrong for 'business days to deliver'?",
+      "ideal_answer": "It includes weekends/holidays. Count working days via a calendar that flags non-working days.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-061"
+      ]
+    },
+    {
+      "id": "SQ-DTR-04",
+      "category": "calendar / dates",
+      "prompt": "Why generate a calendar rather than hardcode dates?",
+      "ideal_answer": "A generated spine covers the full range, is reproducible, and makes missing periods explicit; hardcoded lists are brittle and incomplete.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-059",
+        "SC-023"
+      ]
+    },
+    {
+      "id": "SQ-GI-01",
+      "category": "gaps & islands",
+      "prompt": "What's the set-based trick to group consecutive values into islands?",
+      "ideal_answer": "The difference value - ROW_NUMBER() (or date - row index) is constant within a run; group by it, partitioned per entity, deterministically ordered.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-064",
+        "SC-016"
+      ]
+    },
+    {
+      "id": "SQ-GI-02",
+      "category": "gaps & islands",
+      "prompt": "Why might a 'find missing dates' query miss a whole missing month?",
+      "ideal_answer": "Because it only inspects rows that exist; detect gaps against a complete generated sequence/spine (anti-join) or with LEAD.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-065",
+        "SC-023"
+      ]
+    },
+    {
+      "id": "SQ-REC-01",
+      "category": "recursive / hierarchy",
+      "prompt": "What three parts must a recursive CTE have, and what stops infinite recursion?",
+      "ideal_answer": "An anchor member, a recursive member, and a termination (recursive member returns no rows); add a cycle guard (path check) and depth cap for safety.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-066"
+      ]
+    },
+    {
+      "id": "SQ-REC-02",
+      "category": "recursive / hierarchy",
+      "prompt": "How do you protect a hierarchy traversal against cyclic data?",
+      "ideal_answer": "Accumulate the root->node path and stop a branch if a node reappears in it; also cap depth.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-067",
+        "SC-066"
+      ]
+    },
+    {
+      "id": "SQ-MET-01",
+      "category": "metadata profiling",
+      "prompt": "How do you make validation scale across hundreds of columns?",
+      "ideal_answer": "Read information_schema and generate the checks (SQL that writes SQL) so coverage is complete and stays current, instead of hand-writing per column.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-069",
+        "SC-070"
+      ]
+    },
+    {
+      "id": "SQ-MET-02",
+      "category": "metadata profiling",
+      "prompt": "Why drive checks from the catalog rather than a hardcoded column list?",
+      "ideal_answer": "The catalog reflects the live schema; a hardcoded list goes stale on drift, silently breaking checks or leaving blind spots.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-068"
+      ]
+    },
+    {
+      "id": "SQ-MET-03",
+      "category": "sql generating sql",
+      "prompt": "What's the key safety concern when generating SQL from metadata?",
+      "ideal_answer": "Quote identifiers (quote_ident) and escape literals (quote_literal); raw concatenation yields broken or injectable SQL.",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-069"
+      ]
+    },
+    {
+      "id": "SQ-MET-04",
+      "category": "metadata profiling",
+      "prompt": "What standard per-column profile would you generate, and what does it feed?",
+      "ideal_answer": "rows, null %, distinct count, min/max (and samples) per column -- VP-PROFILE -- feeding the Slice 5 gates and drift detection (SC-031).",
+      "scoring_rubric": {
+        "3": "Correct answer + reasoning + right concept/fix",
+        "2": "Correct, reasoning incomplete",
+        "1": "Right instinct, flawed",
+        "0": "Wrong"
+      },
+      "related_concepts": [
+        "SC-070",
+        "SC-031"
+      ]
+    }
+  ]
+}

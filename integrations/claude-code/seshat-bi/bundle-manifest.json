@@ -1,0 +1,1550 @@
+{
+  "entries": [
+    {
+      "classification": "generated_wrapper",
+      "destination": ".claude-plugin/plugin.json",
+      "output_sha256": "2473668695337b9e1cc40c4f86cdda497f8c75d463a5d7c0c5f0770794d507ce",
+      "source": "distribution/bundle-templates/claude/.claude-plugin/plugin.json",
+      "source_id": "claude-manifest",
+      "source_sha256": "414f8f2dbdeb715721c0b722ce36e04437d89d70ea4502bed3722821a8dcfe8b",
+      "transform": "template-substitute-version-v1"
+    },
+    {
+      "classification": "public_license",
+      "destination": "LICENSE",
+      "output_sha256": "194d39809c3f1f3f33523fdc5523f501c4ee055985e496f6490672595b612ead",
+      "source": "LICENSE",
+      "source_id": "public-license",
+      "source_sha256": "194d39809c3f1f3f33523fdc5523f501c4ee055985e496f6490672595b612ead",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "generated_wrapper",
+      "destination": "README.md",
+      "output_sha256": "6f859574fe83360ac86c4d2f929f4180a5941966ccabda3b737290574d13c704",
+      "source": "distribution/bundle-templates/claude/README.md",
+      "source_id": "claude-readme",
+      "source_sha256": "6f859574fe83360ac86c4d2f929f4180a5941966ccabda3b737290574d13c704",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "generated_wrapper",
+      "destination": "commands/seshat-check.md",
+      "output_sha256": "4f50d44ec449efa967f54a8d5871d09228aa9dcac9865da33823bd5d74192752",
+      "source": "distribution/bundle-templates/claude/commands/seshat-check.md",
+      "source_id": "claude-check",
+      "source_sha256": "4f50d44ec449efa967f54a8d5871d09228aa9dcac9865da33823bd5d74192752",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "generated_wrapper",
+      "destination": "commands/seshat-init.md",
+      "output_sha256": "88662636b2c403dc61413a646e501ffb575d0999d22e96f5996472d1a7f2bb2e",
+      "source": "distribution/bundle-templates/claude/commands/seshat-init.md",
+      "source_id": "claude-init",
+      "source_sha256": "88662636b2c403dc61413a646e501ffb575d0999d22e96f5996472d1a7f2bb2e",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "generated_wrapper",
+      "destination": "commands/seshat-next.md",
+      "output_sha256": "532743175f67b15c3e3ee64fe5aab870c1cc1d6f835896ada8b63709c7eb4a2f",
+      "source": "distribution/bundle-templates/claude/commands/seshat-next.md",
+      "source_id": "claude-next",
+      "source_sha256": "532743175f67b15c3e3ee64fe5aab870c1cc1d6f835896ada8b63709c7eb4a2f",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "generated_wrapper",
+      "destination": "commands/seshat-review.md",
+      "output_sha256": "3e76fad3cf6084f2b7653fbfefaeed7903f6a47cbe8fe898cb9e68c4a7d83f74",
+      "source": "distribution/bundle-templates/claude/commands/seshat-review.md",
+      "source_id": "claude-review",
+      "source_sha256": "3e76fad3cf6084f2b7653fbfefaeed7903f6a47cbe8fe898cb9e68c4a7d83f74",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/INDEX.md",
+      "output_sha256": "ff4f5aceef52cbacac0785a1466fafd1f72e56425d2f75c1f5a23c36ea1a3101",
+      "source": "skills/bi-bigdata-knowledge/INDEX.md",
+      "source_id": "kb-001",
+      "source_sha256": "ff4f5aceef52cbacac0785a1466fafd1f72e56425d2f75c1f5a23c36ea1a3101",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/README.md",
+      "output_sha256": "23d3dcc6d1c63659f1a7b965b87168a97b3646d28028784c4e29d7cd29afa7e5",
+      "source": "skills/bi-bigdata-knowledge/README.md",
+      "source_id": "kb-002",
+      "source_sha256": "23d3dcc6d1c63659f1a7b965b87168a97b3646d28028784c4e29d7cd29afa7e5",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/SKILL.md",
+      "output_sha256": "aebdd910523212f0f0bf48a266b0c21fc9c85edc2e57b84b3fec51f5bb4362e5",
+      "source": "skills/bi-bigdata-knowledge/SKILL.md",
+      "source_id": "kb-003",
+      "source_sha256": "aebdd910523212f0f0bf48a266b0c21fc9c85edc2e57b84b3fec51f5bb4362e5",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/checklists/aggregation-grain-checklist.md",
+      "output_sha256": "9fd3507a9c6babf00aa86d12e7a50cfdb26a5e00ff7ac828115757def3d6810f",
+      "source": "skills/bi-bigdata-knowledge/checklists/aggregation-grain-checklist.md",
+      "source_id": "kb-004",
+      "source_sha256": "9fd3507a9c6babf00aa86d12e7a50cfdb26a5e00ff7ac828115757def3d6810f",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/checklists/engine-selection-checklist.md",
+      "output_sha256": "6596a504d40450e95f71a5e9f726041747d0249b8d1508e2c77cc4e1f6b1d0a7",
+      "source": "skills/bi-bigdata-knowledge/checklists/engine-selection-checklist.md",
+      "source_id": "kb-005",
+      "source_sha256": "6596a504d40450e95f71a5e9f726041747d0249b8d1508e2c77cc4e1f6b1d0a7",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/checklists/join-skew-checklist.md",
+      "output_sha256": "150fc3ba8615a45b87f70408a9d91d96f567a43ec930f17b82355927985117d8",
+      "source": "skills/bi-bigdata-knowledge/checklists/join-skew-checklist.md",
+      "source_id": "kb-006",
+      "source_sha256": "150fc3ba8615a45b87f70408a9d91d96f567a43ec930f17b82355927985117d8",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/checklists/partitioning-shuffle-checklist.md",
+      "output_sha256": "80fd9d6f588d83c6cd2c021efc6495601471e048026552c127de0717f2649aba",
+      "source": "skills/bi-bigdata-knowledge/checklists/partitioning-shuffle-checklist.md",
+      "source_id": "kb-007",
+      "source_sha256": "80fd9d6f588d83c6cd2c021efc6495601471e048026552c127de0717f2649aba",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/checklists/pipeline-review-checklist.md",
+      "output_sha256": "04ccd86b55dc1bfe312ca8d2f4b5e5967969422701f1b60a730b4a72158f864c",
+      "source": "skills/bi-bigdata-knowledge/checklists/pipeline-review-checklist.md",
+      "source_id": "kb-008",
+      "source_sha256": "04ccd86b55dc1bfe312ca8d2f4b5e5967969422701f1b60a730b4a72158f864c",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/checklists/validation-reconciliation-checklist.md",
+      "output_sha256": "b0767297eb9f78fe267f62f3ab09de1d7dd60e38df8414f9e3a1a90a38a6816a",
+      "source": "skills/bi-bigdata-knowledge/checklists/validation-reconciliation-checklist.md",
+      "source_id": "kb-009",
+      "source_sha256": "b0767297eb9f78fe267f62f3ab09de1d7dd60e38df8414f9e3a1a90a38a6816a",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/knowledge/aggregation-and-grain-at-scale.md",
+      "output_sha256": "def76fd52ae74d5bb90056b7e6c4cfeddce3c07a3c539830ba761527e4ad57dc",
+      "source": "skills/bi-bigdata-knowledge/knowledge/aggregation-and-grain-at-scale.md",
+      "source_id": "kb-010",
+      "source_sha256": "def76fd52ae74d5bb90056b7e6c4cfeddce3c07a3c539830ba761527e4ad57dc",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/knowledge/bigdata-anti-patterns.md",
+      "output_sha256": "8116adc67cbaee5d558cb179cac12a76749cfc7f4bbf7af25219537a38a47aca",
+      "source": "skills/bi-bigdata-knowledge/knowledge/bigdata-anti-patterns.md",
+      "source_id": "kb-011",
+      "source_sha256": "8116adc67cbaee5d558cb179cac12a76749cfc7f4bbf7af25219537a38a47aca",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/knowledge/bigdata-core-concepts-for-bi.md",
+      "output_sha256": "11629df842d570913efe2aabfa0487b70f1834bbfa97106b34773a476143ee8e",
+      "source": "skills/bi-bigdata-knowledge/knowledge/bigdata-core-concepts-for-bi.md",
+      "source_id": "kb-012",
+      "source_sha256": "11629df842d570913efe2aabfa0487b70f1834bbfa97106b34773a476143ee8e",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/knowledge/bigdata-retail-examples.md",
+      "output_sha256": "8cb4bc0683ce494c4ab049a0a5471fea7c9169df02889d8b59907b942e4fb34c",
+      "source": "skills/bi-bigdata-knowledge/knowledge/bigdata-retail-examples.md",
+      "source_id": "kb-013",
+      "source_sha256": "8cb4bc0683ce494c4ab049a0a5471fea7c9169df02889d8b59907b942e4fb34c",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/knowledge/distributed-dataframe-model.md",
+      "output_sha256": "9447e4455a8e55a87e3198471267877a2a1b443620ce4f2232e97e95cbc2911f",
+      "source": "skills/bi-bigdata-knowledge/knowledge/distributed-dataframe-model.md",
+      "source_id": "kb-014",
+      "source_sha256": "9447e4455a8e55a87e3198471267877a2a1b443620ce4f2232e97e95cbc2911f",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/knowledge/engine-selection.md",
+      "output_sha256": "a791c6534a36ac386dd1e9436fbb33871591d3ef6dcb74728ed7ff96a4c0643a",
+      "source": "skills/bi-bigdata-knowledge/knowledge/engine-selection.md",
+      "source_id": "kb-015",
+      "source_sha256": "a791c6534a36ac386dd1e9436fbb33871591d3ef6dcb74728ed7ff96a4c0643a",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/knowledge/file-formats-and-storage.md",
+      "output_sha256": "11540d369c1188116388a1007dafdcda427d9980e3969b8b4ac021a542ed1406",
+      "source": "skills/bi-bigdata-knowledge/knowledge/file-formats-and-storage.md",
+      "source_id": "kb-016",
+      "source_sha256": "11540d369c1188116388a1007dafdcda427d9980e3969b8b4ac021a542ed1406",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/knowledge/incremental-and-idempotency.md",
+      "output_sha256": "ec1319a5dead05597ceb8f1128886bef17fb8545b4089300fa9d07fff6907dd8",
+      "source": "skills/bi-bigdata-knowledge/knowledge/incremental-and-idempotency.md",
+      "source_id": "kb-017",
+      "source_sha256": "ec1319a5dead05597ceb8f1128886bef17fb8545b4089300fa9d07fff6907dd8",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/knowledge/joins-and-skew.md",
+      "output_sha256": "f82a1f30c77fe61bc2eb771f826cb63e4991778fea35b056b1cdfdeb11471043",
+      "source": "skills/bi-bigdata-knowledge/knowledge/joins-and-skew.md",
+      "source_id": "kb-018",
+      "source_sha256": "f82a1f30c77fe61bc2eb771f826cb63e4991778fea35b056b1cdfdeb11471043",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/knowledge/partitioning-and-shuffle.md",
+      "output_sha256": "e00005ed070c1781a62d6a7795c61e33f6a87d29cb649987baeeb4f334faf230",
+      "source": "skills/bi-bigdata-knowledge/knowledge/partitioning-and-shuffle.md",
+      "source_id": "kb-019",
+      "source_sha256": "e00005ed070c1781a62d6a7795c61e33f6a87d29cb649987baeeb4f334faf230",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/knowledge/performance-and-cost.md",
+      "output_sha256": "cee64231b6e273aaf1ac621dbd990d961cb26e98308cde39b7c574ddb8b6c907",
+      "source": "skills/bi-bigdata-knowledge/knowledge/performance-and-cost.md",
+      "source_id": "kb-020",
+      "source_sha256": "cee64231b6e273aaf1ac621dbd990d961cb26e98308cde39b7c574ddb8b6c907",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/knowledge/validation-and-reconciliation-at-scale.md",
+      "output_sha256": "9cb3279ecd24ea19422dc89520ee36b1511a2e8162322db31918d4004def0bf2",
+      "source": "skills/bi-bigdata-knowledge/knowledge/validation-and-reconciliation-at-scale.md",
+      "source_id": "kb-021",
+      "source_sha256": "9cb3279ecd24ea19422dc89520ee36b1511a2e8162322db31918d4004def0bf2",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/patterns/analyzer-rule-candidates.json",
+      "output_sha256": "3e822983003389e1f333ca0a488be5dc6d3fc71a3542fceb6509dd6eaa1d9be0",
+      "source": "skills/bi-bigdata-knowledge/patterns/analyzer-rule-candidates.json",
+      "source_id": "kb-022",
+      "source_sha256": "3e822983003389e1f333ca0a488be5dc6d3fc71a3542fceb6509dd6eaa1d9be0",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/patterns/analyzer-rules.json",
+      "output_sha256": "7f54606bbfb32c0edef0499b7d0bb9fe1353b2204abc225f95afd7a80928607d",
+      "source": "skills/bi-bigdata-knowledge/patterns/analyzer-rules.json",
+      "source_id": "kb-023",
+      "source_sha256": "7f54606bbfb32c0edef0499b7d0bb9fe1353b2204abc225f95afd7a80928607d",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/patterns/bigdata-patterns.json",
+      "output_sha256": "194375bb18fb3d86b66faa88489ad47f9bcd92c99ecf0cb8f0ffcb63855899c8",
+      "source": "skills/bi-bigdata-knowledge/patterns/bigdata-patterns.json",
+      "source_id": "kb-024",
+      "source_sha256": "194375bb18fb3d86b66faa88489ad47f9bcd92c99ecf0cb8f0ffcb63855899c8",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/patterns/validation-patterns.json",
+      "output_sha256": "745bce592b4b1f4041a4eaacd3f6cdb34225d987c53e3a05d5f855cda676952e",
+      "source": "skills/bi-bigdata-knowledge/patterns/validation-patterns.json",
+      "source_id": "kb-025",
+      "source_sha256": "745bce592b4b1f4041a4eaacd3f6cdb34225d987c53e3a05d5f855cda676952e",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/references/agent-training-set.json",
+      "output_sha256": "b99a2f88a63d2a38d7d87aaf037049215e0a63027eb2c1404fc67764a91ca75a",
+      "source": "skills/bi-bigdata-knowledge/references/agent-training-set.json",
+      "source_id": "kb-026",
+      "source_sha256": "b99a2f88a63d2a38d7d87aaf037049215e0a63027eb2c1404fc67764a91ca75a",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/references/agent-training-set.md",
+      "output_sha256": "4d84068819a53c810f559d4452e7d36d386c842501acbdd8d61cb2a0eb734c0e",
+      "source": "skills/bi-bigdata-knowledge/references/agent-training-set.md",
+      "source_id": "kb-027",
+      "source_sha256": "4d84068819a53c810f559d4452e7d36d386c842501acbdd8d61cb2a0eb734c0e",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/references/copyright-and-sources.md",
+      "output_sha256": "267d8c1b43b951dc73863f9ad95ba30e3f212014816c21ee00e258d02617cea2",
+      "source": "skills/bi-bigdata-knowledge/references/copyright-and-sources.md",
+      "source_id": "kb-028",
+      "source_sha256": "267d8c1b43b951dc73863f9ad95ba30e3f212014816c21ee00e258d02617cea2",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/references/cross-layer-map.md",
+      "output_sha256": "68187369ae7998041babdc74676da1e7c6f4322796312432436295d080d912f1",
+      "source": "skills/bi-bigdata-knowledge/references/cross-layer-map.md",
+      "source_id": "kb-029",
+      "source_sha256": "68187369ae7998041babdc74676da1e7c6f4322796312432436295d080d912f1",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/references/id-conventions.md",
+      "output_sha256": "3697917a0a0b6099deee2a66f6d09a7ffab1deb39bd9babb3751f42b6655191b",
+      "source": "skills/bi-bigdata-knowledge/references/id-conventions.md",
+      "source_id": "kb-030",
+      "source_sha256": "3697917a0a0b6099deee2a66f6d09a7ffab1deb39bd9babb3751f42b6655191b",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/references/research-notes.md",
+      "output_sha256": "eb9d7c109610589e85e52536f27b2ba69f31b608d7d825686ce9a1172ee2f06f",
+      "source": "skills/bi-bigdata-knowledge/references/research-notes.md",
+      "source_id": "kb-031",
+      "source_sha256": "eb9d7c109610589e85e52536f27b2ba69f31b608d7d825686ce9a1172ee2f06f",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-bigdata-knowledge/references/retail-bigdata-schema.md",
+      "output_sha256": "6ec9950e43db7af9237e43aad0f1a0326a60b708427531003c67ba9b3546f717",
+      "source": "skills/bi-bigdata-knowledge/references/retail-bigdata-schema.md",
+      "source_id": "kb-032",
+      "source_sha256": "6ec9950e43db7af9237e43aad0f1a0326a60b708427531003c67ba9b3546f717",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/INDEX.md",
+      "output_sha256": "86832a29135760eb530574c92c35ec58086670cf735791c2fc4456a4028f6354",
+      "source": "skills/bi-dax-knowledge/INDEX.md",
+      "source_id": "kb-033",
+      "source_sha256": "86832a29135760eb530574c92c35ec58086670cf735791c2fc4456a4028f6354",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/README.md",
+      "output_sha256": "1831c9e32d87ad5c5b23516bb25f467baac37745c01c0e750bc9f7cb8f01af55",
+      "source": "skills/bi-dax-knowledge/README.md",
+      "source_id": "kb-034",
+      "source_sha256": "1831c9e32d87ad5c5b23516bb25f467baac37745c01c0e750bc9f7cb8f01af55",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/SKILL.md",
+      "output_sha256": "9e2d19aff4655e6690276c43aeb4ff5fa2351652cac4d77f823ee5e9682c8a14",
+      "source": "skills/bi-dax-knowledge/SKILL.md",
+      "source_id": "kb-035",
+      "source_sha256": "9e2d19aff4655e6690276c43aeb4ff5fa2351652cac4d77f823ee5e9682c8a14",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/checklists/dax-measure-review-checklist.md",
+      "output_sha256": "b6253c008a9320345dfbaa02b1c8e306ae2904987ebcbab8bcfb9aa8df6a93dc",
+      "source": "skills/bi-dax-knowledge/checklists/dax-measure-review-checklist.md",
+      "source_id": "kb-036",
+      "source_sha256": "b6253c008a9320345dfbaa02b1c8e306ae2904987ebcbab8bcfb9aa8df6a93dc",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/checklists/dax-model-review-checklist.md",
+      "output_sha256": "89720835dceffd3b614125a58c355a59e56809028bdd544897ed08512bbecf4e",
+      "source": "skills/bi-dax-knowledge/checklists/dax-model-review-checklist.md",
+      "source_id": "kb-037",
+      "source_sha256": "89720835dceffd3b614125a58c355a59e56809028bdd544897ed08512bbecf4e",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/checklists/metric-contract-checklist.md",
+      "output_sha256": "d3e4af429f41afccb570d67eb01b16ad65267cfa813cd086d919a723f004538a",
+      "source": "skills/bi-dax-knowledge/checklists/metric-contract-checklist.md",
+      "source_id": "kb-038",
+      "source_sha256": "d3e4af429f41afccb570d67eb01b16ad65267cfa813cd086d919a723f004538a",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/knowledge/dax-anti-patterns.md",
+      "output_sha256": "f8305cf9d3799fe54b647392fe295a11c295929f6d9374ea88562cab0b8ddb2f",
+      "source": "skills/bi-dax-knowledge/knowledge/dax-anti-patterns.md",
+      "source_id": "kb-039",
+      "source_sha256": "f8305cf9d3799fe54b647392fe295a11c295929f6d9374ea88562cab0b8ddb2f",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/knowledge/dax-best-practices.md",
+      "output_sha256": "951758f9acbc470b4ef080e9a07bdc12bdc54bdcd48038a1d74e5b841056d863",
+      "source": "skills/bi-dax-knowledge/knowledge/dax-best-practices.md",
+      "source_id": "kb-040",
+      "source_sha256": "951758f9acbc470b4ef080e9a07bdc12bdc54bdcd48038a1d74e5b841056d863",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/knowledge/dax-calculate-deep-dive.md",
+      "output_sha256": "b7a927f72792a3483db09ca9f133104a7f2d67e0a99a9940f5b25dcfe25f511f",
+      "source": "skills/bi-dax-knowledge/knowledge/dax-calculate-deep-dive.md",
+      "source_id": "kb-041",
+      "source_sha256": "b7a927f72792a3483db09ca9f133104a7f2d67e0a99a9940f5b25dcfe25f511f",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/knowledge/dax-core-concepts.md",
+      "output_sha256": "f46c59d4af88c7fb211abc186d952a89511dfb600cc7eabf149ec215e5c0eddc",
+      "source": "skills/bi-dax-knowledge/knowledge/dax-core-concepts.md",
+      "source_id": "kb-042",
+      "source_sha256": "f46c59d4af88c7fb211abc186d952a89511dfb600cc7eabf149ec215e5c0eddc",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/knowledge/dax-engine-internals.md",
+      "output_sha256": "402dbace79602e0a006c9818de3bec8ab75f1abbd870cfbded5a3443497ccd7a",
+      "source": "skills/bi-dax-knowledge/knowledge/dax-engine-internals.md",
+      "source_id": "kb-043",
+      "source_sha256": "402dbace79602e0a006c9818de3bec8ab75f1abbd870cfbded5a3443497ccd7a",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/knowledge/dax-evaluation-context-deep-dive.md",
+      "output_sha256": "3ad5557dd852f24ea49009a23f26146dc95090beaf2554337688f7080510be0f",
+      "source": "skills/bi-dax-knowledge/knowledge/dax-evaluation-context-deep-dive.md",
+      "source_id": "kb-044",
+      "source_sha256": "3ad5557dd852f24ea49009a23f26146dc95090beaf2554337688f7080510be0f",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/knowledge/dax-function-semantics.md",
+      "output_sha256": "64e70dfa954ba7787e7469d3c685d91b0fca953aa44bc9f36e9c7f9be576151f",
+      "source": "skills/bi-dax-knowledge/knowledge/dax-function-semantics.md",
+      "source_id": "kb-045",
+      "source_sha256": "64e70dfa954ba7787e7469d3c685d91b0fca953aa44bc9f36e9c7f9be576151f",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/knowledge/dax-performance-diagnostics.md",
+      "output_sha256": "5d428a6dfa2d33880ef0ce1b71992f503e1617094555f20a6939dd6e7f8f307a",
+      "source": "skills/bi-dax-knowledge/knowledge/dax-performance-diagnostics.md",
+      "source_id": "kb-046",
+      "source_sha256": "5d428a6dfa2d33880ef0ce1b71992f503e1617094555f20a6939dd6e7f8f307a",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/knowledge/dax-performance-notes.md",
+      "output_sha256": "54aefd19be6bf241d2a25457ac297c720db61ee5895f29b30fe500f232fea861",
+      "source": "skills/bi-dax-knowledge/knowledge/dax-performance-notes.md",
+      "source_id": "kb-047",
+      "source_sha256": "54aefd19be6bf241d2a25457ac297c720db61ee5895f29b30fe500f232fea861",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/knowledge/dax-retail-examples.md",
+      "output_sha256": "895dc738217f71e2767a69399e381ec9735741d306944585ab1ebcc4a9c5944b",
+      "source": "skills/bi-dax-knowledge/knowledge/dax-retail-examples.md",
+      "source_id": "kb-048",
+      "source_sha256": "895dc738217f71e2767a69399e381ec9735741d306944585ab1ebcc4a9c5944b",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/patterns/analyzer-rule-candidates.json",
+      "output_sha256": "bacab862812eff2eb70edc30068f0973007b3cef4336674e62ef0fe8e54dd249",
+      "source": "skills/bi-dax-knowledge/patterns/analyzer-rule-candidates.json",
+      "source_id": "kb-049",
+      "source_sha256": "bacab862812eff2eb70edc30068f0973007b3cef4336674e62ef0fe8e54dd249",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/patterns/analyzer-rules.json",
+      "output_sha256": "08ae6337dd0b36861ba2bf1f8e2a62aba155b110e4180c744a341795c92de97e",
+      "source": "skills/bi-dax-knowledge/patterns/analyzer-rules.json",
+      "source_id": "kb-050",
+      "source_sha256": "08ae6337dd0b36861ba2bf1f8e2a62aba155b110e4180c744a341795c92de97e",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/patterns/dax-patterns.json",
+      "output_sha256": "e815e2fbd9e424dd920df3524fd0d46d207f41d68285d1dbf58c792b26aaec23",
+      "source": "skills/bi-dax-knowledge/patterns/dax-patterns.json",
+      "source_id": "kb-051",
+      "source_sha256": "e815e2fbd9e424dd920df3524fd0d46d207f41d68285d1dbf58c792b26aaec23",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/patterns/metric-contract-patterns.json",
+      "output_sha256": "8abeac94b864b3303bbc7ccacf302a2e646a81308ca582cbf11b84251fdc676d",
+      "source": "skills/bi-dax-knowledge/patterns/metric-contract-patterns.json",
+      "source_id": "kb-052",
+      "source_sha256": "8abeac94b864b3303bbc7ccacf302a2e646a81308ca582cbf11b84251fdc676d",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/references/agent-training-set.json",
+      "output_sha256": "987cc4f09cb6c726b2e093b7cc453010b3c7531a51921fa82383aa22c53368b0",
+      "source": "skills/bi-dax-knowledge/references/agent-training-set.json",
+      "source_id": "kb-053",
+      "source_sha256": "987cc4f09cb6c726b2e093b7cc453010b3c7531a51921fa82383aa22c53368b0",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/references/agent-training-set.md",
+      "output_sha256": "0b80a1ef64297a1840fe1ee6edc678eb7ebcfc0e0e1dd4786a715d3f5161b77a",
+      "source": "skills/bi-dax-knowledge/references/agent-training-set.md",
+      "source_id": "kb-054",
+      "source_sha256": "0b80a1ef64297a1840fe1ee6edc678eb7ebcfc0e0e1dd4786a715d3f5161b77a",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/references/retail-schema.md",
+      "output_sha256": "f185f291ae1135a610ede495a12aac520fa9b90a61c1f6989e12fb1067c0dce1",
+      "source": "skills/bi-dax-knowledge/references/retail-schema.md",
+      "source_id": "kb-055",
+      "source_sha256": "f185f291ae1135a610ede495a12aac520fa9b90a61c1f6989e12fb1067c0dce1",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-dax-knowledge/references/source-map.md",
+      "output_sha256": "dd861877e0fb862c5f6e3f8b25cd3e05047d6e3d956a63f0e0404ec6a15e1bf7",
+      "source": "skills/bi-dax-knowledge/references/source-map.md",
+      "source_id": "kb-056",
+      "source_sha256": "dd861877e0fb862c5f6e3f8b25cd3e05047d6e3d956a63f0e0404ec6a15e1bf7",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-python-knowledge/INDEX.md",
+      "output_sha256": "8d8a05812121526d9342ecd9873531a0451d8f6e60d627a71c0de4297a3cc580",
+      "source": "skills/bi-python-knowledge/INDEX.md",
+      "source_id": "kb-057",
+      "source_sha256": "8d8a05812121526d9342ecd9873531a0451d8f6e60d627a71c0de4297a3cc580",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-python-knowledge/README.md",
+      "output_sha256": "67fd37084e8a1f5d1a9cae00c4e36b72b22f60442223fc47058e31cc8a16c4a9",
+      "source": "skills/bi-python-knowledge/README.md",
+      "source_id": "kb-058",
+      "source_sha256": "67fd37084e8a1f5d1a9cae00c4e36b72b22f60442223fc47058e31cc8a16c4a9",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-python-knowledge/SKILL.md",
+      "output_sha256": "1876a8ae841489759f527d7725de77a7baad7aba0a81e5f75f39d9ca269fb442",
+      "source": "skills/bi-python-knowledge/SKILL.md",
+      "source_id": "kb-059",
+      "source_sha256": "1876a8ae841489759f527d7725de77a7baad7aba0a81e5f75f39d9ca269fb442",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-python-knowledge/checklists/aggregation-grain-checklist.md",
+      "output_sha256": "9789c295d408496df266ae35ff0652e356c7b5bb732814916b531e32f602a11f",
+      "source": "skills/bi-python-knowledge/checklists/aggregation-grain-checklist.md",
+      "source_id": "kb-060",
+      "source_sha256": "9789c295d408496df266ae35ff0652e356c7b5bb732814916b531e32f602a11f",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-python-knowledge/checklists/cleaning-review-checklist.md",
+      "output_sha256": "25b58a618c219b75948270d074d52631ec0e7c6592952b9a8306bee8b6ded302",
+      "source": "skills/bi-python-knowledge/checklists/cleaning-review-checklist.md",
+      "source_id": "kb-061",
+      "source_sha256": "25b58a618c219b75948270d074d52631ec0e7c6592952b9a8306bee8b6ded302",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-python-knowledge/knowledge/cleaning-and-standardization.md",
+      "output_sha256": "61bea9fe88b56decbc605fe9e9fa9c9bb830d89b5d79b8ae42bb42a30a95c843",
+      "source": "skills/bi-python-knowledge/knowledge/cleaning-and-standardization.md",
+      "source_id": "kb-062",
+      "source_sha256": "61bea9fe88b56decbc605fe9e9fa9c9bb830d89b5d79b8ae42bb42a30a95c843",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-python-knowledge/knowledge/file-source-grain.md",
+      "output_sha256": "6cd53284a19880bbaf105005a5b08616bfed05a0b6f448fa599d7e00ddbdaf02",
+      "source": "skills/bi-python-knowledge/knowledge/file-source-grain.md",
+      "source_id": "kb-063",
+      "source_sha256": "6cd53284a19880bbaf105005a5b08616bfed05a0b6f448fa599d7e00ddbdaf02",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-python-knowledge/knowledge/groupby-aggregation-and-grain.md",
+      "output_sha256": "958cbe41c1f7efa6a2a1dc09d41f18f016780bf93d82c0896d9e2aebd1b58218",
+      "source": "skills/bi-python-knowledge/knowledge/groupby-aggregation-and-grain.md",
+      "source_id": "kb-064",
+      "source_sha256": "958cbe41c1f7efa6a2a1dc09d41f18f016780bf93d82c0896d9e2aebd1b58218",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-python-knowledge/patterns/analyzer-rule-candidates.json",
+      "output_sha256": "e555cf1db0a719fcb8f63ace23bfbc83f55021ceb496a5d5dbeec045d385992e",
+      "source": "skills/bi-python-knowledge/patterns/analyzer-rule-candidates.json",
+      "source_id": "kb-065",
+      "source_sha256": "e555cf1db0a719fcb8f63ace23bfbc83f55021ceb496a5d5dbeec045d385992e",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-python-knowledge/references/agent-training-set.json",
+      "output_sha256": "eb07205f7452fb35f714cd26376814e34d489b6808f4d8a13bfe0ec648a69462",
+      "source": "skills/bi-python-knowledge/references/agent-training-set.json",
+      "source_id": "kb-066",
+      "source_sha256": "eb07205f7452fb35f714cd26376814e34d489b6808f4d8a13bfe0ec648a69462",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-python-knowledge/references/agent-training-set.md",
+      "output_sha256": "bb38c0b01de5241d15b6061fd75fe60e89e14bcba53b96f629ec2611dd2c8b83",
+      "source": "skills/bi-python-knowledge/references/agent-training-set.md",
+      "source_id": "kb-067",
+      "source_sha256": "bb38c0b01de5241d15b6061fd75fe60e89e14bcba53b96f629ec2611dd2c8b83",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-python-knowledge/references/copyright-safety.md",
+      "output_sha256": "e3ea15466633807265a2cdccc00dc387cf7ef29553ba5ef7bf8a3c2a1f800c80",
+      "source": "skills/bi-python-knowledge/references/copyright-safety.md",
+      "source_id": "kb-068",
+      "source_sha256": "e3ea15466633807265a2cdccc00dc387cf7ef29553ba5ef7bf8a3c2a1f800c80",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-python-knowledge/references/id-conventions.md",
+      "output_sha256": "e8ab417d6b969ade5dc6758f142d6429218975bfafcfc7c20a299dfbfdaf6ac2",
+      "source": "skills/bi-python-knowledge/references/id-conventions.md",
+      "source_id": "kb-069",
+      "source_sha256": "e8ab417d6b969ade5dc6758f142d6429218975bfafcfc7c20a299dfbfdaf6ac2",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-python-knowledge/references/retail-dataframe-schema.md",
+      "output_sha256": "9050a4d30113c568107307db36fae1c0e7b57bf71e173788fd38d9e73c1801a4",
+      "source": "skills/bi-python-knowledge/references/retail-dataframe-schema.md",
+      "source_id": "kb-070",
+      "source_sha256": "9050a4d30113c568107307db36fae1c0e7b57bf71e173788fd38d9e73c1801a4",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-python-knowledge/references/source-map.md",
+      "output_sha256": "58c8c61c027971020af908fdd0b5cd151987b17c176724f5808d71c776770916",
+      "source": "skills/bi-python-knowledge/references/source-map.md",
+      "source_id": "kb-071",
+      "source_sha256": "58c8c61c027971020af908fdd0b5cd151987b17c176724f5808d71c776770916",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/INDEX.md",
+      "output_sha256": "76f215768d675bb649b57e86df2a64d791ed4a5e4ef10bfd3e8df8086fcc2779",
+      "source": "skills/bi-sql-knowledge/INDEX.md",
+      "source_id": "kb-072",
+      "source_sha256": "76f215768d675bb649b57e86df2a64d791ed4a5e4ef10bfd3e8df8086fcc2779",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/README.md",
+      "output_sha256": "0a3a60f80c09b149d10e858d97dbe44a784c2e7b6fb6979d9f06051f19e239a5",
+      "source": "skills/bi-sql-knowledge/README.md",
+      "source_id": "kb-073",
+      "source_sha256": "0a3a60f80c09b149d10e858d97dbe44a784c2e7b6fb6979d9f06051f19e239a5",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/SKILL.md",
+      "output_sha256": "5261e30085605984562a90b7476bbfb404bc2dc29ae3f50470201ba54cc01948",
+      "source": "skills/bi-sql-knowledge/SKILL.md",
+      "source_id": "kb-074",
+      "source_sha256": "5261e30085605984562a90b7476bbfb404bc2dc29ae3f50470201ba54cc01948",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/checklists/sql-reconciliation-checklist.md",
+      "output_sha256": "7b489cdf8b2648c753d60e4647e243363e96c206d6bd3929874c8872a0457523",
+      "source": "skills/bi-sql-knowledge/checklists/sql-reconciliation-checklist.md",
+      "source_id": "kb-075",
+      "source_sha256": "7b489cdf8b2648c753d60e4647e243363e96c206d6bd3929874c8872a0457523",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/checklists/sql-review-checklist.md",
+      "output_sha256": "bd5ca477f93cf2d12c0659a1a9bf676b496b7ffc378391043141f4fb71dee8a2",
+      "source": "skills/bi-sql-knowledge/checklists/sql-review-checklist.md",
+      "source_id": "kb-076",
+      "source_sha256": "bd5ca477f93cf2d12c0659a1a9bf676b496b7ffc378391043141f4fb71dee8a2",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/checklists/sql-validation-checklist.md",
+      "output_sha256": "1b221f9173a032a4998240c9a1cc08f0bf2a528f44665260194c0755499a5d87",
+      "source": "skills/bi-sql-knowledge/checklists/sql-validation-checklist.md",
+      "source_id": "kb-077",
+      "source_sha256": "1b221f9173a032a4998240c9a1cc08f0bf2a528f44665260194c0755499a5d87",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/knowledge/sql-aggregation-correctness.md",
+      "output_sha256": "dd78862b5ceb710e32ee696b4f2b685f81625391d76b286caf5e90fa700848e6",
+      "source": "skills/bi-sql-knowledge/knowledge/sql-aggregation-correctness.md",
+      "source_id": "kb-078",
+      "source_sha256": "dd78862b5ceb710e32ee696b4f2b685f81625391d76b286caf5e90fa700848e6",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/knowledge/sql-anti-patterns.md",
+      "output_sha256": "eafdb5bafc706b150eed95798e1c6776e3d30a9ccd4ed280f5c2d1db0673b5a5",
+      "source": "skills/bi-sql-knowledge/knowledge/sql-anti-patterns.md",
+      "source_id": "kb-079",
+      "source_sha256": "eafdb5bafc706b150eed95798e1c6776e3d30a9ccd4ed280f5c2d1db0673b5a5",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/knowledge/sql-cookbook-extension-notes.md",
+      "output_sha256": "c8ca1881a47fe299f229d053c108ea4cbcaf83db7ace1ea14b9fa3966f402be3",
+      "source": "skills/bi-sql-knowledge/knowledge/sql-cookbook-extension-notes.md",
+      "source_id": "kb-080",
+      "source_sha256": "c8ca1881a47fe299f229d053c108ea4cbcaf83db7ace1ea14b9fa3966f402be3",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/knowledge/sql-core-concepts.md",
+      "output_sha256": "26144e0f9f7a9f36c4f5ed96164c73e6a351f5296ad593c122afa0d7bd9e6777",
+      "source": "skills/bi-sql-knowledge/knowledge/sql-core-concepts.md",
+      "source_id": "kb-081",
+      "source_sha256": "26144e0f9f7a9f36c4f5ed96164c73e6a351f5296ad593c122afa0d7bd9e6777",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/knowledge/sql-date-time-analysis.md",
+      "output_sha256": "5c5f378c95730fb157efc4169cfd47e470360182486d64dfb094782d92f7f7f6",
+      "source": "skills/bi-sql-knowledge/knowledge/sql-date-time-analysis.md",
+      "source_id": "kb-082",
+      "source_sha256": "5c5f378c95730fb157efc4169cfd47e470360182486d64dfb094782d92f7f7f6",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/knowledge/sql-diagnostics-playbook.md",
+      "output_sha256": "e9102563cec548adc9a2d2681ac45a71a1afccb6b025d69bb9cdcf70fbf1f2e7",
+      "source": "skills/bi-sql-knowledge/knowledge/sql-diagnostics-playbook.md",
+      "source_id": "kb-083",
+      "source_sha256": "e9102563cec548adc9a2d2681ac45a71a1afccb6b025d69bb9cdcf70fbf1f2e7",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/knowledge/sql-grain-and-joins.md",
+      "output_sha256": "be40fda7437b16a35bb29a27f6a9eaf36916cfd005d5f3e3f2c04981ff580528",
+      "source": "skills/bi-sql-knowledge/knowledge/sql-grain-and-joins.md",
+      "source_id": "kb-084",
+      "source_sha256": "be40fda7437b16a35bb29a27f6a9eaf36916cfd005d5f3e3f2c04981ff580528",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/knowledge/sql-logical-query-processing.md",
+      "output_sha256": "f1071a2785b7d2aaf3d6dfdcbfb3e514d3454967b03a78d6fb337211a6d0c41c",
+      "source": "skills/bi-sql-knowledge/knowledge/sql-logical-query-processing.md",
+      "source_id": "kb-085",
+      "source_sha256": "f1071a2785b7d2aaf3d6dfdcbfb3e514d3454967b03a78d6fb337211a6d0c41c",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/knowledge/sql-performance-notes.md",
+      "output_sha256": "d5603db272ef89ee22c5866cc4224a27a9c48e8f79ac938a96e1e862cfee1f0b",
+      "source": "skills/bi-sql-knowledge/knowledge/sql-performance-notes.md",
+      "source_id": "kb-086",
+      "source_sha256": "d5603db272ef89ee22c5866cc4224a27a9c48e8f79ac938a96e1e862cfee1f0b",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/knowledge/sql-reconciliation-playbook.md",
+      "output_sha256": "80a249cd2e51960773cf23fdbc2699a7811537c781cf3696f2736a558694971f",
+      "source": "skills/bi-sql-knowledge/knowledge/sql-reconciliation-playbook.md",
+      "source_id": "kb-087",
+      "source_sha256": "80a249cd2e51960773cf23fdbc2699a7811537c781cf3696f2736a558694971f",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/knowledge/sql-transformation-patterns.md",
+      "output_sha256": "1159dfc98fa2e6afdc7acaa7fe64db5bc1388f64828881e7563ef65630c79839",
+      "source": "skills/bi-sql-knowledge/knowledge/sql-transformation-patterns.md",
+      "source_id": "kb-088",
+      "source_sha256": "1159dfc98fa2e6afdc7acaa7fe64db5bc1388f64828881e7563ef65630c79839",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/knowledge/sql-window-functions.md",
+      "output_sha256": "571259914cee8987d07a9183e46cc22e4c29a2bdbb2ac033550d74a50cb345db",
+      "source": "skills/bi-sql-knowledge/knowledge/sql-window-functions.md",
+      "source_id": "kb-089",
+      "source_sha256": "571259914cee8987d07a9183e46cc22e4c29a2bdbb2ac033550d74a50cb345db",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/patterns/sql-analyzer-rule-candidates.json",
+      "output_sha256": "15dea48fa8cf28d8b2a697502eb6a583f57bec16e14bb220258960782c7f5d4e",
+      "source": "skills/bi-sql-knowledge/patterns/sql-analyzer-rule-candidates.json",
+      "source_id": "kb-090",
+      "source_sha256": "15dea48fa8cf28d8b2a697502eb6a583f57bec16e14bb220258960782c7f5d4e",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/patterns/sql-analyzer-rules.json",
+      "output_sha256": "da2c8bbfbdadf4ebbfa8e207a4c3b39b4c284dc67aeb75a6b59e62adde1bcbea",
+      "source": "skills/bi-sql-knowledge/patterns/sql-analyzer-rules.json",
+      "source_id": "kb-091",
+      "source_sha256": "da2c8bbfbdadf4ebbfa8e207a4c3b39b4c284dc67aeb75a6b59e62adde1bcbea",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/patterns/sql-patterns.json",
+      "output_sha256": "d749297a5c1353d8becbf3c255d450003d629579535eb580d54f27ab4739a062",
+      "source": "skills/bi-sql-knowledge/patterns/sql-patterns.json",
+      "source_id": "kb-092",
+      "source_sha256": "d749297a5c1353d8becbf3c255d450003d629579535eb580d54f27ab4739a062",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/patterns/sql-validation-patterns.json",
+      "output_sha256": "18d32108aafcd4a3b67f39148530e5d8ef587e6079248dff7a38e042771627c9",
+      "source": "skills/bi-sql-knowledge/patterns/sql-validation-patterns.json",
+      "source_id": "kb-093",
+      "source_sha256": "18d32108aafcd4a3b67f39148530e5d8ef587e6079248dff7a38e042771627c9",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/references/agent-training-set.json",
+      "output_sha256": "06ab82645f3254b6d52ca772b074d26f6caa6b1f3f2e30dd1e3d42a1336f07c7",
+      "source": "skills/bi-sql-knowledge/references/agent-training-set.json",
+      "source_id": "kb-094",
+      "source_sha256": "06ab82645f3254b6d52ca772b074d26f6caa6b1f3f2e30dd1e3d42a1336f07c7",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/references/copyright-safety.md",
+      "output_sha256": "f178b4007f614bf7420ea9165fc788a15b039488151e79550ebec03e6215a69f",
+      "source": "skills/bi-sql-knowledge/references/copyright-safety.md",
+      "source_id": "kb-095",
+      "source_sha256": "f178b4007f614bf7420ea9165fc788a15b039488151e79550ebec03e6215a69f",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/references/id-conventions.md",
+      "output_sha256": "6eaae1a233d0b45bec124b4c0203776851a85b5d96c64f3f8563ff28258bc0c0",
+      "source": "skills/bi-sql-knowledge/references/id-conventions.md",
+      "source_id": "kb-096",
+      "source_sha256": "6eaae1a233d0b45bec124b4c0203776851a85b5d96c64f3f8563ff28258bc0c0",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-sql-knowledge/references/source-map.md",
+      "output_sha256": "b5190ad4f5b527dddc726d758e0ff29de340ced656d1410e849e1b8f094d551f",
+      "source": "skills/bi-sql-knowledge/references/source-map.md",
+      "source_id": "kb-097",
+      "source_sha256": "b5190ad4f5b527dddc726d758e0ff29de340ced656d1410e849e1b8f094d551f",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/INDEX.md",
+      "output_sha256": "525e5ff326d7d9e242d65037eb6c6b2c3700ee1cfadfbb709813d06eecfba85a",
+      "source": "skills/retail-kpi-knowledge/INDEX.md",
+      "source_id": "kb-098",
+      "source_sha256": "525e5ff326d7d9e242d65037eb6c6b2c3700ee1cfadfbb709813d06eecfba85a",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/README.md",
+      "output_sha256": "a3469b201247c32ddb27bbedebc769ee9f9d9658638c6dd361d05acb92a5b10b",
+      "source": "skills/retail-kpi-knowledge/README.md",
+      "source_id": "kb-099",
+      "source_sha256": "a3469b201247c32ddb27bbedebc769ee9f9d9658638c6dd361d05acb92a5b10b",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/SKILL.md",
+      "output_sha256": "a78f3b58c064a26c79648c5f81f46b4fff9431acfdadc69033cdaa327dd9646a",
+      "source": "skills/retail-kpi-knowledge/SKILL.md",
+      "source_id": "kb-100",
+      "source_sha256": "a78f3b58c064a26c79648c5f81f46b4fff9431acfdadc69033cdaa327dd9646a",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/checklists/kpi-extension-checklist.md",
+      "output_sha256": "c08a8de0a87434ffb3a96e28b2cdae5e8bb7bf703484f131aebdbc12a4db01b5",
+      "source": "skills/retail-kpi-knowledge/checklists/kpi-extension-checklist.md",
+      "source_id": "kb-101",
+      "source_sha256": "c08a8de0a87434ffb3a96e28b2cdae5e8bb7bf703484f131aebdbc12a4db01b5",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/checklists/kpi-pack-review-checklist.md",
+      "output_sha256": "a238c65e735d1d5f71639b6c569e2b2c8717dd63b2ba318e3261eb43fd373340",
+      "source": "skills/retail-kpi-knowledge/checklists/kpi-pack-review-checklist.md",
+      "source_id": "kb-102",
+      "source_sha256": "a238c65e735d1d5f71639b6c569e2b2c8717dd63b2ba318e3261eb43fd373340",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/checklists/metric-ambiguity-checklist.md",
+      "output_sha256": "fd453377a8834cf23da19d3539b910f148db11b153236f5b8736d6a38eca8449",
+      "source": "skills/retail-kpi-knowledge/checklists/metric-ambiguity-checklist.md",
+      "source_id": "kb-103",
+      "source_sha256": "fd453377a8834cf23da19d3539b910f148db11b153236f5b8736d6a38eca8449",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/checklists/metric-contract-review-checklist.md",
+      "output_sha256": "5f1ebb5e2fc5d67dc9dbcea35dcfb8bd1d481e9c016f736db38c12a2061cf36f",
+      "source": "skills/retail-kpi-knowledge/checklists/metric-contract-review-checklist.md",
+      "source_id": "kb-104",
+      "source_sha256": "5f1ebb5e2fc5d67dc9dbcea35dcfb8bd1d481e9c016f736db38c12a2061cf36f",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/contracts/average-basket-size-units.md",
+      "output_sha256": "4c7d15e463c64ad32799c2a9754a4ae7fec1e44d004b681ffe4c94cd2a8f8fd6",
+      "source": "skills/retail-kpi-knowledge/contracts/average-basket-size-units.md",
+      "source_id": "kb-105",
+      "source_sha256": "4c7d15e463c64ad32799c2a9754a4ae7fec1e44d004b681ffe4c94cd2a8f8fd6",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/contracts/average-transaction-value.md",
+      "output_sha256": "049eb57ec2b0f6aea105a155f4c73f2b4e820f3eb8db2ed06465d0c4fee3544d",
+      "source": "skills/retail-kpi-knowledge/contracts/average-transaction-value.md",
+      "source_id": "kb-106",
+      "source_sha256": "049eb57ec2b0f6aea105a155f4c73f2b4e820f3eb8db2ed06465d0c4fee3544d",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/contracts/discount-amount.md",
+      "output_sha256": "57736ec3fc6b79c9094926aca3284f78132adcbb0af6880ba3770b2cf3822735",
+      "source": "skills/retail-kpi-knowledge/contracts/discount-amount.md",
+      "source_id": "kb-107",
+      "source_sha256": "57736ec3fc6b79c9094926aca3284f78132adcbb0af6880ba3770b2cf3822735",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/contracts/discount-rate.md",
+      "output_sha256": "8e4ce1f4282bea970434015309db17a23c0e379d059436536c32f223152300c4",
+      "source": "skills/retail-kpi-knowledge/contracts/discount-rate.md",
+      "source_id": "kb-108",
+      "source_sha256": "8e4ce1f4282bea970434015309db17a23c0e379d059436536c32f223152300c4",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/contracts/discounted-transaction-rate.md",
+      "output_sha256": "73d431dd393eef41fca3c9329da11636795ed608bcf9fa47d856cb20bb239a0b",
+      "source": "skills/retail-kpi-knowledge/contracts/discounted-transaction-rate.md",
+      "source_id": "kb-109",
+      "source_sha256": "73d431dd393eef41fca3c9329da11636795ed608bcf9fa47d856cb20bb239a0b",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/contracts/gross-margin-percent.md",
+      "output_sha256": "ae86db7a5272794c305786d44f2d622968394b606e0c54bd05fc1c01d7905d71",
+      "source": "skills/retail-kpi-knowledge/contracts/gross-margin-percent.md",
+      "source_id": "kb-110",
+      "source_sha256": "ae86db7a5272794c305786d44f2d622968394b606e0c54bd05fc1c01d7905d71",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/contracts/gross-margin.md",
+      "output_sha256": "75cc96ed1eb7ad15bc5ea01d063e94457f01a7fe5e595dbde7cb63f8ac5d81e8",
+      "source": "skills/retail-kpi-knowledge/contracts/gross-margin.md",
+      "source_id": "kb-111",
+      "source_sha256": "75cc96ed1eb7ad15bc5ea01d063e94457f01a7fe5e595dbde7cb63f8ac5d81e8",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/contracts/gross-sales.md",
+      "output_sha256": "efec78615218459b24718db0ac5d3dec723815272fa9fe904da7d6ee6f88e0c2",
+      "source": "skills/retail-kpi-knowledge/contracts/gross-sales.md",
+      "source_id": "kb-112",
+      "source_sha256": "efec78615218459b24718db0ac5d3dec723815272fa9fe904da7d6ee6f88e0c2",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/contracts/net-sales-growth.md",
+      "output_sha256": "24c6af0f15dc3d2392097c63baf5df26b6714c17715fa4d31dafa251be380af2",
+      "source": "skills/retail-kpi-knowledge/contracts/net-sales-growth.md",
+      "source_id": "kb-113",
+      "source_sha256": "24c6af0f15dc3d2392097c63baf5df26b6714c17715fa4d31dafa251be380af2",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/contracts/net-sales.md",
+      "output_sha256": "df49fa8d49923f71d4f00c9a7afd89425d9e4d410af693f6525cfcba845b65de",
+      "source": "skills/retail-kpi-knowledge/contracts/net-sales.md",
+      "source_id": "kb-114",
+      "source_sha256": "df49fa8d49923f71d4f00c9a7afd89425d9e4d410af693f6525cfcba845b65de",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/contracts/quantity-sold.md",
+      "output_sha256": "237f3973eb7df030285171f9c769ed60f44a3f37834b3426c5f869ef447c1cbb",
+      "source": "skills/retail-kpi-knowledge/contracts/quantity-sold.md",
+      "source_id": "kb-115",
+      "source_sha256": "237f3973eb7df030285171f9c769ed60f44a3f37834b3426c5f869ef447c1cbb",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/contracts/returns-rate-value.md",
+      "output_sha256": "42d7d607b57bcd0c884f69488c18b008ee536e1045e020066caaeac0630cc7be",
+      "source": "skills/retail-kpi-knowledge/contracts/returns-rate-value.md",
+      "source_id": "kb-116",
+      "source_sha256": "42d7d607b57bcd0c884f69488c18b008ee536e1045e020066caaeac0630cc7be",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/contracts/same-store-sales-growth.md",
+      "output_sha256": "802d5db9f4a15dd24f6cf718181aa579b38f563da16c7cdc96c85c479d5705df",
+      "source": "skills/retail-kpi-knowledge/contracts/same-store-sales-growth.md",
+      "source_id": "kb-117",
+      "source_sha256": "802d5db9f4a15dd24f6cf718181aa579b38f563da16c7cdc96c85c479d5705df",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/contracts/transactions-count.md",
+      "output_sha256": "569f90fa7c00475f11eb71fd915939d9c44cd1bdcf1c203c06ef7f10592d91e1",
+      "source": "skills/retail-kpi-knowledge/contracts/transactions-count.md",
+      "source_id": "kb-118",
+      "source_sha256": "569f90fa7c00475f11eb71fd915939d9c44cd1bdcf1c203c06ef7f10592d91e1",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/contracts/ytd.md",
+      "output_sha256": "aaca02df3a2217d8faa2ef1737f914778d258b836547653f991e30270e033edd",
+      "source": "skills/retail-kpi-knowledge/contracts/ytd.md",
+      "source_id": "kb-119",
+      "source_sha256": "aaca02df3a2217d8faa2ef1737f914778d258b836547653f991e30270e033edd",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/domains/basket-and-transactions.md",
+      "output_sha256": "44a16fb0634a2e15f297c95f862b3d2a44ffce3bbe21639b0ee47a3cecab2d17",
+      "source": "skills/retail-kpi-knowledge/domains/basket-and-transactions.md",
+      "source_id": "kb-120",
+      "source_sha256": "44a16fb0634a2e15f297c95f862b3d2a44ffce3bbe21639b0ee47a3cecab2d17",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/domains/branch-store-performance.md",
+      "output_sha256": "e964459c4ff4445ea9bfe5edc550409bd2b7a0b4c48661aeef68e2914eaa8b57",
+      "source": "skills/retail-kpi-knowledge/domains/branch-store-performance.md",
+      "source_id": "kb-121",
+      "source_sha256": "e964459c4ff4445ea9bfe5edc550409bd2b7a0b4c48661aeef68e2914eaa8b57",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/domains/customer.md",
+      "output_sha256": "8b60770415250968abefd0ae08d84a6413dfea365885fbe3af922b1a238d0294",
+      "source": "skills/retail-kpi-knowledge/domains/customer.md",
+      "source_id": "kb-122",
+      "source_sha256": "8b60770415250968abefd0ae08d84a6413dfea365885fbe3af922b1a238d0294",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/domains/data-quality-control.md",
+      "output_sha256": "d53db12fad225d6bb02f97e063c301318d5d26bcbca2eb20202757008b328e8c",
+      "source": "skills/retail-kpi-knowledge/domains/data-quality-control.md",
+      "source_id": "kb-123",
+      "source_sha256": "d53db12fad225d6bb02f97e063c301318d5d26bcbca2eb20202757008b328e8c",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/domains/discounts-and-promotions.md",
+      "output_sha256": "adfc563e150910a97005232831a314bb7f1a44d8f7eaf6ca5cf14416b7b1077e",
+      "source": "skills/retail-kpi-knowledge/domains/discounts-and-promotions.md",
+      "source_id": "kb-124",
+      "source_sha256": "adfc563e150910a97005232831a314bb7f1a44d8f7eaf6ca5cf14416b7b1077e",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/domains/inventory.md",
+      "output_sha256": "3495faaae2bc23fb2528663d5133e2d4a83c596b0f05571ff1e9010f1ee671ef",
+      "source": "skills/retail-kpi-knowledge/domains/inventory.md",
+      "source_id": "kb-125",
+      "source_sha256": "3495faaae2bc23fb2528663d5133e2d4a83c596b0f05571ff1e9010f1ee671ef",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/domains/margin-profitability.md",
+      "output_sha256": "49002203f089ea1d1956dded3741124efc6c21fae62fcc6105c7ba3417a76153",
+      "source": "skills/retail-kpi-knowledge/domains/margin-profitability.md",
+      "source_id": "kb-126",
+      "source_sha256": "49002203f089ea1d1956dded3741124efc6c21fae62fcc6105c7ba3417a76153",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/domains/product-category-performance.md",
+      "output_sha256": "2360603605d6c77552d270814202b02ced74fd9991079cfa6aca64fca1809691",
+      "source": "skills/retail-kpi-knowledge/domains/product-category-performance.md",
+      "source_id": "kb-127",
+      "source_sha256": "2360603605d6c77552d270814202b02ced74fd9991079cfa6aca64fca1809691",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/domains/returns.md",
+      "output_sha256": "d80db4e7340b907c25e14f4c8938edc17c1ad937951475fa6751a7775ecfaf2e",
+      "source": "skills/retail-kpi-knowledge/domains/returns.md",
+      "source_id": "kb-128",
+      "source_sha256": "d80db4e7340b907c25e14f4c8938edc17c1ad937951475fa6751a7775ecfaf2e",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/domains/sales-and-revenue.md",
+      "output_sha256": "0eefd4f1d376c813ecdfbff921bb244ef3c60a7d3b7c367ee9c3d48352a560db",
+      "source": "skills/retail-kpi-knowledge/domains/sales-and-revenue.md",
+      "source_id": "kb-129",
+      "source_sha256": "0eefd4f1d376c813ecdfbff921bb244ef3c60a7d3b7c367ee9c3d48352a560db",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/domains/targets-and-budgets.md",
+      "output_sha256": "9d797d607a57a51bd8b404fcf2ae29f76c4a34a2d649c36765337d0ab50187c0",
+      "source": "skills/retail-kpi-knowledge/domains/targets-and-budgets.md",
+      "source_id": "kb-130",
+      "source_sha256": "9d797d607a57a51bd8b404fcf2ae29f76c4a34a2d649c36765337d0ab50187c0",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/domains/time-intelligence.md",
+      "output_sha256": "155ac42f5691895340b25eed73365d45560e008e2820bca939d897b8658c67ab",
+      "source": "skills/retail-kpi-knowledge/domains/time-intelligence.md",
+      "source_id": "kb-131",
+      "source_sha256": "155ac42f5691895340b25eed73365d45560e008e2820bca939d897b8658c67ab",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/knowledge/kpi-additivity-and-grain.md",
+      "output_sha256": "dd785e665a15345bce66ef919eee3dafcfc7a25ec20994964f1a689cb1d7b2e7",
+      "source": "skills/retail-kpi-knowledge/knowledge/kpi-additivity-and-grain.md",
+      "source_id": "kb-132",
+      "source_sha256": "dd785e665a15345bce66ef919eee3dafcfc7a25ec20994964f1a689cb1d7b2e7",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/knowledge/kpi-ambiguities.md",
+      "output_sha256": "caaeb6477c018e202eaf7f68640153b1bc4ca93ee0111e431067dbdc04f11b7e",
+      "source": "skills/retail-kpi-knowledge/knowledge/kpi-ambiguities.md",
+      "source_id": "kb-133",
+      "source_sha256": "caaeb6477c018e202eaf7f68640153b1bc4ca93ee0111e431067dbdc04f11b7e",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/knowledge/kpi-core-concepts.md",
+      "output_sha256": "0eb9b023c65f09a8959848c967ebf4ce83374af4d07a883fbd676cb75559ff99",
+      "source": "skills/retail-kpi-knowledge/knowledge/kpi-core-concepts.md",
+      "source_id": "kb-134",
+      "source_sha256": "0eb9b023c65f09a8959848c967ebf4ce83374af4d07a883fbd676cb75559ff99",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/knowledge/metric-contracts.md",
+      "output_sha256": "74ec43cb0a3d4accc7514fcfac9b3422efd5ae07360b9f218b0919864a3c913f",
+      "source": "skills/retail-kpi-knowledge/knowledge/metric-contracts.md",
+      "source_id": "kb-135",
+      "source_sha256": "74ec43cb0a3d4accc7514fcfac9b3422efd5ae07360b9f218b0919864a3c913f",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/knowledge/retail-kpi-domains.md",
+      "output_sha256": "0f11f13cf1a926675e407b7e0261cebddbf774dc3aa7a8a433819ea459ce3590",
+      "source": "skills/retail-kpi-knowledge/knowledge/retail-kpi-domains.md",
+      "source_id": "kb-136",
+      "source_sha256": "0f11f13cf1a926675e407b7e0261cebddbf774dc3aa7a8a433819ea459ce3590",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/packs/branch-performance-pack.md",
+      "output_sha256": "37c16e559f8bb4351a9dbea2a66bfcae96b086756b9f81dfd9c0ddd76c475719",
+      "source": "skills/retail-kpi-knowledge/packs/branch-performance-pack.md",
+      "source_id": "kb-137",
+      "source_sha256": "37c16e559f8bb4351a9dbea2a66bfcae96b086756b9f81dfd9c0ddd76c475719",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/packs/data-quality-control-room-pack.md",
+      "output_sha256": "0a84be88e568a977ac82a5c4c4491b61eedf9756713df6311a331adcb45b2859",
+      "source": "skills/retail-kpi-knowledge/packs/data-quality-control-room-pack.md",
+      "source_id": "kb-138",
+      "source_sha256": "0a84be88e568a977ac82a5c4c4491b61eedf9756713df6311a331adcb45b2859",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/packs/inventory-control-pack.md",
+      "output_sha256": "44468e45bf511d61b79e04d6cb8b0f0af6b1ccb7218f9bf8ce2b45e168f0bf99",
+      "source": "skills/retail-kpi-knowledge/packs/inventory-control-pack.md",
+      "source_id": "kb-139",
+      "source_sha256": "44468e45bf511d61b79e04d6cb8b0f0af6b1ccb7218f9bf8ce2b45e168f0bf99",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/packs/mvp-retail-kpi-pack.md",
+      "output_sha256": "4a3bc0403ce95cc2a3d07347090a20d768294b251c8f10f05034850a0689af0b",
+      "source": "skills/retail-kpi-knowledge/packs/mvp-retail-kpi-pack.md",
+      "source_id": "kb-140",
+      "source_sha256": "4a3bc0403ce95cc2a3d07347090a20d768294b251c8f10f05034850a0689af0b",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/packs/product-performance-pack.md",
+      "output_sha256": "6038b67c4155854fbf1d3a77759bd1bd48fae467635879b0735cd16e55d4c248",
+      "source": "skills/retail-kpi-knowledge/packs/product-performance-pack.md",
+      "source_id": "kb-141",
+      "source_sha256": "6038b67c4155854fbf1d3a77759bd1bd48fae467635879b0735cd16e55d4c248",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/packs/returns-exceptions-pack.md",
+      "output_sha256": "521b09a07ef8ec95099c27f03877246ec78ba85c4cd85d013ea2d4dc6dcb51b2",
+      "source": "skills/retail-kpi-knowledge/packs/returns-exceptions-pack.md",
+      "source_id": "kb-142",
+      "source_sha256": "521b09a07ef8ec95099c27f03877246ec78ba85c4cd85d013ea2d4dc6dcb51b2",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/packs/sales-performance-pack.md",
+      "output_sha256": "1282d0cf61b347cdbf57df8cda5281611b76a67acb290e1d55c63fc34f4aecb7",
+      "source": "skills/retail-kpi-knowledge/packs/sales-performance-pack.md",
+      "source_id": "kb-143",
+      "source_sha256": "1282d0cf61b347cdbf57df8cda5281611b76a67acb290e1d55c63fc34f4aecb7",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/patterns/metric-anti-patterns.json",
+      "output_sha256": "fff7dc985e8e0baaa096642cb396bfc5b42b453d3fe1224669ad2b94e648fb07",
+      "source": "skills/retail-kpi-knowledge/patterns/metric-anti-patterns.json",
+      "source_id": "kb-144",
+      "source_sha256": "fff7dc985e8e0baaa096642cb396bfc5b42b453d3fe1224669ad2b94e648fb07",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/patterns/metric-contract-candidates.json",
+      "output_sha256": "0e135c4fda86157708c9539bbeff7f559ddf9b5d656ebea9e102c82da17bbb38",
+      "source": "skills/retail-kpi-knowledge/patterns/metric-contract-candidates.json",
+      "source_id": "kb-145",
+      "source_sha256": "0e135c4fda86157708c9539bbeff7f559ddf9b5d656ebea9e102c82da17bbb38",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/patterns/metric-patterns.json",
+      "output_sha256": "a525ff8dc6a4843cbdfff4b90ca76030d8a7d275f9b8d9fca01fa86c861e697e",
+      "source": "skills/retail-kpi-knowledge/patterns/metric-patterns.json",
+      "source_id": "kb-146",
+      "source_sha256": "a525ff8dc6a4843cbdfff4b90ca76030d8a7d275f9b8d9fca01fa86c861e697e",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/references/id-conventions.md",
+      "output_sha256": "233bbfb4d499516fb9745d8c87b09f48e6511ae96692ba0fb225c18047a6f9fa",
+      "source": "skills/retail-kpi-knowledge/references/id-conventions.md",
+      "source_id": "kb-147",
+      "source_sha256": "233bbfb4d499516fb9745d8c87b09f48e6511ae96692ba0fb225c18047a6f9fa",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/references/kpi-coverage-scorecard-template.md",
+      "output_sha256": "92aabbc438a003fa715a851ed092e42494ce023033cb83a4558f0fdce2f2369a",
+      "source": "skills/retail-kpi-knowledge/references/kpi-coverage-scorecard-template.md",
+      "source_id": "kb-148",
+      "source_sha256": "92aabbc438a003fa715a851ed092e42494ce023033cb83a4558f0fdce2f2369a",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/references/kpi-derivation-lineage.md",
+      "output_sha256": "bea0f16df5d3f3804d96702829bfb80a14aa5c06d8540e150700dc609000e176",
+      "source": "skills/retail-kpi-knowledge/references/kpi-derivation-lineage.md",
+      "source_id": "kb-149",
+      "source_sha256": "bea0f16df5d3f3804d96702829bfb80a14aa5c06d8540e150700dc609000e176",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/references/metric-contract-template.md",
+      "output_sha256": "747e3486ff0b7ab9a6664c77e96e768ad2e512d953ade7c843e9c5b038054253",
+      "source": "skills/retail-kpi-knowledge/references/metric-contract-template.md",
+      "source_id": "kb-150",
+      "source_sha256": "747e3486ff0b7ab9a6664c77e96e768ad2e512d953ade7c843e9c5b038054253",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/references/planned-kpi-backlog.md",
+      "output_sha256": "ff632cc78400337d60767679170d498e9519e247b4b2013457803704b7371786",
+      "source": "skills/retail-kpi-knowledge/references/planned-kpi-backlog.md",
+      "source_id": "kb-151",
+      "source_sha256": "ff632cc78400337d60767679170d498e9519e247b4b2013457803704b7371786",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/references/research-notes.md",
+      "output_sha256": "602046e968ed760c242d7f434dfa5852f411a4b37ae365162ce3f6f7e85573a5",
+      "source": "skills/retail-kpi-knowledge/references/research-notes.md",
+      "source_id": "kb-152",
+      "source_sha256": "602046e968ed760c242d7f434dfa5852f411a4b37ae365162ce3f6f7e85573a5",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/references/source-field-requirements.md",
+      "output_sha256": "6bea21490f6b9d6efb15f2626f8031b0c57e77066a21aee4a970a1c09a7964e8",
+      "source": "skills/retail-kpi-knowledge/references/source-field-requirements.md",
+      "source_id": "kb-153",
+      "source_sha256": "6bea21490f6b9d6efb15f2626f8031b0c57e77066a21aee4a970a1c09a7964e8",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/references/source-map.md",
+      "output_sha256": "7d44e590fb358408bc1bd2b62d68af576452c030dc283c6ea5e8d250c73bec17",
+      "source": "skills/retail-kpi-knowledge/references/source-map.md",
+      "source_id": "kb-154",
+      "source_sha256": "7d44e590fb358408bc1bd2b62d68af576452c030dc283c6ea5e8d250c73bec17",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/registry.yaml",
+      "output_sha256": "1d04ef22f4c8456792a2a253b1727b025dde9c146e8ae91c41247fdf2679629e",
+      "source": "skills/retail-kpi-knowledge/registry.yaml",
+      "source_id": "kb-155",
+      "source_sha256": "1d04ef22f4c8456792a2a253b1727b025dde9c146e8ae91c41247fdf2679629e",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "generated_wrapper",
+      "destination": "portable-operating-contract.md",
+      "output_sha256": "d41f64e8c36378aafa43eebb66faac022e797a6a117bac62d716db641770e3ef",
+      "source": "distribution/bundle-templates/shared/portable-operating-contract.md",
+      "source_id": "portable-contract",
+      "source_sha256": "d41f64e8c36378aafa43eebb66faac022e797a6a117bac62d716db641770e3ef",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "generated_wrapper",
+      "destination": "skills/bi-bigdata-knowledge/SKILL.md",
+      "output_sha256": "1660a73c00da06295d07783b78728790aafa2d55f88e728f87812bf611417a6a",
+      "source": "distribution/bundle-templates/shared/skills/bi-bigdata-knowledge/SKILL.md",
+      "source_id": "bigdata-skill",
+      "source_sha256": "1660a73c00da06295d07783b78728790aafa2d55f88e728f87812bf611417a6a",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "generated_wrapper",
+      "destination": "skills/bi-dax-knowledge/SKILL.md",
+      "output_sha256": "48ea9675809ea10b614b34dc8e03e3fb004c4d4a6bb2c744c752dc60016584ae",
+      "source": "distribution/bundle-templates/shared/skills/bi-dax-knowledge/SKILL.md",
+      "source_id": "dax-skill",
+      "source_sha256": "48ea9675809ea10b614b34dc8e03e3fb004c4d4a6bb2c744c752dc60016584ae",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "generated_wrapper",
+      "destination": "skills/bi-python-knowledge/SKILL.md",
+      "output_sha256": "d90b08f4fff1614f06fb7cc0264e4d0022cee1da81d6ca231833a1c5ebcc282a",
+      "source": "distribution/bundle-templates/shared/skills/bi-python-knowledge/SKILL.md",
+      "source_id": "python-skill",
+      "source_sha256": "d90b08f4fff1614f06fb7cc0264e4d0022cee1da81d6ca231833a1c5ebcc282a",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "generated_wrapper",
+      "destination": "skills/bi-sql-knowledge/SKILL.md",
+      "output_sha256": "414ec1864e706d877710375935b1a5b952476e5ab9f1cced3457bb1c6ab993f1",
+      "source": "distribution/bundle-templates/shared/skills/bi-sql-knowledge/SKILL.md",
+      "source_id": "sql-skill",
+      "source_sha256": "414ec1864e706d877710375935b1a5b952476e5ab9f1cced3457bb1c6ab993f1",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "generated_wrapper",
+      "destination": "skills/retail-kpi-knowledge/SKILL.md",
+      "output_sha256": "efc39e305e1842950c96f0c191d9b6f8bdeab5dfb4b9d5c2da203384e08f3833",
+      "source": "distribution/bundle-templates/shared/skills/retail-kpi-knowledge/SKILL.md",
+      "source_id": "kpi-skill",
+      "source_sha256": "efc39e305e1842950c96f0c191d9b6f8bdeab5dfb4b9d5c2da203384e08f3833",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "generated_wrapper",
+      "destination": "skills/seshat-bi/SKILL.md",
+      "output_sha256": "1817ddbd489a0a325d8acc7b0d78071c320914edc44d777110129412c5e8151c",
+      "source": "distribution/bundle-templates/shared/skills/seshat-bi/SKILL.md",
+      "source_id": "router",
+      "source_sha256": "1817ddbd489a0a325d8acc7b0d78071c320914edc44d777110129412c5e8151c",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "templates/kpi-sufficiency-card.md",
+      "output_sha256": "f478545a65714ab3844b8086136b377f1f56c6eabcb390f29ffd9b72b23ee0ac",
+      "source": "templates/kpi-sufficiency-card.md",
+      "source_id": "shared-kpi-sufficiency-template",
+      "source_sha256": "f478545a65714ab3844b8086136b377f1f56c6eabcb390f29ffd9b72b23ee0ac",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "templates/metric-contract.yaml",
+      "output_sha256": "d87086b74f4f7ff7d4982c0db3b36b92c76ecf3d1a0116542cabba3cbdc66558",
+      "source": "templates/metric-contract.yaml",
+      "source_id": "shared-metric-contract-template",
+      "source_sha256": "d87086b74f4f7ff7d4982c0db3b36b92c76ecf3d1a0116542cabba3cbdc66558",
+      "transform": "copy-normalized-v1"
+    }
+  ],
+  "exporter_version": "1.0",
+  "manifest_digest": "bdfc4da31b352e78ecc6efb41ef90aa9a4a6db847f9791948126abacff18a9b2",
+  "plugin": "seshat-bi",
+  "schema_version": "1.0",
+  "source_revision": "12bbf66d3cfe5066b36e6098a2400845dc584898",
+  "target": "claude",
+  "version": "0.1.0"
+}
