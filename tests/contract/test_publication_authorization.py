@@ -8,7 +8,10 @@ from pathlib import Path
 import pytest
 
 from seshat.release_evidence import (
+    ApprovalScope,
+    AuthorizationRequest,
     EvidenceValidationError,
+    RollbackAuthorizationRequest,
     validate_action_authorization,
     validate_rollback_authorization,
     validate_surface_availability,
@@ -59,6 +62,28 @@ def _availability() -> dict[str, object]:
     }
 
 
+def _request(
+    *,
+    at: datetime = AT,
+    used: set[str] | frozenset[str] = frozenset(),
+    **scope: object,
+) -> AuthorizationRequest:
+    return AuthorizationRequest(
+        ApprovalScope(**scope),  # type: ignore[arg-type]
+        used_approval_ids=used,
+        at=at,
+    )
+
+
+def _rollback_request(*, at: datetime = AT) -> RollbackAuthorizationRequest:
+    return RollbackAuthorizationRequest(
+        version="0.2.0",
+        source_revision=SOURCE_REVISION,
+        artifact_digests=ARTIFACT_DIGESTS,
+        at=at,
+    )
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
@@ -79,7 +104,7 @@ def test_approval_must_match_exact_candidate_version_and_action(
     }
     expected[field] = value
     with pytest.raises(EvidenceValidationError, match="does not match"):
-        validate_action_authorization(_approval(), at=AT, **expected)
+        validate_action_authorization(_approval(), _request(**expected))
 
 
 def test_consumed_or_expired_approval_cannot_be_reused() -> None:
@@ -87,23 +112,34 @@ def test_consumed_or_expired_approval_cannot_be_reused() -> None:
     with pytest.raises(EvidenceValidationError, match="already consumed"):
         validate_action_authorization(
             approval,
-            candidate_id=str(approval["candidate_id"]),
-            version=str(approval["version"]),
-            source_revision=SOURCE_REVISION,
-            artifact_digests=ARTIFACT_DIGESTS,
-            action=str(approval["action"]),
-            used_approval_ids={str(approval["approval_id"])},
-            at=AT,
+            _request(
+                candidate_id=str(approval["candidate_id"]),
+                version=str(approval["version"]),
+                source_revision=SOURCE_REVISION,
+                artifact_digests=ARTIFACT_DIGESTS,
+                action=str(approval["action"]),
+                used={str(approval["approval_id"])},
+            ),
         )
     with pytest.raises(EvidenceValidationError, match="expired"):
         validate_action_authorization(
             approval,
-            candidate_id=str(approval["candidate_id"]),
-            version=str(approval["version"]),
-            source_revision=SOURCE_REVISION,
-            artifact_digests=ARTIFACT_DIGESTS,
-            action=str(approval["action"]),
-            at=datetime(2026, 7, 15, tzinfo=timezone.utc),
+            _request(
+                candidate_id=str(approval["candidate_id"]),
+                version=str(approval["version"]),
+                source_revision=SOURCE_REVISION,
+                artifact_digests=ARTIFACT_DIGESTS,
+                action=str(approval["action"]),
+                at=datetime(2026, 7, 15, tzinfo=timezone.utc),
+            ),
+        )
+
+
+def test_action_authorization_rejects_an_unbound_scope() -> None:
+    with pytest.raises(EvidenceValidationError, match="exact action scope"):
+        validate_action_authorization(
+            _approval(),
+            AuthorizationRequest(ApprovalScope(), at=AT),
         )
 
 
@@ -132,20 +168,14 @@ def test_rollback_requires_its_own_matching_approval() -> None:
     validate_rollback_authorization(
         rollback,
         approval,
-        version="0.2.0",
-        source_revision=SOURCE_REVISION,
-        artifact_digests=ARTIFACT_DIGESTS,
-        at=AT,
+        _rollback_request(),
     )
     approval["action"] = "publish_pypi"
     with pytest.raises(EvidenceValidationError, match="does not match"):
         validate_rollback_authorization(
             rollback,
             approval,
-            version="0.2.0",
-            source_revision=SOURCE_REVISION,
-            artifact_digests=ARTIFACT_DIGESTS,
-            at=AT,
+            _rollback_request(),
         )
 
 
@@ -158,10 +188,7 @@ def test_rollback_action_must_match_its_public_surface() -> None:
         validate_rollback_authorization(
             rollback,
             _approval(),
-            version="0.2.0",
-            source_revision=SOURCE_REVISION,
-            artifact_digests=ARTIFACT_DIGESTS,
-            at=AT,
+            _rollback_request(),
         )
 
 
@@ -172,17 +199,17 @@ def test_approval_rejects_changed_source_or_artifact_digests() -> None:
         "version": str(approval["version"]),
         "artifact_digests": ARTIFACT_DIGESTS,
         "action": str(approval["action"]),
-        "at": AT,
     }
     with pytest.raises(EvidenceValidationError, match="source_revision"):
         validate_action_authorization(
             approval,
-            source_revision="f" * 40,
-            **common,
+            _request(source_revision="f" * 40, **common),
         )
     with pytest.raises(EvidenceValidationError, match="artifact_digests"):
         validate_action_authorization(
             approval,
-            source_revision=SOURCE_REVISION,
-            **{**common, "artifact_digests": {"changed.whl": "c" * 64}},
+            _request(
+                source_revision=SOURCE_REVISION,
+                **{**common, "artifact_digests": {"changed.whl": "c" * 64}},
+            ),
         )

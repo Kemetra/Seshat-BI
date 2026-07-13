@@ -15,7 +15,7 @@
       "output_sha256": "194d39809c3f1f3f33523fdc5523f501c4ee055985e496f6490672595b612ead",
       "source": "LICENSE",
       "source_id": "public-license",
-      "source_sha256": "56727f76eeb206b1724f9875702ef440dafeb7583292d5995c7d1a49b6dd8db5",
+      "source_sha256": "194d39809c3f1f3f33523fdc5523f501c4ee055985e496f6490672595b612ead",
       "transform": "copy-normalized-v1"
     },
     {
@@ -222,7 +222,7 @@
       "output_sha256": "3e822983003389e1f333ca0a488be5dc6d3fc71a3542fceb6509dd6eaa1d9be0",
       "source": "skills/bi-bigdata-knowledge/patterns/analyzer-rule-candidates.json",
       "source_id": "kb-022",
-      "source_sha256": "4a4d4a13bc66fc0e0a3d2e24b9a4c787111df9e1f7d7fdcf5eddc337d4bfd9b5",
+      "source_sha256": "3e822983003389e1f333ca0a488be5dc6d3fc71a3542fceb6509dd6eaa1d9be0",
       "transform": "copy-normalized-v1"
     },
     {
@@ -231,7 +231,7 @@
       "output_sha256": "7f54606bbfb32c0edef0499b7d0bb9fe1353b2204abc225f95afd7a80928607d",
       "source": "skills/bi-bigdata-knowledge/patterns/analyzer-rules.json",
       "source_id": "kb-023",
-      "source_sha256": "923014c78f925832329618f26ffb625d71999de15b4c5d77de390080d75ecdbd",
+      "source_sha256": "7f54606bbfb32c0edef0499b7d0bb9fe1353b2204abc225f95afd7a80928607d",
       "transform": "copy-normalized-v1"
     },
     {
@@ -240,7 +240,7 @@
       "output_sha256": "194375bb18fb3d86b66faa88489ad47f9bcd92c99ecf0cb8f0ffcb63855899c8",
       "source": "skills/bi-bigdata-knowledge/patterns/bigdata-patterns.json",
       "source_id": "kb-024",
-      "source_sha256": "5bbd9c18f2227e5e31bea0456ef1d088347149612be5924f2b4d13adbaba157d",
+      "source_sha256": "194375bb18fb3d86b66faa88489ad47f9bcd92c99ecf0cb8f0ffcb63855899c8",
       "transform": "copy-normalized-v1"
     },
     {
@@ -249,7 +249,7 @@
       "output_sha256": "745bce592b4b1f4041a4eaacd3f6cdb34225d987c53e3a05d5f855cda676952e",
       "source": "skills/bi-bigdata-knowledge/patterns/validation-patterns.json",
       "source_id": "kb-025",
-      "source_sha256": "95c3ee9ef6ff5726f8b07ad2c5cbc70bb67c97c6040007e75032d0dfec0f2076",
+      "source_sha256": "745bce592b4b1f4041a4eaacd3f6cdb34225d987c53e3a05d5f855cda676952e",
       "transform": "copy-normalized-v1"
     },
     {
@@ -258,7 +258,7 @@
       "output_sha256": "b99a2f88a63d2a38d7d87aaf037049215e0a63027eb2c1404fc67764a91ca75a",
       "source": "skills/bi-bigdata-knowledge/references/agent-training-set.json",
       "source_id": "kb-026",
-      "source_sha256": "56d208dcba335e484f778f8962fa7955522e7e6601936cfcfd4b7207e7d7533d",
+      "source_sha256": "b99a2f88a63d2a38d7d87aaf037049215e0a63027eb2c1404fc67764a91ca75a",
       "transform": "copy-normalized-v1"
     },
     {
@@ -465,7 +465,7 @@
       "output_sha256": "bacab862812eff2eb70edc30068f0973007b3cef4336674e62ef0fe8e54dd249",
       "source": "skills/bi-dax-knowledge/patterns/analyzer-rule-candidates.json",
       "source_id": "kb-049",
-      "source_sha256": "1fcd39e624057a6e4ee819b6a7e68dd3569889d77b84b245ec12bc9df6f352f6",
+      "source_sha256": "bacab862812eff2eb70edc30068f0973007b3cef4336674e62ef0fe8e54dd249",
       "transform": "copy-normalized-v1"
     },
     {
@@ -474,7 +474,7 @@
       "output_sha256": "08ae6337dd0b36861ba2bf1f8e2a62aba155b110e4180c744a341795c92de97e",
       "source": "skills/bi-dax-knowledge/patterns/analyzer-rules.json",
       "source_id": "kb-050",
-      "source_sha256": "78aae8af5b7e0b1649b310084f71d947828c6b724fbea84809b64a897a6029bc",
+      "source_sha256": "08ae6337dd0b36861ba2bf1f8e2a62aba155b110e4180c744a341795c92de97e",
       "transform": "copy-normalized-v1"
     },
     {
@@ -483,7 +483,7 @@
       "output_sha256": "e815e2fbd9e424dd920df3524fd0d46d207f41d68285d1dbf58c792b26aaec23",
       "source": "skills/bi-dax-knowledge/patterns/dax-patterns.json",
       "source_id": "kb-051",
-      "source_sha256": "5e461eacc7778bb379710bce9ac093126911379ce2b9c7a3b37d9d93a4736b58",
+      "source_sha256": "e815e2fbd9e424dd920df3524fd0d46d207f41d68285d1dbf58c792b26aaec23",
       "transform": "copy-normalized-v1"
     },
     {
@@ -492,7 +492,7 @@
       "output_sha256": "8abeac94b864b3303bbc7ccacf302a2e646a81308ca582cbf11b84251fdc676d",
       "source": "skills/bi-dax-knowledge/patterns/metric-contract-patterns.json",
       "source_id": "kb-052",
-      "source_sha256": "7f4c234985b9b097c8463c6c05376b544439a72376140d8180c1f90a56506e33",
+      "source_sha256": "8abeac94b864b3303bbc7ccacf302a2e646a81308ca582cbf11b84251fdc676d",
       "transform": "copy-normalized-v1"
     },
     {
@@ -501,7 +501,7 @@
       "output_sha256": "987cc4f09cb6c726b2e093b7cc453010b3c7531a51921fa82383aa22c53368b0",
       "source": "skills/bi-dax-knowledge/references/agent-training-set.json",
       "source_id": "kb-053",
-      "source_sha256": "acf51cb1b54cb57de693a9d7d52bf678c546307e8e304ce8f161e651b6abf50f",
+      "source_sha256": "987cc4f09cb6c726b2e093b7cc453010b3c7531a51921fa82383aa22c53368b0",
       "transform": "copy-normalized-v1"
     },
     {
@@ -609,7 +609,7 @@
       "output_sha256": "e555cf1db0a719fcb8f63ace23bfbc83f55021ceb496a5d5dbeec045d385992e",
       "source": "skills/bi-python-knowledge/patterns/analyzer-rule-candidates.json",
       "source_id": "kb-065",
-      "source_sha256": "17109dcdfd22c7bee098b86cf7f396cb41be485c60873ed186af0a734a5bbdd7",
+      "source_sha256": "e555cf1db0a719fcb8f63ace23bfbc83f55021ceb496a5d5dbeec045d385992e",
       "transform": "copy-normalized-v1"
     },
     {
@@ -618,7 +618,7 @@
       "output_sha256": "eb07205f7452fb35f714cd26376814e34d489b6808f4d8a13bfe0ec648a69462",
       "source": "skills/bi-python-knowledge/references/agent-training-set.json",
       "source_id": "kb-066",
-      "source_sha256": "0b9e956cd145515ca9d03a960ff8f56b9c644838b26d9497e28100cc3bfeb3a9",
+      "source_sha256": "eb07205f7452fb35f714cd26376814e34d489b6808f4d8a13bfe0ec648a69462",
       "transform": "copy-normalized-v1"
     },
     {
@@ -834,7 +834,7 @@
       "output_sha256": "15dea48fa8cf28d8b2a697502eb6a583f57bec16e14bb220258960782c7f5d4e",
       "source": "skills/bi-sql-knowledge/patterns/sql-analyzer-rule-candidates.json",
       "source_id": "kb-090",
-      "source_sha256": "4c8006d9cf5e20f4b339caf684f75fdc5ed82a1f58a071b4c66f41feeab2a51c",
+      "source_sha256": "15dea48fa8cf28d8b2a697502eb6a583f57bec16e14bb220258960782c7f5d4e",
       "transform": "copy-normalized-v1"
     },
     {
@@ -843,7 +843,7 @@
       "output_sha256": "da2c8bbfbdadf4ebbfa8e207a4c3b39b4c284dc67aeb75a6b59e62adde1bcbea",
       "source": "skills/bi-sql-knowledge/patterns/sql-analyzer-rules.json",
       "source_id": "kb-091",
-      "source_sha256": "039057137065229c1e34cf7ac8a6a99ba03d33d412d90fe94ab7fbc0cf0375ef",
+      "source_sha256": "da2c8bbfbdadf4ebbfa8e207a4c3b39b4c284dc67aeb75a6b59e62adde1bcbea",
       "transform": "copy-normalized-v1"
     },
     {
@@ -852,7 +852,7 @@
       "output_sha256": "d749297a5c1353d8becbf3c255d450003d629579535eb580d54f27ab4739a062",
       "source": "skills/bi-sql-knowledge/patterns/sql-patterns.json",
       "source_id": "kb-092",
-      "source_sha256": "31be3574c09ad859bef415c4a8ab88ce60500af3bf57974e6a5d19c9cee86c3e",
+      "source_sha256": "d749297a5c1353d8becbf3c255d450003d629579535eb580d54f27ab4739a062",
       "transform": "copy-normalized-v1"
     },
     {
@@ -861,7 +861,7 @@
       "output_sha256": "18d32108aafcd4a3b67f39148530e5d8ef587e6079248dff7a38e042771627c9",
       "source": "skills/bi-sql-knowledge/patterns/sql-validation-patterns.json",
       "source_id": "kb-093",
-      "source_sha256": "b9b0e6095189457aaef51b443ca92809fb9c9c4e3bca61cdf73f20765db791fd",
+      "source_sha256": "18d32108aafcd4a3b67f39148530e5d8ef587e6079248dff7a38e042771627c9",
       "transform": "copy-normalized-v1"
     },
     {
@@ -870,7 +870,7 @@
       "output_sha256": "06ab82645f3254b6d52ca772b074d26f6caa6b1f3f2e30dd1e3d42a1336f07c7",
       "source": "skills/bi-sql-knowledge/references/agent-training-set.json",
       "source_id": "kb-094",
-      "source_sha256": "defe8da27f7ed74eba9e7413af79683f90e111ba7159359539db03c19e666f78",
+      "source_sha256": "06ab82645f3254b6d52ca772b074d26f6caa6b1f3f2e30dd1e3d42a1336f07c7",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1320,7 +1320,7 @@
       "output_sha256": "fff7dc985e8e0baaa096642cb396bfc5b42b453d3fe1224669ad2b94e648fb07",
       "source": "skills/retail-kpi-knowledge/patterns/metric-anti-patterns.json",
       "source_id": "kb-144",
-      "source_sha256": "367866d709974fbadd78d9ff04284bd04ad70615309cf3b0748da38214025173",
+      "source_sha256": "fff7dc985e8e0baaa096642cb396bfc5b42b453d3fe1224669ad2b94e648fb07",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1329,7 +1329,7 @@
       "output_sha256": "0e135c4fda86157708c9539bbeff7f559ddf9b5d656ebea9e102c82da17bbb38",
       "source": "skills/retail-kpi-knowledge/patterns/metric-contract-candidates.json",
       "source_id": "kb-145",
-      "source_sha256": "376a60300bf494046198c479140f150e065083d3cb741075ea2084633ba32a72",
+      "source_sha256": "0e135c4fda86157708c9539bbeff7f559ddf9b5d656ebea9e102c82da17bbb38",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1338,7 +1338,7 @@
       "output_sha256": "a525ff8dc6a4843cbdfff4b90ca76030d8a7d275f9b8d9fca01fa86c861e697e",
       "source": "skills/retail-kpi-knowledge/patterns/metric-patterns.json",
       "source_id": "kb-146",
-      "source_sha256": "572488a8efceab4a560a4386872344ea1509868404cfa3f2e64e354deb8f5ec5",
+      "source_sha256": "a525ff8dc6a4843cbdfff4b90ca76030d8a7d275f9b8d9fca01fa86c861e697e",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1505,10 +1505,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "f16e08052e50b900d97f878ce87b0cab4653059f931a3bd9417b327cf659e4bc",
+  "manifest_digest": "fe8ae95728f241e7e2b1460130c3ed0abba8df871cb39dc5bf2b9e78ab142c15",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "31a640cd4b3b1310e974588a38986afab7b50079",
+  "source_revision": "12bbf66d3cfe5066b36e6098a2400845dc584898",
   "target": "codex",
   "version": "0.1.0"
 }

@@ -7,6 +7,7 @@ import json
 import re
 import subprocess
 import tomllib
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -18,6 +19,13 @@ _SEMVER = re.compile(
 
 class VersionAuditError(ValueError):
     """The version source itself is missing or invalid."""
+
+
+@dataclass(frozen=True)
+class _ProjectionTarget:
+    surface: str
+    path: str
+    expected: str
 
 
 def _json(path: Path) -> Mapping[str, Any]:
@@ -59,88 +67,92 @@ def _tag_map(repo_root: Path) -> dict[str, str]:
 
 
 def _projection(
-    surface: str,
-    path: str,
+    target: _ProjectionTarget,
     observed: str | None,
-    expected: str,
     *,
     status: str | None = None,
     blocker: str | None = None,
 ) -> dict[str, str | None]:
-    resolved_status = status or ("pass" if observed == expected else "blocked")
+    resolved_status = status or ("pass" if observed == target.expected else "blocked")
     result: dict[str, str | None] = {
-        "surface": surface,
-        "path": path,
+        "surface": target.surface,
+        "path": target.path,
         "observed": observed,
-        "expected": expected,
+        "expected": target.expected,
         "status": resolved_status,
     }
     if blocker:
         result["blocking_reason"] = blocker
     elif resolved_status == "blocked":
         result["blocking_reason"] = (
-            f"{surface} version is {observed!r}; expected {expected!r}"
+            f"{target.surface} version is {observed!r}; expected {target.expected!r}"
         )
     return result
 
 
+def _list_value(value: object, key: int) -> object:
+    if not isinstance(value, list):
+        raise KeyError(key)
+    return value[key]
+
+
+def _mapping_value(value: object, key: object) -> object:
+    if not isinstance(value, Mapping):
+        raise KeyError(key)
+    return value[key]
+
+
+def _value_at_key(value: object, key: object) -> object:
+    if isinstance(key, int):
+        return _list_value(value, key)
+    return _mapping_value(value, key)
+
+
+def _json_value(path: Path, value_path: tuple[object, ...]) -> object:
+    value: object = _json(path)
+    for key in value_path:
+        value = _value_at_key(value, key)
+    return value
+
+
+def _missing_json_projection(
+    target: _ProjectionTarget, schema_optional: bool
+) -> dict[str, str | None]:
+    if schema_optional:
+        return _projection(
+            target,
+            None,
+            status="not_schema_supported",
+        )
+    return _projection(
+        target,
+        None,
+        blocker=f"governed version field is missing: {target.path}",
+    )
+
+
 def _json_version_projection(
     repo_root: Path,
-    *,
-    surface: str,
-    relative_path: str,
-    expected: str,
+    target: _ProjectionTarget,
     value_path: tuple[object, ...],
+    *,
     schema_optional: bool = False,
 ) -> dict[str, str | None]:
-    path = repo_root / relative_path
+    path = repo_root / target.path
     if not path.is_file():
         return _projection(
-            surface,
-            relative_path,
+            target,
             None,
-            expected,
-            blocker=f"required governed version location is missing: {relative_path}",
+            blocker=f"required governed version location is missing: {target.path}",
         )
     try:
-        value: object = _json(path)
-        for key in value_path:
-            if isinstance(key, int):
-                if not isinstance(value, list):
-                    raise KeyError(key)
-                value = value[key]
-            else:
-                if not isinstance(value, Mapping):
-                    raise KeyError(key)
-                value = value[key]
+        value = _json_value(path, value_path)
     except (KeyError, IndexError, TypeError):
-        if schema_optional:
-            return _projection(
-                surface,
-                relative_path,
-                None,
-                expected,
-                status="not_schema_supported",
-            )
-        return _projection(
-            surface,
-            relative_path,
-            None,
-            expected,
-            blocker=f"governed version field is missing: {relative_path}",
-        )
-    return _projection(surface, relative_path, str(value), expected)
+        return _missing_json_projection(target, schema_optional)
+    return _projection(target, str(value))
 
 
-def audit_versions(
-    repo_root: Path,
-    *,
-    source_revision: str | None = None,
-    tags: Mapping[str, str] | None = None,
-    github_release_tag: str | None = None,
-) -> dict[str, Any]:
-    """Return a deterministic, evidence-only version synchronization audit."""
-
+def _project_version(repo_root: Path) -> str:
     pyproject_path = repo_root / "pyproject.toml"
     if not pyproject_path.is_file():
         raise VersionAuditError("pyproject.toml is missing")
@@ -153,137 +165,159 @@ def audit_versions(
         ) from exc
     if _SEMVER.fullmatch(version) is None:
         raise VersionAuditError(f"project.version is not SemVer: {version!r}")
-    revision = source_revision or _git_revision(repo_root)
-    tag_map = dict(tags) if tags is not None else _tag_map(repo_root)
-    projections: list[dict[str, str | None]] = [
-        _projection("python_package", "pyproject.toml", version, version),
+    return version
+
+
+def _distribution_projections(
+    repo_root: Path, version: str
+) -> list[dict[str, str | None]]:
+    return [
+        _projection(
+            _ProjectionTarget("python_package", "pyproject.toml", version), version
+        ),
         _json_version_projection(
             repo_root,
-            surface="claude_plugin",
-            relative_path="integrations/claude-code/seshat-bi/.claude-plugin/plugin.json",
-            expected=version,
+            _ProjectionTarget(
+                "claude_plugin",
+                "integrations/claude-code/seshat-bi/.claude-plugin/plugin.json",
+                version,
+            ),
             value_path=("version",),
         ),
         _json_version_projection(
             repo_root,
-            surface="claude_marketplace",
-            relative_path=".claude-plugin/marketplace.json",
-            expected=version,
+            _ProjectionTarget(
+                "claude_marketplace", ".claude-plugin/marketplace.json", version
+            ),
             value_path=("metadata", "version"),
         ),
         _json_version_projection(
             repo_root,
-            surface="claude_bundle_manifest",
-            relative_path="integrations/claude-code/seshat-bi/bundle-manifest.json",
-            expected=version,
+            _ProjectionTarget(
+                "claude_bundle_manifest",
+                "integrations/claude-code/seshat-bi/bundle-manifest.json",
+                version,
+            ),
             value_path=("version",),
         ),
         _json_version_projection(
             repo_root,
-            surface="codex_plugin",
-            relative_path="integrations/codex/seshat-bi/.codex-plugin/plugin.json",
-            expected=version,
+            _ProjectionTarget(
+                "codex_plugin",
+                "integrations/codex/seshat-bi/.codex-plugin/plugin.json",
+                version,
+            ),
             value_path=("version",),
         ),
         _json_version_projection(
             repo_root,
-            surface="codex_catalog",
-            relative_path=".agents/plugins/marketplace.json",
-            expected=version,
+            _ProjectionTarget(
+                "codex_catalog", ".agents/plugins/marketplace.json", version
+            ),
             value_path=("plugins", 0, "version"),
             schema_optional=True,
         ),
         _json_version_projection(
             repo_root,
-            surface="codex_bundle_manifest",
-            relative_path="integrations/codex/seshat-bi/bundle-manifest.json",
-            expected=version,
+            _ProjectionTarget(
+                "codex_bundle_manifest",
+                "integrations/codex/seshat-bi/bundle-manifest.json",
+                version,
+            ),
             value_path=("version",),
         ),
     ]
-    changelog = repo_root / "CHANGELOG.md"
-    changelog_match = False
-    if changelog.is_file():
-        changelog_match = (
-            re.search(
-                rf"^## \[{re.escape(version)}\](?:\s|$)",
-                changelog.read_text(encoding="utf-8"),
-                re.MULTILINE,
-            )
-            is not None
-        )
-    projections.append(
-        _projection(
-            "changelog",
-            "CHANGELOG.md",
-            version if changelog_match else None,
-            version,
-            blocker=None
-            if changelog_match
-            else f"CHANGELOG.md has no exact [{version}] release heading",
-        )
+
+
+def _document_matches(path: Path, pattern: str) -> bool:
+    if not path.is_file():
+        return False
+    return (
+        re.search(pattern, path.read_text(encoding="utf-8"), re.MULTILINE) is not None
     )
+
+
+def _changelog_projection(repo_root: Path, version: str) -> dict[str, str | None]:
+    changelog = repo_root / "CHANGELOG.md"
+    matched = _document_matches(changelog, rf"^## \[{re.escape(version)}\](?:\s|$)")
+    return _projection(
+        _ProjectionTarget("changelog", "CHANGELOG.md", version),
+        version if matched else None,
+        blocker=None
+        if matched
+        else f"CHANGELOG.md has no exact [{version}] release heading",
+    )
+
+
+def _release_note_projection(repo_root: Path, version: str) -> dict[str, str | None]:
     major_minor = ".".join(version.split(".")[:2])
     note_path = f"docs/releases/v{major_minor}.md"
     release_note = repo_root / note_path
-    note_match = False
-    if release_note.is_file():
-        note_match = (
-            re.search(
-                rf"^# .*\bv{re.escape(major_minor)}(?:\b|\.)",
-                release_note.read_text(encoding="utf-8"),
-                re.MULTILINE,
-            )
-            is not None
-        )
-    projections.append(
-        _projection(
-            "release_note",
-            note_path,
-            major_minor if note_match else None,
-            major_minor,
-            blocker=None
-            if note_match
-            else (
-                f"release note is missing or has no v{major_minor} heading: {note_path}"
-            ),
-        )
+    matched = _document_matches(
+        release_note, rf"^# .*\bv{re.escape(major_minor)}(?:\b|\.)"
     )
+    return _projection(
+        _ProjectionTarget("release_note", note_path, major_minor),
+        major_minor if matched else None,
+        blocker=None
+        if matched
+        else f"release note is missing or has no v{major_minor} heading: {note_path}",
+    )
+
+
+def _tag_projection(
+    version: str, revision: str, tag_map: Mapping[str, str]
+) -> dict[str, str | None]:
     tag = f"v{version}"
     tagged_revision = tag_map.get(tag)
     if tagged_revision is None:
-        projections.append(
-            _projection(
-                "git_tag",
-                tag,
-                None,
-                revision,
-                status="pending_owner_action",
-            )
+        return _projection(
+            _ProjectionTarget("git_tag", tag, revision),
+            None,
+            status="pending_owner_action",
         )
-    else:
-        projections.append(
-            _projection(
-                "git_tag",
-                tag,
-                tagged_revision,
-                revision,
-                blocker=None
-                if tagged_revision == revision
-                else (
-                    f"existing immutable tag {tag} points to {tagged_revision}, "
-                    f"not {revision}"
-                ),
-            )
-        )
-    projections.append(
-        _projection(
-            "github_release",
-            tag,
-            github_release_tag,
-            tag,
-            status="pending_owner_action" if github_release_tag is None else None,
-        )
+    return _projection(
+        _ProjectionTarget("git_tag", tag, revision),
+        tagged_revision,
+        blocker=None
+        if tagged_revision == revision
+        else (
+            f"existing immutable tag {tag} points to {tagged_revision}, not {revision}"
+        ),
+    )
+
+
+def _github_release_projection(
+    version: str, github_release_tag: str | None
+) -> dict[str, str | None]:
+    tag = f"v{version}"
+    return _projection(
+        _ProjectionTarget("github_release", tag, tag),
+        github_release_tag,
+        status="pending_owner_action" if github_release_tag is None else None,
+    )
+
+
+def audit_versions(
+    repo_root: Path,
+    *,
+    source_revision: str | None = None,
+    tags: Mapping[str, str] | None = None,
+    github_release_tag: str | None = None,
+) -> dict[str, Any]:
+    """Return a deterministic, evidence-only version synchronization audit."""
+
+    version = _project_version(repo_root)
+    revision = source_revision or _git_revision(repo_root)
+    tag_map = dict(tags) if tags is not None else _tag_map(repo_root)
+    projections = _distribution_projections(repo_root, version)
+    projections.extend(
+        [
+            _changelog_projection(repo_root, version),
+            _release_note_projection(repo_root, version),
+            _tag_projection(version, revision, tag_map),
+            _github_release_projection(version, github_release_tag),
+        ]
     )
     projections.sort(key=lambda item: (str(item["surface"]), str(item["path"])))
     blockers = sorted(

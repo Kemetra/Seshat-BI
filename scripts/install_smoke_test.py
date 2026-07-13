@@ -182,6 +182,22 @@ def _app_python(pipx_home: Path) -> Path:
     return pipx_home / "venvs" / "seshat-bi" / bin_name / python_name
 
 
+def _local_upgrade_command(wheel: Path) -> list[str]:
+    """Upgrade the existing pipx venv from the candidate wheel, never an index."""
+
+    return [
+        sys.executable,
+        "-m",
+        "pipx",
+        "runpip",
+        "seshat-bi",
+        "install",
+        "--upgrade",
+        "--force-reinstall",
+        str(wheel),
+    ]
+
+
 def _workspace_digest(workspace: Path) -> str:
     digest = hashlib.sha256()
     for path in sorted(workspace.rglob("*")):
@@ -229,9 +245,10 @@ def main() -> int:
         before = _workspace_digest(workspace)
 
         print(
-            "== Upgrade through the recorded local wheel specification ==", flush=True
+            "== Upgrade the pipx environment from the explicit local wheel ==",
+            flush=True,
         )
-        _run([sys.executable, "-m", "pipx", "upgrade", "seshat-bi"])
+        _run(_local_upgrade_command(wheel))
         upgraded_python = _app_python(pipx_home)
         _assert_installed_version(upgraded_python, expected_version)
         _assert_help(_executable(pipx_bin, "seshat"), workspace.parent)

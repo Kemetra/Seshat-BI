@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from seshat.release_evidence import (
+    ApprovalScope,
     EvidenceValidationError,
     validate_external_acceptance,
     validate_publication_approval,
@@ -50,19 +51,23 @@ def test_approval_is_named_and_exactly_action_scoped() -> None:
     assert (
         validate_publication_approval(
             record,
-            candidate_id="candidate-0.2.0-0123456789ab",
-            version="0.2.0",
-            source_revision="0123456789abcdef0123456789abcdef01234567",
-            artifact_digests={
-                "seshat_bi-0.2.0-py3-none-any.whl": "a" * 64,
-                "seshat_bi-0.2.0.tar.gz": "b" * 64,
-            },
-            action="publish_pypi",
+            ApprovalScope(
+                candidate_id="candidate-0.2.0-0123456789ab",
+                version="0.2.0",
+                source_revision="0123456789abcdef0123456789abcdef01234567",
+                artifact_digests={
+                    "seshat_bi-0.2.0-py3-none-any.whl": "a" * 64,
+                    "seshat_bi-0.2.0.tar.gz": "b" * 64,
+                },
+                action="publish_pypi",
+            ),
         )
         is record
     )
     with pytest.raises(EvidenceValidationError, match="action scope"):
-        validate_publication_approval(record, action="publish_github_release")
+        validate_publication_approval(
+            record, ApprovalScope(action="publish_github_release")
+        )
     with pytest.raises(EvidenceValidationError, match="approver"):
         validate_publication_approval({**record, "approver": ""})
 

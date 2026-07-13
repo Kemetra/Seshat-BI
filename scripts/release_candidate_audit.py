@@ -6,6 +6,7 @@ import argparse
 import json
 import subprocess
 import tomllib
+from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
@@ -25,50 +26,68 @@ _CONTRADICTORY_HISTORY_PHRASES = (
 )
 
 
+def _registry_failure(reason: str) -> dict[str, Any]:
+    return {"status": "fail", "blocking_reasons": [reason]}
+
+
+def _load_registry(
+    repo_root: Path, registry_document: Mapping[str, Any] | None
+) -> tuple[Mapping[str, Any] | None, str | None]:
+    if registry_document is not None:
+        return registry_document, None
+    path = repo_root / REGISTRY_PATH
+    if not path.is_file():
+        return None, f"required KPI registry is missing: {REGISTRY_PATH}"
+    loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(loaded, Mapping):
+        return None, "KPI registry must be a YAML object"
+    return loaded, None
+
+
+def _audit_registry_entry(
+    repo_root: Path, index: int, entry: object
+) -> tuple[str | None, list[str]]:
+    if not isinstance(entry, Mapping):
+        return None, [f"registry entry {index} is not an object"]
+    identifier = entry.get("id")
+    if not isinstance(identifier, str):
+        return None, [f"registry entry {index} has no string id"]
+    contract = entry.get("knowledge_contract_ref")
+    if not isinstance(contract, str) or not (repo_root / contract).is_file():
+        return identifier, [
+            f"registry {identifier} contract does not resolve: {contract!r}"
+        ]
+    return identifier, []
+
+
+def _audit_registry_entries(
+    repo_root: Path, entries: list[object]
+) -> tuple[list[str], list[str]]:
+    ids: list[str] = []
+    blockers: list[str] = []
+    for index, entry in enumerate(entries):
+        identifier, entry_blockers = _audit_registry_entry(repo_root, index, entry)
+        blockers.extend(entry_blockers)
+        if identifier is not None:
+            ids.append(identifier)
+    return ids, blockers
+
+
 def audit_registry(
     repo_root: Path, registry_document: Mapping[str, Any] | None = None
 ) -> dict[str, Any]:
     """Check registry uniqueness, contract resolution, and KPI-MC-15 projection."""
 
-    if registry_document is None:
-        path = repo_root / REGISTRY_PATH
-        if not path.is_file():
-            return {
-                "status": "fail",
-                "blocking_reasons": [
-                    f"required KPI registry is missing: {REGISTRY_PATH}"
-                ],
-            }
-        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
-        if not isinstance(loaded, Mapping):
-            return {
-                "status": "fail",
-                "blocking_reasons": ["KPI registry must be a YAML object"],
-            }
-        registry_document = loaded
-    entries = registry_document.get("entries")
+    document, load_error = _load_registry(repo_root, registry_document)
+    if load_error is not None or document is None:
+        return _registry_failure(load_error or "KPI registry could not be loaded")
+    entries = document.get("entries")
     if not isinstance(entries, list):
-        return {
-            "status": "fail",
-            "blocking_reasons": ["KPI registry entries must be a list"],
-        }
-    ids: list[str] = []
-    blockers: list[str] = []
-    for index, entry in enumerate(entries):
-        if not isinstance(entry, Mapping):
-            blockers.append(f"registry entry {index} is not an object")
-            continue
-        identifier = entry.get("id")
-        if not isinstance(identifier, str):
-            blockers.append(f"registry entry {index} has no string id")
-            continue
-        ids.append(identifier)
-        contract = entry.get("knowledge_contract_ref")
-        if not isinstance(contract, str) or not (repo_root / contract).is_file():
-            blockers.append(
-                f"registry {identifier} contract does not resolve: {contract!r}"
-            )
-    duplicates = sorted({identifier for identifier in ids if ids.count(identifier) > 1})
+        return _registry_failure("KPI registry entries must be a list")
+    ids, blockers = _audit_registry_entries(repo_root, entries)
+    duplicates = sorted(
+        identifier for identifier, count in Counter(ids).items() if count > 1
+    )
     if duplicates:
         blockers.append(f"duplicate KPI registry IDs: {duplicates}")
     kpi_count = ids.count("KPI-MC-15")
@@ -106,77 +125,86 @@ def _audit_package(repo_root: Path) -> dict[str, Any]:
     }
 
 
+def _history_doc_blockers(repo_root: Path, relative: str) -> list[str]:
+    path = repo_root / relative
+    if not path.is_file():
+        return [f"release history document is missing: {relative}"]
+    lowered = path.read_text(encoding="utf-8").casefold()
+    return [
+        f"{relative} contradicts the existing v0.1.0 tag: {phrase!r}"
+        for phrase in _CONTRADICTORY_HISTORY_PHRASES
+        if phrase in lowered
+    ]
+
+
 def _audit_history_docs(repo_root: Path) -> dict[str, Any]:
-    blockers: list[str] = []
-    for relative in ("CHANGELOG.md", "docs/releases/v0.1.md"):
-        path = repo_root / relative
-        if not path.is_file():
-            blockers.append(f"release history document is missing: {relative}")
-            continue
-        lowered = path.read_text(encoding="utf-8").casefold()
-        for phrase in _CONTRADICTORY_HISTORY_PHRASES:
-            if phrase in lowered:
-                blockers.append(
-                    f"{relative} contradicts the existing v0.1.0 tag: {phrase!r}"
-                )
+    blockers = [
+        blocker
+        for relative in ("CHANGELOG.md", "docs/releases/v0.1.md")
+        for blocker in _history_doc_blockers(repo_root, relative)
+    ]
     return {
         "status": "fail" if blockers else "pass",
         "blocking_reasons": blockers,
     }
 
 
-def audit_candidate(
-    repo_root: Path,
-    *,
-    allow_untracked_inputs: bool = False,
-    known_immutable_package_versions: set[str] | None = None,
+def _generated_bundles_check(
+    repo_root: Path, allow_untracked_inputs: bool
 ) -> dict[str, Any]:
-    """Audit repository readiness and enumerate release blockers without a score."""
+    try:
+        check_all(repo_root, allow_untracked_inputs=allow_untracked_inputs)
+    except ExportError as exc:
+        return {"status": "fail", "blocking_reasons": [str(exc)]}
+    return {"status": "pass", "blocking_reasons": []}
 
-    repository_checks: dict[str, Any] = {
+
+def _repository_checks(repo_root: Path, allow_untracked_inputs: bool) -> dict[str, Any]:
+    return {
         "package": _audit_package(repo_root),
         "registry": audit_registry(repo_root),
         "history_docs": _audit_history_docs(repo_root),
+        "generated_bundles": _generated_bundles_check(
+            repo_root, allow_untracked_inputs
+        ),
     }
-    try:
-        check_all(repo_root, allow_untracked_inputs=allow_untracked_inputs)
-        repository_checks["generated_bundles"] = {
-            "status": "pass",
-            "blocking_reasons": [],
-        }
-    except ExportError as exc:
-        repository_checks["generated_bundles"] = {
-            "status": "fail",
-            "blocking_reasons": [str(exc)],
-        }
-    version_report = audit_versions(repo_root)
-    repository_blockers = sorted(
-        blocker
-        for check in repository_checks.values()
-        for blocker in check["blocking_reasons"]
+
+
+def _check_blockers(checks: Mapping[str, Any]) -> list[str]:
+    return sorted(
+        blocker for check in checks.values() for blocker in check["blocking_reasons"]
     )
-    release_blockers = list(version_report["blocking_reasons"])
-    immutable = known_immutable_package_versions or set()
-    version = str(version_report["candidate_version"])
-    if version in immutable:
-        release_blockers.append(
-            f"immutable package version {version} already exists; "
-            "select a new owner-approved version"
-        )
-    all_blockers = sorted(repository_blockers + release_blockers)
-    candidate_id = f"candidate-{version}-{version_report['source_revision'][:12]}"
-    artifact_digests: dict[str, str] = {}
+
+
+def _immutable_version_blockers(
+    version: str, known_versions: set[str] | None
+) -> list[str]:
+    if version not in (known_versions or set()):
+        return []
+    return [
+        f"immutable package version {version} already exists; "
+        "select a new owner-approved version"
+    ]
+
+
+def _artifact_digests(repo_root: Path) -> dict[str, str]:
+    digests: dict[str, str] = {}
     for platform, relative in (
         ("claude", "integrations/claude-code/seshat-bi/bundle-manifest.json"),
         ("codex", "integrations/codex/seshat-bi/bundle-manifest.json"),
     ):
         path = repo_root / relative
-        if path.is_file():
-            manifest = json.loads(path.read_text(encoding="utf-8"))
-            digest = manifest.get("manifest_digest")
-            if isinstance(digest, str):
-                artifact_digests[f"{platform}-bundle-manifest"] = digest
-    surface_status = {
+        if not path.is_file():
+            continue
+        digest = json.loads(path.read_text(encoding="utf-8")).get("manifest_digest")
+        if isinstance(digest, str):
+            digests[f"{platform}-bundle-manifest"] = digest
+    return digests
+
+
+def _surface_status(blocked: bool) -> dict[str, Any]:
+    coordinated_status = "blocked" if blocked else "unverified"
+    return {
         "schema_version": "1.0",
         "surfaces": {
             "python_pypi": {
@@ -202,11 +230,53 @@ def audit_candidate(
                 "reason": "no owner-approved OpenAI plugin submission was performed",
             },
         },
-        "coordinated_release_status": "blocked" if all_blockers else "unverified",
+        "coordinated_release_status": coordinated_status,
         "summary": (
             "Repository candidate evidence only; public surfaces remain unverified."
         ),
     }
+
+
+def _evidence_manifest(report: Mapping[str, Any]) -> dict[str, Any]:
+    checks = report["repository_checks"]
+    return {
+        "schema_version": "1.0",
+        "candidate_id": report["candidate_id"],
+        "version": report["candidate_version"],
+        "source_revision": report["source_revision"],
+        "artifact_digests": report["artifact_digests"],
+        "repository_check_statuses": {
+            name: check["status"] for name, check in checks.items()
+        },
+        "surface_availability": report["surface_availability"],
+        "publication_approval": None,
+        "authority_disclaimer": (
+            "Sanitized evidence only; no version, configuration, publication, "
+            "submission, tag, release, or rollback action is approved."
+        ),
+    }
+
+
+def audit_candidate(
+    repo_root: Path,
+    *,
+    allow_untracked_inputs: bool = False,
+    known_immutable_package_versions: set[str] | None = None,
+) -> dict[str, Any]:
+    """Audit repository readiness and enumerate release blockers without a score."""
+
+    repository_checks = _repository_checks(repo_root, allow_untracked_inputs)
+    version_report = audit_versions(repo_root)
+    repository_blockers = _check_blockers(repository_checks)
+    release_blockers = list(version_report["blocking_reasons"])
+    version = str(version_report["candidate_version"])
+    release_blockers.extend(
+        _immutable_version_blockers(version, known_immutable_package_versions)
+    )
+    all_blockers = sorted(repository_blockers + release_blockers)
+    candidate_id = f"candidate-{version}-{version_report['source_revision'][:12]}"
+    artifact_digests = _artifact_digests(repo_root)
+    surface_status = _surface_status(bool(all_blockers))
     report = {
         "schema_version": "1.0",
         "candidate_id": candidate_id,
@@ -225,22 +295,7 @@ def audit_candidate(
             "catalog, submission, or rollback approval."
         ),
     }
-    report["evidence_manifest"] = {
-        "schema_version": "1.0",
-        "candidate_id": candidate_id,
-        "version": version,
-        "source_revision": version_report["source_revision"],
-        "artifact_digests": artifact_digests,
-        "repository_check_statuses": {
-            name: check["status"] for name, check in repository_checks.items()
-        },
-        "surface_availability": surface_status,
-        "publication_approval": None,
-        "authority_disclaimer": (
-            "Sanitized evidence only; no version, configuration, publication, "
-            "submission, tag, release, or rollback action is approved."
-        ),
-    }
+    report["evidence_manifest"] = _evidence_manifest(report)
     return report
 
 

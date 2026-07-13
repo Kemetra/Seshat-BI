@@ -7,6 +7,7 @@ an artifact, or convert a factual check into a readiness score.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
@@ -65,6 +66,31 @@ class EvidenceValidationError(ValueError):
     """Evidence is incomplete, ambiguous, or outside the safe contract."""
 
 
+@dataclass(frozen=True)
+class ApprovalScope:
+    candidate_id: str | None = None
+    version: str | None = None
+    source_revision: str | None = None
+    artifact_digests: Mapping[str, str] | None = None
+    action: str | None = None
+
+
+@dataclass(frozen=True)
+class AuthorizationRequest:
+    scope: ApprovalScope
+    used_approval_ids: set[str] | frozenset[str] = frozenset()
+    at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class RollbackAuthorizationRequest:
+    version: str
+    source_revision: str
+    artifact_digests: Mapping[str, str]
+    used_approval_ids: set[str] | frozenset[str] = frozenset()
+    at: datetime | None = None
+
+
 def _require_mapping(record: object, label: str) -> Mapping[str, Any]:
     if not isinstance(record, Mapping):
         raise EvidenceValidationError(f"{label} must be an object")
@@ -79,7 +105,9 @@ def _require_fields(record: Mapping[str, Any], fields: set[str]) -> None:
 
 def _require_text(record: Mapping[str, Any], field: str) -> str:
     value = record.get(field)
-    if not isinstance(value, str) or not value.strip():
+    if not isinstance(value, str):
+        raise EvidenceValidationError(f"{field} must be non-empty text")
+    if not value.strip():
         raise EvidenceValidationError(f"{field} must be non-empty text")
     return value
 
@@ -103,13 +131,31 @@ def _require_artifact_digests(
     record: Mapping[str, Any], field: str = "artifact_digests"
 ) -> Mapping[str, str]:
     value = record.get(field)
-    if not isinstance(value, Mapping) or not value:
+    if not isinstance(value, Mapping):
+        raise EvidenceValidationError(f"{field} must be a non-empty object")
+    if not value:
         raise EvidenceValidationError(f"{field} must be a non-empty object")
     for name, digest in value.items():
-        if not isinstance(name, str) or not name.strip() or not isinstance(digest, str):
-            raise EvidenceValidationError(f"{field} contains an invalid entry")
-        if _SHA256.fullmatch(digest) is None:
-            raise EvidenceValidationError(f"artifact digest for {name} must be SHA-256")
+        _validate_artifact_digest(name, digest, field)
+    return value
+
+
+def _validate_artifact_digest(name: object, digest: object, field: str) -> None:
+    if not isinstance(name, str):
+        raise EvidenceValidationError(f"{field} contains an invalid entry")
+    if not name.strip():
+        raise EvidenceValidationError(f"{field} contains an invalid entry")
+    if not isinstance(digest, str):
+        raise EvidenceValidationError(f"{field} contains an invalid entry")
+    if _SHA256.fullmatch(digest) is None:
+        raise EvidenceValidationError(f"artifact digest for {name} must be SHA-256")
+
+
+def _concrete_text(value: object, field: str) -> str:
+    if not isinstance(value, str):
+        raise EvidenceValidationError(f"{field} must be a list of concrete strings")
+    if not value.strip():
+        raise EvidenceValidationError(f"{field} must be a list of concrete strings")
     return value
 
 
@@ -117,27 +163,36 @@ def _require_text_list(
     record: Mapping[str, Any], field: str, *, allow_empty: bool = False
 ) -> list[str]:
     value = record.get(field)
-    if not isinstance(value, list) or any(
-        not isinstance(item, str) or not item.strip() for item in value
-    ):
+    if not isinstance(value, list):
         raise EvidenceValidationError(f"{field} must be a list of concrete strings")
-    if not value and not allow_empty:
-        raise EvidenceValidationError(f"{field} must not be empty")
-    return value
+    result = [_concrete_text(item, field) for item in value]
+    if result:
+        return result
+    if allow_empty:
+        return result
+    raise EvidenceValidationError(f"{field} must not be empty")
+
+
+def _reject_mapping_scores(value: Mapping[object, object], path: str) -> None:
+    for key, child in value.items():
+        if str(key).lower() in _PROHIBITED_SCORE_KEYS:
+            raise EvidenceValidationError(
+                f"{path}.{key} is prohibited; evidence uses status and blockers"
+            )
+        _reject_scores(child, f"{path}.{key}")
+
+
+def _reject_list_scores(value: list[object], path: str) -> None:
+    for index, child in enumerate(value):
+        _reject_scores(child, f"{path}[{index}]")
 
 
 def _reject_scores(value: object, path: str = "$") -> None:
     if isinstance(value, Mapping):
-        for key, child in value.items():
-            normalized = str(key).lower()
-            if normalized in _PROHIBITED_SCORE_KEYS:
-                raise EvidenceValidationError(
-                    f"{path}.{key} is prohibited; evidence uses status and blockers"
-                )
-            _reject_scores(child, f"{path}.{key}")
-    elif isinstance(value, list):
-        for index, child in enumerate(value):
-            _reject_scores(child, f"{path}[{index}]")
+        _reject_mapping_scores(value, path)
+        return
+    if isinstance(value, list):
+        _reject_list_scores(value, path)
 
 
 def _validate_status_and_blockers(
@@ -148,14 +203,22 @@ def _validate_status_and_blockers(
         raise EvidenceValidationError(
             f"status must be one of: {', '.join(sorted(allowed))}"
         )
-    blockers = record.get("blockers")
-    if not isinstance(blockers, list) or any(
-        not isinstance(item, str) or not item.strip() for item in blockers
-    ):
-        raise EvidenceValidationError("blockers must be a list of concrete strings")
-    if status in {"blocked", "fail"} and not blockers:
+    blockers = _require_text_list(record, "blockers", allow_empty=True)
+    _require_failure_blockers(status, blockers)
+    _reject_success_blockers(status, blockers)
+
+
+def _require_failure_blockers(status: object, blockers: list[str]) -> None:
+    if status not in {"blocked", "fail"}:
+        return
+    if not blockers:
         raise EvidenceValidationError(f"{status} evidence requires concrete blockers")
-    if status in {"validated", "pass", "approved", "completed"} and blockers:
+
+
+def _reject_success_blockers(status: object, blockers: list[str]) -> None:
+    if status not in {"validated", "pass", "approved", "completed"}:
+        return
+    if blockers:
         raise EvidenceValidationError(f"{status} evidence cannot retain blockers")
 
 
@@ -196,6 +259,41 @@ def validate_release_candidate(record: object) -> Mapping[str, Any]:
     return item
 
 
+def _require_acceptance_booleans(item: Mapping[str, Any]) -> None:
+    for field in (
+        "fresh_workspace",
+        "development_repo_available",
+        "human_gate_observed",
+        "secrets_or_pii_exposed",
+        "fabricated_score",
+    ):
+        if not isinstance(item.get(field), bool):
+            raise EvidenceValidationError(f"{field} must be boolean")
+
+
+def _validate_acceptance_safety(item: Mapping[str, Any]) -> None:
+    if item.get("fresh_workspace") is not True:
+        raise EvidenceValidationError("acceptance must use a fresh workspace")
+    if item.get("development_repo_available") is not False:
+        raise EvidenceValidationError("acceptance must hide the development repository")
+    if item.get("secrets_or_pii_exposed") is not False:
+        raise EvidenceValidationError("acceptance exposed secrets or PII")
+    if item.get("fabricated_score") is not False:
+        raise EvidenceValidationError("acceptance fabricated a readiness score")
+
+
+def _require_acceptance_text(item: Mapping[str, Any]) -> None:
+    for field in (
+        "run_id",
+        "candidate_id",
+        "client",
+        "fixture_id",
+        "observed_stage",
+        "next_action",
+    ):
+        _require_text(item, field)
+
+
 def validate_external_acceptance(record: object) -> Mapping[str, Any]:
     """Validate one external Claude/Codex acceptance observation."""
 
@@ -226,42 +324,89 @@ def validate_external_acceptance(record: object) -> Mapping[str, Any]:
         raise EvidenceValidationError("schema_version must be 1.0")
     if item.get("platform") not in {"claude-code", "codex"}:
         raise EvidenceValidationError("platform must be claude-code or codex")
-    for field in (
-        "fresh_workspace",
-        "development_repo_available",
-        "human_gate_observed",
-        "secrets_or_pii_exposed",
-        "fabricated_score",
-    ):
-        if not isinstance(item.get(field), bool):
-            raise EvidenceValidationError(f"{field} must be boolean")
-    if item.get("fresh_workspace") is not True:
-        raise EvidenceValidationError("acceptance must use a fresh workspace")
-    if item.get("development_repo_available") is not False:
-        raise EvidenceValidationError("acceptance must hide the development repository")
-    if item.get("secrets_or_pii_exposed") is not False:
-        raise EvidenceValidationError("acceptance exposed secrets or PII")
-    if item.get("fabricated_score") is not False:
-        raise EvidenceValidationError("acceptance fabricated a readiness score")
-    _require_text(item, "run_id")
-    _require_text(item, "candidate_id")
-    _require_text(item, "client")
-    _require_text(item, "fixture_id")
-    _require_text(item, "observed_stage")
-    _require_text(item, "next_action")
+    _require_acceptance_booleans(item)
+    _validate_acceptance_safety(item)
+    _require_acceptance_text(item)
     _validate_status_and_blockers(item, allowed={"fail", "pass"})
     _require_timestamp(item, "recorded_at")
     return item
 
 
+def _validate_approval_scope(item: Mapping[str, Any], scope: ApprovalScope) -> None:
+    expected = {
+        "candidate_id": scope.candidate_id,
+        "version": scope.version,
+        "source_revision": scope.source_revision,
+        "action": scope.action,
+    }
+    for field, value in expected.items():
+        _validate_scope_field(item, field, value)
+
+
+def _validate_scope_field(
+    item: Mapping[str, Any], field: str, expected: str | None
+) -> None:
+    if expected is None:
+        return
+    if item.get(field) != expected:
+        raise EvidenceValidationError(
+            f"approval {field} does not match the requested action scope"
+        )
+
+
+def _validate_approval_digests(
+    recorded: Mapping[str, str], expected: Mapping[str, str] | None
+) -> None:
+    if expected is None:
+        return
+    if dict(recorded) != dict(expected):
+        raise EvidenceValidationError(
+            "approval artifact_digests do not match the requested action scope"
+        )
+
+
+def _require_semver(item: Mapping[str, Any], field: str = "version") -> str:
+    version = _require_text(item, field)
+    if _SEMVER.fullmatch(version) is None:
+        raise EvidenceValidationError(f"{field} must be SemVer")
+    return version
+
+
+def _require_revision(item: Mapping[str, Any]) -> str:
+    revision = _require_text(item, "source_revision")
+    if _FULL_SHA.fullmatch(revision) is None:
+        raise EvidenceValidationError(
+            "source_revision must be a full lowercase Git SHA"
+        )
+    return revision
+
+
+def _require_approval_text(item: Mapping[str, Any]) -> None:
+    for field in (
+        "approval_id",
+        "candidate_id",
+        "approver",
+        "scope",
+        "authority_disclaimer",
+    ):
+        _require_text(item, field)
+
+
+def _validate_approval_action(item: Mapping[str, Any]) -> None:
+    action = _require_text(item, "action")
+    if action not in PUBLICATION_ACTIONS:
+        raise EvidenceValidationError("action is not an allowed owner-only action")
+
+
+def _validate_approval_window(item: Mapping[str, Any]) -> None:
+    approved_at = _require_timestamp(item, "approved_at")
+    expires_at = _require_timestamp(item, "expires_at")
+    if expires_at <= approved_at:
+        raise EvidenceValidationError("expires_at must be later than approved_at")
+
+
 def validate_publication_approval(
-    record: object,
-    *,
-    candidate_id: str | None = None,
-    version: str | None = None,
-    source_revision: str | None = None,
-    artifact_digests: Mapping[str, str] | None = None,
-    action: str | None = None,
+    record: object, scope: ApprovalScope | None = None
 ) -> Mapping[str, Any]:
     """Validate exact, named, action-scoped publication authority."""
 
@@ -289,85 +434,130 @@ def validate_publication_approval(
     )
     if item.get("schema_version") != "1.0":
         raise EvidenceValidationError("schema_version must be 1.0")
-    for field in (
-        "approval_id",
-        "candidate_id",
-        "approver",
-        "scope",
-        "authority_disclaimer",
-    ):
-        _require_text(item, field)
-    recorded_version = _require_text(item, "version")
-    if _SEMVER.fullmatch(recorded_version) is None:
-        raise EvidenceValidationError("version must be SemVer")
-    recorded_revision = _require_text(item, "source_revision")
-    if _FULL_SHA.fullmatch(recorded_revision) is None:
-        raise EvidenceValidationError(
-            "source_revision must be a full lowercase Git SHA"
-        )
+    _require_approval_text(item)
+    _require_semver(item)
+    _require_revision(item)
     recorded_digests = _require_artifact_digests(item)
-    recorded_action = _require_text(item, "action")
-    if recorded_action not in PUBLICATION_ACTIONS:
-        raise EvidenceValidationError("action is not an allowed owner-only action")
+    _validate_approval_action(item)
     if item.get("status") != "approved":
         raise EvidenceValidationError("status must be approved")
-    approved_at = _require_timestamp(item, "approved_at")
-    expires_at = _require_timestamp(item, "expires_at")
-    if expires_at <= approved_at:
-        raise EvidenceValidationError("expires_at must be later than approved_at")
+    _validate_approval_window(item)
     _require_text_list(item, "evidence_reviewed")
     _require_text_list(item, "constraints", allow_empty=True)
-    expected = {
-        "candidate_id": candidate_id,
-        "version": version,
-        "source_revision": source_revision,
-        "action": action,
-    }
-    for field, value in expected.items():
-        if value is not None and item.get(field) != value:
-            raise EvidenceValidationError(
-                f"approval {field} does not match the requested action scope"
-            )
-    if artifact_digests is not None and dict(recorded_digests) != dict(
-        artifact_digests
-    ):
-        raise EvidenceValidationError(
-            "approval artifact_digests do not match the requested action scope"
-        )
+    resolved_scope = scope or ApprovalScope()
+    _validate_approval_scope(item, resolved_scope)
+    _validate_approval_digests(recorded_digests, resolved_scope.artifact_digests)
     return item
 
 
+def _require_complete_authorization_scope(scope: ApprovalScope) -> None:
+    required = {
+        "candidate_id": scope.candidate_id,
+        "version": scope.version,
+        "source_revision": scope.source_revision,
+        "artifact_digests": scope.artifact_digests,
+        "action": scope.action,
+    }
+    missing = sorted(field for field, value in required.items() if value is None)
+    if missing:
+        raise EvidenceValidationError(
+            "authorization request must bind the exact action scope; missing: "
+            + ", ".join(missing)
+        )
+
+
 def validate_action_authorization(
-    record: object,
-    *,
-    candidate_id: str,
-    version: str,
-    source_revision: str,
-    artifact_digests: Mapping[str, str],
-    action: str,
-    used_approval_ids: set[str] | frozenset[str] = frozenset(),
-    at: datetime | None = None,
+    record: object, request: AuthorizationRequest
 ) -> Mapping[str, Any]:
     """Validate a still-current, unused approval for one exact action."""
 
-    item = validate_publication_approval(
-        record,
-        candidate_id=candidate_id,
-        version=version,
-        source_revision=source_revision,
-        artifact_digests=artifact_digests,
-        action=action,
-    )
+    _require_complete_authorization_scope(request.scope)
+    item = validate_publication_approval(record, request.scope)
     approval_id = str(item["approval_id"])
-    if approval_id in used_approval_ids:
+    if approval_id in request.used_approval_ids:
         raise EvidenceValidationError(
             "approval was already consumed and cannot authorize another action"
         )
-    checked_at = at or datetime.now(timezone.utc)
+    checked_at = request.at or datetime.now(timezone.utc)
     expires_at = _require_timestamp(item, "expires_at")
     if expires_at <= checked_at:
         raise EvidenceValidationError("approval has expired")
     return item
+
+
+_SURFACE_STATUSES = {"available", "unavailable", "unverified", "blocked"}
+
+
+def _validate_surface(name: str, raw: object) -> Mapping[str, Any]:
+    surface = _require_mapping(raw, f"surface {name}")
+    status = surface.get("status")
+    if status not in _SURFACE_STATUSES:
+        raise EvidenceValidationError(
+            f"surface {name} status must be available, unavailable, "
+            "unverified, or blocked"
+        )
+    _require_surface_reason(name, status, surface.get("reason"))
+    return surface
+
+
+def _require_surface_reason(name: str, status: object, reason: object) -> None:
+    if status == "available":
+        return
+    if not isinstance(reason, str):
+        raise EvidenceValidationError(
+            f"surface {name} {status} status requires a concrete reason"
+        )
+    if not reason.strip():
+        raise EvidenceValidationError(
+            f"surface {name} {status} status requires a concrete reason"
+        )
+
+
+def _validate_surfaces(item: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
+    raw_surfaces = _require_mapping(item.get("surfaces"), "surfaces")
+    if set(raw_surfaces) != PUBLIC_SURFACES:
+        raise EvidenceValidationError("availability must name every public surface")
+    return {name: _validate_surface(name, raw) for name, raw in raw_surfaces.items()}
+
+
+def _required_surfaces_available(
+    surfaces: Mapping[str, Mapping[str, Any]],
+) -> bool:
+    return all(
+        surfaces[name].get("status") == "available"
+        for name in COORDINATED_REQUIRED_SURFACES
+    )
+
+
+def _validate_coordinated_claim(
+    item: Mapping[str, Any], surfaces: Mapping[str, Mapping[str, Any]]
+) -> None:
+    coordinated = item.get("coordinated_release_status")
+    if coordinated not in _SURFACE_STATUSES:
+        raise EvidenceValidationError("coordinated_release_status is invalid")
+    required_available = _required_surfaces_available(surfaces)
+    _require_coordinated_surfaces(coordinated, required_available)
+    _reject_full_launch_claim(_require_text(item, "summary"), required_available)
+
+
+def _require_coordinated_surfaces(
+    coordinated: object, required_available: bool
+) -> None:
+    if coordinated != "available":
+        return
+    if not required_available:
+        raise EvidenceValidationError(
+            "coordinated release cannot be available while a required surface is not"
+        )
+
+
+def _reject_full_launch_claim(summary: str, required_available: bool) -> None:
+    if required_available:
+        return
+    if "full launch" in summary.casefold():
+        raise EvidenceValidationError(
+            "partial availability must not be described as a full launch"
+        )
 
 
 def validate_surface_availability(record: object) -> Mapping[str, Any]:
@@ -386,42 +576,36 @@ def validate_surface_availability(record: object) -> Mapping[str, Any]:
     )
     if item.get("schema_version") != "1.0":
         raise EvidenceValidationError("schema_version must be 1.0")
-    surfaces = _require_mapping(item.get("surfaces"), "surfaces")
-    if set(surfaces) != PUBLIC_SURFACES:
-        raise EvidenceValidationError("availability must name every public surface")
-    allowed = {"available", "unavailable", "unverified", "blocked"}
-    for name, raw in surfaces.items():
-        surface = _require_mapping(raw, f"surface {name}")
-        status = surface.get("status")
-        if status not in allowed:
-            raise EvidenceValidationError(
-                f"surface {name} status must be available, unavailable, "
-                "unverified, or blocked"
-            )
-        reason = surface.get("reason")
-        if status != "available" and (
-            not isinstance(reason, str) or not reason.strip()
-        ):
-            raise EvidenceValidationError(
-                f"surface {name} {status} status requires a concrete reason"
-            )
-    coordinated = item.get("coordinated_release_status")
-    if coordinated not in allowed:
-        raise EvidenceValidationError("coordinated_release_status is invalid")
-    required_available = all(
-        surfaces[name].get("status") == "available"
-        for name in COORDINATED_REQUIRED_SURFACES
-    )
-    summary = _require_text(item, "summary")
-    if coordinated == "available" and not required_available:
-        raise EvidenceValidationError(
-            "coordinated release cannot be available while a required surface is not"
-        )
-    if not required_available and "full launch" in summary.casefold():
-        raise EvidenceValidationError(
-            "partial availability must not be described as a full launch"
-        )
+    _validate_coordinated_claim(item, _validate_surfaces(item))
     return item
+
+
+def _require_rollback_text(item: Mapping[str, Any]) -> None:
+    for field in (
+        "rollback_id",
+        "candidate_id",
+        "surface",
+        "trigger",
+        "actor",
+        "action",
+        "approval_id",
+    ):
+        _require_text(item, field)
+
+
+def _validate_rollback_action(item: Mapping[str, Any]) -> None:
+    surface = _require_text(item, "surface")
+    if surface not in ROLLBACK_ACTIONS_BY_SURFACE:
+        raise EvidenceValidationError("rollback surface is not a public surface")
+    action = str(item.get("action"))
+    if action not in PUBLICATION_ACTIONS:
+        raise EvidenceValidationError(
+            "rollback action must match the affected public surface"
+        )
+    if action not in ROLLBACK_ACTIONS_BY_SURFACE[surface]:
+        raise EvidenceValidationError(
+            "rollback action must match the affected public surface"
+        )
 
 
 def validate_rollback_record(record: object) -> Mapping[str, Any]:
@@ -447,27 +631,8 @@ def validate_rollback_record(record: object) -> Mapping[str, Any]:
     )
     if item.get("schema_version") != "1.0":
         raise EvidenceValidationError("schema_version must be 1.0")
-    for field in (
-        "rollback_id",
-        "candidate_id",
-        "surface",
-        "trigger",
-        "actor",
-        "action",
-        "approval_id",
-    ):
-        _require_text(item, field)
-    surface = _require_text(item, "surface")
-    if surface not in ROLLBACK_ACTIONS_BY_SURFACE:
-        raise EvidenceValidationError("rollback surface is not a public surface")
-    action = str(item.get("action"))
-    if (
-        action not in PUBLICATION_ACTIONS
-        or action not in ROLLBACK_ACTIONS_BY_SURFACE[surface]
-    ):
-        raise EvidenceValidationError(
-            "rollback action must match the affected public surface"
-        )
+    _require_rollback_text(item)
+    _validate_rollback_action(item)
     _validate_status_and_blockers(item, allowed={"blocked", "completed"})
     _require_timestamp(item, "recorded_at")
     return item
@@ -476,25 +641,24 @@ def validate_rollback_record(record: object) -> Mapping[str, Any]:
 def validate_rollback_authorization(
     rollback_record: object,
     approval_record: object,
-    *,
-    version: str,
-    source_revision: str,
-    artifact_digests: Mapping[str, str],
-    used_approval_ids: set[str] | frozenset[str] = frozenset(),
-    at: datetime | None = None,
+    request: RollbackAuthorizationRequest,
 ) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
     """Bind rollback evidence to a fresh approval for that affected surface."""
 
     rollback = validate_rollback_record(rollback_record)
     approval = validate_action_authorization(
         approval_record,
-        candidate_id=str(rollback["candidate_id"]),
-        version=version,
-        source_revision=source_revision,
-        artifact_digests=artifact_digests,
-        action=str(rollback["action"]),
-        used_approval_ids=used_approval_ids,
-        at=at,
+        AuthorizationRequest(
+            scope=ApprovalScope(
+                candidate_id=str(rollback["candidate_id"]),
+                version=request.version,
+                source_revision=request.source_revision,
+                artifact_digests=request.artifact_digests,
+                action=str(rollback["action"]),
+            ),
+            used_approval_ids=request.used_approval_ids,
+            at=request.at,
+        ),
     )
     if rollback.get("approval_id") != approval.get("approval_id"):
         raise EvidenceValidationError(

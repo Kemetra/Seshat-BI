@@ -10,6 +10,7 @@ import pytest
 from scripts.release_candidate_audit import audit_candidate
 from seshat.release_evidence import (
     EvidenceValidationError,
+    RollbackAuthorizationRequest,
     validate_rollback_authorization,
     validate_surface_availability,
 )
@@ -59,10 +60,12 @@ def test_rollback_is_surface_scoped_and_replacement_is_not_authorized() -> None:
     validate_rollback_authorization(
         rollback,
         approval,
-        version="0.2.0",
-        source_revision=SOURCE_REVISION,
-        artifact_digests=ARTIFACT_DIGESTS,
-        at=datetime(2026, 7, 13, 12, tzinfo=timezone.utc),
+        RollbackAuthorizationRequest(
+            version="0.2.0",
+            source_revision=SOURCE_REVISION,
+            artifact_digests=ARTIFACT_DIGESTS,
+            at=datetime(2026, 7, 13, 12, tzinfo=timezone.utc),
+        ),
     )
 
     reused = copy.deepcopy(approval)
@@ -71,8 +74,10 @@ def test_rollback_is_surface_scoped_and_replacement_is_not_authorized() -> None:
         validate_rollback_authorization(
             rollback,
             reused,
-            version="0.2.0",
-            source_revision=SOURCE_REVISION,
-            artifact_digests=ARTIFACT_DIGESTS,
-            at=datetime(2026, 7, 13, 12, tzinfo=timezone.utc),
+            RollbackAuthorizationRequest(
+                version="0.2.0",
+                source_revision=SOURCE_REVISION,
+                artifact_digests=ARTIFACT_DIGESTS,
+                at=datetime(2026, 7, 13, 12, tzinfo=timezone.utc),
+            ),
         )

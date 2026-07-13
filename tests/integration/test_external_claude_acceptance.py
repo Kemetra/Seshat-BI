@@ -9,6 +9,7 @@ import pytest
 import scripts.external_agent_acceptance as acceptance
 from scripts.external_agent_acceptance import (
     AcceptanceError,
+    CliRequest,
     _ensure_isolated,
     classify_transcript,
     execute_cli,
@@ -72,10 +73,7 @@ def test_cli_execution_uses_the_isolated_installed_plugin_not_the_dev_tree(
     workspace = tmp_path / "workspace"
     execute_cli(
         ROOT,
-        platform="claude-code",
-        profile=profile,
-        workspace=workspace,
-        timeout=30,
+        CliRequest("claude-code", profile, workspace, 30),
     )
     command = [str(item) for item in captured["command"]]
     assert "--plugin-dir" not in command

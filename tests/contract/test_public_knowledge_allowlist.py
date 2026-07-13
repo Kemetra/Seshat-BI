@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from scripts.export_agent_bundles import (
+    BuildOptions,
     ExportError,
     build_bundle,
     load_allowlist,
@@ -77,7 +78,7 @@ def test_secret_marker_is_rejected_before_export(tmp_path: Path) -> None:
                 ROOT,
                 "claude",
                 tmp_path / "bundle",
-                allow_untracked_inputs=True,
+                BuildOptions(allow_untracked_inputs=True),
             )
     finally:
         source.write_bytes(original)
@@ -99,7 +100,7 @@ def test_missing_transitive_markdown_reference_fails_closed(tmp_path: Path) -> N
                 ROOT,
                 "codex",
                 tmp_path / "bundle",
-                allow_untracked_inputs=True,
+                BuildOptions(allow_untracked_inputs=True),
             )
     finally:
         source.write_bytes(original)

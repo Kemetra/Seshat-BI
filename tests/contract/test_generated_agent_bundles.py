@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -7,7 +8,9 @@ from pathlib import Path
 import pytest
 
 from scripts.export_agent_bundles import (
+    BuildOptions,
     ExportError,
+    _normalize_text,
     build_bundle,
     check_all,
     compare_bundle_trees,
@@ -26,15 +29,13 @@ def test_two_exports_have_identical_paths_and_bytes(tmp_path: Path) -> None:
         ROOT,
         "claude",
         first,
-        source_revision="0" * 40,
-        allow_untracked_inputs=True,
+        BuildOptions(source_revision="0" * 40, allow_untracked_inputs=True),
     )
     build_bundle(
         ROOT,
         "claude",
         second,
-        source_revision="0" * 40,
-        allow_untracked_inputs=True,
+        BuildOptions(source_revision="0" * 40, allow_untracked_inputs=True),
     )
     first_files = {
         path.relative_to(first): path.read_bytes()
@@ -54,15 +55,13 @@ def test_manifest_digest_and_cross_target_provenance(tmp_path: Path) -> None:
         ROOT,
         "claude",
         tmp_path / "claude",
-        source_revision="0" * 40,
-        allow_untracked_inputs=True,
+        BuildOptions(source_revision="0" * 40, allow_untracked_inputs=True),
     )
     codex = build_bundle(
         ROOT,
         "codex",
         tmp_path / "codex",
-        source_revision="0" * 40,
-        allow_untracked_inputs=True,
+        BuildOptions(source_revision="0" * 40, allow_untracked_inputs=True),
     )
     assert len(claude["manifest_digest"]) == 64
     compare_shared_provenance(claude, codex)
@@ -74,6 +73,19 @@ def test_manifest_digest_and_cross_target_provenance(tmp_path: Path) -> None:
     canonical_entry["output_sha256"] = "f" * 64
     with pytest.raises(ExportError, match="provenance differs"):
         compare_shared_provenance(claude, codex)
+
+
+def test_source_digests_use_normalized_bytes(tmp_path: Path) -> None:
+    manifest = build_bundle(
+        ROOT,
+        "claude",
+        tmp_path / "claude",
+        BuildOptions(source_revision="0" * 40, allow_untracked_inputs=True),
+    )
+    for entry in manifest["entries"]:
+        source = (ROOT / entry["source"]).read_bytes()
+        expected = hashlib.sha256(_normalize_text(source)).hexdigest()
+        assert entry["source_sha256"] == expected
 
 
 def test_committed_bundle_check_rejects_hand_edit_or_unexpected_file(

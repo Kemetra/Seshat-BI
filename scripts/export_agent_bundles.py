@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tempfile
 import tomllib
+from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any, Iterable, Mapping
 
@@ -54,6 +55,31 @@ class ExportError(ValueError):
     """An allowlist or generated bundle violates the public export contract."""
 
 
+@dataclass
+class _AllowlistState:
+    tracked: set[str]
+    allow_untracked_inputs: bool
+    seen_ids: set[str] = field(default_factory=set)
+    seen_sources: set[str] = field(default_factory=set)
+    destinations: dict[str, set[str]] = field(
+        default_factory=lambda: {target: set() for target in TARGET_ROOTS}
+    )
+
+
+@dataclass(frozen=True)
+class BuildOptions:
+    source_revision: str | None = None
+    allow_untracked_inputs: bool = False
+
+
+@dataclass(frozen=True)
+class _BundleContext:
+    repo_root: Path
+    target: str
+    output_root: Path
+    version: str
+
+
 def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -71,17 +97,46 @@ def _normalize_text(data: bytes) -> bytes:
     return normalized.encode("utf-8")
 
 
-def _safe_relative_path(value: object, *, label: str) -> str:
-    if not isinstance(value, str) or not value:
+def _path_text(value: object, label: str) -> str:
+    if not isinstance(value, str):
         raise ExportError(f"{label} must be a non-empty repository-relative path")
-    if "\\" in value or any(char in value for char in "*?"):
-        raise ExportError(f"{label} must be a literal POSIX path: {value!r}")
-    path = PurePosixPath(value)
-    if path.is_absolute() or ".." in path.parts or "." in path.parts:
-        raise ExportError(f"{label} escapes its allowed root: {value!r}")
-    if path.parts and ":" in path.parts[0]:
-        raise ExportError(f"{label} contains a drive prefix: {value!r}")
+    if not value:
+        raise ExportError(f"{label} must be a non-empty repository-relative path")
     return value
+
+
+def _reject_path_metacharacters(value: str, label: str) -> None:
+    if "\\" in value:
+        raise ExportError(f"{label} must be a literal POSIX path: {value!r}")
+    if "*" in value:
+        raise ExportError(f"{label} must be a literal POSIX path: {value!r}")
+    if "?" in value:
+        raise ExportError(f"{label} must be a literal POSIX path: {value!r}")
+
+
+def _reject_path_escape(path: PurePosixPath, value: str, label: str) -> None:
+    if path.is_absolute():
+        raise ExportError(f"{label} escapes its allowed root: {value!r}")
+    if ".." in path.parts:
+        raise ExportError(f"{label} escapes its allowed root: {value!r}")
+    if "." in path.parts:
+        raise ExportError(f"{label} escapes its allowed root: {value!r}")
+
+
+def _reject_drive_prefix(path: PurePosixPath, value: str, label: str) -> None:
+    if not path.parts:
+        return
+    if ":" in path.parts[0]:
+        raise ExportError(f"{label} contains a drive prefix: {value!r}")
+
+
+def _safe_relative_path(value: object, *, label: str) -> str:
+    text = _path_text(value, label)
+    _reject_path_metacharacters(text, label)
+    path = PurePosixPath(text)
+    _reject_path_escape(path, text, label)
+    _reject_drive_prefix(path, text, label)
+    return text
 
 
 def _git_paths(repo_root: Path) -> set[str]:
@@ -118,17 +173,137 @@ def load_allowlist(repo_root: Path, path: Path | None = None) -> dict[str, Any]:
     return document
 
 
+def _entry_mapping(entry: object, section: str) -> Mapping[str, Any]:
+    if not isinstance(entry, Mapping):
+        raise ExportError(f"{section} entries must be objects")
+    return entry
+
+
+def _section_entries(
+    document: Mapping[str, Any], section: str
+) -> list[Mapping[str, Any]]:
+    value = document.get(section)
+    if not isinstance(value, list):
+        raise ExportError(f"{section} must be a list")
+    return [_entry_mapping(entry, section) for entry in value]
+
+
 def _all_entries(document: Mapping[str, Any]) -> list[Mapping[str, Any]]:
-    entries: list[Mapping[str, Any]] = []
-    for section in ("entries", "template_entries"):
-        value = document.get(section)
-        if not isinstance(value, list):
-            raise ExportError(f"{section} must be a list")
-        for entry in value:
-            if not isinstance(entry, Mapping):
-                raise ExportError(f"{section} entries must be objects")
-            entries.append(entry)
-    return entries
+    return _section_entries(document, "entries") + _section_entries(
+        document, "template_entries"
+    )
+
+
+def _validate_allowlist_header(document: Mapping[str, Any]) -> set[str]:
+    if document.get("schema_version") != 1:
+        raise ExportError("allowlist schema_version must be 1")
+    if document.get("canonical_repository") != "ahmed-shaaban-94/Seshat_BI":
+        raise ExportError("allowlist canonical_repository is not Seshat_BI")
+    roots = document.get("canonical_roots")
+    if not isinstance(roots, list):
+        raise ExportError("allowlist must declare the five canonical entrypoints")
+    if len(roots) != 5:
+        raise ExportError("allowlist must declare the five canonical entrypoints")
+    root_set = {_safe_relative_path(item, label="canonical root") for item in roots}
+    if root_set != CANONICAL_ROOTS:
+        raise ExportError("allowlist canonical_roots must match the five Seshat skills")
+    return root_set
+
+
+def _unique_entry_id(entry: Mapping[str, Any], state: _AllowlistState) -> str:
+    entry_id = entry.get("entry_id", entry.get("template_id"))
+    if not isinstance(entry_id, str):
+        raise ExportError("every allowlist/template entry needs a unique stable ID")
+    if not entry_id:
+        raise ExportError("every allowlist/template entry needs a unique stable ID")
+    if entry_id in state.seen_ids:
+        raise ExportError("every allowlist/template entry needs a unique stable ID")
+    state.seen_ids.add(entry_id)
+    return entry_id
+
+
+def _path_contains_symlink(repo_root: Path, source: str) -> bool:
+    cursor = repo_root
+    for part in PurePosixPath(source).parts:
+        cursor /= part
+        if cursor.is_symlink():
+            return True
+    return False
+
+
+def _require_source_tracked(source: str, state: _AllowlistState) -> None:
+    if source in state.tracked:
+        return
+    if not state.allow_untracked_inputs:
+        raise ExportError(f"allowlisted source is not tracked by Git: {source}")
+
+
+def _validate_source(
+    repo_root: Path,
+    entry: Mapping[str, Any],
+    entry_id: str,
+    state: _AllowlistState,
+) -> str:
+    source = _safe_relative_path(entry.get("source"), label=f"{entry_id} source")
+    if source in state.seen_sources:
+        raise ExportError(f"duplicate allowlisted source: {source}")
+    state.seen_sources.add(source)
+    source_path = repo_root / Path(source)
+    if not source_path.is_file():
+        raise ExportError(f"allowlisted source is missing or not a file: {source}")
+    if _path_contains_symlink(repo_root, source):
+        raise ExportError(f"allowlisted symlinks are prohibited: {source}")
+    _require_source_tracked(source, state)
+    return source
+
+
+def _validate_entry_policy(entry_id: str, entry: Mapping[str, Any]) -> None:
+    allowed_classifications = {
+        "generated_wrapper",
+        "public_knowledge",
+        "public_license",
+    }
+    if entry.get("classification") not in allowed_classifications:
+        raise ExportError(f"{entry_id} has an unreviewed classification")
+    if entry.get("media_type") not in ALLOWED_MEDIA_TYPES:
+        raise ExportError(f"{entry_id} has a prohibited media type")
+    if entry.get("transform") not in ALLOWED_TRANSFORMS:
+        raise ExportError(f"{entry_id} has an unknown transform")
+    if entry.get("required") is not True:
+        raise ExportError(f"{entry_id} must explicitly be required")
+    review_reason = entry.get("review_reason")
+    if not isinstance(review_reason, str):
+        raise ExportError(f"{entry_id} requires a public review reason")
+    if not review_reason.strip():
+        raise ExportError(f"{entry_id} requires a public review reason")
+
+
+def _record_destination(
+    entry_id: str,
+    target: object,
+    destination_value: object,
+    state: _AllowlistState,
+) -> None:
+    if target not in TARGET_ROOTS:
+        raise ExportError(f"{entry_id} names unsupported target {target!r}")
+    destination = _safe_relative_path(
+        destination_value, label=f"{entry_id} {target} destination"
+    )
+    if destination in state.destinations[target]:
+        raise ExportError(f"two sources collide at {target}/{destination}")
+    state.destinations[target].add(destination)
+
+
+def _record_destinations(
+    entry_id: str, entry: Mapping[str, Any], state: _AllowlistState
+) -> None:
+    targets = entry.get("targets")
+    if not isinstance(targets, Mapping):
+        raise ExportError(f"{entry_id} requires at least one target")
+    if not targets:
+        raise ExportError(f"{entry_id} requires at least one target")
+    for target, destination_value in targets.items():
+        _record_destination(entry_id, target, destination_value, state)
 
 
 def validate_allowlist(
@@ -140,75 +315,19 @@ def validate_allowlist(
 ) -> list[Mapping[str, Any]]:
     """Validate and return the stable list of reviewed allowlist entries."""
 
-    if document.get("schema_version") != 1:
-        raise ExportError("allowlist schema_version must be 1")
-    if document.get("canonical_repository") != "ahmed-shaaban-94/Seshat_BI":
-        raise ExportError("allowlist canonical_repository is not Seshat_BI")
-    roots = document.get("canonical_roots")
-    if not isinstance(roots, list) or len(roots) != 5:
-        raise ExportError("allowlist must declare the five canonical entrypoints")
-    root_set = {_safe_relative_path(item, label="canonical root") for item in roots}
-    if root_set != CANONICAL_ROOTS:
-        raise ExportError("allowlist canonical_roots must match the five Seshat skills")
+    root_set = _validate_allowlist_header(document)
     tracked = tracked_paths if tracked_paths is not None else _git_paths(repo_root)
     entries = _all_entries(document)
-    seen_ids: set[str] = set()
-    seen_sources: set[str] = set()
-    destinations: dict[str, set[str]] = {target: set() for target in TARGET_ROOTS}
+    state = _AllowlistState(
+        tracked=tracked, allow_untracked_inputs=allow_untracked_inputs
+    )
     for entry in entries:
-        entry_id = entry.get("entry_id", entry.get("template_id"))
-        if not isinstance(entry_id, str) or not entry_id or entry_id in seen_ids:
-            raise ExportError("every allowlist/template entry needs a unique stable ID")
-        seen_ids.add(entry_id)
-        source = _safe_relative_path(entry.get("source"), label=f"{entry_id} source")
-        source_path = repo_root / Path(source)
-        if source in seen_sources:
-            raise ExportError(f"duplicate allowlisted source: {source}")
-        seen_sources.add(source)
-        if not source_path.exists() or not source_path.is_file():
-            raise ExportError(f"allowlisted source is missing or not a file: {source}")
-        cursor = repo_root
-        source_has_symlink = False
-        for part in PurePosixPath(source).parts:
-            cursor /= part
-            if cursor.is_symlink():
-                source_has_symlink = True
-                break
-        if source_has_symlink:
-            raise ExportError(f"allowlisted symlinks are prohibited: {source}")
-        if source not in tracked and not allow_untracked_inputs:
-            raise ExportError(f"allowlisted source is not tracked by Git: {source}")
-        if entry.get("classification") not in {
-            "generated_wrapper",
-            "public_knowledge",
-            "public_license",
-        }:
-            raise ExportError(f"{entry_id} has an unreviewed classification")
-        if entry.get("media_type") not in ALLOWED_MEDIA_TYPES:
-            raise ExportError(f"{entry_id} has a prohibited media type")
-        if entry.get("transform") not in ALLOWED_TRANSFORMS:
-            raise ExportError(f"{entry_id} has an unknown transform")
-        if entry.get("required") is not True:
-            raise ExportError(f"{entry_id} must explicitly be required")
-        if (
-            not isinstance(entry.get("review_reason"), str)
-            or not str(entry.get("review_reason")).strip()
-        ):
-            raise ExportError(f"{entry_id} requires a public review reason")
-        targets = entry.get("targets")
-        if not isinstance(targets, Mapping) or not targets:
-            raise ExportError(f"{entry_id} requires at least one target")
-        for target, destination_value in targets.items():
-            if target not in TARGET_ROOTS:
-                raise ExportError(f"{entry_id} names unsupported target {target!r}")
-            destination = _safe_relative_path(
-                destination_value, label=f"{entry_id} {target} destination"
-            )
-            if destination in destinations[target]:
-                raise ExportError(f"two sources collide at {target}/{destination}")
-            destinations[target].add(destination)
-    if not root_set.issubset(seen_sources):
-        missing = sorted(root_set - seen_sources)
+        entry_id = _unique_entry_id(entry, state)
+        _validate_source(repo_root, entry, entry_id, state)
+        _validate_entry_policy(entry_id, entry)
+        _record_destinations(entry_id, entry, state)
+    if not root_set.issubset(state.seen_sources):
+        missing = sorted(root_set - state.seen_sources)
         raise ExportError(f"canonical entrypoints are not allowlisted: {missing}")
     return sorted(
         entries, key=lambda item: str(item.get("entry_id", item.get("template_id")))
@@ -227,82 +346,117 @@ def _render_entry(
 ) -> tuple[bytes, str]:
     source = str(entry["source"])
     raw = (repo_root / Path(source)).read_bytes()
-    normalized = _normalize_text(raw)
-    _scan_public_content(source, normalized)
+    normalized_source = _normalize_text(raw)
+    _scan_public_content(source, normalized_source)
+    rendered = normalized_source
     transform = str(entry["transform"])
     if transform == "template-substitute-version-v1":
-        normalized = normalized.replace(b"{{VERSION}}", version.encode("utf-8"))
-        if b"{{" in normalized or b"}}" in normalized:
+        rendered = rendered.replace(b"{{VERSION}}", version.encode("utf-8"))
+        if b"{{" in rendered:
             raise ExportError(f"unresolved template marker in {source}")
-    return normalized, _sha256(raw)
+        if b"}}" in rendered:
+            raise ExportError(f"unresolved template marker in {source}")
+    return rendered, _sha256(normalized_source)
+
+
+def _is_external_reference(reference: str) -> bool:
+    if not reference:
+        return True
+    return reference.startswith(("#", "http://", "https://", "mailto:"))
+
+
+def _validate_reference(bundle_root: Path, path: Path, reference: str) -> None:
+    if reference.startswith("/"):
+        raise ExportError(f"unsafe Markdown reference in {path}: {reference}")
+    if "\\" in reference:
+        raise ExportError(f"unsafe Markdown reference in {path}: {reference}")
+    resolved = (path.parent / reference).resolve()
+    try:
+        resolved.relative_to(bundle_root.resolve())
+    except ValueError as exc:
+        raise ExportError(
+            f"Markdown reference escapes generated bundle in {path}: {reference}"
+        ) from exc
+    if not resolved.exists():
+        raise ExportError(
+            f"unlisted or missing transitive reference in {path}: {reference}"
+        )
+
+
+def _validate_markdown_links(bundle_root: Path, path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    for match in _REFERENCE_RE.finditer(text):
+        reference = match.group(1).split("#", 1)[0].strip()
+        if not _is_external_reference(reference):
+            _validate_reference(bundle_root, path, reference)
 
 
 def _validate_links(bundle_root: Path) -> None:
     for path in bundle_root.rglob("*.md"):
-        text = path.read_text(encoding="utf-8")
-        for match in _REFERENCE_RE.finditer(text):
-            reference = match.group(1).split("#", 1)[0].strip()
-            if not reference or reference.startswith(
-                ("#", "http://", "https://", "mailto:")
-            ):
-                continue
-            if reference.startswith("/") or "\\" in reference:
-                raise ExportError(f"unsafe Markdown reference in {path}: {reference}")
-            resolved = (path.parent / reference).resolve()
-            try:
-                resolved.relative_to(bundle_root.resolve())
-            except ValueError as exc:
-                raise ExportError(
-                    "Markdown reference escapes generated bundle in "
-                    f"{path}: {reference}"
-                ) from exc
-            if not resolved.exists():
-                raise ExportError(
-                    f"unlisted or missing transitive reference in {path}: {reference}"
-                )
+        _validate_markdown_links(bundle_root, path)
+
+
+def _prepare_output_root(output_root: Path) -> None:
+    if output_root.exists():
+        shutil.rmtree(output_root)
+    output_root.mkdir(parents=True)
+
+
+def _write_bundle_entry(
+    context: _BundleContext, entry: Mapping[str, Any]
+) -> dict[str, str] | None:
+    targets = entry["targets"]
+    if context.target not in targets:
+        return None
+    destination = str(targets[context.target])
+    data, source_digest = _render_entry(
+        context.repo_root, entry, version=context.version
+    )
+    output = context.output_root / Path(destination)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_bytes(data)
+    return {
+        "classification": str(entry["classification"]),
+        "destination": destination,
+        "output_sha256": _sha256(data),
+        "source": str(entry["source"]),
+        "source_id": str(entry.get("entry_id", entry.get("template_id"))),
+        "source_sha256": source_digest,
+        "transform": str(entry["transform"]),
+    }
+
+
+def _manifest_entries(
+    context: _BundleContext, entries: Iterable[Mapping[str, Any]]
+) -> list[dict[str, str]]:
+    manifest_entries: list[dict[str, str]] = []
+    for entry in entries:
+        rendered = _write_bundle_entry(context, entry)
+        if rendered is not None:
+            manifest_entries.append(rendered)
+    return manifest_entries
 
 
 def build_bundle(
     repo_root: Path,
     target: str,
     output_root: Path,
-    *,
-    source_revision: str | None = None,
-    allow_untracked_inputs: bool = False,
+    options: BuildOptions | None = None,
 ) -> dict[str, Any]:
     """Build one target bundle and return its deterministic manifest."""
 
     if target not in TARGET_ROOTS:
         raise ExportError(f"unsupported target: {target}")
-    document = load_allowlist(repo_root)
+    resolved_options = options or BuildOptions()
     entries = validate_allowlist(
-        repo_root, document, allow_untracked_inputs=allow_untracked_inputs
+        repo_root,
+        load_allowlist(repo_root),
+        allow_untracked_inputs=resolved_options.allow_untracked_inputs,
     )
     version = _project_version(repo_root)
-    if output_root.exists():
-        shutil.rmtree(output_root)
-    output_root.mkdir(parents=True)
-    manifest_entries: list[dict[str, str]] = []
-    for entry in entries:
-        targets = entry["targets"]
-        if target not in targets:
-            continue
-        destination = str(targets[target])
-        data, source_digest = _render_entry(repo_root, entry, version=version)
-        output = output_root / Path(destination)
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_bytes(data)
-        manifest_entries.append(
-            {
-                "classification": str(entry["classification"]),
-                "destination": destination,
-                "output_sha256": _sha256(data),
-                "source": str(entry["source"]),
-                "source_id": str(entry.get("entry_id", entry.get("template_id"))),
-                "source_sha256": source_digest,
-                "transform": str(entry["transform"]),
-            }
-        )
+    _prepare_output_root(output_root)
+    context = _BundleContext(repo_root, target, output_root, version)
+    manifest_entries = _manifest_entries(context, entries)
     _validate_links(output_root)
     payload: dict[str, Any] = {
         "schema_version": "1.0",
@@ -310,7 +464,7 @@ def build_bundle(
         "target": target,
         "plugin": "seshat-bi",
         "version": version,
-        "source_revision": source_revision or _git_revision(repo_root),
+        "source_revision": resolved_options.source_revision or _git_revision(repo_root),
         "entries": sorted(manifest_entries, key=lambda item: item["destination"]),
     }
     payload["manifest_digest"] = _sha256(_canonical_json(payload))
@@ -378,7 +532,7 @@ def export_all(repo_root: Path, *, allow_untracked_inputs: bool = False) -> None
             repo_root,
             target,
             repo_root / relative_root,
-            allow_untracked_inputs=allow_untracked_inputs,
+            BuildOptions(allow_untracked_inputs=allow_untracked_inputs),
         )
     compare_shared_provenance(manifests["claude"], manifests["codex"])
 
@@ -403,8 +557,10 @@ def check_all(repo_root: Path, *, allow_untracked_inputs: bool = False) -> None:
                 repo_root,
                 target,
                 generated_root,
-                source_revision=source_revision,
-                allow_untracked_inputs=allow_untracked_inputs,
+                BuildOptions(
+                    source_revision=source_revision,
+                    allow_untracked_inputs=allow_untracked_inputs,
+                ),
             )
             compare_bundle_trees(generated_root, existing_root, target=target)
         compare_shared_provenance(manifests["claude"], manifests["codex"])

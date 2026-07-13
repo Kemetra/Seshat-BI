@@ -14,7 +14,7 @@ import zipfile
 from email import message_from_bytes
 from email.message import Message
 from pathlib import Path, PurePosixPath
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 _PROHIBITED_TOP_LEVEL = {
     ".github",
@@ -74,7 +74,11 @@ def _safe_archive_path(name: str) -> PurePosixPath:
     if "\\" in name:
         raise ArtifactInspectionError(f"archive path is not POSIX: {name}")
     path = PurePosixPath(name)
-    if path.is_absolute() or ".." in path.parts or "." in path.parts:
+    if path.is_absolute():
+        raise ArtifactInspectionError(f"archive path escapes its root: {name}")
+    if ".." in path.parts:
+        raise ArtifactInspectionError(f"archive path escapes its root: {name}")
+    if "." in path.parts:
         raise ArtifactInspectionError(f"archive path escapes its root: {name}")
     return path
 
@@ -90,45 +94,78 @@ def scan_content(name: str, data: bytes) -> None:
             raise ArtifactInspectionError(f"{name} contains prohibited {label}")
 
 
-def validate_wheel_inventory(names: Iterable[str]) -> None:
-    paths = [_safe_archive_path(name) for name in names]
-    if not any(path.parts and path.parts[0] == "seshat" for path in paths):
-        raise ArtifactInspectionError("wheel is missing the seshat package")
-    if not any(path.parts and path.parts[0] == "retail" for path in paths):
-        raise ArtifactInspectionError(
-            "wheel is missing the retail compatibility package"
-        )
-    if any(path.parts and path.parts[0] in _PROHIBITED_TOP_LEVEL for path in paths):
+def _require_wheel_package(paths: list[PurePosixPath], package: str) -> None:
+    top_levels = {path.parts[0] for path in paths if path.parts}
+    if package not in top_levels:
+        raise ArtifactInspectionError(f"wheel is missing the {package} package")
+
+
+def _reject_development_paths(paths: list[PurePosixPath]) -> None:
+    top_levels = {path.parts[0] for path in paths if path.parts}
+    if top_levels & _PROHIBITED_TOP_LEVEL:
         raise ArtifactInspectionError(
             "wheel contains a development-only top-level path"
         )
+
+
+def _require_wheel_entry_points(names: list[str]) -> None:
     if not any(name.endswith(".dist-info/entry_points.txt") for name in names):
         raise ArtifactInspectionError("wheel is missing console entry-point metadata")
+
+
+def _require_wheel_license(names: list[str]) -> None:
     if not any(".dist-info/licenses/LICENSE" in name for name in names):
         raise ArtifactInspectionError("wheel is missing the Apache-2.0 license file")
 
 
-def validate_sdist_inventory(names: Iterable[str]) -> None:
+def validate_wheel_inventory(names: Iterable[str]) -> None:
+    members = list(names)
+    paths = [_safe_archive_path(name) for name in members]
+    _require_wheel_package(paths, "seshat")
+    _require_wheel_package(paths, "retail")
+    _reject_development_paths(paths)
+    _require_wheel_entry_points(members)
+    _require_wheel_license(members)
+
+
+def _stripped_sdist_paths(names: Iterable[str]) -> list[PurePosixPath]:
     paths = [_safe_archive_path(name) for name in names]
-    stripped = [PurePosixPath(*path.parts[1:]) for path in paths if len(path.parts) > 1]
+    return [PurePosixPath(*path.parts[1:]) for path in paths if len(path.parts) > 1]
+
+
+def _require_sdist_core_files(stripped: list[PurePosixPath]) -> None:
     required = {"LICENSE", "README.md", "pyproject.toml"}
     observed = {path.as_posix() for path in stripped}
     missing = sorted(required - observed)
     if missing:
         raise ArtifactInspectionError(f"sdist is missing required files: {missing}")
-    for package in ("src/seshat", "src/retail"):
-        if not any(path.as_posix().startswith(package + "/") for path in stripped):
-            raise ArtifactInspectionError(f"sdist is missing {package}")
-    allowed_test_resource = "tests/fixtures/demo/demo_sample_orders.csv"
+
+
+def _require_sdist_package(stripped: list[PurePosixPath], package: str) -> None:
+    prefix = package + "/"
+    if not any(path.as_posix().startswith(prefix) for path in stripped):
+        raise ArtifactInspectionError(f"sdist is missing {package}")
+
+
+def _validate_sdist_path(path: PurePosixPath) -> None:
+    if not path.parts:
+        return
+    allowed = "tests/fixtures/demo/demo_sample_orders.csv"
+    if path.as_posix() == allowed:
+        return
+    if path.parts[0] in _PROHIBITED_TOP_LEVEL:
+        raise ArtifactInspectionError(
+            "sdist contains unrelated development/publication files"
+        )
+
+
+def validate_sdist_inventory(names: Iterable[str]) -> None:
+    stripped = _stripped_sdist_paths(names)
+    _require_sdist_core_files(stripped)
+    _require_sdist_package(stripped, "src/seshat")
+    _require_sdist_package(stripped, "src/retail")
     for path in stripped:
-        if not path.parts:
-            continue
-        if path.parts[0] == "tests" and path.as_posix() == allowed_test_resource:
-            continue
-        if path.parts[0] in _PROHIBITED_TOP_LEVEL:
-            raise ArtifactInspectionError(
-                "sdist contains unrelated development/publication files"
-            )
+        _validate_sdist_path(path)
 
 
 def _metadata_values(message: Message) -> dict[str, Any]:
@@ -145,7 +182,7 @@ def _metadata_values(message: Message) -> dict[str, Any]:
     }
 
 
-def _validate_metadata(metadata: dict[str, Any]) -> None:
+def _validate_expected_metadata(metadata: Mapping[str, Any]) -> None:
     expected = {
         "name": "seshat-bi",
         "license_expression": "Apache-2.0",
@@ -156,19 +193,32 @@ def _validate_metadata(metadata: dict[str, Any]) -> None:
             raise ArtifactInspectionError(
                 f"metadata {field} is {metadata.get(field)!r}; expected {value!r}"
             )
+
+
+def _validate_required_metadata(metadata: Mapping[str, Any]) -> None:
     for field in ("version", "summary", "requires_python"):
         if not metadata.get(field):
             raise ArtifactInspectionError(f"metadata field is missing: {field}")
-    urls = "\n".join(metadata["project_urls"])
+
+
+def _validate_project_urls(metadata: Mapping[str, Any]) -> None:
+    urls = "\n".join(str(value) for value in metadata["project_urls"])
     for label in ("Changelog", "Documentation", "Homepage", "Issues", "Repository"):
         if f"{label}, " not in urls:
             raise ArtifactInspectionError(f"metadata is missing project URL: {label}")
-    mandatory = []
-    for requirement in metadata["requires_dist"]:
-        if "extra ==" not in requirement and "extra ==" not in requirement.casefold():
-            mandatory.append(
-                re.split(r"[ <>=;\[]", requirement, maxsplit=1)[0].casefold()
-            )
+
+
+def _mandatory_dependencies(metadata: Mapping[str, Any]) -> list[str]:
+    requirements = (str(value) for value in metadata["requires_dist"])
+    return [
+        re.split(r"[ <>=;\[]", requirement, maxsplit=1)[0].casefold()
+        for requirement in requirements
+        if "extra ==" not in requirement.casefold()
+    ]
+
+
+def _validate_dependencies(metadata: Mapping[str, Any]) -> None:
+    mandatory = _mandatory_dependencies(metadata)
     forbidden = sorted(set(mandatory) & _FORBIDDEN_MANDATORY_DEPS)
     if forbidden:
         raise ArtifactInspectionError(
@@ -180,63 +230,109 @@ def _validate_metadata(metadata: dict[str, Any]) -> None:
         )
 
 
-def _read_wheel(path: Path) -> tuple[dict[str, bytes], dict[str, Any]]:
+def _validate_metadata(metadata: dict[str, Any]) -> None:
+    _validate_expected_metadata(metadata)
+    _validate_required_metadata(metadata)
+    _validate_project_urls(metadata)
+    _validate_dependencies(metadata)
+
+
+def _wheel_member(
+    archive: zipfile.ZipFile, info: zipfile.ZipInfo
+) -> tuple[str, bytes] | None:
+    if info.is_dir():
+        return None
+    mode = (info.external_attr >> 16) & 0o170000
+    if mode == 0o120000:
+        raise ArtifactInspectionError(f"wheel contains a symlink: {info.filename}")
+    data = archive.read(info)
+    scan_content(info.filename, data)
+    return info.filename, data
+
+
+def _wheel_files(path: Path) -> dict[str, bytes]:
+    files: dict[str, bytes] = {}
     with zipfile.ZipFile(path) as archive:
-        files: dict[str, bytes] = {}
         for info in archive.infolist():
-            if info.is_dir():
-                continue
-            mode = (info.external_attr >> 16) & 0o170000
-            if mode == 0o120000:
-                raise ArtifactInspectionError(
-                    f"wheel contains a symlink: {info.filename}"
-                )
-            data = archive.read(info)
-            scan_content(info.filename, data)
-            files[info.filename] = data
-    validate_wheel_inventory(files)
-    metadata_names = [name for name in files if name.endswith(".dist-info/METADATA")]
-    if len(metadata_names) != 1:
-        raise ArtifactInspectionError("wheel must contain exactly one METADATA file")
-    metadata = _metadata_values(message_from_bytes(files[metadata_names[0]]))
-    _validate_metadata(metadata)
-    entry_points = next(
-        data.decode("utf-8")
-        for name, data in files.items()
-        if name.endswith(".dist-info/entry_points.txt")
+            member = _wheel_member(archive, info)
+            if member is not None:
+                files[member[0]] = member[1]
+    return files
+
+
+def _single_member(
+    files: Mapping[str, bytes], suffix: str, error: str
+) -> tuple[str, bytes]:
+    names = [name for name in files if name.endswith(suffix)]
+    if len(names) != 1:
+        raise ArtifactInspectionError(error)
+    name = names[0]
+    return name, files[name]
+
+
+def _validate_wheel_entry_points(files: Mapping[str, bytes]) -> None:
+    _, raw = _single_member(
+        files,
+        ".dist-info/entry_points.txt",
+        "wheel must contain exactly one entry_points.txt file",
     )
+    entry_points = raw.decode("utf-8")
     for command in ("retail = seshat.cli:main", "seshat = seshat.cli:main"):
         if command not in entry_points:
             raise ArtifactInspectionError(f"wheel entry points are missing {command!r}")
+
+
+def _read_wheel(path: Path) -> tuple[dict[str, bytes], dict[str, Any]]:
+    files = _wheel_files(path)
+    validate_wheel_inventory(files)
+    _, metadata_bytes = _single_member(
+        files,
+        ".dist-info/METADATA",
+        "wheel must contain exactly one METADATA file",
+    )
+    metadata = _metadata_values(message_from_bytes(metadata_bytes))
+    _validate_metadata(metadata)
+    _validate_wheel_entry_points(files)
     return files, metadata
 
 
-def _read_sdist(path: Path) -> tuple[dict[str, bytes], dict[str, Any]]:
+def _sdist_member(
+    archive: tarfile.TarFile, member: tarfile.TarInfo
+) -> tuple[str, bytes] | None:
+    _safe_archive_path(member.name)
+    if member.issym():
+        raise ArtifactInspectionError(f"sdist contains a link: {member.name}")
+    if member.islnk():
+        raise ArtifactInspectionError(f"sdist contains a link: {member.name}")
+    if member.isdir():
+        return None
+    if not member.isfile():
+        raise ArtifactInspectionError(f"sdist contains a special file: {member.name}")
+    extracted = archive.extractfile(member)
+    if extracted is None:
+        raise ArtifactInspectionError(f"cannot read sdist member: {member.name}")
+    data = extracted.read()
+    scan_content(member.name, data)
+    return member.name, data
+
+
+def _sdist_files(path: Path) -> dict[str, bytes]:
+    files: dict[str, bytes] = {}
     with tarfile.open(path, "r:gz") as archive:
-        files: dict[str, bytes] = {}
         for member in archive.getmembers():
-            _safe_archive_path(member.name)
-            if member.issym() or member.islnk():
-                raise ArtifactInspectionError(f"sdist contains a link: {member.name}")
-            if member.isdir():
-                continue
-            if not member.isfile():
-                raise ArtifactInspectionError(
-                    f"sdist contains a special file: {member.name}"
-                )
-            extracted = archive.extractfile(member)
-            if extracted is None:
-                raise ArtifactInspectionError(
-                    f"cannot read sdist member: {member.name}"
-                )
-            data = extracted.read()
-            scan_content(member.name, data)
-            files[member.name] = data
+            extracted = _sdist_member(archive, member)
+            if extracted is not None:
+                files[extracted[0]] = extracted[1]
+    return files
+
+
+def _read_sdist(path: Path) -> tuple[dict[str, bytes], dict[str, Any]]:
+    files = _sdist_files(path)
     validate_sdist_inventory(files)
-    metadata_names = [name for name in files if name.endswith("/PKG-INFO")]
-    if len(metadata_names) != 1:
-        raise ArtifactInspectionError("sdist must contain exactly one root PKG-INFO")
-    metadata = _metadata_values(message_from_bytes(files[metadata_names[0]]))
+    _, metadata_bytes = _single_member(
+        files, "/PKG-INFO", "sdist must contain exactly one root PKG-INFO"
+    )
+    metadata = _metadata_values(message_from_bytes(metadata_bytes))
     _validate_metadata(metadata)
     return files, metadata
 
@@ -260,6 +356,62 @@ def _compare_normalized_wheels(original: Path, rebuilt: Path) -> None:
         )
 
 
+def _artifact_pair(dist_dir: Path) -> tuple[Path, Path]:
+    wheels = sorted(dist_dir.glob("*.whl"))
+    sdists = sorted(dist_dir.glob("*.tar.gz"))
+    if len(wheels) != 1:
+        raise ArtifactInspectionError("expected exactly one wheel and one sdist")
+    if len(sdists) != 1:
+        raise ArtifactInspectionError("expected exactly one wheel and one sdist")
+    return wheels[0], sdists[0]
+
+
+def _run_twine_check(wheel: Path, sdist: Path) -> None:
+    subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "twine",
+            "check",
+            "--strict",
+            str(wheel),
+            str(sdist),
+        ],
+        check=True,
+    )
+
+
+def _matching_metadata(wheel: Path, sdist: Path) -> dict[str, Any]:
+    _, wheel_metadata = _read_wheel(wheel)
+    _, sdist_metadata = _read_sdist(sdist)
+    if wheel_metadata != sdist_metadata:
+        raise ArtifactInspectionError("wheel and sdist core metadata differ")
+    return wheel_metadata
+
+
+def _rebuild_sdist(wheel: Path, sdist: Path) -> None:
+    with tempfile.TemporaryDirectory(prefix="seshat-sdist-rebuild-") as temp:
+        rebuilt_dir = Path(temp)
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "build",
+                "--wheel",
+                "--outdir",
+                str(rebuilt_dir),
+                str(sdist),
+            ],
+            check=True,
+        )
+        rebuilt = sorted(rebuilt_dir.glob("*.whl"))
+        if len(rebuilt) != 1:
+            raise ArtifactInspectionError(
+                "sdist rebuild did not produce exactly one wheel"
+            )
+        _compare_normalized_wheels(wheel, rebuilt[0])
+
+
 def inspect_release_artifacts(
     dist_dir: Path,
     *,
@@ -268,51 +420,12 @@ def inspect_release_artifacts(
 ) -> dict[str, Any]:
     """Inspect exactly one wheel and sdist, returning sanitized evidence."""
 
-    wheels = sorted(dist_dir.glob("*.whl"))
-    sdists = sorted(dist_dir.glob("*.tar.gz"))
-    if len(wheels) != 1 or len(sdists) != 1:
-        raise ArtifactInspectionError("expected exactly one wheel and one sdist")
-    wheel, sdist = wheels[0], sdists[0]
+    wheel, sdist = _artifact_pair(dist_dir)
     if run_twine:
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "twine",
-                "check",
-                "--strict",
-                str(wheel),
-                str(sdist),
-            ],
-            check=True,
-        )
-    _, wheel_metadata = _read_wheel(wheel)
-    _, sdist_metadata = _read_sdist(sdist)
-    if wheel_metadata != sdist_metadata:
-        raise ArtifactInspectionError("wheel and sdist core metadata differ")
-    rebuild_status = "not_requested"
+        _run_twine_check(wheel, sdist)
+    wheel_metadata = _matching_metadata(wheel, sdist)
     if rebuild_sdist:
-        with tempfile.TemporaryDirectory(prefix="seshat-sdist-rebuild-") as temp:
-            rebuilt_dir = Path(temp)
-            subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "build",
-                    "--wheel",
-                    "--outdir",
-                    str(rebuilt_dir),
-                    str(sdist),
-                ],
-                check=True,
-            )
-            rebuilt = sorted(rebuilt_dir.glob("*.whl"))
-            if len(rebuilt) != 1:
-                raise ArtifactInspectionError(
-                    "sdist rebuild did not produce exactly one wheel"
-                )
-            _compare_normalized_wheels(wheel, rebuilt[0])
-            rebuild_status = "pass"
+        _rebuild_sdist(wheel, sdist)
     return {
         "schema_version": "1.0",
         "status": "pass",
@@ -322,7 +435,7 @@ def inspect_release_artifacts(
             {"filename": sdist.name, "sha256": _sha256(sdist), "kind": "sdist"},
         ],
         "twine_strict": "pass" if run_twine else "not_requested",
-        "isolated_sdist_rebuild": rebuild_status,
+        "isolated_sdist_rebuild": "pass" if rebuild_sdist else "not_requested",
         "authority_disclaimer": "Artifact validation does not authorize publication.",
     }
 

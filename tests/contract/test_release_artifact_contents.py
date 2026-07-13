@@ -57,6 +57,11 @@ def test_wheel_inventory_requires_packages_entrypoints_and_license() -> None:
     validate_wheel_inventory(valid)
     with pytest.raises(ArtifactInspectionError, match="development-only"):
         validate_wheel_inventory([*valid, "tests/test_release.py"])
+    disguised_entry_points = [
+        name.replace("entry_points.txt", "entry_points.txt.bak") for name in valid
+    ]
+    with pytest.raises(ArtifactInspectionError, match="entry-point"):
+        validate_wheel_inventory(disguised_entry_points)
 
 
 def test_sdist_inventory_is_rebuildable_without_repo_integrations() -> None:
