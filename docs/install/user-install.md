@@ -1,18 +1,18 @@
 # User installation: Seshat BI public beta
 
-> **Availability:** repository implementation is present; public PyPI availability
-> is not claimed until a public-install evidence record passes. The distribution
-> name is `seshat-bi`. Commands labeled “after publication” are the supported public
-> path, not evidence that an owner has already published a release.
+> **Availability:** `seshat-bi==0.2.0` is published on public PyPI and verified by a
+> clean-room `pipx`/`pip` install. See
+> [the v0.2.0 public acceptance record](../releases/v0.2.0-public-acceptance.md) for
+> the sanitized evidence.
 
 Seshat BI is installed as an isolated command-line application. A first run needs Python 3.13, `pipx`, and Git; it does not need a database or Power BI Desktop.
 
 ## Public install and first success
 
-Windows is the release-gated path:
+Windows is the validated release lane:
 
 ```powershell
-pipx install seshat-bi           # after public-install evidence says available
+pipx install seshat-bi
 pipx ensurepath
 seshat init-project my-bi
 cd my-bi
@@ -22,12 +22,13 @@ seshat next --format agent       # Source Ready, not_started
 seshat check                     # exit 0
 ```
 
-On macOS/Linux, use the same commands in a POSIX shell. Reopen the shell after
+On macOS/Linux, use the same commands in a POSIX shell; this lane is documented
+best-effort beta support, not the release gate. Reopen the shell after
 `pipx ensurepath` if the command is not found. A public user does not clone the
 Seshat development repository.
 
-Before publication, a release reviewer may install the exact validated wheel from
-the candidate handoff:
+A release reviewer validating a not-yet-published candidate may instead install the
+exact validated wheel from the candidate handoff:
 
 ```powershell
 pipx install .\seshat_bi-<version>-py3-none-any.whl
@@ -48,11 +49,11 @@ A normal install contains only the runtime dependency needed by the static gate.
 | `snowflake` | Snowflake profile/validate | `pipx install "seshat-bi[snowflake]"` |
 | `files` | Excel file profiling | `pipx install "seshat-bi[files]"` |
 
-All commands above are targets until publication. `dev` (pytest/ruff) and `livetest` (testcontainers) are contributor-only extras; users should not install them for a first run.
+`dev` (pytest/ruff) and `livetest` (testcontainers) are contributor-only extras; users should not install them for a first run.
 
 ## Upgrade, remove, and recover
 
-After publication, upgrade with:
+Upgrade with:
 
 ```powershell
 pipx upgrade seshat-bi
@@ -93,9 +94,9 @@ every user project. The per-surface rollback process is documented in
 - **Python or pipx missing:** install Python 3.13 and `pipx` first.
 - **`seshat` not found:** run `pipx ensurepath`, reopen the shell, or use `python -m seshat.cli <verb>`.
 - **Git missing / workspace not a repo:** install Git if necessary and run `git init` in the workspace.
-- **Install says no matching distribution:** confirm Python 3.13 and the actual
-  availability table. If PyPI is still `not_published`/`unverified`, wait for an
-  owner-approved release; contributors may use the separate developer guide.
+- **Install says no matching distribution:** confirm you are on Python 3.13 and
+  using the public index (`--index-url https://pypi.org/simple`); if the problem
+  persists, check [the support matrix](support-matrix.md) for the current status.
 - **Upgrade fails:** the installed specification or index may be unavailable. The
   current project remains user-owned; record the failure and do not delete it.
 - **Uninstall leaves a command:** reopen the shell, inspect `pipx list`, and remove

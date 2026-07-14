@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/brand/seshat-bi-hero.svg" alt="Seshat BI -- Retail BI Readiness System -- From messy retail data to trusted, governed BI." width="820" />
+<img src="assets/brand/seshat-bi-hero-lockup.png" alt="Seshat BI -- Retail BI Readiness System -- from messy retail data to trusted, governed BI" width="820" />
 
 <br/>
 
@@ -14,8 +14,12 @@ model, design the dashboard -- and only then publish.
 [![warehouse](https://img.shields.io/badge/warehouse-PostgreSQL-0B9A9A?style=flat-square&logo=postgresql&logoColor=F7F1E7&labelColor=001E35)](#architecture)
 [![BI](https://img.shields.io/badge/BI-Power%20BI%20PBIP-C69214?style=flat-square&logo=powerbi&logoColor=001E35&labelColor=001E35)](#power-bi-policy)
 [![governance](https://img.shields.io/badge/gate-retail%20check-0B9A9A?style=flat-square&labelColor=001E35)](docs/glossary.md)
-[![python](https://img.shields.io/badge/python-3.13-C69214?style=flat-square&logo=python&logoColor=F7F1E7&labelColor=001E35)](#quickstart)
+[![python](https://img.shields.io/badge/python-3.13-C69214?style=flat-square&logo=python&logoColor=F7F1E7&labelColor=001E35)](#install)
 [![license](https://img.shields.io/badge/license-Apache--2.0-0B9A9A?style=flat-square&labelColor=001E35)](LICENSE)
+
+<br/>
+
+**From messy retail data to trusted, governed BI -- with an agent that refuses to skip a step.**
 
 </div>
 
@@ -23,18 +27,11 @@ model, design the dashboard -- and only then publish.
 
 ## Why Seshat
 
-Seshat was the ancient Egyptian figure of writing, measurement, and record
-keeping -- you mapped and documented the world before you built on it. This tool
-takes the same stance toward retail data: **nothing advances without recorded
-evidence and a passed gate.**
-
-Seshat BI answers one question, safely:
-
-> Is this retail source ready to become trusted Power BI analytics?
-
-It is not a pile of SQL scripts and `.pbix` files. It is a disciplined operating
-kit for an AI agent (or a BI developer) that refuses to skip a step. Readiness is
-never a faked confidence score -- it is `status` + `evidence` + `blocking_reasons`.
+Ungoverned BI ships wrong numbers with total confidence. Seshat BI takes the
+opposite stance, named for the ancient Egyptian figure of writing and
+measurement: **nothing advances without recorded evidence and a passed gate.**
+Readiness is never a faked confidence score -- it is `status` + `evidence` +
+`blocking_reasons`, at every one of seven stages.
 
 > [!NOTE]
 > **Naming.** The product is **Seshat BI**. The distribution is `seshat-bi` and the
@@ -45,10 +42,65 @@ never a faked confidence score -- it is `status` + `evidence` + `blocking_reason
 
 ---
 
+## Who it's for
+
+- **BI developers & data engineers** -- a governed medallion (`bronze -> silver -> gold`) and Power BI delivery that refuses to skip mapping, validation, or metric contracts.
+- **AI-agent builders** -- an agent-first tool (Claude Code & Codex plugins) that stays truthful on real data: it withholds PII, won't invent a mapping, and won't fake a pass.
+- **Analytics leads** -- trust and auditability by construction. Every dashboard traces to a metric contract; every stage carries its evidence.
+
+---
+
+## See it in 15 seconds
+
+No database, no Power BI Desktop. Run the bundled synthetic retail fixture offline:
+
+```bash
+seshat demo init
+seshat demo run
+seshat demo report --format html
+```
+
+![Seshat BI readiness proof showing seven evidence-backed readiness stages](assets/demo/readiness-proof.png)
+
+The report shows evidence, blockers, approvals, and the next allowed action for all
+seven stages. Offline proof stops honestly at Gold Ready -- live validation needs a
+database.
+
+---
+
+## Install
+
+`seshat-bi` `v0.2.0` is on public PyPI (clean-install verified -- see the
+[public acceptance record](docs/releases/v0.2.0-public-acceptance.md)).
+
+**Python CLI**
+
+```bash
+pipx install seshat-bi
+seshat init-project my-bi
+```
+
+**Claude Code plugin** (validated on Claude Code 2.1.209, Windows)
+
+```text
+/plugin marketplace add ahmed-shaaban-94/Seshat_BI
+/plugin install seshat-bi@seshat-bi-marketplace
+```
+
+**Codex plugin** (install/discovery validated)
+
+```text
+codex plugin marketplace add https://github.com/ahmed-shaaban-94/Seshat_BI
+codex plugin add seshat-bi@seshat-bi-repository
+```
+
+Full guides: [user install](docs/install/user-install.md) - [agent install](docs/install/agent-install.md) - [support matrix](docs/install/support-matrix.md). The Python CLI (`seshat` / `retail`) and the agent plugins are separate: the CLI runs governance checks; a plugin gives an agent session the skills and commands.
+
+---
+
 ## The seven-star readiness spine
 
-The seven points of the Seshat star are the seven readiness stages. Each is a
-gate: a stage is never entered before the prior one passes.
+Seven stages, each a gate: a stage is never entered before the prior one passes. This ordering is the product.
 
 ```mermaid
 flowchart LR
@@ -77,104 +129,28 @@ The ordering is non-negotiable, and the gates are the product:
 
 ---
 
-## Quickstart
+## Why Seshat is different
 
-Seshat BI gives an agent one truthful next action for turning raw retail data into governed BI. Your first run needs neither a database nor Power BI Desktop.
+- **Evidence over scores.** Readiness is `status` + `evidence` + `blocking_reasons`, never a fabricated number.
+- **The gates are the product.** No source goes straight to silver; no gold reaches Power BI unvalidated; no dashboard is designed before its metrics are defined.
+- **Agent-safe by construction.** The `seshat mcp` governor and the plugins refuse execution and approval; they withhold PII and won't invent mappings.
+- **Power BI reads `gold` only.** Reporting is the target, never the source of truth.
+- **Honest offline proof.** The demo renders real evidence and stops truthfully at the live boundary.
 
-### See the readiness proof
+---
 
-Run the bundled, invented retail fixture entirely offline:
-
-```bash
-seshat demo init
-seshat demo run
-seshat demo report --format html
-```
-
-The report is written to `.seshat-output/demo/index.html`. It shows the evidence,
-blockers, approvals, and next allowed action for all seven stages. Offline proof
-stops honestly at Gold Ready because the live validation boundary needs a database.
-
-![Seshat BI readiness proof showing seven evidence-backed readiness stages](assets/demo/readiness-proof.png)
-
-> [!NOTE]
-> `seshat-bi` is the intended distribution name. Repository implementation does
-> not prove public availability; the install commands below become the public path
-> only when the corresponding public-install evidence is recorded.
-
-| Distribution surface | Repository state | Public availability authority |
-|---|---|---|
-| Python (`seshat-bi`) | build/lifecycle validation implemented | public PyPI install evidence |
-| Claude Code GitHub plugin | generated repository bundle | external add/install acceptance plus owner publication |
-| Codex repository plugin | generated repository bundle | external CLI/IDE acceptance |
-| Claude public catalog | separate owner action | catalog install evidence |
-| OpenAI public plugin listing | separate submission/review | accepted listing/install evidence |
-
-Statuses must say `available`, `unavailable`, `unverified`, or a concrete blocked
-reason per surface; one successful surface never implies a coordinated full launch.
-
-### Three steps to first success
-
-1. `pipx install seshat-bi` *(after public availability is verified)*
-2. `seshat init-project my-bi`
-3. `cd my-bi`, run `git init`, then `seshat check`
-
-### Try without a database
-
-#### Windows (release-gated path)
-
-```powershell
-pipx install seshat-bi           # after public availability is verified
-pipx ensurepath                  # reopen PowerShell if seshat is not found
-seshat --help
-seshat init-project my-bi
-cd my-bi
-git init
-seshat status --format json      # expected: {"tables": []}
-seshat next --format agent       # truthful Source Ready onboarding action
-seshat check                     # expected: exit 0
-```
-
-#### macOS / Linux (documented; best-effort tested)
-
-```bash
-pipx install seshat-bi           # after public availability is verified
-pipx ensurepath                  # reopen your shell if seshat is not found
-seshat --help
-seshat init-project my-bi
-cd my-bi
-git init
-seshat status --format json      # expected: {"tables": []}
-seshat next --format agent       # truthful Source Ready onboarding action
-seshat check                     # expected: exit 0
-```
-
-A successful first run lists `init-project`, `status`, `next`, and `check` in `seshat --help`. The `next` result says `not_started`, includes evidence and blockers, and never invents a pass or a numeric score.
-
-If `seshat` is not on PATH after installation, run `pipx ensurepath`, reopen the shell, or use `python -m seshat.cli <verb>`. The legacy fallback `python -m retail.cli <verb>` remains available for one deprecation cycle.
-
-| Problem | What to do |
-|---|---|
-| `python` or `pipx` is missing | Install Python 3.13 and `pipx`, then retry. |
-| `seshat` is not found | Run `pipx ensurepath`, reopen the shell, or use `python -m seshat.cli <verb>`. |
-| `check` or `next` says Git is unavailable / the directory is not a repo | Install Git if needed, then run `git init` in the new workspace. |
-| Plugin installation fails | Confirm the marketplace is publicly released; the local-path flow is development-only. |
-
-### Connect a database later
-
-A normal install brings no database, file, test, or lint dependency. When live validation is needed, install only the relevant extra:
-
-```bash
-pipx inject seshat-bi psycopg2-binary  # or install "seshat-bi[db]" (target — not yet published)
-seshat validate --source-map mappings/<table>/source-map.yaml
-```
-
-`mssql`, `mysql`, `snowflake`, and `files` are additional user-path extras. Put credentials only in the git-ignored `.env` file. See [the complete user install guide](docs/install/user-install.md) and [the Claude Code and Codex guide](docs/install/agent-install.md).
 ## What is built today
 
-Everything below is on `main`, each with a written spec (under `specs/` or
-`docs/superpowers/specs/`) and held by the `retail check` gate. (For what is
-planned but not yet built, see the [Roadmap](#roadmap).)
+Everything below is on `main`, spec-backed, and held by the `retail check` gate. Highlights:
+
+- The static `retail check` gate over SQL, TMDL/PBIR, DAX, config, and docs.
+- Live `retail validate` (PK uniqueness, date coverage, orphan FKs, reconciliation).
+- The full seven-stage readiness spine (source intelligence -> handoff pack).
+- Agent surfaces: `seshat status` / `next`, offline HTML proof, read-only MCP governor, review/SARIF output.
+- The `seshat` CLI + `init-project`, PBIR authoring adapters, and companion dbt / Dagster adapters.
+
+<details>
+<summary>Full capability list</summary>
 
 | Capability | What it gives you |
 |------------|-------------------|
@@ -205,6 +181,8 @@ planned but not yet built, see the [Roadmap](#roadmap).)
 
 A green static check is necessary but not sufficient: semantic correctness needs
 the live validation boundary when a database is available.
+
+</details>
 
 ---
 
@@ -289,6 +267,9 @@ read readiness status
 
 ## Repository layout
 
+<details>
+<summary>Where everything lives</summary>
+
 | Path | Purpose |
 |------|---------|
 | `AGENTS.md` | Operating contract for AI agents. Read first. |
@@ -304,7 +285,9 @@ read readiness status
 | `docs/readiness/` | The seven-stage Readiness System spine. |
 | `docs/roadmap/` | Delivered ledger + the planned companion tier. |
 | `docs/brand/` | The **Seshat BI** visual identity and brand rules. |
-| `assets/brand/` | Committed brand assets (logo, seven-point star). |
+| `assets/brand/` | Committed brand assets (logo, Seshat star). |
+
+</details>
 
 ---
 
@@ -365,13 +348,12 @@ blocked by real BI gates before delivery. It is deliberately **not**:
 
 ## Brand
 
-The public identity is **Seshat BI**: a seven-point gold star (canonical truth and
-the seven readiness gates), a teal data network (lineage and the BI model), and the
-seated Seshat figure with a stylus (mapping and documentation before transformation).
-The star is always seven-pointed.
+The public identity is **Seshat BI**: the seated Seshat figure with a stylus
+(mapping and documentation before transformation), a gold star (canonical truth and
+the seven readiness gates), and a teal data network (lineage and the BI model).
 
 <div align="center">
-<img src="assets/brand/seshat-bi-brand-board.png" alt="Seshat BI brand board: logo system and palette" width="640" />
+<img src="assets/brand/seshat-bi-mark.png" alt="Seshat BI logo mark: seated Seshat figure, gold star, and teal data network on deep navy" width="240" />
 </div>
 
 Full guide: [`docs/brand/visual-identity.md`](docs/brand/visual-identity.md) --

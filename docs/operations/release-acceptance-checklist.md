@@ -83,6 +83,25 @@ OpenAI public plugin listing, record exactly one of `available`, `unavailable`,
 The coordinated release is not `available` until Python plus both repository
 agent distributions have clean public-path evidence.
 
+### v0.2.0 record
+
+- Python: **available** -- `seshat-bi==0.2.0` published on public PyPI (workflow
+  run `29318903859`, GitHub OIDC Trusted Publishing), clean-room install verified.
+- GitHub Release: published as a prerelease at tag `v0.2.0`, assets re-verified
+  against the approved wheel/sdist digests.
+- Claude Code repository plugin: **validated** on Claude Code `2.1.209` (Windows) --
+  install, namespaced-command discovery, governed behavior, pressure/refusal,
+  update, uninstall, and workspace preservation all passed. One limitation: a
+  strict fresh-profile install was not performed (see
+  [the agent install guide](../install/agent-install.md#claude-code)).
+- Codex repository plugin: **partially validated** -- marketplace add, plugin
+  install, and discovery/router-invocation passed. Governed behavior,
+  pressure/refusal, update, uninstall, and IDE acceptance are unverified.
+- Claude public catalog: not submitted.
+- OpenAI public plugin listing: not submitted.
+
+Full sanitized evidence: [the v0.2.0 public acceptance record](../releases/v0.2.0-public-acceptance.md).
+
 ## Repository candidate evidence (2026-07-13)
 
 - [x] Full repository suite passes: 2,235 tests passed and 9 optional tests
@@ -104,11 +123,13 @@ agent distributions have clean public-path evidence.
   Codex CLI, and Codex IDE fixtures with semantic parity.
 - [x] Authorization/rollback contracts reject mismatched, expired, reused, or
   cross-action approvals.
-- [ ] Real external public GitHub/PyPI/Claude/Codex installation evidence is
-  intentionally absent until the repository implementation is merged and the
-  applicable named owner authorizes that external action.
+- [x] Real external public GitHub/PyPI/Claude/Codex installation evidence has been
+  recorded for `v0.2.0` -- see the v0.2.0 record above and
+  [the public acceptance record](../releases/v0.2.0-public-acceptance.md). Codex
+  behavioral/update/uninstall/IDE acceptance and any public-catalog submission
+  remain outstanding.
 
-These are pre-publication repository facts, not final tagged-candidate or public
-installation evidence. The credential-free audit remains truthfully blocked by
-the historical `v0.1.0` tag pointing to a different immutable revision; version
-selection and every public action remain owner-only.
+These were pre-publication repository facts as of 2026-07-13; `v0.2.0` has since
+been tagged, published to PyPI, released on GitHub, and passed the recorded
+external acceptance above. The historical `v0.1.0` tag still points to a different
+immutable revision and is unaffected by this record.
