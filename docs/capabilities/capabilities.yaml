@@ -554,6 +554,20 @@ capabilities:
     references:
       dispatch: "explorer"
 
+  - id: seshat-agent-verify
+    name: "seshat agent verify"
+    summary: "Categorical PASS/BLOCKED/UNAVAILABLE evidence that a shipped agent integration (claude/codex) installs correctly and ships the governance contract intact; static-first, never a score, rank, or certification."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "agent"
+    documentation: "docs/ecosystem/agent-verify.md"
+    references:
+      dispatch: "agent"
+
   # ---------------------------------------------------------------------------
   # Agent / companion (advisory skills, execution adapters not DB-execution-gated
   # here, and read-only/artifact-writing product modules)

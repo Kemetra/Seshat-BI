@@ -22,6 +22,7 @@ import argparse
 
 from .parser_adoption import _add_adopt_pbip_parser
 from .parser_ecosystem import (
+    _add_agent_parser,
     _add_benchmark_parser,
     _add_explorer_parser,
     _add_pack_parser,
@@ -1000,6 +1001,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_pack_parser(sub)
     _add_benchmark_parser(sub)
     _add_explorer_parser(sub)
+    _add_agent_parser(sub)
     _add_mcp_parser(sub)
 
     return parser

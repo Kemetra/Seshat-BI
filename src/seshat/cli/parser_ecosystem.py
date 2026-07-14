@@ -327,6 +327,58 @@ def _add_benchmark_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_agent_parser(sub: argparse._SubParsersAction) -> None:
+    """`agent` verb group (spec 129): categorical PASS/BLOCKED/UNAVAILABLE
+    evidence that a shipped agent integration (`claude`/`codex`) installs
+    correctly and ships the governance contract intact. Static-first: never
+    launches a live agent, never opens a database, never emits a score,
+    rank, pass-rate, grade, or rolled-up "certified" verdict."""
+    agent_p = sub.add_parser(
+        "agent",
+        help=(
+            "agent integration compatibility evidence: verify install/version/"
+            "governance-contract/update/uninstall checks (no scores, no rank)"
+        ),
+    )
+    agent_sub = agent_p.add_subparsers(dest="agent_command", required=True)
+
+    verify_p = agent_sub.add_parser(
+        "verify",
+        help="run the required checks for one shipped agent integration",
+    )
+    verify_p.add_argument("--repo", default=".", help="repo root to read from")
+    verify_p.add_argument(
+        "--target",
+        required=True,
+        choices=("claude", "codex"),
+        help="the shipped agent integration to verify",
+    )
+    verify_p.add_argument(
+        "--output",
+        default=".seshat-output/agent-verify/record.json",
+        metavar="PATH",
+        help=(
+            "evidence record output under .seshat-output/ "
+            "(default: .seshat-output/agent-verify/record.json)"
+        ),
+    )
+    verify_p.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("text", "json"),
+        default="text",
+        help="'text' (default) is human-readable; 'json' emits the evidence record.",
+    )
+    verify_p.add_argument(
+        "--publish",
+        action="store_true",
+        help=(
+            "explicit publication intent, gated on a clean disclosure scan; "
+            "omit to keep the evidence record local-only (the default)"
+        ),
+    )
+
+
 def _add_explorer_parser(sub: argparse._SubParsersAction) -> None:
     """`explorer` verb group (spec 120, US8): generate the disclosure-safe
     offline readiness explorer from committed state only. Local output under
