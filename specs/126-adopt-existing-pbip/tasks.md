@@ -22,7 +22,7 @@ approval while implementing this feature.
 **Purpose**: Establish the public output shape and safe reference projects before
 domain implementation.
 
-- [ ] T001 Promote `specs/126-adopt-existing-pbip/contracts/pbip-adoption-assessment.schema.json` byte-for-byte to `schemas/pbip-adoption-assessment.schema.json`
+- [ ] T001 Promote both JSON design contracts from `specs/126-adopt-existing-pbip/contracts/` byte-for-byte to `schemas/pbip-adoption-assessment.schema.json` and `schemas/pbip-adoption-scaffold-result.schema.json`
 - [ ] T002 [P] Build the generic supported, unsafe-literal, missing-model, multi-model, unsupported-schema, symlink-escape, and PBIX-boundary fixture matrix under `tests/fixtures/pbip_adoption/` without real secrets or business-specific C086 assumptions
 - [ ] T003 Add valid-minimum, classification, relative-path, exactly-one-next-step, empty-approval, no-score, and seeded-invalid contract cases in `tests/contract/test_pbip_adoption_schema.py`
 
@@ -41,7 +41,7 @@ This phase blocks every user-story implementation.
 - [ ] T006 Compose the shipped TMDL/PBIR readers to inventory PBIP projects, semantic models, reports, tables, measures, relationships, parameters, pages, visuals, unsupported boundaries, and ambiguity in `src/seshat/pbip_adoption.py`
 - [ ] T007 Compose Git worktree/tracked/dirty evidence status and the existing rule registry/runner without treating non-versioned or dirty files as committed evidence in `src/seshat/pbip_adoption.py`
 - [ ] T008 Add collection-time redaction plus fail-closed final `scan_disclosure` validation so normalized output contains no absolute roots, credentials, connection literals, raw values, or suspected PII in `src/seshat/pbip_adoption.py`
-- [ ] T009 Compose `build_status_projection`, `build_run_next_response`, and existing stage order into one deterministic project-level `next_step`, returning one ambiguity-resolution action instead of silently selecting a table in `src/seshat/pbip_adoption.py`
+- [ ] T009 Compose `build_status_projection`, `build_blocker_explanations`, `build_run_next_response`, and existing stage order into one deterministic project-level `next_step`, returning one ambiguity-resolution action instead of silently selecting a table in `src/seshat/pbip_adoption.py`
 
 **Checkpoint**: Foundational helpers are offline, deterministic, read-only, and
 own no readiness/approval decision.
@@ -88,7 +88,7 @@ publication failure and verify `written: []` plus zero partial files.
 ### Tests for User Story 2
 
 - [ ] T017 [P] [US2] Add explicit acceptance, stale digest, Git prerequisite, dirty input, fixed write plan, empty approvals, collision, linked escape, simulated interruption, no-partial-result, and pre/post existing-file hash tests in `tests/unit/test_pbip_adoption_scaffold.py`
-- [ ] T018 [P] [US2] Add scaffold CLI parser, required digest, text/JSON result parity, exit-code, and traceback-free refusal cases in `tests/unit/test_cli_pbip_adoption.py`
+- [ ] T018 [P] [US2] Add scaffold-result schema, CLI parser, required digest, text/JSON result parity, exit-code, and traceback-free refusal cases in `tests/contract/test_pbip_adoption_schema.py` and `tests/unit/test_cli_pbip_adoption.py`
 
 ### Implementation for User Story 2
 

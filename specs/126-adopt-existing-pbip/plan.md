@@ -94,7 +94,8 @@ specs/126-adopt-existing-pbip/
 ├── quickstart.md
 ├── contracts/
 │   ├── adopt-pbip-cli.md
-│   └── pbip-adoption-assessment.schema.json
+│   ├── pbip-adoption-assessment.schema.json
+│   └── pbip-adoption-scaffold-result.schema.json
 └── tasks.md
 ```
 
@@ -110,7 +111,8 @@ src/seshat/
     └── commands/adopt_pbip.py          # text/JSON rendering and exit policy
 
 schemas/
-└── pbip-adoption-assessment.schema.json
+├── pbip-adoption-assessment.schema.json
+└── pbip-adoption-scaffold-result.schema.json
 
 tests/
 ├── fixtures/pbip_adoption/             # supported, unsafe, ambiguous, PBIX cases

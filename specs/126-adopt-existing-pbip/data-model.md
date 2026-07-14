@@ -108,6 +108,14 @@ The accepted YAML baseline contains `schema_version`, `assessment_digest`,
 approval-validity calculation. Reassessment reads it only as a prior fingerprint
 baseline.
 
+### ScaffoldResult
+
+The stable text/JSON result of the write command contains `schema_version`, a
+categorical `outcome`, the recomputed `assessment_digest` when available,
+`written` (empty or the one declared manifest path), concrete
+`blocking_reasons`, exactly one `next_step`, and `approvals: []`. It contains no
+partially written path, score, absolute root, secret, or implicit Git action.
+
 ## State transitions
 
 ```text
@@ -134,3 +142,6 @@ existing predicates remain the only readiness authority.
 6. A PBIX target has no components/scaffold writes and one `terminal_stop`.
 7. Unsupported components remain visible with a reason; supported observations
    are retained and partial coverage is never called complete.
+8. Every JSON scaffold result validates against
+   `contracts/pbip-adoption-scaffold-result.schema.json`, and its text rendering
+   carries the same outcome, writes, blockers, approvals, and next step.

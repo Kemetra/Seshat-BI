@@ -42,6 +42,9 @@ seshat adopt-pbip scaffold --project PATH \
   mapping, metric, decision, approval, readiness, or source artifact for writing.
 - The result reports `written: []` on every refusal. On success, `written`
   contains the one relative manifest path and `approvals` remains empty.
+- JSON results conform to `pbip-adoption-scaffold-result.schema.json`; text is
+  derived from the same normalized result and carries equivalent substantive
+  facts.
 
 Exit codes:
 

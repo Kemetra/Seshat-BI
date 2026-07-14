@@ -118,10 +118,11 @@ checks.
 
 ## 8. Output parity and disclosure
 
-**Decision**: Build one normalized assessment dictionary, validate/scan it before
-rendering, serialize it directly for JSON, and derive text only from that same
-object. Redact values during collection and run `scan_disclosure` fail-closed on
-the final object. Emit no absolute root, raw values, source rows, credentials, or
+**Decision**: Build one normalized assessment dictionary and one normalized
+scaffold-result dictionary, validate/scan each before rendering, serialize them
+directly for JSON, and derive text only from the matching normalized object.
+Redact values during collection and run `scan_disclosure` fail-closed on the
+final object. Emit no absolute root, raw values, source rows, credentials, or
 connection strings.
 
 **Rationale**: One model makes text/JSON equivalence testable and prevents a safe
