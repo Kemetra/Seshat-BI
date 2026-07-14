@@ -151,28 +151,6 @@ def write_source_profile(root: Path, scope_dir: str) -> Path:
     return path
 
 
-def _artifact_doc(defaults: dict, overrides: dict) -> dict:
-    """Shared builder behind ``drift_artifact``/``generic_artifact``: merge
-    ``overrides`` onto ``defaults``, then include ``live_leg_available`` /
-    ``owner`` / ``items`` only when the merged value is not ``None`` (so
-    ``generic_artifact``, whose defaults never declare ``live_leg_available``,
-    never gets that key at all)."""
-    merged = {**defaults, **overrides}
-    doc: dict = {
-        "schema_version": merged["schema_version"],
-        "captured_at_revision": merged["captured_at_revision"],
-        "class": merged["class_"],
-        "measured": merged["measured"],
-    }
-    if merged.get("live_leg_available") is not None:
-        doc["live_leg_available"] = merged["live_leg_available"]
-    if merged.get("owner") is not None:
-        doc["owner"] = merged["owner"]
-    if merged.get("items") is not None:
-        doc["items"] = merged["items"]
-    return doc
-
-
 def drift_artifact(**overrides: object) -> dict:
     defaults = {
         "schema_version": "1.0",
@@ -183,16 +161,27 @@ def drift_artifact(**overrides: object) -> dict:
         "owner": None,
         "items": None,
     }
-    return _artifact_doc(defaults, overrides)
+    merged = {**defaults, **overrides}
+    doc: dict = {
+        "schema_version": merged["schema_version"],
+        "captured_at_revision": merged["captured_at_revision"],
+        "live_leg_available": merged["live_leg_available"],
+        "class": merged["class_"],
+        "measured": merged["measured"],
+    }
+    if merged["owner"] is not None:
+        doc["owner"] = merged["owner"]
+    if merged["items"] is not None:
+        doc["items"] = merged["items"]
+    return doc
 
 
 def generic_artifact(**overrides: object) -> dict:
-    defaults = {
-        "schema_version": "1.0",
-        "captured_at_revision": None,
-        "class_": "pass",
-        "measured": "1 item checked",
-        "owner": None,
-        "items": None,
-    }
-    return _artifact_doc(defaults, overrides)
+    """A committed artifact for a dimension with no ``live_leg_available``
+    concept (everything except ``source_drift``): reuses ``drift_artifact``'s
+    defaults/merge logic via delegation and drops the drift-only field,
+    rather than re-declaring the same shape a second time."""
+    merged_overrides = {"class_": "pass", "measured": "1 item checked", **overrides}
+    doc = drift_artifact(**merged_overrides)
+    doc.pop("live_leg_available", None)
+    return doc

@@ -79,11 +79,23 @@ from typing import Any
 
 from .approval_inbox import build_approval_inbox
 from .disclosure import scan_disclosure
+from .portfolio_watch_baseline import (
+    CHANGE_LABELS,
+    LABEL_NEW,
+    LABEL_NO_BASELINE,
+    LABEL_RESOLVED,
+    LABEL_UNCHANGED,
+    SNAPSHOT_SCHEMA_VERSION,
+    ConditionChange,
+    classify_changes,
+    condition_keys_from_summary,
+    read_prior_snapshot,
+    write_snapshot,
+)
 from .readiness_classify import CATEGORY_RANK, classify, rank_of
 from .readiness_projection import build_readiness_projection
 
 SCHEMA_VERSION = "1.0"
-SNAPSHOT_SCHEMA_VERSION = "1.0"
 _ARTIFACT_SCHEMA_VERSION = "1.0"
 
 # The closed, truthful degradation-state set (data-model.md). No state is ever
@@ -102,17 +114,6 @@ DEGRADATION_STATES: frozenset[str] = frozenset(
         STATE_NOT_APPLICABLE,
         STATE_UNREADABLE,
     }
-)
-
-# The closed change-label set (data-model.md entity 5). No label is invented
-# ad hoc anywhere else in this module.
-LABEL_NEW = "new"
-LABEL_RESOLVED = "resolved"
-LABEL_UNCHANGED = "unchanged"
-LABEL_NO_BASELINE = "current_condition_no_baseline"
-
-CHANGE_LABELS: frozenset[str] = frozenset(
-    {LABEL_NEW, LABEL_RESOLVED, LABEL_UNCHANGED, LABEL_NO_BASELINE}
 )
 
 # The six covered dimensions this feature joins (spec 131 FR-001).
@@ -145,9 +146,6 @@ _ARTIFACT_FILENAMES: dict[str, str] = {
     "dashboard_intent_divergence": "semantic-audit-findings.json",
     "review": "review-result.json",
 }
-
-_SNAPSHOT_DIR = ".seshat/watch"
-_SNAPSHOT_FILENAME = "snapshot.json"
 
 
 # --------------------------------------------------------------------------- #
@@ -193,18 +191,6 @@ class PrioritizedNextAction:
 
     category: str
     action: str
-
-
-@dataclass(frozen=True)
-class ConditionChange:
-    """The per-condition new/resolved/unchanged/no-baseline label."""
-
-    key: tuple[str, str, str, str]
-    label: str
-
-    def __post_init__(self) -> None:
-        if self.label not in CHANGE_LABELS:
-            raise ValueError(f"invalid change label: {self.label!r}")
 
 
 @dataclass(frozen=True)
@@ -344,95 +330,96 @@ def _is_stale_captured_at(captured_at: object, source_revision: str | None) -> b
     )
 
 
+@dataclass(frozen=True)
+class _ArtifactContext:
+    """The trio every artifact-finding helper needs once a committed JSON
+    artifact has been located -- bundled into one value so each helper stays
+    under the 4-argument limit."""
+
+    dimension: str
+    rel_artifact: str
+    surface: str
+
+
 def _stale_artifact_finding(
-    dimension: str,
-    data: dict[str, Any],
-    rel_artifact: str,
-    surface: str,
-    source_revision: str | None,
+    ctx: _ArtifactContext, data: dict[str, Any], source_revision: str | None
 ) -> CoveredDimensionFinding | None:
     captured_at = data.get("captured_at_revision")
     if not _is_stale_captured_at(captured_at, source_revision):
         return None
     return CoveredDimensionFinding(
-        dimension=dimension,
+        dimension=ctx.dimension,
         state=STATE_STALE,
         class_=data.get("class") if isinstance(data.get("class"), str) else None,
         measured=f"captured_at_revision={captured_at} vs current={source_revision}",
-        evidence=rel_artifact,
+        evidence=ctx.rel_artifact,
         owner=data.get("owner") if isinstance(data.get("owner"), str) else None,
-        source_surface=surface,
+        source_surface=ctx.surface,
     )
 
 
 def _pending_live_artifact_finding(
-    dimension: str, data: dict[str, Any], rel_artifact: str, surface: str
+    ctx: _ArtifactContext, data: dict[str, Any]
 ) -> CoveredDimensionFinding | None:
-    if dimension != "source_drift" or data.get("live_leg_available") is not False:
+    if ctx.dimension != "source_drift" or data.get("live_leg_available") is not False:
         return None
     return CoveredDimensionFinding(
-        dimension=dimension,
+        dimension=ctx.dimension,
         state=STATE_PENDING_LIVE,
         class_=data.get("class") if isinstance(data.get("class"), str) else None,
         measured=data.get("measured")
         if isinstance(data.get("measured"), str)
         else "live re-profile not available",
-        evidence=rel_artifact,
-        source_surface=surface,
+        evidence=ctx.rel_artifact,
+        source_surface=ctx.surface,
     )
 
 
 def _covered_artifact_finding(
-    dimension: str, data: dict[str, Any], rel_artifact: str, surface: str
+    ctx: _ArtifactContext, data: dict[str, Any]
 ) -> CoveredDimensionFinding:
     cls = data.get("class")
     if not isinstance(cls, str) or not cls:
         return CoveredDimensionFinding(
-            dimension=dimension,
+            dimension=ctx.dimension,
             state=STATE_UNREADABLE,
             measured="artifact is missing a required 'class' field",
-            evidence=rel_artifact,
-            source_surface=surface,
+            evidence=ctx.rel_artifact,
+            source_surface=ctx.surface,
         )
     return CoveredDimensionFinding(
-        dimension=dimension,
+        dimension=ctx.dimension,
         state=STATE_COVERED,
         class_=cls,
         measured=data.get("measured")
         if isinstance(data.get("measured"), str)
         else None,
-        evidence=rel_artifact,
+        evidence=ctx.rel_artifact,
         owner=data.get("owner") if isinstance(data.get("owner"), str) else None,
-        source_surface=surface,
+        source_surface=ctx.surface,
         items=_parse_items(data.get("items")),
     )
 
 
 def _parsed_artifact_finding(
-    dimension: str,
-    data: dict[str, Any],
-    rel_artifact: str,
-    surface: str,
-    source_revision: str | None,
+    ctx: _ArtifactContext, data: dict[str, Any], source_revision: str | None
 ) -> CoveredDimensionFinding:
     schema_version = data.get("schema_version")
     if schema_version != _ARTIFACT_SCHEMA_VERSION:
         return CoveredDimensionFinding(
-            dimension=dimension,
+            dimension=ctx.dimension,
             state=STATE_UNREADABLE,
             measured=f"unknown schema_version {schema_version!r}",
-            evidence=rel_artifact,
-            source_surface=surface,
+            evidence=ctx.rel_artifact,
+            source_surface=ctx.surface,
         )
-    stale = _stale_artifact_finding(
-        dimension, data, rel_artifact, surface, source_revision
-    )
+    stale = _stale_artifact_finding(ctx, data, source_revision)
     if stale is not None:
         return stale
-    pending = _pending_live_artifact_finding(dimension, data, rel_artifact, surface)
+    pending = _pending_live_artifact_finding(ctx, data)
     if pending is not None:
         return pending
-    return _covered_artifact_finding(dimension, data, rel_artifact, surface)
+    return _covered_artifact_finding(ctx, data)
 
 
 def _artifact_dimension_finding(
@@ -468,9 +455,10 @@ def _artifact_dimension_finding(
                 evidence=rel_artifact,
                 source_surface=surface,
             )
-        return _parsed_artifact_finding(
-            dimension, data, rel_artifact, surface, source_revision
+        ctx = _ArtifactContext(
+            dimension=dimension, rel_artifact=rel_artifact, surface=surface
         )
+        return _parsed_artifact_finding(ctx, data, source_revision)
     except OSError as exc:  # pragma: no cover - defensive, mirrors FR-022
         return CoveredDimensionFinding(
             dimension=dimension,
@@ -641,19 +629,28 @@ _ARTIFACT_DIMENSION_NAMES: tuple[str, ...] = (
 )
 
 
+@dataclass(frozen=True)
+class _AssembleContext:
+    """The values one ``_assemble`` call holds constant across every scope --
+    bundled into one value so ``_scope_dimensions`` stays under the
+    4-argument limit."""
+
+    root: Path
+    inbox_items: list[dict[str, Any]]
+    revision: str | None
+
+
 def _scope_dimensions(
-    scope: GovernedScope,
-    entry: dict[str, Any] | None,
-    inbox_items: list[dict[str, Any]],
-    root: Path,
-    revision: str | None,
+    scope: GovernedScope, entry: dict[str, Any] | None, ctx: _AssembleContext
 ) -> dict[str, CoveredDimensionFinding]:
     dims: dict[str, CoveredDimensionFinding] = {
         "readiness": _readiness_dimension_finding(scope, entry),
-        "approvals": _approvals_dimension_finding(scope, inbox_items),
+        "approvals": _approvals_dimension_finding(scope, ctx.inbox_items),
     }
     for dimension in _ARTIFACT_DIMENSION_NAMES:
-        dims[dimension] = _artifact_dimension_finding(dimension, root, scope, revision)
+        dims[dimension] = _artifact_dimension_finding(
+            dimension, ctx.root, scope, ctx.revision
+        )
     return dims
 
 
@@ -705,8 +702,10 @@ def _assemble(
     scopes = enumerate_governed_scopes(root)
     projection = build_readiness_projection(root)
     by_path = {t["source_path"]: t for t in projection["tables"]}
-    inbox_items = build_approval_inbox(root)["items"]
     revision = _source_revision(root)
+    ctx = _AssembleContext(
+        root=root, inbox_items=build_approval_inbox(root)["items"], revision=revision
+    )
 
     scope_docs: list[dict[str, Any]] = []
     scopes_with_no_evidence: list[str] = []
@@ -714,7 +713,7 @@ def _assemble(
 
     for scope in scopes:
         entry = by_path.get(scope.source_path)
-        dims = _scope_dimensions(scope, entry, inbox_items, root, revision)
+        dims = _scope_dimensions(scope, entry, ctx)
         all_keys |= _dimension_keys(scope.scope_id, dims)
         if not _artifact_dims_evidenced(dims):
             scopes_with_no_evidence.append(scope.scope_id)
@@ -747,177 +746,9 @@ def build_portfolio_watch_summary(repo_root: Path | str = ".") -> dict[str, Any]
 
 
 # --------------------------------------------------------------------------- #
-# Condition keys, baseline snapshot, and the change classifier (US2)
-# --------------------------------------------------------------------------- #
-def condition_keys_from_summary(
-    summary: dict[str, Any],
-) -> frozenset[tuple[str, str, str, str]]:
-    """Re-derive the magnitude-free Condition Key set from an already-built
-    summary dict (e.g. one produced by :func:`build_portfolio_watch_summary`).
-    A magnitude wiggle in ``measured`` never changes a key (research D3)."""
-    keys: set[tuple[str, str, str, str]] = set()
-    for scope in summary.get("scopes", []):
-        scope_id = scope["scope_id"]
-        for dim in scope.get("dimensions", []):
-            for item in dim.get("items", []):
-                keys.add(
-                    (scope_id, dim["dimension"], item["class"], item["subject_locator"])
-                )
-    return frozenset(keys)
-
-
-def _snapshot_path(root: Path) -> Path:
-    return root / ".seshat" / "watch" / _SNAPSHOT_FILENAME
-
-
-def _read_snapshot_document(path: Path) -> dict[str, Any] | None:
-    try:
-        raw = path.read_text(encoding="utf-8")
-        data = json.loads(raw)
-    except (OSError, json.JSONDecodeError):
-        return None
-    if not isinstance(data, dict):
-        return None
-    if data.get("schema_version") != SNAPSHOT_SCHEMA_VERSION:
-        return None
-    return data
-
-
-def _valid_condition_key(entry: object) -> bool:
-    return (
-        isinstance(entry, list)
-        and len(entry) == 4
-        and all(isinstance(x, str) for x in entry)
-    )
-
-
-def _condition_keys_from_snapshot(
-    conditions: list[Any],
-) -> frozenset[tuple[str, str, str, str]] | None:
-    if not all(_valid_condition_key(entry) for entry in conditions):
-        return None
-    return frozenset(tuple(entry) for entry in conditions)
-
-
-def read_prior_snapshot(repo_root: Path | str = ".") -> dict[str, Any] | None:
-    """Read the prior-run snapshot. Returns ``None`` (no usable baseline) on
-    any absence/read/parse/shape failure -- fail-closed, never a fabricated
-    diff (FR-009, SNAP-3)."""
-    root = Path(repo_root).resolve()
-    path = _snapshot_path(root)
-    if not path.is_file():
-        return None
-    data = _read_snapshot_document(path)
-    if data is None:
-        return None
-
-    conditions = data.get("conditions")
-    scope_set = data.get("scope_set")
-    if not isinstance(conditions, list) or not isinstance(scope_set, list):
-        return None
-    if not all(isinstance(s, str) for s in scope_set):
-        return None
-
-    keys = _condition_keys_from_snapshot(conditions)
-    if keys is None:
-        return None
-
-    return {
-        "conditions": keys,
-        "scopes": frozenset(scope_set),
-        "captured_at_revision": data.get("captured_at_revision"),
-    }
-
-
-def write_snapshot(
-    repo_root: Path | str,
-    condition_keys: frozenset[tuple[str, str, str, str]],
-    scope_ids: frozenset[str],
-    revision: str | None,
-) -> Path:
-    """Write the fresh local baseline snapshot (SNAP-1: local artifact only;
-    the only write beyond the summary itself, SC-008)."""
-    root = Path(repo_root).resolve()
-    path = _snapshot_path(root)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    doc = {
-        "schema_version": SNAPSHOT_SCHEMA_VERSION,
-        "captured_at_revision": revision,
-        "conditions": sorted(list(key) for key in condition_keys),
-        "scope_set": sorted(scope_ids),
-    }
-    path.write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return path
-
-
-def _no_baseline_changes(
-    current_keys: frozenset[tuple[str, str, str, str]],
-) -> tuple[list[ConditionChange], list[dict[str, str]]]:
-    conditions = [
-        ConditionChange(key=key, label=LABEL_NO_BASELINE)
-        for key in sorted(current_keys)
-    ]
-    return conditions, []
-
-
-def _scope_level_changes(
-    added_scopes: set[str], removed_scopes: set[str]
-) -> list[dict[str, str]]:
-    return [{"scope_id": s, "change": "scope_added"} for s in sorted(added_scopes)] + [
-        {"scope_id": s, "change": "scope_removed"} for s in sorted(removed_scopes)
-    ]
-
-
-def _condition_level_changes(
-    current_keys: frozenset[tuple[str, str, str, str]],
-    prior_keys: frozenset[tuple[str, str, str, str]],
-    added_scopes: set[str],
-    removed_scopes: set[str],
-) -> list[ConditionChange]:
-    filtered_current = {k for k in current_keys if k[0] not in added_scopes}
-    filtered_prior = {k for k in prior_keys if k[0] not in removed_scopes}
-
-    new = sorted(filtered_current - filtered_prior)
-    resolved = sorted(filtered_prior - filtered_current)
-    unchanged = sorted(filtered_current & filtered_prior)
-
-    return (
-        [ConditionChange(key=k, label=LABEL_NEW) for k in new]
-        + [ConditionChange(key=k, label=LABEL_RESOLVED) for k in resolved]
-        + [ConditionChange(key=k, label=LABEL_UNCHANGED) for k in unchanged]
-    )
-
-
-def classify_changes(
-    current_keys: frozenset[tuple[str, str, str, str]],
-    current_scopes: frozenset[str],
-    prior: dict[str, Any] | None,
-) -> tuple[list[ConditionChange], list[dict[str, str]]]:
-    """Pure, deterministic sorted set-diff (FR-008, FR-012, SC-006).
-
-    ``prior`` absent/unreadable -> every current condition is
-    ``current_condition_no_baseline`` (FR-009). A scope added/removed between
-    runs is reported as a scope-level change; its conditions are EXCLUDED from
-    the condition-level diff so they are never misattributed as new/resolved
-    conditions inside a missing scope (FR-011).
-    """
-    if prior is None:
-        return _no_baseline_changes(current_keys)
-
-    prior_keys = prior["conditions"]
-    prior_scopes = prior["scopes"]
-    added_scopes = current_scopes - prior_scopes
-    removed_scopes = prior_scopes - current_scopes
-
-    conditions = _condition_level_changes(
-        current_keys, prior_keys, added_scopes, removed_scopes
-    )
-    scope_changes = _scope_level_changes(added_scopes, removed_scopes)
-    return conditions, scope_changes
-
-
-# --------------------------------------------------------------------------- #
 # The run flow (US2 T021): read prior -> build summary -> classify -> write
+# (condition keys, baseline snapshot, and the change classifier live in
+# ``portfolio_watch_baseline``, imported above)
 # --------------------------------------------------------------------------- #
 def run_portfolio_watch(repo_root: Path | str = ".") -> dict[str, Any]:
     """Run one Portfolio Watch pass: read the prior snapshot, build the
