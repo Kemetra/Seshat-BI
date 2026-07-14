@@ -2,7 +2,11 @@
 
 Two contract surfaces: the **library functions** (the reusable composition +
 rendering layer) and the **skill** (the Option-B user-facing surface). No CLI-verb
-contract is defined (Option B; FR-005).
+contract is defined for the recommended default (Option B; FR-005). NOTE: the
+delivery shape (skill vs CLI verb) is an open-for-human ratifier decision (FR-005
++ spec "Open for Human"); this contract documents the recommended skill default.
+If the ratifier amends FR-005 to a CLI verb, the user-facing surface contract
+changes accordingly while the library-function contract below is unaffected.
 
 ## Library function contract
 
