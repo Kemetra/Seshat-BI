@@ -167,6 +167,21 @@ def _lineage_entries(lineage: dict[str, Any]) -> list[tuple[str, dict[str, Any]]
     return entries
 
 
+def _residual_finding_for_string(value: str, locator: str) -> list[dict[str, str]]:
+    if not (_WINDOWS_ABS_RE.search(value) or _UNIX_ABS_RE.search(value)):
+        return []
+    return [
+        {
+            "rule": "residual_absolute_path",
+            "locator": locator,
+            "message": (
+                "machine-local absolute path survived portability "
+                "normalization and is not safe for disclosure"
+            ),
+        }
+    ]
+
+
 def find_residual_absolute_paths(
     document: Any, *, locator: str = "$"
 ) -> list[dict[str, str]]:
@@ -182,18 +197,7 @@ def find_residual_absolute_paths(
     generation still fails closed regardless of the shared scanner's coverage.
     """
     if isinstance(document, str):
-        if not (_WINDOWS_ABS_RE.search(document) or _UNIX_ABS_RE.search(document)):
-            return []
-        return [
-            {
-                "rule": "residual_absolute_path",
-                "locator": locator,
-                "message": (
-                    "machine-local absolute path survived portability "
-                    "normalization and is not safe for disclosure"
-                ),
-            }
-        ]
+        return _residual_finding_for_string(document, locator)
     if isinstance(document, dict):
         return [
             finding
