@@ -82,6 +82,9 @@ wiring -- the authoring sibling of `retail-govern`, which interprets rule findin
 - Readiness: `docs/readiness/readiness-model.md`, `readiness-pipeline.md`.
 - Roadmap: `docs/roadmap/roadmap.md`. Architecture: `docs/architecture/`.
 - Repo rules (secrets, PBIP, Windows): `CLAUDE.md`.
+<!-- SPECKIT START -->
+Active Spec Kit implementation plan: `specs/126-adopt-existing-pbip/plan.md`.
+<!-- SPECKIT END -->
 <!-- SESHAT-KIT START -->
 **Seshat BI kit router** (v0.2.0) -- generated from `.seshat/kit-source.yaml`; do not edit here.
 
