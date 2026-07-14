@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seshat-bi.dev/schemas/pbip-adoption-assessment-1.0.json",
+  "title": "Seshat BI PBIP Adoption Assessment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "target",
+    "coverage",
+    "facts",
+    "governance_findings",
+    "readiness",
+    "changes",
+    "scaffold_plan",
+    "next_step",
+    "disclosure",
+    "assessment_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "target": {"$ref": "#/$defs/target"},
+    "coverage": {"$ref": "#/$defs/coverage"},
+    "facts": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/fact"}
+    },
+    "governance_findings": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/governanceFinding"}
+    },
+    "readiness": {
+      "type": "array",
+      "items": {"type": "object"}
+    },
+    "changes": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/change"}
+    },
+    "scaffold_plan": {"$ref": "#/$defs/scaffoldPlan"},
+    "next_step": {"$ref": "#/$defs/nextStep"},
+    "disclosure": {"$ref": "#/$defs/disclosure"},
+    "assessment_digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "$defs": {
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?![A-Za-z]:[\\\\/])(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"
+    },
+    "classification": {
+      "enum": [
+        "observed",
+        "proposed",
+        "missing",
+        "blocked",
+        "unavailable_with_reason"
+      ]
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "identity", "artifact", "sha256", "support"],
+      "properties": {
+        "kind": {
+          "enum": [
+            "project",
+            "semantic_model",
+            "report",
+            "table",
+            "measure",
+            "relationship",
+            "parameter",
+            "page",
+            "visual"
+          ]
+        },
+        "identity": {"type": "string", "minLength": 1},
+        "artifact": {"$ref": "#/$defs/relativePath"},
+        "sha256": {
+          "type": ["string", "null"],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "support": {
+          "enum": ["supported", "unsupported", "unreadable", "missing", "ambiguous"]
+        }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "label", "version_control", "components"],
+      "properties": {
+        "kind": {"enum": ["pbip_project", "pbix_unsupported"]},
+        "label": {"type": "string", "minLength": 1},
+        "version_control": {"enum": ["clean", "dirty", "untracked", "absent"]},
+        "components": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/component"}
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "supported", "unsupported", "unreadable", "missing", "ambiguous"],
+      "properties": {
+        "status": {"enum": ["complete", "partial", "blocked"]},
+        "supported": {"type": "integer", "minimum": 0},
+        "unsupported": {"type": "integer", "minimum": 0},
+        "unreadable": {"type": "integer", "minimum": 0},
+        "missing": {"type": "integer", "minimum": 0},
+        "ambiguous": {"type": "integer", "minimum": 0}
+      }
+    },
+    "fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "classification",
+        "category",
+        "subject",
+        "detail",
+        "artifact",
+        "reason",
+        "rule_id",
+        "required_authority"
+      ],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "classification": {"$ref": "#/$defs/classification"},
+        "category": {"enum": ["coverage", "governance", "readiness", "evidence", "proposal", "change"]},
+        "subject": {"type": "string", "minLength": 1},
+        "detail": {"type": "string", "minLength": 1},
+        "artifact": {
+          "oneOf": [
+            {"$ref": "#/$defs/relativePath"},
+            {"type": "null"}
+          ]
+        },
+        "reason": {"type": ["string", "null"]},
+        "rule_id": {"type": ["string", "null"]},
+        "required_authority": {"type": ["string", "null"]}
+      }
+    },
+    "governanceFinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule_id", "severity", "message", "locator", "classification"],
+      "properties": {
+        "rule_id": {"type": "string", "minLength": 1},
+        "severity": {"enum": ["ERROR", "WARNING", "INFO"]},
+        "message": {"type": "string", "minLength": 1},
+        "locator": {"$ref": "#/$defs/relativePath"},
+        "classification": {"enum": ["observed", "blocked"]}
+      }
+    },
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "artifact", "previous_sha256", "current_sha256", "classification"],
+      "properties": {
+        "kind": {"enum": ["added", "removed", "changed", "unchanged"]},
+        "artifact": {"$ref": "#/$defs/relativePath"},
+        "previous_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+        "current_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+        "classification": {"enum": ["observed", "blocked"]}
+      }
+    },
+    "scaffoldPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["writes", "preconditions", "approvals"],
+      "properties": {
+        "writes": {
+          "type": "array",
+          "maxItems": 1,
+          "items": {"const": ".seshat/adoption/pbip-adoption.yaml"}
+        },
+        "preconditions": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "approvals": {"type": "array", "maxItems": 0}
+      }
+    },
+    "nextStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "stage", "action", "blocking_reasons", "required_authority"],
+      "properties": {
+        "kind": {"enum": ["action", "terminal_stop"]},
+        "stage": {
+          "type": ["string", "null"],
+          "enum": [
+            "source_ready",
+            "mapping_ready",
+            "silver_ready",
+            "gold_ready",
+            "semantic_model_ready",
+            "dashboard_ready",
+            "publish_ready",
+            null
+          ]
+        },
+        "action": {"type": "string", "minLength": 1},
+        "blocking_reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "required_authority": {"type": ["string", "null"]}
+      }
+    },
+    "disclosure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "findings"],
+      "properties": {
+        "status": {"enum": ["pass", "blocked"]},
+        "findings": {
+          "type": "array",
+          "items": {"type": "object"}
+        }
+      }
+    }
+  }
+}

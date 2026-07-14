@@ -23,3 +23,26 @@ For subject reasoning, load only the relevant bundled skill:
 
 End with one next action or one blocked stop. Cite evidence and named blockers;
 never invent a pass or score.
+
+## Existing PBIP projects
+
+For an existing Power BI Project, first use the installed read-only entry path:
+
+```powershell
+seshat adopt-pbip assess --project <PBIP-project-directory> --format text
+```
+
+Treat PBIP structure as candidate evidence only. The assessment must not create
+or approve mappings, metrics, business meaning, or readiness passes. It returns
+one governed next action and an assessment digest. A `.pbix` is a conversion
+boundary: save it as PBIP in Power BI Desktop before continuing.
+
+Only after a human reviews the exact digest, and only in a clean existing Git
+worktree, may the agent run:
+
+```powershell
+seshat adopt-pbip scaffold --project <PBIP-project-directory> --accept-assessment <assessment-digest>
+```
+
+This writes at most `.seshat/adoption/pbip-adoption.yaml`; it never initializes
+Git, overwrites existing files, grants approval, or advances readiness.

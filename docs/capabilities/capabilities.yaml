@@ -914,6 +914,21 @@ capabilities:
     references:
       skill: "pbip-workflow"
 
+  - id: pbip-adoption
+    name: "seshat adopt-pbip"
+    summary: "Read-only governed assessment of an existing PBIP project, plus an exact-digest, one-file adoption baseline scaffold."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: source_ready
+    command: "adopt-pbip"
+    documentation: "docs/tools/pbip-adoption.md"
+    references:
+      dispatch: "adopt-pbip"
+      skill: "pbip-workflow"
+
   - id: speckit-workflow-skills
     name: "Spec-Kit workflow skills"
     summary: "The Spec-Kit authoring chain (specify/clarify/plan/tasks/analyze/checklist/constitution/git-*) used to draft and ratify every feature spec in this repo, including this one."

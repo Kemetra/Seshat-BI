@@ -1,0 +1,3 @@
+relationship Sales_Date
+	fromColumn: Sales.DateKey
+	toColumn: Date.DateKey

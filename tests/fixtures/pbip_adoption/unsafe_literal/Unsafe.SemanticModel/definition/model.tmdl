@@ -1,0 +1,3 @@
+table Sales
+	partition Sales = m
+		source = "Server='do-not-disclose'; Password='do-not-disclose'"

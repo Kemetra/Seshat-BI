@@ -50,6 +50,33 @@ def test_two_exports_have_identical_paths_and_bytes(tmp_path: Path) -> None:
     assert first_files == second_files
 
 
+def test_pbip_adoption_router_is_identical_in_claude_and_codex_regeneration(
+    tmp_path: Path, monkeypatch
+) -> None:
+    import scripts.export_agent_bundles as exporter
+
+    allowlist = exporter.load_allowlist(ROOT)
+    tracked = {
+        str(entry["source"])
+        for entry in exporter._all_entries(allowlist)
+        if isinstance(entry.get("source"), str)
+    }
+    monkeypatch.setattr(exporter, "_git_paths", lambda _root: tracked)
+    options = BuildOptions(source_revision="0" * 40, allow_untracked_inputs=True)
+    claude = tmp_path / "claude"
+    codex = tmp_path / "codex"
+    build_bundle(ROOT, "claude", claude, options)
+    build_bundle(ROOT, "codex", codex, options)
+    claude_route = (claude / "skills" / "seshat-bi" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    codex_route = (codex / "skills" / "seshat-bi" / "SKILL.md").read_text(
+        encoding="utf-8"
+    )
+    assert claude_route == codex_route
+    assert "seshat adopt-pbip assess" in claude_route
+
+
 def test_manifest_digest_and_cross_target_provenance(tmp_path: Path) -> None:
     claude = build_bundle(
         ROOT,

@@ -298,6 +298,7 @@ Power BI is the reporting target, not the source of truth.
 - Reads from `gold` only.
 - Every measure traces to a metric contract; blueprints invent no KPIs.
 - PBIP artifacts stay source-control friendly (plain-text TMDL/PBIR).
+- Existing PBIP projects start with the read-only [`seshat adopt-pbip assess`](docs/tools/pbip-adoption.md) path; it creates no readiness pass or approval.
 - Publishing / execution automation is deferred until semantic-model readiness passes.
 
 ---

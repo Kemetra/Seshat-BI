@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seshat-bi.dev/schemas/pbip-adoption-scaffold-result-1.0.json",
+  "title": "Seshat BI PBIP Adoption Scaffold Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "outcome",
+    "assessment_digest",
+    "written",
+    "blocking_reasons",
+    "next_step",
+    "approvals"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "outcome": {"enum": ["written", "refused", "input_defect"]},
+    "assessment_digest": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "written": {
+      "type": "array",
+      "maxItems": 1,
+      "items": {"const": ".seshat/adoption/pbip-adoption.yaml"}
+    },
+    "blocking_reasons": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "next_step": {"$ref": "#/$defs/nextStep"},
+    "approvals": {"type": "array", "maxItems": 0}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"outcome": {"const": "written"}}},
+      "then": {
+        "properties": {
+          "assessment_digest": {"type": "string"},
+          "written": {
+            "minItems": 1,
+            "maxItems": 1
+          },
+          "blocking_reasons": {"maxItems": 0}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"outcome": {"enum": ["refused", "input_defect"]}}},
+      "then": {
+        "properties": {
+          "written": {"maxItems": 0},
+          "blocking_reasons": {"minItems": 1}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "nextStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "stage", "action", "blocking_reasons", "required_authority"],
+      "properties": {
+        "kind": {"enum": ["action", "terminal_stop"]},
+        "stage": {
+          "type": ["string", "null"],
+          "enum": [
+            "source_ready",
+            "mapping_ready",
+            "silver_ready",
+            "gold_ready",
+            "semantic_model_ready",
+            "dashboard_ready",
+            "publish_ready",
+            null
+          ]
+        },
+        "action": {"type": "string", "minLength": 1},
+        "blocking_reasons": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1}
+        },
+        "required_authority": {"type": ["string", "null"]}
+      }
+    }
+  }
+}
