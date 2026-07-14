@@ -27,6 +27,68 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+Work merged to `main` since `v0.2.0` (`git log v0.2.0..HEAD`):
+
+### Added
+- **Spec 127 -- Shareable Seshat Proof (showcase bundle)** (PR #281, ratified PR
+  #280): composes existing Explorer, Passport, readiness, review, blocker,
+  approval, and lineage evidence into a disclosure-safe static offline bundle.
+  Delivered skill/composer-only (Option B, ratified 2026-07-14); no new CLI verb.
+- **Spec 128 -- Public Extension-Pack Catalog** (`seshat pack search / inspect /
+  add`) (PR #281, ratified PR #280): a discovery/retrieval layer over the shipped
+  declarative pack scaffold -- a reviewed static git registry (not a hosted
+  marketplace), with hash/schema verification, fail-closed handling of invalid,
+  incompatible, missing, or tampered packs, and preserved contributor
+  attribution. Extends the shipped `pack` CLI verb group; packs remain
+  declarative-only and cannot grant readiness or approval.
+- **Spec 129 -- Agent Compatibility Certification** (`seshat agent verify`) (PR
+  #281, ratified PR #280): a new CLI verb that certifies agent/tool
+  compatibility; output stays local-only (no public catalog submission).
+- **Spec 130 -- Friendly PR Reviewer** (plain-language PR summary) (PR #281,
+  ratified PR #280): a skill-driven, plain-language summary layer over existing
+  PR review evidence.
+- **Spec 131 -- Portfolio Watch** (`seshat watch build`) (PR #281, ratified PR
+  #280): a recurring, read-only portfolio summary aggregating source drift,
+  contract/semantic drift, stale or missing approvals, changed readiness,
+  dashboard-intent divergence, and blocker deltas into one prioritized next
+  action per governed scope. Delivered agent-/skill-driven like its sibling
+  `retail-control-room` (ratified `docs/roadmap/decisions/cli-verbs-vs-skill-driven.md`,
+  Option B); the one deliberate CLI addition is a narrow, read-only,
+  machine-readable summary/status surface mirroring the ratified `status
+  --format json` precedent -- not a new broad verb family.
+- **Governed existing-PBIP-project adoption** (PR #271): a module that adopts an
+  already-authored PBIP project into the governance model, split into focused
+  submodules, redacting secret values and failing closed on a bad baseline.
+- **Coordinated release preparation workflow** (PR #278):
+  `.github/workflows/prepare-coordinated-release.yml`, an owner-triggered
+  `workflow_dispatch` action that projects an owner-selected SemVer into
+  `pyproject.toml`, the Claude marketplace/plugin manifests, the Codex plugin
+  manifest, and both generated bundles in one synchronized draft release PR. No
+  tag, publication, or catalog submission is performed by the workflow itself.
+
+### Fixed
+- **PBIP adoption: literal Power Query M data-source detection** (PR #279):
+  the existing shipped C1 connection-literal boundary rule previously matched
+  only assignment-form literals (e.g. `Server="..."`) and missed a literal M
+  data source such as `Sql.Database("prod.internal", "DW")`, which went
+  unflagged until the project was committed. The fallback boundary scan now
+  also matches M data-source literal-argument calls (the safe parameterized
+  identifier form is still not matched), raising the same existing C1 fact.
+  Per `docs/operations/versioning-policy.md`, this restores C1's documented
+  intent rather than changing it, but the change **can newly flag an
+  already-committed PBIP project that was previously passing**.
+- **PBIP adoption: source-reference inventory** (PR #279): a parsed table
+  previously emitted measures and relationships but never recorded its
+  partition/M source references. Each table now emits one proposed
+  source-reference fact per partition source (the raw M body itself is never
+  echoed; literal-credential scanning stays a separate check).
+- **`speckit-batch` tolerates JSON-string `args`** (PR #277): the batch runner
+  previously broke when `args` arrived as a JSON-encoded string rather than a
+  native array/object; it now accepts both.
+
+### Docs
+- **v0.2.0 install/support guidance + README landing-page rewrite** (PR #269).
+
 ## [0.2.0] -- 2026-07-13
 
 Work from the current roadmap arc (`docs/roadmap/seshat-bi-agent-controlled-user-tool-roadmap.md`,
