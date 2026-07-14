@@ -753,6 +753,20 @@ capabilities:
       roadmap: "F025"
       skill: "pr-readiness-reviewer"
 
+  - id: friendly-pr-reviewer
+    name: "friendly PR reviewer"
+    summary: "Renders a plain-language narrative of one PR's already-produced review envelope: what changed, per-stage pass/warning/blocked status (verbatim), new/resolved/pre-existing findings, required approval authority, and exactly one next action. A presentation layer over shipped truth, distinct from the pr-readiness-reviewer merge verdict; no roadmap F-number self-assigned yet."
+    state: shipped
+    authority: advisory
+    surface: skill
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: null
+    documentation: ".claude/skills/friendly-pr-reviewer/SKILL.md"
+    references:
+      skill: "friendly-pr-reviewer"
+
   - id: readiness-viewer
     name: "readiness viewer"
     summary: "Stage-centric readiness lens: a per-stage status matrix across the kit's sources/tables/reports plus an approvals timeline."

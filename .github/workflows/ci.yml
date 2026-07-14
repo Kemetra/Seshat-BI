@@ -82,6 +82,54 @@ jobs:
             retail check
           fi
 
+      - name: Friendly PR summary (opt-in, off by default)
+        # Feature 130 (Friendly PR Reviewer) -- a plain-language PRESENTATION
+        # layer over the review envelope `retail check --format review`
+        # already produces (spec 130; src/seshat/pr_summary.py). It is NOT a
+        # new gate and NOT a merge-safety verdict -- that verdict stays owned
+        # by the shipped `pr-readiness-reviewer` skill (F025); this step adds
+        # no `retail check` rule and changes no rule's behavior.
+        #
+        # OFF BY DEFAULT: a repository that has not set the repo-level
+        # Actions variable POST_FRIENDLY_PR_SUMMARY to "true" sees NO
+        # behavior change here and NO comment posted (FR-015, SC-005).
+        #
+        # THIN WRAPPER, not the tested core: the deterministic renderer /
+        # differ / masker / comment-composer (`render_summary`,
+        # `classify_changes`, `mask`, `pick_next_action`, `compose_comment`,
+        # `find_existing`) are unit-tested in tests/unit/test_pr_summary.py
+        # with no network. `scripts/post_friendly_pr_summary.py` only (a)
+        # re-runs the already-produced review in `--format review` (no new
+        # analysis), (b) calls those pure functions, and (c) posts/updates
+        # ONE sticky comment via the runner's own `gh` CLI + GITHUB_TOKEN --
+        # update-in-place by the stable HTML-comment marker, never a second
+        # comment (FR-014). It adds no new Python dependency: `pyyaml` is
+        # already installed via the `[dev]` extra for the semantic-check /
+        # kit-lint steps below.
+        #
+        # The base-branch temporal fingerprint diff (US2, NEW vs RESOLVED vs
+        # pre-existing) is not wired into this CI step yet -- fetching a base
+        # run is explicitly the wrapper's job, deferred here to keep this
+        # step thin (see docs/tools/friendly-pr-reviewer.md); the summary
+        # honestly states the distinction could not be determined.
+        if: >-
+          github.event_name == 'pull_request' &&
+          vars.POST_FRIENDLY_PR_SUMMARY == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git fetch origin main 2>/dev/null || true
+          BASE=$(git merge-base origin/main HEAD 2>/dev/null || echo "")
+          if [ -n "$BASE" ]; then
+            retail check --format review --commit-range "$BASE..HEAD" > review.json || true
+          else
+            retail check --format review > review.json || true
+          fi
+          python scripts/post_friendly_pr_summary.py \
+            --review review.json \
+            --repo "${{ github.repository }}" \
+            --pr "${{ github.event.pull_request.number }}"
+
       - name: Retail semantic-check (L3 contract<->DAX drift)
         # Separate step from `retail check` (above): the static check core is
         # stdlib-only and must never import yaml. `retail semantic-check` parses
