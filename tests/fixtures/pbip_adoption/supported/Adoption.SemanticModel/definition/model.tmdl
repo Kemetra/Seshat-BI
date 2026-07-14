@@ -1,0 +1,15 @@
+table Sales
+	column Amount
+		dataType: decimal
+		summarizeBy: sum
+
+	measure Total Amount = SUM(Sales[Amount])
+		displayFolder: Core
+
+	partition Sales = m
+		source =
+			let
+				Source = PostgreSQL.Database(Server, Database),
+				Data = Source{[Schema="gold", Item="fct_sales"]}[Data]
+			in
+				Data

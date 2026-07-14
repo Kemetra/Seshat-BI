@@ -31,6 +31,35 @@ answerable from `git log`, and a teammate can review a measure change in a pull
 request the same way they'd review a function. Treat the model with the same care
 as source code.
 
+## Adopt an existing PBIP into Seshat BI
+
+When the analyst already has a PBIP project, start with the governed,
+read-only intake rather than treating its report pages or measures as readiness
+evidence:
+
+```powershell
+seshat adopt-pbip assess --project <PBIP-project-directory> --format text
+```
+
+The assessment inventories only supported PBIP/TMDL/PBIR structure, redacts
+unsafe literals, reuses existing governance/readiness findings, and returns one
+next action. It does not create a source map, metric contract, approval, or
+readiness pass. Review the digest and declared write plan before any mutation.
+
+For a clean, existing Git worktree only, an analyst may explicitly accept the
+current assessment to create exactly one new evidence seam:
+
+```powershell
+seshat adopt-pbip scaffold --project <PBIP-project-directory> `
+  --accept-assessment <assessment-digest> --format text
+```
+
+This creates only `.seshat/adoption/pbip-adoption.yaml`; it never initializes
+Git, overwrites a file, or edits PBIP/TMDL/PBIR/DAX/SQL/source artifacts.
+Approvals remain empty and readiness must still be proven through the existing
+seven-stage gates. For a `.pbix`, open it in Power BI Desktop and save it as a
+PBIP first; the adoption command does not parse or extract PBIX binaries.
+
 ## Enabling PBIP
 
 If "Save as Power BI Project" is missing, it's because the preview feature isn't on:

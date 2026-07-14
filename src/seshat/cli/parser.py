@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 
+from .parser_adoption import _add_adopt_pbip_parser
 from .parser_ecosystem import (
     _add_benchmark_parser,
     _add_explorer_parser,
@@ -982,6 +983,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_scaffold_parser(sub)
     _add_init_parser(sub)
     _add_init_project_parser(sub)
+    _add_adopt_pbip_parser(sub)
     _add_status_parser(sub)
     _add_next_parser(sub)
     _add_approvals_parser(sub)

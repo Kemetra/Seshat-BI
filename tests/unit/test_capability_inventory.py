@@ -21,7 +21,12 @@ from pathlib import Path
 import pytest
 
 from seshat import capability_feeders as feeders
-from seshat.capability_inventory import build_inventory, render_human, render_json
+from seshat.capability_inventory import (
+    build_inventory,
+    load_manifest,
+    render_human,
+    render_json,
+)
 from tests.unit import _capability_oracle as oracle
 
 pytestmark = pytest.mark.unit
@@ -115,6 +120,20 @@ def test_o2_reference_coverage_not_entry_per_representation() -> None:
     capability must NOT read as under-covering the other two."""
     problems = oracle.find_unlisted(_FIXTURES_ROOT / "good")
     assert problems == [], problems
+
+
+def test_pbip_adoption_capability_truthfully_covers_the_local_route() -> None:
+    records = {record["id"]: record for record in build_inventory(_REPO_ROOT)}
+    adoption = records["pbip-adoption"]
+    assert adoption["state"] == "shipped"
+    assert adoption["command"] == "adopt-pbip"
+    raw = {entry["id"]: entry for entry in load_manifest(_REPO_ROOT)}
+    assert raw["pbip-adoption"]["references"]["dispatch"] == "adopt-pbip"
+    assert raw["pbip-adoption"]["references"]["skill"] == "pbip-workflow"
+    skill = (
+        _REPO_ROOT / ".claude" / "skills" / "pbip-workflow" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+    assert "seshat adopt-pbip assess" in skill
 
 
 # ---------------------------------------------------------------------------

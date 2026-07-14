@@ -18,6 +18,10 @@ publish/execution deliberately kept **out of scope and gated**.
   metric contracts exist (`no_dashboard_before_metric_contracts`).
 - **`pbip-workflow`** — the PBIP project conventions (plain-text TMDL/PBIR, preview
   feature, short paths).
+- **Existing PBIP adoption** — run `seshat adopt-pbip assess --project <path>` before
+  treating an existing report as governed. It is read-only and returns one next action;
+  the explicitly accepted scaffold writes only the adoption fingerprint baseline. See
+  [PBIP adoption](../tools/pbip-adoption.md).
 - **The PBIR authoring adapters (all shipped, run via `retail`/`seshat`):**
   `pbir-apply-theme`, `pbir-format-visual`, `pbir-set-page-background`,
   `pbir-set-geometry` — deterministic, local-file, reviewable writers that apply
