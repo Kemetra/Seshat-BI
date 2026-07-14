@@ -33,7 +33,14 @@ export const meta = {
 //   See .claude/workflows/speckit-batch.md for the operator recovery protocol.
 // =============================================================================
 
-const IDEAS = Array.isArray(args) ? args : []
+// args may arrive already-parsed (array) OR as a JSON-encoded string (known
+// Workflow serialization gotcha) -- normalize both to an array.
+let IDEAS = []
+if (Array.isArray(args)) {
+  IDEAS = args
+} else if (typeof args === 'string' && args.trim()) {
+  try { const parsed = JSON.parse(args); if (Array.isArray(parsed)) IDEAS = parsed } catch (e) { /* leave empty -> guard below */ }
+}
 if (!IDEAS.length) {
   log('speckit-batch: no feature ideas in args. Pass [{number,name,description}, ...].')
   return { error: 'no feature ideas provided in args' }
