@@ -91,15 +91,25 @@ def test_mixed_state_fixture_shows_truthful_evidence_states(tmp_path: Path) -> N
     ]
     assert defect_nodes, "the malformed metric contract must render as a defect node"
 
+    _assert_no_pass_without_evidence(bundle["tables"])
+
+
+def _stage_pass_without_evidence(table: dict) -> str | None:
+    """Return the offending "table.stage" name if any stage on this table is
+    `pass` with no evidence, else ``None`` (INV-1 helper)."""
+    if "input_defect" in table:
+        return None
+    for stage, block in table["stages"].items():
+        if block["status"] == "pass" and not block["evidence"]:
+            return f"{table['table_id']}.{stage}"
+    return None
+
+
+def _assert_no_pass_without_evidence(tables: list[dict]) -> None:
     # INV-1: no stage renders `pass` without at least one evidence item.
-    for table in bundle["tables"]:
-        if "input_defect" in table:
-            continue
-        for stage, block in table["stages"].items():
-            if block["status"] == "pass":
-                assert block["evidence"], (
-                    f"{table['table_id']}.{stage} pass with no evidence"
-                )
+    offenders = [_stage_pass_without_evidence(table) for table in tables]
+    offenders = [name for name in offenders if name is not None]
+    assert not offenders, f"pass with no evidence: {offenders}"
 
 
 def test_generation_and_rendering_write_nothing_to_source(tmp_path: Path) -> None:

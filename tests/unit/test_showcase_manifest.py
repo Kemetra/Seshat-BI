@@ -75,17 +75,21 @@ def _lineage() -> dict:
     }
 
 
+def _table_references(table: dict) -> set[str]:
+    if "input_defect" in table:
+        return {table["source_path"]}
+    return {
+        f"{table['table_id']}#{stage}:{item['reference']}"
+        for stage, block in table["stages"].items()
+        for item in block["evidence"]
+    }
+
+
 def _all_references(tables: list[dict], lineage: dict) -> set[str]:
-    references = set()
+    references: set[str] = set()
     for table in tables:
-        if "input_defect" in table:
-            references.add(table["source_path"])
-            continue
-        for stage, block in table["stages"].items():
-            for item in block["evidence"]:
-                references.add(f"{table['table_id']}#{stage}:{item['reference']}")
-    for node in lineage["nodes"]:
-        references.add(node["node_id"])
+        references |= _table_references(table)
+    references |= {node["node_id"] for node in lineage["nodes"]}
     return references
 
 

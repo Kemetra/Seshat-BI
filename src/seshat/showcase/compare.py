@@ -49,42 +49,73 @@ def _comparability_reason(before: dict[str, Any], after: dict[str, Any]) -> str 
     return None
 
 
-def _stage_transitions(
-    before: dict[str, Any], after: dict[str, Any]
-) -> list[dict[str, Any]]:
-    before_tables = {
-        entry.get("table_id"): entry
-        for entry in (before.get("readiness") or [])
-        if isinstance(entry, dict)
+def _readiness_table_map(document: dict[str, Any]) -> dict[Any, dict[str, Any]] | None:
+    """Map ``table_id -> stages`` for a snapshot's ``readiness`` list, or
+    ``None`` when that member is not a well-formed list (the malformed-shape
+    guard: a snapshot cannot be diffed when its own shape cannot be read)."""
+    readiness = document.get("readiness") or []
+    if not isinstance(readiness, list):
+        return None
+    stages_by_table: dict[Any, dict[str, Any]] = {}
+    for entry in readiness:
+        if not isinstance(entry, dict):
+            continue
+        stages = entry.get("stages")
+        if isinstance(stages, dict):
+            stages_by_table[entry.get("table_id")] = stages
+    return stages_by_table
+
+
+def _stage_transition(
+    table_id: Any, stage: str, before_block: Any, after_block: Any
+) -> dict[str, Any] | None:
+    if not isinstance(before_block, dict) or not isinstance(after_block, dict):
+        return None
+    before_status = before_block.get("status")
+    after_status = after_block.get("status")
+    if before_status == after_status:
+        return None
+    return {
+        "table_id": table_id,
+        "stage": stage,
+        "before_status": before_status,
+        "after_status": after_status,
     }
+
+
+def _stage_transitions(
+    before_stages_by_table: dict[Any, dict[str, Any]],
+    after_stages_by_table: dict[Any, dict[str, Any]],
+) -> list[dict[str, Any]]:
     transitions: list[dict[str, Any]] = []
-    for after_table in after.get("readiness") or []:
-        if not isinstance(after_table, dict):
-            continue
-        table_id = after_table.get("table_id")
-        before_table = before_tables.get(table_id)
-        if not isinstance(before_table, dict):
-            continue
-        after_stages = after_table.get("stages", {})
-        before_stages = before_table.get("stages", {})
-        if not isinstance(after_stages, dict) or not isinstance(before_stages, dict):
+    for table_id, after_stages in after_stages_by_table.items():
+        before_stages = before_stages_by_table.get(table_id)
+        if not isinstance(before_stages, dict):
             continue
         for stage, after_block in after_stages.items():
-            before_block = before_stages.get(stage)
-            if not isinstance(before_block, dict) or not isinstance(after_block, dict):
-                continue
-            before_status = before_block.get("status")
-            after_status = after_block.get("status")
-            if before_status != after_status:
-                transitions.append(
-                    {
-                        "table_id": table_id,
-                        "stage": stage,
-                        "before_status": before_status,
-                        "after_status": after_status,
-                    }
-                )
+            transition = _stage_transition(
+                table_id, stage, before_stages.get(stage), after_block
+            )
+            if transition is not None:
+                transitions.append(transition)
     return transitions
+
+
+def _absence_reason(snapshots: tuple[Any, Any] | None) -> str | None:
+    if not snapshots:
+        return "no snapshots were supplied"
+    if len(snapshots) != 2 or snapshots[0] is None or snapshots[1] is None:
+        return "only one snapshot was supplied"
+    return None
+
+
+def _incomparable_result(
+    reason: str, before: dict[str, Any], after: dict[str, Any]
+) -> dict[str, Any]:
+    result = _empty(reason)
+    result["before_revision"] = before.get("source_revision")
+    result["after_revision"] = after.get("source_revision")
+    return result
 
 
 def build_comparison(
@@ -96,10 +127,9 @@ def build_comparison(
     were actually supplied (see build.py); this function's own uniform
     return shape is what T024/T025 exercise directly.
     """
-    if not snapshots:
-        return _empty("no snapshots were supplied")
-    if len(snapshots) != 2 or snapshots[0] is None or snapshots[1] is None:
-        return _empty("only one snapshot was supplied")
+    absence_reason = _absence_reason(snapshots)
+    if absence_reason is not None:
+        return _empty(absence_reason)
 
     root = Path(repo_root).resolve()
     before_path, after_path = snapshots
@@ -109,16 +139,17 @@ def build_comparison(
         return _empty("one or both supplied snapshot files could not be read")
 
     reason = _comparability_reason(before, after)
-    if reason is None and (
-        not isinstance(before.get("readiness", []), list)
-        or not isinstance(after.get("readiness", []), list)
-    ):
-        reason = "one or both snapshots have a malformed 'readiness' member"
     if reason is not None:
-        result = _empty(reason)
-        result["before_revision"] = before.get("source_revision")
-        result["after_revision"] = after.get("source_revision")
-        return result
+        return _incomparable_result(reason, before, after)
+
+    before_stages_by_table = _readiness_table_map(before)
+    after_stages_by_table = _readiness_table_map(after)
+    if before_stages_by_table is None or after_stages_by_table is None:
+        return _incomparable_result(
+            "one or both snapshots have a malformed 'readiness' member",
+            before,
+            after,
+        )
 
     verify_result = verify_passport(root, after)
     evidence_verdicts = [
@@ -131,6 +162,8 @@ def build_comparison(
         "omitted_reason": None,
         "before_revision": before.get("source_revision"),
         "after_revision": after.get("source_revision"),
-        "stage_transitions": _stage_transitions(before, after),
+        "stage_transitions": _stage_transitions(
+            before_stages_by_table, after_stages_by_table
+        ),
         "evidence_verdicts": evidence_verdicts,
     }

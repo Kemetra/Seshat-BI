@@ -105,6 +105,44 @@ def normalize_portability(
     return _walk(document, locator), redactions
 
 
+def _evidence_entry(
+    table_id: str, stage: str, item: dict[str, Any]
+) -> tuple[str, dict[str, Any]]:
+    locator = f"{table_id}#{stage}:{item['reference']}"
+    state = item["state"]
+    if state == "available":
+        return "included", _entry("included", locator, "evidence available")
+    if state == "deferred":
+        return "unavailable", _entry("unavailable", locator, "deferred live check")
+    return "omitted", _entry("omitted", locator, "evidence missing")
+
+
+def _table_entries(table: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    table_id = table.get("table_id", "?")
+    if "input_defect" in table:
+        locator = table.get("source_path", table_id)
+        reason = f"input defect: {table['input_defect']}"
+        return [("omitted", _entry("omitted", locator, reason))]
+    return [
+        _evidence_entry(table_id, stage, item)
+        for stage, block in table["stages"].items()
+        for item in block["evidence"]
+    ]
+
+
+def _lineage_entries(lineage: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
+    entries: list[tuple[str, dict[str, Any]]] = []
+    for node in lineage.get("nodes", []):
+        locator = node["node_id"]
+        if node.get("kind") == "input_defect":
+            reason = "unreadable metric contract"
+            entries.append(("omitted", _entry("omitted", locator, reason)))
+        else:
+            reason = "metric lineage available"
+            entries.append(("included", _entry("included", locator, reason)))
+    return entries
+
+
 def build_manifest(
     tables: list[dict[str, Any]],
     lineage: dict[str, Any],
@@ -114,44 +152,21 @@ def build_manifest(
     under exactly one category, each with a locator. ``redacted`` is carried
     verbatim from the portability-normalization pass (already computed).
     """
-    included: list[dict[str, Any]] = []
-    unavailable: list[dict[str, Any]] = []
-    omitted: list[dict[str, Any]] = []
+    buckets: dict[str, list[dict[str, Any]]] = {
+        "included": [],
+        "unavailable": [],
+        "omitted": [],
+    }
 
     for table in tables:
-        table_id = table.get("table_id", "?")
-        if "input_defect" in table:
-            omitted.append(
-                _entry(
-                    "omitted",
-                    table.get("source_path", table_id),
-                    f"input defect: {table['input_defect']}",
-                )
-            )
-            continue
-        for stage, block in table["stages"].items():
-            for item in block["evidence"]:
-                locator = f"{table_id}#{stage}:{item['reference']}"
-                state = item["state"]
-                if state == "available":
-                    included.append(_entry("included", locator, "evidence available"))
-                elif state == "deferred":
-                    unavailable.append(
-                        _entry("unavailable", locator, "deferred live check")
-                    )
-                else:
-                    omitted.append(_entry("omitted", locator, "evidence missing"))
-
-    for node in lineage.get("nodes", []):
-        locator = node["node_id"]
-        if node.get("kind") == "input_defect":
-            omitted.append(_entry("omitted", locator, "unreadable metric contract"))
-        else:
-            included.append(_entry("included", locator, "metric lineage available"))
+        for category, entry in _table_entries(table):
+            buckets[category].append(entry)
+    for category, entry in _lineage_entries(lineage):
+        buckets[category].append(entry)
 
     return {
-        "included": included,
-        "unavailable": unavailable,
-        "omitted": omitted,
+        "included": buckets["included"],
+        "unavailable": buckets["unavailable"],
+        "omitted": buckets["omitted"],
         "redacted": redactions,
     }
