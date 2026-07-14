@@ -39,7 +39,7 @@ The modern BI interpretation:
 | Ancient cue | BI interpretation |
 |-------------|-------------------|
 | Seshat figure | governed knowledge, documentation, auditability |
-| Seven-point Seshat star | canonical truth, navigation, measured structure |
+| Seshat/compass star | canonical truth, navigation, measured structure |
 | Reed/stylus | source mapping and documentation before transformation |
 | Hieroglyphic line art | historical depth, disciplined record keeping |
 | Teal data network | modern data lineage, BI model, agent workflow |
@@ -49,8 +49,12 @@ The modern BI interpretation:
 
 ## 3. Non-negotiable brand rules
 
-1. The Seshat star must be **seven-pointed**, not eight-pointed.
-2. Do not use compass stars, generic north stars, or eight-ray asterisks as substitutes.
+1. The Seshat emblem is a gold star (the Seshat/compass star) paired with the
+   seated Seshat figure and the teal data network. The star's exact point count is
+   not fixed; the goddess figure + gold star + teal network together are the mark.
+2. Keep the star geometric and deliberate (a clean multi-point star, not a generic
+   sparkle or asterisk). The *seven readiness stages* remain the product concept and
+   are shown by the seven-stage spine diagram, independent of the logo's point count.
 3. The Egyptian figure must look like clean Egyptian-inspired line art, not a random cartoon or fantasy icon.
 4. The figure should hold a stylus or writing instrument to reinforce mapping/documentation.
 5. Teal data nodes should represent data lineage or semantic connections, not decorative bubbles.
@@ -65,15 +69,15 @@ Recommended logo family:
 
 | Asset | Purpose |
 |-------|---------|
-| Primary logo | Seshat figure + seven-point star + data network + `SESHAT BI` wordmark. |
+| Primary logo | Seshat figure + Seshat star + data network + `SESHAT BI` wordmark. |
 | Wordmark | Compact horizontal logo for README/docs headers. |
 | Stacked logo | Cover pages, portfolio slides, dashboard title pages. |
-| CLI/app icon | Seven-point star inside navy rounded square, with gold orbit and teal node path. |
-| Hieroglyphic signature | Seven-point star + bowl glyph + seated writing Seshat + `Seshat` wordmark. |
+| CLI/app icon | Seshat star inside navy rounded square, with gold orbit and teal node path. |
+| Hieroglyphic signature | Seshat star + bowl glyph + seated writing Seshat + `Seshat` wordmark. |
 | Monochrome dark | Navy-only usage on light backgrounds. |
 | Monochrome gold | Gold-only usage on navy backgrounds. |
 
-Minimum safe rule: if the logo appears small, use the CLI/app icon or simple seven-point star. Do not shrink the full goddess illustration until it becomes unreadable.
+Minimum safe rule: if the logo appears small, use the CLI/app icon or simple Seshat star. Do not shrink the full goddess illustration until it becomes unreadable.
 
 ---
 
@@ -138,7 +142,7 @@ Recommended placements:
 
 | Place | Visual treatment |
 |-------|------------------|
-| README top | Small wordmark or simple seven-point star badge. |
+| README top | Small wordmark or simple Seshat star badge. |
 | Architecture docs | Minimal Seshat BI badge, then technical diagrams. |
 | Readiness docs | Gold seven-stage orbit motif can be used as a subtle metaphor. |
 | Worked examples | Keep visuals minimal; prioritize source-map evidence. |
@@ -174,8 +178,10 @@ Only commit assets that are stable enough to reuse. Draft generations can live o
 The current visual direction is approved conceptually with one correction requirement:
 
 ```text
-All stars/emblems must be seven-pointed.
+The gold star emblem is paired with the seated/writing Seshat figure and teal
+network; the star's point count is not fixed (amended 2026-07-14 to feature the
+hieroglyphic-goddess mark). The seven readiness stages remain the product concept.
 All hieroglyphic/Seshat figures must be cleaned toward a historically coherent seated/writing form.
 ```
 
-Before using the identity in a production README, portfolio, or Power BI theme, export a clean final asset set and verify the seven-point star in every logo variant.
+Before using the identity in a production README, portfolio, or Power BI theme, export a clean final asset set and verify the goddess mark (figure + gold star + teal network) reads cleanly in every logo variant.
