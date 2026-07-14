@@ -1,0 +1,252 @@
+name: prepare-coordinated-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Owner-approved stable SemVer without a leading v (for example, 0.2.1)
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: prepare-coordinated-release
+  cancel-in-progress: false
+
+jobs:
+  prepare-release-pr:
+    name: Prepare synchronized Python, Claude, and Codex release PR
+    if: ${{ github.repository == 'ahmed-shaaban-94/Seshat_BI' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      VERSION: ${{ inputs.version }}
+      RELEASE_BRANCH: release/v${{ inputs.version }}
+    steps:
+      - name: Require dispatch from main
+        shell: bash
+        run: |
+          test "${GITHUB_REF}" = "refs/heads/main"
+
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install release preparation dependency
+        run: python -m pip install pyyaml
+
+      - name: Validate owner-selected version and release branch
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os
+          import re
+          import tomllib
+          from pathlib import Path
+
+          raw_version = os.environ["VERSION"]
+          version = raw_version.strip()
+          if raw_version != version:
+              raise SystemExit("version must not contain leading or trailing whitespace")
+          if re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", version) is None:
+              raise SystemExit("version must be stable SemVer MAJOR.MINOR.PATCH without a leading v")
+
+          current = str(tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"])
+          current_match = re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", current)
+          if current_match is None:
+              raise SystemExit(f"current project version is not stable SemVer: {current}")
+          current_parts = tuple(int(part) for part in current_match.groups())
+          next_parts = tuple(int(part) for part in version.split("."))
+          if next_parts <= current_parts:
+              raise SystemExit(f"version {version} must be greater than current version {current}")
+          PY
+
+          if git show-ref --verify --quiet "refs/tags/v${VERSION}"; then
+            echo "tag v${VERSION} already exists"
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --heads origin "${RELEASE_BRANCH}" >/dev/null 2>&1; then
+            echo "remote branch ${RELEASE_BRANCH} already exists"
+            exit 1
+          fi
+
+      - name: Project the version and freeze the changelog
+        shell: bash
+        run: |
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import re
+          from datetime import date
+          from pathlib import Path
+
+          version = os.environ["VERSION"].strip()
+
+          pyproject_path = Path("pyproject.toml")
+          pyproject = pyproject_path.read_text(encoding="utf-8")
+          updated_pyproject, replacements = re.subn(
+              r'(?m)^version = "[^"]+"$',
+              f'version = "{version}"',
+              pyproject,
+              count=1,
+          )
+          if replacements != 1:
+              raise SystemExit("could not update exactly one project.version line")
+          pyproject_path.write_text(updated_pyproject, encoding="utf-8")
+
+          marketplace_path = Path(".claude-plugin/marketplace.json")
+          marketplace = json.loads(marketplace_path.read_text(encoding="utf-8"))
+          marketplace["metadata"]["version"] = version
+          plugins = marketplace.get("plugins", [])
+          if len(plugins) != 1 or plugins[0].get("name") != "seshat-bi":
+              raise SystemExit("Claude marketplace must contain exactly one seshat-bi plugin")
+          plugins[0]["version"] = version
+          marketplace_path.write_text(
+              json.dumps(marketplace, indent=2, ensure_ascii=False) + "\n",
+              encoding="utf-8",
+          )
+
+          changelog_path = Path("CHANGELOG.md")
+          changelog = changelog_path.read_text(encoding="utf-8")
+          marker = "## [Unreleased]"
+          marker_index = changelog.find(marker)
+          if marker_index < 0:
+              raise SystemExit("CHANGELOG.md has no [Unreleased] heading")
+          body_start = marker_index + len(marker)
+          next_heading = changelog.find("\n## [", body_start)
+          if next_heading < 0:
+              raise SystemExit("CHANGELOG.md has no release heading after [Unreleased]")
+          unreleased_body = changelog[body_start:next_heading]
+          if not unreleased_body.strip():
+              raise SystemExit("CHANGELOG.md [Unreleased] is empty; merge release notes before preparing a version")
+          replacement = f"## [Unreleased]\n\n## [{version}] -- {date.today().isoformat()}"
+          changelog = changelog[:marker_index] + replacement + unreleased_body + changelog[next_heading:]
+          changelog_path.write_text(changelog, encoding="utf-8")
+
+          major_minor = ".".join(version.split(".")[:2])
+          release_note = Path(f"docs/releases/v{major_minor}.md")
+          if not release_note.is_file():
+              raise SystemExit(f"missing release note: {release_note}")
+          if re.search(rf"(?m)^# .*\bv{re.escape(major_minor)}(?:\b|\.)", release_note.read_text(encoding="utf-8")) is None:
+              raise SystemExit(f"release note has no v{major_minor} heading: {release_note}")
+          PY
+
+      - name: Regenerate Claude and Codex bundles
+        run: python scripts/export_agent_bundles.py
+
+      - name: Validate synchronized release candidate
+        shell: bash
+        run: |
+          python scripts/check_release_versions.py --check
+          python scripts/export_agent_bundles.py --check
+          python scripts/release_candidate_audit.py --require-release-ready
+          git diff --check
+
+      - name: Require the expected release-only diff
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          allowed_exact = {
+              ".claude-plugin/marketplace.json",
+              "CHANGELOG.md",
+              "pyproject.toml",
+          }
+          allowed_prefixes = (
+              "integrations/claude-code/seshat-bi/",
+              "integrations/codex/seshat-bi/",
+          )
+          changed = subprocess.run(
+              ["git", "diff", "--name-only"],
+              check=True,
+              capture_output=True,
+              text=True,
+          ).stdout.splitlines()
+          unexpected = sorted(
+              path
+              for path in changed
+              if path not in allowed_exact and not path.startswith(allowed_prefixes)
+          )
+          if unexpected:
+              raise SystemExit(f"unexpected release preparation files: {unexpected}")
+          if not changed:
+              raise SystemExit("release preparation produced no changes")
+          PY
+
+      - name: Commit and push the release branch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "${RELEASE_BRANCH}"
+          git add -- \
+            pyproject.toml \
+            CHANGELOG.md \
+            .claude-plugin/marketplace.json \
+            integrations/claude-code/seshat-bi \
+            integrations/codex/seshat-bi
+          git diff --cached --check
+          git commit -m "release: prepare v${VERSION}"
+          git push --set-upstream origin "${RELEASE_BRANCH}"
+
+      - name: Open a draft release pull request
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > /tmp/release-pr-body.md <<EOF
+          ## Coordinated release candidate v${VERSION}
+
+          This owner-triggered workflow prepared one synchronized candidate for:
+
+          - Python / PyPI package metadata
+          - Claude Code repository plugin and marketplace metadata
+          - Codex repository plugin bundle
+
+          ## Before merge
+
+          - Review the changelog section and generated bundle diff.
+          - Require normal CI and repository checks to pass.
+          - Confirm that v${VERSION} is the intended owner-approved SemVer.
+          - Approve any PR checks GitHub marks as approval-required for bot-created pull requests.
+
+          ## After merge
+
+          1. Create the immutable annotated tag v${VERSION} at the merged release commit.
+          2. Run the existing release-candidate workflow from that tag with publication_action=publish-pypi.
+          3. Verify the GitHub Release, PyPI install, and repository-plugin update paths.
+
+          This PR does not create a tag, publish to PyPI, create a GitHub Release, or submit to public Claude/OpenAI catalogs.
+          EOF
+
+          gh pr create \
+            --repo "${GITHUB_REPOSITORY}" \
+            --base main \
+            --head "${RELEASE_BRANCH}" \
+            --draft \
+            --title "release: prepare v${VERSION}" \
+            --body-file /tmp/release-pr-body.md
+
+      - name: Write run summary
+        shell: bash
+        run: |
+          {
+            echo "## Release PR prepared"
+            echo
+            echo "- Version: v${VERSION}"
+            echo "- Branch: ${RELEASE_BRANCH}"
+            echo "- Surfaces synchronized: Python, Claude Code, Codex"
+            echo "- Publication: not performed"
+          } >> "${GITHUB_STEP_SUMMARY}"
