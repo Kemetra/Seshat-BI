@@ -24,7 +24,14 @@ rather than reimplementing them:
 - **the benchmark (spec 120, `src/seshat/benchmark/`)** for the governance hard
   stops and retail semantic classes - by loading the committed scenario
   manifests and confirming the deterministic scripted reference participant
-  reproduces each cited scenario's declared expected behavior.
+  reproduces each cited scenario's declared expected behavior. This is a
+  target-invariant **shared baseline** (the manifests are repo-level).
+- **each target's own exported bundle** for the **per-target governance-contract
+  presence** check (FR-012a) - by reading the target's
+  `portable-operating-contract.md` (exported into `integrations/<target>/`) and
+  confirming it carries every hard-stop line. This is the governance layer that
+  genuinely differs by `--target`, so verify's governance evidence is not
+  vacuously identical across targets.
 - **the governor (spec 120, `src/seshat/governor/`)** for the readiness-routing
   check - by invoking its read-only service over a synthetic fixture.
 
@@ -82,9 +89,11 @@ allowlist/registry entry, not a code fork.
   reads the benchmark/governor/release surfaces already in the repo.
 - **III. Medallion / Postgres-First / Gold-Only** - N/A. No warehouse, no DB
   read.
-- **IV. Source Mapping Before Silver** - N/A (no silver authored). One
-  governance check *confirms* the no-silver-before-mapping scenario ships
-  intact; it authors nothing.
+- **IV. Source Mapping Before Silver** - N/A (no silver authored). The
+  governance checks *confirm* the no-silver-before-mapping hard stop ships
+  intact - both in the target's own operating contract (FR-012a, per-target) and
+  as a committed scenario whose reference baseline matches (shared baseline);
+  they author nothing.
 - **V. Agent Stops at Judgment Calls** - PASS. Verify grants no approval,
   advances no stage, and infers no approval from a passing check (FR-004).
   Publication is an explicit owner action (FR-022).
@@ -112,37 +121,37 @@ No violations. Complexity Tracking table intentionally empty.
 
 ```text
 specs/129-agent-verify/
-├── spec.md              # feature specification (done)
-├── plan.md              # this file
-├── data-model.md        # Phase 1: VerifyTarget, RequiredCheck, PerCheckResult, VerifyEvidenceRecord
-├── quickstart.md        # Phase 1: run verify against claude + codex; read the record
-├── contracts/           # Phase 1: check-to-foundation map + evidence-record schema
-│   ├── verify-checks.md            # the 10 required checks, foundation, evidence source, verdict rules
-│   └── agent-verify-record.schema.json
-├── tasks.md             # Phase 2 (/speckit-tasks)
-└── analysis.md          # cross-artifact analysis record
+|-- spec.md              # feature specification (done)
+|-- plan.md              # this file
+|-- data-model.md        # Phase 1: VerifyTarget, RequiredCheck, PerCheckResult, VerifyEvidenceRecord
+|-- quickstart.md        # Phase 1: run verify against claude + codex; read the record
+|-- contracts/           # Phase 1: check-to-foundation map + evidence-record schema
+|     |-- verify-checks.md            # the 11 required checks, foundation, evidence source, per-target vs shared, verdict rules
+|     `-- agent-verify-record.schema.json
+|-- tasks.md             # Phase 2 (/speckit-tasks)
+`-- analysis.md          # cross-artifact analysis record
 ```
 
 ### Source Code (repository root)
 
 ```text
 src/seshat/
-├── agent_verify/
-│   ├── __init__.py
-│   ├── model.py          # PerCheckResult, VerifyTargetSpec, VerifyRecord (frozen dataclasses); VERDICTS = (PASS, BLOCKED, UNAVAILABLE)
-│   ├── targets.py        # data-driven target registry (claude, codex): manifest path, provenance manifest, version source, footprint source, ide_surface flag
-│   ├── checks.py         # the 10 pure check functions -> PerCheckResult; each reads one foundation, returns a verdict + evidence/reason
-│   └── record.py         # assemble VerifyRecord, disclosure scan, JSON serialization under .seshat-output/
-├── cli/
-│   ├── commands/
-│   │   └── agent_verify.py   # agent_verify_main(args): dispatch verify; exit-code contract
-│   ├── parser_ecosystem.py   # + _add_agent_parser: `agent` group with `verify` subcommand (--target, --output, --publish)
-│   └── __init__.py           # + lazy dispatch entry "agent": _lazy(".commands.agent_verify", "agent_verify_main")
+|-- agent_verify/
+|     |-- __init__.py
+|     |-- model.py          # PerCheckResult, VerifyTargetSpec, VerifyRecord (frozen dataclasses); VERDICTS = (PASS, BLOCKED, UNAVAILABLE); each result flags per_target vs shared_baseline
+|     |-- targets.py        # data-driven target registry (claude, codex): manifest path, provenance manifest, version source, footprint source, operating_contract path, ide_surface flag
+|     |-- checks.py         # the 11 pure check functions -> PerCheckResult; each reads one foundation, returns a verdict + evidence/reason
+|     `-- record.py         # assemble VerifyRecord, disclosure scan, JSON serialization under .seshat-output/
+|-- cli/
+|     |-- commands/
+|     |     `-- agent_verify.py   # agent_verify_main(args): dispatch verify; exit-code contract
+|     |-- parser_ecosystem.py     # + _add_agent_parser: `agent` group with `verify` subcommand (--target, --output, --publish)
+|     `-- __init__.py             # + lazy dispatch entry "agent": _lazy(".commands.agent_verify", "agent_verify_main")
 
 tests/unit/
-├── test_agent_verify_checks.py    # each check: PASS / BLOCKED / UNAVAILABLE with fixtures + monkeypatch
-├── test_agent_verify_record.py    # record assembly, disclosure scan, no-score truthfulness, containment
-└── test_agent_verify_cli.py       # parser wiring, --target refusal, exit-code contract, read-only guarantee
+|-- test_agent_verify_checks.py    # each check: PASS / BLOCKED / UNAVAILABLE with fixtures + monkeypatch
+|-- test_agent_verify_record.py    # record assembly, disclosure scan, no-score truthfulness, containment
+`-- test_agent_verify_cli.py       # parser wiring, --target refusal, exit-code contract, read-only guarantee
 ```
 
 **Structure Decision**: A dedicated read-only library package
@@ -171,7 +180,13 @@ Resolve, with citations to shipped code, before authoring checks:
    (`rs-pii-exposure`, `hs-self-grant-approval`, `hs-silver-before-mapping`,
    `rs-metric-without-approval`) and how `load_scenarios` + the reference
    participant + `Observation.comparison` give the reference-baseline match.
-5. **IDE-surface signal**: what in a target's declared metadata indicates an IDE
+5. **Per-target operating-contract shape**: the exported
+   `integrations/<target>/.../portable-operating-contract.md` and the exact
+   hard-stop lines it must carry (confirmed: each of `claude` and `codex` ships
+   its own copy, tracked in that bundle's provenance manifest). Define the
+   hard-stop line set the presence check asserts, and how a dropped/mutated line
+   maps to BLOCKED. This is the per-target governance evidence source.
+6. **IDE-surface signal**: what in a target's declared metadata indicates an IDE
    surface exists; absence -> UNAVAILABLE.
 
 ## Phase 1 - Design
@@ -179,15 +194,21 @@ Resolve, with citations to shipped code, before authoring checks:
 ### data-model.md (entities from the spec, made concrete)
 
 - **VerifyTargetSpec** (frozen): `name`, `manifest_path`, `provenance_manifest`,
-  `version_source`, `footprint_source`, `ide_surface: bool`.
+  `version_source`, `footprint_source`, `operating_contract` (the exported
+  `portable-operating-contract.md` path for this target), `ide_surface: bool`.
 - **RequiredCheck** (enumerated, not a stored entity): a `check_id`, the
-  `foundation` it extends, the `evidence_source` it reads, and the pure function
-  that evaluates it.
+  `foundation` it extends, the `evidence_source` it reads, an
+  `evidence_class` in {`per_target`, `shared_baseline`}, and the pure function
+  that evaluates it. Only the install/version/update/uninstall/IDE checks and
+  the governance-contract-presence check are `per_target`; the scenario- and
+  governor-backed governance checks are `shared_baseline`.
 - **PerCheckResult** (frozen): `check_id`, `verdict` in {PASS, BLOCKED,
-  UNAVAILABLE}, `evidence: tuple[str, ...]`, `blocking_reasons: tuple[str, ...]`,
+  UNAVAILABLE}, `evidence_class` in {`per_target`, `shared_baseline`},
+  `evidence: tuple[str, ...]`, `blocking_reasons: tuple[str, ...]`,
   `unavailable_reason: str | None`. Invariant (enforced + tested): PASS => non-
   empty `evidence` and empty reasons; BLOCKED => >=1 blocking reason;
-  UNAVAILABLE => an `unavailable_reason`.
+  UNAVAILABLE => an `unavailable_reason`. The `evidence_class` label prevents a
+  shared-baseline verdict from being read as per-target evidence.
 - **VerifyEvidenceRecord** (frozen): `schema_version`, `target`, `tool_version`,
   `generated_at`, `static_vs_live_boundary` (a fixed disclosure string),
   `results: tuple[PerCheckResult, ...]`. `to_document()` emits JSON with **no**
@@ -195,9 +216,10 @@ Resolve, with citations to shipped code, before authoring checks:
 
 ### contracts/
 
-- **verify-checks.md** - the authoritative table: for each of the 10 required
+- **verify-checks.md** - the authoritative table: for each of the 11 required
   checks, its `check_id`, the foundation it extends (spec 108 / benchmark /
-  governor), the exact evidence source it reads, the PASS condition, the BLOCKED
+  governor / target bundle), its `evidence_class` (per-target or shared
+  baseline), the exact evidence source it reads, the PASS condition, the BLOCKED
   triggers, and when it is UNAVAILABLE. This is the contract US1/US2/US3 test
   against.
 - **agent-verify-record.schema.json** - JSON Schema (draft 2020-12,
@@ -231,9 +253,14 @@ pass guarantee at the process boundary.)
 ## Testing strategy
 
 - **Per-check unit tests**: each check gets a PASS fixture, a BLOCKED fixture
-  (drift / incompatible version / missing scenario / mismatched baseline), and
-  an UNAVAILABLE fixture (absent surface). Governance checks assert the cited
-  scenario id and that a removed scenario -> BLOCKED (SC-005).
+  (drift / incompatible version / missing scenario / mismatched baseline /
+  dropped hard-stop line), and an UNAVAILABLE fixture (absent surface).
+  Shared-baseline governance checks assert the cited scenario id and that a
+  removed scenario -> BLOCKED. The per-target contract-presence check reads each
+  target's own operating contract, asserts every hard-stop line is present, and
+  asserts a target with a dropped/mutated hard stop -> BLOCKED while the other
+  target stays PASS - proving the governance verdict is genuinely per-target
+  (SC-005).
 - **Truthfulness test** (SC-003): serialize a record for every verdict
   combination and assert the JSON contains no `score`/`rank`/`pass_rate`/
   `grade`/`overall`/`certified` key and no such token in text output; validate

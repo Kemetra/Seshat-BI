@@ -44,11 +44,11 @@ Structure Decision). No new dependency; stdlib-only core, lazy `yaml`.
   four entities (VerifyTargetSpec, RequiredCheck, PerCheckResult,
   VerifyEvidenceRecord) and the per-verdict invariants.
 - [ ] T004 [P] [SETUP] Author `specs/129-agent-verify/contracts/verify-checks.md`
-  (the 10-check table: check_id, foundation, evidence source, PASS condition,
-  BLOCKED triggers, UNAVAILABLE condition) and
-  `contracts/agent-verify-record.schema.json` (closed draft-2020-12 schema:
-  three-value verdict enum, per-verdict reason fields, no score/rank/overall
-  property).
+  (the 11-check table: check_id, foundation, evidence_class (per-target vs
+  shared baseline), evidence source, PASS condition, BLOCKED triggers,
+  UNAVAILABLE condition) and `contracts/agent-verify-record.schema.json` (closed
+  draft-2020-12 schema: three-value verdict enum, the evidence_class enum,
+  per-verdict reason fields, no score/rank/overall property).
 
 ---
 
@@ -61,15 +61,16 @@ check and story depends on.
 
 - [ ] T005 [FOUND] Implement `src/seshat/agent_verify/model.py`:
   `VERDICTS = ("PASS", "BLOCKED", "UNAVAILABLE")`, frozen `PerCheckResult`
-  (with the invariant enforced in `__post_init__`: PASS => non-empty evidence +
-  empty reasons; BLOCKED => >=1 blocking reason; UNAVAILABLE =>
-  `unavailable_reason`), frozen `VerifyTargetSpec`, frozen `VerifyRecord` with a
-  `to_document()` that emits NO aggregate field.
+  (with `evidence_class` in {`per_target`, `shared_baseline`} and the invariant
+  enforced in `__post_init__`: PASS => non-empty evidence + empty reasons;
+  BLOCKED => >=1 blocking reason; UNAVAILABLE => `unavailable_reason`), frozen
+  `VerifyTargetSpec`, frozen `VerifyRecord` with a `to_document()` that emits NO
+  aggregate field.
 - [ ] T006 [FOUND] Implement `src/seshat/agent_verify/targets.py`: a data-driven
   registry mapping `claude` and `codex` to their `VerifyTargetSpec`
   (manifest path, provenance manifest, version source, footprint source,
-  `ide_surface` flag). An unknown target name raises a typed error the CLI maps
-  to exit 2.
+  `operating_contract` path, `ide_surface` flag). An unknown target name raises
+  a typed error the CLI maps to exit 2.
 - [ ] T007 [FOUND] Implement `src/seshat/agent_verify/record.py`: assemble a
   `VerifyRecord` from a list of `PerCheckResult`, run the disclosure scan
   (secret / real connection string / local absolute path / possible PII),
@@ -142,16 +143,26 @@ self-approval, no silver-before-mapping, no invented metric meaning) each
 resolve to a named committed scenario/governor contract and confirm the
 reference baseline matches; a missing/mismatched contract is BLOCKED.
 
-**Independent Test**: Each governance check cites its scenario id / governor
-contract, PASSes when the reference baseline matches, and BLOCKs when the cited
-scenario is removed, malformed, or its baseline mismatches.
+**Independent Test**: The per-target contract-presence check reads each target's
+own exported operating contract and BLOCKs a target that drops a hard-stop line
+(so `claude` and `codex` can differ); each shared-baseline governance check
+cites its scenario id / governor contract, PASSes when the reference baseline
+matches, and BLOCKs when the cited scenario is removed, malformed, or its
+baseline mismatches.
 
 ### Tests for User Story 2 (write first, must FAIL)
 
-- [ ] T017 [P] [US2] `tests/unit/test_agent_verify_checks.py`: PII-refusal check
-  (FR-013) cites `rs-pii-exposure`, confirms expected behavior is a refusal, and
-  the scripted reference reproduces it (PASS); a removed scenario -> BLOCKED
-  naming the missing id (SC-005).
+- [ ] T016a [P] [US2] `tests/unit/test_agent_verify_checks.py`: per-target
+  governance-contract-presence check (FR-012a) reads the target's own
+  `portable-operating-contract.md`, PASSes when every hard-stop line is present,
+  and BLOCKs naming the affected hard stop for a target whose contract drops or
+  mutates one; a fixture with `claude` intact and `codex` dropping a hard stop
+  yields PASS for `claude` and BLOCKED for `codex` (proves per-target,
+  non-vacuous; SC-005).
+- [ ] T017 [P] [US2] Same file: PII-refusal check (FR-013, shared baseline)
+  cites `rs-pii-exposure`, confirms expected behavior is a refusal, and the
+  scripted reference reproduces it (PASS); a removed scenario -> BLOCKED naming
+  the missing id (SC-005).
 - [ ] T018 [P] [US2] Same file: no-self-approval (FR-014, `hs-self-grant-
   approval`) and no-silver-before-mapping (FR-015, `hs-silver-before-mapping`)
   checks - PASS on baseline match; BLOCKED on mismatch.
@@ -166,18 +177,26 @@ scenario is removed, malformed, or its baseline mismatches.
 
 ### Implementation for User Story 2
 
-- [ ] T022 [US2] Implement the five governance checks in `checks.py`: load the
-  cited scenario via `benchmark.runner.load_scenarios`, run the scripted
-  reference participant, and compare via `Observation.comparison`; the routing
-  check invokes `governor.service` read-only. Missing/malformed scenario or a
-  baseline mismatch -> BLOCKED with the concrete reason (FR-017); governor
-  un-invokable -> UNAVAILABLE.
-- [ ] T023 [US2] Add the five governance checks to the required-check set in
-  `agent_verify_main` so they run alongside US1's checks and feed the same
-  record + exit-code contract.
+- [ ] T022a [US2] Implement the per-target governance-contract-presence check in
+  `checks.py` (FR-012a): read the target's `operating_contract` path from its
+  `VerifyTargetSpec`, assert every hard-stop line is present, tag the result
+  `evidence_class="per_target"`, and BLOCK naming the affected hard stop on a
+  drop/mutation. Missing contract file -> BLOCKED.
+- [ ] T022 [US2] Implement the five shared-baseline governance checks in
+  `checks.py`: load the cited scenario via `benchmark.runner.load_scenarios`,
+  run the scripted reference participant, and compare via
+  `Observation.comparison`; the routing check invokes `governor.service`
+  read-only. Tag each result `evidence_class="shared_baseline"`.
+  Missing/malformed scenario or a baseline mismatch -> BLOCKED with the concrete
+  reason (FR-017); governor un-invokable -> UNAVAILABLE.
+- [ ] T023 [US2] Add the six governance checks (one per-target + five shared
+  baseline) to the required-check set in `agent_verify_main` so they run
+  alongside US1's checks and feed the same record + exit-code contract.
 
 **Checkpoint**: US1 + US2 both work; verify now confirms install integrity AND
-the governance contract, per target.
+the governance contract - the target's own bundle carries every hard stop
+(per-target), and each hard stop maps to a committed scenario whose reference
+baseline matches (shared baseline).
 
 ---
 

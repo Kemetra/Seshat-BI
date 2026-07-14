@@ -8,8 +8,9 @@ rewritten to make a finding disappear.
 
 ## Method
 
-- Requirement inventory: 24 own FRs (FR-001..FR-024), 7 SCs (SC-001..SC-007),
-  4 user stories (US1..US4), 36 tasks (T001..T036).
+- Requirement inventory: 25 own FRs (FR-001..FR-024 plus FR-012a), 7 SCs
+  (SC-001..SC-007), 4 user stories (US1..US4), 38 tasks (T001..T036 plus T016a,
+  T022a).
 - Coverage: every FR mapped to >=1 task (by id token or by concept); every SC
   mapped to a test task; every US mapped to a task phase.
 - Grounding: the four cited benchmark scenario ids checked against the shipped
@@ -35,7 +36,8 @@ rewritten to make a finding disappear.
 | FR-008 (no DB/creds/IDE) | T033 | offline test |
 | FR-009/010 (install & discovery) | T008, T014 | reuses smoke-test discipline |
 | FR-011 (version compat) | T009, T014 | out-of-range -> BLOCKED |
-| FR-012 (readiness routing) | T020, T022 | governor read-only |
+| FR-012a (per-target contract presence) | T016a, T022a | reads the target's OWN operating contract; per-target |
+| FR-012 (readiness routing) | T020, T022 | governor read-only; shared baseline |
 | FR-013 (PII refusal) | T017, T022 | rs-pii-exposure |
 | FR-014 (no self-approval) | T018, T022 | hs-self-grant-approval |
 | FR-015 (no silver before mapping) | T018, T022 | hs-silver-before-mapping |
@@ -110,6 +112,22 @@ and an incomplete supplied run leaves the referencing check UNAVAILABLE (already
 covered by the UNAVAILABLE vocab in FR-002 + T033). No task added; no artifact
 rewritten. Reversible.
 
+### A-0 (MEDIUM, RESOLVED): per-target governance evidence was vacuous
+
+An external-review pass found that US2's "per target" claim was vacuous as first
+drafted: FR-012 through FR-016 read only the repo-level benchmark scenarios + the
+scripted reference, which are identical regardless of `--target`, so
+`verify --target claude` and `--target codex` would emit byte-identical
+governance verdicts. RESOLVED before ratify: added FR-012a, a per-target
+governance-contract-presence check that reads the selected target's OWN exported
+`portable-operating-contract.md` (each of `claude` and `codex` ships its own copy,
+tracked in that bundle's provenance manifest) and BLOCKs a target whose contract
+drops or mutates a hard-stop line. The `PerCheckResult` now carries an
+`evidence_class` in {`per_target`, `shared_baseline`}, so the scenario-backed
+checks are honestly labeled a shared baseline rather than implied per-target. T016a
+(test) + T022a (implementation) cover it; SC-005 now tests that one target can
+BLOCK while the other PASSes. The governance evidence is now genuinely per-target.
+
 ### A-2 (LOW): title vs behavior tension is named, not hidden
 
 The working title says "Certification" while the feature forbids certification
@@ -118,16 +136,18 @@ explicit and resolve it toward evidence. This is a deliberately surfaced tension
 not a contradiction - flagged so a reviewer confirms the naming choice (the CLI
 verb is agent verify, not certify, which is the correct signal).
 
-### A-3 (LOW): box-drawing characters in plan.md directory trees
+### A-3 (LOW, RESOLVED): plan.md directory trees are now ASCII
 
-plan.md uses UTF-8 box-drawing glyphs in its directory-tree fences, matching
-.specify/templates/plan-template.md and the sibling specs/120-*/plan.md. It is
-valid UTF-8 without BOM and the retail check gate passes on it. spec.md and
-tasks.md are pure ASCII. No action; recorded for the ASCII-preference note.
+plan.md originally used UTF-8 box-drawing glyphs in its directory-tree fences
+(matching the plan template + sibling plans). Per the run's explicit
+"ASCII + UTF-8 no BOM" constraint, the trees were rewritten with ASCII (`|--`
+/ `` `-- ``). All four artifacts are now pure ASCII, no BOM.
 
 ## Consistency verdict
 
-No BLOCK or MEDIUM findings. The three artifacts are mutually consistent:
+The one MEDIUM finding (A-0, vacuous per-target governance evidence) was
+resolved before ratify; no BLOCK finding remains. The three artifacts are
+mutually consistent:
 requirement ids are stable and fully covered, cited scenario ids and reused
 surfaces are grounded in shipped code, and the two load-bearing constitutional
 boundaries (static-not-live, evidence-not-certification) hold across spec, plan,

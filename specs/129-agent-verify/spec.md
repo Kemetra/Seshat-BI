@@ -100,42 +100,62 @@ BLOCKED" from "one or more UNAVAILABLE".
 
 A reviewer wants to confirm that each of Seshat's hard stops is encoded in the
 integration being shipped: PII refusal, no self-approval, no silver-before-
-mapping, no invented metric meaning, and correct readiness routing. Verify maps
-each governance check to the committed benchmark scenario (or governor
-contract) that encodes it and confirms the deterministic reference baseline
-matches the declared expected categorical behavior.
+mapping, no invented metric meaning, and correct readiness routing. The
+governance evidence has two distinct layers, and verify keeps them distinct:
+
+- **Per-target contract presence**: the selected target's own bundle MUST ship
+  the governance hard-stop contract (the `portable-operating-contract.md`
+  exported into `integrations/<target>/`), and it MUST carry every hard-stop
+  line. This is the layer that genuinely differs by `--target`: a target whose
+  bundle drops or mutates a hard stop is BLOCKED, and the verdict is meaningful
+  because it reads that target's exported artifact, not a shared repo file.
+- **Shared reference baseline** (target-invariant): the committed benchmark
+  scenarios + the deterministic scripted reference are repo-level and identical
+  across targets. Verify confirms each hard stop resolves to a named committed
+  scenario (or the governor contract) and that the reference baseline matches
+  the declared expected categorical behavior. This layer is a shared baseline,
+  and verify labels its evidence as such rather than implying it is per-target.
 
 **Why this priority**: The governance contract is the product's distinctive
-claim. Confirming it ships intact, per target, is the second half of "installs
-correctly and obeys governance" - the "obeys governance" half, expressed as
-static contract presence + reference-baseline match, not live behavior.
+claim. Confirming it ships intact - the target's own bundle carries every hard
+stop, and each hard stop maps to a committed scenario whose reference baseline
+matches - is the second half of "installs correctly and obeys governance",
+expressed as static contract presence + reference-baseline match, not live
+behavior.
 
-**Independent Test**: Run verify's governance checks against a target and
-confirm each of PII refusal, no self-approval, no silver-before-mapping, no
-invented metric meaning, and readiness routing resolves to a named committed
-scenario/contract, and that the reference baseline for that scenario matches
-its declared expected behavior.
+**Independent Test**: Run verify's governance checks against each target and
+confirm (a) the target's exported operating contract is present and carries
+every hard-stop line (per-target, and a target with a dropped hard stop is
+BLOCKED), and (b) each of PII refusal, no self-approval, no silver-before-
+mapping, no invented metric meaning, and readiness routing resolves to a named
+committed scenario/governor contract whose reference baseline matches its
+declared expected behavior (shared baseline).
 
 **Acceptance Scenarios**:
 
-1. **Given** the shipped scenario manifests, **When** the PII-refusal check
+1. **Given** the selected target's exported bundle, **When** the per-target
+   governance-contract-presence check runs, **Then** it confirms the target's
+   `portable-operating-contract.md` is present and carries every hard-stop line
+   (PASS), and reports BLOCKED naming the missing/mutated hard stop for a target
+   whose bundle drops one - so `--target claude` and `--target codex` can differ.
+2. **Given** the shipped scenario manifests, **When** the PII-refusal check
    runs, **Then** it cites the `rs-pii-exposure` scenario, confirms its
    expected categorical behavior is a refusal, and confirms the scripted
-   reference participant reproduces it (PASS).
-2. **Given** the shipped scenario manifests, **When** the no-self-approval and
+   reference participant reproduces it (PASS, labeled a shared baseline).
+3. **Given** the shipped scenario manifests, **When** the no-self-approval and
    no-silver-before-mapping checks run, **Then** they cite `hs-self-grant-
    approval` and `hs-silver-before-mapping` respectively and confirm the
    reference baseline matches each declared expected behavior.
-3. **Given** the shipped scenario manifests, **When** the no-invented-metric-
+4. **Given** the shipped scenario manifests, **When** the no-invented-metric-
    meaning check runs, **Then** it cites `rs-metric-without-approval` (metric
    used without an approved contract) and confirms the expected behavior blocks
    for evidence or requests a human decision, never proceeds.
-4. **Given** the read-only governor, **When** the readiness-routing check runs,
+5. **Given** the read-only governor, **When** the readiness-routing check runs,
    **Then** it confirms the governor returns the current stage, evidence,
    blockers, next allowed action, and forbidden scope for a fixture without
    any write, and reports UNAVAILABLE (not BLOCKED, not PASS) if the governor
    surface cannot be invoked in the environment.
-5. **Given** any governance check whose cited scenario is missing, malformed,
+6. **Given** any governance check whose cited scenario is missing, malformed,
    or whose reference baseline does not match, **When** verify runs, **Then**
    that check is BLOCKED with the concrete reason and verify never claims the
    agent obeys the rule.
@@ -290,10 +310,24 @@ are present.
 
 #### Governance contract checks (extend the benchmark scenarios + governor)
 
+- **FR-012a**: Verify MUST confirm a **per-target governance-contract-presence**
+  check by reading the selected target's own exported operating contract
+  (`integrations/<target>/.../portable-operating-contract.md`) and confirming it
+  is present and carries every governance hard-stop line (no self-approval, no
+  silver before mapping, no Gold-to-Power-BI before live validation, no
+  dashboard before metric contracts, no invented mappings / no exposed
+  secrets-PII / no skipped gate / no numeric readiness score). A target whose
+  exported contract is missing, or drops or mutates a hard-stop line, is
+  BLOCKED naming the affected hard stop. This is the layer that genuinely
+  differs by `--target`, so two targets can produce different governance
+  verdicts. (Shared-baseline checks FR-012 through FR-016 read repo-level
+  scenarios and are target-invariant; verify labels their evidence as a shared
+  baseline, not per-target.)
 - **FR-012**: Verify MUST confirm a **readiness-routing** check by exercising
   the read-only governor over a fixture and confirming it returns the current
   stage, evidence, blockers, next allowed action, and forbidden scope with no
   write; if the governor surface cannot be invoked, the check is UNAVAILABLE.
+  (Shared baseline; target-invariant.)
 - **FR-013**: Verify MUST confirm a **PII-refusal** check by citing the
   committed PII scenario (`rs-pii-exposure`), confirming its expected
   categorical behavior is a refusal, and confirming the scripted reference
@@ -309,11 +343,12 @@ are present.
 - **FR-016**: Verify MUST confirm a **no-invented-metric-meaning** check by
   citing `rs-metric-without-approval` and confirming the expected behavior does
   not proceed (it blocks for evidence or requests a human decision).
-- **FR-017**: For every governance check (FR-012 through FR-016), a cited
-  scenario/contract that is missing, malformed, or whose reference baseline does
-  not match its declared expected behavior MUST make the check BLOCKED with the
-  concrete reason; verify MUST NEVER claim the agent obeys the rule on absent or
-  mismatched contract evidence.
+- **FR-017**: For every governance check (FR-012a and FR-012 through FR-016), a
+  target contract or cited scenario that is missing, malformed, drops or mutates
+  a hard stop, or whose reference baseline does not match its declared expected
+  behavior MUST make the check BLOCKED with the concrete reason; verify MUST
+  NEVER claim the agent obeys the rule on absent or mismatched contract
+  evidence.
 
 #### Update & uninstall integrity (extend release-verification provenance)
 
@@ -361,10 +396,11 @@ are present.
   a resolvable plugin manifest, a bundle provenance manifest, a declared
   version/compatibility range, and a declared installed footprint.
 - **Required Check**: One of the fixed verification checks (installation &
-  discovery, version compatibility, readiness routing, PII refusal, no
-  self-approval, no silver-before-mapping, no invented metric meaning, update
-  integrity, uninstall integrity, IDE verification). Each declares the
-  foundation it extends and the evidence source it reads.
+  discovery, version compatibility, per-target governance-contract presence,
+  readiness routing, PII refusal, no self-approval, no silver-before-mapping,
+  no invented metric meaning, update integrity, uninstall integrity, IDE
+  verification). Each declares the foundation it extends, the evidence source it
+  reads, and whether its evidence is per-target or a shared baseline.
 - **Per-Check Result**: The categorical outcome for one check on one target: a
   verdict {PASS, BLOCKED, UNAVAILABLE}, evidence items (for PASS), blocking
   reasons (for BLOCKED), and an unavailability reason (for UNAVAILABLE).
@@ -393,9 +429,13 @@ are present.
   database writes, model/report mutations, publish actions, self-granted
   approvals, and readiness-stage promotions; the only write is the local
   evidence record under `.seshat-output/`.
-- **SC-005**: Each governance check resolves to a named committed benchmark
-  scenario or the governor contract, and a removed or renamed cited scenario
-  makes the corresponding check BLOCKED rather than silently passing.
+- **SC-005**: The per-target governance-contract-presence check reads the
+  selected target's own exported operating contract and reports BLOCKED (not
+  PASS) for a target whose bundle drops or mutates a hard-stop line, so two
+  targets can produce different governance verdicts; and each shared-baseline
+  governance check resolves to a named committed benchmark scenario or the
+  governor contract, with a removed or renamed cited scenario making the check
+  BLOCKED rather than silently passing.
 - **SC-006**: The evidence record passes an automated disclosure test finding
   zero secrets, real connection strings, raw client records, PII values, or
   local absolute paths, and publication is refused without explicit intent and
