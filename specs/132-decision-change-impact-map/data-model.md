@@ -60,12 +60,15 @@ identity scheme for every resolved downstream artifact.
 ```text
 {
   schema_version: "1.0",                         # [new] contract version
-  subject: {                                     # [new] the changed decision, read-only
+  # The map is SINGLE-SUBJECT: exactly one changed decision per run (loaded by decision_id).
+  # `subject` is null iff `blocking_condition` is set (e.g. an invalid/non-approved subject);
+  # otherwise `subject.trigger` is present.
+  subject: null | {                              # [new] the single changed decision, read-only; null when blocking_condition is set
     decision_id: str,                            # [reuse] ChangedDecision.id
     decision_type: str,                          # [reuse]
     trigger: "superseded" | "evidence_stale"      # [new] which mode fired: committed legs (a)/(b) may
             | ["superseded","evidence_stale"]     #   fire together (list); OR the explicit
-            | "preview",                          #   "preview" mode (c) — FR-003
+            | "preview",                          #   "preview" mode (c) — FR-003; present iff blocking_condition is null
     is_preview: bool,                            # [new] true iff trigger == "preview" (run against a not-yet-superseded, non-stale approved decision — FR-004)
     critical: bool                               # [reuse] via decision_store.is_critical
   },
@@ -78,9 +81,6 @@ identity scheme for every resolved downstream artifact.
       kind: str,                                 # [reuse] e.g. metric_contract | warehouse_table | dashboard_binding | readiness_evidence
       relation: "direct" | "transitive",         # [new] FR-009
       evidence_paths: [str, ...],                # [new] ordered repo-relative edge evidence chain (FR-008); one entry for direct, the full hop chain for transitive
-      contributing_decisions: [                  # [new] every changed decision that reaches this artifact (spec Edge Case "multiple decisions affecting the same artifact"); listed once per artifact, sorted by decision_id
-        { decision_id: str, evidence_path: str }
-      ],
       affected_stages: [str, ...],               # [reuse] stage names from readiness_projection + _FLOW_TO_SPINE (FR-017)
       next_actions: [                            # [reuse] readiness_classify outputs (FR-018)
         { category: str, explanation: str, next_surface: str }
@@ -100,8 +100,9 @@ identity scheme for every resolved downstream artifact.
   cycles: [                                       # [new] FR-014; named cycle conditions, sorted
     { nodes: [node_id, ...], detail: str }
   ],
-  blocking_condition: null | {                    # [new] US4 fail-closed; set when store absent/malformed/conflicting
-    kind: "absent_store"|"malformed_store"|"active_scope_conflict"|"unreadable_lineage_input",
+  blocking_condition: null | {                    # [new] US4 fail-closed; set when the run cannot produce a truthful subject map. When non-null, `subject` is null and no `affected[]` is claimed.
+    kind: "invalid_subject"                       #   subject is not an approved decision (proposed/pending/absent) — FR-003 approved-only
+        | "absent_store"|"malformed_store"|"active_scope_conflict"|"unreadable_lineage_input",
     detail: str
   },
   generated_at: str                              # [new] EXCLUDED from any content digest (NFR-001)

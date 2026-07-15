@@ -307,12 +307,12 @@ written only under the contained output root.
 - **Lineage edge target missing**: incomplete-lineage warning naming the edge; continue without inferring a substitute (D5, FR-013).
 - **Cycle in the dependency graph**: detect, record as a named condition, terminate; never loop, never report the cycle as a completed transitive path (D6, FR-014).
 - **Dangling supersession pointer** (`supersedes` / `superseded_by` does not resolve): incomplete-lineage warning; no fabricated history entry (D2, FR-016).
-- **Decision never approved** (still `proposed`/`pending`): out of trigger scope — the map applies to *approved* decisions that are superseded or evidence-stale; a non-approved decision is reported as not a valid impact-map subject, not as "no impact."
+- **Decision never approved** (still `proposed`/`pending`, or the id resolves to no approved decision): the map applies only to *approved* decisions. A non-approved subject yields a `blocking_condition` of kind `invalid_subject` (with `subject: null`), reported as *not a valid impact-map subject* — never a `subject` carrying a made-up trigger and never "no impact" (FR-003).
 - **Superseded decision whose replacement is itself superseded**: present the full pointer chain in order; each unresolved link is its own incomplete-lineage warning.
 - **Evidence-stale but not superseded**: a valid trigger (D3); the map runs on the staleness signal alone.
 - **Conflicting active in-scope decisions**: surface the conflict (reuse the existing signal); do not silently choose one (US4).
 - **Absent / malformed Decision Store**: fail closed with the condition named; never a clean "no impact" (US4).
-- **Multiple decisions affecting the same artifact**: the artifact is listed once with every contributing decision and evidence path recorded; not duplicated per decision.
+- **Same artifact reached by more than one path from the subject**: the map is single-subject (one changed decision per run), so an artifact is listed **once**; if multiple dependency paths from that subject reach it, the additional paths are recorded within its ordered `evidence_paths` chain — never duplicated as separate affected entries.
 - **Same artifact reachable both directly and transitively**: labeled `direct` (the stronger relation) with the transitive path(s) also recorded as evidence; never double-counted as two affected artifacts.
 - **Decision scope names a gold-only object vs a silver/bronze object**: resolution follows the existing gold-only lineage edges; a reference into `silver`/`bronze` is out of the readable lineage surface and, if cited, is an incomplete-lineage warning, not an inferred edge.
 - **No lineage edges exist yet for a table** (e.g. metric contracts but no model): direct references are still listed; the absent transitive edges are incomplete-lineage warnings, never "no transitive impact."

@@ -8,26 +8,32 @@ contract holds in either.
 
 ## Required top-level keys
 
+The map is **single-subject**: exactly one changed decision per run (loaded by `decision_id`).
+
 - `schema_version` — string, `"1.0"`.
-- `subject` — object: `{ decision_id, decision_type, trigger, is_preview, critical }`.
-  `trigger` ∈ `"superseded"` | `"evidence_stale"` | `"preview"` | a list combining `"superseded"`
-  and `"evidence_stale"` (both committed conditions may fire together). When `trigger` is `"preview"`,
-  `is_preview` MUST be `true` and no committed change condition is required (FR-003 mode (c), FR-004).
+- `subject` — `null` **or** object `{ decision_id, decision_type, trigger, is_preview, critical }`.
+  `subject` is `null` **iff** `blocking_condition` is non-null (e.g. an invalid/non-approved subject);
+  otherwise it is present and carries a `trigger`. `trigger` ∈ `"superseded"` | `"evidence_stale"` |
+  `"preview"` | a list combining `"superseded"` and `"evidence_stale"` (both committed conditions may
+  fire together). When `trigger` is `"preview"`, `is_preview` MUST be `true` and no committed change
+  condition is required (FR-003 mode (c), FR-004).
 - `supersession_chain` — array (possibly empty) of `{ decision_id, relation, resolved }` in pointer
   order.
-- `affected` — array (possibly empty) of affected-artifact objects (see below).
+- `affected` — array (possibly empty) of affected-artifact objects (see below). Empty when
+  `blocking_condition` is set.
 - `incomplete_lineage` — array (possibly empty) of warning objects (see below).
 - `cycles` — array (possibly empty) of `{ nodes[], detail }`.
-- `blocking_condition` — `null` or `{ kind, detail }`.
+- `blocking_condition` — `null` or `{ kind, detail }`. When non-null, `subject` is `null` and no
+  `affected[]` is claimed (never a false "no impact").
 - `generated_at` — string; EXCLUDED from any content digest.
 
 ### `affected[]` object
 
-`{ artifact_id, kind, relation ∈ {direct,transitive}, evidence_paths[], contributing_decisions[], affected_stages[], next_actions[] }`
+`{ artifact_id, kind, relation ∈ {direct,transitive}, evidence_paths[], affected_stages[], next_actions[] }`
 where `next_actions[]` items are `{ category, explanation, next_surface }` drawn from
-`readiness_classify`, and `contributing_decisions[]` items are `{ decision_id, evidence_path }` naming
-every changed decision that reaches this artifact (the artifact is listed once, not duplicated per
-decision — spec Edge Case "multiple decisions affecting the same artifact").
+`readiness_classify`. Because the map is single-subject, an artifact is listed once; if it is reached
+by more than one path from the subject, the additional paths are recorded within its ordered
+`evidence_paths` chain (INV-2 direct-dominance still applies).
 
 ### `incomplete_lineage[]` object
 
@@ -41,10 +47,10 @@ decision — spec Edge Case "multiple decisions affecting the same artifact").
 | INV-2 Direct dominates a dual-reachable artifact | Edge Cases | fixture where an artifact is both; assert single `direct` entry |
 | INV-3 Every `affected` has non-empty `evidence_paths` | FR-008 | structural scan |
 | INV-4 No numeric score anywhere | FR-023, SC-005 | no digit-then-`%`; no `score`/`confidence`/`risk`/`risk_score`/`trust`/`completeness`/`blast_radius`/`weight` key |
-| INV-5 Fail-closed, never false "no impact" | FR-019, SC-008 | degraded-input matrix; assert `blocking_condition` set, no empty-clean result |
+| INV-5 Fail-closed, never false "no impact" (incl. `invalid_subject` for a non-approved subject) | FR-003, FR-019, SC-008 | degraded-input + non-approved-subject matrix; assert `blocking_condition` set + `subject` null, no empty-clean result |
 | INV-6 Byte-deterministic modulo `generated_at` | NFR-001, SC-010 | double-run byte diff |
 | INV-7 Disclosure-safe pre-write | NFR-003, SC-011 | `scan_disclosure` blocks a planted secret/PII/connection-string |
-| INV-8 `affected`/`incomplete_lineage`/`supersession_chain` stably ordered; within each `affected[]` entry, `evidence_paths` and `contributing_decisions` stably ordered | NFR-001 | sorted-order assertion |
+| INV-8 `affected`/`incomplete_lineage`/`supersession_chain` stably ordered; within each `affected[]` entry, `evidence_paths` in a stable (traversal) order | NFR-001 | sorted-order assertion |
 | INV-9 Transitive entries carry the full ordered edge evidence chain | FR-009/010/011, SC-002 | transitive fixture path assertion |
 | INV-10 Cycle recorded + bounded, never a completed transitive path | FR-014, SC-006 | cyclic fixture terminates + records cycle |
 | INV-11 Only reused authorities; no new store/engine/authority/model/stage/CLI-family/UI | FR-001/002/024/025, SC-013 | no-duplicate task asserts imports, not re-implementations |

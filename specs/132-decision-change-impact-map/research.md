@@ -133,8 +133,8 @@ pointer chain. The readiness spine stays the sole stage-state authority.
 **Decision**: Sort every collection by a stable key and exclude a `generated_at` field from any
 content digest, mirroring `passport.build_passport`'s `passport_id` (content digest excludes
 `generated_at`). Ordering: `affected[]` by `(direct-first, artifact_id)`, with each entry's
-`evidence_paths` in traversal order and `contributing_decisions` by `decision_id` (edge provenance
-lives inside `evidence_paths`; no separate top-level `edges[]`);
+`evidence_paths` in traversal order (the map is single-subject; edge provenance lives inside
+`evidence_paths`; no separate top-level `edges[]`);
 `incomplete_lineage[]` by `(kind, locator)`; `supersession_chain[]` in pointer order.
 
 **Rationale**: NFR-001 / SC-010 / residual risk #6. Determinism is what makes the machine form

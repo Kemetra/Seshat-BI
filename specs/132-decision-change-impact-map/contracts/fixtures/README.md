@@ -21,8 +21,7 @@ No fixture carries a worked-example's real table/column/policy/number/client/hum
 | `malformed_store/` | Decision Store that fails to load | US4, FR-019, SC-008 | `blocking_condition.kind = malformed_store`; write refused |
 | `preview/` | approved decision NOT yet superseded | US3, FR-004 | preview `affected[]` produced; `is_preview:true`; zero state writes |
 | `no_leak/` | a document that would carry a secret/PII/connection string | SC-011, NFR-003 | `scan_disclosure` blocks the write |
-| `non_approved_subject/` | a decision that is still `proposed`/`pending` (never approved) | US1, FR-003 (approved-only), spec Edge Case "Decision never approved" | reported as *not a valid impact-map subject*, NOT as "no impact" |
-| `multi_decision/` | two changed decisions whose scopes both reach the same downstream artifact | US1, spec Edge Case "multiple decisions affecting the same artifact" | artifact appears in `affected[]` **once**, with a `contributing_decisions[]` entry for each contributing decision + its evidence path; never duplicated per decision |
+| `non_approved_subject/` | a decision that is still `proposed`/`pending` (never approved) | US1, FR-003 (approved-only), spec Edge Case "Decision never approved" | `blocking_condition.kind == "invalid_subject"`, `subject == null`; reported as *not a valid impact-map subject*, NOT as "no impact" |
 
 ## Cross-cutting assertions (apply to every fixture)
 

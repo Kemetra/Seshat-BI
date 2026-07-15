@@ -49,7 +49,7 @@ tests; this repo's convention is TDD (RED → GREEN → IMPROVE). Test tasks pre
 - [ ] T002 [P] Materialize the fixture tree under `tests/fixtures/impact_map/` from the descriptors in
   `contracts/fixtures/README.md` — one subdir per family (direct, transitive, cycle, stale_evidence,
   missing_ref, conflict, incomplete_lineage, dangling_pointer, absent_store, malformed_store, preview,
-  no_leak, non_approved_subject, multi_decision). Fixtures are generic; no worked-example real values
+  no_leak, non_approved_subject). Fixtures are generic; no worked-example real values
   as defaults (SC-012, NFR-005).
 
 ---
@@ -102,23 +102,20 @@ once, `relation:"direct"`, resolvable evidence path, stage from readiness projec
 - [ ] T010 [P] [US1] `tests/unit/test_impact_map.py::test_no_state_written` — after producing a map, no
   decision/approval/supersession pointer/`readiness-status.yaml` changed (FR-024, FR-025).
 - [ ] T010a [P] [US1] `tests/unit/test_impact_map.py::test_non_approved_subject_reported` —
-  `non_approved_subject/` fixture: a `proposed`/`pending` (non-approved) decision is reported as *not a
-  valid impact-map subject*, NOT as "no impact" (spec Edge Case "Decision never approved"; FR-003
-  approved-only precondition).
-- [ ] T010b [P] [US1] `tests/unit/test_impact_map.py::test_multiple_decisions_one_artifact` —
-  `multi_decision/` fixture: an artifact reached by two changed decisions appears in `affected[]`
-  exactly once with a `contributing_decisions[]` entry per contributing decision (+ evidence path);
-  never duplicated per decision (spec Edge Case "multiple decisions affecting the same artifact").
+  `non_approved_subject/` fixture: a `proposed`/`pending` (non-approved) subject yields
+  `blocking_condition.kind == "invalid_subject"` with `subject == null`, reported as *not a valid
+  impact-map subject*, NOT as "no impact" and NOT a `subject` with a made-up trigger (spec Edge Case
+  "Decision never approved"; FR-003 approved-only precondition).
 
 ### Implementation for US1
 
-- [ ] T011 [US1] Implement scope→direct-artifact resolution in `src/seshat/impact_map.py`: for each
-  `scope_keys(subject.scope)` entry, resolve to committed downstream artifacts (metric contracts, gold
-  bindings via the explorer metric→gold edge, readiness evidence), producing `affected[]` entries with
-  `relation:"direct"`, `artifact_id` (via `artifact_identity`), `evidence_paths`, and
-  `contributing_decisions[]` (listing every changed decision that reaches the artifact; artifact listed
-  once — spec Edge Case "multiple decisions affecting the same artifact"). Keeps the direct set
-  separable from the transitive set (FR-007, FR-008, FR-009, FR-010).
+- [ ] T011 [US1] Implement scope→direct-artifact resolution in `src/seshat/impact_map.py`: for the
+  single subject decision, for each `scope_keys(subject.scope)` entry, resolve to committed downstream
+  artifacts (metric contracts, gold bindings via the explorer metric→gold edge, readiness evidence),
+  producing `affected[]` entries with `relation:"direct"`, `artifact_id` (via `artifact_identity`), and
+  `evidence_paths` (an artifact reached by more than one path from the subject is listed once, extra
+  paths folded into its `evidence_paths`). Keeps the direct set separable from the transitive set
+  (FR-007, FR-008, FR-009, FR-010).
 - [ ] T012 [US1] Attach affected readiness stage(s) per affected artifact using
   `readiness_projection.build_readiness_projection` + `decision_gate._FLOW_TO_SPINE` (READ only;
   FR-017).
@@ -127,7 +124,7 @@ once, `relation:"direct"`, resolvable evidence path, stage from readiness projec
 - [ ] T014 [US1] Enforce the no-score invariant structurally in the composer (no synthesized number
   ever placed in the dict) and the never-write contract (FR-023/024/025).
 
-**Checkpoint**: direct-impact map works; T007–T010b pass.
+**Checkpoint**: direct-impact map works; T007–T010a pass.
 
 ---
 
@@ -259,9 +256,9 @@ disclosure-scan before write; contained write; deterministic.
 ### Implementation for US5
 
 - [ ] T037 [US5] Implement deterministic ordering in the composer: sort `affected[]` by
-  `(direct-first, artifact_id)`, each `affected[].evidence_paths` in traversal order and
-  `affected[].contributing_decisions` by `decision_id`, `incomplete_lineage[]` by `(kind,locator)`,
-  `supersession_chain[]` in pointer order; exclude `generated_at` from any digest (NFR-001).
+  `(direct-first, artifact_id)`, each `affected[].evidence_paths` in traversal order,
+  `incomplete_lineage[]` by `(kind,locator)`, `supersession_chain[]` in pointer order; exclude
+  `generated_at` from any digest (NFR-001).
 - [ ] T038 [US5] Implement the thin read-only surface in `src/seshat/cli/commands/impact_map.py`
   (mirror `commands/explorer.py`/`commands/passport.py`): build dict → `scan_disclosure` → render human
   form + write machine form under `resolve_local_output`; register the surface in the CLI dispatch
@@ -304,9 +301,9 @@ disclosure-scan before write; contained write; deterministic.
 - **Foundational (P2: T003–T006)** → after Setup; BLOCKS all user stories (the composer's input layer +
   promoted staleness helper + guard tests). T003 (promote `_evidence_stale`) → T004 (its guard test);
   T005 (input-loading layer) depends on T003 and on T002 fixtures; T006 ∥ T004.
-- **US1 (P3: T007–T014)** → after Foundational. Tests T007–T010b (RED) before impl T011–T014 (GREEN).
-  T011 (direct resolution, incl. `contributing_decisions[]`) depends on T005; T012/T013 (stages/actions)
-  depend on T011; T014 (no-score/never-write enforcement) after T011–T013.
+- **US1 (P3: T007–T014)** → after Foundational. Tests T007–T010a (RED) before impl T011–T014 (GREEN).
+  T011 (direct resolution, single subject) depends on T005; T012/T013 (stages/actions) depend on T011;
+  T014 (no-score/never-write enforcement) after T011–T013.
 - **US2 (P4: T015–T022)** → after US1's direct resolution. Tests T015–T019 (RED) before impl T020–T022
   (GREEN). **T020 (transitive walk) depends on T011** (it walks outward from the direct set); T021
   (incomplete-lineage) depends on T020; T022 (cycle handling) folds into T020's visited-set. US1+US2 =

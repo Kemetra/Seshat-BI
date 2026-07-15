@@ -206,10 +206,10 @@ ground-truth pass surfaced. Key decisions recorded there:
 ## Deterministic Ordering & Cycle Handling
 
 - **Ordering**: `affected[]` sorted by `(direct-before-transitive, artifact_id)`; within each entry,
-  `evidence_paths` in traversal order and `contributing_decisions` by `decision_id`;
-  `incomplete_lineage[]` sorted by `(kind, locator)`; `supersession_chain[]` in pointer order from the
-  subject decision. Byte-identical across runs modulo `generated_at` (NFR-001). (Edge provenance lives
-  inside `affected[].evidence_paths`; there is no separate top-level `edges[]` collection.)
+  `evidence_paths` in traversal order; `incomplete_lineage[]` sorted by `(kind, locator)`;
+  `supersession_chain[]` in pointer order from the subject decision. Byte-identical across runs modulo
+  `generated_at` (NFR-001). (The map is single-subject; edge provenance lives inside
+  `affected[].evidence_paths`; there is no separate top-level `edges[]` collection.)
 - **Cycles**: a visited-set-guarded walk; on re-encountering a node, record a named cycle condition
   and stop that branch — never re-traverse, never emit the cycle as a completed transitive path
   (FR-014, SC-006).

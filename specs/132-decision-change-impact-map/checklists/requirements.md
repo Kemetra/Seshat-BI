@@ -45,10 +45,19 @@
   systematic coverage map found **0 CRITICAL, 0 HIGH**; 47/47 requirements (FR-001..025, NFR-001..006,
   SEC-001..003, SC-001..013) have id-cited task coverage. Remediation applied inside the feature dir
   only (no requirement weakened): reconciled the no-score forbidden-key set to 8 keys incl. `trust`
-  across spec/data-model/contract/tasks; added `contributing_decisions[]` to `affected[]`
-  (data-model + contract + T011); added the `non_approved_subject/` fixture + test T010a for the
+  across spec/data-model/contract/tasks; added the `non_approved_subject/` fixture + test T010a for the
   approved-only precondition; added T041 as the actual SC-012/NFR-005 no-leak scan (distinct from the
   T002 fixture constraint); added explicit id citations closing all traceability gaps; documented the
   `_evidence_stale` promotion-asymmetry rationale in research.md + plan.md; bounded affected-stage
-  placement in the contract. Re-verification confirmed every finding RESOLVED with no CRITICAL/HIGH
-  remaining and no new inconsistency. Analysis converged.
+  placement in the contract.
+- **Post-PR-review remediation (2026-07-15, PR #291):** an automated external reviewer (Codex) caught
+  five cross-artifact contradictions across two rounds that the internal analyze passes missed —
+  registered as a real signal about the subject model. Round 1: phantom top-level `edges[]` (dropped;
+  edge provenance lives in `affected[].evidence_paths`), preview-vs-trigger contradiction (preview made
+  an explicit third trigger mode), and the repo-wide `feature.json` pointer (reverted to
+  `specs/131-portfolio-watch` so the PR is purely additive). Round 2: no representable state for a
+  non-approved subject (added `blocking_condition.kind = invalid_subject` with `subject: null`), and a
+  `contributing_decisions[]`/`multi_decision` construct that implied a multi-subject model the feature
+  does not have (the map is **single-subject**; dropped the field, its fixture, and its test). Final
+  pass traced the subject model end-to-end (one subject in → valid triggers → invalid-subject state)
+  for consistency across spec/data-model/contract/tasks/fixtures.
