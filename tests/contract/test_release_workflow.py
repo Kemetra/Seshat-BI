@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -36,7 +37,13 @@ def test_publish_job_uses_protected_environment_oidc_and_exact_handoff() -> None
     assert publish["environment"] == "pypi"
     assert publish["permissions"] == {"contents": "read", "id-token": "write"}
     rendered = WORKFLOW.read_text(encoding="utf-8")
-    assert "pypa/gh-action-pypi-publish@release/v1" in rendered
+    # SHA-pinned (security finding `actions-tag-pinned-not-sha`): the publish
+    # action must be a 40-char commit SHA, never the mutable `@release/v1` branch,
+    # because it runs in the `id-token: write` OIDC-privileged job.
+    assert "pypa/gh-action-pypi-publish@release/v1" not in rendered
+    assert re.search(r"pypa/gh-action-pypi-publish@[0-9a-f]{40}\b", rendered), (
+        "publish action must be pinned to a 40-char commit SHA"
+    )
     assert "sha256sum --check SHA256SUMS" in rendered
     assert "refs/tags/v*" in rendered
     reject_step = next(

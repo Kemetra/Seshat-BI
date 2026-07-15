@@ -387,6 +387,11 @@ _ENV_EXAMPLE_C2 = _env_example_text()
 
 
 def _run(repo: Path, *args: str) -> None:
+    # SECURITY: `repo` here is ALWAYS a throwaway synthetic repo this module
+    # git-inits itself (see _init_repo) for the fail-closed self-check -- never a
+    # user- or attacker-supplied tree. So the untrusted-tree git hardening
+    # (core.fsmonitor=false etc. applied in gitutil/portfolio_watch/etc.) is not
+    # needed here: there is no externally-authored .git/config to execute.
     subprocess.run(
         ["git", "-C", str(repo), *args],
         check=True,

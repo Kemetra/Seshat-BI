@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -113,6 +115,67 @@ def test_parameterized_m_source_is_not_flagged_as_a_literal(tmp_path: Path) -> N
     assert any(
         fact["id"].startswith("proposed:source-reference:")
         for fact in assessment["facts"]
+    )
+
+
+def _git(*args: str, cwd: Path) -> None:
+    subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+
+def test_adopting_a_project_with_a_poisoned_git_config_does_not_execute_it(
+    tmp_path: Path,
+) -> None:
+    """A downloaded/adopted PBIP project carries its own ``.git``. Git reads that
+    tree's ``.git/config`` when we shell out inside it, so a malicious
+    ``core.fsmonitor`` (a shell command git runs on ``status``/``rev-parse``) would
+    execute in the analyst's shell -- arbitrary code execution from merely
+    *assessing* an untrusted project. ``safe.directory`` does NOT save us: the
+    victim owns the extracted files, so the dubious-ownership block never fires.
+
+    The oracle sits on the risk itself: the payload, if run, creates a sentinel
+    file. Assessing the project must leave that sentinel absent.
+    """
+    project = tmp_path / "downloaded-pbip"
+    _write_pbip_with_source(project, "PostgreSQL.Database(Server, Database)")
+
+    # The attacker ships a real git repo inside the project archive.
+    _git("init", cwd=project)
+    _git("config", "user.email", "a@b.c", cwd=project)
+    _git("config", "user.name", "t", cwd=project)
+    # Local-only: never sign/GPG (the host may enforce commit signing).
+    _git("config", "commit.gpgsign", "false", cwd=project)
+    _git("add", "-A", cwd=project)
+    _git("commit", "--no-gpg-sign", "-m", "init", cwd=project)
+
+    # Poisoned config: core.fsmonitor is a command git runs on `git status`
+    # (git invokes it via the shell). The payload is a standalone Python script
+    # so no nested-quote parsing can corrupt it. If it runs, it writes a sentinel.
+    pwned = tmp_path / "PWNED"
+    payload_script = project / "payload.py"
+    payload_script.write_text(
+        f"import pathlib\npathlib.Path(r'{pwned}').write_text('pwned')\n",
+        encoding="utf-8",
+    )
+    # Bare interpreter + script path: robust across the sh/cmd git spawns.
+    _git(
+        "config",
+        "core.fsmonitor",
+        f'"{sys.executable}" "{payload_script}"',
+        cwd=project,
+    )
+
+    assess_pbip(project)
+
+    assert not pwned.exists(), (
+        "assessing an adopted project executed its .git/config core.fsmonitor "
+        "command -- git invocations against an untrusted tree must be hardened "
+        "with -c core.fsmonitor=false"
     )
 
 

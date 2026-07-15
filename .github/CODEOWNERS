@@ -1,0 +1,30 @@
+# Code owners for Seshat BI.
+#
+# GitHub requests review from these owners when a PR touches a matching path.
+# NOTE: this is advisory until branch protection on `main` is configured to
+# "Require review from Code Owners" (a GitHub repo setting, not a repo file).
+#
+# Later matches take precedence, so the security-critical paths are listed last.
+
+# Default owner for everything.
+*                                   @ahmed-shaaban-94
+
+# Distributed source — what a `pip install seshat-bi` user executes.
+/src/                               @ahmed-shaaban-94
+
+# Supply chain: CI/release workflows run with repo tokens (release holds OIDC
+# id-token:write). Any change here is security-sensitive.
+/.github/workflows/                 @ahmed-shaaban-94
+/.github/dependabot.yml             @ahmed-shaaban-94
+/pyproject.toml                     @ahmed-shaaban-94
+
+# Marketplace-distributed agent surface — these load into a consumer's agent,
+# so an edit here can change what the agent is instructed to do. Review for
+# prompt-injection and confidentiality (real client/company identifiers) before
+# it ships to the Claude/Codex marketplaces.
+/.claude-plugin/                    @ahmed-shaaban-94
+/integrations/                      @ahmed-shaaban-94
+/distribution/                      @ahmed-shaaban-94
+
+# Security policy itself.
+/SECURITY.md                        @ahmed-shaaban-94

@@ -17,6 +17,23 @@ from pathlib import Path
 SCHEMA_VERSION = "1.0"
 MANIFEST_PATH = ".seshat/adoption/pbip-adoption.yaml"
 
+# Hardening flags for any `git` invocation whose cwd is an EXTERNALLY-AUTHORED
+# tree (an adopted PBIP project the user downloaded). Git reads that tree's own
+# `.git/config`, so an attacker-supplied `core.fsmonitor` (a command git runs on
+# `git status`) or `core.hooksPath` would execute in the analyst's shell -- RCE
+# from merely assessing a project. `safe.directory` does NOT help: the victim
+# owns the extracted files, so the dubious-ownership block never fires. Prepend
+# these to the argv (after "git") to neutralize the config-driven exec vectors.
+# On a trusted repo they are a harmless no-op (fsmonitor is only an optimization).
+GIT_UNTRUSTED_TREE_HARDENING: tuple[str, ...] = (
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.hooksPath=/dev/null",
+    "-c",
+    "protocol.ext.allow=never",
+)
+
 # Detection patterns: a boolean "does this text look like a credential or a
 # literal connection detail" used to raise a governance fact.  They match only
 # the key and delimiter deliberately, so detection stays broad.
@@ -170,7 +187,7 @@ def _read_text(path: Path) -> str | None:
 
 def _git_state(root: Path) -> str:
     revision = subprocess.run(
-        ["git", "rev-parse", "--is-inside-work-tree"],
+        ["git", *GIT_UNTRUSTED_TREE_HARDENING, "rev-parse", "--is-inside-work-tree"],
         cwd=root,
         capture_output=True,
         text=True,
@@ -179,7 +196,13 @@ def _git_state(root: Path) -> str:
     if revision.returncode != 0 or revision.stdout.strip() != "true":
         return "absent"
     status = subprocess.run(
-        ["git", "status", "--porcelain", "--untracked-files=all"],
+        [
+            "git",
+            *GIT_UNTRUSTED_TREE_HARDENING,
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+        ],
         cwd=root,
         capture_output=True,
         text=True,

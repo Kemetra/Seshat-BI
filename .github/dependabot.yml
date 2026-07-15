@@ -1,0 +1,24 @@
+version: 2
+updates:
+  # Python dependencies (runtime + optional extras declared in pyproject.toml).
+  # The runtime surface is minimal (pyyaml only); most of the surface is the
+  # dev/db/mssql/... extras used in CI. Weekly is enough for a beta package.
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+
+  # GitHub Actions. The workflows pin actions by commit SHA (see the security
+  # scan finding `actions-tag-pinned-not-sha`); Dependabot keeps those SHAs
+  # current and surfaces a re-pointed / compromised action as a reviewable PR.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
