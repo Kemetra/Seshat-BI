@@ -11,6 +11,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+try:
+    from scripts.bundle_provenance import (
+        ProvenanceError,
+        validate_manifest_provenance,
+    )
+except ModuleNotFoundError:  # direct `python scripts/check_release_versions.py`
+    from bundle_provenance import (
+        ProvenanceError,
+        validate_manifest_provenance,
+    )
+
 _SEMVER = re.compile(
     r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
     r"(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
@@ -229,6 +240,52 @@ def _distribution_projections(
     ]
 
 
+def _bundle_provenance_projection(
+    repo_root: Path, *, platform: str, path: str
+) -> dict[str, str | None]:
+    target = _ProjectionTarget(f"{platform}_bundle_provenance", path, "valid")
+    manifest_path = repo_root / path
+    if not manifest_path.is_file():
+        return _projection(
+            target,
+            None,
+            blocker=f"required bundle manifest is missing: {path}",
+        )
+    try:
+        manifest = _json(manifest_path)
+        revision = validate_manifest_provenance(
+            repo_root, manifest, label=f"{platform} bundle manifest"
+        )
+    except (ProvenanceError, VersionAuditError, OSError, ValueError) as exc:
+        return _projection(target, None, blocker=str(exc))
+    return _projection(target, "valid") | {"source_revision": revision}
+
+
+def _bundle_provenance_projections(
+    repo_root: Path,
+) -> list[dict[str, str | None]]:
+    manifests = {
+        "claude": "integrations/claude-code/seshat-bi/bundle-manifest.json",
+        "codex": "integrations/codex/seshat-bi/bundle-manifest.json",
+    }
+    projections = [
+        _bundle_provenance_projection(repo_root, platform=platform, path=path)
+        for platform, path in manifests.items()
+    ]
+    revisions = {
+        str(item.get("source_revision"))
+        for item in projections
+        if item["status"] == "pass"
+    }
+    if len(revisions) > 1:
+        for item in projections:
+            item["status"] = "blocked"
+            item["blocking_reason"] = (
+                "Claude and Codex bundle source_revision provenance differs"
+            )
+    return projections
+
+
 def _document_matches(path: Path, pattern: str) -> bool:
     if not path.is_file():
         return False
@@ -311,6 +368,7 @@ def audit_versions(
     revision = source_revision or _git_revision(repo_root)
     tag_map = dict(tags) if tags is not None else _tag_map(repo_root)
     projections = _distribution_projections(repo_root, version)
+    projections.extend(_bundle_provenance_projections(repo_root))
     projections.extend(
         [
             _changelog_projection(repo_root, version),

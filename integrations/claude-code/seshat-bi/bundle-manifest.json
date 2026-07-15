@@ -1541,10 +1541,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "682444eb84868e080b7d4aab4a90defb48c78881fb949e14ff5110b269be29f5",
+  "manifest_digest": "b1b99f7f2089f5c28ef01d5747860a0c4d24f0b4c4834c06dfdadc16fc949f65",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "d48486aa96d11bf4cb53987fea480c63eb693c2e",
+  "source_revision": "5c06be952f1f9d9660951e3c5451ab9d84019ccb",
   "target": "claude",
   "version": "0.3.1"
 }

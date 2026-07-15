@@ -25,6 +25,11 @@ the ignored private evidence area and follow the platform owner's retention
 policy.
 
 - [ ] Owner has selected and recorded the version bump in `pyproject.toml` and `CHANGELOG.md`.
+- [ ] Coordinated preparation has committed that version projection before exporting
+  bundles, and both manifests' `source_revision` commits reproduce the declared
+  `project.version` locally.
+- [ ] The release PR will use a merge commit; squash or rebase would discard/rewrite
+  the immutable version-projection commit and must fail provenance validation.
 - [x] Baseline audit: `KPI-MC-15` is present exactly once in the canonical registry,
   resolves to `contracts/average-basket-size-units.md`, and is protected by
   `test_kpi_mc_15_exists_exactly_once_and_resolves_to_its_contract`. Do not add a

@@ -16,6 +16,14 @@ from typing import Any, Iterable, Mapping
 
 import yaml
 
+try:
+    from scripts.bundle_provenance import (
+        ProvenanceError,
+        validate_manifest_provenance,
+    )
+except ModuleNotFoundError:  # direct `python scripts/export_agent_bundles.py`
+    from bundle_provenance import ProvenanceError, validate_manifest_provenance
+
 EXPORTER_VERSION = "1.0"
 TARGET_ROOTS = {
     "claude": Path("integrations/claude-code/seshat-bi"),
@@ -163,6 +171,26 @@ def _git_revision(repo_root: Path) -> str:
 def _project_version(repo_root: Path) -> str:
     document = tomllib.loads((repo_root / "pyproject.toml").read_text(encoding="utf-8"))
     return str(document["project"]["version"])
+
+
+def _validated_source_revision(
+    repo_root: Path, *, version: str, source_revision: object
+) -> str:
+    if source_revision is None:
+        try:
+            source_revision = _git_revision(repo_root)
+        except subprocess.CalledProcessError as exc:
+            raise ExportError(
+                "source_revision is missing because Git HEAD does not resolve"
+            ) from exc
+    try:
+        return validate_manifest_provenance(
+            repo_root,
+            {"version": version, "source_revision": source_revision},
+            label="generated bundle",
+        )
+    except ProvenanceError as exc:
+        raise ExportError(str(exc)) from exc
 
 
 def load_allowlist(repo_root: Path, path: Path | None = None) -> dict[str, Any]:
@@ -494,12 +522,17 @@ def build_bundle(
     if target not in TARGET_ROOTS:
         raise ExportError(f"unsupported target: {target}")
     resolved_options = options or BuildOptions()
+    version = _project_version(repo_root)
+    source_revision = _validated_source_revision(
+        repo_root,
+        version=version,
+        source_revision=resolved_options.source_revision,
+    )
     entries = validate_allowlist(
         repo_root,
         load_allowlist(repo_root),
         allow_untracked_inputs=resolved_options.allow_untracked_inputs,
     )
-    version = _project_version(repo_root)
     _prepare_output_root(output_root)
     context = _BundleContext(repo_root, target, output_root, version)
     manifest_entries = _manifest_entries(context, entries)
@@ -510,7 +543,7 @@ def build_bundle(
         "target": target,
         "plugin": "seshat-bi",
         "version": version,
-        "source_revision": resolved_options.source_revision or _git_revision(repo_root),
+        "source_revision": source_revision,
         "entries": sorted(manifest_entries, key=lambda item: item["destination"]),
     }
     payload["manifest_digest"] = _sha256(_canonical_json(payload))
@@ -550,22 +583,37 @@ def compare_bundle_trees(
     )
 
 
+def _require_matching_provenance_fields(
+    claude_manifest: Mapping[str, Any], codex_manifest: Mapping[str, Any]
+) -> None:
+    for provenance_field in ("version", "source_revision"):
+        if claude_manifest.get(provenance_field) != codex_manifest.get(
+            provenance_field
+        ):
+            raise ExportError(f"Claude and Codex {provenance_field} provenance differs")
+
+
+def _canonical_provenance(
+    manifest: Mapping[str, Any],
+) -> dict[str, tuple[str, str]]:
+    canonical_classes = {"public_knowledge", "public_license"}
+    return {
+        str(entry["source"]): (
+            str(entry["source_sha256"]),
+            str(entry["output_sha256"]),
+        )
+        for entry in manifest.get("entries", [])
+        if entry.get("classification") in canonical_classes
+    }
+
+
 def compare_shared_provenance(
     claude_manifest: Mapping[str, Any], codex_manifest: Mapping[str, Any]
 ) -> None:
-    """Require identical canonical digests across both platform projections."""
+    """Require one version/revision contract and identical canonical source digests."""
 
-    def canonical(manifest: Mapping[str, Any]) -> dict[str, tuple[str, str]]:
-        result: dict[str, tuple[str, str]] = {}
-        for entry in manifest.get("entries", []):
-            if entry.get("classification") in {"public_knowledge", "public_license"}:
-                result[str(entry["source"])] = (
-                    str(entry["source_sha256"]),
-                    str(entry["output_sha256"]),
-                )
-        return result
-
-    if canonical(claude_manifest) != canonical(codex_manifest):
+    _require_matching_provenance_fields(claude_manifest, codex_manifest)
+    if _canonical_provenance(claude_manifest) != _canonical_provenance(codex_manifest):
         raise ExportError("Claude and Codex canonical provenance differs")
 
 
@@ -597,7 +645,14 @@ def check_all(repo_root: Path, *, allow_untracked_inputs: bool = False) -> None:
                 existing_manifest = json.loads(
                     existing_manifest_path.read_text(encoding="utf-8")
                 )
-                source_revision = existing_manifest.get("source_revision")
+                try:
+                    source_revision = validate_manifest_provenance(
+                        repo_root,
+                        existing_manifest,
+                        label=f"committed {target} bundle",
+                    )
+                except ProvenanceError as exc:
+                    raise ExportError(str(exc)) from exc
             generated_root = temp_root / target
             manifests[target] = build_bundle(
                 repo_root,
