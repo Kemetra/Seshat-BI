@@ -44,6 +44,16 @@ closed. Its `pass` means only that projections agree; it never selects the versi
 authorizes a tag, upload, release, catalog publication, or OpenAI public plugin
 submission.
 
+Generated bundle provenance uses the immutable version-projection commit. Coordinated
+release preparation first commits `pyproject.toml`, the root marketplace version, and
+the frozen changelog; the exporter then records that commit as `source_revision` and
+verifies locally that its canonical `project.version` equals the bundle version. A
+second commit records the generated Claude and Codex bundles. The final generated
+commit cannot be its own provenance revision because embedding that commit hash in the
+manifest would create a self-referential hash cycle. Release PRs therefore preserve
+both commits with a merge commit; squash or rebase merging invalidates the recorded
+projection revision and fails provenance validation.
+
 ## Who bumps it
 
 **The owner bumps the version.** A version bump is a human, named decision -- never

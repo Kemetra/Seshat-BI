@@ -142,7 +142,45 @@ jobs:
               raise SystemExit(f"release note has no v{major_minor} heading: {release_note}")
           PY
 
-      - name: Regenerate Claude and Codex bundles
+      - name: Require the expected version-projection diff
+        shell: bash
+        run: |
+          python - <<'PY'
+          import subprocess
+
+          expected = {
+              ".claude-plugin/marketplace.json",
+              "CHANGELOG.md",
+              "pyproject.toml",
+          }
+          changed = set(
+              subprocess.run(
+                  ["git", "diff", "--name-only"],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              ).stdout.splitlines()
+          )
+          if changed != expected:
+              raise SystemExit(
+                  f"version projection changed {sorted(changed)}; expected {sorted(expected)}"
+              )
+          PY
+
+      - name: Commit the immutable version projection
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "${RELEASE_BRANCH}"
+          git add -- \
+            pyproject.toml \
+            CHANGELOG.md \
+            .claude-plugin/marketplace.json
+          git diff --cached --check
+          git commit -m "chore: project v${VERSION} version metadata"
+
+      - name: Regenerate Claude and Codex bundles from the version projection
         run: python scripts/export_agent_bundles.py
 
       - name: Validate synchronized release candidate
@@ -153,17 +191,12 @@ jobs:
           python scripts/release_candidate_audit.py --require-release-ready
           git diff --check
 
-      - name: Require the expected release-only diff
+      - name: Require the expected generated-bundle diff
         shell: bash
         run: |
           python - <<'PY'
           import subprocess
 
-          allowed_exact = {
-              ".claude-plugin/marketplace.json",
-              "CHANGELOG.md",
-              "pyproject.toml",
-          }
           allowed_prefixes = (
               "integrations/claude-code/seshat-bi/",
               "integrations/codex/seshat-bi/",
@@ -177,28 +210,22 @@ jobs:
           unexpected = sorted(
               path
               for path in changed
-              if path not in allowed_exact and not path.startswith(allowed_prefixes)
+              if not path.startswith(allowed_prefixes)
           )
           if unexpected:
-              raise SystemExit(f"unexpected release preparation files: {unexpected}")
+              raise SystemExit(f"unexpected generated bundle files: {unexpected}")
           if not changed:
-              raise SystemExit("release preparation produced no changes")
+              raise SystemExit("bundle generation produced no changes")
           PY
 
-      - name: Commit and push the release branch
+      - name: Commit generated bundles and push the release branch
         shell: bash
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch -c "${RELEASE_BRANCH}"
           git add -- \
-            pyproject.toml \
-            CHANGELOG.md \
-            .claude-plugin/marketplace.json \
             integrations/claude-code/seshat-bi \
             integrations/codex/seshat-bi
           git diff --cached --check
-          git commit -m "chore: prepare v${VERSION}"
+          git commit -m "chore: generate v${VERSION} agent bundles"
           git push --set-upstream origin "${RELEASE_BRANCH}"
 
       - name: Open a draft release pull request
@@ -220,6 +247,8 @@ jobs:
           - Review the changelog section and generated bundle diff.
           - Require normal CI and repository checks to pass.
           - Confirm that v${VERSION} is the intended owner-approved SemVer.
+          - Merge with a merge commit. Do not squash or rebase: both release-preparation
+            commits must remain ancestors of the release commit for bundle provenance.
           - Approve any PR checks GitHub marks as approval-required for bot-created pull requests.
 
           ## After merge

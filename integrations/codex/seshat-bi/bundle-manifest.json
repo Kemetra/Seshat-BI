@@ -1505,10 +1505,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "07a3288363563ae3a65b12e42efb492e059c969c565247529c239cd5f1d20150",
+  "manifest_digest": "729db26f2212441bfe9697375d3f127032b39a7e811a4ce82c226f892eacdd08",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "d48486aa96d11bf4cb53987fea480c63eb693c2e",
+  "source_revision": "5c06be952f1f9d9660951e3c5451ab9d84019ccb",
   "target": "codex",
   "version": "0.3.1"
 }

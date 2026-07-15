@@ -22,6 +22,17 @@ pytestmark = pytest.mark.unit
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def _build_options() -> BuildOptions:
+    revision = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    return BuildOptions(source_revision=revision, allow_untracked_inputs=True)
+
+
 def test_two_exports_have_identical_paths_and_bytes(tmp_path: Path) -> None:
     first = tmp_path / "first"
     second = tmp_path / "second"
@@ -29,13 +40,13 @@ def test_two_exports_have_identical_paths_and_bytes(tmp_path: Path) -> None:
         ROOT,
         "claude",
         first,
-        BuildOptions(source_revision="0" * 40, allow_untracked_inputs=True),
+        _build_options(),
     )
     build_bundle(
         ROOT,
         "claude",
         second,
-        BuildOptions(source_revision="0" * 40, allow_untracked_inputs=True),
+        _build_options(),
     )
     first_files = {
         path.relative_to(first): path.read_bytes()
@@ -62,7 +73,7 @@ def test_pbip_adoption_router_is_identical_in_claude_and_codex_regeneration(
         if isinstance(entry.get("source"), str)
     }
     monkeypatch.setattr(exporter, "_git_paths", lambda _root: tracked)
-    options = BuildOptions(source_revision="0" * 40, allow_untracked_inputs=True)
+    options = _build_options()
     claude = tmp_path / "claude"
     codex = tmp_path / "codex"
     build_bundle(ROOT, "claude", claude, options)
@@ -82,16 +93,20 @@ def test_manifest_digest_and_cross_target_provenance(tmp_path: Path) -> None:
         ROOT,
         "claude",
         tmp_path / "claude",
-        BuildOptions(source_revision="0" * 40, allow_untracked_inputs=True),
+        _build_options(),
     )
     codex = build_bundle(
         ROOT,
         "codex",
         tmp_path / "codex",
-        BuildOptions(source_revision="0" * 40, allow_untracked_inputs=True),
+        _build_options(),
     )
     assert len(claude["manifest_digest"]) == 64
     compare_shared_provenance(claude, codex)
+    codex["source_revision"] = "f" * 40
+    with pytest.raises(ExportError, match="source_revision provenance differs"):
+        compare_shared_provenance(claude, codex)
+    codex["source_revision"] = claude["source_revision"]
     canonical_entry = next(
         entry
         for entry in codex["entries"]
@@ -107,7 +122,7 @@ def test_source_digests_use_normalized_bytes(tmp_path: Path) -> None:
         ROOT,
         "claude",
         tmp_path / "claude",
-        BuildOptions(source_revision="0" * 40, allow_untracked_inputs=True),
+        _build_options(),
     )
     for entry in manifest["entries"]:
         source = (ROOT / entry["source"]).read_bytes()
