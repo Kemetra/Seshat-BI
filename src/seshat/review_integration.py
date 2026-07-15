@@ -25,11 +25,27 @@ _STAGE_HINTS = {
 }
 
 
+# `repo_root` is the caller-supplied `--repo` path and may be an
+# EXTERNALLY-AUTHORED tree; git reads its `.git/config` when we shell out inside
+# it, so harden against config-driven execution (core.fsmonitor/hooksPath).
+# `commit_range` is separately validated by gitutil._SAFE_RANGE_RE upstream
+# (option-injection guard). Keep in sync with
+# pbip_adoption._safety.GIT_UNTRUSTED_TREE_HARDENING.
+_GIT_HARDENING = (
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.hooksPath=/dev/null",
+    "-c",
+    "protocol.ext.allow=never",
+)
+
+
 def _changed_files(repo_root: Path, commit_range: str | None) -> list[str]:
     if not commit_range:
         return []
     result = subprocess.run(
-        ["git", "diff", "--name-only", commit_range],
+        ["git", *_GIT_HARDENING, "diff", "--name-only", commit_range],
         cwd=repo_root,
         capture_output=True,
         text=True,

@@ -15,6 +15,26 @@ _SAFE_RANGE_RE = re.compile(r"^[A-Za-z0-9_][\w./~^@-]*(\.\.\.?[\w./~^@-]+)?\Z")
 # unbounded (or sensitive) output into a RuntimeError / Finding (audit #27).
 _STDERR_LIMIT = 300
 
+# `repo_root` here can be an EXTERNALLY-AUTHORED tree -- notably a downloaded PBIP
+# project the user runs `seshat adopt-pbip` against, reached via the adoption
+# seams. `git -C <tree>` (like cwd=<tree>) makes git read THAT tree's own
+# `.git/config`, so an attacker-supplied `core.fsmonitor` (a command git runs on
+# status/check-ignore/ls-files) or `core.hooksPath` executes in the analyst's
+# shell -- arbitrary code execution from merely assessing a project.
+# `safe.directory` does NOT help: the victim owns the extracted files, so the
+# dubious-ownership block never fires. These flags neutralize the config-driven
+# exec vectors at the shared git wrapper and are a harmless no-op on a trusted
+# repo (fsmonitor is only an optimization). Keep in sync with
+# pbip_adoption._safety.GIT_UNTRUSTED_TREE_HARDENING.
+_GIT_HARDENING = (
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.hooksPath=/dev/null",
+    "-c",
+    "protocol.ext.allow=never",
+)
+
 
 def validate_commit_range(range_expr: str) -> str:
     """Return ``range_expr`` if it is a safe git revision range, else ``ValueError``.
@@ -30,7 +50,7 @@ def validate_commit_range(range_expr: str) -> str:
 
 def git_output(repo_root: Path, *args: str) -> str:
     result = subprocess.run(
-        ["git", "-C", str(repo_root), *args],
+        ["git", *_GIT_HARDENING, "-C", str(repo_root), *args],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -50,7 +70,7 @@ def git_output(repo_root: Path, *args: str) -> str:
 
 def git_check_ignore(repo_root: Path, path: str) -> bool:
     result = subprocess.run(
-        ["git", "-C", str(repo_root), "check-ignore", "-q", path],
+        ["git", *_GIT_HARDENING, "-C", str(repo_root), "check-ignore", "-q", path],
         capture_output=True,
         text=True,
     )

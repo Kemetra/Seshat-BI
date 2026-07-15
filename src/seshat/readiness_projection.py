@@ -22,9 +22,32 @@ _STAGE_ORDER = (
 )
 
 
+# `root` may be an EXTERNALLY-AUTHORED tree (a downloaded PBIP project reached
+# via the adoption seams). Git reads that tree's own `.git/config` when we shell
+# out inside it, so an attacker-supplied `core.fsmonitor`/`core.hooksPath` would
+# execute -> RCE. safe.directory only bypasses the ownership check, NOT config
+# exec, so it is not sufficient on its own. Keep in sync with
+# pbip_adoption._safety.GIT_UNTRUSTED_TREE_HARDENING.
+_GIT_HARDENING = (
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.hooksPath=/dev/null",
+    "-c",
+    "protocol.ext.allow=never",
+)
+
+
 def _source_revision(root: Path) -> str | None:
     result = subprocess.run(
-        ["git", "-c", f"safe.directory={root.as_posix()}", "rev-parse", "HEAD"],
+        [
+            "git",
+            *_GIT_HARDENING,
+            "-c",
+            f"safe.directory={root.as_posix()}",
+            "rev-parse",
+            "HEAD",
+        ],
         cwd=root,
         capture_output=True,
         text=True,

@@ -208,9 +208,31 @@ class GovernedScope:
 # --------------------------------------------------------------------------- #
 # Git revision (mirrors readiness_projection._source_revision verbatim)
 # --------------------------------------------------------------------------- #
+# `root` is the caller-supplied `seshat watch --repo` path, which may be an
+# EXTERNALLY-AUTHORED tree. safe.directory only bypasses the ownership check, NOT
+# git's config-driven execution (core.fsmonitor/hooksPath), so it must be paired
+# with the hardening flags or a poisoned .git/config in a downloaded tree yields
+# RCE. Keep in sync with pbip_adoption._safety.GIT_UNTRUSTED_TREE_HARDENING.
+_GIT_HARDENING = (
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.hooksPath=/dev/null",
+    "-c",
+    "protocol.ext.allow=never",
+)
+
+
 def _source_revision(root: Path) -> str | None:
     result = subprocess.run(
-        ["git", "-c", f"safe.directory={root.as_posix()}", "rev-parse", "HEAD"],
+        [
+            "git",
+            *_GIT_HARDENING,
+            "-c",
+            f"safe.directory={root.as_posix()}",
+            "rev-parse",
+            "HEAD",
+        ],
         cwd=root,
         capture_output=True,
         text=True,

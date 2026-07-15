@@ -9,6 +9,22 @@ from .core import Finding, RegisteredRule, RuleContext, RuleTier, Severity
 # git's "not a git repository" sentinel exit code (the expected non-repo case).
 _GIT_NOT_A_REPO = 128
 
+# This runner shells out to git with cwd=repo_root, which may be an
+# EXTERNALLY-AUTHORED tree (e.g. a downloaded PBIP project reached via the
+# adoption seams). Git reads that tree's own `.git/config`, so an
+# attacker-supplied `core.fsmonitor` command runs on `git ls-files` -> RCE.
+# `safe.directory` does not help (the victim owns the files). These flags
+# neutralize the config-driven exec vectors and are a harmless no-op on a
+# trusted repo. Keep in sync with pbip_adoption._safety.GIT_UNTRUSTED_TREE_HARDENING.
+_GIT_HARDENING = (
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.hooksPath=/dev/null",
+    "-c",
+    "protocol.ext.allow=never",
+)
+
 
 def _git_ls_files(repo_root: Path) -> tuple[str, ...]:
     """Return repo-relative POSIX paths for every tracked file.
@@ -23,7 +39,7 @@ def _git_ls_files(repo_root: Path) -> tuple[str, ...]:
       LOUD (red) rather than silently green.
     """
     result = subprocess.run(
-        ["git", "ls-files"],
+        ["git", *_GIT_HARDENING, "ls-files"],
         cwd=repo_root,
         capture_output=True,
         text=True,
@@ -42,7 +58,7 @@ def _git_ls_files(repo_root: Path) -> tuple[str, ...]:
     if tracked:
         return tracked
     untracked = subprocess.run(
-        ["git", "ls-files", "--others", "--exclude-standard"],
+        ["git", *_GIT_HARDENING, "ls-files", "--others", "--exclude-standard"],
         cwd=repo_root,
         capture_output=True,
         text=True,

@@ -29,12 +29,12 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
         with:
           fetch-depth: 0
           ref: ${{ inputs.candidate_ref }}
           persist-credentials: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
       - name: Install build validators
@@ -73,7 +73,7 @@ jobs:
           test "$(find release-staging/dist -maxdepth 1 -name '*.tar.gz' | wc -l)" -eq 1
           test "$(find release-staging/dist -maxdepth 1 -type f | wc -l)" -eq 2
       - name: Upload immutable candidate handoff
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: seshat-bi-candidate-${{ github.run_id }}
           path: release-staging/
@@ -107,7 +107,7 @@ jobs:
             *) echo "Publication requires an immutable refs/tags/v* candidate"; exit 1 ;;
           esac
       - name: Download the validated candidate handoff
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: seshat-bi-candidate-${{ github.run_id }}
           path: release-staging
@@ -122,7 +122,7 @@ jobs:
           grep -Eq '^[0-9a-f]{40}$' SOURCE_REVISION
           sha256sum --check SHA256SUMS
       - name: Trusted Publishing via GitHub OIDC
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
         with:
           packages-dir: release-staging/dist/
           attestations: true
