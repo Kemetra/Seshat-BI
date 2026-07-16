@@ -724,19 +724,20 @@ capabilities:
       skill: "dbt-transformation-adapter"
 
   - id: dagster-orchestration-adapter
-    name: "Dagster advisory adapter"
-    summary: "Runs the medallion sequence unattended/in CI as a Dagster asset graph, running only already-approved steps behind every gate."
+    name: "Dagster orchestration adapter"
+    summary: "Runs the medallion sequence unattended/in CI as a real Dagster asset graph (spec 134 runtime: orchestration/dagster/ project + seshat dagster doctor/run/evidence), executing only already-approved steps behind every gate, fail-closed, recording derived run evidence and deciding no readiness stage."
     state: shipped
-    authority: advisory
+    authority: agent-runnable
     surface: execution-adapter
     requirements: [optional-dependency]
     provenance: locally-verified
     readiness_stage: not-stage-scoped
-    command: null
-    documentation: ".claude/skills/dagster-orchestration-adapter/SKILL.md"
+    command: "dagster"
+    documentation: "orchestration/dagster/README.md"
     references:
       roadmap: "F030"
       skill: "dagster-orchestration-adapter"
+      dispatch: "dagster"
 
   - id: pbir-authoring-adapter-skill
     name: "pbir-authoring-adapter (skill)"

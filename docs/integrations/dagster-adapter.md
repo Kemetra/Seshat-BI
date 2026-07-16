@@ -4,11 +4,13 @@
   (dir 024 == F030; when the dir number and the F-number disagree, the roadmap F-number wins).
 - **Authority category (F024):** Execution Adapter / `DB-connected` (NOT publish-capable -- it
   TRIGGERS F016, it never publishes). See `docs/architecture/product-modules.md`.
-- **Status:** Authored (this human-facing guide + the ADR + the run-evidence template + the
-  adapter skill are this build slice). The Dagster PROJECT itself -- `orchestration/dagster/`,
-  `definitions.py`, the `assets/` / `jobs/` / `sensors/` / `schedules/` packages -- is NOT
-  created here; it is ENUMERATED below as the shape a later implementation slice will author
-  (docs-first; Principle VIII / roadmap rule #8).
+- **Status:** BUILT (spec 134, the activation slice of F030). The Dagster PROJECT exists at
+  `orchestration/dagster/` -- `definitions.py`, the 11-asset graph, the two jobs, one STOPPED
+  schedule, one STOPPED sensor -- together with the `seshat dagster doctor|run|evidence`
+  control layer in `src/seshat/dagster_adapter/`, the canonical evidence schema
+  `schemas/dagster-run-evidence.schema.json`, and the CI definitions-load smoke
+  (`.github/workflows/dagster-smoke.yml`). This guide's authority boundary is unchanged from
+  the spec-024 planning slice.
 
 ## What Dagster is here (one line)
 
@@ -167,31 +169,46 @@ Authority; Dagster reads it and halts if absent:
   `deferred-boundary` result with its timestamp -- it does NOT fabricate a pass and does NOT mark
   Gold Ready (Principle VIII; the live run is gated on creds).
 
-## The PLANNED project shape (ENUMERATED, not created this slice)
+## The project shape (BUILT, spec 134)
 
-When this adapter is BUILT, it ships as a SEPARATE, dependable, upgradeable Dagster project --
-consumed as an external dependency, never forked (Principle II). This slice ENUMERATES the shape;
-it creates NONE of it:
+The adapter ships as a SEPARATE, dependable, upgradeable Dagster project -- consumed as an
+external dependency, never forked (Principle II) -- with its OWN virtual environment so the
+main package's static core stays stdlib-only:
 
 ```text
 orchestration/dagster/
-  README.md                                  # PLANNED -- how to run the adapter, the human seams, the gate-read posture
-  pyproject.toml                             # PLANNED -- pins dagster + dagster-dbt TOGETHER (no independent bumps)
-  profiles.example.yml                       # PLANNED -- placeholder credentials only (Principle IX); real creds in git-ignored .env
+  README.md                                  # how to run the adapter, the human seams, the gate-read posture
+  pyproject.toml                             # pins dagster==1.13.14 + dagster-dbt==0.29.14 TOGETHER
   src/tower_bi_orchestration/
-    definitions.py                           # PLANNED -- the Definitions object (assets/jobs/sensors/schedules)
-    assets/                                   # PLANNED -- the 11 assets (raw_source_file .. publish_execution_evidence)
-    jobs/                                     # PLANNED -- the full-sequence + partial jobs
-    sensors/                                  # PLANNED -- event triggers (cadence specifics deferred)
-    schedules/                                # PLANNED -- cadence (specifics deferred)
+    definitions.py                           # the Definitions object (assets/jobs/schedules/sensors)
+    repo.py                                  # repo-root + mapped-table discovery (mappings/<table>/source-map.yaml)
+    evidence_writer.py                       # re-export of the ONE evidence impl (seshat.dagster_adapter.evidence)
+    db.py / commands.py                      # DSN boundary (deferred without creds); the SAME gate commands CI runs
+    assets/{ingest,gates,downstream}.py      # the 11 assets + live_validate (STOP / HUMAN-SEAM semantics)
+    jobs.py                                  # full_sequence_job + through_gold_job
+    schedules.py / sensors.py                # one daily schedule + one file sensor, BOTH default_status=STOPPED
   run-evidence/
-    <run-id>.md                               # PLANNED -- a filled copy of templates/dagster-run-evidence.md per run
+    <run-id>.md                              # a filled copy of templates/dagster-run-evidence.md per run
+  tests/                                     # in-process materialize() tests (US1-US3) + definitions-load smoke
 ```
 
-Note the package id stays `src/tower_bi_orchestration/` (the planned package name). The project is
-a SEPARATE top-level `orchestration/dagster/` tree so the adapter stays an upgradeable external
-dependency and the static `src/seshat/` gate is left unchanged. None of the above is created now;
-the asset / job / sensor / schedule code is a later implementation slice.
+The control layer lives in the main package (`src/seshat/dagster_adapter/`: read-only gate
+readers, doctor, shell-free closed-argv runner, redaction, evidence validate/render) and the
+CLI family is `seshat dagster doctor|run|evidence` (exit codes 0..4; see
+`specs/134-activate-dagster-mvp/contracts/dagster-cli.md`). Raw per-run records land under the
+git-ignored `.seshat/dagster/runs/<run-id>/` (schema
+`schemas/dagster-run-evidence.schema.json`); the committed record is the rendered
+`orchestration/dagster/run-evidence/<run-id>.md`.
+
+## The dagster-dbt engine seam (activates after spec 133 merges)
+
+Where dbt is adopted (F029 / spec 133, a separate slice), `silver_tables` / `gold_tables`
+switch from executing the committed `warehouse/migrations/*.sql` path to `dagster-dbt` assets
+over the dbt project -- with IDENTICAL gate semantics: still downstream of the `source_map`
+HUMAN SEAM, still gated on the same check exit codes, still fail-closed. The pinned pair
+(`dagster` + `dagster-dbt`, bumped together only) already proves the integration loads. No code
+in this slice references spec-133 modules; the switch is a deliberate follow-up slice once both
+branches are on main.
 
 ## Relationship to the other features
 

@@ -1902,6 +1902,36 @@ template_entries:
     required: true
     generated_notice: manifest
     review_reason: Deprecated alias of the review command, kept for one release cycle.
+  - template_id: claude-dagster-doctor
+    source: distribution/bundle-templates/claude/commands/dagster-doctor.md
+    classification: generated_wrapper
+    media_type: text/markdown
+    targets:
+      claude: commands/dagster-doctor.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Reviewed wrapper for the read-only Dagster orchestration preflight (spec 134).
+  - template_id: claude-dagster-run
+    source: distribution/bundle-templates/claude/commands/dagster-run.md
+    classification: generated_wrapper
+    media_type: text/markdown
+    targets:
+      claude: commands/dagster-run.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Reviewed wrapper for the gated fail-closed Dagster run command (spec 134).
+  - template_id: claude-dagster-evidence
+    source: distribution/bundle-templates/claude/commands/dagster-evidence.md
+    classification: generated_wrapper
+    media_type: text/markdown
+    targets:
+      claude: commands/dagster-evidence.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Reviewed wrapper for rendering derived Dagster run evidence (spec 134).
   - template_id: claude-help
     source: distribution/bundle-templates/claude/commands/help.md
     classification: generated_wrapper

@@ -1,0 +1,46 @@
+# Dagster definitions-load smoke (spec 134 / spec 024 FR-009 minimum CI gate).
+# Installs the orchestration project in its OWN environment and proves:
+#   1. the pinned dagster/dagster-dbt pair resolves together on Python 3.13;
+#   2. the Definitions object loads (11 assets, jobs, STOPPED automations);
+#   3. the orchestration unit tests pass (US1-US3, in-process, no DB).
+# Deliberately NO database service and NO secrets: DB-touching paths are
+# fixture-stubbed; a missing DSN is a recorded deferred boundary by design.
+name: dagster-smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "orchestration/dagster/**"
+      - "src/seshat/dagster_adapter/**"
+      - "schemas/dagster-run-evidence.schema.json"
+      - ".github/workflows/dagster-smoke.yml"
+  pull_request:
+    paths:
+      - "orchestration/dagster/**"
+      - "src/seshat/dagster_adapter/**"
+      - "schemas/dagster-run-evidence.schema.json"
+      - ".github/workflows/dagster-smoke.yml"
+
+jobs:
+  definitions-load-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install the orchestration project (own env; repo root editable)
+        working-directory: orchestration/dagster
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --quiet --upgrade pip
+          .venv/bin/python -m pip install --quiet -e ../.. -e ".[dev]"
+      - name: Definitions-load smoke (import + dagster definitions validate)
+        working-directory: orchestration/dagster
+        run: |
+          .venv/bin/python -c "from tower_bi_orchestration.definitions import defs; print('definitions loaded')"
+          .venv/bin/python -m dagster definitions validate -m tower_bi_orchestration.definitions
+      - name: Orchestration unit tests (in-process, no DB, no secrets)
+        working-directory: orchestration/dagster
+        run: .venv/bin/python -m pytest -q

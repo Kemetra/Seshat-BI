@@ -170,6 +170,40 @@ commands:
     gates: [assessment-digest-human-review]
     documentation: docs/install/agent-install.md
     status: shipped
+  # -- Dagster orchestration adapter commands (Claude Code, spec 134) --------
+  - name: dagster-doctor
+    platform: claude
+    intent: Preflight the Dagster orchestration adapter read-only (environment, pinned pair, gate state).
+    cli_verbs: [dagster]
+    skill: seshat-bi
+    wrapper_template: distribution/bundle-templates/claude/commands/dagster-doctor.md
+    bundle_destination: commands/dagster-doctor.md
+    mode: read-only
+    gates: []
+    documentation: docs/install/agent-install.md
+    status: shipped
+  - name: dagster-run
+    platform: claude
+    intent: Execute one governed orchestration job behind every gate, fail-closed, and record run evidence.
+    cli_verbs: [dagster]
+    skill: seshat-bi
+    wrapper_template: distribution/bundle-templates/claude/commands/dagster-run.md
+    bundle_destination: commands/dagster-run.md
+    mode: mutating
+    gates: [named-human-approval]
+    documentation: docs/install/agent-install.md
+    status: shipped
+  - name: dagster-evidence
+    platform: claude
+    intent: List orchestration runs or render a run's committed derived evidence.
+    cli_verbs: [dagster]
+    skill: seshat-bi
+    wrapper_template: distribution/bundle-templates/claude/commands/dagster-evidence.md
+    bundle_destination: commands/dagster-evidence.md
+    mode: read-only
+    gates: []
+    documentation: docs/install/agent-install.md
+    status: shipped
 command_aliases:
   # Deprecated names kept for ONE release cycle: the v0.2.0 external
   # acceptance pass validated these four commands under their original

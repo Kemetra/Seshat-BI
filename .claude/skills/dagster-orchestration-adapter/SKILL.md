@@ -32,12 +32,25 @@ engine -- the engine, when built, is the separate Dagster project. See
 `docs/decisions/0010-dagster-is-orchestration-adapter.md` and
 `docs/integrations/dagster-adapter.md`.
 
-> NOTE: The Dagster PROJECT is a PLANNED future output (enumerated in
-> `docs/integrations/dagster-adapter.md`). `orchestration/dagster/` -- `definitions.py`, the
-> `assets/` / `jobs/` / `sensors/` / `schedules/` packages, `pyproject.toml` -- is NOT created
-> yet. This file fixes the procedure and the authority boundary the build slice will follow;
-> until the project exists, treat every "Dagster runs ..." step as a seam to report, not a
-> command to fake.
+> STATUS: the Dagster PROJECT is BUILT (spec 134, activation slice of F030).
+> `orchestration/dagster/` exists -- `definitions.py`, the 11-asset graph, `jobs`,
+> one STOPPED schedule, one STOPPED sensor, `pyproject.toml` pinning
+> `dagster==1.13.14` + `dagster-dbt==0.29.14` TOGETHER -- plus the
+> `seshat dagster doctor|run|evidence` control layer. The OPERATIONAL procedure:
+>
+> 1. `seshat dagster doctor` -- read-only preflight (project, its own venv
+>    under `orchestration/dagster/.venv`, the pinned pair, per-table gate
+>    state, DSN present/absent). Blockers exit 2; the install remedy is
+>    `cd orchestration/dagster && uv venv .venv && uv pip install -p .venv -e ../.. -e ".[dev]"`.
+> 2. `seshat dagster run --job <full_sequence_job|through_gold_job> [--table <table>]`
+>    -- executes the graph as a shell-free child process in the orchestration
+>    venv. A failed/blocked gate halts downstream assets and exits 3 (the CI
+>    signal); report it with the recorded blocking_reason + named owner.
+> 3. `seshat dagster evidence [--run-id <id>]` -- list runs / render the
+>    committed record at `orchestration/dagster/run-evidence/<run-id>.md`.
+>
+> Without DB credentials the DB-touching assets record a deferred boundary and
+> block fail-closed -- report that truthfully; never fake a run.
 
 ## Authority declaration (F024) -- the filled adapter contract
 
@@ -63,7 +76,7 @@ The filled `templates/adapter-contract.md` declaration follows.
 - **Product layer:** `1`  *(Layer D / orchestration -- the functional axis; it SEQUENCES all seven readiness stages and DECIDES none)*
 - **Roadmap feature:** `F030`  **On-disk spec:** `specs/024-dagster-orchestration-adapter`
 - **Owner:** orchestration / platform owner (a named human; Dagster never self-approves)
-- **Status:** Authored (docs/templates; no runtime code this slice -- the Dagster project is a later implementation slice)
+- **Status:** BUILT (spec 134 activation slice: the `orchestration/dagster/` runtime project + the `seshat dagster` control layer + CI definitions-load smoke; automations ship STOPPED)
 
 #### What it does (one line)
 
@@ -287,10 +300,6 @@ release-maturity); this skill states only Dagster's adapter-specific needs and D
 
 ## Seams (deferred by design -- report and park, never fake)
 
-- **The Dagster project itself** -- `orchestration/dagster/` (`definitions.py`, the `assets/` /
-  `jobs/` / `sensors/` / `schedules/` packages under `src/tower_bi_orchestration/`,
-  `pyproject.toml`) is a PLANNED future output (see `docs/integrations/dagster-adapter.md`).
-  Until it exists, state that the build slice creates it and STOP; never fabricate a run.
 - **A live unattended run** -- needs the DB + a git-ignored credential set (only
   `profiles.example.yml` / `.env.example` with placeholders is committed; Principle IX). Without
   it, report the boundary + the enable steps (supply credentials in the git-ignored `.env`);
