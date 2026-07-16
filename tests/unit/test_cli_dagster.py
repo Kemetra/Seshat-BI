@@ -106,8 +106,17 @@ class TestRunExitCodes:
         )
         assert code == 2
 
-    def test_failed_child_run_exits_3_and_still_renders_evidence(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    @pytest.mark.parametrize(
+        ("child_exit", "run_status", "expected_code"),
+        [(1, "failed", 3), (0, "succeeded", 0)],
+    )
+    def test_run_exit_follows_finalized_run_status_and_renders_evidence(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        child_exit: int,
+        run_status: str,
+        expected_code: int,
     ) -> None:
         from seshat.cli.commands.dagster import dagster_main
         from seshat.dagster_adapter import doctor, evidence, runner
@@ -117,16 +126,16 @@ class TestRunExitCodes:
             runner,
             "execute_run",
             lambda root, job, table=None: runner.RunResult(
-                run_id="run-x", exit_code=1, output="asset failed"
+                run_id="run-x", exit_code=child_exit, output="child output"
             ),
         )
         calls: dict = {}
         monkeypatch.setattr(
             evidence,
             "finalize_run",
-            lambda root, run_id, tables, *, started, trigger="manual-CI": (
+            lambda root, run_id, tables, meta: (
                 calls.setdefault("finalized", run_id),
-                {"run_status": "failed"},
+                {"run_status": run_status},
             )[1],
         )
         monkeypatch.setattr(
@@ -142,40 +151,6 @@ class TestRunExitCodes:
                 table=None,
             )
         )
-        assert code == 3
-        assert calls["finalized"] == "run-x"
+        assert code == expected_code
+        assert calls["finalized"] == "run-x"  # evidence finalized in BOTH cases
         assert calls["rendered"] == Path("run-x.md")
-
-    def test_green_child_run_exits_0(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        from seshat.cli.commands.dagster import dagster_main
-        from seshat.dagster_adapter import doctor, evidence, runner
-
-        monkeypatch.setattr(doctor, "run_doctor", lambda root: [])
-        monkeypatch.setattr(
-            runner,
-            "execute_run",
-            lambda root, job, table=None: runner.RunResult(
-                run_id="run-y", exit_code=0, output="ok"
-            ),
-        )
-        monkeypatch.setattr(
-            evidence,
-            "finalize_run",
-            lambda root, run_id, tables, *, started, trigger="manual-CI": {
-                "run_status": "succeeded"
-            },
-        )
-        monkeypatch.setattr(
-            evidence, "write_run_evidence", lambda root, run_id: Path("run-y.md")
-        )
-        code = dagster_main(
-            _args(
-                dagster_cmd="run",
-                repo=str(tmp_path),
-                job="full_sequence_job",
-                table=None,
-            )
-        )
-        assert code == 0

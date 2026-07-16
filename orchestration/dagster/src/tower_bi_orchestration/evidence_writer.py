@@ -6,10 +6,19 @@ editable) share writer, finalize, validation, and rendering."""
 from __future__ import annotations
 
 from seshat.dagster_adapter.evidence import (  # noqa: F401
+    AssetOutcome,
     EvidenceWriter,
+    RunMeta,
     commit_sha,
     finalize_run,
     run_dir,
 )
 
-__all__ = ["EvidenceWriter", "commit_sha", "finalize_run", "run_dir"]
+__all__ = [
+    "AssetOutcome",
+    "EvidenceWriter",
+    "RunMeta",
+    "commit_sha",
+    "finalize_run",
+    "run_dir",
+]

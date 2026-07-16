@@ -10,7 +10,12 @@ import pytest
 from conftest import TABLE, stub_green_db
 from dagster import materialize
 from tower_bi_orchestration.assets import build_table_assets
-from tower_bi_orchestration.evidence_writer import EvidenceWriter, finalize_run
+from tower_bi_orchestration.evidence_writer import (
+    AssetOutcome,
+    EvidenceWriter,
+    RunMeta,
+    finalize_run,
+)
 from tower_bi_orchestration.jobs import THROUGH_GOLD_ASSETS
 
 
@@ -18,12 +23,14 @@ class TestEvidenceWriter:
     def test_records_are_schema_shaped_jsonl(self, green_repo) -> None:
         writer = EvidenceWriter(green_repo, "testrun-001")
         writer.record(
-            asset="source_map",
-            table=TABLE,
-            gate_command="reads Gate status",
-            exit_code=None,
-            measured={"gate_status": "CLEARED", "open_rows": 0},
-            outcome="materialized",
+            AssetOutcome(
+                asset="source_map",
+                table=TABLE,
+                gate_command="reads Gate status",
+                exit_code=None,
+                measured={"gate_status": "CLEARED", "open_rows": 0},
+                outcome="materialized",
+            )
         )
         raw = writer.records_path.read_text(encoding="utf-8").strip()
         row = json.loads(raw)
@@ -44,40 +51,46 @@ class TestEvidenceWriter:
         writer = EvidenceWriter(green_repo, "testrun-001")
         with pytest.raises(ValueError, match="requires blocking_reason"):
             writer.record(
-                asset="silver_tables",
-                table=TABLE,
-                gate_command="seshat check",
-                exit_code=1,
-                measured={},
-                outcome="failed",
+                AssetOutcome(
+                    asset="silver_tables",
+                    table=TABLE,
+                    gate_command="seshat check",
+                    exit_code=1,
+                    measured={},
+                    outcome="failed",
+                )
             )
 
     def test_outcome_vocabulary_is_closed(self, green_repo) -> None:
         writer = EvidenceWriter(green_repo, "testrun-001")
         with pytest.raises(ValueError, match="execution word"):
             writer.record(
-                asset="gold_tables",
-                table=TABLE,
-                gate_command="seshat check",
-                exit_code=0,
-                measured={},
-                outcome="pass",  # the readiness token is NOT an execution word
+                AssetOutcome(
+                    asset="gold_tables",
+                    table=TABLE,
+                    gate_command="seshat check",
+                    exit_code=0,
+                    measured={},
+                    outcome="pass",  # the readiness token is NOT an execution word
+                )
             )
 
     def test_records_are_redacted(self, green_repo, monkeypatch) -> None:
         monkeypatch.setenv("ANALYTICS_DB_PASSWORD", "supersecretpw")
         writer = EvidenceWriter(green_repo, "testrun-001")
         row = writer.record(
-            asset="live_validate",
-            table=TABLE,
-            gate_command="seshat validate",
-            exit_code=1,
-            measured={"output_tail": "auth failed with supersecretpw"},
-            outcome="failed",
-            # Split so the committed text never carries a whole DSN shape (C2).
-            blocking_reason="validate failed: dsn postgresql:"
-            + "//u:supersecretpw@h/d",
-            owner="warehouse owner",
+            AssetOutcome(
+                asset="live_validate",
+                table=TABLE,
+                gate_command="seshat validate",
+                exit_code=1,
+                measured={"output_tail": "auth failed with supersecretpw"},
+                outcome="failed",
+                # Split so the committed text never carries a whole DSN shape (C2).
+                blocking_reason="validate failed: dsn postgresql:"
+                + "//u:supersecretpw@h/d",
+                owner="warehouse owner",
+            )
         )
         text = json.dumps(row)
         assert "supersecretpw" not in text
@@ -99,8 +112,7 @@ class TestGreenRunEndToEnd:
             green_repo,
             "testrun-001",
             [TABLE],
-            started="2026-07-17T00:00:00Z",
-            trigger="manual-CI",
+            RunMeta(started="2026-07-17T00:00:00Z", trigger="manual-CI"),
         )
         assert summary["run_status"] == "succeeded"
         assert summary["tables"] == [TABLE]

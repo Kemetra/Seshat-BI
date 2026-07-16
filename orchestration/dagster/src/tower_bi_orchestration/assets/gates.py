@@ -15,6 +15,7 @@ from dagster import AssetKey, asset
 from seshat.dagster_adapter.gate import read_gate_state
 
 from .. import commands, db
+from ..evidence_writer import AssetOutcome
 from . import halt, writer_for
 
 
@@ -25,41 +26,41 @@ def _migrations(root: Path, layer: str, table: str) -> list[Path]:
     return sorted(migrations_dir.glob(f"*{layer}*{table}*.sql"))
 
 
-def _build_layer(
-    context, *, table: str, root: Path, layer: str, asset_name: str
-) -> None:
+def _build_layer(context, table: str, root: Path, layer: str) -> None:
     """Shared silver/gold body: apply the committed migrations, then run the
     static gate; exit 0 is the ONLY green (Principle I)."""
+    asset_name = f"{layer}_tables"
     writer = writer_for(context, root)
     gate_command = " ".join(commands.checker_argv()[-3:])
+    base = dict(asset=asset_name, table=table, gate_command=gate_command)
     dsn = db.resolve_dsn()
     if dsn is None:
         halt(
             writer,
-            asset=asset_name,
-            table=table,
-            gate_command=gate_command,
-            exit_code=None,
-            measured={},
-            outcome="blocked",
-            reason=db.DEFERRED_BOUNDARY,
-            owner="platform owner",
+            AssetOutcome(
+                **base,
+                exit_code=None,
+                measured={},
+                outcome="blocked",
+                blocking_reason=db.DEFERRED_BOUNDARY,
+                owner="platform owner",
+            ),
         )
     migrations = _migrations(root, layer, table)
     if not migrations:
         halt(
             writer,
-            asset=asset_name,
-            table=table,
-            gate_command=gate_command,
-            exit_code=None,
-            measured={},
-            outcome="blocked",
-            reason=(
-                f"no committed {layer} migration found for {table} "
-                "under warehouse/migrations/"
+            AssetOutcome(
+                **base,
+                exit_code=None,
+                measured={},
+                outcome="blocked",
+                blocking_reason=(
+                    f"no committed {layer} migration found for {table} "
+                    "under warehouse/migrations/"
+                ),
+                owner="warehouse owner",
             ),
-            owner="warehouse owner",
         )
     for migration in migrations:
         db.apply_sql_file(dsn, migration)
@@ -67,135 +68,150 @@ def _build_layer(
     if exit_code != 0:
         halt(
             writer,
-            asset=asset_name,
-            table=table,
-            gate_command=gate_command,
-            exit_code=exit_code,
-            measured={"output_tail": output},
-            outcome="failed",
-            reason=f"static governance gate failed: seshat check exit {exit_code}",
-            owner="warehouse owner",
+            AssetOutcome(
+                **base,
+                exit_code=exit_code,
+                measured={"output_tail": output},
+                outcome="failed",
+                blocking_reason=(
+                    f"static governance gate failed: seshat check exit {exit_code}"
+                ),
+                owner="warehouse owner",
+            ),
         )
     writer.record(
-        asset=asset_name,
-        table=table,
-        gate_command=gate_command,
-        exit_code=0,
-        measured={"migrations_applied": [m.name for m in migrations]},
-        outcome="materialized",
+        AssetOutcome(
+            **base,
+            exit_code=0,
+            measured={"migrations_applied": [m.name for m in migrations]},
+            outcome="materialized",
+        )
     )
 
 
-def build_gate_assets(table: str, root: Path) -> list:
-    prefix = [table]
-
+def _source_map_asset(table: str, root: Path):
     @asset(
         name="source_map",
-        key_prefix=prefix,
+        key_prefix=[table],
         group_name=table,
-        deps=[AssetKey([*prefix, "source_profile"])],
+        deps=[AssetKey([table, "source_profile"])],
     )
     def source_map(context) -> None:
         """HUMAN SEAM (Principle IV): reads Gate status; HALTS if not CLEARED."""
         writer = writer_for(context, root)
         state = read_gate_state(root, table)
-        gate_command = (
-            f"reads Gate status from mappings/{table}/unresolved-questions.md"
+        base = dict(
+            asset="source_map",
+            table=table,
+            gate_command=(
+                f"reads Gate status from mappings/{table}/unresolved-questions.md"
+            ),
+            exit_code=None,
+            measured={"gate_status": state.gate_status, "open_rows": state.open_rows},
         )
         if not state.silver_permitted:
             halt(
                 writer,
-                asset="source_map",
-                table=table,
-                gate_command=gate_command,
-                exit_code=None,
-                measured={
-                    "gate_status": state.gate_status,
-                    "open_rows": state.open_rows,
-                },
-                outcome="blocked",
-                reason=(
-                    f"source_map gate not CLEARED: Gate status {state.gate_status}, "
-                    f"open rows {state.open_rows} "
-                    f"(read from mappings/{table}/unresolved-questions.md)"
+                AssetOutcome(
+                    **base,
+                    outcome="blocked",
+                    blocking_reason=(
+                        f"source_map gate not CLEARED: Gate status "
+                        f"{state.gate_status}, open rows {state.open_rows} "
+                        f"(read from mappings/{table}/unresolved-questions.md)"
+                    ),
+                    owner="the mapping reviewer",
                 ),
-                owner="the mapping reviewer",
             )
-        writer.record(
-            asset="source_map",
-            table=table,
-            gate_command=gate_command,
-            exit_code=None,
-            measured={"gate_status": state.gate_status, "open_rows": state.open_rows},
-            outcome="materialized",
-        )
+        writer.record(AssetOutcome(**base, outcome="materialized"))
 
+    return source_map
+
+
+def _silver_asset(table: str, root: Path):
     @asset(
         name="silver_tables",
-        key_prefix=prefix,
+        key_prefix=[table],
         group_name=table,
-        deps=[AssetKey([*prefix, "source_map"])],
+        deps=[AssetKey([table, "source_map"])],
     )
     def silver_tables(context) -> None:
-        _build_layer(
-            context, table=table, root=root, layer="silver", asset_name="silver_tables"
-        )
+        _build_layer(context, table, root, "silver")
 
+    return silver_tables
+
+
+def _gold_asset(table: str, root: Path):
     @asset(
         name="gold_tables",
-        key_prefix=prefix,
+        key_prefix=[table],
         group_name=table,
-        deps=[AssetKey([*prefix, "silver_tables"])],
+        deps=[AssetKey([table, "silver_tables"])],
     )
     def gold_tables(context) -> None:
-        _build_layer(
-            context, table=table, root=root, layer="gold", asset_name="gold_tables"
-        )
+        _build_layer(context, table, root, "gold")
 
+    return gold_tables
+
+
+def _live_validate_asset(table: str, root: Path):
     @asset(
         name="live_validate",
-        key_prefix=prefix,
+        key_prefix=[table],
         group_name=table,
-        deps=[AssetKey([*prefix, "gold_tables"])],
+        deps=[AssetKey([table, "gold_tables"])],
     )
     def live_validate(context) -> None:
         """The live acceptance step: records ``deferred`` without creds (never a
         fabricated pass; Principle VIII); a real non-zero exit FAILS CLOSED."""
         writer = writer_for(context, root)
         argv = commands.validate_argv(table)
-        gate_command = " ".join(argv[-4:])
+        base = dict(
+            asset="live_validate", table=table, gate_command=" ".join(argv[-4:])
+        )
         if db.resolve_dsn() is None:
             writer.record(
-                asset="live_validate",
-                table=table,
-                gate_command=gate_command,
-                exit_code=None,
-                measured={},
-                outcome="deferred",
-                blocking_reason=db.DEFERRED_BOUNDARY,
-                owner="platform owner",
+                AssetOutcome(
+                    **base,
+                    exit_code=None,
+                    measured={},
+                    outcome="deferred",
+                    blocking_reason=db.DEFERRED_BOUNDARY,
+                    owner="platform owner",
+                )
             )
             return
         exit_code, output = commands.run_gate_command(argv, cwd=root)
         if exit_code != 0:
             halt(
                 writer,
-                asset="live_validate",
-                table=table,
-                gate_command=gate_command,
-                exit_code=exit_code,
-                measured={"output_tail": output},
-                outcome="failed",
-                reason=f"live validation failed: seshat validate exit {exit_code}",
-                owner="warehouse owner",
+                AssetOutcome(
+                    **base,
+                    exit_code=exit_code,
+                    measured={"output_tail": output},
+                    outcome="failed",
+                    blocking_reason=(
+                        f"live validation failed: seshat validate exit {exit_code}"
+                    ),
+                    owner="warehouse owner",
+                ),
             )
         writer.record(
-            asset="live_validate",
-            table=table,
-            gate_command=gate_command,
-            exit_code=0,
-            measured={"validate": "exit 0"},
-            outcome="materialized",
+            AssetOutcome(
+                **base,
+                exit_code=0,
+                measured={"validate": "exit 0"},
+                outcome="materialized",
+            )
         )
 
-    return [source_map, silver_tables, gold_tables, live_validate]
+    return live_validate
+
+
+def build_gate_assets(table: str, root: Path) -> list:
+    return [
+        _source_map_asset(table, root),
+        _silver_asset(table, root),
+        _gold_asset(table, root),
+        _live_validate_asset(table, root),
+    ]

@@ -12,7 +12,11 @@ from conftest import TABLE, mappings_digest, stub_green_db
 from dagster import materialize
 from tower_bi_orchestration import commands
 from tower_bi_orchestration.assets import build_table_assets
-from tower_bi_orchestration.evidence_writer import EvidenceWriter, finalize_run
+from tower_bi_orchestration.evidence_writer import (
+    EvidenceWriter,
+    RunMeta,
+    finalize_run,
+)
 
 
 def test_failed_gate_halts_downstream_and_fails_the_run(
@@ -30,7 +34,7 @@ def test_failed_gate_halts_downstream_and_fails_the_run(
     assert result.success is False  # the CI signal
 
     summary = finalize_run(
-        green_repo, "testrun-001", [TABLE], started="2026-07-17T00:00:00Z"
+        green_repo, "testrun-001", [TABLE], RunMeta(started="2026-07-17T00:00:00Z")
     )
     assert summary["run_status"] == "failed"
 

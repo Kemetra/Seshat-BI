@@ -22,17 +22,19 @@ _SECRET_ENV_RE = re.compile(r"(PASSWORD|SECRET|TOKEN|_KEY$)", re.IGNORECASE)
 
 def _secret_env_values() -> list[str]:
     values: list[str] = []
-    for key, value in os.environ.items():
-        if len(value) < 4:
-            continue
-        if (
-            key == "DATABASE_URL"
-            or key.startswith("ANALYTICS_DB_")
-            or _SECRET_ENV_RE.search(key)
-        ):
-            values.append(value)
+    values.extend(
+        value
+        for key, value in os.environ.items()
+        if len(value) >= 4 and _is_secret_key(key)
+    )
     # Longest first so substrings of longer secrets do not survive partially.
     return sorted(values, key=len, reverse=True)
+
+
+def _is_secret_key(key: str) -> bool:
+    if key == "DATABASE_URL" or key.startswith("ANALYTICS_DB_"):
+        return True
+    return bool(_SECRET_ENV_RE.search(key))
 
 
 def redact_text(text: str) -> str:

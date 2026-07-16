@@ -14,7 +14,7 @@ from pathlib import Path
 
 from dagster import Failure
 
-from ..evidence_writer import EvidenceWriter
+from ..evidence_writer import AssetOutcome, EvidenceWriter
 
 
 def run_id_for(context) -> str:
@@ -27,30 +27,15 @@ def writer_for(context, root: Path) -> EvidenceWriter:
     return EvidenceWriter(root, run_id_for(context))
 
 
-def halt(
-    writer: EvidenceWriter,
-    *,
-    asset: str,
-    table: str,
-    gate_command: str,
-    exit_code: int | None,
-    measured: dict,
-    outcome: str,
-    reason: str,
-    owner: str,
-) -> None:
+def halt(writer: EvidenceWriter, outcome: AssetOutcome) -> None:
     """Record a halted outcome and FAIL CLOSED (raise ``dagster.Failure``)."""
-    writer.record(
-        asset=asset,
-        table=table,
-        gate_command=gate_command,
-        exit_code=exit_code,
-        measured=measured,
-        outcome=outcome,
-        blocking_reason=reason,
-        owner=owner,
+    writer.record(outcome)
+    raise Failure(
+        description=(
+            f"[{outcome.table}] {outcome.asset} {outcome.outcome}: "
+            f"{outcome.blocking_reason}"
+        )
     )
-    raise Failure(description=f"[{table}] {asset} {outcome}: {reason}")
 
 
 def build_table_assets(table: str, root: Path) -> list:

@@ -27,14 +27,11 @@ UNRESOLVED = """- **Gate status:** `{status}`
 """
 
 
-def _repo(
-    tmp_path: Path,
-    *,
-    orchestration: bool = True,
-    venv: bool = True,
-    pyproject: str = GOOD_PYPROJECT,
-    gate_status: str = "CLEARED",
-) -> Path:
+def _repo(tmp_path: Path, **spec) -> Path:
+    orchestration = spec.get("orchestration", True)
+    venv = spec.get("venv", True)
+    pyproject = spec.get("pyproject", GOOD_PYPROJECT)
+    gate_status = spec.get("gate_status", "CLEARED")
     root = tmp_path / "repo"
     tdir = root / "mappings" / "demo_table"
     tdir.mkdir(parents=True)

@@ -42,52 +42,74 @@ def _run_doctor(args) -> int:
     return 2 if doctor.has_blockers(findings) else 0
 
 
+def _refused_by_doctor(root: Path, args) -> bool:
+    from seshat.dagster_adapter import doctor
+
+    findings = doctor.run_doctor(root)
+    if not doctor.has_blockers(findings):
+        return False
+    _print_findings(findings, args.as_json)
+    print("refused: fix the blockers above, then re-run.", file=sys.stderr)
+    return True
+
+
+def _render_evidence(root: Path, run_id: str) -> Path | None:
+    from seshat.dagster_adapter import evidence
+
+    try:
+        return evidence.write_run_evidence(root, run_id)
+    except (ValueError, FileNotFoundError) as error:
+        print(f"evidence rendering refused: {error}", file=sys.stderr)
+        return None
+
+
+def _print_run_outcome(args, result, summary: dict, rendered: Path | None) -> None:
+    if args.as_json:
+        payload = {
+            "run_id": result.run_id,
+            "run_status": summary["run_status"],
+            "evidence": str(rendered) if rendered else None,
+        }
+        print(json.dumps(payload, indent=2))
+        return
+    print(f"run {result.run_id}: {summary['run_status']}")
+    if rendered:
+        print(f"evidence: {rendered}")
+    if result.output and summary["run_status"] == "failed":
+        print(result.output)
+
+
 def _run_run(args) -> int:
-    from seshat.dagster_adapter import doctor, evidence, runner
+    from seshat.dagster_adapter import evidence, runner
     from seshat.dagster_adapter.gate import list_mapped_tables
 
     root = Path(args.repo)
-    findings = doctor.run_doctor(root)
-    if doctor.has_blockers(findings):
-        _print_findings(findings, args.as_json)
-        print("refused: fix the blockers above, then re-run.", file=sys.stderr)
+    if _refused_by_doctor(root, args):
         return 2
-
     started = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     try:
         result = runner.execute_run(root, args.job, table=args.table)
     except runner.RunnerError as error:
         print(f"refused: {error}", file=sys.stderr)
         return 2
-
     tables = [args.table] if args.table else list_mapped_tables(root)
     summary = evidence.finalize_run(
-        root, result.run_id, tables, started=started, trigger="manual-CI"
+        root, result.run_id, tables, evidence.RunMeta(started=started)
     )
-    try:
-        rendered = evidence.write_run_evidence(root, result.run_id)
-    except (ValueError, FileNotFoundError) as error:
-        print(f"evidence rendering refused: {error}", file=sys.stderr)
-        rendered = None
-
-    if args.as_json:
-        print(
-            json.dumps(
-                {
-                    "run_id": result.run_id,
-                    "run_status": summary["run_status"],
-                    "evidence": str(rendered) if rendered else None,
-                },
-                indent=2,
-            )
-        )
-    else:
-        print(f"run {result.run_id}: {summary['run_status']}")
-        if rendered:
-            print(f"evidence: {rendered}")
-        if result.output and summary["run_status"] == "failed":
-            print(result.output)
+    rendered = _render_evidence(root, result.run_id)
+    _print_run_outcome(args, result, summary, rendered)
     return 0 if summary["run_status"] == "succeeded" else 3
+
+
+def _print_run_list(runs: list[dict], as_json: bool) -> None:
+    if as_json:
+        print(json.dumps({"runs": runs}, indent=2))
+        return
+    for run in runs:
+        print(
+            f"{run['run_id']}  {run['run_status']}  started {run['started']}  "
+            f"tables {', '.join(run['tables'])}"
+        )
 
 
 def _run_evidence(args) -> int:
@@ -99,14 +121,7 @@ def _run_evidence(args) -> int:
         if not runs:
             print("no runs recorded under .seshat/dagster/runs/")
             return 0
-        if args.as_json:
-            print(json.dumps({"runs": runs}, indent=2))
-        else:
-            for run in runs:
-                print(
-                    f"{run['run_id']}  {run['run_status']}  started {run['started']}  "
-                    f"tables {', '.join(run['tables'])}"
-                )
+        _print_run_list(runs, args.as_json)
         return 0
     try:
         rendered = evidence.write_run_evidence(root, args.run_id)

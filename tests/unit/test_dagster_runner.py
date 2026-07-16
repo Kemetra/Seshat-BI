@@ -69,21 +69,7 @@ class TestExecuteRun:
         assert env["SESHAT_REPO_ROOT"] == str(root)
         assert "demo_table" not in captured["argv"]  # scoping via env, never argv
 
-    def test_child_failure_maps_to_nonzero_result(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        root = _fake_repo(tmp_path)
-        monkeypatch.setattr(
-            runner.subprocess,
-            "run",
-            lambda argv, **kwargs: subprocess.CompletedProcess(
-                argv, 1, stdout="", stderr="boom"
-            ),
-        )
-        result = runner.execute_run(root, "full_sequence_job")
-        assert result.exit_code == 1
-
-    def test_output_is_redacted(
+    def test_child_failure_maps_to_nonzero_result_with_redacted_output(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         root = _fake_repo(tmp_path)
@@ -95,6 +81,7 @@ class TestExecuteRun:
             ),
         )
         result = runner.execute_run(root, "full_sequence_job")
+        assert result.exit_code == 1
         assert "pw@h" not in result.output
         assert "[REDACTED-DSN]" in result.output
 

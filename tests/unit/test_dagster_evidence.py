@@ -120,15 +120,20 @@ class TestWriteRunEvidence:
     def test_writes_committed_markdown_from_raw_records(self, tmp_path: Path) -> None:
         writer = evidence.EvidenceWriter(tmp_path, "run-001")
         writer.record(
-            asset="source_map",
-            table="demo_table",
-            gate_command="reads Gate status",
-            exit_code=None,
-            measured={"gate_status": "CLEARED", "open_rows": 0},
-            outcome="materialized",
+            evidence.AssetOutcome(
+                asset="source_map",
+                table="demo_table",
+                gate_command="reads Gate status",
+                exit_code=None,
+                measured={"gate_status": "CLEARED", "open_rows": 0},
+                outcome="materialized",
+            )
         )
         evidence.finalize_run(
-            tmp_path, "run-001", ["demo_table"], started="2026-07-17T00:00:00Z"
+            tmp_path,
+            "run-001",
+            ["demo_table"],
+            evidence.RunMeta(started="2026-07-17T00:00:00Z"),
         )
         out = evidence.write_run_evidence(tmp_path, "run-001")
         assert (
@@ -152,15 +157,20 @@ class TestWriteRunEvidence:
     def test_list_runs_reports_known_runs(self, tmp_path: Path) -> None:
         writer = evidence.EvidenceWriter(tmp_path, "run-003")
         writer.record(
-            asset="source_map",
-            table="demo_table",
-            gate_command="reads Gate status",
-            exit_code=None,
-            measured={},
-            outcome="materialized",
+            evidence.AssetOutcome(
+                asset="source_map",
+                table="demo_table",
+                gate_command="reads Gate status",
+                exit_code=None,
+                measured={},
+                outcome="materialized",
+            )
         )
         evidence.finalize_run(
-            tmp_path, "run-003", ["demo_table"], started="2026-07-17T00:00:00Z"
+            tmp_path,
+            "run-003",
+            ["demo_table"],
+            evidence.RunMeta(started="2026-07-17T00:00:00Z"),
         )
         runs = evidence.list_runs(tmp_path)
         assert [run["run_id"] for run in runs] == ["run-003"]
