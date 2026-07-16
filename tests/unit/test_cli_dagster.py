@@ -107,17 +107,17 @@ class TestRunExitCodes:
         assert code == 2
 
     @pytest.mark.parametrize(
-        ("child_exit", "run_status", "expected_code"),
+        "case",
         [(1, "failed", 3), (0, "succeeded", 0)],
+        ids=["failed-run-exits-3", "green-run-exits-0"],
     )
     def test_run_exit_follows_finalized_run_status_and_renders_evidence(
         self,
         tmp_path: Path,
         monkeypatch: pytest.MonkeyPatch,
-        child_exit: int,
-        run_status: str,
-        expected_code: int,
+        case: tuple[int, str, int],
     ) -> None:
+        child_exit, run_status, expected_code = case
         from seshat.cli.commands.dagster import dagster_main
         from seshat.dagster_adapter import doctor, evidence, runner
 

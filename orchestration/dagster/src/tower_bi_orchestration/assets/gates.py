@@ -128,30 +128,20 @@ def _source_map_asset(table: str, root: Path):
     return source_map
 
 
-def _silver_asset(table: str, root: Path):
+_LAYER_UPSTREAM = {"silver": "source_map", "gold": "silver_tables"}
+
+
+def _layer_asset(table: str, root: Path, layer: str):
     @asset(
-        name="silver_tables",
+        name=f"{layer}_tables",
         key_prefix=[table],
         group_name=table,
-        deps=[AssetKey([table, "source_map"])],
+        deps=[AssetKey([table, _LAYER_UPSTREAM[layer]])],
     )
-    def silver_tables(context) -> None:
-        _build_layer(context, table, root, "silver")
+    def layer_tables(context) -> None:
+        _build_layer(context, table, root, layer)
 
-    return silver_tables
-
-
-def _gold_asset(table: str, root: Path):
-    @asset(
-        name="gold_tables",
-        key_prefix=[table],
-        group_name=table,
-        deps=[AssetKey([table, "silver_tables"])],
-    )
-    def gold_tables(context) -> None:
-        _build_layer(context, table, root, "gold")
-
-    return gold_tables
+    return layer_tables
 
 
 def _live_validate_asset(table: str, root: Path):
@@ -211,7 +201,7 @@ def _live_validate_asset(table: str, root: Path):
 def build_gate_assets(table: str, root: Path) -> list:
     return [
         _source_map_asset(table, root),
-        _silver_asset(table, root),
-        _gold_asset(table, root),
+        _layer_asset(table, root, "silver"),
+        _layer_asset(table, root, "gold"),
         _live_validate_asset(table, root),
     ]

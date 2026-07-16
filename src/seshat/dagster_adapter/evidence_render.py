@@ -74,10 +74,8 @@ def _summary_errors(summary: dict) -> list[str]:
     return errors
 
 
-def _record_errors(index: int, row: dict) -> list[str]:
-    label = f"records[{index}]"
-    errors = [f"{label}: missing key {key}" for key in sorted(_RECORD_KEYS - set(row))]
-    errors += [f"{label}: unknown key {key}" for key in sorted(set(row) - _RECORD_KEYS)]
+def _vocabulary_errors(label: str, row: dict) -> list[str]:
+    errors: list[str] = []
     if row.get("asset") not in ASSET_ORDER:
         errors.append(f"{label}: asset must be one of the spec-024 graph names")
     if row.get("outcome") not in OUTCOMES:
@@ -85,9 +83,23 @@ def _record_errors(index: int, row: dict) -> list[str]:
             f"{label}: outcome must be an execution word "
             f"({'|'.join(sorted(OUTCOMES))}), got {row.get('outcome')!r}"
         )
-    halted = row.get("outcome") in _HALTED
-    if halted and not (row.get("blocking_reason") and row.get("owner")):
-        errors.append(f"{label}: halted outcome requires blocking_reason + owner")
+    return errors
+
+
+def _halted_field_errors(label: str, row: dict) -> list[str]:
+    if row.get("outcome") not in _HALTED:
+        return []
+    if row.get("blocking_reason") and row.get("owner"):
+        return []
+    return [f"{label}: halted outcome requires blocking_reason + owner"]
+
+
+def _record_errors(index: int, row: dict) -> list[str]:
+    label = f"records[{index}]"
+    errors = [f"{label}: missing key {key}" for key in sorted(_RECORD_KEYS - set(row))]
+    errors += [f"{label}: unknown key {key}" for key in sorted(set(row) - _RECORD_KEYS)]
+    errors += _vocabulary_errors(label, row)
+    errors += _halted_field_errors(label, row)
     errors += [
         f"{label}: score-like key forbidden (hard rule #9): {key}"
         for key in _score_keys(row)

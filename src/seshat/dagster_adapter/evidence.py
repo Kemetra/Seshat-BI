@@ -75,13 +75,17 @@ class AssetOutcome:
     blocking_reason: str | None = None
     owner: str | None = None
 
+    def _missing_halt_fields(self) -> bool:
+        if self.outcome not in HALTED_OUTCOMES:
+            return False
+        return not self.blocking_reason or not self.owner
+
     def validate(self) -> None:
         if self.asset not in ASSET_ORDER:
             raise ValueError(f"unknown asset name: {self.asset}")
         if self.outcome not in OUTCOMES:
             raise ValueError(f"outcome must be an execution word, got: {self.outcome}")
-        halted = self.outcome in HALTED_OUTCOMES
-        if halted and not (self.blocking_reason and self.owner):
+        if self._missing_halt_fields():
             raise ValueError(
                 f"halted outcome {self.outcome} requires blocking_reason + owner"
             )
