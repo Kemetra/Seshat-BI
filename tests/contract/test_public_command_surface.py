@@ -328,6 +328,25 @@ def test_install_docs_version_pins_match_the_packaged_version() -> None:
 # ---------------------------------------------------------------------------
 
 
+def test_documented_governor_tools_match_the_mcp_server() -> None:
+    """The router skill and the agent install guide document the MCP governor's
+    tool names; they must match the tools the server actually defines."""
+    server_source = (ROOT / "src" / "seshat" / "governor" / "mcp_server.py").read_text(
+        encoding="utf-8"
+    )
+    actual = set(re.findall(r"def (seshat_[a-z_]+)\(", server_source))
+    assert actual, "no governor tools found -- did mcp_server.py move?"
+    router_entry = next(s for s in _surface()["skills"] if s["name"] == "seshat-bi")
+    for doc in (
+        ROOT / router_entry["wrapper_template"],
+        ROOT / "docs" / "install" / "agent-install.md",
+    ):
+        documented = set(re.findall(r"`(seshat_[a-z_]+)`", doc.read_text("utf-8")))
+        assert documented == actual, (
+            f"{doc.name} governor-tool drift: {documented ^ actual}"
+        )
+
+
 def _bundle_text_files(bundle: Path) -> list[Path]:
     return [
         path

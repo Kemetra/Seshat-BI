@@ -100,6 +100,33 @@ An example guarded Power BI session:
 /seshat-bi:powerbi-design     # design pages from approved metric contracts
 ```
 
+## Agent-driven automation (MCP governor)
+
+The plugins are deliberately skills-only, but the Python package ships an
+optional **read-only MCP governor** so an agent can drive the readiness flow
+programmatically with no memorized command names:
+
+```text
+pipx install "seshat-bi[mcp]"
+claude mcp add seshat-governor -- seshat mcp --repo <workspace>
+```
+
+(For Codex, register the same `seshat mcp --repo <workspace>` stdio command as
+an MCP server in its configuration.)
+
+The governor exposes exactly six read-only tools: `seshat_get_status`,
+`seshat_get_next_action`, `seshat_explain_blockers`,
+`seshat_prepare_approval_request`, `seshat_run_static_check`, and
+`seshat_export_evidence_pack`. The supported autonomous loop is: call
+`seshat_get_next_action`, perform exactly that one action, re-run
+`seshat_run_static_check`, and repeat. When the next action is a named-human
+decision, `seshat_prepare_approval_request` packages it for review and the
+loop **stops** -- no governor tool grants approval, advances a readiness
+stage, writes a file, or emits a score. Without the `mcp` extra installed,
+`seshat mcp` explains what to install instead of failing silently; the
+`seshat next --format agent` CLI form remains the driver-free fallback for
+the same loop.
+
 Update and restart:
 
 ```text

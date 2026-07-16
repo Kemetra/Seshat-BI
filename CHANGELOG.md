@@ -57,6 +57,12 @@ explicitly identifies a public release event.
   name is enough -- the router points to `/seshat-bi:help`, `seshat --help`,
   and `seshat next --format agent` so agents never need memorized command or
   skill names.
+- **Agent-driven automation surfaced**: the previously undocumented read-only
+  MCP governor (`seshat mcp`, extra `seshat-bi[mcp]`) and its six tools are now
+  documented in the agent install guide and routed from the bundled router,
+  with the governed loop protocol (next action -> act -> re-check -> stop at
+  named-human gates) stated explicitly and a contract test pinning the
+  documented tool names to the server source.
 
 ### Fixed
 - **`capability_feeders.read_dispatch_keys` stale source path**: the feeder read

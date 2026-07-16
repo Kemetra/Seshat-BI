@@ -40,6 +40,20 @@ A user or agent only needs this skill's name; everything else self-describes:
   invent a name, and if `seshat` is not installed, say so and point to
   `pipx install seshat-bi` instead of simulating output.
 
+## Agent-driven loop (programmatic automation)
+
+For fully programmatic automation, the optional read-only MCP governor
+(`seshat mcp --repo <workspace>`, installed via `pipx install "seshat-bi[mcp]"`)
+exposes six tools: `seshat_get_status`, `seshat_get_next_action`,
+`seshat_explain_blockers`, `seshat_prepare_approval_request`,
+`seshat_run_static_check`, and `seshat_export_evidence_pack`.
+
+The governed loop is: get the next action, perform exactly that one action,
+re-run the static check, and repeat. When the next action is a named-human
+decision, call `seshat_prepare_approval_request` to package it and STOP -- no
+tool in this loop grants an approval, advances a stage, or emits a score, and
+the loop must never route around a blocked gate.
+
 ## Existing PBIP projects
 
 For an existing Power BI Project, first use the installed read-only entry path:
