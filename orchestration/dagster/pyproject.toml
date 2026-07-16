@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tower-bi-orchestration"
+version = "0.1.0"
+description = "Seshat BI Dagster orchestration adapter (F030): runs already-approved medallion steps behind every gate; decides no readiness stage."
+requires-python = ">=3.13"
+# The pinned pair (spec 024 auto-update posture): dagster and dagster-dbt are
+# pinned EXACTLY and TOGETHER -- dagster-dbt 0.29.14 itself hard-pins
+# dagster==1.13.14, so a partial bump fails resolution instead of skewing
+# silently. Updates land via PR only; a MAJOR bump needs a named reviewer
+# (no automerge). psycopg2 is the DB boundary for bronze loads / migrations /
+# read-only validation. pyyaml reads committed readiness/gate artifacts.
+#
+# NOTE: this project also requires the repo-root `seshat-bi` package (the
+# read-only gate readers live in seshat.dagster_adapter.gate -- one tested
+# implementation, imported by both sides). A relative-path dependency is not
+# portable in pyproject metadata, so the install step supplies it explicitly:
+#   uv venv .venv
+#   uv pip install -p .venv -e ../.. -e ".[dev]"
+dependencies = [
+    "dagster==1.13.14",
+    "dagster-dbt==0.29.14",
+    "psycopg2-binary>=2.9",
+    "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tower_bi_orchestration"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

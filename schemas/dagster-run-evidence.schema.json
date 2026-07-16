@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Kemetra/Seshat-BI/schemas/dagster-run-evidence.schema.json",
+  "title": "Seshat BI Dagster run evidence (raw records)",
+  "description": "Contract for the raw per-run Dagster evidence: one RunSummary object plus one AssetRecord per asset outcome. Derived evidence only: outcomes are execution words, never the readiness token 'pass'; no numeric health/confidence/maturity score field exists in this schema by design (hard rule #9).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "records"],
+  "properties": {
+    "summary": { "$ref": "#/$defs/runSummary" },
+    "records": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/assetRecord" }
+    }
+  },
+  "$defs": {
+    "runSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "commit_sha", "started", "finished", "trigger", "tables", "run_status"],
+      "properties": {
+        "run_id": { "type": "string", "minLength": 1 },
+        "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+        "started": { "type": "string", "format": "date-time" },
+        "finished": { "type": "string", "format": "date-time" },
+        "trigger": { "enum": ["schedule", "sensor", "manual-CI"] },
+        "tables": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "run_status": { "enum": ["succeeded", "failed"] }
+      }
+    },
+    "assetRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "asset", "table", "gate_command", "exit_code", "measured", "outcome", "blocking_reason", "owner", "ts"],
+      "properties": {
+        "run_id": { "type": "string", "minLength": 1 },
+        "asset": {
+          "enum": [
+            "raw_source_file",
+            "bronze_table",
+            "source_profile",
+            "source_map",
+            "silver_tables",
+            "gold_tables",
+            "live_validate",
+            "metric_contracts",
+            "semantic_model",
+            "dashboard_blueprint",
+            "handoff_pack",
+            "publish_execution_evidence"
+          ]
+        },
+        "table": { "type": "string", "minLength": 1 },
+        "gate_command": { "type": "string", "minLength": 1 },
+        "exit_code": { "type": ["integer", "null"] },
+        "measured": { "type": "object" },
+        "outcome": { "enum": ["materialized", "failed", "skipped", "blocked", "deferred"] },
+        "blocking_reason": { "type": ["string", "null"] },
+        "owner": { "type": ["string", "null"] },
+        "ts": { "type": "string", "format": "date-time" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "outcome": { "enum": ["failed", "skipped", "blocked", "deferred"] } } },
+          "then": {
+            "properties": {
+              "blocking_reason": { "type": "string", "minLength": 1 },
+              "owner": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

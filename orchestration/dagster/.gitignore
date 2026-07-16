@@ -1,0 +1,11 @@
+# Orchestration project local environment and Dagster local state.
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+# Ephemeral Dagster instance artifacts (never committed; run evidence is the
+# committed record, written to run-evidence/<run-id>.md).
+.dagster/
+history/
+storage/
+logs/

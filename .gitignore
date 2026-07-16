@@ -101,3 +101,9 @@ specs/038-tabular-editor-bpa-adapter/evidence/smoke-*.md
 # that wants a reviewable committed baseline may deliberately un-ignore/commit
 # their own .seshat/watch/snapshot.json.
 .seshat/watch/
+
+# Dagster orchestration adapter (spec 134): raw per-run records
+# (records.jsonl + summary.json) under .seshat/dagster/runs/<run-id>/.
+# Machine-local run output; the COMMITTED record is the rendered
+# orchestration/dagster/run-evidence/<run-id>.md.
+.seshat/dagster/
