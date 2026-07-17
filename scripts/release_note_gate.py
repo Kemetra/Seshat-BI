@@ -6,9 +6,7 @@ import argparse
 import re
 from pathlib import Path
 
-_STABLE_SEMVER = re.compile(
-    r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$"
-)
+_STABLE_SEMVER = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 
 
 def governed_release_note_version(version: str) -> str:

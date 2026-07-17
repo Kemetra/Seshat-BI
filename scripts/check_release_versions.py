@@ -16,10 +16,18 @@ try:
         ProvenanceError,
         validate_manifest_provenance,
     )
+    from scripts.release_note_gate import (
+        governed_release_note_path,
+        governed_release_note_version,
+    )
 except ModuleNotFoundError:  # direct `python scripts/check_release_versions.py`
     from bundle_provenance import (
         ProvenanceError,
         validate_manifest_provenance,
+    )
+    from release_note_gate import (
+        governed_release_note_path,
+        governed_release_note_version,
     )
 
 _SEMVER = re.compile(
@@ -307,18 +315,18 @@ def _changelog_projection(repo_root: Path, version: str) -> dict[str, str | None
 
 
 def _release_note_projection(repo_root: Path, version: str) -> dict[str, str | None]:
-    major_minor = ".".join(version.split(".")[:2])
-    note_path = f"docs/releases/v{major_minor}.md"
+    note_version = governed_release_note_version(version)
+    note_path = governed_release_note_path(version).as_posix()
     release_note = repo_root / note_path
     matched = _document_matches(
-        release_note, rf"^# .*\bv{re.escape(major_minor)}(?:\b|\.)"
+        release_note, rf"^# .*\bv{re.escape(note_version)}(?:\b|\.)"
     )
     return _projection(
-        _ProjectionTarget("release_note", note_path, major_minor),
-        major_minor if matched else None,
+        _ProjectionTarget("release_note", note_path, note_version),
+        note_version if matched else None,
         blocker=None
         if matched
-        else f"release note is missing or has no v{major_minor} heading: {note_path}",
+        else f"release note is missing or has no v{note_version} heading: {note_path}",
     )
 
 

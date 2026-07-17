@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from scripts.check_release_versions import audit_versions
+from scripts.release_note_gate import governed_release_note_path
 
 pytestmark = pytest.mark.unit
 
@@ -85,8 +86,9 @@ def _repository(
         {"version": version, "source_revision": revision},
     )
     _write(root / "CHANGELOG.md", f"# Changelog\n\n## [{version}]\n")
-    major_minor = ".".join(version.split(".")[:2])
-    _write(root / f"docs/releases/v{major_minor}.md", f"# Seshat BI v{major_minor}\n")
+    note_path = governed_release_note_path(version)
+    note_version = note_path.stem.removeprefix("v")
+    _write(root / note_path, f"# Seshat BI v{note_version}\n")
     return revision
 
 
@@ -120,6 +122,29 @@ def test_version_mismatch_and_missing_release_note_block(tmp_path: Path) -> None
     report = audit_versions(tmp_path, source_revision=revision, tags={})
     assert report["status"] == "blocked"
     assert len(report["blocking_reasons"]) == 2
+
+
+def test_patch_release_uses_an_exact_patch_release_note(tmp_path: Path) -> None:
+    revision = _repository(tmp_path, version="0.2.1")
+    report = audit_versions(tmp_path, source_revision=revision, tags={})
+    release_note = next(
+        item for item in report["projections"] if item["surface"] == "release_note"
+    )
+    assert release_note["status"] == "pass"
+    assert release_note["path"] == "docs/releases/v0.2.1.md"
+    assert release_note["expected"] == "0.2.1"
+
+
+def test_patch_release_does_not_accept_the_series_release_note(tmp_path: Path) -> None:
+    revision = _repository(tmp_path, version="0.2.1")
+    (tmp_path / "docs/releases/v0.2.1.md").unlink()
+    _write(tmp_path / "docs/releases/v0.2.md", "# Seshat BI v0.2\n")
+    report = audit_versions(tmp_path, source_revision=revision, tags={})
+    assert report["status"] == "blocked"
+    assert (
+        "release note is missing or has no v0.2.1 heading: docs/releases/v0.2.1.md"
+        in report["blocking_reasons"]
+    )
 
 
 def test_existing_tag_at_another_revision_blocks_reuse(tmp_path: Path) -> None:
@@ -221,3 +246,5 @@ def test_coordinated_release_commits_version_before_bundle_export() -> None:
     )
     assert version_commit < bundle_export < bundle_commit
     assert "Do not squash or rebase" in workflow
+    assert "from scripts.release_note_gate import validate_release_note" in workflow
+    assert "validate_release_note(Path.cwd(), version)" in workflow

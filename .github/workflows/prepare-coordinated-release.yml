@@ -91,6 +91,8 @@ jobs:
           from datetime import date
           from pathlib import Path
 
+          from scripts.release_note_gate import validate_release_note
+
           version = os.environ["VERSION"].strip()
 
           pyproject_path = Path("pyproject.toml")
@@ -134,12 +136,10 @@ jobs:
           changelog = changelog[:marker_index] + replacement + unreleased_body + changelog[next_heading:]
           changelog_path.write_text(changelog, encoding="utf-8")
 
-          major_minor = ".".join(version.split(".")[:2])
-          release_note = Path(f"docs/releases/v{major_minor}.md")
-          if not release_note.is_file():
-              raise SystemExit(f"missing release note: {release_note}")
-          if re.search(rf"(?m)^# .*\bv{re.escape(major_minor)}(?:\b|\.)", release_note.read_text(encoding="utf-8")) is None:
-              raise SystemExit(f"release note has no v{major_minor} heading: {release_note}")
+          try:
+              validate_release_note(Path.cwd(), version)
+          except ValueError as exc:
+              raise SystemExit(str(exc)) from exc
           PY
 
       - name: Require the expected version-projection diff
