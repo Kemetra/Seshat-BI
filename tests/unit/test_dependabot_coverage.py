@@ -42,11 +42,7 @@ def _load_dependabot() -> dict:
 
 
 def _pip_blocks(doc: dict) -> list[dict]:
-    return [
-        u
-        for u in doc.get("updates", [])
-        if u.get("package-ecosystem") == "pip"
-    ]
+    return [u for u in doc.get("updates", []) if u.get("package-ecosystem") == "pip"]
 
 
 def test_orchestration_directory_is_watched():

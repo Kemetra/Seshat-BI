@@ -215,13 +215,13 @@ matches the P2 `SUBJECT_RE`.
 
 ## Phase 6: Polish and Cross-Cutting Concerns
 
-- [ ] T028 [P] Add a short doc note (e.g. `docs/tools/dep-integrity.md`) describing
+- [x] T028 [P] Add a short doc note (e.g. `docs/tools/dep-integrity.md`) describing
       the manifest shape, the four resolve outcomes, and that governed pins are only
       ever PROPOSED, never auto-bumped. ASCII only.
-- [ ] T029 Run `ruff format --check` and `ruff check` over `scripts` and `tests`, and
+- [x] T029 Run `ruff format --check` and `ruff check` over `scripts` and `tests`, and
       run `pytest -m unit` -- confirm GREEN and that CI still installs only `.[dev]`
       (SC-002).
-- [ ] T030 Run `retail check --commit-range <base>..HEAD` and confirm exit 0 (P2 on
+- [x] T030 Run `retail check --commit-range <base>..HEAD` and confirm exit 0 (P2 on
       the branch's own commits, C2 clean over the new specs/scripts/manifest text).
 
 ---
