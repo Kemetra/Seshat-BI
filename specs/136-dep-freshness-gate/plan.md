@@ -180,12 +180,14 @@ For each declared environment and cross-product:
 
 1. Read the referenced pyproject(s), assemble the full requirement set for the
    declared extras / union (a cross-product unions the requirement sets of its
-   members). A member may be a LOCAL path or editable install (the orchestration
-   project resolves the local `orchestration/dagster` directory plus an editable
-   `seshat-bi`, not published wheels); `pip install --dry-run` handles local-path
-   and editable members natively, and a transitive conflict (e.g. dbt-core pulled
-   in via `dagster-dbt` clashing with the root `dbt` extra pin) still surfaces as
-   RESOLUTION -- the union is over requirement SETS, some of which are local.
+   members). HARD RULE (plan-review D1): a member that IS a repository-local
+   project is assembled as a LOCAL PATH requirement (`<checkout>[extras]`,
+   `orchestration/dagster`), NEVER by distribution name -- otherwise pip
+   resolves the PUBLISHED seshat-bi from PyPI and the gate validates yesterday's
+   pins instead of the PR's tree. The manifest marks local projects explicitly;
+   a unit test pins that assembled requirement strings for local members are
+   paths, not names. `pip install --dry-run` handles local-path members
+   natively; a transitive conflict still surfaces as RESOLUTION.
 2. Create an EPHEMERAL throwaway virtual environment (`python -m venv` in a temp
    dir, removed after).
 3. Run `pip install --dry-run --report <report.json> <requirements...>` inside that
@@ -196,9 +198,13 @@ For each declared environment and cross-product:
    - exit 0 with a report -> **PASS** (record the resolved set).
    - resolver conflict (`ResolutionImpossible` / non-zero with a resolution error in
      stderr) -> **RESOLUTION**; capture the resolver's own text.
-   - network/index failure (connection error, index timeout, 5xx) -> **INFRA**;
-     distinct exit code / status so a flaky network is never read as a conflict
-     (FR-004, SC-004).
+   - network/index failure (connection error, index timeout, DNS, 5xx) ->
+     **INFRA**; distinct exit code / status so a flaky network is never read as
+     a conflict (FR-004, SC-004). Classification defaults to RESOLUTION when
+     ambiguous (fail-closed, plan-review D2); INFRA requires an explicit,
+     fixture-tested signature. The ephemeral venv's pip must support
+     `--report` (>= 22.2); an unusable venv pip is a CONFIG outcome, not a
+     crash (plan-review D5).
    - manifest points at a missing file / undefined extra -> **CONFIG** (FR-005).
 5. Redact any captured resolver text through the repo's existing C2 secret-shape
    redaction posture before surfacing (FR-016), so no credential-shaped token leaks

@@ -59,7 +59,12 @@ and tested independently. US1 (co-resolution proof) is the MVP.
 - [ ] T004 [US1] Implement the manifest loader + the `ResolveOutcome` classification
       enum (PASS / RESOLUTION / INFRA / CONFIG) in `scripts/dep_coresolve.py` to make
       T003 GREEN. Loader reads pins from the referenced pyproject via `tomllib` (no
-      duplicated version strings, FR-015).
+      duplicated version strings, FR-015). Classification defaults to RESOLUTION on
+      ambiguity (fail-closed); INFRA only on explicit fixture-tested network
+      signatures -- add BOTH fixture cases (plan-review D2). Assembled requirement
+      strings for repository-local members MUST be LOCAL PATHS, never distribution
+      names -- add the pinning unit test (plan-review D1). An ephemeral-venv pip
+      too old for `--report` yields CONFIG, not a crash (plan-review D5).
 - [ ] T005 [US1] Write FAILING unit tests for the resolver-error REDACTION helper:
       a resolver error text carrying a credential-shaped token is masked before it
       is surfaced; a clean conflict message is passed through unchanged (FR-016).
@@ -153,7 +158,8 @@ tracked pin changes.
 
 - [ ] T020 [US2] Implement latest-stable computation over the PyPI JSON API via
       stdlib `urllib` (yanked/pre-release exclusion) to make T015/T018 GREEN
-      (FR-007).
+      (FR-007). Yanked semantics are PER-FILE: a release counts as yanked only when
+      ALL its files are yanked -- pin with a half-yanked fixture (plan-review D5).
 - [ ] T021 [US2] Implement proposal generation + solve-proof (reuse the T011 resolve
       with the proposed version substituted) to make T016/T017 GREEN
       (FR-009, FR-010).
@@ -193,7 +199,12 @@ matches the P2 `SUBJECT_RE`.
 
 - [ ] T026 [US3] Edit `.github/dependabot.yml`: add the orchestration pip ecosystem
       block (`directory: "/orchestration/dagster"`, weekly, `dependencies` label) to
-      make the T025 coverage assertion GREEN (FR-013).
+      make the T025 coverage assertion GREEN (FR-013). Verify Dependabot accepts the
+      orchestration manifest as it exists at implementation time (it may carry a
+      repository-local seshat-bi reference after spec 135); if the local reference
+      is refused, record the limitation in a manifest comment and keep the directory
+      watched for its remaining named pins -- partial coverage recorded honestly
+      (plan-review D4).
 - [ ] T027 [US3] Edit `.github/dependabot.yml`: add `commit-message: { prefix: "build" }`
       to every pip block (no `include: scope`) to make the T024/T025 subject
       assertions GREEN (FR-014). Confirm against a produced subject that P2 passes.

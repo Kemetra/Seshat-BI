@@ -165,9 +165,11 @@ matches the P2 `SUBJECT_RE` used by the governance rule.
   intentionally on a pre-release is reported as such but pre-releases are never
   proposed as the stable target.
 - **A governed pin with an upper bound** (e.g. `mcp>=1.28,<2`): "latest stable" is
-  reported honestly even when it sits ABOVE the declared ceiling; the proposal notes
-  the ceiling would have to be raised, and the solve-proof runs against the ceiling
-  as declared. The gate never silently relaxes a ceiling.
+  reported honestly even when it sits ABOVE the declared ceiling. The solve-proof
+  ALWAYS substitutes the proposed version (FR-009); when the declared ceiling or a
+  sibling pin forbids it, the proof records RESOLUTION with the forbidding
+  requirement named -- that IS the actionable information (what the owner would
+  have to relax). The gate never silently relaxes a ceiling (plan-review D3).
 - **A manifest entry pointing at a missing pyproject or an undefined extra**: The
   gate fails closed with a clear message naming the bad manifest entry (a
   configuration error is distinguishable from both INFRA and RESOLUTION).
@@ -185,14 +187,21 @@ matches the P2 `SUBJECT_RE` used by the governance rule.
   combinations to resolve together.
 - **FR-002**: The co-resolution gate MUST resolve each declared environment and each
   declared cross-product using PyPI, in an EPHEMERAL environment per environment,
-  and MUST NOT install any optional extra into the CI test interpreter.
+  and MUST NOT install any optional extra into the CI test interpreter. Any member
+  that IS a repository-local project (the root package, the orchestration project)
+  MUST be assembled as a LOCAL PATH requirement (e.g. the checkout root with its
+  extras), NEVER by distribution name -- the gate proves the PR's tree resolves,
+  not PyPI's published copy of it (plan-review D1). The manifest schema marks
+  local projects explicitly.
 - **FR-003**: The co-resolution gate MUST be fail-closed: any declared environment
   or cross-product that cannot resolve MUST cause a non-zero exit, and the resolver's
   own error text MUST be surfaced (redacted only if it carries a sensitive value).
 - **FR-004**: The gate MUST distinguish an INFRASTRUCTURE failure (PyPI/index
   unreachable, network error) from a RESOLUTION failure (a genuine dependency
   conflict) via distinct, machine-readable outcomes, so CI can tell a flaky network
-  from a real conflict.
+  from a real conflict. Classification MUST default to RESOLUTION (fail-closed,
+  non-zero) when ambiguous; INFRA requires an explicit, fixture-tested network
+  signature. An unrecognized failure is never excused as INFRA (plan-review D2).
 - **FR-005**: The gate MUST also distinguish a CONFIGURATION error (manifest points
   at a missing pyproject or an undefined extra) from both INFRA and RESOLUTION.
 - **FR-006**: The co-resolution gate MUST run as a CI job, NOT as part of the
