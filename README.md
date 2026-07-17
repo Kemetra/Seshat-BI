@@ -14,6 +14,7 @@ without skipping the human decisions that make analytics trustworthy.
 [![CI](https://img.shields.io/github/actions/workflow/status/Kemetra/Seshat-BI/ci.yml?branch=main&style=flat-square&label=CI&labelColor=001E35&color=0B9A9A)](https://github.com/Kemetra/Seshat-BI/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.13%2B-C69214?style=flat-square&logo=python&logoColor=F7F1E7&labelColor=001E35)](pyproject.toml)
 [![License](https://img.shields.io/badge/License-Apache--2.0-0B9A9A?style=flat-square&labelColor=001E35)](LICENSE)
+[![Sponsor](https://img.shields.io/badge/Sponsor-Kemetra-EA4AAA?style=flat-square&logo=githubsponsors&logoColor=white&labelColor=001E35)](https://github.com/sponsors/Kemetra)
 [![PostgreSQL](https://img.shields.io/badge/Warehouse-PostgreSQL-0B9A9A?style=flat-square&logo=postgresql&logoColor=F7F1E7&labelColor=001E35)](#how-it-works)
 [![Power BI](https://img.shields.io/badge/BI-Power%20BI%20PBIP-C69214?style=flat-square&logo=powerbi&logoColor=001E35&labelColor=001E35)](#how-it-works)
 
@@ -223,11 +224,13 @@ Sponsorship can accelerate public, evidence-backed roadmap lanes such as:
 **The guardrail is simple:** funding supports the work; it never buys a readiness
 approval, a rule exception, or an undisclosed product claim.
 
-[**Start a sponsorship conversation**](https://github.com/Kemetra/Seshat-BI/issues/new?title=%5Bsponsorship%5D%20Sponsor%20a%20public%20roadmap%20lane)
+[**Sponsor Seshat BI through GitHub Sponsors**](https://github.com/sponsors/Kemetra)
+&nbsp;&middot;&nbsp;
+[**Discuss a public roadmap sponsorship**](https://github.com/Kemetra/Seshat-BI/issues/new?title=%5Bsponsorship%5D%20Sponsor%20a%20public%20roadmap%20lane)
 
-Until a verified funding profile is published, the inquiry link is the official
-starting point. Do not include confidential procurement or client information in a
-public issue.
+For organization-level sponsorships or roadmap discussions, use the issue link only
+for non-confidential context. Do not post procurement, client, or payment information
+in a public issue.
 
 ## Repository guide
 
