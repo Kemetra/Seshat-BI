@@ -6,16 +6,17 @@ from pathlib import Path
 
 import pytest
 
-from seshat.dagster_adapter import PINNED_DAGSTER, PINNED_DAGSTER_DBT, doctor
+from seshat.dagster_adapter import PINNED_DAGSTER, doctor
 
 pytestmark = pytest.mark.unit
 
 
+# spec 135 (FR-011 owner decision, 2026-07-17) dropped the dagster-dbt pin; the
+# orchestration project pins dagster only.
 GOOD_PYPROJECT = f"""[project]
 name = "tower-bi-orchestration"
 dependencies = [
     "dagster=={PINNED_DAGSTER}",
-    "dagster-dbt=={PINNED_DAGSTER_DBT}",
 ]
 """
 
@@ -81,7 +82,7 @@ def test_missing_venv_is_a_blocker_with_the_install_remedy(tmp_path: Path) -> No
 
 
 def test_pin_mismatch_is_a_blocker(tmp_path: Path) -> None:
-    bad = GOOD_PYPROJECT.replace(PINNED_DAGSTER_DBT, "0.99.0")
+    bad = GOOD_PYPROJECT.replace(PINNED_DAGSTER, "0.99.0")
     findings = doctor.run_doctor(_repo(tmp_path, pyproject=bad))
     assert "DAG-PAIR-01" in _ids(findings)
 

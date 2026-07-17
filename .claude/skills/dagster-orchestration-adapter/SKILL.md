@@ -32,16 +32,19 @@ engine -- the engine, when built, is the separate Dagster project. See
 `docs/decisions/0010-dagster-is-orchestration-adapter.md` and
 `docs/integrations/dagster-adapter.md`.
 
-> STATUS: the Dagster PROJECT is BUILT (spec 134, activation slice of F030).
-> `orchestration/dagster/` exists -- `definitions.py`, the 11-asset graph, `jobs`,
-> one STOPPED schedule, one STOPPED sensor, `pyproject.toml` pinning
-> `dagster==1.13.14` + `dagster-dbt==0.29.14` TOGETHER -- plus the
+> STATUS: the Dagster PROJECT is BUILT (spec 134, activation slice of F030;
+> the dbt engine seam is ACTIVATED per spec 135). `orchestration/dagster/`
+> exists -- `definitions.py`, the 11-asset graph, `jobs`, one STOPPED schedule,
+> one STOPPED sensor, `pyproject.toml` pinning `dagster==1.13.14` and bringing
+> `seshat-bi[dbt]` (the `dagster-dbt` pin was dropped by spec 135 FR-011: it
+> excludes dbt-core 1.12 and sits on no execution path) -- plus the
 > `seshat dagster doctor|run|evidence` control layer. The OPERATIONAL procedure:
 >
 > 1. `seshat dagster doctor` -- read-only preflight (project, its own venv
->    under `orchestration/dagster/.venv`, the pinned pair, per-table gate
->    state, DSN present/absent). Blockers exit 2; the install remedy is
->    `cd orchestration/dagster && uv venv .venv && uv pip install -p .venv -e ../.. -e ".[dev]"`.
+>    under `orchestration/dagster/.venv`, the pinned dagster, the resolved build
+>    engine per table, per-table gate state, DSN present/absent). Blockers exit
+>    2; the install remedy is
+>    `cd orchestration/dagster && uv venv .venv && uv pip install -p .venv -e "../..[dbt]" -e ".[dev]"`.
 > 2. `seshat dagster run --job <full_sequence_job|through_gold_job> [--table <table>]`
 >    -- executes the graph as a shell-free child process in the orchestration
 >    venv. A failed/blocked gate halts downstream assets and exits 3 (the CI
@@ -119,7 +122,8 @@ The definition MUST already exist in Core Authority. The adapter executes it; it
 it.
 
 - Materializes silver / gold from the APPROVED `source-map.yaml` (after Mapping Ready) -- via
-  `dagster-dbt` where dbt is adopted (F029), or via SQL-migration assets otherwise; identical
+  the governed `seshat.dbt` build when the dbt engine is selected (spec 135), or via
+  SQL-migration assets otherwise; identical
   gate semantics either way.
 - Generates the handoff pack from already-approved upstream evidence.
 - Publishes NOTHING itself; the terminal asset TRIGGERS the already-approved F016 publish once
@@ -251,7 +255,7 @@ never publishes itself.
 | `bronze_<table>` | Load the raw landing into bronze. | Execute an approved step (DB write). |
 | `source_profile` | Profile the source; write profile evidence. | DERIVED evidence only. |
 | `source_map` | READ `Gate status` + `approvals[]`. If not CLEARED -> HALT, record the open mapping blocker. | HUMAN SEAM (Principle IV); never self-grant. |
-| `silver_tables` | Build silver (dbt via `dagster-dbt`, or SQL migrations); then `retail check`. | STOP edge; gated on `source_map` CLEARED. |
+| `silver_tables` | Build silver (dbt via the governed `seshat.dbt` build, or SQL migrations); then `retail check`. | STOP edge; gated on `source_map` CLEARED. |
 | `gold_tables` | Build the gold star; then `retail check`. | STOP edge; mechanical. |
 | `metric_contracts` | READ the approved metric contracts (authors none). | Reads truth; never authors it. |
 | `semantic_model` | `retail check` + contract-binding read; READ the semantic-model approval. | STOP + HUMAN SEAM. |
@@ -286,13 +290,13 @@ HALT the affected asset and escalate to a named human; record an owner row in
   `pass` -- always a named-human or gate-exit action, never a green Dagster asset.
 - triggering a publish when `publish_ready` is not `pass`, or publishing yourself when F016 is
   absent -- FAIL CLOSED.
-- any `dagster` / `dagster-dbt` MAJOR version bump -- a named reviewer approves; no automerge
+- any `dagster` MAJOR version bump -- a named reviewer approves; no automerge
   (pin the pair TOGETHER; the shared policy is F031 / F033).
 - any finding you cannot confidently classify -> default to escalate.
 
 ## Auto-update posture (Dagster-specific; the shared policy is deferred)
 
-Pin `dagster` + `dagster-dbt` TOGETHER (no independent bumps); updates via PR only; a
+Pin `dagster` exactly (the `dagster-dbt` pin was dropped by spec 135 FR-011; the governed dbt runtime arrives via `seshat-bi[dbt]`); updates via PR only; a
 definitions-load smoke test as the minimum CI gate; a small orchestration smoke test once an
 implementation exists; NO automerge for Dagster MAJOR versions. The SHARED cross-adapter
 update/maturity policy lives in F031 (spec 025, adapter-maintenance-policy) and F033 (spec 027,
@@ -308,8 +312,8 @@ release-maturity); this skill states only Dagster's adapter-specific needs and D
   terminal asset TRIGGERS it once `publish_ready = pass` and never publishes itself. If F016 is
   absent, FAIL CLOSED.
 - **The dbt build internals** -- F029 owns HOW the silver/gold transformations are defined and
-  validated; this adapter owns the SEQUENCING and gate-respecting execution of them via
-  `dagster-dbt`. Do not redefine dbt's internals here.
+  validated; this adapter owns the SEQUENCING and gate-respecting execution of them through
+  the governed `seshat.dbt` control layer. Do not redefine dbt's internals here.
 
 At a seam: state plainly what is deferred, what would unblock it, and STOP. One invocation does
 NOT produce a finished, published deliverable -- that is the named-seam design, not a bug.
@@ -326,7 +330,7 @@ NOT produce a finished, published deliverable -- that is the named-seam design, 
   `docs/decisions/0008-core-authority-vs-product-modules.md`.
 - The conductor sibling (the gate-read + human-seam posture this mirrors):
   `.claude/skills/retail-orchestrate/SKILL.md`; `specs/005-layer-d-orchestration/spec.md`.
-- The transformation adapter it orchestrates via `dagster-dbt`:
+- The transformation adapter it orchestrates through the `seshat.dbt` control layer:
   `.claude/skills/dbt-transformation-adapter/SKILL.md`; `specs/023-dbt-transformation-adapter/` (F029).
 - The verbs it sequences: `.claude/skills/{retail-onboard-table,source-mapping,retail-build-warehouse,retail-validate,retail-semantic-check}/SKILL.md`.
 - The spec + posture: `specs/024-dagster-orchestration-adapter/spec.md`;

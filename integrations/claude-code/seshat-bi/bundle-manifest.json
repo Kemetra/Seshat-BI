@@ -48,10 +48,10 @@
     {
       "classification": "generated_wrapper",
       "destination": "commands/dagster-doctor.md",
-      "output_sha256": "4a53dc5712479f103e347451a63ae97f3a47bb50dc6f880bfcdfe9f4172ff15d",
+      "output_sha256": "8e0217d49a67be46c491f29885d6e4bd2c8fa18f7463756cf091a149f9610a46",
       "source": "distribution/bundle-templates/claude/commands/dagster-doctor.md",
       "source_id": "claude-dagster-doctor",
-      "source_sha256": "4a53dc5712479f103e347451a63ae97f3a47bb50dc6f880bfcdfe9f4172ff15d",
+      "source_sha256": "8e0217d49a67be46c491f29885d6e4bd2c8fa18f7463756cf091a149f9610a46",
       "transform": "copy-normalized-v1"
     },
     {
@@ -120,10 +120,10 @@
     {
       "classification": "generated_wrapper",
       "destination": "commands/help.md",
-      "output_sha256": "60a21cce0ad67f46672e9979cc2b483343aed6fc4315e277dfe34c9297c368eb",
+      "output_sha256": "27cf6b75247194df02679b498ebf473007de5ef88d3a33b006d26988e3eada33",
       "source": "distribution/bundle-templates/claude/commands/help.md",
       "source_id": "claude-help",
-      "source_sha256": "60a21cce0ad67f46672e9979cc2b483343aed6fc4315e277dfe34c9297c368eb",
+      "source_sha256": "27cf6b75247194df02679b498ebf473007de5ef88d3a33b006d26988e3eada33",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1748,10 +1748,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "710a7ad85cea40eaf63f3defc4c3cc50646cb522f63d892c64b305840d7db4c5",
+  "manifest_digest": "46d644d755113b14ea26d3586caf7501ace2ea2e9210f534a3b77053912c6c89",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "82e6489e0cda6aab62831ca1f360e240486def8a",
+  "source_revision": "f21a1314142c6c2313a028058fc5b774fe335dea",
   "target": "claude",
   "version": "0.4.0"
 }

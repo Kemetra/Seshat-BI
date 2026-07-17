@@ -1,6 +1,8 @@
 # Dagster definitions-load smoke (spec 134 / spec 024 FR-009 minimum CI gate).
 # Installs the orchestration project in its OWN environment and proves:
-#   1. the pinned dagster/dagster-dbt pair resolves together on Python 3.13;
+#   1. the pinned dagster resolves with seshat-bi[dbt] on Python 3.13
+#      (spec 135 FR-011 dropped the dagster-dbt pin -- it excludes dbt-core 1.12
+#      and sits on no execution path);
 #   2. the Definitions object loads (11 assets, jobs, STOPPED automations);
 #   3. the orchestration unit tests pass (US1-US3, in-process, no DB).
 # Deliberately NO database service and NO secrets: DB-touching paths are
@@ -35,7 +37,7 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install --quiet --upgrade pip
-          .venv/bin/python -m pip install --quiet -e ../.. -e ".[dev]"
+          .venv/bin/python -m pip install --quiet -e "../..[dbt]" -e ".[dev]"
       - name: Definitions-load smoke (import + dagster definitions validate)
         working-directory: orchestration/dagster
         run: |

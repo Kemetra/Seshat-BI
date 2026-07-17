@@ -178,7 +178,7 @@ main package's static core stays stdlib-only:
 ```text
 orchestration/dagster/
   README.md                                  # how to run the adapter, the human seams, the gate-read posture
-  pyproject.toml                             # pins dagster==1.13.14 + dagster-dbt==0.29.14 TOGETHER
+  pyproject.toml                             # pins dagster==1.13.14; brings seshat-bi[dbt] (dagster-dbt dropped, spec 135 FR-011)
   src/tower_bi_orchestration/
     definitions.py                           # the Definitions object (assets/jobs/schedules/sensors)
     repo.py                                  # repo-root + mapped-table discovery (mappings/<table>/source-map.yaml)
@@ -200,15 +200,32 @@ git-ignored `.seshat/dagster/runs/<run-id>/` (schema
 `schemas/dagster-run-evidence.schema.json`); the committed record is the rendered
 `orchestration/dagster/run-evidence/<run-id>.md`.
 
-## The dagster-dbt engine seam (activates after spec 133 merges)
+## The dbt engine seam (ACTIVATED as a selectable engine; spec 135)
 
-Where dbt is adopted (F029 / spec 133, a separate slice), `silver_tables` / `gold_tables`
-switch from executing the committed `warehouse/migrations/*.sql` path to `dagster-dbt` assets
-over the dbt project -- with IDENTICAL gate semantics: still downstream of the `source_map`
-HUMAN SEAM, still gated on the same check exit codes, still fail-closed. The pinned pair
-(`dagster` + `dagster-dbt`, bumped together only) already proves the integration loads. No code
-in this slice references spec-133 modules; the switch is a deliberate follow-up slice once both
-branches are on main.
+`silver_tables` / `gold_tables` have a SELECTABLE build engine (spec 135, activating the seam
+spec 134 left as documentation). The default engine is the committed `warehouse/migrations/*.sql`
+path. When a table's committed `mappings/<table>/build-engine.yaml` names `dbt` for a layer, that
+asset runs the governed dbt build through the `seshat.dbt` control layer (plan -> self-accepted
+accept-plan digest -> build into isolated shadow schemas) INSTEAD of applying migration SQL --
+with IDENTICAL gate semantics: still downstream of the `source_map` HUMAN SEAM, still gated on the
+same `seshat check` exit codes, still fail-closed. The engine resolves per layer and FAILS CLOSED
+to migrations on anything but the exact `dbt` value; the flag lives inside the human-reviewed
+committed working set so flipping it is a reviewed, attributable change.
+
+Naming vs mechanism: the seam is historically named the "dagster-dbt engine seam", but the
+EXECUTION PATH deliberately routes through `seshat.dbt` (which enforces the accept-plan digest and
+the governed gate), NOT through native `dagster-dbt` asset wiring (`@dbt_assets` / a raw
+`DbtCliResource`) -- native wiring would bypass the digest and the gate (spec 133 FR-023/FR-025).
+The `dagster-dbt` LIBRARY was consequently DROPPED (spec 135 FR-011 owner decision, 2026-07-17):
+no released dagster-dbt accepts dbt-core 1.12 and it sits on no execution path. What lands on the
+dbt engine's path is `seshat-bi[dbt]`, the governed control layer.
+
+The dbt engine is a governed REHEARSAL into isolated shadow schemas: it does NOT rebuild the real
+`silver`/`gold` (spec 133 FR-005), so evidence records `warehouse_updated: false`, `seshat dagster
+doctor` warns on mixed-engine tables, and migrations remain the default / parity oracle / rollback
+until a named human retires them (spec 133 FR-006). Live dbt drive stays `[PENDING LIVE PROFILE]`
+(`docs/operations/dbt-activation-status.yaml`); this feature ships the selectable-engine WIRING,
+not a proven live run.
 
 ## Relationship to the other features
 
@@ -218,11 +235,12 @@ branches are on main.
   conductor says "I will pause and ask," Dagster says "I will halt this asset and surface the
   open blocker." The sequence is cited from `specs/005-layer-d-orchestration/spec.md`, not
   redefined.
-- **F029 dbt Transformation Adapter.** Where dbt is adopted, the silver / gold build steps
-  Dagster orchestrates ARE dbt assets, run via `dagster-dbt`. F029 owns HOW the transformations
-  are defined and validated; F030 owns the SEQUENCING and gate-respecting execution of them.
-  Where dbt is not adopted, the build steps are SQL-migration assets; the gate semantics are
-  identical either way.
+- **F029 dbt Transformation Adapter.** When the dbt engine is selected, the silver / gold build
+  steps Dagster orchestrates run the governed dbt build through the `seshat.dbt` control layer
+  (NOT native `dagster-dbt` wiring, which would bypass the governed gate). F029 owns HOW the
+  transformations are defined and validated; F030 owns the SEQUENCING and gate-respecting
+  execution of them. On the default engine the build steps are SQL-migration assets; the gate
+  semantics are identical either way.
 - **F024 Companion-Tools Architecture (the category parent).** Dagster declares the single
   category Execution Adapter / `DB-connected` against the F024 matrix. The unattended / CI flavor
   is real but does NOT make it Maintenance Automation -- that category declares no connectivity
@@ -237,10 +255,11 @@ branches are on main.
 
 ## Auto-update posture (Dagster-specific; the shared policy is deferred)
 
-Pin `dagster` + `dagster-dbt` TOGETHER (no independent bumps); updates via PR only; a
-definitions-load smoke test as the minimum CI gate; a small orchestration smoke test once an
-implementation exists; NO automerge for Dagster MAJOR versions. The SHARED cross-adapter policy
-is deferred to F031 (spec 025) / F033 (spec 027).
+Pin `dagster` exactly (the `dagster-dbt` pin was dropped by spec 135 FR-011; the governed dbt
+runtime arrives via `seshat-bi[dbt]`); updates via PR only; a definitions-load smoke test as the
+minimum CI gate; a small orchestration smoke test once an implementation exists; NO automerge for
+Dagster MAJOR versions. The SHARED cross-adapter policy is deferred to F031 (spec 025) / F033
+(spec 027).
 
 ## Secrets (Principle IX)
 
@@ -260,7 +279,7 @@ Validation runs are READ-ONLY.
   `docs/decisions/0008-core-authority-vs-product-modules.md`.
 - The conductor sibling + the sequence it reuses: `.claude/skills/retail-orchestrate/SKILL.md`;
   `specs/005-layer-d-orchestration/spec.md`.
-- The transformation adapter it orchestrates via `dagster-dbt`:
+- The transformation adapter it orchestrates through the `seshat.dbt` control layer:
   `.claude/skills/dbt-transformation-adapter/SKILL.md`; `specs/023-dbt-transformation-adapter/` (F029).
 - The parked publish adapter it triggers: roadmap F016 (Power BI Execution Adapter).
 - The readiness spine + the four-status / no-score vocabulary:

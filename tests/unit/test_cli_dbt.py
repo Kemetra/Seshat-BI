@@ -108,7 +108,9 @@ def test_base_cli_import_is_adapter_lazy() -> None:
                 "print(json.dumps({"
                 "'adapter': 'seshat.dbt' in sys.modules,"
                 "'handler': 'seshat.cli.commands.dbt' in sys.modules,"
-                "'external': 'dbt' in sys.modules}))"
+                "'external': 'dbt' in sys.modules,"
+                "'dagster': 'dagster' in sys.modules,"
+                "'dagster_dbt': 'dagster_dbt' in sys.modules}))"
             ),
         ],
         cwd=root,
@@ -119,10 +121,15 @@ def test_base_cli_import_is_adapter_lazy() -> None:
         shell=False,
     )
 
+    # spec 135 T003: importing base seshat loads NO governed dbt adapter and NO
+    # third-party dagster / dagster_dbt / dbt module -- the static core import
+    # path stays stdlib-only (FR-011, spec 134 FR-001).
     assert json.loads(result.stdout) == {
         "adapter": False,
         "handler": False,
         "external": False,
+        "dagster": False,
+        "dagster_dbt": False,
     }
 
 

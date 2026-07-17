@@ -10,15 +10,17 @@ still works without one.
 from __future__ import annotations
 
 import os
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import PINNED_DAGSTER, PINNED_DAGSTER_DBT
+from . import PINNED_DAGSTER
+from .engine import resolve_build_engine
 from .gate import GateState, list_mapped_tables, read_gate_state
 
 _INSTALL_REMEDY = (
     "cd orchestration/dagster && uv venv .venv && "
-    'uv pip install -p .venv -e ../.. -e ".[dev]"'
+    'uv pip install -p .venv -e "../..[dbt]" -e ".[dev]"'
 )
 
 
@@ -58,15 +60,15 @@ _PROJECT_ABSENT = DoctorFinding(
     remedy="check out the full repo (the orchestration project ships with spec 134)",
 )
 
-_PAIR_MISMATCH = DoctorFinding(
+_PIN_MISMATCH = DoctorFinding(
     id="DAG-PAIR-01",
     severity="blocker",
     message=(
-        "pinned pair mismatch: orchestration/dagster/pyproject.toml must pin "
-        f"dagster=={PINNED_DAGSTER} and dagster-dbt=={PINNED_DAGSTER_DBT} "
-        "TOGETHER (spec 024 auto-update posture)"
+        "pinned dagster mismatch: orchestration/dagster/pyproject.toml must pin "
+        f"dagster=={PINNED_DAGSTER} (spec 024 auto-update posture; the dagster-dbt "
+        "pin was dropped by spec 135 FR-011)"
     ),
-    remedy="restore the pinned pair; bumps land via PR only, never independently",
+    remedy="restore the dagster pin; bumps land via PR only, never independently",
 )
 
 _VENV_ABSENT = DoctorFinding(
@@ -111,9 +113,8 @@ def _project_findings(root: Path) -> list[DoctorFinding]:
         return [_PROJECT_ABSENT]
     findings: list[DoctorFinding] = []
     pyproject = (orch / "pyproject.toml").read_text(encoding="utf-8")
-    expected = (f"dagster=={PINNED_DAGSTER}", f"dagster-dbt=={PINNED_DAGSTER_DBT}")
-    if not all(pin in pyproject for pin in expected):
-        findings.append(_PAIR_MISMATCH)
+    if f"dagster=={PINNED_DAGSTER}" not in pyproject:
+        findings.append(_PIN_MISMATCH)
     if orchestration_python(root) is None:
         findings.append(_VENV_ABSENT)
     return findings
@@ -141,11 +142,146 @@ def _gate_finding(table: str, state: GateState) -> DoctorFinding:
     )
 
 
+def _dbt_runtime_present(root: Path) -> bool:
+    """True when the dbt runtime is importable in the ORCHESTRATION venv.
+
+    ``seshat dagster run`` launches the Dagster child through the orchestration
+    interpreter, so THAT environment -- not this parent process -- is the one
+    the preflight must probe (Codex review on PR #307). Read-only metadata
+    probe; an absent venv, a failing interpreter, or a missing distribution all
+    read as not-present.
+    """
+    interpreter = orchestration_python(root)
+    if interpreter is None:
+        return False
+    probe = "import importlib.metadata as m; m.version('dbt-core')"
+    try:
+        result = subprocess.run(
+            [str(interpreter), "-c", probe],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
+def _dbt_profile_present(root: Path) -> bool:
+    """True when the governed dbt live profile (SESHAT_DBT_*) resolves.
+
+    The dbt engine reads its credentials from the SESHAT_DBT_* child
+    environment (spec 133), not the migrations DSN -- report on the contract
+    the dbt build actually uses. A malformed .env reads as absent here (the
+    doctor is read-only; the concrete error surfaces when the build runs).
+    """
+    from seshat.cli.commands.dbt import EnvironmentConfigError, load_child_environment
+
+    try:
+        environment = load_child_environment(root)
+    except EnvironmentConfigError:
+        return False
+    return bool(environment.get("SESHAT_DBT_HOST"))
+
+
+def _engine_availability_finding(root: Path, table: str) -> DoctorFinding:
+    """Under the dbt engine: is the dbt runtime + a live profile available?
+
+    Truthful and categorical -- never a fabricated live pass. An absent runtime
+    or profile is a concrete deferred/enable finding, not a blocker (everything
+    static still works); credentials are reported present/absent only.
+    """
+    if not _dbt_runtime_present(root):
+        return DoctorFinding(
+            id="DAG-ENG-DBT-01",
+            severity="warning",
+            message=(
+                f"{table}: engine dbt but the dbt runtime is absent from the "
+                "orchestration environment -- the dbt build will block fail-closed"
+            ),
+            remedy=_INSTALL_REMEDY,
+        )
+    if not _dbt_profile_present(root):
+        return DoctorFinding(
+            id="DAG-ENG-DBT-02",
+            severity="warning",
+            message=(
+                f"{table}: engine dbt but no live dbt profile (SESHAT_DBT_*) -- "
+                "the dbt build will record a deferred boundary and block "
+                "fail-closed"
+            ),
+            remedy=(
+                "put the SESHAT_DBT_* values in the git-ignored .env; never "
+                "commit a real value"
+            ),
+        )
+    return DoctorFinding(
+        id="DAG-ENG-DBT-00",
+        severity="info",
+        message=(
+            f"{table}: engine dbt; the dbt runtime and database credentials are "
+            "PRESENT (live drive stays [PENDING LIVE PROFILE])"
+        ),
+        remedy="none",
+    )
+
+
+def _engine_mode_findings(root: Path, table: str) -> list[DoctorFinding]:
+    """Per-table resolved build engine (migrations vs dbt), per layer.
+
+    Reports the resolved engine truthfully; warns on a MIXED configuration (a
+    migrations layer may read a real relation this run's dbt layer never
+    rebuilt -- FR-015/plan-review R2). A migrations-only table asserts nothing
+    about dbt.
+    """
+    silver = resolve_build_engine(root, table, "silver")
+    gold = resolve_build_engine(root, table, "gold")
+    if silver != gold:
+        return [
+            DoctorFinding(
+                id="DAG-ENG-MIX-01",
+                severity="warning",
+                message=(
+                    f"{table}: MIXED build engines (silver={silver}, gold={gold}) "
+                    "-- a migrations layer may read a real relation the dbt layer "
+                    "only rebuilt in shadow this run"
+                ),
+                remedy=(
+                    "set both layers to the same engine in "
+                    "mappings/<table>/build-engine.yaml unless the mix is intended"
+                ),
+            ),
+            _engine_availability_finding(root, table),
+        ]
+    if silver == "dbt":
+        return [
+            DoctorFinding(
+                id="DAG-ENG-00",
+                severity="info",
+                message=f"{table}: build engine dbt (both layers)",
+                remedy="none",
+            ),
+            _engine_availability_finding(root, table),
+        ]
+    return [
+        DoctorFinding(
+            id="DAG-ENG-00",
+            severity="info",
+            message=f"{table}: build engine migrations (both layers, the default)",
+            remedy="none",
+        )
+    ]
+
+
 def _table_findings(root: Path) -> list[DoctorFinding]:
     tables = list_mapped_tables(root)
     if not tables:
         return [_NO_TABLES]
-    return [_gate_finding(table, read_gate_state(root, table)) for table in tables]
+    findings: list[DoctorFinding] = []
+    for table in tables:
+        findings.append(_gate_finding(table, read_gate_state(root, table)))
+        findings.extend(_engine_mode_findings(root, table))
+    return findings
 
 
 def run_doctor(root: Path) -> list[DoctorFinding]:

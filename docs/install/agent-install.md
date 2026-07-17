@@ -94,7 +94,7 @@ Guarded Power BI commands:
 - `/seshat-bi:powerbi-format` -- formatting plans plus governed PBIR
   formatting/geometry (`seshat pbir-format-visual` / `pbir-set-geometry`).
 - `/seshat-bi:dagster-doctor` -- read-only Dagster orchestration preflight
-  (environment, pinned pair, per-table gate state; never echoes credentials).
+  (environment, pinned dagster, per-table gate state; never echoes credentials).
 - `/seshat-bi:dagster-run` -- execute one governed orchestration job behind
   every gate, fail-closed; a halted run exits 3 and cites the named owner.
 - `/seshat-bi:dagster-evidence` -- list orchestration runs or render a run's

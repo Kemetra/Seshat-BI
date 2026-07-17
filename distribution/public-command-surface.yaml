@@ -218,7 +218,7 @@ commands:
   # -- Dagster orchestration adapter commands (Claude Code, spec 134) --------
   - name: dagster-doctor
     platform: claude
-    intent: Preflight the Dagster orchestration adapter read-only (environment, pinned pair, gate state).
+    intent: Preflight the Dagster orchestration adapter read-only (environment, pinned dagster, gate state).
     cli_verbs: [dagster]
     skill: dagster-workflows
     wrapper_template: distribution/bundle-templates/claude/commands/dagster-doctor.md

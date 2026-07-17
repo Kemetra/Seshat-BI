@@ -49,7 +49,7 @@ the adapter-specific membership:
 | Adapter / dependency class | Lane | Why |
 |-----------------------------|------|-----|
 | dbt transformation adapter -- `dbt-core`, `dbt-postgres` (F029) | **Lane B** | a named human review is required before merge; green checks are necessary but not sufficient |
-| Dagster orchestration adapter -- `dagster`, `dagster-dbt` (F030) | **Lane B** | a named human review is required before merge |
+| Dagster orchestration adapter -- `dagster` (F030; `dagster-dbt` REMOVED by the spec-135 owner decision, 2026-07-17 -- it excluded dbt-core 1.12 and sat on no execution path) | **Lane B** | a named human review is required before merge |
 | Postgres driver -- `psycopg2` / driver changes; Power BI modeling utilities | **Lane B** | a named human review is required before merge |
 | **Major DB-driver change** (a major version of the driver) | **Lane C** | never automerge under any check state |
 | the official Power BI MCP / execution adapter (F016, parked) -- anything publish-capable, credential / auth, or semantic-model-behavior changes | **Lane C** | never automerge under any check state; publish-capable / credential changes always need a named human |

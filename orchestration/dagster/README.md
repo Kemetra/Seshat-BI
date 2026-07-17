@@ -15,13 +15,16 @@ this project keeps its own environment:
 ```text
 cd orchestration/dagster
 uv venv .venv
-uv pip install -p .venv -e ../.. -e ".[dev]"
+uv pip install -p .venv -e "../..[dbt]" -e ".[dev]"
 ```
 
-Installed pair (pinned TOGETHER; spec 024 auto-update posture):
-`dagster==1.13.14` + `dagster-dbt==0.29.14` (dagster-dbt itself hard-pins its
-dagster twin, so a partial bump fails resolution instead of skewing silently).
-Updates via PR only; MAJOR bumps need a named reviewer; no automerge.
+Installed runtime (spec 024 auto-update posture): `dagster==1.13.14`, plus
+`seshat-bi[dbt]` (the governed dbt control layer: `dbt-core==1.12.0` +
+`dbt-postgres==1.10.2`, the spec-133 pinned pair). The `dagster-dbt` pin was
+DROPPED by spec 135 (FR-011 owner decision, 2026-07-17): no released dagster-dbt
+accepts dbt-core 1.12, and the dbt engine's execution path never imports
+dagster-dbt -- it routes through `seshat.dbt`. Updates via PR only; MAJOR bumps
+need a named reviewer; no automerge.
 
 Credentials (live DB steps only) come from the git-ignored `.env`
 (`DATABASE_URL` or the `ANALYTICS_DB_*` set). Without them, DB-touching assets
@@ -34,7 +37,7 @@ The front door is the main package's CLI (see
 `specs/134-activate-dagster-mvp/contracts/dagster-cli.md`):
 
 ```text
-seshat dagster doctor                 # preflight: env, pinned pair, gate state
+seshat dagster doctor                 # preflight: env, pinned dagster, engine mode, gate state
 seshat dagster run --job through_gold_job --table retail_store_sales
 seshat dagster evidence --run-id <id> # render run-evidence/<id>.md
 ```
@@ -89,12 +92,26 @@ One daily schedule on `full_sequence_job` and one raw-landing file sensor ship
 with `default_status=STOPPED`. Enabling either is a named-human action; this
 slice never turns them on.
 
-## The dagster-dbt engine seam
+## The dbt engine seam (activated, selectable)
 
-Where dbt is adopted (spec 133, separate slice), `silver_tables` /
-`gold_tables` become `dagster-dbt` assets with IDENTICAL gate semantics; until
-then they execute the committed `warehouse/migrations/*.sql` path. See
-`docs/integrations/dagster-adapter.md` (engine seam section).
+`silver_tables` / `gold_tables` have a SELECTABLE build engine (spec 135). The
+default is the committed `warehouse/migrations/*.sql` path; when a table's
+`mappings/<table>/build-engine.yaml` names `dbt` for a layer, that asset runs the
+governed dbt build through the `seshat.dbt` control layer (plan -> self-accepted
+accept-plan digest -> shadow-schema build) instead. The gate is UNCHANGED: both
+engines run the same `seshat check` on exit 0, downstream of the `source_map`
+HUMAN SEAM, fail-closed. The engine resolves per layer and fails closed to
+migrations on anything but the exact `dbt` value.
+
+The dbt engine is a governed REHEARSAL into isolated shadow schemas: it does NOT
+rebuild the real `silver`/`gold` (spec 133 FR-005), so its evidence records
+`warehouse_updated: false` and `seshat dagster doctor` warns on mixed-engine
+tables. Migrations remain the default, the parity oracle, and the rollback path
+until a named human retires them (spec 133 FR-006). Live dbt drive stays
+`[PENDING LIVE PROFILE]` (`docs/operations/dbt-activation-status.yaml`). The
+execution path goes through `seshat.dbt`, NOT the `dagster-dbt` library (dropped
+by spec 135 FR-011); see `docs/integrations/dagster-adapter.md` (engine seam
+section).
 
 ## Tests
 

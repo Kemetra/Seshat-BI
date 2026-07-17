@@ -1,5 +1,5 @@
 """SC-001 / US6: the Definitions object loads with the full graph, both jobs,
-and BOTH automations shipped STOPPED -- and the pinned pair is consistent."""
+and BOTH automations shipped STOPPED -- and the dagster pin is consistent."""
 
 from __future__ import annotations
 
@@ -49,11 +49,13 @@ def test_exactly_one_schedule_and_one_sensor_both_stopped(
     assert sensors[0].default_status is DefaultSensorStatus.STOPPED
 
 
-def test_pinned_pair_is_consistent_with_the_control_layer_constants() -> None:
+def test_pinned_dagster_is_consistent_with_the_control_layer_constant() -> None:
+    # spec 135 (FR-011 owner decision, 2026-07-17) DROPPED the dagster-dbt pin:
+    # no released dagster-dbt accepts dbt-core 1.12 and the dbt engine's
+    # execution path never imports dagster-dbt (it routes through seshat.dbt).
+    # Only the dagster pin remains an installed-runtime invariant.
     import dagster
-    import dagster_dbt
 
-    from seshat.dagster_adapter import PINNED_DAGSTER, PINNED_DAGSTER_DBT
+    from seshat.dagster_adapter import PINNED_DAGSTER
 
     assert dagster.__version__ == PINNED_DAGSTER
-    assert dagster_dbt.__version__ == PINNED_DAGSTER_DBT

@@ -968,7 +968,7 @@ def _add_dagster_parser(sub: argparse._SubParsersAction) -> None:
     dagster_sub = dagster_p.add_subparsers(dest="dagster_cmd", required=True)
 
     doctor_p = dagster_sub.add_parser(
-        "doctor", help="read-only preflight: environment, pinned pair, gate state"
+        "doctor", help="read-only preflight: environment, pinned dagster, gate state"
     )
     doctor_p.add_argument("--repo", default=".", help="repo root to inspect")
     doctor_p.add_argument(

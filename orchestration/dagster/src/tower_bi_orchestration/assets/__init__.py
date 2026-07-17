@@ -14,6 +14,8 @@ from pathlib import Path
 
 from dagster import Failure
 
+from seshat.dagster_adapter.redaction import redact_text
+
 from ..evidence_writer import AssetOutcome, EvidenceWriter
 
 
@@ -28,10 +30,18 @@ def writer_for(context, root: Path) -> EvidenceWriter:
 
 
 def halt(writer: EvidenceWriter, outcome: AssetOutcome) -> None:
-    """Record a halted outcome and FAIL CLOSED (raise ``dagster.Failure``)."""
+    """Record a halted outcome and FAIL CLOSED (raise ``dagster.Failure``).
+
+    ``writer.record`` redacts the persisted row; the raised ``Failure``
+    description is ALSO redacted here (spec 135 T012 / Principle IX). The
+    migrations path only ever put static text in ``blocking_reason``, but the
+    dbt engine can surface child-process text carrying a DSN/host/path, so the
+    description must pass the shared redaction before it reaches the dagster
+    console or run log.
+    """
     writer.record(outcome)
     raise Failure(
-        description=(
+        description=redact_text(
             f"[{outcome.table}] {outcome.asset} {outcome.outcome}: "
             f"{outcome.blocking_reason}"
         )

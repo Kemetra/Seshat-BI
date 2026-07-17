@@ -25,7 +25,7 @@ Slash commands (Claude Code namespaces them by plugin, so invoke as
 - `powerbi-theme` -- theme JSON, palette, typography, filter-pane defaults, backgrounds, canvas.
 - `powerbi-format` -- formatting plans and governed PBIR formatting/geometry.
 - `powerbi-adopt` -- adopt an existing PBIP project through assess/scaffold.
-- `dagster-doctor` -- read-only orchestration preflight (environment, pinned pair, gates).
+- `dagster-doctor` -- read-only orchestration preflight (environment, pinned dagster, gates).
 - `dagster-run` -- execute one governed orchestration job, fail-closed behind every gate.
 - `dagster-evidence` -- list runs or render a run's committed derived evidence.
 

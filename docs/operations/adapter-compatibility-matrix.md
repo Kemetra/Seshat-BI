@@ -86,7 +86,7 @@ fills them from attested evidence via `templates/adapter-version-record.md`.
 | dbt-core version/range | `>=<X>,<<Y>` | `<dbt-core-smoke>` | `<status>` | `<YYYY-MM-DD \| unknown>` | `<named owner \| UNASSIGNED>` |
 | dbt-postgres version/range | `>=<X>,<<Y>` | `<dbt-postgres-smoke>` | `<status>` | `<YYYY-MM-DD \| unknown>` | `<named owner \| UNASSIGNED>` |
 | Dagster version/range | `>=<X>,<<Y>` | `<dagster-smoke>` | `<status>` | `<YYYY-MM-DD \| unknown>` | `<named owner \| UNASSIGNED>` |
-| dagster-dbt version/range | `>=<X>,<<Y>` | `<dagster-dbt-smoke>` | `<status>` | `<YYYY-MM-DD \| unknown>` | `<named owner \| UNASSIGNED>` |
+| dagster-dbt version/range (row retired: removed from the orchestration environment by the spec-135 owner decision, 2026-07-17 -- excluded dbt-core 1.12, sat on no execution path) | `removed` | `n/a` | `removed` | `2026-07-17` | `Ahmed Shaaban` |
 | Power BI PBIP/TMDL assumptions | `<assumed PBIP/TMDL shape; floor tested, ceiling unknown>` | `<pbip-tmdl-smoke>` | `<status>` | `<YYYY-MM-DD \| unknown>` | `<named owner \| UNASSIGNED>` |
 | Power BI MCP adapter status (F016, parked) | `<unknown -- not yet exercised>` | `<pbi-mcp-smoke>` | `unknown` | `unknown` | `UNASSIGNED` |
 

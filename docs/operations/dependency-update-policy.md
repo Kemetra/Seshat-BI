@@ -53,7 +53,7 @@ its `<dependency>` and resolved `<lane>` explicitly.
 | Lane | Membership (examples -- not exhaustive) | Automerge eligible | Named human review |
 |------|------------------------------------------|--------------------|--------------------|
 | **Lane A -- allowed-auto** | Ruff, Pytest, pre-commit / dev tools, GitHub Actions patch/minor, docs tooling | YES, ONLY if every required check is green | not required when checks are green |
-| **Lane B -- human-review-required** | `dbt-core`, `dbt-postgres`, `dagster`, `dagster-dbt`, `psycopg2`, Postgres-driver changes, Power BI modeling utilities | NO | REQUIRED before merge -- green checks are necessary but not sufficient |
+| **Lane B -- human-review-required** | `dbt-core`, `dbt-postgres`, `dagster` (`dagster-dbt` removed by the spec-135 owner decision, 2026-07-17), `psycopg2`, Postgres-driver changes, Power BI modeling utilities | NO | REQUIRED before merge -- green checks are necessary but not sufficient |
 | **Lane C -- never-automerge** | the official Power BI MCP / execution adapter, anything publish-capable, major DB-driver changes, anything touching credentials / auth, anything that changes semantic-model behavior | NO -- forbidden under any check state | REQUIRED before merge |
 
 Classification is a read-only analysis of the diff, the changed packages, and their

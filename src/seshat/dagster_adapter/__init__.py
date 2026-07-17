@@ -10,10 +10,13 @@ readiness ``status``, a ``Gate status``, or an ``approvals[]`` entry.
 
 from __future__ import annotations
 
-# The exact pinned pair the orchestration project must carry (spec 024
-# auto-update posture: pinned TOGETHER, PR-only updates, no automerge majors).
+# The exact dagster pin the orchestration project must carry (spec 024
+# auto-update posture: PR-only updates, no automerge majors). The dagster-dbt
+# pin was DROPPED by spec 135 (FR-011 owner decision, 2026-07-17): no released
+# dagster-dbt accepts dbt-core 1.12 and the dbt engine's execution path never
+# imports dagster-dbt (it routes through seshat.dbt), so the unused library is
+# removed rather than downgrading the spec-133 dbt pins.
 PINNED_DAGSTER = "1.13.14"
-PINNED_DAGSTER_DBT = "0.29.14"
 
 # The canonical asset vocabulary, in graph order (spec 024; the extra
 # live_validate row is the acceptance step recorded alongside the eleven).
