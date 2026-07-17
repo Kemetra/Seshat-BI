@@ -44,3 +44,43 @@ jobs:
         run: python -m pip install --upgrade pip
       - name: Co-resolution gate (fail-closed)
         run: python scripts/dep_coresolve.py --check
+
+  freshness:
+    # The advisory freshness report (US2). Proposes latest-stable bumps of
+    # governed pins, each with a solve-proof; it CHANGES NO pin and opens NO PR
+    # (FR-008/FR-012). Runs on the weekly schedule + on demand; the report is a
+    # CI artifact (FR-011). It is NEVER merge-blocking -- the job always exits 0.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+      - name: Advisory freshness report
+        run: python scripts/dep_coresolve.py --freshness --out freshness-report.json
+      - name: Upload freshness report artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: freshness-report
+          path: |
+            freshness-report.json
+            freshness-report.md
+      - name: Advisory PR comment (opt-in, off by default)
+        # OFF BY DEFAULT (mirrors the ci.yml POST_FRIENDLY_PR_SUMMARY pattern):
+        # a repository that has not set the repo-level Actions variable
+        # POST_DEP_FRESHNESS_COMMENT to "true" sees NO comment posted. The
+        # comment is advisory only and NEVER merge-blocking (FR-011). It is
+        # posted only when a freshness run coincides with an open PR context;
+        # on the weekly schedule there is no PR to comment on, so this step is
+        # a no-op there.
+        if: >-
+          vars.POST_DEP_FRESHNESS_COMMENT == 'true' &&
+          github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Freshness comment posting is opt-in and advisory only."
+          echo "See freshness-report.md (uploaded as an artifact) for the proposals."

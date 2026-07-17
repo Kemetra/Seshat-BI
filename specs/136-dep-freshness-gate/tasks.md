@@ -137,36 +137,36 @@ tracked pin changes.
 
 ### Tests for User Story 2 (RED first)
 
-- [ ] T015 [P] [US2] Write FAILING unit test: latest-stable computation EXCLUDES
+- [x] T015 [P] [US2] Write FAILING unit test: latest-stable computation EXCLUDES
       yanked releases and pre-release/dev/rc versions from a stubbed PyPI JSON
       response (FR-007). Include a pin already on a pre-release: reported as such,
       never proposed as stable.
-- [ ] T016 [P] [US2] Write FAILING unit test: a governed pin behind latest yields a
+- [x] T016 [P] [US2] Write FAILING unit test: a governed pin behind latest yields a
       PROPOSAL carrying a solve-proof result (PASS/RESOLUTION) for the proposed
       substitution (FR-009).
-- [ ] T017 [P] [US2] Write FAILING unit test: a proposed bump whose solve FAILS is
+- [x] T017 [P] [US2] Write FAILING unit test: a proposed bump whose solve FAILS is
       still rendered in the report, marked non-resolving; the report does not crash
       or omit it (FR-010).
-- [ ] T018 [P] [US2] Write FAILING unit test: an upper-bounded pin (e.g. `<2`) whose
+- [x] T018 [P] [US2] Write FAILING unit test: an upper-bounded pin (e.g. `<2`) whose
       latest stable sits above the ceiling is reported honestly, notes the ceiling,
       and runs the solve-proof against the ceiling as declared (edge case).
-- [ ] T019 [P] [US2] Write FAILING unit test: the freshness run mutates NO tracked
+- [x] T019 [P] [US2] Write FAILING unit test: the freshness run mutates NO tracked
       pin value and opens NO PR (assert the reporter is read-only over pyproject
       files; FR-008, FR-012).
 
 ### Implementation for User Story 2
 
-- [ ] T020 [US2] Implement latest-stable computation over the PyPI JSON API via
+- [x] T020 [US2] Implement latest-stable computation over the PyPI JSON API via
       stdlib `urllib` (yanked/pre-release exclusion) to make T015/T018 GREEN
       (FR-007). Yanked semantics are PER-FILE: a release counts as yanked only when
       ALL its files are yanked -- pin with a half-yanked fixture (plan-review D5).
-- [ ] T021 [US2] Implement proposal generation + solve-proof (reuse the T011 resolve
+- [x] T021 [US2] Implement proposal generation + solve-proof (reuse the T011 resolve
       with the proposed version substituted) to make T016/T017 GREEN
       (FR-009, FR-010).
-- [ ] T022 [US2] Implement the `--freshness` entry mode: render JSON + Markdown report
+- [x] T022 [US2] Implement the `--freshness` entry mode: render JSON + Markdown report
       to an output path; read-only over pyproject files; make T019 GREEN
       (FR-008, FR-011, FR-012).
-- [ ] T023 [US2] Add the `freshness` CI job (schedule: weekly + `workflow_dispatch`):
+- [x] T023 [US2] Add the `freshness` CI job (schedule: weekly + `workflow_dispatch`):
       run `--freshness`, upload the report artifact, and gate an OPTIONAL PR comment
       behind an off-by-default repo Actions variable (mirror the existing
       `POST_FRIENDLY_PR_SUMMARY` opt-in pattern; FR-011). The comment is never

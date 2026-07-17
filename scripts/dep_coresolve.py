@@ -469,6 +469,303 @@ def _fetch_pypi_json(dist: str) -> dict:
         raise InfraError(f"PyPI fetch failed for {dist}: {exc}") from exc
 
 
+# --------------------------------------------------------------------------- #
+# Freshness reporting (US2). Advisory only: proposes, never applies (FR-008/12).
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class Proposal:
+    """An advisory freshness record for one governed pin (spec Key Entities).
+
+    Carries the current pin specifier, the latest stable on PyPI, and the
+    solve-proof result for SUBSTITUTING the proposed version (FR-009). It
+    changes no pin and opens no PR (FR-008/FR-012).
+    """
+
+    dist: str
+    env_id: str
+    current: str
+    latest_stable: str
+    solve_outcome: ResolveOutcome
+    solve_detail: str
+
+
+# A pre-release / dev / rc / post local segment marker: any release whose
+# version string carries one of these is not a "stable" target (FR-007).
+_PRERELEASE_RE = re.compile(r"(a|b|rc|c|dev|alpha|beta|pre)\d*", re.IGNORECASE)
+
+
+def _parse_version(version: str) -> tuple[int, ...] | None:
+    """Parse a plain numeric release version into a comparable int tuple.
+
+    stdlib-only (``packaging`` is not a guaranteed dependency), so ordering is
+    NUMERIC, never lexical ("1.10" > "1.9"). Returns ``None`` for a version
+    that is not a plain dotted-numeric release (a pre-release/dev/rc/local),
+    which excludes it from the stable set (FR-007).
+    """
+    core = version.strip()
+    # Reject anything carrying a pre-release/dev marker or a local segment.
+    if "+" in core or _PRERELEASE_RE.search(core):
+        return None
+    parts: list[int] = []
+    for token in core.split("."):
+        if not token.isdigit():
+            return None
+        parts.append(int(token))
+    return tuple(parts) if parts else None
+
+
+def _release_is_yanked(files: object) -> bool:
+    """A release is yanked ONLY when it has files and ALL of them are yanked
+    (plan-review D5, PER-FILE). A release with no files is treated as not
+    installable rather than yanked -- excluded from the stable set separately.
+    """
+    if not isinstance(files, list) or not files:
+        return False
+    return all(isinstance(f, dict) and f.get("yanked") for f in files)
+
+
+def latest_stable(pypi_json: dict) -> str | None:
+    """The highest non-yanked, non-pre-release version on PyPI (FR-007).
+
+    ``pypi_json`` is the PyPI JSON API body (``releases`` maps version ->
+    per-file list). Pre-release/dev/rc versions and FULLY-yanked releases are
+    excluded. Ordering is numeric. Returns ``None`` when no stable release
+    exists.
+    """
+    releases = pypi_json.get("releases", {})
+    best: tuple[int, ...] | None = None
+    best_str: str | None = None
+    for version, files in releases.items():
+        if not isinstance(files, list) or not files:
+            continue
+        if _release_is_yanked(files):
+            continue
+        parsed = _parse_version(str(version))
+        if parsed is None:
+            continue
+        if best is None or parsed > best:
+            best = parsed
+            best_str = str(version)
+    return best_str
+
+
+# --------------------------------------------------------------------------- #
+# Pin -> declared environment mapping + solve-proof (REPLACE semantics, D3).
+# --------------------------------------------------------------------------- #
+
+
+def _canonical(name: str) -> str:
+    """PEP 503 canonical distribution name (lowercase, runs of -_. -> -)."""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def _extra_requirements(project_path: Path, extra: str) -> list[str]:
+    data = tomllib.loads(project_path.read_text(encoding="utf-8"))
+    optional = data.get("project", {}).get("optional-dependencies", {})
+    return [str(r) for r in optional.get(extra, [])]
+
+
+def _requirement_dist(requirement: str) -> str:
+    """The distribution name from a requirement string (drop the specifier)."""
+    return re.split(r"[<>=!~ \[]", requirement.strip(), maxsplit=1)[0]
+
+
+def _find_pin_environment(
+    manifest: Manifest, dist: str
+) -> tuple[Environment, str, str] | None:
+    """Find the declared environment + extra + current specifier that declares
+    ``dist`` as a governed pin. Built from the pyprojects, never hardcoded.
+
+    Returns ``(environment, current_specifier, extra)`` or ``None``.
+    """
+    target = _canonical(dist)
+    for env in manifest.environments:
+        project_path = manifest.root / env.pyproject
+        if not project_path.is_file():
+            continue
+        for extra in env.extras:
+            for req in _extra_requirements(project_path, extra):
+                if _canonical(_requirement_dist(req)) == target:
+                    return env, req, extra
+    return None
+
+
+def _declared_ceiling(specifier: str) -> str | None:
+    """The declared upper-bound clause (``<X`` / ``<=X``) of a requirement
+    specifier, if any -- so D3's ceiling short-circuit can name it."""
+    match = re.search(r"<=?[^,;\s]+", specifier)
+    return match.group(0) if match else None
+
+
+def _violates_ceiling(proposed: str, ceiling: str) -> bool:
+    """True if ``proposed`` violates a ``<X`` / ``<=X`` ceiling (numeric)."""
+    inclusive = ceiling.startswith("<=")
+    bound = ceiling.lstrip("<=")
+    prop = _parse_version(proposed)
+    limit = _parse_version(bound)
+    if prop is None or limit is None:
+        return False
+    return prop > limit or (prop == limit and not inclusive)
+
+
+def _substituted_requirements(
+    manifest: Manifest, env: Environment, extra: str, dist: str, proposed: str
+) -> list[str]:
+    """The affected environment's extra requirement list with the target pin's
+    specifier REPLACED by ``dist==proposed`` (FR-009 substitution semantics).
+
+    Read from the LOCAL pyproject (so it still reflects the PR's declared
+    pins, D1) but assembled as an EXPLICIT requirement list rather than the
+    ``<path>[extra]`` local install -- otherwise the local metadata would
+    re-impose the current pin and every exact-pinned bump would trivially
+    conflict against itself (the ADD-vs-REPLACE trap).
+    """
+    project_path = manifest.root / env.pyproject
+    target = _canonical(dist)
+    reqs: list[str] = []
+    for req in _extra_requirements(project_path, extra):
+        if _canonical(_requirement_dist(req)) == target:
+            reqs.append(f"{dist}=={proposed}")
+        else:
+            reqs.append(req)
+    return reqs
+
+
+def _solve_proof(
+    manifest: Manifest,
+    env: Environment,
+    extra: str,
+    dist: str,
+    current: str,
+    proposed: str,
+) -> tuple[ResolveOutcome, str]:
+    """Prove whether ``dist==proposed`` co-resolves in its declared environment.
+
+    D3: ALWAYS substitutes the proposed version. If the pin's own DECLARED
+    CEILING forbids the proposed version, records RESOLUTION naming that
+    ceiling BY CONSTRUCTION (that is the actionable info -- what the owner
+    would have to relax), rather than relying on a resolver round-trip that a
+    lone ceiling would not reproduce. Otherwise runs the real resolve.
+    """
+    ceiling = _declared_ceiling(current)
+    if ceiling is not None and _violates_ceiling(proposed, ceiling):
+        return (
+            ResolveOutcome.RESOLUTION,
+            f"proposed {dist}=={proposed} exceeds the declared ceiling "
+            f"'{ceiling}' in '{current}' (owner would have to relax it)",
+        )
+    requirements = _substituted_requirements(manifest, env, extra, dist, proposed)
+    result = _resolve_reqs(f"{env.id}+{dist}=={proposed}", requirements)
+    return result.outcome, result.detail
+
+
+def propose_bumps(manifest: Manifest) -> list[Proposal]:
+    """For each governed pin behind its latest stable, emit an advisory
+    PROPOSAL carrying a solve-proof (FR-008/FR-009). Read-only: mutates no pin,
+    opens no PR (FR-012). A pin at/above latest yields no proposal.
+    """
+    proposals: list[Proposal] = []
+    for pin in manifest.governed_pins:
+        located = _find_pin_environment(manifest, pin.dist)
+        if located is None:
+            continue
+        env, specifier, extra = located
+        latest = latest_stable(_fetch_pypi_json(pin.dist))
+        if latest is None:
+            continue
+        current_ver = _extract_pinned_version(specifier)
+        if current_ver is not None and not _is_newer(latest, current_ver):
+            continue
+        outcome, detail = _solve_proof(
+            manifest, env, extra, pin.dist, specifier or "", latest
+        )
+        proposals.append(
+            Proposal(
+                dist=pin.dist,
+                env_id=env.id,
+                current=current_ver if current_ver is not None else specifier,
+                latest_stable=latest,
+                solve_outcome=outcome,
+                solve_detail=detail,
+            )
+        )
+    return proposals
+
+
+def _extract_pinned_version(specifier: str) -> str | None:
+    """The version from an ``==X`` exact pin, else the floor from ``>=X``,
+    else None -- enough to decide 'is latest newer than what we declare'."""
+    exact = re.search(r"==\s*([^,;\s]+)", specifier)
+    if exact:
+        return exact.group(1)
+    floor = re.search(r">=\s*([^,;\s]+)", specifier)
+    if floor:
+        return floor.group(1)
+    return None
+
+
+def _is_newer(candidate: str, baseline: str) -> bool:
+    cand = _parse_version(candidate)
+    base = _parse_version(baseline)
+    if cand is None or base is None:
+        return candidate != baseline
+    return cand > base
+
+
+def render_freshness_markdown(proposals: list[Proposal]) -> str:
+    """Render the advisory freshness report as Markdown (FR-011).
+
+    Every proposal is rendered, including one whose solve FAILED -- marked
+    'does not resolve', never omitted or crashed (FR-010).
+    """
+    lines = ["# Dependency freshness proposals (advisory)", ""]
+    lines.append(
+        "Governed pins are NEVER auto-bumped. Each row PROPOSES a bump to the "
+        "owner and records whether the proposed version co-resolves. No pin "
+        "value was changed and no pull request was opened."
+    )
+    lines.append("")
+    if not proposals:
+        lines.append("All governed pins are at their latest stable. No proposal.")
+        return "\n".join(lines) + "\n"
+    lines.append(
+        "| distribution | environment | current | latest stable | solve-proof |"
+    )
+    lines.append("|---|---|---|---|---|")
+    for p in proposals:
+        if p.solve_outcome is ResolveOutcome.PASS:
+            proof = "proposed, resolves"
+        elif p.solve_outcome is ResolveOutcome.RESOLUTION:
+            proof = f"proposed, does not resolve ({redact(p.solve_detail)})"
+        else:
+            proof = f"proposed, {p.solve_outcome.value} ({redact(p.solve_detail)})"
+        lines.append(
+            f"| {p.dist} | {p.env_id} | {p.current} | {p.latest_stable} | {proof} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def render_freshness_json(proposals: list[Proposal]) -> str:
+    return json.dumps(
+        {
+            "proposals": [
+                {
+                    "dist": p.dist,
+                    "environment": p.env_id,
+                    "current": p.current,
+                    "latest_stable": p.latest_stable,
+                    "solve_outcome": p.solve_outcome.value,
+                    "solve_detail": redact(p.solve_detail),
+                }
+                for p in proposals
+            ]
+        },
+        indent=2,
+    )
+
+
 def _print_result(result: ResolveResult) -> None:
     if result.outcome is ResolveOutcome.PASS:
         print(f"[PASS] {result.target_id}: {result.detail}")
@@ -479,7 +776,19 @@ def _print_result(result: ResolveResult) -> None:
 
 def _exit_code_for(results: list[ResolveResult]) -> int:
     """Fail closed: any RESOLUTION or CONFIG -> EXIT_RESOLUTION; else if any
-    INFRA -> the distinct EXIT_INFRA; else EXIT_OK (FR-003/FR-004/SC-004)."""
+    INFRA -> the distinct EXIT_INFRA; else EXIT_OK (FR-003/FR-004/SC-004).
+
+    Conscious call on FR-005's "CONFIG distinguishable from both INFRA and
+    RESOLUTION": the four OUTCOMES are distinct (the machine-readable
+    ``ResolveOutcome`` enum + the ``[CONFIG]``/``[RESOLUTION]`` output label),
+    which is where FR-005's distinction lives. The EXIT CODE space is
+    deliberately two-valued for the fail/retry decision CI actually makes:
+    CONFIG and RESOLUTION both fail CLOSED (a bad manifest and a real conflict
+    both block, non-zero, and neither is retryable), while INFRA alone earns a
+    distinct code because it is the one retryable/annotatable case (SC-004). A
+    reviewer reading the printed ``[CONFIG]`` line still tells a bad-manifest
+    from a conflict; only the coarse retry signal is shared.
+    """
     outcomes = {r.outcome for r in results}
     if ResolveOutcome.RESOLUTION in outcomes or ResolveOutcome.CONFIG in outcomes:
         return EXIT_RESOLUTION
@@ -518,8 +827,23 @@ def run_check(manifest_path: Path) -> int:
     return code
 
 
-def run_freshness(manifest_path: Path, out: str | None) -> int:  # implemented in T022
-    raise NotImplementedError
+def run_freshness(manifest_path: Path, out: str | None) -> int:
+    """The advisory freshness reporter (T022, FR-011).
+
+    Writes a JSON report to ``out`` (default ``freshness-report.json``) and a
+    sibling Markdown report. Read-only over pyproject files; opens no PR
+    (FR-008/FR-012). Never a merge-blocking verdict -- it always returns
+    EXIT_OK; a non-resolving proposal is rendered, not a failure.
+    """
+    manifest = load_manifest(manifest_path)
+    proposals = propose_bumps(manifest)
+    out_json = Path(out) if out else (_REPO_ROOT / "freshness-report.json")
+    out_md = out_json.with_suffix(".md")
+    out_json.write_text(render_freshness_json(proposals), encoding="utf-8")
+    out_md.write_text(render_freshness_markdown(proposals), encoding="utf-8")
+    print(f"freshness report written: {out_json} (+ {out_md.name})")
+    print(f"{len(proposals)} proposal(s); no pin changed, no PR opened")
+    return EXIT_OK
 
 
 def _main(argv: list[str]) -> int:
