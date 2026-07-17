@@ -34,14 +34,17 @@ no secrets.
 **Purpose**: make the orchestration environment able to run the dbt engine, with
 the main package unchanged.
 
-- [ ] T001 [SETUP] Add `seshat-bi[dbt]` to the orchestration venv dependencies in
-  `orchestration/dagster/pyproject.toml` (dagster + dagster-dbt already pinned
-  together); do NOT touch the main package `pyproject.toml`. Record the exact
-  added line. FIRST prove the four pins co-resolve in a fresh venv solve
-  (dagster 1.13.14 + dagster-dbt 0.29.14 + dbt-core 1.12.0 + dbt-postgres
-  1.10.2) and record the solver output; on a solve failure STOP and surface to
-  the owner -- bumping either pinned pair is spec-133/134 governance, never an
-  implementer call (plan-review R3).
+- [ ] T001 [SETUP] In `orchestration/dagster/pyproject.toml`: REMOVE the
+  `dagster-dbt==0.29.14` pin (FR-011 owner decision resolving plan-review R3:
+  it excludes dbt-core 1.12 and sits on no execution path) and ADD
+  `seshat-bi[dbt]`; do NOT touch the main package `pyproject.toml`. Prove the
+  resulting solve in a fresh venv (dagster 1.13.14 + seshat-bi[dbt] ->
+  dbt-core 1.12.0 + dbt-postgres 1.10.2) and record the solver output. Then
+  reconcile every surface asserting the old dagster/dagster-dbt pinned pair to
+  the dagster-only reality: `seshat.dagster_adapter` PINNED_* constants and
+  doctor findings, the definitions-load smoke, spec-134-era contract tests that
+  pin the pair, and living docs -- each recording the removal as a deliberate
+  owner decision, never silently.
 - [ ] T002 [P] [SETUP] Confirm the `.gitignore` baseline still ignores raw dbt
   `target/`/`logs/`/local lock files and `.seshat/dagster/runs/` (spec 133 FR-030
   / spec 134); add nothing that ignores a committed `definition/`, `dbt/models`,

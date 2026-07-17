@@ -23,9 +23,10 @@ is a separate Python project with its own venv.
 
 **Primary Dependencies**: main `seshat` package unchanged (`pyyaml>=6`, stdlib
 static core, NO dagster/dagster-dbt/dbt). Orchestration venv:
-`dagster==1.13.14` + `dagster-dbt==0.29.14` (already pinned together), plus
-`seshat-bi[dbt]` (brings `dbt-core==1.12.0` + `dbt-postgres==1.10.2`, the spec-133
-pinned pair) and `psycopg2-binary` for the migrations path.
+`dagster==1.13.14` plus `seshat-bi[dbt]` (brings `dbt-core==1.12.0` +
+`dbt-postgres==1.10.2`, the spec-133 pinned pair) and `psycopg2-binary` for the
+migrations path. `dagster-dbt` is REMOVED (FR-011 owner decision, 2026-07-17):
+it excludes dbt-core 1.12 (ResolutionImpossible) and sits on no execution path.
 
 **Storage**: committed mappings, the `dbt/` project, dagster run-evidence markdown
 (`orchestration/dagster/run-evidence/<run-id>.md`), and the distinct dbt
@@ -164,10 +165,11 @@ dependency; the doctor edit lives in the existing control layer.
    asset wiring (`@dbt_assets` / a raw `DbtCliResource`). Native dagster-dbt wiring
    would run dbt directly and BYPASS the accept-plan digest recompute and the
    governed gate (spec 133 FR-023/FR-025) -- so it is intentionally NOT used. The
-   `dagster-dbt` pin therefore remains an INHERITED pin from spec 134 (already in
-   `orchestration/dagster/pyproject.toml`, kept because dagster requires a
-   compatible dagster-dbt in the same environment); this feature does NOT put the
-   `dagster-dbt` library on a new execution path. What lands on the dbt engine's
+   `dagster-dbt` pin is REMOVED by this feature (FR-011 owner decision): the
+   solve proof showed dagster-dbt excludes dbt-core 1.12, and since the library
+   sits on no execution path, removal -- not a dbt downgrade -- resolves the
+   conflict; doctor/smoke/docs surfaces asserting the old pinned pair are
+   reconciled to dagster-only. What lands on the dbt engine's
    execution path is `seshat-bi[dbt]` (the governed control layer), not the
    `dagster-dbt` library. This is the one place naming and mechanism could read as
    disagreeing; the mechanism is the authority.
@@ -231,12 +233,12 @@ dependency; the doctor edit lives in the existing control layer.
   that REAL warehouse. Evidence records `warehouse_updated: false` under dbt, and
   doctor warns on mixed-engine tables (FR-015, plan-review R2).
 
-- **The four pins must co-resolve BEFORE anything is built on them.** dagster
-  1.13.14 + dagster-dbt 0.29.14 + dbt-core 1.12.0 + dbt-postgres 1.10.2 land in
-  ONE venv; dagster-dbt declares its own dbt-core range. T001 proves the fresh
-  solve first and records it; a solve failure STOPS the feature and goes to the
-  owner (bumping either pinned pair is spec-133/134 governance, not an
-  implementer call) -- plan-review R3.
+- **The pins must co-resolve BEFORE anything is built on them (R3) -- RESOLVED.**
+  The T001 solve proof FAILED as R3 anticipated: dagster-dbt 0.29.14 declares
+  dbt-core <1.12, excluding the spec-133 pin (ResolutionImpossible, confirmed in
+  isolation). Owner decision (2026-07-17): DROP the unused dagster-dbt pin; keep
+  dagster 1.13.14 + seshat-bi[dbt] intact. T001 now proves THAT solve and
+  reconciles the pinned-pair surfaces (doctor, smoke, docs, contract tests).
 
 - **Lock semantics under unattended kill.** The bridge inherits
   `seshat.dbt.runner`'s bounded cross-process lock. Contention or a stale holder
