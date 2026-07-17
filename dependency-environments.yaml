@@ -15,15 +15,16 @@
 # PyPI's PUBLISHED copy resolves, not the PR's working tree -- defeating the
 # whole point. `path` is the directory pip installs (`<path>[extras]`).
 #
-# HISTORICAL-INCIDENT NOTE (spec 136, SC-001): while spec 135 (PR #307) is
-# unmerged on its own branch, the orchestration project here still pins
-# dagster-dbt==0.29.14, which declares dbt-core<1.12, while the root `dbt` extra
-# pins dbt-core==1.12.0. The `root-dbt-plus-orchestration` cross-product below
-# therefore genuinely FAILS to resolve (ResolutionImpossible). That is the
-# historical incident reproducing -- it is the PROOF the gate works (SC-001),
-# NOT a defect in the gate. The co-resolution CI job goes green only after
-# PR #307 merges and the cross-product resolves; the gate is never weakened and
-# the cross-product is never dropped to force a local pass.
+# HISTORICAL-INCIDENT NOTE (spec 136, SC-001): before spec 135 (PR #307) merged,
+# the orchestration project here still pinned dagster-dbt==0.29.14, which
+# declares dbt-core<1.12, while the root `dbt` extra pins dbt-core==1.12.0. The
+# `root-dbt-plus-orchestration` cross-product below genuinely FAILED to resolve
+# (ResolutionImpossible) at that point -- that was the historical incident
+# reproducing, and it is the PROOF the gate works (SC-001), NOT a defect in the
+# gate. PR #307 has since merged and dropped the dagster-dbt pin, so the
+# cross-product now resolves cleanly and the co-resolution CI job is green; the
+# gate is never weakened and the cross-product is never dropped to force a
+# local pass.
 version: 1
 
 environments:

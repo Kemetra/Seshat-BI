@@ -16,21 +16,21 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: build
-    labels:
-      - dependencies
+    labels: []
 
   # Orchestration project (spec 136, FR-013): the /orchestration/dagster pip
   # environment was UNWATCHED before this change -- the exact coverage hole that
   # let the spec-134 dagster pin drift unseen. Dependabot parses this manifest
   # today: its `dependencies` are all NAMED PyPI distributions (dagster,
-  # dagster-dbt, psycopg2-binary, pyyaml); the repo-local seshat-bi dependency is
-  # supplied at INSTALL time (`uv pip install -e ../..`), not declared in the
-  # pyproject metadata, so there is no local/direct reference for Dependabot to
-  # refuse (plan-review D4). Should spec 135 later add a repository-local
-  # `seshat-bi[dbt]` reference to this pyproject's metadata and Dependabot then
-  # refuse the whole manifest, the fallback is to keep this directory watched for
-  # its remaining NAMED pins and record the local-reference limitation here --
-  # partial coverage recorded honestly, never claimed as full.
+  # psycopg2-binary, pyyaml -- the dagster-dbt pin spec 135 later dropped is gone
+  # from this list); the repo-local seshat-bi dependency is supplied at INSTALL
+  # time (`uv pip install -e ../..`), not declared in the pyproject metadata, so
+  # there is no local/direct reference for Dependabot to refuse (plan-review
+  # D4). Should a future change add a repository-local `seshat-bi[dbt]`
+  # reference to this pyproject's metadata and Dependabot then refuse the whole
+  # manifest, the fallback is to keep this directory watched for its remaining
+  # NAMED pins and record the local-reference limitation here -- partial
+  # coverage recorded honestly, never claimed as full.
   - package-ecosystem: pip
     directory: "/orchestration/dagster"
     schedule:
@@ -38,8 +38,7 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: build
-    labels:
-      - dependencies
+    labels: []
 
   # GitHub Actions. The workflows pin actions by commit SHA (see the security
   # scan finding `actions-tag-pinned-not-sha`); Dependabot keeps those SHAs
@@ -55,6 +54,4 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-    labels:
-      - dependencies
-      - ci
+    labels: []

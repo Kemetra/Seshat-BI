@@ -27,6 +27,61 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+### Added
+- **Activated the `dagster-dbt` engine seam** (spec 135, PR #307): `silver_tables` /
+  `gold_tables` gain a SELECTABLE build engine -- when a table's committed
+  `mappings/<table>/build-engine.yaml` names `dbt` for a layer, that layer's build
+  routes through the governed `seshat.dbt` control layer (plan -> self-accepted
+  accept-plan digest -> isolated shadow-schema build) instead of the default
+  `warehouse/migrations/*.sql` path, with identical gate semantics (same
+  `seshat check` exit codes, still downstream of the `source_map` HUMAN SEAM,
+  still fail-closed). The unused `dagster-dbt` library pin was dropped from
+  `orchestration/dagster/` (FR-011 owner decision, Ahmed Shaaban, 2026-07-17): no
+  released `dagster-dbt` accepts `dbt-core` 1.12, and the engine's execution path
+  never imports it. The dbt engine remains a governed rehearsal into isolated
+  shadow schemas (`warehouse_updated: false`); migrations stay the default, the
+  parity oracle, and the rollback path until a named human retires them. Live dbt
+  drive stays `[PENDING LIVE PROFILE]` (`docs/operations/dbt-activation-status.yaml`).
+- **Governed dependency co-resolution and freshness gate** (spec 136, PR #308):
+  a new `dep-integrity` CI workflow resolves every declared install environment
+  and cross-product listed in `dependency-environments.yaml` in an ephemeral venv
+  (`scripts/dep_coresolve.py --check`), catching on the day it lands the exact
+  class of conflict that let the spec-133/134 `dagster-dbt` vs. `dbt-core` pin
+  mismatch sit unseen on `main`. A weekly advisory freshness reporter proposes
+  latest-stable bumps of governed pins with a solve-proof but changes no pin and
+  opens no PR. The previously-unwatched `/orchestration/dagster` pip environment
+  is now covered by Dependabot.
+
+### Changed
+- **GitHub Sponsors enabled** (PRs #309, #313): `.github/FUNDING.yml` points at
+  the verified `Kemetra` Sponsors profile, and the README carries a prominent
+  sponsor call-to-action.
+- **CI action pins bumped** (Dependabot, PRs #310, #311): `.github/workflows/dagster-smoke.yml`
+  moves to `actions/checkout@7` and `actions/setup-python@6`.
+
+### Fixed
+- **Stale "unmerged" wording in the dependency co-resolution gate's
+  historical-incident note** (`dependency-environments.yaml`,
+  `.github/workflows/dep-integrity.yml`, `docs/tools/dep-integrity.md`): the note
+  described spec 135 / PR #307 as still unmerged and the
+  `root-dbt-plus-orchestration` cross-product as still failing to resolve; both
+  merged and the cross-product resolves cleanly, so the note is reworded to the
+  past tense without losing the historical record of the incident it proves the
+  gate catches.
+- **Stale `dagster-dbt` reference in the Dependabot orchestration-coverage
+  comment** (`.github/dependabot.yml`): the comment describing the
+  `/orchestration/dagster` manifest's named PyPI distributions still listed
+  `dagster-dbt`, which spec 135 had already removed from that project's
+  `pyproject.toml`; corrected to the current dependency set.
+- **Dependabot config referenced two GitHub labels (`dependencies`, `ci`) that do
+  not exist in this repository**: set `labels: []` on each `.github/dependabot.yml`
+  entry rather than leaving a dangling reference to missing labels. Simply
+  deleting the `labels:` key (the initial fix) was wrong -- per GitHub's
+  Dependabot config reference, an unset `labels` key falls back to the default
+  `dependencies` label and Dependabot creates it if absent, which is the exact
+  outcome this change is meant to avoid (caught by automated PR review on
+  PR #314). No label was created.
+
 ## [0.4.0] -- 2026-07-17
 
 ### Added

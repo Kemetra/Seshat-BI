@@ -18,6 +18,16 @@ without skipping the human decisions that make analytics trustworthy.
 [![PostgreSQL](https://img.shields.io/badge/Warehouse-PostgreSQL-0B9A9A?style=flat-square&logo=postgresql&logoColor=F7F1E7&labelColor=001E35)](#how-it-works)
 [![Power BI](https://img.shields.io/badge/BI-Power%20BI%20PBIP-C69214?style=flat-square&logo=powerbi&logoColor=001E35&labelColor=001E35)](#how-it-works)
 
+<br />
+
+<a href="https://github.com/sponsors/Kemetra">
+  <img src="https://img.shields.io/badge/Sponsor%20Seshat%20BI-Support%20the%20public%20roadmap-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor Seshat BI through GitHub Sponsors" height="46" />
+</a>
+<br />
+<sub>Fund open-source work on validation, compatibility, documentation, and agent safety.</sub>
+
+<br /><br />
+
 [**Run the demo**](#see-it-work) &nbsp;&middot;&nbsp;
 [**Start contributing**](docs/contributing/first-contribution.md) &nbsp;&middot;&nbsp;
 [**Sponsor a roadmap lane**](#sponsor-seshat-bi)

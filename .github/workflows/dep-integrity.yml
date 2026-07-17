@@ -27,16 +27,15 @@ jobs:
     # The fail-closed co-resolution proof (US1). Resolves every declared
     # environment and cross-product in dependency-environments.yaml.
     #
-    # HISTORICAL-INCIDENT NOTE (SC-001): while spec 135 (PR #307) is unmerged,
-    # the orchestration project still pins dagster-dbt==0.29.14 (dbt-core<1.12)
+    # HISTORICAL-INCIDENT NOTE (SC-001): before spec 135 (PR #307) merged, the
+    # orchestration project still pinned dagster-dbt==0.29.14 (dbt-core<1.12)
     # while the root `dbt` extra pins dbt-core==1.12.0, so the
-    # `root-dbt-plus-orchestration` cross-product genuinely FAILS to resolve
-    # (ResolutionImpossible). That failure IS the proof the gate works -- it is
-    # the historical incident reproducing, not a gate defect. The job's stdout
-    # names the failing cross-product and prints the resolver's own text. This
-    # job goes green only after PR #307 merges and the cross-product resolves;
-    # the gate is never weakened and the cross-product is never dropped to force
-    # a local pass.
+    # `root-dbt-plus-orchestration` cross-product genuinely FAILED to resolve
+    # (ResolutionImpossible). That failure WAS the proof the gate works -- it
+    # was the historical incident reproducing, not a gate defect. PR #307 has
+    # since merged and dropped the dagster-dbt pin, so the cross-product now
+    # resolves cleanly and this job is green; the gate is never weakened and
+    # the cross-product is never dropped to force a local pass.
     runs-on: ubuntu-latest
     permissions:
       contents: read

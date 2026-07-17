@@ -81,10 +81,11 @@ a HUMAN action taken on a proposal (Principle V).
 
 ## Historical-incident note (SC-001)
 
-While spec 135 (PR #307) is unmerged, the orchestration project still pins
+Before spec 135 (PR #307) merged, the orchestration project still pinned
 `dagster-dbt==0.29.14` (which requires `dbt-core<1.12`) while the root `dbt` extra
-pins `dbt-core==1.12.0`. The `root-dbt-plus-orchestration` cross-product therefore
-genuinely FAILS to resolve -- that is the historical incident reproducing, and it
-is the PROOF the gate works (SC-001), not a defect in the gate. The `co-resolution`
-CI job goes green only after PR #307 merges and the cross-product resolves. The gate
-is never weakened and the cross-product is never dropped to force a local pass.
+pins `dbt-core==1.12.0`. The `root-dbt-plus-orchestration` cross-product genuinely
+FAILED to resolve at that point -- that was the historical incident reproducing,
+and it is the PROOF the gate works (SC-001), not a defect in the gate. PR #307 has
+since merged and dropped the `dagster-dbt` pin, so the cross-product now resolves
+cleanly and the `co-resolution` CI job is green. The gate is never weakened and the
+cross-product is never dropped to force a local pass.
