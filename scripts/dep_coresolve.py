@@ -135,6 +135,23 @@ class ResolveRun:
     report_json: str | None
 
 
+def _parse_environment(entry: dict) -> Environment:
+    return Environment(
+        id=str(entry["id"]),
+        pyproject=str(entry["pyproject"]),
+        extras=tuple(str(x) for x in (entry.get("extras") or [])),
+        local=bool(entry.get("local", False)),
+        path=(str(entry["path"]) if entry.get("path") is not None else None),
+    )
+
+
+def _parse_cross_product(entry: dict) -> CrossProduct:
+    return CrossProduct(
+        id=str(entry["id"]),
+        combine=tuple(str(m) for m in (entry.get("combine") or [])),
+    )
+
+
 def load_manifest(path: Path) -> Manifest:
     """Parse the committed environments manifest into typed records (FR-001).
 
@@ -145,32 +162,23 @@ def load_manifest(path: Path) -> Manifest:
     doc = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(doc, dict):
         raise ValueError(f"manifest is not a mapping: {path}")
-    environments = tuple(
-        Environment(
-            id=str(e["id"]),
-            pyproject=str(e["pyproject"]),
-            extras=tuple(str(x) for x in (e.get("extras") or [])),
-            local=bool(e.get("local", False)),
-            path=(str(e["path"]) if e.get("path") is not None else None),
-        )
-        for e in (doc.get("environments") or [])
-    )
-    cross_products = tuple(
-        CrossProduct(
-            id=str(c["id"]),
-            combine=tuple(str(m) for m in (c.get("combine") or [])),
-        )
-        for c in (doc.get("cross_products") or [])
-    )
-    governed_pins = tuple(
-        GovernedPin(dist=str(p["dist"])) for p in (doc.get("governed_pins") or [])
-    )
     return Manifest(
         root=path.resolve().parent,
-        environments=environments,
-        cross_products=cross_products,
-        governed_pins=governed_pins,
+        environments=tuple(map(_parse_environment, _section(doc, "environments"))),
+        cross_products=tuple(
+            map(_parse_cross_product, _section(doc, "cross_products"))
+        ),
+        governed_pins=tuple(map(_parse_governed_pin, _section(doc, "governed_pins"))),
     )
+
+
+def _section(doc: dict, key: str) -> list:
+    """One manifest section as a list (an absent/None section is empty)."""
+    return doc.get(key) or []
+
+
+def _parse_governed_pin(entry: dict) -> GovernedPin:
+    return GovernedPin(dist=str(entry["dist"]))
 
 
 # --------------------------------------------------------------------------- #
@@ -197,11 +205,22 @@ def _assemble_member(manifest: Manifest, env: Environment) -> str:
     published copy. The pyproject is read only to VALIDATE the declared extras
     exist (FR-005); the version pins are resolved by pip from that same tree.
     """
+    _validate_member(manifest, env)
+    local_dir = (manifest.root / env.path).resolve()  # type: ignore[arg-type]
+    extras_suffix = f"[{','.join(env.extras)}]" if env.extras else ""
+    return f"{local_dir.as_posix()}{extras_suffix}"
+
+
+def _require_pyproject(manifest: Manifest, env: Environment) -> Path:
     project_path = manifest.root / env.pyproject
     if not project_path.is_file():
         raise ConfigError(
             f"environment {env.id!r}: pyproject not found: {env.pyproject}"
         )
+    return project_path
+
+
+def _require_defined_extras(env: Environment, project_path: Path) -> None:
     defined = _read_pyproject_extras(project_path)
     unknown = [x for x in env.extras if x not in defined]
     if unknown:
@@ -209,14 +228,21 @@ def _assemble_member(manifest: Manifest, env: Environment) -> str:
             f"environment {env.id!r}: undefined extra(s) {unknown} "
             f"(defined: {sorted(defined)})"
         )
+
+
+def _require_local(env: Environment) -> None:
     if not env.local or env.path is None:
         raise ConfigError(
             f"environment {env.id!r}: only repository-local projects are "
             "supported; mark 'local: true' with a 'path'"
         )
-    local_dir = (manifest.root / env.path).resolve()
-    extras_suffix = f"[{','.join(env.extras)}]" if env.extras else ""
-    return f"{local_dir.as_posix()}{extras_suffix}"
+
+
+def _validate_member(manifest: Manifest, env: Environment) -> None:
+    """Fail-closed CONFIG validation of one declared environment (FR-005)."""
+    project_path = _require_pyproject(manifest, env)
+    _require_defined_extras(env, project_path)
+    _require_local(env)
 
 
 def assemble_requirements(manifest: Manifest, env: Environment) -> list[str]:
@@ -224,16 +250,22 @@ def assemble_requirements(manifest: Manifest, env: Environment) -> list[str]:
     return [_assemble_member(manifest, env)]
 
 
+def _member_environment(
+    manifest: Manifest, cp: CrossProduct, member_id: str
+) -> Environment:
+    env = manifest.by_id(member_id)
+    if env is None:
+        raise ConfigError(f"cross-product {cp.id!r}: unknown member {member_id!r}")
+    return env
+
+
 def assemble_cross_product(manifest: Manifest, cp: CrossProduct) -> list[str]:
     """Union the requirement sets of a cross-product's members (T012)."""
     reqs: list[str] = []
-    for member_id in cp.combine:
-        env = manifest.by_id(member_id)
-        if env is None:
-            raise ConfigError(f"cross-product {cp.id!r}: unknown member {member_id!r}")
-        for req in assemble_requirements(manifest, env):
-            if req not in reqs:
-                reqs.append(req)
+    members = [_member_environment(manifest, cp, m) for m in cp.combine]
+    for req in (r for env in members for r in assemble_requirements(manifest, env)):
+        if req not in reqs:
+            reqs.append(req)
     return reqs
 
 
@@ -572,23 +604,51 @@ def _requirement_dist(requirement: str) -> str:
     return re.split(r"[<>=!~ \[]", requirement.strip(), maxsplit=1)[0]
 
 
-def _find_pin_environment(
-    manifest: Manifest, dist: str
-) -> tuple[Environment, str, str] | None:
-    """Find the declared environment + extra + current specifier that declares
-    ``dist`` as a governed pin. Built from the pyprojects, never hardcoded.
+@dataclass(frozen=True)
+class PinLocation:
+    """Where a governed pin is declared: its environment, extra, the current
+    requirement specifier, and the distribution name -- bundled so the
+    solve-proof does not thread five positional arguments."""
 
-    Returns ``(environment, current_specifier, extra)`` or ``None``.
-    """
+    env: Environment
+    extra: str
+    specifier: str
+    dist: str
+
+
+def _pin_in_extra(
+    manifest: Manifest, env: Environment, extra: str, target: str
+) -> str | None:
+    """The current specifier declaring ``target`` in one env/extra, or None."""
+    project_path = manifest.root / env.pyproject
+    for req in _extra_requirements(project_path, extra):
+        if _canonical(_requirement_dist(req)) == target:
+            return req
+    return None
+
+
+def _pin_in_environment(
+    manifest: Manifest, env: Environment, dist: str, target: str
+) -> PinLocation | None:
+    """A PinLocation if ``env`` declares ``dist`` in one of its extras, else None."""
+    if not (manifest.root / env.pyproject).is_file():
+        return None
+    for extra in env.extras:
+        specifier = _pin_in_extra(manifest, env, extra, target)
+        if specifier is not None:
+            return PinLocation(env=env, extra=extra, specifier=specifier, dist=dist)
+    return None
+
+
+def _find_pin_environment(manifest: Manifest, dist: str) -> PinLocation | None:
+    """Find the declared environment/extra/specifier that declares ``dist`` as a
+    governed pin. Built from the pyprojects, never hardcoded. Returns None if no
+    declared environment references the distribution."""
     target = _canonical(dist)
     for env in manifest.environments:
-        project_path = manifest.root / env.pyproject
-        if not project_path.is_file():
-            continue
-        for extra in env.extras:
-            for req in _extra_requirements(project_path, extra):
-                if _canonical(_requirement_dist(req)) == target:
-                    return env, req, extra
+        found = _pin_in_environment(manifest, env, dist, target)
+        if found is not None:
+            return found
     return None
 
 
@@ -611,7 +671,7 @@ def _violates_ceiling(proposed: str, ceiling: str) -> bool:
 
 
 def _substituted_requirements(
-    manifest: Manifest, env: Environment, extra: str, dist: str, proposed: str
+    manifest: Manifest, loc: PinLocation, proposed: str
 ) -> list[str]:
     """The affected environment's extra requirement list with the target pin's
     specifier REPLACED by ``dist==proposed`` (FR-009 substitution semantics).
@@ -622,24 +682,17 @@ def _substituted_requirements(
     re-impose the current pin and every exact-pinned bump would trivially
     conflict against itself (the ADD-vs-REPLACE trap).
     """
-    project_path = manifest.root / env.pyproject
-    target = _canonical(dist)
-    reqs: list[str] = []
-    for req in _extra_requirements(project_path, extra):
-        if _canonical(_requirement_dist(req)) == target:
-            reqs.append(f"{dist}=={proposed}")
-        else:
-            reqs.append(req)
-    return reqs
+    project_path = manifest.root / loc.env.pyproject
+    target = _canonical(loc.dist)
+    substitute = f"{loc.dist}=={proposed}"
+    return [
+        substitute if _canonical(_requirement_dist(req)) == target else req
+        for req in _extra_requirements(project_path, loc.extra)
+    ]
 
 
 def _solve_proof(
-    manifest: Manifest,
-    env: Environment,
-    extra: str,
-    dist: str,
-    current: str,
-    proposed: str,
+    manifest: Manifest, loc: PinLocation, proposed: str
 ) -> tuple[ResolveOutcome, str]:
     """Prove whether ``dist==proposed`` co-resolves in its declared environment.
 
@@ -649,15 +702,15 @@ def _solve_proof(
     would have to relax), rather than relying on a resolver round-trip that a
     lone ceiling would not reproduce. Otherwise runs the real resolve.
     """
-    ceiling = _declared_ceiling(current)
+    ceiling = _declared_ceiling(loc.specifier)
     if ceiling is not None and _violates_ceiling(proposed, ceiling):
         return (
             ResolveOutcome.RESOLUTION,
-            f"proposed {dist}=={proposed} exceeds the declared ceiling "
-            f"'{ceiling}' in '{current}' (owner would have to relax it)",
+            f"proposed {loc.dist}=={proposed} exceeds the declared ceiling "
+            f"'{ceiling}' in '{loc.specifier}' (owner would have to relax it)",
         )
-    requirements = _substituted_requirements(manifest, env, extra, dist, proposed)
-    result = _resolve_reqs(f"{env.id}+{dist}=={proposed}", requirements)
+    requirements = _substituted_requirements(manifest, loc, proposed)
+    result = _resolve_reqs(f"{loc.env.id}+{loc.dist}=={proposed}", requirements)
     return result.outcome, result.detail
 
 
@@ -666,32 +719,35 @@ def propose_bumps(manifest: Manifest) -> list[Proposal]:
     PROPOSAL carrying a solve-proof (FR-008/FR-009). Read-only: mutates no pin,
     opens no PR (FR-012). A pin at/above latest yields no proposal.
     """
-    proposals: list[Proposal] = []
-    for pin in manifest.governed_pins:
-        located = _find_pin_environment(manifest, pin.dist)
-        if located is None:
-            continue
-        env, specifier, extra = located
-        latest = latest_stable(_fetch_pypi_json(pin.dist))
-        if latest is None:
-            continue
-        current_ver = _extract_pinned_version(specifier)
-        if current_ver is not None and not _is_newer(latest, current_ver):
-            continue
-        outcome, detail = _solve_proof(
-            manifest, env, extra, pin.dist, specifier or "", latest
-        )
-        proposals.append(
-            Proposal(
-                dist=pin.dist,
-                env_id=env.id,
-                current=current_ver if current_ver is not None else specifier,
-                latest_stable=latest,
-                solve_outcome=outcome,
-                solve_detail=detail,
-            )
-        )
+    proposals = [
+        proposal
+        for pin in manifest.governed_pins
+        if (proposal := _proposal_for(manifest, pin)) is not None
+    ]
     return proposals
+
+
+def _proposal_for(manifest: Manifest, pin: GovernedPin) -> Proposal | None:
+    """One governed pin's proposal, or None if it is not declared anywhere, has
+    no stable release, or is already at/above the latest stable."""
+    loc = _find_pin_environment(manifest, pin.dist)
+    if loc is None:
+        return None
+    latest = latest_stable(_fetch_pypi_json(pin.dist))
+    if latest is None:
+        return None
+    current_ver = _extract_pinned_version(loc.specifier)
+    if current_ver is not None and not _is_newer(latest, current_ver):
+        return None
+    outcome, detail = _solve_proof(manifest, loc, latest)
+    return Proposal(
+        dist=pin.dist,
+        env_id=loc.env.id,
+        current=current_ver if current_ver is not None else loc.specifier,
+        latest_stable=latest,
+        solve_outcome=outcome,
+        solve_detail=detail,
+    )
 
 
 def _extract_pinned_version(specifier: str) -> str | None:
