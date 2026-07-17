@@ -19,7 +19,14 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-_GATE_STATUS_RE = re.compile(r"\*\*Gate status:\*\*\s*`?([A-Za-z]+)`?")
+# Both committed phrasings are real: the retail_store_sales instance writes a
+# bold bullet (`- **Gate status:** \`CLEARED\``); the demo_sample_orders
+# instance writes a heading (`## Gate status: CLEARED`). Read either; anything
+# else stays MISSING (fail-closed).
+_GATE_STATUS_RE = re.compile(
+    r"(?:\*\*Gate status:\*\*|^#{1,6}\s*Gate status:)\s*`?([A-Za-z]+)`?",
+    re.MULTILINE,
+)
 # An open-question table row: `| Q<n> | ... |`. The Status column carries
 # `answered` when resolved; anything else counts as open.
 _QUESTION_ROW_RE = re.compile(r"^\|\s*Q\d+\s*\|", re.MULTILINE)
@@ -66,14 +73,16 @@ def _read_unresolved(table_dir: Path) -> tuple[str, int]:
     text = unresolved.read_text(encoding="utf-8")
     match = _GATE_STATUS_RE.search(text)
     gate_status = match.group(1).upper() if match else "MISSING"
-    # A question row is open unless its Status cell says answered.
+    # A question row is open unless its Status cell is EXACTLY the token
+    # `answered` -- substring matching would count "unanswered" as resolved
+    # (review finding).
     open_rows = 0
     for line in text.splitlines():
         if not _QUESTION_ROW_RE.match(line):
             continue
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
         status_cell = cells[5] if len(cells) > 5 else ""
-        if "answered" not in status_cell:
+        if status_cell.strip("`").strip() != "answered":
             open_rows += 1
     return gate_status, open_rows
 

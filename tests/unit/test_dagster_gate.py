@@ -87,6 +87,28 @@ class TestReadGateState:
         assert state.gate_status == "OPEN"
         assert state.open_rows == 2
 
+    def test_heading_style_gate_status_is_read(self, tmp_path: Path) -> None:
+        """The demo_sample_orders instance on main writes the gate as an H2
+        heading (`## Gate status: CLEARED`), not a bold bullet -- both real
+        committed phrasings must parse (review finding)."""
+        heading_form = (
+            "# Unresolved questions -- `demo_table`\n\n"
+            "## Gate status: CLEARED\n\n"
+            "- every question answered by the named owner.\n"
+        )
+        _make_table(tmp_path, "demo_table", heading_form)
+        state = gate.read_gate_state(tmp_path, "demo_table")
+        assert state.gate_status == "CLEARED"
+        assert state.silver_permitted is True
+
+    def test_unanswered_status_cell_counts_as_open(self, tmp_path: Path) -> None:
+        """'unanswered' contains the substring 'answered' -- the cell must be
+        an exact token match (review finding)."""
+        tricky = UNRESOLVED_OPEN.replace("| `open` |", "| `unanswered` |")
+        _make_table(tmp_path, "demo_table", tricky)
+        state = gate.read_gate_state(tmp_path, "demo_table")
+        assert state.open_rows == 2
+
     def test_missing_artifacts_report_missing(self, tmp_path: Path) -> None:
         (tmp_path / "mappings").mkdir()
         state = gate.read_gate_state(tmp_path, "absent_table")
