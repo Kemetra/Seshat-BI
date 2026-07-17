@@ -192,7 +192,7 @@ resolved engine and dbt availability; no score, no fabricated live pass.
 
 ### Tests for User Story 4 (write first, must fail)
 
-- [ ] T014 [P] [US4] Write
+- [x] T014 [P] [US4] Write
   `tests/unit/dagster_adapter/test_doctor_engine_mode.py` (RED): fixtures with
   `engine: dbt` and `engine: migrations` -> assert the categorical engine finding
   per table, plus a deferred/enable finding under `dbt` when the runtime or DSN is
@@ -202,7 +202,7 @@ resolved engine and dbt availability; no score, no fabricated live pass.
 
 ### Implementation for User Story 4
 
-- [ ] T015 [US4] Edit `run_doctor` / add an engine-mode finding in
+- [x] T015 [US4] Edit `run_doctor` / add an engine-mode finding in
   `src/seshat/dagster_adapter/doctor.py` (read-only, categorical, concrete
   remedy). Turn T014 GREEN. (FR-010)
 

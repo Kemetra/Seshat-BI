@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import PINNED_DAGSTER
+from .engine import resolve_build_engine
 from .gate import GateState, list_mapped_tables, read_gate_state
 
 _INSTALL_REMEDY = (
@@ -140,11 +141,115 @@ def _gate_finding(table: str, state: GateState) -> DoctorFinding:
     )
 
 
+def _dbt_runtime_present() -> bool:
+    """True when the pinned dbt runtime is importable in THIS environment.
+
+    Read-only metadata probe (no dbt module import); mirrors the seshat dbt
+    doctor's version check without asserting the exact version here.
+    """
+    import importlib.metadata
+
+    try:
+        importlib.metadata.version("dbt-core")
+    except importlib.metadata.PackageNotFoundError:
+        return False
+    return True
+
+
+def _engine_availability_finding(table: str) -> DoctorFinding:
+    """Under the dbt engine: is the dbt runtime + a live profile available?
+
+    Truthful and categorical -- never a fabricated live pass. An absent runtime
+    or DSN is a concrete deferred/enable finding, not a blocker (everything
+    static still works); the DSN is reported present/absent only.
+    """
+    if not _dbt_runtime_present():
+        return DoctorFinding(
+            id="DAG-ENG-DBT-01",
+            severity="warning",
+            message=(
+                f"{table}: engine dbt but the dbt runtime is absent from the "
+                "orchestration environment -- the dbt build will block fail-closed"
+            ),
+            remedy=_INSTALL_REMEDY,
+        )
+    if not _dsn_present():
+        return DoctorFinding(
+            id="DAG-ENG-DBT-02",
+            severity="warning",
+            message=(
+                f"{table}: engine dbt but no database credentials -- the dbt "
+                "build will record a deferred boundary and block fail-closed"
+            ),
+            remedy="put the DSN in the git-ignored .env; never commit a real value",
+        )
+    return DoctorFinding(
+        id="DAG-ENG-DBT-00",
+        severity="info",
+        message=(
+            f"{table}: engine dbt; the dbt runtime and database credentials are "
+            "PRESENT (live drive stays [PENDING LIVE PROFILE])"
+        ),
+        remedy="none",
+    )
+
+
+def _engine_mode_findings(root: Path, table: str) -> list[DoctorFinding]:
+    """Per-table resolved build engine (migrations vs dbt), per layer.
+
+    Reports the resolved engine truthfully; warns on a MIXED configuration (a
+    migrations layer may read a real relation this run's dbt layer never
+    rebuilt -- FR-015/plan-review R2). A migrations-only table asserts nothing
+    about dbt.
+    """
+    silver = resolve_build_engine(root, table, "silver")
+    gold = resolve_build_engine(root, table, "gold")
+    if silver != gold:
+        return [
+            DoctorFinding(
+                id="DAG-ENG-MIX-01",
+                severity="warning",
+                message=(
+                    f"{table}: MIXED build engines (silver={silver}, gold={gold}) "
+                    "-- a migrations layer may read a real relation the dbt layer "
+                    "only rebuilt in shadow this run"
+                ),
+                remedy=(
+                    "set both layers to the same engine in "
+                    "mappings/<table>/build-engine.yaml unless the mix is intended"
+                ),
+            ),
+            _engine_availability_finding(table),
+        ]
+    if silver == "dbt":
+        return [
+            DoctorFinding(
+                id="DAG-ENG-00",
+                severity="info",
+                message=f"{table}: build engine dbt (both layers)",
+                remedy="none",
+            ),
+            _engine_availability_finding(table),
+        ]
+    return [
+        DoctorFinding(
+            id="DAG-ENG-00",
+            severity="info",
+            message=f"{table}: build engine migrations (both layers, the default)",
+            remedy="none",
+        )
+    ]
+
+
 def _table_findings(root: Path) -> list[DoctorFinding]:
     tables = list_mapped_tables(root)
     if not tables:
         return [_NO_TABLES]
-    return [_gate_finding(table, read_gate_state(root, table)) for table in tables]
+    findings: list[DoctorFinding] = []
+    for table in tables:
+        findings.append(_gate_finding(table, read_gate_state(root, table)))
+        findings.extend(_engine_mode_findings(root, table))
+    return findings
 
 
 def run_doctor(root: Path) -> list[DoctorFinding]:
