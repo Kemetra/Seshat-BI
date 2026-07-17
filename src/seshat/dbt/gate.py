@@ -207,7 +207,17 @@ def _approval_candidate(row: Any) -> MappingApproval | None:
     owner = _approval_owner(approval_row.get("owner"))
     approved_at = _valid_approval_date(approval_row.get("at"))
     note = _approval_note(approval_row.get("note", ""))
-    if owner is None or approved_at is None or note is None:
+    return _approval_from_fields(owner, approved_at, note)
+
+
+def _approval_from_fields(
+    owner: str | None, approved_at: str | None, note: str | None
+) -> MappingApproval | None:
+    if owner is None:
+        return None
+    if approved_at is None:
+        return None
+    if note is None:
         return None
     return MappingApproval(
         stage="mapping_ready",
