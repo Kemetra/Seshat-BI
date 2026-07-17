@@ -1712,10 +1712,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "d2274ddb6914704ab696e795a32769f431cfee7de7f6f31ca4f66dddd8688207",
+  "manifest_digest": "522adc3a6c3081a14908b5e9a6d25d0627c8d2ba18de744aaa40d213789b474f",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "ed5a477a50ba3c955588cc457195ac2beeec5a92",
+  "source_revision": "06062d9d50acd462e21e78db01255bd09879648d",
   "target": "claude",
   "version": "0.3.1"
 }

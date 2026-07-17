@@ -1523,10 +1523,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "d74d24e3f1ee1de11c83fcf2bf6473d3ba1d00c51bf650b5ce2596cee2e54e5b",
+  "manifest_digest": "ea7d954ee666937b4fb2488062ed84646ff75dee87b577ed39178f1fd57ccb7f",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "ed5a477a50ba3c955588cc457195ac2beeec5a92",
+  "source_revision": "06062d9d50acd462e21e78db01255bd09879648d",
   "target": "codex",
   "version": "0.3.1"
 }
