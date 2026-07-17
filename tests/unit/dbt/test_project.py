@@ -254,6 +254,91 @@ def test_stale_model_citation_is_rejected(tmp_path: Path) -> None:
     assert "DBT_MODEL_CITATION_STALE" in {b.code for b in result.blocking_reasons}
 
 
+def _append_model(root: Path, subdir: str, model_yaml: str) -> None:
+    """Add a second model's _models.yml under dbt/models/<subdir>/."""
+    model_dir = root / "dbt" / "models" / subdir
+    model_dir.mkdir(parents=True, exist_ok=True)
+    (model_dir / "_models.yml").write_text(model_yaml, encoding="utf-8")
+
+
+def _tagged_model_yaml(name: str, tag: str, table_id: str) -> str:
+    return "\n".join(
+        [
+            "version: 2",
+            "models:",
+            f"  - name: {name}",
+            "    config:",
+            f"      tags: [{tag}]",
+            "    meta:",
+            "      seshat:",
+            f"        table_id: {table_id}",
+            f"        source_map: mappings/{table_id}/source-map.yaml",
+            f"        source_map_revision: {MAP_REVISION}",
+            "        grain: one row per thing",
+            "        business_key: [thing_id]",
+            "        authority: derived",
+            "    columns:",
+            "      - name: thing_id",
+            "        meta:",
+            "          seshat:",
+            "            source_columns: [thing_id]",
+            "",
+        ]
+    )
+
+
+def test_model_tagged_for_nonexistent_table_is_orphan_rejected(tmp_path: Path) -> None:
+    """A model tagged seshat_table_<bogus> (no committed mapping) must block.
+
+    This is the only guard against a mistyped/phantom selector tag once validation
+    is partitioned per table: such a model matches no real governed table, so no
+    table's validate run would otherwise ever check it. It must be an orphan
+    blocker, not silently skipped as "some other table's model".
+    """
+    from seshat.dbt.project import validate_project
+
+    working_set = _write_project(tmp_path)  # governed table = orders
+    _append_model(
+        tmp_path,
+        "staging/bogus",
+        _tagged_model_yaml("stg_bogus", "seshat_table_bogus", "bogus"),
+    )
+
+    result = validate_project(tmp_path, working_set)
+
+    assert result.valid is False
+    assert "DBT_MODEL_ORPHANED" in {b.code for b in result.blocking_reasons}
+
+
+def test_model_for_another_governed_table_is_out_of_scope(tmp_path: Path) -> None:
+    """A model belonging to a DIFFERENT real governed table is skipped, not flagged.
+
+    When validating table X, a model tagged for table Y -- where Y has its own
+    committed mapping working set -- is out of scope (it is validated when Y runs).
+    It must NOT raise a selector/citation/orphan blocker against X.
+    """
+    from seshat.dbt.project import validate_project
+
+    working_set = _write_project(tmp_path)  # validating table = orders
+    # A second real governed table "widgets" with its own mapping working set.
+    widgets = tmp_path / "mappings/widgets"
+    widgets.mkdir(parents=True, exist_ok=True)
+    (widgets / "source-map.yaml").write_text(
+        "meta:\n  table_id: widgets\n", encoding="utf-8"
+    )
+    (widgets / "readiness-status.yaml").write_text("stages: {}\n", encoding="utf-8")
+    _append_model(
+        tmp_path,
+        "staging/widgets",
+        _tagged_model_yaml("stg_widgets", "seshat_table_widgets", "widgets"),
+    )
+
+    result = validate_project(tmp_path, working_set)
+
+    # orders is fully valid; the widgets model neither validated here nor flagged.
+    assert result.valid is True, [b.code for b in result.blocking_reasons]
+
+
 def test_missing_column_citation_is_rejected(tmp_path: Path) -> None:
     from seshat.dbt.project import validate_project
 

@@ -292,6 +292,45 @@ def _model_name(row: Any) -> str | None:
     return None
 
 
+_SESHAT_TABLE_TAG = re.compile(r"^seshat_table_([a-z][a-z0-9_]*)$")
+
+
+def _governed_table_ids(root: Path) -> frozenset[str]:
+    """Table ids that have a committed mapping working set under mappings/<id>/.
+
+    The authoritative set of tables a governed dbt model may legitimately belong
+    to: a directory under ``mappings/`` carrying both a source map and a readiness
+    status. Used to attribute each model to a real table during validation --
+    a model tagged for a table absent from this set is an orphan, not merely
+    "another table's" model.
+    """
+    mappings_dir = root / "mappings"
+    if not mappings_dir.is_dir():
+        return frozenset()
+    return frozenset(
+        child.name
+        for child in mappings_dir.iterdir()
+        if child.is_dir()
+        and (child / "source-map.yaml").is_file()
+        and (child / "readiness-status.yaml").is_file()
+    )
+
+
+def _model_table_tags(row: dict[str, Any]) -> frozenset[str]:
+    """The governed-table ids a model row declares via its ``seshat_table_*`` tags."""
+    config = row.get("config")
+    tags = config.get("tags") if isinstance(config, dict) else None
+    if not isinstance(tags, list):
+        return frozenset()
+    ids: set[str] = set()
+    for tag in tags:
+        if isinstance(tag, str):
+            match = _SESHAT_TABLE_TAG.match(tag)
+            if match is not None:
+                ids.add(match.group(1))
+    return frozenset(ids)
+
+
 def _check_model_selector(
     name: str,
     row: dict[str, Any],
@@ -441,11 +480,17 @@ def _model_contracts(
         source_map_revision=working_set.source_map_revision,
     )
     property_paths = sorted([*models_dir.rglob("*.yml"), *models_dir.rglob("*.yaml")])
+    governed_tables = _governed_table_ids(root)
     contracts.extend(
         contract
         for path in property_paths
         for row in _property_rows(path)
-        if (contract := _row_contract(context, row, blockers)) is not None
+        if (
+            contract := _row_contract(
+                context, row, working_set.table_id, governed_tables, blockers
+            )
+        )
+        is not None
     )
     if not contracts:
         blockers.append(
@@ -457,11 +502,38 @@ def _model_contracts(
 def _row_contract(
     context: _ContractContext,
     row: dict[str, Any],
+    table_id: str,
+    governed_tables: frozenset[str],
     blockers: list[Blocker],
 ) -> ModelContract | None:
-    if _model_name(row) is None:
+    """Attribute one model row to a governed table, then validate it if it is ours.
+
+    Partitions models so a multi-table dbt project validates each table's models
+    under that table's own working set (spec 133: validate covers ONE working set;
+    models are isolated under the worked selector). A model tagged for THIS table is
+    validated in full. A model tagged for ANOTHER table that has a real committed
+    mapping is out of scope here (it is validated when its own table runs). A model
+    that belongs to no real governed table -- a phantom/mistyped tag, or no
+    ``seshat_table_*`` tag at all -- is an orphan and blocks: every model must be
+    attributable to some governed table, or governance can never reach it.
+    """
+    name = _model_name(row)
+    if name is None:
         return None
-    return _model_contract(context, row, blockers)
+    model_tables = _model_table_tags(row)
+    if table_id in model_tables:
+        return _model_contract(context, row, blockers)
+    if model_tables & governed_tables:
+        # Belongs to another real governed table -- validated under that table.
+        return None
+    blockers.append(
+        Blocker(
+            "DBT_MODEL_ORPHANED",
+            f"model {name} is not tagged for any governed table "
+            "(no seshat_table_<table> tag matches a committed mapping working set)",
+        )
+    )
+    return None
 
 
 def _generic_example_leaks(project_dir: Path) -> bool:
