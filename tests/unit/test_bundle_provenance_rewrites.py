@@ -107,3 +107,18 @@ def test_default_posture_still_requires_ancestry(tmp_path: Path) -> None:
     manifest = {"version": "0.3.1", "source_revision": orphaned}
     with pytest.raises(ProvenanceError, match="not an ancestor"):
         validate_manifest_provenance(repo, manifest, label="committed bundle")
+
+
+def test_exporter_revalidation_tolerates_the_orphaned_revision(
+    tmp_path: Path,
+) -> None:
+    """--check reuses the committed manifest's revision inside build_bundle;
+    that downstream re-validation must not reinstate the ancestry demand the
+    upstream fallback just tolerated (Codex P1 on PR #302)."""
+    from scripts.export_agent_bundles import _validated_source_revision
+
+    repo, orphaned = _squashed_repository(tmp_path)
+    validated = _validated_source_revision(
+        repo, version="0.3.1", source_revision=orphaned
+    )
+    assert validated == orphaned
