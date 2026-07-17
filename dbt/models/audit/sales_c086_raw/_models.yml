@@ -1,0 +1,54 @@
+version: 2
+
+models:
+  - name: audit_sales_c086_raw_parity
+    config:
+      tags: [seshat_table_sales_c086_raw]
+    meta:
+      seshat:
+        table_id: sales_c086_raw
+        source_map: mappings/sales_c086_raw/source-map.yaml
+        source_map_revision: 5e4043b041e560c8b2b458b2adcc878f91eb69de
+        grain: one row per required migration-versus-shadow parity assertion
+        business_key: [assertion_id]
+        authority: derived
+    columns:
+      - name: assertion_id
+        meta:
+          seshat:
+            derivation: parity_measure
+        data_tests:
+          - unique:
+              config:
+                tags: [seshat_table_sales_c086_raw]
+          - not_null:
+              config:
+                tags: [seshat_table_sales_c086_raw]
+      - name: assertion_class
+        meta:
+          seshat:
+            derivation: parity_measure
+      - name: subject
+        meta:
+          seshat:
+            derivation: parity_measure
+      - name: expected
+        meta:
+          seshat:
+            derivation: parity_measure
+      - name: actual
+        meta:
+          seshat:
+            derivation: parity_measure
+      - name: delta
+        meta:
+          seshat:
+            derivation: parity_measure
+      - name: tolerance
+        meta:
+          seshat:
+            derivation: parity_measure
+      - name: passed
+        meta:
+          seshat:
+            derivation: parity_measure

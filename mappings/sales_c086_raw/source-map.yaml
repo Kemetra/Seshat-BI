@@ -1,0 +1,600 @@
+# =============================================================================
+# source-map.yaml  --  sales_c086_raw (C086 pharmacy branch sales export)
+# =============================================================================
+# Filled instance of templates/source-map.yaml (Seshat_BI kit). The machine-readable
+# spine of the source-mapping gate for bronze.sales_c086_raw. Authored from the
+# committed source-profile.md, the four Source Ready rulings recorded in
+# readiness-status.yaml approvals[] (PK, net-sales, blank-semantics, PII), and a
+# column-by-column keep/drop review conducted directly with the data owner
+# (Ahmed Shaaban) on 2026-07-16. NO silver.* SQL is written until this map itself
+# is reviewed and approved. ASCII only.
+#
+# RC ids = ADR-0002 cleaning defaults (RC1-RC16); see docs/decisions/0002-retail-
+# cleaning-defaults.md in the Seshat_BI kit repo. Deviations recorded below.
+# =============================================================================
+
+meta:
+  table_id: "sales_c086_raw"
+  source_system: "pharmacy_branch_c086_sales_export"
+  profiled_from: "mappings/sales_c086_raw/source-profile.md"
+  # GRAIN (RC1): one row = one billing line item within one document.
+  grain: "one row = one billing-document line item"
+  # PRIMARY KEY (RC2): RULED 2026-07-16 (data owner) -- unique on landed data
+  # (249,106 = 249,106, 0 null). billing_document REJECTED (format-split evidence,
+  # see source-profile.md Candidate grain & PK). Re-verify on transformed silver output.
+  primary_key:
+    - "reference_no"
+    - "item_no"
+  reviewed_by: "Ahmed Shaaban (data_owner)"
+  reviewed_on: "2026-07-16"
+
+defaults:
+  adopted:
+    - "RC1"   # lowest grain (billing line item)
+    - "RC2"   # verify PK on transformed data
+    - "RC3"   # drop no-signal columns (knumv, ref_return_date, cosm_mg, area_mg -- all 100%/single-value)
+    - "RC5"   # '' -> NULL baseline; missingness '' OR NULL
+    - "RC7"   # money -> NUMERIC; date -> DATE; leading-zero/site-coded ids stay TEXT
+    - "RC8"   # is_return from authoritative billing_type column, never measure sign
+    - "RC10"  # billing_type_2 short code kept alongside its 1:1 label billing_type
+    - "RC14"  # gold Kimball star (_sk, -1 unknown member, FK COALESCE, degenerate dims)
+    - "RC15"  # contiguous generate_series date dim
+  deviations:
+    - id: "RC4"
+      reason: "insurance_tel / insurance_no are genuine third-party PII (61.9% populated, ~0.1% placeholder) -- data owner RULED drop entirely (2026-07-16), consistent with the RC4 default (no keep-deviation needed, this IS the default applied). person_name is STAFF PII (not customer/patient) -- data owner RULED mask/pseudonymize rather than drop; this is a deviation from the RC4 default (drop), recorded here because the column is KEPT under a transform, not dropped outright."
+      detail_in: "mappings/sales_c086_raw/readiness-status.yaml (approvals[], PII ruling 2026-07-16)"
+    - id: "RC9"
+      reason: "landed net_sales does NOT satisfy gross_sales+dis_tax+add_dis-tax on 9.6% of rows (23,915 rows; 80.3% of those with a material, non-rounding residual). Data owner RULED (2026-07-16) that landed net_sales is unreliable and will NOT be carried forward; net sales will be computed from first principles (gross_sales, tax, discounts) in the silver build instead of trusting this column. Further, during the column-by-column mapping review, salse_not_tax and kzwi1 (both tested as net-sales candidates, neither closed the gap alone) were ALSO dropped rather than carried as independent landed measures -- a further deviation from RC9's default of keeping every independent money measure, made because these two showed no standalone analytical value beyond the failed net-sales reconciliation attempt."
+      detail_in: "mappings/sales_c086_raw/source-profile.md (Semantics: Money-relationship check)"
+    - id: "RC6"
+      reason: "item_cluster blank measured as NON-random (a stable per-material attribute: 0/9,690 materials show mixed blank/non-blank). Despite that structural evidence, data owner RULED it genuinely unknown/missing (NULL), not a sentinel -- i.e. RC5's null-for-unknown applies even though the data suggested a cleaner structural read. assignment and certification were DROPPED entirely during the column review rather than kept with a null/sentinel policy (assignment despite measuring as a likely credit-account reference field; certification for lack of a clean applicability pattern) -- so RC6 (sentinel-for-grouping-dims) does not apply to either of those two; only item_cluster remains in-model with a plain null policy."
+      detail_in: "mappings/sales_c086_raw/readiness-status.yaml (approvals[], blank-semantics ruling 2026-07-16)"
+    - id: "RC12"
+      reason: "mat_group / mat_group_2 (both proven 1:1, 0 fan-out) were DROPPED entirely during the column-by-column review rather than kept as a flat denormalized product attribute -- the data owner judged category/subcategory/segment/division already cover product classification for this model without needing the mat_group level."
+      detail_in: "column review, 2026-07-16 (conversational, this session)"
+
+# -----------------------------------------------------------------------------
+# columns -- one entry per SOURCE column (46 source + 2 lineage). Every source
+# column appears, including dropped ones, per the mapping-gate reviewer convention.
+# Decisions below reflect an explicit column-by-column keep/drop review with the
+# data owner (2026-07-16), NOT the agent's own judgment calls.
+# -----------------------------------------------------------------------------
+columns:
+
+  - source_name: "reference_no"
+    decision: "keep"
+    reason: "grain key (RULED 2026-07-16): uniform format (C086 + 10 digits, site code embedded), unique paired with item_no on 249,106/249,106 rows, 0 null -> degenerate dim on the fact (RC14)"
+    rename_to: "reference_no"
+    silver_type: "text"                    # RC7: site-coded id stays TEXT
+    missing_policy: "null"
+    pii: false
+    gold_placement: "degenerate_dim"
+
+  - source_name: "item_no"
+    decision: "keep"
+    reason: "line-item sequence within a document (44 distinct); part of the composite grain key"
+    rename_to: "item_no"
+    silver_type: "text"                    # RC7: sequence code, kept TEXT for stability
+    missing_policy: "null"
+    pii: false
+    gold_placement: "degenerate_dim"
+
+  - source_name: "billing_document"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner, column review): rejected as PK (format-split evidence); data owner chose not to retain it as a secondary document reference either"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "fi_document_no"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner, column review): accounting document reference, 13.57% blank; data owner chose not to retain the posted/unposted signal it carries"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "material"
+    decision: "keep"
+    reason: "product code (9,690 distinct); 1:1 with material_desc (0 fan-out) -> product dim natural key"
+    rename_to: "material"
+    silver_type: "text"                    # RC7: leading-zero-style product code stays TEXT
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_product.material"
+
+  - source_name: "material_desc"
+    decision: "keep"
+    reason: "product description; 1:1 with material (0 fan-out) -> product dim label"
+    rename_to: "material_desc"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_product.material_desc"
+
+  - source_name: "category"
+    decision: "keep"
+    reason: "product category (88 distinct); 1:1 with material (0 fan-out) -> flat denorm product attribute (RC12)"
+    rename_to: "category"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_product.category"
+
+  - source_name: "subcategory"
+    decision: "keep"
+    reason: "product subcategory (243 distinct) -> flat denorm product attribute (RC12)"
+    rename_to: "subcategory"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_product.subcategory"
+
+  - source_name: "segment"
+    decision: "keep"
+    reason: "therapeutic/marketing segment (699 distinct) -> flat denorm product attribute (RC12)"
+    rename_to: "segment"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_product.segment"
+
+  - source_name: "division"
+    decision: "keep"
+    reason: "e.g. RX/OTC/COSMETICS (11 remaining distinct after the row filter below) -> flat denorm product attribute (RC12). Four of the original 15 distinct values (ARCHIVE, AUX, blank, EL EZABY SERVICES) are excluded entirely via row_filters below (2026-07-16, data owner), not merely relabeled -- see row_filters for the full reasoning."
+    rename_to: "division"
+    silver_type: "text"
+    missing_policy: "sentinel:'UNKNOWN'"    # per the 2026-07-16 missing-value ruling; moot in practice since blank-division rows are now row-filtered out entirely
+    pii: false
+    gold_placement: "dim:dim_product.division"
+
+  - source_name: "brand"
+    decision: "keep"
+    reason: "product brand (3,420 distinct) -> product dim attribute"
+    rename_to: "brand"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_product.brand"
+
+  - source_name: "mat_group"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner, column review, RC12 deviation): material-group classification level judged redundant with category/subcategory/segment/division already in-model, despite mat_group being 1:1 clean with mat_group_2"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "mat_group_2"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner, column review, RC12 deviation): dropped alongside mat_group -- the whole material-group classification level was judged unnecessary, not just the redundant half of the 1:1 pair"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "item_cluster"
+    decision: "keep"
+    reason: "product tier A/B/C/D (+GT/N rare, 7 distinct). Blank RULED unknown/missing 2026-07-16 (data owner) despite measuring as a stable per-material attribute (RC6 deviation, see defaults.deviations)"
+    rename_to: "item_cluster"
+    silver_type: "text"
+    missing_policy: "null"                 # RC5 applied per the ruling; NOT a sentinel despite the structural signal
+    pii: false
+    gold_placement: "dim:dim_product.item_cluster"
+
+  - source_name: "item_status"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner, column review): product lifecycle flag (ACTIVE/DELISTED/CANCELLED/NEW) judged not needed for this model"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "certification"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner ruling, reconfirmed in column review): population rate varies by division (0% Cosmetics .. ~38% RX/OTC) with no clean applicability pattern; owner chose to drop rather than guess its meaning"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "assignment"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner ruling, reconfirmed in column review): blank RULED unknown/missing despite measuring as a likely credit-account reference (85.5% populated on billing_type='credit' rows, 0% on 'cash'); no forward business use identified for this table's scope"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "quantity"
+    decision: "keep"
+    reason: "units sold; float-as-text -> NUMERIC. Sign does NOT reliably indicate a return (RC8: is_return derived from billing_type, never this column's sign)"
+    rename_to: "quantity"
+    silver_type: "numeric(14,3)"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "fact_measure"
+
+  - source_name: "gross_sales"
+    decision: "keep"
+    reason: "gross money measure; independent, numeric-clean (RC9)"
+    rename_to: "gross_sales"
+    silver_type: "numeric(18,2)"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "fact_measure"
+    currency: "EGP"
+
+  - source_name: "net_sales"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner ruling, RC9 deviation): landed net_sales unreliable -- gross_sales+dis_tax+add_dis-tax identity holds on only 90.4% of rows with no explaining formula found. Will NOT be carried forward; a new net-sales measure is computed downstream in silver from gross_sales/tax/discounts instead."
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "tax"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner, post-hoc column review): originally kept as an input to a planned net-sales derivation; that plan was itself CLOSED the same session (see derived_columns -- gross_sales is now the standing 'sales' measure, no net-sales figure will be computed), so this column has no remaining purpose in the model"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "dis_tax"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner, post-hoc column review): same basis as tax -- originally kept for the net-sales replacement work, removed before that work happened"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "add_dis"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner, post-hoc column review): same basis as tax/dis_tax"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "subtotal5_discount"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner, post-hoc column review): same basis as tax/dis_tax/add_dis"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "salse_not_tax"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner, column review, RC9 deviation): money-like column (source-named 'salse_not_tax' -- sic); tested as a net-sales candidate but did not close the reconciliation gap alone, and judged to carry no independent analytical value on its own"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "kzwi1"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner, column review, RC9 deviation): SAP pricing-procedure condition-value field; tested as a net-sales candidate but did not close the reconciliation gap alone, and judged to carry no independent analytical value without further SAP-condition-technique clarification"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "paid"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner, post-hoc column review): removed from the model along with tax/dis_tax/add_dis/subtotal5_discount"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "billing_type"
+    decision: "keep"
+    reason: "AUTHORITATIVE returns/billing-type column (Arabic; 10 distinct) -- source of the RC8 is_return derivation, never the quantity sign. TRANSLATED to English 2026-07-16 (data owner, explicit choice: REPLACE the Arabic value entirely, do not keep both): Credit Sale / Cash Sale / Credit Return / Cash Return / Pick-Up Order / Pick-Up Order Return / Delivery / Delivery Return / Delivery - Credit / Delivery - Credit Return. Bug caught and fixed during translation review: is_return must match 'Return' in the TRANSLATED label, not the Arabic مرتجع prefix -- matching the Arabic prefix alone silently missed 'Pick-Up Order Return' (376 rows, already English in bronze, never carried the Arabic substring)."
+    rename_to: "billing_type"
+    silver_type: "text"
+    missing_policy: "sentinel:'UNKNOWN'"    # per the 2026-07-16 missing-value ruling
+    pii: false
+    gold_placement: "dim:dim_billing_type.billing_type"
+
+  - source_name: "billing_type_2"
+    decision: "keep"
+    reason: "short code (FP/Z1..Z10, 10 distinct); 1:1 with billing_type (0 fan-out) -- standardized code+label pair kept together (RC10)"
+    rename_to: "billing_type_code"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_billing_type.billing_type_code"
+
+  - source_name: "ref_return"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner, column review): cross-reference to the original invoice on return rows only (95.04% blank); data owner chose not to retain this return-lineage attribute"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "ref_return_date"
+    decision: "drop"
+    reason: "100% blank across all 249,106 rows -- no signal (RC3)"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "knumv"
+    decision: "drop"
+    reason: "100% blank across all 249,106 rows -- no signal (RC3)"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "cosm_mg"
+    decision: "drop"
+    reason: "single distinct value across all 249,106 rows -- no signal (RC3)"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "area_mg"
+    decision: "drop"
+    reason: "single distinct value across all 249,106 rows -- no signal (RC3)"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "site"
+    decision: "drop"
+    reason: "single distinct value ('C086') across all rows in this table -- no signal WITHIN this table (RC3). Revisit if/when multiple branch tables are folded together (site would become load-bearing then)"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "site_name"
+    decision: "drop"
+    reason: "single distinct value across all rows in this table -- no signal WITHIN this table (RC3), same reasoning as site"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "date"
+    decision: "keep"
+    reason: "transaction date, YYYY-MM-DD (1,094 distinct, spans 2023-01-01..2025-12-31) -> dim_date FK (RC15 contiguous calendar)"
+    rename_to: "sale_date"
+    silver_type: "date"                    # RC7: date -> DATE
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_date.full_date"
+
+  - source_name: "customer"
+    decision: "keep"
+    reason: "customer/pharmacy code (638 distinct); 1:1 with customer_name (0 fan-out) -> customer dim natural key. PII RULED low-risk 2026-07-16 (predominantly B2B/institutional codes)"
+    rename_to: "customer"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_customer.customer"
+
+  - source_name: "customer_name"
+    decision: "keep"
+    reason: "customer/pharmacy display name (512 distinct); RULED 2026-07-16 (data owner): LOW RISK, KEEP AS-IS -- sample confirms predominantly B2B/institutional names (insurance companies, pharma distributors, branch names; only 517/249,106 rows show a redacted-looking hash pattern, no individual patient names observed)"
+    rename_to: "customer_name"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false                              # ruled low-risk, not raw individual PII; no deviation_ref needed
+    gold_placement: "dim:dim_customer.customer_name"
+
+  - source_name: "buyer"
+    decision: "drop"
+    reason: "FULL HISTORY (2026-07-16, all same session): originally kept as-is (degenerate fact attribute) -> renamed to purchaser and PROMOTED to its own dimension (gold.dim_purchaser_c086) during an outlier investigation, after the same invoice was observed carrying two different purchaser codes across its lines (reference_no C0860000190130: FROST line -> 'A.AZIZ', OZEMPIC line -> 'KHALED') -> then DROPPED entirely in a later post-hoc column review, alongside tax/dis_tax/add_dis/subtotal5_discount/paid. The gold.dim_purchaser_c086 dimension and its dim_purchaser_c086 gold_star entry are correspondingly removed."
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+  - source_name: "personel_number"
+    decision: "keep"
+    reason: "staff id (258 distinct) -> staff dim natural key, paired with person_name/position"
+    rename_to: "staff_code"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_staff.staff_code"
+
+  - source_name: "person_name"
+    decision: "keep"
+    reason: "RULED 2026-07-16 (data owner): staff/employee display name (roles observed: driver, cashier, pharmacist, branch manager) -- MASK/PSEUDONYMIZE before any downstream exposure, per governance ruling (RC4 deviation, see defaults.deviations)"
+    rename_to: "staff_name_masked"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: true                               # kept only under a transform (masked), per the ruling
+    deviation_ref: "RC4"
+    gold_placement: "dim:dim_staff.staff_name_masked"
+
+  - source_name: "position"
+    decision: "keep"
+    reason: "staff role (32 distinct, e.g. pharmacist/cashier/driver); missingness co-occurs exactly with person_name (both 22,044) -> staff dim attribute, not itself PII"
+    rename_to: "staff_position"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_staff.staff_position"
+
+  - source_name: "insurance_tel"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner ruling): genuine third-party insurance contact PII (61.9% populated, 10,108 distinct, only ~0.1% placeholder values) -- RC4 default applied, no deviation"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: true
+    gold_placement: "dropped"
+
+  - source_name: "insurance_no"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner ruling): genuine third-party insurance policy PII (61.9% populated, 14,436 distinct, only ~0.1% placeholder values) -- RC4 default applied, no deviation"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: true
+    gold_placement: "dropped"
+
+  - source_name: "crm_order"
+    decision: "drop"
+    reason: "DROPPED 2026-07-16 (data owner, column review): CRM order reference, 99.52% blank (applies to a small order channel only); data owner chose not to retain this rare cross-reference"
+    rename_to: null
+    silver_type: null
+    missing_policy: null
+    pii: false
+    gold_placement: "dropped"
+
+# -----------------------------------------------------------------------------
+# row_filters -- Phase 2.6, applied in the silver WHERE clause (never invented
+# implicitly; every filter here must be independently reviewable, same as a
+# column decision). This is the ONE deliberate deviation from bronze row-count
+# parity in this table's silver build.
+# -----------------------------------------------------------------------------
+row_filters:
+  - condition: "division IN ('ARCHIVE', 'AUX', '', 'EL EZABY SERVICES')"
+    action: "exclude"
+    reviewed_by: "Ahmed Shaaban (data_owner)"
+    reviewed_on: "2026-07-16"
+    rows_affected: 513
+    reason: "Inspected each division before excluding. ARCHIVE (6 rows) = retired/discontinued products + penny-value promotional 'gift' line items. AUX (6 rows) = miscellaneous-tagged real drugs, negligible volume. Blank/'' (3 rows) = genuinely missing division (the sentinel-eligible blank population). EL EZABY SERVICES (498 rows) = NOT product sales at all -- injection fees, a 'WHATS APP - A' line item, and generic 'SPECIAL SERVICE' charges; out of scope for a retail sales-of-goods fact."
+    caveat: "85 of the 513 excluded rows (72 Arabic-prefix return rows + 13 'Pick-Up Order Return' rows) were RETURN transactions. Excluding them changes the full-table is_return count from 12,365 (full bronze) to 12,280 (post-filter silver) -- a real, verified reduction, not an oversight left undocumented. Anyone reconciling silver's return count against a bronze-level total must account for this 85-row gap."
+
+# -----------------------------------------------------------------------------
+# gold_star -- Kimball star at the ruled grain (RC14). One fact + conformed dims.
+# -----------------------------------------------------------------------------
+gold_star:
+
+  fact:
+    name: "gold.fct_sales_c086"
+    grain: "one row = one billing-document line item"   # = meta.grain (RC1)
+    measures:                                            # RC9: independent measures kept
+      - "quantity"
+      - "gross_sales"          # CLOSED 2026-07-16 (data owner): this IS the
+                                # standing "sales" measure for this table.
+                                # No net-sales figure will be computed -- see
+                                # derived_columns for the closure note.
+      # tax, dis_tax, add_dis, subtotal5_discount, paid, net_sales, salse_not_tax,
+      # and kzwi1 are all deliberately absent -- dropped from the model. The
+      # first five were dropped 2026-07-16 in a post-hoc column review; net_sales
+      # (landed) was rejected earlier (RC9 deviation, unreliable formula);
+      # salse_not_tax/kzwi1 were dropped as failed net-sales candidates with no
+      # independent value. With tax/discounts also gone, there is no remaining
+      # plan to derive a net-sales measure at all -- gross_sales is final.
+
+  dimensions:
+    - name: "gold.dim_product_c086"
+      surrogate_key: "product_sk"
+      has_unknown_member: true             # RC14
+      attributes:
+        - "material"
+        - "material_desc"
+        - "category"
+        - "subcategory"
+        - "segment"
+        - "division"
+        - "brand"
+        - "item_cluster"
+        # mat_group / mat_group_2 / item_status dropped in the column review
+
+    - name: "gold.dim_billing_type_c086"
+      surrogate_key: "billing_type_sk"
+      has_unknown_member: true             # RC14
+      attributes:
+        - "billing_type"
+        - "billing_type_code"
+
+    - name: "gold.dim_customer_c086"
+      surrogate_key: "customer_sk"
+      has_unknown_member: true             # RC14
+      attributes:
+        - "customer"
+        - "customer_name"                  # PII ruled low-risk, kept as-is
+
+    - name: "gold.dim_staff_c086"
+      surrogate_key: "staff_sk"
+      has_unknown_member: true             # RC14
+      attributes:
+        - "staff_code"
+        - "staff_name_masked"              # PII masked per governance ruling (RC4 deviation)
+        - "staff_position"
+
+    # dim_purchaser_c086 REMOVED 2026-07-16: buyer/purchaser was renamed and
+    # promoted to this dimension earlier the same session, then dropped from
+    # the model entirely in a later post-hoc column review. See the "buyer"
+    # column entry above for the full history.
+
+  # Transaction identifiers with no attributes of their own -> degenerate dims on
+  # the fact (RC14): they are columns of the fact, not their own table.
+  # billing_document, fi_document_no, ref_return, and crm_order were all dropped
+  # in the column review; buyer/purchaser was PROMOTED to its own dim (see
+  # dim_purchaser_c086 above) -- so the degenerate-dim list is now just the two
+  # grain-key columns.
+  degenerate_dimensions:
+    - "reference_no"           # grain key (ruled PK component)
+    - "item_no"                # grain key (ruled PK component)
+
+  date_dimension:
+    name: "gold.dim_date_c086"
+    surrogate_key: "date_sk"               # YYYYMMDD integer
+    method: "generate_series"              # RC15: contiguous, one row per calendar day
+    contiguous: true
+    span:
+      from: "2023-01-01"                   # earliest sale_date measured
+      to: "2025-12-31"                     # latest sale_date measured
+
+# -----------------------------------------------------------------------------
+# derived_columns -- computed in silver, not present in the source (Phase 2.7).
+# -----------------------------------------------------------------------------
+derived_columns:
+
+  # is_return (RC8): from the AUTHORITATIVE billing_type column, NEVER the
+  # quantity sign (measured: sign-alone would misclassify 2,030 rows).
+  - name: "is_return"
+    type: "boolean"
+    derived_from: "billing_type (the TRANSLATED English value, computed once and reused -- not re-derived from the Arabic source separately)"
+    rule: "billing_type LIKE '%Return%' (matches all 5 return variants: Credit Return, Cash Return, Delivery Return, Delivery - Credit Return, Pick-Up Order Return) -> true, else false"
+    note: "RC8: authoritative column, not measure sign. CORRECTED 2026-07-16 during billing_type English translation: the original rule matched the Arabic مرتجع prefix directly, which silently missed 'Pick-Up Order Return' (376 rows -- already English in bronze, never carried the Arabic substring). Final measured rate: 12,365/249,106 (4.96%) true (up from the pre-fix 11,989 -- the +376 difference is exactly the previously-missed rows). Sign-alone would have misclassified 1,667 return rows with non-negative quantity + 363 non-return rows with negative quantity (2,030 total) -- still the reason billing_type, not the sign, is authoritative."
+
+  # net_sales -- CLOSED 2026-07-16 (data owner ruling, final decision, not a
+  # placeholder anymore): there is NO net-sales measure in this model. gross_sales
+  # is the standing "sales" measure for this table going forward. This
+  # supersedes the earlier "net_sales_computed" placeholder, which anticipated
+  # deriving a net-sales figure from gross_sales/tax/dis_tax/add_dis -- those
+  # tax/discount inputs were themselves dropped from the model in the same
+  # session (see the "tax" column entry), so the placeholder had nothing left
+  # to compute from even before this closure. Do not re-open this by inventing
+  # a net-sales formula later without a fresh governance ruling; if net sales
+  # is ever needed, treat it as a new decision, not a resumption of this one.

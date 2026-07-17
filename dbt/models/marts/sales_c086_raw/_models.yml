@@ -1,0 +1,320 @@
+version: 2
+
+models:
+  - name: dim_product_c086
+    config:
+      tags: [seshat_table_sales_c086_raw]
+    meta:
+      seshat:
+        table_id: sales_c086_raw
+        source_map: mappings/sales_c086_raw/source-map.yaml
+        source_map_revision: 5e4043b041e560c8b2b458b2adcc878f91eb69de
+        grain: one row per governed product member
+        business_key: [material]
+        authority: derived
+    columns:
+      - name: product_sk
+        meta:
+          seshat:
+            derivation: surrogate_key
+        data_tests:
+          - unique:
+              config:
+                tags: [seshat_table_sales_c086_raw]
+          - not_null:
+              config:
+                tags: [seshat_table_sales_c086_raw]
+      - name: material
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.material]
+      - name: material_desc
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.material_desc]
+      - name: category
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.category]
+      - name: subcategory
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.subcategory]
+      - name: segment
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.segment]
+      - name: division
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.division]
+      - name: brand
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.brand]
+      - name: item_cluster
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.item_cluster]
+
+  - name: dim_billing_type_c086
+    config:
+      tags: [seshat_table_sales_c086_raw]
+    meta:
+      seshat:
+        table_id: sales_c086_raw
+        source_map: mappings/sales_c086_raw/source-map.yaml
+        source_map_revision: 5e4043b041e560c8b2b458b2adcc878f91eb69de
+        grain: one row per governed billing type member
+        business_key: [billing_type]
+        authority: derived
+    columns:
+      - name: billing_type_sk
+        meta:
+          seshat:
+            derivation: surrogate_key
+        data_tests:
+          - unique:
+              config:
+                tags: [seshat_table_sales_c086_raw]
+          - not_null:
+              config:
+                tags: [seshat_table_sales_c086_raw]
+      - name: billing_type
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.billing_type]
+      - name: billing_type_code
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.billing_type_2]
+
+  - name: dim_customer_c086
+    config:
+      tags: [seshat_table_sales_c086_raw]
+    meta:
+      seshat:
+        table_id: sales_c086_raw
+        source_map: mappings/sales_c086_raw/source-map.yaml
+        source_map_revision: 5e4043b041e560c8b2b458b2adcc878f91eb69de
+        grain: one row per governed customer member
+        business_key: [customer]
+        authority: derived
+    columns:
+      - name: customer_sk
+        meta:
+          seshat:
+            derivation: surrogate_key
+        data_tests:
+          - unique:
+              config:
+                tags: [seshat_table_sales_c086_raw]
+          - not_null:
+              config:
+                tags: [seshat_table_sales_c086_raw]
+      - name: customer
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.customer]
+      - name: customer_name
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.customer_name]
+
+  - name: dim_staff_c086
+    config:
+      tags: [seshat_table_sales_c086_raw]
+    meta:
+      seshat:
+        table_id: sales_c086_raw
+        source_map: mappings/sales_c086_raw/source-map.yaml
+        source_map_revision: 5e4043b041e560c8b2b458b2adcc878f91eb69de
+        grain: one row per governed staff member
+        business_key: [staff_code]
+        authority: derived
+    columns:
+      - name: staff_sk
+        meta:
+          seshat:
+            derivation: surrogate_key
+        data_tests:
+          - unique:
+              config:
+                tags: [seshat_table_sales_c086_raw]
+          - not_null:
+              config:
+                tags: [seshat_table_sales_c086_raw]
+      - name: staff_code
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.personel_number]
+      - name: staff_name_masked
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.person_name]
+      - name: staff_position
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.position]
+
+  - name: dim_date_c086
+    config:
+      tags: [seshat_table_sales_c086_raw]
+    meta:
+      seshat:
+        table_id: sales_c086_raw
+        source_map: mappings/sales_c086_raw/source-map.yaml
+        source_map_revision: 5e4043b041e560c8b2b458b2adcc878f91eb69de
+        grain: one row per calendar date in the approved span
+        business_key: [full_date]
+        authority: derived
+    columns:
+      - name: date_sk
+        meta:
+          seshat:
+            derivation: date_spine
+        data_tests:
+          - unique:
+              config:
+                tags: [seshat_table_sales_c086_raw]
+          - not_null:
+              config:
+                tags: [seshat_table_sales_c086_raw]
+      - name: full_date
+        meta:
+          seshat:
+            derivation: date_spine
+      - name: year
+        meta:
+          seshat:
+            derivation: date_spine
+      - name: quarter
+        meta:
+          seshat:
+            derivation: date_spine
+      - name: month
+        meta:
+          seshat:
+            derivation: date_spine
+      - name: month_name
+        meta:
+          seshat:
+            derivation: date_spine
+      - name: day
+        meta:
+          seshat:
+            derivation: date_spine
+      - name: day_name
+        meta:
+          seshat:
+            derivation: date_spine
+      - name: iso_week
+        meta:
+          seshat:
+            derivation: date_spine
+      - name: is_weekend
+        meta:
+          seshat:
+            derivation: date_spine
+
+  - name: fct_sales_c086
+    config:
+      tags: [seshat_table_sales_c086_raw]
+    meta:
+      seshat:
+        table_id: sales_c086_raw
+        source_map: mappings/sales_c086_raw/source-map.yaml
+        source_map_revision: 5e4043b041e560c8b2b458b2adcc878f91eb69de
+        grain: one row = one billing-document line item
+        business_key: [reference_no, item_no]
+        authority: derived
+    columns:
+      - name: fct_sales_c086_sk
+        meta:
+          seshat:
+            derivation: surrogate_key
+        data_tests:
+          - unique:
+              config:
+                tags: [seshat_table_sales_c086_raw]
+          - not_null:
+              config:
+                tags: [seshat_table_sales_c086_raw]
+      - name: reference_no
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.reference_no]
+      - name: item_no
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.item_no]
+      - name: is_return
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.billing_type]
+      - name: product_sk
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.material]
+        data_tests:
+          - relationships:
+              arguments:
+                to: "{{ ref('dim_product_c086') }}"
+                field: product_sk
+              config:
+                tags: [seshat_table_sales_c086_raw]
+      - name: billing_type_sk
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.billing_type]
+        data_tests:
+          - relationships:
+              arguments:
+                to: "{{ ref('dim_billing_type_c086') }}"
+                field: billing_type_sk
+              config:
+                tags: [seshat_table_sales_c086_raw]
+      - name: customer_sk
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.customer]
+        data_tests:
+          - relationships:
+              arguments:
+                to: "{{ ref('dim_customer_c086') }}"
+                field: customer_sk
+              config:
+                tags: [seshat_table_sales_c086_raw]
+      - name: staff_sk
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.personel_number]
+        data_tests:
+          - relationships:
+              arguments:
+                to: "{{ ref('dim_staff_c086') }}"
+                field: staff_sk
+              config:
+                tags: [seshat_table_sales_c086_raw]
+      - name: date_sk
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.date]
+        data_tests:
+          - not_null:
+              config:
+                tags: [seshat_table_sales_c086_raw]
+          - relationships:
+              arguments:
+                to: "{{ ref('dim_date_c086') }}"
+                field: date_sk
+              config:
+                tags: [seshat_table_sales_c086_raw]
+      - name: quantity
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.quantity]
+      - name: gross_sales
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.gross_sales]

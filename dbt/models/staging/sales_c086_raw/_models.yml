@@ -1,0 +1,107 @@
+version: 2
+
+models:
+  - name: stg_sales_c086_raw
+    config:
+      tags: [seshat_table_sales_c086_raw]
+    meta:
+      seshat:
+        table_id: sales_c086_raw
+        source_map: mappings/sales_c086_raw/source-map.yaml
+        source_map_revision: 5e4043b041e560c8b2b458b2adcc878f91eb69de
+        grain: one row = one billing-document line item
+        business_key: [reference_no, item_no]
+        authority: derived
+    columns:
+      - name: reference_no
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.reference_no]
+        data_tests:
+          - not_null:
+              config:
+                tags: [seshat_table_sales_c086_raw]
+      - name: item_no
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.item_no]
+        data_tests:
+          - not_null:
+              config:
+                tags: [seshat_table_sales_c086_raw]
+      - name: material
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.material]
+      - name: material_desc
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.material_desc]
+      - name: category
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.category]
+      - name: subcategory
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.subcategory]
+      - name: segment
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.segment]
+      - name: division
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.division]
+      - name: brand
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.brand]
+      - name: item_cluster
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.item_cluster]
+      - name: billing_type
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.billing_type]
+      - name: billing_type_code
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.billing_type_2]
+      - name: quantity
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.quantity]
+      - name: gross_sales
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.gross_sales]
+      - name: sale_date
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.date]
+      - name: customer
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.customer]
+      - name: customer_name
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.customer_name]
+      - name: staff_code
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.personel_number]
+      - name: staff_name_masked
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.person_name]
+      - name: staff_position
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.position]
+      - name: is_return
+        meta:
+          seshat:
+            source_columns: [bronze.sales_c086_raw.billing_type]

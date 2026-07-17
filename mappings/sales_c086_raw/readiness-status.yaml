@@ -1,0 +1,201 @@
+# =============================================================================
+# readiness-status.yaml  --  sales_c086_raw (C086 pharmacy branch sales export)
+# =============================================================================
+# Per-table readiness state (ADR 0004), spanning all seven stages. Four statuses +
+# evidence + blockers, never a numeric score. ASCII only.
+# =============================================================================
+
+# --- identity ---------------------------------------------------------------
+table: "bronze.sales_c086_raw"
+source_id: "sales_c086_raw"
+source_family: "pharmacy_branch_c086_sales_export"
+
+# --- where we are -----------------------------------------------------------
+current_stage: "publish_ready"        # publish_ready PASSED 2026-07-16 (data owner approval recorded). All seven stages are now pass; the readiness spine for this table is complete.
+mapping_version: "1"
+
+# --- the seven stages -------------------------------------------------------
+stages:
+
+  source_ready:
+    status: "pass"
+    evidence:
+      - "mappings/sales_c086_raw/source-profile.md (249,106 rows; 46 source cols + 2 lineage; mechanical numbers via seshat.profile.profile())"
+      - "PK RULED 2026-07-16 (data owner, see approvals[]): grain PK is (reference_no, item_no). reference_no is uniform format (always C086 + 10 digits, site code embedded); billing_document REJECTED as PK -- it mixes two prefixes ('0' on 215,297 rows vs letter 'O' on 33,809 rows), and the O-prefix rows exactly match where fi_document_no is blank (33,809), indicating billing_document conflates two different document/channel types under one column"
+      - "returns rule measured from authoritative column billing_type (Arabic mrtja values); sign-alone would misclassify 2,030 rows"
+      - "NET-SALES RULED 2026-07-16 (data owner, see approvals[]): net_sales landed column is UNRELIABLE and REJECTED as a derivation source. gross_sales+dis_tax+add_dis-tax==net_sales holds on only 90.4% (225,191/249,106) rows; tested 7 alternative formulas (subtotal5_discount/salse_not_tax/kzwi1/paid combinations), none improved on 90.4%. Of the 23,915 mismatches, only 4,723 (19.7%) are rounding noise (<=0.01); the remaining 19,192 have a material residual (avg 6.18, range -921.04..5225.44) not explained by any tested column combination. Mismatch rate is roughly uniform (~10-11%) across every billing_type -- not concentrated in returns or one channel, so it is not a returns-handling artifact. Decision: do NOT carry landed net_sales forward as a trusted measure; a new net-sales calculation will be authored in source-map.yaml / the silver build from first principles (gross_sales, tax, discounts), not reconciled against this column."
+      - "BLANK-SEMANTICS RULED 2026-07-16 (data owner, see approvals[]): item_cluster blank (32.01%, 79,734 rows) = unknown/missing, despite measuring as a stable per-material attribute (0 / 9,690 materials show both blank and non-blank item_cluster across their rows -- the blank is consistent per material, not scattered per transaction). assignment blank (46.88%, 116,776 rows) = unknown/missing, despite measuring 85.5% populated on billing_type='اجل' (credit) rows and 0% populated on 'فورى' (cash) and most other billing types -- a pattern consistent with a credit-account reference field. certification (67.96% blank) DROPPED from the model entirely -- populated rate varies by division (0% Cosmetics .. ~38% OTC) without a clean applicability pattern, and the data owner chose not to resolve its meaning rather than guess."
+      - "PII RULED 2026-07-16 (data owner, see approvals[]): person_name (91.15% populated, 142 distinct) confirmed as STAFF/EMPLOYEE data (sample roles: driver/سائق, cashier/موظف كاشير, pharmacist/صيدلى, branch manager/مدير صيدلية) -- ruled MASK/PSEUDONYMIZE before any downstream exposure. customer_name (100% populated, 512 distinct) confirmed as predominantly B2B/institutional (insurance companies, pharma distributors, branch names -- e.g. AXA-EGYPT, ASTRAZENECA offers; only 517/249,106 rows show a redacted-looking hash pattern) -- ruled LOW RISK, KEEP AS-IS. insurance_tel and insurance_no (61.9% populated each, 154,088/249,106 rows, only ~0.1% placeholder/zero values) confirmed as genuine third-party insurance contact/policy data -- ruled DROP ENTIRELY from the model, excluded from source-map.yaml."
+    blocking_reasons: []
+    # pass: all four open items are now RULED by the data owner (see approvals[]
+    # below) -- PK, net-sales, blank-semantics, and PII. Mechanical numbers complete
+    # via seshat.profile.profile() and every semantic proposal has a named-human
+    # decision on record (ADR 0004; Principle V). Source Ready gate clears.
+
+  mapping_ready:
+    status: "pass"
+    evidence:
+      - "mappings/sales_c086_raw/source-map.yaml (46 source columns mapped: 18 keep incl. 2 PK cols, 28 drop; grain PK (reference_no, item_no); gold star = 1 fact (gold.fct_sales_c086) + 4 dims (dim_product_c086, dim_billing_type_c086, dim_customer_c086, dim_staff_c086) + date dim)"
+      - "column-by-column keep/drop review conducted directly with the data owner (Ahmed Shaaban) 2026-07-16, batch by batch: document references (all 4 dropped), no-signal columns (all 6 dropped incl. site/site_name), product attributes (mat_group/mat_group_2/item_status/certification/assignment dropped; material/material_desc/category/subcategory/segment/division/brand/item_cluster kept), billing columns (both kept), money columns (net_sales/salse_not_tax/kzwi1 dropped; quantity/gross_sales/tax/dis_tax/add_dis/subtotal5_discount/paid kept), date/customer/staff/PII columns (insurance_tel/insurance_no dropped per prior ruling; date/customer/customer_name/buyer/personel_number/person_name/position kept)"
+      - "all four Source Ready rulings (PK, net-sales, blank-semantics, PII) carried forward into the map without re-litigation; new deviations recorded for RC9 (salse_not_tax/kzwi1 dropped, not kept as independent measures) and RC12 (mat_group/mat_group_2 dropped, not kept as a flat denorm attribute)"
+    blocking_reasons: []
+    # pass: source-map.yaml authored and reviewed column-by-column with the named
+    # data owner in-session (2026-07-16); approval recorded below (mapping_ready is
+    # one of the four RS1 approval-required stages). No silver.* SQL written yet --
+    # that is the next stage's work, not this one's.
+
+  silver_ready:
+    status: "pass"
+    evidence:
+      - "warehouse/silver/0001_create_silver_sales_c086_raw.sql applied to Ex-1 (live, re-run five times: after the rename/missing-value review, after promoting buyer->purchaser, after the billing_type translation + is_return bug fix, after excluding 4 non-product-sale divisions, and after a final post-hoc column review); silver.sales_c086_raw created, 248,593 rows (249,106 bronze MINUS 513 excluded rows -- see ROW FILTER below; this is the only deliberate row-count deviation from bronze). FINAL COLUMN COUNT: 21 (down from an earlier 27) -- tax, dis_tax, add_dis, subtotal5_discount, paid, and purchaser (formerly buyer) were all dropped from the model in a final review, 2026-07-16."
+      - "ROW FILTER applied 2026-07-16 (data owner ruling): excludes 513/249,106 (0.21%) rows where division IN ('ARCHIVE','AUX','','EL EZABY SERVICES'). Each division inspected before dropping: ARCHIVE (6 rows) = retired/discontinued products + penny-value promotional 'gift' lines; AUX (6 rows) = miscellaneous-tagged real drugs, negligible; blank/UNKNOWN (3 rows) = genuinely missing division; EL EZABY SERVICES (498 rows) = NOT product sales at all (injection fees, 'WHATS APP - A' line items, generic 'SPECIAL SERVICE' charges) -- out of scope for a retail sales-of-goods fact. This CHANGES the row-parity invariant used throughout this stage: silver row count is now 248,593, not the full bronze count -- every prior/future row-count check must expect 248,593."
+      - "BILLING_TYPE TRANSLATED to English 2026-07-16 (data owner ruling: REPLACE the Arabic value entirely, no dual-language column): Credit Sale / Cash Sale / Credit Return / Cash Return / Pick-Up Order / Pick-Up Order Return / Delivery / Delivery Return / Delivery - Credit / Delivery - Credit Return. BUG CAUGHT AND FIXED during this translation: is_return originally matched the Arabic mrtja prefix directly, which silently missed 'Pick-Up Order Return' (376 rows -- already English in bronze, never carried the Arabic substring), leaving those rows incorrectly classified as non-returns. Fixed by deriving is_return from the TRANSLATED English label (LIKE '%Return%') instead, computed once in a shared CTE so billing_type and is_return can never drift apart. Corrected is_return rate: 12,365/249,106 (4.96%), up from the pre-fix 11,989 (4.81%) by exactly the 376 previously-missed rows."
+      - "RENAME MAP reviewed column-by-column with the data owner 2026-07-16: billing_type_2->billing_type_code, date->sale_date, personel_number->staff_code (NOT staff_number -- owner's explicit choice), person_name->staff_name_masked, position->staff_position, buyer->purchaser (added later, during an outlier investigation -- see below); every other kept column renamed identically to source"
+      - "buyer RENAMED to purchaser and PROMOTED from a degenerate fact attribute to its own dimension (gold.dim_purchaser_c086), 2026-07-16 (data owner ruling): discovered during a full-invoice investigation of 5 large FROST-spray transactions (2023-11-21, reference_no C0860000190130/190131/190132/190134/190136) that the SAME invoice can carry TWO DIFFERENT purchaser codes across its own line items (e.g. C0860000190130: the FROST line -> 'A.AZIZ', the OZEMPIC line -> 'KHALED') -- worth a standalone dim to filter/group on directly, not left inert as a degenerate dim"
+      - "MISSING-VALUE POLICY reviewed and DEVIATES from RC5/RC6 defaults (data owner ruling 2026-07-16): money/quantity columns (quantity, gross_sales, tax, dis_tax, add_dis, subtotal5_discount, paid) stay NULL on blank (RC5 default confirmed, NOT coerced to 0 -- protects SUM() semantics); EVERY text column (including natural keys material/customer/staff_code/buyer, not just grouping dims) uses sentinel 'UNKNOWN' on blank, a deliberate extension beyond RC6's grouping-dim-only scope"
+      - "RC2 PK re-proof on TRANSFORMED, POST-FILTER data: COUNT(*) = COUNT(DISTINCT (reference_no, item_no)) = 248,593, 0 rows where either PK column collapsed to the 'UNKNOWN' sentinel; PRIMARY KEY constraint (sales_c086_raw_pkey) verified present via pg_constraint"
+      - "is_return derived from the TRANSLATED billing_type (RC8, not quantity sign): measured 12,280/248,593 (4.94%) true after the translation bug fix and the row filter above (all 5 return variants -- Credit/Cash/Delivery/Delivery-Credit/Pick-Up Order Return -- now correctly captured by a single LIKE '%Return%' rule on the English label). CORRECTION: full bronze had 12,365 total return rows; 85 of them (72 Arabic-prefix + 13 Pick-Up Order Return) belonged to the 4 excluded divisions and are now gone from silver along with their division -- 12,365 - 85 = 12,280 checks out exactly. An earlier note in this file wrongly claimed the row filter left the return count unchanged; corrected here after verifying against the data rather than assuming."
+      - "person_name PII ruling applied: staff_name_masked is an md5() hash on non-blank names (deterministic -- same staff_code always -> same hash) or the 'UNKNOWN' sentinel on blank; no raw Arabic person_name column present in silver"
+      - "sentinel rate spot-checked against known bronze missingness: item_cluster 'UNKNOWN' = 79,734/249,106 (32.01%, exact match); staff_code 'UNKNOWN' = 1,748/249,106 (0.70%, exact match to the known personel_number blank rate); all other kept columns show 0 'UNKNOWN' rows, consistent with their 0% source blank rate"
+      - "NET-SALES QUESTION CLOSED 2026-07-16 (data owner, final ruling): there is NO net-sales measure in this model. gross_sales is the standing 'sales' measure going forward. This supersedes the earlier 'net_sales_computed' open placeholder (which anticipated a formula from gross_sales/tax/dis_tax/add_dis -- those tax/discount columns were dropped from the model in the same session, so the placeholder had nothing left to compute from). If net sales is ever needed later, it is a NEW decision requiring a fresh governance ruling, not a resumption of this one."
+      - "COLUMNS DROPPED 2026-07-16 (data owner, final post-hoc review, after silver had already passed once): tax, dis_tax, add_dis, subtotal5_discount, paid (5 money columns), and purchaser (formerly buyer, which had itself been renamed and promoted to its own dimension gold.dim_purchaser_c086 earlier the same session -- that dimension is now removed too). Re-verified after the drop: row count (248,593) and RC2 PK proof both unchanged."
+    blocking_reasons: []
+    # pass: silver migration authored strictly from the approved source-map.yaml
+    # PLUS a separate rename-map and missing-value-policy review conducted
+    # explicitly with the data owner (not folded silently into the SQL without
+    # review, which was the initial gap flagged and corrected). Applied to the
+    # live Ex-1 database; RC2 PK re-proof, row-count parity, is_return
+    # correctness, PII masking, and sentinel rates were all independently
+    # verified against the live transformed output -- not assumed from the SQL
+    # looking correct.
+
+  gold_ready:
+    status: "pass"
+    evidence:
+      - "warehouse/gold/0001_create_gold_sales_c086_star.sql applied to Ex-1 (live, re-run once after a bug fix -- see below); gold Kimball star built: 1 fact (gold.fct_sales_c086) + 4 entity dims (dim_product_c086, dim_billing_type_c086, dim_customer_c086, dim_staff_c086) + 1 date dim (dim_date_c086, contiguous 2023-01-01..2025-12-31)"
+      - "BUG FOUND AND FIXED on first live run (2026-07-16): the migration failed on its own UNIQUE grain-key constraint (reference_no, item_no) = (C0860010004024, 5) duplicated. Root cause: dim_staff_c086 was built with a plain GROUP BY staff_code, which produced a REAL dimension row for the literal string 'UNKNOWN' (1,745 silver rows carry this sentinel from the missing-value policy) IN ADDITION to the manually-inserted -1 unknown-member row (which also uses the label 'UNKNOWN') -- two dimension rows sharing one natural-key value. Every staff_code='UNKNOWN' silver row then fanned out across BOTH matching dimension rows in the fact LEFT JOIN, silently duplicating fact rows. Reproduced deterministically on a second run (ruled out as a query-nondeterminism fluke) before being diagnosed and fixed by excluding the sentinel value from each dimension's natural-key population (WHERE <> 'UNKNOWN'), applied as a standing safeguard to all 4 entity dims, not just dim_staff_c086."
+      - "POST-FIX VERIFICATION (RC16): row-count reconciliation silver (248,593) = gold fact (248,593); grain-key (reference_no, item_no) proven unique on the gold fact itself (248,593 = 248,593 distinct); ZERO orphan FKs across all 5 dimensions (product_sk, billing_type_sk, customer_sk, staff_sk, date_sk); SUM(gross_sales) and SUM(quantity) reconcile EXACTLY between silver and gold (38,804,001.54 and 286,098.392 respectively, to the cent/unit); dim_staff_c086 confirmed to have 0 duplicate natural keys post-fix; 1,745 fact rows correctly route to the staff -1 unknown member, matching the known blank-staff_code count exactly (proving the fix routes correctly rather than just avoiding the constraint failure)"
+      - "date dimension verified before this migration was written: generate_series(2023-01-01, 2025-12-31) produces 1,096 contiguous, unique calendar days (mechanically proven, COUNT(*) = COUNT(DISTINCT) = 1,096); matches silver's actual sale_date range exactly; 0 NULL sale_date rows in silver, so no unknown-date handling was needed; dim_date_c086 correctly carries NO -1 member (marked date table convention, rule S8) -- an unmatched fact date fails loud via date_sk NOT NULL, never silently bucketed"
+      - "gross_sales confirmed as the sole standing 'sales' measure in the fact (CLOSED 2026-07-16, no net_sales); quantity also carried as an independent measure; no tax/discount columns present, consistent with source-map.yaml's post-hoc column review"
+    blocking_reasons: []
+    # pass: gold star built strictly from the approved source-map.yaml gold_star
+    # section, applied to the live Ex-1 database. A REAL bug was found on the
+    # first run (sentinel-collision fan-out duplicating fact rows), root-caused
+    # rather than worked around, fixed with a standing safeguard applied to all
+    # entity dims (not just the one that happened to trigger the failure), and
+    # the fix was independently re-verified against live data (RC16: 0 orphan
+    # FKs, exact total reconciliation, grain-key uniqueness) -- not assumed from
+    # the migration succeeding a second time.
+
+  semantic_model_ready:
+    status: "pass"
+    evidence:
+      - "mappings/sales_c086_raw/metrics/TotalSales.yaml authored and approved 2026-07-16 (Ahmed Shaaban, data_owner). formula_intent: sum of gross_sales across all line items, gross of returns. binds_to gold.fct_sales_c086.gross_sales (gold-only, per Principle III)"
+      - "A2 (returns) RULED: TotalSales is gross of returns -- verified 2026-07-16 that all 12,280 is_return=true rows carry negative (10,603, 86.4%) or zero (1,677, 13.6%) gross_sales, none positive -- so a plain SUM nets returns in automatically without double-counting or inflating"
+      - "A1 (VAT) RULED as DEFERRED, not left open: data owner directed 'we will ignore tax for now' 2026-07-16 -- recorded as a decided ambiguity (decision_status: decided, number_moving: false, explicitly attributed to the named owner) rather than an unresolved blocking item. TotalSales reports gross_sales as-landed with no stated pre-tax/tax-inclusive position; revisit with a fresh ruling if a tax-aware metric is ever needed"
+      - "A4 (gross vs net) N/A for this table: no net_sales measure exists in the model at all (closed 2026-07-16), so there is no gross/net substitution risk to record"
+      - "seshat semantic-check: 0 findings (no drift between the contract's stated intent and the committed artifacts it can verify statically)"
+      - "This is Semantic Model Ready for the ONE contract authored so far (TotalSales). It is NOT a claim that every metric this table will ever need has a contract -- future metrics (e.g. ReturnsSales, a by-product or by-billing-type breakdown) each need their own contract and their own owner approval before a DAX measure traces to them."
+    blocking_reasons: []
+    # pass: the metric-contract gate is satisfied for the contracts that exist.
+    # TotalSales is approved by the named data owner with its load-bearing
+    # ambiguities (A1, A2, A4, A8, A9) explicitly recorded -- decided or N/A,
+    # never left as a silent assumption. No DAX/PBIP has been built yet; that is
+    # a separate later step (the define/check boundary -- this stage DEFINES
+    # intent + binding, it does not build or check a model).
+
+  dashboard_ready:
+    status: "pass"
+    evidence:
+      - "mappings/sales_c086_raw/design/ authored: dashboard-layout.md, visual-list.md, visual-contract-binding-map.md"
+      - "MINIMAL scope chosen 2026-07-16 (data owner): single page, single visual (v01: TotalSales KPI card) -- only TotalSales has an approved metric contract, so the design deliberately avoids any orphan visual rather than adding a breakdown/trend that has no backing contract"
+      - "binding map: 1 measure-bearing visual, 1 approved contract bound, ZERO orphans; the gross-of-returns and deferred-tax caveats (from the TotalSales contract's A1/A2 rulings) explicitly carried onto the page as a footnote requirement, not silently dropped"
+      - "design review APPROVED by Ahmed Shaaban (data_owner, acting as BI report owner) on 2026-07-16, no requested changes"
+      - "'Deferred, not forgotten' list recorded in dashboard-layout.md: returns metric, by-division/by-billing-type/by-product breakdowns, and staff-level activity are explicit known future asks, NOT designed here because they lack an approved contract -- not an oversight"
+    blocking_reasons: []
+    # pass: design review approved by the named BI report owner (Principle V --
+    # the reviewer's action, recorded in visual-contract-binding-map.md, not
+    # self-granted by the agent). Deliberately minimal scope (1 visual) is an
+    # honest reflection of how many contracts are approved so far, not a
+    # shortcut -- expanding the dashboard requires expanding the contract set
+    # first, in that order.
+
+  publish_ready:
+    status: "pass"
+    evidence:
+      - "mappings/sales_c086_raw/handoff/bi-handoff-pack.md assembled 2026-07-16: composes the approved TotalSales contract, the RC16 bronze->gold reconciliation (row parity 248,593=248,593, 0 orphan FKs, exact SUM reconciliation), a data dictionary of the deployed gold schema verified column-by-column against live information_schema.columns (fct_sales_c086 + 4 dims + dim_date_c086), and all four mandatory caveats (PII exclusion/masking, returns-from-billing_type, measured known gaps incl. the 513-row division filter and its 85-row return-count effect, out-of-scope list)"
+      - "mappings/sales_c086_raw/handoff/handoff-review-checklist.md walked: all sections + all four caveats + publish approval now satisfied"
+      - "seshat evidence-pack --table sales_c086_raw run 2026-07-16: handoff-pack section = pass, metric-contracts = pass, semantic-model-summary = pass, dashboard-summary = pass. Five OPTIONAL standalone-file sections (source-profile, assumptions-and-decisions, validation-summary, known-limitations, release-notes) report blocked because this table folded that content into source-profile.md/readiness-status.yaml evidence[] rather than authoring the separate standalone files the generic evidence-pack scan expects; not a gap in the actual handoff pack itself, which composes the same underlying evidence directly."
+      - "seshat pii-notice --table sales_c086_raw run 2026-07-16: echoes the same PII dispositions verbatim (person_name masked, insurance_tel/insurance_no dropped) -- confirms the pack's PII caveat matches the committed source-map.yaml, not a hand-typed restatement"
+      - "seshat approver-view --table sales_c086_raw run 2026-07-16: no refusal-worthy item found in stages 1-6; flags mappings/sales_c086_raw/unresolved-questions.md as not found (absence of the file, not proof of zero open questions) -- carried forward as a known documentation gap, not a blocker (no open question is on record anywhere in this table's evidence)"
+      - "publish_ready approval RECORDED 2026-07-16 by Ahmed Shaaban (data_owner) -- see approvals[] below. All seven readiness stages are now pass."
+    blocking_reasons: []
+    # pass: the sole blocking reason (no recorded publish approval) is
+    # resolved by the named data owner's explicit sign-off below. This is
+    # the terminal stage of the readiness spine for sales_c086_raw -- live
+    # publish to a Power BI workspace remains the deferred, gated F016
+    # execution adapter and is NOT performed from this surface.
+
+# --- cross-cutting ----------------------------------------------------------
+evidence:
+  - "source-profile.md filled 2026-07-16 via read-only seshat.profile.profile() session"
+blocking_reasons: []
+# top-level blocking_reasons mirrors current_stage only when current_stage is
+# "blocked" (RS1); current_stage here is "source_ready" at warning, so this stays
+# empty -- the open items live as source_ready evidence[] above.
+
+# --- approvals (named human sign-offs; the agent cannot self-grant) ---------
+approvals:
+  - stage: "source_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-07-16"
+    note: "AMENDMENT (not a full stage pass): ruled the grain PK is (reference_no, item_no), not (billing_document, item_no). Basis: reference_no is uniformly formatted (C086 + 10 digits, embeds site code) on all 249,106 rows; billing_document mixes a '0'-prefix (215,297 rows) and letter-'O'-prefix (33,809 rows) split that exactly matches the blank-fi_document_no population, indicating it conflates two document/channel types. Three items remain open at the time of this ruling: net-sales 9.6% mismatch, item_cluster/certification/assignment blank semantics, and the PII ruling on insurance_tel/insurance_no/person_name/customer_name."
+  - stage: "source_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-07-16"
+    note: "AMENDMENT (not a full stage pass): ruled that landed net_sales is UNRELIABLE and will NOT be reconciled or carried forward as a trusted measure. Basis: the gross_sales+dis_tax+add_dis-tax identity holds on only 90.4% of rows; 7 alternative formulas were tested and none improved on that rate; of the 23,915 mismatches, 80.3% have a material (non-rounding) residual with no explaining column combination found; the mismatch rate is uniform across billing_type, ruling out a returns-specific cause. Decision: drop landed net_sales as a source for downstream measures -- a new net-sales calculation will be authored from first principles (gross_sales, tax, discounts) during source-map.yaml / the silver build, not derived by reconciling this column. Two items remain open: item_cluster/certification/assignment blank semantics, and the PII ruling."
+  - stage: "source_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-07-16"
+    note: "AMENDMENT (not a full stage pass): ruled the blank semantics for three columns. item_cluster blank -> UNKNOWN/MISSING (agent's measurement showed it is a stable per-material attribute -- 0 / 9,690 materials have mixed blank/non-blank item_cluster across their own rows -- but the owner ruled it unknown/missing rather than a real 'no cluster' category). assignment blank -> UNKNOWN/MISSING (agent's measurement showed 85.5% population on billing_type='اجل' credit rows vs 0% on 'فورى' cash and most other types, consistent with a credit-account reference field -- but the owner ruled it unknown/missing rather than structural not-applicable). certification -> DROPPED from the model entirely; its division-based population pattern (0% Cosmetics .. ~38% RX/OTC) was not clean enough to rule on, and the owner chose to drop the column rather than guess its meaning. One item remains open: the PII ruling on insurance_tel/insurance_no/person_name/customer_name."
+  - stage: "source_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-07-16"
+    note: "FINAL RULING -- clears source_ready to pass. PII governance decided for all four flagged columns: (1) person_name (staff/employee data -- driver, cashier, pharmacist, branch manager roles observed) -> MASK/PSEUDONYMIZE before any downstream exposure. (2) customer_name (sampled as predominantly B2B/institutional: insurance companies, pharma distributors, branch names; only 517/249,106 rows show a redacted-looking hash pattern) -> LOW RISK, KEEP AS-IS, no masking required. (3) insurance_tel and insurance_no (154,088/249,106 rows populated, ~0.1% placeholder values, genuine third-party insurance contact/policy data) -> DROP ENTIRELY, excluded from source-map.yaml and every downstream layer. With this ruling, all four Source Ready open items (PK, net-sales, blank-semantics, PII) are resolved. source_ready moves to pass."
+  - stage: "mapping_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-07-16"
+    note: "APPROVED mapping_ready. source-map.yaml authored and reviewed column-by-column, batch by batch, directly with the data owner in this session: document references (billing_document, fi_document_no, ref_return, crm_order -- all dropped), no-signal columns (ref_return_date, knumv, cosm_mg, area_mg, site, site_name -- all dropped), product attributes (mat_group, mat_group_2, item_status, certification, assignment dropped; material, material_desc, category, subcategory, segment, division, brand, item_cluster kept), billing columns (billing_type, billing_type_2 both kept), money columns (net_sales, salse_not_tax, kzwi1 dropped; quantity, gross_sales, tax, dis_tax, add_dis, subtotal5_discount, paid kept), and date/customer/staff/PII columns (insurance_tel, insurance_no dropped per the prior Source Ready ruling; date, customer, customer_name, buyer, personel_number, person_name, position kept). Final model: 18 columns kept (16 source + reference_no/item_no PK), 28 dropped. Gold star: 1 fact (gold.fct_sales_c086) + 4 dims + date dim. Explicitly directed by the data owner: 'approve mapping_ready and move to silver_ready.'"
+  - stage: "silver_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-07-16"
+    note: "APPROVED silver_ready (data owner directed: 'ok', confirming the migration should run). warehouse/silver/0001_create_silver_sales_c086_raw.sql applied to the live Ex-1 database. Verified independently after the run (not assumed from the SQL alone): row count parity (249,106 = 249,106), the RC2 PK re-proof on TRANSFORMED data (not landed) via a direct COUNT(*)/COUNT(DISTINCT pk)/null-count query plus a pg_constraint check that the PRIMARY KEY actually exists on the live table, is_return correctness (4.81% match to the bronze-side measurement), and that the person_name masking ruling produces a deterministic md5() pseudonym with no raw name column surviving into silver."
+  - stage: "silver_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-07-16"
+    note: "AMENDMENT (stays pass, corrects prior evidence): directed billing_type be translated to English, replacing the Arabic value entirely. During translation review, caught and fixed a real bug: is_return's original Arabic-prefix match silently missed 'Pick-Up Order Return' (376 rows already English in bronze, no Arabic substring to match), so those rows were wrongly classified as non-returns. Fixed by deriving is_return from the translated English label instead, in a shared CTE. Corrected rate: 12,365/249,106 (4.96%) is_return true, verified against the live re-run (row parity and PK proof both re-confirmed unchanged)."
+  - stage: "gold_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-07-16"
+    note: "APPROVED gold_ready (data owner directed: 'go', confirming the gold star migration should run). warehouse/gold/0001_create_gold_sales_c086_star.sql applied to the live Ex-1 database. A real bug was found and fixed on the first run: a sentinel-collision in dim_staff_c086 ('UNKNOWN' natural-key row colliding with the -1 unknown member) fanned out fact rows via the LEFT JOIN, breaking the grain-key UNIQUE constraint. Root-caused (not worked around), fixed with a standing safeguard applied to all 4 entity dims, and independently re-verified: 0 orphan FKs across all 5 dims, exact SUM(gross_sales)/SUM(quantity) reconciliation between silver and gold, and grain-key uniqueness re-proven on the gold fact itself (RC16 satisfied)."
+  - stage: "semantic_model_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-07-16"
+    note: "APPROVED semantic_model_ready for the TotalSales metric contract (mappings/sales_c086_raw/metrics/TotalSales.yaml). Formula intent: SUM(gross_sales) across all gold.fct_sales_c086 rows, gross of returns. Two load-bearing ambiguities ruled: A2 (returns) -- gross of returns, confirmed all 12,280 is_return=true rows carry negative or zero gross_sales (never positive), so a plain SUM nets them in correctly. A1 (VAT) -- explicitly DEFERRED ('we will ignore tax for now'), recorded as a decided-but-deferred ambiguity with number_moving:false attributed to this ruling, not left as a silent unstated assumption. A4 (gross/net) and A9 (branch key) recorded as not-applicable to this single-measure, single-branch table. seshat semantic-check: 0 findings. This approval covers ONLY the contracts that exist today; additional metrics (e.g. ReturnsSales, per-product or per-billing-type breakdowns) each require their own contract and their own approval before Semantic Model Ready extends to cover them."
+  - stage: "dashboard_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-07-16"
+    note: "APPROVED dashboard_ready (BI report owner sign-off recorded directly in mappings/sales_c086_raw/design/visual-contract-binding-map.md, per the kit's convention that the reviewer signs off in the artifact itself, mirrored here). Design reviewed: 1 measure-bearing visual (v01, TotalSales KPI card), 1 approved contract bound, ZERO orphans. Scope was deliberately MINIMAL -- data owner chose a single-visual page rather than adding breakdowns/trends that would need contracts not yet authored. Gross-of-returns and deferred-tax caveats (from the TotalSales contract) carried onto the page as required footnotes. No changes requested; approved as drafted."
+  - stage: "publish_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-07-16"
+    note: "APPROVED publish_ready -- FINAL approval, closes the seven-stage readiness spine for sales_c086_raw. Reviewed and approved: mappings/sales_c086_raw/handoff/bi-handoff-pack.md (the approved TotalSales contract; the RC16 bronze->gold reconciliation, row parity 248,593=248,593, 0 orphan FKs, exact SUM reconciliation; the data dictionary verified against the LIVE deployed gold schema via information_schema.columns, including the is_return column caught late and added; all four mandatory caveats -- PII masking/drop dispositions, returns identified from billing_type never a measure sign, the 513-row division filter and its 85-row effect on the return count, VAT deferred, no net-sales measure, and the out-of-scope list) and handoff-review-checklist.md (all sections and caveats satisfied). Data owner directed: 'yes, approve publish_ready.' Live publish to a Power BI workspace itself remains OUT OF SCOPE -- that is the deferred, gated F016 execution adapter and is not performed from this surface or by this approval."
+# The agent cannot self-grant; all approvals above are recorded from the named
+# human's explicit rulings given in-session, not inferred or defaulted by the agent.
+
+# --- the single next allowed action -----------------------------------------
+next_action: "publish_ready = pass (2026-07-16, Ahmed Shaaban, data_owner). All seven readiness stages for sales_c086_raw are now pass. There is no further readiness-spine action for this table. The only remaining action outside this surface is live publish to a Power BI workspace, which is the deferred, gated F016 execution adapter -- explicitly NOT built or run from this surface. If new metrics (e.g. ReturnsSales, a by-product/by-division breakdown) or dashboard expansion are ever wanted, each requires its own new metric contract (Semantic Model Ready) and its own owner approval before the dashboard can extend -- this pass does not cover future asks."
+
+# --- audit ------------------------------------------------------------------
+last_checked_at: "2026-07-16"
+checked_by: "agent (seshat.profile.profile(), read-only session); PK, net-sales, blank-semantics, PII, mapping_ready, and silver_ready approvals all recorded from data owner's explicit decisions, not self-granted. silver_ready evidence independently re-verified against the live database after the migration ran (row count, PK constraint, is_return rate, masking), not assumed from the SQL text."

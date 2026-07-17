@@ -4,3 +4,8 @@ selectors:
     definition:
       method: tag
       value: seshat_table_retail_store_sales
+  - name: seshat_table_sales_c086_raw
+    description: Governed shadow graph for the approved C086 pharmacy sales map.
+    definition:
+      method: tag
+      value: seshat_table_sales_c086_raw
