@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from secrets import token_hex
+from types import SimpleNamespace
 from typing import Any
 
 import yaml
@@ -375,6 +376,34 @@ def _test(args: Any) -> CommandResult:
     return _execute(args, Operation.TEST)
 
 
+def run_governed_build(
+    root: Path, table: str, operation: Operation = Operation.BUILD
+) -> CommandResult:
+    """Run the FULL governed dbt build for one table, self-accepting the plan.
+
+    The unattended caller (the spec-135 dagster dbt-engine bridge) has no human
+    to review the plan, so it recomputes the plan and passes ITS OWN digest as
+    the acceptance token (FR-014 self-accept-by-recompute; plan-review R1). The
+    digest still functions as a DRIFT-GUARD: ``_execute`` INDEPENDENTLY recomputes
+    the plan and ``require_accepted_plan`` refuses if the working set drifted
+    between the two computes -- so this must NOT be short-circuited into a single
+    compute (that would make the acceptance check tautological). The governed
+    selector is table-wide by governance (spec 133 FR-023); the caller supplies
+    no selector, target, profile, or dbt argument. On any governed failure this
+    RAISES the same typed error the CLI raises (the caller maps it to a dagster
+    outcome); on a completed governed run it returns the CommandResult carrying
+    the sanitized evidence path.
+    """
+    root = Path(root).resolve()
+    plan = create_plan(root, table, invoke_dbt)
+    args = SimpleNamespace(
+        repo=str(root),
+        table=table,
+        accept_plan=_plan_digest(plan),
+    )
+    return _execute(args, operation)
+
+
 def _inside_runs(root: Path, supplied: str) -> Path:
     runs = (root / ".seshat" / "dbt" / "runs").resolve(strict=False)
     candidate = (root / supplied).resolve(strict=False)
@@ -583,10 +612,13 @@ def dbt_main(args: Any) -> int:
 
 __all__ = [
     "ArtifactIntegrityError",
+    "CommandResult",
     "DbtUnavailable",
     "GovernanceError",
     "HandledDbtFailure",
     "LockUnavailable",
+    "Operation",
     "PlanDrift",
     "dbt_main",
+    "run_governed_build",
 ]

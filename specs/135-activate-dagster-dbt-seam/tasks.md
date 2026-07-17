@@ -90,19 +90,19 @@ no readiness/`Gate status`/`approvals[]` changed.
 
 ### Tests for User Story 1 (write first, must fail)
 
-- [ ] T006 [P] [US1] Write `orchestration/dagster/tests/test_dbt_engine_build.py`
+- [x] T006 [P] [US1] Write `orchestration/dagster/tests/test_dbt_engine_build.py`
   (RED): with a fake `seshat.dbt` runner, assert the governed plan is computed and
   the accept-plan digest recomputed (no raw dbt selector/argument), the build
   targets shadow schemas only, and `seshat check` is invoked; assert exit 0 ->
   materialized with dbt engine + selector + measured recorded (never `pass`,
   never a score). (SC-001)
-- [ ] T007 [P] [US1] In the same module, add the fail-closed case (RED): a forced
+- [x] T007 [P] [US1] In the same module, add the fail-closed case (RED): a forced
   non-zero `seshat check` under the dbt engine -> asset failed, all downstream
   skipped, evidence records the non-zero exit -- identical to migrations. (SC-002)
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] Implement
+- [x] T008 [US1] Implement
   `orchestration/dagster/src/tower_bi_orchestration/dbt_build.py`:
   `build_layer(context, table, layer, root)` delegating to `seshat.dbt`
   (`gate.resolve_working_set` + mapping-gate eval, `planning` execution plan for
@@ -110,7 +110,7 @@ no readiness/`Gate status`/`approvals[]` changed.
   refuse-on-drift, `runner` shadow-schema build); return
   `(exit_code, measured, dbt_evidence_path)`; reject any raw dbt argument; run all
   surfaced text through the shared redaction. (FR-002/FR-003)
-- [ ] T009 [US1] Edit `_build_layer` in
+- [x] T009 [US1] Edit `_build_layer` in
   `orchestration/dagster/src/tower_bi_orchestration/assets/gates.py` to branch on
   `resolve_build_engine(...)`: keep the DSN/deferred preamble and the trailing
   `commands.run_gate_command(commands.checker_argv(), cwd=root)` gate UNCHANGED;
@@ -133,14 +133,14 @@ an asset-level assertion that the migrations branch runs for non-`dbt` values.
 
 ### Tests for User Story 2 (write first, must fail)
 
-- [ ] T010 [P] [US2] Add to `test_dbt_engine_build.py` (RED): assert that with
+- [x] T010 [P] [US2] Add to `test_dbt_engine_build.py` (RED): assert that with
   `engine` absent / `migrations` / malformed, `_build_layer` takes the migrations
   branch and records `engine: migrations`; only exact `dbt` takes the dbt branch.
   (SC-003)
 
 ### Implementation for User Story 2
 
-- [ ] T011 [US2] Confirm `_build_layer` (T009) consumes `resolve_build_engine`
+- [x] T011 [US2] Confirm `_build_layer` (T009) consumes `resolve_build_engine`
   such that T010 passes with no additional inference; add the `engine` field to the
   recorded `measured` for both branches. (FR-001)
 

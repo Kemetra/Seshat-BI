@@ -12,9 +12,10 @@ from pathlib import Path
 
 from dagster import AssetKey, asset
 
+from seshat.dagster_adapter.engine import resolve_build_engine
 from seshat.dagster_adapter.gate import read_gate_state
 
-from .. import commands, db
+from .. import commands, db, dbt_build
 from ..evidence_writer import AssetOutcome
 from . import halt, writer_for
 
@@ -26,9 +27,82 @@ def _migrations(root: Path, layer: str, table: str) -> list[Path]:
     return sorted(migrations_dir.glob(f"*{layer}*{table}*.sql"))
 
 
+def _produce_migrations(
+    writer, base: dict, root: Path, layer: str, table: str, dsn: str
+) -> dict:
+    """Apply the committed migration SQL; return the measured produce fields.
+
+    Unchanged from the pre-feature migrations path (US5): flipping back to
+    ``engine: migrations`` reproduces this behavior byte-for-byte.
+    """
+    migrations = _migrations(root, layer, table)
+    if not migrations:
+        halt(
+            writer,
+            AssetOutcome(
+                **base,
+                exit_code=None,
+                measured={"engine": "migrations"},
+                outcome="blocked",
+                blocking_reason=(
+                    f"no committed {layer} migration found for {table} "
+                    "under warehouse/migrations/"
+                ),
+                owner="warehouse owner",
+            ),
+        )
+    for migration in migrations:
+        db.apply_sql_file(dsn, migration)
+    return {
+        "engine": "migrations",
+        "migrations_applied": [m.name for m in migrations],
+    }
+
+
+def _produce_dbt(writer, base: dict, root: Path, layer: str, table: str) -> dict:
+    """Run the governed table-wide dbt build (shadow-only rehearsal).
+
+    The dbt engine does NOT rebuild the real ``silver``/``gold`` relations
+    (spec 133 FR-005) -- it is a governed rehearsal into shadow schemas, so the
+    measured record states ``warehouse_updated: false`` (FR-015). The
+    accept-plan digest is self-accepted-by-recompute on this unattended path
+    (FR-014); that is recorded too. A governed refusal / absent runtime HALTS
+    fail-closed with the bridge's redacted reason (FR-006) -- never a traceback.
+    """
+    exit_code, measured, evidence_path = dbt_build.build_layer(
+        context=None, table=table, layer=layer, root=root
+    )
+    measured = {
+        **measured,
+        "engine": "dbt",
+        "warehouse_updated": False,
+        "self_accepted_by_recompute": True,
+    }
+    if exit_code != 0:
+        halt(
+            writer,
+            AssetOutcome(
+                **base,
+                exit_code=exit_code,
+                measured=measured,
+                outcome=measured.get("outcome", "blocked"),
+                blocking_reason=measured.get(
+                    "blocking_reason", "governed dbt build did not complete"
+                ),
+                owner=measured.get("owner", "the dbt runtime owner"),
+            ),
+        )
+    return measured
+
+
 def _build_layer(context, table: str, root: Path, layer: str) -> None:
-    """Shared silver/gold body: apply the committed migrations, then run the
-    static gate; exit 0 is the ONLY green (Principle I)."""
+    """Shared silver/gold body: PRODUCE via the resolved engine, then run the
+    SAME static gate; exit 0 is the ONLY green (Principle I).
+
+    The GATE (``seshat check``), the DSN/deferred preamble, and the STOP-edge
+    topology are engine-independent and unchanged; only the produce step
+    branches on ``resolve_build_engine`` (default ``migrations``, fail-closed).
+    """
     asset_name = f"{layer}_tables"
     writer = writer_for(context, root)
     gate_command = " ".join(commands.checker_argv()[-3:])
@@ -46,24 +120,11 @@ def _build_layer(context, table: str, root: Path, layer: str) -> None:
                 owner="platform owner",
             ),
         )
-    migrations = _migrations(root, layer, table)
-    if not migrations:
-        halt(
-            writer,
-            AssetOutcome(
-                **base,
-                exit_code=None,
-                measured={},
-                outcome="blocked",
-                blocking_reason=(
-                    f"no committed {layer} migration found for {table} "
-                    "under warehouse/migrations/"
-                ),
-                owner="warehouse owner",
-            ),
-        )
-    for migration in migrations:
-        db.apply_sql_file(dsn, migration)
+    engine = resolve_build_engine(root, table, layer)
+    if engine == "dbt":
+        produced = _produce_dbt(writer, base, root, layer, table)
+    else:
+        produced = _produce_migrations(writer, base, root, layer, table, dsn)
     exit_code, output = commands.run_gate_command(commands.checker_argv(), cwd=root)
     if exit_code != 0:
         halt(
@@ -71,7 +132,7 @@ def _build_layer(context, table: str, root: Path, layer: str) -> None:
             AssetOutcome(
                 **base,
                 exit_code=exit_code,
-                measured={"output_tail": output},
+                measured={**produced, "output_tail": output},
                 outcome="failed",
                 blocking_reason=(
                     f"static governance gate failed: seshat check exit {exit_code}"
@@ -83,7 +144,7 @@ def _build_layer(context, table: str, root: Path, layer: str) -> None:
         AssetOutcome(
             **base,
             exit_code=0,
-            measured={"migrations_applied": [m.name for m in migrations]},
+            measured=produced,
             outcome="materialized",
         )
     )
