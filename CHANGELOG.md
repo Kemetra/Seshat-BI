@@ -27,6 +27,8 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+## [0.4.1] -- 2026-07-17
+
 ### Added
 - **Activated the `dagster-dbt` engine seam** (spec 135, PR #307): `silver_tables` /
   `gold_tables` gain a SELECTABLE build engine -- when a table's committed
