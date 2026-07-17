@@ -678,6 +678,21 @@ capabilities:
       skill: "source-mapping"
       verb: "source-mapping"
 
+  - id: kpi-contract-builder
+    name: "kpi-contract-builder"
+    summary: "Drives the shipped kpi_contracts engine: assess answerability, list the decisions to approve, preview a project metric-contract with per-field provenance, then draft/finalize; never self-grants approval."
+    state: shipped
+    authority: advisory
+    surface: skill
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: semantic_model_ready
+    command: null
+    documentation: ".claude/skills/kpi-contract-builder/SKILL.md"
+    references:
+      skill: "kpi-contract-builder"
+      verb: "kpi-contract-builder"
+
   - id: retail-build-warehouse
     name: "retail-build-warehouse"
     summary: "Authors silver/gold migration SQL from an approved source-map, then stops before executing."
