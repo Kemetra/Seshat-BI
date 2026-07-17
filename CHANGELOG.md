@@ -74,9 +74,13 @@ explicitly identifies a public release event.
   `dagster-dbt`, which spec 135 had already removed from that project's
   `pyproject.toml`; corrected to the current dependency set.
 - **Dependabot config referenced two GitHub labels (`dependencies`, `ci`) that do
-  not exist in this repository**: removed the dangling `labels:` entries from
-  `.github/dependabot.yml` rather than leaving a no-op label request in a
-  committed config file. No label was created.
+  not exist in this repository**: set `labels: []` on each `.github/dependabot.yml`
+  entry rather than leaving a dangling reference to missing labels. Simply
+  deleting the `labels:` key (the initial fix) was wrong -- per GitHub's
+  Dependabot config reference, an unset `labels` key falls back to the default
+  `dependencies` label and Dependabot creates it if absent, which is the exact
+  outcome this change is meant to avoid (caught by automated PR review on
+  PR #314). No label was created.
 
 ## [0.4.0] -- 2026-07-17
 

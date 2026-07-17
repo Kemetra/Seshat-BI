@@ -16,6 +16,7 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: build
+    labels: []
 
   # Orchestration project (spec 136, FR-013): the /orchestration/dagster pip
   # environment was UNWATCHED before this change -- the exact coverage hole that
@@ -37,6 +38,7 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: build
+    labels: []
 
   # GitHub Actions. The workflows pin actions by commit SHA (see the security
   # scan finding `actions-tag-pinned-not-sha`); Dependabot keeps those SHAs
@@ -52,3 +54,4 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    labels: []
