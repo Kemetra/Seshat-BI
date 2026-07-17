@@ -184,10 +184,15 @@ def _validated_source_revision(
                 "source_revision is missing because Git HEAD does not resolve"
             ) from exc
     try:
+        # The exporter is the everyday posture end-to-end: --check reuses the
+        # committed manifest's (possibly squash-orphaned) revision here, so
+        # this re-validation must tolerate rewritten history too. Release
+        # strictness lives in check_release_versions, not in the exporter.
         return validate_manifest_provenance(
             repo_root,
             {"version": version, "source_revision": source_revision},
             label="generated bundle",
+            require_ancestry=False,
         )
     except ProvenanceError as exc:
         raise ExportError(str(exc)) from exc
@@ -646,10 +651,16 @@ def check_all(repo_root: Path, *, allow_untracked_inputs: bool = False) -> None:
                     existing_manifest_path.read_text(encoding="utf-8")
                 )
                 try:
+                    # Everyday posture: feature PRs regenerate bundles on their
+                    # branch and land by squash-merge, orphaning the recorded
+                    # generation commit. Validate the version claim against
+                    # HEAD instead of requiring ancestry (the release audit in
+                    # check_release_versions keeps the strict posture).
                     source_revision = validate_manifest_provenance(
                         repo_root,
                         existing_manifest,
                         label=f"committed {target} bundle",
+                        require_ancestry=False,
                     )
                 except ProvenanceError as exc:
                     raise ExportError(str(exc)) from exc

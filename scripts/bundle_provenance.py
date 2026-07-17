@@ -117,6 +117,35 @@ def _require_revision_ancestor(repo_root: Path, revision: str) -> None:
         raise _ancestor_failure(revision, result.returncode)
 
 
+def _head_revision(repo_root: Path) -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise ProvenanceError("current HEAD does not resolve to a Git commit")
+    return result.stdout.strip()
+
+
+def _source_version_allowing_rewrites(repo_root: Path, revision: str) -> str:
+    """Version at the recorded revision, or at HEAD when history rewriting
+    (squash-merge, deleted PR branch) has orphaned the generation commit.
+
+    The anti-fabrication invariant survives the fallback: the manifest's
+    version claim must still equal the canonical project version of a commit
+    in this repository -- HEAD, the very commit under validation.
+    """
+
+    try:
+        source_version = project_version_at_revision(repo_root, revision)
+        _require_revision_ancestor(repo_root, revision)
+        return source_version
+    except ProvenanceError:
+        return project_version_at_revision(repo_root, _head_revision(repo_root))
+
+
 def _manifest_version(manifest: Mapping[str, object], label: str) -> str:
     version = manifest.get("version")
     if not isinstance(version, str) or not version:
@@ -135,16 +164,31 @@ def _require_matching_version(
 
 
 def validate_manifest_provenance(
-    repo_root: Path, manifest: Mapping[str, object], *, label: str
+    repo_root: Path,
+    manifest: Mapping[str, object],
+    *,
+    label: str,
+    require_ancestry: bool = True,
 ) -> str:
-    """Require a manifest version to match its immutable source revision."""
+    """Require a manifest version to match its immutable source revision.
+
+    ``require_ancestry=True`` (the release-audit posture) demands the recorded
+    revision be a reachable ancestor of HEAD -- the coordinated-release flow
+    lands its version-projection commit without squash or rebase precisely so
+    this holds. ``require_ancestry=False`` (the everyday export/CI posture)
+    tolerates squash-merged history by validating the version claim against
+    HEAD's canonical project version instead.
+    """
 
     version = _manifest_version(manifest, label)
     revision = require_full_git_revision(
         manifest.get("source_revision"), label=f"{label} source_revision"
     )
-    source_version = project_version_at_revision(repo_root, revision)
-    _require_revision_ancestor(repo_root, revision)
+    if require_ancestry:
+        source_version = project_version_at_revision(repo_root, revision)
+        _require_revision_ancestor(repo_root, revision)
+    else:
+        source_version = _source_version_allowing_rewrites(repo_root, revision)
     _require_matching_version(
         label=label,
         revision=revision,
