@@ -180,7 +180,12 @@ For each declared environment and cross-product:
 
 1. Read the referenced pyproject(s), assemble the full requirement set for the
    declared extras / union (a cross-product unions the requirement sets of its
-   members).
+   members). A member may be a LOCAL path or editable install (the orchestration
+   project resolves the local `orchestration/dagster` directory plus an editable
+   `seshat-bi`, not published wheels); `pip install --dry-run` handles local-path
+   and editable members natively, and a transitive conflict (e.g. dbt-core pulled
+   in via `dagster-dbt` clashing with the root `dbt` extra pin) still surfaces as
+   RESOLUTION -- the union is over requirement SETS, some of which are local.
 2. Create an EPHEMERAL throwaway virtual environment (`python -m venv` in a temp
    dir, removed after).
 3. Run `pip install --dry-run --report <report.json> <requirements...>` inside that
@@ -260,11 +265,15 @@ verified during implementation against a produced subject.
 
 ### 6. Redaction reuse
 
-The gate imports the repository's existing secret-shape detection (the C2
-connection-string patterns in `src/seshat/rules/git_meta.py`, or a shared helper if
-one exists) to mask any credential-shaped substring in a surfaced resolver error
-BEFORE printing (FR-016). This mirrors the memory rule that every new surface with a
-failure path must reuse the established redaction rather than re-implement it.
+The gate masks any credential-shaped substring in a surfaced resolver error BEFORE
+printing (FR-016). Note the split in the existing code: `src/seshat/rules/git_meta.py`
+DETECTS secret shapes (the C2 connection-string patterns, returning Findings/bool),
+while the actual text-MASKING capability lives in `src/seshat/pr_summary.py` (`mask`,
+used by the friendly-PR-summary step). The implementation should reuse that masking
+posture -- extracting a shared helper that consumes the C2 shapes and returns
+redacted text, rather than re-implementing either half. This mirrors the memory rule
+that every new surface with a failure path reuses the established redaction rather
+than inventing a parallel one.
 
 ## Complexity Tracking
 

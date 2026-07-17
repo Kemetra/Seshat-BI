@@ -89,6 +89,16 @@ task (US1 scenarios -> T007-T010; US2 -> T015-T019; US3 -> T024-T025).
   whether to require the github-actions block to carry the prefix too. (Out-of-scope
   note in spec.md limits non-pip ecosystem changes.)
 
+- **A4 (LOW)**: FR-016's "reuse the existing C2 posture" is precise only once the
+  split in the existing code is acknowledged: `src/seshat/rules/git_meta.py` DETECTS
+  secret shapes (returns Findings/bool) but exposes no text-masking function; the
+  actual masking lives in `src/seshat/pr_summary.py` (`mask`). plan.md section 6 now
+  states this explicitly and directs the implementation to extract a shared helper
+  (consume the C2 shapes, return redacted text) rather than assume a redactor already
+  exists on `git_meta`. The FR is sound; the earlier phrasing that treated
+  redaction-reuse as a single settled call was imprecise, and is corrected here
+  against the author's own work.
+
 ### Constitution and hard-rule alignment
 
 - **G1 (INFO)**: Principle V is honored end-to-end. Every governed-pin bump, the
@@ -137,7 +147,7 @@ task (US1 scenarios -> T007-T010; US2 -> T015-T019; US3 -> T024-T025).
 | CRITICAL | 0     | --    |
 | HIGH     | 0     | --    |
 | MEDIUM   | 0     | --    |
-| LOW      | 3     | A1 (CI-job home file), A2 (script yaml vs stdlib core), A3 (github-actions prefix conditional) |
+| LOW      | 4     | A1 (CI-job home file), A2 (script yaml vs stdlib core), A3 (github-actions prefix conditional), A4 (redaction detect-vs-mask split) |
 | INFO     | 7     | C1, C2, G1-G4 alignment, V-series ground-truth confirmations |
 
 ## Top items for the reviewer
