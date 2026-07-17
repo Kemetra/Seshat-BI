@@ -611,6 +611,14 @@ def _extra_requirements(project_path: Path, extra: str) -> list[str]:
     return [str(r) for r in optional.get(extra, [])]
 
 
+def _base_requirements(project_path: Path) -> list[str]:
+    """The [project].dependencies list -- governed pins can live HERE too
+    (the orchestration project pins dagster in its base dependencies, not an
+    extra; Codex review on PR #308)."""
+    data = tomllib.loads(project_path.read_text(encoding="utf-8"))
+    return [str(r) for r in data.get("project", {}).get("dependencies", [])]
+
+
 def _requirement_dist(requirement: str) -> str:
     """The distribution name from a requirement string (drop the specifier)."""
     return re.split(r"[<>=!~ \[]", requirement.strip(), maxsplit=1)[0]
@@ -623,7 +631,7 @@ class PinLocation:
     solve-proof does not thread five positional arguments."""
 
     env: Environment
-    extra: str
+    extra: str | None  # None = pinned in the base [project].dependencies
     specifier: str
     dist: str
 
@@ -639,12 +647,26 @@ def _pin_in_extra(
     return None
 
 
+def _pin_in_base(manifest: Manifest, env: Environment, target: str) -> str | None:
+    """The requirement string when ``env``'s BASE [project].dependencies pin
+    ``target``, else None."""
+    for req in _base_requirements(manifest.root / env.pyproject):
+        if _canonical(_requirement_dist(req)) == target:
+            return req
+    return None
+
+
 def _pin_in_environment(
     manifest: Manifest, env: Environment, dist: str, target: str
 ) -> PinLocation | None:
-    """A PinLocation if ``env`` declares ``dist`` in one of its extras, else None."""
+    """A PinLocation if ``env`` declares ``dist`` in its base dependencies or
+    one of its extras, else None (base scanned first: that is where the
+    orchestration project pins dagster)."""
     if not (manifest.root / env.pyproject).is_file():
         return None
+    base = _pin_in_base(manifest, env, target)
+    if base is not None:
+        return PinLocation(env=env, extra=None, specifier=base, dist=dist)
     for extra in env.extras:
         specifier = _pin_in_extra(manifest, env, extra, target)
         if specifier is not None:
@@ -697,9 +719,14 @@ def _substituted_requirements(
     project_path = manifest.root / loc.env.pyproject
     target = _canonical(loc.dist)
     substitute = f"{loc.dist}=={proposed}"
+    requirements = (
+        _base_requirements(project_path)
+        if loc.extra is None
+        else _extra_requirements(project_path, loc.extra)
+    )
     return [
         substitute if _canonical(_requirement_dist(req)) == target else req
-        for req in _extra_requirements(project_path, loc.extra)
+        for req in requirements
     ]
 
 

@@ -42,10 +42,13 @@ jobs:
         with:
           python-version: "3.13"
       # No `pip install -e .` and NO optional extra installed into THIS
-      # interpreter (SC-002). Only pip itself is upgraded so the resolver is
-      # current; every declared resolve runs in its own ephemeral venv.
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
+      # interpreter (SC-002). pip is upgraded so the resolver is current, and
+      # pyyaml (the repo's ONE runtime dependency, needed to read the manifest)
+      # is installed -- it is not an optional extra, so the lazy-import
+      # isolation proof is untouched. Every declared resolve still runs in its
+      # own ephemeral venv.
+      - name: Upgrade pip and install the manifest reader dependency
+        run: python -m pip install --upgrade pip pyyaml
       - name: Co-resolution gate (fail-closed)
         run: python scripts/dep_coresolve.py --check
 
@@ -63,8 +66,8 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
+      - name: Upgrade pip and install the manifest reader dependency
+        run: python -m pip install --upgrade pip pyyaml
       - name: Advisory freshness report
         run: python scripts/dep_coresolve.py --freshness --out freshness-report.json
       - name: Upload freshness report artifact
