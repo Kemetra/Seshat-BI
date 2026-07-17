@@ -1,4 +1,4 @@
-"""Resolve and validate the governed release note for a stable SemVer."""
+"""Resolve and validate the governed release note for a SemVer version."""
 
 from __future__ import annotations
 
@@ -6,24 +6,29 @@ import argparse
 import re
 from pathlib import Path
 
-_STABLE_SEMVER = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
+_SEMVER = re.compile(
+    r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)"
+    r"(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$"
+)
 
 
 def governed_release_note_version(version: str) -> str:
     """Return the version token used by the governed release-note file.
 
-    Initial minor releases preserve the historical series-note convention:
-    ``0.4.0`` uses ``docs/releases/v0.4.md``. Later patch releases require an
-    exact patch note: ``0.4.1`` uses ``docs/releases/v0.4.1.md``.
+    Initial minor releases and non-stable candidate versions preserve the
+    historical series-note convention: ``0.4.0`` and ``0.4.0-rc.1`` use
+    ``docs/releases/v0.4.md``. Later stable patch releases require an exact
+    patch note: ``0.4.1`` uses ``docs/releases/v0.4.1.md``.
     """
 
-    match = _STABLE_SEMVER.fullmatch(version)
+    match = _SEMVER.fullmatch(version)
     if match is None:
         raise ValueError(
-            "version must be stable SemVer MAJOR.MINOR.PATCH without a leading v"
+            "version must be SemVer MAJOR.MINOR.PATCH with optional prerelease "
+            "or build metadata, without a leading v"
         )
     major, minor, patch = match.groups()
-    if patch == "0":
+    if patch == "0" or "-" in version or "+" in version:
         return f"{major}.{minor}"
     return version
 
