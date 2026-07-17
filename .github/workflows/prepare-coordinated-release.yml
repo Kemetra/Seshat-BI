@@ -107,6 +107,24 @@ jobs:
               raise SystemExit("could not update exactly one project.version line")
           pyproject_path.write_text(updated_pyproject, encoding="utf-8")
 
+          install_doc_paths = (
+              Path("docs/install/agent-install.md"),
+              Path("docs/install/support-matrix.md"),
+              Path("docs/install/user-install.md"),
+          )
+          for install_doc_path in install_doc_paths:
+              install_doc = install_doc_path.read_text(encoding="utf-8")
+              updated_install_doc, replacements = re.subn(
+                  r"seshat-bi==\d+\.\d+\.\d+",
+                  f"seshat-bi=={version}",
+                  install_doc,
+              )
+              if replacements != 1:
+                  raise SystemExit(
+                      f"{install_doc_path} must contain exactly one seshat-bi version pin"
+                  )
+              install_doc_path.write_text(updated_install_doc, encoding="utf-8")
+
           marketplace_path = Path(".claude-plugin/marketplace.json")
           marketplace = json.loads(marketplace_path.read_text(encoding="utf-8"))
           marketplace["metadata"]["version"] = version
@@ -151,6 +169,9 @@ jobs:
           expected = {
               ".claude-plugin/marketplace.json",
               "CHANGELOG.md",
+              "docs/install/agent-install.md",
+              "docs/install/support-matrix.md",
+              "docs/install/user-install.md",
               "pyproject.toml",
           }
           changed = set(
@@ -176,6 +197,9 @@ jobs:
           git add -- \
             pyproject.toml \
             CHANGELOG.md \
+            docs/install/agent-install.md \
+            docs/install/support-matrix.md \
+            docs/install/user-install.md \
             .claude-plugin/marketplace.json
           git diff --cached --check
           git commit -m "chore: project v${VERSION} version metadata"

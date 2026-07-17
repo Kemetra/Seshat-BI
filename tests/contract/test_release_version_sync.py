@@ -262,3 +262,10 @@ def test_coordinated_release_commits_version_before_bundle_export() -> None:
     assert "Do not squash or rebase" in workflow
     assert "from scripts.release_note_gate import validate_release_note" in workflow
     assert "validate_release_note(Path.cwd(), version)" in workflow
+    assert 'r"seshat-bi==\\d+\\.\\d+\\.\\d+"' in workflow
+    for install_doc in (
+        "docs/install/agent-install.md",
+        "docs/install/support-matrix.md",
+        "docs/install/user-install.md",
+    ):
+        assert install_doc in workflow
