@@ -97,6 +97,7 @@ Verbs the agent drives:
 - `retail-discover-portfolio` -- metadata-only portfolio discovery -> governed domain/scope proposals -> selected-table onboarding -> interview handoff
 - `business-knowledge-interview` -- after DB discovery, interview the owner into the Decision Store (batch low-risk, explicit critical); records decisions, never self-grants approval
 - `source-mapping` -- the mapping gate -- produces source-map.yaml
+- `kpi-contract-builder` -- drive the shipped kpi_contracts engine: assess answerability, list the decisions to approve, preview with per-field provenance, then draft/finalize -- never self-grants approval
 - `retail-build-warehouse` -- author silver/gold SQL; stop before executing
 - `retail-validate` -- live checks; needs db extra + DSN, else [PENDING LIVE PROFILE]
 - `retail-govern` -- static check (retail check)

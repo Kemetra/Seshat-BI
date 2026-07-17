@@ -28,6 +28,8 @@ verbs:
     purpose: "after DB discovery, interview the owner into the Decision Store (batch low-risk, explicit critical); records decisions, never self-grants approval"
   - id: source-mapping
     purpose: "the mapping gate -- produces source-map.yaml"
+  - id: kpi-contract-builder
+    purpose: "drive the shipped kpi_contracts engine: assess answerability, list the decisions to approve, preview with per-field provenance, then draft/finalize -- never self-grants approval"
   - id: retail-build-warehouse
     purpose: "author silver/gold SQL; stop before executing"
   - id: retail-validate
