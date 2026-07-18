@@ -435,6 +435,20 @@ capabilities:
     references:
       dispatch: "approver-view"
 
+  - id: retail-mapping-mirror
+    name: "retail mapping-mirror"
+    summary: "Guarantees one table's unresolved-questions.md exists: writes a derived CLEARED/OPEN stub only when the ledger is absent; never overwrites, never grants approval."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: mapping_ready
+    command: "mapping-mirror"
+    documentation: ".claude/skills/source-mapping/SKILL.md"
+    references:
+      dispatch: "mapping-mirror"
+
   - id: capabilities
     name: "capabilities (this inventory)"
     summary: "Read-only 'what can this kit do' capability inventory, grouped and machine-readable, over committed metadata."
