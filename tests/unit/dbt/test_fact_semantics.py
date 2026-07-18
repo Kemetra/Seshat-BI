@@ -33,8 +33,41 @@ def test_load_fact_semantics_reads_declared_tags(tmp_path: Path) -> None:
 
     fact = load_fact_semantics(_write_map(tmp_path, _VALID_MAP))
 
-    assert fact.business_key == "transaction_id"
+    assert fact.business_key == ("transaction_id",)
     assert fact.additive_money_measures == ("total_spent",)
+
+
+def test_composite_business_key_keeps_declared_order(tmp_path: Path) -> None:
+    """A composite grain (e.g. invoice_no + line_no) declares its key as an
+    ordered column list; the order is the grain declaration, so it is
+    preserved verbatim, never sorted."""
+    from seshat.dbt.fact_semantics import load_fact_semantics
+
+    text = _VALID_MAP.replace(
+        'business_key: "transaction_id"',
+        'business_key: ["invoice_no", "line_no"]',
+    )
+
+    fact = load_fact_semantics(_write_map(tmp_path, text))
+
+    assert fact.business_key == ("invoice_no", "line_no")
+
+
+def test_factless_fact_declares_an_empty_money_set(tmp_path: Path) -> None:
+    """templates/factless-fact.yaml requires measures: [] by design -- an
+    explicitly declared empty additive_money_measures is a decision, not an
+    omission, and parity then requires ZERO additive_money_total rows."""
+    from seshat.dbt.fact_semantics import load_fact_semantics
+
+    text = _VALID_MAP.replace(
+        '    measures:\n      - "quantity"\n      - "total_spent"\n'
+        '    additive_money_measures:\n      - "total_spent"\n',
+        "    measures: []\n    additive_money_measures: []\n",
+    )
+
+    fact = load_fact_semantics(_write_map(tmp_path, text))
+
+    assert fact.additive_money_measures == ()
 
 
 def test_load_fact_semantics_sorts_money_measures_for_determinism(
@@ -110,13 +143,19 @@ def test_missing_source_map_is_invalid(tmp_path: Path) -> None:
             id="business-key-not-identifier",
         ),
         pytest.param(
+            _VALID_MAP.replace('business_key: "transaction_id"', "business_key: []"),
+            "DBT_FACT_SEMANTICS_INVALID",
+            "business_key",
+            id="empty-business-key-list",
+        ),
+        pytest.param(
             _VALID_MAP.replace(
-                'additive_money_measures:\n      - "total_spent"\n',
-                "additive_money_measures: []\n",
+                'business_key: "transaction_id"',
+                'business_key: ["invoice_no", "invoice_no"]',
             ),
             "DBT_FACT_SEMANTICS_INVALID",
-            "additive_money_measures",
-            id="empty-money-measures",
+            "business_key",
+            id="duplicate-business-key-columns",
         ),
         pytest.param(
             _VALID_MAP.replace(

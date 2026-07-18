@@ -34,7 +34,7 @@ def _fixture_execution_plan(manifest, selected: tuple[str, ...]):
         schema_version=1,
         table_id=TABLE_ID,
         fact=FactBinding(
-            business_key="transaction_id",
+            business_key=("transaction_id",),
             additive_money_measures=("total_spent",),
         ),
         mapping=MappingBinding(

@@ -422,7 +422,8 @@ def _subject_root(subject: str) -> str:
 # Fact-level assertion classes split by expected cardinality:
 #   - fact_row_count / business_key_count are inherent SINGLETONS: one fact table
 #     has one row count, one grain has one distinct-key count -- exactly one each.
-#   - additive_money_total carries one row PER approved additive money measure.
+#   - additive_money_total carries one row PER approved additive money measure --
+#     which may be ZERO rows: a factless fact declares an explicit empty set.
 #     Money measures and the grain key are columns, not enumerable model nodes, so
 #     the built graph alone cannot list them -- the approved map's gold_star.fact
 #     tags supply them (plan.fact, issue #331), and the expected fact-subject set
@@ -446,7 +447,9 @@ def _require_fact_singletons(subjects_by_class: dict[str, list[str]]) -> None:
 
 
 def _require_exact_business_key(subject: str, fact_model: str, fact: FactBinding):
-    expected = f"{fact_model}.{fact.business_key}"
+    # Composite grains dot-join their ordered key columns into one subject
+    # (e.g. fct_sales.invoice_no.line_no) -- order is the grain declaration.
+    expected = ".".join((fact_model, *fact.business_key))
     if subject != expected:
         raise ArtifactIntegrityError(
             "parity business_key_count subject does not reference the approved "

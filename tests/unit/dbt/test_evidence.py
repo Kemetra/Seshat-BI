@@ -38,7 +38,7 @@ def _sample_plan():
         # (fct_sales_rss.transaction_id / fct_sales_rss.total_spent) must match
         # these EXACTLY for evidence to validate.
         fact=FactBinding(
-            business_key="transaction_id",
+            business_key=("transaction_id",),
             additive_money_measures=("total_spent",),
         ),
         mapping=MappingBinding(
@@ -287,10 +287,13 @@ def _parity_row(assertion_id: str, cls: str, subject: str):
     )
 
 
-def _fact_semantics(money: tuple[str, ...] = ("money_amount",)):
+def _fact_semantics(
+    money: tuple[str, ...] = ("money_amount",),
+    business_key: tuple[str, ...] = ("grain",),
+):
     from seshat.dbt.contracts import FactBinding
 
-    return FactBinding(business_key="grain", additive_money_measures=money)
+    return FactBinding(business_key=business_key, additive_money_measures=money)
 
 
 def _fact_parity_base() -> tuple:
@@ -371,6 +374,52 @@ def test_parity_money_subjects_must_match_declared_measures(
 
     with pytest.raises(ArtifactIntegrityError, match=match):
         _validate_parity_set(parity, _FACT_SELECTED, _fact_semantics(money=declared))
+
+
+def test_factless_fact_requires_zero_money_rows() -> None:
+    """A factless fact (declared additive_money_measures: []) is covered by
+    ZERO additive_money_total rows -- and any money row against it is an
+    unexpected, undeclared reconciliation that must block."""
+    from seshat.dbt.artifacts import ArtifactIntegrityError
+    from seshat.dbt.evidence import _validate_parity_set
+
+    factless = _fact_semantics(money=())
+
+    _validate_parity_set(_fact_parity_base(), _FACT_SELECTED, factless)  # no raise
+
+    with_money = _fact_parity_base() + (
+        _parity_row("fact_money_sum", "additive_money_total", "fct_x.money_amount"),
+    )
+    with pytest.raises(ArtifactIntegrityError, match="unexpected fct_x.money_amount"):
+        _validate_parity_set(with_money, _FACT_SELECTED, factless)
+
+
+def test_composite_business_key_subject_joins_the_declared_columns() -> None:
+    """A composite grain declares an ordered column set; the expected
+    business_key_count subject is the dot-join in declared order."""
+    from seshat.dbt.artifacts import ArtifactIntegrityError
+    from seshat.dbt.evidence import _validate_parity_set
+
+    composite = _fact_semantics(business_key=("invoice_no", "line_no"))
+
+    def _parity(subject: str) -> tuple:
+        return (
+            _parity_row("fact_row_count", "fact_row_count", "fct_x"),
+            _parity_row("fact_grain", "business_key_count", subject),
+            _parity_row("fact_money_sum", "additive_money_total", "fct_x.money_amount"),
+            _parity_row(
+                "dim_only_x_member_count", "dimension_member_count", "dim_only_x"
+            ),
+        )
+
+    _validate_parity_set(
+        _parity("fct_x.invoice_no.line_no"), _FACT_SELECTED, composite
+    )  # no raise
+
+    with pytest.raises(ArtifactIntegrityError, match="fct_x.invoice_no.line_no"):
+        _validate_parity_set(
+            _parity("fct_x.line_no.invoice_no"), _FACT_SELECTED, composite
+        )
 
 
 def test_parity_business_key_subject_must_be_the_declared_grain_key() -> None:

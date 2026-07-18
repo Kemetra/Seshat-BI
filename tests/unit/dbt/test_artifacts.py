@@ -34,7 +34,7 @@ def _sample_plan():
         schema_version=1,
         table_id="retail_store_sales",
         fact=FactBinding(
-            business_key="transaction_id",
+            business_key=("transaction_id",),
             additive_money_measures=("total_spent",),
         ),
         mapping=MappingBinding(

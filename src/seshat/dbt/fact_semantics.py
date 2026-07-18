@@ -1,11 +1,18 @@
 """Owner-declared gold_star fact column semantics for exact parity coverage.
 
-The approved source map's ``gold_star.fact`` section must tag which column is
-the grain/business key and which columns are the additive money measures.
+The approved source map's ``gold_star.fact`` section must tag which column(s)
+form the grain/business key and which columns are the additive money measures.
 Parity evidence derives the expected fact-subject set from these tags exactly
 -- the same pattern as dimension-subject coverage, generalized for columns the
 built graph cannot enumerate (issue #331). Fail closed: a map without the tags
 blocks dbt validate/plan with a stable governance code and a remedy.
+
+Generality (not example-shaped): a composite grain declares ``business_key``
+as an ordered column list (e.g. ``[invoice_no, line_no]``), and a FACTLESS
+fact (templates/factless-fact.yaml, ``measures: []`` by design) declares
+``additive_money_measures: []`` -- an explicit empty set is a decision, and
+parity then requires ZERO additive_money_total rows. Only an ABSENT tag is
+missing.
 """
 
 from __future__ import annotations
@@ -61,15 +68,31 @@ def _is_identifier(value: Any) -> bool:
     return isinstance(value, str) and bool(_IDENTIFIER.fullmatch(value))
 
 
-def _business_key(fact: dict[str, Any]) -> str:
+def _business_key_columns(value: Any) -> tuple[str, ...]:
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, list):
+        return tuple(value)
+    return ()
+
+
+def _require_key_columns(columns: tuple[str, ...]) -> None:
+    if not columns or not all(_is_identifier(column) for column in columns):
+        raise _invalid(
+            "gold_star.fact.business_key must be a lowercase column identifier "
+            "or a non-empty ordered list of them (composite grain)"
+        )
+    if len(columns) != len(set(columns)):
+        raise _invalid("gold_star.fact.business_key contains duplicate columns")
+
+
+def _business_key(fact: dict[str, Any]) -> tuple[str, ...]:
     value = fact.get("business_key")
     if value is None:
         raise _missing("business_key")
-    if not _is_identifier(value):
-        raise _invalid(
-            "gold_star.fact.business_key must be a lowercase column identifier"
-        )
-    return value
+    columns = _business_key_columns(value)
+    _require_key_columns(columns)
+    return columns
 
 
 def _require_money_entries(value: list[Any]) -> None:
@@ -85,10 +108,10 @@ def _require_money_entries(value: list[Any]) -> None:
 
 
 def _require_money_list(value: Any) -> None:
-    if not isinstance(value, list) or not value:
-        raise _invalid(
-            "gold_star.fact.additive_money_measures must be a non-empty list"
-        )
+    # An EMPTY list is legitimate: a factless fact declares zero money
+    # measures by design. Only a non-list shape is invalid.
+    if not isinstance(value, list):
+        raise _invalid("gold_star.fact.additive_money_measures must be a list")
     _require_money_entries(value)
 
 
@@ -112,11 +135,14 @@ def _require_money_are_measures(fact: dict[str, Any], money: tuple[str, ...]) ->
         )
 
 
-def _require_key_is_not_money(business_key: str, money: tuple[str, ...]) -> None:
-    if business_key in money:
+def _require_key_is_not_money(
+    business_key: tuple[str, ...], money: tuple[str, ...]
+) -> None:
+    overlap = sorted(set(business_key) & set(money))
+    if overlap:
         raise _invalid(
-            "gold_star.fact.business_key cannot also be an additive money "
-            f"measure: {business_key}"
+            "gold_star.fact.business_key columns cannot also be additive money "
+            "measures: " + ", ".join(overlap)
         )
 
 

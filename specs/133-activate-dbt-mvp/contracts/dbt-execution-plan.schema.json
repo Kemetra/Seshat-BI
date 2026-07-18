@@ -43,10 +43,14 @@
       "additionalProperties": false,
       "required": ["business_key", "additive_money_measures"],
       "properties": {
-        "business_key": {"$ref": "#/$defs/columnIdentifier"},
-        "additive_money_measures": {
+        "business_key": {
           "type": "array",
           "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/columnIdentifier"}
+        },
+        "additive_money_measures": {
+          "type": "array",
           "uniqueItems": true,
           "items": {"$ref": "#/$defs/columnIdentifier"}
         }

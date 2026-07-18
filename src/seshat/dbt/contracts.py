@@ -228,14 +228,16 @@ class FactBinding:
     """Owner-declared fact column semantics bound into an execution plan.
 
     Read from the approved source map's ``gold_star.fact`` section: which
-    column is the grain/business key parity counts distinct, and which
-    columns are the additive money measures parity reconciles by sum. These
-    make the expected fact-subject set derivable EXACTLY (issue #331) --
-    fact measures/keys are columns, not model nodes, so unlike dimensions
-    the built graph alone cannot enumerate them.
+    ordered column(s) form the grain/business key parity counts distinct
+    (one column normally; several for a composite grain), and which columns
+    are the additive money measures parity reconciles by sum (possibly none
+    -- a factless fact declares an explicit empty set). These make the
+    expected fact-subject set derivable EXACTLY (issue #331) -- fact
+    measures/keys are columns, not model nodes, so unlike dimensions the
+    built graph alone cannot enumerate them.
     """
 
-    business_key: str
+    business_key: tuple[str, ...]
     additive_money_measures: tuple[str, ...]
 
 

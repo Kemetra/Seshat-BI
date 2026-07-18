@@ -142,8 +142,7 @@ def _validate_plan_hashes(plan: ExecutionPlan) -> None:
 
 
 def _canonical_money(money: tuple[str, ...]) -> bool:
-    if not money:
-        return False
+    # Empty is canonical: a factless fact declares zero money measures.
     if money != tuple(sorted(set(money))):
         return False
     return all(
@@ -154,15 +153,25 @@ def _canonical_money(money: tuple[str, ...]) -> bool:
 def _require_canonical_money(money: tuple[str, ...]) -> None:
     if not _canonical_money(money):
         raise PlanDrift(
-            "plan fact additive_money_measures must be non-empty, sorted, and unique"
+            "plan fact additive_money_measures must be sorted, unique identifiers"
         )
 
 
+def _canonical_business_key(key: tuple[str, ...]) -> bool:
+    # Ordered and non-empty; order is the grain declaration, so uniqueness is
+    # required but sorting is NOT.
+    if not key or len(key) != len(set(key)):
+        return False
+    return all(
+        isinstance(column, str) and _COLUMN_ID.fullmatch(column) for column in key
+    )
+
+
 def _validate_fact_binding(plan: ExecutionPlan) -> None:
-    if not _COLUMN_ID.fullmatch(plan.fact.business_key):
+    if not _canonical_business_key(plan.fact.business_key):
         raise PlanDrift("plan fact business_key is unsafe")
     _require_canonical_money(plan.fact.additive_money_measures)
-    if plan.fact.business_key in plan.fact.additive_money_measures:
+    if set(plan.fact.business_key) & set(plan.fact.additive_money_measures):
         raise PlanDrift("plan fact business_key cannot be an additive money measure")
 
 
@@ -298,7 +307,7 @@ def _plan_envelope(payload: object) -> PlanEnvelope:
             table_id=raw["table_id"],
             mapping=MappingBinding(**raw["mapping"]),
             fact=FactBinding(
-                business_key=raw["fact"]["business_key"],
+                business_key=tuple(raw["fact"]["business_key"]),
                 additive_money_measures=tuple(raw["fact"]["additive_money_measures"]),
             ),
             project=ProjectBinding(**raw["project"]),

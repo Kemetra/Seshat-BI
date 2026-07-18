@@ -210,7 +210,15 @@ gold_star:
   fact:
     name: "fct_<coverage_grain>"         # placeholder; adopting table names its own
     grain: "<= meta.grain>"              # MUST equal meta.grain (RC1)
+    business_key: ["<key_col_a>", "<key_col_b>"]   # the ORDERED coverage-grain
+                                         # columns; dbt parity counts distinct on
+                                         # exactly this set (single column: a
+                                         # plain string is also accepted)
     measures: []                         # EMPTY BY DESIGN -- the factless difference.
+    additive_money_measures: []          # EMPTY BY DESIGN (#331): a factless fact
+                                         # declares ZERO money measures, and dbt
+                                         # parity must emit ZERO additive_money_total
+                                         # rows -- an explicit decision, not an omission
     # Authoring note: COUNT(*) over this fact's rows is a valid read ("how
     # many combinations were on promotion") without being a stored measure
     # column. Do NOT add a fabricated "coverage_count" column here (see

@@ -24,7 +24,7 @@ def _sample_plan():
         schema_version=1,
         table_id="retail_store_sales",
         fact=FactBinding(
-            business_key="transaction_id",
+            business_key=("transaction_id",),
             additive_money_measures=("total_spent",),
         ),
         mapping=MappingBinding(
@@ -152,15 +152,27 @@ def test_save_plan_writes_atomic_envelope_to_fixed_local_path(tmp_path: Path) ->
 @pytest.mark.parametrize(
     ("business_key", "money", "message"),
     (
-        ("Bad-Name", ("total_spent",), "business_key"),
-        ("transaction_id", (), "additive_money_measures"),
-        ("transaction_id", ("total_spent", "net_amount"), "additive_money_measures"),
-        ("transaction_id", ("total_spent", "total_spent"), "additive_money_measures"),
-        ("total_spent", ("total_spent",), "business_key"),
+        (("Bad-Name",), ("total_spent",), "business_key"),
+        ((), ("total_spent",), "business_key"),
+        (("invoice_no", "invoice_no"), ("total_spent",), "business_key"),
+        (
+            ("transaction_id",),
+            ("total_spent", "net_amount"),
+            "additive_money_measures",
+        ),
+        (
+            ("transaction_id",),
+            ("total_spent", "total_spent"),
+            "additive_money_measures",
+        ),
+        (("total_spent",), ("total_spent",), "business_key"),
     ),
 )
 def test_save_plan_rejects_invalid_fact_binding(
-    tmp_path: Path, business_key: str, money: tuple[str, ...], message: str
+    tmp_path: Path,
+    business_key: tuple[str, ...],
+    money: tuple[str, ...],
+    message: str,
 ) -> None:
     from seshat.dbt.contracts import FactBinding
     from seshat.dbt.planning import PlanDrift, save_plan
@@ -172,6 +184,21 @@ def test_save_plan_rejects_invalid_fact_binding(
 
     with pytest.raises(PlanDrift, match=message):
         save_plan(tmp_path, plan)
+
+
+def test_save_plan_accepts_a_factless_empty_money_set(tmp_path: Path) -> None:
+    """A factless fact (templates/factless-fact.yaml: measures [] BY DESIGN)
+    legitimately declares zero additive money measures -- the plan must accept
+    the empty set."""
+    from seshat.dbt.contracts import FactBinding
+    from seshat.dbt.planning import save_plan
+
+    plan = replace(
+        _sample_plan(),
+        fact=FactBinding(business_key=("transaction_id",), additive_money_measures=()),
+    )
+
+    save_plan(tmp_path, plan)  # no raise
 
 
 def test_save_plan_rejects_table_path_escape(tmp_path: Path) -> None:
@@ -482,7 +509,7 @@ def test_create_plan_binds_gate_project_manifest_and_exact_selection(
 
     assert plan.mapping.git_blob == "b" * 40
     assert plan.mapping.approval_id == "approval-1"
-    assert plan.fact.business_key == "transaction_id"
+    assert plan.fact.business_key == ("transaction_id",)
     assert plan.fact.additive_money_measures == ("total_spent",)
     assert plan.project.sha256 == "f" * 64
     assert plan.selected_unique_ids == tuple(sorted(listed_ids))
