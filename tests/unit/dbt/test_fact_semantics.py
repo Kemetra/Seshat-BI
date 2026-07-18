@@ -33,6 +33,9 @@ def test_load_fact_semantics_reads_declared_tags(tmp_path: Path) -> None:
 
     fact = load_fact_semantics(_write_map(tmp_path, _VALID_MAP))
 
+    # The schema-qualified declared name normalizes to the bare MODEL name --
+    # evidence compares it against the built fact model.
+    assert fact.name == "fct_sales_rss"
     assert fact.business_key == ("transaction_id",)
     assert fact.additive_money_measures == ("total_spent",)
 
@@ -133,6 +136,18 @@ def test_missing_source_map_is_invalid(tmp_path: Path) -> None:
             "DBT_FACT_SEMANTICS_INVALID",
             "source map",
             id="invalid-yaml",
+        ),
+        pytest.param(
+            _VALID_MAP.replace('    name: "gold.fct_sales_rss"\n', ""),
+            "DBT_FACT_SEMANTICS_MISSING",
+            "name",
+            id="no-fact-name",
+        ),
+        pytest.param(
+            _VALID_MAP.replace('name: "gold.fct_sales_rss"', 'name: "gold.Fct-Sales"'),
+            "DBT_FACT_SEMANTICS_INVALID",
+            "name",
+            id="fact-name-not-identifier",
         ),
         pytest.param(
             _VALID_MAP.replace(

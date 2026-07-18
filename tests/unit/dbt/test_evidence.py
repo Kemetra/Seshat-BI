@@ -32,12 +32,13 @@ def _sample_plan():
     )
 
     return ExecutionPlan(
-        schema_version=1,
+        schema_version=2,
         table_id="retail_store_sales",
         # The approved map's fact tags: the parity fixtures' subjects
         # (fct_sales_rss.transaction_id / fct_sales_rss.total_spent) must match
         # these EXACTLY for evidence to validate.
         fact=FactBinding(
+            name="fct_sales_rss",
             business_key=("transaction_id",),
             additive_money_measures=("total_spent",),
         ),
@@ -293,7 +294,30 @@ def _fact_semantics(
 ):
     from seshat.dbt.contracts import FactBinding
 
-    return FactBinding(business_key=business_key, additive_money_measures=money)
+    return FactBinding(
+        name="fct_x", business_key=business_key, additive_money_measures=money
+    )
+
+
+def test_built_fact_must_be_the_approved_gold_star_fact() -> None:
+    """The single built fact model must BE the approved gold_star fact -- an
+    audit whose subjects all root at a DIFFERENT fact than the map approved
+    must block, even when every column-level subject check would pass."""
+    from seshat.dbt.artifacts import ArtifactIntegrityError
+    from seshat.dbt.contracts import FactBinding
+    from seshat.dbt.evidence import _validate_parity_set
+
+    approved_other = FactBinding(
+        name="fct_approved",
+        business_key=("grain",),
+        additive_money_measures=("money_amount",),
+    )
+    parity = _fact_parity_base() + (
+        _parity_row("fact_money_sum", "additive_money_total", "fct_x.money_amount"),
+    )
+
+    with pytest.raises(ArtifactIntegrityError, match="fct_approved"):
+        _validate_parity_set(parity, _FACT_SELECTED, approved_other)
 
 
 def _fact_parity_base() -> tuple:

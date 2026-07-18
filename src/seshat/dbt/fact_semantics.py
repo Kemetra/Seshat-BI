@@ -76,6 +76,24 @@ def _business_key_columns(value: Any) -> tuple[str, ...]:
     return ()
 
 
+def _fact_name(fact: dict[str, Any]) -> str:
+    """The approved fact relation's normalized model name.
+
+    The map declares it schema-qualified (``gold.fct_sales``) because the
+    live-validate SQL reads it verbatim; the dbt manifest knows the same
+    relation by its bare MODEL name, so the qualifier is stripped here."""
+    value = fact.get("name")
+    if value is None:
+        raise _missing("name")
+    normalized = value.rsplit(".", 1)[-1] if isinstance(value, str) else None
+    if not _is_identifier(normalized):
+        raise _invalid(
+            "gold_star.fact.name must be a (schema-qualified) lowercase "
+            "relation identifier"
+        )
+    return normalized
+
+
 def _require_key_columns(columns: tuple[str, ...]) -> None:
     if not columns or not all(_is_identifier(column) for column in columns):
         raise _invalid(
@@ -150,8 +168,11 @@ def load_fact_semantics(source_map: Path) -> FactBinding:
     """Read the approved map's exact fact-column tags, failing closed."""
 
     fact = _fact_section(_load_document(source_map))
+    name = _fact_name(fact)
     business_key = _business_key(fact)
     money = _money_measures(fact)
     _require_money_are_measures(fact, money)
     _require_key_is_not_money(business_key, money)
-    return FactBinding(business_key=business_key, additive_money_measures=money)
+    return FactBinding(
+        name=name, business_key=business_key, additive_money_measures=money
+    )

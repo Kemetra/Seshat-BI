@@ -21,9 +21,10 @@ def _sample_plan():
     )
 
     return ExecutionPlan(
-        schema_version=1,
+        schema_version=2,
         table_id="retail_store_sales",
         fact=FactBinding(
+            name="fact_retail_store_sales",
             business_key=("transaction_id",),
             additive_money_measures=("total_spent",),
         ),
@@ -184,7 +185,11 @@ def test_save_plan_rejects_invalid_fact_binding(
 
     plan = replace(
         _sample_plan(),
-        fact=FactBinding(business_key=business_key, additive_money_measures=money),
+        fact=FactBinding(
+            name="fact_retail_store_sales",
+            business_key=business_key,
+            additive_money_measures=money,
+        ),
     )
 
     with pytest.raises(PlanDrift, match=message):
@@ -200,7 +205,11 @@ def test_save_plan_accepts_a_factless_empty_money_set(tmp_path: Path) -> None:
 
     plan = replace(
         _sample_plan(),
-        fact=FactBinding(business_key=("transaction_id",), additive_money_measures=()),
+        fact=FactBinding(
+            name="fact_retail_store_sales",
+            business_key=("transaction_id",),
+            additive_money_measures=(),
+        ),
     )
 
     save_plan(tmp_path, plan)  # no raise

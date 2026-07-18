@@ -113,8 +113,10 @@ def plan_digest(plan: ExecutionPlan) -> str:
 
 
 def _validate_plan_identity(plan: ExecutionPlan) -> None:
-    if plan.schema_version != 1:
-        raise PlanDrift("plan schema_version must be 1")
+    # v2 added the required fact binding (issue #331); a v1 plan predates it
+    # and must be re-planned, never silently reinterpreted.
+    if plan.schema_version != 2:
+        raise PlanDrift("plan schema_version must be 2")
     if not _TABLE_ID.fullmatch(plan.table_id):
         raise PlanDrift("plan table_id is unsafe")
 
@@ -172,6 +174,9 @@ def _canonical_business_key(key: tuple[str, ...]) -> bool:
 
 
 def _validate_fact_binding(plan: ExecutionPlan) -> None:
+    name = plan.fact.name
+    if not (isinstance(name, str) and _COLUMN_ID.fullmatch(name)):
+        raise PlanDrift("plan fact name is unsafe")
     if not _canonical_business_key(plan.fact.business_key):
         raise PlanDrift("plan fact business_key is unsafe")
     _require_canonical_money(plan.fact.additive_money_measures)
@@ -320,6 +325,7 @@ def _plan_envelope(payload: object) -> PlanEnvelope:
             table_id=raw["table_id"],
             mapping=MappingBinding(**raw["mapping"]),
             fact=FactBinding(
+                name=raw["fact"]["name"],
                 business_key=_stored_columns(raw["fact"]["business_key"]),
                 additive_money_measures=_stored_columns(
                     raw["fact"]["additive_money_measures"]
@@ -710,7 +716,7 @@ def _build_plan(context: _PlanBuildContext) -> ExecutionPlan:
     manifest = context.manifest
     mapping_path = working_set.source_map.relative_to(context.root).as_posix()
     return ExecutionPlan(
-        schema_version=1,
+        schema_version=2,
         table_id=context.table_id,
         mapping=MappingBinding(
             path=mapping_path,

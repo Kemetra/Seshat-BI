@@ -234,9 +234,13 @@ class FactBinding:
     -- a factless fact declares an explicit empty set). These make the
     expected fact-subject set derivable EXACTLY (issue #331) -- fact
     measures/keys are columns, not model nodes, so unlike dimensions the
-    built graph alone cannot enumerate them.
+    built graph alone cannot enumerate them. ``name`` is the approved fact
+    relation's normalized MODEL name (schema qualifier stripped): evidence
+    requires the single built fact model to BE this relation, so an audit
+    against a different fact can never satisfy the subject checks.
     """
 
+    name: str
     business_key: tuple[str, ...]
     additive_money_measures: tuple[str, ...]
 

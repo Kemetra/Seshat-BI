@@ -31,9 +31,10 @@ def _fixture_execution_plan(manifest, selected: tuple[str, ...]):
     )
 
     return ExecutionPlan(
-        schema_version=1,
+        schema_version=2,
         table_id=TABLE_ID,
         fact=FactBinding(
+            name="fct_sales_rss",
             business_key=("transaction_id",),
             additive_money_measures=("total_spent",),
         ),

@@ -497,6 +497,11 @@ def _validate_fact_assertions(
     -- exact subjects, no extras."""
     _require_fact_singletons(subjects_by_class)
     fact_model = _selected_fact_model(selected_unique_ids)
+    if fact_model != fact.name:
+        raise ArtifactIntegrityError(
+            f"the built fact model {fact_model!r} is not the approved "
+            f"gold_star fact {fact.name!r}"
+        )
     row_count_subject = subjects_by_class["fact_row_count"][0]
     if _subject_root(row_count_subject) != fact_model:
         raise ArtifactIntegrityError(
