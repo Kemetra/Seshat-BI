@@ -141,9 +141,14 @@ publish-safety (governance sign-off; default drop), grain ambiguity (candidate P
 not unique on the data), sentinel-vs-null choice, and any build-blocking question.
 
 ### 6. GATE -- hard stop (Principle IV)
-Emit the `reconciliation-report.md` blank and STOP. State plainly: no `silver.*`
-SQL may be written until the map is reviewed and approved. Hand the filled set to
-the reviewer; do not proceed to silver.
+Emit the `reconciliation-report.md` blank and STOP. Before stopping, guarantee
+the decision ledger exists even when Step 5 raised zero questions -- run
+`seshat mapping-mirror --table <table>`. It writes a stub only if
+`unresolved-questions.md` is absent (status derived from the committed
+`readiness-status.yaml`, never invented) and never overwrites the ledger; the
+downstream dbt and Dagster gates hard-require this file. State plainly: no
+`silver.*` SQL may be written until the map is reviewed and approved. Hand the
+filled set to the reviewer; do not proceed to silver.
 
 ## Deferred/live-boundary mode (no DSN or no `db` extra)
 

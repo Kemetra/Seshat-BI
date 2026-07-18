@@ -257,6 +257,27 @@ def _add_approver_view_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_mapping_mirror_parser(sub: argparse._SubParsersAction) -> None:
+    """`mapping-mirror` (issue #326): guarantee one table's
+    unresolved-questions.md exists. Writes a stub ONLY when the file is absent
+    (CLEARED when readiness already records a named-human mapping_ready pass;
+    OPEN otherwise); never overwrites the human-authored ledger and never
+    grants an approval itself."""
+    p = sub.add_parser(
+        "mapping-mirror",
+        help=(
+            "materialize mappings/<table>/unresolved-questions.md if absent "
+            "(status derived from readiness-status.yaml; never overwrites)"
+        ),
+    )
+    p.add_argument("--repo", default=".", help="repo root to read from")
+    p.add_argument(
+        "--table",
+        required=True,
+        help="table identity (the mappings/<table>/ directory name)",
+    )
+
+
 def _add_dashboard_planner_parser(sub: argparse._SubParsersAction) -> None:
     """`dashboard-planner` (spec 116): read-only categorical new/extends/duplicate
     verdict on a PROPOSED dashboard idea, compared against the target table's
@@ -1044,6 +1065,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_blockers_parser(sub)
     _add_pii_notice_parser(sub)
     _add_approver_view_parser(sub)
+    _add_mapping_mirror_parser(sub)
     _add_dashboard_planner_parser(sub)
     _add_gap_detector_parser(sub)
     _add_kit_lint_parser(sub)
