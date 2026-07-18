@@ -318,3 +318,26 @@ def test_audit_model_emits_exact_normalized_parity_contract() -> None:
     assert sql.count("union all") == 7
     assert "source('migration_gold', 'fct_sales_rss')" in sql
     assert "ref('fct_sales_rss')" in sql
+
+
+def test_source_map_fact_tags_match_the_audit_parity_subjects() -> None:
+    """The map's gold_star.fact parity tags (issue #331) and the audit SQL must
+    agree: the audit reconciles by SUM exactly the declared money measures and
+    counts distinct on exactly the declared business key. The evidence layer
+    enforces this at run time from plan.fact; this contract pins the committed
+    worked example so the pair cannot drift in review."""
+    fact = _yaml(ROOT / SOURCE_MAP)["gold_star"]["fact"]
+    sql = (
+        (DBT / "models" / "audit" / TABLE_ID / "audit_retail_store_sales_parity.sql")
+        .read_text(encoding="utf-8")
+        .lower()
+    )
+    fact_model = fact["name"].split(".", 1)[1]
+
+    assert f"'{fact_model}.{fact['business_key']}'" in sql
+    for measure in fact["additive_money_measures"]:
+        assert f"'{fact_model}.{measure}'" in sql
+        assert measure in fact["measures"]
+    assert sql.count("'additive_money_total'") == len(
+        fact["additive_money_measures"]
+    )

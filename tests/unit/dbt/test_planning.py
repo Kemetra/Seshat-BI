@@ -12,6 +12,7 @@ pytestmark = pytest.mark.unit
 def _sample_plan():
     from seshat.dbt.contracts import (
         ExecutionPlan,
+        FactBinding,
         ManifestBinding,
         MappingBinding,
         ProjectBinding,
@@ -22,6 +23,10 @@ def _sample_plan():
     return ExecutionPlan(
         schema_version=1,
         table_id="retail_store_sales",
+        fact=FactBinding(
+            business_key="transaction_id",
+            additive_money_measures=("total_spent",),
+        ),
         mapping=MappingBinding(
             path="mappings/retail_store_sales/source-map.yaml",
             git_blob="b" * 40,
@@ -70,6 +75,10 @@ def test_plan_digest_is_deterministic() -> None:
 def _changed_bound_fact(plan, field: str):
     changes = {
         "mapping": replace(plan, mapping=replace(plan.mapping, sha256="0" * 64)),
+        "fact": replace(
+            plan,
+            fact=replace(plan.fact, additive_money_measures=("net_amount",)),
+        ),
         "project": replace(plan, project=replace(plan.project, sha256="0" * 64)),
         "runtime": replace(
             plan,
@@ -96,7 +105,15 @@ def _changed_bound_fact(plan, field: str):
 
 @pytest.mark.parametrize(
     "field",
-    ("mapping", "project", "runtime", "schemas", "manifest", "selected_unique_ids"),
+    (
+        "mapping",
+        "fact",
+        "project",
+        "runtime",
+        "schemas",
+        "manifest",
+        "selected_unique_ids",
+    ),
 )
 def test_each_bound_fact_changes_the_digest(field: str) -> None:
     from seshat.dbt.planning import plan_digest
@@ -130,6 +147,31 @@ def test_save_plan_writes_atomic_envelope_to_fixed_local_path(tmp_path: Path) ->
     assert payload["digest"] == plan_digest(plan)
     assert payload["plan"]["table_id"] == "retail_store_sales"
     assert not list(path.parent.glob("*.tmp"))
+
+
+@pytest.mark.parametrize(
+    ("business_key", "money", "message"),
+    (
+        ("Bad-Name", ("total_spent",), "business_key"),
+        ("transaction_id", (), "additive_money_measures"),
+        ("transaction_id", ("total_spent", "net_amount"), "additive_money_measures"),
+        ("transaction_id", ("total_spent", "total_spent"), "additive_money_measures"),
+        ("total_spent", ("total_spent",), "business_key"),
+    ),
+)
+def test_save_plan_rejects_invalid_fact_binding(
+    tmp_path: Path, business_key: str, money: tuple[str, ...], message: str
+) -> None:
+    from seshat.dbt.contracts import FactBinding
+    from seshat.dbt.planning import PlanDrift, save_plan
+
+    plan = replace(
+        _sample_plan(),
+        fact=FactBinding(business_key=business_key, additive_money_measures=money),
+    )
+
+    with pytest.raises(PlanDrift, match=message):
+        save_plan(tmp_path, plan)
 
 
 def test_save_plan_rejects_table_path_escape(tmp_path: Path) -> None:
@@ -262,7 +304,18 @@ def _planning_working_set(tmp_path: Path):
     source_map = mapping_dir / "source-map.yaml"
     readiness = mapping_dir / "readiness-status.yaml"
     questions = mapping_dir / "unresolved-questions.md"
-    source_map.write_text("table_id: retail_store_sales\n", encoding="utf-8")
+    source_map.write_text(
+        "table_id: retail_store_sales\n"
+        "gold_star:\n"
+        "  fact:\n"
+        '    name: "gold.fact_retail_store_sales"\n'
+        '    business_key: "transaction_id"\n'
+        "    measures:\n"
+        '      - "total_spent"\n'
+        "    additive_money_measures:\n"
+        '      - "total_spent"\n',
+        encoding="utf-8",
+    )
     readiness.write_text("stages: {}\n", encoding="utf-8")
     questions.write_text("Gate status: CLEARED\n", encoding="utf-8")
     (tmp_path / "dbt").mkdir()
@@ -429,6 +482,8 @@ def test_create_plan_binds_gate_project_manifest_and_exact_selection(
 
     assert plan.mapping.git_blob == "b" * 40
     assert plan.mapping.approval_id == "approval-1"
+    assert plan.fact.business_key == "transaction_id"
+    assert plan.fact.additive_money_measures == ("total_spent",)
     assert plan.project.sha256 == "f" * 64
     assert plan.selected_unique_ids == tuple(sorted(listed_ids))
     assert (

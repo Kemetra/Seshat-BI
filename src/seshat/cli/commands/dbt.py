@@ -39,6 +39,7 @@ from seshat.dbt.evidence import (
     parse_parity_rows,
     write_evidence,
 )
+from seshat.dbt.fact_semantics import load_fact_semantics
 from seshat.dbt.gate import evaluate_mapping_gate, resolve_working_set
 from seshat.dbt.planning import (
     PlanDrift,
@@ -221,6 +222,9 @@ def _validated_project(root: Path, table_id: str):
             f"{blocker.code}: {blocker.message}" for blocker in gate.blocking_reasons
         )
         raise _governance_error("DBT_MAPPING_GATE_BLOCKED", details)
+    # Surface missing/invalid gold_star.fact parity tags at validate time, not
+    # first at plan time -- the same fail-closed loader create_plan uses.
+    load_fact_semantics(working_set.source_map)
     environment = load_child_environment(root)
     project = validate_project(
         root,

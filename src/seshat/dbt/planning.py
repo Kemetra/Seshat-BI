@@ -26,6 +26,7 @@ from seshat.dbt.artifacts import (
 )
 from seshat.dbt.contracts import (
     ExecutionPlan,
+    FactBinding,
     GateDecision,
     InvocationResult,
     ManifestBinding,
@@ -42,12 +43,14 @@ from seshat.dbt.contracts import (
     ShadowSchemas,
     WorkingSet,
 )
+from seshat.dbt.fact_semantics import load_fact_semantics
 from seshat.dbt.gate import evaluate_mapping_gate, resolve_working_set
 from seshat.dbt.project import validate_project
 from seshat.dbt.redaction import load_child_environment
 from seshat.dbt.runner import build_dbt_argv, target_lock
 
 _TABLE_ID = re.compile(r"^[a-z][a-z0-9_]*$")
+_COLUMN_ID = re.compile(r"^[a-z][a-z0-9_]*$")
 _UNIQUE_ID = re.compile(r"^(model|test)\.seshat_bi\.[A-Za-z0-9_.-]+$")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _GIT_BLOB = re.compile(r"^[0-9a-f]{40,64}$")
@@ -85,6 +88,7 @@ class _PlanBuildContext:
     table_id: str
     working_set: WorkingSet
     approval: MappingApproval
+    fact: FactBinding
     project: ProjectValidation
     manifest: ManifestSummary
     selected: tuple[str, ...]
@@ -135,6 +139,22 @@ def _validate_plan_hashes(plan: ExecutionPlan) -> None:
         raise PlanDrift("plan contains an invalid mapping Git blob")
     if not plan.mapping.approval_id:
         raise PlanDrift("plan has no named-human approval identity")
+
+
+def _validate_fact_binding(plan: ExecutionPlan) -> None:
+    money = plan.fact.additive_money_measures
+    if not _COLUMN_ID.fullmatch(plan.fact.business_key):
+        raise PlanDrift("plan fact business_key is unsafe")
+    if (
+        not money
+        or money != tuple(sorted(set(money)))
+        or not all(isinstance(m, str) and _COLUMN_ID.fullmatch(m) for m in money)
+    ):
+        raise PlanDrift(
+            "plan fact additive_money_measures must be non-empty, sorted, and unique"
+        )
+    if plan.fact.business_key in money:
+        raise PlanDrift("plan fact business_key cannot be an additive money measure")
 
 
 def _validate_runtime_binding(plan: ExecutionPlan) -> None:
@@ -202,6 +222,7 @@ def _valid_plan(plan: ExecutionPlan) -> None:
     _validate_plan_identity(plan)
     _validate_mapping_binding(plan)
     _validate_plan_hashes(plan)
+    _validate_fact_binding(plan)
     _validate_runtime_binding(plan)
     _validate_manifest_binding(plan)
     _validate_selected_ids(plan)
@@ -267,6 +288,12 @@ def _plan_envelope(payload: object) -> PlanEnvelope:
             schema_version=raw["schema_version"],
             table_id=raw["table_id"],
             mapping=MappingBinding(**raw["mapping"]),
+            fact=FactBinding(
+                business_key=raw["fact"]["business_key"],
+                additive_money_measures=tuple(
+                    raw["fact"]["additive_money_measures"]
+                ),
+            ),
             project=ProjectBinding(**raw["project"]),
             runtime=RuntimeBinding(**raw["runtime"]),
             schemas=ShadowSchemas(**raw["schemas"]),
@@ -662,6 +689,7 @@ def _build_plan(context: _PlanBuildContext) -> ExecutionPlan:
             unresolved_questions_sha256=_sha256(working_set.unresolved_questions),
             approval_id=context.approval.approval_id,
         ),
+        fact=context.fact,
         project=ProjectBinding(path="dbt", sha256=project.project_fingerprint),
         runtime=RuntimeBinding(
             dbt_core=DBT_CORE_VERSION,
@@ -685,6 +713,7 @@ def create_plan(repo_root: Path, table_id: str, runner: DbtRunner) -> ExecutionP
 
     root = Path(repo_root).resolve()
     working_set, approval = _approved_mapping(root, table_id)
+    fact = load_fact_semantics(working_set.source_map)
     environment = load_child_environment(root)
     target_schema = environment.get("SESHAT_DBT_SCHEMA") or None
     project = _validated_project(root, working_set, target_schema)
@@ -708,6 +737,7 @@ def create_plan(repo_root: Path, table_id: str, runner: DbtRunner) -> ExecutionP
             table_id=table_id,
             working_set=working_set,
             approval=approval,
+            fact=fact,
             project=project,
             manifest=manifest,
             selected=selected,

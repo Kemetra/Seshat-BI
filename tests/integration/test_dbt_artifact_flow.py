@@ -22,6 +22,7 @@ EXPECTED_MODELS = (
 def _fixture_execution_plan(manifest, selected: tuple[str, ...]):
     from seshat.dbt.contracts import (
         ExecutionPlan,
+        FactBinding,
         ManifestBinding,
         MappingBinding,
         ProjectBinding,
@@ -32,6 +33,10 @@ def _fixture_execution_plan(manifest, selected: tuple[str, ...]):
     return ExecutionPlan(
         schema_version=1,
         table_id=TABLE_ID,
+        fact=FactBinding(
+            business_key="transaction_id",
+            additive_money_measures=("total_spent",),
+        ),
         mapping=MappingBinding(
             path=f"mappings/{TABLE_ID}/source-map.yaml",
             git_blob="a" * 40,

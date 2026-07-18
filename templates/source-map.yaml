@@ -219,10 +219,16 @@ gold_star:
   fact:
     name: "fct_<grain>"                  # placeholder; one fact per source grain
     grain: "<= meta.grain>"              # MUST equal meta.grain (RC1)
+    business_key: "<grain_key_column>"   # the grain key column; the dbt parity
+                                         # audit counts distinct on EXACTLY this
     measures:                            # RC9: keep independent money/qty measures
       - "<measure_a>"                    # from columns[].gold_placement: fact_measure
       # - "<measure_b>"
       # - "<measure_c>"
+    additive_money_measures:             # subset of measures that are MONEY and
+      - "<measure_a>"                    # additive; dbt parity reconciles each by
+      # - "<measure_b>"                  # SUM, exactly -- no more, no less (#331).
+                                         # qty/unit-rate columns do NOT belong here
 
   dimensions:
     - name: "dim_<entity_a>"             # placeholder; referenced by columns[].gold_placement

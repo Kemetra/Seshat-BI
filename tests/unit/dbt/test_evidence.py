@@ -23,6 +23,7 @@ def _sample_plan():
     from seshat.dbt.artifacts import load_manifest
     from seshat.dbt.contracts import (
         ExecutionPlan,
+        FactBinding,
         ManifestBinding,
         MappingBinding,
         ProjectBinding,
@@ -33,6 +34,13 @@ def _sample_plan():
     return ExecutionPlan(
         schema_version=1,
         table_id="retail_store_sales",
+        # The approved map's fact tags: the parity fixtures' subjects
+        # (fct_sales_rss.transaction_id / fct_sales_rss.total_spent) must match
+        # these EXACTLY for evidence to validate.
+        fact=FactBinding(
+            business_key="transaction_id",
+            additive_money_measures=("total_spent",),
+        ),
         mapping=MappingBinding(
             path="mappings/retail_store_sales/source-map.yaml",
             git_blob="b" * 40,
@@ -234,32 +242,7 @@ def test_parity_with_right_count_but_wrong_dimension_subjects_is_blocked() -> No
     the built dimension set is not covered.
     """
     from seshat.dbt.artifacts import ArtifactIntegrityError
-    from seshat.dbt.contracts import ParityAssertion
     from seshat.dbt.evidence import _validate_parity_set
-
-    def _dim(subject: str) -> ParityAssertion:
-        return ParityAssertion(
-            assertion_id=f"{subject}_member_count",
-            assertion_class="dimension_member_count",
-            subject=subject,
-            expected="1",
-            actual="1",
-            delta="0",
-            tolerance="0",
-            passed=True,
-        )
-
-    def _fact(assertion_id: str, cls: str) -> ParityAssertion:
-        return ParityAssertion(
-            assertion_id=assertion_id,
-            assertion_class=cls,
-            subject="fct_x",
-            expected="1",
-            actual="1",
-            delta="0",
-            tolerance="0",
-            passed=True,
-        )
 
     # built dims: dim_customer_x, dim_date_x. Audit covers dim_customer_x TWICE and
     # dim_date_x zero times -- count matches (2), subject set does not.
@@ -269,69 +252,143 @@ def test_parity_with_right_count_but_wrong_dimension_subjects_is_blocked() -> No
         "model.seshat_bi.dim_date_x",
     )
     parity = (
-        _fact("fact_row_count", "fact_row_count"),
-        _fact("fact_grain", "business_key_count"),
-        _fact("fact_money", "additive_money_total"),
-        _dim("dim_customer_x"),
+        _parity_row("fact_row_count", "fact_row_count", "fct_x"),
+        _parity_row("fact_grain", "business_key_count", "fct_x.grain"),
+        _parity_row("fact_money", "additive_money_total", "fct_x.money_amount"),
+        _parity_row(
+            "dim_customer_x_member_count",
+            "dimension_member_count",
+            "dim_customer_x",
+        ),
         # a second, distinct assertion still comparing dim_customer_x
-        ParityAssertion(
-            assertion_id="dim_customer_x_alt_count",
-            assertion_class="dimension_member_count",
-            subject="dim_customer_x",
-            expected="1",
-            actual="1",
-            delta="0",
-            tolerance="0",
-            passed=True,
+        _parity_row(
+            "dim_customer_x_alt_count",
+            "dimension_member_count",
+            "dim_customer_x",
         ),
     )
 
     with pytest.raises(ArtifactIntegrityError, match="dimension"):
-        _validate_parity_set(parity, selected)
+        _validate_parity_set(parity, selected, _fact_semantics())
 
 
-def test_parity_accepts_multiple_money_measures_but_requires_at_least_one() -> None:
-    """A fact with several additive money measures emits one additive_money_total
-    row per measure -- that must pass (both subjects root at the built fact), and
-    the class still requires at least one row. fact_row_count and
-    business_key_count remain exactly-one singletons."""
-    from seshat.dbt.artifacts import ArtifactIntegrityError
+def _parity_row(assertion_id: str, cls: str, subject: str):
     from seshat.dbt.contracts import ParityAssertion
+
+    return ParityAssertion(
+        assertion_id=assertion_id,
+        assertion_class=cls,
+        subject=subject,
+        expected="1",
+        actual="1",
+        delta="0",
+        tolerance="0",
+        passed=True,
+    )
+
+
+def _fact_semantics(money: tuple[str, ...] = ("money_amount",)):
+    from seshat.dbt.contracts import FactBinding
+
+    return FactBinding(business_key="grain", additive_money_measures=money)
+
+
+def _fact_parity_base() -> tuple:
+    return (
+        _parity_row("fact_row_count", "fact_row_count", "fct_x"),
+        _parity_row("fact_grain", "business_key_count", "fct_x.grain"),
+        _parity_row("dim_only_x_member_count", "dimension_member_count", "dim_only_x"),
+    )
+
+
+_FACT_SELECTED = ("model.seshat_bi.fct_x", "model.seshat_bi.dim_only_x")
+
+
+def test_parity_requires_every_declared_money_measure_exactly() -> None:
+    """The approved map's additive_money_measures define the EXACT expected
+    additive_money_total subject set -- every declared money measure covered,
+    once each, and nothing undeclared (issue #331). Several declared measures
+    mean several rows; all of them are required."""
     from seshat.dbt.evidence import _validate_parity_set
 
-    def _row(assertion_id: str, cls: str, subject: str) -> ParityAssertion:
-        return ParityAssertion(
-            assertion_id=assertion_id,
-            assertion_class=cls,
-            subject=subject,
-            expected="1",
-            actual="1",
-            delta="0",
-            tolerance="0",
-            passed=True,
-        )
-
-    selected = ("model.seshat_bi.fct_x", "model.seshat_bi.dim_only_x")
-    base = [
-        _row("fact_row_count", "fact_row_count", "fct_x"),
-        _row("fact_grain", "business_key_count", "fct_x.grain"),
-        _row("dim_only_x_member_count", "dimension_member_count", "dim_only_x"),
-    ]
-
-    # Two money measures on the same fact -> passes.
-    two_money = tuple(
-        base
-        + [
-            _row("fact_gross_sum", "additive_money_total", "fct_x.gross_amount"),
-            _row("fact_net_sum", "additive_money_total", "fct_x.net_amount"),
-        ]
+    two_money = _fact_parity_base() + (
+        _parity_row("fact_gross_sum", "additive_money_total", "fct_x.gross_amount"),
+        _parity_row("fact_net_sum", "additive_money_total", "fct_x.net_amount"),
     )
-    _validate_parity_set(two_money, selected)  # no raise
 
-    # Zero money measures -> still blocks ("at least one").
-    no_money = tuple(base)
-    with pytest.raises(ArtifactIntegrityError, match="additive_money_total"):
-        _validate_parity_set(no_money, selected)
+    _validate_parity_set(
+        two_money,
+        _FACT_SELECTED,
+        _fact_semantics(money=("gross_amount", "net_amount")),
+    )  # no raise
+
+
+@pytest.mark.parametrize(
+    ("money_rows", "declared", "match"),
+    (
+        pytest.param(
+            (),
+            ("money_amount",),
+            "missing fct_x.money_amount",
+            id="zero-money-rows",
+        ),
+        pytest.param(
+            (("fact_gross_sum", "fct_x.gross_amount"),),
+            ("gross_amount", "net_amount"),
+            "missing fct_x.net_amount",
+            id="one-declared-measure-uncovered",
+        ),
+        pytest.param(
+            (
+                ("fact_money_sum", "fct_x.money_amount"),
+                ("fact_rate_sum", "fct_x.price_per_unit"),
+            ),
+            ("money_amount",),
+            "unexpected fct_x.price_per_unit",
+            id="undeclared-numeric-column-reconciled",
+        ),
+        pytest.param(
+            (
+                ("fact_money_sum", "fct_x.money_amount"),
+                ("fact_money_sum_again", "fct_x.money_amount"),
+            ),
+            ("money_amount",),
+            "duplicate",
+            id="duplicate-money-subject",
+        ),
+    ),
+)
+def test_parity_money_subjects_must_match_declared_measures(
+    money_rows: tuple, declared: tuple[str, ...], match: str
+) -> None:
+    from seshat.dbt.artifacts import ArtifactIntegrityError
+    from seshat.dbt.evidence import _validate_parity_set
+
+    parity = _fact_parity_base() + tuple(
+        _parity_row(assertion_id, "additive_money_total", subject)
+        for assertion_id, subject in money_rows
+    )
+
+    with pytest.raises(ArtifactIntegrityError, match=match):
+        _validate_parity_set(parity, _FACT_SELECTED, _fact_semantics(money=declared))
+
+
+def test_parity_business_key_subject_must_be_the_declared_grain_key() -> None:
+    """A business_key_count row that counts a plausible but WRONG column (the
+    root still matches the built fact) must block -- the subject must be exactly
+    <fact_model>.<declared business_key>."""
+    from seshat.dbt.artifacts import ArtifactIntegrityError
+    from seshat.dbt.evidence import _validate_parity_set
+
+    parity = (
+        _parity_row("fact_row_count", "fact_row_count", "fct_x"),
+        _parity_row("fact_grain", "business_key_count", "fct_x.other_column"),
+        _parity_row("fact_money_sum", "additive_money_total", "fct_x.money_amount"),
+        _parity_row("dim_only_x_member_count", "dimension_member_count", "dim_only_x"),
+    )
+
+    with pytest.raises(ArtifactIntegrityError, match="fct_x.grain"):
+        _validate_parity_set(parity, _FACT_SELECTED, _fact_semantics())
 
 
 @pytest.mark.parametrize(

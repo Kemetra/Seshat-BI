@@ -163,10 +163,15 @@ gold_star:
     # qualified and match the materialized tables in 0004_*.sql exactly.
     name: "gold.fct_sales_rss"
     grain: "one row = one retail transaction"      # = meta.grain (RC1)
+    business_key: "transaction_id"                 # the grain key; dbt parity counts
+                                                   # distinct on exactly this column
     measures:                                       # RC9: independent measures
       - "quantity"
       - "total_spent"
       # price_per_unit kept as a fact attribute (unit rate), not summed
+    additive_money_measures:                        # dbt parity reconciles each of
+      - "total_spent"                               # these by SUM, exactly (#331);
+      # quantity is additive but NOT money -- it is deliberately not listed
 
   dimensions:
     - name: "gold.dim_customer_rss"

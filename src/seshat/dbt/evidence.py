@@ -18,6 +18,7 @@ from seshat.dbt.contracts import (
     ArtifactSet,
     Blocker,
     ExecutionPlan,
+    FactBinding,
     InvocationResult,
     Operation,
     ParityAssertion,
@@ -421,48 +422,86 @@ def _subject_root(subject: str) -> str:
 # Fact-level assertion classes split by expected cardinality:
 #   - fact_row_count / business_key_count are inherent SINGLETONS: one fact table
 #     has one row count, one grain has one distinct-key count -- exactly one each.
-#   - additive_money_total is NOT a singleton: a fact may carry several additive
-#     money measures (e.g. gross_amount AND net_amount), each a separate row. So it
-#     requires AT LEAST ONE. Exact per-measure coverage is uncheckable here --
-#     money measures are columns, not enumerable model nodes, so unlike dimensions
-#     (which are dim_* nodes in selected_unique_ids) the built graph does not list
-#     which measures must be reconciled. "At least one, every subject rooting at
-#     the built fact" is therefore the strongest check the committed artifacts
-#     support. (Exact money-measure coverage would need the map's gold_star to tag
-#     which measures are money -- a separate future enhancement, not this layer.)
+#   - additive_money_total carries one row PER approved additive money measure.
+#     Money measures and the grain key are columns, not enumerable model nodes, so
+#     the built graph alone cannot list them -- the approved map's gold_star.fact
+#     tags supply them (plan.fact, issue #331), and the expected fact-subject set
+#     is checked exactly, mirroring dimension-subject coverage.
 _FACT_SINGLETON_CLASSES = ("fact_row_count", "business_key_count")
 _FACT_CLASSES = (*_FACT_SINGLETON_CLASSES, "additive_money_total")
 
 
-def _validate_fact_assertions(
-    fact_subjects: list[str],
-    fact_counts: dict[str, int],
-    selected_unique_ids: tuple[str, ...],
-) -> None:
-    """One row_count + one business_key_count + >=1 additive_money_total, each
-    subject rooting at the built fact model."""
+def _require_fact_singletons(subjects_by_class: dict[str, list[str]]) -> None:
     wrong_cardinality = {
-        cls: fact_counts.get(cls, 0)
-        for cls in _FACT_CLASSES
-        if (
-            fact_counts.get(cls, 0) != 1
-            if cls in _FACT_SINGLETON_CLASSES
-            else fact_counts.get(cls, 0) < 1
-        )
+        cls: len(subjects_by_class[cls])
+        for cls in _FACT_SINGLETON_CLASSES
+        if len(subjects_by_class[cls]) != 1
     }
     if wrong_cardinality:
         raise ArtifactIntegrityError(
             "parity fact-level assertions have the wrong cardinality "
-            "(expected exactly one fact_row_count and business_key_count, and at "
-            f"least one additive_money_total): {wrong_cardinality}"
+            "(expected exactly one fact_row_count and business_key_count): "
+            f"{wrong_cardinality}"
         )
-    fact_model = _selected_fact_model(selected_unique_ids)
-    wrong_fact = sorted({s for s in fact_subjects if _subject_root(s) != fact_model})
-    if wrong_fact:
+
+
+def _require_exact_business_key(subject: str, fact_model: str, fact: FactBinding):
+    expected = f"{fact_model}.{fact.business_key}"
+    if subject != expected:
         raise ArtifactIntegrityError(
-            "parity fact assertions do not reference the built fact model "
-            f"{fact_model!r}: {', '.join(wrong_fact)}"
+            "parity business_key_count subject does not reference the approved "
+            f"grain key {expected!r}: {subject}"
         )
+
+
+def _require_exact_money_coverage(
+    subjects: list[str], fact_model: str, fact: FactBinding
+) -> None:
+    seen = frozenset(subjects)
+    if len(subjects) != len(seen):
+        duplicates = sorted({s for s in subjects if subjects.count(s) > 1})
+        raise ArtifactIntegrityError(
+            "parity has duplicate additive_money_total subjects: "
+            + ", ".join(duplicates)
+        )
+    expected = frozenset(
+        f"{fact_model}.{measure}" for measure in fact.additive_money_measures
+    )
+    if seen == expected:
+        return
+    detail = []
+    if expected - seen:
+        detail.append("missing " + ", ".join(sorted(expected - seen)))
+    if seen - expected:
+        detail.append("unexpected " + ", ".join(sorted(seen - expected)))
+    raise ArtifactIntegrityError(
+        "parity additive_money_total subjects do not match the approved "
+        "additive money measures: " + "; ".join(detail)
+    )
+
+
+def _validate_fact_assertions(
+    subjects_by_class: dict[str, list[str]],
+    selected_unique_ids: tuple[str, ...],
+    fact: FactBinding,
+) -> None:
+    """One row_count rooting at the built fact, one business_key_count on the
+    approved grain key, and one additive_money_total per approved money measure
+    -- exact subjects, no extras."""
+    _require_fact_singletons(subjects_by_class)
+    fact_model = _selected_fact_model(selected_unique_ids)
+    row_count_subject = subjects_by_class["fact_row_count"][0]
+    if _subject_root(row_count_subject) != fact_model:
+        raise ArtifactIntegrityError(
+            "parity fact_row_count does not reference the built fact model "
+            f"{fact_model!r}: {row_count_subject}"
+        )
+    _require_exact_business_key(
+        subjects_by_class["business_key_count"][0], fact_model, fact
+    )
+    _require_exact_money_coverage(
+        subjects_by_class["additive_money_total"], fact_model, fact
+    )
 
 
 def _validate_dimension_assertions(
@@ -494,28 +533,29 @@ def _validate_dimension_assertions(
 def _validate_parity_set(
     parity: tuple[ParityAssertion, ...],
     selected_unique_ids: tuple[str, ...],
+    fact: FactBinding,
 ) -> None:
-    """Prove the parity audit covers exactly what was built.
+    """Prove the parity audit covers exactly what was built and approved.
 
-    Fact-level: exactly one each of fact_row_count / business_key_count /
-    additive_money_total, each one's subject rooting at the built fact model
-    (subject, not just count, so a malformed audit cannot reconcile the wrong
-    fact relation). Dimensions: the SET of dimension_member_count subjects must
-    equal the set of built dim_* models (subject set, not just count, so a
-    malformed audit cannot pass by duplicating one dimension and omitting
-    another). Partition once here; each side is checked by its own helper.
+    Fact-level: exactly one fact_row_count rooting at the built fact model, one
+    business_key_count on the approved grain key, and one additive_money_total
+    per approved money measure (exact subject sets, so a malformed audit cannot
+    reconcile the wrong relation, the wrong key, or an arbitrary numeric column
+    instead of a governed money measure). Dimensions: the SET of
+    dimension_member_count subjects must equal the set of built dim_* models
+    (subject set, not just count, so a malformed audit cannot pass by
+    duplicating one dimension and omitting another). Partition once here; each
+    side is checked by its own helper.
     """
-    fact_counts: dict[str, int] = {cls: 0 for cls in _FACT_CLASSES}
-    fact_subjects: list[str] = []
+    subjects_by_class: dict[str, list[str]] = {cls: [] for cls in _FACT_CLASSES}
     dim_subjects: list[str] = []
     for row in parity:
-        if row.assertion_class in fact_counts:
-            fact_counts[row.assertion_class] += 1
-            fact_subjects.append(row.subject)
+        if row.assertion_class in subjects_by_class:
+            subjects_by_class[row.assertion_class].append(row.subject)
         elif row.assertion_class == "dimension_member_count":
             dim_subjects.append(row.subject)
 
-    _validate_fact_assertions(fact_subjects, fact_counts, selected_unique_ids)
+    _validate_fact_assertions(subjects_by_class, selected_unique_ids, fact)
     _validate_dimension_assertions(dim_subjects, selected_unique_ids)
 
 
@@ -585,7 +625,7 @@ def build_evidence(
         raise ArtifactIntegrityError("only build/test invocations produce run evidence")
     _validate_artifact_roles(invocation, artifacts)
     _validate_artifacts(plan, artifacts)
-    _validate_parity_set(parity, plan.selected_unique_ids)
+    _validate_parity_set(parity, plan.selected_unique_ids, plan.fact)
     tests = _test_summary(artifacts)
     outcome, exit_code, blockers = _evidence_outcome(invocation, tests, parity)
     return RunEvidence(
