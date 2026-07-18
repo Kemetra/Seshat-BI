@@ -292,6 +292,71 @@ def _model_name(row: Any) -> str | None:
     return None
 
 
+_SESHAT_TABLE_TAG = re.compile(r"^seshat_table_([a-z][a-z0-9_]*)$")
+
+
+def _is_validatable_table(root: Path, table_id: str) -> bool:
+    """True iff a real ``validate --table <table_id>`` run would reach model
+    checking -- i.e. the table can ACTUALLY be validated on its own run.
+
+    This is the single authority for "governed enough to absorb another table's
+    skipped models". It mirrors EVERY precondition the CLI entry point
+    (``_validated_project``) enforces before it reaches ``validate_project``'s
+    model stage: (1) ``resolve_working_set`` succeeds (full mapping working set +
+    the source map git-tracked, clean, and revision-resolvable), and (2) the
+    Mapping Ready gate (``evaluate_mapping_gate``) is allowed. Both are leaf checks
+    -- neither re-enters ``_model_contracts`` -- so this is recursion-safe; do NOT
+    delegate to ``_validated_project``/``validate_project`` (that would recurse
+    back into this predicate). Mirroring the entry point's complete precondition
+    set -- not just one of its checks -- is what keeps the skip bar and the
+    validate bar the same: a table whose map is untracked/dirty OR whose Mapping
+    Ready gate is still blocked is NOT validatable, so its models orphan-block
+    instead of being silently skipped and thus never reached by any check. The
+    table resolved here is always another table, never the one under validation.
+    """
+    from seshat.dbt.gate import (
+        GovernanceError,
+        evaluate_mapping_gate,
+        resolve_working_set,
+    )
+
+    try:
+        working_set = resolve_working_set(root, table_id)
+    except GovernanceError:
+        return False
+    return evaluate_mapping_gate(working_set).allowed
+
+
+def _governed_table_ids(root: Path) -> frozenset[str]:
+    """Table ids that can actually be validated on their own (see
+    ``_is_validatable_table``) -- the authoritative set a governed dbt model may be
+    attributed to when deciding whether to skip it under a different table.
+    """
+    mappings_dir = root / "mappings"
+    if not mappings_dir.is_dir():
+        return frozenset()
+    return frozenset(
+        child.name
+        for child in mappings_dir.iterdir()
+        if child.is_dir() and _is_validatable_table(root, child.name)
+    )
+
+
+def _model_table_tags(row: dict[str, Any]) -> frozenset[str]:
+    """The governed-table ids a model row declares via its ``seshat_table_*`` tags."""
+    config = row.get("config")
+    tags = config.get("tags") if isinstance(config, dict) else None
+    if not isinstance(tags, list):
+        return frozenset()
+    ids: set[str] = set()
+    for tag in tags:
+        if isinstance(tag, str):
+            match = _SESHAT_TABLE_TAG.match(tag)
+            if match is not None:
+                ids.add(match.group(1))
+    return frozenset(ids)
+
+
 def _check_model_selector(
     name: str,
     row: dict[str, Any],
@@ -441,11 +506,17 @@ def _model_contracts(
         source_map_revision=working_set.source_map_revision,
     )
     property_paths = sorted([*models_dir.rglob("*.yml"), *models_dir.rglob("*.yaml")])
+    governed_tables = _governed_table_ids(root)
     contracts.extend(
         contract
         for path in property_paths
         for row in _property_rows(path)
-        if (contract := _row_contract(context, row, blockers)) is not None
+        if (
+            contract := _row_contract(
+                context, row, working_set.table_id, governed_tables, blockers
+            )
+        )
+        is not None
     )
     if not contracts:
         blockers.append(
@@ -457,11 +528,59 @@ def _model_contracts(
 def _row_contract(
     context: _ContractContext,
     row: dict[str, Any],
+    table_id: str,
+    governed_tables: frozenset[str],
     blockers: list[Blocker],
 ) -> ModelContract | None:
-    if _model_name(row) is None:
+    """Attribute one model row to a governed table, then validate it if it is ours.
+
+    Partitions models so a multi-table dbt project validates each table's models
+    under that table's own working set (spec 133: validate covers ONE working set;
+    models are isolated under the worked selector).
+
+    Attribution uses BOTH the model's ``seshat_table_*`` tag AND its
+    ``meta.seshat.table_id`` contract, so a model belongs to THIS table if either
+    names it. That is deliberate: a model whose tag was accidentally copied from
+    another table but whose contract still cites this table is validated here (not
+    skipped), where ``_check_model_selector`` then catches the tag/contract
+    mismatch -- otherwise such a model would be skipped under this table AND
+    excluded from dbt's ``selector:seshat_table_<this>`` build, vanishing silently.
+
+    A model belonging to this table -> validated in full. A model belonging only to
+    ANOTHER table that has a COMPLETE committed working set (see
+    ``_governed_table_ids``) -> out of scope here, validated when its own table
+    runs. Anything else -- a phantom/mistyped tag, a partial-mapping table that can
+    never be validated, or no seshat attribution at all -> orphan blocker: every
+    model must be reachable by some table's checks, or governance never sees it.
+    """
+    name = _model_name(row)
+    if name is None:
         return None
-    return _model_contract(context, row, blockers)
+    model_tags = _model_table_tags(row)
+    contract_table = _model_contract_table_id(row)
+    # Owns THIS table if either the tag or the committed contract names it.
+    if table_id in model_tags or contract_table == table_id:
+        return _model_contract(context, row, blockers)
+    # Owned only by another table that can actually be validated on its own.
+    other_tables = model_tags | ({contract_table} if contract_table else set())
+    if other_tables & governed_tables:
+        return None
+    blockers.append(
+        Blocker(
+            "DBT_MODEL_ORPHANED",
+            f"model {name} is not attributable to any governed table "
+            "(no seshat_table_<table> tag or meta.seshat.table_id matches a "
+            "complete committed mapping working set)",
+        )
+    )
+    return None
+
+
+def _model_contract_table_id(row: dict[str, Any]) -> str | None:
+    """The table id a model row declares in its ``meta.seshat.table_id`` contract."""
+    seshat = _model_metadata(row)
+    table_id = seshat.get("table_id") if isinstance(seshat, dict) else None
+    return table_id if isinstance(table_id, str) and table_id else None
 
 
 def _generic_example_leaks(project_dir: Path) -> bool:

@@ -186,7 +186,41 @@ _DISPATCH: dict[str, Callable[[object], int]] = {
 }
 
 
+def _force_utf8_stdio() -> None:
+    """Make CLI output UTF-8 on Windows so non-ASCII renders instead of crashing.
+
+    Renderers emit Unicode (box-drawing, arrows) and governed data can contain
+    non-Latin text (e.g. Arabic ``billing_type`` values). Windows consoles
+    default to a legacy code page (cp1252), so the default stdout encoder raises
+    ``UnicodeEncodeError`` on the most basic verbs (``status``, ``next``). This
+    is the single dispatch chokepoint, so reconfiguring here fixes every
+    subcommand at once.
+
+    Scoped to win32 and gated on ``hasattr(..., "reconfigure")`` -- POSIX stdout
+    is already UTF-8 (reconfiguring to the same encoding is a byte-for-byte
+    no-op, so the CLI's unchanged-output contract holds there), and under pytest
+    capture / some pipe redirects ``sys.stdout`` is not a ``TextIOWrapper`` and
+    has no ``reconfigure``. Strict encoding (no ``errors=`` override) is
+    deliberate: replacement would silently corrupt Arabic output we govern.
+    """
+    if sys.platform != "win32":
+        return
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        if (getattr(stream, "encoding", "") or "").lower().replace("-", "") == "utf8":
+            continue
+        try:
+            reconfigure(encoding="utf-8")
+        except (ValueError, OSError):
+            # A stream that refuses reconfiguration is left as-is rather than
+            # turning a rendering nicety into a hard failure.
+            pass
+
+
 def main(argv: list[str] | None = None) -> int:
+    _force_utf8_stdio()
     try:
         args = _build_parser().parse_args(argv)
     except SystemExit as exc:
