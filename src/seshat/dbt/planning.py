@@ -141,19 +141,28 @@ def _validate_plan_hashes(plan: ExecutionPlan) -> None:
         raise PlanDrift("plan has no named-human approval identity")
 
 
-def _validate_fact_binding(plan: ExecutionPlan) -> None:
-    money = plan.fact.additive_money_measures
-    if not _COLUMN_ID.fullmatch(plan.fact.business_key):
-        raise PlanDrift("plan fact business_key is unsafe")
-    if (
-        not money
-        or money != tuple(sorted(set(money)))
-        or not all(isinstance(m, str) and _COLUMN_ID.fullmatch(m) for m in money)
-    ):
+def _canonical_money(money: tuple[str, ...]) -> bool:
+    if not money:
+        return False
+    if money != tuple(sorted(set(money))):
+        return False
+    return all(
+        isinstance(measure, str) and _COLUMN_ID.fullmatch(measure) for measure in money
+    )
+
+
+def _require_canonical_money(money: tuple[str, ...]) -> None:
+    if not _canonical_money(money):
         raise PlanDrift(
             "plan fact additive_money_measures must be non-empty, sorted, and unique"
         )
-    if plan.fact.business_key in money:
+
+
+def _validate_fact_binding(plan: ExecutionPlan) -> None:
+    if not _COLUMN_ID.fullmatch(plan.fact.business_key):
+        raise PlanDrift("plan fact business_key is unsafe")
+    _require_canonical_money(plan.fact.additive_money_measures)
+    if plan.fact.business_key in plan.fact.additive_money_measures:
         raise PlanDrift("plan fact business_key cannot be an additive money measure")
 
 
@@ -290,9 +299,7 @@ def _plan_envelope(payload: object) -> PlanEnvelope:
             mapping=MappingBinding(**raw["mapping"]),
             fact=FactBinding(
                 business_key=raw["fact"]["business_key"],
-                additive_money_measures=tuple(
-                    raw["fact"]["additive_money_measures"]
-                ),
+                additive_money_measures=tuple(raw["fact"]["additive_money_measures"]),
             ),
             project=ProjectBinding(**raw["project"]),
             runtime=RuntimeBinding(**raw["runtime"]),

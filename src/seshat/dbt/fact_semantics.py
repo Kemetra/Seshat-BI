@@ -57,28 +57,23 @@ def _fact_section(document: dict[str, Any]) -> dict[str, Any]:
     return fact
 
 
+def _is_identifier(value: Any) -> bool:
+    return isinstance(value, str) and bool(_IDENTIFIER.fullmatch(value))
+
+
 def _business_key(fact: dict[str, Any]) -> str:
     value = fact.get("business_key")
     if value is None:
         raise _missing("business_key")
-    if not isinstance(value, str) or not _IDENTIFIER.fullmatch(value):
+    if not _is_identifier(value):
         raise _invalid(
             "gold_star.fact.business_key must be a lowercase column identifier"
         )
     return value
 
 
-def _money_measures(fact: dict[str, Any]) -> tuple[str, ...]:
-    value = fact.get("additive_money_measures")
-    if value is None:
-        raise _missing("additive_money_measures")
-    if not isinstance(value, list) or not value:
-        raise _invalid(
-            "gold_star.fact.additive_money_measures must be a non-empty list"
-        )
-    if not all(
-        isinstance(item, str) and _IDENTIFIER.fullmatch(item) for item in value
-    ):
+def _require_money_entries(value: list[Any]) -> None:
+    if not all(_is_identifier(item) for item in value):
         raise _invalid(
             "gold_star.fact.additive_money_measures must be lowercase "
             "column identifiers"
@@ -87,12 +82,25 @@ def _money_measures(fact: dict[str, Any]) -> tuple[str, ...]:
         raise _invalid(
             "gold_star.fact.additive_money_measures contains duplicate columns"
         )
+
+
+def _require_money_list(value: Any) -> None:
+    if not isinstance(value, list) or not value:
+        raise _invalid(
+            "gold_star.fact.additive_money_measures must be a non-empty list"
+        )
+    _require_money_entries(value)
+
+
+def _money_measures(fact: dict[str, Any]) -> tuple[str, ...]:
+    value = fact.get("additive_money_measures")
+    if value is None:
+        raise _missing("additive_money_measures")
+    _require_money_list(value)
     return tuple(sorted(value))
 
 
-def _require_money_are_measures(
-    fact: dict[str, Any], money: tuple[str, ...]
-) -> None:
+def _require_money_are_measures(fact: dict[str, Any], money: tuple[str, ...]) -> None:
     measures = fact.get("measures")
     if not isinstance(measures, list):
         return

@@ -8,7 +8,7 @@ models:
       seshat:
         table_id: retail_store_sales
         source_map: mappings/retail_store_sales/source-map.yaml
-        source_map_revision: 1815a59abadf2ce7752f99444a0b403d717e100d
+        source_map_revision: d679ae199f588c8dc96c2396a7f6877f2ca70c6e
         grain: one row per governed customer member
         business_key: [customer_id]
         authority: derived
@@ -36,7 +36,7 @@ models:
       seshat:
         table_id: retail_store_sales
         source_map: mappings/retail_store_sales/source-map.yaml
-        source_map_revision: 1815a59abadf2ce7752f99444a0b403d717e100d
+        source_map_revision: d679ae199f588c8dc96c2396a7f6877f2ca70c6e
         grain: one row per governed item member
         business_key: [item]
         authority: derived
@@ -68,7 +68,7 @@ models:
       seshat:
         table_id: retail_store_sales
         source_map: mappings/retail_store_sales/source-map.yaml
-        source_map_revision: 1815a59abadf2ce7752f99444a0b403d717e100d
+        source_map_revision: d679ae199f588c8dc96c2396a7f6877f2ca70c6e
         grain: one row per governed payment method member
         business_key: [payment_method]
         authority: derived
@@ -96,7 +96,7 @@ models:
       seshat:
         table_id: retail_store_sales
         source_map: mappings/retail_store_sales/source-map.yaml
-        source_map_revision: 1815a59abadf2ce7752f99444a0b403d717e100d
+        source_map_revision: d679ae199f588c8dc96c2396a7f6877f2ca70c6e
         grain: one row per governed location member
         business_key: [location]
         authority: derived
@@ -124,7 +124,7 @@ models:
       seshat:
         table_id: retail_store_sales
         source_map: mappings/retail_store_sales/source-map.yaml
-        source_map_revision: 1815a59abadf2ce7752f99444a0b403d717e100d
+        source_map_revision: d679ae199f588c8dc96c2396a7f6877f2ca70c6e
         grain: one row per calendar date in the approved span
         business_key: [full_date]
         authority: derived
@@ -184,7 +184,7 @@ models:
       seshat:
         table_id: retail_store_sales
         source_map: mappings/retail_store_sales/source-map.yaml
-        source_map_revision: 1815a59abadf2ce7752f99444a0b403d717e100d
+        source_map_revision: d679ae199f588c8dc96c2396a7f6877f2ca70c6e
         grain: one row = one retail transaction
         business_key: [transaction_id]
         authority: derived

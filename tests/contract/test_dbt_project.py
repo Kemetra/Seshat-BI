@@ -338,6 +338,4 @@ def test_source_map_fact_tags_match_the_audit_parity_subjects() -> None:
     for measure in fact["additive_money_measures"]:
         assert f"'{fact_model}.{measure}'" in sql
         assert measure in fact["measures"]
-    assert sql.count("'additive_money_total'") == len(
-        fact["additive_money_measures"]
-    )
+    assert sql.count("'additive_money_total'") == len(fact["additive_money_measures"])

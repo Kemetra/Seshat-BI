@@ -8,7 +8,7 @@ models:
       seshat:
         table_id: retail_store_sales
         source_map: mappings/retail_store_sales/source-map.yaml
-        source_map_revision: 1815a59abadf2ce7752f99444a0b403d717e100d
+        source_map_revision: d679ae199f588c8dc96c2396a7f6877f2ca70c6e
         grain: one row per required migration-versus-shadow parity assertion
         business_key: [assertion_id]
         authority: derived

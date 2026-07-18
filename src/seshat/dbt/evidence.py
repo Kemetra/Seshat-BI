@@ -454,16 +454,20 @@ def _require_exact_business_key(subject: str, fact_model: str, fact: FactBinding
         )
 
 
+def _require_no_duplicate_money_subjects(subjects: list[str]) -> None:
+    if len(subjects) == len(set(subjects)):
+        return
+    duplicates = sorted({s for s in subjects if subjects.count(s) > 1})
+    raise ArtifactIntegrityError(
+        "parity has duplicate additive_money_total subjects: " + ", ".join(duplicates)
+    )
+
+
 def _require_exact_money_coverage(
     subjects: list[str], fact_model: str, fact: FactBinding
 ) -> None:
+    _require_no_duplicate_money_subjects(subjects)
     seen = frozenset(subjects)
-    if len(subjects) != len(seen):
-        duplicates = sorted({s for s in subjects if subjects.count(s) > 1})
-        raise ArtifactIntegrityError(
-            "parity has duplicate additive_money_total subjects: "
-            + ", ".join(duplicates)
-        )
     expected = frozenset(
         f"{fact_model}.{measure}" for measure in fact.additive_money_measures
     )
