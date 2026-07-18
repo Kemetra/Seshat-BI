@@ -136,7 +136,9 @@ def test_build_argv_supports_only_closed_operations(
             "selector:seshat_table_retail_store_sales",
         )
     if selected is Operation.SHOW:
-        assert argv[-2:] == ("--output", "json")
+        # --limit lifts dbt show's default 5-row preview cap so a full parity
+        # audit (more than five assertions) is not silently truncated.
+        assert argv[-4:] == ("--output", "json", "--limit", "1000")
 
 
 def test_invoke_never_uses_a_shell_and_sanitizes_output(

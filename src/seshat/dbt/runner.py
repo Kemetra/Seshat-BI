@@ -111,7 +111,11 @@ def build_dbt_argv(operation: Operation, context: RunContext) -> tuple[str, ...]
         )
     )
     if operation is Operation.SHOW:
-        argv.extend(("--output", "json"))
+        # --limit caps dbt show's preview rows; its default (5) silently truncates
+        # a parity audit with more assertions, so the evidence layer would see an
+        # incomplete set. A high explicit cap returns every governed assertion row
+        # (a governed star has far fewer than this many parity assertions).
+        argv.extend(("--output", "json", "--limit", "1000"))
     elif operation is Operation.LIST:
         argv.extend(("--output", "json", "--output-keys", "unique_id"))
     return tuple(argv)

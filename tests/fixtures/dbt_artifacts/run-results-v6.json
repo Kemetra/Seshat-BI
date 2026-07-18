@@ -4,13 +4,50 @@
     "dbt_version": "1.12.0",
     "generated_at": "2026-07-16T12:01:00Z"
   },
-  "args": {"which": "build"},
+  "args": {
+    "which": "build"
+  },
   "results": [
     {
-      "unique_id": "model.seshat_bi.fact_retail_store_sales",
+      "unique_id": "model.seshat_bi.fct_sales_rss",
       "status": "success",
       "failures": null,
       "execution_time": 0.21,
+      "message": "private adapter message"
+    },
+    {
+      "unique_id": "model.seshat_bi.dim_customer_rss",
+      "status": "success",
+      "failures": null,
+      "execution_time": 0.15,
+      "message": "private adapter message"
+    },
+    {
+      "unique_id": "model.seshat_bi.dim_product_rss",
+      "status": "success",
+      "failures": null,
+      "execution_time": 0.15,
+      "message": "private adapter message"
+    },
+    {
+      "unique_id": "model.seshat_bi.dim_payment_method_rss",
+      "status": "success",
+      "failures": null,
+      "execution_time": 0.15,
+      "message": "private adapter message"
+    },
+    {
+      "unique_id": "model.seshat_bi.dim_location_rss",
+      "status": "success",
+      "failures": null,
+      "execution_time": 0.15,
+      "message": "private adapter message"
+    },
+    {
+      "unique_id": "model.seshat_bi.dim_date_rss",
+      "status": "success",
+      "failures": null,
+      "execution_time": 0.15,
       "message": "private adapter message"
     },
     {

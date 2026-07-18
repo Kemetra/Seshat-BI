@@ -18,6 +18,27 @@ DBT_ENVIRONMENT_KEYS = (
     "SESHAT_DBT_SSLMODE",
 )
 
+# Not every governed dbt env var is a secret. Three carry non-secret connection
+# METADATA whose values are short, public, and dictionary-like, so redacting them
+# corrupts the tool's own governed evidence by rewriting innocent substrings:
+#   - SESHAT_DBT_SCHEMA  (e.g. "seshat_dbt_shadow"): a non-production target
+#     namespace with a public default; appears verbatim and REQUIRED in evidence
+#     (target.schemas.<layer> = <schema>_<layer>, pattern ^[a-z_][a-z0-9_]*$).
+#     Redacting it turned "seshat_dbt_shadow_silver" into "<redacted>_silver".
+#   - SESHAT_DBT_SSLMODE (e.g. "require"): an English word; redacting "require"
+#     mangled the governed const "none; named-human approval required".
+#   - SESHAT_DBT_PORT    (e.g. "25060"): a bare number that can collide with any
+#     digits in the payload.
+# These are still loaded into the child env (load_child_environment) but excluded
+# from the redaction secret set. Genuine credentials -- host, user, password,
+# dbname -- stay redacted.
+_NON_SECRET_ENVIRONMENT_KEYS = frozenset(
+    {"SESHAT_DBT_SCHEMA", "SESHAT_DBT_SSLMODE", "SESHAT_DBT_PORT"}
+)
+_SECRET_ENVIRONMENT_KEYS = tuple(
+    key for key in DBT_ENVIRONMENT_KEYS if key not in _NON_SECRET_ENVIRONMENT_KEYS
+)
+
 _RUNTIME_ENVIRONMENT_KEYS = (
     "COMSPEC",
     "LANG",
@@ -114,9 +135,13 @@ def load_child_environment(repo_root: Path) -> dict[str, str]:
 
 
 def secret_values(environment: Mapping[str, str]) -> tuple[str, ...]:
-    """Return non-empty governed dbt environment values, longest first."""
+    """Return non-empty governed dbt CREDENTIAL values, longest first.
 
-    values = {environment.get(key, "") for key in DBT_ENVIRONMENT_KEYS}
+    Excludes the shadow schema name (SESHAT_DBT_SCHEMA): it is a non-secret target
+    namespace that must survive verbatim in governed evidence -- see
+    _SECRET_ENVIRONMENT_KEYS."""
+
+    values = {environment.get(key, "") for key in _SECRET_ENVIRONMENT_KEYS}
     return tuple(sorted((value for value in values if value), key=len, reverse=True))
 
 

@@ -98,3 +98,38 @@ def test_sanitize_redacts_mapping_keys_as_well_as_values(tmp_path: Path) -> None
     clean = sanitize({"private-user": "ok"}, ("private-user",), tmp_path)
 
     assert clean == {"<redacted>": "ok"}
+
+
+def test_non_secret_connection_metadata_is_not_redacted_but_credentials_are(
+    tmp_path: Path,
+) -> None:
+    """Non-secret connection metadata (schema, sslmode, port) must survive
+    sanitization -- they are short/public/dictionary-like values that appear in
+    governed evidence, and redacting them corrupts it -- while every genuine
+    credential (host, user, password, dbname) is still redacted."""
+    from seshat.dbt.redaction import sanitize, secret_values
+
+    environment = {
+        "SESHAT_DBT_HOST": "db.example.com",
+        "SESHAT_DBT_PORT": "25060",
+        "SESHAT_DBT_USER": "analytics",
+        "SESHAT_DBT_PASSWORD": "s3cr3t-pass",
+        "SESHAT_DBT_DBNAME": "Warehouse",
+        "SESHAT_DBT_SCHEMA": "seshat_dbt_shadow",
+        "SESHAT_DBT_SSLMODE": "require",
+    }
+    secrets = secret_values(environment)
+
+    # Non-secret metadata is excluded from the secret set...
+    for metadata in ("seshat_dbt_shadow", "require", "25060"):
+        assert metadata not in secrets
+    # ...so governed evidence strings that embed those values survive intact:
+    for governed in (
+        "seshat_dbt_shadow_silver",  # target.schemas.silver
+        "none; named-human approval required",  # readiness_effect const
+    ):
+        assert sanitize(governed, secrets, tmp_path) == governed
+    # ...but every real credential value is still a secret and still redacted.
+    for credential in ("db.example.com", "analytics", "s3cr3t-pass", "Warehouse"):
+        assert credential in secrets
+        assert sanitize(credential, secrets, tmp_path) == "<redacted>"

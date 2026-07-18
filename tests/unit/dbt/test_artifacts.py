@@ -59,8 +59,13 @@ def _sample_plan():
             semantic_sha256="a" * 64,
         ),
         selected_unique_ids=(
-            "model.seshat_bi.fact_retail_store_sales",
+            "model.seshat_bi.fct_sales_rss",
             "model.seshat_bi.stg_retail_store_sales",
+            "model.seshat_bi.dim_customer_rss",
+            "model.seshat_bi.dim_product_rss",
+            "model.seshat_bi.dim_payment_method_rss",
+            "model.seshat_bi.dim_location_rss",
+            "model.seshat_bi.dim_date_rss",
             "test.seshat_bi.not_null_fact_transaction_id.abc123",
         ),
     )
@@ -159,7 +164,7 @@ def test_load_run_results_normalizes_without_adapter_messages() -> None:
     summary = load_run_results(FIXTURES / "run-results-v6.json")
 
     assert summary.which == "build"
-    assert len(summary.results) == 3
+    assert len(summary.results) == 8
     assert summary.results[0].execution_seconds.as_tuple().exponent <= 0
     assert not hasattr(summary.results[0], "message")
 
