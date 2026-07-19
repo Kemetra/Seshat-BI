@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "Seshat BI repository marketplace. Canonical source is this repository; external publication remains an owner action.",
-    "version": "0.5.0"
+    "version": "0.5.1"
   },
   "plugins": [
     {
       "name": "seshat-bi",
       "source": "./integrations/claude-code/seshat-bi",
       "description": "Guarded BI readiness workflow and reviewed public knowledge for Claude Code.",
-      "version": "0.5.0"
+      "version": "0.5.1"
     }
   ]
 }

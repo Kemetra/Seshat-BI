@@ -27,6 +27,8 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+## [0.5.1] -- 2026-07-19
+
 ### Added
 
 - `seshat scaffold-source <table>` writes the three Stage-1 blank templates
