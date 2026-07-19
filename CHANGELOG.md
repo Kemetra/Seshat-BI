@@ -39,10 +39,12 @@ explicitly identifies a public release event.
   config -- sees it), with real environment variables winning over `.env`, and
   restores `os.environ` exactly on exit (including on error). It reuses the
   governed dependency-free `.env` parser from `dbt.redaction` -- no
-  `python-dotenv` dependency. A malformed `.env` now fails clean (exit 1, no
-  traceback) at the command boundary. `value-check` reads `.env` from `--repo`
-  (the evaluated workspace), not the caller's cwd. (Scoped follow-ups: `drift`'s
-  postgres path is still gated on `--dsn` upstream; and the driver hint prints
+  `python-dotenv` dependency. A malformed `.env` -- or a syntactically valid but
+  invalid connection VALUE (an unknown `ANALYTICS_DB_ENGINE`, an unparseable
+  `ANALYTICS_DB_PORT`) -- now fails clean (exit 1, no traceback) at each command
+  boundary. `value-check` reads `.env` from `--repo` (the evaluated workspace),
+  not the caller's cwd. (Scoped follow-ups: `drift`'s postgres path is still
+  gated on `--dsn` upstream; and the driver hint prints
   `retail[db]` where the installable extra is `seshat-bi[db]`.)
 
 ## [0.5.0] -- 2026-07-19

@@ -50,7 +50,7 @@ def run_validate(args: argparse.Namespace) -> int:
     """
     from pathlib import Path
 
-    from seshat.connection_env import applied_dotenv
+    from seshat.connection_env import ConnectionConfigError, applied_dotenv
     from seshat.dbt.redaction import EnvironmentConfigError
 
     try:
@@ -58,6 +58,9 @@ def run_validate(args: argparse.Namespace) -> int:
             return _run_validate_body(args)
     except EnvironmentConfigError as exc:
         print(f"error: could not read the workspace .env: {exc}", file=sys.stderr)
+        return 1
+    except ConnectionConfigError as exc:
+        print(f"error: invalid database connection setting: {exc}", file=sys.stderr)
         return 1
 
 
@@ -83,17 +86,24 @@ def _run_validate_body(args: argparse.Namespace) -> int:
         fixture-tested; a live run needs a table's targets). Returns 1.
     """
     from seshat import cli
+    from seshat.connection_env import as_connection_config
     from seshat.core import Severity
     from seshat.dialect import get_dialect
     from seshat.runner import _format  # reuse the [severity] id (locator) format
     from seshat.validate import resolve_dsn, run_live_checks
 
+    # Engine + config resolution can raise ValueError on an invalid setting
+    # (unknown ANALYTICS_DB_ENGINE, unparseable port); convert those to a clean
+    # boundary failure. The live-check body below is deliberately OUTSIDE this
+    # wrap so its own ValueErrors are never masked.
     engine = cli._current_engine()
-    dialect = get_dialect(engine)
+    dialect = as_connection_config(lambda: get_dialect(engine))
 
     # 1. Resolve the engine's config. Postgres: --dsn wins; else env (UNCHANGED
     #    behavior). Other engines: --dsn is not applicable; resolve from env only.
-    config = _resolve_config(args, engine, dialect, resolve_dsn)
+    config = as_connection_config(
+        lambda: _resolve_config(args, engine, dialect, resolve_dsn)
+    )
     if config is None:
         print(
             "error: no database connection configured.\n"

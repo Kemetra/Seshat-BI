@@ -164,7 +164,7 @@ def _run_live_drift(args: argparse.Namespace, parsed: object) -> int:
     """
     from pathlib import Path
 
-    from seshat.connection_env import applied_dotenv
+    from seshat.connection_env import ConnectionConfigError, applied_dotenv
     from seshat.dbt.redaction import EnvironmentConfigError
 
     try:
@@ -173,6 +173,12 @@ def _run_live_drift(args: argparse.Namespace, parsed: object) -> int:
     except EnvironmentConfigError as exc:
         print(
             f"retail drift: could not read the workspace .env: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+    except ConnectionConfigError as exc:
+        print(
+            f"retail drift: invalid database connection setting: {exc}",
             file=sys.stderr,
         )
         return 1
@@ -188,12 +194,15 @@ def _run_live_drift_body(args: argparse.Namespace, parsed: object) -> int:
     grain_pk_drift can't be fabricated.
     """
     from seshat import cli
+    from seshat.connection_env import as_connection_config
     from seshat.dialect import get_dialect
     from seshat.drift import ReportContext, to_findings_dict
     from seshat.profile import profile as run_profile
 
-    dialect = get_dialect(cli._current_engine())
-    config = _resolve_live_config(args, cli, dialect)
+    # Convert an invalid engine/port setting into a clean boundary failure;
+    # the re-profile body below stays outside the wrap (its ValueErrors are real).
+    dialect = as_connection_config(lambda: get_dialect(cli._current_engine()))
+    config = as_connection_config(lambda: _resolve_live_config(args, cli, dialect))
     if config is None:
         print(
             "retail drift: no database connection configured for the live "

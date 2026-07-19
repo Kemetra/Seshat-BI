@@ -27,9 +27,40 @@ boundary converts to a clean exit-1 (no traceback).
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import TypeVar
+
+
+class ConnectionConfigError(ValueError):
+    """A connection VALUE loaded from the environment/`.env` is invalid.
+
+    Distinct from ``dbt.redaction.EnvironmentConfigError`` (a malformed `.env`
+    FILE): this is a syntactically valid setting that cannot resolve -- an
+    unknown ``ANALYTICS_DB_ENGINE`` (``get_dialect`` raises), or an unparseable
+    ``ANALYTICS_DB_PORT`` (``resolve_config`` raises). Commands catch it at their
+    boundary and print a clean exit-1 instead of a raw traceback (#340 review).
+    """
+
+
+_T = TypeVar("_T")
+
+
+def as_connection_config(resolve: Callable[[], _T]) -> _T:
+    """Run a connection-config resolution, converting a ``ValueError`` from an
+    invalid setting into ``ConnectionConfigError``.
+
+    Wrap ONLY the engine/config resolution (``get_dialect`` + ``resolve_config``
+    / ``resolve_dsn``) -- never the live-check body -- so a genuine downstream
+    ``ValueError`` is not masked.
+    """
+    try:
+        return resolve()
+    except ConnectionConfigError:
+        raise
+    except ValueError as exc:
+        raise ConnectionConfigError(str(exc)) from exc
 
 
 def _dotenv_overlay(repo_root: Path | str) -> dict[str, str]:

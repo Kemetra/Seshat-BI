@@ -150,3 +150,49 @@ def test_validate_resolves_dsn_from_dotenv_end_to_end(
 
     assert dsn is not None
     assert "@db.example" in dsn and "/warehouse" in dsn
+
+
+@pytest.mark.parametrize("command", ["validate", "drift", "value-check"])
+def test_invalid_engine_value_exits_1_without_traceback(
+    command: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """P2 round-2 (#344): a syntactically valid .env with an UNKNOWN engine
+    (get_dialect ValueError) must fail clean (exit 1, no traceback) at the
+    command boundary -- not just a malformed .env FILE. Covers the pre-existing
+    exported-env case too, now reachable via the documented .env path."""
+    from seshat.cli import main
+
+    monkeypatch.setenv("ANALYTICS_DB_ENGINE", "oracle")  # not a supported engine
+    monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@h:5432/db")
+    monkeypatch.chdir(tmp_path)
+
+    if command == "validate":
+        argv = ["validate", "--source-map", str(tmp_path / "sm.yaml")]
+    elif command == "drift":
+        argv = [
+            "drift",
+            "--baseline",
+            str(tmp_path / "b.md"),
+            "--dsn",
+            "postgresql://x",
+        ]
+    else:
+        (tmp_path / "m").mkdir()
+        argv = [
+            "value-check",
+            "--repo",
+            str(tmp_path),
+            "--metrics-dir",
+            str(tmp_path / "m"),
+        ]
+
+    rc = main(argv)
+
+    assert rc == 1
+    # the failure is an actionable message, never a raw Python traceback
+    err = capsys.readouterr().err
+    assert "Traceback" not in err
+    assert "oracle" in err or "engine" in err.lower() or "connection" in err.lower()
