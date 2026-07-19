@@ -16,11 +16,13 @@ with parity_values as (
 
     union all
 
-    -- composite business key (reference_no, item_no) -- NOT a single column
+    -- composite business key (reference_no, item_no) -- NOT a single column.
+    -- v0.5.1 requires the subject as <fact>.<col1>.<col2> (dot-joined, ordered),
+    -- matching the approved grain key derived from gold_star.fact.business_key.
     select
         'fact_distinct_grain_key',
         'business_key_count',
-        'fct_sales_c086.(reference_no,item_no)',
+        'fct_sales_c086.reference_no.item_no',
         (select count(distinct (reference_no, item_no))::numeric from {{ source('migration_gold', 'fct_sales_c086') }}),
         (select count(distinct (reference_no, item_no))::numeric from {{ ref('fct_sales_c086') }}),
         0::numeric
