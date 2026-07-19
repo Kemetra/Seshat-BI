@@ -20,6 +20,24 @@ _KEYWORD_RE = re.compile(
 )
 _SECRET_ENV_RE = re.compile(r"(PASSWORD|SECRET|TOKEN|_KEY$)", re.IGNORECASE)
 
+# ``ANALYTICS_DB_*`` keys whose VALUES are non-secret config from `.env.example`
+# (a port number, an sslmode word, an engine name, a driver name, a boolean
+# trust flag). Redacting these as if they were credentials corrupts legitimate
+# output -- e.g. the literal "require" / "25060" / "true" would be replaced
+# wherever it appears -- since #348 now loads `.env` into the process env these
+# commands redact against. Excluded by key so the blunt value-replacement never
+# sees a fixed-vocabulary config value (Codex P2). HOST / NAME / USER / PASSWORD
+# / ACCOUNT stay redacted (a host / account is identifying infra, not a boolean).
+_NON_SECRET_ANALYTICS_KEYS = frozenset(
+    {
+        "ANALYTICS_DB_PORT",
+        "ANALYTICS_DB_SSLMODE",
+        "ANALYTICS_DB_ENGINE",
+        "ANALYTICS_DB_ODBC_DRIVER",
+        "ANALYTICS_DB_TRUST_CERT",
+    }
+)
+
 
 def _secret_env_values() -> list[str]:
     values: list[str] = []
@@ -33,6 +51,8 @@ def _secret_env_values() -> list[str]:
 
 
 def _is_secret_key(key: str) -> bool:
+    if key in _NON_SECRET_ANALYTICS_KEYS:
+        return False  # fixed-vocabulary config, never a credential value
     if key == "DATABASE_URL" or key.startswith("ANALYTICS_DB_"):
         return True
     return bool(_SECRET_ENV_RE.search(key))

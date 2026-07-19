@@ -20,8 +20,10 @@ driver choice (``_ensure_driver``), and config resolution -- sees the documented
 
 The `.env` parser is reused from ``seshat.dbt.redaction`` (governed,
 dependency-free); no `python-dotenv` dependency is added. A malformed `.env`
-raises ``seshat.dbt.redaction.EnvironmentConfigError``, which the CLI command
-boundary converts to a clean exit-1 (no traceback).
+raises ``seshat.dbt.redaction.EnvironmentConfigError``, which each CLI command
+boundary converts to a clean, per-family exit code (no traceback): exit 1 for
+``validate`` / ``drift`` / ``value-check``, exit 2 (preflight refusal) for the
+``dagster`` family (issue #348) whose exit codes are a distinct stable API.
 """
 
 from __future__ import annotations
