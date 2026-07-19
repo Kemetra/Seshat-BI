@@ -186,9 +186,7 @@ def _materialized_bytes(name: str, table: str) -> bytes:
     if name == "source-profile.md":
         text = text.replace(_BROKEN_LINK, _LINK_REPLACEMENT)
     elif name == "readiness-status.yaml":
-        text = text.replace(
-            _READINESS_PLACEHOLDER_STAGE, _READINESS_INITIAL_STAGE
-        )
+        text = text.replace(_READINESS_PLACEHOLDER_STAGE, _READINESS_INITIAL_STAGE)
     elif name == "source-map.yaml":
         text = text.replace(
             _SOURCE_MAP_PROFILE_REF,
