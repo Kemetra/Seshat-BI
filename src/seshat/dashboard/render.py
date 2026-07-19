@@ -56,7 +56,7 @@ def _chip(status: str) -> str:
 def _count_blocked(tables: list[dict]) -> int:
     total = 0
     for t in tables:
-        stages = t.get("stages", {})
+        stages = t.get("stages") or {}
         any_blocked = any(
             isinstance(s, dict) and s.get("status") == "blocked"
             for s in stages.values()
@@ -86,7 +86,7 @@ def _kpis(tables: list[dict]) -> str:
 
 
 def _stage_dots(t: dict) -> str:
-    stages = t.get("stages", {})
+    stages = t.get("stages") or {}
     dots = []
     for name in _STAGE_ORDER:
         block = stages.get(name) or {}
@@ -122,7 +122,7 @@ def _summary_table(tables: list[dict]) -> str:
 
 def _table_card(t: dict) -> str:
     name = t.get("table", t.get("source_path", ""))
-    stages = t.get("stages", {})
+    stages = t.get("stages") or {}
     stage_html = []
     for stage_name in _STAGE_ORDER:
         block = stages.get(stage_name) or {}
@@ -149,7 +149,7 @@ def _table_card(t: dict) -> str:
     return (
         f'<div class="card" id="table-{_esc(name)}">'
         f"<h3>{_esc(name)} {_chip(t.get('current_stage') or 'not_started')}</h3>"
-        f'<div class="meta">{_esc(t.get("source_path", ""))}</div>'
+        f'<div class="meta">{_esc(t.get("source_path") or "")}</div>'
         f'<div class="stepper">{"".join(stage_html)}</div>'
         f"{top_blockers}"
         f'<div class="next">الإجراء التالي: {_esc(t.get("next_action") or "-")}</div>'

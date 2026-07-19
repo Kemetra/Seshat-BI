@@ -150,3 +150,22 @@ def test_injected_markup_is_escaped():
 def test_table_has_anchor_id_for_in_page_nav():
     html_out = render_page(_FIXTURE)
     assert 'id="table-bronze.retail_store_sales"' in html_out
+
+
+def test_render_page_tolerates_none_fields_without_crashing():
+    projection = {
+        "tables": [
+            {
+                "table": "t",
+                "source_path": None,
+                "current_stage": None,
+                "stages": None,
+                "blocking_reasons": None,
+                "next_action": None,
+            }
+        ]
+    }
+    html_out = render_page(projection)
+    assert isinstance(html_out, str)
+    assert "t" in html_out
+    assert '<div class="meta"></div>' in html_out  # None source_path -> "", not "None"
