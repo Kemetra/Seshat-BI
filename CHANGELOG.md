@@ -27,6 +27,16 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+### Fixed
+- **`dbt plan` no longer swallows the underlying dbt parse error** (#341): a
+  failed non-database PARSE runs under `--log-format json`, so the Compilation
+  Error lands as JSON log events on stdout while stderr is empty --
+  `_successful` interpolated the empty stderr and emitted a bare
+  `DBT_ARTIFACT_INTEGRITY:` with nothing after the colon. It now surfaces the
+  most informative available text (stderr, else error-level JSON log `msg`
+  events from stdout, else raw stdout, else an explicit log-location marker),
+  so the real parse error reaches the operator.
+
 ## [0.5.0] -- 2026-07-19
 
 ### Added

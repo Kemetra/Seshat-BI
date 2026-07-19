@@ -532,3 +532,91 @@ def test_create_plan_binds_gate_project_manifest_and_exact_selection(
         == planning.load_manifest(fixtures / "manifest-v12.json").semantic_sha256
     )
     assert b"2026-07-16" not in planning.canonical_plan_bytes(plan)
+
+
+def _failed_result(stdout: str, stderr: str):
+    """A non-zero-return InvocationResult, mirroring `_planning_runner`'s shape.
+
+    dbt PARSE runs under `--log-format json`, so a Compilation Error lands as
+    JSON log events on stdout while stderr is typically empty (issue #341).
+    """
+    from seshat.dbt.contracts import InvocationResult, Operation
+
+    return InvocationResult(
+        invocation_id="run-341",
+        operation=Operation.PARSE,
+        argv_summary=("parse",),
+        return_code=1,
+        started_at="2026-07-19T12:00:00Z",
+        completed_at="2026-07-19T12:00:01Z",
+        stdout=stdout,
+        stderr=stderr,
+        target_dir=Path("target"),
+        log_dir=Path("logs"),
+    )
+
+
+def test_successful_surfaces_stderr_when_present() -> None:
+    import seshat.dbt.planning as planning
+
+    result = _failed_result(stdout="", stderr="boom on stderr")
+    with pytest.raises(planning.ArtifactIntegrityError) as exc:
+        planning._successful(result, "parse")
+    assert "boom on stderr" in str(exc.value)
+
+
+def test_successful_surfaces_json_log_error_from_stdout_when_stderr_empty() -> None:
+    """The #341 bug: PARSE fails, stderr is empty, and the real Compilation
+    Error sits in stdout as JSON log events. `_successful` must surface it, not
+    emit an empty-after-colon message."""
+    import seshat.dbt.planning as planning
+
+    stdout = "\n".join(
+        [
+            json.dumps({"info": {"level": "info", "msg": "Running with dbt=1.12"}}),
+            json.dumps(
+                {
+                    "info": {
+                        "level": "error",
+                        "msg": (
+                            "Compilation Error in model stg_sales_c086_raw: depends "
+                            "on a source named 'bronze.sales_c086_raw' which was not "
+                            "found"
+                        ),
+                    }
+                }
+            ),
+        ]
+    )
+    result = _failed_result(stdout=stdout, stderr="")
+    with pytest.raises(planning.ArtifactIntegrityError) as exc:
+        planning._successful(result, "parse")
+    message = str(exc.value)
+    assert "Compilation Error in model stg_sales_c086_raw" in message
+    assert "which was not found" in message
+    # never the empty-after-colon symptom from the issue
+    assert not message.rstrip().endswith("planning:")
+
+
+def test_successful_falls_back_to_raw_stdout_when_not_json() -> None:
+    """If stderr is empty and stdout is not JSON log events, surface the raw
+    stdout rather than an empty message."""
+    import seshat.dbt.planning as planning
+
+    result = _failed_result(stdout="plain text compilation error here", stderr="")
+    with pytest.raises(planning.ArtifactIntegrityError) as exc:
+        planning._successful(result, "parse")
+    assert "plain text compilation error here" in str(exc.value)
+
+
+def test_successful_reports_no_detail_marker_when_both_streams_empty() -> None:
+    """Degenerate case: both streams empty. The message must still be
+    self-explanatory (a marker), never a bare trailing colon."""
+    import seshat.dbt.planning as planning
+
+    result = _failed_result(stdout="", stderr="")
+    with pytest.raises(planning.ArtifactIntegrityError) as exc:
+        planning._successful(result, "parse")
+    message = str(exc.value).rstrip()
+    assert not message.endswith("planning:")
+    assert not message.endswith(":")

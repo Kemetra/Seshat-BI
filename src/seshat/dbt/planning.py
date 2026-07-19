@@ -643,10 +643,66 @@ def _run_id() -> str:
     return f"{timestamp}-{token_hex(4)}"
 
 
+_JSON_LOG_ERROR_LEVELS = frozenset({"error", "warn"})
+
+
+def _json_log_error_msg(line: str) -> str | None:
+    """The error/warn ``msg`` from one dbt JSON log line, or ``None``.
+
+    dbt nests the event under ``info`` in current schemas, or at the top level
+    in older ones. Non-JSON, non-dict, or non-error lines yield ``None``.
+    """
+    try:
+        event = json.loads(line)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(event, dict):
+        return None
+    info = event.get("info") if isinstance(event.get("info"), dict) else event
+    if str(info.get("level", "")).lower() not in _JSON_LOG_ERROR_LEVELS:
+        return None
+    msg = info.get("msg")
+    return msg.strip() if isinstance(msg, str) and msg.strip() else None
+
+
+def _json_log_errors(stdout: str) -> str:
+    """Extract error-level ``msg`` text from dbt ``--log-format json`` stdout.
+
+    PARSE runs under ``--log-format json`` (runner.build_dbt_argv), so a
+    Compilation Error arrives as JSON log events on stdout while stderr is
+    usually empty. Returns an empty string when nothing parses as an error
+    event, so the caller can fall back to raw stdout.
+    """
+    messages = (_json_log_error_msg(line.strip()) for line in stdout.splitlines())
+    return "\n".join(msg for msg in messages if msg)
+
+
+def _failure_detail(result: InvocationResult) -> str:
+    """The most informative failure text available, in priority order.
+
+    stderr first (populated for text-format steps and process-level failures),
+    then error-level JSON log events on stdout (the PARSE case, issue #341),
+    then raw stdout, then an explicit marker so the message is never a bare
+    trailing colon.
+    """
+    if result.stderr.strip():
+        return result.stderr.strip()
+    json_errors = _json_log_errors(result.stdout)
+    if json_errors:
+        return json_errors
+    if result.stdout.strip():
+        return result.stdout.strip()
+    return (
+        f"no dbt diagnostic captured (return code {result.return_code}); "
+        f"see the dbt logs under {result.log_dir}"
+    )
+
+
 def _successful(result: InvocationResult, label: str) -> None:
     if result.return_code != 0:
         raise ArtifactIntegrityError(
-            f"dbt {label} failed during non-database planning: {result.stderr}"
+            f"dbt {label} failed during non-database planning: "
+            f"{_failure_detail(result)}"
         )
 
 
