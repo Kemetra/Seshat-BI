@@ -14,7 +14,7 @@ def _make_repo(tmp_path: Path) -> Path:
     d.mkdir(parents=True)
     (d / "readiness-status.yaml").write_text(
         'table: "bronze.orders"\ncurrent_stage: "source_ready"\n'
-        "stages:\n  source_ready:\n    status: \"pass\"\n"
+        'stages:\n  source_ready:\n    status: "pass"\n'
         "    evidence: []\n    blocking_reasons: []\n"
         'next_action: "next"\n',
         encoding="utf-8",
