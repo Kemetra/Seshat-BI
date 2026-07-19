@@ -116,6 +116,20 @@ capabilities:
     references:
       dispatch: "status"
 
+  - id: retail-dashboard
+    name: "retail / seshat dashboard"
+    summary: "Read-only static HTML view of committed per-table readiness status (Home health overview + per-table 7-stage cards). Writes one self-contained file and opens it; no server."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "dashboard"
+    documentation: "docs/superpowers/specs/2026-07-19-localhost-status-dashboard-design.md"
+    references:
+      dispatch: "dashboard"
+
   - id: retail-next
     name: "retail / seshat next"
     summary: "Computes the ONE next allowed action for a single table from its readiness-status.yaml."
