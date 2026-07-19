@@ -136,7 +136,8 @@ _TERMINAL_STOP_POINT = (
 
 _FRESH_NEXT_ACTION = (
     "No readiness evidence found under mappings/. Begin at Source Ready: "
-    "onboard one table with a read-only source profile and record "
+    "run `seshat scaffold-source <table>` to write the blank source profile "
+    "and readiness-status.yaml, then fill the source profile and record "
     "mappings/<table>/readiness-status.yaml before any warehouse or "
     "dashboard work."
 )
