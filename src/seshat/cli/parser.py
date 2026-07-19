@@ -113,6 +113,30 @@ def _add_status_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_dashboard_parser(sub: argparse._SubParsersAction) -> None:
+    """`dashboard`: render committed readiness status to a self-contained
+    static HTML file and open it. Read-only VIEW; no server, no socket (B1)."""
+    p = sub.add_parser(
+        "dashboard",
+        help=(
+            "render committed readiness status to a self-contained HTML file "
+            "and open it (read-only view; no server)"
+        ),
+    )
+    p.add_argument("--repo", default=".", help="repo root to read status from")
+    p.add_argument(
+        "--out",
+        default=None,
+        help="output HTML path (default: <repo>/reports/dashboard/index.html)",
+    )
+    p.add_argument(
+        "--no-open",
+        dest="no_open",
+        action="store_true",
+        help="write the file but do not open it in a browser",
+    )
+
+
 def _add_next_parser(sub: argparse._SubParsersAction) -> None:
     """`next` (spec 080 + Agent-Driven v0.1): read-only run-next readiness
     answer. With --table (text/json) it is the original per-table response;
@@ -1095,6 +1119,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_adopt_pbip_parser(sub)
     _add_dbt_parser(sub)
     _add_status_parser(sub)
+    _add_dashboard_parser(sub)
     _add_next_parser(sub)
     _add_approvals_parser(sub)
     _add_evidence_pack_parser(sub)

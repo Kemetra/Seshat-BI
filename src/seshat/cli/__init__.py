@@ -165,6 +165,7 @@ _DISPATCH: dict[str, Callable[[object], int]] = {
     "dbt": _lazy(".commands.dbt", "dbt_main"),
     "kit-lint": _lazy(".commands.kit_lint", "run_kit_lint"),
     "status": _lazy(".commands.status", "status_main"),
+    "dashboard": _lazy(".commands.dashboard", "dashboard_main"),
     "next": _lazy(".commands.next", "next_main"),
     "approvals": _lazy(".commands.approvals", "approvals_main"),
     "evidence-pack": _lazy(".commands.evidence_pack", "evidence_pack_main"),
