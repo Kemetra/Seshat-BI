@@ -46,6 +46,15 @@ _LINK_REPLACEMENT = "ADR 0003 (mapping-artifact-location)"
 _READINESS_PLACEHOLDER_STAGE = 'current_stage: "<stage_key>"'
 _READINESS_INITIAL_STAGE = 'current_stage: "source_ready"'
 
+# readiness-status.yaml also ships generic identity placeholders. run_next reads
+# `table`/`source_id` to attribute the scope, so leaving them makes `seshat next`
+# report the literal "<...>" instead of the onboarded table. Set them to the
+# requested table (the folder identity we KNOW); `table` stays unqualified since
+# the target schema is a mapping-stage decision, not yet made -- honest, not
+# fabricated. `source_family` remains a placeholder (a genuine open question).
+_READINESS_TABLE_REF = 'table: "<schema>.<table>"'
+_READINESS_SOURCE_ID_REF = 'source_id: "<source_id>"'
+
 # source-map.yaml's meta.profiled_from points at the dev-repo template path,
 # which a pip-only workspace does not have. Retarget it at the materialized
 # profile so a completed map cites the profile it actually rests on.
@@ -106,6 +115,12 @@ def _has_trimmed_suffix(table: str) -> bool:
     return table != table.strip(" .")
 
 
+def _has_control_char(table: str) -> bool:
+    # ASCII control codes (0-31) are invalid in a Win32 filename and, embedded in
+    # a name, corrupt the line-oriented `wrote`/`next` CLI output. Refuse them.
+    return any(ord(char) < 32 for char in table)
+
+
 # Each predicate names one reason a ``table`` cannot be a safe, portably-
 # createable path segment. Kept as a flat tuple so the guard is a single
 # ``any(...)`` rather than a multi-branch method (CodeScene complexity guard).
@@ -113,6 +128,7 @@ _UNSAFE_TABLE_PREDICATES = (
     lambda t: t in _UNSAFE_TABLE_TOKENS,
     _has_path_separator,
     _has_invalid_char,
+    _has_control_char,
     _has_trimmed_suffix,
     _is_windows_reserved,
 )
@@ -187,6 +203,8 @@ def _materialized_bytes(name: str, table: str) -> bytes:
         text = text.replace(_BROKEN_LINK, _LINK_REPLACEMENT)
     elif name == "readiness-status.yaml":
         text = text.replace(_READINESS_PLACEHOLDER_STAGE, _READINESS_INITIAL_STAGE)
+        text = text.replace(_READINESS_SOURCE_ID_REF, f'source_id: "{table}"')
+        text = text.replace(_READINESS_TABLE_REF, f'table: "{table}"')
     elif name == "source-map.yaml":
         text = text.replace(
             _SOURCE_MAP_PROFILE_REF,

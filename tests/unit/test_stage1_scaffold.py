@@ -291,3 +291,48 @@ def test_scaffolded_source_map_profiled_from_points_at_materialized_profile(
     assert 'profiled_from: "templates/source-profile.md"' not in sm
     data = yaml.safe_load(sm)
     assert data["meta"]["profiled_from"] == "mappings/orders/source-profile.md"
+
+
+def test_scaffolded_readiness_identity_matches_requested_table(tmp_path: Path) -> None:
+    """P2 round-5 (#342): the scaffolded readiness must carry the REQUESTED
+    table identity, not the generic '<schema>.<table>' / '<source_id>'
+    placeholders -- otherwise run_next attributes the scope to the literal
+    placeholder instead of the onboarded table."""
+    import yaml
+
+    from seshat.stage1_scaffold import scaffold_source
+
+    scaffold_source(tmp_path, "foo")
+    data = yaml.safe_load(
+        (tmp_path / "mappings" / "foo" / "readiness-status.yaml").read_text(
+            encoding="utf-8-sig"
+        )
+    )
+    assert data["source_id"] == "foo"
+    assert "foo" in str(data["table"])
+    assert "<schema>" not in str(data["table"])
+    assert "<source_id>" not in str(data["source_id"])
+
+
+def test_scaffolded_next_attributes_scope_to_requested_table(tmp_path: Path) -> None:
+    """Regression lock (#342): `seshat next` after scaffold must report the
+    REQUESTED table (foo), not a '<...>' placeholder scope."""
+    from seshat.run_next import build_run_next_response
+    from seshat.stage1_scaffold import scaffold_source
+
+    scaffold_source(tmp_path, "foo")
+    resp = build_run_next_response(str(tmp_path), "foo")
+
+    assert "<" not in str(resp["table"])
+    assert "foo" in str(resp["table"])
+
+
+@pytest.mark.parametrize("bad", ["a\nb", "a\tb", "a\x00b", "a\rb", "\x1f"])
+def test_scaffold_source_rejects_control_characters(tmp_path: Path, bad: str) -> None:
+    """P2 round-5 (#342): a control character (newline/tab/NUL/...) in the table
+    name corrupts the line-oriented CLI output and is invalid on Windows (code
+    points 0-31). Reject it as a documented refusal."""
+    from seshat.stage1_scaffold import Stage1ScaffoldError, scaffold_source
+
+    with pytest.raises(Stage1ScaffoldError):
+        scaffold_source(tmp_path, bad)

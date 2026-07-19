@@ -45,9 +45,13 @@ explicitly identifies a public release event.
   materialized `readiness-status.yaml` carries a truthful initial
   `current_stage: source_ready` (not the `<stage_key>` placeholder), so a
   committed scaffold passes the RS1 governance gate as an honest unstarted
-  Source-Ready journey with no fabricated evidence or approvals; the
-  `source-map.yaml` `profiled_from` provenance is retargeted at the
-  materialized `mappings/<table>/source-profile.md`.
+  Source-Ready journey with no fabricated evidence or approvals; its `table`
+  and `source_id` identity fields are set to the requested table (so
+  `seshat next` attributes the scope to it, not the literal placeholder); and
+  the `source-map.yaml` `profiled_from` provenance is retargeted at the
+  materialized `mappings/<table>/source-profile.md`. The table name also
+  rejects ASCII control characters (invalid on Windows; would corrupt the
+  line-oriented CLI output).
 
 ### Fixed
 - **`dbt plan` no longer swallows the underlying dbt parse error** (#341): a
