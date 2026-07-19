@@ -181,8 +181,17 @@ def _run_guarded(handler, args) -> int:
     Redacting after the overlay is torn down would print a `.env`-only secret
     unredacted, violating the all-output-redacted contract (Codex P1, #348).
     """
+    from seshat.safe_write import SafeWriteError
+
     try:
         return handler(args)
+    except SafeWriteError as error:
+        # `dagster init` refused a path-safety violation (symlinked orchestration/
+        # parent or output path). That is a preflight/gate refusal (exit 2), not
+        # an unexpected internal error -- mirror the dbt boundary (#351). Caught
+        # before the generic handler since SafeWriteError is a ValueError.
+        print(f"refused: {error}", file=sys.stderr)
+        return 2
     except Exception as error:  # the contract forbids raw tracebacks
         from seshat.dagster_adapter.redaction import redact_text
 

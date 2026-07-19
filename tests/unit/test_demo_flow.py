@@ -45,6 +45,148 @@ def test_demo_load_offline_skips_and_exits_zero(tmp_path, capsys):
     assert "offline" in capsys.readouterr().out.lower()
 
 
+def test_demo_load_resolves_dsn_from_workspace_dotenv(tmp_path, monkeypatch):
+    """#350: `demo load` must resolve a DSN from the workspace `.env`, the same
+    precedence `retail validate` uses post-#340. Before the fix, `_resolve_dsn`
+    called `resolve_dsn()` with no argument (TypeError, swallowed) and never
+    loaded `.env`, so it ALWAYS returned None -- offline regardless of config."""
+    for key in (
+        "DATABASE_URL",
+        "ANALYTICS_DB_HOST",
+        "ANALYTICS_DB_NAME",
+        "ANALYTICS_DB_USER",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    (tmp_path / ".env").write_text(
+        "ANALYTICS_DB_HOST=db.example\n"
+        "ANALYTICS_DB_NAME=warehouse\n"
+        "ANALYTICS_DB_USER=reader\n",
+        encoding="utf-8",
+    )
+
+    class _Args:
+        repo = str(tmp_path)
+        dsn = None
+
+    from seshat.demo.load import _resolve_dsn
+
+    dsn = _resolve_dsn(_Args())
+
+    assert dsn is not None
+    assert "@db.example" in dsn and "/warehouse" in dsn
+
+
+def test_demo_load_explicit_dsn_still_wins(tmp_path, monkeypatch):
+    """#350 regression: an explicit --dsn must still take precedence over `.env`
+    (the pre-existing behavior must not regress when .env loading is added)."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    (tmp_path / ".env").write_text(
+        "ANALYTICS_DB_HOST=ignored.example\n", encoding="utf-8"
+    )
+
+    class _Args:
+        repo = str(tmp_path)
+        dsn = "postgresql://u:p@explicit.example:5432/db"
+
+    from seshat.demo.load import _resolve_dsn
+
+    assert _resolve_dsn(_Args()) == "postgresql://u:p@explicit.example:5432/db"
+
+
+def test_demo_load_non_postgres_engine_degrades_to_offline(tmp_path, monkeypatch):
+    """#350 Codex P2: the live leg is Postgres-only. When `.env` selects a
+    non-Postgres ANALYTICS_DB_ENGINE, the generic ANALYTICS_DB_* values must NOT
+    be force-built into a bogus postgresql:// DSN (which psycopg2 would then aim
+    at the wrong engine). It degrades to offline instead."""
+    for key in (
+        "DATABASE_URL",
+        "ANALYTICS_DB_ENGINE",
+        "ANALYTICS_DB_HOST",
+        "ANALYTICS_DB_NAME",
+        "ANALYTICS_DB_USER",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    (tmp_path / ".env").write_text(
+        "ANALYTICS_DB_ENGINE=mysql\n"
+        "ANALYTICS_DB_HOST=mysql.example\n"
+        "ANALYTICS_DB_NAME=warehouse\n"
+        "ANALYTICS_DB_USER=reader\n",
+        encoding="utf-8",
+    )
+
+    class _Args:
+        repo = str(tmp_path)
+        dsn = None
+
+    from seshat.demo.load import _resolve_dsn
+
+    # No postgresql:// DSN fabricated for a mysql engine -> offline (None).
+    assert _resolve_dsn(_Args()) is None
+
+
+def test_demo_load_resolvable_dsn_without_driver_degrades_gracefully(
+    tmp_path, monkeypatch, capsys
+):
+    """#350 Codex P2: post-#350 a workspace `.env` can resolve a DSN, making the
+    live leg reachable -- but without psycopg2, load_demo_scoped would raise
+    ModuleNotFoundError. The portable operating contract requires an enable-step
+    message and exit 0, never a traceback."""
+    for key in (
+        "DATABASE_URL",
+        "ANALYTICS_DB_ENGINE",
+        "ANALYTICS_DB_HOST",
+        "ANALYTICS_DB_NAME",
+        "ANALYTICS_DB_USER",
+    ):
+        monkeypatch.delenv(key, raising=False)
+    (tmp_path / ".env").write_text(
+        "ANALYTICS_DB_HOST=db.example\n"
+        "ANALYTICS_DB_NAME=warehouse\n"
+        "ANALYTICS_DB_USER=reader\n",
+        encoding="utf-8",
+    )
+    # Force "psycopg2 unimportable" regardless of the test environment:
+    # sys.modules[name]=None makes `import name` raise ImportError.
+    import sys
+
+    monkeypatch.setitem(sys.modules, "psycopg2", None)
+
+    class _Args:
+        repo = str(tmp_path)
+        dsn = None
+
+    from seshat.demo.load import run_load
+
+    code = run_load(_Args())
+    out = capsys.readouterr().out
+    assert code == 0  # graceful, not a crash
+    assert "pip install" in out and "seshat-bi[db]" in out  # the enable step
+
+
+def test_demo_load_checks_psycopg2_not_the_engine_driver(tmp_path, monkeypatch, capsys):
+    """#350 Codex P2 round-2: the live leg is Postgres-only, and an explicit
+    --dsn resolves BEFORE the engine gate. So the driver check must pin psycopg2,
+    independent of ANALYTICS_DB_ENGINE -- otherwise a `mysql` engine + a Postgres
+    --dsn would check the mysql driver, misreporting offline (or passing then
+    crashing in demo.live). With psycopg2 absent it must degrade gracefully."""
+    monkeypatch.setenv("ANALYTICS_DB_ENGINE", "mysql")  # a wrong-engine export
+
+    import sys
+
+    monkeypatch.setitem(sys.modules, "psycopg2", None)  # psycopg2 import fails
+
+    class _Args:
+        repo = str(tmp_path)
+        dsn = "postgresql://u:p@localhost:5432/demo"  # explicit Postgres --dsn
+
+    from seshat.demo.load import run_load
+
+    code = run_load(_Args())
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "psycopg2" in out and "pip install" in out  # psycopg2-specific message
+
+
 def test_demo_run_offline_ceiling(tmp_path, capsys):
     """T012: offline run -> source/mapping/silver pass, gold+ never pass."""
     _seed_repo(tmp_path)

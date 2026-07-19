@@ -44,7 +44,7 @@ def _add_init_project_parser(sub: argparse._SubParsersAction) -> None:
         "init-project",
         help=(
             "scaffold a fresh, empty Retail-BI project workspace for a new user "
-            "(mappings/, warehouse/{bronze,silver,gold}/, powerbi/, reports/, "
+            "(mappings/, warehouse/migrations/, powerbi/, reports/, "
             "evidence/, README.md, .env.example) -- no wizard"
         ),
     )

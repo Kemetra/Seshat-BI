@@ -69,6 +69,28 @@ def test_init_project_subparser_is_registered() -> None:
     assert args.force is False
 
 
+def test_init_project_help_advertises_migrations_not_medallion_dirs() -> None:
+    """#349 Codex P2: the `init-project` subcommand help line in `seshat --help`
+    must describe the ACTUAL scaffold layout (warehouse/migrations/, where the
+    readers read), not the removed warehouse/{bronze,silver,gold}/ that would
+    point new users at invisible SQL. The `help=` string renders in the PARENT
+    parser's subcommand list, not in the subparser's own `--help`."""
+    import contextlib
+    import io
+
+    from seshat.cli.parser import _build_parser
+
+    parser = _build_parser()
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        with pytest.raises(SystemExit):
+            parser.parse_args(["--help"])
+    help_text = buf.getvalue()
+
+    assert "warehouse/migrations" in help_text
+    assert "{bronze,silver,gold}" not in help_text
+
+
 def test_init_project_does_not_read_stdin(tmp_path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
 

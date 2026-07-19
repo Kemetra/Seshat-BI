@@ -75,14 +75,44 @@ def test_fresh_scaffold_creates_workspace_shape(target) -> None:
 
     assert target.is_dir()
     assert (target / "mappings").is_dir()
-    assert (target / "warehouse" / "bronze").is_dir()
-    assert (target / "warehouse" / "silver").is_dir()
-    assert (target / "warehouse" / "gold").is_dir()
+    # #349: the medallion SQL home is warehouse/migrations/ (what the readers
+    # read), not the unread warehouse/{bronze,silver,gold}/.
+    assert (target / "warehouse" / "migrations").is_dir()
     assert (target / "powerbi").is_dir()
     assert (target / "reports").is_dir()
     assert (target / "evidence").is_dir()
     assert (target / ".env.example").is_file()
     assert (target / "README.md").is_file()
+
+
+def test_scaffold_warehouse_layout_matches_the_readers(target) -> None:
+    """#349: the scaffold must create `warehouse/migrations/` -- the ONE medallion
+    SQL location every governance rule + Dagster actually read (and the reference
+    example ships). It must NOT create the unread `warehouse/{bronze,silver,gold}/`
+    that silently swallowed SQL the tool could never see."""
+    init_project(str(target))
+
+    # The readers' location exists and is the SQL home.
+    assert (target / "warehouse" / "migrations").is_dir()
+    # The unread fiction is gone (nothing reads these; SQL here is invisible).
+    assert not (target / "warehouse" / "silver").exists()
+    assert not (target / "warehouse" / "gold").exists()
+    assert not (target / "warehouse" / "bronze").exists()
+
+
+def test_readmes_direct_sql_to_migrations_not_medallion_dirs(target) -> None:
+    """#349: the READMEs must point the user at `warehouse/migrations/` (where the
+    readers look), never at `warehouse/{bronze,silver,gold}/` (where SQL is
+    invisible). A user who follows the README must land where the tool reads."""
+    init_project(str(target))
+    root_readme = (target / "README.md").read_text(encoding="utf-8")
+    wh_readme = (target / "warehouse" / "README.md").read_text(encoding="utf-8")
+
+    assert "warehouse/migrations" in root_readme
+    for readme in (root_readme, wh_readme):
+        # no direction to the unread medallion SQL homes
+        assert "{bronze,silver,gold}" not in readme
+        assert "`bronze/`" not in readme and "`silver/`" not in readme
 
 
 def test_fresh_scaffold_returns_created_paths_as_path_objects(target) -> None:
@@ -258,6 +288,32 @@ def test_allows_absolute_path_that_is_under_cwd(tmp_path, monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 # FR-005 -- pure filesystem; no DB/network at module scope.
 # ---------------------------------------------------------------------------
+
+
+def test_gitkeep_write_refuses_a_symlink_escape(tmp_path, monkeypatch) -> None:
+    """#352: the conditional `.gitkeep` write must not follow a pre-planted
+    symlink out of the workspace. Route through the hardened safe_write so a
+    symlinked `.gitkeep` (dangling) is refused rather than followed."""
+    import os
+
+    from seshat.safe_write import SafeWriteError
+
+    monkeypatch.chdir(tmp_path)
+    target = tmp_path / "ws"
+    # Pre-create the first empty dir + a symlinked .gitkeep pointing outside.
+    from seshat.workspace_init import _EMPTY_DIRS, _GITKEEP_NAME
+
+    first = target / _EMPTY_DIRS[0]
+    first.mkdir(parents=True)
+    outside = tmp_path / "outside-gitkeep"
+    try:
+        os.symlink(outside, first / _GITKEEP_NAME)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation not permitted in this environment")
+
+    with pytest.raises(SafeWriteError):
+        init_project(str(target), force=True)
+    assert not outside.exists()  # nothing written through the symlink
 
 
 def test_module_has_no_module_scope_db_or_network_import() -> None:

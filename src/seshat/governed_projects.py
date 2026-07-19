@@ -147,13 +147,18 @@ def _tree_files(relative_dir: str) -> tuple[str, ...]:
 
 
 def _write_if_absent(root: Path, relative: str, data: bytes) -> bool:
-    """Write one template file; True when written, False when kept as-is."""
-    target = root / Path(*relative.split("/"))
-    if target.exists():
-        return False
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(data)
-    return True
+    """Write one template file; True when written, False when kept as-is.
+
+    Delegates to the shared hardened writer (``safe_write``, #351): the previous
+    ``if target.exists(): return False`` + ``write_bytes`` followed symlinks and
+    had no containment guard, so a dangling symlink at an output path or a
+    symlinked parent directory (``dbt/``) could redirect the write OUT of the
+    workspace with no race required. ``write_if_absent`` refuses those
+    (``SafeWriteError``) and makes the write an atomic ``O_EXCL`` create.
+    """
+    from seshat.safe_write import write_if_absent
+
+    return write_if_absent(root, relative, data)
 
 
 def _ensure_ignore_rules(
