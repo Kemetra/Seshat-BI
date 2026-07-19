@@ -6,6 +6,7 @@ from seshat.dashboard.render import (
     _STATUS_STYLE,
     render_page,
 )
+from seshat.dashboard.theme import DASHBOARD_CSS
 
 pytestmark = pytest.mark.unit
 
@@ -40,3 +41,16 @@ def test_render_page_is_self_contained_no_remote_assets():
     html = render_page({"tables": []})
     assert "http://" not in html
     assert "https://" not in html
+
+
+def test_theme_css_is_local_only():
+    assert DASHBOARD_CSS.strip()
+    assert "@import" not in DASHBOARD_CSS
+    assert "http://" not in DASHBOARD_CSS and "https://" not in DASHBOARD_CSS
+
+
+def test_render_page_inlines_the_theme_css():
+    html_out = render_page({"tables": []})
+    # a distinctive token from the brand palette must appear inline
+    assert "#001E35" in html_out  # navy sidebar
+    assert "<style>" in html_out

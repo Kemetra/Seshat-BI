@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import html
 
+from seshat.dashboard.theme import DASHBOARD_CSS
+
 _STAGE_ORDER: tuple[str, ...] = (
     "source_ready",
     "mapping_ready",
@@ -65,7 +67,7 @@ def render_page(projection: dict) -> str:
         '<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         "<title>Seshat BI — لوحة الحالة</title>\n"
-        "<style>/* css placeholder */</style>\n"
+        f"<style>{DASHBOARD_CSS}</style>\n"
         "</head>\n<body>\n"
         f"{body}\n"
         "</body>\n</html>\n"
