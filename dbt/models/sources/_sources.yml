@@ -5,6 +5,7 @@ sources:
     schema: bronze
     tables:
       - name: retail_store_sales
+      - name: sales_c086_raw
 
   - name: migration_gold
     schema: gold
@@ -15,3 +16,9 @@ sources:
       - name: dim_payment_method_rss
       - name: dim_location_rss
       - name: dim_date_rss
+      - name: fct_sales_c086
+      - name: dim_product_c086
+      - name: dim_billing_type_c086
+      - name: dim_customer_c086
+      - name: dim_staff_c086
+      - name: dim_date_c086

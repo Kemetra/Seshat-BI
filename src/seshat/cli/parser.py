@@ -62,6 +62,29 @@ def _add_init_project_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_scaffold_source_parser(sub: argparse._SubParsersAction) -> None:
+    """`scaffold-source <table>` (issue #339): write the three Stage-1 blank
+    templates (source-profile.md, readiness-status.yaml, source-map.yaml) into
+    mappings/<table>/ from bundled package data, so a pip-only user has the
+    Source-Ready artifacts to fill. Per-file non-destructive; no wizard.
+    Extracted (mirrors `_add_init_project_parser`) to keep `_build_parser` from
+    growing (CodeScene large-method guard)."""
+    p = sub.add_parser(
+        "scaffold-source",
+        help=(
+            "write the three Stage-1 blank templates (source-profile.md, "
+            "readiness-status.yaml, source-map.yaml) into mappings/<table>/ "
+            "so a fresh workspace has the Source-Ready artifacts to fill"
+        ),
+    )
+    p.add_argument(
+        "table",
+        metavar="TABLE",
+        help="table id / mapping folder name to scaffold under mappings/",
+    )
+    p.add_argument("--repo", default=".", help="repo root to scaffold into")
+
+
 def _add_status_parser(sub: argparse._SubParsersAction) -> None:
     """`status` (spec 109, roadmap M4, under ratified Option B): the ONE
     sanctioned CLI addition -- a thin, READ-ONLY JSON projection of committed
@@ -1068,6 +1091,7 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_scaffold_parser(sub)
     _add_init_parser(sub)
     _add_init_project_parser(sub)
+    _add_scaffold_source_parser(sub)
     _add_adopt_pbip_parser(sub)
     _add_dbt_parser(sub)
     _add_status_parser(sub)

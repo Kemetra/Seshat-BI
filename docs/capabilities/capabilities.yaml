@@ -159,6 +159,20 @@ capabilities:
     references:
       dispatch: "init-project"
 
+  - id: scaffold-source
+    name: "seshat scaffold-source"
+    summary: "Writes the three Stage-1 blank templates (source-profile.md, readiness-status.yaml, source-map.yaml) into mappings/<table>/ so a pip-only workspace has the Source-Ready artifacts to fill."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: source_ready
+    command: "scaffold-source"
+    documentation: "docs/superpowers/specs/2026-07-19-stage1-template-self-sufficiency-design.md"
+    references:
+      dispatch: "scaffold-source"
+
   - id: retail-init
     name: "retail init"
     summary: "Bootstraps the Compass-driven kit substrate (compass router + fenced AGENTS.md/CLAUDE.md regions + manifests)."

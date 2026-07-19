@@ -160,6 +160,7 @@ _DISPATCH: dict[str, Callable[[object], int]] = {
     "scaffold": _lazy(".commands.scaffold", "run_scaffold"),
     "init": _lazy(".commands.init", "run_init"),
     "init-project": _lazy(".commands.init_project", "init_project_main"),
+    "scaffold-source": _lazy(".commands.scaffold_source", "scaffold_source_main"),
     "adopt-pbip": _lazy(".commands.adopt_pbip", "adopt_pbip_main"),
     "dbt": _lazy(".commands.dbt", "dbt_main"),
     "kit-lint": _lazy(".commands.kit_lint", "run_kit_lint"),
