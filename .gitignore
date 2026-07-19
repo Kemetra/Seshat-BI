@@ -47,6 +47,8 @@ dist/
 build/
 .mypy_cache/
 tmp/
+# Local release build output (wheel/sdist already published to PyPI as seshat-bi)
+release-staging/
 
 # ── Vendored Power BI Modeling MCP (36MB binary tool, not source) ──
 # The Microsoft Power BI Modeling MCP server, kept locally to build/edit the
