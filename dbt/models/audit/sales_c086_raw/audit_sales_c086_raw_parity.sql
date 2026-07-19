@@ -35,25 +35,12 @@ with parity_values as (
         (select coalesce(sum(gross_sales), 0)::numeric from {{ ref('fct_sales_c086') }}),
         0.01::numeric
 
-    union all
-
-    select
-        'fact_quantity_sum',
-        'additive_quantity_total',
-        'fct_sales_c086.quantity',
-        (select coalesce(sum(quantity), 0)::numeric from {{ source('migration_gold', 'fct_sales_c086') }}),
-        (select coalesce(sum(quantity), 0)::numeric from {{ ref('fct_sales_c086') }}),
-        0.001::numeric
-
-    union all
-
-    select
-        'fact_return_row_count',
-        'flag_row_count',
-        'fct_sales_c086.is_return',
-        (select count(*) filter (where is_return)::numeric from {{ source('migration_gold', 'fct_sales_c086') }}),
-        (select count(*) filter (where is_return)::numeric from {{ ref('fct_sales_c086') }}),
-        0::numeric
+    -- NOTE: fact_quantity_sum (additive_quantity_total) and fact_return_row_count
+    -- (flag_row_count) were dropped to conform to v0.5.1's 4-class governed parity
+    -- enum (fact_row_count, business_key_count, dimension_member_count,
+    -- additive_money_total). quantity is not money and is_return is a flag, so neither
+    -- is a governed additive-money parity class; SUM(quantity) parity is still verified
+    -- out-of-band in warehouse/gold's RC16 reconciliation.
 
     union all
 
