@@ -54,3 +54,99 @@ def test_render_page_inlines_the_theme_css():
     # a distinctive token from the brand palette must appear inline
     assert "#001E35" in html_out  # navy sidebar
     assert "<style>" in html_out
+
+
+_FIXTURE = {
+    "tables": [
+        {
+            "table": "bronze.retail_store_sales",
+            "source_path": "mappings/retail_store_sales/readiness-status.yaml",
+            "current_stage": "publish_ready",
+            "stages": {
+                name: {"status": "pass", "evidence": [], "blocking_reasons": []}
+                for name in _STAGE_ORDER
+            },
+            "blocking_reasons": [],
+            "next_action": "All seven stages pass.",
+        },
+        {
+            "table": "bronze.demo_sample_orders",
+            "source_path": "mappings/demo_sample_orders/readiness-status.yaml",
+            "current_stage": "gold_ready",
+            "stages": {
+                "source_ready": {
+                    "status": "pass",
+                    "evidence": ["50.37% known"],
+                    "blocking_reasons": [],
+                },
+                "gold_ready": {
+                    "status": "blocked",
+                    "evidence": [],
+                    "blocking_reasons": ["no DB offline"],
+                },
+            },
+            "blocking_reasons": ["no DB offline"],
+            "next_action": "Run the optional live leg.",
+        },
+    ]
+}
+
+
+def test_kpi_values_are_integer_counts_not_scores():
+    html_out = render_page(_FIXTURE)
+    # total tables = 2, publish-ready = 1, blocked = 1
+    assert ">2<" in html_out  # total tables count
+    assert ">1<" in html_out  # publish-ready / blocked counts
+    # KPI region: after </head> (excludes inlined CSS's 100%/50%), before <table>
+    kpi_region = html_out.split("</head>")[1].split("<table")[0]
+    assert 'class="kpis"' in kpi_region
+    assert "%" not in kpi_region  # KPI values are integer counts, never a score
+
+
+def test_evidence_percent_passes_through_verbatim():
+    html_out = render_page(_FIXTURE)
+    assert "50.37%" in html_out  # evidence '%' is legitimate pass-through, not a score
+
+
+def test_table_names_and_stage_labels_present():
+    html_out = render_page(_FIXTURE)
+    assert "bronze.retail_store_sales" in html_out
+    assert "bronze.demo_sample_orders" in html_out
+    for label in _STAGE_LABELS_AR.values():
+        assert label in html_out
+
+
+def test_blocked_stage_uses_blocked_color_and_shows_reason():
+    html_out = render_page(_FIXTURE)
+    assert "#C0392B" in html_out  # blocked fg color
+    assert "no DB offline" in html_out  # blocking reason rendered
+
+
+def test_injected_markup_is_escaped():
+    evil = {
+        "tables": [
+            {
+                "table": "<script>alert(1)</script>",
+                "source_path": "mappings/x/readiness-status.yaml",
+                "current_stage": "source_ready",
+                "stages": {
+                    "source_ready": {
+                        "status": "pass",
+                        "evidence": ["<b>x</b>"],
+                        "blocking_reasons": [],
+                    }
+                },
+                "blocking_reasons": [],
+                "next_action": "<img src=x onerror=y>",
+            }
+        ]
+    }
+    html_out = render_page(evil)
+    assert "<script>alert(1)</script>" not in html_out
+    assert "&lt;script&gt;" in html_out
+    assert "onerror=y" not in html_out or "&lt;img" in html_out
+
+
+def test_table_has_anchor_id_for_in_page_nav():
+    html_out = render_page(_FIXTURE)
+    assert 'id="table-bronze.retail_store_sales"' in html_out
