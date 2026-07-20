@@ -17,8 +17,14 @@ list of categorical findings + a count, never a health percentage. It **self-gra
 nothing**. By default it is ADVISORY -- it prints the digest and exits 0 even when
 findings exist -- so it never becomes a second gate competing with ``retail check``
 (the gate remains the single authority, Principle I). Pass ``--strict`` to make it
-exit non-zero when any finding is present (opt-in, for a maintainer who wants it to
-fail a pre-push hook).
+exit non-zero when an ACTIONABLE finding (WARNING/ERROR) is present (opt-in, for a
+maintainer who wants it to fail a pre-push hook). An INFO -- e.g. the foreign-repo
+skip below -- is not drift and never fails ``--strict``.
+
+Like ``retail check`` (Spec A), doctor SKIPS its aggregated kit-self checks in a
+repo that is not kit-bootstrapped: those checks (and the load-bearing docs) are the
+KIT's own artifacts, absent by design in a repo the kit was merely downloaded into,
+so reporting them as errors there would be a false alarm (#377).
 """
 
 from __future__ import annotations
@@ -59,11 +65,39 @@ def _probe_loadbearing(ctx: RuleContext) -> list[Finding]:
     return findings
 
 
+def _foreign_repo_skip() -> Finding:
+    """The single INFO emitted in place of the aggregation on a foreign repo.
+
+    Mirrors the runner's KIT_SELF skip (Spec A) so ``doctor`` presents the same
+    verdict as ``check`` on the same tree.
+    """
+    from .core import Severity
+
+    return Finding(
+        rule_id="DOCTOR",
+        severity=Severity.INFO,
+        message="skipped (kit-self checks; repo not kit-bootstrapped)",
+        locator="(foreign repo)",
+    )
+
+
 def collect_findings(ctx: RuleContext) -> list[Finding]:
     """Run every aggregated read-only check and return the combined findings.
 
     Pure: context in, findings out. No writes, no DB, no execution.
+
+    Every aggregated check (A1/A3/SC1) is a KIT_SELF check, and the load-bearing
+    docs are all kit-authored artifacts. A repo that is not kit-bootstrapped can't
+    have them, so -- exactly as ``check`` does (Spec A) -- doctor SKIPS the whole
+    aggregation there with a single INFO, rather than ERROR-ing on manifests a
+    downloaded-into repo will never carry (#377). This keeps doctor and check in
+    agreement on the same tree.
     """
+    from .kit_lint import is_bootstrapped
+
+    if not is_bootstrapped(ctx.repo_root):
+        return [_foreign_repo_skip()]
+
     findings: list[Finding] = []
     findings.extend(check_routes_resolve(ctx))
     findings.extend(check_route_coverage(ctx))
@@ -87,12 +121,21 @@ def format_digest(findings: list[Finding]) -> str:
 
 
 def run_doctor(repo_root: Path, strict: bool = False) -> int:
-    """Print the digest. Return 0 (advisory) unless ``strict`` and findings exist."""
+    """Print the digest. Return 0 (advisory) unless ``strict`` and drift exists.
+
+    ``--strict`` counts only actionable findings (WARNING/ERROR); an INFO -- such
+    as the foreign-repo skip -- is not drift, so a not-kit-bootstrapped repo never
+    fails strict for its (correctly skipped) kit manifests (#377).
+    """
+    from .core import Severity
     from .runner import build_context
 
     ctx = build_context(repo_root)
     findings = collect_findings(ctx)
     print(format_digest(findings))
-    if strict and findings:
+    actionable = [
+        f for f in findings if f.severity in (Severity.ERROR, Severity.WARNING)
+    ]
+    if strict and actionable:
         return 1
     return 0

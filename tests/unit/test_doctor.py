@@ -8,6 +8,7 @@ rule.
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -17,16 +18,37 @@ from seshat.doctor import collect_findings, format_digest, run_doctor
 
 pytestmark = pytest.mark.unit
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _bootstrap(repo: Path) -> None:
+    """Make `repo` kit-bootstrapped so the KIT_SELF checks actually run (#377).
+
+    Since Spec A, doctor SKIPS the aggregated kit-self checks in a repo that is not
+    kit-bootstrapped (to agree with `check` and not over-report on a foreign repo).
+    So a test that wants to see GENUINE drift must bootstrap first.
+    """
+    (repo / ".seshat").mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(
+        _REPO_ROOT / ".seshat" / "kit-source.yaml", repo / ".seshat" / "kit-source.yaml"
+    )
+    shutil.copyfile(
+        _REPO_ROOT / ".seshat" / "compass.yaml", repo / ".seshat" / "compass.yaml"
+    )
+
 
 def _ctx_missing_everything(tmp_path: Path) -> RuleContext:
-    # A bare tmp dir: no tracked files at all -> the load-bearing probe + the
-    # manifest-dependent checks all fire (fail-loud), giving a non-empty digest.
+    # A BOOTSTRAPPED repo that is nonetheless missing its manifests -> genuine
+    # drift the checks fire on (fail-loud), giving a non-empty digest.
+    _bootstrap(tmp_path)
     return RuleContext(repo_root=tmp_path, tracked_files=())
 
 
-def test_collect_findings_on_empty_repo_reports_drift(tmp_path: Path) -> None:
+def test_collect_findings_on_bootstrapped_repo_with_drift_reports_it(
+    tmp_path: Path,
+) -> None:
     findings = collect_findings(_ctx_missing_everything(tmp_path))
-    assert findings, "an empty repo should surface load-bearing-doc + manifest findings"
+    assert findings, "a bootstrapped repo missing its manifests should surface drift"
     # the load-bearing probe must flag the missing glossary
     assert any("glossary.md" in f.message for f in findings)
 
@@ -50,6 +72,10 @@ def test_run_doctor_advisory_exits_zero_even_with_findings(tmp_path: Path) -> No
 
 
 def test_run_doctor_strict_exits_nonzero_on_findings(tmp_path: Path) -> None:
+    # Bootstrap so the kit-self checks run and surface genuine drift (missing
+    # manifests) -- strict must then exit non-zero. A non-bootstrapped repo is
+    # covered separately in test_doctor_kit_self_skip.py (strict stays 0).
+    _bootstrap(tmp_path)
     assert run_doctor(tmp_path, strict=True) == 1
 
 
