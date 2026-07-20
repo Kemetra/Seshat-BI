@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from ._dsn import probe_reachable, resolve_dsn
 from .fixtures import committed_readiness_status, work_dir
 
 # The four canonical statuses (FR-006). No numeric score is ever computed.
@@ -71,8 +72,13 @@ def compute_offline_status(committed: dict, *, live_reachable: bool) -> dict:
 def run_run(args) -> int:
     """Recompute + persist the snapshot. Exit 0 whenever computation completes."""
     repo = Path(getattr(args, "repo", "."))
-    dsn = getattr(args, "dsn", None)
-    live_reachable = bool(dsn)  # a real reachability probe belongs to the live leg
+    # Resolve a DSN the SAME way `demo load` does (explicit --dsn, then workspace
+    # .env), so a DSN configured the documented way is honored here too (#376).
+    dsn = resolve_dsn(args)
+    # "live mode" needs EVIDENCE: actually probe reachability rather than trusting
+    # the presence of a DSN string (#375). No DSN -> no probe -> honest offline,
+    # and the pure-offline path stays free of the [db] driver.
+    live_reachable = probe_reachable(dsn) if dsn else False
 
     try:
         committed = _load_committed_status(repo)
