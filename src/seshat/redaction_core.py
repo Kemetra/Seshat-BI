@@ -28,9 +28,20 @@ def uri_component_values(secret: str) -> tuple[str, ...]:
     scrubbed on its own. Both the raw and percent-decoded form of every non-empty
     component are yielded (an error may print either). Non-URI secrets yield the
     empty tuple.
+
+    The gate is ``netloc`` presence, NOT ``scheme``: credentials live in the
+    netloc (``//user:pw@host``), and a scheme-relative DSN carries them without a
+    ``scheme://``. Requiring a scheme dropped those on the floor. urlsplit itself
+    is TOTAL here -- a malformed URI (e.g. a bad IPv6 literal raises ValueError)
+    yields ``()`` rather than propagating, so every boundary redactor that runs
+    WHILE formatting an error is shielded at the core, once, instead of each
+    caller guarding case-by-case (#385 follow-through).
     """
-    parsed = urlsplit(secret)
-    if not parsed.scheme or not parsed.netloc:
+    try:
+        parsed = urlsplit(secret)
+    except ValueError:
+        return ()
+    if not parsed.netloc:
         return ()
     raw = (parsed.username, parsed.password, parsed.hostname, parsed.path.lstrip("/"))
     return tuple(

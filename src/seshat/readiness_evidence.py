@@ -9,12 +9,15 @@ structured readiness evidence.
 Consumed seams (confirmed unchanged, T001):
   - ``core.Finding`` fields: ``rule_id``, ``severity`` (a ``Severity`` enum),
     ``message``, ``locator``.
-  - The DSN-redaction contract from ``cli._redact_dsn``: scrub the literal DSN AND
-    each of its parsed components (host, username, password) wherever they appear,
-    since a driver can reformat a DSN into text where the literal never appears yet
-    components leak. This module re-implements that contract with a stdlib
-    ``urllib.parse`` split ONLY -- it does NOT import from ``cli`` (which would pull
-    a heavy import into this stdlib-only path and trip the B3 import-boundary guard).
+  - The DSN-redaction contract: scrub the literal DSN AND each of its parsed
+    components (host, username, password, db-name) wherever they appear, since a
+    driver can reformat a DSN into text where the literal never appears yet
+    components leak. The decomposition is DELEGATED to ``seshat.redaction_core``
+    (the single hardened source of truth, #365/#366) -- a stdlib-only leaf, so this
+    path stays stdlib-only and does NOT import from ``cli`` (which would pull a
+    heavy import in and trip the B3 import-boundary guard). Sharing that one
+    decomposition -- rather than re-implementing it -- is what keeps this recorder
+    from drifting weaker than the boundary redactors (#385 class).
 
 Ratified rulings (spec 057 ## Clarifications):
   - FR-012: NEVER set ``status: pass``. A clean run is at most ``warning`` (advanced
@@ -32,9 +35,9 @@ Ratified rulings (spec 057 ## Clarifications):
 from __future__ import annotations
 
 from typing import Optional
-from urllib.parse import unquote, urlsplit
 
 from .core import Finding, Severity
+from .redaction_core import replace_fragments, uri_components
 
 _VALID_MODES = ("live", "deferred")
 
@@ -42,31 +45,19 @@ _VALID_MODES = ("live", "deferred")
 def _scrub(text: str, dsn: Optional[str]) -> str:
     """Redact the literal DSN and its non-empty components from ``text``.
 
-    Mirrors ``cli._redact_dsn`` using only ``urllib.parse`` (stdlib). Idempotent: a
-    string with no surviving credential passes through unchanged.
+    Delegates the component decomposition to :mod:`seshat.redaction_core` -- the
+    single hardened source of truth (#365/#366) -- so recorded readiness evidence
+    scrubs the DB-NAME and the percent-decoded form of every component (which the
+    old hand-rolled copy missed), and can never drift from the shared decomposition
+    (#385 class). Idempotent: a string with no surviving credential is unchanged.
     """
     out = str(text)
     if not dsn:
         return out
+    # Literal DSN first (keeps the "<redacted DSN>" token), then every component;
+    # uri_components sorts longest-first and is ValueError-total on a malformed DSN.
     out = out.replace(dsn, "<redacted DSN>")
-    try:
-        parts = urlsplit(dsn)
-    except ValueError:
-        return out
-    # Collect each sensitive component in BOTH its raw (percent-encoded) form -- as it
-    # appears in the DSN string -- and its URL-decoded form, since a driver commonly
-    # prints the DECODED credential (e.g. DSN "svc%2Fetl" -> message "svc/etl"). Redact
-    # LONGEST-first so a component that is a substring of another (username "db" inside
-    # host "dbhost.internal") does not mangle the longer one before it can be matched.
-    raw = (parts.password, parts.username, parts.hostname)
-    values: set[str] = set()
-    for c in raw:
-        if c:
-            values.add(c)
-            values.add(unquote(c))
-    for component in sorted(values, key=len, reverse=True):
-        out = out.replace(component, "<redacted>")
-    return out
+    return replace_fragments(out, uri_components([dsn]), "<redacted>")
 
 
 def build_gold_ready_block(

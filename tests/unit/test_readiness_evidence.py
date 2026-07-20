@@ -93,6 +93,18 @@ def test_dsn_percent_encoded_credentials_redacted():
     assert "p@ss" not in blob
 
 
+# T005d: the DB-NAME (DSN path) is scrubbed too. The hand-rolled _scrub only
+# covered host/user/password; a "database ... does not exist" error leaked the
+# db-name into recorded readiness evidence. Delegating to the shared hardened
+# decomposition (redaction_core) closes it -- the same class as #385, #384-review.
+def test_dsn_db_name_redacted():
+    dsn = "postgresql://admin:pw@dbhost/secret_prod_db"
+    findings = [_err('database "secret_prod_db" does not exist', "t.a")]
+    b = build_gold_ready_block(findings, "schema.tbl", run_mode="live", dsn=dsn)
+    blob = " ".join(b["blocking_reasons"])
+    assert "secret_prod_db" not in blob, blob
+
+
 # T006: deferred mode -> blocked with deferred-boundary reason, no clean evidence
 def test_deferred_mode_blocked_no_clean_evidence():
     b = build_gold_ready_block([], "schema.tbl", run_mode="deferred")

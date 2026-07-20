@@ -426,3 +426,36 @@ def test_redact_dsn_scrubs_psycopg2_reformatted_host_and_user() -> None:
     assert "s3cret" not in out, out  # password must never appear
     # The message must remain useful (still mentions the auth-failure nature).
     assert "failed" in out
+
+
+def test_redact_dsn_scrubs_db_name_and_percent_decoded_credentials() -> None:
+    """The shared redaction_core decomposition additionally scrubs the DB-NAME
+    (the DSN path) and the PERCENT-DECODED form of every component; a driver
+    error may print either. Reusing that one hardened decomposition (#385) means
+    ``_redact_dsn`` must cover both -- the hand-rolled version did not.
+    """
+    from seshat.cli import _redact_dsn
+
+    # Password 'p@s%s' is stored percent-encoded ('p%40s%25s'); a driver may echo
+    # the DECODED form. db-name 'secret_prod_db' can appear in a "database ... does
+    # not exist" error.
+    dsn = "postgresql://admin:p%40s%25s@h:5432/secret_prod_db?sslmode=require"
+    # A message where the literal DSN never appears, yet the db-name and the
+    # percent-DECODED password both leak.
+    msg = 'database "secret_prod_db" does not exist (auth token p@s%s rejected)'
+    out = _redact_dsn(msg, dsn)
+    assert "secret_prod_db" not in out, out  # DB-NAME must be scrubbed
+    assert "p@s%s" not in out, out  # percent-DECODED password must be scrubbed
+
+
+def test_redact_dsn_does_not_crash_on_malformed_dsn() -> None:
+    """``_redact_dsn`` runs WHILE formatting a DB error, so a malformed DSN (a bad
+    IPv6 literal makes urlsplit raise ValueError) must degrade to the literal-DSN
+    scrub, never crash the error path (#385 delegation must keep the old guard).
+    """
+    from seshat.cli import _redact_dsn
+
+    dsn = "postgresql://user:pw@[::1"  # bad IPv6 literal -> urlsplit raises
+    out = _redact_dsn(f"boom connecting with {dsn} now", dsn)
+    assert "<redacted DSN>" in out  # literal DSN still scrubbed
+    assert dsn not in out

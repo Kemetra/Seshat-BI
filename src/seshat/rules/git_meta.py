@@ -287,6 +287,28 @@ SUBJECT_RE = re.compile(r"^(?:" + "|".join(_P2_TYPES) + r"): .+")
 DEFAULT_RANGE = "HEAD~1..HEAD"
 
 
+def _repo_root_has_commit(repo_root: Path) -> bool:
+    """True only when ``repo_root`` is ITSELF a git repo root that has a commit.
+
+    Distinguishes the two "no subject to judge" states -- a fully non-git dir and
+    a `git init`-ed-but-no-HEAD dir -- from a real repo with history, WITHOUT being
+    fooled by git's upward repo discovery (an ancestor repo, e.g. a client whose
+    $HOME is version-controlled). The git toplevel must equal ``repo_root`` (so an
+    ancestor repo does not count) AND ``HEAD`` must verify (so no-commit-yet does
+    not count). Any git failure means "not our repo" -> no subject (#384).
+    """
+    try:
+        toplevel = gitutil.git_output(repo_root, "rev-parse", "--show-toplevel").strip()
+        if not toplevel or not Path(toplevel).samefile(repo_root):
+            return False
+        gitutil.git_output(repo_root, "rev-parse", "--verify", "HEAD")
+    except (RuntimeError, OSError):
+        # RuntimeError: git rejected the probe (non-repo / no HEAD).
+        # OSError: samefile on a path that does not exist.
+        return False
+    return True
+
+
 def _load_subjects(ctx: RuleContext) -> tuple[list[str], list[Finding]]:
     """Resolve the commit subjects to validate for the contract-v2 invocation.
 
@@ -300,19 +322,21 @@ def _load_subjects(ctx: RuleContext) -> tuple[list[str], list[Finding]]:
     #   local fallback       -> just the current/incoming commit (DEFAULT_RANGE).
     if ctx.commit_message is not None:
         return ([ctx.commit_message.splitlines()[0] if ctx.commit_message else ""], [])
-    # A freshly `git init`-ed workspace has no HEAD yet. It is a valid
-    # first-success state, so there is no commit subject for P2 to judge. Keep the
-    # normal error posture for non-repositories and malformed explicit ranges.
-    if ctx.commit_range is None:
-        inside_work_tree = ""
-        try:
-            inside_work_tree = gitutil.git_output(
-                ctx.repo_root, "rev-parse", "--is-inside-work-tree"
-            ).strip()
-            gitutil.git_output(ctx.repo_root, "rev-parse", "--verify", "HEAD")
-        except RuntimeError:
-            if inside_work_tree == "true":
-                return ([], [])
+    # Bare-fallback mode. Two non-committed states have no subject for P2 to judge
+    # and BOTH are valid first-success states: a freshly `git init`-ed workspace
+    # with no HEAD yet, AND a fully non-git workspace (no `.git/` at all). Treat
+    # them the same -- return no subject rather than a P2 [error] (#384). A
+    # malformed EXPLICIT --commit-range never reaches here (commit_range is None),
+    # so its normal error posture below is unaffected.
+    #
+    # The probe must ask "is repo_root ITSELF a repo root", not "is there a repo
+    # somewhere up-tree": git discovers an ancestor repo (e.g. a client whose
+    # $HOME is under version control), so `--is-inside-work-tree` / `--verify HEAD`
+    # both answer for that ANCESTOR and mask the non-git case. Comparing the git
+    # toplevel to repo_root isolates "this dir is the repo" from "this dir merely
+    # sits inside one".
+    if ctx.commit_range is None and not _repo_root_has_commit(ctx.repo_root):
+        return ([], [])
     # --commit-range is a full revision range; never append "..HEAD".
     range_expr = ctx.commit_range if ctx.commit_range is not None else DEFAULT_RANGE
     try:

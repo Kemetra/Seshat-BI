@@ -333,31 +333,34 @@ def _redact_dsn(message: object, dsn: str) -> str:
     (e.g. ``connection to server at "host" (1.2.3.4), port 5432 failed: FATAL:
     password authentication failed for user "admin"``) where the literal DSN never
     appears yet host/user/password leak. So, in addition to the literal DSN, parse
-    the DSN and redact each non-empty component (host, username, password, and the
-    ``user@`` credentials prefix) wherever it appears (audit 2026-06-26 #7).
+    the DSN and redact each non-empty component (host, username, password, db-name,
+    and the ``user@`` credentials prefix) wherever it appears (audit 2026-06-26 #7).
+
+    The component decomposition is delegated to :mod:`seshat.redaction_core` -- the
+    single hardened source of truth (#365/#366) -- so this boundary redactor also
+    scrubs the DB-NAME and the percent-decoded form of every component, and can
+    never drift from the shared decomposition (#385).
     """
-    from urllib.parse import urlsplit
+    from ..redaction_core import replace_fragments, uri_components
 
     text = str(message) or message.__class__.__name__
     if not dsn:
         return text
+    # Order matters: replace the verbatim DSN (and its ``user@`` prefix) BEFORE
+    # decomposing, so the "<redacted DSN>" token survives for callers that assert
+    # on it. uri_components sorts longest-first and tolerates a non-URI dsn (empty
+    # tuple), so the reformatted-by-the-driver leak is covered without a crash.
     text = text.replace(dsn, "<redacted DSN>")
     if "@" in dsn:
         text = text.replace(dsn.split("@", 1)[0] + "@", "<credentials>@")
-    # Component-level scrub for the reformatted-by-the-driver case.
+    # uri_components -> urlsplit can raise ValueError on a malformed DSN (e.g. a
+    # bad IPv6 literal). This runs WHILE formatting a DB error, so a crash here is
+    # worse than under-redaction: fall back to the literal-DSN scrub already done.
     try:
-        parts = urlsplit(dsn)
+        fragments = uri_components([dsn])
     except ValueError:
         return text
-    # Longest first so a host containing the username substring is fully covered.
-    for secret in sorted(
-        {parts.password, parts.username, parts.hostname},
-        key=lambda s: len(s or ""),
-        reverse=True,
-    ):
-        if secret:
-            text = text.replace(secret, "<redacted>")
-    return text
+    return replace_fragments(text, fragments, "<redacted>")
 
 
 __all__ = [
