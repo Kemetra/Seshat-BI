@@ -58,7 +58,7 @@ with no deviation entry (or vice versa), the document is inconsistent and the re
 gate should reject it.
 
 > **Namespace note (disambiguated).** The `RC1`-`RC16` ids in this table are **ADR 0002
-> cleaning/modeling defaults** ("retail cleaning"). The `retail check` governance checker
+> cleaning/modeling defaults** ("retail cleaning"). The `seshat check` governance checker
 > uses a separate `D1`-`D8` for its TMDL/DAX rules -- **distinct prefixes, distinct
 > namespaces**, no collision. (Historically the ADR also used `D`; it was renamed to `RC*`
 > in feature 002 because the checker ids live in code.) When this file says `RC7`, it
@@ -113,7 +113,7 @@ slice changes them. They are *not* per-table decisions -- they frame the whole k
 - **`pbi-cli` is a later adapter, not the core.** The Power BI semantic-model engine is
   `pbi-cli` (depend-not-fork, installed via `pipx`), invoked at the build step -- it is
   not the center of the kit. (Governance design decision #1; architecture doc Sec. 4.)
-- **Validators are categories only at this stage.** Static (`retail check`, 23 rules,
+- **Validators are categories only at this stage.** Static (`seshat check`, 23 rules,
   already on `main`) versus live (`retail validate`, deferred) are *documented
   categories*; no validator logic is implemented in this slice. The
   `reconciliation-report.md` template is the blank a future live run fills. (Architecture

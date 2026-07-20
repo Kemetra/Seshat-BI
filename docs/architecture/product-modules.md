@@ -29,7 +29,7 @@
 - It **emits no score.** Categories are explicit names, never a maturity number.
   Readiness stays `status` + `evidence[]` + `blocking_reasons[]` (hard rule #9). A
   maturity-level concept is F033's deferred problem, not this contract's.
-- It **adds no gate, no `retail check` rule, no readiness stage.** Enforcement of "every
+- It **adds no gate, no `seshat check` rule, no readiness stage.** Enforcement of "every
   tool declares its category" is a DEFERRED, enumerated future conformance check
   (docs-first, hard rule #8); a tool with no declared category is a review finding now,
   not a runtime error.

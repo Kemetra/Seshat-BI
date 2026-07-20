@@ -105,7 +105,7 @@ layout rectangle of an EXISTING, already-bound visual (authorized by ADR 0016):
 
 - Written JSON valid + keeps its `$schema` (PBIR is schema-versioned).
 - Round-trip stable (read -> write -> read is identical).
-- `retail check` R1 (model reference relative) + R2 (report authoring-lint: valid /
+- `seshat check` R1 (model reference relative) + R2 (report authoring-lint: valid /
   schema / referenced BaseTheme exists / no forbidden business-logic key) stay green.
 
 ## Boundaries (what it never does)

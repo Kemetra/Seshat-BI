@@ -5,7 +5,7 @@ description: >-
   Power BI PBIP model in the Seshat BI repo. Use after Gold Ready is
   `pass`, when someone asks whether the semantic model is ready, to check that every
   measure binds to an approved metric contract, or before any dashboard/PBIP work.
-  READ-ONLY and invoke-and-interpret only: it runs the existing `retail check` gate,
+  READ-ONLY and invoke-and-interpret only: it runs the existing `seshat check` gate,
   reads the committed TMDL and the filled metric-contract store (F009), and emits ONE
   status (not_started | blocked | warning | pass) with evidence + blockers, then
   STOPS. It NEVER edits TMDL, NEVER defines/approves a metric contract (that is F009),
@@ -15,7 +15,7 @@ description: >-
 
 # retail-semantic-check
 
-`retail check` proves the model is mechanically clean (PascalCase measures, display
+`seshat check` proves the model is mechanically clean (PascalCase measures, display
 folders, DIVIDE, single-direction relationships, a marked date table, gold-only
 partitions, parameterized connection, no real host). This skill answers the larger
 question that clean text alone cannot: **is the semantic model GOVERNED** -- does
@@ -30,7 +30,7 @@ MODEL, not the SQL. It implements the procedure that
 Invoke-and-interpret only, and READ-ONLY.
 
 - **CHECKS the model.** Reads the committed PBIP TMDL, reads the filled
-  metric-contract store, runs `retail check`, evaluates the contract-binding
+  metric-contract store, runs `seshat check`, evaluates the contract-binding
   criterion, and emits one readiness verdict. All side-effect-free reads over
   committed text -- the same category as `retail-govern` reading TMDL.
 - **NEVER DEFINES contracts (F009).** The metric-contract store (name, grain, formula
@@ -72,9 +72,9 @@ NEVER treat the existence of `templates/metric-contract.yaml` (or `kpi-pack.yaml
 nothing. If no filled contract exists for a measure, that measure is unbound -> a
 `blocking_reason`.
 
-## The central property: a green `retail check` is NECESSARY, not SUFFICIENT
+## The central property: a green `seshat check` is NECESSARY, not SUFFICIENT
 
-A clean mechanical gate (`retail check` exit 0) does NOT make this stage `pass`.
+A clean mechanical gate (`seshat check` exit 0) does NOT make this stage `pass`.
 `pass` ALSO requires the contract-binding criterion satisfied AND the metric owner's
 approval recorded as evidence. Emitting `pass` on a green checker alone would be a
 silent governance hole -- a perfectly-formed model whose measures bind to nothing.
@@ -97,7 +97,7 @@ produce.
 Run the same command CI runs:
 
 ```
-retail check
+seshat check
 ```
 
 Any `D1`-`D8` (TMDL/DAX), `C1` (connection params), `R1` (relative reference), or
@@ -142,12 +142,12 @@ For EACH PascalCase measure in the model:
 Binding (step 4) proves a measure maps to an approved contract; it does NOT prove the
 DAX LOGIC matches the contract's approved definition. A measure can bind to its
 contract and still compute the WRONG number (the 50.37-vs-33.55 class: a denominator
-over all transactions when the contract rules known-status only). `retail check` (D-rules)
+over all transactions when the contract rules known-status only). `seshat check` (D-rules)
 sees only form; nothing else sees a wrong denominator. L3 closes that gap.
 
 For each measure whose contract carries an optional machine-readable `definition`
 block, invoke the drift checker (a lazy module -- it reads YAML, so it is NOT part of
-the `retail check` core; mirrors `validate_targets`):
+the `seshat check` core; mirrors `validate_targets`):
 
 ```python
 from retail.metric_drift import load_definition, check_measure_drift
@@ -176,13 +176,13 @@ been). Only the structured `definition` decides; absent it, L3 stays silent (ski
 
 ### 5. Verdict
 Combine into EXACTLY ONE status, shaped to `templates/readiness-status.yaml`, with
-`evidence[]` (committed files + the `retail check` run) and `blocking_reasons[]`:
+`evidence[]` (committed files + the `seshat check` run) and `blocking_reasons[]`:
 
 | Verdict | When |
 |---------|------|
 | `not_started` | step 1 failed (Gold Ready not `pass`) |
 | `blocked` | any step-2/3 finding, OR any unmatched/unapproved measure, OR store absent, OR an L3 `drift` (step 4b: DAX denominator contradicts the contract definition) |
-| `warning` | `retail check` clean + binding satisfied, but a non-fatal recorded item (e.g. an accepted display-folder deviation), OR an L3 `escalate` left for human classification; never auto-promotes |
+| `warning` | `seshat check` clean + binding satisfied, but a non-fatal recorded item (e.g. an accepted display-folder deviation), OR an L3 `escalate` left for human classification; never auto-promotes |
 | `pass` | steps 2-4(+4b) ALL clear AND every measure binds to an approved contract AND owner approval is recorded as `evidence[]` (any measure with a `definition` block is L3 `pass` or `skip`; none `drift`/`escalate`) |
 
 A `pass` MUST carry evidence; never fabricate a confidence number (roadmap rule #9 --
@@ -238,7 +238,7 @@ next call, not a loop this skill performs.
 - The spine: `docs/readiness/readiness-model.md`, `docs/readiness/readiness-pipeline.md`.
 - The contracts it consumes (owned by F009): `templates/metric-contract.yaml`,
   `templates/kpi-pack.yaml`, `docs/metrics/metric-contract-store.md`.
-- The mechanical gate it calls: `retail check` (`D1`-`D8` `src/seshat/rules/dax.py`,
+- The mechanical gate it calls: `seshat check` (`D1`-`D8` `src/seshat/rules/dax.py`,
   `C1`/`R1` `src/seshat/rules/pbir.py`, `G6` `src/seshat/rules/g6.py`); the
   `retail-govern` skill for the id -> fix mapping.
 - The live sibling one layer down: the `retail-validate` skill.

@@ -67,10 +67,10 @@ readiness token `pass`:
 | 2 | `bronze_<table>` | `<load command>` | `<0 | non-zero>` | `<rows loaded>` | `<materialized | failed | skipped>` |
 | 3 | `source_profile` | `<profile command>` | `<0 | non-zero>` | `<rows profiled, null-rate, distinct PK>` | `<materialized | failed | skipped>` |
 | 4 | `source_map` *(HUMAN SEAM)* | `<reads Gate status; runs nothing if OPEN>` | `<n/a>` | `<Gate status read: CLEARED | OPEN; open rows: N>` | `<materialized | blocked>` |
-| 5 | `silver_tables` *(STOP + gated on source_map)* | `retail check` | `<0 | non-zero>` | `<rule violations: N>` | `<materialized | failed | skipped | blocked>` |
-| 6 | `gold_tables` *(STOP)* | `retail check` | `<0 | non-zero>` | `<rule violations: N>` | `<materialized | failed | skipped>` |
+| 5 | `silver_tables` *(STOP + gated on source_map)* | `seshat check` | `<0 | non-zero>` | `<rule violations: N>` | `<materialized | failed | skipped | blocked>` |
+| 6 | `gold_tables` *(STOP)* | `seshat check` | `<0 | non-zero>` | `<rule violations: N>` | `<materialized | failed | skipped>` |
 | 7 | `metric_contracts` | `<reads approved contracts; authors none>` | `<n/a>` | `<contracts bound: N; unbound: N>` | `<materialized | skipped>` |
-| 8 | `semantic_model` *(HUMAN SEAM)* | `retail check` + contract-binding read | `<0 | non-zero>` | `<measures bound to approved contracts: N of M>` | `<materialized | blocked | skipped>` |
+| 8 | `semantic_model` *(HUMAN SEAM)* | `seshat check` + contract-binding read | `<0 | non-zero>` | `<measures bound to approved contracts: N of M>` | `<materialized | blocked | skipped>` |
 | 9 | `dashboard_blueprint` *(gated on semantic_model)* | `<design-evidence command>` | `<0 | non-zero>` | `<pages / visuals planned: N>` | `<materialized | skipped>` |
 | 10 | `handoff_pack` | `<generate handoff command>` | `<0 | non-zero>` | `<handoff written at <path>>` | `<materialized | skipped>` |
 | 11 | `publish_execution_evidence` *(HUMAN SEAM; gated on publish_ready = pass; TRIGGERS F016 only)* | `<reads publish_ready; triggers F016 if pass>` | `<n/a>` | `<publish_ready read: pass | not-pass; F016: triggered | unavailable>` | `<materialized | blocked>` |

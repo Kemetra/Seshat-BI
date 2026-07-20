@@ -106,7 +106,7 @@ _README_TEXT = (
     "- `mappings/` -- source-to-mapping evidence (the source-mapping gate "
     "populates this)\n"
     "- `warehouse/migrations/` -- the medallion SQL home (numbered silver/gold "
-    "migration files; this is where `retail check` and the build read)\n"
+    "migration files; this is where `seshat check` and the build read)\n"
     "- `powerbi/` -- the PBIP project home\n"
     "- `reports/` -- dashboard-spec / blueprint homes\n"
     "- `evidence/` -- evidence-pack output home\n"
@@ -118,7 +118,7 @@ _README_TEXT = (
     "2. Initialize git and make a first commit -- the checker reads git-tracked "
     "state, so it must run inside a git repo with at least one commit:\n"
     '   `git init && git add -A && git commit -m "chore: scaffold workspace"`\n'
-    "3. Run `retail check` to confirm the workspace baseline is clean.\n"
+    "3. Run `seshat check` to confirm the workspace baseline is clean.\n"
     "4. Follow the readiness flow: profile your first table, then map it "
     "(the source-mapping gate) before building silver/gold SQL in "
     "`warehouse/migrations/`.\n"

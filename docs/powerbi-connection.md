@@ -84,7 +84,7 @@ Source = PostgreSQL.Database("<your-host>.db.ondigitalocean.com:25060", "<databa
 ```
 
 With a **real** host in place of `<your-host>`, that line is a committed connection
-string — `retail check` **C2** (secret scan) and **C1** (parameterized-connection
+string — `seshat check` **C2** (secret scan) and **C1** (parameterized-connection
 rule) will both fail on it, and the real host ends up in git. (The `<...>`
 placeholders above are exempt from C2 so this guide itself stays gate-clean.) This
 is not optional cleanup; it blocks the gate.
@@ -101,7 +101,7 @@ is not optional cleanup; it blocks the gate.
    ```m
    Source = PostgreSQL.Database(Server, Database)
    ```
-3. Re-run `retail check` — C1/C2 must clear (0 host literals on disk).
+3. Re-run `seshat check` — C1/C2 must clear (0 host literals on disk).
 
 The Power BI Modeling MCP can do steps 1-2 (`named_expression CreateParameter` +
 `partition Update`). To enable it, vendor the extension under

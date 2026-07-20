@@ -31,7 +31,7 @@ masking, record + STOP, never self-grant) but does NOT extend it: the
 `required_inputs` and `focus` differ. Behavior is governed by the contract
 `contracts/interview/report-intent-interview.yaml`; the shape of the produced
 artifact is `templates/report-intent.yaml`. The static rule DL9
-(`retail check`) verifies the recorded artifact's SHAPE, not the conversation.
+(`seshat check`) verifies the recorded artifact's SHAPE, not the conversation.
 
 ## When to use
 

@@ -83,7 +83,7 @@ batch_authorization:
     - no_open_principle_v_judgment_call   # see the split below
     - envelope_holds: [no execution, no numeric score, no gate self-grant,
                        no doc/prose rewrite by the agent]
-    - local_gate_green: [ruff, pytest -m unit, retail check, retail kit-lint]
+    - local_gate_green: [ruff, pytest -m unit, seshat check, retail kit-lint]
   on_any_condition_fail: PARK for owner   # never proceed on a miss
 ```
 

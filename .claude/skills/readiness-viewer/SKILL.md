@@ -90,7 +90,7 @@ reads a missing-evidence stage as complete (Principle V; stop-and-ask).
   itself. Core Authority owns truth.
 - **Read-only.** It never edits a `readiness-status.yaml` or any per-item artifact,
   never advances a stage, never writes a `pass`, never runs SQL, never opens a DB
-  connection, never runs `retail check` / `retail validate` as a new check.
+  connection, never runs `seshat check` / `retail validate` as a new check.
 - **Infers no approval.** It RENDERS recorded `approvals[]` (each a named owner +
   date already written by the approving human); it never establishes, fabricates,
   or back-fills an approval, and never treats an unapproved gate as approved.
@@ -239,7 +239,7 @@ exist in the readiness model.
 The skill modifies nothing: after a run, `git status` shows zero modified
 `mappings/<item>/readiness-status.yaml` or per-item artifact, and zero
 `approvals[]` entries added by the viewer. It triggers no state-mutating
-`retail check` / `retail validate` run of its own.
+`seshat check` / `retail validate` run of its own.
 
 ## See also
 

@@ -15,7 +15,7 @@ retail blockers --format json
 ```
 
 The command is read-only. It does not edit `readiness-status.yaml`, clear
-`blocking_reasons[]`, add approvals, run `retail check`, run `retail validate`,
+`blocking_reasons[]`, add approvals, run `seshat check`, run `retail validate`,
 or move any stage to `pass`.
 
 ## Categories

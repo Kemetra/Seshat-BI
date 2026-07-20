@@ -26,7 +26,7 @@ to the playbook's **Phase 5/6 validation gates** and to ADR 0002 defaults **RC2,
 > tested; the **live run** against a real DB (needs the optional `db` extra + read-only
 > credentials) is the remaining deferred step. Until that run is wired per table, results
 > may be filled by a read-only analyst/agent session and pasted in below. The static,
-> CI-able governance gate is the separate, already-shipped `retail check`
+> CI-able governance gate is the separate, already-shipped `seshat check`
 > (23 rules, `src/retail/`); it does **not** cover these -- these need the data.
 
 > **Namespace note (disambiguated -- feature 002):** the ADR ids cited here (`RC2`, `RC15`,
@@ -89,7 +89,7 @@ playbook Phase 6).
 **Result:** calendar spans every `<date_column>`, contiguous, `0` missing -> **`<PASS|FAIL>`**.
 
 > Note: the *pattern* half of RC15 (generate_series vs distinct) is statically checkable from
-> the migration SQL and is a future `retail check` candidate; the *coverage* half here is the
+> the migration SQL and is a future `seshat check` candidate; the *coverage* half here is the
 > live half and cannot be proven from text (worked example sections 7-8).
 
 ---
@@ -166,7 +166,7 @@ signals noted for analyst follow-up" or "FAIL on category X, see notes">`.
 - **Architecture:** `docs/architecture/tower-bi-agent-kit.md` -- Sec 5 (this template is the
   Phase 5/6 artifact of the source-mapping gate), Sec 7 (LIVE validator categories / the deferred
   `retail validate` surface).
-- **Static gate:** `retail check` (`src/retail/`, 23 rules) -- the already-shipped CI-able
+- **Static gate:** `seshat check` (`src/retail/`, 23 rules) -- the already-shipped CI-able
   surface; complementary to these live gates, not a substitute.
 - **Sibling gate artifacts:** `templates/source-profile.md`, `templates/source-map.yaml`,
   `templates/assumptions.md`, `templates/unresolved-questions.md`.

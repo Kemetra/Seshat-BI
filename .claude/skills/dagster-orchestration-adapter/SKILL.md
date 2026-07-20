@@ -100,7 +100,7 @@ load-bearing gates:
   (`silver_tables`, `gold_tables`, `semantic_model`) are gated on a literal gate exit 0.
 - **Required approval / evidence:** for human-seam assets, the committed approval read from disk
   (the `Gate status` field; the `approvals[]` owner+date in
-  `mappings/<table>/readiness-status.yaml`). For mechanical assets, the `retail check` /
+  `mappings/<table>/readiness-status.yaml`). For mechanical assets, the `seshat check` /
   `retail validate` exit 0.
 - **Fail-closed behavior:** a failed gate asset HALTS and propagates the stop to every
   downstream asset (a STOP edge); a human-seam asset whose approval is absent BLOCKS and runs
@@ -185,7 +185,7 @@ does NOT publish Power BI, and does NOT move a readiness stage to `pass`. Three 
 
 - **The gate exit code is the SOLE pass authority** (Principle I -- agent proposes, gate
   disposes). A Dagster asset's success means "the command ran and returned this exit," NEVER
-  "the stage is now `pass`." A green `retail check` / `retail validate` asset records exit-0
+  "the stage is now `pass`." A green `seshat check` / `retail validate` asset records exit-0
   EVIDENCE; Core Authority's process (and a named human at the human-seam stages) records the
   stage `pass`. There is NO path by which a green asset alone writes `pass`.
 - **Two hard human seams you MUST halt at** (mirrored from `retail-orchestrate`):
@@ -255,16 +255,16 @@ never publishes itself.
 | `bronze_<table>` | Load the raw landing into bronze. | Execute an approved step (DB write). |
 | `source_profile` | Profile the source; write profile evidence. | DERIVED evidence only. |
 | `source_map` | READ `Gate status` + `approvals[]`. If not CLEARED -> HALT, record the open mapping blocker. | HUMAN SEAM (Principle IV); never self-grant. |
-| `silver_tables` | Build silver (dbt via the governed `seshat.dbt` build, or SQL migrations); then `retail check`. | STOP edge; gated on `source_map` CLEARED. |
-| `gold_tables` | Build the gold star; then `retail check`. | STOP edge; mechanical. |
+| `silver_tables` | Build silver (dbt via the governed `seshat.dbt` build, or SQL migrations); then `seshat check`. | STOP edge; gated on `source_map` CLEARED. |
+| `gold_tables` | Build the gold star; then `seshat check`. | STOP edge; mechanical. |
 | `metric_contracts` | READ the approved metric contracts (authors none). | Reads truth; never authors it. |
-| `semantic_model` | `retail check` + contract-binding read; READ the semantic-model approval. | STOP + HUMAN SEAM. |
+| `semantic_model` | `seshat check` + contract-binding read; READ the semantic-model approval. | STOP + HUMAN SEAM. |
 | `dashboard_blueprint` | Produce design evidence. | Gated on `semantic_model` ready. |
 | `handoff_pack` | Generate the BI handoff bundle; write evidence. | DERIVED evidence only. |
 | `publish_execution_evidence` | READ `publish_ready`. If `pass` -> TRIGGER F016. If F016 absent -> FAIL CLOSED. | Publish wall (Principle II); triggers F016 only. |
 | (every asset) | Write the run-evidence record; surface results as `evidence[]` / `blocking_reasons[]`. | DERIVED evidence; never a `pass`. |
 
-At every mechanical gate node, run the SAME command CI runs (`retail check`, and
+At every mechanical gate node, run the SAME command CI runs (`seshat check`, and
 `retail validate` once creds exist) so the unattended run behaves identically to the conductor's
 gate. Validate evidence is recorded; a `deferred-boundary` (no creds / DB unreachable) is
 recorded with its timestamp and NEVER fabricated into a pass.

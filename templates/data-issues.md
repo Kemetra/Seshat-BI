@@ -21,7 +21,7 @@
 
 ## How issues relate to the gates
 
-- **Static `retail check`** WARNs on suspect patterns (ADR "override when"
+- **Static `seshat check`** WARNs on suspect patterns (ADR "override when"
   clauses) -> typically a `warning` data issue.
 - **Live `retail validate`** ERRORs on proven defects (PK dup, orphan FK, penny
   mismatch) -> a `blocked` stage, logged here AND in `blocking-reasons.md`.

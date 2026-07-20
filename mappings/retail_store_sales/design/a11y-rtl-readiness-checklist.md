@@ -22,10 +22,10 @@ the existing BI/report-owner design-review sign-off on that gate.
 | Field | Value |
 |-------|-------|
 | `token_file` | `design/tokens/tower-retail-design-tokens.yaml` |
-| `ct1_result` | `clean` -- `retail check` CT1 (`design_contrast.py`) reports 0 findings for this file: `colors.text.primary` (`#1A1D21`), `colors.text.secondary` (`#3C434B`), and `colors.text.muted` (`#6B7480`) each meet the declared `accessibility.min_text_contrast_ratio: "4.5:1"` floor against `colors.background` (`#FFFFFF`) |
+| `ct1_result` | `clean` -- `seshat check` CT1 (`design_contrast.py`) reports 0 findings for this file: `colors.text.primary` (`#1A1D21`), `colors.text.secondary` (`#3C434B`), and `colors.text.muted` (`#6B7480`) each meet the declared `accessibility.min_text_contrast_ratio: "4.5:1"` floor against `colors.background` (`#FFFFFF`) |
 | `disposition` | `reviewed-clean` |
 | `reason` | -- (not applicable; disposition is clean) |
-| `citation` | `["design/tokens/tower-retail-design-tokens.yaml", "retail check CT1 result captured 2026-07-05: 0 findings for this file"]` |
+| `citation` | `["design/tokens/tower-retail-design-tokens.yaml", "seshat check CT1 result captured 2026-07-05: 0 findings for this file"]` |
 
 Invariant check: `disposition: reviewed-clean` and `ct1_result: clean` agree
 -- this dimension does not contradict CT1's registered finding.

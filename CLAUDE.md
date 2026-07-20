@@ -53,7 +53,7 @@ Verbs the agent drives:
 - `kpi-contract-builder` -- drive the shipped kpi_contracts engine: assess answerability, list the decisions to approve, preview with per-field provenance, then draft/finalize -- never self-grants approval
 - `retail-build-warehouse` -- author silver/gold SQL; stop before executing
 - `retail-validate` -- live checks; needs db extra + DSN, else [PENDING LIVE PROFILE]
-- `retail-govern` -- static check (retail check)
+- `retail-govern` -- static check (seshat check)
 
 Hard-stops (orientation the agent reads; enforcement is the lint rules + G6/C2, not this file):
 - never_self_grant_approval

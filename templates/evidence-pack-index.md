@@ -64,7 +64,7 @@ from upstream stays `warning` -- it does NOT auto-promote to `pass`.
 | 02 | source-map-summary | `<status>` | `mappings/<table>/source-map.yaml` | `<summary / MISSING -> blocker>` |
 | 03 | assumptions-and-decisions | `<status>` | `mappings/<table>/assumptions.md` + `unresolved-questions.md` (+ ADRs) | `<summary / MISSING -> blocker>` |
 | 04 | metric-contracts | `<status>` | `mappings/<table>/metrics/` (filled F009/F010 contracts) | `<summary / MISSING -> blocker>` |
-| 05 | validation-summary | `<status>` | recorded `retail check` + `retail validate` results + F012 roll-up | `<summary / MISSING -> blocker>` |
+| 05 | validation-summary | `<status>` | recorded `seshat check` + `retail validate` results + F012 roll-up | `<summary / MISSING -> blocker>` |
 | 06 | semantic-model-summary | `<status>` | F010 / `retail semantic check` recorded output | `<summary / MISSING -> blocker>` |
 | 07 | dashboard-summary | `<status>` | F011 dashboard design + F011A visual foundation | `<summary / MISSING -> blocker>` |
 | 08 | handoff-pack | `<status>` | `mappings/<table>/handoff/bi-handoff-pack.md` (FILLED F013 instance -- EMBED) | `<summary / MISSING / incomplete -> blocker>` |
@@ -102,7 +102,7 @@ gap. A blank-template source counts as MISSING (a blocker), never as evidence.
 
 ### 05 validation-summary
 
-- **evidence:** `<recorded retail check / retail validate result + F012 roll-up>`
+- **evidence:** `<recorded seshat check / retail validate result + F012 roll-up>`
 - **blocking_reasons:** `<empty / naming the missing recorded result>`
 
 ### 06 semantic-model-summary

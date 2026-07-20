@@ -20,7 +20,7 @@
 <!-- Commands you ran and their result, e.g.:
      - ruff format --check src tests / ruff check src tests
      - pytest -m unit
-     - retail check / retail semantic-check --repo .
+     - seshat check / retail semantic-check --repo .
      - lane-specific verification (see contribution-lanes.yaml) -->
 
 ## Evidence

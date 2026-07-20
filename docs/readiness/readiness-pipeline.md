@@ -13,9 +13,9 @@ spine adds sequencing and state, not a new method.
 |---|-------|-----------------|-------------------------------|---------|
 | 1 | Source Ready | profile review | `mappings/<t>/source-profile.md` | playbook Phase 1 |
 | 2 | Mapping Ready | source-mapping gate (Principle IV) | `source-map.yaml`, `assumptions.md`, `unresolved-questions.md` (`Gate status: CLEARED`) | playbook Phase 2-4 |
-| 3 | Silver Ready | `retail check` (S1-S8) | `warehouse/migrations/NNNN_create_silver_<t>.sql` | playbook Phase 5 |
-| 4 | Gold Ready | `retail check` + `retail validate` (live) | `NNNN_create_gold_<t>_star.sql`, filled `reconciliation-report.md` | playbook Phase 6 |
-| 5 | Semantic Model Ready | `retail check` (D1-D11/C1/R1) + metric contracts | the PBIP model + metric-contract artifacts (F009/F010) | playbook Phase 7 (model) |
+| 3 | Silver Ready | `seshat check` (S1-S8) | `warehouse/migrations/NNNN_create_silver_<t>.sql` | playbook Phase 5 |
+| 4 | Gold Ready | `seshat check` + `retail validate` (live) | `NNNN_create_gold_<t>_star.sql`, filled `reconciliation-report.md` | playbook Phase 6 |
+| 5 | Semantic Model Ready | `seshat check` (D1-D11/C1/R1) + metric contracts | the PBIP model + metric-contract artifacts (F009/F010) | playbook Phase 7 (model) |
 | 6 | Dashboard Ready | metric-contract review | the report designed against approved contracts (F011) | playbook Phase 7 (BI) |
 | 7 | Publish Ready | handoff review | the BI handoff pack (F013) | post-Phase-7 |
 

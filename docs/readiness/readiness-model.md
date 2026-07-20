@@ -2,15 +2,15 @@
 
 - **Status:** Shipped -- the seven-stage spine (F005-F015) is on `main`; this
   doc is its model. (The spine is docs/templates/skills by design, hard rule #8;
-  it adds no runtime validator beyond `retail check` / `retail validate`.)
+  it adds no runtime validator beyond `seshat check` / `retail validate`.)
 - **What it is:** the **operating spine** inside Seshat BI. It does
   NOT replace the constitution, the medallion playbook, the source-mapping gate,
-  or `retail check` -- it **organizes them into stage-based readiness state** the
+  or `seshat check` -- it **organizes them into stage-based readiness state** the
   agent reads to decide the next allowed action.
 
 ## Why a readiness spine
 
-The kit already has the gates (mapping gate, `retail check`, `retail validate`).
+The kit already has the gates (mapping gate, `seshat check`, `retail validate`).
 What it lacks is a single, legible answer to "where is this table, and what is
 the one next thing allowed?" The readiness spine is that answer -- a **state
 model**, not a new gate. It turns the existing gates into a tracked sequence.
@@ -40,7 +40,7 @@ flowchart TD
     F16["F016 - Power BI execution adapter<br/>materialize / publish (DEFERRED, gated, last)"]
 
     S1 -->|"source-mapping gate (HUMAN approval)"| S2
-    S2 -->|"retail check (static gate)"| S3
+    S2 -->|"seshat check (static gate)"| S3
     S3 -->|"retail validate (live gate)"| S4
     S4 -->|"contracts owner-approved + retail-semantic-check"| S5
     S5 -->|"design review sign-off: no contract = no visual"| S6
@@ -57,7 +57,7 @@ flowchart TD
 > for itself, recorded in `approvals[]`: `Mapping Ready` (mandatory gate sign-off),
 > `Semantic Model Ready` (metric owner approves the contracts), `Dashboard Ready` (report
 > owner signs off the visual->contract binding), and `Publish Ready` (data-owner/governance
-> publish approval). `Silver Ready` and `Gold Ready` are mechanical gates (`retail check` /
+> publish approval). `Silver Ready` and `Gold Ready` are mechanical gates (`seshat check` /
 > `retail validate`) with no stage approval. `Source Ready` additionally needs the data
 > owner to confirm the proposed semantics + any PII ruling before it is `pass`. `F016` is
 > the deliberately-last, execution-only Power BI adapter -- gated on Semantic Model Ready,
@@ -113,7 +113,7 @@ Each `docs/readiness/<stage>-ready.md` defines, in this shape:
 
 - **Purpose** -- what "ready" means at this stage.
 - **Required artifacts** -- the committed files that must exist.
-- **Required checks** -- the gate(s) that must pass (`retail check`,
+- **Required checks** -- the gate(s) that must pass (`seshat check`,
   `retail validate`, an artifact review).
 - **Statuses** -- what `not_started` / `blocked` / `warning` / `pass` mean here.
 - **Blocking reasons** -- the concrete reasons this stage is `blocked`.

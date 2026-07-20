@@ -1,12 +1,12 @@
 # Readiness decay -- the stale-pass demotion pattern
 
-> **Pattern doc, doc-only -- no rule code, no `retail check` rule id.** This
+> **Pattern doc, doc-only -- no rule code, no `seshat check` rule id.** This
 > document names the CONCEPT `docs/readiness/source-drift.md:74` already
 > promises in prose ("a `warning`/`blocked` drift at Source Ready makes
 > downstream `pass` stages SUSPECT ... the human/agent re-runs the stage
 > gate") and gives it a generic, agent-followable shape: a `stale_pass`
 > SIGNAL a human or agent can raise by hand today, without a live DB, a
-> drift-detection runtime, or a new `retail check` rule. It is intentionally
+> drift-detection runtime, or a new `seshat check` rule. It is intentionally
 > NOT wired into `src/seshat/rules/` here -- the reserved id (`HR3`) and the
 > mechanical, git-history-backed enforcement of this pattern are a SEPARATE,
 > not-yet-landed piece of work. Treat everything below as the vocabulary and
@@ -20,7 +20,7 @@ every downstream `pass` stage suspect, and the detector "FLAGS this" without
 auto-demoting -- "the human/agent re-runs the stage gate." That sentence
 describes the correct behavior but nothing mechanically enforces it yet: a
 table can drift at Source Ready, nothing downstream ever gets
-re-confirmed, and `retail check` stays green throughout, because no rule
+re-confirmed, and `seshat check` stays green throughout, because no rule
 watches for exactly that condition today.
 
 This pattern also covers a second, related gap: a `pass` stage's approval
@@ -183,7 +183,7 @@ no score field.
 
 ## What this pattern does not do
 
-- It does not define a new `retail check` rule id, does not add a wiring
+- It does not define a new `seshat check` rule id, does not add a wiring
   surface, and does not change any existing rule's behavior. The
   mechanical, git-history-backed enforcement of this pattern (comparing an
   approval date against a cited evidence path's actual commit history) is

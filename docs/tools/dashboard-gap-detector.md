@@ -83,7 +83,7 @@ never a silent `Covered`.
 - **Emits no numeric score**, coverage percentage, confidence value, priority
   number, or "N of M" count (hard rule #9). The per-item categorical status plus
   its named blocker is the only answer.
-- **Adds no `retail check` rule and is not SL1's runtime.** SL1
+- **Adds no `seshat check` rule and is not SL1's runtime.** SL1
   (`src/seshat/rules/scorecard.py`) is the static rule that gates a committed
   scorecard's STRUCTURE; this surface reuses SL1's status VOCABULARY only (via the
   shared `coverage_status` constant) and adds no gate.

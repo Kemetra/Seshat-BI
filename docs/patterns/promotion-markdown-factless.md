@@ -27,7 +27,7 @@ that did NOT sell?"
   example is cited once, below, as an existing measure-bearing fact a
   coverage fact could be anti-joined against -- never restated with invented
   promotion data.
-- It does NOT add a `retail check` rule, a reserved rule id, or a new
+- It does NOT add a `seshat check` rule, a reserved rule id, or a new
   readiness stage. Cross-star conformance between this pattern's dimensions
   and an existing sales star's dimensions is the concern of spec 087
   (cross-star conformed-dimension readiness, reserved rule id HR1) -- a

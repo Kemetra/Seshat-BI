@@ -30,7 +30,7 @@ verbs:
 - id: retail-validate
   purpose: live checks; needs db extra + DSN, else [PENDING LIVE PROFILE]
 - id: retail-govern
-  purpose: static check (retail check)
+  purpose: static check (seshat check)
 hard_stops:
 - never_self_grant_approval
 - no_silver_before_mapping_cleared

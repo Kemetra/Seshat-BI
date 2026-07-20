@@ -11,7 +11,7 @@ description: >-
   a metric, NEVER publishes, NEVER opens Power BI Desktop or a DB connection, and
   NEVER calls the Power BI execution adapter (official Power BI MCP / connection;
   `pbi-cli` no longer preferred) -- that is feature F016. It authors,
-  runs static retail check, records dashboard_ready at most as warning, and STOPS.
+  runs static seshat check, records dashboard_ready at most as warning, and STOPS.
 ---
 
 # dashboard-design
@@ -42,7 +42,7 @@ authoring `warehouse/migrations/*.sql`. EXECUTING the design -- generating the P
 report, publishing to a workspace, calling the Power BI execution adapter (official
 Power BI MCP / connection; `pbi-cli` no longer preferred) -- is the deferred,
 execution-only F016 adapter seam and is OUT of scope here. The skill authors, runs
-static `retail check` on any committed report text, and STOPS.
+static `seshat check` on any committed report text, and STOPS.
 
 ## Hard gate (rule 5) -- verify BEFORE authoring anything
 
@@ -69,7 +69,7 @@ of the prior stage is the entry condition).
 |-------------------|--------------------------|
 | layout plan, visual list, visual->contract binding map | generating/publishing the PBIR report |
 | optional blank PBIR scaffold a human fills | opening Power BI Desktop or a DB connection |
-| running static `retail check` on committed report text | calling the Power BI execution adapter (official Power BI MCP / connection) |
+| running static `seshat check` on committed report text | calling the Power BI execution adapter (official Power BI MCP / connection) |
 | recording `dashboard_ready: warning` + evidence | publishing to a workspace / refreshing a model |
 
 The skill authors, checks, and STOPS. Name F016 (the Power BI execution adapter --
@@ -132,12 +132,12 @@ visual->contract binding review.
 
 ## R1 / relative-reference note
 
-When a committed PBIR report exists for the subject area, confirm `retail check`
+When a committed PBIR report exists for the subject area, confirm `seshat check`
 (rule R1) stays exit 0 -- the report references the governed model by a RELATIVE
 path, not an absolute/remote ref. On failure, record `dashboard_ready: blocked`
 with the reason ("PBIR references the model by absolute/remote path -- R1 fails")
 and STOP; the relative-reference fix is the human's. This skill reuses the existing
-R1 rule; it adds no new `retail check` rule.
+R1 rule; it adds no new `seshat check` rule.
 
 ## Blocking reasons (each maps to a STOP)
 

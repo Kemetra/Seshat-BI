@@ -44,7 +44,7 @@ recorded here as a **deviation with its triggering data fact**, not a special ca
 - Handoff: `mappings/retail_store_sales/handoff/` (pack + review checklist)
 - Readiness state: `mappings/retail_store_sales/readiness-status.yaml` (the spine record)
 - Process: `docs/medallion-playbook.md`; the spine: `docs/readiness/readiness-model.md`
-- Governance: `retail check` (static gate) + `retail validate` (live surface)
+- Governance: `seshat check` (static gate) + `retail validate` (live surface)
 
 **How to reuse this for a new table:** copy this section structure, swap
 `retail_store_sales` for the new table, walk the seven stages, and fill each section's
@@ -69,7 +69,7 @@ time of writing:
 |---|-------|--------|-------------------|
 | 1 | Source Ready | **pass** | 12,575 rows, 11 cols profiled; PK `transaction_id` unique; semantics + PII ruling confirmed by data owner |
 | 2 | Mapping Ready | **pass** | grain/PK/PII mapped; gate CLEARED; Q1–Q4 answered; owner approval recorded |
-| 3 | Silver Ready | **pass** | `0003_*.sql` applied; 12,575 silver rows; `retail check` exit 0; PK re-proven (V-RC2) |
+| 3 | Silver Ready | **pass** | `0003_*.sql` applied; 12,575 silver rows; `seshat check` exit 0; PK re-proven (V-RC2) |
 | 4 | Gold Ready | **pass** | `0004_*.sql` applied; `retail validate` exit 0; 0 orphan FKs; penny-exact reconcile |
 | 5 | Semantic Model Ready | **pass** | 5 approved contracts; governed TMDL; every measure binds 1:1; `retail-semantic-check` = pass |
 | 6 | Dashboard Ready | **pass** | 10-visual design; all 5 contracts bound, 0 orphan visuals; design review approved |
@@ -150,7 +150,7 @@ still a real row).
 
 **Rule it proves.** RC5/RC7 + RC13 (idempotent numbered migration) + the layer-aware S4b
 policy (DROP+CREATE-in-txn on a rebuildable `silver.*` is the sanctioned pattern, not a
-finding). `retail check` exits 0 on the migration.
+finding). `seshat check` exits 0 on the migration.
 
 **Evidence.** `0003_create_silver_retail_store_sales.sql`; `readiness-status.yaml`
 `silver_ready` (exit 0, S1–S7; PK re-proven unique on the transform via V-RC2).
@@ -214,7 +214,7 @@ example records no parity pass and no migration-switch approval.
 `TransactionCount`, `AvgTransactionValue`, `DiscountedTransactionRate`. A governed PBIP
 model was authored as **TMDL** (`powerbi/RetailStoreSales.SemanticModel`): 5 dims +
 `fct_sales_rss`, a **marked date table**, and a **parameterized connection (no real
-host committed)**. `retail-semantic-check`'s 5-step verdict is **pass**: `retail check`
+host committed)**. `retail-semantic-check`'s 5-step verdict is **pass**: `seshat check`
 exit 0 (D1–D8/C1/R1/G6), `gold_ready` is `pass`, and **every model measure binds 1:1 to
 an approved contract**.
 
@@ -301,5 +301,5 @@ here by design.
 - Method: `docs/medallion-playbook.md` (the 7 phases).
 - The table's own artifacts: `mappings/retail_store_sales/` and
   `powerbi/RetailStoreSales.SemanticModel`.
-- Governance: `retail check` / `retail validate` (`src/seshat/`); the rule meanings:
+- Governance: `seshat check` / `retail validate` (`src/seshat/`); the rule meanings:
   the `retail-govern` skill.

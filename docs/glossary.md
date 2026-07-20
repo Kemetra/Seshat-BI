@@ -19,7 +19,7 @@ are grouped, then alphabetical within a group.
 | **Readiness spine** | the operating state model that organizes the existing gates into a tracked seven-stage sequence; a state model, not a new gate (`docs/readiness/readiness-model.md`). |
 | **Stage 1 — Source Ready** | a profiled, understood source exists; semantics + any PII ruling confirmed by the data owner. |
 | **Stage 2 — Mapping Ready** | grain / PK / PII mapped and reviewed; the source-mapping gate is CLEARED with a recorded human approval. |
-| **Stage 3 — Silver Ready** | a typed/cleaned silver table built and statically clean (`retail check` exit 0). |
+| **Stage 3 — Silver Ready** | a typed/cleaned silver table built and statically clean (`seshat check` exit 0). |
 | **Stage 4 — Gold Ready** | a Kimball star built and live-validated (PK uniqueness, date coverage, 0 orphan FKs, penny-exact reconcile). |
 | **Stage 5 — Semantic Model Ready** | owner-approved metric contracts + a governed PBIP model whose every measure binds 1:1 to a contract. |
 | **Stage 6 — Dashboard Ready** | a report design where every measure-bearing visual binds to an approved contract; design review signed off. |
@@ -30,7 +30,7 @@ are grouped, then alphabetical within a group.
 | **Status: `pass`** | all required artifacts exist, all required checks pass, approvals are recorded. |
 | **Evidence / blockers** | the explicit `evidence[]` (committed files/check-runs) and `blocking_reasons[]` that justify a status — never a fabricated confidence score (hard rule #9). |
 | **Approval seam** | a stage that needs a named-human sign-off in `approvals[]`: Mapping, Semantic Model, Dashboard, Publish. The agent never self-grants one (Principle V). |
-| **Readiness decay / `stale_pass`** | a concept (not a `retail check` rule): a stage recorded `pass` may become stale when the evidence it rests on changes (a source drift, or an approval that predates a later edit). The signal is SURFACED as a blocker for a named human to demote — never auto-demoted (`source-drift.md` Downstream section; `docs/patterns/readiness-decay.md`). A `stale_review` reaffirmation entry records a human re-check. |
+| **Readiness decay / `stale_pass`** | a concept (not a `seshat check` rule): a stage recorded `pass` may become stale when the evidence it rests on changes (a source drift, or an approval that predates a later edit). The signal is SURFACED as a blocker for a named human to demote — never auto-demoted (`source-drift.md` Downstream section; `docs/patterns/readiness-decay.md`). A `stale_review` reaffirmation entry records a human re-check. |
 
 ## Discovery and decisions
 
@@ -82,7 +82,7 @@ are grouped, then alphabetical within a group.
 | **Handoff pack** | the documentation/evidence bundle handed to a BI consumer at Publish Ready (F013). |
 | **Source-mapping gate** | the rule that no `silver.*` SQL is written until the map is reviewed + approved (hard rules #2/#3; Stage 2). |
 | **Companion module / adapter** | an optional tool that READS/SUMMARIZES/EXECUTES an approved step but never creates truth (F024 tier; e.g. dbt, Dagster). |
-| **`retail check`** | the static governance gate (the rule families below); runs on committed text, no DB. |
+| **`seshat check`** | the static governance gate (the rule families below); runs on committed text, no DB. |
 | **`retail validate`** | the live data surface; reconciles a materialized table against a running Postgres (read-only). |
 | **`retail value-check`** | the L4 value proxy that asserts a contract's live value still matches its approved `expected_value`. |
 | **`retail generate`** | the DAX generator that emits a verified measure from an approved metric contract. |
@@ -102,15 +102,15 @@ idempotent migration · **RC14** Kimball star + `-1` member · **RC15** contiguo
 > **Namespace note:** `RC<n>` are *cleaning defaults*; the static checker uses a separate
 > letter-prefixed namespace (below). They no longer collide (feature 002).
 
-## Static check rules (`retail check`)
+## Static check rules (`seshat check`)
 
-This catalog is the **single source of truth for `retail check`'s rule count.**
+This catalog is the **single source of truth for `seshat check`'s rule count.**
 The **live registry in `src/seshat/rules/` is authoritative**; the table below
 mirrors it and the `retail-govern` skill maps each id to its fix.
 
 > **Currently 78 rules in 26 families** (S, D, C, R, RS, G, P, A, B, PP, SC, DF, SL, KR, KP, AL, AD, AQ, CB, DL, CT, DR, AP, SF, HR, DS).
 > When a rule is added or removed, update the table and this line **together** — and
-> elsewhere refer to "the static `retail check` gate" by name rather than restating a
+> elsewhere refer to "the static `seshat check` gate" by name rather than restating a
 > number. Restated counts are exactly what drifted before (see
 > `docs/quality/drift-consistency-audit-2026-06-28.md`). (`S4` is split into
 > `S4a`/`S4b`.)

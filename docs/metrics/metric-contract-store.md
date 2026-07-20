@@ -29,7 +29,7 @@ This boundary is stated VERBATIM in `templates/metric-contract.yaml`,
 
 > This feature DEFINES contracts (and groups them into packs). It does NOT CHECK a
 > model. Nothing here reads `powerbi/<Model>.SemanticModel/`, asserts a measure /
-> relationship / marked date table, or adds a `retail check` rule. CHECKING a PBIP
+> relationship / marked date table, or adds a `seshat check` rule. CHECKING a PBIP
 > model against these contracts is the SEPARATE later feature F010 (on-disk feature
 > 011, Semantic Model Readiness). A contract is INTENT + binding + an explicit
 > readiness status; it is never the DAX, never a visual, never a check.
@@ -39,7 +39,7 @@ This boundary is stated VERBATIM in `templates/metric-contract.yaml`,
   PBIP read, no DB connection.
 - **CHECKING a PBIP model is OUT of scope (F010 / on-disk 011).** Reading
   `powerbi/`, asserting a measure exists, asserting relationships or the marked date
-  table, running `retail check`'s D1-D11 over TMDL -- all belong to the checking half.
+  table, running `seshat check`'s D1-D11 over TMDL -- all belong to the checking half.
 - **No dashboard design (roadmap hard rule #5).** Contracts come BEFORE dashboards;
   designing visuals is F011, gated on approved contracts existing -- which is exactly
   what this store produces.
@@ -130,7 +130,7 @@ in a filled worked example under `../worked-examples/`; it is cited, never inlin
 
 **Define/check boundary (verbatim, this feature respects it).** DEFINING a contract writes
 INTENT + binding + this ambiguity ruling; it never authors DAX, never touches a `powerbi/`
-model, and **adds no `retail check` rule**. The enforcing CHECK half (the AL1 static rule) is a
+model, and **adds no `seshat check` rule**. The enforcing CHECK half (the AL1 static rule) is a
 SEPARATE, deferred idea and is **not** implemented here -- until it ships, the non-pass blocker
 is a docs convention the reviewer honors, not a gate exit code.
 

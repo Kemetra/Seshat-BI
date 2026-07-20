@@ -10,7 +10,7 @@ Portfolio Watch answers one recurring question: *since we last looked, what
 changed, what still needs a human, and what is the one next thing to do per
 scope?* It is a **read-only aggregation/summary layer**, not a new governance
 engine: it derives every finding from evidence the shipped surfaces already
-produce, adds no new gate, no new `retail check` rule, and no new approval
+produce, adds no new gate, no new `seshat check` rule, and no new approval
 mechanism.
 
 It is the multi-dimension, baseline-diffable EXTENSION of the point-in-time
@@ -112,8 +112,8 @@ diffable against the last local run -- nothing more.
   only the four readiness spine statuses, the shipped categorical finding
   enums (relayed verbatim), and measured magnitudes traceable to a committed
   source (hard rule #9).
-- No new `retail check` rule, gate, or approval mechanism is introduced;
-  `retail check`'s rule inventory and exit behavior are unchanged.
+- No new `seshat check` rule, gate, or approval mechanism is introduced;
+  `seshat check`'s rule inventory and exit behavior are unchanged.
 - No live database connection is opened in the MVP; a dimension needing one
   degrades truthfully to `[PENDING LIVE]`.
 - No Principle-V ruling (grain, PII publish-safety, business-rollup/segment

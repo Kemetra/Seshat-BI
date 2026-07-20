@@ -88,7 +88,7 @@ source's repo-relative path. The pack composes; it invents no section content.
 | 02 | source-map-summary | `source-map.yaml` (the Principle-IV mapping-gate artifact; F008 consumes it, does not produce it) |
 | 03 | assumptions-and-decisions | `assumptions.md` + `unresolved-questions.md` + relevant ADRs |
 | 04 | metric-contracts | `mappings/<table>/metrics/` filled contracts (F009/F010) |
-| 05 | validation-summary | recorded `retail check` + `retail validate` results + the F012 data-quality roll-up |
+| 05 | validation-summary | recorded `seshat check` + `retail validate` results + the F012 data-quality roll-up |
 | 06 | semantic-model-summary | F010 / `retail semantic check` recorded output |
 | 07 | dashboard-summary | F011 dashboard design + F011A visual foundation |
 | 08 | handoff-pack | the table's FILLED F013 `templates/handoff/bi-handoff-pack.md` instance (EMBED / reference; never re-authored) |
@@ -193,7 +193,7 @@ prints a publish-ready claim -- the in-progress posture does not weaken the guar
   Clarifications 2026-06-25).
 - Reading a live database or PBIP model; calling the Power BI execution adapter (F016).
 - Publishing / deploying to any workspace or Fabric.
-- Adding a `retail check` rule, defining a new readiness stage, or altering a gate.
+- Adding a `seshat check` rule, defining a new readiness stage, or altering a gate.
 - Silently reconciling disagreeing sources or choosing a winner (Principle V).
 - Inlining C086 / retail_store_sales specifics into the generic skill, doc, or templates.
 

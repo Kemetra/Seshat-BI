@@ -1,7 +1,7 @@
 # Versioning Policy -- the version scheme for a governance kit, and who bumps it
 
 - **Status:** Authored (the FR-001 deliverable of spec 108; docs-only, no runtime
-  code, no CI config, no `retail check` rule).
+  code, no CI config, no `seshat check` rule).
 - **Authority category:** Maintenance Automation *(sub-axis: none / `--`)* -- per
   `docs/architecture/product-modules.md` (the five-category contract, F024 / on-disk
   spec 018). This policy is read/authored by a human; it defines no CLI verb and
@@ -14,7 +14,7 @@
 ## What this is
 
 Seshat BI is not an ordinary library -- it is a **governance kit**: the thing being
-versioned is a bundle of `retail check` rules, CLI verbs, and templates that other
+versioned is a bundle of `seshat check` rules, CLI verbs, and templates that other
 repos depend on to gate their own readiness. A version bump communicates blast radius
 to a consumer repo pinning this package, exactly as it would for any dependency (see
 `docs/operations/dependency-update-policy.md`, which classifies incoming updates by
@@ -75,7 +75,7 @@ with the bump classification adapted to what actually changes blast radius for a
 
 | Change class | Bump | Why |
 |---|---|---|
-| A NEW `retail check` rule is registered (the rule set grows) | **MINOR** | Additive. A consumer who was passing keeps passing until they touch the newly-covered surface; the new rule fires only on a pattern that was previously ungoverned. Expected kit growth -- a consumer who wants to defer adopting it can pin the prior minor. |
+| A NEW `seshat check` rule is registered (the rule set grows) | **MINOR** | Additive. A consumer who was passing keeps passing until they touch the newly-covered surface; the new rule fires only on a pattern that was previously ungoverned. Expected kit growth -- a consumer who wants to defer adopting it can pin the prior minor. |
 | A rule's **behavior changes** such that it can newly fail a previously-passing repo (a broadened predicate, a new failure mode inside an existing rule id, a severity change from `warning` to blocking) | **MAJOR** | Breaking. The rule id a consumer already adopted now judges their already-green repo differently. This is the exact shape semver's MAJOR clause exists for: an existing, relied-upon contract changed underneath the consumer without them opting in. |
 | A NEW CLI verb, or a new optional flag on an existing verb, with no change to existing verb behavior | **MINOR** | Additive surface. |
 | A CLI verb's existing flag/output contract changes (e.g. `--format text` output shape changes, a flag is removed or renamed, an exit-code meaning changes) | **MAJOR** | Breaking for any consumer/script parsing that output. |

@@ -27,7 +27,7 @@ contracts, no dashboard design (roadmap rule 5).
 
 | Gate | What it confirms |
 |------|------------------|
-| `retail check` (R1) | the PBIR references the model with a relative path (no baked-in/remote ref) |
+| `seshat check` (R1) | the PBIR references the model with a relative path (no baked-in/remote ref) |
 | design review | every visual maps to an approved metric contract; no metric invented at design time |
 
 ## Statuses
@@ -55,7 +55,7 @@ Recorded in `approvals[]` as `{stage: dashboard_ready, owner: <bi-report-owner>,
 
 > Added by feature F034 (on-disk spec `specs/039-visual-implementation-mvp`; roadmap
 > F-number wins). This is an EVIDENCE ITEM only -- it adds NO new status, NO new gate, NO
-> new `retail check` rule, and does NOT change the gate, statuses, blocking reasons, owner,
+> new `seshat check` rule, and does NOT change the gate, statuses, blocking reasons, owner,
 > required checks, or the design-review responsibility above.
 
 A `pass` here is granted on the DESIGN (the approved visual -> contract binding map plus the

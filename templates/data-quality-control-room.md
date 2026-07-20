@@ -7,7 +7,7 @@
 > file (read-only). See `docs/readiness/readiness-model.md`.
 >
 > **Aggregates, never re-derives.** Every numeric cell is a MEASURED count copied from a
-> committed source (a `retail check` WARN line, a `retail validate` ERROR, a
+> committed source (a `seshat check` WARN line, a `retail validate` ERROR, a
 > `blocking-reasons.md` row). Never an adjective ("several", "mostly clean").
 >
 > **No fake confidence.** There is NO health/confidence score column, and a filled copy
@@ -39,7 +39,7 @@ evidence yet" -- never an invented status or count.
 | `<table-c>` | `<source_family>` | `<stage_key>` | `pass` | `0` | `0` | `0` | `<next action>` |
 | `<table-d>` | `<source_family>` | -- | `not_started` | -- | -- | -- | no evidence yet |
 
-- **Static WARNs** = recorded `retail check` WARN lines for the table (`warning`).
+- **Static WARNs** = recorded `seshat check` WARN lines for the table (`warning`).
 - **Live findings** = recorded `retail validate` ERRORs (V-RC2 / V-RC15 / V-RC16,
   `error`). If not run recently: "not run since `<date>`".
 - **Open blockers** = count of "Open blockers" rows in the table's `blocking-reasons.md`.

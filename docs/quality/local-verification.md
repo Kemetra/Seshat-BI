@@ -41,19 +41,19 @@ database driver installed.
 ## 4. Retail governance checks
 
 ```bash
-retail check
+seshat check
 retail semantic-check --repo .
 ```
 
-- `retail check` is the static governance gate; its exit code is the authority.
+- `seshat check` is the static governance gate; its exit code is the authority.
 - `retail semantic-check --repo .` reports contract-vs-measure drift (no drift =
   clean).
 
 > [!NOTE]
-> **Local P2 scope.** A bare `retail check` (no `--commit-range`) scopes its P2
+> **Local P2 scope.** A bare `seshat check` (no `--commit-range`) scopes its P2
 > commit-subject rule to the **current/incoming commit only** (`HEAD~1..HEAD`), so
 > on a compliant HEAD it exits cleanly and is **not** tripped by aged-out
-> nonconforming subjects further back in history. Run bare `retail check` for
+> nonconforming subjects further back in history. Run bare `seshat check` for
 > day-to-day verification of the current change -- its exit code is authoritative
 > for what you are about to commit.
 >

@@ -68,7 +68,7 @@ prose.
   against the deployed model is marked PENDING, never silently assumed
   reconciled.
 
-This module adds NO new readiness stage and NO new `retail check` rule -- it
+This module adds NO new readiness stage and NO new `seshat check` rule -- it
 composes from artifacts other tools already produced (the F024 Product
 Module boundary).
 
@@ -359,7 +359,7 @@ After a run, `git status` shows the only new/modified file is the one
 derived dictionary at `mappings/<table>/consumer-data-dictionary.md`. No
 source artifact (`source-map.yaml`, any `metrics/*.yaml`, the gold migration
 SQL, `readiness-status.yaml`, the handoff pack) is modified, and no
-readiness stage moved. The skill triggered no `retail check` / `retail
+readiness stage moved. The skill triggered no `seshat check` / `retail
 validate` run of its own and opened no DB connection (FR-011, SC-004).
 
 ## What the agent must NOT do
@@ -389,7 +389,7 @@ validate` run of its own and opened no DB connection (FR-011, SC-004).
   count/percentage.
 - Do NOT read a live database or PBIP model; do NOT call the Power BI
   execution adapter (F016) or any spec-only runtime (F031-F033).
-- Do NOT add a `retail check` rule, define a new readiness stage, or alter a
+- Do NOT add a `seshat check` rule, define a new readiness stage, or alter a
   gate.
 - Do NOT inline C086 / retail_store_sales specifics into the template or a
   fixed section label.

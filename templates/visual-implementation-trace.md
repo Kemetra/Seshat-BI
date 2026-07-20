@@ -156,7 +156,7 @@ Same four-status vocabulary; same "grants no approval" rule (FR-031); never a nu
 | theme / background | `<theme_json / background_asset refs on the blueprint>` | `<report.json themeCollection / page.json objects.background>` | `<...>` | `<...>` |
 | navigation | `<report-composition.yaml page order / drillthrough intent>` | `<pages.json pageOrder / bookmark or drillthrough wiring, where statically inspectable>` | `<...>` | `<...>` |
 | statically-inspectable interactions | `<blueprint-declared interaction intent, where present>` | `<visual filterConfig / interaction wiring found in the committed JSON>` | `<...>` | `<...>` |
-| relative model references | `R1: byPath, relative` | `<definition.pbir datasetReference>` (reuses R1, `rules/pbir.py`, not re-derived) | `<...>` | `<absolute/byConnection ref -> blocked, same as retail check R1>` |
+| relative model references | `R1: byPath, relative` | `<definition.pbir datasetReference>` (reuses R1, `rules/pbir.py`, not re-derived) | `<...>` | `<absolute/byConnection ref -> blocked, same as seshat check R1>` |
 | implementation trace | `this document's 1:1 trace + coverage check (above)` | `<...>` | `<...>` | `<cites the 1:1 trace rows above; never recomputed here>` |
 
 > Any row whose "actual" cannot be determined from committed, statically-inspectable PBIR (no

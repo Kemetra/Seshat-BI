@@ -108,7 +108,7 @@ does not:
    disagreement (a `next_action_disagreement` caveat) rather than silently
    picking one. Cross-table aggregation stays F012/F026 territory.
 3. **vs. RS1 (`src/seshat/rules/readiness_status.py`).** RS1 is the static
-   consistency LINTER wired into `retail check` (invalid status values, `pass`
+   consistency LINTER wired into `seshat check` (invalid status values, `pass`
    without evidence, `blocked` without reasons, invalid approval-owner shape,
    `current_stage` skipping a blocker). This skill applies the SAME
    approval-owner shape rule -- so its notion of "approved" agrees with the
@@ -297,7 +297,7 @@ empty after any such walk.
 - MUST NOT advance a stage or set any `status` to `pass`.
 - MUST NOT emit a numeric score / confidence / percent-ready (hard rule #9).
 - MUST NOT open a DB connection or require the `db` extra.
-- MUST NOT register a `retail check` rule (`@register`) -- it is not a gate.
+- MUST NOT register a `seshat check` rule (`@register`) -- it is not a gate.
 
 ## See also
 

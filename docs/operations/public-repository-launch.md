@@ -88,7 +88,7 @@ a shortfall.
 1. `CHANGELOG.md` and `README.md` claims reconciled with what is actually on
    `main` (per-phase availability, no forward claims).
 2. All gates green: `ruff format --check`, `ruff check`, `pytest`,
-   `retail check`, `retail semantic-check`, `retail kit-lint`.
+   `seshat check`, `retail semantic-check`, `retail kit-lint`.
 3. Repository metadata set as above.
 4. Issue forms and PR template render correctly on GitHub (open the new
    issue chooser and a draft PR to verify).

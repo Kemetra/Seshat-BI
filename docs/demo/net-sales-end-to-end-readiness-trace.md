@@ -111,7 +111,7 @@ Net Sales is the base realized-revenue KPI most other retail KPIs derive from
   transparency").
 - **Documented (not runtime-enforced):** Semantic Model Ready
   (`docs/readiness/semantic-model-ready.md`) is "Planning (docs/templates; no
-  runtime code)". The L1–L2 DAX rules (`retail check` D1–D11) and the L3
+  runtime code)". The L1–L2 DAX rules (`seshat check` D1–D11) and the L3
   `retail semantic-check` (contract↔DAX denominator drift) and L4
   `retail value-check` (live value proxy) are the relevant gates; L4 needs real
   data.

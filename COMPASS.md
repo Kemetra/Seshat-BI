@@ -5,7 +5,7 @@
 Seshat BI is an agent-first Retail BI readiness system that guides agents from
 raw retail sources through source understanding, mapping, silver, gold, semantic
 model, dashboard, and publish readiness using documented gates, evidence, and
-human approvals. The agent is the interface; the CLI gates (`retail check`,
+human approvals. The agent is the interface; the CLI gates (`seshat check`,
 `retail validate`) are helpers it calls, never the product.
 
 ## Start here

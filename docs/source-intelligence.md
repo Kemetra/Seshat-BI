@@ -50,7 +50,7 @@ only the four-value spine vocabulary plus the `proposed`/`confirmed` entry-level
 
 - It adds NO new readiness stage, status, blocking reason, or required artifact. The ONE
   required Source Ready artifact stays `source-profile.md`; the gate stays a review.
-- It adds NO `retail check` rule, NO Python, NO dependency.
+- It adds NO `seshat check` rule, NO Python, NO dependency.
 - The `proposed`/`confirmed` value is an ENTRY-LEVEL meaning status inside a registry,
   not a new stage status -- the table's Source Ready stage status remains the four-value
   spine vocabulary.

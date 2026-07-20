@@ -130,7 +130,7 @@ restrictive matching sub-axis:
 
 ## What this contract deliberately does NOT do
 
-- It adds no `retail check` rule, no CLI verb, no readiness stage, and no conformance
+- It adds no `seshat check` rule, no CLI verb, no readiness stage, and no conformance
   checker. Enforcement of "every tool declares its category" is enumerated as a FUTURE
   deliverable's job (docs-first, hard rule #8). A tool with no declared category is a
   review finding today, not a runtime error.

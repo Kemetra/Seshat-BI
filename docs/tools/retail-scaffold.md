@@ -13,7 +13,7 @@ phrases) instead of being CLI-only and undiscoverable.
 
 ## When to use it (and when not)
 
-- **Use it** when you are ADDING a new `retail check` rule, or checking whether a rule
+- **Use it** when you are ADDING a new `seshat check` rule, or checking whether a rule
   is fully wired ("is `S9` in all five places?").
 - **Use `retail-govern` instead** when an EXISTING check FAILED and you need to map the
   reported rule id to its fix. Scaffold authors; govern interprets. (See the boundary
@@ -39,7 +39,7 @@ point at it; they do not re-list it as a competing authority (anti-fork).
 
 - **Write/print split**: the helper writes exactly three targets and PRINTS the rest;
   it never edits the glossary or a golden record (Principle V).
-- **Never self-grants a wiring pass**: the test suite + `retail check` exit code decide
+- **Never self-grants a wiring pass**: the test suite + `seshat check` exit code decide
   (Principle I).
 - **Never invents rule intent**: the author supplies id + title + real logic (DEC-1).
 

@@ -78,7 +78,7 @@ impact, and never decides what must be re-reviewed.
   reader over already-committed repository text (Principle VIII), never a
   running emitter, never a client of an external lineage backend.
 
-This module adds NO new readiness stage and NO new `retail check` rule -- it
+This module adds NO new readiness stage and NO new `seshat check` rule -- it
 composes evidence other tools already recorded (the F024 Product Module
 boundary).
 
@@ -178,7 +178,7 @@ The trace composes EXACTLY these committed sources -- no live DB, no PBIP
 model, no Power BI execution adapter (F016), no spec-only runtime
 (F031-F033), no network. "Committed" means the current on-disk working-tree
 content of these tracked files, not a specific git ref -- whatever a reviewer
-would see by opening the file right now, matching how `retail check` and the
+would see by opening the file right now, matching how `seshat check` and the
 other read-only skills in this repo already read state.
 
 1. `mappings/<table>/source-map.yaml` -- hop 1.
@@ -439,7 +439,7 @@ After a run, `git status` shows the only new/untracked file is the one
 derived trace at `mappings/<table>/lineage-column-<column>.md` or
 `mappings/<table>/lineage-metric-<Metric>.md`. No source artifact (source-
 map, migration SQL, metric contract, TMDL, binding map, readiness-
-status.yaml) is modified. The skill triggered no `retail check` / `retail
+status.yaml) is modified. The skill triggered no `seshat check` / `retail
 validate` run of its own and opened no DB connection.
 
 ## What the agent must NOT do

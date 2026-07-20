@@ -17,7 +17,7 @@ def _read(path: Path) -> str:
 @pytest.mark.unit
 def test_agent_references_retail_check() -> None:
     text = _read(AGENT)
-    assert "retail check" in text
+    assert "seshat check" in text
 
 
 @pytest.mark.unit
@@ -62,7 +62,7 @@ def test_skill_frontmatter_valid() -> None:
 @pytest.mark.unit
 def test_skill_references_retail_check() -> None:
     text = _read(SKILL)
-    assert "retail check" in text
+    assert "seshat check" in text
 
 
 @pytest.mark.unit

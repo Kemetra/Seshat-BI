@@ -28,7 +28,7 @@ An independent pytest oracle (`tests/unit/test_capability_inventory.py`) reads
 these feeders directly -- never through the inventory's own rendering code --
 and fails CI when the manifest drifts from them in either direction: an
 orphaned reference, an unlisted real capability, a false `shipped`, or a false
-`publicly-released`. This is a TEST, not a `retail check` rule: it fails CI
+`publicly-released`. This is a TEST, not a `seshat check` rule: it fails CI
 but adds no gate, no registered rule, and no `blocking_reasons[]` entry.
 
 ## How this differs from the four existing authorities
@@ -39,7 +39,7 @@ but adds no gate, no registered rule, and no `blocking_reasons[]` entry.
 | `seshat status` | "Where is THIS table in the readiness journey right now?" | Per-table `mappings/<table>/readiness-status.yaml` | Nothing | No (projects committed state verbatim) |
 | `seshat next` | "What is the single next allowed action for THIS table?" | Per-table `readiness-status.yaml` | Nothing | No |
 | `seshat doctor` | "Has the repo drifted from what the kit expects?" | Committed manifests/config for structural drift | Nothing | No |
-| `retail check` | "Does the committed text pass the governance gate?" | Committed SQL/TMDL/PBIR/docs/git text | Nothing (exit code is the authority) | No (the gate itself, not a grant) |
+| `seshat check` | "Does the committed text pass the governance gate?" | Committed SQL/TMDL/PBIR/docs/git text | Nothing (exit code is the authority) | No (the gate itself, not a grant) |
 
 The capability inventory is orthogonal to all four: it never reads or
 computes a per-table readiness state, and none of the four existing

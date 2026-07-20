@@ -38,7 +38,7 @@ expects.
 - A first reply on your issue or PR within **7 days**.
 - A review of a passing PR within **14 days**.
 - Reviews check the lane contract (scope, verification, safety), not style
-  preferences beyond what `ruff` and `retail check` enforce.
+  preferences beyond what `ruff` and `seshat check` enforce.
 
 ## Ground rules that always apply
 

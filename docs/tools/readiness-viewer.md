@@ -77,7 +77,7 @@ reads, summarizes, and visualizes Core Authority -- and does nothing else. It:
 - fabricates NO evidence: a stage with empty `evidence[]` shows "evidence missing";
   an absent referenced file shows "referenced file not found"; a missing-evidence
   `pass` is surfaced, never hidden;
-- runs NO validator and opens NO DB connection: no `retail check` / `retail
+- runs NO validator and opens NO DB connection: no `seshat check` / `retail
   validate` as a new check, no SQL;
 - emits NO numeric health / confidence / percent-ready score (hard rule #9). A score
   request is DECLINED, citing readiness-model "No fake confidence"; the four explicit
@@ -114,7 +114,7 @@ never inlined (Principle VII).
 - **`src/seshat/tools/readiness_viewer.py`** -- an OPTIONAL future read-only CLI
   renderer that would parse the per-item files and emit the matrix if item volume
   outgrows hand-rendering. It is still a read-only reporter (NO new validator, NO new
-  `retail check` rule, NO DB read). It is ENUMERATED here only; nothing in this slice
+  `seshat check` rule, NO DB read). It is ENUMERATED here only; nothing in this slice
   creates it.
 - **A machine-readable view export** (e.g. `readiness-view.json`) for a future UI --
   DEFERRED until a consumer exists.

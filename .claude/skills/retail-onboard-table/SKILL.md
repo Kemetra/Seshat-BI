@@ -21,7 +21,7 @@ conductor that sequences every verb end-to-end (`retail-orchestrate`). This skil
 the stage-scoped composition between them: "I have a new raw table -- walk me from
 nothing to a reviewed map." It advances **Source Ready -> Mapping Ready**, seeds the
 per-table `readiness-status.yaml`, and STOPS. It is a procedure the agent performs
-(agent-first, Principle I); `retail check` and the read-only profile are gates it
+(agent-first, Principle I); `seshat check` and the read-only profile are gates it
 CALLS, not a CLI subcommand.
 
 ## Scope boundary (read first)

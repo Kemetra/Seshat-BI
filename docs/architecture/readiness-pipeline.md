@@ -13,11 +13,11 @@
 ## What it is, and is not
 
 - It **does NOT replace** the constitution, the medallion playbook, the
-  source-mapping gate, or `retail check` / `retail validate`.
+  source-mapping gate, or `seshat check` / `retail validate`.
 - It **organizes them** into seven readiness stages (Source -> Mapping -> Silver ->
   Gold -> Semantic Model -> Dashboard -> Publish), each with explicit
   `status + evidence + blockers` (never a fabricated confidence number).
-- `retail check` and `retail validate` remain **gates/helpers the agent calls** --
+- `seshat check` and `retail validate` remain **gates/helpers the agent calls** --
   not the user-facing product. The agent + skills are the primary surface
   (Impeccable-style). `pbi-cli` / PBIP stays a **later adapter** (feature 016),
   not the core.
@@ -37,7 +37,7 @@ binds the existing layers into stages:
      source -> mapping -> silver -> gold -> semantic model -> dashboard -> publish
         | each stage's gate is an EXISTING check:
         v
-  A  GOVERNANCE CORE         retail check (static) + retail validate (live)
+  A  GOVERNANCE CORE         seshat check (static) + retail validate (live)
         |                    -- the gates the stages assert; unchanged
         v
   ENGINE / SUBSTRATE         pbi-cli (later adapter) ; Postgres medallion + PBIP
@@ -53,9 +53,9 @@ executes the sequence; the readiness status records the state.
 |-------|-----------------|----------------------|
 | Source Ready | profile review | `mappings/<t>/source-profile.md` |
 | Mapping Ready | source-mapping gate (Principle IV) | `source-map.yaml` + `assumptions.md` + `unresolved-questions.md` (CLEARED) |
-| Silver Ready | `retail check` S1-S8 | silver migration .sql |
-| Gold Ready | `retail check` + `retail validate` (live) | gold star migration + filled `reconciliation-report.md` |
-| Semantic Model Ready | `retail check` D1-D11/C1/R1/G6 + metric contracts | PBIP model + metric-contract artifacts |
+| Silver Ready | `seshat check` S1-S8 | silver migration .sql |
+| Gold Ready | `seshat check` + `retail validate` (live) | gold star migration + filled `reconciliation-report.md` |
+| Semantic Model Ready | `seshat check` D1-D11/C1/R1/G6 + metric contracts | PBIP model + metric-contract artifacts |
 | Dashboard Ready | metric-contract review | report designed against approved contracts |
 | Publish Ready | handoff review | BI handoff pack + publish approval |
 

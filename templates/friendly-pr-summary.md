@@ -9,7 +9,7 @@
  boundary) and `.claude/skills/friendly-pr-reviewer/SKILL.md` (the procedure).
 
  NARRATIVE, NOT A VERDICT. This is a plain-language presentation over the
- already-shipped `retail check --format review` envelope + readiness truth. It
+ already-shipped `seshat check --format review` envelope + readiness truth. It
  renders NO `merge_ready` boolean (that stays F025 pr-readiness-reviewer's
  surface) and NO numeric score/percentage/tally anywhere (hard rule #9). Every
  line traces to a field of the review envelope, the readiness truth, or a

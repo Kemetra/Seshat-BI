@@ -7,7 +7,7 @@ description: >-
   portfolio-wide open-blockers list. Use when someone asks "show the control room",
   "what is broken across all tables", or "which table do I fix next". READ-ONLY and
   invoke-and-present only: it AGGREGATES evidence that already exists (per-table
-  readiness-status.yaml / data-issues.md / blocking-reasons.md + recorded retail check
+  readiness-status.yaml / data-issues.md / blocking-reasons.md + recorded seshat check
   / retail validate results); it runs NO new validator, edits NO per-table file, clears
   NO blocker, and emits NO fabricated health/confidence score (every cell is a measured
   number traceable to a committed source).
@@ -24,7 +24,7 @@ evidence that already exists per table -- the portfolio-level sibling of
 ## Scope boundary (read first)
 
 - **Aggregates, never re-derives.** The only evidence shown is evidence already
-  committed: `retail check` WARNs, `retail validate` ERRORs (V-RC2/V-RC15/V-RC16), and
+  committed: `seshat check` WARNs, `retail validate` ERRORs (V-RC2/V-RC15/V-RC16), and
   the per-table `data-issues.md` / `blocking-reasons.md` / `readiness-status.yaml` rows.
   It runs NO new check.
 - **Read-only.** It never edits a per-table artifact, never clears a blocker, never
@@ -46,7 +46,7 @@ Every cell traces back to an existing committed source -- a JOIN, not a measurem
 
 | Control-room column | Source it aggregates | Severity |
 |---------------------|----------------------|----------|
-| static WARNs per table | recorded `retail check` exit + WARN lines | `warning` |
+| static WARNs per table | recorded `seshat check` exit + WARN lines | `warning` |
 | live findings per table | recorded `retail validate` V-RC2/V-RC15/V-RC16 ERRORs | `error` |
 | data-quality issues | the table's `data-issues.md` rows | as recorded |
 | open blockers | the table's `blocking-reasons.md` "Open blockers" rows | blocking |
@@ -100,7 +100,7 @@ invented score is tempting; it is forbidden.
 
 The skill modifies nothing: after a run, `git status` shows zero modified per-table
 `mappings/<table>/`, `data-issues.md`, or `blocking-reasons.md` files. It triggers no
-state-mutating `retail check` / `retail validate` run of its own.
+state-mutating `seshat check` / `retail validate` run of its own.
 
 ## See also
 
@@ -111,7 +111,7 @@ state-mutating `retail check` / `retail validate` run of its own.
 - The model + no-fake-confidence rule: `docs/readiness/readiness-model.md`; the stage
   sequence: `docs/readiness/readiness-pipeline.md`.
 - The gates it reads (never re-runs as a new check): the `retail-govern` /
-  `retail check` static surface, the `retail-validate` / `retail validate` live surface
+  `seshat check` static surface, the `retail-validate` / `retail validate` live surface
   (`src/seshat/validate.py`, V-RC2/V-RC15/V-RC16).
 - The conductor it plugs into: `.claude/skills/retail-orchestrate/SKILL.md`.
 - The roadmap row + hard rules: `docs/roadmap/roadmap.md` (F012, Layer 4; #7/#8/#9);

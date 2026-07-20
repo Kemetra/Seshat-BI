@@ -9,7 +9,7 @@ into an EXISTING repo. Covers FR-001..FR-006:
 * FR-003 refuses a non-empty target without --force;
 * FR-004 static scaffolding only -- no fabricated data/credentials;
 * FR-005 pure stdlib filesystem, no DB/network at module scope;
-* FR-006 the generated workspace passes `retail check` (clean baseline).
+* FR-006 the generated workspace passes `seshat check` (clean baseline).
 
 Deviation from plan.md (recorded, owner-review pending): the workspace does NOT
 call `kit_init.bootstrap()` / write `.seshat/compass.yaml`. A spike (see
@@ -147,7 +147,7 @@ def test_env_example_carries_no_real_values(target) -> None:
 def test_readme_points_at_the_readiness_flow(target) -> None:
     init_project(str(target))
     text = (target / "README.md").read_text(encoding="utf-8")
-    assert "retail check" in text or "check" in text.lower()
+    assert "seshat check" in text or "check" in text.lower()
 
 
 def test_scaffold_does_not_write_seshat_bootstrap(target) -> None:
@@ -327,7 +327,7 @@ def test_module_has_no_module_scope_db_or_network_import() -> None:
 
 
 # ---------------------------------------------------------------------------
-# FR-006 -- the generated workspace passes `retail check` (clean baseline).
+# FR-006 -- the generated workspace passes `seshat check` (clean baseline).
 # ---------------------------------------------------------------------------
 
 

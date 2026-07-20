@@ -49,7 +49,7 @@ WCAG contrast, colorblind-safe palette separation, and RTL/Arabic layout
 readiness. It is a REQUIRED `evidence[]` item on the EXISTING `dashboard_ready`
 gate (`docs/readiness/dashboard-ready.md`) -- an ADDITIVE evidence item,
 following the F034 "design approved vs page implemented" precedent: no new
-status, no new readiness stage, and no new `retail check` rule id.
+status, no new readiness stage, and no new `seshat check` rule id.
 
 It is NOT a re-derivation of contrast math (CT1 already computes that; this
 checklist CITES CT1's registered result -- see the `contrast` dimension
@@ -89,7 +89,7 @@ can NEVER contradict CT1's registered finding.
 | `ct1_result` | `<clean \| open-error: <finding text> \| parse-failure: <finding text> \| file-not-found>` |
 | `disposition` | `<reviewed-clean \| blocked>` -- derived from `ct1_result`, never set independently |
 | `reason` | `<required when disposition is blocked -- restate the CT1 finding verbatim, do not invent a different reason>` |
-| `citation` | `[<token_file path>, "retail check CT1 result for that path, captured <YYYY-MM-DD>"]` |
+| `citation` | `[<token_file path>, "seshat check CT1 result for that path, captured <YYYY-MM-DD>"]` |
 
 **Derivation rule (never violate)**: `ct1_result: clean` -> `disposition:
 reviewed-clean`. `ct1_result: open-error` / `parse-failure` / `file-not-found`
@@ -148,7 +148,7 @@ restated or reinvented per page).
 When the cited `token_file`, `palette_source`, or `layout_source` changes
 after this checklist was filled, this checklist becomes STALE evidence. There
 is NO automated timestamp/hash/diff detector for this (FR-008 forbids a new
-`retail check` rule) -- staleness is a human REVIEW-DISCIPLINE obligation
+`seshat check` rule) -- staleness is a human REVIEW-DISCIPLINE obligation
 checked at the next `dashboard_ready` design-review sign-off. A reviewer
 re-confirming a `pass` claim is responsible for noticing a cited file changed
 and re-filling this checklist before relying on it for a fresh claim.

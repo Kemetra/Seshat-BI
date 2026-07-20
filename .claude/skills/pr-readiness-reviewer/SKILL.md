@@ -50,7 +50,7 @@ It reads; it never writes these. Inputs, unchanged.
 - `mappings/<table>/readiness-status.yaml` -- `current_stage`, per-stage `status`,
   `approvals[]` (named owner + date), `blocking_reasons[]`.
 - `source-map.yaml` -- approval / mapping-gate CLEARED metadata (when the PR touches a mapping).
-- The PR's declared test plan, the recorded `retail check` / `retail validate` and CI
+- The PR's declared test plan, the recorded `seshat check` / `retail validate` and CI
   results, and the PR diff / file list (for the raw-data / secret / path scan).
 
 ### Derived evidence it WRITES
@@ -93,14 +93,14 @@ This skill turns that pattern into a repeatable read: it OBSERVES one PR plus th
 readiness evidence and RENDERS one structured verdict. It is the per-PR sibling of the
 F012 portfolio control room: F012 answers "which table is broken across the portfolio";
 this answers "is THIS pull request safe to merge, and what blocks it". It adds no new gate,
-no new validator, no `retail check` rule, no CLI verb, and no CI workflow (Principle VIII;
+no new validator, no `seshat check` rule, no CLI verb, and no CI workflow (Principle VIII;
 hard rule #8): the agent is the runtime.
 
 ## Scope boundary (read first)
 
 - **Aggregates and observes, never re-derives or gates.** Every verdict line traces back
   to an observed PR fact or a committed evidence file. It READS the recorded results of the
-  existing gates (`retail check` / `retail validate`) and the existing CI; it does NOT
+  existing gates (`seshat check` / `retail validate`) and the existing CI; it does NOT
   re-run them as a new check and adds no rule. Reading PR / CI / git state is read-only
   OBSERVATION, not a gate and not a mutation.
 - **Read-only (the boundary, verbatim).** The module cannot merge a PR, approve a PR
@@ -169,7 +169,7 @@ performs (`gh pr view`, `gh pr checks`, the PR diff). Read, never write, GitHub 
 ### 3. READ the committed readiness evidence the PR touches
 Read `mappings/<table>/readiness-status.yaml` (`current_stage`, per-stage `status`,
 `approvals[]`, `blocking_reasons[]`), `source-map.yaml` approval metadata (if the PR
-touches a mapping), the declared test plan, the recorded `retail check` / `retail validate`
+touches a mapping), the declared test plan, the recorded `seshat check` / `retail validate`
 and CI results, and the PR diff for the raw-data / secret / local-path scan. These are
 INPUTS; the module creates no new evidence file.
 
@@ -261,7 +261,7 @@ self-approve.
   portfolio roll-up); the invoke-and-interpret sibling: `.claude/skills/retail-validate/SKILL.md`.
 - The model + no-fake-confidence rule: `../../../docs/readiness/readiness-model.md`; the
   stage sequence: `../../../docs/readiness/readiness-pipeline.md`.
-- The gates it reads (never re-runs as a new check): the `retail-govern` / `retail check`
+- The gates it reads (never re-runs as a new check): the `retail-govern` / `seshat check`
   static surface, the `retail-validate` / `retail validate` live surface.
 - The roadmap row + hard rules: `../../../docs/roadmap/roadmap.md` (F025, cross-cutting;
   #7 / #8 / #9); Principles V, VII, VIII, IX. A filled worked example lives under

@@ -51,7 +51,7 @@
 ## Kit-level open decisions (inherited)
 
 - **[RESOLVED -- feature 002] D-namespace disambiguation.** ADR cleaning defaults are
-  `RC1-RC16`; the `retail check` checker keeps `D1-D8`. No collision.
+  `RC1-RC16`; the `seshat check` checker keeps `D1-D8`. No collision.
 - **[RESOLVED -- ADR 0003] per-table mapping artifact location.** This table's five
   artifacts live together under `mappings/retail_store_sales/`.
 - **[NEEDS CLARIFICATION: deferred `retail validate` live surface]** The live

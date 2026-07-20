@@ -13,7 +13,7 @@ A passport is **evidence transport, never authority**:
 
 - It records approvals that named humans already granted; it cannot grant one.
 - It cannot advance a readiness stage, clear a blocker, or stand in for the
-  gate (`retail check`) or a live validation run.
+  gate (`seshat check`) or a live validation run.
 - Every passport embeds this fixed statement in `authority_disclaimer`:
 
   > This passport records readiness statuses, evidence identities, and

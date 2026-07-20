@@ -15,7 +15,7 @@ sign-off; it never **grants** the sign-off (verify-slot-only, Principle V).
 ## The skills that produce it (already shipped)
 
 - **`evidence-pack-generator`** (roadmap F028) — assembles the evidence pack for a stage:
-  what artifacts exist, which checks passed (`retail check` / `retail validate` exit
+  what artifacts exist, which checks passed (`seshat check` / `retail validate` exit
   codes), and the standing blockers. Categorical status + named blockers only — **never a
   fabricated confidence/health/maturity score.**
 - **`approval-evidence-pack`** (roadmap F035, spec 063) — the approval-stage evidence pack

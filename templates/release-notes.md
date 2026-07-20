@@ -31,7 +31,7 @@
  CONSUME, NEVER RE-MEASURE  (FR-009)
    This note COMPOSES already-committed evidence. The generator READS the F028 evidence
    pack (-> "what became possible"), the F032 compatibility matrix (-> "what changed" +
-   "migration notes"), and the roadmap ledger + commit refs. It runs NO retail check /
+   "migration notes"), and the roadmap ledger + commit refs. It runs NO seshat check /
    retail validate, profiles NO source, opens NO DB connection, reads NO powerbi/. A
    missing input is recorded "evidence not available", never fabricated.
 

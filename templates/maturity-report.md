@@ -34,7 +34,7 @@
 
  CONSUME, NEVER RE-MEASURE; NEVER SELF-CONFIRM  (FR-009 / FR-010)
    The generator ASSESSES each rung from already-committed evidence + on-disk presence.
-   It runs NO retail check / retail validate, profiles NO source, opens NO DB connection,
+   It runs NO seshat check / retail validate, profiles NO source, opens NO DB connection,
    reads NO powerbi/. It never self-confirms a level: a named RELEASE OWNER confirms the
    reported level (Core Authority / Principle V). A missing input -> "evidence not
    available", never fabricated.

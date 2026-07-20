@@ -37,7 +37,7 @@ server. It embeds the packaged brand asset and contains no external requests.
 Offline (the default, zero network / zero DB):
 
 - **Source Ready / Mapping Ready / Silver Ready reach `pass`** -- backed by the
-  committed mapping-gate artifacts + static `retail check`.
+  committed mapping-gate artifacts + static `seshat check`.
 - **Gold Ready onward is `blocked` (deferred)** -- because Gold Ready's gate is the
   LIVE `retail validate`, which needs a reachable database. The demo draws this
   line honestly; it never fakes a live pass offline.

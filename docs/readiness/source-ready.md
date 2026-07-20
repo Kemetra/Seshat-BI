@@ -40,7 +40,7 @@ review. See `docs/source-intelligence.md` for how a filled copy contributes evid
 |-------|------|
 | Profile review | The numbers are recorded AND the semantic rows are PROPOSED (not invented), flagged for human confirmation |
 
-This stage has no `retail check` / `retail validate` gate. The gate is a review:
+This stage has no `seshat check` / `retail validate` gate. The gate is a review:
 confirm the mechanical numbers came from a read-only profiling pass over the landed
 source, and confirm each semantic proposal is marked as a proposal awaiting sign-off,
 not stated as fact.

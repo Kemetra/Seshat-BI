@@ -48,7 +48,7 @@ pip install -e ".[db]"       # psycopg2-binary
 cp .env.example .env         # fill locally; never commit real values
 ```
 
-The static `retail check` core is **stdlib-only** by design (no `pyyaml` import) -- keep
+The static `seshat check` core is **stdlib-only** by design (no `pyyaml` import) -- keep
 it that way; YAML-parsing logic belongs in `retail semantic-check`, not the static core.
 
 ## Before you commit
@@ -59,18 +59,18 @@ Run what CI runs (`.github/workflows/ci.yml`) locally:
 ruff format --check src tests   # formatting
 ruff check src tests            # lint (E, F, I)
 pytest -m unit                  # unit tests
-retail check                    # static governance gate (see docs/glossary.md for the rule families)
+seshat check                    # static governance gate (see docs/glossary.md for the rule families)
 retail semantic-check --repo .  # contract <-> DAX drift (L3)
 ```
 
-A pre-commit hook runs `retail check` automatically and blocks the commit on any
+A pre-commit hook runs `seshat check` automatically and blocks the commit on any
 ERROR-severity finding:
 
 ```bash
 pip install pre-commit && pre-commit install
 ```
 
-When `retail check` flags a rule id (e.g. `S4b`, `D7`, `G6`), the **`retail-govern`**
+When `seshat check` flags a rule id (e.g. `S4b`, `D7`, `G6`), the **`retail-govern`**
 skill maps the id to its meaning and fix; `docs/glossary.md` lists the families.
 
 ## Commit messages
@@ -95,7 +95,7 @@ feat: add layer-aware S4b guard-form check
    (`.github/pull_request_template.md`) prompts for what changed, the readiness
    stage touched, scope, tests, evidence, human decisions, and secret/data
    safety -- fill each section rather than deleting it.
-5. CI must be green (ruff, tests, `retail check`, `retail semantic-check`).
+5. CI must be green (ruff, tests, `seshat check`, `retail semantic-check`).
 
 ## Working on warehouse / Power BI changes
 

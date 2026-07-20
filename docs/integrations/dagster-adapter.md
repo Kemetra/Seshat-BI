@@ -55,7 +55,7 @@ authors truth." They are different writes; the adapter keeps them apart:
   writing `Gate status: CLEARED`, defining a metric / grain / PII disposition -- these are
   RULINGS. Dagster MUST NOT write any of them.
 - **How the two reconcile (the one sentence).** For mechanical stages (Silver Ready, Gold Ready)
-  Dagster writes the CHECK evidence (the `retail check` / `retail validate` exit + numbers);
+  Dagster writes the CHECK evidence (the `seshat check` / `retail validate` exit + numbers);
   whether that evidence MARKS the stage `pass` is Core Authority's record, written by Core
   Authority's process, not by Dagster's asset. For human-approval stages (Mapping Ready,
   Semantic Model publish-safety, Publish Ready) Dagster READS the committed approval and HALTS if
@@ -90,10 +90,10 @@ raw_source_file
 | `bronze_<table>` | build | load command | failed -> downstream skipped |
 | `source_profile` | build | profile command | failed -> downstream skipped |
 | `source_map` | HUMAN SEAM | `Gate status: CLEARED` + zero open rows; `approvals[]` | BLOCKS `silver_tables`; records open mapping blocker |
-| `silver_tables` | STOP (gated on `source_map`) | `retail check` exit 0 | failed/blocked -> downstream skipped |
-| `gold_tables` | STOP | `retail check` exit 0 | failed -> downstream skipped |
+| `silver_tables` | STOP (gated on `source_map`) | `seshat check` exit 0 | failed/blocked -> downstream skipped |
+| `gold_tables` | STOP | `seshat check` exit 0 | failed -> downstream skipped |
 | `metric_contracts` | read | approved metric contracts | n/a (reads; authors none) |
-| `semantic_model` | STOP + HUMAN SEAM | `retail check` + contract-binding read; semantic-model approval | failed/blocked -> downstream skipped |
+| `semantic_model` | STOP + HUMAN SEAM | `seshat check` + contract-binding read; semantic-model approval | failed/blocked -> downstream skipped |
 | `dashboard_blueprint` | gated | Semantic Model Ready | skipped if upstream skipped |
 | `handoff_pack` | build | generate-handoff command | failed -> downstream skipped |
 | `publish_execution_evidence` | HUMAN SEAM | `publish_ready = pass`; TRIGGERS F016 | BLOCKS / FAILS CLOSED; triggers nothing |
@@ -110,7 +110,7 @@ Dagster MAY orchestrate exactly these steps; the list is explicit and closed:
 
 - Sequence all seven readiness stages in the asset graph (decide none).
 - RUN: load bronze, profile source, run dbt or SQL migrations (silver / gold), run
-  `retail check`, run `retail validate`, run the semantic check, generate the handoff pack.
+  `seshat check`, run `retail validate`, run the semantic check, generate the handoff pack.
 - WRITE DERIVED run-evidence (`orchestration/dagster/run-evidence/<run-id>.md`): per-asset gate
   command, exit code, measured numbers, timestamps, commit sha, blocked/skipped reasons + named
   owners; surface those measured results as `evidence[]` / `blocking_reasons[]` on the affected

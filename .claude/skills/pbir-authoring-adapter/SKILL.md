@@ -46,7 +46,7 @@ this bounded adapter only* -- the static core stays forbidden from writing PBIR.
 4. **Evidence, not approval.** A successful write is evidence formatting was applied;
    it moves NO readiness stage and emits NO score (hard rule #9). The
    `dashboard_ready` / design-review sign-off stays a named human's decision.
-5. **The core polices; the adapter writes.** `retail check` R2 is the read-only core
+5. **The core polices; the adapter writes.** `seshat check` R2 is the read-only core
    lint over the written report; the writer (`src/seshat/pbir_theme_apply.py`) is the
    adapter. The core never writes PBIR (ADR 0015 decision 1).
 

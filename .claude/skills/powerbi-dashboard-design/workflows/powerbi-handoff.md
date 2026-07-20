@@ -108,7 +108,7 @@ any automation now:
 - It would bind each visual to its already-approved metric contract and mapped
   field (still no metric invented -- the contract is the source of truth).
 - It would set the model reference as a RELATIVE path (the same constraint
-  `retail check` R1 enforces) -- never an absolute/remote ref, never a real host.
+  `seshat check` R1 enforces) -- never an absolute/remote ref, never a real host.
 - It would remain GATED on the same gate: no data-bound generation before
   `semantic_model_ready` is `pass` and the design-review sign-off is recorded.
 

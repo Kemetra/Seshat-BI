@@ -19,7 +19,7 @@
 
 ## Purpose
 
-A retail-BI PR carries governance truth in machine shapes: the `retail check` review
+A retail-BI PR carries governance truth in machine shapes: the `seshat check` review
 envelope (`build_review_result`), the SARIF projection, and the readiness truth
 (`readiness-status.yaml`). A reviewer or non-technical owner reading a PR today must
 open several JSON/YAML artifacts and reconstruct, by hand, what actually changed and
@@ -31,7 +31,7 @@ measures / dashboards / evidence changed; which readiness stages remain `pass` /
 `warning` / `blocked`; which blockers are NEW versus RESOLVED (when a base identity set
 is supplied); who must review or approve; and EXACTLY ONE recommended next action. It
 creates no truth -- it re-states, in plain language, what the shipped engines already
-decided. It runs no new analysis, adds no `retail check` rule, opens no database, and
+decided. It runs no new analysis, adds no `seshat check` rule, opens no database, and
 takes no action on the PR.
 
 ## The F025 boundary (read first)
@@ -58,7 +58,7 @@ gate/verdict; this tool owns the plain-language change story.
 ## Inputs
 
 - **The review envelope** (`review_integration.build_review_result`, exposed via
-  `retail check --format review`): `outcome` (`ok` | `blocked` only -- there is no
+  `seshat check --format review`): `outcome` (`ok` | `blocked` only -- there is no
   `input_defect` outcome value; an absent/unproducible envelope is a separate honesty
   branch, handled as `envelope is None`), `checks_run`, `changed_files`,
   `changed_readiness_state`, `affected_stages`, `findings[]`, `blocking_findings[]`,
@@ -151,7 +151,7 @@ opts in by setting the Actions repository VARIABLE `POST_FRIENDLY_PR_SUMMARY` to
 `"true"`. When set, the existing `.github/workflows/ci.yml` `check` job's "Friendly PR
 summary" step:
 
-1. Re-runs the already-produced review as `retail check --format review [--commit-range
+1. Re-runs the already-produced review as `seshat check --format review [--commit-range
    BASE..HEAD] > review.json` (no new analysis).
 2. Calls `scripts/post_friendly_pr_summary.py`, a thin wrapper (not part of the tested
    core) that loads the envelope, best-effort loads a single changed

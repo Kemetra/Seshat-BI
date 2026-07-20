@@ -73,7 +73,7 @@ It reads; it never writes these.
   the summary surfaces).
 - The 10 committed section sources (see the section contract below): source-profile,
   source-map.yaml, assumptions.md / unresolved-questions.md / ADRs, the
-  `mappings/<table>/metrics/` contracts, the recorded `retail check` / `retail
+  `mappings/<table>/metrics/` contracts, the recorded `seshat check` / `retail
   validate` results + F012 roll-up, the F010 semantic-model summary, the F011/F011A
   dashboard design, the FILLED F013 handoff pack, `data-issues.md`, and the F015
   reconciliation ledger (+ F014 drift).
@@ -137,7 +137,7 @@ missing/unfilled/blank-template section source -> that section is `blocked` with
   execution adapter (F016), no publish/deploy. Any live signal must already be
   recorded as committed evidence (e.g. by `retail validate`) before the pack can cite
   it.
-- **Adds no gate.** It runs no new validator, adds no `retail check` rule, defines no
+- **Adds no gate.** It runs no new validator, adds no `seshat check` rule, defines no
   new readiness stage. It composes results other tools already recorded.
 - **No fake confidence, no count.** Readiness is the four explicit statuses
   (`not_started` / `blocked` / `warning` / `pass`) + `evidence[]` +
@@ -160,7 +160,7 @@ back to that source's repo-relative path.
 | 02 | source-map-summary | `source-map.yaml` (the Principle-IV mapping-gate artifact; F008 consumes it, does not produce it) |
 | 03 | assumptions-and-decisions | `assumptions.md` + `unresolved-questions.md` + relevant ADRs |
 | 04 | metric-contracts | `mappings/<table>/metrics/` filled contracts (F009/F010) |
-| 05 | validation-summary | recorded `retail check` + `retail validate` results + the F012 data-quality roll-up |
+| 05 | validation-summary | recorded `seshat check` + `retail validate` results + the F012 data-quality roll-up |
 | 06 | semantic-model-summary | F010 / `retail semantic check` recorded output |
 | 07 | dashboard-summary | F011 dashboard design + F011A visual foundation |
 | 08 | handoff-pack | the table's FILLED F013 `templates/handoff/bi-handoff-pack.md` instance (EMBED / reference; never re-authored) |
@@ -256,7 +256,7 @@ the named human via Core Authority; the pack reads-and-displays it.
 After a run, `git status` shows the only new/modified files are the two derived pack
 files under `mappings/<table>/` (`evidence-pack-index.md`, `evidence-pack-summary.md`).
 No source artifact is modified, `readiness-status.yaml` / `approvals[]` is unchanged,
-and no stage moved to `pass`. The skill triggered no `retail check` / `retail validate`
+and no stage moved to `pass`. The skill triggered no `seshat check` / `retail validate`
 run of its own and opened no DB connection.
 
 ## What the agent must NOT do
@@ -268,7 +268,7 @@ run of its own and opened no DB connection.
 - Do NOT emit a numeric confidence / health score or a completeness count.
 - Do NOT read a live database or PBIP model; do NOT call the Power BI execution adapter
   (F016); do NOT publish / deploy.
-- Do NOT add a `retail check` rule, define a new readiness stage, or alter a gate.
+- Do NOT add a `seshat check` rule, define a new readiness stage, or alter a gate.
 - Do NOT silently reconcile disagreeing sources or choose a winner (Principle V).
 - Do NOT inline C086 / retail_store_sales specifics into the pack, the templates, or
   the doc.

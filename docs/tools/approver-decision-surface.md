@@ -67,7 +67,7 @@ with no score anywhere.
 - **Emits NO score, count, or percentage** anywhere -- no "N blockers", no
   readiness percentage, no confidence value. Items are ordered and shown,
   not tallied.
-- **Adds NO `retail check` rule and NO gate.** No new blocking reason, no
+- **Adds NO `seshat check` rule and NO gate.** No new blocking reason, no
   stage move; its presence/absence is never a gate requirement.
 - **Reads ONLY the two committed artifacts** (`readiness-status.yaml`,
   `unresolved-questions.md`); opens no DB, Power BI, or network connection.

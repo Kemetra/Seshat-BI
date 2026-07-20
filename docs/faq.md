@@ -8,7 +8,7 @@ source; follow it for the full story. For terms and rule ids, see `docs/glossary
 **What is Seshat BI?**
 A standalone, agent-first retail BI **readiness** service: it walks a source through seven
 readiness stages (`raw` → `marts` → Power BI) with evidence and gates at each step. The
-agent is the interface; `retail check` / `retail validate` are gates it calls. See
+agent is the interface; `seshat check` / `retail validate` are gates it calls. See
 `README.md` and `docs/readiness/readiness-model.md`.
 
 **Is this part of the Retail Tower OS orchestrator?**
@@ -44,13 +44,13 @@ Dashboard, Publish.
 
 ## Checks & gates
 
-**What's the difference between `retail check` and `retail validate`?**
-`retail check` is the **static** gate — it runs over committed text (SQL/TMDL/PBIR), needs
+**What's the difference between `seshat check` and `retail validate`?**
+`seshat check` is the **static** gate — it runs over committed text (SQL/TMDL/PBIR), needs
 no database, and is stdlib-only. `retail validate` is the **live** surface — it reconciles
 a materialized table against a running Postgres (read-only). Static-green is necessary but
 not sufficient; semantic correctness needs the live boundary. See `docs/glossary.md`.
 
-**`retail check` flagged a rule id like `S4b` / `D7` / `G6`. What do I do?**
+**`seshat check` flagged a rule id like `S4b` / `D7` / `G6`. What do I do?**
 The `retail-govern` skill maps each id to its meaning and fix; `docs/glossary.md` lists the
 families (S = SQL, D = DAX/TMDL, C = connection/secrets, R = PBIR, G = git hygiene,
 P = process). The live registry in `src/seshat/rules/` is authoritative.
@@ -116,7 +116,7 @@ No — a contract is *intent + binding*, never DAX, SQL, a visual, or a check. I
 
 **How do I set up and run the checks locally?**
 The package needs **Python 3.13+**: `pip install -e ".[dev]"`, then run `ruff format
---check`, `ruff check`, `pytest -m unit`, `retail check`, `retail semantic-check --repo .`
+--check`, `ruff check`, `pytest -m unit`, `seshat check`, `retail semantic-check --repo .`
 (what CI runs). Full detail in `CONTRIBUTING.md`.
 
 **Are dbt and Dagster required?**

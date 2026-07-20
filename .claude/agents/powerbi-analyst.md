@@ -26,10 +26,10 @@ This repo ships a static governance checker. Before treating any DAX/PBIP/SQL wo
 as done, run it from the repo root:
 
 ```
-retail check
+seshat check
 ```
 
-`retail check` parses the committed TMDL/PBIR/SQL/git text and exits non-zero on any
+`seshat check` parses the committed TMDL/PBIR/SQL/git text and exits non-zero on any
 `error`-severity violation (warnings are reported but do not fail). The authoritative
 rule catalog — ids, what each parses, and the violation signal — is spec §5 in
 `docs/superpowers/specs/2026-06-23-pbi-governance-layer-design.md`. **Do not duplicate
@@ -67,6 +67,6 @@ stays trustworthy (spec §7). Honor them yourself:
 ## Workflow
 
 1. Make the DAX/PBIP/SQL change.
-2. Run `retail check` from the repo root.
+2. Run `seshat check` from the repo root.
 3. For each finding, read its rule id, open the `retail-govern` skill for the id→fix
    mapping, fix the violation, and re-run until clean.

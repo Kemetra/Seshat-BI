@@ -35,7 +35,7 @@ room does not fold in.
   check and calls NONE of those surfaces' own comparators itself -- it reads what they
   already recorded and cites the path.
 - **No new gate / rule / approval mechanism.** This is a Tier-5 read/summarize/derive
-  companion (roadmap binding rule), not another governance engine. `retail check`'s rule
+  companion (roadmap binding rule), not another governance engine. `seshat check`'s rule
   inventory and exit behavior are unchanged by this skill's existence.
 - **No score, ever.** Only the four readiness spine statuses, the shipped categorical
   finding enums (relayed verbatim), and measured magnitudes (counts/rates/deltas) traced
@@ -132,7 +132,7 @@ readiness stage moves to `pass`, no database is opened, nothing is published.
 - The aggregator library + snapshot format: `src/seshat/portfolio_watch.py`.
 - The tool doc: `docs/tools/portfolio-watch.md`.
 - The feature spec: `specs/131-portfolio-watch/spec.md` (+ `data-model.md`, `contracts/`).
-- The gates it reads (never re-runs): `retail-govern` / `retail check`,
+- The gates it reads (never re-runs): `retail-govern` / `seshat check`,
   `retail-semantic-check`, `retail-validate`; the readiness model:
   `docs/readiness/readiness-model.md`; the source-drift precedent:
   `docs/readiness/source-drift.md`.

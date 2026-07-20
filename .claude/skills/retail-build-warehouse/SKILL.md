@@ -30,7 +30,7 @@ carry the transform logic; an engine would emit only boilerplate). See
 - **You NEVER execute.** Do not open a DB connection, do not run the migration, do
   not run the Phase-5 PK dry-run or the Phase-6 orphan/reconcile checks -- those need
   live data and are the deferred DB-write seam (creds + the `db` extra, Principle
-  VIII). Authoring -> static `retail check` -> a HUMAN applies the SQL -> only then
+  VIII). Authoring -> static `seshat check` -> a HUMAN applies the SQL -> only then
   `retail-validate`. Never claim the silver/gold tables exist or were validated.
 
 ## Preconditions (STOP unless all hold)
@@ -51,7 +51,7 @@ carry the transform logic; an engine would emit only boilerplate). See
 ## Silver: the load-bearing Phase-5 order (NUMBERED -- do NOT reorder)
 
 Author `warehouse/migrations/NNNN_create_silver_<table>.sql`. The order is
-load-bearing; a reordering passes `retail check` (the gate is order-blind) yet is
+load-bearing; a reordering passes `seshat check` (the gate is order-blind) yet is
 WRONG. Transcribe in this exact sequence, adapting the proven `0003`:
 
 1. **`src` CTE -- TRIM every text column** (kills whitespace-variant phantom distincts).
@@ -111,7 +111,7 @@ STOP and raise an `unresolved-questions.md` row (do not guess) if:
 
 ## After authoring (the handoff)
 
-1. Run `retail check` (static, local, no DB) -- the authored SQL must exit 0 (S1-S7).
+1. Run `seshat check` (static, local, no DB) -- the authored SQL must exit 0 (S1-S7).
 2. **Self-review the order:** diff your silver SQL against the numbered checklist
    above. The checker is order-blind; this manual step is the only catch for a
    reordering bug (e.g. `''`->NULL before the junk filter).
@@ -120,7 +120,7 @@ STOP and raise an `unresolved-questions.md` row (do not guess) if:
    then the gold file, in numeric order. Then `retail validate --source-map
    mappings/<table>/source-map.yaml`.
 
-**`retail check` exit 0 is NECESSARY, not SUFFICIENT.** It proves form (snake_case,
+**`seshat check` exit 0 is NECESSARY, not SUFFICIENT.** It proves form (snake_case,
 schemas, idempotent shape, `-1` member present, generate_series used). It does NOT
 prove correctness -- right row count, no sentinel collision, complete enums, penny
 reconciliation. That is proven ONLY by the live `retail-validate` after a human

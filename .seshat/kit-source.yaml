@@ -35,7 +35,7 @@ verbs:
   - id: retail-validate
     purpose: "live checks; needs db extra + DSN, else [PENDING LIVE PROFILE]"
   - id: retail-govern
-    purpose: "static check (retail check)"
+    purpose: "static check (seshat check)"
 
 # Hard-stops the agent READS as orientation (enforcement is the lint rules + G6/C2, not this file).
 hard_stops:

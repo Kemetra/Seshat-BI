@@ -24,7 +24,7 @@ unrecorded assumptions.
 Behavior is governed by the contract
 `contracts/interview/business-knowledge-interview.yaml`; the detailed protocol is
 `specs/121-business-knowledge-interview/contracts/interview-protocol.md`. The
-static rules DS1-DS5 (`retail check`) verify the recorded outcome, not the
+static rules DS1-DS5 (`seshat check`) verify the recorded outcome, not the
 conversation.
 
 ## When to use

@@ -329,7 +329,7 @@ these guard the TOOL against arbitrary data, distinct from the cleaning traps ab
     comment will false-trip it.
 
 Hard-won when an independent reviewer (Codex) reviewed the first end-to-end PR and
-found nine defects a green self-test + green `retail check` + green `retail validate`
+found nine defects a green self-test + green `seshat check` + green `retail validate`
 all missed (ADR 0006). These continue the tool-robustness set:
 
 17. **A comment-stripper feeding an identifier rule MUST be quote-aware.** A `--` or

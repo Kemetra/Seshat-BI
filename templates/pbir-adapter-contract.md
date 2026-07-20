@@ -45,7 +45,7 @@ be written.
   a partial/corrupt file.
 - **Determinism:** byte-identical output on re-run (stable key order, no timestamps).
 - **Validation:** written JSON is valid + keeps its `$schema`; round-trip stable;
-  `retail check` R1 (model-ref) and R2 (report authoring-lint) stay green.
+  `seshat check` R1 (model-ref) and R2 (report authoring-lint) stay green.
 
 ## The authorization gate
 

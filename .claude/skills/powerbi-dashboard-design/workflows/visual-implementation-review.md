@@ -120,7 +120,7 @@ The page is reviewed in git like code -- the reviewer reads plain text, never an
       never freehand-edited).
 - [ ] No opaque `.pbix` is committed -- the page is plain-text PBIR (FR-002).
 - [ ] The PBIR references the governed semantic model by a RELATIVE path -- never an
-      absolute/remote ref, never a real host (FR-007; the same constraint `retail check`
+      absolute/remote ref, never a real host (FR-007; the same constraint `seshat check`
       R1 enforces).
 - [ ] One visual container per approved measure-bearing visual; no visual the binding map
       did not approve (no orphan).

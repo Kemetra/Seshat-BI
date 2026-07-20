@@ -46,7 +46,7 @@ merged (or is BLOCKED with unresolved items), **stop** — do not start NEXT PRO
 | Capability | Source PR | Current role |
 |------------|-----------|--------------|
 | Route registry manifest | #62 | Route integrity / machine-checkable navigation (`routes.yaml` + static rule A1) |
-| Structured findings output | #63 | Optional structured observability (`retail check --format json`; default text unchanged) |
+| Structured findings output | #63 | Optional structured observability (`seshat check --format json`; default text unchanged) |
 | Never-execute guard | #64 | Protects the no-execution invariant (rule B1; module-scope DB/network imports blocked) |
 | KPI decision-question index | #65 | Business-question navigation into KPI domains |
 | KPI coverage scorecard | #66 | Analytical coverage expressed as statuses/blockers (never a score) |

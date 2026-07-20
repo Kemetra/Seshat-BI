@@ -17,7 +17,7 @@
   the L3 new predicate ops were assessed and DEFERRED for want of a consumer/target
   (see `docs/superpowers/specs/`). Additionally, the **idea-bank execution sequence
   (A1/B2/B1/F7/F8) SHIPPED 2026-06-27** (PRs #62-#66) -- five gated items drawn from
-  the exploratory idea bank; A1 + B1 add two static rules to the `retail check` gate
+  the exploratory idea bank; A1 + B1 add two static rules to the `seshat check` gate
   (see the Idea-Bank section below). This doc records what was delivered, the one
   original feature still parked, and the companion tier's true state.
 - **Product identity:** **Seshat BI** is the product (package alias `Seshat_BI`;
@@ -57,7 +57,7 @@ for any deferred/gated item).
   toolchain (pbi-tools) or a real predicate consumer (L3) appears.
 
 > The kit already ships an agent-first constitution, a source-mapping gate, the
-> Spec-Kit foundation, the C086 worked example, the static `retail check` gate
+> Spec-Kit foundation, the C086 worked example, the static `seshat check` gate
 > (the original sequence plus A1/B1 from the idea-bank sequence),
 > and a `retail validate` live surface. This roadmap reconciles that foundation
 > (feature 001-004 + the orchestration/builder slices) with the readiness
@@ -72,7 +72,7 @@ blockers, never a hallucinated confidence score**:
 |----------|----------------------|
 | Where are we now? | `current_stage` in the readiness status |
 | What artifacts exist? | `evidence[]` (committed files) |
-| What checks passed? | stage `checks` + `retail check` / `retail validate` exit codes |
+| What checks passed? | stage `checks` + `seshat check` / `retail validate` exit codes |
 | What blockers remain? | `blocking_reasons[]` |
 | Who must approve? | `approvals[]` (named owner) |
 | What is the next allowed action? | `next_action` (one step) |
@@ -103,7 +103,7 @@ The kit's surfaces, top (what the user touches) to bottom (later adapter):
 | 1 | **Agent Experience** | the agent + skills are the interface; CLI is a gate it calls | shipped (conductor + verbs) |
 | 2 | **Source Intelligence** | profile, business meaning, Arabic retail dictionary, drift detector | shipped (F006-F007, F014) |
 | 3 | **Mapping Governance** | the source-mapping gate, grain confidence, mapping diff | shipped (gate + F008) |
-| 4 | **Validation & Readiness** | `retail check` / `retail validate` + the readiness spine, QC room, ledger | shipped (checks + F005, F012, F015) |
+| 4 | **Validation & Readiness** | `seshat check` / `retail validate` + the readiness spine, QC room, ledger | shipped (checks + F005, F012, F015) |
 | 5 | **Metrics & Semantic Model** | metric contracts, KPI packs, governed PBIP model | shipped (F009-F010) |
 | 6 | **Dashboard & Delivery** | dashboard design, handoff pack; Power BI execution adapter | shipped (F011, F011A, F013); **F016 execution adapter remains (official Power BI MCP / connection; execution-only, gated, last)** |
 
@@ -192,10 +192,10 @@ sequences before it or assumes it exists.
 | **F032** | Adapter Compatibility Matrix | Maintenance Automation | `026` | spec-only -- same no-consumer reason as F031 |
 | **F033** | Release & Maturity Management | Maintenance Automation / Skill | `027` | spec-only -- same no-consumer reason as F031 |
 | **F034** | Visual Implementation MVP | Dashboard & Delivery (manual build, F016-independent) | `039` | **Authoring slice SHIPPED 2026-06-26** (spec `Finalized`) -- the three generic artifacts exist: the trace template (`templates/visual-implementation-trace.md`), the Dashboard Ready evidence-item edit (`docs/readiness/dashboard-ready.md`), and the review workflow (`.claude/skills/powerbi-dashboard-design/workflows/visual-implementation-review.md`). The **built page itself remains a human Power BI Desktop action** (US-1/SC-001/SC-007/FR-013 UNMET by design -- FR-008/FR-009 forbid agent-generated PBIR): `mappings/retail_store_sales/design/dashboard-layout.md` (approved design) + the committed PBIR report (`powerbi/RetailStoreSales.Report/`, page still empty) await a human's Desktop build, which the gate (`semantic_model_ready: pass` + design-review sign-off) already permits. |
-| **F035** | Approval Evidence Pack | Product Module (artifact-writing) | `063` | **Authored 2026-07-02** -- `.claude/skills/approval-evidence-pack/` + `templates/approval-evidence-pack.md`. Composes ONE pre-approval evidence pack for ONE (table, stage) so a named human reads one traceable document before signing; generic across all seven stages via a stage parameter. Reads committed artifacts only (per-stage readiness doc, `readiness-status.yaml`, per-contract AL1 signal, `parked-on.yaml`, pending contracts); writes only `mappings/<table>/approval-evidence-pack-<stage>.md` with an EMPTY approval slot; adds no `retail check` rule and no runtime code (the agent is the runtime). Composes AFTER F028 (late-stage 10-section pack) and BEFORE F027 (records the signature); structurally incapable of writing `approvals[]` / moving a stage / emitting a score/count (Principle V; hard rule #9). On-disk spec dir `063-approval-evidence-pack` (dir != F-number; this row wins, per the tier note). |
-| **F036** | Cross-Table Lineage / Impact Analysis | Product Module (read-only) | `099` | **Spec-built 2026-07-05** -- `.claude/skills/cross-table-lineage/` + `templates/lineage-trace.md`, `templates/module-contract.md`. A READ-ONLY aggregator that derives a column-level lineage trace (source-map -> migration SQL -> metric contract -> TMDL measure -> dashboard visual) from committed artifacts; creates no truth, opens no DB, emits no score. A contract<->column or measure<->contract link with no explicit machine-readable cross-reference stays a candidate (never auto-promoted to `proven`); FR-010 (a promotion heuristic) is left OPEN for a named human. No `retail check` rule. |
-| **F037** | Consumer-Facing Data Dictionary | Product Module (artifact-writing) | `101` | **Spec-built 2026-07-05** -- `.claude/skills/consumer-data-dictionary/` + `templates/consumer-data-dictionary.md`. Composes a per-table analyst-facing dictionary (gold columns + approved metric contracts -> plain "what does this column/measure mean") from committed artifacts only; never invents meaning (retail-kpi owns it) -- a technical-only source-map rationale is verbatim-cited-or-gapped (FR-008/Q1 OPEN for a named human). No `retail check` rule. |
-| **F039** | Dashboard Accessibility + RTL/Arabic Readiness | Dashboard & Delivery (Stage-6 evidence item) | `102` | **Spec-built 2026-07-05** -- `templates/a11y-rtl-readiness-checklist.md` + a filled instance under `mappings/<table>/design/`. A required, reviewed Dashboard-Ready evidence item covering WCAG contrast (citing `CT1`, not a new rule), colorblind-safe palette separation, and RTL/Arabic layout direction. NOT a `retail check` rule -- its offered rule id was DECLINED as a duplicate of `CT1`. Two OPEN owner rulings: whether every page is RTL-in-scope by default, and whether an open finding blocks vs warns dashboard_ready. |
+| **F035** | Approval Evidence Pack | Product Module (artifact-writing) | `063` | **Authored 2026-07-02** -- `.claude/skills/approval-evidence-pack/` + `templates/approval-evidence-pack.md`. Composes ONE pre-approval evidence pack for ONE (table, stage) so a named human reads one traceable document before signing; generic across all seven stages via a stage parameter. Reads committed artifacts only (per-stage readiness doc, `readiness-status.yaml`, per-contract AL1 signal, `parked-on.yaml`, pending contracts); writes only `mappings/<table>/approval-evidence-pack-<stage>.md` with an EMPTY approval slot; adds no `seshat check` rule and no runtime code (the agent is the runtime). Composes AFTER F028 (late-stage 10-section pack) and BEFORE F027 (records the signature); structurally incapable of writing `approvals[]` / moving a stage / emitting a score/count (Principle V; hard rule #9). On-disk spec dir `063-approval-evidence-pack` (dir != F-number; this row wins, per the tier note). |
+| **F036** | Cross-Table Lineage / Impact Analysis | Product Module (read-only) | `099` | **Spec-built 2026-07-05** -- `.claude/skills/cross-table-lineage/` + `templates/lineage-trace.md`, `templates/module-contract.md`. A READ-ONLY aggregator that derives a column-level lineage trace (source-map -> migration SQL -> metric contract -> TMDL measure -> dashboard visual) from committed artifacts; creates no truth, opens no DB, emits no score. A contract<->column or measure<->contract link with no explicit machine-readable cross-reference stays a candidate (never auto-promoted to `proven`); FR-010 (a promotion heuristic) is left OPEN for a named human. No `seshat check` rule. |
+| **F037** | Consumer-Facing Data Dictionary | Product Module (artifact-writing) | `101` | **Spec-built 2026-07-05** -- `.claude/skills/consumer-data-dictionary/` + `templates/consumer-data-dictionary.md`. Composes a per-table analyst-facing dictionary (gold columns + approved metric contracts -> plain "what does this column/measure mean") from committed artifacts only; never invents meaning (retail-kpi owns it) -- a technical-only source-map rationale is verbatim-cited-or-gapped (FR-008/Q1 OPEN for a named human). No `seshat check` rule. |
+| **F039** | Dashboard Accessibility + RTL/Arabic Readiness | Dashboard & Delivery (Stage-6 evidence item) | `102` | **Spec-built 2026-07-05** -- `templates/a11y-rtl-readiness-checklist.md` + a filled instance under `mappings/<table>/design/`. A required, reviewed Dashboard-Ready evidence item covering WCAG contrast (citing `CT1`, not a new rule), colorblind-safe palette separation, and RTL/Arabic layout direction. NOT a `seshat check` rule -- its offered rule id was DECLINED as a duplicate of `CT1`. Two OPEN owner rulings: whether every page is RTL-in-scope by default, and whether an open finding blocks vs warns dashboard_ready. |
 
 > **Numbering (spec-dir vs F-number) for this tier.** Spec dirs were allocated
 > from the next free on-disk slot, giving **spec-dir = F-number - 6** for F024-F033
@@ -215,14 +215,14 @@ A separate, gated five-PR sequence taken from the **idea bank**
 exploratory; selection there was not a commitment -- each item still passed the
 normal feature discipline (small PR, one family, review, CI green) before
 shipping. All five are now **merged to `main`** (PRs #62-#66). Two add static
-`retail check` rules (A1, B1); three are docs/CLI surface (B2, F7, F8). None
+`seshat check` rules (A1, B1); three are docs/CLI surface (B2, F7, F8). None
 advances a readiness stage, grants an approval, or touches the gated F016
 execution path.
 
 | Idea | Name | Layer | What shipped | PR / commit |
 |------|------|-------|--------------|-------------|
 | **A1** | Route Registry Manifest | 1 (routing integrity) | `docs/routing/routes.yaml` (mirrors the knowledge-map routes 1-22) + static rule **A1** (`src/seshat/rules/routes.py`): a `built` route target must resolve to a tracked file; a `planned` target must not yet exist (stale marker) -- honest both directions, read-only, lazy `yaml`. | #62 (`abbbd73`) |
-| **B2** | Structured Findings Output | 4 (observability) | `retail check --format {text,json}`; default text output preserved **byte-for-byte** (proven by diff vs `main`); opt-in `run_json()` emits `{"findings":[...],"exit_code":N}`; `Finding.to_dict()` + `FindingDict`. No rule behavior changed. | #63 (`ca1431c`) |
+| **B2** | Structured Findings Output | 4 (observability) | `seshat check --format {text,json}`; default text output preserved **byte-for-byte** (proven by diff vs `main`); opt-in `run_json()` emits `{"findings":[...],"exit_code":N}`; `Finding.to_dict()` + `FindingDict`. No rule behavior changed. | #63 (`ca1431c`) |
 | **B1** | Never-Execute Invariant Guard | 4 (invariant protection) | Static rule **B1** (`src/seshat/rules/never_execute.py`): stdlib-`ast` scan of the static-core modules (cli/runner/core/registry/rules) for a **module-scope** DB/network import (psycopg2, requests, socket, http, urllib.request, ...). Lazy in-handler imports stay allowed; `urllib.parse` allowed; an unparseable module fails loud. Never opens a connection. | #64 (`9d12589`) |
 | **F7** | KPI Decision-Question Index | 5 (KPI usability) | A "Decision questions this domain answers" section in all 11 `skills/retail-kpi-knowledge/domains/*.md`; each question routes to a real `contracts/*.md` (Seeded) or an honest `--`/Planned marker. Pure docs in the KPI meaning layer; no contract meaning changed. | #65 (`ae471aa`) |
 | **F8** | KPI Coverage Scorecard | 5 (analytical coverage) | A per-table coverage scorecard template (`skills/retail-kpi-knowledge/references/kpi-coverage-scorecard-template.md`): coverage as explicit **status + named blocker** (Covered / Blocked -- missing field / Blocked -- needs business definition / Planned / Out of scope), **never a numeric score** (hard rule #9); Covered requires contract Seeded AND fields present; grants no readiness. | #66 (`9d782f8`) |
@@ -231,10 +231,10 @@ execution path.
 | **PP1** | Publish-pack Completeness Gate | 1 (publish integrity) | Static rule **PP1** (`src/seshat/rules/publish_pack.py`): every committed `mappings/<table>/handoff/bi-handoff-pack.md` must have all six required-section index rows (a-f) present and filled (non-`<placeholder>`/non-GAP) -- else ERROR. Reuses G6's placeholder mechanism over the index table's resolution column only. Checks the publish-approval slot is present-and-filled ONLY, never grants it (Principle V). Zero findings on `main`. | 049 (this sequence) |
 | **SC1** | Stale-Marker Sweep / Status-Claim Reconciler | 1 (status integrity) | Static rule **SC1** (`src/seshat/rules/status_claims.py`): a hand-curated manifest (`docs/quality/status-claims.yaml`) of prose status claims (doc + anchor + claimed-artifact + claimed-status) is reconciled against tracked-file evidence -- a `planned` marker on a shipped artifact, or a `built` claim for a missing one, is an ERROR. A1's resolver shape applied to prose; checks only listed claims (never free-scans). Seeded with one corrected stale-doc defect; zero findings on `main`. | 050 (this sequence) |
 | **DF1** | Parked-On Map / dependency-edge reconciler | 1 (dependency integrity) | Static rule **DF1** (`src/seshat/rules/parked_on.py`): a hand-curated manifest (`docs/quality/parked-on.yaml`) of parked-on edges (blocked + parked_on + doc + anchor + evidence, optional shipped_when_tracked) is reconciled against tracked-file evidence -- a missing blocker/evidence, an absent anchor, or a parked-but-shipped contradiction is an ERROR. SC1's resolver shape applied to dependency edges; v1 maps the F016 bottleneck cluster (pbi-tools, L3-ops, F031-F033). Adds the seam, never F016. Zero findings on `main`. | 051 (this sequence) |
-| **IL1** | Idea-Bank Memory Seam | 1 (memory integrity) | NOT a `retail check` rule -- a docs/data + workflow-read seam. Adds a human-curated structured ledger (`docs/roadmap/shipped-ideas.yaml`, idea-id -> {status, pr_sha, f_row}) read by the idea-engine Memory stage as authoritative known-history (alongside the prose SHIPPED/SETTLED appendix; authoritative on conflict, surfaced never silently rewritten). A pytest guard enforces the ledger contract. Strictly read/evidence -- never assigns a roadmap F-row (a human does); the engine never appends (Ground stays single owner of git-derived ship-status). Rule count unchanged (38). | 052 (this sequence) |
+| **IL1** | Idea-Bank Memory Seam | 1 (memory integrity) | NOT a `seshat check` rule -- a docs/data + workflow-read seam. Adds a human-curated structured ledger (`docs/roadmap/shipped-ideas.yaml`, idea-id -> {status, pr_sha, f_row}) read by the idea-engine Memory stage as authoritative known-history (alongside the prose SHIPPED/SETTLED appendix; authoritative on conflict, surfaced never silently rewritten). A pytest guard enforces the ledger contract. Strictly read/evidence -- never assigns a roadmap F-row (a human does); the engine never appends (Ground stays single owner of git-derived ship-status). Rule count unchanged (38). | 052 (this sequence) |
 | **SC2** | Rule-Count Claim Reconciler | 1 (count integrity) | Static rule **SC2** (`src/seshat/rules/rule_count_claims.py`): a hand-curated manifest (`docs/quality/rule-count-claims.yaml`) of prose "N rules" count claims (id + doc + anchor + claimed-count) is reconciled against the AUTHORITATIVE count -- `len(docs/rules/rules-manifest.json)` read with stdlib `json`, never by importing the rules package (preserving the stdlib-only never-execute core). SC1's resolver shape applied to the rule-COUNT facet SC1 delegated out. Seeded with the one corrected stale glossary count; zero findings on `main`. Off-spine idea-bank integrity rule (sibling SC1/DF1); no F-number/readiness stage self-assigned (a human may assign one). Rule count N -> N+1. | 065 (off-spine) |
 
-> **Effect on the static gate:** A1 and B1 took the registered `retail check`
+> **Effect on the static gate:** A1 and B1 took the registered `seshat check`
 > rule set from 31 to **33**; the idea-loop sequence then added **A3 (34)**, **B3
 > (35)**, **PP1 (36)**, **SC1 (37)**, and **DF1 (38)**; subsequent off-spine
 > integrity rules brought the set to **44**, most recently **SC2** (the rule-count
@@ -266,7 +266,7 @@ scale boundaries. Nothing here advances a readiness stage or grants an approval.
 These are the ordering constraints the roadmap encodes. They reinforce the
 existing constitution (Principles I, IV, V, VIII), they do not replace it:
 
-1. **Agent-first, not CLI-first.** The agent is the interface; `retail check` /
+1. **Agent-first, not CLI-first.** The agent is the interface; `seshat check` /
    `retail validate` are gates/helpers the agent calls.
 2. **No source goes directly to silver.** Mapping Ready must `pass` first.
 3. **No silver without** a source profile + source map + declared grain +
@@ -293,10 +293,10 @@ existing constitution (Principles I, IV, V, VIII), they do not replace it:
   execution-only, gated + last), Fabric deployment, ML, forecasting, a universal
   ERP connector, and fully automated mapping approval.
 - The shipped F005-F015 slices are docs/skills/templates (agent-first, hard rule
-  #8); they added NO new `retail check` rule (the static gate was 27 rules at that
+  #8); they added NO new `seshat check` rule (the static gate was 27 rules at that
   slice; it grew to 31 after S8 + D9-D11 + G6, and then to **33** after the
   idea-bank A1 + B1 rules -- see the Idea-Bank execution sequence above) and
-  NO new runtime validator beyond the already-shipped `retail check` / `retail
+  NO new runtime validator beyond the already-shipped `seshat check` / `retail
   validate`. Each shipped feature has its own spec under `specs/`.
 
 ## See also

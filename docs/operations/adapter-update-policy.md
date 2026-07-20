@@ -1,7 +1,7 @@
 # Adapter Update Policy -- the adapter-specific overlay: compatibility review, the Lane B/C split, and the no-fork-tax rule
 
 - **Status:** Authored (the F031 enumerated deliverable; docs/operations, no runtime
-  code, no CI/bot config, no `retail check` rule).
+  code, no CI/bot config, no `seshat check` rule).
 - **Authority category:** Maintenance Automation  *(sub-axis: none / `--`)* -- per
   `docs/architecture/product-modules.md` (the five-category contract, F024 / on-disk
   spec 018). Maintenance Automation runs WITHOUT a per-invocation human trigger and
@@ -37,7 +37,7 @@ them. It defines HOW they are upgraded, not WHAT they do.
 > No update in ANY lane may bypass a readiness gate or move any stage to `pass`;
 > automerge lives entirely below the readiness spine.
 
-An adapter update that could regress a gate (`retail check`, `retail validate`, the
+An adapter update that could regress a gate (`seshat check`, `retail validate`, the
 silver/gold build, the semantic-model checks) MUST re-pass that gate before merge. No
 adapter update auto-promotes a stage or clears a blocker.
 
@@ -82,7 +82,7 @@ trigger and RECORDS the evidence -- it does not self-decide compatibility (Princ
 
 The compatibility review MUST name:
 
-- **the gates it could regress** (which readiness gates -- `retail check`,
+- **the gates it could regress** (which readiness gates -- `seshat check`,
   `retail validate`, the silver/gold build, the semantic-model checks -- this adapter
   version could affect),
 - **the named reviewer** (a person/role, never "the agent" and never blank), and

@@ -10,7 +10,7 @@ presentation defects against the thirteen-anti-pattern catalog): this workflow
 asks whether the WHOLE report, taken together, answers its committed Report
 Intent -- an intent question no page answers, a page mixing two purposes, a
 diagnostic report with no visible driver, and so on (FR-018). This workflow
-checks and cites; it does not redesign anything and it is not a `retail check`
+checks and cites; it does not redesign anything and it is not a `seshat check`
 gate (data-model.md D8) -- it is decision SUPPORT, not enforcement.
 
 ## Scope (read first)

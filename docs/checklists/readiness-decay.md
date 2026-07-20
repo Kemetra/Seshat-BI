@@ -5,7 +5,7 @@ Planning (docs/templates; no runtime code) -- DESIGN ONLY, mirroring
 agent acting on their behalf, up to the human-only-reviewer boundary) follows
 to raise a `stale_pass` signal by hand, per
 `docs/patterns/readiness-decay.md`, and to clear it once a human has acted.
-This adds NO new `retail check` rule and NO new gate -- the existing Source
+This adds NO new `seshat check` rule and NO new gate -- the existing Source
 Ready / stage-approval review is the gate; this checklist only makes its
 staleness discipline explicit and repeatable. ASCII only.
 

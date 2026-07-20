@@ -1,7 +1,7 @@
 # Dependency Update Policy -- how every dependency and toolchain bump is classified, checked, and merged safely
 
 - **Status:** Authored (the F031 enumerated deliverable; docs/operations, no runtime
-  code, no CI/bot config, no `retail check` rule).
+  code, no CI/bot config, no `seshat check` rule).
 - **Authority category:** Maintenance Automation  *(sub-axis: none / `--`)* -- per
   `docs/architecture/product-modules.md` (the five-category contract, F024 / on-disk
   spec 018). Maintenance Automation runs WITHOUT a per-invocation human trigger
@@ -36,7 +36,7 @@ than re-stating it.
 > No update in ANY lane may bypass a readiness gate or move any stage to `pass`;
 > automerge lives entirely below the readiness spine.
 
-An update that could regress a gate (`retail check`, `retail validate`, the silver/gold
+An update that could regress a gate (`seshat check`, `retail validate`, the silver/gold
 build, the semantic-model checks) MUST re-pass that gate before merge. It never
 auto-promotes a stage and never clears a blocker. Automerge is a mechanical action in
 the dependency / CI plane only -- it does NOT define business meaning, approve a metric
@@ -68,7 +68,7 @@ effect. The highest blast radius wins; the lowest-friction label never overrides
 
 ### An update that could change a readiness gate's behavior
 
-An update to a `retail check` rule dependency, a validator library, or anything that
+An update to a `seshat check` rule dependency, a validator library, or anything that
 could change how a gate decides is at minimum **Lane B**: the affected gate MUST
 re-pass, and the PR MUST state which gate it touches. No such update is Lane A.
 
@@ -83,7 +83,7 @@ lane's mandatory named-human review. A red check blocks the merge regardless of 
 | ruff format check | already in `.github/workflows/ci.yml` |
 | ruff lint | already in `.github/workflows/ci.yml` |
 | `pytest -m unit` | already in `.github/workflows/ci.yml` |
-| `retail check` | already in `.github/workflows/ci.yml` |
+| `seshat check` | already in `.github/workflows/ci.yml` |
 | `retail validate` fixture mode | if available (the live surface fixture mode) |
 | semantic check fixture mode | if available |
 | dbt compile/build smoke | once the dbt adapter exists (F029) |
@@ -121,7 +121,7 @@ the check. The note MAY add further invariants but MUST assert at least these th
    BI read `silver` / `bronze`; the gold-only read surface is intact.
 2. **No new runtime dependency on the static core's import path unless explicitly
    intended and named (Principle VIII).** The DB driver stays an OPTIONAL, lazily-imported
-   extra; the update does not pull an optional/dev dependency into the `retail check`
+   extra; the update does not pull an optional/dev dependency into the `seshat check`
    core import chain.
 3. **No fork / vendor / re-implement to take the update (Principle II, no fork tax).**
    The update is taken by upgrading the dependency, with no local patch an upstream bump
@@ -148,7 +148,7 @@ Maturity Management).
 ## What this policy MUST NOT do (the forbidden set)
 
 - Automerge any Lane B or Lane C update, or any update with a red/absent required check.
-- Bypass, skip, or weaken any readiness gate (`retail check`, `retail validate`, the
+- Bypass, skip, or weaken any readiness gate (`seshat check`, `retail validate`, the
   silver/gold build, the semantic-model checks) via an update.
 - Move any readiness stage to `pass`, clear a blocker, or self-approve -- through an
   update PR or its automerge (Core Authority owns truth; Principle V).
@@ -164,8 +164,8 @@ Maturity Management).
 ## How the policy is enforced (the runtime is existing)
 
 The required-check runtime is the EXISTING CI (`.github/workflows/ci.yml`: ruff format
-check, ruff lint, `pytest -m unit`, `retail check`) plus a named human reviewer. This
-policy adds NO new runtime, NO `retail check` rule, NO validator, and NO CLI verb. The
+check, ruff lint, `pytest -m unit`, `seshat check`) plus a named human reviewer. This
+policy adds NO new runtime, NO `seshat check` rule, NO validator, and NO CLI verb. The
 OPTIONAL bot config (`.github/dependabot.yml` / `renovate.json`) is PLANNED, not created:
 if later added it ENCODES these lanes (Lane A auto-eligible, Lane B/C review-required,
 grouped by package class) and is itself subject to this policy. The dependabot-vs-renovate
@@ -201,7 +201,7 @@ stage to `pass`. (Mirrors F012's "all stages" cross-cutting framing.)
   `docs/operations/adapter-compatibility-matrix.md` (F032, on-disk spec 026).
 - The category home (Maintenance Automation): `docs/architecture/product-modules.md`
   (F024 / on-disk spec 018).
-- The required-check runtime: `.github/workflows/ci.yml`; the `retail check` static
+- The required-check runtime: `.github/workflows/ci.yml`; the `seshat check` static
   surface and the `retail validate` live surface.
 - The principles: `.specify/memory/constitution.md` (Principles II, III, V, VIII, IX);
   hard rule #9, `docs/roadmap/roadmap.md`.

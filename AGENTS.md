@@ -1,7 +1,7 @@
 # AGENTS.md -- operating rules for agents in this repo
 
 Seshat BI is **agent-first**: you (the agent) are the interface; the CLI
-gates (`retail check`, `retail validate`) are helpers you CALL, never the product.
+gates (`seshat check`, `retail validate`) are helpers you CALL, never the product.
 This file is the short operating contract. The full law is
 `.specify/memory/constitution.md`; the spine is `docs/readiness/readiness-model.md`.
 
@@ -40,7 +40,7 @@ This file is the short operating contract. The full law is
   work". Record it in the status + `blocking-reasons.md`; then STOP.
 - Readiness is `status + evidence + blockers`, NEVER a fabricated confidence
   number. A `pass` MUST cite `evidence`. Do not emit a score (scoring is deferred).
-- `retail check` exit 0 is NECESSARY, not SUFFICIENT -- semantic correctness is
+- `seshat check` exit 0 is NECESSARY, not SUFFICIENT -- semantic correctness is
   proven only by the live `retail validate`. Do not let green read as "correct".
 
 ## Live DB steps -- graceful deferred mode
@@ -72,7 +72,7 @@ loop lives only in the conductor.
 
 Kit / tooling verbs (outside the medallion sequence): `retail-init` (bootstrap the
 Compass-Driven kit substrate + route a new user to a first profile) ;
-`retail-scaffold` (author a NEW `retail check` rule, or `--doctor` an existing rule's
+`retail-scaffold` (author a NEW `seshat check` rule, or `--doctor` an existing rule's
 wiring -- the authoring sibling of `retail-govern`, which interprets rule findings).
 
 ## See also
@@ -100,7 +100,7 @@ Verbs the agent drives:
 - `kpi-contract-builder` -- drive the shipped kpi_contracts engine: assess answerability, list the decisions to approve, preview with per-field provenance, then draft/finalize -- never self-grants approval
 - `retail-build-warehouse` -- author silver/gold SQL; stop before executing
 - `retail-validate` -- live checks; needs db extra + DSN, else [PENDING LIVE PROFILE]
-- `retail-govern` -- static check (retail check)
+- `retail-govern` -- static check (seshat check)
 
 Hard-stops (orientation the agent reads; enforcement is the lint rules + G6/C2, not this file):
 - never_self_grant_approval

@@ -20,7 +20,7 @@ never self-grants). The authoritative delivered ledger remains
 > approval-console, evidence-pack-generator, dbt/dagster adapters,
 > approval-evidence-pack, cross-table-lineage, consumer-data-dictionary,
 > a11y-rtl-readiness-checklist (all live under `.claude/skills/`) — nor the
-> idea-bank waves that grew the static `retail check` gate from 27 to **56
+> idea-bank waves that grew the static `seshat check` gate from 27 to **56
 > registered rules** (67 manifest entries). Because several capabilities this
 > draft frames as "new" (see M4/M5/M6/M7/M9) already ship **as agent skills**,
 > read those milestones as *"add a CLI-verb wrapper / packaging story over an
@@ -107,7 +107,7 @@ retail = "retail.cli:main"
 The current CLI already includes:
 
 ```text
-retail check
+seshat check
 retail validate
 retail semantic-check
 retail value-check
@@ -148,7 +148,7 @@ retail demo init/load/run/report
 
 ### 2.7 Agent operating contract already exists
 
-`AGENTS.md` already states that Seshat BI is **agent-first**: the agent is the interface, while CLI gates like `retail check` and `retail validate` are helpers the agent calls.
+`AGENTS.md` already states that Seshat BI is **agent-first**: the agent is the interface, while CLI gates like `seshat check` and `retail validate` are helpers the agent calls.
 
 It also defines hard stops:
 
@@ -177,7 +177,7 @@ The next roadmap must avoid rebuilding existing shipped surfaces.
 | Already shipped / present          | Do not repeat                                                                         |
 | ---------------------------------- | ------------------------------------------------------------------------------------- |
 | Seven-stage readiness spine        | Do not create a second readiness model                                                |
-| `retail check`                     | Do not create a duplicate static gate                                                 |
+| `seshat check`                     | Do not create a duplicate static gate                                                 |
 | `retail validate`                  | Do not create a second validation CLI                                                 |
 | `semantic-check` / `value-check`   | Do not create another metric drift/value checker                                      |
 | DAX generator                      | Do not create another measure generator before improving contracts                    |
@@ -367,10 +367,10 @@ The repo has installation instructions, but the experience is still developer-or
 ```bash
 git clone
 pip install -e ".[dev]"
-retail check
+seshat check
 ```
 
-The README currently documents editable dev install and `retail check`.
+The README currently documents editable dev install and `seshat check`.
 
 ### Desired Product Experience
 
@@ -502,7 +502,7 @@ Runtime + tests.
 
 `AGENTS.md` already defines operating rules and lists agent-driven verbs.
 
-The CLI already supports JSON output for `retail check --format json`.
+The CLI already supports JSON output for `seshat check --format json`.
 
 The demo report command also supports text/json output.
 

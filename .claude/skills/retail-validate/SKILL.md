@@ -11,7 +11,7 @@ description: >-
 
 # retail-validate
 
-`retail check` proves everything provable from committed text. `retail validate`
+`seshat check` proves everything provable from committed text. `retail validate`
 proves the four things only a running database can show, on the MATERIALIZED rows
 (constitution Principle VIII; `src/seshat/validate.py`). This skill runs it and
 maps each finding to the one place to fix it -- the live sibling of

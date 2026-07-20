@@ -190,7 +190,7 @@ The console adds no new validator and no new gate. It is the missing write-back 
 - It does NOT decide, self-approve, or self-grant a stage.
 - It does NOT auto-accept a recommended default.
 - It does NOT emit a numeric confidence/health score (hard rule #9).
-- It adds NO `retail check` rule, NO CLI verb, NO Python, NO DB connection, NO Power BI
+- It adds NO `seshat check` rule, NO CLI verb, NO Python, NO DB connection, NO Power BI
   execution (that is F016, parked). The agent is the runtime.
 - It inlines NO C086 / pharmacy specifics; C086 is cited as a filled instance only
   (Principle VII).

@@ -21,7 +21,7 @@ Power BI report's visuals -- writing the PBIR/PBIP JSON directly, no external to
 | Adapter D -- visual geometry (position/size/z) | **SHIPPED** (2026-07-06, PR #216) | `retail pbir-set-geometry` -> `src/seshat/pbir_geometry.py` |
 | Core lint R2 (polices written report.json) | SHIPPED | `src/seshat/rules/pbir.py` |
 
-Everything above is green on `main` (`retail check` exit 0; full `pytest -m unit`
+Everything above is green on `main` (`seshat check` exit 0; full `pytest -m unit`
 passing). The four verbs chain: generate a theme -> apply it to a report -> format
 individual visuals -> lay out (position/size/stack order) existing bound visuals.
 

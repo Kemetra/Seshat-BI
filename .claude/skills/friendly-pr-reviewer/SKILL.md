@@ -7,7 +7,7 @@ description: >-
   who must approve, and exactly one next action. Use when someone asks "explain this PR
   in plain language", "what does this review envelope actually mean", or wants a
   non-technical summary of a PR's governance findings WITHOUT opening JSON/YAML. It is
-  a NARRATIVE over already-shipped truth (`retail check --format review`, readiness
+  a NARRATIVE over already-shipped truth (`seshat check --format review`, readiness
   truth), NOT a merge-safety verdict -- see the boundary note against F025
   pr-readiness-reviewer below. It renders NO merge_ready boolean and NO score; asked
   for either, it declines and cites the rule.
@@ -115,7 +115,7 @@ story. Asked to decide whether a PR is safe to merge, this skill DECLINES and po
 
 - **Presentation over shipped truth, never a second analysis engine.** Every summary
   line traces to a field of the review envelope, the readiness truth, or a
-  fingerprint. It re-runs no rule, opens no DB, and adds no `retail check` rule.
+  fingerprint. It re-runs no rule, opens no DB, and adds no `seshat check` rule.
 - **No fake confidence, no verdict.** No numeric score/percentage/tally anywhere
   (rule #9); no `merge_ready` boolean anywhere (that stays F025's surface).
 - **Read-only; takes no action on the PR.** It cannot approve, merge, dismiss a
@@ -141,7 +141,7 @@ The deterministic core is `seshat.pr_summary` (`render_summary`, `classify_chang
 `mask`, `pick_next_action`, `compose_comment`, `find_existing`). To render a summary by
 hand over an already-produced review:
 
-1. **Produce the review envelope**: `retail check --format review [--commit-range
+1. **Produce the review envelope**: `seshat check --format review [--commit-range
    BASE..HEAD] > review.json` (an already-shipped surface; no new analysis).
 2. **Load readiness truth** (optional but recommended): parse the relevant
    `mappings/<table>/readiness-status.yaml` into a plain mapping.

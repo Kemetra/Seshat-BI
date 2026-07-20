@@ -125,7 +125,7 @@ Write the ledger at `readiness.status: warning`,
 `ratification.ratified_by:` **EMPTY** -- you are structurally forbidden to fill it.
 Then STOP and print:
 
-> Run `retail check` (DL7 validates this ledger's shape). Then a named owner must
+> Run `seshat check` (DL7 validates this ledger's shape). Then a named owner must
 > ratify it, apply it with the `pbir-*` verbs, render the report in Power BI Desktop,
 > and run `screenshot-review` to judge the result. Do NOT self-ratify. Do NOT apply.
 

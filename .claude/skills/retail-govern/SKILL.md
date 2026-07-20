@@ -3,7 +3,7 @@ name: retail-govern
 description: >-
   Run the Seshat BI governance checker and interpret its findings. Use when
   someone asks to check, validate, or gate Power BI / DAX / TMDL / PBIR / SQL
-  work in the Seshat BI repo, when `retail check` reports a rule
+  work in the Seshat BI repo, when `seshat check` reports a rule
   violation, or when you need to know what a rule id (D8, C2, S2, G1, …) means
   and where to fix it. Invoke-and-interpret only: this skill does NOT build
   models, run pbi-cli, or auto-fix — it runs the checker and maps ids to fixes.
@@ -11,7 +11,7 @@ description: >-
 
 # retail-govern
 
-Seshat BI's conventions are enforced by a static checker, `retail check`. This
+Seshat BI's conventions are enforced by a static checker, `seshat check`. This
 skill teaches you to **run it, read its findings, and map each rule id to the file
 and fix it points at**. The authoritative catalog is `docs/glossary.md` (the
 "Static check rules" section), which mirrors the live registry in
@@ -32,7 +32,7 @@ single place to change — then stop.
 From the repo root:
 
 ```
-retail check
+seshat check
 ```
 
 It parses the committed TMDL / PBIR / SQL / git text — **no Power BI Desktop, no
@@ -111,7 +111,7 @@ under `src/seshat/rules/`.
 
 Report the failing ids, their locators, and the one fix each needs. Hand DAX/PBIP
 fixes to the `powerbi-analyst` agent; SQL fixes belong in `warehouse/`. Then **stop** —
-re-running `retail check` to confirm green is the user's (or agent's) next call, not an
+re-running `seshat check` to confirm green is the user's (or agent's) next call, not an
 automated loop this skill performs.
 
 ## Orchestration

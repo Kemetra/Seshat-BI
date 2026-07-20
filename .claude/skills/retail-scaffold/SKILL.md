@@ -4,7 +4,7 @@ description: >-
   Author a NEW static governance rule's boilerplate, or verify an existing rule's
   wiring for drift, in the Seshat BI repo -- an invoke-and-interpret wrapper over the
   `retail scaffold` CLI verb. Use when someone asks to "add a new governance rule",
-  "scaffold a rule", "create a retail check rule", "wire a new rule", "author a rule
+  "scaffold a rule", "create a seshat check rule", "wire a new rule", "author a rule
   stub", or "check rule-wiring drift / is rule X fully wired", or runs `retail
   scaffold`. Author mode WRITES exactly three targets (a stub rule module, a failing
   test stub, and the EXPECTED_RULE_IDS insertion) and PRINTS the remaining follow-ups
@@ -19,7 +19,7 @@ description: >-
 
 # retail-scaffold
 
-The authoring front door for a NEW `retail check` rule. Adding a rule means wiring the
+The authoring front door for a NEW `seshat check` rule. Adding a rule means wiring the
 same **five places** every time; doing it by hand silently under-governs a rule when a
 place is missed (a shipped rule once had no glossary row). This skill runs the
 `retail scaffold` CLI verb, which automates the mechanical part with a strict
@@ -29,7 +29,7 @@ write/print split, and interprets its output.
 
 Both wrap a governance CLI verb; they do opposite jobs:
 
-- **`retail-govern`** -- INTERPRET existing `retail check` findings: map a reported rule
+- **`retail-govern`** -- INTERPRET existing `seshat check` findings: map a reported rule
   id (`D8`, `C2`, `S2`, `G1`, …) to its meaning and fix. It reasons about rules that
   already exist.
 - **`retail-scaffold`** (this skill) -- AUTHOR a NEW rule + verify its wiring. It
@@ -74,7 +74,7 @@ PRINTS (for the human to run / apply -- never written by the helper):
 - the import + `__all__` edit for `src/seshat/rules/__init__.py`.
 
 Then: fill the stub with real logic, replace the failing test with a real one, run the
-printed regen commands, apply the printed edits, and let `retail check` + the suite
+printed regen commands, apply the printed edits, and let `seshat check` + the suite
 decide it is wired. Refuses (no writes) on an invalid id, an already-registered id, or
 an existing stub module.
 
@@ -92,7 +92,7 @@ it.
 
 ## After a scaffold -- the fix loop
 
-If a freshly authored (or edited) rule then trips `retail check`, switch to the
+If a freshly authored (or edited) rule then trips `seshat check`, switch to the
 `retail-govern` skill to map the finding id to its fix -- that is govern's job, not
 this skill's.
 
@@ -101,4 +101,4 @@ this skill's.
 - The CLI verb + write/print helper: `src/seshat/scaffold.py` (`FIVE_PLACES` is the
   authoritative wiring-place list); the spec: `specs/062-scaffold-rule-generator/`.
 - The interpret sibling: `.claude/skills/retail-govern/SKILL.md` (map a rule id → fix).
-- Rule families + ids: `docs/glossary.md`; the gate: the `retail check` static surface.
+- Rule families + ids: `docs/glossary.md`; the gate: the `seshat check` static surface.

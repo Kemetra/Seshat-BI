@@ -7,7 +7,7 @@ Status note: Planning (docs/templates; no runtime code).
 Stage 5. A governed Power BI semantic model whose measures each bind to an
 APPROVED metric contract. "Ready" means: the PBIP model is committed and clean
 (relationships set, date table marked, PascalCase measures in display folders,
-parameterized connection with NO real host), `retail check` passes the DAX/TMDL
+parameterized connection with NO real host), `seshat check` passes the DAX/TMDL
 + connection rules, and every measure traces to a metric contract owned by the
 metric owner. Maps to playbook Phase 7 (the model half, before any dashboard).
 
@@ -31,7 +31,7 @@ the first worked example / a filled instance, not the schema.)
 
 | Gate | Scope | Pass condition |
 |------|-------|----------------|
-| `retail check` | D1-D11 (DAX/TMDL), C1 (connection params), R1 (relative ref), G6 (no real host) | exit 0 |
+| `seshat check` | D1-D11 (DAX/TMDL), C1 (connection params), R1 (relative ref), G6 (no real host) | exit 0 |
 | Metric-contract review | every measure | each measure traces to an approved contract |
 
 ## Statuses
@@ -40,13 +40,13 @@ the first worked example / a filled instance, not the schema.)
 |--------|--------------|
 | `not_started` | Gold not `pass`, OR no FILLED, owner-approved metric contracts exist for this table yet (the F009 template + F010 checker are shipped; the per-table contracts under `mappings/<table>/metrics/` are not authored) -- default for new tables |
 | `blocked` | a D/C/R/G6 finding, a measure with no contract, or a real host in PBIP params (G6) -- see Blocking reasons |
-| `warning` | `retail check` clean but a non-fatal item recorded (e.g. an accepted display-folder deviation); never auto-promotes |
-| `pass` | model committed + clean, `retail check` exit 0, every measure traces to an approved contract, owner signed off |
+| `warning` | `seshat check` clean but a non-fatal item recorded (e.g. an accepted display-folder deviation); never auto-promotes |
+| `pass` | model committed + clean, `seshat check` exit 0, every measure traces to an approved contract, owner signed off |
 
 ## Blocking reasons
 
 - Prior stage `gold_ready` is not `pass` (gold star / live validation incomplete).
-- A `retail check` D1-D11 DAX/TMDL finding.
+- A `seshat check` D1-D11 DAX/TMDL finding.
 - A C1 connection-parameter finding or R1 relative-reference finding.
 - G6: a real connection host baked into PBIP params (must be parameterized).
 - A measure with no corresponding metric contract.
@@ -57,7 +57,7 @@ the first worked example / a filled instance, not the schema.)
 ## Required owner / approval
 
 Metric owner approves the metric contracts. A `pass` records that approval as
-evidence (contract name + owner + date). Mechanical checks (`retail check`) need
+evidence (contract name + owner + date). Mechanical checks (`seshat check`) need
 no human; the contract binding does.
 
 ## Next allowed action

@@ -39,6 +39,6 @@ def init_project_main(args: argparse.Namespace) -> int:
         print(f"wrote {path}")
     print(
         f"\nscaffolded workspace at {args.name}. "
-        "Next: `retail check` to verify a clean baseline."
+        "Next: `seshat check` to verify a clean baseline."
     )
     return 0

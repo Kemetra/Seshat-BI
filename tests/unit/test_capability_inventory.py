@@ -531,5 +531,5 @@ def test_readme_names_four_authorities() -> None:
     readme = (_REPO_ROOT / "docs" / "capabilities" / "README.md").read_text(
         encoding="utf-8"
     )
-    for authority in ("seshat status", "seshat next", "seshat doctor", "retail check"):
+    for authority in ("seshat status", "seshat next", "seshat doctor", "seshat check"):
         assert authority in readme, f"README does not name {authority!r}"

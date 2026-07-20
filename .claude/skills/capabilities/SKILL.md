@@ -52,12 +52,12 @@ its output.
 
 ## What it is NOT
 
-- **Not a gate.** It adds no `retail check` rule; its presence/absence never
+- **Not a gate.** It adds no `seshat check` rule; its presence/absence never
   blocks anything.
 - **Not a readiness surface.** It reads no `readiness-status.yaml`, moves no
   stage, grants no approval. For per-table readiness use `seshat status`; for
   the next allowed action use `seshat next`; for repo drift use
-  `seshat doctor`; for the governance gate use `retail check`.
+  `seshat doctor`; for the governance gate use `seshat check`.
 - **Not a scoring surface.** No maturity/confidence/completeness/health value
   is ever emitted, and nothing is ranked by a computed number.
 - **Not a writer.** It writes nothing, connects to no database, runs no

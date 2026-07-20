@@ -119,7 +119,7 @@ def _run_validate_body(args: argparse.Namespace) -> int:
         print(
             "error: `retail validate` needs the optional DB driver.\n"
             "       install it with:  pip install 'retail[db]'\n"
-            "       (the static `retail check` core stays dependency-free).",
+            "       (the static `seshat check` core stays dependency-free).",
             file=sys.stderr,
         )
         return 1

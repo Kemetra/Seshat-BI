@@ -216,7 +216,7 @@ def _preflight_config(
         raise _ContractError(
             "error: `retail value-check` needs the optional DB driver.\n"
             "       install it with:  pip install 'retail[db]'\n"
-            "       (the static `retail check` core stays dependency-free)."
+            "       (the static `seshat check` core stays dependency-free)."
         )
     return config
 

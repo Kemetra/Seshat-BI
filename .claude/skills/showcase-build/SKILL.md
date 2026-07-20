@@ -77,7 +77,7 @@ its own.
 ### Approved step it EXECUTES
 
 - none. It composes and writes ONE local file, then STOPS. It runs no
-  `retail check` / `retail validate` of its own, opens no database, and
+  `seshat check` / `retail validate` of its own, opens no database, and
   calls no Power BI execution adapter.
 
 ### Forbidden operations

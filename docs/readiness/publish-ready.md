@@ -39,7 +39,7 @@ per table to `mappings/<table>/handoff/`) and `templates/handoff/handoff-review-
 | All prior stages | stages 1-6 each `pass` in the readiness status file |
 | Handoff review | a human review of the pack (completeness + caveats + reconciliation) |
 
-No new validator is introduced here. `retail check` / `retail validate` evidence
+No new validator is introduced here. `seshat check` / `retail validate` evidence
 is inherited from stages 3-5; this stage adds the handoff review on top.
 
 ## Statuses

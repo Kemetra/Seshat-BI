@@ -100,7 +100,7 @@ Each subsection scopes a *future* PR. None is executed in this document.
   `@register` / `EXPECTED_RULE_IDS` pattern. Every route must resolve to a real file or carry
   a planned/deferred marker.
 - **Validation commands (to run in that PR):** `python -m pytest tests/unit/test_rules_wiring.py`;
-  the repo's static check (`retail check`) if it covers rules; a manifest-resolution check that
+  the repo's static check (`seshat check`) if it covers rules; a manifest-resolution check that
   every referenced path exists or is marked planned.
 - **Acceptance criteria:** manifest exists and every entry resolves or is honestly marked
   planned; if a rule was added, it is registered AND present in `EXPECTED_RULE_IDS` and its
@@ -271,7 +271,7 @@ gated on the prior step; run only after its gate condition is met and the plan i
   point to an existing file or a planned/deferred marker; add the rule only if it fits the
   existing `@register` / `EXPECTED_RULE_IDS` pattern; stdlib-only; read-only (no execution).
 - **Validation commands:** `python -m pytest tests/unit/test_rules_wiring.py`; manifest path
-  resolution check; `retail check` if applicable.
+  resolution check; `seshat check` if applicable.
 - **Acceptance criteria:** manifest resolves end-to-end or marks planned; rule (if any) wired +
   in `EXPECTED_RULE_IDS`; no runtime/route execution.
 - **Stop rules:** unclear format → ship docs-only manifest, defer the rule; never invent a

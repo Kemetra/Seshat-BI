@@ -10,7 +10,7 @@
 > future table's own mapping-gate review fills in, not this document.
 >
 > **What this is not.** It is not a database object, not SQL DDL, and not
-> itself consumed by `retail check`. It seeds no metric contract (F009's
+> itself consumed by `seshat check`. It seeds no metric contract (F009's
 > contract-template + review process still applies separately) and advances
 > no readiness stage. See `templates/customer-dimension.md` for the copy-me
 > worksheet that instantiates this shape for a real table.
@@ -40,7 +40,7 @@ reverse-engineering someone else's already-answered ruling.
 | Unknown-member row | FILLED (structural convention, RC14) | A row at `customer_sk = -1` representing an unresolved/unknown member. Every fact that references the dimension joins via a foreign key `COALESCE`'d to `-1` when no match is found -- the same convention already used elsewhere in the star. |
 
 **Non-goal.** This is a document, not a database object. It produces no DDL
-and is not itself consumed by `retail check`.
+and is not itself consumed by `seshat check`.
 
 ## What is fixed vs. what stays open
 

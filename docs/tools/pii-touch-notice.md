@@ -35,7 +35,7 @@ unmatched) `deviation_ref` is UNDECIDED -> GAP, never a false clearance.
   verbatim-quoted disposition).
 - Never OMITS a `pii: true` column; an undecided one is a GAP marked "NOT cleared".
 - Emits NO score, count, or percentage (hard rule #9).
-- Adds NO `retail check` rule and blocks NO stage (FR-007). Its presence/absence
+- Adds NO `seshat check` rule and blocks NO stage (FR-007). Its presence/absence
   is never a gate requirement (answerability-summary optional-companion precedent).
 - Reads ONLY `source-map.yaml`; writes ONLY `mappings/<table>/pii-touch-notice.md`
   (with `--write`); opens no DB/Power BI/network connection.

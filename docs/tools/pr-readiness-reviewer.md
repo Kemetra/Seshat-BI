@@ -124,8 +124,8 @@ anywhere in the verdict.
 
 ## No new gate, no new validator
 
-The reviewer adds NO new gate and NO new validator. It does not re-run `retail check` or
-`retail validate` as a new check, adds no `retail check` rule (the static gate stays exit
+The reviewer adds NO new gate and NO new validator. It does not re-run `seshat check` or
+`retail validate` as a new check, adds no `seshat check` rule (the static gate stays exit
 0), and adds no CI workflow. It READS the recorded results of the existing gates and the
 existing CI as evidence and interprets them. Reading PR / CI / git state is read-only
 OBSERVATION, not a gate and not a mutation. The gates remain the authority on rule-pass;

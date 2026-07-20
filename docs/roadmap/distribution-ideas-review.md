@@ -52,7 +52,7 @@ analyst-value lens says the *sequencing* is backwards.
 ## CONFIRMED — analyst-value (the sequencing critique)
 
 6. **[analyst, high] First-run shows a green gate on emptiness, not a dashboard.** README's
-   Quickstart payoff is `retail check → exit 0 == governance-clean`; `init` only adds
+   Quickstart payoff is `seshat check → exit 0 == governance-clean`; `init` only adds
    orientation files on top. Five minutes in, "the machine tells the agent about the machine" —
    no result the analyst can show. **Fix:** make the first-run path end on a *visible artifact*
    from the user's (or a sample) table — a profile, a mapped grain, a metric contract.

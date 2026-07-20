@@ -17,7 +17,7 @@
 |-------|------------------|
 | Source Ready | profile missing; semantics unconfirmed; source unreachable |
 | Mapping Ready | `Gate status` not CLEARED; open unresolved question; grain not unique on data; `pii:true` column not dropped; rollup not analyst-supplied |
-| Silver Ready | mapping not pass; `retail check` ERROR; Phase-5 build order violated |
+| Silver Ready | mapping not pass; `seshat check` ERROR; Phase-5 build order violated |
 | Gold Ready | live finding (V-RC2/V-RC15/V-RC16); reconciliation not penny-exact; no DSN/`db` extra (blocked-deferred) |
 | Semantic Model Ready | gold not pass; D/C/R/G6 finding; measure with no metric contract; real host in PBIP params |
 | Dashboard Ready | semantic model not pass; visual with no backing metric contract |

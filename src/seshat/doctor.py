@@ -114,7 +114,7 @@ def format_digest(findings: list[Finding]) -> str:
     for f in findings:
         lines.append(f"  [{f.severity.value}] {f.rule_id} {f.message} ({f.locator})")
     lines.append(
-        "\n(advisory digest -- the `retail check` gate exit code remains the "
+        "\n(advisory digest -- the `seshat check` gate exit code remains the "
         "authority; run it to gate.)"
     )
     return "\n".join(lines)

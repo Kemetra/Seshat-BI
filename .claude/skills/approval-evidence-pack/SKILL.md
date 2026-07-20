@@ -61,7 +61,7 @@ invented content. The pack surfaces the gate's readiness picture; it never signs
   this pack is the evidence a human reads BEFORE the Approval Console records their
   signature.
 
-This module adds NO new readiness stage and NO new `retail check` rule -- it
+This module adds NO new readiness stage and NO new `seshat check` rule -- it
 composes results other tools recorded (the F024 Product Module boundary).
 
 ## Authority declaration (F024) -- the filled module contract
@@ -304,7 +304,7 @@ repo-relative paths (Windows 260-char budget).
 After a run, `git status` shows the only new/modified file is the one derived pack
 at `mappings/<table>/approval-evidence-pack-<stage>.md`. No source artifact is
 modified, `readiness-status.yaml` / `approvals[]` is unchanged, and no stage moved
-to `pass`. The skill triggered no `retail check` / `retail validate` run of its own
+to `pass`. The skill triggered no `seshat check` / `retail validate` run of its own
 and opened no DB connection.
 
 ## What the agent must NOT do
@@ -321,7 +321,7 @@ and opened no DB connection.
   count.
 - Do NOT read a live database or PBIP model; do NOT call the Power BI execution
   adapter (F016) or any spec-only runtime (F031-F033); do NOT publish / deploy.
-- Do NOT add a `retail check` rule, define a new readiness stage, or alter a gate.
+- Do NOT add a `seshat check` rule, define a new readiness stage, or alter a gate.
 - Do NOT surface a stage AFTER the selected one (FR-020).
 - Do NOT inline C086 / retail_store_sales specifics into the pack, the template, or
   this doc.

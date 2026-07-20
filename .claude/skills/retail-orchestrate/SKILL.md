@@ -30,7 +30,7 @@ fix-applying subagent. See `specs/005-layer-d-orchestration/spec.md`.
   something YOU perform in-context.
 - **The gate exit code is the SOLE pass authority** (constitution Principle I --
   agent proposes, gate disposes). A phase advances ONLY on a literal exit 0 from
-  `retail check` / `retail validate`. Never declare a rule "passed" from reading
+  `seshat check` / `retail validate`. Never declare a rule "passed" from reading
   prose or your own edit; only the non-zero/zero exit decides.
 - **Fail-closed.** A non-zero exit blocks. Never suppress, never promote warnings
   to pass, never merge around a failing gate.
@@ -69,14 +69,14 @@ or `Gate status: CLEARED` yourself (approval is the reviewer's action).
 |-------|-----------|--------------|----------------------------------------|------|
 | 1-4 Profile -> map -> stop-and-ask | **retail-onboard-table** (the Source -> Mapping front door; seeds the readiness-status and DELEGATES the five artifacts to **source-mapping**) | (artifact review) | `mapping_ready == pass` (+ `approvals[]`), `Gate status: CLEARED` mirror agrees, zero open rows | gate |
 | GATE Mapping approval | (read state; **grain-confidence-reviewer** surfaces the grain-confidence card + the source-map diff for the human) | -- | reviewer recorded `stages.mapping_ready.status == pass` (+ `approvals[]`), `Gate status: CLEARED` mirror agrees | silver |
-| 5 Build silver | **retail-build-warehouse** (authors the silver `.sql`) -> then **[SEAM: a human APPLIES the SQL; execution is the deferred DB-write seam]** | `retail check` | exit 0 | gold |
-| 6 Build gold (star) | **retail-build-warehouse** (authors the gold star `.sql`) -> then **[SEAM: human applies]** | `retail check` | exit 0 | validate |
+| 5 Build silver | **retail-build-warehouse** (authors the silver `.sql`) -> then **[SEAM: a human APPLIES the SQL; execution is the deferred DB-write seam]** | `seshat check` | exit 0 | gold |
+| 6 Build gold (star) | **retail-build-warehouse** (authors the gold star `.sql`) -> then **[SEAM: human applies]** | `seshat check` | exit 0 | validate |
 | ACCEPT Live validate | **retail-validate** | `retail validate --source-map mappings/<table>/source-map.yaml` | exit 0 (or deferred-boundary report) | semantic |
-| GATE Semantic Model Ready | **retail-semantic-check** (read-only; computes the Stage-5 verdict: `retail check` clean AND every measure binds to an approved metric contract) | `retail check` + contract-binding read | verdict `pass` (a green checker is necessary-NOT-sufficient) | PBIP |
-| 7 Build Power BI model | **pbip-workflow** + `powerbi-analyst` agent | `retail check` | exit 0 | done |
+| GATE Semantic Model Ready | **retail-semantic-check** (read-only; computes the Stage-5 verdict: `seshat check` clean AND every measure binds to an approved metric contract) | `seshat check` + contract-binding read | verdict `pass` (a green checker is necessary-NOT-sufficient) | PBIP |
+| 7 Build Power BI model | **pbip-workflow** + `powerbi-analyst` agent | `seshat check` | exit 0 | done |
 | PBIP execution engine | **[SEAM -- Power BI execution adapter (official Power BI MCP / connection; `pbi-cli` no longer preferred), deferred + execution-only, Principle II; gated on Semantic Model Ready = pass]** | -- | -- | -- |
 
-At every gate node, run the SAME command CI runs (`retail check`, and
+At every gate node, run the SAME command CI runs (`seshat check`, and
 `retail validate` once creds exist) so local behavior equals the unattended gate.
 
 ## The self-heal loop (a contract you follow; not a runtime)
@@ -155,7 +155,7 @@ the named-seam design, not a bug.
 
 A demonstrable self-heal loop on the gate that fully exists today: route a table to
 `source-mapping`, stop at the mapping gate, and (since c086's silver+gold already
-exist in `warehouse/migrations/`) run `retail check` after a change and watch the
+exist in `warehouse/migrations/`) run `seshat check` after a change and watch the
 loop converge to a literal exit 0 -- while a planted `V-RC2`/`D6`-class finding
 HARD-STOPS instead of being auto-fixed.
 

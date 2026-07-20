@@ -107,7 +107,7 @@ surfaces it.
 > **Namespace note (flagged, not resolved here).** The `Dn` ids above refer to **ADR
 > 0002 cleaning/modeling defaults (RC1-RC16)** in
 > `docs/decisions/0002-retail-cleaning-defaults.md`. These are a **different namespace**
-> from the `retail check` governance checker's TMDL/DAX rules (`D1-D8`). Distinct prefixes,
+> from the `seshat check` governance checker's TMDL/DAX rules (`D1-D8`). Distinct prefixes,
 > distinct namespaces -- no collision (disambiguated in feature 002). A cleaning default
 > reads `RC<n>`; a checker rule reads `D<n>`.
 
@@ -123,9 +123,9 @@ Marked in Spec-Kit `[NEEDS CLARIFICATION]` style; do **not** resolve them in a p
 file.
 
 - **[RESOLVED -- feature 002] D-namespace disambiguation.** ADR 0002 cleaning defaults are
-  now **RC1-RC16** ("retail cleaning"); the `retail check` governance checker keeps its
+  now **RC1-RC16** ("retail cleaning"); the `seshat check` governance checker keeps its
   separate **D1-D8** TMDL/DAX rules. Distinct prefixes, no collision -- this was the
-  disambiguation required before any ADR default is wired into `retail check`.
+  disambiguation required before any ADR default is wired into `seshat check`.
 
 - **[NEEDS CLARIFICATION: per-table mapping artifact location]** Where the five mapping
   artifacts (`source-profile.md`, `source-map.yaml`, `assumptions.md`,
@@ -135,7 +135,7 @@ file.
   relative to each other (as this template's header does).
 
 - **[NEEDS CLARIFICATION: agent orchestration shape]** Which agent / skill drives the
-  playbook conversationally (Layer D), and how it self-heals against the `retail check`
+  playbook conversationally (Layer D), and how it self-heals against the `seshat check`
   gate, is **designed as a seam, not a runtime** in this slice. The mechanism that
   reads this file, asks the analyst the `open` questions, and writes back `Resolution`
   is a later slice.

@@ -32,7 +32,7 @@ statically, that is stated; nothing here is presented as an executed run.
 | PR | Idea | Feature | Integration responsibility |
 |----|------|---------|----------------------------|
 | #62 | A1 | Route Registry Manifest (`docs/routing/routes.yaml` + `src/seshat/rules/routes.py`) | Routes are machine-checkable and honest — a `built` target resolves to a real tracked file; a `planned` target must not yet exist. |
-| #63 | B2 | Structured Findings Output (`retail check --format {text,json}`) | Findings can be emitted in structured form (opt-in JSON) without changing the default text output. |
+| #63 | B2 | Structured Findings Output (`seshat check --format {text,json}`) | Findings can be emitted in structured form (opt-in JSON) without changing the default text output. |
 | #64 | B1 | Never-Execute Invariant Guard (`src/seshat/rules/never_execute.py`) | Module-scope DB/network import creep is blocked; legitimate lazy in-handler imports are allowed. |
 | #65 | F7 | KPI Decision-Question Index (`skills/retail-kpi-knowledge/domains/*.md`) | Business questions route to a real KPI contract or an honest planned/deferred marker. |
 | #66 | F8 | KPI Coverage Scorecard (`skills/retail-kpi-knowledge/references/kpi-coverage-scorecard-template.md`) | Table-to-KPI support is status/blocker-based, never score-based. |
@@ -41,7 +41,7 @@ statically, that is stated; nothing here is presented as an executed run.
 
 The five features are expected to **reinforce each other, not bypass each other**:
 
-- **A1** makes the routing / `retail check` surface **auditable**: every route in
+- **A1** makes the routing / `seshat check` surface **auditable**: every route in
   the registry resolves to a real file or is honestly marked planned. The shipped
   manifest mirrors the `docs/knowledge-map.md` "Route by task" rows (ids 1–22,
   including the KPI routes 12 / 12a / 12b that point at `retail-kpi-knowledge`).
@@ -201,7 +201,7 @@ scenarios above can cite it honestly.
 
 | Governance rule | Covered by | Expected result |
 |-----------------|------------|-----------------|
-| Agent-first, not CLI-first | hard rule #1 (`roadmap.md`); `COMPASS.md` ("the CLI gates … are helpers it calls, never the product") | The agent is the interface; `retail check` / `retail validate` are gates it calls. **Aligned.** |
+| Agent-first, not CLI-first | hard rule #1 (`roadmap.md`); `COMPASS.md` ("the CLI gates … are helpers it calls, never the product") | The agent is the interface; `seshat check` / `retail validate` are gates it calls. **Aligned.** |
 | No execution during routing | `COMPASS.md` ("never executors … never run a query/DAX/Python or touch a database"); `knowledge-map.md` ("a router, not the knowledge base"; do-not list); A1 & B1 code | Routing/knowledge layers reason and resolve references; they execute nothing. **Aligned.** |
 | Metric contracts before DAX | `knowledge-map.md` route **12c** ("for a *ready* business contract") + cross-layer guard ("DAX must stop and route back to Retail KPI if no upstream contract exists"); `COMPASS.md` DAX route | DAX implements only a ready contract; otherwise it routes back. **Aligned.** (Cite the knowledge-map route/guard, **not** hard rule #5.) |
 | KPI meaning stays in `retail-kpi-knowledge` | `SKILL.md` ("owns the business meaning … governs meaning; other layers govern code"); `knowledge-map.md` cross-layer guard | KPI meaning is owned by one layer. **Aligned.** |
@@ -296,7 +296,7 @@ docs-only smoke test.
 
 ### Known limitations (not verified in this smoke test)
 
-- The full `retail check` CLI was **not** invoked (text or `--format json`); B2's
+- The full `seshat check` CLI was **not** invoked (text or `--format json`); B2's
   JSON shape, matching exit codes, and unchanged default output are verified from
   source + unit-test assertions read statically — **not** from a live CLI run.
 - The pytest suite was **not** executed here; unit-test outcomes are described as
@@ -319,7 +319,7 @@ docs-only smoke test.
 
 ### Follow-up recommendations (optional, not authorized here)
 
-- A future PR could add an **execution record** (run `retail check --format json`
+- A future PR could add an **execution record** (run `seshat check --format json`
   and the pytest suite, cite exact output) to upgrade the docs-level PASS to an
   executed PASS — mirroring how `agent-routing-smoke-test.md` reserves a real run
   for a later PR.

@@ -34,7 +34,7 @@ open questions:
 
 | # | Correction | Where it lives in this architecture |
 |---|------------|-------------------------------------|
-| 1 | **Agent-first, not terminal-first.** | Layer **D** is the primary surface (Sec 4). The CLI (`retail check`) is the gate the agent *calls*, not the product the user *operates*. |
+| 1 | **Agent-first, not terminal-first.** | Layer **D** is the primary surface (Sec 4). The CLI (`seshat check`) is the gate the agent *calls*, not the product the user *operates*. |
 | 2 | **C086 is the first worked example, not the universal schema.** | C086 appears only as a **cited filled instance** (Sec 6). The kit's pattern is general; pharmacy columns/codes are never baked into templates or the constitution. |
 | 3 | **Source mapping happens before silver/gold.** | The **[NEW] source-mapping gate** (Sec 5) -- the one genuinely new idea here -- sits between *profile* and *build silver*. Reconciled with the playbook in Sec 5. |
 | 4 | **`pbi-cli` is a later Power BI semantic-model adapter, not the core.** | Bottom of the stack (Sec 4, ENGINE row). Depend-not-fork, installed via `pipx`; consistent with the governance spec's decision #1. |
@@ -48,7 +48,7 @@ to re-describe or re-decide them:
 
 | Existing artifact | What it is | Role in the kit |
 |-------------------|------------|-----------------|
-| **`retail check`** (`src/seshat/`) | The shippable governance core -- stdlib-only, CI-able, parses committed TMDL/PBIR/SQL/git text. No `pbi-cli`, no Desktop, no network. | **The enforced gate (Layer A, static surface).** Already on `main`. |
+| **`seshat check`** (`src/seshat/`) | The shippable governance core -- stdlib-only, CI-able, parses committed TMDL/PBIR/SQL/git text. No `pbi-cli`, no Desktop, no network. | **The enforced gate (Layer A, static surface).** Already on `main`. |
 | **`docs/medallion-playbook.md`** (7 phases) | The interactive cleaning method: connect & profile -> grain-first cleaning decisions -> ruleset -> review gate -> build silver -> build gold -> data dictionary. | **The process the agent runs.** The source-mapping gate (Sec 5) formalizes its early phases. |
 | **`docs/decisions/0002-retail-cleaning-defaults.md`** (RC1-RC16) | The reusable cleaning/modeling defaults: grain, PII, types, returns, star schema, contiguous date dim, reconciliation. | **The default rulings** every new table starts from. The constitution ratifies their *spirit* as principles. |
 | **A filled worked example** under `docs/worked-examples/` | The first validated medallion table: full ADR-default PASS after live DB validation. | **The first worked example** -- a *filled instance* of every template, cited, never the schema itself. |
@@ -77,11 +77,11 @@ is the foundation that already ships; D is the new primary surface this kit is n
                                  v
   C  AUTOMATION / CI         pre-commit hook + GitHub Action:                      <- UNATTENDED
      (the gate, unattended)  run the STATIC checks on commit/PR, block on            [SEAM -- wired for
-                             violation. Exit non-zero is the contract.               retail check]
+                             violation. Exit non-zero is the contract.               seshat check]
                                  | runs
                                  v
   A  GOVERNANCE CORE         +-- STATIC surface --------+-- LIVE surface --------+  <- FOUNDATION
-     (the enforced gate --   | retail check             | retail validate        |    (already on main)
+     (the enforced gate --   | seshat check             | retail validate        |    (already on main)
       THE SHIPPED UNIT)      | rules over committed     | wraps a live DB/Desktop |
                              | TMDL / PBIR / SQL / git   | for PK/coverage/recon  |
                              | stdlib-only, CI-able      | [BUILT; live run later] |
@@ -164,7 +164,7 @@ static-vs-live taxonomy already established in the worked example (Sec 7/Sec 8) 
 governance spec (Sec 4):
 
 - **STATIC validators** -- checkable from committed text alone, CI-able, the powerful
-  core that already exists as `retail check`. The statically-checkable ADR
+  core that already exists as `seshat check`. The statically-checkable ADR
   defaults are now wired in (feature 003, after the namespace collision was resolved):
   **S5** enforces RC7 type discipline, **S6** enforces RC14 star-structure (`-1` member),
   **S7** enforces RC15 (`generate_series` date-dim). Each is a SQL-family rule that cites
@@ -201,7 +201,7 @@ This Phase 0/1 foundation deliberately stops at architecture + spec + templates:
 
 1. **D-namespace collision** -- **RESOLVED (feature 002).** ADR cleaning defaults renamed to
    `RC1-RC16`; the checker keeps `D1-D8`. Distinct prefixes, no collision; the prerequisite
-   for wiring any ADR default into `retail check` is now met.
+   for wiring any ADR default into `seshat check` is now met.
 2. **Where the mapping artifacts live per table** -- **RESOLVED (ADR 0003):**
    `mappings/<table>/`, a top-level dir with one folder per table holding the five filled
    artifacts. Keeps `warehouse/` SQL-only and `docs/` narrative-only.

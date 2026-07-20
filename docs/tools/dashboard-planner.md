@@ -73,7 +73,7 @@ committed page is fabricated.
   contract.
 - **A `new` verdict is NOT clearance to build and NOT a gate pass.** The planner is
   gate-agnostic: it neither enforces nor clears `no_dashboard_before_metric_contracts`
-  / `semantic_model_ready`, adds no `retail check` rule, and moves no readiness
+  / `semantic_model_ready`, adds no `seshat check` rule, and moves no readiness
   stage. The human decides build / extend / drop.
 - **It does not rank proposals or recommend which to build**, and it is single-
   table (no cross-table dedup).

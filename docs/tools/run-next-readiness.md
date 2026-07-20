@@ -31,7 +31,7 @@ retail next --table bronze.retail_store_sales --format json
 
 `--table` may name the `mappings/<table>/` directory, the status file's
 `source_id`, or the status file's `table` value. The command is read-only: it
-does not run `retail check`, `retail validate`, SQL, Power BI, or any approval
+does not run `seshat check`, `retail validate`, SQL, Power BI, or any approval
 write-back.
 
 ## When to use it -- and when to use a neighbor instead
@@ -45,7 +45,7 @@ job:
 | "Actually DO the next step and self-heal against the gate" | `retail-orchestrate` (it executes; this tool only decides) |
 | "Which stage has EACH table reached, with evidence + approvals timeline?" | Readiness Viewer (F026, renders many tables) |
 | "What is broken across all tables, worst-first?" | F012 Data Quality Control Room |
-| "Is this file's readiness status internally consistent?" | RS1 in `retail check` (the static linter) |
+| "Is this file's readiness status internally consistent?" | RS1 in `seshat check` (the static linter) |
 
 The genuine deltas: this tool COMPUTES a fresh next action from the seven stage
 statuses (the viewer/control-room RENDER the stored `next_action` string
@@ -61,7 +61,7 @@ trusting the stored string.
   any invocation (SC-003).
 - Applies the SAME approval-shape rule as the gate
   (`src/seshat/rules/readiness_status.py::_owner_is_valid`) so its notion of
-  "approved" agrees with `retail check` -- but it does not call RS1, add a rule
+  "approved" agrees with `seshat check` -- but it does not call RS1, add a rule
   ID, or require RS1-clean input first (it degrades gracefully on a dirty file).
 - Emits no numeric confidence / health / percent-ready score (hard rule #9).
 - Never executes the action and never grants an approval (Principle V).

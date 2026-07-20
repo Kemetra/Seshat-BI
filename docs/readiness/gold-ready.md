@@ -24,12 +24,12 @@ report must be a filled instance, not the blank template.
 
 | Gate | What it proves here |
 |------|---------------------|
-| `retail check` (static) | S6 -> `-1` unknown member present; S7 -> date dim built via `generate_series` (contiguous) |
+| `seshat check` (static) | S6 -> `-1` unknown member present; S7 -> date dim built via `generate_series` (contiguous) |
 | `retail validate` (LIVE, read-only) | RC2 -> PK/grain uniqueness; RC15 -> date coverage; RC16 -> 0 orphan FKs AND penny-exact silver<->gold reconciliation |
 
 Live validate needs the `db` extra installed and a DSN. With neither, the stage
 is `blocked` in deferred mode -> report the boundary, never fake a pass. Static
-`retail check` exit 0 alone is NOT proof of correctness.
+`seshat check` exit 0 alone is NOT proof of correctness.
 
 ## Statuses
 
@@ -62,7 +62,7 @@ When `pass`: build the semantic model -> Stage 5 (Semantic Model Ready).
 
 - Point Power BI at the gold star before `retail validate` passes (Principle VIII
   hard gate).
-- Treat `retail check` exit 0 alone as proof of correctness.
+- Treat `seshat check` exit 0 alone as proof of correctness.
 - Emit a `pass` while in deferred mode (no DSN / no `db` extra) -- report
   blocked-deferred instead.
 - Fabricate or round reconciliation figures to reach penny-exact.

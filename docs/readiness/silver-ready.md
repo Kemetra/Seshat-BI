@@ -7,7 +7,7 @@ Status note: Planning (docs/templates; no runtime code).
 Stage 3. The typed/cleaned silver table for `<schema>.<table>` is authored as a
 migration and is statically clean. "Ready" here means the migration .sql exists,
 was generated from the CLEARED source map (Stage 2 `pass`), follows the
-load-bearing Phase-5 column/transform order, and passes `retail check`. This is
+load-bearing Phase-5 column/transform order, and passes `seshat check`. This is
 authoring only -- applying the SQL to Postgres is the deferred DB-write seam and
 is out of scope (a human applies). Maps to playbook Phase 5.
 
@@ -24,7 +24,7 @@ First filled instance: `warehouse/migrations/0003_create_silver_retail_store_sal
 
 | Gate | Scope |
 |------|-------|
-| `retail check` (S1-S7) exit 0 on the migration | NECESSARY, not sufficient. The gate is order-blind and static: it cannot prove row-count/sentinel correctness -- that is proven later by live `retail validate` at Gold Ready. |
+| `seshat check` (S1-S7) exit 0 on the migration | NECESSARY, not sufficient. The gate is order-blind and static: it cannot prove row-count/sentinel correctness -- that is proven later by live `retail validate` at Gold Ready. |
 | Self-review diff vs Phase-5 order | Confirms the generated SQL did not reorder/skip load-bearing transforms. |
 
 ## Statuses
@@ -32,14 +32,14 @@ First filled instance: `warehouse/migrations/0003_create_silver_retail_store_sal
 | Status | Meaning HERE |
 |--------|--------------|
 | `not_started` | No silver migration authored; Stage 2 (mapping_ready) may not be `pass` yet. |
-| `blocked` | A blocking reason holds (no CLEARED map, `retail check` ERROR, or Phase-5 order violated). STOP. |
-| `warning` | Migration authored and `retail check` passes but a non-fatal WARN or an accepted deviation is recorded in evidence. Does not auto-promote. |
-| `pass` | Migration committed, `retail check` (S1-S7) exit 0, self-review diff confirms Phase-5 order. Evidence lists the file + check run. |
+| `blocked` | A blocking reason holds (no CLEARED map, `seshat check` ERROR, or Phase-5 order violated). STOP. |
+| `warning` | Migration authored and `seshat check` passes but a non-fatal WARN or an accepted deviation is recorded in evidence. Does not auto-promote. |
+| `pass` | Migration committed, `seshat check` (S1-S7) exit 0, self-review diff confirms Phase-5 order. Evidence lists the file + check run. |
 
 ## Blocking reasons
 
 - No CLEARED map -- Stage 2 (mapping_ready) is not `pass`.
-- `retail check` returns an ERROR on the migration (S1-S7 failure).
+- `seshat check` returns an ERROR on the migration (S1-S7 failure).
 - Phase-5 order violated -- self-review diff shows reordered/missing load-bearing
   transforms vs the CLEARED map.
 - Migration not committed (file absent from `warehouse/migrations/`).
@@ -61,7 +61,7 @@ for live `retail validate`.
 - Write silver before mapping_ready is `pass` (Principle IV hard gate).
 - Execute/apply the migration against Postgres (deferred DB-write seam).
 - Claim the silver table "exists" before a human has applied it.
-- Reorder or skip Phase-5 transforms to make `retail check` pass.
+- Reorder or skip Phase-5 transforms to make `seshat check` pass.
 - Record `pass` without evidence, or emit a confidence number.
 
 ## See also

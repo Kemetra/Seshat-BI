@@ -12,7 +12,7 @@ description: >-
   (L0..L6) by a BINARY evidence test each, reports the level as the highest
   all-evidence-present rung, and then STOPS for the named release owner. It emits NO
   numeric / maturity / confidence score (the ladder is milestones, not a score),
-  re-measures NOTHING (no retail check/validate, no DB, no powerbi/ read),
+  re-measures NOTHING (no seshat check/validate, no DB, no powerbi/ read),
   self-approves NO release, self-confirms NO level, and publishes nothing.
 ---
 
@@ -108,13 +108,13 @@ roadmap ledger + commit refs, the worked-example docs, and the on-disk presence 
 adapters/projects. It DRAFTS the note and ASSESSES the rung from that committed
 evidence. It NEVER:
 
-- runs `retail check` / `retail validate`, profiles a source, opens a DB connection, or
+- runs `seshat check` / `retail validate`, profiles a source, opens a DB connection, or
   reads `powerbi/` (it consumes recorded results; it re-measures nothing). A missing
   input is recorded as "evidence not available", never fabricated.
 - self-approves a release (`draft -> approved` is a named release owner recorded in
   `approvals[]`), self-confirms a level, or publishes (tags / GitHub releases / registry
   pushes are out of scope -- release execution stays a human action).
-- moves any readiness stage to `pass` or adds any gate / `retail check` rule / CLI verb /
+- moves any readiness stage to `pass` or adds any gate / `seshat check` rule / CLI verb /
   validator. Release & maturity is a product-level process orthogonal to the per-table
   readiness spine; it advances no stage.
 
@@ -264,9 +264,9 @@ no validator run, no DB opened.
 - Do NOT report a level above the highest all-evidence-present rung; do NOT round a
   partial rung up.
 - Do NOT self-approve a release, self-confirm a level, or publish (Core Authority).
-- Do NOT re-measure: no `retail check` / `retail validate`, no source profiling, no DB
+- Do NOT re-measure: no `seshat check` / `retail validate`, no source profiling, no DB
   connection, no `powerbi/` read.
-- Do NOT add a `retail check` rule, a CLI verb, a validator, or any new gate; do NOT move
+- Do NOT add a `seshat check` rule, a CLI verb, a validator, or any new gate; do NOT move
   any readiness stage to `pass`.
 - Do NOT bake C086 / retail_store_sales specifics into the two generic templates (they are
   cited as track record in a FILLED instance, never inlined into the blank templates).

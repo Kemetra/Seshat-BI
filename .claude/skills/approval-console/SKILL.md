@@ -13,7 +13,7 @@ description: >-
   rationale, auto-accepts a recommended default, or moves a stage to `pass` without
   the stage's required evidence AND a named human approval. It emits NO numeric
   confidence/health score (hard rule #9), runs NO validator, opens NO DB connection,
-  and adds NO `retail check` rule. F027 is the first concrete Product Module under F024.
+  and adds NO `seshat check` rule. F027 is the first concrete Product Module under F024.
 ---
 
 # approval-console
@@ -84,7 +84,7 @@ a new metric/mapping definition.
 - MUST NOT create truth: no defining business meaning, no approving a metric/mapping (Core Authority / named human only).
 - MUST NOT connect to a DB / external service, and MUST NOT publish a Power BI artifact (that is an Execution Adapter).
 - MUST NOT emit a numeric / maturity / confidence score (hard rule #9).
-- MUST NOT add a `retail check` rule, a CLI verb, or Python.
+- MUST NOT add a `seshat check` rule, a CLI verb, or Python.
 
 ### How it handles a missing input
 
