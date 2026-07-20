@@ -36,8 +36,16 @@ _AUTHORITY_BY_STAGE: dict[str, str] = {
     "publish_ready": "data_owner",
 }
 
+# The action shown when NO readiness file exists at all -- an unstarted journey.
+# Kept distinct from the source_ready action below: emitting "No readiness file
+# found" for a file that IS present is inaccurate (#374).
+_NO_STATUS_FILE_ACTION = "No readiness file found; start onboarding at Source Ready."
+
 _ACTION_BY_STAGE: dict[str, str] = {
-    "source_ready": "No readiness file found; start onboarding at Source Ready.",
+    "source_ready": (
+        "Begin Source Ready (Stage 1) -- fill the read-only source profile, then "
+        "submit the mapping for review."
+    ),
     "mapping_ready": "Begin Mapping Ready (Stage 2) -- the source-mapping gate.",
     "silver_ready": (
         "Begin Silver Ready (Stage 3) -- author the silver migration strictly "
@@ -439,6 +447,6 @@ def build_run_next_response(repo_root: Path | str, table: str) -> dict[str, Any]
             table,
             "next_action",
             "source_ready",
-            {"action_text": _ACTION_BY_STAGE["source_ready"]},
+            {"action_text": _NO_STATUS_FILE_ACTION},
         )
     return _build_from_data(table, data)

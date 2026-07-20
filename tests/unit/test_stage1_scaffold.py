@@ -1,7 +1,8 @@
-"""`seshat scaffold-source <table>` self-sufficiency (issue #339).
+"""`seshat scaffold-source <table>` self-sufficiency (issues #339, #380).
 
-A bare workspace (no dev repo) must obtain the three Stage-1 blank templates
-from bundled package data, written non-destructively into mappings/<table>/.
+A bare workspace (no dev repo) must obtain the Stage-1 blank templates from
+bundled package data, written non-destructively into mappings/<table>/. #380
+added assumptions.md + reconciliation-report.md to the materialized set.
 """
 
 from __future__ import annotations
@@ -16,10 +17,12 @@ _STAGE1_FILES = (
     "source-profile.md",
     "readiness-status.yaml",
     "source-map.yaml",
+    "assumptions.md",
+    "reconciliation-report.md",
 )
 
 
-def test_scaffold_source_writes_the_three_stage1_files(tmp_path: Path) -> None:
+def test_scaffold_source_writes_the_stage1_files(tmp_path: Path) -> None:
     from seshat.stage1_scaffold import scaffold_source
 
     report = scaffold_source(tmp_path, "sales_c086")
@@ -74,11 +77,11 @@ def test_scaffold_source_rejects_unsafe_table_segment(tmp_path: Path, bad: str) 
 
 def test_scaffold_source_dev_checkout_fallback_resolves(tmp_path: Path) -> None:
     """No wheel data needed in the dev suite: the _SOURCE_ROOT fallback must
-    find the repo-root templates/ so the three files still materialize."""
+    find the repo-root templates/ so all five files still materialize."""
     from seshat.stage1_scaffold import scaffold_source
 
     report = scaffold_source(tmp_path, "foo")
-    assert len(report.written) == 3
+    assert len(report.written) == len(_STAGE1_FILES)
 
 
 def test_scaffolded_readiness_degrades_to_unstarted_not_malformed(

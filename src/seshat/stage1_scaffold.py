@@ -25,12 +25,18 @@ from pathlib import Path
 _SOURCE_ROOT = Path(__file__).resolve().parents[2]
 _PACKAGED_ROOT = "stage1_templates"
 
-# The three Stage-1 blank templates (issue #339). Exactly these -- the other
-# ~60 templates stay dev-only (YAGNI + constitution VII).
+# The Stage-1 blank templates scaffold-source materializes. The first three
+# shipped with #339; assumptions.md + reconciliation-report.md were added for
+# #380 -- source-map.yaml's own prose declares a reviewer reads all five as a set,
+# so the scaffolder's output must match that declaration. (unresolved-questions.md
+# is handled separately by #326.) The other ~55 templates stay dev-only (YAGNI +
+# constitution VII).
 _STAGE1_FILES: tuple[str, ...] = (
     "source-profile.md",
     "readiness-status.yaml",
     "source-map.yaml",
+    "assumptions.md",
+    "reconciliation-report.md",
 )
 
 # source-profile.md carries one dev-repo relative link that dangles once the
@@ -58,8 +64,9 @@ _READINESS_SOURCE_ID_REF = 'source_id: "<source_id>"'
 
 # next_action is projected verbatim by status_surface as the CONTROLLING action;
 # the template ships a Mapping-stage EXAMPLE, which would present the wrong
-# guidance for a not-started Source-Ready scope (and trip run_next's
-# next_action_disagreement caveat). Materialize a concrete Stage-1 action.
+# guidance for a not-started Source-Ready scope. Materialize the SAME source_ready
+# action `run_next` computes -- a single source of truth -- so `seshat next` right
+# after scaffolding does not trip its own next_action_disagreement caveat (#374).
 _READINESS_NEXT_ACTION_REF = (
     'next_action: "<one concrete next step, e.g. '
     "'resolve open grain question in mappings/<table>/unresolved-questions.md'>\""
@@ -226,12 +233,15 @@ def _materialized_bytes(name: str, table: str) -> bytes:
         text = text.replace(_READINESS_PLACEHOLDER_STAGE, _READINESS_INITIAL_STAGE)
         text = text.replace(_READINESS_SOURCE_ID_REF, f'source_id: "{table}"')
         text = text.replace(_READINESS_TABLE_REF, f'table: "{table}"')
+        # Emit the SAME source_ready action run_next computes (single source of
+        # truth) so `seshat next` right after scaffolding does not trip its own
+        # next_action_disagreement caveat (#374).
+        from seshat.run_next import _ACTION_BY_STAGE
+
+        source_ready_action = _ACTION_BY_STAGE["source_ready"].replace('"', '\\"')
         text = text.replace(
             _READINESS_NEXT_ACTION_REF,
-            'next_action: "Fill the read-only source profile in '
-            f"mappings/{table}/source-profile.md (Table id, Row count, the "
-            "Per-column profile table, the PK proof), then submit the mapping "
-            'for review."',
+            f'next_action: "{source_ready_action}"',
         )
     elif name == "source-map.yaml":
         text = text.replace(
