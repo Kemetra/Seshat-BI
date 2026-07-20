@@ -293,18 +293,29 @@ def _repo_root_has_commit(repo_root: Path) -> bool:
     Distinguishes the two "no subject to judge" states -- a fully non-git dir and
     a `git init`-ed-but-no-HEAD dir -- from a real repo with history, WITHOUT being
     fooled by git's upward repo discovery (an ancestor repo, e.g. a client whose
-    $HOME is version-controlled). The git toplevel must equal ``repo_root`` (so an
-    ancestor repo does not count) AND ``HEAD`` must verify (so no-commit-yet does
-    not count). Any git failure means "not our repo" -> no subject (#384).
+    $HOME is version-controlled).
+
+    "Is ``repo_root`` the repo root" is asked with ``rev-parse --show-prefix``: git
+    returns the path of the working dir RELATIVE to the repo root, which is empty
+    exactly when they are the same dir. An ancestor repo yields a non-empty prefix
+    (``workspace/``), so it does not count -- and a subdir of the target repo is
+    likewise treated as "not the root" (P1 layout fails loudly on subdir misuse).
+    ``HEAD`` must also verify, so a no-commit-yet repo does not count. Any git
+    failure means "not our repo" -> no subject (#384).
+
+    ``--show-prefix`` asks git the question directly, so the answer is independent
+    of how the toolchain spells paths -- unlike comparing ``--show-toplevel`` to
+    ``repo_root`` on the filesystem, which a Cygwin/MSYS git (POSIX ``/c/...``
+    toplevel) made fail with ``OSError`` on a real repo (#393).
     """
     try:
-        toplevel = gitutil.git_output(repo_root, "rev-parse", "--show-toplevel").strip()
-        if not toplevel or not Path(toplevel).samefile(repo_root):
+        prefix = gitutil.git_output(repo_root, "rev-parse", "--show-prefix").strip()
+        if prefix:  # non-empty => repo_root is a SUBDIR (of an ancestor/target repo)
             return False
         gitutil.git_output(repo_root, "rev-parse", "--verify", "HEAD")
-    except (RuntimeError, OSError):
-        # RuntimeError: git rejected the probe (non-repo / no HEAD).
-        # OSError: samefile on a path that does not exist.
+    except RuntimeError:
+        # git rejected a probe: non-repo, bare repo (no work tree / prefix), or no
+        # HEAD yet. All mean "no commit subject here" -> P2 has nothing to judge.
         return False
     return True
 

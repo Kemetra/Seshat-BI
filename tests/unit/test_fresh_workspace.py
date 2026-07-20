@@ -22,6 +22,7 @@ from seshat import cli, compass_project, gitutil
 from seshat.core import RuleContext, Severity
 from seshat.rules.git_meta import (
     REQUIRED_PATHS,
+    _repo_root_has_commit,
     rule_p1_layout,
     rule_p2_commit_subjects,
 )
@@ -226,6 +227,35 @@ def test_p2_still_errors_on_a_single_commit_repo_bare_fallback(tmp_path: Path) -
         if f.rule_id == "P2" and f.severity is Severity.ERROR
     ]
     assert errors, "single-commit bare fallback must still surface the P2 range error"
+
+
+# ---------------------------------------------------------------------------
+# #393 -- _repo_root_has_commit does not rely on filesystem path comparison
+# (a Cygwin/MSYS git returns a POSIX --show-toplevel that samefile cannot resolve)
+# ---------------------------------------------------------------------------
+
+
+def test_repo_root_has_commit_survives_posix_toplevel_from_msys_git(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # A real repo at its own root, but git reports paths POSIX-style (Cygwin/MSYS
+    # on Windows: --show-toplevel = "/c/Users/..."). The old code compared that to
+    # repo_root with Path.samefile, which raises OSError -> False -> P2 silently
+    # dropped on a REAL repo. Keying on --show-prefix (empty == at repo root)
+    # asks git the question directly, immune to how the toolchain spells paths.
+    real_top = "/c/msys/home/dev/project"  # a POSIX path samefile cannot resolve here
+
+    def fake_git_output(root: Path, *args: str) -> str:
+        if args == ("rev-parse", "--show-toplevel"):
+            return real_top + "\n"
+        if args == ("rev-parse", "--show-prefix"):
+            return "\n"  # empty => cwd IS the repo root
+        if args == ("rev-parse", "--verify", "HEAD"):
+            return "abc123\n"  # HEAD verifies
+        raise AssertionError(f"unexpected git call: {args}")
+
+    monkeypatch.setattr("seshat.rules.git_meta.gitutil.git_output", fake_git_output)
+    assert _repo_root_has_commit(tmp_path) is True
 
 
 def test_p2_still_errors_on_a_malformed_explicit_commit_range(tmp_path: Path) -> None:
