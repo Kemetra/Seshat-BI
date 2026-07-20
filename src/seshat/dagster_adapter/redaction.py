@@ -3,8 +3,17 @@
 Anything the adapter prints, records as evidence, or raises passes through
 here first. Scrubbed classes (Principle IX): URL DSNs, keyword-style
 connection credentials (host/port/user/password/dbname), and the literal
-values of secret-bearing environment variables (``DATABASE_URL``,
-``ANALYTICS_DB_*``, anything with PASSWORD/SECRET/TOKEN in its name).
+values of secret-bearing environment variables -- ``DATABASE_URL``, the
+credential subset of ``ANALYTICS_DB_*`` (host/name/user/password/account), and
+anything with PASSWORD/SECRET/TOKEN in its name.
+
+Secret ENV keys are an explicit POSITIVE set (#357): the ``ANALYTICS_DB_*``
+config knobs (port/sslmode/engine/driver/trust) and any future config key are
+non-secret by default, never an enumerated exclusion, so the value scan cannot
+over-redact a fixed-vocabulary config word. Credential values are redacted at
+any length; the tradeoff is that a database literally named a common word
+(e.g. NAME=``gold``) has that word clobbered wherever it appears -- safe
+direction (a dbname must never surface), a documented decision.
 """
 
 from __future__ import annotations
@@ -20,53 +29,76 @@ _KEYWORD_RE = re.compile(
 )
 _SECRET_ENV_RE = re.compile(r"(PASSWORD|SECRET|TOKEN|_KEY$)", re.IGNORECASE)
 
-# ``ANALYTICS_DB_*`` keys whose VALUES are non-secret config from `.env.example`
-# (a port number, an sslmode word, an engine name, a driver name, a boolean
-# trust flag). Redacting these as if they were credentials corrupts legitimate
-# output -- e.g. the literal "require" / "25060" / "true" would be replaced
-# wherever it appears -- since #348 now loads `.env` into the process env these
-# commands redact against. Excluded by key so the blunt value-replacement never
-# sees a fixed-vocabulary config value (Codex P2). HOST / NAME / USER / PASSWORD
-# / ACCOUNT stay redacted (a host / account is identifying infra, not a boolean).
-_NON_SECRET_ANALYTICS_KEYS = frozenset(
+# The ``ANALYTICS_DB_*`` keys whose VALUES are credentials (#357). This is a
+# POSITIVE set: redact ONLY these, so every other key in the namespace -- the
+# fixed-vocabulary config knobs (PORT/SSLMODE/ENGINE/ODBC_DRIVER/TRUST_CERT) AND
+# any FUTURE ``ANALYTICS_DB_*`` config key -- is non-secret BY DEFAULT, with no
+# enumerated exclusion list to keep in sync as `.env.example` grows. Mirrors
+# ``seshat.dbt.redaction._SECRET_ENVIRONMENT_KEYS`` and the per-dialect
+# ``_secret_keys`` in ``seshat.dialect`` (password/user/host/account/name).
+#
+# The set is derived from ALL ANALYTICS_DB_* keys the tool reads (see
+# seshat.dialect / validate). Deliberately EXCLUDED as non-secret target/config
+# labels, not credentials -- matching how dbt treats SESHAT_DBT_SCHEMA:
+#   ANALYTICS_DB_ENGINE / _PORT / _SSLMODE / _ODBC_DRIVER / _TRUST_CERT (knobs)
+#   ANALYTICS_DB_SCHEMA / _ROLE / _WAREHOUSE (Snowflake target/authz labels; none
+#     appear in any dialect's _secret_keys).
+# ACCOUNT (a Snowflake account identifier) IS redacted -- it is in
+# _SNOWFLAKE_SECRET_KEYS: identifying infra, not a config word.
+_SECRET_ANALYTICS_KEYS = frozenset(
     {
-        "ANALYTICS_DB_PORT",
-        "ANALYTICS_DB_SSLMODE",
-        "ANALYTICS_DB_ENGINE",
-        "ANALYTICS_DB_ODBC_DRIVER",
-        "ANALYTICS_DB_TRUST_CERT",
+        "ANALYTICS_DB_HOST",
+        "ANALYTICS_DB_NAME",
+        "ANALYTICS_DB_USER",
+        "ANALYTICS_DB_PASSWORD",
+        "ANALYTICS_DB_ACCOUNT",
     }
 )
 
 
+# A generic `_SECRET_ENV_RE`-matched key (e.g. `MY_DEPLOY_TOKEN`) can carry a
+# tiny value (a flag `1`, a version `v2`) that is NOT a credential; replacing it
+# globally would shred every matching digit/short token in the payload. The
+# any-length policy the #357 decision approved applies to the KNOWN CREDENTIAL
+# set only; generic regex-matched keys keep a small length floor (a real token
+# is long) so a 1-char flag never becomes a redaction wildcard.
+_GENERIC_SECRET_MIN_LEN = 4
+
+
 def _secret_env_values() -> list[str]:
+    # Two policies (#357):
+    #  * a KNOWN credential -- the ANALYTICS secret set or DATABASE_URL -- is
+    #    redacted at ANY non-empty length: a short host/user (`db`/`sa`) must not
+    #    survive in a reformatted, non-key=value driver error. Correctness beats
+    #    the (approved, documented) short-substring collision.
+    #  * a GENERIC `_SECRET_ENV_RE`-matched key keeps a length floor, so a 1-char
+    #    flag-style value never turns into a global redaction wildcard.
     values: list[str] = []
-    values.extend(
-        value
-        for key, value in os.environ.items()
-        if len(value) >= 4 and _is_secret_key(key)
-    )
+    for key, value in os.environ.items():
+        if not value:
+            continue
+        if key == "DATABASE_URL" or key in _SECRET_ANALYTICS_KEYS:
+            values.append(value)
+        elif len(value) >= _GENERIC_SECRET_MIN_LEN and bool(_SECRET_ENV_RE.search(key)):
+            values.append(value)
     # Longest first so substrings of longer secrets do not survive partially.
     return sorted(values, key=len, reverse=True)
-
-
-def _is_secret_key(key: str) -> bool:
-    if key in _NON_SECRET_ANALYTICS_KEYS:
-        return False  # fixed-vocabulary config, never a credential value
-    if key == "DATABASE_URL" or key.startswith("ANALYTICS_DB_"):
-        return True
-    return bool(_SECRET_ENV_RE.search(key))
 
 
 def redact_text(text: str) -> str:
     """Return ``text`` with every credential-bearing fragment replaced."""
     if not text:
         return text
-    out = _DSN_RE.sub("[REDACTED-DSN]", text)
-    out = _KEYWORD_RE.sub(lambda m: f"{m.group(1)}=[REDACTED]", out)
+    # Exact secret VALUES first, then the regex passes (mirrors dialect.py's
+    # documented order): a regex-first pass can consume the leading token of a
+    # secret and leave the tail (`abc;` of `abc;user=bob;xyz`) surviving the
+    # later value replace. Value-first closes that.
+    out = text
     for value in _secret_env_values():
         if value in out:
             out = out.replace(value, "[REDACTED-ENV]")
+    out = _DSN_RE.sub("[REDACTED-DSN]", out)
+    out = _KEYWORD_RE.sub(lambda m: f"{m.group(1)}=[REDACTED]", out)
     return out
 
 
