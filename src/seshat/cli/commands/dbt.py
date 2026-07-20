@@ -611,6 +611,7 @@ def _emit_result(args: Any, result: CommandResult) -> None:
 
 def dbt_main(args: Any) -> int:
     """Dispatch one governed dbt helper and normalize expected failures."""
+    from seshat.safe_write import SafeWriteError
 
     handler = _COMMANDS[args.dbt_command]
     try:
@@ -619,7 +620,10 @@ def dbt_main(args: Any) -> int:
         result = _error_result(args, exc, 1)
     except DbtUnavailable as exc:
         result = _error_result(args, exc, 2)
-    except (GovernanceError, PlanDrift, LockUnavailable) as exc:
+    except (GovernanceError, PlanDrift, LockUnavailable, SafeWriteError) as exc:
+        # SafeWriteError: `dbt init` refused a path-safety violation (symlinked
+        # component, non-file collision) -- a clean refusal (exit 3), never an
+        # uncaught traceback at the dbt boundary (Codex P2, #351).
         result = _error_result(args, exc, 3)
     except (ArtifactIntegrityError, EnvironmentConfigError) as exc:
         result = _error_result(args, exc, 4)

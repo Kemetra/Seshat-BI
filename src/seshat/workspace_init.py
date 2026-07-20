@@ -39,11 +39,15 @@ from pathlib import Path
 # see the module docstring for why that piece is deliberately omitted.
 # ---------------------------------------------------------------------------
 
+# The medallion SQL home is `warehouse/migrations/` -- the ONE location every
+# governance rule (sql, date_spine, reload_idempotency, rls_access), the impact
+# map, and the Dagster silver/gold build actually read, and the layout the
+# reference example ships (#349). The former `warehouse/{bronze,silver,gold}/`
+# dirs were read by NOTHING: SQL scaffolded there was invisible to `retail check`
+# (silent false-pass) and dead-ended the Dagster build.
 _EMPTY_DIRS: tuple[str, ...] = (
     "mappings",
-    "warehouse/bronze",
-    "warehouse/silver",
-    "warehouse/gold",
+    "warehouse/migrations",
     "powerbi",
     "reports",
     "evidence",
@@ -101,7 +105,8 @@ _README_TEXT = (
     "\n"
     "- `mappings/` -- source-to-mapping evidence (the source-mapping gate "
     "populates this)\n"
-    "- `warehouse/{bronze,silver,gold}/` -- medallion SQL homes\n"
+    "- `warehouse/migrations/` -- the medallion SQL home (numbered silver/gold "
+    "migration files; this is where `retail check` and the build read)\n"
     "- `powerbi/` -- the PBIP project home\n"
     "- `reports/` -- dashboard-spec / blueprint homes\n"
     "- `evidence/` -- evidence-pack output home\n"
@@ -115,14 +120,18 @@ _README_TEXT = (
     '   `git init && git add -A && git commit -m "chore: scaffold workspace"`\n'
     "3. Run `retail check` to confirm the workspace baseline is clean.\n"
     "4. Follow the readiness flow: profile your first table, then map it "
-    "(the source-mapping gate) before building silver/gold SQL.\n"
+    "(the source-mapping gate) before building silver/gold SQL in "
+    "`warehouse/migrations/`.\n"
 )
 
 _WAREHOUSE_README_TEXT = (
     "# warehouse/\n"
     "\n"
-    "Medallion SQL homes: `bronze/`, `silver/`, `gold/`. Power BI reads the "
-    "`gold` schema only.\n"
+    "`migrations/` -- the medallion SQL home: numbered, idempotent silver/gold "
+    "migration files (e.g. `0003_create_silver_<table>.sql`, "
+    "`0004_create_gold_<table>_star.sql`). Every governance rule and the "
+    "orchestrated build read SQL from here. Power BI reads the `gold` schema "
+    "only.\n"
 )
 
 _POWERBI_README_TEXT = (
@@ -175,16 +184,22 @@ def _guard_target(target: Path, force: bool) -> None:
 
 
 def _scaffold_empty_dirs(target: Path) -> list[Path]:
-    """Create each empty workspace dir + its ``.gitkeep``; idempotent."""
+    """Create each empty workspace dir + its ``.gitkeep``; idempotent.
+
+    The ``.gitkeep`` write goes through the shared hardened writer (#352): the
+    former ``if not keep.exists(): _write_text`` followed a pre-planted symlink
+    out of the workspace. ``safe_write.write_if_absent`` refuses that (and any
+    non-file collision) and keeps the write non-destructive + atomic.
+    """
+    from seshat.safe_write import write_if_absent
+
     written: list[Path] = []
     for rel in _EMPTY_DIRS:
         d = target / rel
         d.mkdir(parents=True, exist_ok=True)
         written.append(d)
-        keep = d / _GITKEEP_NAME
-        if not keep.exists():
-            _write_text(keep, "")
-        written.append(keep)
+        write_if_absent(target, f"{rel}/{_GITKEEP_NAME}", b"")
+        written.append(d / _GITKEEP_NAME)
     return written
 
 

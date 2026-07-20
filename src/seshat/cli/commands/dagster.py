@@ -164,7 +164,65 @@ def _run_init(args) -> int:
     return 0
 
 
+# The DB-touching verbs resolve the DSN (doctor's DAG-DSN check, the runner's
+# child env) from ``os.environ``. Wrap ONLY these in the workspace ``.env``
+# overlay so the documented ``ANALYTICS_DB_*`` / ``DATABASE_URL`` values resolve
+# consistently with `retail validate` (#340/#348). ``evidence`` / ``init`` touch
+# no DB and are left unwrapped.
+_DB_TOUCHING_VERBS = frozenset({"doctor", "run"})
+
+
+def _run_guarded(handler, args) -> int:
+    """Run one handler, mapping any unexpected exception to the redacted exit 4.
+
+    CRITICAL: this runs INSIDE the ``applied_dotenv`` overlay for DB-touching
+    verbs, so ``redact_text`` -- which discovers literal secrets from the CURRENT
+    ``os.environ`` -- still sees the `.env`-loaded credentials and redacts them.
+    Redacting after the overlay is torn down would print a `.env`-only secret
+    unredacted, violating the all-output-redacted contract (Codex P1, #348).
+    """
+    from seshat.safe_write import SafeWriteError
+
+    try:
+        return handler(args)
+    except SafeWriteError as error:
+        # `dagster init` refused a path-safety violation (symlinked orchestration/
+        # parent or output path). That is a preflight/gate refusal (exit 2), not
+        # an unexpected internal error -- mirror the dbt boundary (#351). Caught
+        # before the generic handler since SafeWriteError is a ValueError.
+        print(f"refused: {error}", file=sys.stderr)
+        return 2
+    except Exception as error:  # the contract forbids raw tracebacks
+        from seshat.dagster_adapter.redaction import redact_text
+
+        print(f"internal error: {redact_text(str(error))}", file=sys.stderr)
+        return 4
+
+
+def _dispatch(args, handler) -> int:
+    """Run one dagster verb, applying the workspace `.env` for DB-touching verbs.
+
+    A single wrap around ``run`` covers BOTH its doctor preflight and the runner
+    child env (both read ``os.environ`` inside this body); ``doctor`` reads it
+    for its own DSN finding. The redaction guard (``_run_guarded``) is nested
+    INSIDE the overlay so exception redaction sees the `.env` secrets before
+    ``applied_dotenv`` restores ``os.environ`` on exit.
+    """
+    from pathlib import Path
+
+    from seshat.connection_env import applied_dotenv
+
+    if getattr(args, "dagster_cmd", None) not in _DB_TOUCHING_VERBS:
+        return _run_guarded(handler, args)
+    with applied_dotenv(Path(args.repo)):
+        return _run_guarded(handler, args)
+
+
 def dagster_main(args) -> int:
+    # Local import keeps module load lazy (the family imports nothing eagerly);
+    # `seshat.dbt.redaction` does not pull in the dagster adapter.
+    from seshat.dbt.redaction import EnvironmentConfigError
+
     handlers = {
         "doctor": _run_doctor,
         "run": _run_run,
@@ -175,9 +233,10 @@ def dagster_main(args) -> int:
     if handler is None:
         return 1
     try:
-        return handler(args)
-    except Exception as error:  # the contract forbids raw tracebacks
-        from seshat.dagster_adapter.redaction import redact_text
-
-        print(f"internal error: {redact_text(str(error))}", file=sys.stderr)
-        return 4
+        return _dispatch(args, handler)
+    except EnvironmentConfigError as error:
+        # A malformed workspace `.env` is refused at context ENTRY (before any
+        # secret is applied), so this is safe to report outside the overlay: a
+        # preflight refusal (exit 2), NOT the redacted exit-4 path.
+        print(f"refused: could not read the workspace .env: {error}", file=sys.stderr)
+        return 2

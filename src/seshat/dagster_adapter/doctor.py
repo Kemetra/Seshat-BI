@@ -190,8 +190,11 @@ def _dbt_profile_present(root: Path) -> bool:
 
     The dbt engine reads its credentials from the SESHAT_DBT_* child
     environment (spec 133), not the migrations DSN -- report on the contract
-    the dbt build actually uses. A malformed .env reads as absent here (the
-    doctor is read-only; the concrete error surfaces when the build runs).
+    the dbt build actually uses. A malformed .env reads as absent here so a
+    DIRECT caller (or a non-CLI entry point) still degrades read-only rather
+    than raising; on the `seshat dagster` CLI path the malformed file is now
+    intercepted earlier -- `applied_dotenv` raises at the command boundary and
+    the family returns a clean exit 2 (issue #348) before this runs.
     """
     from seshat.cli.commands.dbt import EnvironmentConfigError, load_child_environment
 

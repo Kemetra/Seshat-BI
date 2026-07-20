@@ -17,6 +17,7 @@ always kept, never overwritten. Pure stdlib -- no DB, no network.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
@@ -262,20 +263,80 @@ def _refuse_unwritable_target(target: Path) -> None:
         )
 
 
+# Exclusive-create flags for the atomic write. What each flag actually buys,
+# measured on both platforms -- stated precisely so the #345 "documented
+# decision" is accurate, not optimistic:
+#   * O_EXCL closes the existence race on BOTH platforms: a file (regular OR a
+#     symlink) racing into the FINAL component after the guards can no longer be
+#     opened -- the create fails with FileExistsError and the existing node is
+#     kept untouched. This alone refuses a final-component symlink swap (POSIX
+#     mandates EEXIST for O_CREAT|O_EXCL on an existing symlink).
+#   * O_NOFOLLOW (POSIX-only; getattr -> 0 on Windows) is belt-and-suspenders
+#     for the final component only -- O_EXCL already refuses it, so it changes
+#     nothing on this code path. It does NOT govern PARENT directory components:
+#     a symlink swapped into `mappings/` or `mappings/<table>/` after
+#     `_guard_destination_within_root` still redirects the write on BOTH
+#     platforms. That parent-component race is the accepted residue (#345: a
+#     hostile process already writing into the user's own workspace can do
+#     anything the race would); every DETERMINISTIC path-safety case is closed
+#     by the guards above.
+#   * O_BINARY (getattr -> 0 on POSIX) is future-proofing, NOT the mechanism
+#     that preserves bytes: `os.fdopen(fd, "wb")` below already forces a binary
+#     stream, so LF is written verbatim on Windows with or without this flag.
+#     The flag keeps the fd itself binary should a future refactor ever `os.write`
+#     to it directly (raw os.write WOULD translate LF->CRLF without it).
+_EXCL_CREATE_FLAGS = (
+    os.O_CREAT
+    | os.O_EXCL
+    | os.O_WRONLY
+    | getattr(os, "O_NOFOLLOW", 0)
+    | getattr(os, "O_BINARY", 0)
+)
+
+
+def _atomic_write_new(target: Path, data: bytes) -> bool:
+    """Create ``target`` exclusively and write ``data``; False if it already exists.
+
+    ``os.O_EXCL`` makes the create-or-fail atomic: if the path exists (a regular
+    file or a symlink that raced into the final component after the caller's
+    keep-check), the ``open`` raises ``FileExistsError`` and the existing node is
+    KEPT untouched -- never truncated. This is the concurrent-race backstop
+    behind the deterministic guards; extracted so ``_write_if_absent`` stays a
+    flat, single-purpose body.
+    """
+    try:
+        # Mode 0o666 (not 0o644) so the caller's umask keeps governing access,
+        # matching the prior ``Path.write_bytes`` (0o666 & ~umask): a shared repo
+        # with umask 0o002 must still get group-writable scaffold files (Codex
+        # P2). Windows ignores the POSIX mode bits, so this is POSIX-only effect.
+        fd = os.open(target, _EXCL_CREATE_FLAGS, 0o666)
+    except FileExistsError:
+        return False  # a racing node exists -> keep it (non-destructive)
+    try:
+        handle = os.fdopen(fd, "wb")
+    except BaseException:  # fdopen owns the fd only on success; close it on any raise
+        os.close(fd)
+        raise
+    with handle:
+        handle.write(data)
+    return True
+
+
 def _write_if_absent(target: Path, data: bytes) -> bool:
     """Write one file; True when written, False when kept as-is.
 
     A symlink or non-file node at the path is refused FIRST (see
     ``_refuse_unwritable_target``) -- a symlink to a regular file satisfies
     ``is_file()``, so the refusal must precede the keep check or it would be
-    bypassed. A pre-existing REGULAR file is then kept (non-destructive).
+    bypassed. A pre-existing REGULAR file is then kept (non-destructive). The
+    final write is an atomic ``O_EXCL`` create (``_atomic_write_new``) so a file
+    racing into the window after these checks is kept, not truncated (#345).
     """
     _refuse_unwritable_target(target)
     if target.is_file():
         return False  # a pre-existing REGULAR file is kept (non-destructive)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(data)
-    return True
+    return _atomic_write_new(target, data)
 
 
 def scaffold_source(repo_root: Path, table: str) -> Stage1Report:

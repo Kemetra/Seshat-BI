@@ -31,6 +31,83 @@ def test_dbt_init_materializes_the_doctor_required_paths(tmp_path: Path) -> None
     assert any("profiles.example.yml" in note for note in report.notes)
 
 
+def test_dbt_init_refuses_a_symlinked_parent_escape(tmp_path: Path) -> None:
+    """#351: a symlinked `dbt/` pointing outside the workspace would let
+    `dbt_init` write governed files OUT of the repo -- a deterministic escape
+    (no race). The hardened writer (safe_write) must refuse it."""
+    import os
+
+    from seshat.governed_projects import dbt_init
+    from seshat.safe_write import SafeWriteError
+
+    root = tmp_path / "repo"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    try:
+        os.symlink(outside, root / "dbt", target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation not permitted in this environment")
+
+    with pytest.raises(SafeWriteError):
+        dbt_init(root)
+    # nothing was written through the symlink, out of the workspace
+    assert not (outside / "dbt_project.yml").exists()
+    assert not (outside / "selectors.yml").exists()
+
+
+def test_dbt_init_cli_converts_safewriteerror_to_clean_refusal(tmp_path: Path) -> None:
+    """#351 Codex P2: when `seshat dbt init` refuses a path-safety violation
+    (SafeWriteError), the dbt CLI boundary must map it to a clean nonzero
+    CommandResult, never an uncaught traceback."""
+    import os
+
+    from seshat.cli.commands.dbt import dbt_main
+
+    root = tmp_path / "repo"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    try:
+        os.symlink(outside, root / "dbt", target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation not permitted in this environment")
+
+    class _Args:
+        dbt_command = "init"
+        repo = str(root)
+        output_format = "text"
+
+    # No traceback escapes; a clean nonzero exit code is returned.
+    code = dbt_main(_Args())
+    assert code != 0
+    assert not (outside / "dbt_project.yml").exists()  # nothing escaped
+
+
+def test_dagster_init_cli_maps_safewriteerror_to_exit_2(tmp_path: Path) -> None:
+    """#351 Codex P2: `seshat dagster init` refusing a path-safety violation
+    (SafeWriteError from a symlinked orchestration/ parent) must map to the
+    contract's preflight-refusal exit 2, not the redacted exit-4 'internal
+    error' -- mirroring the dbt boundary."""
+    import os
+    import types
+
+    from seshat.cli.commands.dagster import dagster_main
+
+    root = tmp_path / "repo"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    try:
+        os.symlink(outside, root / "orchestration", target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation not permitted in this environment")
+
+    args = types.SimpleNamespace(dagster_cmd="init", repo=str(root), as_json=False)
+    code = dagster_main(args)
+    assert code == 2  # preflight refusal, not exit 4
+
+
 def test_dbt_init_never_overwrites_and_is_idempotent(tmp_path: Path) -> None:
     from seshat.governed_projects import dbt_init
 

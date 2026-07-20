@@ -395,3 +395,89 @@ def test_cli_scaffold_source_hint_carries_repo(
     note = " ".join(report.notes)
     # the next-step guidance references the table so it is unambiguous
     assert "foo" in note
+
+
+def test_write_if_absent_atomic_create_keeps_a_racing_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#345: close the TOCTOU window. The race is a file materializing AFTER both
+    the ``_refuse_unwritable_target`` guard AND the ``is_file()`` keep-check see
+    it absent, but BEFORE the write. Simulate that by planting the file from a
+    patched ``Path.mkdir`` -- the last step before the write -- so both guards
+    have already passed on the absent path. An atomic O_CREAT|O_EXCL create must
+    then fail closed and KEEP the racing file; the old ``write_bytes`` truncates
+    it (the bug this test locks out)."""
+    from seshat.stage1_scaffold import _write_if_absent
+
+    target = tmp_path / "raced.yaml"
+    planted = b"planted-by-a-concurrent-process\n"
+    real_mkdir = Path.mkdir
+
+    def _mkdir_then_race(self: Path, *args, **kwargs) -> None:
+        real_mkdir(self, *args, **kwargs)
+        # A concurrent process wins the race in the window before our write.
+        target.write_bytes(planted)
+
+    monkeypatch.setattr(Path, "mkdir", _mkdir_then_race)
+
+    written = _write_if_absent(target, b"our-content\n")
+
+    assert written is False  # the atomic create refused to clobber
+    assert target.read_bytes() == planted  # the racing file survived intact
+
+
+def test_write_if_absent_writes_bytes_verbatim_no_newline_translation(
+    tmp_path: Path,
+) -> None:
+    """#345 regression: the atomic create writes bytes verbatim -- a bare LF must
+    not become CRLF on Windows, preserving this module's copied-byte-for-byte
+    guarantee (the prior impl, write_bytes, is binary). The ``os.fdopen(fd, "wb")``
+    binary stream is what guarantees this; O_BINARY on the fd is belt-and-braces
+    for a future raw-os.write refactor. This test pins the OBSERVABLE contract
+    (bytes in == bytes out), independent of which mechanism enforces it."""
+    from seshat.stage1_scaffold import _write_if_absent
+
+    target = tmp_path / "verbatim.yaml"
+    payload = b"line1\nline2\n"  # bare LFs, no CR
+
+    written = _write_if_absent(target, payload)
+
+    assert written is True
+    assert target.read_bytes() == payload  # no \r inserted
+
+
+def test_write_if_absent_writes_a_fresh_file(tmp_path: Path) -> None:
+    """#345: the ordinary path -- an absent target is written and reported."""
+    from seshat.stage1_scaffold import _write_if_absent
+
+    target = tmp_path / "sub" / "fresh.yaml"
+    target.parent.mkdir(parents=True)
+
+    assert _write_if_absent(target, b"data\n") is True
+    assert target.read_bytes() == b"data\n"
+
+
+def test_write_if_absent_lets_umask_govern_mode(tmp_path: Path) -> None:
+    """#345 Codex P2: the atomic create must use mode 0o666 so the caller's umask
+    keeps governing access (matching the prior write_bytes). Under a permissive
+    umask (0o002) the scaffold file must be group-writable (0o664) -- a hard-coded
+    0o644 would have stripped group write regardless. POSIX-only (Windows ignores
+    the mode bits)."""
+    import os
+
+    if os.name == "nt":
+        pytest.skip("POSIX file-mode semantics only")
+
+    from seshat.stage1_scaffold import _write_if_absent
+
+    target = tmp_path / "moded.yaml"
+    old = os.umask(0o002)
+    try:
+        _write_if_absent(target, b"x\n")
+    finally:
+        os.umask(old)
+
+    mode = target.stat().st_mode & 0o777
+    # group-write present == umask governed (0o666 & ~0o002 == 0o664); a forced
+    # 0o644 would fail this. This pins that umask, not a hard-coded mode, decides.
+    assert mode & 0o020, f"group-write stripped despite permissive umask: {oct(mode)}"

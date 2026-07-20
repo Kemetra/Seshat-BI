@@ -46,6 +46,32 @@ class TestRedactText:
         assert "topsecretvalue" not in out
         assert "pw@h" not in out
 
+    def test_non_secret_analytics_defaults_are_not_over_redacted(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Codex P2 (#348): with `.env` now loaded into the process env, the
+        fixed-vocabulary config values (ANALYTICS_DB_PORT / _SSLMODE / _ENGINE)
+        must NOT be treated as secrets -- redacting them would mangle legitimate
+        output (the literal 'require'/'25060'/'postgres'). The real password IS
+        still redacted."""
+        monkeypatch.setenv("ANALYTICS_DB_PORT", "25060")
+        monkeypatch.setenv("ANALYTICS_DB_SSLMODE", "require")
+        monkeypatch.setenv("ANALYTICS_DB_ENGINE", "postgres")
+        monkeypatch.setenv("ANALYTICS_DB_ODBC_DRIVER", "ODBC Driver 18 for SQL Server")
+        monkeypatch.setenv("ANALYTICS_DB_TRUST_CERT", "true")
+        monkeypatch.setenv("ANALYTICS_DB_PASSWORD", "realsecretpw")
+
+        text = (
+            "connect to port 25060 sslmode require trust true "
+            "driver ODBC Driver 18 for SQL Server but pw realsecretpw"
+        )
+        out = redaction.redact_text(text)
+
+        # fixed-vocabulary config words survive (no over-redaction)
+        assert "25060" in out and "require" in out
+        assert "true" in out and "ODBC Driver 18 for SQL Server" in out
+        assert "realsecretpw" not in out  # the credential is still scrubbed
+
     def test_plain_text_is_untouched(self) -> None:
         text = "3 orphan FKs in dim_product; reconcile delta 0.07"
         assert redaction.redact_text(text) == text
