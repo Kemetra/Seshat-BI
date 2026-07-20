@@ -107,6 +107,26 @@ agent distributions have clean public-path evidence.
 
 Full sanitized evidence: [the v0.2.0 public acceptance record](../releases/v0.2.0-public-acceptance.md).
 
+### v0.5.2 record
+
+- Python: **available** -- `seshat-bi==0.5.2` published on public PyPI (release
+  workflow run `29737079179`, GitHub OIDC Trusted Publishing); listed in the
+  `/simple/` index with wheel + sdist.
+- GitHub Release: published at annotated tag `v0.5.2` (merge commit `f7aa26c`),
+  marked Latest; no assets attached (PyPI is the distribution channel).
+- Claude Code repository plugin: **available** at v0.5.2 -- `.claude-plugin/
+  marketplace.json` and the `integrations/claude-code/seshat-bi/` bundle are
+  bumped to 0.5.2 on `main`. A fresh external public-path acceptance run has not
+  been re-performed for this patch (unverified for v0.5.2 specifically).
+- Codex repository plugin: **available** at v0.5.2 -- the
+  `integrations/codex/seshat-bi/` bundle manifest is bumped to 0.5.2 on `main`.
+  External IDE/CLI acceptance not re-performed for this patch (unverified).
+- Claude public catalog: not submitted.
+- OpenAI public plugin listing: not submitted.
+
+Full detail: [the v0.5.2 release note](../releases/v0.5.2.md) and the
+[support matrix](../install/support-matrix.md).
+
 ## Repository candidate evidence (2026-07-13)
 
 - [x] Full repository suite passes: 2,235 tests passed and 9 optional tests
