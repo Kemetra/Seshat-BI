@@ -85,6 +85,37 @@ class TestExecuteRun:
         assert "pw@h" not in result.output
         assert "[REDACTED-DSN]" in result.output
 
+    def test_dsn_straddling_tail_boundary_does_not_leak_password(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """#362 leak #2: truncate-before-redact. `runner` slices output to the last
+        _TAIL_CHARS BEFORE redacting. A DSN straddling that cut loses its
+        `scheme://` to the discarded front, so the schemeless remainder
+        (`/alice:s3cretpw@...`) misses _DSN_RE (no scheme), misses _KEYWORD_RE (not
+        keyword=value), and misses the value-replace (truncated != full env value)
+        -- the password leaks. Fix: redact the FULL output, THEN slice.
+
+        The ordering defect is size-independent, so we scale the BOUNDARY (a
+        monkeypatchable module global read at call time) rather than build an
+        absurd ~4 KB DSN -- a faithful reproduction of the same bug."""
+        monkeypatch.setattr(runner, "_TAIL_CHARS", 40)
+        secret = "postgresql://alice:s3cretpw@db.example.internal/gold"
+        # sanity: at TAIL=40 the raw tail drops the scheme but keeps the password
+        raw_tail = secret[-40:]
+        assert "://" not in raw_tail
+        assert "s3cretpw" in raw_tail
+        root = _fake_repo(tmp_path)
+        monkeypatch.setattr(
+            runner.subprocess,
+            "run",
+            lambda argv, **kwargs: subprocess.CompletedProcess(
+                argv, 1, stdout="", stderr=secret
+            ),
+        )
+        result = runner.execute_run(root, "full_sequence_job")
+        assert result.exit_code == 1
+        assert "s3cretpw" not in result.output  # password must never leak
+
     def test_hung_child_maps_to_failed_result_not_an_exception(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:

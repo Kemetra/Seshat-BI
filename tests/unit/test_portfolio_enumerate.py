@@ -93,6 +93,46 @@ def test_redactor_failure_falls_back_without_leaking_dsn(
     _assert_redacted(result)
 
 
+def test_config_engine_value_is_not_over_redacted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#362 leak #3: `_database_secret_values` prefix-scans ALL ANALYTICS_DB_*
+    with no allowlist, so ANALYTICS_DB_ENGINE=postgres has 'postgres' redacted --
+    shredding the legit word 'postgresql' in an error into '<redacted>ql'. Fixed
+    by the positive secret-key set (matching the dagster module after #357)."""
+    dialect = _Dialect(resolve_error=RuntimeError("could not connect via postgresql"))
+    monkeypatch.setattr(portfolio_enumerate, "get_dialect", lambda _engine: dialect)
+
+    result = portfolio_enumerate.enumerate_tables(
+        "analytics",
+        env={"DATABASE_URL": SECRET_DSN, "ANALYTICS_DB_ENGINE": "postgres"},
+    )
+
+    assert result.error
+    assert "postgresql" in result.error  # the config word survives verbatim
+
+
+def test_database_url_components_scrubbed_in_reformatted_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """#362 leak #1 in the portfolio path: a reformatted error with host+user and
+    NO `@`/`://` slips past the value-scan (DSN never appears verbatim) AND the
+    outer guard. URI decomposition must scrub the host/user components."""
+    reformatted = (
+        'connection to server at "private-db" failed for user "portfolio_user"'
+    )
+    dialect = _Dialect(resolve_error=RuntimeError(reformatted))
+    monkeypatch.setattr(portfolio_enumerate, "get_dialect", lambda _engine: dialect)
+
+    result = portfolio_enumerate.enumerate_tables(
+        "analytics", env={"DATABASE_URL": SECRET_DSN}
+    )
+
+    assert result.error
+    assert "private-db" not in result.error  # host component scrubbed
+    assert "portfolio_user" not in result.error  # user component scrubbed
+
+
 def test_success_returns_every_table(monkeypatch: pytest.MonkeyPatch) -> None:
     dialect = _Dialect()
     monkeypatch.setattr(portfolio_enumerate, "get_dialect", lambda _engine: dialect)

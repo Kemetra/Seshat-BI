@@ -205,6 +205,43 @@ class TestRedactionRobustness357:
         assert redaction.redact_text("") == ""
 
 
+class TestUnify362:
+    """#362: the dagster/portfolio redactor lacked capabilities the dbt sibling
+    already had. Each test reproduces one confirmed leak with the issue's exact
+    repro; the oracle sits on the credential substring, not on the token."""
+
+    def test_database_url_host_and_user_scrubbed_in_reformatted_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Leak #1: a DATABASE_URL-only config, then a reformatted psycopg2 error
+        with NO scheme:// and NOT the verbatim DSN string. The whole-value replace
+        misses (value never appears verbatim) and _DSN_RE misses (no scheme), so
+        host + user leak. The dbt core scrubs these by decomposing URI components."""
+        for key in list(__import__("os").environ):
+            if key == "DATABASE_URL" or key.startswith("ANALYTICS_DB_"):
+                monkeypatch.delenv(key, raising=False)
+        monkeypatch.setenv(
+            "DATABASE_URL", "postgresql://svc_seshat:pw@db-prod.internal:5432/gold"
+        )
+        text = (
+            'connection to server at "db-prod.internal" (10.1.2.3), port 5432 '
+            'failed for user "svc_seshat"'
+        )
+        out = redaction.redact_text(text)
+        assert "db-prod.internal" not in out  # host component scrubbed
+        assert "svc_seshat" not in out  # user component scrubbed
+
+    def test_payload_dict_keys_are_also_scrubbed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Leak #4 (latent): the dbt sibling sanitizes dict KEYS; dagster only
+        redacts values. A secret surfacing as a mapping key must not survive."""
+        monkeypatch.setenv("ANALYTICS_DB_PASSWORD", "keyleaksecret")
+        payload = {"keyleaksecret": "value"}
+        out = redaction.redact_payload(payload)
+        assert "keyleaksecret" not in repr(out)
+
+
 class TestRedactPayload:
     def test_nested_payloads_are_scrubbed(
         self, monkeypatch: pytest.MonkeyPatch

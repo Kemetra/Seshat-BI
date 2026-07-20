@@ -96,8 +96,12 @@ def execute_run(root: Path, job: str, table: str | None = None) -> RunResult:
             output=f"child run timed out after {_RUN_TIMEOUT_SECONDS}s (killed)",
         )
     combined = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
+    # Redact BEFORE truncating (#362 leak #2): slicing first can cut a DSN's
+    # `scheme://` into the discarded front, leaving a schemeless credential
+    # remainder that every redaction pass then misses. Redacting the full string
+    # first, then trimming to the tail, closes that.
     return RunResult(
         run_id=run_id,
         exit_code=proc.returncode,
-        output=redact_text(combined[-_TAIL_CHARS:].strip()),
+        output=redact_text(combined).strip()[-_TAIL_CHARS:],
     )
