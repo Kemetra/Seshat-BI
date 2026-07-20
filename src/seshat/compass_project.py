@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from importlib.resources import files
 from pathlib import Path
 
 import yaml
@@ -33,11 +34,58 @@ INTEGRATIONS_DIR_REL = ".seshat/integrations"
 # is deliberately NOT here (FR-005: no run-state).
 _COMPASS_KEYS = ("kit", "version", "orient", "verbs", "hard_stops", "integrations")
 
+# The canonical kit-source.yaml seed ships bundled (issue #370). Wheel copy first
+# (force-included from `templates/kit-source.yaml`), dev checkout as the fallback
+# -- the same two-location pattern stage1_scaffold uses.
+_SEED_NAME = "kit-source.yaml"
+_SEED_PACKAGED_ROOT = "stage1_templates"
+_SOURCE_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _seed_bytes() -> bytes:
+    """The bundled canonical kit-source.yaml seed: wheel data first, dev fallback."""
+    packaged = files("seshat").joinpath(_SEED_PACKAGED_ROOT, _SEED_NAME)
+    if packaged.is_file():
+        return packaged.read_bytes()
+    source = _SOURCE_ROOT / "templates" / _SEED_NAME
+    if source.is_file():
+        return source.read_bytes()
+    raise FileNotFoundError(
+        f"bundled kit seed is missing: {_SEED_NAME} "
+        "(reinstall seshat-bi, or run from a development checkout)"
+    )
+
+
+def seed_kit_source(repo: Path | str) -> bool:
+    """Materialize ``.seshat/kit-source.yaml`` from the bundled seed if absent.
+
+    Idempotent: a workspace that already carries a seed is left byte-identical
+    (returns ``False``). A fresh pip-only workspace gets the canonical router seed
+    so ``init`` can project a REAL compass rather than crashing on a missing file
+    (#370). Returns whether it wrote.
+    """
+    repo = Path(repo)
+    target = repo / SOURCE_REL
+    if target.exists():
+        return False
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(_seed_bytes())
+    return True
+
 
 def load_source(repo: Path | str) -> dict:
     """Parse the canonical ``kit-source.yaml`` (lazy-ish yaml import at module top)."""
     repo = Path(repo)
-    text = (repo / SOURCE_REL).read_text(encoding="utf-8-sig")
+    path = repo / SOURCE_REL
+    if not path.exists():
+        # A clean, actionable error -- never a bare FileNotFoundError traceback
+        # (#370). `init` seeds this file; if it is still absent something skipped
+        # the bootstrap seam.
+        raise FileNotFoundError(
+            f"{SOURCE_REL} not found in {repo}. Run `seshat init` to seed the kit "
+            "substrate first."
+        )
+    text = path.read_text(encoding="utf-8-sig")
     data = yaml.safe_load(text)
     if not isinstance(data, dict):
         raise ValueError(f"{SOURCE_REL} must be a YAML mapping")

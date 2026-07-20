@@ -162,6 +162,11 @@ packages = ["src/seshat", "src/retail"]
 # reads as a set (issue #380); scaffold-source now materializes all five.
 "templates/assumptions.md" = "seshat/stage1_templates/assumptions.md"
 "templates/reconciliation-report.md" = "seshat/stage1_templates/reconciliation-report.md"
+# `seshat init` (issue #370) seeds the canonical kit-source.yaml router into a
+# fresh `.seshat/` so a pip-only workspace can bootstrap the compass. Unlike the
+# blank Stage-1 templates above this is the kit's own global router content
+# (verbs/orient/hard_stops), so `init` projects a REAL compass, not a hollow one.
+"templates/kit-source.yaml" = "seshat/stage1_templates/kit-source.yaml"
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -193,6 +198,8 @@ include = [
     "/templates/source-map.yaml",
     "/templates/assumptions.md",
     "/templates/reconciliation-report.md",
+    # The canonical kit-source.yaml seed `init` materializes (issue #370).
+    "/templates/kit-source.yaml",
     "/README.md",
     "/LICENSE",
     "/pyproject.toml",
