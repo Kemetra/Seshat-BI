@@ -56,4 +56,13 @@ td { border-top: 1px solid #EEF1F5; color: #334155; }
 a.tealref { color: #0C7C7A; text-decoration: none; }
 .empty { padding: 60px; text-align: center; color: #64748B; font-size: 15px; }
 .meta { color: #64748B; font-size: 12.5px; margin-bottom: 14px; }
+.metarow { color: #64748B; font-size: 12.5px; margin: 0 0 18px; }
+.banner {
+  background: #E6F2F1; color: #0C7C7A; border: 1px solid #B7DEDC;
+  border-radius: 12px; padding: 14px 18px; font-size: 13px; font-weight: 600;
+  margin: 22px 0 4px; line-height: 1.6;
+}
+.icon { width: 15px; height: 15px; vertical-align: -2px; }
+.nav a .icon { margin-inline-end: 8px; }
+.dotsvg { vertical-align: middle; margin: 0 2px; }
 """

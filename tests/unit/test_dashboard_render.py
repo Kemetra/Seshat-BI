@@ -152,6 +152,49 @@ def test_table_has_anchor_id_for_in_page_nav():
     assert 'id="table-bronze.retail_store_sales"' in html_out
 
 
+def test_meta_row_omitted_when_no_timestamp_injected():
+    # default (generated_at=None) must stay deterministic: no meta row at all
+    html_out = render_page(_FIXTURE)
+    assert "آخر تحديث" not in html_out
+    assert 'class="metarow"' not in html_out
+
+
+def test_meta_row_shows_injected_render_timestamp():
+    html_out = render_page(_FIXTURE, generated_at="2026-07-20 14:30")
+    assert 'class="metarow"' in html_out
+    assert "آخر تحديث: 2026-07-20 14:30" in html_out
+
+
+def test_injected_timestamp_is_escaped():
+    html_out = render_page(_FIXTURE, generated_at="<b>x</b>")
+    assert "<b>x</b>" not in html_out
+    assert "&lt;b&gt;x&lt;/b&gt;" in html_out
+
+
+def test_governance_banner_is_present_and_read_only_reminder():
+    html_out = render_page(_FIXTURE)
+    assert 'class="banner"' in html_out
+    assert "للقراءة فقط" in html_out  # read-only reminder copy
+    assert "موافقة بشرية" in html_out  # human-approval gate reminder
+    assert "%" not in html_out.split('class="banner"')[1].split("</div>")[0]
+
+
+def test_inline_svg_icons_present_and_have_no_remote_refs():
+    html_out = render_page(_FIXTURE)
+    assert "<svg" in html_out
+    # inline SVG must carry NO url-bearing attribute (self-contained gate)
+    assert "xmlns" not in html_out  # http://www.w3.org/2000/svg would leak http://
+    assert "xlink" not in html_out
+    assert "<use" not in html_out
+
+
+def test_stage_markers_keep_status_fill_color():
+    # dot->SVG swap must preserve the per-status fill (blocked red still shows)
+    html_out = render_page(_FIXTURE)
+    assert 'fill="#C0392B"' in html_out  # blocked marker fill
+    assert 'fill="#1F8A54"' in html_out  # pass marker fill
+
+
 def test_render_page_tolerates_none_fields_without_crashing():
     projection = {
         "tables": [

@@ -41,6 +41,39 @@ _STATUS_STYLE: dict[str, tuple[str, str]] = {
 }
 
 
+# Feather-style inline SVG icons. Inline in the HTML namespace on purpose: NO
+# `xmlns` (a URL that would trip the self-contained no-remote-asset gate), no
+# `<use>`, no external href — pure path markup only. ``currentColor`` lets each
+# icon inherit the colour of its context (nav text, KPI tile, stage status).
+_ICON_PATHS: dict[str, str] = {
+    # home / project-health
+    "home": '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/>',
+    # stacked layers — the tables list
+    "layers": '<path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="M2 17l10 5 10-5"/>'
+    '<path d="M2 12l10 5 10-5"/>',
+    # totals / grid
+    "grid": '<path d="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z"/>',
+    # publish-ready — check
+    "check": '<path d="M20 6 9 17l-5-5"/>',
+    # blocked — octagon slash
+    "block": '<path d="M4.9 4.9 19 19"/>'
+    '<path d="M7.9 2h8.2L22 7.9v8.2L16.1 22H7.9L2 16.1V7.9L7.9 2Z"/>',
+    # needs attention — alert triangle
+    "alert": '<path d="M12 3 2 20h20L12 3Z"/><path d="M12 9v5"/><path d="M12 17h.01"/>',
+}
+
+
+def _icon(name: str) -> str:
+    """One inline SVG glyph. Empty string for an unknown name (never raises)."""
+    paths = _ICON_PATHS.get(name)
+    if not paths:
+        return ""
+    return (
+        '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        f'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{paths}</svg>'
+    )
+
+
 def _esc(value: object) -> str:
     """HTML-escape any projection value (defense-in-depth; quote=True)."""
     return html.escape(str(value), quote=True)
@@ -72,15 +105,15 @@ def _kpis(tables: list[dict]) -> str:
     blocked = _count_blocked(tables)
     needs_attention = total - publish_ready
     cards = [
-        ("إجمالي الجداول", total),
-        ("جاهز للنشر", publish_ready),
-        ("محظور", blocked),
-        ("يحتاج انتباه", needs_attention),
+        ("إجمالي الجداول", total, "grid"),
+        ("جاهز للنشر", publish_ready, "check"),
+        ("محظور", blocked, "block"),
+        ("يحتاج انتباه", needs_attention, "alert"),
     ]
     inner = "".join(
-        f'<div class="card kpi"><div class="label">{_esc(label)}</div>'
+        f'<div class="card kpi"><div class="label">{_icon(icon)}{_esc(label)}</div>'
         f'<div class="value">{value}</div></div>'
-        for label, value in cards
+        for label, value, icon in cards
     )
     return f'<div class="kpis">{inner}</div>'
 
@@ -93,8 +126,10 @@ def _stage_dots(t: dict) -> str:
         status = block.get("status", "not_started")
         fg, _bg = _STATUS_STYLE.get(status, _STATUS_STYLE["not_started"])
         dots.append(
-            f'<span class="dot" style="background:{fg};" '
-            f'title="{_esc(_STAGE_LABELS_AR[name])}"></span>'
+            f'<svg class="dotsvg" width="12" height="12" viewBox="0 0 12 12" '
+            f'role="img" aria-label="{_esc(_STAGE_LABELS_AR[name])}">'
+            f"<title>{_esc(_STAGE_LABELS_AR[name])}</title>"
+            f'<circle cx="6" cy="6" r="6" fill="{fg}"/></svg>'
         )
     return "".join(dots)
 
@@ -161,12 +196,43 @@ def _table_card(t: dict) -> str:
     )
 
 
-def render_page(projection: dict) -> str:
+# Fixed governance-reminder copy. The dashboard is a read-only VIEW: it never
+# grants approval and never invents a health score — only the human gates do.
+_GOVERNANCE_REMINDER: str = (
+    "هذه اللوحة عرضٌ للقراءة فقط: الأرقام أعلاه عدٌّ للحقائق المُودعة، "
+    "وليست درجات جاهزية مُختَلَقة. الانتقال بين المراحل يتطلّب موافقة بشرية "
+    "عند بوابات الحوكمة — لا تمنح هذه الصفحة أي موافقة."
+)
+
+
+def _governance_banner() -> str:
+    return f'<div class="banner">{_esc(_GOVERNANCE_REMINDER)}</div>'
+
+
+def _meta_row(generated_at: str | None) -> str:
+    """Render the 'آخر تحديث' row, or nothing when no timestamp is injected.
+
+    ``generated_at`` is the honest process render time, supplied by the impure
+    caller (``generate``); the renderer never reads the clock itself. Labeled as
+    a render time, not data freshness. ``None`` omits the row entirely so a
+    bare ``render_page(projection)`` stays deterministic.
+    """
+    if not generated_at:
+        return ""
+    return f'<div class="metarow">آخر تحديث: {_esc(generated_at)}</div>'
+
+
+def render_page(projection: dict, generated_at: str | None = None) -> str:
     """Render the full self-contained dashboard document for ``projection``.
 
     ``projection`` is the shape returned by
     ``seshat.status_surface.build_status_projection`` — ``{"tables": [...]}``.
     An empty table list renders a friendly empty state, never an error.
+
+    ``generated_at`` is an optional, caller-supplied render timestamp string.
+    When given it is shown as an 'آخر تحديث' meta row (an honest render time,
+    not data freshness); when ``None`` the row is omitted and output is
+    deterministic. The renderer performs no I/O and never reads the clock.
     """
     tables = projection.get("tables", [])
     if not tables:
@@ -181,8 +247,10 @@ def render_page(projection: dict) -> str:
         body = (
             "<h1>صحة المشروع</h1>"
             '<p class="sub">حالة جاهزية كل جدول عبر مراحل الحوكمة السبع.</p>'
+            f"{_meta_row(generated_at)}"
             f"{_kpis(tables)}"
             f"{_summary_table(tables)}"
+            f"{_governance_banner()}"
             '<h1 id="tables" style="margin-top:32px;">تفاصيل الجداول</h1>'
             f"{cards}"
         )
@@ -197,8 +265,8 @@ def render_page(projection: dict) -> str:
         '<div class="app">\n'
         '<aside class="sidebar"><div class="brand">Seshat<small>BI لوحة الحالة'
         "</small></div>"
-        '<nav class="nav"><a href="#">الرئيسية</a>'
-        '<a href="#tables">الجداول</a></nav></aside>\n'
+        f'<nav class="nav"><a href="#">{_icon("home")}الرئيسية</a>'
+        f'<a href="#tables">{_icon("layers")}الجداول</a></nav></aside>\n'
         f"<main>{body}</main>\n"
         "</div>\n"
         "</body>\n</html>\n"

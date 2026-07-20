@@ -35,10 +35,18 @@ def test_generate_writes_file_at_returned_path(tmp_path):
 
 def test_generate_output_equals_render_of_projection(tmp_path):
     repo = _make_repo(tmp_path)
-    out = generate(repo)
+    stamp = "2026-07-20 14:30"  # fixed so both sides are deterministic
+    out = generate(repo, generated_at=stamp)
     written = out.read_text(encoding="utf-8")
-    expected = render_page(build_status_projection(repo))
+    expected = render_page(build_status_projection(repo), generated_at=stamp)
     assert written == expected
+
+
+def test_generate_stamps_a_render_timestamp_by_default(tmp_path):
+    repo = _make_repo(tmp_path)
+    out = generate(repo)  # no generated_at -> generate reads the clock
+    written = out.read_text(encoding="utf-8")
+    assert "آخر تحديث:" in written  # the impure boundary injected a render time
 
 
 def test_generate_writes_utf8_without_bom(tmp_path):
