@@ -222,13 +222,29 @@ def _force_utf8_stdio() -> None:
             pass
 
 
-def main(argv: list[str] | None = None) -> int:
+def _invoked_prog() -> str:
+    """The command name the client actually typed (``seshat`` or ``retail``).
+
+    Derived from argv[0]'s basename so the two byte-identical console entry
+    points each print their own identity in usage/error text (#378). Falls back
+    to ``retail`` when argv[0] is unavailable or empty (e.g. ``python -c``).
+    """
+    import os
+    import sys
+
+    raw = sys.argv[0] if sys.argv else ""
+    stem = os.path.splitext(os.path.basename(raw))[0]
+    return stem or "retail"
+
+
+def main(argv: list[str] | None = None, *, prog: str | None = None) -> int:
     _force_utf8_stdio()
     try:
-        args = _build_parser().parse_args(argv)
+        args = _build_parser(prog or _invoked_prog()).parse_args(argv)
     except SystemExit as exc:
-        # argparse exits 2 on bad/missing args (e.g. no subcommand); surface it
-        # as a return code rather than letting it propagate.
+        # argparse exits on bad/missing args (code 2) AND on --help / --version
+        # (code 0) after printing. The established contract is to SURFACE the code
+        # as a return value, not let it propagate -- so `main([...])` never raises.
         return int(exc.code or 0)
 
     handler = _DISPATCH.get(args.command)

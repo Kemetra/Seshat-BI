@@ -1086,16 +1086,39 @@ def _add_dagster_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
-def _build_parser() -> argparse.ArgumentParser:
+def _distribution_version() -> str:
+    """The installed seshat-bi version, or a friendly fallback off-package."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("seshat-bi")
+    except PackageNotFoundError:  # running from a source tree without an install
+        return "0+unknown"
+
+
+def _build_parser(prog: str = "retail") -> argparse.ArgumentParser:
     """Build the CLI argument parser.
 
     Exposed (not inlined in ``main``) so flag->field mapping is unit-testable
     without executing any rules. The two commit-aware flags live UNDER the
     ``check`` subcommand alongside ``--repo``.
+
+    ``prog`` names the command in usage/error/help text; ``main`` passes the
+    name the client actually invoked (``seshat`` or ``retail``) so the two
+    byte-identical entry points each print their own identity (#378). Defaults to
+    ``retail`` so direct callers/tests are unchanged.
     """
     parser = argparse.ArgumentParser(
-        prog="retail",
+        prog=prog,
         description="Static governance checks for committed Power BI artifacts.",
+    )
+    # A top-level --version that short-circuits BEFORE the required-subcommand
+    # check (argparse version actions exit during parse), so `seshat --version`
+    # works with no subcommand (#378).
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {_distribution_version()}",
     )
     sub = parser.add_subparsers(dest="command", required=True)
     _add_check_parser(sub)
