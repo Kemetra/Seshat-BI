@@ -15,6 +15,11 @@ _SAFE_RANGE_RE = re.compile(r"^[A-Za-z0-9_][\w./~^@-]*(\.\.\.?[\w./~^@-]+)?\Z")
 # unbounded (or sensitive) output into a RuntimeError / Finding (audit #27).
 _STDERR_LIMIT = 300
 
+# git's "not a git repository" sentinel exit code (the expected non-repo case,
+# e.g. a fresh pip-only workspace before `git init`). Mirrors the same-named
+# constant in ``runner`` so the two git wrappers treat the condition identically.
+_GIT_NOT_A_REPO = 128
+
 # `repo_root` here can be an EXTERNALLY-AUTHORED tree -- notably a downloaded PBIP
 # project the user runs `seshat adopt-pbip` against, reached via the adoption
 # seams. `git -C <tree>` (like cwd=<tree>) makes git read THAT tree's own
@@ -77,6 +82,13 @@ def git_check_ignore(repo_root: Path, path: str) -> bool:
     if result.returncode == 0:
         return True
     if result.returncode == 1:
+        return False
+    if result.returncode == _GIT_NOT_A_REPO:
+        # `repo_root` is not a git repository (e.g. a pip-only client's fresh
+        # workspace before `git init`). Nothing can be gitignored there, so the
+        # answer is a clean "not ignored" -- NOT a crash (#371). Mirrors the
+        # exit-128 tolerance in runner._git_ls_files, so the two sibling helpers
+        # agree on the identical "not a repo" condition.
         return False
     raise RuntimeError(f"git check-ignore error ({result.returncode}): {result.stderr}")
 

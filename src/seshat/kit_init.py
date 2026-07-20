@@ -61,6 +61,12 @@ def bootstrap(repo: Path | str) -> BootstrapResult:
     """
     repo = Path(repo)
 
+    # Seed the canonical kit-source.yaml router into a fresh workspace BEFORE
+    # projecting -- a pip-only client's first `init` has no seed, and reading it
+    # unconditionally crashed with a raw FileNotFoundError (#370). Idempotent: an
+    # already-seeded workspace is untouched.
+    compass_project.seed_kit_source(repo)
+
     # Detect prior bootstrap BEFORE writing: a compass.yaml + at least one fence.
     was_bootstrapped = (repo / compass_project.COMPASS_REL).exists() and any(
         _has_fence(repo / f) for f in _FENCED_FILES

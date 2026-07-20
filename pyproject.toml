@@ -158,6 +158,15 @@ packages = ["src/seshat", "src/retail"]
 "templates/source-profile.md" = "seshat/stage1_templates/source-profile.md"
 "templates/readiness-status.yaml" = "seshat/stage1_templates/readiness-status.yaml"
 "templates/source-map.yaml" = "seshat/stage1_templates/source-map.yaml"
+# The other two of the five sister artifacts source-map.yaml declares a reviewer
+# reads as a set (issue #380); scaffold-source now materializes all five.
+"templates/assumptions.md" = "seshat/stage1_templates/assumptions.md"
+"templates/reconciliation-report.md" = "seshat/stage1_templates/reconciliation-report.md"
+# `seshat init` (issue #370) seeds the canonical kit-source.yaml router into a
+# fresh `.seshat/` so a pip-only workspace can bootstrap the compass. Unlike the
+# blank Stage-1 templates above this is the kit's own global router content
+# (verbs/orient/hard_stops), so `init` projects a REAL compass, not a hollow one.
+"templates/kit-source.yaml" = "seshat/stage1_templates/kit-source.yaml"
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -182,11 +191,15 @@ include = [
     "/orchestration/dagster/README.md",
     "/orchestration/dagster/run-evidence/README.md",
     "/orchestration/dagster/src",
-    # Stage-1 blank templates the scaffold-source verb bundles (issue #339);
+    # Stage-1 blank templates the scaffold-source verb bundles (issue #339, #380);
     # the wheel is built from the sdist, so the sdist must carry them.
     "/templates/source-profile.md",
     "/templates/readiness-status.yaml",
     "/templates/source-map.yaml",
+    "/templates/assumptions.md",
+    "/templates/reconciliation-report.md",
+    # The canonical kit-source.yaml seed `init` materializes (issue #370).
+    "/templates/kit-source.yaml",
     "/README.md",
     "/LICENSE",
     "/pyproject.toml",

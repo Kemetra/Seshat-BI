@@ -150,9 +150,13 @@ def test_p1_flags_misplaced_sql_and_pbip() -> None:
 
 
 @pytest.mark.unit
-def test_p1_flags_missing_required_dir() -> None:
+def test_p1_flags_missing_required_dir(tmp_path: Path) -> None:
+    # repo_root is an ISOLATED tmp dir so "missing" means genuinely absent on disk
+    # (P1 now checks the filesystem, not just the tracked set -- #372). Two of the
+    # three required paths are tracked; powerbi/README.md is neither tracked nor on
+    # disk, so it -- and only it -- is flagged.
     tracked = ("README.md", "warehouse/README.md")  # no powerbi/README.md
-    ctx = RuleContext(repo_root=Path("."), tracked_files=tracked)
+    ctx = RuleContext(repo_root=tmp_path, tracked_files=tracked)
     findings = _findings(rule_p1_layout, ctx)
     assert any(f.locator == "powerbi/README.md" for f in findings)
     assert all(f.severity is Severity.ERROR for f in findings)

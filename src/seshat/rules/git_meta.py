@@ -69,10 +69,14 @@ def _is_pbip_signature(path: str) -> bool:
     return any(marker in path for marker in PBIP_DIR_MARKERS)
 
 
-def _missing_required_layout(tracked: set[str]) -> list[Finding]:
+def _missing_required_layout(repo_root: Path, tracked: set[str]) -> list[Finding]:
+    # "Present" means present ON DISK or git-tracked -- not tracked-only. A
+    # freshly-scaffolded, not-yet-committed workspace has the files on disk but an
+    # empty tracked set; calling those "missing" is inaccurate and erodes trust in
+    # `check` before the client has committed (#372).
     return _absent_findings(
         REQUIRED_PATHS,
-        lambda required: required in tracked,
+        lambda required: required in tracked or (repo_root / required).exists(),
         lambda required: Finding(
             rule_id="P1",
             severity=Severity.ERROR,
@@ -106,7 +110,7 @@ def _sql_placement_finding(path: str) -> Finding | None:
 
 @register("P1", "Approach-A layout")
 def rule_p1_layout(ctx: RuleContext) -> Iterable[Finding]:
-    findings = _missing_required_layout(set(ctx.tracked_files))
+    findings = _missing_required_layout(ctx.repo_root, set(ctx.tracked_files))
     for path in ctx.tracked_files:
         # Committed test fixtures (e.g. tests/fixtures/golden_pbip/*.pbip and any
         # test *.sql) are not the live model and must not be forced under
