@@ -5,10 +5,10 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from typing import Mapping
-from urllib.parse import unquote, urlsplit
 
 from .dialect import Dialect, get_dialect
 from .identifiers import validate_identifier
+from .redaction_core import replace_fragments, uri_components
 
 # The ANALYTICS_DB_* keys whose VALUES are credentials -- a POSITIVE set, mirroring
 # ``seshat.dagster_adapter.redaction._SECRET_ANALYTICS_KEYS`` (#357). Redact ONLY
@@ -56,20 +56,14 @@ def _redact_error(error: Exception, *, dialect: Dialect, config: object | None) 
         return "database metadata boundary failed (details redacted)"
 
 
-def _replace_fragments(text: str, fragments: list[str]) -> str:
-    for fragment in fragments:
-        text = text.replace(fragment, "<redacted>")
-    return text
-
-
 def _scrub_environment_secrets(redacted: str, env: Mapping[str, str]) -> str:
     secrets = _database_secret_values(env)
-    redacted = _replace_fragments(redacted, secrets)
+    redacted = replace_fragments(redacted, secrets, "<redacted>")
     # Then each URI component of a DSN-shaped secret (host/user/password/dbname),
     # so a reformatted, schemeless error that names only the host/user -- neither
     # the verbatim DSN nor a `scheme://` present -- still gets its credentials
-    # scrubbed (mirrors seshat.dbt.redaction._uri_values / the dagster redactor).
-    redacted = _replace_fragments(redacted, _uri_components(secrets))
+    # scrubbed (shared core: seshat.redaction_core.uri_components).
+    redacted = replace_fragments(redacted, uri_components(secrets), "<redacted>")
     if "@" in redacted or "://" in redacted:
         return "database metadata boundary failed (details redacted)"
     return redacted
@@ -82,23 +76,6 @@ def _database_secret_values(env: Mapping[str, str]) -> list[str]:
         if value and (key == "DATABASE_URL" or key in _SECRET_ANALYTICS_KEYS)
     }
     return sorted(secrets, key=len, reverse=True)
-
-
-def _uri_component_values(secret: str) -> tuple[str, ...]:
-    parsed = urlsplit(secret)
-    if not parsed.scheme or not parsed.netloc:
-        return ()
-    raw = (parsed.username, parsed.password, parsed.hostname, parsed.path.lstrip("/"))
-    return tuple(
-        component for value in raw if value for component in (value, unquote(value))
-    )
-
-
-def _uri_components(secrets: list[str]) -> list[str]:
-    components = {
-        component for secret in secrets for component in _uri_component_values(secret)
-    }
-    return sorted(components, key=len, reverse=True)
 
 
 def enumerate_tables(

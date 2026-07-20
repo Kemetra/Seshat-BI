@@ -6,7 +6,8 @@ import os
 import re
 from collections.abc import Mapping
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+
+from seshat.redaction_core import replace_fragments, uri_components
 
 DBT_ENVIRONMENT_KEYS = (
     "SESHAT_DBT_HOST",
@@ -156,29 +157,6 @@ def secret_values(environment: Mapping[str, str]) -> tuple[str, ...]:
     return tuple(sorted((value for value in values if value), key=len, reverse=True))
 
 
-def _uri_values(secret: str) -> tuple[str, ...]:
-    parsed = urlsplit(secret)
-    if not parsed.scheme or not parsed.netloc:
-        return ()
-    values = (
-        parsed.username,
-        parsed.password,
-        parsed.hostname,
-        parsed.path.lstrip("/"),
-    )
-    return tuple(value for value in values if value)
-
-
-def _uri_components(secrets: tuple[str, ...]) -> tuple[str, ...]:
-    components = {
-        component
-        for secret in secrets
-        for value in _uri_values(secret)
-        for component in (value, unquote(value))
-    }
-    return tuple(sorted(components, key=len, reverse=True))
-
-
 def _replace_path(text: str, path: Path, token: str) -> str:
     raw = str(path.resolve(strict=False)).rstrip("\\/")
     variants = {raw, raw.replace("\\", "/"), raw.replace("/", "\\")}
@@ -192,11 +170,8 @@ def _sanitize_text(text: str, secrets: tuple[str, ...], repo_root: Path) -> str:
     ordered = tuple(
         sorted({value for value in secrets if value}, key=len, reverse=True)
     )
-    components = _uri_components(ordered)
-    for secret in ordered:
-        text = text.replace(secret, "<redacted>")
-    for component in components:
-        text = text.replace(component, "<redacted>")
+    text = replace_fragments(text, ordered, "<redacted>")
+    text = replace_fragments(text, uri_components(ordered), "<redacted>")
     text = _replace_path(text, repo_root, "<repo>")
     return _replace_path(text, Path.home(), "<home>")
 

@@ -20,7 +20,8 @@ from __future__ import annotations
 
 import os
 import re
-from urllib.parse import unquote, urlsplit
+
+from seshat.redaction_core import replace_fragments, uri_components
 
 _DSN_RE = re.compile(r"\b[A-Za-z][A-Za-z0-9+.-]*://[^\s'\"]+")
 _KEYWORD_RE = re.compile(
@@ -86,38 +87,6 @@ def _secret_env_values() -> list[str]:
     return sorted(values, key=len, reverse=True)
 
 
-def _uri_component_values(secret: str) -> tuple[str, ...]:
-    """Return the individual credential components of a URI-shaped secret.
-
-    A DATABASE_URL-only config stores the DSN as one opaque value; a *reformatted*
-    driver error (`connection to server at "host" ... for user "u"`) contains the
-    host/user components but neither the verbatim DSN nor a `scheme://`, so the
-    whole-value replace and _DSN_RE both miss. Decomposing the URI (mirrors
-    ``seshat.dbt.redaction._uri_values``) lets each component be scrubbed on its
-    own. Non-URI secrets yield nothing (empty tuple)."""
-    parsed = urlsplit(secret)
-    if not parsed.scheme or not parsed.netloc:
-        return ()
-    raw = (parsed.username, parsed.password, parsed.hostname, parsed.path.lstrip("/"))
-    return tuple(
-        component for value in raw if value for component in (value, unquote(value))
-    )
-
-
-def _uri_components(secrets: list[str]) -> list[str]:
-    components = {
-        component for secret in secrets for component in _uri_component_values(secret)
-    }
-    return sorted(components, key=len, reverse=True)
-
-
-def _replace_fragments(text: str, fragments: list[str], token: str) -> str:
-    """Replace every fragment in ``text`` (no-op when absent -- no guard needed)."""
-    for fragment in fragments:
-        text = text.replace(fragment, token)
-    return text
-
-
 def redact_text(text: str) -> str:
     """Return ``text`` with every credential-bearing fragment replaced."""
     if not text:
@@ -128,8 +97,8 @@ def redact_text(text: str) -> str:
     # order: a regex-first pass can consume the leading token of a secret and leave
     # the tail (`abc;` of `abc;user=bob;xyz`) surviving the later value replace.
     secrets = _secret_env_values()
-    out = _replace_fragments(text, secrets, "[REDACTED-ENV]")
-    out = _replace_fragments(out, _uri_components(secrets), "[REDACTED-ENV]")
+    out = replace_fragments(text, secrets, "[REDACTED-ENV]")
+    out = replace_fragments(out, uri_components(secrets), "[REDACTED-ENV]")
     out = _DSN_RE.sub("[REDACTED-DSN]", out)
     out = _KEYWORD_RE.sub(lambda m: f"{m.group(1)}=[REDACTED]", out)
     return out
