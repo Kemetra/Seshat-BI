@@ -194,6 +194,13 @@ def test_safe_target_label_never_leaks_keyword_conninfo_password() -> None:
     assert label == "postgres"
     assert "secret" not in label
 
+    # password quoting a "://" -> must NOT be misclassified as a URL (the
+    # discriminator is the LEADING scheme, not "://" appearing anywhere).
+    spoof = "host=db password='abc://u:s3cret@credential'"
+    spoof_label = _safe_target_label("postgres", spoof)
+    assert spoof_label == "postgres"
+    assert "s3cret" not in spoof_label and "credential" not in spoof_label
+
     # URL form with credentials in the query string is also scrubbed to host.
     url = "postgresql://h:5432/db?password=s3cret"
     assert "s3cret" not in _safe_target_label("postgres", url)

@@ -341,16 +341,16 @@ def _safe_target_label(engine: str, config: object) -> str:
 def _postgres_target_label(config: str) -> str:
     """A credential-free label from a Postgres config string.
 
-    Detect the SHAPE before splitting (#409 P1): a libpq KEYWORD conninfo can
-    carry ``@`` inside an unquoted password (``password=@s3cret``) AND quote
-    host-shaped tokens inside a password (``password='x host=secret'``), so
-    neither an ``@`` split nor a ``host=`` regex can safely isolate a component
-    without a full conninfo parser. URL syntax (``://``) is the unambiguous
-    discriminator: only a URL gets the userinfo/query strip; a keyword conninfo
-    renders NO component at all -- it falls back to the bare engine label so no
-    quoted/escaped credential can ever reach the status line.
+    Classify by OUTER syntax, never by content (#409 P1). A libpq KEYWORD
+    conninfo can embed anything inside a quoted credential -- ``@``, ``host=``,
+    even ``://`` (``password='abc://u:s3cret@x'``) -- so any content-based test
+    (``"://" in config``, a ``host=`` regex, an ``@`` split) can be spoofed into
+    surfacing the secret. A genuine Postgres URL is identified ONLY by its
+    leading ``postgresql://`` / ``postgres://`` scheme, which a keyword conninfo
+    (always ``keyword=value ...``) can never produce at offset 0. Anything that
+    is not outwardly a URL renders NO component -- just the bare engine label.
     """
-    if "://" in config:
+    if config.lstrip().lower().startswith(("postgresql://", "postgres://")):
         # URL form. Credentials live in the userinfo (before "@") and/or the
         # query string (?password=); strip both, keep host[:port]/dbname.
         after_userinfo = config.split("@")[-1]
