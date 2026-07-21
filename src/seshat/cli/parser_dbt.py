@@ -53,6 +53,16 @@ def _add_dbt_parser(sub: argparse._SubParsersAction) -> None:
     _table(validate)
     _common(validate)
 
+    scaffold = commands.add_parser(
+        "scaffold",
+        help=(
+            "materialize the governed dbt model set (staging + gold star + parity "
+            "audit + contracts + selector) from an approved source map (issue #406)"
+        ),
+    )
+    _table(scaffold)
+    _common(scaffold)
+
     plan = commands.add_parser("plan", help="create an immutable execution plan")
     _table(plan)
     _common(plan)

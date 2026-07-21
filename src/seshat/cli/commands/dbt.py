@@ -530,9 +530,25 @@ def _init(args: Any) -> CommandResult:
     return _pass("init", None, message)
 
 
+def _scaffold(args: Any) -> CommandResult:
+    """Materialize the governed dbt model set from an approved map (issue #406)."""
+    from seshat.dbt.scaffold import scaffold_models
+
+    report = scaffold_models(_root(args), args.table)
+    message = "; ".join(
+        (
+            f"scaffolded {len(report.written)} governed dbt files "
+            f"(kept {len(report.kept)} existing, merged {len(report.merged)})",
+            *report.notes,
+        )
+    )
+    return _pass("scaffold", args.table, message)
+
+
 _COMMANDS = {
     "doctor": _doctor,
     "validate": _validate,
+    "scaffold": _scaffold,
     "plan": _plan,
     "build": _build,
     "test": _test,

@@ -1695,10 +1695,10 @@
     {
       "classification": "generated_wrapper",
       "destination": "skills/dbt-workflows/SKILL.md",
-      "output_sha256": "b216171a521e1c35c1ebabb0c3c3450b0ca52967fdc6dcba798f85120c531c17",
+      "output_sha256": "fad10d636f1d9e43e6a63778c3aed7cec64af5e43e2be44d5b87be9c11fd1dd4",
       "source": "distribution/bundle-templates/shared/skills/dbt-workflows/SKILL.md",
       "source_id": "dbt-workflows-skill",
-      "source_sha256": "b216171a521e1c35c1ebabb0c3c3450b0ca52967fdc6dcba798f85120c531c17",
+      "source_sha256": "fad10d636f1d9e43e6a63778c3aed7cec64af5e43e2be44d5b87be9c11fd1dd4",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1748,10 +1748,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "2a1753e73e5827f23c6e5c9632b3df81fbe83dededaaeaea5db1074d874f4c2e",
+  "manifest_digest": "8fdea27c17a25b1b2e02bcc7a7931f173fe72f10da016cf9cf83dd7dcd92259f",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "56d9cfacbf4733524e947ee306ef65b4e1cd2d8a",
+  "source_revision": "0949d7a7c2ac06a94b882599b8abd6c9bd60aec4",
   "target": "claude",
   "version": "0.5.3"
 }

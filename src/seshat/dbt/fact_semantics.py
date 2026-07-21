@@ -29,7 +29,9 @@ _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
 
 _REMEDY = (
     "declare it in the approved source map's gold_star.fact section "
-    "(see templates/source-map.yaml) and re-approve the mapping"
+    "(mappings/<table>/source-map.yaml; the fields are shown in the shipped "
+    "source-map template and documented in the dbt-workflows skill) and "
+    "re-approve the mapping"
 )
 
 

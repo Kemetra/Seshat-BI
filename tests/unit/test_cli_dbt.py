@@ -16,7 +16,8 @@ pytestmark = pytest.mark.unit
 
 
 @pytest.mark.parametrize(
-    "command", ("doctor", "validate", "plan", "build", "test", "inspect-run")
+    "command",
+    ("doctor", "validate", "scaffold", "plan", "build", "test", "inspect-run"),
 )
 def test_dbt_subcommands_are_parseable(command: str) -> None:
     argv = ["dbt", command]
@@ -93,6 +94,31 @@ def test_accept_plan_requires_exact_lowercase_sha256() -> None:
         )
         == 2
     )
+
+
+def test_scaffold_is_dispatched_and_gate_blocks_are_governance_refusals(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`dbt scaffold` is a registered verb; a missing/unapproved map fails closed
+    as a governance refusal (exit 3), never an uncaught traceback."""
+    import seshat.cli.commands.dbt as module
+
+    assert "scaffold" in module._COMMANDS
+    args = Namespace(
+        command="dbt",
+        dbt_command="scaffold",
+        table="never_onboarded",
+        repo=str(tmp_path),
+        output_format="json",
+    )
+
+    code = module.dbt_main(args)
+    output = capsys.readouterr().out
+
+    assert code == 3
+    payload = json.loads(output)
+    assert payload["outcome"] == "blocked"
+    assert "Traceback" not in output
 
 
 def test_base_cli_import_is_adapter_lazy() -> None:
