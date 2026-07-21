@@ -81,6 +81,52 @@ def test_retail_alias_still_echoes_retail(capsys, tmp_path) -> None:
 
 
 # ---------------------------------------------------------------------------
+# #402 (PR #403 review) -- module-run stems must normalize, never leak
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("argv0", "expected"),
+    [
+        # console scripts: the stem IS the brand -> honored verbatim
+        ("seshat", "seshat"),
+        ("retail", "retail"),
+        ("/usr/local/bin/seshat", "seshat"),
+        (r"C:\pipx\venvs\seshat-bi\Scripts\seshat.exe", "seshat"),
+        # module runs: the stem is the entry FILE, not the brand -> normalize to
+        # seshat so no command ever prints `__main__ status:` / `cli drift:`.
+        ("/x/seshat/cli/__main__.py", "seshat"),  # python -m seshat.cli
+        ("/x/retail/cli.py", "seshat"),  # python -m retail.cli (stem `cli`)
+        ("__main__", "seshat"),
+        ("cli", "seshat"),
+        # no argv0 at all (python -c) -> the primary brand, never a garbage stem
+        ("", "seshat"),
+    ],
+)
+def test_invoked_prog_normalizes_unknown_stems(monkeypatch, argv0, expected) -> None:
+    # The oracle on the mechanism the PR #403 review flagged: _invoked_prog reads
+    # argv[0], and only the two real brand stems survive; everything else is the
+    # primary brand. (The module entry points ALSO pass an explicit prog, but this
+    # guards the fallback that leaked `__main__` before.)
+    import sys
+
+    from seshat.cli import _invoked_prog
+
+    monkeypatch.setattr(sys, "argv", [argv0])
+    assert _invoked_prog() == expected
+
+
+def test_invoked_prog_handles_empty_argv(monkeypatch) -> None:
+    # argv itself empty (not just argv[0]) -> still the primary brand, no IndexError.
+    import sys
+
+    from seshat.cli import _invoked_prog
+
+    monkeypatch.setattr(sys, "argv", [])
+    assert _invoked_prog() == "seshat"
+
+
+# ---------------------------------------------------------------------------
 # #399 -- missing-driver guidance names the real distribution + pipx remedy
 # ---------------------------------------------------------------------------
 

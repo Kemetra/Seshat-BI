@@ -242,15 +242,23 @@ def _invoked_prog() -> str:
     """The command name the client actually typed (``seshat`` or ``retail``).
 
     Derived from argv[0]'s basename so the two byte-identical console entry
-    points each print their own identity in usage/error text (#378). Falls back
-    to ``retail`` when argv[0] is unavailable or empty (e.g. ``python -c``).
+    points each print their own identity in usage/error text (#378) and output
+    prefixes (#402).
+
+    Only the two real brand stems are honored; anything else -- an empty argv0
+    (``python -c``), or a module run whose stem is the entry file, not the brand
+    (``python -m seshat.cli`` -> ``__main__``; ``python -m retail.cli`` -> ``cli``)
+    -- normalizes to ``seshat``, the primary brand, so no command ever emits a
+    nonsense ``__main__ status:`` / ``cli drift:`` prefix (PR #403 review). The
+    module entry points additionally pass an explicit ``prog`` to preserve the
+    deprecated ``retail`` identity on ``-m retail.cli``; this is the safety net.
     """
     import os
     import sys
 
     raw = sys.argv[0] if sys.argv else ""
     stem = os.path.splitext(os.path.basename(raw))[0]
-    return stem or "retail"
+    return stem if stem in ("seshat", "retail") else "seshat"
 
 
 def _prog(args: object) -> str:
