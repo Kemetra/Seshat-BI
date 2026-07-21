@@ -27,6 +27,49 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+### Added
+
+- Top-level `--version` prints `<prog> <version>` from installed package
+  metadata (with a `0+unknown` fallback for an uninstalled source tree), and
+  CLI identity now follows the invoked command name (`seshat --help` no longer
+  prints `usage: retail ...`) (#378).
+
+### Fixed
+
+- `check` and `doctor` emit a clean stderr error and exit 1 on a broken or
+  unlaunchable git (missing binary, corrupt repo), instead of a raw traceback
+  (#394).
+- `redaction_core` now scrubs three more DSN shapes at the shared decomposition
+  -- a mixed-case hostname, URI query-param credentials, and libpq keyword
+  conninfo strings -- so every boundary redactor benefits; the repo-root probe
+  behind P2 uses `git rev-parse --show-prefix` instead of a path comparison
+  that a Cygwin/MSYS git could fail (#392, #393).
+- `cli._redact_dsn` is reimplemented on the shared `redaction_core`, closing a
+  duplicate that missed the DB name and percent-decoded credential forms; P2 no
+  longer errors in a fully non-git workspace (#384, #385).
+- `doctor` now honors the same KIT_SELF / foreign-repo skip that `check`
+  already applies, so a client's downloaded-into workspace is not warned about
+  kit-internal manifests it was never given (#377).
+- `scaffold-source` output is self-consistent with its own templates: the
+  written `readiness-status.yaml` next_action matches the actual
+  `source_ready` stage, and all five sister artifacts declared in
+  `source-map.yaml` are materialized (#374, #380).
+- `demo run`'s live mode is decided by an actual reachability probe rather than
+  `bool(dsn)`, and both `demo run` and `demo load` resolve the DSN from the
+  same shared helper (workspace `.env` included); a live-leg connect failure is
+  redacted before being reported instead of surfacing a credential-bearing
+  traceback (#375, #376, #379).
+- `seshat init` no longer crashes on a fresh non-git workspace missing
+  `.seshat/kit-source.yaml` (now a bundled template), and `check` no longer
+  raises or falsely reports on-disk files as missing in a non-git workspace
+  (#370, #371, #372).
+
+### Docs
+
+- Rebrand user-facing `retail check` references to `seshat check` (#390).
+- Add a Claude/Codex marketplace client quickstart and a public-catalog
+  submission runbook (#373, #382).
+
 ## [0.5.2] -- 2026-07-20
 
 ### Added
