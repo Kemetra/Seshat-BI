@@ -32,7 +32,12 @@ class _FakeRunner:
             "DISTINCT" not in sql
         ):
             return [(3,)]
-        if "DISTINCT (a)" in sql or "DISTINCT (a, " in sql:
+        # PK proof: the FINAL query, which selects THREE values -- `count(*)`, the
+        # distinct-tuple count, and the null-count -- so its SELECT list carries a
+        # leading `count(*),` (a comma) that the single-aggregate per-column query
+        # does not. Match on that shape, not on quoted identifier text, so #410's
+        # dialect quoting (`DISTINCT ("a")`) cannot defeat the discriminator.
+        if sql.lstrip().lower().startswith("select count(*),"):
             # PK proof row: (total, distinct_pk, null_pk) -> unique, no nulls
             return [(3, 3, 0)]
         # per-column (missing, distinct)

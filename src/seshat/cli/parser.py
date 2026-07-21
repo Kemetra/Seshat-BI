@@ -240,6 +240,33 @@ def _add_blockers_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_orchestration_assess_parser(sub: argparse._SubParsersAction) -> None:
+    """`orchestration-assess` (issue #401): read-only recommend-then-decide step
+    for adopting the dbt / dagster orchestration adapters. From committed state
+    (table count, gold-ready state, adapter presence) it emits per-adapter
+    signals, the open questions the human must answer, and each opt-in command --
+    but NEVER installs, runs, or approves an adapter. No numeric score."""
+    p = sub.add_parser(
+        "orchestration-assess",
+        help=(
+            "read-only recommend-then-decide assessment of whether this project "
+            "needs the dbt / dagster orchestration adapters; recommends only, "
+            "the human decides (never adopts on your behalf)"
+        ),
+    )
+    p.add_argument("--repo", default=".", help="repo root to assess from")
+    p.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("text", "json"),
+        default="text",
+        help=(
+            "'text' (default) is human-readable; 'json' emits the stable "
+            "recommend-then-decide document -- never a numeric score."
+        ),
+    )
+
+
 def _add_pii_notice_parser(sub: argparse._SubParsersAction) -> None:
     """`pii-notice` (spec 114): read-only per-column PII-disclosure notice from a
     table's committed source-map.yaml. Echoes each pii:true column's flag +
@@ -1197,6 +1224,7 @@ def _build_parser(prog: str = "retail") -> argparse.ArgumentParser:
     _add_approvals_parser(sub)
     _add_evidence_pack_parser(sub)
     _add_blockers_parser(sub)
+    _add_orchestration_assess_parser(sub)
     _add_pii_notice_parser(sub)
     _add_approver_view_parser(sub)
     _add_mapping_mirror_parser(sub)

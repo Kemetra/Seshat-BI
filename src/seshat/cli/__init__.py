@@ -187,6 +187,9 @@ _DISPATCH: dict[str, Callable[[object], int]] = {
     "approvals": _lazy(".commands.approvals", "approvals_main"),
     "evidence-pack": _lazy(".commands.evidence_pack", "evidence_pack_main"),
     "blockers": _lazy(".commands.blockers", "blockers_main"),
+    "orchestration-assess": _lazy(
+        ".commands.orchestration_assess", "orchestration_assess_main"
+    ),
     "pii-notice": _lazy(".commands.pii_notice", "pii_notice_main"),
     "approver-view": _lazy(".commands.approver_view", "approver_view_main"),
     "mapping-mirror": _lazy(".commands.mapping_mirror", "mapping_mirror_main"),
