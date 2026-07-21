@@ -180,6 +180,45 @@ def test_mismatched_columns_fail_closed(db_first_repo, monkeypatch) -> None:
     assert "source-map" in bronze["blocking_reason"]
 
 
+def test_bronze_unchanged_after_a_downstream_gate_failure(
+    db_first_repo, monkeypatch
+) -> None:
+    """#405 acceptance #3 (second half): Bronze stays untouched after a
+    DOWNSTREAM failure too.
+
+    bronze_table verifies the existing relation read-only (materialized), then
+    a downstream gate fails. The Bronze drop-and-reload still never runs and the
+    run fails closed -- the read-only verification never mutated the relation
+    on the way in, and the failure never triggers a reload on the way out.
+    """
+    writes = _forbid_bronze_writes(monkeypatch)
+    monkeypatch.setattr(db, "resolve_dsn", lambda: "postgresql://stub")
+    monkeypatch.setattr(
+        db,
+        "inspect_bronze",
+        lambda dsn, table: db.BronzeRelation(
+            exists=True, columns=_HEALTHY_COLUMNS, rows=249106
+        ),
+    )
+    monkeypatch.setattr(db, "apply_sql_file", lambda dsn, path: None)
+    # The static governance gate fails at silver_tables (a downstream STOP).
+    monkeypatch.setattr(
+        commands, "run_gate_command", lambda argv, cwd: (1, "3 violations")
+    )
+
+    result = materialize(_through_gold(db_first_repo), raise_on_error=False)
+    assert result.success is False  # fail closed on the downstream gate
+
+    records = {r["asset"]: r for r in EvidenceWriter(db_first_repo, RUN_ID).records()}
+    # Bronze was verified read-only and materialized BEFORE the failure...
+    assert records["bronze_table"]["outcome"] == "materialized"
+    assert records["bronze_table"]["measured"]["bronze_mutated"] is False
+    # ...the downstream gate failed...
+    assert records["silver_tables"]["outcome"] == "failed"
+    # ...and the Bronze drop-and-reload NEVER ran, before or after the failure.
+    assert writes == []
+
+
 def test_existing_bronze_without_dsn_blocks_on_deferred_boundary(
     db_first_repo, monkeypatch
 ) -> None:

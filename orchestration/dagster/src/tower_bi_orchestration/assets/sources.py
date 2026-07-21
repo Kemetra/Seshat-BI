@@ -104,7 +104,8 @@ class ExistingBronzeAdapter:
         if relation.rows == 0:
             self._halt_failed(
                 f"existing-bronze mode: bronze.{table} exists but is EMPTY "
-                "(0 rows) -- refusing to start a governed run on empty Bronze"
+                "(0 rows) -- refusing to start a governed run on empty Bronze; "
+                "re-load Bronze, or use --source-mode csv"
             )
         required = referenced_source_columns(self._root, table)
         missing = sorted(required - set(relation.columns))
@@ -112,9 +113,11 @@ class ExistingBronzeAdapter:
             self._halt_failed(
                 f"existing-bronze mode: bronze.{table} does not match the "
                 "approved source-map -- missing source column(s): "
-                f"{', '.join(missing)}"
+                f"{', '.join(missing)}; re-load Bronze with these columns, or "
+                "correct mappings/<table>/source-map.yaml"
             )
         # READ-ONLY: nothing was dropped, created, truncated, or loaded.
+        mutated = False  # the single source of truth for the non-destruction
         return SourcePrepared(
             source_mode=EXISTING_BRONZE,
             outcome="materialized",
@@ -122,7 +125,9 @@ class ExistingBronzeAdapter:
                 "source_mode": EXISTING_BRONZE,
                 "rows_present": relation.rows,
                 "columns_present": len(relation.columns),
-                "bronze_mutated": False,
+                # Same value the SourcePrepared contract carries -- the evidence
+                # flag is derived, never a decorative duplicate literal.
+                "bronze_mutated": mutated,
             },
-            mutated_bronze=False,
+            mutated_bronze=mutated,
         )
