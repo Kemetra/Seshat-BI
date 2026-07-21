@@ -136,6 +136,8 @@ def test_pk_proof_uses_the_selected_dialects_tuple_distinct_form() -> None:
     pk_sql = runner.calls[-1]
     # SQL Server form: a DISTINCT subquery, NOT the Postgres row-value tuple.
     assert "SELECT DISTINCT" in pk_sql
+    # Identifiers are quoted with the dialect's bracket form (#410).
+    assert "[id], [line_no]" in pk_sql
     assert "count(DISTINCT (id, line_no))" not in pk_sql
 
 
@@ -143,19 +145,20 @@ def test_pk_null_proof_counts_empty_text_keys_not_just_null() -> None:
     """For a TEXT candidate key the null/empty proof must use the ''OR NULL
     measure (RC5), not IS NULL alone -- a faithful bronze landing writes '' for a
     missing key, so IS NULL alone would pass a blank-key grain as unique and make
-    the emitted `NULLs/empty in PK` label dishonest (PR #409)."""
+    the emitted `NULLs/empty in PK` label dishonest (PR #409). Identifiers are
+    dialect-quoted (#410), so the text key appears as `trim("code")`."""
     from seshat.profile import profile
 
     runner = FakeRunner([[("code", "text")], [(100,)], [(0, 100)], [(100, 100, 0)]])
     profile(runner, "bronze.demo", ("code",))
     pk_sql = runner.calls[-1]
-    assert "trim(code)" in pk_sql and "= ''" in pk_sql
+    assert 'trim("code")' in pk_sql and "= ''" in pk_sql
 
     # A non-text key stays on plain IS NULL (trim() is text-only, would crash).
     runner2 = FakeRunner([[("id", "integer")], [(100,)], [(0, 100)], [(100, 100, 0)]])
     profile(runner2, "bronze.demo", ("id",))
     pk_sql2 = runner2.calls[-1]
-    assert "id IS NULL" in pk_sql2 and "trim(" not in pk_sql2
+    assert '"id" IS NULL' in pk_sql2 and "trim(" not in pk_sql2
 
 
 def test_pk_is_not_unique_on_an_empty_table() -> None:
@@ -174,10 +177,10 @@ def test_pk_is_not_unique_on_an_empty_table() -> None:
 
 def test_snowflake_lowercase_pk_matches_uppercased_catalog_type() -> None:
     """Snowflake's INFORMATION_SCHEMA reports an unquoted `id` as `ID`. A user's
-    `--pk id` must still resolve to its real (numeric) type via the dialect's
-    catalog normalization -- a case-sensitive lookup would miss it, default to
-    `text`, and emit `trim(id) = ''` against a NUMBER column (a DB-boundary crash
-    instead of a profile, #409)."""
+    `--pk id` must resolve to its real (numeric) type by casefold-matching the
+    DISCOVERED column, then emit the discovered spelling QUOTED (`"ID"`) -- a
+    case-sensitive lookup would miss it, default to `text`, and emit `trim` against
+    a NUMBER column (a DB-boundary crash instead of a profile, #409/#410)."""
     from seshat.dialect import get_dialect
     from seshat.profile import profile
 
@@ -186,9 +189,89 @@ def test_snowflake_lowercase_pk_matches_uppercased_catalog_type() -> None:
     runner = FakeRunner([[("ID", "NUMBER")], [(100,)], [(0, 100)], [(100, 100, 0)]])
     profile(runner, "bronze.demo", ("id",), dialect=snowflake)
     pk_sql = runner.calls[-1]
-    # Non-text key -> plain IS NULL, NEVER trim() (which errors on a NUMBER column).
-    assert "id IS NULL" in pk_sql
-    assert "trim(id)" not in pk_sql
+    # Non-text key -> plain IS NULL, NEVER trim(); emitted as the discovered
+    # spelling quoted (Snowflake upper-quotes), matching the stored column.
+    assert '"ID" IS NULL' in pk_sql
+    assert "trim(" not in pk_sql
+
+
+def test_postgres_uppercase_pk_matches_lowercased_catalog_type() -> None:
+    """The mirror of the Snowflake case, on a CASE-INSENSITIVE engine that folds
+    the OTHER way. Postgres stores an unquoted `id` lowercased; a user's `--pk ID`
+    must casefold-match the discovered `id` and resolve to its numeric type -- else
+    it defaults to `text` and emits `trim(ID)` against an integer column, a
+    DB-boundary crash (#410, the codex-flagged Postgres case the Snowflake-only
+    fix did not cover because `normalize_catalog_literal` is identity on Postgres)."""
+    from seshat.dialect import get_dialect
+    from seshat.profile import profile
+
+    pg = get_dialect("postgres")
+    runner = FakeRunner([[("id", "integer")], [(100,)], [(0, 100)], [(100, 100, 0)]])
+    profile(runner, "bronze.t", ("ID",), dialect=pg)
+    pk_sql = runner.calls[-1]
+    # Numeric key -> plain IS NULL (no trim), emitted as the discovered lowercase
+    # spelling quoted so it matches the stored column.
+    assert '"id" IS NULL' in pk_sql
+    assert "trim(" not in pk_sql
+
+
+def test_exact_case_pk_match_wins_over_casefold_collision() -> None:
+    """On a case-SENSITIVE catalog (Postgres) a table can hold BOTH `id` and a
+    quoted `"ID"`. A candidate `--pk id` must resolve to the EXACT-case `id`
+    (integer here), never let the casefold-colliding `"ID"` (text) win -- a
+    casefold-only lookup would silently profile the wrong column and emit a wrong
+    PK proof at exit 0, the worst kind of gate-evidence bug (#410 review catch)."""
+    from seshat.dialect import get_dialect
+    from seshat.profile import profile
+
+    pg = get_dialect("postgres")
+    # Catalog returns `id` (integer) then `ID` (text) -- both coexist on Postgres.
+    runner = FakeRunner(
+        [
+            [("id", "integer"), ("ID", "text")],
+            [(100,)],
+            [(0, 100)],  # id column stats
+            [(5, 90)],  # ID column stats
+            [(100, 100, 0)],  # pk proof
+        ]
+    )
+    profile(runner, "bronze.t", ("id",), dialect=pg)
+    pk_sql = runner.calls[-1]
+    # Must profile the exact-case integer `id` (no trim), NOT the text `"ID"`.
+    assert '"id" IS NULL' in pk_sql
+    assert "trim(" not in pk_sql
+
+
+def test_ambiguous_casefold_pk_is_refused() -> None:
+    """When a --pk name matches NO column exactly but case-folds to MORE THAN ONE
+    discovered column (Postgres `id` + quoted `"ID"`, `--pk Id`), the profiler must
+    REFUSE with an actionable error rather than silently pick the ordinal-first
+    column and fabricate a uniqueness proof for the wrong grain (#410 review)."""
+    from seshat.dialect import get_dialect
+    from seshat.profile import profile
+
+    pg = get_dialect("postgres")
+    runner = FakeRunner([[("id", "integer"), ("ID", "text")], [(100,)]])
+    with pytest.raises(ValueError, match="ambiguous"):
+        profile(runner, "bronze.t", ("Id",), dialect=pg)
+
+
+def test_reserved_word_identifiers_are_quoted() -> None:
+    """A valid landed object whose table or column is a reserved word (`order`,
+    `group`) must be QUOTED in the generated SQL so the DB parses it as an
+    identifier, not a keyword -- otherwise the run fails at the DB boundary instead
+    of producing a profile (#410)."""
+    from seshat.profile import profile
+
+    # table `bronze.order`, a text column `group`, PK on `group`.
+    runner = FakeRunner([[("group", "text")], [(10,)], [(0, 5)], [(10, 10, 0)]])
+    profile(runner, "bronze.order", ("group",))
+    # every emitted statement quotes the reserved words.
+    row_count_sql = runner.calls[1]
+    assert 'FROM "bronze"."order"' in row_count_sql
+    pk_sql = runner.calls[-1]
+    assert 'trim("group")' in pk_sql
+    assert "trim(group)" not in pk_sql
 
 
 def test_profile_rejects_unsafe_table_name() -> None:
