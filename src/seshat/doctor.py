@@ -106,21 +106,21 @@ def collect_findings(ctx: RuleContext) -> list[Finding]:
     return findings
 
 
-def format_digest(findings: list[Finding]) -> str:
+def format_digest(findings: list[Finding], prog: str = "seshat") -> str:
     """Render the findings as a human digest (no score -- a list + a count)."""
     if not findings:
-        return "retail doctor: no drift found across the aggregated read-only checks."
-    lines = [f"retail doctor: {len(findings)} finding(s) across read-only checks:"]
+        return f"{prog} doctor: no drift found across the aggregated read-only checks."
+    lines = [f"{prog} doctor: {len(findings)} finding(s) across read-only checks:"]
     for f in findings:
         lines.append(f"  [{f.severity.value}] {f.rule_id} {f.message} ({f.locator})")
     lines.append(
-        "\n(advisory digest -- the `seshat check` gate exit code remains the "
+        f"\n(advisory digest -- the `{prog} check` gate exit code remains the "
         "authority; run it to gate.)"
     )
     return "\n".join(lines)
 
 
-def run_doctor(repo_root: Path, strict: bool = False) -> int:
+def run_doctor(repo_root: Path, strict: bool = False, prog: str = "seshat") -> int:
     """Print the digest. Return 0 (advisory) unless ``strict`` and drift exists.
 
     ``--strict`` counts only actionable findings (WARNING/ERROR); an INFO -- such
@@ -145,7 +145,7 @@ def run_doctor(repo_root: Path, strict: bool = False) -> int:
         )
         return 1
     findings = collect_findings(ctx)
-    print(format_digest(findings))
+    print(format_digest(findings, prog))
     actionable = [
         f for f in findings if f.severity in (Severity.ERROR, Severity.WARNING)
     ]

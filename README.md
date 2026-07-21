@@ -172,13 +172,22 @@ evidence behind each claim.
 ### Python CLI
 
 ```bash
+# core CLI (static checks + the offline demo)
 pipx install seshat-bi
 seshat init-project my-bi
+
+# to also run the live-data steps (`seshat validate`, `seshat drift`), add the
+# optional Postgres driver. Either install it inline:
+pipx install "seshat-bi[db]"
+# or inject it into an existing pipx install:
+pipx inject seshat-bi psycopg2-binary
 ```
 
 The `seshat` command is primary. `retail` is a deprecated compatibility alias kept
 for one deprecation cycle. Live database validation needs the optional `db` extra
-and a DSN stored only in a gitignored `.env`.
+(shown above) and a DSN stored only in a gitignored `.env`. If the driver is
+missing, `seshat validate` / `seshat drift` print the exact `pipx inject` /
+`pip install` remedy rather than a raw import error.
 
 ### Claude Code plugin
 

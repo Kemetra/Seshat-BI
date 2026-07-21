@@ -35,7 +35,10 @@ def run_drift(args: argparse.Namespace) -> int:
     Kept thin (each leg is its own function) so the guard-heavy live path does
     not turn this into a Bumpy Road / Complex Method.
     """
+    from seshat import cli
     from seshat.source_profile_reader import read_source_profile
+
+    prog = cli._prog(args)  # brand the client typed (`seshat`/`retail`), #402
 
     # A missing/unreadable --baseline path is a distinct failure from a
     # non-conformant one; surface it as a clean message (never a traceback),
@@ -44,13 +47,13 @@ def run_drift(args: argparse.Namespace) -> int:
         parsed = read_source_profile(args.baseline)
     except OSError as exc:
         print(
-            f"retail drift: cannot read baseline {args.baseline!r}: {exc}",
+            f"{prog} drift: cannot read baseline {args.baseline!r}: {exc}",
             file=sys.stderr,
         )
         return 1
 
     if parsed.uncomparable is not None:
-        print(f"retail drift: {parsed.uncomparable}", file=sys.stderr)
+        print(f"{prog} drift: {parsed.uncomparable}", file=sys.stderr)
         return 1
 
     if not args.dsn:
@@ -58,21 +61,23 @@ def run_drift(args: argparse.Namespace) -> int:
     return _run_live_drift(args, parsed)
 
 
-def _emit(doc: dict, output_format: str) -> None:
+def _emit(doc: dict, output_format: str, prog: str = "seshat") -> None:
     """Shared output: JSON document, or a human status + blocking-reason lines."""
     if output_format == "json":
         print(json.dumps(doc, indent=2))
         return
     n = len(doc["findings"])
-    print(f"retail drift: status={doc['status']}; {n} finding(s)")
+    print(f"{prog} drift: status={doc['status']}; {n} finding(s)")
     for r in doc["blocking_reasons"]:
         print(f"  blocking_reason: {r}")
 
 
 def _run_deferred_drift(args: argparse.Namespace, parsed: object) -> int:
     """No --dsn: emit a schema-valid pending document; never a fabricated diff."""
+    from seshat import cli
     from seshat.drift import ReportContext, to_findings_dict
 
+    prog = cli._prog(args)
     doc = to_findings_dict(
         parsed.profile,
         None,
@@ -82,9 +87,9 @@ def _run_deferred_drift(args: argparse.Namespace, parsed: object) -> int:
         ),
     )
     if getattr(args, "output_format", "text") == "json":
-        _emit(doc, "json")
+        _emit(doc, "json", prog)
     print(
-        "retail drift: [PENDING LIVE RE-PROFILE] -- no --dsn given, so no "
+        f"{prog} drift: [PENDING LIVE RE-PROFILE] -- no --dsn given, so no "
         "observed re-profile was taken. status=pending_live_reprofile + "
         "warning; no comparison fabricated. Pass --dsn to run the live leg.",
         file=sys.stderr,
@@ -164,21 +169,23 @@ def _run_live_drift(args: argparse.Namespace, parsed: object) -> int:
     """
     from pathlib import Path
 
+    from seshat import cli
     from seshat.connection_env import ConnectionConfigError, applied_dotenv
     from seshat.dbt.redaction import EnvironmentConfigError
 
+    prog = cli._prog(args)
     try:
         with applied_dotenv(Path.cwd()):
             return _run_live_drift_body(args, parsed)
     except EnvironmentConfigError as exc:
         print(
-            f"retail drift: could not read the workspace .env: {exc}",
+            f"{prog} drift: could not read the workspace .env: {exc}",
             file=sys.stderr,
         )
         return 1
     except ConnectionConfigError as exc:
         print(
-            f"retail drift: invalid database connection setting: {exc}",
+            f"{prog} drift: invalid database connection setting: {exc}",
             file=sys.stderr,
         )
         return 1
@@ -199,13 +206,15 @@ def _run_live_drift_body(args: argparse.Namespace, parsed: object) -> int:
     from seshat.drift import ReportContext, to_findings_dict
     from seshat.profile import profile as run_profile
 
+    prog = cli._prog(args)
+
     # Convert an invalid engine/port setting into a clean boundary failure;
     # the re-profile body below stays outside the wrap (its ValueErrors are real).
     dialect = as_connection_config(lambda: get_dialect(cli._current_engine()))
     config = as_connection_config(lambda: _resolve_live_config(args, cli, dialect))
     if config is None:
         print(
-            "retail drift: no database connection configured for the live "
+            f"{prog} drift: no database connection configured for the live "
             "re-profile. Pass --dsn (postgresql://...) or set the ANALYTICS_DB_* "
             "vars in your gitignored .env. Never commit a real DSN.",
             file=sys.stderr,
@@ -214,8 +223,8 @@ def _run_live_drift_body(args: argparse.Namespace, parsed: object) -> int:
 
     if not cli._ensure_driver():
         print(
-            "retail drift: the live re-profile needs the optional DB driver.\n"
-            "       install it with:  pip install 'retail[db]'\n"
+            f"{prog} drift: the live re-profile needs the optional DB driver.\n"
+            f"{cli._db_extra_hint()}\n"
             "       (the deferred [PENDING LIVE RE-PROFILE] mode needs no driver).",
             file=sys.stderr,
         )
@@ -223,14 +232,14 @@ def _run_live_drift_body(args: argparse.Namespace, parsed: object) -> int:
 
     reason = _uncomparable_precondition(parsed)
     if reason is not None:
-        print(f"retail drift: {reason}", file=sys.stderr)
+        print(f"{prog} drift: {reason}", file=sys.stderr)
         return 1
 
     # Returns/PII semantics from the source-map (flag > sibling; absent -> None).
     try:
         semantics = _resolve_semantics(args)
     except _SemanticsError as exc:
-        print(f"retail drift: {exc}", file=sys.stderr)
+        print(f"{prog} drift: {exc}", file=sys.stderr)
         return 1
 
     try:
@@ -238,7 +247,7 @@ def _run_live_drift_body(args: argparse.Namespace, parsed: object) -> int:
         observed = run_profile(runner, parsed.landed_table, parsed.pk_columns)
     except Exception as exc:
         print(
-            "retail drift: live re-profile failed at the DB boundary "
+            f"{prog} drift: live re-profile failed at the DB boundary "
             f"({exc.__class__.__name__}): {dialect.redact(exc, config)}",
             file=sys.stderr,
         )
@@ -254,5 +263,5 @@ def _run_live_drift_body(args: argparse.Namespace, parsed: object) -> int:
         ),
         semantics=semantics,
     )
-    _emit(doc, getattr(args, "output_format", "text"))
+    _emit(doc, getattr(args, "output_format", "text"), prog)
     return 0 if doc["status"] in ("pass", "warning") else 1

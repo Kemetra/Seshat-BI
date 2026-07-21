@@ -91,5 +91,6 @@ def run_semantic_check(args: argparse.Namespace) -> int:
     for finding in findings:
         print(_format(finding))
     if exit_code == 0 and not findings:
-        print("retail semantic-check: no drift (0 findings).", file=sys.stderr)
+        prog = getattr(args, "prog", "seshat")
+        print(f"{prog} semantic-check: no drift (0 findings).", file=sys.stderr)
     return exit_code

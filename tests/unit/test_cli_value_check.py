@@ -70,7 +70,10 @@ def test_value_check_driver_missing_errors_clearly(
     rc = main_under_test(["value-check"])
     err = capsys.readouterr().err
     assert rc == 1
-    assert "db driver" in err.lower() and "retail[db]" in err.lower()
+    # #399: names the real distribution (seshat-bi) + the pipx remedy, not retail.
+    assert "db driver" in err.lower()
+    assert "seshat-bi[db]" in err and "retail[db]" not in err
+    assert "pipx inject" in err
 
 
 # ---------------------------------------------------------------------------

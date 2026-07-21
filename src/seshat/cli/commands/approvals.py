@@ -6,10 +6,10 @@ import argparse
 import json
 
 
-def _render_text(inbox: dict) -> str:
+def _render_text(inbox: dict, prog: str = "seshat") -> str:
     items = inbox.get("items", [])
     if not items:
-        return "retail approvals: no open approval issues found."
+        return f"{prog} approvals: no open approval issues found."
 
     lines: list[str] = []
     for item in items:
@@ -34,5 +34,5 @@ def approvals_main(args: argparse.Namespace) -> int:
     if getattr(args, "output_format", "text") == "json":
         print(json.dumps(inbox, indent=2))
     else:
-        print(_render_text(inbox))
+        print(_render_text(inbox, getattr(args, "prog", "seshat")))
     return 0

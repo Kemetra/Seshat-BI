@@ -116,7 +116,11 @@ def _run_doctor(args: object) -> int:
     ``handler(args)`` shape."""
     from ..doctor import run_doctor
 
-    return run_doctor(Path(args.repo), strict=args.strict)  # type: ignore[attr-defined]
+    return run_doctor(
+        Path(args.repo),  # type: ignore[attr-defined]
+        strict=args.strict,  # type: ignore[attr-defined]
+        prog=getattr(args, "prog", "seshat"),
+    )
 
 
 def _run_mcp(args: object) -> int:
@@ -238,26 +242,68 @@ def _invoked_prog() -> str:
     """The command name the client actually typed (``seshat`` or ``retail``).
 
     Derived from argv[0]'s basename so the two byte-identical console entry
-    points each print their own identity in usage/error text (#378). Falls back
-    to ``retail`` when argv[0] is unavailable or empty (e.g. ``python -c``).
+    points each print their own identity in usage/error text (#378) and output
+    prefixes (#402).
+
+    Only the two real brand stems are honored; anything else -- an empty argv0
+    (``python -c``), or a module run whose stem is the entry file, not the brand
+    (``python -m seshat.cli`` -> ``__main__``; ``python -m retail.cli`` -> ``cli``)
+    -- normalizes to ``seshat``, the primary brand, so no command ever emits a
+    nonsense ``__main__ status:`` / ``cli drift:`` prefix (PR #403 review). The
+    module entry points additionally pass an explicit ``prog`` to preserve the
+    deprecated ``retail`` identity on ``-m retail.cli``; this is the safety net.
     """
     import os
     import sys
 
     raw = sys.argv[0] if sys.argv else ""
     stem = os.path.splitext(os.path.basename(raw))[0]
-    return stem or "retail"
+    return stem if stem in ("seshat", "retail") else "seshat"
+
+
+def _prog(args: object) -> str:
+    """The brand the client typed, for a handler's output prefix.
+
+    ``main`` stamps ``args.prog`` with the resolved invoked name (``seshat`` or the
+    deprecated ``retail`` alias). Read via ``getattr`` with a ``seshat`` default so
+    a handler stays callable from a unit test that builds a bare ``Namespace``
+    without ``prog`` -- and the customer-facing brand (``seshat``, the primary
+    command) is the default, never the ``retail`` alias (#402).
+    """
+    return getattr(args, "prog", "seshat") or "seshat"
+
+
+def _db_extra_hint() -> str:
+    """Actionable, install-path-aware guidance for the optional DB driver (#399).
+
+    Names the real distribution (``seshat-bi``, not the internal ``retail``) and
+    both supported ways to add the driver: ``pipx inject`` for the documented
+    external-customer ``pipx`` install (where ``pip install`` inside the isolated
+    venv is the wrong mechanism), and the ``pip install`` extra for a plain venv.
+    Sourced from ONE place so the brand + remedy can't drift per command.
+    """
+    return (
+        "       pipx install:  pipx inject seshat-bi psycopg2-binary\n"
+        "       pip install:   pip install 'seshat-bi[db]'"
+    )
 
 
 def main(argv: list[str] | None = None, *, prog: str | None = None) -> int:
     _force_utf8_stdio()
+    resolved_prog = prog or _invoked_prog()
     try:
-        args = _build_parser(prog or _invoked_prog()).parse_args(argv)
+        args = _build_parser(resolved_prog).parse_args(argv)
     except SystemExit as exc:
         # argparse exits on bad/missing args (code 2) AND on --help / --version
         # (code 0) after printing. The established contract is to SURFACE the code
         # as a return value, not let it propagate -- so `main([...])` never raises.
         return int(exc.code or 0)
+
+    # Stamp the invoked command name onto args so every handler can echo the brand
+    # the client actually typed (`seshat` or the deprecated `retail` alias) in its
+    # output prefix, instead of a hardcoded literal that drifts (#402). Threading it
+    # via args keeps all handler signatures at their existing `handler(args)` shape.
+    args.prog = resolved_prog
 
     handler = _DISPATCH.get(args.command)
     if handler is None:
@@ -384,6 +430,8 @@ __all__ = [
     "_make_runner",
     "_load_targets",
     "_redact_dsn",
+    "_prog",
+    "_db_extra_hint",
     "build_context",
     "run",
     "run_json",

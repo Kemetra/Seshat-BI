@@ -92,6 +92,8 @@ def _run_validate_body(args: argparse.Namespace) -> int:
     from seshat.runner import _format  # reuse the [severity] id (locator) format
     from seshat.validate import resolve_dsn, run_live_checks
 
+    prog = cli._prog(args)  # brand the client typed (`seshat`/`retail`), #402
+
     # Engine + config resolution can raise ValueError on an invalid setting
     # (unknown ANALYTICS_DB_ENGINE, unparseable port); convert those to a clean
     # boundary failure. The live-check body below is deliberately OUTSIDE this
@@ -117,9 +119,9 @@ def _run_validate_body(args: argparse.Namespace) -> int:
     # 2. The DB driver is optional + lazy: only needed for a real run.
     if not cli._ensure_driver():
         print(
-            "error: `retail validate` needs the optional DB driver.\n"
-            "       install it with:  pip install 'retail[db]'\n"
-            "       (the static `seshat check` core stays dependency-free).",
+            f"error: `{prog} validate` needs the optional DB driver.\n"
+            f"{cli._db_extra_hint()}\n"
+            f"       (the static `{prog} check` core stays dependency-free).",
             file=sys.stderr,
         )
         return 1
@@ -129,7 +131,7 @@ def _run_validate_body(args: argparse.Namespace) -> int:
     # 3a. Deferred mode: no table targets supplied -> report, do not connect.
     if not args.source_map:
         print(
-            "retail validate: the live-validator surface is built and fixture-tested. "
+            f"{prog} validate: the live-validator surface is built and fixture-tested. "
             "Pass --source-map <mappings/<table>/source-map.yaml> to run the four live "
             "checks against that table; the standalone live run is otherwise the "
             "deferred follow-up.\n"
@@ -146,7 +148,7 @@ def _run_validate_body(args: argparse.Namespace) -> int:
         print(f"error: could not load source-map: {exc}", file=sys.stderr)
         return 1
 
-    print(f"retail validate: running live checks against {safe_host}", file=sys.stderr)
+    print(f"{prog} validate: running live checks against {safe_host}", file=sys.stderr)
     try:
         runner = cli._make_runner(config)
         findings = run_live_checks(runner, targets, dialect=dialect)
@@ -158,7 +160,8 @@ def _run_validate_body(args: argparse.Namespace) -> int:
         )
         print(
             "       verify the DSN, network access, database objects, and the "
-            "optional DB driver: pip install 'retail[db]'",
+            "optional DB driver:\n"
+            f"{cli._db_extra_hint()}",
             file=sys.stderr,
         )
         return 1
@@ -167,5 +170,5 @@ def _run_validate_body(args: argparse.Namespace) -> int:
         print(_format(finding))
     if any(f.severity is Severity.ERROR for f in findings):
         return 1
-    print("retail validate: all live checks passed (0 findings).", file=sys.stderr)
+    print(f"{prog} validate: all live checks passed (0 findings).", file=sys.stderr)
     return 0

@@ -28,15 +28,16 @@ _CONFORMANT = "mappings/retail_store_sales/source-profile.md"
 
 def test_drift_live_missing_driver_is_actionable(capsys, monkeypatch):
     # --dsn given but the optional DB driver is absent: gate like validate does
-    # -- an actionable "pip install 'retail[db]'" message + rc 1, never a raw
-    # ModuleNotFoundError traceback.
+    # -- an actionable, install-path-aware message + rc 1, never a raw
+    # ModuleNotFoundError traceback. #399: names seshat-bi + the pipx remedy.
     from seshat import cli
 
     monkeypatch.setattr(cli, "_ensure_driver", lambda: False)
     rc = main(["drift", "--baseline", _CONFORMANT, "--dsn", "postgresql://x@h/db"])
     err = capsys.readouterr().err
     assert rc == 1
-    assert "retail[db]" in err
+    assert "seshat-bi[db]" in err and "retail[db]" not in err
+    assert "pipx inject" in err
 
 
 def test_drift_live_db_error_is_scrubbed_not_leaked(capsys, monkeypatch):

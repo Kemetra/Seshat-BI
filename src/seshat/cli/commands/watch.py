@@ -60,13 +60,13 @@ def _portfolio_lines(summary: dict) -> list[str]:
     return lines
 
 
-def _render_text(summary: dict) -> str:
+def _render_text(summary: dict, prog: str = "seshat") -> str:
     """Human-readable rendering: stage/blockers/attention/next-action per
     scope, plus the change labels -- never a score. Mirrors ``status``'s
     ``_render_text`` posture."""
     scopes = summary.get("scopes", [])
     if not scopes:
-        lines = ["retail watch: no governed scopes found under mappings/."]
+        lines = [f"{prog} watch: no governed scopes found under mappings/."]
     else:
         lines = [line for scope in scopes for line in _scope_lines(scope)]
     lines.extend(_portfolio_lines(summary))
@@ -83,5 +83,5 @@ def watch_main(args: argparse.Namespace) -> int:
     if getattr(args, "output_format", "text") == "json":
         print(json.dumps(summary, indent=2))
     else:
-        print(_render_text(summary))
+        print(_render_text(summary, getattr(args, "prog", "seshat")))
     return 0

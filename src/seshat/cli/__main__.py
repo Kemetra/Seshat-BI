@@ -12,4 +12,7 @@ import sys
 from seshat.cli import main
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Pass the brand explicitly: on a module run argv[0] is this file (``__main__``),
+    # not the command name, so the output prefixes would otherwise read
+    # ``__main__ status:`` (PR #403 review). ``-m seshat.cli`` is the seshat brand.
+    sys.exit(main(prog="seshat"))

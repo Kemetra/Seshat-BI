@@ -6,10 +6,10 @@ import argparse
 import json
 
 
-def _render_text(result: dict) -> str:
+def _render_text(result: dict, prog: str = "seshat") -> str:
     items = result.get("items", [])
     if not items:
-        return "retail blockers: no readiness blockers found."
+        return f"{prog} blockers: no readiness blockers found."
 
     lines: list[str] = []
     for item in items:
@@ -30,5 +30,5 @@ def blockers_main(args: argparse.Namespace) -> int:
     if getattr(args, "output_format", "text") == "json":
         print(json.dumps(result, indent=2))
     else:
-        print(_render_text(result))
+        print(_render_text(result, getattr(args, "prog", "seshat")))
     return 0

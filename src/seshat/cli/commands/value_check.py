@@ -213,10 +213,11 @@ def _preflight_config(
         )
     # The DB driver is optional + lazy: only needed for a real run.
     if not cli._ensure_driver():
+        prog = cli._prog(args)
         raise _ContractError(
-            "error: `retail value-check` needs the optional DB driver.\n"
-            "       install it with:  pip install 'retail[db]'\n"
-            "       (the static `seshat check` core stays dependency-free)."
+            f"error: `{prog} value-check` needs the optional DB driver.\n"
+            f"{cli._db_extra_hint()}\n"
+            f"       (the static `{prog} check` core stays dependency-free)."
         )
     return config
 
@@ -265,8 +266,11 @@ def run_value_check(args: argparse.Namespace) -> int:
     value outside tolerance. A contract with no expected_value block is skipped; a
     malformed block is a fail-closed ERROR, never a silent skip.
     """
+    from seshat import cli
     from seshat.connection_env import ConnectionConfigError, applied_dotenv
     from seshat.dbt.redaction import EnvironmentConfigError
+
+    prog = cli._prog(args)
 
     # Apply the workspace .env for the whole body (#340) so engine selection,
     # driver choice, and config resolution honor the documented ANALYTICS_DB_*
@@ -277,13 +281,13 @@ def run_value_check(args: argparse.Namespace) -> int:
             return _run_value_check_body(args)
     except EnvironmentConfigError as exc:
         print(
-            f"retail value-check: could not read the workspace .env: {exc}",
+            f"{prog} value-check: could not read the workspace .env: {exc}",
             file=sys.stderr,
         )
         return 1
     except ConnectionConfigError as exc:
         print(
-            f"retail value-check: invalid database connection setting: {exc}",
+            f"{prog} value-check: invalid database connection setting: {exc}",
             file=sys.stderr,
         )
         return 1
@@ -295,6 +299,7 @@ def _run_value_check_body(args: argparse.Namespace) -> int:
     from seshat.connection_env import as_connection_config
     from seshat.dialect import get_dialect
 
+    prog = cli._prog(args)
     engine = cli._current_engine()
     # An unknown ANALYTICS_DB_ENGINE makes get_dialect raise ValueError; convert
     # it (and the unparseable-port case inside _preflight_config) to a clean
@@ -313,7 +318,7 @@ def _run_value_check_body(args: argparse.Namespace) -> int:
 
     if not expectations:
         print(
-            "retail value-check: no contract carries a `definition.expected_value` "
+            f"{prog} value-check: no contract carries a `definition.expected_value` "
             "block -- nothing to verify.",
             file=sys.stderr,
         )
@@ -322,7 +327,7 @@ def _run_value_check_body(args: argparse.Namespace) -> int:
     # Step 4: connect and run each check. No real DB is touched in tests (fake runner).
     safe_host = cli._safe_target_label(engine, config)
     print(
-        f"retail value-check: running L4 value checks against {safe_host}",
+        f"{prog} value-check: running L4 value checks against {safe_host}",
         file=sys.stderr,
     )
     try:
@@ -331,10 +336,10 @@ def _run_value_check_body(args: argparse.Namespace) -> int:
         print(str(exc), file=sys.stderr)
         return 1
 
-    return _report_findings(findings)
+    return _report_findings(findings, prog)
 
 
-def _report_findings(findings: list) -> int:
+def _report_findings(findings: list, prog: str = "seshat") -> int:
     """Print each finding and return the exit code (1 iff any ERROR-severity)."""
     from seshat.core import Severity
     from seshat.runner import _format
@@ -344,7 +349,7 @@ def _report_findings(findings: list) -> int:
     if any(f.severity is Severity.ERROR for f in findings):
         return 1
     print(
-        "retail value-check: all live values match the approved contracts "
+        f"{prog} value-check: all live values match the approved contracts "
         "(0 findings).",
         file=sys.stderr,
     )

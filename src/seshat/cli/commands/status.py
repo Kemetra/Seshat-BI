@@ -14,12 +14,12 @@ import argparse
 import json
 
 
-def _render_text(projection: dict) -> str:
+def _render_text(projection: dict, prog: str = "seshat") -> str:
     """Human-readable rendering: status/evidence/blockers/next_action per table,
     never a score. Mirrors ``demo/report.py``'s render_text posture."""
     tables = projection.get("tables", [])
     if not tables:
-        return "retail status: no readiness-status.yaml committed under mappings/."
+        return f"{prog} status: no readiness-status.yaml committed under mappings/."
 
     lines: list[str] = []
     for table in tables:
@@ -48,5 +48,5 @@ def status_main(args: argparse.Namespace) -> int:
     if getattr(args, "output_format", "text") == "json":
         print(json.dumps(projection, indent=2))
     else:
-        print(_render_text(projection))
+        print(_render_text(projection, getattr(args, "prog", "seshat")))
     return 0
