@@ -9,16 +9,28 @@
 > record. Fill it from a read-only profiling pass over the *landed* source -- before
 > any cleaning decision and before any `silver.*` SQL exists.
 >
-> **How to produce these numbers (issue #400) -- self-contained, no turnkey
-> command.** There is no `seshat profile` verb; the agent performs this read-only
-> pass itself, from the method below (nothing here needs the unshipped `docs/`). It
-> mirrors what `seshat.profile.profile()` computes, so the numbers match the tool's
-> own profiler. Semantic rows (what each column MEANS) are PROPOSED for a human,
-> never invented.
+> **How to produce these numbers (issue #400).** For a DB source the turnkey path
+> is the shipped **`seshat profile`** verb -- it drives the SAME
+> `seshat.profile.profile()` the drift path uses, routes the SQL through the
+> selected engine's dialect (Postgres / SQL Server / MySQL / Snowflake), and emits
+> a markdown block you paste straight into the sections below:
 >
-> **DB source (`db` extra + a read-only DSN** in a gitignored `.env` --
-> `pipx inject seshat-bi psycopg2-binary`, or `pip install "seshat-bi[db]"`; never
-> commit a real DSN). Run against the *landed* table:
+> ```
+> seshat profile --table <bronze_schema>.<landed_table> --pk <candidate-key>
+> ```
+>
+> (needs a read-only DSN + the `db` extra -- `pipx inject seshat-bi
+> psycopg2-binary`, or `pip install "seshat-bi[db]"`; never commit a real DSN. For a
+> non-Postgres engine set `ANALYTICS_DB_ENGINE` and inject that engine's driver.)
+> Semantic rows (what each column MEANS) are PROPOSED for a human, never invented --
+> the verb emits only the mechanical numbers, not the semantic passes.
+>
+> **The reference SQL, if you profile by hand (PostgreSQL-illustrative).** The verb
+> is preferred because it is dialect-correct; the queries below use PostgreSQL
+> syntax (`FILTER`, row-value `count(DISTINCT (...))`) and must be translated for
+> another engine (that is exactly what the verb does for you). They mirror what
+> `profile.py` computes, so hand numbers match the tool's own profiler. Run against
+> the *landed* table:
 >
 > - **Row + column count:** `SELECT count(*) FROM <table>;` plus the column list +
 >   each column's data type from `information_schema.columns`.
@@ -38,16 +50,21 @@
 >   <table>;` -- the PK holds iff **`count(*) > 0`** (an empty source proves nothing)
 >   **AND** `count(*) = count(DISTINCT pk)` **AND** the NULL-in-any-PK-component count
 >   is `0` (RC2; all three required, matching the profiler's
->   `is_unique = row_count > 0 and total == distinct_pk and null_pk == 0`).
+>   `is_unique = total > 0 and total == distinct_pk and null_pk == 0`).
 > - **Returns-column population:** the missingness measure above on the
 >   authoritative returns column.
 >
 > **File source (`csv`/`excel`, no DB/DSN):** the same mechanical set is computed
 > from the file's raw cells, not SQL -- CSV uses the stdlib (no extra); Excel needs
 > the `files` extra (`pipx inject seshat-bi openpyxl`, or
-> `pip install "seshat-bi[files]"`). Treat every cell as landed-as-TEXT: a cell is
-> missing when `str(cell).strip() == ''`; distinct cardinality is over the
-> `strip()`ed cells; skip a wholly-blank row (it is a formatting artifact, not data);
+> `pip install "seshat-bi[files]"`). Treat every cell as landed-as-TEXT, but
+> **normalize an empty cell to `''` FIRST** -- openpyxl reads a blank Excel cell as
+> Python `None`, and `str(None)` is the literal `"None"`, not `""`, so measuring
+> missingness with `str(cell).strip() == ''` would count a blank cell as populated
+> and let a blank key satisfy the PK proof. Map the cell as `'' if cell is None else
+> str(cell)` (exactly what `file_profile.py` does), THEN: a cell is missing when the
+> normalized text `.strip()` is `''`; distinct cardinality is over the `.strip()`ed
+> normalized cells; skip a wholly-blank row (it is a formatting artifact, not data);
 > and the PK proof is the SAME three-part check -- at least one row, rows =
 > distinct-key-tuples, and no blank/empty key component. This mirrors the shipped
 > `file_profile.py` so file and DB numbers are comparable at the gate. See the
