@@ -214,6 +214,12 @@ def test_safe_target_label_never_leaks_keyword_conninfo_password() -> None:
     assert _safe_target_label("postgres", "postgresql://u:p@h:5432/db") == "h:5432/db"
     assert _safe_target_label("postgres", "postgresql://h:5432/db") == "h:5432/db"
 
+    # A non-numeric / out-of-range port makes urlsplit's lazy `.port` raise
+    # ValueError; the label is computed before the DB-boundary try, so it must
+    # be guarded and fall back to the engine label (no uncaught traceback, #409).
+    assert _safe_target_label("postgres", "postgresql://h:notaport/db") == "postgres"
+    assert _safe_target_label("postgres", "postgresql://h:99999/db") == "postgres"
+
 
 @pytest.mark.parametrize("bad_table", ["orders", "a.b.c", "bronze.", ".orders"])
 def test_profile_requires_exactly_schema_dot_table(

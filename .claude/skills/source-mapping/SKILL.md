@@ -100,24 +100,24 @@ model-layer** display choice (rename in the semantic model), NEVER a SQL identif
 Confirm the bronze `schema.table` exists. Ask the analyst/agent for the candidate
 PK column(s) to test (grain is decided FIRST, Phase 2.0 / RC1).
 
-### 2. Profile (mechanical) -- via profile.py
+### 2. Profile (mechanical) -- via `seshat profile`
 Run the mechanical profiler over a read-only connection and record the numbers
-into `mappings/<table>/source-profile.md`:
+into `mappings/<table>/source-profile.md`. Use the shipped CLI verb (the
+internal `seshat.profile.profile()` API is not reachable on a pip/pipx install
+-- #400):
 
-```python
-import os
-from retail.validate import resolve_dsn, make_psycopg2_runner
-from retail.profile import profile
-
-dsn = resolve_dsn(dict(os.environ))     # DATABASE_URL or ANALYTICS_DB_* parts
-runner = make_psycopg2_runner(dsn)      # read-only; needs the `db` extra
-result = profile(runner, "bronze.<table>", ("<pk_a>", "<pk_b>"))
+```bash
+# needs the `db` extra + a DSN (DATABASE_URL / ANALYTICS_DB_* / --dsn)
+seshat profile --table bronze.<table> --pk <pk_a>,<pk_b>            # markdown to paste
+seshat profile --table bronze.<table> --pk <pk_a>,<pk_b> --format json
 ```
 
-`result` gives: `row_count`, `column_count`, per-column `missing_count` /
+The output gives: `row_count`, `column_count`, per-column `missing_count` /
 `missing_pct` (measured `''OR NULL`, NEVER `IS NULL` alone -- the load-bearing
 trap, RC5) / `distinct_cardinality`, and the candidate-PK proof (`total`,
-`distinct_pk`, `null_pk`, `is_unique`). Write each into the source-profile table
+`distinct_pk`, `null_pk`, `is_unique`). The markdown form is already shaped for
+the source-profile.md Shape / Per-column / Candidate-PK sections; paste each into
+the source-profile table
 and the Candidate grain & PK section.
 
 ### 3. Profile (semantic) -- PROPOSE, do not invent (Principle V)

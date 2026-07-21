@@ -360,12 +360,18 @@ def _postgres_target_label(config: str) -> str:
 
         try:
             parts = urlsplit(config.lstrip())
+            host = parts.hostname
+            # .port is a lazily-parsed property: it raises ValueError on a
+            # non-numeric / out-of-range port (`host:notaport`). This label is
+            # computed BEFORE the handler's DB-boundary try, so an unguarded
+            # access would surface an uncaught traceback instead of the clean
+            # config error (#409). Access it inside the guard.
+            port = parts.port
         except ValueError:
             return "postgres"
-        host = parts.hostname
         if not host:
             return "postgres"
-        label = f"{host}:{parts.port}" if parts.port else host
+        label = f"{host}:{port}" if port else host
         return f"{label}{parts.path}" if parts.path not in ("", "/") else label
     return "postgres"
 
