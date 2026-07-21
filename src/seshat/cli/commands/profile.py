@@ -136,6 +136,18 @@ def _run_profile_body(args: argparse.Namespace) -> int:
         )
         return 1
 
+    if "." not in args.table:
+        # Require schema.table: column discovery defaults an unqualified name to
+        # `public`, but the row/PK queries use the connection's default schema --
+        # on MySQL/SQL Server/Snowflake those differ, silently yielding an empty
+        # profile (#409). The landed bronze target is always qualified.
+        print(
+            "error: --table must be schema-qualified, e.g. bronze.<table> "
+            f"(got {args.table!r}).",
+            file=sys.stderr,
+        )
+        return 1
+
     resolved = _resolve_engine(args, cli, prog)
     if resolved is None:
         return 1

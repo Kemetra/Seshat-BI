@@ -146,7 +146,20 @@ def profile(
         )
 
     validated_pk = tuple(_safe_identifier(c) for c in candidate_pk)
-    null_pred = " OR ".join(f"{c} IS NULL" for c in validated_pk)
+    # Count an EMPTY-or-NULL key, not just NULL, for TEXT PK columns -- the same
+    # RC5 ''OR NULL measure used for text-column missingness above. A faithful
+    # all-TEXT bronze landing writes '' (not NULL) for a missing key, so IS NULL
+    # alone would miss a blank key and wrongly pass a non-unique grain; it also
+    # keeps the emitted `NULLs/empty in PK` proof honest (#409). Non-text keys
+    # cannot hold '' -> plain IS NULL (trim() is text-only and would crash).
+    type_by_name = {name: data_type for name, data_type in columns}
+    null_terms = [
+        f"trim({c}) = '' OR {c} IS NULL"
+        if dialect.is_text_type(type_by_name.get(c, "text"))
+        else f"{c} IS NULL"
+        for c in validated_pk
+    ]
+    null_pred = " OR ".join(null_terms)
     null_frag = dialect.count_where(null_pred)
     # Route the tuple-distinct count through the dialect, NOT a hardcoded
     # Postgres row-value `count(DISTINCT (a, b))`. Postgres returns exactly that

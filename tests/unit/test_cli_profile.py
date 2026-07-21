@@ -172,6 +172,37 @@ def test_profile_missing_driver_errors_clearly(
     assert "Traceback" not in err
 
 
+def test_safe_target_label_never_leaks_keyword_conninfo_password() -> None:
+    """A libpq keyword conninfo (no `@` to split on) must NOT be echoed
+    verbatim -- the status line prints this label to stderr before connecting,
+    and it would otherwise leak the password (PR #409 P1)."""
+    from seshat.cli import _safe_target_label
+
+    conninfo = "host=db.example user=svc password=s3cret dbname=x port=5432"
+    label = _safe_target_label("postgres", conninfo)
+    assert "s3cret" not in label
+    assert "password" not in label
+    assert "svc" not in label
+    assert label == "db.example"  # only the host token is surfaced
+
+    # URL form with credentials in the query string is also scrubbed to host.
+    url = "postgresql://h:5432/db?password=s3cret"
+    assert "s3cret" not in _safe_target_label("postgres", url)
+
+    # Unchanged: the credential-bearing URL form still yields host:port/db.
+    assert _safe_target_label("postgres", "postgresql://u:p@h:5432/db") == "h:5432/db"
+
+
+def test_profile_requires_schema_qualified_table(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _args_ok(monkeypatch)
+    rc = main_under_test(["profile", "--table", "orders", "--pk", "id"])
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert "must be schema-qualified" in err
+
+
 def test_db_extra_hint_is_engine_specific() -> None:
     """The driver remedy must name the SELECTED engine's driver/extra, not
     always psycopg2 (PR #409). Postgres stays the default (unchanged output)."""

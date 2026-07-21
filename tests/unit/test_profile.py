@@ -139,6 +139,25 @@ def test_pk_proof_uses_the_selected_dialects_tuple_distinct_form() -> None:
     assert "count(DISTINCT (id, line_no))" not in pk_sql
 
 
+def test_pk_null_proof_counts_empty_text_keys_not_just_null() -> None:
+    """For a TEXT candidate key the null/empty proof must use the ''OR NULL
+    measure (RC5), not IS NULL alone -- a faithful bronze landing writes '' for a
+    missing key, so IS NULL alone would pass a blank-key grain as unique and make
+    the emitted `NULLs/empty in PK` label dishonest (PR #409)."""
+    from seshat.profile import profile
+
+    runner = FakeRunner([[("code", "text")], [(100,)], [(0, 100)], [(100, 100, 0)]])
+    profile(runner, "bronze.demo", ("code",))
+    pk_sql = runner.calls[-1]
+    assert "trim(code)" in pk_sql and "= ''" in pk_sql
+
+    # A non-text key stays on plain IS NULL (trim() is text-only, would crash).
+    runner2 = FakeRunner([[("id", "integer")], [(100,)], [(0, 100)], [(100, 100, 0)]])
+    profile(runner2, "bronze.demo", ("id",))
+    pk_sql2 = runner2.calls[-1]
+    assert "id IS NULL" in pk_sql2 and "trim(" not in pk_sql2
+
+
 def test_profile_rejects_unsafe_table_name() -> None:
     from seshat.profile import profile
 
