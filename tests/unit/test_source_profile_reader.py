@@ -74,3 +74,22 @@ def test_nonconformant_profile_reported_uncomparable():
     assert parsed.pk_columns is None
     # ...nor a connectable landed-table identity.
     assert parsed.landed_table is None
+
+
+def test_empty_table_pk_proof_round_trips_as_not_unique():
+    """An empty-table proof (`0 = 0`, `0`, `0`) must reconstruct as NOT unique,
+    mirroring profile.py's `total > 0` guard -- otherwise a pasted empty-table
+    baseline round-trips to is_unique=True and a later drift run treats an
+    unproven grain as valid (#409)."""
+    from seshat.source_profile_reader import _parse_pk
+
+    proof = (
+        "- **Candidate PK:** `( id )`.\n"
+        "- **Uniqueness proof (on the landed data):**\n"
+        "  - `COUNT(*)            = 0`\n"
+        "  - `COUNT(DISTINCT pk)  = 0`\n"
+        "  - `NULLs/empty in PK   = 0`\n"
+    )
+    pk = _parse_pk(proof, row_count=0)
+    assert pk.total == 0
+    assert pk.is_unique is False

@@ -110,7 +110,13 @@ def _parse_pk(text: str, row_count: int) -> PkProof:
     distinct = _num(r"COUNT\(DISTINCT pk\)\s*=\s*([\d,]+)")
     null_pk = _num(r"NULLs/empty in PK\s*=\s*([\d,]+)")
     null_pk = 0 if null_pk is None else null_pk
-    is_unique = distinct is not None and distinct == total and null_pk == 0
+    # Mirror profile.py's empty-table guard: total == 0 proves nothing, so
+    # `(0, 0, 0)` must reconstruct as NOT unique (else a paste of an empty-table
+    # proof round-trips to is_unique=True and a later drift run treats an
+    # unproven grain as valid, #409).
+    is_unique = (
+        total > 0 and distinct is not None and distinct == total and null_pk == 0
+    )
     return PkProof(
         total=total,
         distinct_pk=distinct if distinct is not None else total,
