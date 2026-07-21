@@ -131,9 +131,7 @@ def test_pk_proof_uses_the_selected_dialects_tuple_distinct_form() -> None:
     from seshat.profile import profile
 
     sqlserver = get_dialect("sqlserver")
-    runner = FakeRunner(
-        [[("id", "text")], [(100,)], [(0, 100)], [(100, 100, 0)]]
-    )
+    runner = FakeRunner([[("id", "text")], [(100,)], [(0, 100)], [(100, 100, 0)]])
     profile(runner, "bronze.demo", ("id", "line_no"), dialect=sqlserver)
     pk_sql = runner.calls[-1]
     # SQL Server form: a DISTINCT subquery, NOT the Postgres row-value tuple.
