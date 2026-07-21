@@ -178,18 +178,21 @@ def test_safe_target_label_never_leaks_keyword_conninfo_password() -> None:
     and it would otherwise leak the password (PR #409 P1)."""
     from seshat.cli import _safe_target_label
 
+    # A keyword conninfo renders NO component (host/user/password can be quoted
+    # or "@"-bearing, so no split/regex safely isolates the host) -- it falls
+    # back to the bare engine label, guaranteeing nothing leaks.
     conninfo = "host=db.example user=svc password=s3cret dbname=x port=5432"
-    label = _safe_target_label("postgres", conninfo)
-    assert "s3cret" not in label
-    assert "password" not in label
-    assert "svc" not in label
-    assert label == "db.example"  # only the host token is surfaced
+    assert _safe_target_label("postgres", conninfo) == "postgres"
 
-    # A keyword conninfo whose password itself contains "@" must NOT be split on
-    # "@": the shape is detected before any split, so the password never leaks.
-    at_pw = "host=db user=svc password=@s3cret dbname=x"
-    assert "s3cret" not in _safe_target_label("postgres", at_pw)
-    assert _safe_target_label("postgres", at_pw) == "db"
+    # password containing "@" -> never split on "@".
+    assert _safe_target_label("postgres", "host=db user=svc password=@s3cret") == (
+        "postgres"
+    )
+    # password quoting a host-shaped token -> never regex-extracted.
+    quoted = "password='abc host=secret' host=db"
+    label = _safe_target_label("postgres", quoted)
+    assert label == "postgres"
+    assert "secret" not in label
 
     # URL form with credentials in the query string is also scrubbed to host.
     url = "postgresql://h:5432/db?password=s3cret"
@@ -204,14 +207,19 @@ def test_safe_target_label_never_leaks_keyword_conninfo_password() -> None:
     )
 
 
-def test_profile_requires_schema_qualified_table(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize("bad_table", ["orders", "a.b.c", "bronze.", ".orders"])
+def test_profile_requires_exactly_schema_dot_table(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    bad_table: str,
 ) -> None:
+    # Unqualified (mis-resolves across engines) AND 3-part `db.schema.table`
+    # (SQL Server -- discovers 0 columns, exit-0 empty profile) are both refused.
     _args_ok(monkeypatch)
-    rc = main_under_test(["profile", "--table", "orders", "--pk", "id"])
+    rc = main_under_test(["profile", "--table", bad_table, "--pk", "id"])
     err = capsys.readouterr().err
     assert rc == 1
-    assert "must be schema-qualified" in err
+    assert "must be exactly schema.table" in err
 
 
 def test_db_extra_hint_is_engine_specific() -> None:

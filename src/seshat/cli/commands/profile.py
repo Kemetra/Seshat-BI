@@ -52,6 +52,35 @@ def _parse_pk(raw: str) -> tuple[str, ...]:
     return tuple(part.strip() for part in raw.split(",") if part.strip())
 
 
+def _validate_args(args: argparse.Namespace) -> tuple[str, ...] | None:
+    """Validate ``--pk`` and ``--table``; return the candidate-key tuple, or
+    ``None`` after printing an actionable error (caller exits 1).
+
+    Extracted from the handler to keep it small. ``--table`` must be EXACTLY
+    ``schema.table``: ``_discover_columns`` splits on the first dot, so an
+    unqualified name OR a 3-part ``database.schema.table`` (SQL Server) discovers
+    zero columns while the row/PK aggregates still resolve -- an exit-0 empty
+    profile (#409).
+    """
+    candidate_pk = _parse_pk(args.pk)
+    if not candidate_pk:
+        print(
+            "error: --pk must name at least one column (the candidate grain key; "
+            "comma-separate a composite, e.g. --pk invoice_id,line_no).",
+            file=sys.stderr,
+        )
+        return None
+    parts = args.table.split(".")
+    if len(parts) != 2 or not all(parts):
+        print(
+            "error: --table must be exactly schema.table, e.g. bronze.<table> "
+            f"(got {args.table!r}).",
+            file=sys.stderr,
+        )
+        return None
+    return candidate_pk
+
+
 def _resolve_engine(args: argparse.Namespace, cli, prog: str):
     """Resolve (engine, dialect, config) for the run, or ``None`` on a clean
     failure (message already printed).
@@ -127,25 +156,8 @@ def _run_profile_body(args: argparse.Namespace) -> int:
 
     prog = cli._prog(args)  # brand the client typed (`seshat`/`retail`), #402
 
-    candidate_pk = _parse_pk(args.pk)
-    if not candidate_pk:
-        print(
-            "error: --pk must name at least one column (the candidate grain key; "
-            "comma-separate a composite, e.g. --pk invoice_id,line_no).",
-            file=sys.stderr,
-        )
-        return 1
-
-    if "." not in args.table:
-        # Require schema.table: column discovery defaults an unqualified name to
-        # `public`, but the row/PK queries use the connection's default schema --
-        # on MySQL/SQL Server/Snowflake those differ, silently yielding an empty
-        # profile (#409). The landed bronze target is always qualified.
-        print(
-            "error: --table must be schema-qualified, e.g. bronze.<table> "
-            f"(got {args.table!r}).",
-            file=sys.stderr,
-        )
+    candidate_pk = _validate_args(args)
+    if candidate_pk is None:
         return 1
 
     resolved = _resolve_engine(args, cli, prog)

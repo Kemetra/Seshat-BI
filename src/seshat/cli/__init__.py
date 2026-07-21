@@ -342,21 +342,20 @@ def _postgres_target_label(config: str) -> str:
     """A credential-free label from a Postgres config string.
 
     Detect the SHAPE before splitting (#409 P1): a libpq KEYWORD conninfo can
-    carry ``@`` inside an unquoted password (``password=@s3cret``), so a blind
-    ``"@" in config`` split would surface the password. URL syntax (``://``) is
-    the unambiguous discriminator; only a URL gets the ``@``/query strip, and
-    every keyword conninfo is routed through the host-only token match.
+    carry ``@`` inside an unquoted password (``password=@s3cret``) AND quote
+    host-shaped tokens inside a password (``password='x host=secret'``), so
+    neither an ``@`` split nor a ``host=`` regex can safely isolate a component
+    without a full conninfo parser. URL syntax (``://``) is the unambiguous
+    discriminator: only a URL gets the userinfo/query strip; a keyword conninfo
+    renders NO component at all -- it falls back to the bare engine label so no
+    quoted/escaped credential can ever reach the status line.
     """
     if "://" in config:
         # URL form. Credentials live in the userinfo (before "@") and/or the
         # query string (?password=); strip both, keep host[:port]/dbname.
         after_userinfo = config.split("@")[-1]
         return after_userinfo.split("?")[0]
-    # libpq KEYWORD conninfo: never split on "@"; extract only the host token.
-    import re
-
-    match = re.search(r"\b(?:host|hostaddr)\s*=\s*(\S+)", config)
-    return match.group(1) if match else "postgres"
+    return "postgres"
 
 
 def _current_engine() -> str:
