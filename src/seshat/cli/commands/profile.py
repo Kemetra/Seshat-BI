@@ -52,6 +52,44 @@ def _parse_pk(raw: str) -> tuple[str, ...]:
     return tuple(part.strip() for part in raw.split(",") if part.strip())
 
 
+def _resolve_engine(args: argparse.Namespace, cli, prog: str):
+    """Resolve (engine, dialect, config) for the run, or ``None`` on a clean
+    failure (message already printed).
+
+    Extracted from ``_run_profile_body`` to keep that handler small: it folds
+    the engine pick, config resolution (--dsn/env), and the optional-driver
+    check into one preflight that either yields the connect inputs or prints an
+    actionable error and signals the caller to exit 1.
+    """
+    from seshat.connection_env import as_connection_config
+    from seshat.dialect import get_dialect
+    from seshat.validate import resolve_dsn
+
+    engine = cli._current_engine()
+    dialect = as_connection_config(lambda: get_dialect(engine))
+    config = as_connection_config(
+        lambda: _resolve_config(args, engine, dialect, resolve_dsn)
+    )
+    if config is None:
+        print(
+            "error: no database connection configured.\n"
+            "       pass --dsn (a postgresql:// connection string), or set\n"
+            "       DATABASE_URL, or the ANALYTICS_DB_* vars (in your gitignored\n"
+            "       .env). Never commit a real DSN.",
+            file=sys.stderr,
+        )
+        return None
+    if not cli._ensure_driver():
+        print(
+            f"error: `{prog} profile` needs the optional DB driver.\n"
+            f"{cli._db_extra_hint()}\n"
+            f"       (the static `{prog} check` core stays dependency-free).",
+            file=sys.stderr,
+        )
+        return None
+    return engine, dialect, config
+
+
 def run_profile(args: argparse.Namespace) -> int:
     """Run the mechanical profiler against a real DB, honoring the workspace `.env`.
 
@@ -85,10 +123,7 @@ def _run_profile_body(args: argparse.Namespace) -> int:
     Dialect; the Postgres path keeps using --dsn/DATABASE_URL verbatim.
     """
     from seshat import cli
-    from seshat.connection_env import as_connection_config
-    from seshat.dialect import get_dialect
     from seshat.profile import profile as run_mechanical_profile
-    from seshat.validate import resolve_dsn
 
     prog = cli._prog(args)  # brand the client typed (`seshat`/`retail`), #402
 
@@ -101,29 +136,10 @@ def _run_profile_body(args: argparse.Namespace) -> int:
         )
         return 1
 
-    engine = cli._current_engine()
-    dialect = as_connection_config(lambda: get_dialect(engine))
-    config = as_connection_config(
-        lambda: _resolve_config(args, engine, dialect, resolve_dsn)
-    )
-    if config is None:
-        print(
-            "error: no database connection configured.\n"
-            "       pass --dsn (a postgresql:// connection string), or set\n"
-            "       DATABASE_URL, or the ANALYTICS_DB_* vars (in your gitignored\n"
-            "       .env). Never commit a real DSN.",
-            file=sys.stderr,
-        )
+    resolved = _resolve_engine(args, cli, prog)
+    if resolved is None:
         return 1
-
-    if not cli._ensure_driver():
-        print(
-            f"error: `{prog} profile` needs the optional DB driver.\n"
-            f"{cli._db_extra_hint()}\n"
-            f"       (the static `{prog} check` core stays dependency-free).",
-            file=sys.stderr,
-        )
-        return 1
+    engine, dialect, config = resolved
 
     safe_host = cli._safe_target_label(engine, config)
     print(
