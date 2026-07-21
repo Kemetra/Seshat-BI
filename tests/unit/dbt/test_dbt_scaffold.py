@@ -555,6 +555,131 @@ def test_single_column_grain_staging_keeps_unique_and_not_null() -> None:
 # --------------------------------------------------------------------------- #
 # FIX 2 regression -- unstaged reference remedy names the derived_columns path
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# FIX #1 regression -- the fact carries EVERY governed column, not just money
+# --------------------------------------------------------------------------- #
+# A map that declares a NON-money measure (quantity, additive but not money) and a
+# DEGENERATE dimension (discount_applied) -- both real fact columns the human
+# declared that the pre-fix _fact_columns dropped. Both are staged in columns[]
+# (renamed from a distinct bronze source_name) so their provenance is verifiable.
+_FULL_FACT_MAP = {
+    "meta": {"table_id": TABLE_ID, "grain": "one row = one retail transaction"},
+    "columns": [
+        {"source_name": "TxnId", "decision": "keep", "rename_to": "transaction_id"},
+        {"source_name": "CustId", "decision": "keep", "rename_to": "customer_id"},
+        {
+            "source_name": "Qty",
+            "decision": "keep",
+            "rename_to": "quantity",
+            "silver_type": "numeric(12,2)",
+        },
+        {
+            "source_name": "TotalSpent",
+            "decision": "keep",
+            "rename_to": "total_spent",
+            "silver_type": "numeric(12,2)",
+        },
+        {
+            "source_name": "Discount",
+            "decision": "keep",
+            "rename_to": "discount_applied",
+            "silver_type": "boolean",
+        },
+    ],
+    "gold_star": {
+        "fact": {
+            "name": "gold.fct_sales_rss",
+            "business_key": "transaction_id",
+            "measures": ["quantity", "total_spent"],
+            "additive_money_measures": ["total_spent"],
+        },
+        "dimensions": [
+            {
+                "name": "gold.dim_customer_rss",
+                "surrogate_key": "customer_sk",
+                "attributes": ["customer_id"],
+            },
+        ],
+        "degenerate_dimensions": ["transaction_id", "discount_applied"],
+    },
+}
+
+
+def _full_fact_plan() -> model_plan.ScaffoldPlan:
+    return model_plan.build_scaffold_plan(_source(_FULL_FACT_MAP), TABLE_ID, _FACT)
+
+
+def test_fact_includes_non_money_measure_and_degenerate_dim() -> None:
+    """The fact must carry the non-money measure (quantity) and the degenerate dim
+    (discount_applied) the map declares -- not only the additive money measure."""
+    plan = _full_fact_plan()
+    by_name = {c.name: c for c in plan.fact_model.columns}
+
+    # Non-money measure and degenerate dim are present, cited to REAL bronze names.
+    assert by_name["quantity"].source_columns == (f"bronze.{TABLE_ID}.Qty",)
+    assert by_name["total_spent"].source_columns == (f"bronze.{TABLE_ID}.TotalSpent",)
+    assert by_name["discount_applied"].source_columns == (
+        f"bronze.{TABLE_ID}.Discount",
+    )
+    # None of them fabricates a citation or claims a spurious derivation.
+    for name in ("quantity", "total_spent", "discount_applied"):
+        assert by_name[name].derivation is None
+
+
+def test_fact_column_set_is_exactly_the_governed_columns() -> None:
+    """The complete governed set: synthetic PK + business key + one FK per dim +
+    every declared measure + every degenerate dim, with the business-key/degenerate
+    overlap (transaction_id) collapsed to a single column."""
+    plan = _full_fact_plan()
+    names = [c.name for c in plan.fact_model.columns]
+
+    assert set(names) == {
+        "fct_sales_rss_sk",  # synthetic PK
+        "transaction_id",  # business key == a degenerate dim (deduped to one)
+        "customer_sk",  # dimension FK
+        "quantity",  # non-money measure
+        "total_spent",  # money measure
+        "discount_applied",  # degenerate dim
+    }
+    assert len(names) == len(set(names))  # transaction_id appears exactly once
+
+
+def test_fact_degenerate_reference_to_unstaged_column_fails_closed() -> None:
+    """A degenerate dimension that no kept columns[] row maps to fails closed
+    (never a fabricated citation) -- same posture as the measure/key path."""
+    broken = {
+        **_FULL_FACT_MAP,
+        "gold_star": {
+            **_FULL_FACT_MAP["gold_star"],
+            "degenerate_dimensions": ["transaction_id", "not_staged_flag"],
+        },
+    }
+    with pytest.raises(model_plan.ScaffoldError, match="not_staged_flag"):
+        model_plan.build_scaffold_plan(_source(broken), TABLE_ID, _FACT)
+
+
+# --------------------------------------------------------------------------- #
+# FIX #2 regression -- composite grain count(distinct) is valid PostgreSQL
+# --------------------------------------------------------------------------- #
+def test_composite_business_key_audit_counts_a_row_expression() -> None:
+    """A composite key must render count(distinct (a, b)) -- a ROW expression --
+    because Postgres count() rejects count(distinct a, b)."""
+    plan = model_plan.build_scaffold_plan(
+        _source(_COMPOSITE_MAP), TABLE_ID, _COMPOSITE_FACT
+    )
+    sql = sql_render.render_audit_sql(plan)
+
+    assert "count(distinct (invoice_no, line_no))" in sql
+    assert "count(distinct invoice_no, line_no)" not in sql  # the rejected form
+
+
+def test_single_column_business_key_audit_counts_the_bare_column() -> None:
+    """A single-column key stays the plain count(distinct col) -- no parens churn."""
+    sql = sql_render.render_audit_sql(_plan())
+
+    assert "count(distinct transaction_id)" in sql
+
+
 def test_derived_rollup_attribute_remedy_points_at_derived_columns() -> None:
     """A dim attribute whose provenance is a derived_columns rollup (not a kept
     columns[] source) fails closed with a remedy that names derived_columns and

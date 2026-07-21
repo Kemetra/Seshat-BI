@@ -305,26 +305,64 @@ def _dimensions(inputs: _PlanInputs) -> tuple[ModelSpec, ...]:
     return tuple(entities)
 
 
+def _bronze_cited_column(inputs: _PlanInputs, name: str, context: str) -> ColumnSpec:
+    """A fact column whose value IS a bronze column (grain key, measure, degenerate
+    dim), cited to its real ``source_name`` -- fail closed if the map does not
+    stage it (never a fabricated citation)."""
+    return ColumnSpec(
+        name=name,
+        source_columns=(_bronze_citation(inputs, name, context),),
+    )
+
+
+def _string_field(container: dict, key: str) -> tuple[str, ...]:
+    return _string_list(container.get(key))
+
+
+def _governed_measures(inputs: _PlanInputs) -> tuple[str, ...]:
+    """Every fact measure the owner declared -- money AND non-money (e.g. an
+    additive ``quantity``). The ``gold_star.fact.measures`` list is authoritative:
+    the additive_money_measures subset parity reconciles by sum, but ALL declared
+    measures are real fact columns the human wants materialized."""
+    fact_section = inputs.gold_star.get("fact")
+    declared = (
+        _string_field(fact_section, "measures")
+        if isinstance(fact_section, dict)
+        else ()
+    )
+    # measures[] is the superset; union in additive_money_measures so a map that
+    # tags money without re-listing it under measures still gets those columns.
+    ordered: list[str] = [*declared]
+    ordered.extend(m for m in inputs.fact.additive_money_measures if m not in ordered)
+    return tuple(ordered)
+
+
+def _degenerate_dimensions(inputs: _PlanInputs) -> tuple[str, ...]:
+    """The top-level ``gold_star.degenerate_dimensions`` -- attribute-free columns
+    that live ON the fact (e.g. ``transaction_id``, ``discount_applied``)."""
+    return _string_field(inputs.gold_star, "degenerate_dimensions")
+
+
 def _fact_columns(
     inputs: _PlanInputs, dimensions: tuple[ModelSpec, ...]
 ) -> tuple[ColumnSpec, ...]:
-    """The fact's synthetic PK, the grain/business key, one FK per dimension, and
-    every declared money measure.
+    """EVERY governed fact column: the synthetic PK, the grain/business key, one
+    FK per dimension, every declared measure (money AND non-money), and every
+    degenerate dimension.
 
     Provenance is honest, never fabricated: the fact's own surrogate PK and every
     dimension FK (``*_sk``) are computed by join, so they carry a governed
     ``surrogate_key`` derivation -- NOT a bronze citation to the renamed silver
-    name (which no bronze column has). The grain key and money measures ARE
-    columns that exist in bronze, so they resolve to their real ``source_name``
-    through the provenance lookup (fail closed if the map does not stage them).
+    name (which no bronze column has). The grain key, measures, and degenerate
+    dimensions ARE columns that exist in bronze, so they resolve to their real
+    ``source_name`` through the provenance lookup (fail closed if the map does not
+    stage them). ``_dedupe_columns`` collapses a name that is both the business key
+    and a degenerate dim (e.g. ``transaction_id``) to one column.
     """
     fact_sk = f"{inputs.fact.name}_sk"
     columns = [ColumnSpec(name=fact_sk, derivation="surrogate_key")]
     columns.extend(
-        ColumnSpec(
-            name=key,
-            source_columns=(_bronze_citation(inputs, key, "fact business_key"),),
-        )
+        _bronze_cited_column(inputs, key, "fact business_key")
         for key in inputs.fact.business_key
     )
     columns.extend(
@@ -332,13 +370,12 @@ def _fact_columns(
         for dim in dimensions
     )
     columns.extend(
-        ColumnSpec(
-            name=measure,
-            source_columns=(
-                _bronze_citation(inputs, measure, "fact additive_money_measure"),
-            ),
-        )
-        for measure in inputs.fact.additive_money_measures
+        _bronze_cited_column(inputs, measure, "fact measure")
+        for measure in _governed_measures(inputs)
+    )
+    columns.extend(
+        _bronze_cited_column(inputs, degenerate, "fact degenerate_dimension")
+        for degenerate in _degenerate_dimensions(inputs)
     )
     return tuple(_dedupe_columns(columns))
 

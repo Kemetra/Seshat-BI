@@ -9,6 +9,7 @@ be clobbered with only the new rows (destroying other tables' entries).
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,7 @@ import yaml
 
 from seshat.dbt.contracts import FactBinding
 from seshat.dbt.scaffold import model_plan, writer
+from seshat.safe_write import SafeWriteError
 
 pytestmark = pytest.mark.unit
 
@@ -112,3 +114,71 @@ def test_malformed_selectors_fails_closed_without_clobbering(tmp_path: Path) -> 
     with pytest.raises(model_plan.ScaffoldError, match="valid YAML"):
         writer.merge_selector(tmp_path, "seshat_table_b")
     assert path.read_text(encoding="utf-8") == original
+
+
+# --------------------------------------------------------------------------- #
+# FIX #3 regression -- a symlinked merge target is refused, never followed
+# --------------------------------------------------------------------------- #
+def test_merge_sources_refuses_a_symlinked_target(tmp_path: Path) -> None:
+    """If _sources.yml is a SYMLINK, rewriting it through write_text would follow
+    the link and clobber its target (possibly outside the repo). Refuse it."""
+    path = tmp_path / SOURCES
+    path.parent.mkdir(parents=True)
+    outside = tmp_path / "escape_sources.yml"  # a dangling target
+    try:
+        os.symlink(outside, path)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation not permitted in this environment")
+
+    with pytest.raises(SafeWriteError, match="symlink"):
+        writer.merge_sources(tmp_path, _plan("table_a"))
+    assert not outside.exists()  # nothing written through the symlink
+
+
+def test_merge_selector_refuses_a_symlinked_target(tmp_path: Path) -> None:
+    """A symlinked selectors.yml is refused before the rewrite, same as sources."""
+    path = tmp_path / SELECTORS
+    path.parent.mkdir(parents=True)
+    outside = tmp_path / "escape_selectors.yml"
+    try:
+        os.symlink(outside, path)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation not permitted in this environment")
+
+    with pytest.raises(SafeWriteError, match="symlink"):
+        writer.merge_selector(tmp_path, "seshat_table_a")
+    assert not outside.exists()
+
+
+def test_merge_target_refusal_holds_without_os_symlink_support(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Prove the refusal branch even where the OS forbids creating symlinks (this
+    Windows box): a path reporting is_symlink() True is refused and never
+    rewritten, regardless of whether a real link could be planted."""
+    path = tmp_path / SOURCES
+    path.parent.mkdir(parents=True)
+    original = "sources: []\n"
+    path.write_text(original, encoding="utf-8")
+    monkeypatch.setattr(Path, "is_symlink", lambda self: True)
+
+    with pytest.raises(SafeWriteError, match="symlink"):
+        writer.merge_sources(tmp_path, _plan("table_a"))
+    assert path.read_text(encoding="utf-8") == original  # untouched
+
+
+def test_merge_refuses_a_symlinked_parent_component(tmp_path: Path) -> None:
+    """A symlinked PARENT dir (e.g. dbt/ -> outside) redirects the rewrite even
+    when the target file itself is not a link -- refused too, mirroring safe_write's
+    whole-chain containment (#351/#352), not just the final component."""
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (tmp_path / "dbt").mkdir()
+    try:
+        os.symlink(outside, tmp_path / "dbt" / "models", target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlink creation not permitted in this environment")
+
+    with pytest.raises(SafeWriteError, match="symlink"):
+        writer.merge_sources(tmp_path, _plan("table_a"))
+    assert not (outside / "sources" / "_sources.yml").exists()

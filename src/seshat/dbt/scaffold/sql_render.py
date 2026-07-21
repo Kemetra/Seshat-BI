@@ -80,8 +80,7 @@ def render_fact_sql(plan: ScaffoldPlan) -> str:
 def _parity_value(row: ParityRow, plan: ScaffoldPlan, which: str) -> str:
     """The migration-oracle (source) or shadow (ref) SQL expression for a row."""
     if row.assertion_class == "business_key_count":
-        keys = ", ".join(plan.fact.business_key)
-        return _count_distinct(plan.fact.name, keys, which)
+        return _count_distinct(plan.fact.name, plan.fact.business_key, which)
     if row.assertion_class == "additive_money_total":
         measure = row.subject.split(".", 1)[1]
         return _sum_measure(plan.fact.name, measure, which)
@@ -99,8 +98,15 @@ def _count_star(subject: str, which: str) -> str:
     return f"(select count(*)::numeric from {_relation(subject, which)})"
 
 
-def _count_distinct(model: str, keys: str, which: str) -> str:
-    return f"(select count(distinct {keys})::numeric from {_relation(model, which)})"
+def _count_distinct(model: str, keys: tuple[str, ...], which: str) -> str:
+    """Distinct-count the grain key. A COMPOSITE key is wrapped as a parenthesized
+    ROW expression -- ``count(distinct (a, b))`` -- because Postgres ``count``
+    takes exactly ONE distinct expression (``count(distinct a, b)`` is a syntax
+    error). A single-column key stays the plain ``count(distinct col)`` it was."""
+    expression = keys[0] if len(keys) == 1 else f"({', '.join(keys)})"
+    return (
+        f"(select count(distinct {expression})::numeric from {_relation(model, which)})"
+    )
 
 
 def _sum_measure(model: str, measure: str, which: str) -> str:

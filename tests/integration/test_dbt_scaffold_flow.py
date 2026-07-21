@@ -79,6 +79,13 @@ def test_scaffold_output_passes_static_validation(tmp_path: Path) -> None:
     assert result.valid, [b.code for b in result.blocking_reasons]
     assert {c.name for c in result.model_contracts} == EXPECTED_MODELS
 
+    # The now-complete fact carries EVERY governed column (fix #1): the non-money
+    # measure `quantity` and the degenerate dim `discount_applied`, not only the
+    # additive money measure -- and validation still passes with 0 blockers.
+    fact = next(c for c in result.model_contracts if c.name == "fct_sales_rss")
+    fact_columns = {column.name for column in fact.columns}
+    assert {"quantity", "total_spent", "discount_applied"} <= fact_columns
+
 
 def test_scaffold_is_non_destructive_on_rerun(tmp_path: Path) -> None:
     from seshat.dbt.scaffold import scaffold_models

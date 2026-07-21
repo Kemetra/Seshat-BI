@@ -15,7 +15,11 @@ from pathlib import Path
 
 import yaml
 
-from seshat.safe_write import write_if_absent
+from seshat.safe_write import (
+    SafeWriteError,
+    _refuse_symlinked_components,
+    write_if_absent,
+)
 
 from .model_plan import ModelSpec, ScaffoldError, ScaffoldPlan
 
@@ -26,6 +30,41 @@ _SOURCES = "dbt/models/sources/_sources.yml"
 def _yaml_bytes(document: dict) -> bytes:
     text = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
     return text.encode("utf-8")
+
+
+def _refuse_symlinked_target(path: Path) -> None:
+    """Refuse a symlink AT the output path (even DANGLING, which ``is_file`` misses).
+
+    ``write_text`` on a symlinked path follows the link and rewrites its TARGET --
+    possibly outside the repo. Refused with the repo's dedicated ``SafeWriteError``,
+    the same posture ``safe_write`` enforces and which the dbt CLI already routes to
+    a clean exit 3.
+    """
+    if path.is_symlink():
+        raise SafeWriteError(
+            f"refusing to rewrite a symlinked merge target: {path} "
+            "(a symlink here could write outside the workspace); remove it and retry"
+        )
+
+
+def _write_merge_target(root: Path, path: Path, document: dict) -> None:
+    """Rewrite a MERGE target (selectors.yml / _sources.yml) in place, refusing any
+    symlink on the path first.
+
+    Unlike the per-model files (write-if-absent), these shared files must be
+    read-then-rewritten to union in the new table, so ``write_if_absent`` cannot
+    guard them. This mirrors its containment posture instead: refuse a symlinked
+    PARENT component (a symlinked ``dbt/`` would redirect the write even when the
+    final file is not itself a link -- ``mkdir(exist_ok=True)`` happily traverses
+    it) AND a symlink at the output path. Closes the whole #351/#352 class, not
+    just the final component.
+    """
+    _refuse_symlinked_components(root, path)
+    _refuse_symlinked_target(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        _yaml_bytes(document).decode("utf-8"), encoding="utf-8", newline="\n"
+    )
 
 
 def _load_document(path: Path) -> dict:
@@ -71,10 +110,7 @@ def merge_selector(root: Path, selector: str) -> bool:
     if any(isinstance(row, dict) and row.get("name") == selector for row in rows):
         return False
     document["selectors"] = [*rows, _selector_row(selector)]
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        _yaml_bytes(document).decode("utf-8"), encoding="utf-8", newline="\n"
-    )
+    _write_merge_target(root, path, document)
     return True
 
 
@@ -150,10 +186,7 @@ def merge_sources(root: Path, plan: ScaffoldPlan) -> bool:
         return False
     document.setdefault("version", 2)
     document["sources"] = rows
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        _yaml_bytes(document).decode("utf-8"), encoding="utf-8", newline="\n"
-    )
+    _write_merge_target(root, path, document)
     return True
 
 
