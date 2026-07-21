@@ -50,7 +50,8 @@ not stated as fact.
   read-only file profiler. It computes the same mechanical set (row/col count,
   `'' OR NULL` missingness, distinct cardinality, candidate-PK proof) from the file's
   raw cells; CSV uses the stdlib (no extra), Excel uses the optional `files` extra
-  (`pip install 'retail[files]'`). The file-grain reasoning that guides the read
+  (`pipx inject seshat-bi openpyxl` or `pip install "seshat-bi[files]"`). The
+  file-grain reasoning that guides the read
   (encoding, delimiter, header row, sheet selection) lives in
   `skills/bi-python-knowledge/` (route: profile a standalone file source).
 

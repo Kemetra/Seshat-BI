@@ -28,7 +28,7 @@ auto-loop. The live run needs a DB and is the user's call; you report and stop.
 - silver + gold are materialized for the table.
 - A reviewed `mappings/<table>/source-map.yaml` exists (the targets are derived
   from it -- table, PK, FK, measures).
-- The optional `db` extra is installed (`pip install 'retail[db]'`) and a DSN is
+- The optional `db` extra is installed (`pipx inject seshat-bi psycopg2-binary`, or `pip install "seshat-bi[db]"`) and a DSN is
   configured (`DATABASE_URL` or the `ANALYTICS_DB_*` vars in the gitignored
   `.env`). Never commit a real DSN.
 
@@ -68,8 +68,9 @@ If no DSN is configured or the `db` extra is absent, `retail validate` does NOT
 traceback and does NOT pretend a run happened -- the live boundary is
 user-supplied by design (Principle VIII). Without `--source-map` it reports the
 surface is built and how to target a table; without a DSN/driver it prints the
-enable steps: `pip install 'retail[db]'`, then set `DATABASE_URL` (or
-`ANALYTICS_DB_*`) in the gitignored `.env`. Report that state; do not fake a pass.
+enable steps: `pipx inject seshat-bi psycopg2-binary` (or `pip install "seshat-bi[db]"`),
+then set `DATABASE_URL` (or `ANALYTICS_DB_*`) in the gitignored `.env`. Report that
+state; do not fake a pass.
 
 ## What to do after interpreting
 

@@ -86,7 +86,7 @@ evidence it derives from (default: omit it).
 
 ### Deferred / live-boundary mode
 No DSN / no `db` extra: report `[PENDING LIVE PROFILE]` and status `blocked` (evidence
-missing); print the enable steps (`pip install 'retail[db]'`; set `DATABASE_URL` or
+missing); print the enable steps (`pipx inject seshat-bi psycopg2-binary` or `pip install "seshat-bi[db]"`; set `DATABASE_URL` or
 `ANALYTICS_DB_*` in the gitignored `.env`; never commit a real DSN). Do NOT fabricate a
 result (Principle VIII).
 

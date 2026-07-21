@@ -9,6 +9,17 @@
 > record. Fill it from a read-only profiling pass over the *landed* source -- before
 > any cleaning decision and before any `silver.*` SQL exists.
 >
+> **How to produce these numbers (issue #400):** on a `pipx`/marketplace install
+> (no development repository), reach the Stage-1 profiling procedure through the
+> shipped surface, not this file's `docs/` links (which are the dev-checkout
+> reference). Ask your agent to load the **`seshat-bi`** skill (the one that ships
+> with the plugin) and run `seshat next --format agent` -- it names the one governed
+> next action for this stage; at Source Ready that is the read-only profile that
+> fills the table below. Discover verbs with `seshat --help` / `seshat status`;
+> never guess a verb or skill name. The live profiling leg needs the optional `db`
+> extra and a DSN in a gitignored `.env` (`pipx inject seshat-bi psycopg2-binary`,
+> or `pip install "seshat-bi[db]"`).
+>
 > **The rule the gate enforces:** you do not write silver until this profile is filled,
 > the source is mapped (`source-map.yaml`), and the mapping is reviewed.
 >

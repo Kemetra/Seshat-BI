@@ -158,8 +158,9 @@ credentials + the optional `db` extra are user-supplied under constitution
 Principle VIII. In this mode:
 
 - Report the boundary and print the exact enable steps:
-  `pip install 'retail[db]'`, then set `DATABASE_URL` (or the `ANALYTICS_DB_*`
-  vars) in the gitignored `.env`. Never commit a real DSN.
+  `pipx inject seshat-bi psycopg2-binary` (or `pip install "seshat-bi[db]"`), then
+  set `DATABASE_URL` (or the `ANALYTICS_DB_*` vars) in the gitignored `.env`. Never
+  commit a real DSN.
 - STAY USEFUL: copy the five template blanks into `mappings/<table>/`, fill their
   STRUCTURE, mark the mechanical profile numbers `[PENDING LIVE PROFILE]`, still
   drive the semantic stop-and-ask (Step 3) and the gate (Step 6).

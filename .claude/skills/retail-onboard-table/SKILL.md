@@ -141,8 +141,9 @@ STOP. The wizard never authors silver.
 If no DSN is configured or the `db` extra is absent: do NOT traceback and do NOT
 fabricate profile numbers. Mark the mechanical rows `[PENDING LIVE PROFILE]`, record
 `source_ready: warning` (never `pass`), and print the enable steps:
-`pip install 'retail[db]'`, then set `DATABASE_URL` (or `ANALYTICS_DB_*`) in the
-git-ignored `.env` -- never commit a real DSN. The semantic stop-and-ask and the gate
+`pipx inject seshat-bi psycopg2-binary` (or `pip install "seshat-bi[db]"`), then set
+`DATABASE_URL` (or `ANALYTICS_DB_*`) in the git-ignored `.env` -- never commit a real
+DSN. The semantic stop-and-ask and the gate
 stop still run (they need no DB).
 
 ## Generic, not C086

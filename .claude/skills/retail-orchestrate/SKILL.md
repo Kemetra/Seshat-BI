@@ -142,8 +142,9 @@ escalate rather than guess.
   (official Power BI MCP / connection; `pbi-cli` no longer preferred), Principle II;
   not wired. It executes an approved model; it never defines metrics/mappings/semantics.
 - **Live `retail validate` run** -- needs the `db` extra + a user DSN (Principle
-  VIII). Without them, report the boundary and the enable steps (`pip install
-  'retail[db]'`, set `DATABASE_URL` or `ANALYTICS_DB_*` in the gitignored `.env`);
+  VIII). Without them, report the boundary and the enable steps (`pipx inject
+  seshat-bi psycopg2-binary` or `pip install "seshat-bi[db]"`, set `DATABASE_URL`
+  or `ANALYTICS_DB_*` in the gitignored `.env`);
   mark profile/validate numbers `[PENDING LIVE PROFILE]`. Never traceback, never
   fake a pass.
 

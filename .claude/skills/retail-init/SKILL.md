@@ -61,7 +61,7 @@ Phase-1 Step 1-2 of `docs/roadmap/distribution-ideas.md`.
    agent-visible first result is the grain candidates + column types it returns.
 5. **Degrade honestly when there's no DB.** The Stage-1 profile is DB-backed
    (`profile.py` over a `QueryRunner`). If no `db` extra / DSN is configured, report
-   the boundary and the enable steps (`pip install 'retail[db]'`; set `DATABASE_URL`
+   the boundary and the enable steps (`pipx inject seshat-bi psycopg2-binary` or `pip install "seshat-bi[db]"`; set `DATABASE_URL`
    or `ANALYTICS_DB_*` in the gitignored `.env`), mark profile numbers `[PENDING LIVE
    PROFILE]`, author the source-map / orientation structure, and STAY USEFUL — never
    traceback, never fake a pass. There is no CSV/Excel profiler (YAGNI).

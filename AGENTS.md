@@ -47,8 +47,9 @@ This file is the short operating contract. The full law is
 
 - The live boundary (`retail validate`, profiling against a DSN) needs the `db`
   extra + a DSN. If absent: report the boundary + the enable steps
-  (`pip install 'retail[db]'`, set `DATABASE_URL` or `ANALYTICS_DB_*` in the
-  gitignored `.env`), mark numbers `[PENDING LIVE PROFILE]`, and STAY USEFUL
+  (`pipx inject seshat-bi psycopg2-binary` or `pip install "seshat-bi[db]"`, set
+  `DATABASE_URL` or `ANALYTICS_DB_*` in the gitignored `.env`), mark numbers
+  `[PENDING LIVE PROFILE]`, and STAY USEFUL
   (author artifact structure). NEVER traceback, NEVER fake a pass.
 - Secrets only in the gitignored `.env`. NEVER commit a real host/DSN. Power BI
   params use the `<placeholder>` form -- `G6` + `C2` block a real host at the gate.

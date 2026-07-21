@@ -73,8 +73,9 @@ Each row is a STOP: PROPOSE with the supporting data fact, raise an
       Silver Ready is the next (out-of-scope) stage, and STOP. Never author silver.
 - [ ] **Deferred-boundary mode** -- no DSN / no `db` extra: no traceback, no fabricated
       numbers; mechanical rows `[PENDING LIVE PROFILE]`; `source_ready: warning`; print
-      the enable steps (`pip install 'retail[db]'`; set `DATABASE_URL` in the
-      git-ignored `.env`; never commit a real DSN).
+      the enable steps (`pipx inject seshat-bi psycopg2-binary` or `pip install
+      "seshat-bi[db]"`; set `DATABASE_URL` in the git-ignored `.env`; never commit a
+      real DSN).
 
 ## Terminal definition-of-done
 
