@@ -377,6 +377,20 @@ capabilities:
     references:
       dispatch: "blockers"
 
+  - id: retail-orchestration-assess
+    name: "retail / seshat orchestration-assess"
+    summary: "Read-only recommend-then-decide assessment of whether the project needs the dbt / dagster orchestration adapters, from committed state; recommends only, the human decides."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "orchestration-assess"
+    documentation: "docs/tools/orchestration-assess.md"
+    references:
+      dispatch: "orchestration-assess"
+
   - id: retail-dashboard-planner
     name: "retail dashboard-planner"
     summary: "Read-only categorical new/extends/duplicate verdict on a proposed dashboard idea against the committed dashboard set."
