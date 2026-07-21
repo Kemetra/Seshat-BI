@@ -379,9 +379,15 @@ def scaffold_source(repo_root: Path, table: str) -> Stage1Report:
     notes = (
         f"fill mappings/{table}/source-profile.md (Table id, Row count, the "
         "Per-column profile table, the PK proof), then run `seshat next`",
+        # Do NOT interpolate the scaffold id into `--table`: a scaffold id is only
+        # a safe path segment (e.g. `sales.orders` or `sales-orders`), not
+        # necessarily a valid `schema.table` SQL identifier, so a derived
+        # `--table bronze.<id>` can be rejected by `profile` as three-part or
+        # non-identifier (#409). Ask for the ACTUAL landed schema-qualified table.
         "get the mechanical numbers (row/column count, per-column missingness, "
         "distinct cardinality, PK proof) with "
-        f"`seshat profile --table bronze.{table} --pk <candidate-key>` "
-        "(needs a DSN + the 'db' extra); paste its output into the profile",
+        "`seshat profile --table <bronze_schema>.<landed_table> --pk "
+        "<candidate-key>` (needs a DSN + the 'db' extra); paste its output into "
+        "the profile",
     )
     return Stage1Report(written=tuple(written), kept=tuple(kept), notes=notes)

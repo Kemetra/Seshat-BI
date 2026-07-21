@@ -152,7 +152,6 @@ def _run_profile_body(args: argparse.Namespace) -> int:
     Dialect; the Postgres path keeps using --dsn/DATABASE_URL verbatim.
     """
     from seshat import cli
-    from seshat.profile import profile as run_mechanical_profile
 
     prog = cli._prog(args)  # brand the client typed (`seshat`/`retail`), #402
 
@@ -163,8 +162,30 @@ def _run_profile_body(args: argparse.Namespace) -> int:
     resolved = _resolve_engine(args, cli, prog)
     if resolved is None:
         return 1
-    engine, dialect, config = resolved
+    return _profile_and_render(args, cli, resolved, candidate_pk)
 
+
+def _profile_and_render(
+    args: argparse.Namespace,
+    cli,
+    resolved: tuple[str, object, object],
+    candidate_pk: tuple[str, ...],
+) -> int:
+    """Run the mechanical profile over a live connection and emit the result.
+
+    Extracted from ``_run_profile_body`` to keep that handler small (code-health
+    gate): it prints the credential-free target line, then owns the DB-boundary
+    contract -- any failure is redacted through ``dialect.redact`` and reported
+    with the engine-specific driver remedy, never surfaced as a raw traceback --
+    then renders JSON or the pasteable markdown. Takes the ``resolved`` tuple
+    ``_resolve_engine`` already returns (engine, dialect, config), not three
+    loose primitives, and re-derives ``prog`` via ``cli._prog(args)``, so the
+    seam stays at four arguments.
+    """
+    from seshat.profile import profile as run_mechanical_profile
+
+    prog = cli._prog(args)  # brand the client typed (`seshat`/`retail`), #402
+    engine, dialect, config = resolved
     safe_host = cli._safe_target_label(engine, config)
     print(
         f"{prog} profile: profiling {args.table} against {safe_host}",

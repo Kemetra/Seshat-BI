@@ -99,6 +99,42 @@ def _discover_columns(
     return tuple((r[0], (r[1] if len(r) > 1 else "text")) for r in rows)
 
 
+def _pk_null_predicate(
+    dialect: Dialect,
+    validated_pk: tuple[str, ...],
+    columns: tuple[tuple[str, str], ...],
+) -> str:
+    """The ``OR``-joined missing-key predicate for the candidate-PK null proof.
+
+    Count an EMPTY-or-NULL key, not just NULL, for TEXT PK columns -- the same
+    RC5 ``'' OR NULL`` measure used for text-column missingness. A faithful
+    all-TEXT bronze landing writes ``''`` (not NULL) for a missing key, so
+    ``IS NULL`` alone would miss a blank key and wrongly pass a non-unique grain;
+    it also keeps the emitted ``NULLs/empty in PK`` proof honest (#409). Non-text
+    keys cannot hold ``''`` -> plain ``IS NULL`` (``trim()`` is text-only, crashes).
+
+    Match a candidate-key name to its discovered type using the dialect's OWN
+    catalog normalization -- NOT a raw case-sensitive dict lookup. Snowflake's
+    INFORMATION_SCHEMA reports an unquoted ``id`` as ``ID``, so a user's ``--pk
+    id`` would miss a case-sensitive lookup, default to ``text``, and emit
+    ``trim(id) = ''`` against a NUMBER column -- a DB-boundary crash instead of a
+    profile (#409). Postgres's normalize is identity, so its case-sensitive
+    matching is unchanged; Snowflake folds to upper, aligning with ``columns_query``.
+    """
+    type_by_name = {
+        dialect.normalize_catalog_literal(name): data_type
+        for name, data_type in columns
+    }
+
+    def _term(col: str) -> str:
+        data_type = type_by_name.get(dialect.normalize_catalog_literal(col), "text")
+        if dialect.is_text_type(data_type):
+            return f"trim({col}) = '' OR {col} IS NULL"
+        return f"{col} IS NULL"
+
+    return " OR ".join(_term(c) for c in validated_pk)
+
+
 def profile(
     runner: QueryRunner,
     table: str,
@@ -146,21 +182,7 @@ def profile(
         )
 
     validated_pk = tuple(_safe_identifier(c) for c in candidate_pk)
-    # Count an EMPTY-or-NULL key, not just NULL, for TEXT PK columns -- the same
-    # RC5 ''OR NULL measure used for text-column missingness above. A faithful
-    # all-TEXT bronze landing writes '' (not NULL) for a missing key, so IS NULL
-    # alone would miss a blank key and wrongly pass a non-unique grain; it also
-    # keeps the emitted `NULLs/empty in PK` proof honest (#409). Non-text keys
-    # cannot hold '' -> plain IS NULL (trim() is text-only and would crash).
-    type_by_name = {name: data_type for name, data_type in columns}
-    null_terms = [
-        f"trim({c}) = '' OR {c} IS NULL"
-        if dialect.is_text_type(type_by_name.get(c, "text"))
-        else f"{c} IS NULL"
-        for c in validated_pk
-    ]
-    null_pred = " OR ".join(null_terms)
-    null_frag = dialect.count_where(null_pred)
+    null_frag = dialect.count_where(_pk_null_predicate(dialect, validated_pk, columns))
     # Route the tuple-distinct count through the dialect, NOT a hardcoded
     # Postgres row-value `count(DISTINCT (a, b))`. Postgres returns exactly that
     # form (byte-identical to before), but SQL Server / MySQL / Snowflake need
@@ -174,7 +196,12 @@ def profile(
         total=total,
         distinct_pk=distinct_pk,
         null_pk=null_pk,
-        is_unique=(total == distinct_pk and null_pk == 0),
+        # An empty table (total == 0) proves NOTHING: `0 == 0 and 0 == 0` would
+        # otherwise pass a candidate PK on a source with no rows. Guard on a
+        # nonempty table so this DB profiler agrees with the file profiler, which
+        # already requires it (`file_profile.py`: `row_count > 0 and ...`), and so
+        # the source-profile.md template's stated rule matches what runs (#409).
+        is_unique=(total > 0 and total == distinct_pk and null_pk == 0),
     )
 
     return ProfileResult(
