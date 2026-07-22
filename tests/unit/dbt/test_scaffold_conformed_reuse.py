@@ -90,14 +90,35 @@ def _doc_for(star_id: str) -> dict:
     return {**_MAP, "meta": {**_MAP["meta"], "table_id": star_id}}
 
 
+def _owner_view(*, attributes: list[str]) -> dict[str, dict[str, dict]]:
+    """An owner-view where OWNER_TABLE owns dim_customer_rss with ``attributes``."""
+    return {
+        _OWNER_TABLE: {
+            "dim_customer_rss": {
+                "name": "gold.dim_customer_rss",
+                "surrogate_key": "customer_sk",
+                "attributes": attributes,
+            }
+        }
+    }
+
+
+# The default owner-view every reuse test uses unless it is exercising a refusal:
+# the owner declares dim_customer_rss carrying the reuser's customer_id attribute.
+_DEFAULT_OWNER_VIEW = _owner_view(attributes=["customer_id"])
+
+
 def _source_with_map(
-    document: dict, conformed_map: dict | None
+    document: dict,
+    conformed_map: dict | None,
+    owner_view: dict[str, dict[str, dict]] | None = _DEFAULT_OWNER_VIEW,
 ) -> model_plan.MapSource:
     return model_plan.MapSource(
         document=document,
         source_map=SOURCE_MAP,
         source_map_revision=REVISION,
         conformed_map=conformed_map,
+        owner_view=owner_view,
     )
 
 
@@ -307,3 +328,107 @@ def test_owner_is_stars0_even_if_it_is_repeated_later_in_the_list() -> None:
     )
     assert reuser_plan.reused_dimensions == ("dim_customer_rss",)
     assert reuser_plan.reused_dimension_owners["dim_customer_rss"] == _OWNER_TABLE
+
+
+# --------------------------------------------------------------------------- #
+# #418 remainder -- owner-existence + attribute-divergence reconciliation
+# --------------------------------------------------------------------------- #
+def test_reuse_ok_when_owner_declares_a_superset_of_attributes() -> None:
+    """The reuser uses the shared canonical dim; the owner having MORE attributes
+    than the reuser is fine -- reuse proceeds (#418)."""
+    plan = model_plan.build_scaffold_plan(
+        _source_with_map(
+            _doc_for(_REUSER_TABLE),
+            _conformed_map(),
+            _owner_view(attributes=["customer_id", "customer_segment"]),
+        ),
+        _REUSER_TABLE,
+        _FACT,
+    )
+    assert plan.reused_dimensions == ("dim_customer_rss",)
+
+
+def test_reuse_refused_when_owner_star_is_absent() -> None:
+    """Owner star id resolves to NO committed star -> fail closed, not a dangling
+    ref() at dbt parse (#418)."""
+    with pytest.raises(model_plan.ScaffoldError, match="dim_customer_rss") as err:
+        model_plan.build_scaffold_plan(
+            _source_with_map(_doc_for(_REUSER_TABLE), _conformed_map(), {}),
+            _REUSER_TABLE,
+            _FACT,
+        )
+    assert _OWNER_TABLE in str(err.value)
+
+
+def test_reuse_refused_when_owner_does_not_declare_the_dim() -> None:
+    """Owner star exists but declares no dim of this name -> fail closed (#418)."""
+    view = {_OWNER_TABLE: {"dim_other": {"name": "gold.dim_other"}}}
+    with pytest.raises(model_plan.ScaffoldError, match="dim_customer_rss"):
+        model_plan.build_scaffold_plan(
+            _source_with_map(_doc_for(_REUSER_TABLE), _conformed_map(), view),
+            _REUSER_TABLE,
+            _FACT,
+        )
+
+
+def test_reuse_refused_when_reuser_declares_an_attribute_owner_lacks() -> None:
+    """The reuser's dim_customer_rss declares customer_id, but the owner's dim has
+    only ``customer_ref`` -> the reuser attribute would be silently lost -> fail
+    closed naming the attribute + both stars (#418)."""
+    with pytest.raises(model_plan.ScaffoldError, match="customer_id") as err:
+        model_plan.build_scaffold_plan(
+            _source_with_map(
+                _doc_for(_REUSER_TABLE),
+                _conformed_map(),
+                _owner_view(attributes=["customer_ref"]),
+            ),
+            _REUSER_TABLE,
+            _FACT,
+        )
+    assert _OWNER_TABLE in str(err.value) and _REUSER_TABLE in str(err.value)
+
+
+def test_all_dims_reused_builds_a_zero_owned_dim_plan() -> None:
+    """A fully-conformed reuser (every dim owned elsewhere, all validated) builds:
+    NO dim models, but a real fact + staging + audit; parity has zero
+    dimension_member_count rows and validates exactly (#418)."""
+    from seshat.dbt.contracts import ParityAssertion
+    from seshat.dbt.evidence import _validate_parity_set
+
+    # a map whose ONLY dim is the conformed dim_customer_rss (drop the date dim)
+    single = {
+        **_MAP,
+        "meta": {**_MAP["meta"], "table_id": _REUSER_TABLE},
+        "gold_star": {
+            k: v for k, v in _MAP["gold_star"].items() if k != "date_dimension"
+        },
+    }
+    plan = model_plan.build_scaffold_plan(
+        _source_with_map(
+            single, _conformed_map(), _owner_view(attributes=["customer_id"])
+        ),
+        _REUSER_TABLE,
+        _FACT,
+    )
+    assert plan.dimensions == ()  # zero owned dim models
+    assert plan.reused_dimensions == ("dim_customer_rss",)
+    assert plan.fact_model is not None and plan.staging is not None
+    # the fact still carries the reused dim FK
+    assert any(c.name == "customer_sk" for c in plan.fact_model.columns)
+    # parity has NO dimension_member_count rows and validates exactly
+    assert _member_count_subjects(plan) == set()
+    assertions = tuple(
+        ParityAssertion(
+            assertion_id=r.assertion_id,
+            assertion_class=r.assertion_class,
+            subject=r.subject,
+            expected="1",
+            actual="1",
+            delta="0",
+            tolerance=r.tolerance,
+            passed=True,
+        )
+        for r in plan.parity
+    )
+    unique_ids = tuple(sorted(f"model.seshat_bi.{m.name}" for m in _all_models(plan)))
+    _validate_parity_set(assertions, unique_ids, plan.fact)  # must not raise

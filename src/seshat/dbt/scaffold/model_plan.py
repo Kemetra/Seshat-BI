@@ -473,13 +473,13 @@ def _conformed_reuse(conformed_map: dict | None, star_id: str) -> dict[str, str]
     :func:`_reuses_dimension`) yields no reuse -> every dim is owned and emitted
     as today.
 
-    NOTE: HR1 validates a conformed dim's ``status`` and its surrogate/attribute
-    conformance across DISCOVERED same-named stars, but it does NOT validate the
-    ``stars`` LIST contents (that ``stars[0]`` names a real governed star which
-    actually declares this dim). A mistyped/absent owner therefore suppresses the
-    reuser's model and leaves a dangling ``ref()`` caught at ``dbt parse`` -- not a
-    clean scaffold-time refusal. Validating the owner requires the cross-table
-    governed-star view tracked as a #418 follow-up.
+    HR1 validates a conformed dim's ``status`` and its surrogate/attribute
+    conformance across DISCOVERED same-named stars, but does NOT validate the
+    ``stars`` LIST contents. Scaffold closes that at build time: the owner
+    (``stars[0]``) is validated against the committed owner-view by
+    :func:`_reconcile_reused` (#418) BEFORE a dim's model is dropped -- a
+    mistyped/absent owner or a reuser-only attribute fails closed here, not as a
+    dangling ``ref()`` at ``dbt parse``.
     """
     dims = conformed_map.get("dimensions") if isinstance(conformed_map, dict) else None
     if not isinstance(dims, dict):
@@ -688,11 +688,12 @@ class _PartitionedDimensions:
     drives models, contracts, and parity; a ``reused`` dim's model lives under its
     owning star and the fact ``ref()``s it there.
 
-    NOTE (#418 follow-up): reuse drops the reuser's WHOLE dim spec, so an attribute
-    the reuser declares that the OWNER's dim lacks is not preserved -- HR1 allows
-    divergent attribute sets, and reconciling them needs the owner's map (the
-    cross-table view scaffold does not load here). Latent until a real conformed
-    collision exists; documented in the design spec.
+    Before a dim is reused it is RECONCILED against its owner
+    (:func:`_reconcile_reused`, #418): reuse fails closed if the owner star is
+    absent, does not declare the dim,
+    or lacks an attribute the reuser declares (which would silently drop a governed
+    field). Only reconciled dims are reused, so ``owned`` may legitimately be empty
+    (a fully-conformed reuser -- every dim validated against a real owner).
     """
 
     declared: tuple[ModelSpec, ...]
@@ -702,19 +703,71 @@ class _PartitionedDimensions:
     owners: dict[str, str]
 
 
+def _dim_attributes(raw: dict | None) -> tuple[str, ...]:
+    """The string ``attributes`` a raw dim dict declares (empty if none/malformed)."""
+    if not isinstance(raw, dict):
+        return ()
+    attrs = raw.get("attributes")
+    if not isinstance(attrs, list):
+        return ()
+    return tuple(a for a in attrs if isinstance(a, str))
+
+
+def _reconcile_reused(
+    reused: tuple[ModelSpec, ...],
+    owners: dict[str, str],
+    reuser_dims: dict[str, dict],
+    owner_view: dict[str, dict[str, dict]] | None,
+    star_id: str,
+) -> None:
+    """Validate each REUSED dim against its owner before its model is dropped (#418).
+
+    Fail closed (``ScaffoldError``) if the owner star is absent from the committed
+    view, does not declare the dim, or lacks an attribute the reuser declares (a
+    silently-lost governed field). ``reuser_dims`` maps this star's bare dim name ->
+    its raw dim dict (for the reuser's declared attributes). Never merges the
+    reuser's attributes into the owner and never mutates the owner's model.
+    """
+    view = owner_view or {}
+    for dim in reused:
+        bare = _bare_dim_name(dim.name)
+        owner = owners[bare]
+        owner_dims = view.get(owner)
+        if owner_dims is None or bare not in owner_dims:
+            raise ScaffoldError(
+                f"conformed dimension {bare!r} names owner star {owner!r}, but no "
+                f"committed governed star with that id materializes it. Fix the "
+                f"stars[] owner in the conformed-dimension map, or ensure the owner "
+                f"star's source-map declares {bare!r}."
+            )
+        missing = [
+            a
+            for a in _dim_attributes(reuser_dims.get(bare))
+            if a not in _dim_attributes(owner_dims[bare])
+        ]
+        if missing:
+            raise ScaffoldError(
+                f"reuser star {star_id!r} declares attribute(s) "
+                f"{', '.join(missing)} on conformed dimension {bare!r} that its "
+                f"owner star {owner!r} does not carry -- reuse would silently drop "
+                f"them. Add the attribute(s) to the owner star's {bare!r}, or "
+                f"declare the dimension 'distinct' in the conformed-dimension map."
+            )
+
+
 def _partition_dimensions(
-    inputs: _PlanInputs, conformed_map: dict | None, star_id: str
+    inputs: _PlanInputs,
+    conformed_map: dict | None,
+    star_id: str,
+    owner_view: dict[str, dict[str, dict]] | None,
 ) -> _PartitionedDimensions:
     declared = _dimensions(inputs)
     reuse = _conformed_reuse(conformed_map, star_id)
     owned = tuple(dim for dim in declared if _bare_dim_name(dim.name) not in reuse)
     reused = tuple(dim for dim in declared if _bare_dim_name(dim.name) in reuse)
-    if not owned:
-        raise ScaffoldError(
-            "every declared dimension is a conformed dimension owned by another "
-            "star, so this table would materialize no dimension model of its own; "
-            "at least one owned dimension is required to scaffold a star"
-        )
+    # The reuser's own raw dims (bare -> raw dict), for the attribute comparison.
+    reuser_dims = stars.star_dimensions({"gold_star": inputs.gold_star})
+    _reconcile_reused(reused, reuse, reuser_dims, owner_view, star_id)
     return _PartitionedDimensions(
         declared=declared, owned=owned, reused=reused, owners=reuse
     )
@@ -733,7 +786,9 @@ def build_scaffold_plan(
     """
     inputs = _plan_inputs(source, table_id, fact)
     star_id = stars.star_id(source.document, table_id)
-    dims = _partition_dimensions(inputs, source.conformed_map, star_id)
+    dims = _partition_dimensions(
+        inputs, source.conformed_map, star_id, source.owner_view
+    )
     return ScaffoldPlan(
         table_id=table_id,
         source_table=table_id,

@@ -167,11 +167,23 @@ def _plan_with_reuse() -> model_plan.ScaffoldPlan:
             }
         }
     }
+    # the owner (retail_store_sales) declares dim_customer_rss carrying the
+    # reuser's customer_id attribute, so reconciliation permits the reuse (#418).
+    owner_view = {
+        "retail_store_sales": {
+            "dim_customer_rss": {
+                "name": "gold.dim_customer_rss",
+                "surrogate_key": "customer_sk",
+                "attributes": ["customer_id"],
+            }
+        }
+    }
     source = model_plan.MapSource(
         document=document,
         source_map="mappings/returns_line/source-map.yaml",
         source_map_revision="d" * 40,
         conformed_map=conformed,
+        owner_view=owner_view,
     )
     return model_plan.build_scaffold_plan(source, "returns_line", fact)
 
