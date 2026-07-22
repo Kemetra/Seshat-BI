@@ -346,7 +346,9 @@ def _postgres_target_label(config: str) -> str:
 
     Classify by OUTER syntax, never by content (#409 P1). A libpq KEYWORD
     conninfo can embed anything inside a quoted credential -- ``@``, ``host=``,
-    even ``://`` (``password='abc://u:s3cret@x'``) -- so any content-based test
+    even a scheme separator (e.g. a password quoting ``abc``, a ``:``, a secret,
+    then a host, joined the way a URL joins userinfo to host) -- so any
+    content-based test
     (``"://" in config``, a ``host=`` regex, an ``@`` split) can be spoofed into
     surfacing the secret. A genuine Postgres URL is identified ONLY by its
     leading ``postgresql://`` / ``postgres://`` scheme, which a keyword conninfo
