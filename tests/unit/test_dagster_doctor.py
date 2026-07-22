@@ -222,6 +222,20 @@ def test_live_readiness_is_pending_without_credentials_or_driver(
     assert next(f for f in findings if f.id == "DAG-LIVE-00").state == "pending_live"
 
 
+def test_blank_engine_setting_defaults_to_postgres(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ANALYTICS_DB_ENGINE", "  ")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://reader:redacted@host/db")
+    monkeypatch.setattr(doctor, "_driver_metadata_present", lambda root, engine: True)
+
+    findings = doctor.live_readiness_findings(_repo(tmp_path))
+
+    engine = next(f for f in findings if f.id == "DAG-LIVE-ENGINE-00")
+    assert "postgres selected" in engine.message
+    assert next(f for f in findings if f.id == "DAG-LIVE-00").state == "available"
+
+
 def test_live_driver_probe_reads_only_the_dagster_venv_metadata(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

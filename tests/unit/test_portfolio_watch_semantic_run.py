@@ -51,6 +51,7 @@ def _semantic_approval() -> list[dict[str, str]]:
             "stage": "semantic_model_ready",
             "owner": "Ada Lovelace (metric_owner)",
             "at": "2026-07-22",
+            "note": "approved metric contract TotalSales",
         }
     ]
 
@@ -151,35 +152,36 @@ def test_live_run_matches_mapping_directory_when_display_table_differs(
     assert scope["last_dagster_run"] == "verified"
 
 
-def test_untracked_contract_blocks_verified_contract_state(tmp_path: Path) -> None:
-    write_readiness_status(
-        tmp_path,
-        "scope_alpha",
-        current_stage="semantic_model_ready",
-        approvals=_semantic_approval(),
-    )
-    _write_bound_contract(tmp_path)
-    init_git_repo(tmp_path)
-    extra = tmp_path / "mappings" / "scope_alpha" / "metrics" / "Untracked.yaml"
-    extra.write_text("name: Untracked" + chr(10), encoding="utf-8")
-
-    assert pw.contract_binding_state(tmp_path, "scope_alpha") == "blocked"
+def _add_untracked_contract(root: Path) -> None:
+    extra = root / "mappings" / "scope_alpha" / "metrics" / "Untracked.yaml"
+    extra.write_text("name: Untracked\n", encoding="utf-8")
 
 
-def test_dirty_model_blocks_verified_contract_state(tmp_path: Path) -> None:
-    write_readiness_status(
-        tmp_path,
-        "scope_alpha",
-        current_stage="semantic_model_ready",
-        approvals=_semantic_approval(),
-    )
-    _write_bound_contract(tmp_path)
-    init_git_repo(tmp_path)
-    tmdl = next((tmp_path / "powerbi").rglob("sales.tmdl"))
+def _dirty_model(root: Path) -> None:
+    tmdl = next((root / "powerbi").rglob("sales.tmdl"))
     tmdl.write_text(
-        tmdl.read_text(encoding="utf-8") + "// uncommitted edit" + chr(10),
+        tmdl.read_text(encoding="utf-8") + "// uncommitted edit\n",
         encoding="utf-8",
     )
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    (_add_untracked_contract, _dirty_model),
+    ids=("untracked-contract", "dirty-model"),
+)
+def test_uncommitted_semantic_inputs_block_verified_contract_state(
+    tmp_path: Path, mutate
+) -> None:
+    write_readiness_status(
+        tmp_path,
+        "scope_alpha",
+        current_stage="semantic_model_ready",
+        approvals=_semantic_approval(),
+    )
+    _write_bound_contract(tmp_path)
+    init_git_repo(tmp_path)
+    mutate(tmp_path)
 
     assert pw.contract_binding_state(tmp_path, "scope_alpha") == "blocked"
 
@@ -227,6 +229,21 @@ def test_run_from_an_older_source_revision_is_stale(tmp_path: Path) -> None:
     _finalize_live_run(tmp_path)
     (tmp_path / "later.txt").write_text("advance\n", encoding="utf-8")
     commit_all(tmp_path, "advance")
+
+    scope = _scope(pw.build_portfolio_watch_summary(tmp_path))
+
+    assert scope["last_dagster_run"] == "stale"
+    assert scope["live_validation_state"] == "stale"
+
+
+def test_run_from_dirty_workspace_is_stale(tmp_path: Path) -> None:
+    status = write_readiness_status(tmp_path, "scope_alpha", current_stage="gold_ready")
+    init_git_repo(tmp_path)
+    status.write_text(
+        status.read_text(encoding="utf-8") + "# uncommitted governed edit\n",
+        encoding="utf-8",
+    )
+    _finalize_live_run(tmp_path)
 
     scope = _scope(pw.build_portfolio_watch_summary(tmp_path))
 

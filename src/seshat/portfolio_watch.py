@@ -511,7 +511,8 @@ def _dagster_run_states(
         candidates,
         key=lambda pair: (str(pair[0].get("finished", "")), pair[0]["run_id"]),
     )
-    stale = _is_stale_captured_at(summary.get("commit_sha"), source_revision)
+    stale = bool(summary.get("workspace_dirty"))
+    stale = stale or _is_stale_captured_at(summary.get("commit_sha"), source_revision)
     stale = stale or _run_inputs_are_stale(root, summary)
     run_state = (
         "stale"

@@ -63,7 +63,7 @@ approvals:
 APPROVAL_ROW = """  - stage: "{stage}"
     owner: "Named Human ({role})"
     at: "2026-06-25"
-    note: "recorded by a named human"
+    note: "{note}"
 """
 
 
@@ -90,10 +90,14 @@ def make_fixture_repo(
         ),
         encoding="utf-8",
     )
-    approvals = APPROVAL_ROW.format(stage="mapping_ready", role="data_owner")
+    approvals = APPROVAL_ROW.format(
+        stage="mapping_ready", role="data_owner", note="recorded by a named human"
+    )
     if semantic_approved:
         approvals += APPROVAL_ROW.format(
-            stage="semantic_model_ready", role="metric_owner"
+            stage="semantic_model_ready",
+            role="metric_owner",
+            note="approved metric contract AMetric",
         )
     (table_dir / "readiness-status.yaml").write_text(
         READINESS_TEMPLATE.format(

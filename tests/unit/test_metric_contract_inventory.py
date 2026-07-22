@@ -17,13 +17,17 @@ def _write(path: Path, text: str) -> Path:
     return path
 
 
-def _write_approval(root: Path, scope: str) -> None:
+def _write_approval(
+    root: Path, scope: str, contract_names: tuple[str, ...] = ("TotalSales",)
+) -> None:
+    approved_names = ", ".join(contract_names)
     _write(
         root / "mappings" / scope / "readiness-status.yaml",
         "approvals:\n"
         "  - stage: semantic_model_ready\n"
         '    owner: "Ada Lovelace (metric_owner)"\n'
-        '    at: "2026-07-22"\n',
+        '    at: "2026-07-22"\n'
+        f'    note: "approved metric contracts: {approved_names}"\n',
     )
 
 
@@ -122,6 +126,18 @@ def test_pass_contract_without_named_scope_approval_is_rejected(tmp_path: Path) 
 
     assert inventory.approved == {}
     assert any("named-human approval" in error for error in inventory.errors)
+
+
+def test_approval_for_another_contract_does_not_approve_new_metric(
+    tmp_path: Path,
+) -> None:
+    _write_approval(tmp_path, "sales", ("ExistingMetric",))
+    path = _write(_contract_path(tmp_path, "sales"), _approved())
+
+    inventory = load_contract_inventory([path], tmp_path)
+
+    assert inventory.approved == {}
+    assert any("note names this contract" in error for error in inventory.errors)
 
 
 def test_duplicate_name_within_one_scope_is_rejected(tmp_path: Path) -> None:

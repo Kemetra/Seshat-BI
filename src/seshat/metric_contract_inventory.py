@@ -72,7 +72,9 @@ def _valid_evidence(value: object) -> bool:
     return all(isinstance(item, str) and item.strip() for item in value)
 
 
-def _named_semantic_approval(root: Path, scope: str, yaml) -> bool:
+def _named_semantic_approval(
+    root: Path, scope: str, contract_name: object, yaml
+) -> bool:
     path = root / "mappings" / scope / "readiness-status.yaml"
     try:
         document = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
@@ -83,10 +85,12 @@ def _named_semantic_approval(root: Path, scope: str, yaml) -> bool:
     approvals = document.get("approvals")
     if not isinstance(approvals, list):
         return False
-    return any(_valid_semantic_approval(approval) for approval in approvals)
+    return any(
+        _valid_semantic_approval(approval, contract_name) for approval in approvals
+    )
 
 
-def _valid_semantic_approval(approval: object) -> bool:
+def _valid_semantic_approval(approval: object, contract_name: object) -> bool:
     from seshat.rules.readiness_status import _owner_is_valid
 
     if not isinstance(approval, dict):
@@ -95,7 +99,13 @@ def _valid_semantic_approval(approval: object) -> bool:
         return False
     if not _owner_is_valid(approval.get("owner")):
         return False
-    return bool(approval.get("at"))
+    if not approval.get("at") or not isinstance(contract_name, str):
+        return False
+    note = approval.get("note")
+    if not isinstance(note, str):
+        return False
+    pattern = rf"(?<![A-Za-z0-9_]){re.escape(contract_name)}(?![A-Za-z0-9_])"
+    return re.search(pattern, note) is not None
 
 
 def _identity_error(raw: dict, path: Path, relative: str) -> str | None:
@@ -121,7 +131,10 @@ def _approval_error(raw: dict, relative: str, approved: bool) -> str | None:
     if not isinstance(owner, str) or not owner.strip():
         return f"{relative}: approved contract requires owner"
     if not approved:
-        return f"{relative}: approved contract requires named-human approval"
+        return (
+            f"{relative}: approved contract requires named-human approval "
+            "whose note names this contract"
+        )
     return None
 
 
@@ -138,7 +151,7 @@ def _definition_error(raw: dict, relative: str) -> str | None:
 
 
 def _contract_error(
-    raw: dict, path: Path, relative: str, semantic_approval: dict | None
+    raw: dict, path: Path, relative: str, semantic_approval: bool
 ) -> str | None:
     errors = (
         _identity_error(raw, path, relative),
@@ -186,7 +199,9 @@ def load_contract_inventory(paths: Iterable[Path], root: Path) -> ContractInvent
             errors.append(read_error)
             continue
         assert raw is not None
-        semantic_approval = _named_semantic_approval(resolved_root, scope, yaml)
+        semantic_approval = _named_semantic_approval(
+            resolved_root, scope, raw.get("name"), yaml
+        )
         validation_error = _contract_error(raw, path, relative, semantic_approval)
         if validation_error is not None:
             errors.append(validation_error)

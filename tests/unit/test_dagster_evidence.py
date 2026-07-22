@@ -282,6 +282,7 @@ class TestEvidenceIntegrity:
                 "  - stage: semantic_model_ready\n"
                 '    owner: "Ada Lovelace (metric_owner)"\n'
                 '    at: "2026-07-22"\n'
+                '    note: "approved metric contract TotalSales"\n'
             ),
             "mappings/demo_table/metrics/TotalSales.yaml": (
                 "name: TotalSales\nowner: metric_owner\n"

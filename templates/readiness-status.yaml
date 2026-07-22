@@ -103,6 +103,10 @@ approvals: []
   #   owner: "<Person Name> (data_owner)"  # named owner confirming the [PROPOSED] encoding
   #   at: "<YYYY-MM-DD>"             #   (and delimiter/header) the profile's numbers rest on
   #   note: "encoding <utf-8|cp1256|...> confirmed"
+  # - stage: "semantic_model_ready"  # note MUST name each approved metric contract
+  #   owner: "<Person Name> (metric_owner)"
+  #   at: "<YYYY-MM-DD>"
+  #   note: "approved metric contracts: <MetricNameA>, <MetricNameB>"
 
 # --- the single next allowed action -----------------------------------------
 next_action: "<one concrete next step, e.g. 'resolve open grain question in mappings/<table>/unresolved-questions.md'>"

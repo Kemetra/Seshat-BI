@@ -119,13 +119,19 @@ def _make_repo_tmdl(tmp_path: Path, tmdl: str, contract: str) -> Path:
     return tmp_path
 
 
-def _write_semantic_approval(root: Path, scope: str) -> None:
+def _write_semantic_approval(
+    root: Path,
+    scope: str,
+    contracts: tuple[str, ...] = ("AvgTransactionValue",),
+) -> None:
+    approved_names = ", ".join(contracts)
     _write(
         root / "mappings" / scope / "readiness-status.yaml",
         "approvals:\n"
         "  - stage: semantic_model_ready\n"
         '    owner: "Ada Lovelace (metric_owner)"\n'
-        '    at: "2026-07-22"\n',
+        '    at: "2026-07-22"\n'
+        f'    note: "approved metric contracts: {approved_names}"\n',
     )
 
 
@@ -207,6 +213,7 @@ def test_semantic_check_approved_contract_without_measure_is_an_error(
         repo / "mappings/ds/metrics/UnusedMeasure.yaml",
         _CONTRACT_CLEAN.replace("AvgTransactionValue", "UnusedMeasure"),
     )
+    _write_semantic_approval(repo, "ds", ("AvgTransactionValue", "UnusedMeasure"))
 
     code = main(["semantic-check", "--repo", str(repo), "--metrics-dir", "mappings"])
 
@@ -226,9 +233,9 @@ readiness:
   status: pass
   evidence: [approved by named metric owner]
   blocking_reasons: []
-"""
+    """
     for scope, gold_table in (("sales", "gold.sales"), ("returns", "gold.returns")):
-        _write_semantic_approval(tmp_path, scope)
+        _write_semantic_approval(tmp_path, scope, ("TotalSales",))
         _write(
             tmp_path / "mappings" / scope / "metrics" / "TotalSales.yaml",
             contract.replace("GOLD_TABLE", gold_table),

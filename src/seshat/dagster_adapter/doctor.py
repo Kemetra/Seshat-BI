@@ -76,7 +76,7 @@ def live_readiness_findings(root: Path) -> list[DoctorFinding]:
     """Configuration-only DB diagnostics; never connect, query, or import drivers."""
     from seshat.dialect import get_dialect
 
-    engine = os.environ.get("ANALYTICS_DB_ENGINE", "postgres").strip().lower()
+    engine = os.environ.get("ANALYTICS_DB_ENGINE", "").strip().lower() or "postgres"
     try:
         dialect = get_dialect(engine)
         config = dialect.resolve_config(dict(os.environ))
