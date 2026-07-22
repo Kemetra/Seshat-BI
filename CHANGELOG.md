@@ -27,6 +27,8 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+## [0.6.0] -- 2026-07-22
+
 ### Added
 
 - `seshat profile` CLI verb: runs the mechanical Stage-1 profiler over a
