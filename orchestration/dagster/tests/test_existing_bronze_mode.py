@@ -219,6 +219,79 @@ def test_bronze_unchanged_after_a_downstream_gate_failure(
     assert writes == []
 
 
+def test_silver_migration_writing_bronze_fails_closed_before_applying(
+    db_first_repo, monkeypatch
+) -> None:
+    """#417 defense-in-depth: in existing-bronze mode a silver migration that
+    WRITES to Bronze (a layering violation) fails closed BEFORE it is applied --
+    extending the adapter's read-only guarantee to whole-run Bronze immutability.
+
+    ``apply_sql_file`` is a raise-on-call spy here (NOT a no-op), so "the offending
+    migration was never executed" is provable: if the guard let it through, the
+    spy would raise and the test would fail for the wrong reason.
+    """
+    writes = _forbid_bronze_writes(monkeypatch)
+    monkeypatch.setattr(db, "resolve_dsn", lambda: "postgresql://stub")
+    monkeypatch.setattr(
+        db,
+        "inspect_bronze",
+        lambda dsn, table: db.BronzeRelation(
+            exists=True, columns=_HEALTHY_COLUMNS, rows=249106
+        ),
+    )
+    monkeypatch.setattr(
+        commands, "run_gate_command", lambda argv, cwd: (0, "0 violations")
+    )
+
+    def must_not_apply(dsn, path):
+        raise AssertionError(f"guard must fail closed before applying {path.name}")
+
+    monkeypatch.setattr(db, "apply_sql_file", must_not_apply)
+
+    # Overwrite the fixture's benign silver migration with one that WRITES Bronze.
+    offending = (
+        db_first_repo / "warehouse" / "migrations" / f"0001_create_silver_{TABLE}.sql"
+    )
+    offending.write_text(
+        f"INSERT INTO bronze.{TABLE} (id) SELECT 1;\n", encoding="utf-8"
+    )
+
+    result = materialize(_through_gold(db_first_repo), raise_on_error=False)
+    assert result.success is False  # fail closed
+    assert writes == []  # the read-only adapter never wrote either
+
+    records = {r["asset"]: r for r in EvidenceWriter(db_first_repo, RUN_ID).records()}
+    silver = records["silver_tables"]
+    assert silver["outcome"] == "failed"
+    assert "bronze" in silver["blocking_reason"].lower()
+    assert silver["measured"]["offending_migration"] == offending.name
+    assert silver["owner"] == "warehouse owner"
+
+
+def test_silver_migration_reading_bronze_is_allowed(db_first_repo, monkeypatch) -> None:
+    """The normal medallion flow is untouched: a silver migration that only READS
+    Bronze (``FROM bronze.<t>``) is applied and the run proceeds through gold --
+    the guard fires on WRITES, never on the legitimate read (#417)."""
+    _forbid_bronze_writes(monkeypatch)
+    _stub_existing_bronze(monkeypatch, rows=249106, columns=_HEALTHY_COLUMNS)
+
+    # A legitimate silver migration: builds silver BY READING bronze.
+    silver_mig = (
+        db_first_repo / "warehouse" / "migrations" / f"0001_create_silver_{TABLE}.sql"
+    )
+    silver_mig.write_text(
+        f"CREATE TABLE silver.{TABLE} AS SELECT * FROM bronze.{TABLE};\n",
+        encoding="utf-8",
+    )
+
+    result = materialize(_through_gold(db_first_repo))
+    assert result.success is True  # the read-from-bronze migration is allowed
+
+    records = {r["asset"]: r for r in EvidenceWriter(db_first_repo, RUN_ID).records()}
+    assert records["silver_tables"]["outcome"] == "materialized"
+    assert records["gold_tables"]["outcome"] == "materialized"
+
+
 def test_existing_bronze_without_dsn_blocks_on_deferred_boundary(
     db_first_repo, monkeypatch
 ) -> None:

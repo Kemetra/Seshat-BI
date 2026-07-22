@@ -57,6 +57,55 @@ def _load_map_document(source_map: Path) -> dict:
     return document
 
 
+_CONFORMED_MAP = "docs/quality/conformed-dimension-map.yaml"
+
+
+def _committed_map_text(root: Path) -> str | None:
+    """The conformed-dimension map as committed at ``HEAD`` (or None).
+
+    The map is now an OWNERSHIP AUTHORITY that changes which dimension models get
+    emitted, so -- exactly like the source map, which resolves to its committed
+    blob (``source_map_revision``) -- reuse must be driven by COMMITTED governance
+    state, never an uncommitted worktree edit that could suppress models from
+    unreviewed content (#419 review). Reads ``git show HEAD:<map>``. Any failure
+    (git absent, file not committed, non-zero exit) returns None -> no reuse.
+    """
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "show", f"HEAD:{_CONFORMED_MAP}"],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, ValueError):
+        return None
+    return result.stdout if result.returncode == 0 else None
+
+
+def _load_conformed_map(root: Path) -> dict | None:
+    """The COMMITTED conformed-dimension map (or None), so a CONFORMED dim owned by
+    another star is referenced, not re-emitted (#418-P1).
+
+    Read from ``HEAD`` (``_committed_map_text``), NOT the worktree: the map is an
+    ownership authority, and an uncommitted edit must not silently suppress
+    dimension models. Fail-SAFE, never fail-closed: an absent/uncommitted or
+    unreadable/malformed map disables reuse (every dim is owned) -- HR1 is the gate
+    that fails closed on a bad declaration, not scaffold. Returns the parsed
+    mapping, else None.
+    """
+    text = _committed_map_text(root)
+    if text is None:
+        return None
+    try:
+        document = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return None
+    return document if isinstance(document, dict) else None
+
+
 def _build_plan(root: Path, table_id: str) -> model_plan.ScaffoldPlan:
     working_set = _approved_working_set(root, table_id)
     fact = load_fact_semantics(working_set.source_map)
@@ -64,6 +113,7 @@ def _build_plan(root: Path, table_id: str) -> model_plan.ScaffoldPlan:
         document=_load_map_document(working_set.source_map),
         source_map=working_set.source_map.relative_to(root).as_posix(),
         source_map_revision=working_set.source_map_revision,
+        conformed_map=_load_conformed_map(root),
     )
     return model_plan.build_scaffold_plan(source, table_id, fact)
 
@@ -120,7 +170,30 @@ def _model_files(plan: model_plan.ScaffoldPlan, selector: str) -> dict[str, str]
 
 def _notes(plan: model_plan.ScaffoldPlan) -> tuple[str, ...]:
     table = plan.table_id
+    reuse_notes: tuple[str, ...] = ()
+    if plan.reused_dimensions:
+        owners = plan.reused_dimension_owners
+        dims = ", ".join(
+            f"{name} (owned by {owners[name]})" if name in owners else name
+            for name in plan.reused_dimensions
+        )
+        reuse_notes = (
+            f"conformed dimension(s) {dims} are owned by another star (per "
+            f"{_CONFORMED_MAP}), so this table does NOT emit their model files -- "
+            "its fact FKs reference the owning star's model via `ref()`. Build the "
+            "owning star(s) first so dbt can resolve those refs.",
+            # scaffold is write-if-absent, so a dim that BECOMES reused (declared
+            # conformed after this table was already scaffolded) is not
+            # auto-removed: DELETE any stale dbt/models/marts/<table>/<dim>.sql +
+            # its _models.yml row for a now-reused dim, or dbt parse still fails on
+            # the duplicate model name.
+            "if a dimension became conformed/reused AFTER this table was first "
+            "scaffolded, delete its now-stale dbt/models/marts/"
+            f"{table}/<dim>.sql and _models.yml row by hand -- scaffold keeps "
+            "existing files and will not remove the superseded model.",
+        )
     return (
+        *reuse_notes,
         "the generated .sql files are SKELETONS: complete the joins, casts, and "
         "surrogate-key logic (the SELECT column list is the governed contract -- "
         f"do not change it), then run `seshat dbt validate --table {table}`",

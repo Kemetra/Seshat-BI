@@ -626,6 +626,38 @@ def test_fact_includes_non_money_measure_and_degenerate_dim() -> None:
         assert by_name[name].derivation is None
 
 
+def test_fact_columns_carry_the_mapped_silver_type() -> None:
+    """A source-cited fact column (grain key, measure, degenerate dim) must carry
+    the map's ``silver_type`` as its advisory ``data_type``, consistent with the
+    staging model (#418-P2). Before the fix these ColumnSpecs defaulted to ``text``
+    regardless of the mapped target type, so the generated native contract's
+    ``data_type`` did not reflect the map."""
+    plan = _full_fact_plan()
+    by_name = {c.name: c for c in plan.fact_model.columns}
+
+    # Measures and the degenerate dim reflect their mapped silver_type...
+    assert by_name["quantity"].data_type == "numeric(12,2)"
+    assert by_name["total_spent"].data_type == "numeric(12,2)"
+    assert by_name["discount_applied"].data_type == "boolean"
+    # ...and the advisory type surfaces in the rendered contract, unenforced.
+    document = yaml_render.render_models_document((plan.fact_model,), plan, SELECTOR)
+    fact = document["models"][0]
+    assert "contract" not in fact["config"]
+    qty = next(c for c in fact["columns"] if c["name"] == "quantity")
+    assert qty["data_type"] == "numeric(12,2)"
+    # A derived FK still carries NO guessed data_type (surrogate key).
+    fk = next(c for c in fact["columns"] if c["name"] == "customer_sk")
+    assert "data_type" not in fk
+
+
+def test_fact_column_without_a_mapped_silver_type_defaults_to_text() -> None:
+    """A source-cited fact column whose kept row has no ``silver_type`` keeps the
+    ``text`` default (the pre-#418 behavior for unspecified types)."""
+    plan = _renamed_plan()  # TxnId/CustId rows carry no silver_type
+    bk = next(c for c in plan.fact_model.columns if c.name == "transaction_id")
+    assert bk.data_type == "text"
+
+
 def test_fact_column_set_is_exactly_the_governed_columns() -> None:
     """The complete governed set: synthetic PK + business key + one FK per dim +
     every declared measure + every degenerate dim, with the business-key/degenerate
@@ -680,10 +712,103 @@ def test_single_column_business_key_audit_counts_the_bare_column() -> None:
     assert "count(distinct transaction_id)" in sql
 
 
-def test_derived_rollup_attribute_remedy_points_at_derived_columns() -> None:
-    """A dim attribute whose provenance is a derived_columns rollup (not a kept
-    columns[] source) fails closed with a remedy that names derived_columns and
-    the hand-completion path -- NOT a misleading 'add it to columns[]'."""
+# --------------------------------------------------------------------------- #
+# #414 -- a derived_columns (RC11 rollup) dim attribute cites its derived_from
+# bronze source instead of failing closed; a placeholder/unresolvable one still
+# fails closed (never a fabricated citation).
+# --------------------------------------------------------------------------- #
+def _rollup_map(derived_from: str) -> dict:
+    """A map whose dim attribute (customer_segment) is an RC11 rollup living in
+    derived_columns, deriving from ``derived_from`` (a real bronze source col)."""
+    return {
+        **_MAP,
+        "columns": [
+            # customer_segment_code is the AUTHORITATIVE bronze source the rollup
+            # derives from; it is kept so its bronze source_name is verifiable.
+            {
+                "source_name": "cust_seg_code",
+                "decision": "keep",
+                "rename_to": "customer_segment_code",
+            },
+            *_MAP["columns"],
+        ],
+        "derived_columns": [
+            {
+                "name": "customer_segment",
+                "type": "text",
+                "derived_from": derived_from,
+                "mapping_source": "templates/assumptions.md",
+                "unmapped_default": "UNMAPPED",
+            }
+        ],
+        "gold_star": {
+            **_MAP["gold_star"],
+            "dimensions": [
+                {
+                    "name": "gold.dim_customer_rss",
+                    "surrogate_key": "customer_sk",
+                    "attributes": ["customer_segment"],
+                },
+            ],
+        },
+    }
+
+
+def test_derived_rollup_attribute_cites_its_derived_from_bronze_source() -> None:
+    """A dim attribute whose provenance is a derived_columns rollup (RC11) now cites
+    its ``derived_from`` bronze source -- a governed derivation citing the real
+    bronze column, scaffolded end-to-end (#414), NOT failing closed and NOT
+    fabricating a citation to the derived (bronze-absent) name."""
+    plan = model_plan.build_scaffold_plan(
+        _source(_rollup_map("customer_segment_code")), TABLE_ID, _FACT
+    )
+    dim = next(d for d in plan.dimensions if d.name == "dim_customer_rss")
+    attr = next(c for c in dim.columns if c.name == "customer_segment")
+    # customer_segment_code renames the bronze `cust_seg_code`, so the citation
+    # resolves THROUGH the provenance authority to the real bronze source_name.
+    assert attr.source_columns == (f"bronze.{TABLE_ID}.cust_seg_code",)
+
+
+def test_derived_rollup_from_a_direct_bronze_source_name() -> None:
+    """``derived_from`` may name a bronze ``source_name`` directly (not a silver
+    rename); the citation resolves to that exact bronze column (#414)."""
+    plan = model_plan.build_scaffold_plan(
+        # derive straight from the raw bronze source_name of a kept column
+        _source(_rollup_map("cust_seg_code")),
+        TABLE_ID,
+        _FACT,
+    )
+    dim = next(d for d in plan.dimensions if d.name == "dim_customer_rss")
+    attr = next(c for c in dim.columns if c.name == "customer_segment")
+    assert attr.source_columns == (f"bronze.{TABLE_ID}.cust_seg_code",)
+
+
+def test_derived_rollup_with_placeholder_derived_from_fails_closed() -> None:
+    """A rollup whose ``derived_from`` is an unfilled ``<placeholder>`` (or empty)
+    is NOT a real citation -- it still fails closed with the derived_columns remedy,
+    never fabricating provenance from the placeholder (#414)."""
+    with pytest.raises(model_plan.ScaffoldError, match="derived_columns") as err:
+        model_plan.build_scaffold_plan(
+            _source(_rollup_map("<grouping_dim_col>")), TABLE_ID, _FACT
+        )
+    assert "customer_segment" in str(err.value)
+
+
+def test_derived_rollup_whose_derived_from_is_not_in_bronze_fails_closed() -> None:
+    """A rollup deriving from a column that no kept row maps to a real bronze
+    source still fails closed -- the derived_from must resolve to a bronze column
+    that genuinely exists, never a fabricated one (#414)."""
+    with pytest.raises(model_plan.ScaffoldError) as err:
+        model_plan.build_scaffold_plan(
+            _source(_rollup_map("no_such_bronze_col")), TABLE_ID, _FACT
+        )
+    assert "customer_segment" in str(err.value)
+
+
+def test_plain_missing_attribute_still_names_derived_columns_remedy() -> None:
+    """An attribute that is neither a kept columns[] source NOR a derived_columns
+    rollup still fails closed with the remedy naming BOTH paths (#414 keeps the
+    original guidance for the genuinely-absent case)."""
     rollup_map = {
         **_MAP,
         "gold_star": {
@@ -692,9 +817,7 @@ def test_derived_rollup_attribute_remedy_points_at_derived_columns() -> None:
                 {
                     "name": "gold.dim_customer_rss",
                     "surrogate_key": "customer_sk",
-                    # customer_segment is an RC11 rollup living in derived_columns,
-                    # not a kept 1:1 source column -- so it is not in the lookup.
-                    "attributes": ["customer_segment"],
+                    "attributes": ["customer_segment"],  # nowhere in the map
                 },
             ],
         },
@@ -702,3 +825,7 @@ def test_derived_rollup_attribute_remedy_points_at_derived_columns() -> None:
     with pytest.raises(model_plan.ScaffoldError, match="derived_columns") as err:
         model_plan.build_scaffold_plan(_source(rollup_map), TABLE_ID, _FACT)
     assert "customer_segment" in str(err.value)
+
+
+# #418-P1 conformed-dimension reuse tests live in test_scaffold_conformed_reuse.py
+# (self-contained, to keep this file focused and under the module-size threshold).

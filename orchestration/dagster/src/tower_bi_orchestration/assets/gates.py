@@ -19,6 +19,8 @@ from seshat.dagster_adapter.gate import read_gate_state
 from .. import commands, db, dbt_build
 from ..evidence_writer import AssetOutcome
 from . import halt, writer_for
+from .bronze_guard import _targets_bronze_write
+from .sources import resolve_source_mode
 
 
 def _migrations(root: Path, layer: str, table: str) -> list[Path]:
@@ -86,12 +88,58 @@ def _produce_migrations(produce: _Produce) -> dict:
                 owner="warehouse owner",
             ),
         )
+    _guard_bronze_immutable(produce, migrations)
     for migration in migrations:
         db.apply_sql_file(dsn, migration)
     return {
         "engine": "migrations",
         "migrations_applied": [m.name for m in migrations],
     }
+
+
+def _guard_bronze_immutable(produce: _Produce, migrations: list[Path]) -> None:
+    """#417 defense-in-depth: in existing-bronze mode, fail closed BEFORE applying
+    any migration if a to-be-applied silver/gold migration WRITES to Bronze.
+
+    The existing-bronze adapter is read-only (issue #405), so the customer's
+    pre-existing Bronze must never be mutated by the run. A correctly-layered
+    silver/gold migration only READS Bronze (``FROM``/``JOIN``) -- which
+    ``_targets_bronze_write`` deliberately does NOT flag. This extends the
+    adapter's read-only guarantee to whole-run Bronze immutability.
+
+    Scoped to existing-bronze mode ONLY: the CSV path is byte-identical to the
+    pre-feature adapter and its Bronze writes go through ``db.load_csv``, never a
+    migration -- so it is untouched, and this runs AFTER the DSN deferred check so
+    the deferred-boundary ordering is preserved.
+    """
+    if resolve_source_mode() == "csv":
+        return
+    for migration in migrations:
+        try:
+            sql_text = migration.read_text(encoding="utf-8")
+        except OSError:
+            continue  # an unreadable file surfaces at apply_sql_file, not here
+        if _targets_bronze_write(sql_text):
+            halt(
+                produce.writer,
+                AssetOutcome(
+                    **produce.base,
+                    exit_code=None,
+                    measured={
+                        "engine": "migrations",
+                        "offending_migration": migration.name,
+                    },
+                    outcome="failed",
+                    blocking_reason=(
+                        f"existing-bronze mode forbids Bronze writes, but "
+                        f"{produce.layer} migration {migration.name} targets the "
+                        "bronze schema (DDL/DML) -- a layering violation. A "
+                        "silver/gold migration may READ Bronze but must never "
+                        "write it; fix the migration before re-running."
+                    ),
+                    owner="warehouse owner",
+                ),
+            )
 
 
 def _produce_dbt(produce: _Produce) -> dict:

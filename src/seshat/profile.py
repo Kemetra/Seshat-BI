@@ -162,17 +162,24 @@ def _resolve_pk_columns(
             )
         return candidates[0] if candidates else (col, "text")
 
-    resolved: list[_ResolvedColumn] = []
+    # Dedupe on the RESOLVED discovered name, preserving first-seen order (#412):
+    # `--pk id,ID` (only `id` exists) casefold-resolves BOTH to the same discovered
+    # column, which without dedupe collapses to a redundant `count(DISTINCT ("id",
+    # "id"))` -- arithmetically correct but a degenerate row-value tuple. An
+    # order-preserving dict keyed on the DISCOVERED spelling (not the raw --pk
+    # string) drops that collision; column ordering is load-bearing for the proof.
+    resolved: dict[str, _ResolvedColumn] = {}
     for col in candidate_pk:
         discovered, data_type = _match(col)
-        resolved.append(
+        resolved.setdefault(
+            discovered,
             _ResolvedColumn(
                 discovered=discovered,
                 data_type=data_type,
                 is_text=dialect.is_text_type(data_type),
-            )
+            ),
         )
-    return tuple(resolved)
+    return tuple(resolved.values())
 
 
 def _pk_null_predicate(dialect: Dialect, pk_cols: tuple[_ResolvedColumn, ...]) -> str:

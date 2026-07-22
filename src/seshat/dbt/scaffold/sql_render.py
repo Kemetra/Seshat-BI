@@ -64,9 +64,12 @@ def render_date_dimension_sql(model: ModelSpec) -> str:
 
 def render_fact_sql(plan: ScaffoldPlan) -> str:
     columns = _select_list(plan.fact_model)
+    # The fact FKs point at BOTH the dims this star owns AND any conformed dim it
+    # reuses from another star (#418-P1) -- a reused dim is materialized under its
+    # owner but the fact still ref()s it, so its join hint must appear here too.
     refs = "\n".join(
         f"-- join {{{{ ref('{dim.name}') }}}} to resolve {dim.columns[0].name}"
-        for dim in plan.dimensions
+        for dim in (*plan.dimensions, *plan.reused_dimension_specs)
     )
     return (
         f"{_TODO}"

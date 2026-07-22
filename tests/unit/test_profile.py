@@ -256,6 +256,51 @@ def test_ambiguous_casefold_pk_is_refused() -> None:
         profile(runner, "bronze.t", ("Id",), dialect=pg)
 
 
+def test_duplicate_pk_components_resolving_to_one_column_are_deduped() -> None:
+    """`--pk id,ID` where only `id` exists resolves BOTH names to the SAME
+    discovered column. Without dedupe the profiler emitted
+    `count(DISTINCT ("id", "id"))` -- arithmetically correct, but a redundant
+    row-value tuple that reads oddly in the rendered PK line (#412). Dedupe the
+    RESOLVED components (preserving order) so the proof names each column once.
+    """
+    from seshat.dialect import get_dialect
+    from seshat.profile import profile
+
+    pg = get_dialect("postgres")
+    # Catalog has only `id`; `--pk id,ID` casefold-resolves both to `id`.
+    runner = FakeRunner([[("id", "integer")], [(100,)], [(0, 100)], [(100, 100, 0)]])
+    profile(runner, "bronze.t", ("id", "ID"), dialect=pg)
+    pk_sql = runner.calls[-1]
+    # The distinct-count names `id` ONCE, not the degenerate `("id", "id")` tuple.
+    assert '"id", "id"' not in pk_sql
+    assert '"id"' in pk_sql
+
+
+def test_duplicate_pk_components_dedupe_preserves_order() -> None:
+    """A composite key with a redundant repeat (`--pk order_no,line_no,ORDER_NO`)
+    keeps the FIRST-SEEN order of its distinct components -- the PK proof's column
+    ordering is load-bearing (#412)."""
+    from seshat.dialect import get_dialect
+    from seshat.profile import profile
+
+    pg = get_dialect("postgres")
+    runner = FakeRunner(
+        [
+            [("order_no", "text"), ("line_no", "integer")],
+            [(100,)],
+            [(0, 90)],  # order_no stats
+            [(0, 100)],  # line_no stats
+            [(100, 100, 0)],  # pk proof
+        ]
+    )
+    profile(runner, "bronze.t", ("order_no", "line_no", "ORDER_NO"), dialect=pg)
+    pk_sql = runner.calls[-1]
+    # The distinct-tuple names each component ONCE, in first-seen order --
+    # the redundant `ORDER_NO` is dropped, not appended as a third element.
+    assert 'count(DISTINCT ("order_no", "line_no"))' in pk_sql
+    assert '"order_no", "line_no", "order_no"' not in pk_sql
+
+
 def test_reserved_word_identifiers_are_quoted() -> None:
     """A valid landed object whose table or column is a reserved word (`order`,
     `group`) must be QUOTED in the generated SQL so the DB parses it as an
