@@ -41,6 +41,9 @@
 | Finished | `<YYYY-MM-DDThh:mm:ssZ>` (UTC) |
 | Triggered by | `<schedule | sensor | manual-CI>` (the unattended / CI trigger -- never a per-run human ruling) |
 | Table(s) in scope | `<table>` (generic; one row per orchestrated table) |
+| Workspace dirty | `<true | false>` (execution context only; never an approval or readiness verdict) |
+| Records SHA-256 | `<64 lowercase hexadecimal chars>` (digest of the exact raw `records.jsonl` bytes) |
+| Input artifacts | `<N tracked files>` (repo-relative source-map, readiness, approved contracts, migrations, and TMDL digests in `summary.json`) |
 | Connection | **READ-ONLY for validation steps.** Credentials from the git-ignored `.env` only (e.g. `DATABASE_URL` or `ANALYTICS_DB_*`); never committed, never inlined here (Principle IX). |
 | Run status | `<succeeded | failed>` (a halted / fail-closed run terminates `failed` -- the CI signal; this is derived evidence about the run, never a readiness write) |
 

@@ -216,6 +216,56 @@ def _next_allowed_action(response: dict[str, Any]) -> str:
     return "Repair the readiness-status.yaml input defect before any pipeline work."
 
 
+def _contract_next_override(
+    root: Path, response: dict[str, Any], entry: dict[str, Any] | None
+) -> str | None:
+    """Surface the existing metric-owner seam after Gold without moving a stage."""
+    stage = response.get("stage")
+    if entry is None or stage not in {
+        "semantic_model_ready",
+        "dashboard_ready",
+        "publish_ready",
+    }:
+        return None
+    from seshat.portfolio_watch import contract_binding_state
+
+    scope_dir = _dir_name(entry["source_path"])
+    if contract_binding_state(root, scope_dir) == "verified":
+        return None
+    return (
+        "Run `kpi-contract-builder` to assess and draft the missing or unbound "
+        "metric contracts, then obtain the named metric owner approval. Do not "
+        "design a dashboard until the semantic contract gate is complete."
+    )
+
+
+def _live_validation_next_override(
+    root: Path, response: dict[str, Any], entry: dict[str, Any] | None
+) -> str | None:
+    """Keep the live DB boundary explicit after Gold; do not connect from next."""
+    stage = response.get("stage")
+    if entry is None or stage not in {
+        "gold_ready",
+        "semantic_model_ready",
+        "dashboard_ready",
+        "publish_ready",
+    }:
+        return None
+    from seshat.portfolio_watch import live_validation_state
+
+    scope_id = str(response.get("table") or _dir_name(entry["source_path"]))
+    if live_validation_state(root, scope_id) != "pending_live":
+        return None
+    scope_dir = _dir_name(entry["source_path"])
+    return (
+        "Run `retail validate --source-map mappings/"
+        f"{scope_dir}/source-map.yaml`. [PENDING LIVE PROFILE]: install the db "
+        "extra (`pipx inject seshat-bi psycopg2-binary` or `pip install "
+        '"seshat-bi[db]"`), then set DATABASE_URL or ANALYTICS_DB_* in the '
+        "gitignored .env. Do not claim Gold Ready until the live validation passes."
+    )
+
+
 def _readiness_state(
     response: dict[str, Any], entry: dict[str, Any] | None
 ) -> str | None:
@@ -277,18 +327,23 @@ def _rank(response: dict[str, Any]) -> int:
 
 
 def _compose(
+    root: Path,
     response: dict[str, Any],
     entry: dict[str, Any] | None,
     summaries: list[dict],
 ) -> dict[str, Any]:
     stage = response["stage"]
     outcome = response["outcome"]
+    contract_override = _contract_next_override(root, response, entry)
+    live_override = _live_validation_next_override(root, response, entry)
     return {
         "current_stage": stage,
         "readiness_state": _readiness_state(response, entry),
         "evidence": _evidence(entry),
         "blocking_reasons": list(response.get("blocking_reasons", [])),
-        "next_allowed_action": _next_allowed_action(response),
+        "next_allowed_action": (
+            contract_override or live_override or _next_allowed_action(response)
+        ),
         "forbidden_scope": _forbidden_scope(stage, outcome),
         "validation_commands": _validation_commands(stage),
         "stop_point": _stop_point(response),
@@ -423,7 +478,11 @@ def build_table_next_document(repo_root: Path | str, table: str) -> dict[str, An
     quadratic. ``tables`` is empty and the entry-derived fields
     (``readiness_state``/``evidence``) degrade conservatively; callers that
     need those use the full document."""
-    return _compose(build_run_next_response(Path(repo_root), table), None, [])
+    root = Path(repo_root)
+    response = build_run_next_response(root, table)
+    source_path = _resolved_source_path(root, table)
+    entry = {"source_path": source_path} if source_path is not None else None
+    return _compose(root, response, entry, [])
 
 
 def build_agent_next_document(
@@ -447,7 +506,7 @@ def build_agent_next_document(
     if table is not None:
         response = build_run_next_response(root, table)
         entry = _entry_matching(root, entries, table, response)
-        return _compose(response, entry, _summaries(triples))
+        return _compose(root, response, entry, _summaries(triples))
 
     if not triples:
         return _fresh_repo_document()
@@ -455,4 +514,4 @@ def build_agent_next_document(
     focus_entry, focus_response, _ = min(
         triples, key=lambda triple: (_rank(triple[1]), triple[2])
     )
-    return _compose(focus_response, focus_entry, _summaries(triples))
+    return _compose(root, focus_response, focus_entry, _summaries(triples))

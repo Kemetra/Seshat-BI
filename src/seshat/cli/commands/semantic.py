@@ -10,32 +10,64 @@ import sys
 from pathlib import Path
 
 
+def _semantic_files(repo: Path, include_untracked: bool) -> tuple[Path, ...]:
+    """Discover semantic inputs from Git, with a non-Git filesystem fallback."""
+
+    def is_input(path: Path) -> bool:
+        try:
+            rel = path.relative_to(repo).as_posix()
+        except ValueError:
+            return False
+        if rel.startswith("tests/") or "/tests/" in rel:
+            return False
+        return ("/metrics/" in f"/{rel}" and rel.endswith(".yaml")) or (
+            ".SemanticModel/definition/" in rel and rel.endswith(".tmdl")
+        )
+
+    if not include_untracked:
+        from seshat.gitutil import git_output
+
+        try:
+            git_root = Path(git_output(repo, "rev-parse", "--show-toplevel").strip())
+            if git_root.resolve() != repo:
+                raise RuntimeError(
+                    "semantic repository is a subdirectory of another Git root"
+                )
+            raw = git_output(repo, "ls-files", "-z")
+        except RuntimeError:
+            pass
+        else:
+            return tuple(
+                repo / Path(rel)
+                for rel in raw.split("\0")
+                if rel and is_input(repo / Path(rel))
+            )
+    candidates = sorted(repo.rglob("*.yaml")) + sorted(repo.rglob("*.tmdl"))
+    return tuple(path for path in candidates if is_input(path))
+
+
 def run_semantic_check(args: argparse.Namespace) -> int:
     """Run the L3 contract<->DAX drift gate.
 
-    Lazy imports (yaml via load_definition, plus semantic + metric_drift, plus the
-    TMDL parser) live INSIDE this handler so the stdlib-only `retail check` import
-    chain never pulls them. Pairs each committed measure (parsed from the model
-    TMDL) with its contract definition (mappings/<dataset>/metrics/<name>.yaml) and
-    reports drift (ERROR) / escalate (WARNING). Returns 1 iff any drift.
-
-    Scans the model TMDL directly from the filesystem (not git ls-files): the
-    semantic-check surface is not a registered rule, so it reads the repo tree
-    directly -- which also makes it runnable in a non-git directory.
+    Lazy YAML, semantic, and TMDL imports live inside this handler so the
+    stdlib-only `retail check` import chain never pulls them. Every committed
+    measure must bind to a complete owner-approved contract, every approved
+    contract must bind to a measure, and their shared definitions receive the
+    L3 drift check. Git workspaces inspect tracked inputs by default; non-Git
+    workspaces use a filesystem fallback.
     """
-    from seshat.metric_drift import load_definition
+    from seshat.metric_contract_inventory import load_contract_inventory
     from seshat.runner import _format
-    from seshat.semantic import MeasurePair, run_semantic_pairs
+    from seshat.semantic import MeasurePair, binding_error, run_semantic_pairs
     from seshat.tmdl import parse_tmdl
 
-    repo = Path(args.repo)
+    repo = Path(args.repo).resolve()
 
     # Confine --metrics-dir to the repo tree: resolve it and reject a value that
     # traverses outside the repo root (e.g. `../../etc`) so contract discovery
     # cannot be pointed at arbitrary filesystem locations (audit 2026-06-26 #26).
-    repo_resolved = repo.resolve()
     metrics_root = (repo / args.metrics_dir).resolve()
-    if metrics_root != repo_resolved and not metrics_root.is_relative_to(repo_resolved):
+    if metrics_root != repo and not metrics_root.is_relative_to(repo):
         print(
             f"error: --metrics-dir {args.metrics_dir!r} escapes the repo root; "
             "it must resolve to a path inside --repo.",
@@ -43,31 +75,21 @@ def run_semantic_check(args: argparse.Namespace) -> int:
         )
         return 1
 
-    # 1. Index contract definitions by measure name (YAML stem == measure name).
-    definitions: dict[str, dict | None] = {}
-    if metrics_root.is_dir():
-        for contract_path in sorted(metrics_root.glob("*/metrics/*.yaml")):
-            name = contract_path.stem
-            try:
-                definitions[name] = load_definition(str(contract_path))
-            except (OSError, ValueError) as exc:
-                print(
-                    f"error: could not load contract {contract_path}: {exc}",
-                    file=sys.stderr,
-                )
-                return 1
+    inputs = _semantic_files(repo, getattr(args, "include_untracked", False))
+    contract_paths = tuple(
+        path
+        for path in inputs
+        if path.suffix == ".yaml" and path.is_relative_to(metrics_root)
+    )
+    inventory = load_contract_inventory(contract_paths, repo)
 
-    # 2. Pair each committed measure with its contract definition (if any).
-    # Scan *.SemanticModel/definition/**/*.tmdl, skipping any tests/ fixtures.
-    # The recursive ``**`` glob matches zero-or-more intermediate dirs, so it
-    # covers both top-level (definition/foo.tmdl) and nested (definition/tables/
-    # foo.tmdl) files in one pass -- no separate top-level glob (which would
-    # double-count) is needed.
+    # Parse the tracked TMDL measures and pair their approved contract definitions.
     pairs: list[MeasurePair] = []
-    for tmdl_path in sorted(repo.rglob("*.SemanticModel/definition/**/*.tmdl")):
-        rel = tmdl_path.relative_to(repo).as_posix()
-        if rel.startswith("tests/") or "/tests/" in rel:
+    measure_locators: dict[str, str] = {}
+    for tmdl_path in inputs:
+        if tmdl_path.suffix != ".tmdl":
             continue
+        rel = tmdl_path.relative_to(repo).as_posix()
         try:
             text = tmdl_path.read_text(encoding="utf-8-sig")
         except OSError:
@@ -76,18 +98,42 @@ def run_semantic_check(args: argparse.Namespace) -> int:
         if table is None:
             continue
         for measure in table.measures:
-            if measure.name in definitions:
+            locator = f"{rel}:{measure.line}"
+            measure_locators.setdefault(measure.name, locator)
+            contract = inventory.approved.get(measure.name)
+            if contract is not None:
                 pairs.append(
                     MeasurePair(
                         name=measure.name,
                         dax=measure.expression,
-                        locator=f"{rel}:{measure.line}",
-                        definition=definitions[measure.name],
+                        locator=locator,
+                        definition=contract.definition,
                     )
                 )
 
-    # 3. Run the drift check; print findings; return the exit code.
-    findings, exit_code = run_semantic_pairs(pairs)
+    findings = [
+        binding_error("metric contract", error.partition(":")[0], error)
+        for error in inventory.errors
+    ]
+    findings.extend(
+        binding_error(name, locator, "no approved metric contract")
+        for name, locator in sorted(measure_locators.items())
+        if name not in inventory.approved
+    )
+    findings.extend(
+        binding_error(
+            name,
+            contract.path.relative_to(repo).as_posix(),
+            "approved metric contract has no corresponding TMDL measure",
+        )
+        for name, contract in sorted(inventory.approved.items())
+        if name not in measure_locators
+    )
+    drift_findings, _ = run_semantic_pairs(pairs)
+    findings.extend(drift_findings)
+    exit_code = (
+        1 if any(finding.severity.value == "error" for finding in findings) else 0
+    )
     for finding in findings:
         print(_format(finding))
     if exit_code == 0 and not findings:

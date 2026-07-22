@@ -18,7 +18,8 @@ from pathlib import Path
 
 from . import ALLOWED_JOBS
 from .doctor import orchestration_python
-from .redaction import redact_text
+from .environment import allowed_child_environment
+from .redaction import redact_and_tail
 from .source_mode import DEFAULT_SOURCE_MODE, SOURCE_MODE_ENV, normalize_source_mode
 
 _TAIL_CHARS = 4000
@@ -59,13 +60,14 @@ def build_run_argv(python: Path, job: str) -> list[str]:
 def _child_env(
     root: Path, run_id: str, table: str | None, resolved_mode: str
 ) -> dict[str, str]:
-    """The child process's environment: a copy of the parent's os.environ plus
-    the run-scoped keys, the UTF-8 forcing, and the closed discovery seams.
+    """Build the allowlisted child environment plus run-scoped discovery seams.
 
-    Byte-identity: the table and source-mode seams are set ONLY when non-empty /
-    non-default, so a default (CSV, no-table) run leaves both vars absent and the
-    child environment matches the pre-feature runner exactly."""
-    env = dict(os.environ)
+    The table and source-mode seams are set only when non-empty/non-default, so
+    a default (CSV, no-table) run leaves both vars absent. Ambient variables do
+    not cross the process boundary unless they are explicit runtime or governed
+    connection variables.
+    """
+    env = allowed_child_environment(os.environ)
     env["SESHAT_DAGSTER_RUN_ID"] = run_id
     env["SESHAT_REPO_ROOT"] = str(root)
     # Force the CHILD to EMIT UTF-8, not just decode it in the parent (#404).
@@ -155,5 +157,5 @@ def execute_run(
     return RunResult(
         run_id=run_id,
         exit_code=proc.returncode,
-        output=redact_text(combined).strip()[-_TAIL_CHARS:],
+        output=redact_and_tail(combined, _TAIL_CHARS),
     )

@@ -143,6 +143,11 @@ last_checked_at: "<YYYY-MM-DD>"
 checked_by: "<agent | person>"
 ```
 
+RS1 treats `last_checked_at` as audit metadata, not a readiness approval. It must
+be a valid ISO date. When it predates a valid named approval, RS1 emits a warning
+that names the dates and requires a named human to recompute the audit record; an
+agent must never advance the date or alter `checked_by` merely to clear the warning.
+
 ## What the agent does with the spine
 
 - Reads the readiness status to find `current_stage` and `next_action`.

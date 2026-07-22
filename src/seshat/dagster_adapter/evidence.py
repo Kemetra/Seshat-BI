@@ -15,12 +15,15 @@ string passes redaction before it is written (Principle IX).
 from __future__ import annotations
 
 import json
-import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+
+from seshat.gitutil import git_output
+from seshat.metric_contract_inventory import load_contract_inventory
 
 from . import ASSET_ORDER, OUTCOMES
+from .evidence_digest import sha256_file
 from .evidence_render import (  # noqa: F401  (stable public re-exports)
     evidence_out_path,
     list_runs,
@@ -30,6 +33,7 @@ from .evidence_render import (  # noqa: F401  (stable public re-exports)
     write_run_evidence,
 )
 from .redaction import redact_payload
+from .run_identity import contained_path, validate_run_id
 
 HALTED_OUTCOMES = frozenset({"failed", "skipped", "blocked", "deferred"})
 
@@ -39,27 +43,133 @@ def _utc_now() -> str:
 
 
 def run_dir(root: Path, run_id: str) -> Path:
-    return Path(root) / ".seshat" / "dagster" / "runs" / run_id
+    return contained_path(
+        Path(root), ".seshat", "dagster", "runs", validate_run_id(run_id)
+    )
 
 
 def commit_sha(root: Path) -> str:
     """The repo state the run executed against; '0000000' when git is absent
     (a fixture repo) -- recorded honestly, never fabricated as a real sha."""
     try:
-        proc = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-            timeout=10,
-            shell=False,
-        )
-        sha = proc.stdout.strip()
-        if proc.returncode == 0 and sha:
-            return sha
-    except (OSError, subprocess.SubprocessError):
-        pass
+        sha = git_output(Path(root), "rev-parse", "HEAD").strip()
+    except RuntimeError:
+        return "0000000"
+    if sha:
+        return sha
     return "0000000"
+
+
+def records_sha256(path: Path) -> str:
+    """Return the SHA-256 digest of the exact JSONL bytes written for a run."""
+    return sha256_file(path)
+
+
+def _tracked_paths(root: Path) -> set[str]:
+    """Git-tracked, repository-relative POSIX paths; empty outside a Git repo."""
+    try:
+        raw = git_output(root, "ls-files", "-z")
+    except RuntimeError:
+        return set()
+    return {path for path in raw.split("\0") if path}
+
+
+def _is_workspace_dirty(root: Path) -> bool:
+    """Record Git dirtiness as execution context, never as an approval signal."""
+    try:
+        # Raw per-run records are deliberately local runtime output.  Exclude the
+        # directory this run just wrote, otherwise every otherwise-clean run
+        # would report itself dirty before the user changed a governed input.
+        return bool(
+            git_output(
+                root,
+                "status",
+                "--porcelain",
+                "--",
+                ".",
+                ":(exclude).seshat/dagster",
+            )
+        )
+    except RuntimeError:
+        return False
+
+
+def _contained_tracked_path(root: Path, relative: str) -> Path | None:
+    """Resolve one Git path only when it remains a safe, regular input file."""
+    path = PurePosixPath(relative)
+    if path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+        return None
+    try:
+        candidate = contained_path(root, *path.parts)
+    except ValueError:
+        return None
+    return candidate if candidate.is_file() else None
+
+
+def _input_artifact_digests(root: Path, tables: list[str]) -> dict[str, str]:
+    """Digest tracked inputs relevant to a run, with stable POSIX path keys.
+
+    Only approved metric contracts are included.  Invalid/unapproved contracts
+    remain gate blockers elsewhere; they are not silently promoted into evidence.
+    """
+    root = Path(root)
+    tracked = _tracked_paths(root)
+    selected: set[str] = set()
+    metric_candidates: list[tuple[str, Path]] = []
+    for table in sorted(set(tables)):
+        prefix = f"mappings/{table}/"
+        selected.update(
+            {
+                f"{prefix}source-map.yaml",
+                f"{prefix}readiness-status.yaml",
+            }
+        )
+        metric_prefix = f"{prefix}metrics/"
+        for relative in tracked:
+            if relative.startswith(metric_prefix) and relative.endswith(
+                (".yaml", ".yml")
+            ):
+                candidate = _contained_tracked_path(root, relative)
+                if candidate is not None:
+                    metric_candidates.append((relative, candidate))
+
+    inventory = load_contract_inventory(
+        (candidate for _, candidate in metric_candidates), root
+    )
+    approved_paths = {
+        contract.path.resolve() for contract in inventory.approved.values()
+    }
+    selected.update(
+        relative
+        for relative, candidate in metric_candidates
+        if candidate.resolve() in approved_paths
+    )
+    selected.update(
+        relative
+        for relative in tracked
+        if relative.startswith("warehouse/migrations/") and relative.endswith(".sql")
+    )
+    selected.update(
+        relative
+        for relative in tracked
+        if relative.startswith("powerbi/") and relative.endswith(".tmdl")
+    )
+
+    digests: dict[str, str] = {}
+    for relative in sorted(selected & tracked):
+        candidate = _contained_tracked_path(root, relative)
+        if candidate is not None:
+            digests[PurePosixPath(relative).as_posix()] = records_sha256(candidate)
+    return digests
+
+
+def _write_summary_atomically(path: Path, summary: dict) -> None:
+    """Replace summary only after its record digest and input binding are complete."""
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    temporary.replace(path)
 
 
 @dataclass(frozen=True)
@@ -118,7 +228,25 @@ class EvidenceWriter:
 
     @property
     def records_path(self) -> Path:
-        return self.directory / "records.jsonl"
+        return contained_path(
+            self.root,
+            ".seshat",
+            "dagster",
+            "runs",
+            validate_run_id(self.run_id),
+            "records.jsonl",
+        )
+
+    @property
+    def summary_path(self) -> Path:
+        return contained_path(
+            self.root,
+            ".seshat",
+            "dagster",
+            "runs",
+            validate_run_id(self.run_id),
+            "summary.json",
+        )
 
     def record(self, outcome: AssetOutcome) -> dict:
         outcome.validate()
@@ -191,11 +319,13 @@ def _backfill_skipped(writer: EvidenceWriter, tables: list[str]) -> None:
 
 
 def finalize_run(root: Path, run_id: str, tables: list[str], meta: RunMeta) -> dict:
-    """Back-fill ``skipped`` records for never-ran assets and write summary.json.
+    """Back-fill ``skipped`` records and atomically bind their evidence summary.
 
     Computes ``run_status``: failed when anything failed or blocked (the CI
     signal), else succeeded. A skipped back-fill is what the committed evidence
-    table must show for a STOP-edge halt (US1/US3).
+    table must show for a STOP-edge halt (US1/US3). The summary records the
+    exact raw-record digest plus safely contained, tracked inputs; none of these
+    execution facts decides a readiness state or human approval.
     """
     writer = EvidenceWriter(root, run_id)
     _backfill_skipped(writer, tables)
@@ -212,8 +342,12 @@ def finalize_run(root: Path, run_id: str, tables: list[str], meta: RunMeta) -> d
         "trigger": meta.trigger,
         "tables": sorted(tables),
         "run_status": "failed" if halted else "succeeded",
+        "workspace_dirty": _is_workspace_dirty(Path(root)),
+        "records_sha256": records_sha256(writer.records_path),
+        "input_artifacts": _input_artifact_digests(Path(root), tables),
     }
-    (writer.directory / "summary.json").write_text(
-        json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
-    return summary
+    redacted = redact_payload(summary)
+    if not isinstance(redacted, dict):  # pragma: no cover - fixed summary shape
+        raise TypeError("evidence summary must remain a mapping after redaction")
+    _write_summary_atomically(writer.summary_path, redacted)
+    return redacted

@@ -10,13 +10,23 @@ still works without one.
 from __future__ import annotations
 
 import os
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 from . import PINNED_DAGSTER
 from .engine import resolve_build_engine
 from .gate import GateState, list_mapped_tables, read_gate_state
+
+_DRIVER_DISTRIBUTIONS: dict[str, tuple[str, ...]] = {
+    "postgres": ("psycopg2-binary", "psycopg2"),
+    "sqlserver": ("pyodbc",),
+    "mysql": ("mysql-connector-python",),
+    "snowflake": ("snowflake-connector-python",),
+}
+_LIVE_ENABLE_STEPS = (
+    'pipx inject seshat-bi psycopg2-binary; or pip install "seshat-bi[db]"; '
+    "set DATABASE_URL or ANALYTICS_DB_* in the gitignored .env"
+)
 
 _INSTALL_REMEDY = (
     "cd orchestration/dagster && uv venv .venv && "
@@ -31,6 +41,7 @@ class DoctorFinding:
     severity: str  # "blocker" | "warning" | "info"
     message: str
     remedy: str
+    state: str | None = None
 
 
 def orchestration_dir(root: Path) -> Path:
@@ -50,6 +61,109 @@ def _dsn_present() -> bool:
     from seshat.validate import resolve_dsn  # driver-free env resolution
 
     return resolve_dsn(dict(os.environ)) is not None
+
+
+def _driver_metadata_present(engine: str) -> bool:
+    """Inspect installed-distribution metadata without importing a DB driver."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    for distribution in _DRIVER_DISTRIBUTIONS[engine]:
+        try:
+            version(distribution)
+        except PackageNotFoundError:
+            continue
+        return True
+    return False
+
+
+def live_readiness_findings(root: Path) -> list[DoctorFinding]:
+    """Configuration-only DB diagnostics; never connect, query, or import drivers."""
+    del root  # configuration is intentionally read only from the scoped environment
+    from seshat.dialect import get_dialect
+
+    engine = os.environ.get("ANALYTICS_DB_ENGINE", "postgres").strip().lower()
+    try:
+        dialect = get_dialect(engine)
+        config = dialect.resolve_config(dict(os.environ))
+    except ValueError:
+        return [
+            DoctorFinding(
+                id="DAG-LIVE-ENGINE-01",
+                severity="warning",
+                message=(
+                    "live-readiness engine configuration is invalid (value redacted)"
+                ),
+                remedy=(
+                    "set ANALYTICS_DB_ENGINE to postgres, sqlserver, mysql, or "
+                    "snowflake"
+                ),
+                state="invalid",
+            ),
+            DoctorFinding(
+                id="DAG-LIVE-00",
+                severity="warning",
+                message=(
+                    "live-readiness configuration is invalid; no connection or "
+                    "query was attempted"
+                ),
+                remedy=_LIVE_ENABLE_STEPS,
+                state="invalid",
+            ),
+        ]
+
+    findings = [
+        DoctorFinding(
+            id="DAG-LIVE-ENGINE-00",
+            severity="info",
+            message=(
+                f"live-readiness engine {engine} selected (no connection attempted)"
+            ),
+            remedy="none",
+            state="available",
+        )
+    ]
+    credentials_state = "available" if config is not None else "missing"
+    findings.append(
+        DoctorFinding(
+            id="DAG-LIVE-CRED-00" if config is not None else "DAG-LIVE-CRED-01",
+            severity="info" if config is not None else "warning",
+            message=(
+                "live-readiness credential source available (value redacted)"
+                if config is not None
+                else "live-readiness credential source missing"
+            ),
+            remedy="none" if config is not None else _LIVE_ENABLE_STEPS,
+            state=credentials_state,
+        )
+    )
+    driver_present = _driver_metadata_present(engine)
+    findings.append(
+        DoctorFinding(
+            id="DAG-LIVE-DRIVER-00" if driver_present else "DAG-LIVE-DRIVER-01",
+            severity="info" if driver_present else "warning",
+            message=(
+                "live-readiness driver metadata available (driver not imported)"
+                if driver_present
+                else "live-readiness driver metadata missing (driver not imported)"
+            ),
+            remedy="none" if driver_present else _LIVE_ENABLE_STEPS,
+            state="available" if driver_present else "missing",
+        )
+    )
+    overall = "available" if config is not None and driver_present else "pending_live"
+    findings.append(
+        DoctorFinding(
+            id="DAG-LIVE-00",
+            severity="info" if overall == "available" else "warning",
+            message=(
+                f"live-readiness configuration is {overall}; no connection or query "
+                "was attempted"
+            ),
+            remedy="none" if overall == "available" else _LIVE_ENABLE_STEPS,
+            state=overall,
+        )
+    )
+    return findings
 
 
 _PROJECT_ABSENT = DoctorFinding(
@@ -160,29 +274,30 @@ def _gate_finding(table: str, state: GateState) -> DoctorFinding:
     )
 
 
-def _dbt_runtime_present(root: Path) -> bool:
-    """True when the dbt runtime is importable in the ORCHESTRATION venv.
+def _venv_site_packages(venv: Path) -> tuple[Path, ...]:
+    """Return existing Windows and POSIX virtual-environment site directories."""
+    candidates = [venv / "Lib" / "site-packages"]
+    candidates.extend(sorted((venv / "lib").glob("python*/site-packages")))
+    return tuple(path for path in candidates if path.is_dir())
 
-    ``seshat dagster run`` launches the Dagster child through the orchestration
-    interpreter, so THAT environment -- not this parent process -- is the one
-    the preflight must probe (Codex review on PR #307). Read-only metadata
-    probe; an absent venv, a failing interpreter, or a missing distribution all
-    read as not-present.
+
+def _distribution_metadata_present(venv: Path, name: str) -> bool:
+    """Check installed distribution metadata without executing the environment."""
+    normalized = name.replace("-", "_")
+    return any(
+        any(site.glob(f"{normalized}-*.dist-info/METADATA"))
+        for site in _venv_site_packages(venv)
+    )
+
+
+def _dbt_runtime_present(root: Path) -> bool:
+    """True when the orchestration venv contains dbt-core metadata.
+
+    Doctor is a read-only metadata probe: it must never execute a repository
+    interpreter merely to discover whether dbt-core is installed.
     """
-    interpreter = orchestration_python(root)
-    if interpreter is None:
-        return False
-    probe = "import importlib.metadata as m; m.version('dbt-core')"
-    try:
-        result = subprocess.run(
-            [str(interpreter), "-c", probe],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    return result.returncode == 0
+    venv = orchestration_dir(root) / ".venv"
+    return _distribution_metadata_present(venv, "dbt-core")
 
 
 def _dbt_profile_present(root: Path) -> bool:
@@ -305,13 +420,14 @@ def _table_findings(root: Path) -> list[DoctorFinding]:
     return findings
 
 
-def run_doctor(root: Path) -> list[DoctorFinding]:
+def run_doctor(root: Path, live_readiness: bool = False) -> list[DoctorFinding]:
     root = Path(root)
     project = _project_findings(root)
     if project and project[0].id == "DAG-PROJ-01":
         return project
     dsn = [_DSN_PRESENT if _dsn_present() else _DSN_ABSENT]
-    return project + _table_findings(root) + dsn
+    findings = project + _table_findings(root) + dsn
+    return findings + (live_readiness_findings(root) if live_readiness else [])
 
 
 def has_blockers(findings: list[DoctorFinding]) -> bool:

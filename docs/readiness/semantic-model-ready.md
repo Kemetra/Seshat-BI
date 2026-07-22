@@ -1,6 +1,7 @@
 # Semantic Model Ready
 
-Status note: Planning (docs/templates; no runtime code).
+Status note: Built. The `seshat semantic-check` gate verifies tracked semantic
+bindings and L3 denominator drift without opening a live Power BI connection.
 
 ## Purpose
 
@@ -32,7 +33,7 @@ the first worked example / a filled instance, not the schema.)
 | Gate | Scope | Pass condition |
 |------|-------|----------------|
 | `seshat check` | D1-D11 (DAX/TMDL), C1 (connection params), R1 (relative ref), G6 (no real host) | exit 0 |
-| Metric-contract review | every measure | each measure traces to an approved contract |
+| Metric-contract review | every measure and approved contract | complete one-to-one binding: every measure traces to an approved contract and every approved contract has a TMDL measure |
 
 ## Statuses
 

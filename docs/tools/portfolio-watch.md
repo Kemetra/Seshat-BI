@@ -36,6 +36,17 @@ retail watch --format text
 | `approvals` (stale/missing) | `approval_inbox.py` |
 | `review` | `review_integration.py` / `review_pack_export.py` committed result |
 
+Every governed scope also carries three categorical operational fields; they
+are evidence context, not a readiness score or new gate:
+
+- `contract_binding_state`: `missing`, `blocked`, or `verified`, based on the
+  approved metric-contract inventory, model binding, and a clean recorded
+  semantic-drift result. A blocked binding names the **metric owner**.
+- `live_validation_state`: `pending_live`, `blocked`, `stale`, or `verified`.
+  A missing live proof remains `pending_live`; it never reads as a pass.
+- `last_dagster_run`: `unavailable`, `invalid`, `failed`, `stale`, or
+  `verified`, after raw evidence verification and input/revision comparison.
+
 The governed-scope set is enumerated from the committed
 `mappings/*/readiness-status.yaml` paths -- the SAME set `status_surface` /
 `readiness_projection` already track (FR-002). It is NOT the live

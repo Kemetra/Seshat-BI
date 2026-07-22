@@ -34,9 +34,7 @@ No live DB provisioning, no automated ingestion code, no orchestrator integratio
 unless explicitly requested. Add the seam, not the implementation.
 
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan:
-`specs/134-activate-dagster-mvp/plan.md`
+No active Spec Kit implementation plan.
 <!-- SPECKIT END -->
 <!-- SESHAT-KIT START -->
 **Seshat BI kit router** (v0.2.0) -- generated from `.seshat/kit-source.yaml`; do not edit here.

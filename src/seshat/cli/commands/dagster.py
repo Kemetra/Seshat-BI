@@ -22,6 +22,7 @@ def _print_findings(findings, as_json: bool) -> None:
                 "severity": finding.severity,
                 "message": finding.message,
                 "remedy": finding.remedy,
+                "state": finding.state,
             }
             for finding in findings
         ]
@@ -37,7 +38,10 @@ def _print_findings(findings, as_json: bool) -> None:
 def _run_doctor(args) -> int:
     from seshat.dagster_adapter import doctor
 
-    findings = doctor.run_doctor(Path(args.repo))
+    if getattr(args, "live_readiness", False):
+        findings = doctor.run_doctor(Path(args.repo), live_readiness=True)
+    else:
+        findings = doctor.run_doctor(Path(args.repo))
     _print_findings(findings, args.as_json)
     return 2 if doctor.has_blockers(findings) else 0
 

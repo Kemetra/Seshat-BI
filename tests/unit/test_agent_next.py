@@ -120,6 +120,65 @@ def test_gate_rule_no_silver_before_mapping_ready(tmp_path: Path) -> None:
     assert document["evidence"][0]["items"] == ["mappings/orders/source-profile.md"]
 
 
+def test_incomplete_contracts_after_gold_route_to_metric_owner_before_dashboard(
+    tmp_path: Path,
+) -> None:
+    _write_status(
+        tmp_path,
+        "orders",
+        """\
+table: "silver.orders"
+current_stage: "semantic_model_ready"
+stages:
+  source_ready: {status: "pass", evidence: ["profile"]}
+  mapping_ready: {status: "pass", evidence: ["map"]}
+  silver_ready: {status: "pass", evidence: ["silver"]}
+  gold_ready: {status: "pass", evidence: ["gold"]}
+  semantic_model_ready: {status: "not_started"}
+  dashboard_ready: {status: "not_started"}
+  publish_ready: {status: "not_started"}
+approvals:
+  - {stage: mapping_ready, owner: "Ada Lovelace (analyst)", at: "2026-07-01"}
+next_action: "build semantic model"
+""",
+    )
+
+    document = build_agent_next_document(tmp_path)
+
+    assert "kpi-contract-builder" in document["next_allowed_action"]
+    assert "metric owner" in document["next_allowed_action"]
+    assert any("dashboard" in item.lower() for item in document["forbidden_scope"])
+
+
+def test_missing_live_proof_after_gold_routes_to_deferred_validate(
+    tmp_path: Path,
+) -> None:
+    _write_status(
+        tmp_path,
+        "orders",
+        """\
+table: "silver.orders"
+current_stage: "gold_ready"
+stages:
+  source_ready: {status: "pass", evidence: ["profile"]}
+  mapping_ready: {status: "pass", evidence: ["map"]}
+  silver_ready: {status: "pass", evidence: ["silver"]}
+  gold_ready: {status: "not_started"}
+  semantic_model_ready: {status: "not_started"}
+  dashboard_ready: {status: "not_started"}
+  publish_ready: {status: "not_started"}
+approvals:
+  - {stage: mapping_ready, owner: "Ada Lovelace (analyst)", at: "2026-07-01"}
+next_action: "validate gold"
+""",
+    )
+
+    document = build_agent_next_document(tmp_path)
+
+    assert "retail validate" in document["next_allowed_action"]
+    assert "[PENDING LIVE PROFILE]" in document["next_allowed_action"]
+
+
 def test_blocked_table_surfaces_verbatim_reasons_and_stops(tmp_path: Path) -> None:
     _write_status(
         tmp_path,

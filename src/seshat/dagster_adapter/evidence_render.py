@@ -14,10 +14,13 @@ import re
 from pathlib import Path
 
 from . import ASSET_ORDER, OUTCOMES
+from .evidence_digest import sha256_file
+from .run_identity import contained_path, validate_run_id
 
 _HALTED = {"failed", "skipped", "blocked", "deferred"}
 _TRIGGERS = {"schedule", "sensor", "manual-CI"}
 _SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _SUMMARY_KEYS = {
     "run_id",
     "commit_sha",
@@ -26,6 +29,9 @@ _SUMMARY_KEYS = {
     "trigger",
     "tables",
     "run_status",
+    "workspace_dirty",
+    "records_sha256",
+    "input_artifacts",
 }
 _RECORD_KEYS = {
     "run_id",
@@ -43,7 +49,13 @@ _HUMAN_SEAM_ASSETS = {"source_map", "semantic_model", "publish_execution_evidenc
 
 
 def evidence_out_path(root: Path, run_id: str) -> Path:
-    return Path(root) / "orchestration" / "dagster" / "run-evidence" / f"{run_id}.md"
+    return contained_path(
+        Path(root),
+        "orchestration",
+        "dagster",
+        "run-evidence",
+        f"{validate_run_id(run_id)}.md",
+    )
 
 
 def _score_keys(payload: object) -> list[str]:
@@ -71,6 +83,26 @@ def _summary_errors(summary: dict) -> list[str]:
         errors.append(f"summary: trigger must be one of {sorted(_TRIGGERS)}")
     if not _SHA_RE.match(str(summary.get("commit_sha", ""))):
         errors.append("summary: commit_sha must be a 7-40 char hex sha")
+    if not isinstance(summary.get("workspace_dirty"), bool):
+        errors.append("summary: workspace_dirty must be boolean")
+    if not _SHA256_RE.match(str(summary.get("records_sha256", ""))):
+        errors.append("summary: records_sha256 must be a 64 char lowercase hex sha")
+    input_artifacts = summary.get("input_artifacts")
+    if not isinstance(input_artifacts, dict):
+        errors.append("summary: input_artifacts must be a mapping")
+    else:
+        for relative, digest in input_artifacts.items():
+            path = Path(relative)
+            if (
+                not isinstance(relative, str)
+                or path.is_absolute()
+                or ".." in path.parts
+            ):
+                errors.append("summary: input_artifacts paths must be repo-relative")
+            if not _SHA256_RE.match(str(digest)):
+                errors.append(
+                    f"summary: input_artifacts digest invalid for {relative!r}"
+                )
     return errors
 
 
@@ -118,32 +150,47 @@ def validate_records(summary: dict, records: list[dict]) -> list[str]:
 
 
 def load_run(root: Path, run_id: str) -> tuple[dict, list[dict]]:
-    directory = Path(root) / ".seshat" / "dagster" / "runs" / run_id
-    summary_path = directory / "summary.json"
-    records_path = directory / "records.jsonl"
+    safe_run_id = validate_run_id(run_id)
+    summary_path = contained_path(
+        Path(root), ".seshat", "dagster", "runs", safe_run_id, "summary.json"
+    )
+    records_path = contained_path(
+        Path(root), ".seshat", "dagster", "runs", safe_run_id, "records.jsonl"
+    )
     if not summary_path.is_file() or not records_path.is_file():
         raise FileNotFoundError(
             f"run {run_id} has no summary.json/records.jsonl "
             "under .seshat/dagster/runs/"
         )
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    if summary.get("records_sha256") != sha256_file(records_path):
+        raise ValueError(f"run {run_id} records_sha256 does not match records.jsonl")
     lines = records_path.read_text(encoding="utf-8").splitlines()
     records = [json.loads(line) for line in lines if line.strip()]
     return summary, records
 
 
 def list_runs(root: Path) -> list[dict]:
-    runs_root = Path(root) / ".seshat" / "dagster" / "runs"
+    root = Path(root)
+    runs_root = contained_path(root, ".seshat", "dagster", "runs")
     if not runs_root.is_dir():
         return []
-    summaries = (
-        directory / "summary.json" for directory in sorted(runs_root.iterdir())
-    )
-    return [
-        json.loads(path.read_text(encoding="utf-8"))
-        for path in summaries
-        if path.is_file()
-    ]
+    summaries: list[Path] = []
+    for directory in sorted(runs_root.iterdir()):
+        try:
+            summary_path = contained_path(
+                root,
+                ".seshat",
+                "dagster",
+                "runs",
+                validate_run_id(directory.name),
+                "summary.json",
+            )
+        except ValueError:
+            continue
+        if summary_path.is_file():
+            summaries.append(summary_path)
+    return [json.loads(path.read_text(encoding="utf-8")) for path in summaries]
 
 
 def _measured_cell(measured: dict) -> str:
@@ -172,6 +219,9 @@ def _header_lines(summary: dict) -> list[str]:
         f"| Finished | `{summary['finished']}` |",
         f"| Triggered by | `{summary['trigger']}` |",
         f"| Table(s) in scope | `{', '.join(summary['tables'])}` |",
+        f"| Workspace dirty | `{str(summary['workspace_dirty']).lower()}` |",
+        f"| Records SHA-256 | `{summary['records_sha256']}` |",
+        f"| Input artifacts | `{len(summary['input_artifacts'])}` tracked file(s) |",
         "| Connection | READ-ONLY for validation steps; credentials from the "
         "git-ignored `.env` only (never recorded here). |",
         f"| Run status | `{summary['run_status']}` |",

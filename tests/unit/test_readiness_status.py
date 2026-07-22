@@ -18,9 +18,11 @@ STATUS_PATH = "mappings/demo/readiness-status.yaml"
 OWNER = "A. Lovelace (data_owner)"
 
 
-def _appr(stage: str, owner: str = OWNER, extra: str = "") -> str:
+def _appr(
+    stage: str, owner: str = OWNER, extra: str = "", at: str = "2026-01-01"
+) -> str:
     """One approvals[] YAML line, kept short so no fixture line exceeds line-length."""
-    return f"  - {{stage: {stage}, owner: '{owner}', at: '2026-01-01'{extra}}}\n"
+    return f"  - {{stage: {stage}, owner: '{owner}', at: '{at}'{extra}}}\n"
 
 
 def _status_yaml(
@@ -390,3 +392,53 @@ def test_report_owner_is_the_only_class_added(tmp_path: Path) -> None:
     assert _AUTHORITY_CLASSES == frozenset(
         {"analyst", "governance", "data_owner", "metric_owner", "report_owner"}
     )
+
+
+def test_last_checked_before_latest_approval_is_a_warning_not_an_error(
+    tmp_path: Path,
+) -> None:
+    approvals = (
+        _appr("mapping_ready", at="2026-01-02")
+        + _appr("semantic_model_ready", at="2026-01-02")
+        + _appr("dashboard_ready", at="2026-01-02")
+        + _appr("publish_ready", at="2026-01-02")
+    )
+    findings = list(
+        check_readiness_status_consistency(
+            _ctx(tmp_path, _status_yaml(approvals=approvals))
+        )
+    )
+
+    assert not [finding for finding in findings if finding.severity is Severity.ERROR]
+    warning = next(
+        finding for finding in findings if finding.severity is Severity.WARNING
+    )
+    assert "2026-01-01" in warning.message
+    assert "2026-01-02" in warning.message
+    assert "named human" in warning.message
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    (
+        'last_checked_at: "not-a-date"',
+        "last_checked_at: null",
+    ),
+)
+def test_invalid_or_missing_last_checked_at_is_an_error(
+    tmp_path: Path, replacement: str
+) -> None:
+    text = _status_yaml().replace('last_checked_at: "2026-01-01"', replacement)
+    messages = _messages(_ctx(tmp_path, text))
+    assert any("last_checked_at" in message for message in messages)
+
+
+def test_invalid_approval_date_is_an_error(tmp_path: Path) -> None:
+    approvals = (
+        _appr("mapping_ready", at="bad-date")
+        + _appr("semantic_model_ready")
+        + _appr("dashboard_ready")
+        + _appr("publish_ready")
+    )
+    messages = _messages(_ctx(tmp_path, _status_yaml(approvals=approvals)))
+    assert any("approval" in message and "date" in message for message in messages)

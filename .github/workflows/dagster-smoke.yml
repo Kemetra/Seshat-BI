@@ -9,6 +9,8 @@
 # fixture-stubbed; a missing DSN is a recorded deferred boundary by design.
 name: dagster-smoke
 
+permissions: {}
+
 on:
   push:
     branches: [main]
@@ -27,9 +29,11 @@ on:
 jobs:
   definitions-load-smoke:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.13"
       - name: Install the orchestration project (own env; repo root editable)

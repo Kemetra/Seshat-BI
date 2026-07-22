@@ -104,6 +104,15 @@ def redact_text(text: str) -> str:
     return out
 
 
+def redact_and_tail(text: str, max_chars: int) -> str:
+    """Redact the complete payload, then return at most ``max_chars`` chars."""
+    if max_chars < 0:
+        raise ValueError("max_chars must be non-negative")
+    if max_chars == 0:
+        return ""
+    return redact_text(text).strip()[-max_chars:]
+
+
 def redact_payload(payload: object) -> object:
     """Recursively redact every string inside a JSON-shaped payload.
 

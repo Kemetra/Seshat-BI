@@ -124,6 +124,9 @@ class TestGreenRunEndToEnd:
             "trigger",
             "tables",
             "run_status",
+            "workspace_dirty",
+            "records_sha256",
+            "input_artifacts",
         }
         records = EvidenceWriter(green_repo, "testrun-001").records()
         by_asset = {row["asset"]: row for row in records}

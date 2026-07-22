@@ -24,6 +24,7 @@ grants an approval, and never advances a stage.
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
@@ -128,6 +129,15 @@ def _finding(message: str, locator: str) -> Finding:
     )
 
 
+def _warning(message: str, locator: str) -> Finding:
+    return Finding(
+        rule_id="RS1",
+        severity=Severity.WARNING,
+        message=message,
+        locator=locator,
+    )
+
+
 def _iter_status_files(ctx: RuleContext) -> list[str]:
     return [
         p for p in ctx.tracked_files if _INSTANCE_RE.match(p) and not is_test_path(p)
@@ -197,6 +207,73 @@ def _check_approval_owners(approvals: list, rel: str) -> list[Finding]:
                     rel,
                 )
             )
+    return findings
+
+
+def _parse_iso_date(value: object) -> date | None:
+    if isinstance(value, date):
+        return value
+    if not isinstance(value, str):
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _check_audit_freshness(data: dict, approvals: list, rel: str) -> list[Finding]:
+    """Report stale audit metadata without changing any owner-authored record."""
+    findings: list[Finding] = []
+    shape_valid_approvals = [
+        approval
+        for approval in approvals
+        if isinstance(approval, dict)
+        and isinstance(approval.get("stage"), str)
+        and _owner_is_valid(approval.get("owner"))
+    ]
+    # A freshly scaffolded, fully unapproved table has no audit to reconcile yet;
+    # its placeholder audit fields must not block Source -> Mapping onboarding.
+    if not shape_valid_approvals:
+        return findings
+
+    last_checked_raw = data.get("last_checked_at")
+    last_checked = _parse_iso_date(last_checked_raw)
+    if last_checked is None:
+        findings.append(
+            _finding(
+                "last_checked_at must be a valid ISO date so readiness audit freshness "
+                "can be established",
+                rel,
+            )
+        )
+
+    approval_dates: list[date] = []
+    for approval in shape_valid_approvals:
+        approved_at = _parse_iso_date(approval.get("at"))
+        if approved_at is None:
+            findings.append(
+                _finding(
+                    f"approval for stage {approval['stage']!r} has invalid ISO date "
+                    f"{approval.get('at')!r}; readiness audit freshness cannot be "
+                    "established",
+                    rel,
+                )
+            )
+            continue
+        approval_dates.append(approved_at)
+
+    if last_checked is None or not approval_dates:
+        return findings
+    latest_approval = max(approval_dates)
+    if last_checked < latest_approval:
+        findings.append(
+            _warning(
+                f"last_checked_at {last_checked.isoformat()} predates latest approval "
+                f"{latest_approval.isoformat()}; a named human must recompute the "
+                "audit metadata",
+                rel,
+            )
+        )
     return findings
 
 
@@ -440,6 +517,7 @@ def _check_one_status_file(ctx: RuleContext, rel: str) -> list[Finding]:
     approvals = _as_list(data.get("approvals"))
     approved_stages = _approved_stages(approvals)
     findings += _check_approval_owners(approvals, rel)
+    findings += _check_audit_freshness(data, approvals, rel)
 
     earliest_blocked_index: int | None = None
     for index, stage_name in enumerate(_STAGE_ORDER):

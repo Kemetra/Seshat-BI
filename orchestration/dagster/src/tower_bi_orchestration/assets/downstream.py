@@ -34,15 +34,44 @@ def _metric_contracts_asset(table: str, root: Path):
     )
     def metric_contracts(context) -> None:
         """Reads approved contracts; AUTHORS NONE (spec 024 FR-003)."""
+        from seshat.metric_contract_inventory import load_contract_inventory
+
         writer = writer_for(context, root)
-        count = _artifact_count(root / "mappings" / table / "metrics")
+        metrics_dir = root / "mappings" / table / "metrics"
+        paths = (
+            tuple(sorted(metrics_dir.glob("*.yaml"))) if metrics_dir.is_dir() else ()
+        )
+        inventory = load_contract_inventory(paths, root)
+        measured = {
+            "contracts_found": len(paths),
+            "approved_contracts": len(inventory.approved),
+        }
+        base = dict(
+            asset="metric_contracts",
+            table=table,
+            gate_command=(f"n/a -- reads mappings/{table}/metrics/ (authors none)"),
+            exit_code=None,
+        )
+        if not inventory.approved or inventory.errors:
+            reason = (
+                f"metric contract inventory invalid: {inventory.errors[0]}"
+                if inventory.errors
+                else f"no approved metric contracts under mappings/{table}/metrics/"
+            )
+            halt(
+                writer,
+                AssetOutcome(
+                    **base,
+                    measured=measured,
+                    outcome="blocked",
+                    blocking_reason=reason,
+                    owner="the metric owner",
+                ),
+            )
         writer.record(
             AssetOutcome(
-                asset="metric_contracts",
-                table=table,
-                gate_command=(f"n/a -- reads mappings/{table}/metrics/ (authors none)"),
-                exit_code=None,
-                measured={"contracts_found": count},
+                **base,
+                measured=measured,
                 outcome="materialized",
             )
         )
@@ -58,13 +87,12 @@ def _semantic_model_asset(table: str, root: Path):
         deps=[AssetKey([table, "metric_contracts"])],
     )
     def semantic_model(context) -> None:
-        """STOP (the same static gate CI runs) + HUMAN SEAM (the committed
-        semantic-model approval; absent -> BLOCK, never self-grant)."""
+        """Static + semantic STOP edges, then the committed approval seam."""
         writer = writer_for(context, root)
         base = dict(
             asset="semantic_model",
             table=table,
-            gate_command="seshat check + approvals[] read",
+            gate_command="seshat check + semantic-check + approvals[] read",
         )
         exit_code, output = commands.run_gate_command(commands.checker_argv(), cwd=root)
         if exit_code != 0:
@@ -77,6 +105,24 @@ def _semantic_model_asset(table: str, root: Path):
                     outcome="failed",
                     blocking_reason=(
                         f"static governance gate failed: seshat check exit {exit_code}"
+                    ),
+                    owner="the metric owner",
+                ),
+            )
+        semantic_exit, semantic_output = commands.run_gate_command(
+            commands.semantic_argv(), cwd=root
+        )
+        if semantic_exit != 0:
+            halt(
+                writer,
+                AssetOutcome(
+                    **base,
+                    exit_code=semantic_exit,
+                    measured={"output_tail": semantic_output},
+                    outcome="failed",
+                    blocking_reason=(
+                        "semantic gate failed: seshat semantic-check exit "
+                        f"{semantic_exit}"
                     ),
                     owner="the metric owner",
                 ),

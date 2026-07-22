@@ -8,6 +8,7 @@ words, halted rows carry reason + owner, and no numeric score can appear.
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,9 @@ def _summary(**overrides) -> dict:
         "trigger": "manual-CI",
         "tables": ["demo_table"],
         "run_status": "succeeded",
+        "workspace_dirty": False,
+        "records_sha256": "0" * 64,
+        "input_artifacts": {},
     }
     base.update(overrides)
     return base
@@ -142,6 +146,45 @@ def _finalized_green_run(
 
 
 class TestWriteRunEvidence:
+    @pytest.mark.parametrize(
+        "run_id",
+        ("../escape", "..\\escape", ".", "..", "C:drive", "/absolute", "a/b"),
+    )
+    def test_run_id_rejects_path_syntax(self, tmp_path: Path, run_id: str) -> None:
+        with pytest.raises(ValueError, match="run id"):
+            evidence.evidence_out_path(tmp_path, run_id)
+
+    def test_safe_legacy_run_id_remains_contained(self, tmp_path: Path) -> None:
+        path = evidence.evidence_out_path(tmp_path, "run-001")
+        assert path.is_relative_to(tmp_path.resolve())
+
+    def test_load_run_rejects_path_syntax_before_reading(self, tmp_path: Path) -> None:
+        with pytest.raises(ValueError, match="run id"):
+            evidence.load_run(tmp_path, "../escape")
+
+    def test_existing_symlink_cannot_escape_evidence_root(self, tmp_path: Path) -> None:
+        from seshat.dagster_adapter.run_identity import contained_path
+
+        runs = tmp_path / ".seshat" / "dagster" / "runs"
+        runs.mkdir(parents=True)
+        outside = tmp_path.parent / "outside"
+        outside.mkdir()
+        link = runs / "linked"
+        try:
+            link.symlink_to(outside, target_is_directory=True)
+        except OSError:
+            pytest.skip("symlink creation is unavailable in this environment")
+
+        with pytest.raises(ValueError, match="escapes"):
+            contained_path(
+                tmp_path,
+                ".seshat",
+                "dagster",
+                "runs",
+                "linked",
+                "records.jsonl",
+            )
+
     def test_writes_committed_markdown_from_raw_records(self, tmp_path: Path) -> None:
         _finalized_green_run(tmp_path, "run-001")
         out = evidence.write_run_evidence(tmp_path, "run-001")
@@ -160,7 +203,7 @@ class TestWriteRunEvidence:
             encoding="utf-8",
         )
         (run_dir / "summary.json").write_text('{"run_id": "run-002"}', encoding="utf-8")
-        with pytest.raises(ValueError, match="invalid run evidence"):
+        with pytest.raises(ValueError, match="records_sha256"):
             evidence.write_run_evidence(tmp_path, "run-002")
 
     def test_child_crash_with_zero_records_finalizes_failed(
@@ -186,12 +229,11 @@ class TestWriteRunEvidence:
     def test_commit_sha_survives_a_hung_git(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import subprocess
-
-        def hung_git(argv, **kwargs):
-            raise subprocess.TimeoutExpired(cmd=argv, timeout=10)
-
-        monkeypatch.setattr(evidence.subprocess, "run", hung_git)
+        monkeypatch.setattr(
+            evidence,
+            "git_output",
+            lambda *args: (_ for _ in ()).throw(RuntimeError("git unavailable")),
+        )
         assert evidence.commit_sha(tmp_path) == "0000000"
 
     def test_list_runs_reports_known_runs(self, tmp_path: Path) -> None:
@@ -199,3 +241,76 @@ class TestWriteRunEvidence:
         runs = evidence.list_runs(tmp_path)
         assert [run["run_id"] for run in runs] == ["run-003"]
         assert runs[0]["run_status"] == "succeeded"
+
+
+class TestEvidenceIntegrity:
+    def test_tampered_records_are_refused_before_rendering(
+        self, tmp_path: Path
+    ) -> None:
+        _finalized_green_run(tmp_path, "run-tampered")
+        records_path = (
+            tmp_path / ".seshat" / "dagster" / "runs" / "run-tampered" / "records.jsonl"
+        )
+        records_path.write_text(
+            records_path.read_text(encoding="utf-8") + "\n", encoding="utf-8"
+        )
+
+        with pytest.raises(ValueError, match="records_sha256"):
+            evidence.write_run_evidence(tmp_path, "run-tampered")
+
+    def test_finalized_summary_binds_tracked_inputs_and_dirty_state(
+        self, tmp_path: Path
+    ) -> None:
+        table = "demo_table"
+        paths = {
+            "mappings/demo_table/source-map.yaml": "table: demo_table\n",
+            "mappings/demo_table/readiness-status.yaml": "stages: {}\n",
+            "mappings/demo_table/metrics/TotalSales.yaml": (
+                "name: TotalSales\ndefinition: {}\nreadiness:\n"
+                "  status: pass\n  evidence: [approved]\n"
+            ),
+            "warehouse/migrations/001_gold.sql": "select 1;\n",
+            "powerbi/Model.SemanticModel/definition/tables/sales.tmdl": (
+                "table 'sales'\n"
+            ),
+        }
+        for relative, contents in paths.items():
+            path = tmp_path / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(contents, encoding="utf-8")
+        subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+        subprocess.run(
+            ["git", "add", "."], cwd=tmp_path, check=True, capture_output=True
+        )
+        subprocess.run(
+            [
+                "git",
+                "-c",
+                "commit.gpgSign=false",
+                "-c",
+                "user.name=Evidence Test",
+                "-c",
+                "user.email=evidence@example.test",
+                "commit",
+                "-m",
+                "fixture",
+            ],
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+        )
+
+        summary = _finalized_green_run(tmp_path, "run-bound")
+
+        assert summary["workspace_dirty"] is False
+        assert len(summary["records_sha256"]) == 64
+        assert set(paths) <= set(summary["input_artifacts"])
+        assert all(
+            not Path(relative).is_absolute() for relative in summary["input_artifacts"]
+        )
+
+        (tmp_path / "mappings" / table / "source-map.yaml").write_text(
+            "table: changed\n", encoding="utf-8"
+        )
+        dirty_summary = _finalized_green_run(tmp_path, "run-dirty")
+        assert dirty_summary["workspace_dirty"] is True
