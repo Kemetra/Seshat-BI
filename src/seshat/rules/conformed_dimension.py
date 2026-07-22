@@ -45,24 +45,24 @@ Mirrors the SF1/HR2 lazy-``yaml``-import discipline (kept out of the
 
 from __future__ import annotations
 
-import re
 from collections.abc import Iterable
 
-from ..core import Finding, RuleContext, Severity, is_test_path
+from seshat import star_discovery as _stars
+
+from ..core import Finding, RuleContext, Severity
 from ..registry import register
 
 RULE_ID = "HR1"
 
-_MAPPING_RE = re.compile(r"^mappings/([^/]+)/source-map\.yaml$")
+# Star-discovery primitives live in seshat.star_discovery (a top-level module, not
+# under seshat.dbt) so HR1 and `seshat dbt scaffold` share ONE definition of star
+# identity + dimension discovery WITHOUT dragging seshat.dbt onto the static-core
+# CLI import path (#418). Aliased ``_stars`` so the module never collides with the
+# many local ``stars`` dicts (discovered star_id -> data) this rule threads.
+_bare = _stars.bare_dim_name
+
 _MAP_FILE = "docs/quality/conformed-dimension-map.yaml"
 _VALID_STATUS = ("conformed", "distinct")
-
-
-def _bare(name: object) -> str | None:
-    """Bare dimension name: strip an optional ``<schema>.`` prefix, lowercased."""
-    if not isinstance(name, str) or not name.strip():
-        return None
-    return name.rsplit(".", 1)[-1].strip().lower()
 
 
 def _load_yaml(ctx: RuleContext, rel: str) -> dict | None:
@@ -73,55 +73,6 @@ def _load_yaml(ctx: RuleContext, rel: str) -> dict | None:
     except (OSError, yaml.YAMLError):
         return None
     return data if isinstance(data, dict) else None
-
-
-def _star_id(data: dict, table_dir: str) -> str:
-    meta = data.get("meta")
-    if isinstance(meta, dict) and isinstance(meta.get("table_id"), str):
-        return meta["table_id"]
-    if isinstance(data.get("source_id"), str):
-        return data["source_id"]
-    return table_dir
-
-
-def _is_star(data: dict) -> bool:
-    gs = data.get("gold_star")
-    return isinstance(gs, dict) and gs.get("fact") is not None
-
-
-def _add_dim(out: dict[str, dict], raw: object, *, overwrite: bool) -> None:
-    """Register one raw dimension dict under its bare name (no-op if not usable).
-
-    ``overwrite`` selects the dedup rule: explicit dims are last-wins
-    (``overwrite=True``), the standalone date_dimension is first-wins
-    (``overwrite=False`` -- never displaces an explicit dim).
-    """
-    if not isinstance(raw, dict):
-        return
-    b = _bare(raw.get("name"))
-    if not b:
-        return
-    if overwrite:
-        out[b] = raw
-    else:
-        out.setdefault(b, raw)
-
-
-def _star_dimensions(data: dict) -> dict[str, dict]:
-    """Map bare-name -> the raw dimension dict for one star (dims + date_dimension).
-
-    Degenerate dimensions are excluded (never traversed).
-    """
-    out: dict[str, dict] = {}
-    gs = data.get("gold_star")
-    if not isinstance(gs, dict):
-        return out
-    dims = gs.get("dimensions")
-    if isinstance(dims, list):
-        for dim in dims:
-            _add_dim(out, dim, overwrite=True)
-    _add_dim(out, gs.get("date_dimension"), overwrite=False)
-    return out
 
 
 def _attr_silver_types(data: dict, dim_name: str) -> dict[str, str]:
@@ -233,26 +184,18 @@ def _conformed_divergence(bare: str, stars: dict[str, dict]) -> str | None:
 def _discover_stars(ctx: RuleContext) -> dict[str, dict]:
     """Discover each star: star_id -> source-map dict for every committed
     ``mappings/<table>/source-map.yaml`` that carries a ``gold_star.fact`` key.
+
+    Worktree read via the ``RuleContext`` loader; the discovery logic itself lives
+    in ``seshat.star_discovery`` so scaffold and HR1 agree on star identity (#418).
     """
-    stars: dict[str, dict] = {}
-    for rel in sorted(ctx.tracked_files):
-        if is_test_path(rel):
-            continue
-        m = _MAPPING_RE.match(rel)
-        if not m:
-            continue
-        data = _load_yaml(ctx, rel)
-        if data is None or not _is_star(data):
-            continue
-        stars[_star_id(data, m.group(1))] = data
-    return stars
+    return _stars.discover_stars(ctx.tracked_files, lambda rel: _load_yaml(ctx, rel))
 
 
 def _index_dims_by_name(stars: dict[str, dict]) -> dict[str, dict[str, tuple]]:
     """bare-name -> {star_id: (dim_dict, source_map_dict)} across all stars."""
     name_to_stars: dict[str, dict[str, tuple]] = {}
     for sid, data in stars.items():
-        for bare, dim in _star_dimensions(data).items():
+        for bare, dim in _stars.star_dimensions(data).items():
             name_to_stars.setdefault(bare, {})[sid] = (dim, data)
     return name_to_stars
 

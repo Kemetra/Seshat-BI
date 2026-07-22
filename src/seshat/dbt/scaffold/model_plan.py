@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from seshat import star_discovery as _stars
 from seshat.dbt.contracts import FactBinding, GovernanceError
 
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -67,6 +68,10 @@ class MapSource:
     # declares CONFORMED but does not OWN is reused (referenced), not re-emitted
     # (#418-P1). None -> no reuse -> byte-identical single-table output.
     conformed_map: dict | None = None
+    # {star_id: {bare_dim: raw_dim_dict}} for every committed governed star, so
+    # reuse can validate a reused dim against its OWNER (#418). None -> no owner
+    # view (reconciliation treats every owner as absent -> fails closed).
+    owner_view: dict[str, dict[str, dict]] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -457,42 +462,24 @@ def _reuses_dimension(decl: object, table_id: str) -> bool:
     return table_id in stars and table_id != stars[0]
 
 
-def _governed_star_id(document: dict, table_id: str) -> str:
-    """The GOVERNED star id the conformed-dimension map keys ``stars`` on.
-
-    Mirrors HR1's ``conformed_dimension._star_id`` EXACTLY -- ``meta.table_id``,
-    then top-level ``source_id``, then the directory ``table_id`` fallback -- so
-    scaffold resolves reuse against the SAME identifier the authority (and HR1)
-    declares. Using the raw CLI/directory ``table_id`` would miss a legitimate
-    reuser whose mapping directory differs from its governed star id (#419 review).
-    """
-    meta = document.get("meta")
-    if isinstance(meta, dict) and isinstance(meta.get("table_id"), str):
-        return meta["table_id"]
-    source_id = document.get("source_id")
-    if isinstance(source_id, str):
-        return source_id
-    return table_id
-
-
 def _conformed_reuse(conformed_map: dict | None, star_id: str) -> dict[str, str]:
     """Map each bare dim name ``star_id`` REUSES (does not own) to its OWNING star,
     read from the conformed-dimension map (#418-P1).
 
-    ``star_id`` is the GOVERNED star id (:func:`_governed_star_id`), matching what
+    ``star_id`` is the GOVERNED star id (:func:`_stars.star_id`), matching what
     the map's ``stars`` entries and HR1 use -- NOT the raw CLI/directory table id.
     The owner is ``stars[0]`` -- carried so the operator note can name which star
     to build first. Fail-SAFE: an absent/malformed map (or any dim not meeting
     :func:`_reuses_dimension`) yields no reuse -> every dim is owned and emitted
     as today.
 
-    NOTE: HR1 validates a conformed dim's ``status`` and its surrogate/attribute
-    conformance across DISCOVERED same-named stars, but it does NOT validate the
-    ``stars`` LIST contents (that ``stars[0]`` names a real governed star which
-    actually declares this dim). A mistyped/absent owner therefore suppresses the
-    reuser's model and leaves a dangling ``ref()`` caught at ``dbt parse`` -- not a
-    clean scaffold-time refusal. Validating the owner requires the cross-table
-    governed-star view tracked as a #418 follow-up.
+    HR1 validates a conformed dim's ``status`` and its surrogate/attribute
+    conformance across DISCOVERED same-named stars, but does NOT validate the
+    ``stars`` LIST contents. Scaffold closes that at build time: the owner
+    (``stars[0]``) is validated against the committed owner-view by
+    :func:`_reconcile_reused` (#418) BEFORE a dim's model is dropped -- a
+    mistyped/absent owner or a reuser-only attribute fails closed here, not as a
+    dangling ``ref()`` at ``dbt parse``.
     """
     dims = conformed_map.get("dimensions") if isinstance(conformed_map, dict) else None
     if not isinstance(dims, dict):
@@ -701,11 +688,12 @@ class _PartitionedDimensions:
     drives models, contracts, and parity; a ``reused`` dim's model lives under its
     owning star and the fact ``ref()``s it there.
 
-    NOTE (#418 follow-up): reuse drops the reuser's WHOLE dim spec, so an attribute
-    the reuser declares that the OWNER's dim lacks is not preserved -- HR1 allows
-    divergent attribute sets, and reconciling them needs the owner's map (the
-    cross-table view scaffold does not load here). Latent until a real conformed
-    collision exists; documented in the design spec.
+    Before a dim is reused it is RECONCILED against its owner
+    (:func:`_reconcile_reused`, #418): reuse fails closed if the owner star is
+    absent, does not declare the dim,
+    or lacks an attribute the reuser declares (which would silently drop a governed
+    field). Only reconciled dims are reused, so ``owned`` may legitimately be empty
+    (a fully-conformed reuser -- every dim validated against a real owner).
     """
 
     declared: tuple[ModelSpec, ...]
@@ -715,19 +703,135 @@ class _PartitionedDimensions:
     owners: dict[str, str]
 
 
+def _dim_attributes(raw: dict | None) -> tuple[str, ...]:
+    """The string ``attributes`` a raw dim dict declares (empty if none/malformed).
+
+    Routes through the SAME ``_string_list`` the dimension MODEL builder
+    (:func:`_dimension_model`) uses, so a scalar ``attributes: customer_id`` (valid
+    YAML the model materializes as a real column) is seen identically by the
+    reconciler -- otherwise a scalar attribute would be materialized yet compared
+    as zero attributes, silently bypassing the attribute-divergence refusal (#418
+    review BLOCKER)."""
+    if not isinstance(raw, dict):
+        return ()
+    return _string_list(raw.get("attributes"))
+
+
+@dataclass(frozen=True, slots=True)
+class _ReuseContext:
+    """The cross-table inputs each reused dim is reconciled against (#418)."""
+
+    owners: dict[str, str]  # bare dim -> owning star id
+    reuser_dims: dict[str, dict]  # this star's bare dim -> raw dim dict
+    owner_view: dict[str, dict[str, dict]]  # star id -> bare dim -> raw dim dict
+    star_id: str  # the reuser's governed star id (for the message)
+
+
+def _owner_dim_or_refuse(bare: str, ctx: _ReuseContext) -> dict:
+    """The owner's raw dim dict for ``bare``, or fail closed if the owner star is
+    absent from the committed view or does not declare the dim (#418)."""
+    owner = ctx.owners[bare]
+    owner_dims = ctx.owner_view.get(owner)
+    if owner_dims is None or bare not in owner_dims:
+        raise ScaffoldError(
+            f"conformed dimension {bare!r} names owner star {owner!r}, but that star "
+            f"is absent from the committed owner view (or its committed source-map "
+            f"could not be read) or does not declare {bare!r}. Fix the stars[] owner "
+            f"in the conformed-dimension map, or ensure the owner star's committed "
+            f"source-map declares {bare!r}."
+        )
+    return owner_dims[bare]
+
+
+def _dim_surrogate(raw: dict | None) -> str | None:
+    """The declared ``surrogate_key`` of a raw dim dict, if a non-empty string."""
+    if not isinstance(raw, dict):
+        return None
+    sk = raw.get("surrogate_key")
+    return sk if isinstance(sk, str) and sk else None
+
+
+def _require_surrogate_key_matches(
+    bare: str, owner_dim: dict, ctx: _ReuseContext
+) -> None:
+    """Fail closed if the reuser's declared ``surrogate_key`` for ``bare`` differs
+    from the owner's (#418 review).
+
+    The fact FK is the reuser's surrogate name (``<sk>``) but ``ref()``s the OWNER's
+    model; a divergent SK would emit a fact FK the owner's dim never exposes -- a
+    join that breaks at run, LATER than the dangling-ref class reconciliation
+    otherwise closes. Only compared when BOTH declare one (graceful, mirroring
+    HR1's ``_surrogate_key_divergence``)."""
+    owner_sk = _dim_surrogate(owner_dim)
+    reuser_sk = _dim_surrogate(ctx.reuser_dims.get(bare))
+    # Compare only when BOTH declare a key (graceful, like HR1); equal -> fine.
+    declared = {sk for sk in (owner_sk, reuser_sk) if sk is not None}
+    if len(declared) < 2:
+        return
+    raise ScaffoldError(
+        f"reuser star {ctx.star_id!r} declares surrogate_key {reuser_sk!r} for "
+        f"conformed dimension {bare!r}, but its owner star {ctx.owners[bare]!r} "
+        f"declares {owner_sk!r} -- the reuser's fact FK would reference a key the "
+        f"owner's model does not expose. Align the surrogate_key across the stars, "
+        f"or declare the dimension 'distinct' in the conformed-dimension map."
+    )
+
+
+def _require_attributes_covered(bare: str, owner_dim: dict, ctx: _ReuseContext) -> None:
+    """Fail closed if the reuser declares an attribute on ``bare`` that the owner's
+    dim does not carry (a silently-lost governed field, #418)."""
+    owner_attrs = _dim_attributes(owner_dim)
+    missing = [
+        a for a in _dim_attributes(ctx.reuser_dims.get(bare)) if a not in owner_attrs
+    ]
+    if not missing:
+        return
+    raise ScaffoldError(
+        f"reuser star {ctx.star_id!r} declares attribute(s) {', '.join(missing)} "
+        f"on conformed dimension {bare!r} that its owner star {ctx.owners[bare]!r} "
+        f"does not carry -- reuse would silently drop them. Add the attribute(s) to "
+        f"the owner star's {bare!r}, or declare the dimension 'distinct' in the "
+        f"conformed-dimension map."
+    )
+
+
+def _reconcile_reused(reused: tuple[ModelSpec, ...], ctx: _ReuseContext) -> None:
+    """Validate each REUSED dim against its owner before its model is dropped (#418).
+
+    Fails closed if the owner star is absent/does not declare the dim
+    (:func:`_owner_dim_or_refuse`), its surrogate_key diverges
+    (:func:`_require_surrogate_key_matches`), or it lacks a reuser attribute
+    (:func:`_require_attributes_covered`). Never merges the reuser's fields into the
+    owner and never mutates the owner's model.
+    """
+    for dim in reused:
+        bare = _bare_dim_name(dim.name)
+        owner_dim = _owner_dim_or_refuse(bare, ctx)
+        _require_surrogate_key_matches(bare, owner_dim, ctx)
+        _require_attributes_covered(bare, owner_dim, ctx)
+
+
 def _partition_dimensions(
-    inputs: _PlanInputs, conformed_map: dict | None, star_id: str
+    inputs: _PlanInputs,
+    conformed_map: dict | None,
+    star_id: str,
+    owner_view: dict[str, dict[str, dict]] | None,
 ) -> _PartitionedDimensions:
     declared = _dimensions(inputs)
     reuse = _conformed_reuse(conformed_map, star_id)
     owned = tuple(dim for dim in declared if _bare_dim_name(dim.name) not in reuse)
     reused = tuple(dim for dim in declared if _bare_dim_name(dim.name) in reuse)
-    if not owned:
-        raise ScaffoldError(
-            "every declared dimension is a conformed dimension owned by another "
-            "star, so this table would materialize no dimension model of its own; "
-            "at least one owned dimension is required to scaffold a star"
-        )
+    # The reuser's own raw dims (bare -> raw dict), for the attribute comparison.
+    reuser_dims = _stars.star_dimensions({"gold_star": inputs.gold_star})
+    _reconcile_reused(
+        reused,
+        _ReuseContext(
+            owners=reuse,
+            reuser_dims=reuser_dims,
+            owner_view=owner_view or {},
+            star_id=star_id,
+        ),
+    )
     return _PartitionedDimensions(
         declared=declared, owned=owned, reused=reused, owners=reuse
     )
@@ -745,8 +849,10 @@ def build_scaffold_plan(
     section, only the star's dimensions and the staging columns.
     """
     inputs = _plan_inputs(source, table_id, fact)
-    star_id = _governed_star_id(source.document, table_id)
-    dims = _partition_dimensions(inputs, source.conformed_map, star_id)
+    star_id = _stars.star_id(source.document, table_id)
+    dims = _partition_dimensions(
+        inputs, source.conformed_map, star_id, source.owner_view
+    )
     return ScaffoldPlan(
         table_id=table_id,
         source_table=table_id,

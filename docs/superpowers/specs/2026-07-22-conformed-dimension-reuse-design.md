@@ -121,6 +121,14 @@ guarantees matches the owner's).
 7. **owner-rule determinism**: reversing which table is passed flips owner/reuser
    deterministically from the SAME map.
 
+> **RESOLVED (2026-07-22, #418 remainder).** The three limitations below —
+> zero-owned-dim refusal, owner-existence validation, and reuser-only-attribute
+> loss — are all addressed by the cross-star reconciliation spec
+> (`2026-07-22-conformed-reconciliation-design.md`): scaffold now loads a
+> committed owner-view, validates each reused dim's owner + attributes (fail
+> closed), and allows a fully-conformed zero-owned-dim plan. The sections below
+> are the point-in-time #419 record; see that spec for current behavior.
+
 ## Known limitation — a star must OWN at least one dimension
 
 If EVERY dimension a star declares is a conformed dimension owned by another
