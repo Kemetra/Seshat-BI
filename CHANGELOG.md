@@ -27,6 +27,17 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+## [0.6.1] -- 2026-07-22
+
+### Fixed
+
+- Release audit false positive that blocked the v0.6.0 PyPI publish: a
+  fabricated spoof example (`abc://u:s3cret@x`) in the `_postgres_target_label`
+  docstring matched the release inspector's credential-bearing-URL pattern. The
+  example is rephrased in prose (docstring-only, behavior-neutral); the scanner
+  regex is left strict. v0.6.0's tag is frozen by the `v*` immutability ruleset,
+  so the fix ships as v0.6.1 (#426).
+
 ## [0.6.0] -- 2026-07-22
 
 ### Added

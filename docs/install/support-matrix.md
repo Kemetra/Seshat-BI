@@ -1,6 +1,6 @@
 # Support matrix: Seshat BI
 
-The current public release is `seshat-bi==0.6.0` (single-sourced from
+The current public release is `seshat-bi==0.6.1` (single-sourced from
 `pyproject.toml`), externally accepted per
 [the v0.3.1 public acceptance record](../releases/v0.3.1-public-acceptance.md).
 Where a row cites v0.2.0 evidence

@@ -1,6 +1,6 @@
 # Client quickstart: install Seshat BI
 
-The current public release is **`seshat-bi==0.6.0`** on public PyPI. Seshat BI
+The current public release is **`seshat-bi==0.6.1`** on public PyPI. Seshat BI
 ships as two things you can download independently:
 
 1. the **command-line package** (the `seshat` CLI + governance engine), and
