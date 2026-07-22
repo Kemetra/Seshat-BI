@@ -244,11 +244,13 @@ def _live_validation_next_override(
 ) -> str | None:
     """Keep the live DB boundary explicit after Gold; do not connect from next."""
     stage = response.get("stage")
-    if entry is None or stage not in {
+    terminal_pass = response.get("outcome") == "terminal_pass"
+    post_gold_stage = stage in {
         "semantic_model_ready",
         "dashboard_ready",
         "publish_ready",
-    }:
+    }
+    if entry is None or not (terminal_pass or post_gold_stage):
         return None
     from seshat.portfolio_watch import live_validation_state
 

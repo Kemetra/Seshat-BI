@@ -249,6 +249,21 @@ class TestWriteRunEvidence:
         )
         assert evidence.commit_sha(tmp_path) == "0000000"
 
+    def test_finalize_run_survives_a_missing_git_executable(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            evidence,
+            "git_output",
+            lambda *args: (_ for _ in ()).throw(FileNotFoundError("git missing")),
+        )
+
+        summary = _finalized_green_run(tmp_path, "run-no-git")
+
+        assert summary["commit_sha"] == "0000000"
+        assert summary["workspace_dirty"] is False
+        assert summary["input_artifacts"] == {}
+
     def test_list_runs_reports_known_runs(self, tmp_path: Path) -> None:
         _finalized_green_run(tmp_path, "run-003")
         runs = evidence.list_runs(tmp_path)

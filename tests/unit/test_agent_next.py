@@ -287,6 +287,51 @@ next_action: "validate gold"
     assert "retail validate" in document["next_allowed_action"]
 
 
+@pytest.mark.parametrize(
+    ("live_state", "expected_action_start"),
+    (("verified", "No pipeline action"), ("pending_live", "STOP")),
+)
+def test_terminal_pass_still_honors_the_live_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    live_state: str,
+    expected_action_start: str,
+) -> None:
+    _write_status(
+        tmp_path,
+        "orders",
+        """\
+table: "silver.orders"
+current_stage: "publish_ready"
+stages:
+  source_ready: {status: "pass", evidence: ["profile"]}
+  mapping_ready: {status: "pass", evidence: ["map"]}
+  silver_ready: {status: "pass", evidence: ["silver"]}
+  gold_ready: {status: "pass", evidence: ["gold"]}
+  semantic_model_ready: {status: "pass", evidence: ["model"]}
+  dashboard_ready: {status: "pass", evidence: ["dashboard"]}
+  publish_ready: {status: "pass", evidence: ["handoff"]}
+approvals:
+  - {stage: mapping_ready, owner: "Ada Lovelace (analyst)", at: "2026-07-01"}
+  - stage: semantic_model_ready
+    owner: "Grace Hopper (metric_owner)"
+    at: "2026-07-01"
+  - {stage: dashboard_ready, owner: "Katherine Johnson (governance)", at: "2026-07-01"}
+  - {stage: publish_ready, owner: "Ahmed Shaaban (data_owner)", at: "2026-07-01"}
+next_action: "done"
+""",
+    )
+    monkeypatch.setattr(
+        "seshat.portfolio_watch.live_validation_state",
+        lambda root, scope_id: live_state,
+    )
+
+    document = build_agent_next_document(tmp_path)
+
+    assert document["outcome"] == "terminal_pass"
+    assert document["next_allowed_action"].startswith(expected_action_start)
+
+
 def test_blocked_table_surfaces_verbatim_reasons_and_stops(tmp_path: Path) -> None:
     _write_status(
         tmp_path,

@@ -53,7 +53,7 @@ def commit_sha(root: Path) -> str:
     (a fixture repo) -- recorded honestly, never fabricated as a real sha."""
     try:
         sha = git_output(Path(root), "rev-parse", "HEAD").strip()
-    except RuntimeError:
+    except (RuntimeError, OSError):
         return "0000000"
     if sha:
         return sha
@@ -69,7 +69,7 @@ def _tracked_paths(root: Path) -> set[str]:
     """Git-tracked, repository-relative POSIX paths; empty outside a Git repo."""
     try:
         raw = git_output(root, "ls-files", "-z")
-    except RuntimeError:
+    except (RuntimeError, OSError):
         return set()
     return {path for path in raw.split("\0") if path}
 
@@ -90,7 +90,7 @@ def _is_workspace_dirty(root: Path) -> bool:
                 ":(exclude).seshat/dagster",
             )
         )
-    except RuntimeError:
+    except (RuntimeError, OSError):
         return False
 
 
