@@ -713,46 +713,60 @@ def _dim_attributes(raw: dict | None) -> tuple[str, ...]:
     return tuple(a for a in attrs if isinstance(a, str))
 
 
-def _reconcile_reused(
-    reused: tuple[ModelSpec, ...],
-    owners: dict[str, str],
-    reuser_dims: dict[str, dict],
-    owner_view: dict[str, dict[str, dict]] | None,
-    star_id: str,
-) -> None:
+@dataclass(frozen=True, slots=True)
+class _ReuseContext:
+    """The cross-table inputs each reused dim is reconciled against (#418)."""
+
+    owners: dict[str, str]  # bare dim -> owning star id
+    reuser_dims: dict[str, dict]  # this star's bare dim -> raw dim dict
+    owner_view: dict[str, dict[str, dict]]  # star id -> bare dim -> raw dim dict
+    star_id: str  # the reuser's governed star id (for the message)
+
+
+def _owner_dim_or_refuse(bare: str, ctx: _ReuseContext) -> dict:
+    """The owner's raw dim dict for ``bare``, or fail closed if the owner star is
+    absent from the committed view or does not declare the dim (#418)."""
+    owner = ctx.owners[bare]
+    owner_dims = ctx.owner_view.get(owner)
+    if owner_dims is None or bare not in owner_dims:
+        raise ScaffoldError(
+            f"conformed dimension {bare!r} names owner star {owner!r}, but no "
+            f"committed governed star with that id materializes it. Fix the "
+            f"stars[] owner in the conformed-dimension map, or ensure the owner "
+            f"star's source-map declares {bare!r}."
+        )
+    return owner_dims[bare]
+
+
+def _require_attributes_covered(bare: str, owner_dim: dict, ctx: _ReuseContext) -> None:
+    """Fail closed if the reuser declares an attribute on ``bare`` that the owner's
+    dim does not carry (a silently-lost governed field, #418)."""
+    owner_attrs = _dim_attributes(owner_dim)
+    missing = [
+        a for a in _dim_attributes(ctx.reuser_dims.get(bare)) if a not in owner_attrs
+    ]
+    if not missing:
+        return
+    raise ScaffoldError(
+        f"reuser star {ctx.star_id!r} declares attribute(s) {', '.join(missing)} "
+        f"on conformed dimension {bare!r} that its owner star {ctx.owners[bare]!r} "
+        f"does not carry -- reuse would silently drop them. Add the attribute(s) to "
+        f"the owner star's {bare!r}, or declare the dimension 'distinct' in the "
+        f"conformed-dimension map."
+    )
+
+
+def _reconcile_reused(reused: tuple[ModelSpec, ...], ctx: _ReuseContext) -> None:
     """Validate each REUSED dim against its owner before its model is dropped (#418).
 
-    Fail closed (``ScaffoldError``) if the owner star is absent from the committed
-    view, does not declare the dim, or lacks an attribute the reuser declares (a
-    silently-lost governed field). ``reuser_dims`` maps this star's bare dim name ->
-    its raw dim dict (for the reuser's declared attributes). Never merges the
-    reuser's attributes into the owner and never mutates the owner's model.
+    Fails closed if the owner star is absent/does not declare the dim
+    (:func:`_owner_dim_or_refuse`) or lacks a reuser attribute
+    (:func:`_require_attributes_covered`). Never merges the reuser's attributes
+    into the owner and never mutates the owner's model.
     """
-    view = owner_view or {}
     for dim in reused:
         bare = _bare_dim_name(dim.name)
-        owner = owners[bare]
-        owner_dims = view.get(owner)
-        if owner_dims is None or bare not in owner_dims:
-            raise ScaffoldError(
-                f"conformed dimension {bare!r} names owner star {owner!r}, but no "
-                f"committed governed star with that id materializes it. Fix the "
-                f"stars[] owner in the conformed-dimension map, or ensure the owner "
-                f"star's source-map declares {bare!r}."
-            )
-        missing = [
-            a
-            for a in _dim_attributes(reuser_dims.get(bare))
-            if a not in _dim_attributes(owner_dims[bare])
-        ]
-        if missing:
-            raise ScaffoldError(
-                f"reuser star {star_id!r} declares attribute(s) "
-                f"{', '.join(missing)} on conformed dimension {bare!r} that its "
-                f"owner star {owner!r} does not carry -- reuse would silently drop "
-                f"them. Add the attribute(s) to the owner star's {bare!r}, or "
-                f"declare the dimension 'distinct' in the conformed-dimension map."
-            )
+        _require_attributes_covered(bare, _owner_dim_or_refuse(bare, ctx), ctx)
 
 
 def _partition_dimensions(
@@ -767,7 +781,15 @@ def _partition_dimensions(
     reused = tuple(dim for dim in declared if _bare_dim_name(dim.name) in reuse)
     # The reuser's own raw dims (bare -> raw dict), for the attribute comparison.
     reuser_dims = stars.star_dimensions({"gold_star": inputs.gold_star})
-    _reconcile_reused(reused, reuse, reuser_dims, owner_view, star_id)
+    _reconcile_reused(
+        reused,
+        _ReuseContext(
+            owners=reuse,
+            reuser_dims=reuser_dims,
+            owner_view=owner_view or {},
+            star_id=star_id,
+        ),
+    )
     return _PartitionedDimensions(
         declared=declared, owned=owned, reused=reused, owners=reuse
     )
