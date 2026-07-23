@@ -43,6 +43,15 @@ explicitly identifies a public release event.
   (G3, S-family, B1, G6, R1, TMDL) skip the absent path gracefully, the
   presence-required governance-manifest rules (SC1/SC2, A1/A3, DF1, DR1) fail loud,
   and file-presence rules (AL1/AL2/HR11) still flag a deleted required artifact. (#430)
+- `seshat dbt scaffold` fails closed when a `gold_star` dimension attribute, fact
+  measure, or degenerate dimension references a column marked `decision: drop` in
+  the source map, naming the drop conflict instead of silently materializing (or
+  emitting a generic "unresolved") — a dropped column can never appear in a
+  generated model or its `_models.yml` contract, in any layout. (#434)
+- `seshat dbt scaffold` refuses to write a `.sql` model whose dbt model name (file
+  basename) already exists at a different path under `dbt/models/`, instead of
+  silently producing a duplicate that breaks `dbt plan` with a
+  `DBT_ARTIFACT_INTEGRITY` "two models with the name" error. (#431)
 
 ## [0.6.1] -- 2026-07-22
 

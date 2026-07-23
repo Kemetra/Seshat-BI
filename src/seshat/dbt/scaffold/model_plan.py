@@ -179,6 +179,10 @@ class _PlanInputs:
     # cites its real bronze source instead of failing closed (#414). Only filled
     # (non-placeholder) derivations appear.
     derived_source_by_name: dict[str, str]
+    # Every source_name/rename_to a decision:drop row is reachable under, so a
+    # gold_star reference to a dropped column fails closed with a message naming
+    # the drop conflict, not a generic "unstaged" one (#434).
+    dropped_column_names: frozenset[str]
 
 
 def _kept_columns(document: dict) -> tuple[dict, ...]:
@@ -191,6 +195,30 @@ def _kept_columns(document: dict) -> tuple[dict, ...]:
         for row in rows
         if isinstance(row, dict) and row.get("decision") in {"keep", "derive"}
     )
+
+
+def _dropped_column_names(document: dict) -> frozenset[str]:
+    """Every name a ``decision: drop`` row is reachable under: its bronze
+    ``source_name`` and (if set) its ``rename_to``.
+
+    A gold-star reference (dim attribute / fact measure / degenerate dimension)
+    can name either form. This is consulted ONLY to sharpen the fail-closed
+    message in :func:`_bronze_citation` -- a dropped column already fails to
+    resolve through ``bronze_by_silver`` (#434) same as a genuinely-unstaged one;
+    this lets the message tell the human WHY (dropped, not merely absent).
+    """
+    rows = document.get("columns")
+    names: set[str] = set()
+    for row in rows if isinstance(rows, list) else ():
+        if not isinstance(row, dict) or row.get("decision") != "drop":
+            continue
+        source = row.get("source_name")
+        if isinstance(source, str) and source:
+            names.add(source)
+        rename = row.get("rename_to")
+        if isinstance(rename, str) and rename:
+            names.add(rename)
+    return frozenset(names)
 
 
 def _bronze_by_silver(document: dict) -> dict[str, str]:
@@ -314,7 +342,22 @@ def _bronze_citation(inputs: _PlanInputs, silver_name: str, context: str) -> str
     A name that resolves to no real bronze column is a defect (never a fabricated
     citation): a rollup with an unfilled ``<placeholder>`` derived_from, or an
     attribute that is neither kept nor derived. The message distinguishes the
-    kept-column and derived_columns paths and points at the hand-completion path."""
+    kept-column and derived_columns paths and points at the hand-completion path.
+
+    The ``dropped_column_names`` check runs FIRST, before either resolution path:
+    a name can be BOTH marked ``decision: drop`` in columns[] AND re-declared as a
+    same-named ``derived_columns`` entry whose ``derived_from`` resolves to a real
+    bronze column. Checking drop only after both resolutions fail would let that
+    derived-columns path return a real citation for a name the map declares
+    dropped -- silently un-dropping it (Codex #444)."""
+    if silver_name in inputs.dropped_column_names:
+        raise ScaffoldError(
+            f"{context} references {silver_name!r}, which the map's columns[] "
+            "marks decision: drop. A dropped column can never be materialized "
+            "in a generated model (that would silently un-drop it, #434) -- "
+            "either change its decision to keep/derive in columns[] before "
+            "scaffolding, or remove this gold_star reference to it"
+        )
     source = _resolve_bronze_source(inputs, silver_name)
     if source is None:
         derived_from = inputs.derived_source_by_name.get(silver_name)
@@ -676,6 +719,7 @@ def _plan_inputs(source: MapSource, table_id: str, fact: FactBinding) -> _PlanIn
         bronze_by_silver=_bronze_by_silver(document),
         silver_type_by_name=_silver_type_by_name(document),
         derived_source_by_name=_derived_source_by_name(document),
+        dropped_column_names=_dropped_column_names(document),
     )
 
 
