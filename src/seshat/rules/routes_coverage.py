@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from ..core import Finding, RuleContext, RuleTier, Severity
+from ..core import Finding, RuleContext, RuleTier, Severity, read_tracked_text
 from ..registry import register
 
 _MANIFEST = "docs/routing/routes.yaml"
@@ -95,7 +95,12 @@ def _manifest_ids(ctx: RuleContext) -> set[str] | list[Finding]:
     Returns a list of Findings (never an id set) on any unreadable/wrong-shape
     input so the caller propagates the fail-loud ERROR.
     """
-    if _MANIFEST not in ctx.tracked_files:
+    raw = None
+    if _MANIFEST in ctx.tracked_files:
+        raw = read_tracked_text(ctx.repo_root / _MANIFEST)
+    if raw is None:
+        # Untracked OR tracked-but-deleted-on-disk (#430) both fail loud here,
+        # never a vacuous pass and never a crash on the read.
         return [
             _finding(
                 f"route registry manifest {_MANIFEST!r} is missing or untracked; "
@@ -106,7 +111,6 @@ def _manifest_ids(ctx: RuleContext) -> set[str] | list[Finding]:
 
     import yaml  # lazy: dev/optional dep, kept out of the retail check core chain
 
-    raw = (ctx.repo_root / _MANIFEST).read_text(encoding="utf-8")
     try:
         data = yaml.safe_load(raw)
     except yaml.YAMLError as exc:  # malformed YAML -> fail loud, never vacuous
@@ -156,7 +160,11 @@ def check_route_coverage(ctx: RuleContext) -> Iterable[Finding]:
     if isinstance(manifest_ids, list):  # the manifest could not be read -> ERRORs
         return manifest_ids
 
-    if _MAP not in ctx.tracked_files:
+    map_text = None
+    if _MAP in ctx.tracked_files:
+        map_text = read_tracked_text(ctx.repo_root / _MAP)
+    if map_text is None:
+        # Untracked OR tracked-but-deleted-on-disk (#430) both fail loud.
         return [
             _finding(
                 f"knowledge map {_MAP!r} is missing or untracked; A3 cannot verify "
@@ -165,7 +173,6 @@ def check_route_coverage(ctx: RuleContext) -> Iterable[Finding]:
             )
         ]
 
-    map_text = (ctx.repo_root / _MAP).read_text(encoding="utf-8")
     map_ids = _map_ids(map_text)
     if map_ids is None:
         return [

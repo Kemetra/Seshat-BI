@@ -115,7 +115,18 @@ def check_parked_on(ctx: RuleContext) -> Iterable[Finding]:
             continue
 
         anchor = edge["anchor"]
-        doc_text = (ctx.repo_root / doc).read_text(encoding="utf-8")
+        doc_text = read_tracked_text(ctx.repo_root / doc)
+        if doc_text is None:
+            # Tracked but deleted on disk (#430): the anchor cannot be verified;
+            # fail loud rather than crash.
+            findings.append(
+                _finding(
+                    f"edge {eid!r} names doc {doc!r}, which is tracked but missing on "
+                    f"disk; the parked-on anchor cannot be verified",
+                    loc,
+                )
+            )
+            continue
         if anchor not in doc_text:
             findings.append(
                 _finding(

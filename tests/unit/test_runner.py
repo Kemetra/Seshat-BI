@@ -211,8 +211,12 @@ def test_check_does_not_crash_on_git_tracked_but_unstaged_deletions(tmp_path):
 
     Covers one committed fixture per known content-scanning family (G3 TMDL/
     JSON scan, the S1-S8 SQL family, B1 never-execute, G6 PBIP parameter scan,
-    R1 PBIR reference scan) so the fix is proven across every content-scanning
-    rule, not just the single rule the issue happened to reproduce with.
+    R1 PBIR reference scan) AND the presence-required governance-manifest
+    families (SC2 rule-count-claims + its count source, A3 route-registry + its
+    knowledge map, DF1 parked-on, SC1 status-claims, DR1 stale-phrase manifest)
+    whose membership guards otherwise pass while the direct manifest read raises
+    FileNotFoundError (Codex #443 P1). Proven across every reader, not just the
+    single rule the issue happened to reproduce with.
     """
     import seshat.rules  # noqa: F401  (side effect: registers the real rule set)
     from seshat.registry import all_rules
@@ -231,6 +235,16 @@ def test_check_does_not_crash_on_git_tracked_but_unstaged_deletions(tmp_path):
         "demo.Report/definition.pbir": (
             '{"datasetReference": {"byPath": {"path": "../demo.SemanticModel"}}}\n'
         ),
+        # Presence-required governance manifests (+ their referenced sources): each
+        # rule guards `path in tracked_files` then reads directly, so a tracked-but-
+        # deleted manifest crashes the read unless routed through read_tracked_text.
+        "docs/quality/rule-count-claims.yaml": "claims: []\n",  # SC2 manifest
+        "docs/rules/rules-manifest.json": "[]\n",  # SC2 count source
+        "docs/routing/routes.yaml": "routes: []\n",  # A3 manifest
+        "docs/knowledge-map.md": "# Map\n\n## Route by task\n\n| Task |\n|---|\n",
+        "docs/quality/parked-on.yaml": "edges: []\n",  # DF1 manifest
+        "docs/quality/status-claims.yaml": "claims: []\n",  # SC1 manifest
+        "docs/quality/design-stale-phrases.yaml": "phrases: []\n",  # DR1 manifest
     }
     for rel, body in fixtures.items():
         path = repo / rel

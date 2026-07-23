@@ -112,8 +112,10 @@ def _add_profile_parser(sub: argparse._SubParsersAction) -> None:
         dest="output_format",
         choices=("md", "json"),
         default="md",
-        help="'md' (default) emits the source-profile.md blocks to paste; "
-        "'json' emits the machine-readable ProfileResult.",
+        help="'md' (default) emits the source-profile.md blocks to paste, with "
+        "a progress banner on stderr; 'json' emits the machine-readable "
+        "ProfileResult and stays silent on stderr on success, so "
+        "`--format json 2>&1 | jq` is safe (#436).",
     )
 
 
