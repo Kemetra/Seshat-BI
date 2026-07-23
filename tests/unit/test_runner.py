@@ -201,3 +201,52 @@ def test_importing_runner_does_not_import_rules_package():
     importlib.import_module("seshat.runner")
 
     assert "seshat.rules" not in sys.modules
+
+
+@pytest.mark.unit
+def test_check_does_not_crash_on_git_tracked_but_unstaged_deletions(tmp_path):
+    """Issue #430: `seshat check` must not raise FileNotFoundError when a
+    tracked file is deleted on disk but the deletion is not staged/committed
+    (i.e. still listed by `git ls-files`).
+
+    Covers one committed fixture per known content-scanning family (G3 TMDL/
+    JSON scan, the S1-S8 SQL family, B1 never-execute, G6 PBIP parameter scan,
+    R1 PBIR reference scan) so the fix is proven across every content-scanning
+    rule, not just the single rule the issue happened to reproduce with.
+    """
+    import seshat.rules  # noqa: F401  (side effect: registers the real rule set)
+    from seshat.registry import all_rules
+    from seshat.runner import collect_findings
+    from tests.unit._gitfix import commit_all, make_git_repo
+
+    repo = make_git_repo(tmp_path)
+
+    fixtures = {
+        "model.tmdl": "table Sales\n",
+        "warehouse/migrations/0001_init.sql": "create table bronze.x (a text);\n",
+        "src/seshat/rules/fake_governed.py": "x = 1\n",
+        "demo.SemanticModel/definition/expressions.tmdl": (
+            'expression Host = "<your-db-host>" meta [IsParameterQuery=true];\n'
+        ),
+        "demo.Report/definition.pbir": (
+            '{"datasetReference": {"byPath": {"path": "../demo.SemanticModel"}}}\n'
+        ),
+    }
+    for rel, body in fixtures.items():
+        path = repo / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body, encoding="utf-8")
+    commit_all(repo, "chore: add fixtures")
+
+    # Delete on disk WITHOUT `git rm` -- tracked-but-unstaged deletion, exactly
+    # the scenario reported in #430.
+    for rel in fixtures:
+        (repo / rel).unlink()
+
+    ctx = build_context(repo)
+    for rel in fixtures:
+        assert rel in ctx.tracked_files  # still enumerated (needed by AL1/AL2/HR11)
+
+    # Must not raise -- this is the crash the issue reports.
+    findings = collect_findings(all_rules(), ctx)
+    assert isinstance(findings, list)

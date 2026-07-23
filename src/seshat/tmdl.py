@@ -548,12 +548,19 @@ def iter_model_files(ctx: RuleContext, suffix: str) -> Iterable[tuple[str, str]]
 
     Reads files from ``ctx.repo_root`` using ``encoding="utf-8-sig"`` (BOM-
     tolerant).
+
+    A tracked path that is absent on disk (e.g. deleted-but-unstaged -- #430)
+    is silently skipped rather than raising ``FileNotFoundError``: this is a
+    content scan, not a presence check, so there is simply nothing to read.
     """
     for rel in ctx.tracked_files:
         if is_test_path(rel):
             continue
         if ".SemanticModel/definition/" in rel and rel.endswith(suffix):
-            text = (ctx.repo_root / Path(rel)).read_text(encoding="utf-8-sig")
+            try:
+                text = (ctx.repo_root / Path(rel)).read_text(encoding="utf-8-sig")
+            except FileNotFoundError:
+                continue
             yield rel, text
 
 
@@ -652,7 +659,7 @@ def _tmdl_files_to_scan(
             continue
         try:
             text = (repo_root / Path(rel)).read_text(encoding="utf-8-sig")
-        except OSError:
+        except FileNotFoundError:
             continue
         yield rel, text
 

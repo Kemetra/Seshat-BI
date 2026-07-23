@@ -726,7 +726,13 @@ def rule_g3_no_bom(ctx: RuleContext) -> Iterable[Finding]:
             continue
         if not rel.lower().endswith(_G3_SUFFIXES):
             continue
-        if _read_leading_bytes(ctx.repo_root / rel) == _UTF8_BOM:
+        try:
+            leading = _read_leading_bytes(ctx.repo_root / rel)
+        except FileNotFoundError:
+            # Tracked-but-deleted-on-disk (#430): nothing to scan for a BOM,
+            # skip rather than crash. G3 is a content scan, not a presence check.
+            continue
+        if leading == _UTF8_BOM:
             yield Finding(
                 rule_id="G3",
                 severity=Severity.ERROR,

@@ -28,8 +28,14 @@ def check_pbir_relative_reference(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
     for rel in _iter_pbir_files(ctx):
         path = ctx.repo_root / rel
-        with path.open(encoding="utf-8-sig") as fh:
-            doc: Any = json.load(fh)
+        try:
+            with path.open(encoding="utf-8-sig") as fh:
+                doc: Any = json.load(fh)
+        except FileNotFoundError:
+            # Tracked-but-deleted-on-disk (#430): nothing to scan for a
+            # reference shape, skip rather than crash. Content scan, not a
+            # presence check.
+            continue
         ref = doc.get("datasetReference", {}) if isinstance(doc, dict) else {}
         if "byConnection" in ref:
             findings.append(

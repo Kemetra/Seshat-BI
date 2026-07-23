@@ -27,6 +27,12 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+### Fixed
+- `seshat check` no longer crashes with `FileNotFoundError` when a git-tracked file
+  is deleted from disk but the deletion is not yet staged; content-scanning rules
+  (G3, S-family, B1, G6, R1, TMDL) skip the absent path gracefully while file-presence
+  rules (AL1/AL2/HR11) still flag a deleted required artifact. (#430)
+
 ## [0.6.1] -- 2026-07-22
 
 ### Fixed

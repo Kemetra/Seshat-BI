@@ -50,7 +50,13 @@ def _iter_param_files(ctx: RuleContext) -> list[str]:
 def check_pbip_param_no_real_value(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
     for rel in _iter_param_files(ctx):
-        text = (ctx.repo_root / rel).read_text(encoding="utf-8-sig")
+        # A tracked-but-deleted-on-disk parameter file (#430) has no content to
+        # scan for a leaked value; skip it rather than crash. This is a content
+        # scan, not a presence check.
+        try:
+            text = (ctx.repo_root / rel).read_text(encoding="utf-8-sig")
+        except FileNotFoundError:
+            continue
         for lineno, line in enumerate(text.splitlines(), start=1):
             m = _PARAM_RE.search(line)
             if not m:
