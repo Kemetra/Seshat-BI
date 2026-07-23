@@ -19,7 +19,12 @@ from typing import Iterable
 from .core import Finding, Severity
 from .metric_drift import Verdict, check_measure_drift
 
-__all__ = ["MeasurePair", "verdict_to_finding", "run_semantic_pairs"]
+__all__ = [
+    "MeasurePair",
+    "binding_error",
+    "verdict_to_finding",
+    "run_semantic_pairs",
+]
 
 # Stable tag for L3 findings (NOT a registered rule id -- see ADR 0007).
 _L3_TAG = "L3"
@@ -39,6 +44,16 @@ class MeasurePair:
     dax: str
     locator: str
     definition: dict | None
+
+
+def binding_error(measure_name: str, locator: str, detail: str) -> Finding:
+    """Create a fail-closed L3 finding for a missing or invalid binding."""
+    return Finding(
+        rule_id=_L3_TAG,
+        severity=Severity.ERROR,
+        message=f"measure '{measure_name}': {detail}",
+        locator=locator,
+    )
 
 
 def verdict_to_finding(

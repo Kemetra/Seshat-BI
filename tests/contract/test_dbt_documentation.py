@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 from pathlib import Path
@@ -128,12 +129,28 @@ def test_exact_versions_and_governed_commands_are_documented() -> None:
 
 
 def test_active_spec_kit_markers_agree_and_resolve() -> None:
-    # The active plan moves with each merged feature (133 -> 134 -> ...);
-    # the durable contract is that AGENTS.md and CLAUDE.md name the SAME
-    # plan and that the plan file exists on disk.
+    feature_directory = json.loads((ROOT / ".specify/feature.json").read_text())[
+        "feature_directory"
+    ]
+    agents_text = _text("AGENTS.md")
+    claude_text = _text("CLAUDE.md")
     pattern = re.compile(r"specs/\d{3}-[a-z0-9-]+/plan\.md")
-    agents_refs = set(pattern.findall(_text("AGENTS.md")))
-    claude_refs = set(pattern.findall(_text("CLAUDE.md")))
-    assert len(agents_refs) == 1, agents_refs
-    assert agents_refs == claude_refs
-    assert (ROOT / agents_refs.pop()).is_file()
+    fence = re.compile(
+        r"<!-- SPECKIT START -->(?P<body>.*?)<!-- SPECKIT END -->", re.DOTALL
+    )
+    agents_body = fence.search(agents_text).group("body").strip()
+    claude_body = fence.search(claude_text).group("body").strip()
+    if feature_directory is None:
+        assert agents_body == "No active Spec Kit implementation plan."
+        assert claude_body == "No active Spec Kit implementation plan."
+        assert not pattern.search(agents_body + claude_body)
+        return
+
+    assert isinstance(feature_directory, str)
+    expected = f"{feature_directory}/plan.md"
+    assert pattern.findall(agents_body) == [expected]
+    assert pattern.findall(claude_body) == [expected]
+    assert (ROOT / expected).is_file()
+    tasks = ROOT / feature_directory / "tasks.md"
+    assert tasks.is_file()
+    assert "- [ ]" in tasks.read_text(encoding="utf-8")

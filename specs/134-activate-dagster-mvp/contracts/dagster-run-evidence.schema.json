@@ -18,15 +18,21 @@
     "runSummary": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["run_id", "commit_sha", "started", "finished", "trigger", "tables", "run_status"],
+      "required": ["run_id", "commit_sha", "started", "finished", "trigger", "tables", "run_status", "workspace_dirty", "records_sha256", "input_artifacts"],
       "properties": {
-        "run_id": { "type": "string", "minLength": 1 },
+        "run_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
         "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
         "started": { "type": "string", "format": "date-time" },
         "finished": { "type": "string", "format": "date-time" },
         "trigger": { "enum": ["schedule", "sensor", "manual-CI"] },
         "tables": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "run_status": { "enum": ["succeeded", "failed"] }
+        "run_status": { "enum": ["succeeded", "failed"] },
+        "workspace_dirty": { "type": "boolean" },
+        "records_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "input_artifacts": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
       }
     },
     "assetRecord": {
@@ -34,7 +40,7 @@
       "additionalProperties": false,
       "required": ["run_id", "asset", "table", "gate_command", "exit_code", "measured", "outcome", "blocking_reason", "owner", "ts"],
       "properties": {
-        "run_id": { "type": "string", "minLength": 1 },
+        "run_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
         "asset": {
           "enum": [
             "raw_source_file",

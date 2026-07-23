@@ -11,6 +11,12 @@ binds_to:
     - "quantity"
   pii_sensitive: false
 
+# Machine-readable base-measure definition (L3 contract<->DAX drift check).
+definition:
+  kind: base
+  aggregation: sum
+  filter: []
+
 readiness:
   status: "pass"
   evidence:

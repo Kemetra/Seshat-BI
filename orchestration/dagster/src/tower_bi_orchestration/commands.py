@@ -11,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from seshat.dagster_adapter.redaction import redact_text
+from seshat.dagster_adapter.redaction import redact_and_tail
 
 _TAIL_CHARS = 2000
 
@@ -19,6 +19,20 @@ _TAIL_CHARS = 2000
 def checker_argv() -> list[str]:
     """The static governance gate -- identical to CI's ``seshat check``."""
     return [sys.executable, "-m", "seshat.cli", "check"]
+
+
+def semantic_argv() -> list[str]:
+    """The complete contract-to-TMDL binding gate."""
+    return [
+        sys.executable,
+        "-m",
+        "seshat.cli",
+        "semantic-check",
+        "--repo",
+        ".",
+        "--metrics-dir",
+        "mappings",
+    ]
 
 
 def validate_argv(table: str) -> list[str]:
@@ -50,4 +64,4 @@ def run_gate_command(argv: list[str], cwd: Path) -> tuple[int, str]:
         timeout=1800,
     )
     combined = (proc.stdout or "") + ("\n" + proc.stderr if proc.stderr else "")
-    return proc.returncode, redact_text(combined[-_TAIL_CHARS:].strip())
+    return proc.returncode, redact_and_tail(combined, _TAIL_CHARS)

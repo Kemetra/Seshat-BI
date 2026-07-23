@@ -78,7 +78,7 @@ def test_action_is_relayed_never_synthesized(tmp_path: Path) -> None:
     assert "next_surface" not in scope["prioritized_next_action"]["action"]
 
 
-def test_clean_scope_gets_its_own_terminal_next_action(tmp_path: Path) -> None:
+def test_terminal_scope_relays_its_live_validation_stop(tmp_path: Path) -> None:
     write_readiness_status(
         tmp_path,
         "scope_alpha",
@@ -106,7 +106,8 @@ def test_clean_scope_gets_its_own_terminal_next_action(tmp_path: Path) -> None:
 
     assert scope["prioritized_next_action"]["category"] == "readiness"
     assert scope["prioritized_next_action"]["action"] == expected
-    assert "all seven" in expected.lower() or "no pipeline action" in expected.lower()
+    assert expected.startswith("STOP")
+    assert "retail validate" in expected
 
 
 def test_two_scopes_tying_on_the_top_category_both_surface_their_own_action(

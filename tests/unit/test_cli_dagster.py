@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from seshat.cli import parser_dagster
 from seshat.cli.parser import _build_parser
 from seshat.dagster_adapter import PINNED_DAGSTER
 
@@ -22,11 +23,15 @@ pytestmark = pytest.mark.unit
 
 
 class TestParserRegistration:
+    def test_dagster_parser_family_is_extracted(self) -> None:
+        assert callable(parser_dagster.add_dagster_parsers)
+
     def test_dagster_family_parses(self) -> None:
         parser = _build_parser()
-        args = parser.parse_args(["dagster", "doctor"])
+        args = parser.parse_args(["dagster", "doctor", "--live-readiness"])
         assert args.command == "dagster"
         assert args.dagster_cmd == "doctor"
+        assert args.live_readiness is True
         args = parser.parse_args(
             ["dagster", "run", "--job", "through_gold_job", "--table", "demo_table"]
         )
@@ -60,7 +65,7 @@ class TestLazyImportGuard:
 
 
 def _args(**kwargs) -> types.SimpleNamespace:
-    base = {"repo": ".", "as_json": False}
+    base = {"repo": ".", "as_json": False, "live_readiness": False}
     base.update(kwargs)
     return types.SimpleNamespace(**base)
 
@@ -158,23 +163,25 @@ class TestDoctorLoadsDotenv:
     def test_run_propagates_dotenv_to_the_child_environment(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, _no_dsn: None
     ) -> None:
-        """`run` is the verb that actually touches the DB (via the child process
-        reading ``env = dict(os.environ)``). Pin that the workspace `.env` is
-        applied for its body -- a single wrap on `run` must cover BOTH the doctor
-        preflight and the runner child env, or #348 silently reopens for `run`."""
+        """`run` is the verb that actually touches the DB through a governed
+        child environment. Pin that the workspace `.env` is applied for its body
+        -- a single wrap on `run` must cover BOTH the doctor preflight and the
+        runner child env, or #348 silently reopens for `run`."""
         from seshat.cli.commands.dagster import dagster_main
         from seshat.dagster_adapter import doctor, evidence, runner
 
         root = _green_repo(tmp_path)
         (root / ".env").write_text(
-            "ANALYTICS_DB_HOST=child.example\n", encoding="utf-8"
+            "ANALYTICS_DB_HOST=child.example\nUNRELATED_REVIEW_SECRET=must-not-cross\n",
+            encoding="utf-8",
         )
         monkeypatch.setattr(doctor, "run_doctor", lambda r: [])  # no blockers
         seen: dict[str, str | None] = {}
 
         def _capture_env(r, job, table=None, source_mode=None):
-            # The runner snapshots os.environ here; capture what it would inherit.
-            seen["ANALYTICS_DB_HOST"] = os.environ.get("ANALYTICS_DB_HOST")
+            child_env = runner._child_env(r, "run-x", table, "csv")
+            seen["ANALYTICS_DB_HOST"] = child_env.get("ANALYTICS_DB_HOST")
+            seen["UNRELATED_REVIEW_SECRET"] = child_env.get("UNRELATED_REVIEW_SECRET")
             return runner.RunResult(run_id="run-x", exit_code=0, output="")
 
         monkeypatch.setattr(runner, "execute_run", _capture_env)
@@ -191,8 +198,9 @@ class TestDoctorLoadsDotenv:
             )
         )
 
-        # The .env value is visible in os.environ at the moment the child is spawned.
+        # Governed .env values cross the process boundary; arbitrary ones do not.
         assert seen["ANALYTICS_DB_HOST"] == "child.example"
+        assert seen["UNRELATED_REVIEW_SECRET"] is None
 
     def test_exception_redacts_dotenv_secret_before_overlay_teardown(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys, _no_dsn: None

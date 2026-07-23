@@ -35,6 +35,9 @@ def _scope_lines(scope: dict) -> list[str]:
     lines = [
         f"{scope['scope_id']} ({scope['source_path']})",
         f"  current_stage: {scope['current_stage']}",
+        f"  contract_binding_state: {scope['contract_binding_state']}",
+        f"  live_validation_state: {scope['live_validation_state']}",
+        f"  last_dagster_run: {scope['last_dagster_run']}",
     ]
     lines.extend(_dimension_line(dim) for dim in scope.get("dimensions", []))
     lines.extend(

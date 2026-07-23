@@ -11,6 +11,12 @@ binds_to:
     - "transaction_id"
   pii_sensitive: false
 
+# Machine-readable base-measure definition (L3 contract<->DAX drift check).
+definition:
+  kind: base
+  aggregation: count_rows
+  filter: []
+
 readiness:
   status: "pass"
   evidence:

@@ -21,6 +21,8 @@ from __future__ import annotations
 import argparse
 
 from .parser_adoption import _add_adopt_pbip_parser
+from .parser_core import add_core_parsers
+from .parser_dagster import add_dagster_parsers
 from .parser_dbt import _add_dbt_parser
 from .parser_ecosystem import (
     _add_agent_parser,
@@ -31,86 +33,7 @@ from .parser_ecosystem import (
     _add_passport_parser,
     _add_watch_parser,
 )
-
-
-def _add_init_project_parser(sub: argparse._SubParsersAction) -> None:
-    """`init-project` (spec 107, roadmap M3): scaffold a FRESH, empty Retail-BI
-    project workspace for a new user -- distinct from `init` (which bootstraps
-    `.seshat/` into an EXISTING repo). Pure stdlib filesystem; no DB/network;
-    never prompts. Deliberately does NOT bootstrap `.seshat/` (see
-    src/seshat/workspace_init.py for why). Extracted to keep `_build_parser`
-    from growing (CodeScene large-method guard)."""
-    p = sub.add_parser(
-        "init-project",
-        help=(
-            "scaffold a fresh, empty Retail-BI project workspace for a new user "
-            "(mappings/, warehouse/migrations/, powerbi/, reports/, "
-            "evidence/, README.md, .env.example) -- no wizard"
-        ),
-    )
-    p.add_argument(
-        "name", metavar="NAME", help="workspace directory to create (under the CWD)"
-    )
-    p.add_argument(
-        "--force",
-        action="store_true",
-        help=(
-            "scaffold into an existing non-empty target; overwrites only the "
-            "scaffold's own files (README.md, .env.example, .gitignore, "
-            ".gitattributes, .gitkeep), never touches or deletes any other file"
-        ),
-    )
-
-
-def _add_scaffold_source_parser(sub: argparse._SubParsersAction) -> None:
-    """`scaffold-source <table>` (issue #339): write the three Stage-1 blank
-    templates (source-profile.md, readiness-status.yaml, source-map.yaml) into
-    mappings/<table>/ from bundled package data, so a pip-only user has the
-    Source-Ready artifacts to fill. Per-file non-destructive; no wizard.
-    Extracted (mirrors `_add_init_project_parser`) to keep `_build_parser` from
-    growing (CodeScene large-method guard)."""
-    p = sub.add_parser(
-        "scaffold-source",
-        help=(
-            "write the three Stage-1 blank templates (source-profile.md, "
-            "readiness-status.yaml, source-map.yaml) into mappings/<table>/ "
-            "so a fresh workspace has the Source-Ready artifacts to fill"
-        ),
-    )
-    p.add_argument(
-        "table",
-        metavar="TABLE",
-        help="table id / mapping folder name to scaffold under mappings/",
-    )
-    p.add_argument("--repo", default=".", help="repo root to scaffold into")
-
-
-def _add_status_parser(sub: argparse._SubParsersAction) -> None:
-    """`status` (spec 109, roadmap M4, under ratified Option B): the ONE
-    sanctioned CLI addition -- a thin, READ-ONLY JSON projection of committed
-    ``mappings/*/readiness-status.yaml`` state. NOT a new computation; NOT a
-    broad verb surface. Extracted (mirrors ``_add_init_project_parser``) to
-    keep ``_build_parser`` from growing (CodeScene large-method guard)."""
-    p = sub.add_parser(
-        "status",
-        help=(
-            "read-only projection of committed readiness state (per-table "
-            "current_stage, evidence[], blocking_reasons[], next_action) -- "
-            "the agent-control status surface (spec 109)"
-        ),
-    )
-    p.add_argument("--repo", default=".", help="repo root to project status from")
-    p.add_argument(
-        "--format",
-        dest="output_format",
-        choices=("text", "json"),
-        default="text",
-        help=(
-            "'text' (default) is human-readable and additive. 'json' emits the "
-            "stable machine surface validated by "
-            "schemas/agent-status.schema.json -- never a numeric score."
-        ),
-    )
+from .parser_validation import add_validation_parsers
 
 
 def _add_dashboard_parser(sub: argparse._SubParsersAction) -> None:
@@ -134,109 +57,6 @@ def _add_dashboard_parser(sub: argparse._SubParsersAction) -> None:
         dest="no_open",
         action="store_true",
         help="write the file but do not open it in a browser",
-    )
-
-
-def _add_next_parser(sub: argparse._SubParsersAction) -> None:
-    """`next` (spec 080 + Agent-Driven v0.1): read-only run-next readiness
-    answer. With --table (text/json) it is the original per-table response;
-    without --table, or with --format agent, it emits the agent-facing
-    next-action document (current_stage, readiness_state, evidence,
-    blocking_reasons, next_allowed_action, forbidden_scope,
-    validation_commands, stop_point). It never writes, executes, approves, or
-    emits a numeric readiness value."""
-    p = sub.add_parser(
-        "next",
-        help=(
-            "read-only run-next answer: next action, blocker, approval "
-            "requirement, terminal pass, or input defect; without --table (or "
-            "with --format agent) emits the agent-facing next-action document"
-        ),
-    )
-    p.add_argument("--repo", default=".", help="repo root to read from")
-    p.add_argument(
-        "--table",
-        default=None,
-        help=(
-            "table identity to inspect (matches readiness-status table, source_id, "
-            "or mappings/<table>/ directory); omit for the repo-level agent "
-            "document focused on the most urgent table"
-        ),
-    )
-    p.add_argument(
-        "--format",
-        dest="output_format",
-        choices=("text", "json", "agent"),
-        default="text",
-        help=(
-            "'text' (default) is human-readable; 'json' emits the stable "
-            "response; 'agent' emits the guarded agent-facing document"
-        ),
-    )
-
-
-def _add_approvals_parser(sub: argparse._SubParsersAction) -> None:
-    """`approvals`: read-only inbox for missing/invalid approval seams."""
-    p = sub.add_parser(
-        "approvals",
-        help=(
-            "read-only approval inbox over mappings/*/readiness-status.yaml; "
-            "reports missing or invalid named-human approvals"
-        ),
-    )
-    p.add_argument("--repo", default=".", help="repo root to read from")
-    p.add_argument(
-        "--format",
-        dest="output_format",
-        choices=("text", "json"),
-        default="text",
-        help="'text' (default) is human-readable; 'json' emits the inbox document.",
-    )
-
-
-def _add_evidence_pack_parser(sub: argparse._SubParsersAction) -> None:
-    """`evidence-pack`: read-only 10-section evidence pack preview."""
-    p = sub.add_parser(
-        "evidence-pack",
-        help=(
-            "read-only 10-section evidence pack preview for one table; "
-            "surfaces section blockers and publish_ready state"
-        ),
-    )
-    p.add_argument("--repo", default=".", help="repo root to read from")
-    p.add_argument(
-        "--table",
-        required=True,
-        help=(
-            "table identity to inspect (matches readiness-status table, source_id, "
-            "or mappings/<table>/ directory)"
-        ),
-    )
-    p.add_argument(
-        "--format",
-        dest="output_format",
-        choices=("text", "json"),
-        default="text",
-        help="'text' (default) is human-readable; 'json' emits the pack document.",
-    )
-
-
-def _add_blockers_parser(sub: argparse._SubParsersAction) -> None:
-    """`blockers`: read-only explanations for recorded readiness blockers."""
-    p = sub.add_parser(
-        "blockers",
-        help=(
-            "read-only blocker explainer over mappings/*/readiness-status.yaml; "
-            "categorizes blockers and names the next surface"
-        ),
-    )
-    p.add_argument("--repo", default=".", help="repo root to read from")
-    p.add_argument(
-        "--format",
-        dest="output_format",
-        choices=("text", "json"),
-        default="text",
-        help="'text' (default) is human-readable; 'json' emits the blocker document.",
     )
 
 
@@ -437,211 +257,6 @@ def _add_gap_detector_parser(sub: argparse._SubParsersAction) -> None:
         choices=("text", "json"),
         default="text",
         help="'text' (default) is human-readable; 'json' emits the inventory document.",
-    )
-
-
-def _add_check_parser(sub: argparse._SubParsersAction) -> None:
-    """`check`: static governance checks. Extracted from ``_build_parser`` (with
-    ``validate``/``semantic-check``/``value-check``/``demo``) to shrink the
-    CodeScene Large-Method hotspot without changing any flag/help text."""
-    check = sub.add_parser("check", help="run static governance checks")
-    check.add_argument("--repo", default=".", help="repo root to check")
-    check.add_argument(
-        "--commit-range",
-        dest="commit_range",
-        default=None,
-        metavar="ORIGIN..HEAD",
-        help="CI mode: git commit range to scope commit-aware rules (P2).",
-    )
-    check.add_argument(
-        "--commit-msg-file",
-        dest="commit_msg_file",
-        default=None,
-        metavar="PATH",
-        help="commit-msg-hook mode: file holding the incoming commit message (P2).",
-    )
-    check.add_argument(
-        "--format",
-        dest="output_format",
-        choices=("text", "json", "review", "sarif"),
-        default="text",
-        help=(
-            "findings output format. 'text' (default) is the human-readable "
-            "[severity] id message (locator) lines, unchanged. 'json' emits one "
-            "structured document for tooling; 'review' adds changed-state and a "
-            "stable digest; 'sarif' emits SARIF 2.1.0. Exit policy is identical."
-        ),
-    )
-
-
-def _add_validate_parser(sub: argparse._SubParsersAction) -> None:
-    """`validate`: LIVE data checks (feature 004). Needs a running DB + the
-    optional `db` extra (psycopg2). The driver is imported LAZILY in
-    _run_validate, never here, so `retail check` and CI (no driver installed)
-    never import it. Connection is host-agnostic: ANY Postgres (local / remote /
-    DigitalOcean / other) via a DSN -- from --dsn, or DATABASE_URL, or the
-    ANALYTICS_DB_* parts."""
-    validate = sub.add_parser(
-        "validate",
-        help="run LIVE data checks against any Postgres DB (needs the 'db' extra)",
-    )
-    validate.add_argument(
-        "--dsn",
-        default=None,
-        metavar="postgresql://...",
-        help=(
-            "Postgres connection string. Overrides env. If omitted, DATABASE_URL "
-            "or the ANALYTICS_DB_* env vars are used. NEVER commit a real DSN."
-        ),
-    )
-    validate.add_argument(
-        "--source-map",
-        dest="source_map",
-        default=None,
-        metavar="PATH",
-        help=(
-            "Path to a filled source-map.yaml. When given (with a DSN + the 'db' "
-            "extra), the four live checks run against that table's targets. "
-            "Without it, validate reports the deferred state."
-        ),
-    )
-
-
-def _add_profile_parser(sub: argparse._SubParsersAction) -> None:
-    """`profile` (#400): run the mechanical Stage-1 profiler over a read-only
-    connection and emit the numbers the blank ``source-profile.md`` asks for
-    (row/column count, per-column ''-OR-NULL missingness, distinct cardinality,
-    and the candidate-PK uniqueness proof). This is the CLI entry point for
-    ``seshat.profile.profile`` -- previously reachable only by importing an
-    internal from inside the pipx venv. Needs a running DB + the optional `db`
-    extra; the driver is imported LAZILY in ``run_profile``, never here, so the
-    stdlib-only ``check`` core is unaffected."""
-    profile = sub.add_parser(
-        "profile",
-        help="profile a landed (bronze) table for the Source Ready source-profile.md "
-        "(needs a DSN + the 'db' extra)",
-    )
-    profile.add_argument(
-        "--table",
-        required=True,
-        metavar="schema.table",
-        help="the landed table to profile, schema-qualified, e.g. "
-        "`bronze.sales_c086_raw`. An unqualified name is rejected: column "
-        "discovery and the row/PK queries would resolve to different schemas "
-        "on non-Postgres engines.",
-    )
-    profile.add_argument(
-        "--pk",
-        required=True,
-        metavar="col[,col...]",
-        help="the candidate grain key to prove unique on the landed data; "
-        "comma-separate a composite, e.g. `invoice_id,line_no`.",
-    )
-    profile.add_argument(
-        "--dsn",
-        default=None,
-        metavar="postgresql://...",
-        help=(
-            "Postgres connection string. Overrides env. If omitted, DATABASE_URL "
-            "or the ANALYTICS_DB_* env vars are used. NEVER commit a real DSN."
-        ),
-    )
-    profile.add_argument(
-        "--format",
-        dest="output_format",
-        choices=("md", "json"),
-        default="md",
-        help="'md' (default) emits the source-profile.md blocks to paste; "
-        "'json' emits the machine-readable ProfileResult.",
-    )
-
-
-def _add_drift_parser(sub: argparse._SubParsersAction) -> None:
-    """`drift` (F014): compare a committed baseline source-profile.md against a
-    live observed re-profile and emit source-drift-findings. Two-mode like
-    `validate`: without --dsn (no observed re-profile) it reports the deferred
-    [PENDING LIVE RE-PROFILE] state + warning, never a fabricated diff. The DB
-    driver is imported LAZILY in run_drift, never here. Extracted (not inlined
-    into `_build_parser`) to keep that CodeScene Large-Method hotspot from
-    growing."""
-    drift = sub.add_parser(
-        "drift",
-        help="compare a baseline source-profile.md vs a live re-profile (F014); "
-        "needs --dsn + the 'db' extra for the live leg",
-    )
-    drift.add_argument(
-        "--baseline",
-        required=True,
-        metavar="PATH",
-        help="path to the committed source-profile.md that earned Source Ready pass",
-    )
-    drift.add_argument(
-        "--dsn",
-        default=None,
-        metavar="postgresql://...",
-        help="Postgres DSN for the live re-profile. Without it, drift reports the "
-        "deferred [PENDING LIVE RE-PROFILE] state. NEVER commit a real DSN.",
-    )
-    drift.add_argument(
-        "--source-map",
-        dest="source_map",
-        default=None,
-        metavar="PATH",
-        help="path to the table's source-map.yaml (returns/PII rulings for the "
-        "live leg). Default: the source-map.yaml sibling of --baseline. Absent "
-        "=> the returns/PII drift classes stay silent.",
-    )
-    drift.add_argument(
-        "--format",
-        dest="output_format",
-        choices=("text", "json"),
-        default="text",
-        help="'text' (default) human summary; 'json' emits the "
-        "source-drift-findings.schema.json document.",
-    )
-
-
-def _add_semantic_and_value_check_parsers(sub: argparse._SubParsersAction) -> None:
-    """`semantic-check` (L3 contract<->DAX drift, DAX fortification Phase 1) and
-    `value-check` (L4 value proxy, DAX fortification #4). Both parse metric-
-    contract YAML lazily inside their handlers -- NOT in the stdlib-only
-    `retail check` core chain. value-check reuses the validate path's lazy
-    psycopg2 import; live-deferred by repo YAGNI: needs a DSN + the `db` extra."""
-    semantic = sub.add_parser(
-        "semantic-check",
-        help="L3 contract<->DAX denominator drift on committed metric contracts",
-    )
-    semantic.add_argument("--repo", default=".", help="repo root to check")
-    semantic.add_argument(
-        "--metrics-dir",
-        dest="metrics_dir",
-        default="mappings",
-        metavar="DIR",
-        help="root dir holding <dataset>/metrics/<Measure>.yaml contracts",
-    )
-
-    value_check = sub.add_parser(
-        "value-check",
-        help="L4: recompute metric values live and compare to the approved value",
-    )
-    value_check.add_argument(
-        "--repo", default=".", help="repo root to scan for contracts"
-    )
-    value_check.add_argument(
-        "--metrics-dir",
-        dest="metrics_dir",
-        default="mappings",
-        metavar="DIR",
-        help="root dir holding <dataset>/metrics/<Measure>.yaml contracts",
-    )
-    value_check.add_argument(
-        "--dsn",
-        default=None,
-        metavar="postgresql://...",
-        help=(
-            "Postgres connection string. Overrides env. If omitted, DATABASE_URL "
-            "or the ANALYTICS_DB_* env vars are used. NEVER commit a real DSN."
-        ),
     )
 
 
@@ -1102,77 +717,6 @@ def _add_doctor_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
-def _add_dagster_parser(sub: argparse._SubParsersAction) -> None:
-    """`dagster`: the orchestration-adapter family (spec 134). Three verbs,
-    closed argument set; exit codes 0..4 per the committed CLI contract."""
-    dagster_p = sub.add_parser(
-        "dagster",
-        help="Dagster orchestration adapter: doctor / run / evidence (spec 134)",
-    )
-    dagster_sub = dagster_p.add_subparsers(dest="dagster_cmd", required=True)
-
-    doctor_p = dagster_sub.add_parser(
-        "doctor", help="read-only preflight: environment, pinned dagster, gate state"
-    )
-    doctor_p.add_argument("--repo", default=".", help="repo root to inspect")
-    doctor_p.add_argument(
-        "--json", dest="as_json", action="store_true", help="machine-readable findings"
-    )
-
-    run_p = dagster_sub.add_parser(
-        "run", help="execute one orchestration job behind the gates (fail-closed)"
-    )
-    run_p.add_argument("--repo", default=".", help="repo root to run against")
-    run_p.add_argument(
-        "--job",
-        required=True,
-        choices=("full_sequence_job", "through_gold_job"),
-        help="the closed job vocabulary (no raw dagster arguments are accepted)",
-    )
-    run_p.add_argument(
-        "--table",
-        default=None,
-        help="scope the run to one mapped table (via the discovery seam, never argv)",
-    )
-    run_p.add_argument(
-        "--source-mode",
-        dest="source_mode",
-        default="csv",
-        choices=("csv", "existing-bronze"),
-        help=(
-            "Bronze source: 'csv' (default; a landing file OWNS/reloads bronze) "
-            "or 'existing-bronze' (non-destructive DB-first: verify a pre-loaded "
-            "bronze.<table> read-only, zero writes). #404/#405"
-        ),
-    )
-    run_p.add_argument(
-        "--json", dest="as_json", action="store_true", help="machine-readable result"
-    )
-
-    evidence_p = dagster_sub.add_parser(
-        "evidence", help="list runs or render a run's committed evidence markdown"
-    )
-    evidence_p.add_argument("--repo", default=".", help="repo root to read")
-    evidence_p.add_argument(
-        "--run-id", dest="run_id", default=None, help="render this run's evidence"
-    )
-    evidence_p.add_argument(
-        "--json", dest="as_json", action="store_true", help="machine-readable output"
-    )
-
-    init_p = dagster_sub.add_parser(
-        "init",
-        help=(
-            "materialize the governed Dagster orchestration project into this "
-            "workspace from bundled templates (never overwrites; issue #325)"
-        ),
-    )
-    init_p.add_argument("--repo", default=".", help="repo root to materialize into")
-    init_p.add_argument(
-        "--json", dest="as_json", action="store_true", help="machine-readable result"
-    )
-
-
 def _distribution_version() -> str:
     """The installed seshat-bi version, or a friendly fallback off-package."""
     from importlib.metadata import PackageNotFoundError, version
@@ -1208,11 +752,7 @@ def _build_parser(prog: str = "retail") -> argparse.ArgumentParser:
         version=f"%(prog)s {_distribution_version()}",
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    _add_check_parser(sub)
-    _add_validate_parser(sub)
-    _add_profile_parser(sub)
-    _add_drift_parser(sub)
-    _add_semantic_and_value_check_parsers(sub)
+    add_validation_parsers(sub)
     _add_generate_parser(sub)
     _add_theme_gen_parser(sub)
     _add_theme_compile_parser(sub)
@@ -1225,16 +765,12 @@ def _build_parser(prog: str = "retail") -> argparse.ArgumentParser:
     _add_severity_posture_parser(sub)
     _add_scaffold_parser(sub)
     _add_init_parser(sub)
-    _add_init_project_parser(sub)
-    _add_scaffold_source_parser(sub)
+    add_core_parsers(sub, "first_arrival", "scaffold_source")
     _add_adopt_pbip_parser(sub)
     _add_dbt_parser(sub)
-    _add_status_parser(sub)
+    add_core_parsers(sub, "status")
     _add_dashboard_parser(sub)
-    _add_next_parser(sub)
-    _add_approvals_parser(sub)
-    _add_evidence_pack_parser(sub)
-    _add_blockers_parser(sub)
+    add_core_parsers(sub, "next", "approvals", "evidence_pack", "blockers")
     _add_orchestration_assess_parser(sub)
     _add_pii_notice_parser(sub)
     _add_approver_view_parser(sub)
@@ -1251,7 +787,7 @@ def _build_parser(prog: str = "retail") -> argparse.ArgumentParser:
     _add_impact_map_parser(sub)
     _add_agent_parser(sub)
     _add_watch_parser(sub)
-    _add_dagster_parser(sub)
+    add_dagster_parsers(sub)
     _add_mcp_parser(sub)
 
     return parser

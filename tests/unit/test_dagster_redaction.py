@@ -77,6 +77,24 @@ class TestRedactText:
         assert redaction.redact_text(text) == text
 
 
+class TestRedactAndTail:
+    def test_removes_partial_dsn_before_slicing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(redaction, "_secret_env_values", lambda: [])
+        secret = "postgresql://alice:s3cretpw@db.example.internal/gold"
+        raw_tail = secret[-40:]
+        assert "://" not in raw_tail and "s3cretpw" in raw_tail
+
+        cleaned = redaction.redact_and_tail(secret, 40)
+
+        assert "s3cretpw" not in cleaned
+        assert "REDACTED" in cleaned
+
+    def test_zero_limit_is_empty(self) -> None:
+        assert redaction.redact_and_tail("visible", 0) == ""
+
+
 class TestRedactionRobustness357:
     """#357: an explicit SECRET-key set replaces the 'ANALYTICS_DB_* prefix minus
     enumerated non-secret allowlist' + len>=4 gate. Config keys are non-secret by

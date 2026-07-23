@@ -4,6 +4,8 @@ from pathlib import Path
 import pytest
 
 from seshat import cli, registry
+from seshat.cli import parser_core, parser_validation
+from seshat.cli.parser import _build_parser
 
 
 @pytest.fixture(autouse=True)
@@ -24,6 +26,21 @@ def _init_repo(tmp_path: Path) -> None:
     subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
     (tmp_path / "a.sql").write_text("select 1\n", encoding="utf-8")
     subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True, capture_output=True)
+
+
+@pytest.mark.unit
+def test_parser_family_modules_preserve_core_and_validation_defaults() -> None:
+    """The parser stays assembled centrally while family builders stay import-pure."""
+    parser = _build_parser()
+
+    status = parser.parse_args(["status"])
+    semantic = parser.parse_args(["semantic-check"])
+
+    assert callable(parser_core.add_core_parsers)
+    assert callable(parser_validation.add_validation_parsers)
+    assert status.output_format == "text"
+    assert semantic.metrics_dir == "mappings"
+    assert semantic.include_untracked is False
 
 
 @pytest.mark.unit

@@ -63,7 +63,7 @@ approvals:
 APPROVAL_ROW = """  - stage: "{stage}"
     owner: "Named Human ({role})"
     at: "2026-06-25"
-    note: "recorded by a named human"
+    note: "{note}"
 """
 
 
@@ -90,10 +90,14 @@ def make_fixture_repo(
         ),
         encoding="utf-8",
     )
-    approvals = APPROVAL_ROW.format(stage="mapping_ready", role="data_owner")
+    approvals = APPROVAL_ROW.format(
+        stage="mapping_ready", role="data_owner", note="recorded by a named human"
+    )
     if semantic_approved:
         approvals += APPROVAL_ROW.format(
-            stage="semantic_model_ready", role="metric_owner"
+            stage="semantic_model_ready",
+            role="metric_owner",
+            note="approved metric contract AMetric",
         )
     (table_dir / "readiness-status.yaml").write_text(
         READINESS_TEMPLATE.format(
@@ -105,8 +109,19 @@ def make_fixture_repo(
         encoding="utf-8",
     )
     (table_dir / "metrics").mkdir()
-    (table_dir / "metrics" / "a-metric.yaml").write_text(
-        "metric: A\n", encoding="utf-8"
+    (table_dir / "metrics" / "AMetric.yaml").write_text(
+        'name: "AMetric"\n'
+        "owner: metric_owner\n"
+        f'binds_to: {{gold_table: "gold.{TABLE}"}}\n'
+        "definition:\n"
+        "  additive: true\n"
+        "  numerator: {aggregation: sum, filter: []}\n"
+        "  denominator: null\n"
+        "readiness:\n"
+        '  status: "pass"\n'
+        '  evidence: ["approved by M. Owner (metric_owner) on 2026-01-01"]\n'
+        "  blocking_reasons: []\n",
+        encoding="utf-8",
     )
     (table_dir / "design").mkdir()
     (table_dir / "design" / "layout.md").write_text("# layout\n", encoding="utf-8")

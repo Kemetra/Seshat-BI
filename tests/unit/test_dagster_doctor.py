@@ -94,6 +94,17 @@ def test_open_gate_is_a_warning_not_a_blocker(tmp_path: Path) -> None:
     assert "demo_table" in gate_findings[0].message
 
 
+def test_no_mapped_tables_refuses_orchestration(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    (root / "mappings" / "demo_table" / "source-map.yaml").unlink()
+
+    findings = doctor.run_doctor(root)
+
+    no_tables = next(finding for finding in findings if finding.id == "DAG-TBL-01")
+    assert no_tables.severity == "blocker"
+    assert doctor.has_blockers(findings) is True
+
+
 def test_uncommitted_gate_artifact_names_the_commit_remedy(tmp_path: Path) -> None:
     """The `_repo` fixture is deliberately NOT a git repo, so its CLEARED
     mirror reads as UNCOMMITTED (#334): the doctor must name the commit
@@ -122,3 +133,149 @@ def test_absent_dsn_is_a_warning_and_present_dsn_is_never_echoed(
     dsn_findings = [f for f in findings if f.id == "DAG-DSN-01"]
     assert not dsn_findings  # warning cleared
     assert all(secret not in f.message + f.remedy for f in findings)
+
+
+def test_dbt_runtime_probe_reads_windows_metadata_without_execution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    metadata = (
+        root
+        / "orchestration"
+        / "dagster"
+        / ".venv"
+        / "Lib"
+        / "site-packages"
+        / "dbt_core-1.12.0.dist-info"
+        / "METADATA"
+    )
+    metadata.parent.mkdir(parents=True)
+    metadata.write_text("Name: dbt-core\n", encoding="utf-8")
+    monkeypatch.setattr(
+        doctor,
+        "orchestration_python",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("doctor looked up an executable probe")
+        ),
+    )
+
+    assert doctor._dbt_runtime_present(root) is True
+
+
+def test_dbt_runtime_probe_reads_posix_metadata_without_an_interpreter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path, venv=False)
+    metadata = (
+        root
+        / "orchestration"
+        / "dagster"
+        / ".venv"
+        / "lib"
+        / "python3.13"
+        / "site-packages"
+        / "dbt_core-1.12.0.dist-info"
+        / "METADATA"
+    )
+    metadata.parent.mkdir(parents=True)
+    metadata.write_text("Name: dbt-core\n", encoding="utf-8")
+    monkeypatch.setattr(
+        doctor,
+        "orchestration_python",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("doctor looked up an executable probe")
+        ),
+    )
+
+    assert doctor._dbt_runtime_present(root) is True
+
+
+def test_dbt_runtime_probe_is_false_without_metadata(tmp_path: Path) -> None:
+    assert doctor._dbt_runtime_present(_repo(tmp_path)) is False
+
+
+def test_live_readiness_reports_engine_driver_and_credentials_without_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    secret = "postgresql://reader:never-print@db.internal/warehouse"
+    monkeypatch.setenv("DATABASE_URL", secret)
+    monkeypatch.setattr(doctor, "_driver_metadata_present", lambda root, engine: True)
+
+    findings = doctor.live_readiness_findings(_repo(tmp_path))
+
+    assert {finding.id for finding in findings} >= {
+        "DAG-LIVE-ENGINE-00",
+        "DAG-LIVE-CRED-00",
+        "DAG-LIVE-DRIVER-00",
+        "DAG-LIVE-00",
+    }
+    assert all(secret not in finding.message + finding.remedy for finding in findings)
+    assert next(f for f in findings if f.id == "DAG-LIVE-00").state == "available"
+
+
+def test_live_readiness_is_pending_without_credentials_or_driver(
+    tmp_path: Path,
+) -> None:
+    findings = doctor.live_readiness_findings(_repo(tmp_path))
+
+    assert next(f for f in findings if f.id == "DAG-LIVE-CRED-01").state == "missing"
+    assert next(f for f in findings if f.id == "DAG-LIVE-00").state == "pending_live"
+
+
+def test_blank_engine_setting_defaults_to_postgres(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ANALYTICS_DB_ENGINE", "  ")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://reader:redacted@host/db")
+    monkeypatch.setattr(doctor, "_driver_metadata_present", lambda root, engine: True)
+
+    findings = doctor.live_readiness_findings(_repo(tmp_path))
+
+    engine = next(f for f in findings if f.id == "DAG-LIVE-ENGINE-00")
+    assert "postgres selected" in engine.message
+    assert next(f for f in findings if f.id == "DAG-LIVE-00").state == "available"
+
+
+def test_live_driver_probe_reads_only_the_dagster_venv_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    metadata = (
+        root
+        / "orchestration"
+        / "dagster"
+        / ".venv"
+        / "Lib"
+        / "site-packages"
+        / "psycopg2_binary-2.9.10.dist-info"
+        / "METADATA"
+    )
+    metadata.parent.mkdir(parents=True)
+    metadata.write_text("Name: psycopg2-binary\n", encoding="utf-8")
+    monkeypatch.setenv("DATABASE_URL", "postgresql://reader:redacted@host/db")
+
+    findings = doctor.live_readiness_findings(root)
+
+    assert next(f for f in findings if f.id == "DAG-LIVE-DRIVER-00").state == (
+        "available"
+    )
+    assert next(f for f in findings if f.id == "DAG-LIVE-00").state == "available"
+
+
+def test_live_readiness_invalid_engine_never_connects(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ANALYTICS_DB_ENGINE", "unknown-engine")
+    from seshat.dialect import PostgresDialect
+
+    monkeypatch.setattr(
+        PostgresDialect,
+        "connect",
+        lambda *args: (_ for _ in ()).throw(AssertionError("must not connect")),
+    )
+
+    findings = doctor.live_readiness_findings(_repo(tmp_path))
+
+    overall = next(f for f in findings if f.id == "DAG-LIVE-00")
+    assert overall.state == "invalid"
+    assert "unknown-engine" not in overall.message

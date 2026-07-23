@@ -5,10 +5,10 @@ Three invariants, each sitting ON its risk (not adjacent to it):
 1. Asset dependency TOPOLOGY is unchanged (FR-005): the silver/gold/live edges
    are asserted POSITIVELY from the built assets -- a body change to _build_layer
    cannot perturb them.
-2. A real dbt-engine evidence record CONFORMS to the unchanged run-evidence
+2. A real dbt-engine evidence record CONFORMS to the canonical run-evidence
    schema (FR-008): only gate_command / measured contents differ; the record
    built through the PRODUCTION _measured_from_result validates against the
-   committed schema mirror, and the committed schema file is byte-unchanged.
+   committed schema mirror, and its specification copy stays byte-identical.
 3. STATIC no-bypass oracle (R5): no module under tower_bi_orchestration imports a
    dagster_dbt execution API (DbtCliResource / @dbt_assets) or invokes dbt
    directly; the bridge reaches dbt ONLY through the governed seshat entry point.
@@ -16,7 +16,6 @@ Three invariants, each sitting ON its risk (not adjacent to it):
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 from conftest import TABLE
@@ -95,6 +94,9 @@ def test_dbt_engine_record_conforms_to_the_unchanged_schema() -> None:
         "trigger": "manual-CI",
         "tables": ["retail_store_sales"],
         "run_status": "succeeded",
+        "workspace_dirty": False,
+        "records_sha256": "0" * 64,
+        "input_artifacts": {},
     }
     record = {
         "run_id": "run-dbt-001",
@@ -112,16 +114,13 @@ def test_dbt_engine_record_conforms_to_the_unchanged_schema() -> None:
     assert ev.validate_records(summary, [record]) == []
 
 
-def test_run_evidence_schema_file_is_byte_unchanged() -> None:
-    schema = "schemas/dagster-run-evidence.schema.json"
-    result = subprocess.run(
-        ["git", "-c", "core.fsmonitor=false", "diff", "--quiet", "HEAD", "--", schema],
-        cwd=_REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
+def test_run_evidence_schema_matches_its_specification_contract() -> None:
+    schema = _REPO_ROOT / "schemas/dagster-run-evidence.schema.json"
+    contract = (
+        _REPO_ROOT
+        / "specs/134-activate-dagster-mvp/contracts/dagster-run-evidence.schema.json"
     )
-    assert result.returncode == 0, "the run-evidence schema MUST NOT change (FR-008)"
+    assert schema.read_bytes() == contract.read_bytes()
 
 
 # --------------------------------------------------------------------------

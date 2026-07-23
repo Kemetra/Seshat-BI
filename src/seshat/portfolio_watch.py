@@ -74,7 +74,7 @@ from __future__ import annotations
 import json
 import subprocess
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .approval_inbox import build_approval_inbox
@@ -124,6 +124,12 @@ DIMENSIONS: tuple[str, ...] = (
     "readiness",
     "approvals",
     "review",
+)
+
+CONTRACT_BINDING_STATES = frozenset({"missing", "blocked", "verified"})
+LIVE_VALIDATION_STATES = frozenset({"pending_live", "blocked", "stale", "verified"})
+LAST_DAGSTER_RUN_STATES = frozenset(
+    {"unavailable", "invalid", "failed", "stale", "verified"}
 )
 
 _SOURCE_SURFACE: dict[str, str] = {
@@ -350,6 +356,191 @@ def _is_stale_captured_at(captured_at: object, source_revision: str | None) -> b
         and bool(captured_at)
         and captured_at != source_revision
     )
+
+
+def _scope_dir(root: Path, scope: GovernedScope) -> Path:
+    return root / Path(scope.source_path).parent
+
+
+def _semantic_inputs(root: Path, scope_dir: str) -> tuple[tuple[Path, ...], bool]:
+    """Return committed semantic paths and whether their worktree is dirty."""
+    from .cli.commands.semantic import _semantic_files
+    from .gitutil import git_output
+
+    inputs = _semantic_files(root, include_untracked=False)
+    try:
+        dirty = bool(
+            git_output(
+                root,
+                "status",
+                "--porcelain",
+                "--untracked-files=all",
+                "--",
+                f"mappings/{scope_dir}/metrics",
+                f"mappings/{scope_dir}/readiness-status.yaml",
+                "powerbi",
+            )
+        )
+    except RuntimeError:
+        dirty = False
+    return inputs, dirty
+
+
+def _tmdl_measure_bindings(paths: tuple[Path, ...]) -> set[tuple[str, str]]:
+    """Table-scoped model measures, using the semantic-check identity."""
+    from .metric_contract_inventory import normalize_table_binding
+    from .tmdl import parse_tmdl
+
+    bindings: set[tuple[str, str]] = set()
+    for path in paths:
+        if path.suffix != ".tmdl":
+            continue
+        try:
+            table = parse_tmdl(path.read_text(encoding="utf-8-sig"))
+        except OSError:
+            continue
+        if table is not None:
+            table_name = normalize_table_binding(table.name)
+            bindings.update((table_name, measure.name) for measure in table.measures)
+    return bindings
+
+
+def contract_binding_state(
+    repo_root: Path | str,
+    scope_dir: str,
+    semantic_finding: CoveredDimensionFinding | None = None,
+) -> str:
+    """Categorize one scope's metric contracts without granting an approval.
+
+    The inventory is the shared Task-5 reader; this merely checks whether its
+    approved names bind the model measures.  A supplied semantic finding must
+    be a clean, current covered record before the portfolio calls it verified.
+    """
+    from .metric_contract_inventory import load_contract_inventory
+
+    root = Path(repo_root).resolve()
+    metrics_dir = root / "mappings" / scope_dir / "metrics"
+    if not metrics_dir.is_dir():
+        return "missing"
+    inputs, dirty = _semantic_inputs(root, scope_dir)
+    if dirty:
+        return "blocked"
+    contract_paths = tuple(
+        path
+        for path in inputs
+        if path.suffix == ".yaml" and path.is_relative_to(metrics_dir)
+    )
+    if not contract_paths:
+        return "missing"
+    inventory = load_contract_inventory(contract_paths, root)
+    if inventory.errors or not inventory.approved:
+        return "blocked"
+    contracts = inventory.for_scope(scope_dir)
+    contract_bindings = {contract.binding for contract in contracts.values()}
+    model_bindings = _tmdl_measure_bindings(inputs)
+    bound_tables = {table for table, _measure in contract_bindings}
+    scoped_model_bindings = {
+        binding for binding in model_bindings if binding[0] in bound_tables
+    }
+    if not contract_bindings or contract_bindings != scoped_model_bindings:
+        return "blocked"
+    if semantic_finding is not None and (
+        semantic_finding.state != STATE_COVERED
+        or semantic_finding.class_ not in {"pass", "no_drift"}
+        or semantic_finding.items
+    ):
+        return "blocked"
+    return "verified"
+
+
+def _run_inputs_are_stale(root: Path, summary: dict[str, Any]) -> bool:
+    """Compare a verified run's recorded input digests with current files."""
+    from .dagster_adapter.evidence_digest import sha256_file
+    from .dagster_adapter.run_identity import contained_path
+
+    artifacts = summary.get("input_artifacts")
+    if not isinstance(artifacts, dict):
+        return True
+    for relative, expected_digest in artifacts.items():
+        if not isinstance(relative, str) or not isinstance(expected_digest, str):
+            return True
+        parts = PurePosixPath(relative).parts
+        if not parts or any(part in {"", ".", ".."} for part in parts):
+            return True
+        try:
+            current = contained_path(root, *parts)
+        except ValueError:
+            return True
+        if not current.is_file() or sha256_file(current) != expected_digest:
+            return True
+    return False
+
+
+def _dagster_run_states(
+    root: Path, mapping_scope: str, source_revision: str | None
+) -> tuple[str, str]:
+    """Return the latest verified run and live-validation state for a scope."""
+    from .dagster_adapter.evidence_render import load_run, validate_records
+
+    runs_root = root / ".seshat" / "dagster" / "runs"
+    if not runs_root.is_dir():
+        return "unavailable", "pending_live"
+    candidates: list[tuple[dict[str, Any], list[dict[str, Any]]]] = []
+    invalid = False
+    for directory in sorted(runs_root.iterdir()):
+        if not directory.is_dir():
+            continue
+        try:
+            summary, records = load_run(root, directory.name)
+        except (FileNotFoundError, ValueError, OSError, json.JSONDecodeError):
+            invalid = True
+            continue
+        if validate_records(summary, records):
+            invalid = True
+            continue
+        if mapping_scope in summary.get("tables", []) or any(
+            row.get("table") == mapping_scope for row in records
+        ):
+            candidates.append((summary, records))
+    if not candidates:
+        return (
+            ("invalid", "pending_live") if invalid else ("unavailable", "pending_live")
+        )
+
+    summary, records = max(
+        candidates,
+        key=lambda pair: (str(pair[0].get("finished", "")), pair[0]["run_id"]),
+    )
+    stale = bool(summary.get("workspace_dirty"))
+    stale = stale or _is_stale_captured_at(summary.get("commit_sha"), source_revision)
+    stale = stale or _run_inputs_are_stale(root, summary)
+    run_state = (
+        "stale"
+        if stale
+        else ("verified" if summary.get("run_status") == "succeeded" else "failed")
+    )
+    live_rows = [
+        row
+        for row in records
+        if row.get("table") == mapping_scope and row.get("asset") == "live_validate"
+    ]
+    if stale:
+        return run_state, "stale"
+    if not live_rows:
+        return run_state, "pending_live"
+    outcome = live_rows[-1].get("outcome")
+    if outcome == "materialized":
+        return run_state, "verified"
+    if outcome == "deferred" or outcome == "skipped":
+        return run_state, "pending_live"
+    return run_state, "blocked"
+
+
+def live_validation_state(repo_root: Path | str, mapping_scope: str) -> str:
+    """Read live-validation evidence state only; never opens a database."""
+    root = Path(repo_root).resolve()
+    _run_state, state = _dagster_run_states(root, mapping_scope, _source_revision(root))
+    return state
 
 
 @dataclass(frozen=True)
@@ -693,13 +884,20 @@ def _artifact_dims_evidenced(dims: dict[str, CoveredDimensionFinding]) -> bool:
 
 
 def _scope_document(
+    root: Path,
     scope: GovernedScope,
     entry: dict[str, Any] | None,
     dims: dict[str, CoveredDimensionFinding],
+    revision: str | None,
 ) -> dict[str, Any]:
     next_action = select_next_action(entry)
     attention, owner = _requires_attention(dims)
     open_blockers = list(entry.get("blocking_reasons", [])) if entry else []
+    scope_dir = _scope_dir(root, scope).name
+    contract_state = contract_binding_state(
+        root, scope_dir, dims["contract_metric_drift"]
+    )
+    run_state, live_state = _dagster_run_states(root, scope_dir, revision)
     return {
         "scope_id": scope.scope_id,
         "source_path": scope.source_path,
@@ -708,6 +906,12 @@ def _scope_document(
         "open_blockers": open_blockers,
         "requires_human_attention": attention,
         "owner": owner,
+        "contract_binding_state": contract_state,
+        "contract_binding_owner": "metric owner"
+        if contract_state == "blocked"
+        else None,
+        "live_validation_state": live_state,
+        "last_dagster_run": run_state,
         "prioritized_next_action": {
             "category": next_action.category,
             "action": next_action.action,
@@ -739,7 +943,7 @@ def _assemble(
         all_keys |= _dimension_keys(scope.scope_id, dims)
         if not _artifact_dims_evidenced(dims):
             scopes_with_no_evidence.append(scope.scope_id)
-        scope_docs.append(_scope_document(scope, entry, dims))
+        scope_docs.append(_scope_document(root, scope, entry, dims, revision))
 
     attention_count = sum(1 for doc in scope_docs if doc["requires_human_attention"])
 
@@ -817,6 +1021,9 @@ __all__ = [
     "DEGRADATION_STATES",
     "CHANGE_LABELS",
     "DIMENSIONS",
+    "CONTRACT_BINDING_STATES",
+    "LIVE_VALIDATION_STATES",
+    "LAST_DAGSTER_RUN_STATES",
     "STATE_COVERED",
     "STATE_PENDING_LIVE",
     "STATE_STALE",
@@ -832,6 +1039,8 @@ __all__ = [
     "ConditionChange",
     "GovernedScope",
     "enumerate_governed_scopes",
+    "contract_binding_state",
+    "live_validation_state",
     "select_next_action",
     "build_portfolio_watch_summary",
     "condition_keys_from_summary",

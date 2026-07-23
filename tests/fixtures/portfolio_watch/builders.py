@@ -100,6 +100,8 @@ def _approval_lines(approvals: list[dict[str, str]] | None) -> list[str]:
         lines.append(f'  - stage: "{entry["stage"]}"')
         lines.append(f'    owner: "{entry["owner"]}"')
         lines.append(f'    at: "{entry.get("at", "2026-01-01")}"')
+        if isinstance(entry.get("note"), str):
+            lines.append(f'    note: "{entry["note"]}"')
     return lines
 
 

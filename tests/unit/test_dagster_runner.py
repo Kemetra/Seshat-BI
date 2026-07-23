@@ -144,6 +144,34 @@ class TestExecuteRun:
             runner.execute_run(tmp_path, "full_sequence_job")
 
 
+class TestChildEnvironment:
+    def test_drops_unrelated_ambient_secrets(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setenv("UNRELATED_REVIEW_SECRET", "must-not-cross")
+        monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@h/db")
+        monkeypatch.setenv("SESHAT_DBT_HOST", "db.internal")
+
+        env = runner._child_env(tmp_path, "run-001", "orders", "csv")
+
+        assert "UNRELATED_REVIEW_SECRET" not in env
+        assert env["DATABASE_URL"] == "postgresql://u:p@h/db"
+        assert env["SESHAT_DBT_HOST"] == "db.internal"
+
+    def test_keeps_required_windows_and_tls_keys(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setenv("SYSTEMROOT", r"C:\\Windows")
+        monkeypatch.setenv("PATH", r"C:\\Python")
+        monkeypatch.setenv("SSL_CERT_FILE", r"C:\\certs\\ca.pem")
+
+        env = runner._child_env(tmp_path, "run-001", None, "csv")
+
+        assert env["SYSTEMROOT"] == r"C:\\Windows"
+        assert env["PATH"] == r"C:\\Python"
+        assert env["SSL_CERT_FILE"] == r"C:\\certs\\ca.pem"
+
+
 class TestSourceModeWiring:
     """The source mode travels via SESHAT_DAGSTER_SOURCE_MODE, never argv, set
     ONLY when non-default so the CSV child env stays byte-identical (#404/#405)."""

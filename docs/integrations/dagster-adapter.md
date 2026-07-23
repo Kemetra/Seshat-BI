@@ -200,6 +200,23 @@ git-ignored `.seshat/dagster/runs/<run-id>/` (schema
 `schemas/dagster-run-evidence.schema.json`); the committed record is the rendered
 `orchestration/dagster/run-evidence/<run-id>.md`.
 
+`seshat dagster doctor` reads project, virtual-environment, and distribution metadata only. It
+does not execute the repository's virtual-environment interpreter while probing for dbt.
+
+Use `seshat dagster doctor --live-readiness` for a stricter **non-connecting**
+live-boundary preflight. It reports only categorical engine, driver-metadata,
+credential-source, and overall states (`available`, `missing`, `invalid`, or
+`pending_live`); configured values are redacted. It never imports a database
+driver, opens a socket, or runs a query. `pending_live` means install the
+driver (`pipx inject seshat-bi psycopg2-binary` or `pip install
+"seshat-bi[db]"`) and set `DATABASE_URL` or `ANALYTICS_DB_*` in the gitignored
+`.env`, then run `retail validate` for actual proof.
+
+The downstream Dagster graph fails closed on two semantic boundaries before it reads the
+`semantic_model_ready` human approval: every table needs at least one complete owner-approved
+metric contract, and `seshat semantic-check --repo . --metrics-dir mappings` must pass. Neither
+machine check creates an approval or changes readiness state.
+
 ## The dbt engine seam (ACTIVATED as a selectable engine; spec 135)
 
 `silver_tables` / `gold_tables` have a SELECTABLE build engine (spec 135, activating the seam
@@ -267,6 +284,11 @@ The adapter reads credentials from the git-ignored `.env` only (e.g. `DATABASE_U
 `ANALYTICS_DB_*` set); the only committed connection file is a `profiles.example.yml` /
 `.env.example` carrying PLACEHOLDER values. No real host, DSN, or credential is ever committed.
 Validation runs are READ-ONLY.
+
+When a Dagster job is launched, it receives a positive environment allowlist: runtime/TLS keys,
+`DATABASE_URL`, `ANALYTICS_DB_*`, and `SESHAT_DBT_*`, plus run-scoped Seshat keys. Unrelated
+ambient environment variables, including arbitrary CI or developer-machine secrets, are not
+forwarded to the child process.
 
 ## See also
 

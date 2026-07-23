@@ -40,6 +40,26 @@ def test_run_status_is_the_ci_signal_vocabulary(schema: dict) -> None:
     assert set(run_status) == {"succeeded", "failed"}
 
 
+def test_summary_requires_tamper_evident_integrity_fields(schema: dict) -> None:
+    definition = schema["$defs"]["runSummary"]
+    assert {"workspace_dirty", "records_sha256", "input_artifacts"} <= set(
+        definition["required"]
+    )
+    assert definition["properties"]["workspace_dirty"]["type"] == "boolean"
+    assert definition["properties"]["records_sha256"]["pattern"] == "^[0-9a-f]{64}$"
+    assert (
+        definition["properties"]["input_artifacts"]["additionalProperties"]["pattern"]
+        == "^[0-9a-f]{64}$"
+    )
+
+
+def test_run_ids_use_the_same_path_safe_pattern(schema: dict) -> None:
+    expected = "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    definitions = schema["$defs"]
+    assert definitions["runSummary"]["properties"]["run_id"]["pattern"] == expected
+    assert definitions["assetRecord"]["properties"]["run_id"]["pattern"] == expected
+
+
 def test_record_shapes_are_closed_so_no_score_field_can_appear(schema: dict) -> None:
     for def_name in ("runSummary", "assetRecord"):
         definition = schema["$defs"][def_name]

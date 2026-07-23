@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -26,7 +27,18 @@ _MEASURE_LINE = (
 )
 _TMDL = f"table 'gold fct_sales_rss'\n\n{_MEASURE_LINE}\n\t\tdisplayFolder: Sales\n"
 
-_CONTRACT_CLEAN = """\
+_APPROVED_READINESS = """\
+owner: metric_owner
+binds_to:
+  gold_table: "gold.fct_sales_rss"
+readiness:
+  status: pass
+  evidence: ["approved by Metric Owner on 2026-07-22"]
+  blocking_reasons: []
+"""
+
+_CONTRACT_CLEAN = (
+    """\
 name: "AvgTransactionValue"
 definition:
   additive: false
@@ -37,8 +49,11 @@ definition:
       - column: total_spent
         op: is_not_null
 """
+    + _APPROVED_READINESS
+)
 
-_CONTRACT_DRIFT = """\
+_CONTRACT_DRIFT = (
+    """\
 name: "AvgTransactionValue"
 definition:
   additive: false
@@ -49,6 +64,8 @@ definition:
       - column: discount_applied
         op: is_not_null
 """
+    + _APPROVED_READINESS
+)
 
 # An escalate DAX: uses LEN() predicate rather than ISBLANK/NOT, which the drift
 # checker cannot confidently compare (escalates to WARNING, exit 0).
@@ -65,7 +82,8 @@ _TMDL_ESCALATE = (
 
 # Contract matching the escalate DAX numerically (correct filter column),
 # so the only reason for escalation is the predicate form.
-_CONTRACT_ESCALATE = """\
+_CONTRACT_ESCALATE = (
+    """\
 name: "AvgTransactionValue"
 definition:
   additive: false
@@ -76,6 +94,8 @@ definition:
       - column: total_spent
         op: is_not_null
 """
+    + _APPROVED_READINESS
+)
 
 
 def _make_repo(tmp_path: Path, contract: str) -> Path:
@@ -84,6 +104,7 @@ def _make_repo(tmp_path: Path, contract: str) -> Path:
         _TMDL,
     )
     _write(tmp_path / "mappings/ds/metrics/AvgTransactionValue.yaml", contract)
+    _write_semantic_approval(tmp_path, "ds")
     return tmp_path
 
 
@@ -94,7 +115,24 @@ def _make_repo_tmdl(tmp_path: Path, tmdl: str, contract: str) -> Path:
         tmdl,
     )
     _write(tmp_path / "mappings/ds/metrics/AvgTransactionValue.yaml", contract)
+    _write_semantic_approval(tmp_path, "ds")
     return tmp_path
+
+
+def _write_semantic_approval(
+    root: Path,
+    scope: str,
+    contracts: tuple[str, ...] = ("AvgTransactionValue",),
+) -> None:
+    approved_names = ", ".join(contracts)
+    _write(
+        root / "mappings" / scope / "readiness-status.yaml",
+        "approvals:\n"
+        "  - stage: semantic_model_ready\n"
+        '    owner: "Ada Lovelace (metric_owner)"\n'
+        '    at: "2026-07-22"\n'
+        f'    note: "approved metric contracts: {approved_names}"\n',
+    )
 
 
 def test_semantic_check_clean_exits_zero(tmp_path: Path, capsys) -> None:
@@ -146,18 +184,10 @@ def test_semantic_check_escalate_exits_zero_and_prints_l3_warning(
     assert "AvgTransactionValue" in out
 
 
-def test_semantic_check_measure_without_contract_is_skipped(
+def test_semantic_check_measure_without_contract_is_an_error(
     tmp_path: Path, capsys
 ) -> None:
-    """#50: a measure with no matching contract YAML produces no L3 finding; exits 0.
-
-    The CLI pairs measures only when the YAML stem matches the measure name (line
-    327 of cli.py: `if measure.name in definitions`). An unmatched measure is
-    silently skipped -- it is NOT flagged as drift.
-    """
-    # Write a repo with a measure (AvgTransactionValue) but NO contract YAML for it.
-    # The mappings dir exists so the path-traversal guard doesn't fire, but it holds
-    # no file matching the measure name.
+    """A TMDL measure without an approved contract blocks semantic readiness."""
     _write(
         tmp_path / "powerbi/M.SemanticModel/definition/tables/gold fct_sales_rss.tmdl",
         _TMDL,
@@ -169,10 +199,132 @@ def test_semantic_check_measure_without_contract_is_skipped(
     code = main(
         ["semantic-check", "--repo", str(tmp_path), "--metrics-dir", "mappings"]
     )
-    assert code == 0, "a measure with no contract must be skipped, not flagged"
+    assert code == 1
     out = capsys.readouterr().out
-    assert "AvgTransactionValue" not in out
-    assert "L3" not in out
+    assert "AvgTransactionValue" in out
+    assert "no approved metric contract" in out
+
+
+def test_semantic_check_approved_contract_without_measure_is_an_error(
+    tmp_path: Path, capsys
+) -> None:
+    repo = _make_repo(tmp_path, _CONTRACT_CLEAN)
+    _write(
+        repo / "mappings/ds/metrics/UnusedMeasure.yaml",
+        _CONTRACT_CLEAN.replace("AvgTransactionValue", "UnusedMeasure"),
+    )
+    _write_semantic_approval(repo, "ds", ("AvgTransactionValue", "UnusedMeasure"))
+
+    code = main(["semantic-check", "--repo", str(repo), "--metrics-dir", "mappings"])
+
+    assert code == 1
+    assert "UnusedMeasure" in capsys.readouterr().out
+
+
+def test_same_measure_name_in_different_tables_binds_by_scope(
+    tmp_path: Path, capsys
+) -> None:
+    contract = """\
+name: TotalSales
+owner: metric_owner
+binds_to: {gold_table: GOLD_TABLE}
+definition: {kind: base, aggregation: sum, filter: []}
+readiness:
+  status: pass
+  evidence: [approved by named metric owner]
+  blocking_reasons: []
+    """
+    for scope, gold_table in (("sales", "gold.sales"), ("returns", "gold.returns")):
+        _write_semantic_approval(tmp_path, scope, ("TotalSales",))
+        _write(
+            tmp_path / "mappings" / scope / "metrics" / "TotalSales.yaml",
+            contract.replace("GOLD_TABLE", gold_table),
+        )
+        _write(
+            tmp_path
+            / "powerbi"
+            / f"{scope}.SemanticModel"
+            / "definition"
+            / "tables"
+            / f"gold {scope}.tmdl",
+            f"table 'gold {scope}'\n\tmeasure TotalSales = SUM({scope}[amount])\n",
+        )
+
+    code = main(
+        ["semantic-check", "--repo", str(tmp_path), "--metrics-dir", "mappings"]
+    )
+
+    assert code == 0
+    assert "no drift" in capsys.readouterr().err
+
+
+def test_semantic_check_rejects_duplicate_contract_bindings(
+    tmp_path: Path, capsys
+) -> None:
+    repo = _make_repo(tmp_path, _CONTRACT_CLEAN)
+    _write(
+        repo / "mappings/other/metrics/AvgTransactionValue.yaml",
+        _CONTRACT_CLEAN,
+    )
+    _write_semantic_approval(repo, "other")
+
+    code = main(["semantic-check", "--repo", str(repo), "--metrics-dir", "mappings"])
+
+    assert code == 1
+    assert "duplicate semantic binding" in capsys.readouterr().out
+
+
+def test_semantic_check_rejects_unapproved_and_invalid_contracts(
+    tmp_path: Path, capsys
+) -> None:
+    repo = _make_repo(
+        tmp_path,
+        _CONTRACT_CLEAN.replace("status: pass", "status: blocked"),
+    )
+
+    code = main(["semantic-check", "--repo", str(repo), "--metrics-dir", "mappings"])
+
+    assert code == 1
+    out = capsys.readouterr().out
+    assert "not owner-approved pass" in out
+    assert "AvgTransactionValue" in out
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+
+
+def test_semantic_check_ignores_untracked_inputs_unless_requested(
+    tmp_path: Path, capsys
+) -> None:
+    repo = _make_repo(tmp_path, _CONTRACT_CLEAN)
+    _git(repo, "init")
+    _git(repo, "add", "powerbi", "mappings")
+    _write(
+        repo / "powerbi/M.SemanticModel/definition/tables/untracked.tmdl",
+        "table untracked\n\n\tmeasure UntrackedMeasure = 1\n",
+    )
+
+    default_code = main(
+        ["semantic-check", "--repo", str(repo), "--metrics-dir", "mappings"]
+    )
+    default_out = capsys.readouterr().out
+    included_code = main(
+        [
+            "semantic-check",
+            "--repo",
+            str(repo),
+            "--metrics-dir",
+            "mappings",
+            "--include-untracked",
+        ]
+    )
+    included_out = capsys.readouterr().out
+
+    assert default_code == 0
+    assert "UntrackedMeasure" not in default_out
+    assert included_code == 1
+    assert "UntrackedMeasure" in included_out
 
 
 # Import prefixes cli.py must NOT carry at module scope (yaml + L3 modules).
