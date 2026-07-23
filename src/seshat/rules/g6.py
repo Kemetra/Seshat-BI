@@ -46,6 +46,33 @@ def _iter_param_files(ctx: RuleContext) -> list[str]:
     ]
 
 
+def _g6_finding_for_line(rel: str, lineno: int, line: str) -> Finding | None:
+    """The G6 finding for one line, or ``None`` when the line is safe.
+
+    Flags only a connection PARAMETER (``IsParameterQuery=true``) whose value is
+    NOT the ``<placeholder>`` form -- a real host/db committed into a parameter.
+    """
+    m = _PARAM_RE.search(line)
+    if m is None:
+        return None
+    # Only connection PARAMETERS, not every shared M expression.
+    if "isparameterquery=true" not in m.group("meta").lower().replace(" ", ""):
+        return None
+    value = m.group("value")
+    if _PLACEHOLDER_RE.search(value):
+        return None  # placeholder form -> safe
+    return Finding(
+        rule_id="G6",
+        severity=Severity.ERROR,
+        message=(
+            f"PBIP parameter {m.group('name')!r} has a real value ({value!r}); "
+            f"a committed parameter must be the <placeholder> form -- real "
+            f"host/db are supplied at refresh (Desktop/gateway), never committed"
+        ),
+        locator=f"{rel}:{lineno}",
+    )
+
+
 @register("G6", "No real host/value in committed PBIP parameters")
 def check_pbip_param_no_real_value(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
@@ -57,26 +84,7 @@ def check_pbip_param_no_real_value(ctx: RuleContext) -> Iterable[Finding]:
         if text is None:
             continue
         for lineno, line in enumerate(text.splitlines(), start=1):
-            m = _PARAM_RE.search(line)
-            if not m:
-                continue
-            # Only connection PARAMETERS, not every shared M expression.
-            if "isparameterquery=true" not in m.group("meta").lower().replace(" ", ""):
-                continue
-            value = m.group("value")
-            if _PLACEHOLDER_RE.search(value):
-                continue  # placeholder form -> safe
-            findings.append(
-                Finding(
-                    rule_id="G6",
-                    severity=Severity.ERROR,
-                    message=(
-                        f"PBIP parameter {m.group('name')!r} has a real value "
-                        f"({value!r}); a committed parameter must be the "
-                        f"<placeholder> form -- real host/db are supplied at "
-                        f"refresh (Desktop/gateway), never committed"
-                    ),
-                    locator=f"{rel}:{lineno}",
-                )
-            )
+            finding = _g6_finding_for_line(rel, lineno, line)
+            if finding is not None:
+                findings.append(finding)
     return findings
