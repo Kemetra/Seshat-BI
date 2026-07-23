@@ -27,6 +27,17 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+### Fixed
+- `seshat dbt scaffold` fails closed when a `gold_star` dimension attribute, fact
+  measure, or degenerate dimension references a column marked `decision: drop` in
+  the source map, naming the drop conflict instead of silently materializing (or
+  emitting a generic "unresolved") — a dropped column can never appear in a
+  generated model or its `_models.yml` contract, in any layout. (#434)
+- `seshat dbt scaffold` refuses to write a `.sql` model whose dbt model name (file
+  basename) already exists at a different path under `dbt/models/`, instead of
+  silently producing a duplicate that breaks `dbt plan` with a
+  `DBT_ARTIFACT_INTEGRITY` "two models with the name" error. (#431)
+
 ## [0.6.1] -- 2026-07-22
 
 ### Fixed

@@ -198,3 +198,63 @@ def test_merge_refuses_a_symlinked_parent_component(tmp_path: Path) -> None:
     with pytest.raises(SafeWriteError, match="symlink"):
         writer.merge_sources(tmp_path, _plan("table_a"))
     assert not (outside / "sources" / "_sources.yml").exists()
+
+
+# --------------------------------------------------------------------------- #
+# #431b regression -- a same-named model in a DIFFERENT layout is refused, not
+# silently written as a second colliding model.
+# --------------------------------------------------------------------------- #
+def test_write_model_file_refuses_a_same_named_model_in_a_different_layout(
+    tmp_path: Path,
+) -> None:
+    """A pre-existing FLAT-layout audit_<t>_parity.sql directly under
+    dbt/models/audit/ must block the scaffold's NESTED
+    dbt/models/audit/<t>/audit_<t>_parity.sql -- both compile to the SAME dbt
+    model name, which fails DBT_ARTIFACT_INTEGRITY at `dbt parse`/`plan`. The
+    writer must refuse (fail closed), naming both paths, never silently write
+    the second file."""
+    flat = tmp_path / "dbt" / "models" / "audit" / "audit_table_a_parity.sql"
+    flat.parent.mkdir(parents=True)
+    flat.write_text("select 1\n", encoding="utf-8")
+    nested = "dbt/models/audit/table_a/audit_table_a_parity.sql"
+
+    with pytest.raises(model_plan.ScaffoldError, match="audit_table_a_parity.sql"):
+        writer.write_model_file(tmp_path, nested, "select 2\n")
+
+    # Refused BEFORE any write -- the nested path was never created.
+    assert not (tmp_path / nested).exists()
+    # The pre-existing flat file is untouched.
+    assert flat.read_text(encoding="utf-8") == "select 1\n"
+
+
+def test_write_model_file_is_non_destructive_on_rerun_at_the_same_path(
+    tmp_path: Path,
+) -> None:
+    """The ordinary rerun case must still work: writing to the SAME relative path
+    twice is not a collision -- the second call keeps the existing file (#431b
+    must not regress the write-if-absent non-destructive contract)."""
+    relative = "dbt/models/audit/table_a/audit_table_a_parity.sql"
+
+    first = writer.write_model_file(tmp_path, relative, "select 1\n")
+    second = writer.write_model_file(tmp_path, relative, "select 2\n")
+
+    assert first is True
+    assert second is False
+    assert (tmp_path / relative).read_text(encoding="utf-8") == "select 1\n"
+
+
+def test_write_model_file_does_not_guard_models_yml_by_basename(
+    tmp_path: Path,
+) -> None:
+    """_models.yml is not a dbt MODEL name (many models share that basename by
+    design, one per layer/table directory) -- the collision guard must not fire
+    on it."""
+    (tmp_path / "dbt" / "models" / "audit" / "table_a").mkdir(parents=True)
+    (tmp_path / "dbt" / "models" / "audit" / "table_a" / "_models.yml").write_text(
+        "version: 2\n", encoding="utf-8"
+    )
+    other_relative = "dbt/models/marts/table_b/_models.yml"
+
+    written = writer.write_model_file(tmp_path, other_relative, "version: 2\n")
+
+    assert written is True
