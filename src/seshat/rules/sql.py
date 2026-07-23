@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import PurePosixPath
 
-from ..core import Finding, RuleContext, Severity, is_test_path
+from ..core import Finding, RuleContext, Severity, is_test_path, read_tracked_text
 from ..registry import register
 from ..sql import (
     SqlToken,
@@ -24,7 +24,14 @@ EXEMPT_S2 = frozenset({"warehouse/README.md"})
 
 
 def _read(ctx: RuleContext, rel: str) -> str:
-    return (ctx.repo_root / rel).read_text(encoding="utf-8")
+    """Return the text of tracked SQL file `rel`, or "" if it is absent on disk.
+
+    A tracked-but-deleted-on-disk file (#430, e.g. deleted-but-unstaged) has no
+    content to scan; every S-family rule treats empty text as "nothing to flag"
+    (no identifiers/tokens/DDL to match), so returning "" is a silent no-finding
+    skip rather than a crash. This is a content scan, not a presence check.
+    """
+    return read_tracked_text(ctx.repo_root / rel) or ""
 
 
 def _tokens(ctx: RuleContext, rel: str) -> list[SqlToken]:

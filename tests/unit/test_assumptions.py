@@ -125,6 +125,20 @@ def test_c6b_invalid_utf8_fails_loud(tmp_path):
     assert findings[0].severity is Severity.ERROR
 
 
+# C6c: tracked-but-deleted-on-disk contract (#430: deleted-but-unstaged) still
+# fails loud. AL1 is a PRESENCE-requiring rule -- a deleted required metric
+# contract IS a governance finding, so the fix for the runner's #430 crash
+# must NOT make this pass vacuously by dropping the path from tracked_files.
+def test_c6c_deleted_but_tracked_contract_still_fires_loud(tmp_path):
+    # RuleContext.tracked_files lists the path but nothing exists on disk --
+    # exactly what `git ls-files` reports for a deleted-but-unstaged file.
+    ctx = RuleContext(repo_root=tmp_path, tracked_files=(INST,))
+    findings = _findings(ctx)
+    assert len(findings) == 1
+    assert findings[0].severity is Severity.ERROR
+    assert INST in findings[0].locator
+
+
 # Template is never scanned
 def test_template_not_scanned(tmp_path):
     body = _contract(

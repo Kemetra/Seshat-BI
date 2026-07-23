@@ -221,6 +221,16 @@ def test_missing_manifest_fails_loud(tmp_path: Path) -> None:
     )
 
 
+def test_tracked_but_deleted_on_disk_still_fails_loud(tmp_path: Path) -> None:
+    # #430 + Codex P1: TRACKED (listed by `git ls-files`) but deleted-but-unstaged
+    # -> the presence-required gate must emit its fail-closed finding, not crash
+    # and not pass vacuously.
+    ctx = RuleContext(repo_root=tmp_path, tracked_files=(_MANIFEST,))
+    findings = list(check_routes_resolve(ctx))
+    assert len(findings) == 1
+    assert _MANIFEST in findings[0].message
+
+
 @pytest.mark.skipif(shutil.which("git") is None, reason="git not available")
 def test_live_manifest_resolves_against_real_repo() -> None:
     """The shipped routes.yaml must resolve end-to-end against the real repo.

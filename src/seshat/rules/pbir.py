@@ -6,7 +6,7 @@ import json
 import re
 from typing import Any, Iterable
 
-from ..core import Finding, RuleContext, Severity, is_test_path
+from ..core import Finding, RuleContext, Severity, is_test_path, read_tracked_text
 from ..registry import register
 
 _ABSOLUTE = re.compile(r"^(?:[A-Za-z]:|\\|/)")
@@ -27,9 +27,12 @@ def _iter_pbir_files(ctx: RuleContext) -> list[str]:
 def check_pbir_relative_reference(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
     for rel in _iter_pbir_files(ctx):
-        path = ctx.repo_root / rel
-        with path.open(encoding="utf-8-sig") as fh:
-            doc: Any = json.load(fh)
+        # Tracked-but-deleted-on-disk (#430): nothing to scan for a reference
+        # shape, skip rather than crash. Content scan, not a presence check.
+        raw = read_tracked_text(ctx.repo_root / rel, encoding="utf-8-sig")
+        if raw is None:
+            continue
+        doc: Any = json.loads(raw)
         ref = doc.get("datasetReference", {}) if isinstance(doc, dict) else {}
         if "byConnection" in ref:
             findings.append(

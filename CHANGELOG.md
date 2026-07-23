@@ -27,7 +27,18 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+### Changed
+- `seshat profile --format json` no longer prints the human progress banner to
+  stderr, so a merged-stream pipe (`seshat profile ... --format json 2>&1 | jq`)
+  receives pure JSON. The banner is retained in the default (text) output mode;
+  DB-boundary errors stay on stderr in both modes. (#436)
+
 ### Fixed
+- `seshat check` no longer crashes with `FileNotFoundError` when a git-tracked file
+  is deleted from disk but the deletion is not yet staged; content-scanning rules
+  (G3, S-family, B1, G6, R1, TMDL) skip the absent path gracefully, the
+  presence-required governance-manifest rules (SC1/SC2, A1/A3, DF1, DR1) fail loud,
+  and file-presence rules (AL1/AL2/HR11) still flag a deleted required artifact. (#430)
 - `seshat dbt scaffold` fails closed when a `gold_star` dimension attribute, fact
   measure, or degenerate dimension references a column marked `decision: drop` in
   the source map, naming the drop conflict instead of silently materializing (or

@@ -686,6 +686,18 @@ def test_g3_ignores_non_target_extension_with_bom(tmp_path: Path) -> None:
     assert _findings(rule_g3_no_bom, ctx) == []
 
 
+@pytest.mark.unit
+def test_g3_does_not_crash_on_git_tracked_but_unstaged_deletion(
+    tmp_path: Path,
+) -> None:
+    # #430: a file git still lists as tracked (`git ls-files`) but that was
+    # deleted on disk WITHOUT `git rm` (an unstaged deletion) must not crash
+    # G3 -- it is a content scan (is there a leading BOM?), not a presence
+    # check, so an absent path is simply nothing to scan.
+    ctx = RuleContext(repo_root=tmp_path, tracked_files=("deleted.tmdl",))
+    assert _findings(rule_g3_no_bom, ctx) == []
+
+
 # ---------------------------------------------------------------------------
 # M2.G4 — G4 .gitattributes EOL policy
 # ---------------------------------------------------------------------------

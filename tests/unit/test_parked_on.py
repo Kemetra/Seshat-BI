@@ -125,6 +125,17 @@ def test_missing_manifest_fails_loud(tmp_path: Path) -> None:
     assert _MANIFEST in findings[0].message
 
 
+def test_tracked_but_deleted_on_disk_still_fails_loud(tmp_path: Path) -> None:
+    # #430 + Codex P1: the manifest is TRACKED (`git ls-files` still lists it)
+    # but deleted-but-unstaged (absent on disk). This presence-required rule must
+    # emit its documented fail-closed finding -- NOT crash on the read, and NOT
+    # pass vacuously by skipping.
+    ctx = RuleContext(repo_root=tmp_path, tracked_files=(_MANIFEST,))
+    findings = list(check_parked_on(ctx))
+    assert len(findings) == 1
+    assert _MANIFEST in findings[0].message
+
+
 def test_malformed_yaml_fails_loud(tmp_path: Path) -> None:
     ctx = _stage(tmp_path, "edges:\n  - id: [unbalanced\n")
     findings = list(check_parked_on(ctx))
