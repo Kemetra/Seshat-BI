@@ -51,6 +51,19 @@ def _add_scaffold_source_parser(sub: argparse._SubParsersAction) -> None:
     p.add_argument("--repo", default=".", help="repo root to scaffold into")
 
 
+def _add_scaffold_design_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "scaffold-design",
+        help=(
+            "materialize the Stage-6/7 design + handoff templates (blueprint / "
+            "visual-spec / report-composition / 16x9 grid / handoff pack) into "
+            "the workspace so Dashboard-Ready and Publish-Ready authoring has "
+            "templates to copy"
+        ),
+    )
+    p.add_argument("--repo", default=".", help="repo root to scaffold into")
+
+
 def _add_status_parser(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "status",
@@ -155,6 +168,7 @@ def _add_evidence_pack_parser(sub: argparse._SubParsersAction) -> None:
 _FAMILIES: dict[str, Callable[[argparse._SubParsersAction], None]] = {
     "first_arrival": _add_init_project_parser,
     "scaffold_source": _add_scaffold_source_parser,
+    "scaffold_design": _add_scaffold_design_parser,
     "status": _add_status_parser,
     "next": _add_next_parser,
     "approvals": partial(

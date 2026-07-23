@@ -172,6 +172,40 @@ def test_template_is_not_scanned(tmp_path) -> None:
     assert list(check_publish_pack_complete(ctx)) == []
 
 
+def test_bundled_template_copies_are_not_scanned(tmp_path) -> None:
+    # #440/#441 ship the generic template into the marketplace bundle under
+    # integrations/<agent>/seshat-bi/templates/handoff/. PP1 must exclude the
+    # placeholder-only template WHEREVER it ships, not only the repo-root copy --
+    # otherwise scaffold-design's bundled template trips PP1 on its own placeholders.
+    placeholder_pack = "# Pack\n\n" + _index_table({"a": "`<path / GAP>`"})
+    ctx = _stage(
+        tmp_path,
+        {
+            "integrations/claude-code/seshat-bi/templates/handoff/bi-handoff-pack.md": (
+                placeholder_pack
+            ),
+            "integrations/codex/seshat-bi/templates/handoff/bi-handoff-pack.md": (
+                placeholder_pack
+            ),
+        },
+    )
+    assert list(check_publish_pack_complete(ctx)) == []
+
+
+def test_real_per_table_pack_is_still_scanned(tmp_path) -> None:
+    # The exclusion keys on the `templates/handoff/` tail; a REAL per-table pack
+    # (mappings/<table>/handoff/...) has no such segment and must still be scanned.
+    ctx = _stage(
+        tmp_path,
+        {
+            "mappings/generic_table/handoff/bi-handoff-pack.md": "# Pack\n\n"
+            + _index_table({"a": "`<path / GAP>`"})
+        },
+    )
+    findings = list(check_publish_pack_complete(ctx))
+    assert findings, "a real per-table pack with a placeholder cell must be flagged"
+
+
 def test_no_packs_silent_pass(tmp_path) -> None:
     ctx = _stage(tmp_path, {"docs/readme.md": "nothing here\n"})
     assert list(check_publish_pack_complete(ctx)) == []

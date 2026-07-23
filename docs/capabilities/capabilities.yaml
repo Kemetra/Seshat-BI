@@ -187,6 +187,21 @@ capabilities:
     references:
       dispatch: "scaffold-source"
 
+  - id: scaffold-design
+    name: "seshat scaffold-design"
+    summary: "Writes the six Stage-6/7 design + handoff blank templates (dashboard-page-blueprint.yaml, visual-spec.yaml, report-composition.yaml, design/grids/16x9-grid.yaml, handoff/bi-handoff-pack.md, handoff/handoff-review-checklist.md) into the workspace so a pip-only workspace has the Dashboard-Ready / Publish-Ready artifacts to fill."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "scaffold-design"
+    documentation: "docs/roadmap/roadmap.md"
+    references:
+      dispatch: "scaffold-design"
+      roadmap: "issues #440, #441"
+
   - id: retail-init
     name: "retail init"
     summary: "Bootstraps the Compass-driven kit substrate (compass router + fenced AGENTS.md/CLAUDE.md regions + manifests)."

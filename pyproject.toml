@@ -167,6 +167,21 @@ packages = ["src/seshat", "src/retail"]
 # blank Stage-1 templates above this is the kit's own global router content
 # (verbs/orient/hard_stops), so `init` projects a REAL compass, not a hollow one.
 "templates/kit-source.yaml" = "seshat/stage1_templates/kit-source.yaml"
+# `seshat scaffold-design` (issues #440/#441) materializes the six Stage-6/7
+# design + handoff blank templates from these bundled copies so a pip-only
+# workspace can produce Dashboard-Ready / Publish-Ready artifacts without the
+# development repository. The runtime consumers (blueprint_preview,
+# dashboard_coordinator, the publish_pack rule) read these as REPO-RELATIVE
+# paths, so the packaged layout is deliberately flattened under
+# seshat/design_templates/ while the materializer reproduces the original
+# templates/ + design/grids/ destinations (only these six ship; the other
+# design/handoff templates stay dev-only, constitution VII).
+"templates/dashboard-page-blueprint.yaml" = "seshat/design_templates/dashboard-page-blueprint.yaml"
+"templates/visual-spec.yaml" = "seshat/design_templates/visual-spec.yaml"
+"templates/report-composition.yaml" = "seshat/design_templates/report-composition.yaml"
+"design/grids/16x9-grid.yaml" = "seshat/design_templates/grids/16x9-grid.yaml"
+"templates/handoff/bi-handoff-pack.md" = "seshat/design_templates/handoff/bi-handoff-pack.md"
+"templates/handoff/handoff-review-checklist.md" = "seshat/design_templates/handoff/handoff-review-checklist.md"
 
 [tool.hatch.build.targets.sdist]
 include = [
@@ -200,6 +215,15 @@ include = [
     "/templates/reconciliation-report.md",
     # The canonical kit-source.yaml seed `init` materializes (issue #370).
     "/templates/kit-source.yaml",
+    # Stage-6/7 design + handoff blank templates the scaffold-design verb
+    # bundles (issues #440, #441); the wheel is built from the sdist, so the
+    # sdist must carry them.
+    "/templates/dashboard-page-blueprint.yaml",
+    "/templates/visual-spec.yaml",
+    "/templates/report-composition.yaml",
+    "/design/grids/16x9-grid.yaml",
+    "/templates/handoff/bi-handoff-pack.md",
+    "/templates/handoff/handoff-review-checklist.md",
     "/README.md",
     "/LICENSE",
     "/pyproject.toml",

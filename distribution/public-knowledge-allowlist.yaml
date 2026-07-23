@@ -1742,6 +1742,72 @@ entries:
     required: true
     generated_notice: manifest
     review_reason: Required by the public retail KPI Knowledge Base route.
+  - entry_id: shared-dashboard-page-blueprint-template
+    source: templates/dashboard-page-blueprint.yaml
+    classification: public_knowledge
+    media_type: application/yaml
+    targets:
+      claude: templates/dashboard-page-blueprint.yaml
+      codex: templates/dashboard-page-blueprint.yaml
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required Stage-6 design template materialized by `seshat scaffold-design` (issues #440, #441).
+  - entry_id: shared-visual-spec-template
+    source: templates/visual-spec.yaml
+    classification: public_knowledge
+    media_type: application/yaml
+    targets:
+      claude: templates/visual-spec.yaml
+      codex: templates/visual-spec.yaml
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required Stage-6 design template materialized by `seshat scaffold-design` (issues #440, #441).
+  - entry_id: shared-report-composition-template
+    source: templates/report-composition.yaml
+    classification: public_knowledge
+    media_type: application/yaml
+    targets:
+      claude: templates/report-composition.yaml
+      codex: templates/report-composition.yaml
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required Stage-6 design template materialized by `seshat scaffold-design` (issues #440, #441).
+  - entry_id: shared-16x9-grid-template
+    source: design/grids/16x9-grid.yaml
+    classification: public_knowledge
+    media_type: application/yaml
+    targets:
+      claude: design/grids/16x9-grid.yaml
+      codex: design/grids/16x9-grid.yaml
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required Stage-6 design template materialized by `seshat scaffold-design` (issues #440, #441).
+  - entry_id: shared-bi-handoff-pack-template
+    source: templates/handoff/bi-handoff-pack.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: templates/handoff/bi-handoff-pack.md
+      codex: templates/handoff/bi-handoff-pack.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required Stage-7 handoff template materialized by `seshat scaffold-design` (issues #440, #441).
+  - entry_id: shared-handoff-review-checklist-template
+    source: templates/handoff/handoff-review-checklist.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: templates/handoff/handoff-review-checklist.md
+      codex: templates/handoff/handoff-review-checklist.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required Stage-7 handoff template materialized by `seshat scaffold-design` (issues #440, #441).
   - entry_id: public-license
     source: LICENSE
     classification: public_license

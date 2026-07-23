@@ -29,6 +29,15 @@
     },
     {
       "classification": "public_knowledge",
+      "destination": "design/grids/16x9-grid.yaml",
+      "output_sha256": "2490696e92eec516e39d696cb7913665dc7cce975b114b7018df1fc8b2705ef1",
+      "source": "design/grids/16x9-grid.yaml",
+      "source_id": "shared-16x9-grid-template",
+      "source_sha256": "2490696e92eec516e39d696cb7913665dc7cce975b114b7018df1fc8b2705ef1",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
       "destination": "knowledge/bi-bigdata-knowledge/INDEX.md",
       "output_sha256": "ff4f5aceef52cbacac0785a1466fafd1f72e56425d2f75c1f5a23c36ea1a3101",
       "source": "skills/bi-bigdata-knowledge/INDEX.md",
@@ -1514,6 +1523,33 @@
     },
     {
       "classification": "public_knowledge",
+      "destination": "templates/dashboard-page-blueprint.yaml",
+      "output_sha256": "35fee24cf0f75821c4f48ac00d679fd7539770a625154fdce798ce666d3cc552",
+      "source": "templates/dashboard-page-blueprint.yaml",
+      "source_id": "shared-dashboard-page-blueprint-template",
+      "source_sha256": "35fee24cf0f75821c4f48ac00d679fd7539770a625154fdce798ce666d3cc552",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "templates/handoff/bi-handoff-pack.md",
+      "output_sha256": "bc421e832d45325ef8227d9b853011aad018ac594bf098c44725a9b543013225",
+      "source": "templates/handoff/bi-handoff-pack.md",
+      "source_id": "shared-bi-handoff-pack-template",
+      "source_sha256": "bc421e832d45325ef8227d9b853011aad018ac594bf098c44725a9b543013225",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "templates/handoff/handoff-review-checklist.md",
+      "output_sha256": "8092f25978679621ef8c063308983e52d74f4624fd3dce329b62d0cda6fb2e5d",
+      "source": "templates/handoff/handoff-review-checklist.md",
+      "source_id": "shared-handoff-review-checklist-template",
+      "source_sha256": "8092f25978679621ef8c063308983e52d74f4624fd3dce329b62d0cda6fb2e5d",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
       "destination": "templates/kpi-sufficiency-card.md",
       "output_sha256": "f478545a65714ab3844b8086136b377f1f56c6eabcb390f29ffd9b72b23ee0ac",
       "source": "templates/kpi-sufficiency-card.md",
@@ -1529,13 +1565,31 @@
       "source_id": "shared-metric-contract-template",
       "source_sha256": "d87086b74f4f7ff7d4982c0db3b36b92c76ecf3d1a0116542cabba3cbdc66558",
       "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "templates/report-composition.yaml",
+      "output_sha256": "7e5405ecd14fa974df7ede5d22754c44466a59ac0f88e461fc8bf133f1a330dc",
+      "source": "templates/report-composition.yaml",
+      "source_id": "shared-report-composition-template",
+      "source_sha256": "7e5405ecd14fa974df7ede5d22754c44466a59ac0f88e461fc8bf133f1a330dc",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "templates/visual-spec.yaml",
+      "output_sha256": "ca9136ec207c9e0bab65ad1fe8c58a967ae735da1e501a039d8cd8abaa01b097",
+      "source": "templates/visual-spec.yaml",
+      "source_id": "shared-visual-spec-template",
+      "source_sha256": "ca9136ec207c9e0bab65ad1fe8c58a967ae735da1e501a039d8cd8abaa01b097",
+      "transform": "copy-normalized-v1"
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "219adeae87df351e301e464bfa8db1ca28b8d7647b3ce619d06ae5967f6a1a9e",
+  "manifest_digest": "ae5e972c1f3ba6e0e0a569ac19f8258fbb486755d8178187805a43254c23a846",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "b51ecd5585be13ff9661098a6a976e19458ec2a7",
+  "source_revision": "c68182ba37f465d63c36115d99dfc28f3f1565e4",
   "target": "codex",
   "version": "0.6.1"
 }

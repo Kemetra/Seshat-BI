@@ -27,6 +27,13 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+### Added
+- `seshat scaffold-design` materializes the Stage-6/7 design + handoff templates
+  (dashboard-page-blueprint, visual-spec, report-composition, the 16x9 grid, the
+  handoff pack + review checklist) into a workspace, so package-only (pipx /
+  marketplace) users reaching Dashboard/Publish Ready have templates to copy.
+  Non-destructive; wheel-data-first with a dev-checkout fallback. (#440, #441)
+
 ### Changed
 - `seshat profile --format json` no longer prints the human progress banner to
   stderr, so a merged-stream pipe (`seshat profile ... --format json 2>&1 | jq`)
@@ -63,6 +70,9 @@ explicitly identifies a public release event.
   basename) already exists at a different path under `dbt/models/`, instead of
   silently producing a duplicate that breaks `dbt plan` with a
   `DBT_ARTIFACT_INTEGRITY` "two models with the name" error. (#431)
+- The six Stage-6/7 design + handoff templates now ship in the wheel
+  (`force-include` + sdist) and the marketplace bundle (allowlist), instead of
+  existing only in the development tree. (#440, #441)
 
 ### Docs
 - `bi-sql-knowledge`: added anti-pattern card SQL-AP-061 warning that matching a

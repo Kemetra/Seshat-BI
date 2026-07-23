@@ -34,10 +34,20 @@ from typing import Iterable
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
 
-# Only per-table handoff-pack instances are scanned. The generic template lives under
-# templates/ and is excluded (it is full of <placeholder> tokens by design).
+# Only per-table handoff-pack instances (mappings/<table>/handoff/bi-handoff-pack.md)
+# are scanned. The generic template is full of <placeholder> tokens by design and is
+# excluded WHEREVER it ships: the repo-root templates/ copy AND any packaged copy the
+# scaffold-design verb bundles (e.g. integrations/<agent>/seshat-bi/templates/handoff/
+# ...). Excluding by the `templates/handoff/` tail (not one exact path) keeps a real
+# per-table pack -- which never contains a `templates/handoff/` segment -- scanned.
 _PACK_GLOB_SUFFIX = "/handoff/bi-handoff-pack.md"
-_TEMPLATE_PATH = "templates/handoff/bi-handoff-pack.md"
+_TEMPLATE_TAIL = "templates/handoff/bi-handoff-pack.md"
+
+
+def _is_generic_template(path: str) -> bool:
+    """True for the placeholder-only generic template at any shipped location."""
+    return path == _TEMPLATE_TAIL or path.endswith("/" + _TEMPLATE_TAIL)
+
 
 # The six required-section index rows the template defines (a-f). Membership is the
 # ratified closed set; index granularity only.
@@ -66,7 +76,9 @@ def _iter_packs(ctx: RuleContext) -> list[str]:
     return [
         p
         for p in ctx.tracked_files
-        if p.endswith(_PACK_GLOB_SUFFIX) and p != _TEMPLATE_PATH and not is_test_path(p)
+        if p.endswith(_PACK_GLOB_SUFFIX)
+        and not _is_generic_template(p)
+        and not is_test_path(p)
     ]
 
 
