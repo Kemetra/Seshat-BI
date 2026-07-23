@@ -387,6 +387,47 @@ def _is_measure_ref(base: str) -> bool:
     return bool(re.fullmatch(r"\[[^\]]+\]", base))
 
 
+def _expected_inline_operand(contract_side: dict[str, Any]) -> str | None:
+    """The DAX operand text a contract's inline aggregation source must emit.
+
+    Mirrors the generator's `_qualify`: ``{table: "gold.x", column: "c"}`` ->
+    ``'gold x'[c]``; a table-only source (e.g. count_rows) -> ``'gold x'``.
+    Returns None when the source shape is absent/mis-typed (caller escalates --
+    it cannot verify what it cannot resolve).
+    """
+    source = contract_side.get("source")
+    if not isinstance(source, dict):
+        return None
+    table = source.get("table")
+    if not isinstance(table, str) or not table:
+        return None
+    quoted = "'" + table.replace(".", " ") + "'"
+    column = source.get("column")
+    if isinstance(column, str) and column:
+        return f"{quoted}[{column}]"
+    return quoted
+
+
+def _inline_operand_matches(dax_agg_expr: str, contract_side: dict[str, Any]) -> bool:
+    """True when the DAX ``AGG(<operand>)`` operand equals the contract source.
+
+    Compares the argument inside the recognized aggregation call to
+    `_expected_inline_operand`, ignoring surrounding whitespace. False when the
+    operand cannot be extracted or does not match -- so a denominator that
+    aggregates a DIFFERENT column than the contract declares (e.g. a
+    `DISTINCTCOUNT(order_id)` contract with `DISTINCTCOUNT(customer_id)` DAX) is
+    NOT silently accepted (#432 / Codex #449).
+    """
+    func = _recognized_agg_func(dax_agg_expr)
+    if func is None:
+        return False
+    inner = _outer_call(dax_agg_expr, func)
+    expected = _expected_inline_operand(contract_side)
+    if inner is None or expected is None:
+        return False
+    return inner.strip() == expected
+
+
 def _ratio_denominator_filters(
     dax_denominator: str, contract_side: dict[str, Any]
 ) -> frozenset[Filter] | Verdict:
@@ -398,11 +439,13 @@ def _ratio_denominator_filters(
         aggregation is never read here (unchanged pre-#432 behavior).
       * inline aggregation-call base (AGG(col) / CALCULATE(AGG(col), ...)) --
         reuses `_base_dax_filters` (the same shape logic the kind:base path
-        already trusts), which ALSO checks the aggregation function against
-        `contract_side['aggregation']` -- the inline call is not opaque, there is
-        no separate contract for it to defer to.
+        already trusts), which checks the aggregation FUNCTION against
+        `contract_side['aggregation']`, AND -- because the inline call is not
+        opaque and has no separate contract to defer to -- verifies the aggregated
+        OPERAND matches `contract_side['source']` (Codex #449: otherwise a
+        different-column denominator computing a different KPI would pass).
     Anything genuinely unrecognized (VAR/RETURN, nested CALCULATE, a non-AGG
-    call) still escalates, via `_base_dax_filters`'s own ESCALATE-by-default.
+    call), or an operand that does not match the contract source, escalates.
     """
     den = _normalize_denominator(dax_denominator)
     if den is not None and _is_measure_ref(den[0]):
@@ -419,6 +462,20 @@ def _ratio_denominator_filters(
     if want_func is None:
         return Verdict(
             "escalate", f"contract denominator aggregation {agg!r} not recognized"
+        )
+    # Verify the aggregated operand matches the contract source before trusting the
+    # inline call: the CALCULATE arm's base is parts[0], the bare arm is the whole
+    # expr. Escalate (never silently pass) when the operand cannot be confirmed.
+    inner_agg = dax_denominator.strip()
+    calc = _outer_call(inner_agg, "CALCULATE")
+    if calc is not None:
+        parts = _split_balanced(calc)
+        inner_agg = parts[0].strip() if parts else inner_agg
+    if not _inline_operand_matches(inner_agg, contract_side):
+        return Verdict(
+            "escalate",
+            "denominator aggregates an operand that does not match the contract "
+            "source (or the operand could not be verified)",
         )
     return _base_dax_filters(dax_denominator.strip(), want_func)
 

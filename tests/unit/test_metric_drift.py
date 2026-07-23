@@ -552,6 +552,21 @@ def test_unfiltered_inline_agg_denominator_passes() -> None:
     assert v.status == "pass", v
 
 
+def test_inline_agg_denominator_wrong_operand_does_not_pass() -> None:
+    """Codex #449: the #432 widening must verify the aggregated OPERAND, not just
+    the function + filters. A denominator whose contract declares
+    `DISTINCTCOUNT(reference_no)` but whose DAX aggregates a DIFFERENT column
+    (`customer_id`) computes a different KPI and must NOT pass -- it escalates
+    (before the widening it escalated too; the widening must not silently accept
+    it). This is the load-bearing safety of the widening."""
+    dax_wrong_col = (
+        "DIVIDE(SUM('gold fct_sales_rss'[gross_sales]), "
+        "DISTINCTCOUNT('gold fct_sales_rss'[customer_id]))"
+    )
+    v = check_measure_drift(dax_wrong_col, DEF_ATV)
+    assert v.status != "pass", v
+
+
 def test_filtered_inline_agg_denominator_still_passes() -> None:
     """A CALCULATE-wrapped inline-agg denominator with a recognized predicate
     must still pass, comparing its filter-set to the contract as before."""
