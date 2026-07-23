@@ -659,7 +659,12 @@ def _tmdl_files_to_scan(
             continue
         try:
             text = (repo_root / Path(rel)).read_text(encoding="utf-8-sig")
-        except FileNotFoundError:
+        except OSError:
+            # Pre-existing broad tolerance (NOT narrowed by #430): this M-scan
+            # reader's contract is to skip ANY unreadable tracked file -- a
+            # deleted-but-unstaged path (FileNotFoundError), but also an unstaged
+            # dir-for-file replacement (IsADirectoryError) or a permission/IO
+            # error -- so the C1/D8 M scans never abort the whole check.
             continue
         yield rel, text
 
