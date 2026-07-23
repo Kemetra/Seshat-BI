@@ -78,6 +78,22 @@ def is_test_path(path: str) -> bool:
     return path.startswith("tests/")
 
 
+# Single source of truth for "read a tracked file's content, or skip it if it is
+# absent on disk". A content-scanning rule enumerates paths from `git ls-files`,
+# which still lists a tracked file that was deleted-but-not-staged (#430); opening
+# it raised an unhandled FileNotFoundError. Returning None for the absent case lets
+# each rule flatten its scan loop to `text = read_tracked_text(...); if text is
+# None: continue` instead of nesting a try/except per open site. This is a content
+# scan, not a presence check -- presence-requiring rules (AL1/AL2/HR11) read
+# `ctx.tracked_files` directly and still flag a deleted required artifact.
+def read_tracked_text(path: Path, *, encoding: str = "utf-8") -> str | None:
+    """Return ``path``'s text, or ``None`` if the file is absent on disk (#430)."""
+    try:
+        return path.read_text(encoding=encoding)
+    except FileNotFoundError:
+        return None
+
+
 # A rule is a pure function: context in, findings out. No side effects.
 Rule = Callable[[RuleContext], Iterable[Finding]]
 

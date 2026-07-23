@@ -90,6 +90,35 @@ def test_profile_json_render(
     assert [c["name"] for c in payload["columns"]] == ["a", "amount"]
 
 
+def test_profile_json_mode_is_silent_on_stderr(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """#436: `--format json` must not print the human progress banner to
+    stderr -- a caller merging streams (`2>&1 | jq`) sees the banner text
+    ahead of the JSON and `jq` fails to parse. Machine-readable mode must be
+    silent on stderr on success; stdout must still parse as JSON."""
+    _args_ok(monkeypatch)
+    rc = main_under_test(
+        ["profile", "--table", "bronze.t", "--pk", "a", "--format", "json"]
+    )
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert captured.err == ""
+    json.loads(captured.out)  # stdout is still pure, parseable JSON
+
+
+def test_profile_text_mode_still_prints_banner_to_stderr(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Guard the human path: the default/markdown render must keep the
+    progress banner on stderr (#436 only suppresses it for `--format json`)."""
+    _args_ok(monkeypatch)
+    rc = main_under_test(["profile", "--table", "bronze.t", "--pk", "a"])
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert "profiling bronze.t against" in captured.err
+
+
 def test_rendered_markdown_round_trips_as_a_drift_baseline(tmp_path) -> None:
     """The markdown the verb advertises ("paste into source-profile.md") must be
     parseable by ``read_source_profile`` as a conformant, comparable baseline: a

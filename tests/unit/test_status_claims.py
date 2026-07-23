@@ -143,6 +143,16 @@ def test_missing_manifest_fails_loud(tmp_path: Path) -> None:
     assert _MANIFEST in findings[0].message
 
 
+def test_tracked_but_deleted_on_disk_still_fails_loud(tmp_path: Path) -> None:
+    # #430 + Codex P1: TRACKED (listed by `git ls-files`) but deleted-but-unstaged
+    # -> the presence-required gate must emit its fail-closed finding, not crash
+    # and not pass vacuously.
+    ctx = RuleContext(repo_root=tmp_path, tracked_files=(_MANIFEST,))
+    findings = list(check_status_claims(ctx))
+    assert len(findings) == 1
+    assert _MANIFEST in findings[0].message
+
+
 def test_malformed_yaml_fails_loud(tmp_path: Path) -> None:
     ctx = _stage(tmp_path, "claims:\n  - id: [unbalanced\n")
     findings = list(check_status_claims(ctx))

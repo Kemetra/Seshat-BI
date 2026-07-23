@@ -17,6 +17,12 @@ shared seams via ``from seshat import cli`` and ``cli.<name>(...)`` -- NOT a
 by-value import -- so the test suite's ``monkeypatch.setattr("seshat.cli.
 _make_runner", ...)`` still lands on the attribute this handler reads at call
 time.
+
+``--format json`` is stderr-silent on success (no progress banner) so
+``seshat profile ... --format json 2>&1 | jq`` is safe -- merging streams
+would otherwise put the banner ahead of the JSON and break ``jq`` (#436). The
+default markdown render keeps the banner; DB-boundary errors stay on stderr in
+BOTH formats since a piped caller needs to see a failed run.
 """
 
 from __future__ import annotations
@@ -181,16 +187,23 @@ def _profile_and_render(
     ``_resolve_engine`` already returns (engine, dialect, config), not three
     loose primitives, and re-derives ``prog`` via ``cli._prog(args)``, so the
     seam stays at four arguments.
+
+    The progress banner is suppressed in ``--format json``: a caller merging
+    streams (``seshat profile ... --format json 2>&1 | jq``) would otherwise
+    see it precede the JSON and break ``jq`` (#436). Error output stays on
+    stderr in BOTH formats -- those are diagnostics a piped caller needs to
+    see, not progress noise.
     """
     from seshat.profile import profile as run_mechanical_profile
 
     prog = cli._prog(args)  # brand the client typed (`seshat`/`retail`), #402
     engine, dialect, config = resolved
     safe_host = cli._safe_target_label(engine, config)
-    print(
-        f"{prog} profile: profiling {args.table} against {safe_host}",
-        file=sys.stderr,
-    )
+    if args.output_format != "json":
+        print(
+            f"{prog} profile: profiling {args.table} against {safe_host}",
+            file=sys.stderr,
+        )
     try:
         runner = cli._make_runner(config)
         result = run_mechanical_profile(

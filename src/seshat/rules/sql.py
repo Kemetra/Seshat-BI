@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from pathlib import PurePosixPath
 
-from ..core import Finding, RuleContext, Severity, is_test_path
+from ..core import Finding, RuleContext, Severity, is_test_path, read_tracked_text
 from ..registry import register
 from ..sql import (
     SqlToken,
@@ -24,7 +25,14 @@ EXEMPT_S2 = frozenset({"warehouse/README.md"})
 
 
 def _read(ctx: RuleContext, rel: str) -> str:
-    return (ctx.repo_root / rel).read_text(encoding="utf-8")
+    """Return the text of tracked SQL file `rel`, or "" if it is absent on disk.
+
+    A tracked-but-deleted-on-disk file (#430, e.g. deleted-but-unstaged) has no
+    content to scan; every S-family rule treats empty text as "nothing to flag"
+    (no identifiers/tokens/DDL to match), so returning "" is a silent no-finding
+    skip rather than a crash. This is a content scan, not a presence check.
+    """
+    return read_tracked_text(ctx.repo_root / rel) or ""
 
 
 def _tokens(ctx: RuleContext, rel: str) -> list[SqlToken]:
@@ -220,6 +228,18 @@ _DDL_VERBS = frozenset({"CREATE", "ALTER", "DROP"})
 _TXN_BOUNDARY_VERBS = frozenset({"BEGIN", "START", "COMMIT", "ROLLBACK"})
 
 
+# Tokens that CLOSE an open DDL statement. `;` is the SQL terminator; the psql
+# buffer-sending meta-commands `\g`, `\gx`, `\gexec` are documented as equivalent to
+# `;` (they send the current query buffer to the server) and a `psql -f` migration
+# may legitimately use them instead of `;`. The tokenizer preserves the backslash
+# (see sql.py::_scan_meta_command), so each is a distinct terminator token here and
+# an unguarded `DROP TABLE bronze.x \g` followed by another statement is NOT masked
+# as a sub-clause. Scope note: only the buffer-SENDING family terminates; `\set`,
+# `\i`, `\echo` etc. do not send the buffer and are (correctly) not terminators.
+# psql meta-command reference: https://www.postgresql.org/docs/current/app-psql.html
+_STATEMENT_TERMINATORS = frozenset({";", "\\g", "\\gx", "\\gexec"})
+
+
 def _txn_boundary_state(toks: list[SqlToken], idx: int, in_txn: bool) -> bool | None:
     """If toks[idx] is a transaction-boundary keyword, return the (possibly
     unchanged) `in_txn` state to carry forward; otherwise return None (not a
@@ -269,48 +289,102 @@ def _s4b_finding_for_bare_ddl(
     )
 
 
+def _is_statement_start_verb(stmt_open: bool) -> bool:
+    """True when a DDL verb STARTS a statement, not a sub-clause.
+
+    A DDL keyword STARTS a statement unless a DDL statement is already open --
+    i.e. a prior statement-starting DDL verb has not yet been closed by ``;``.
+    ``stmt_open`` carries that state from the caller's single left-to-right walk.
+    The same keyword appearing while a statement is open is a sub-clause, not a
+    new statement: `ALTER TABLE gold.t ALTER COLUMN c ...` carries a SECOND
+    `ALTER` whose target (the column) has no schema qualifier, so re-evaluating it
+    as a top-level verb yielded a spurious "target schema undetermined" S4b
+    warning even though the statement is schema-qualified and txn-wrapped (#442).
+    Only the leading `ALTER` governs the statement -- regardless of whether the
+    sub-clause sits on the same physical line or a wrapped one.
+
+    Tracking open-vs-closed (rather than the previous token) also closes a hole a
+    naive `prev == ";"` check left: a line-oriented psql meta-command such as
+    `\\set ON_ERROR_STOP on` carries no ``;`` (warehouse/README.md applies these
+    files with `psql -f`). With no statement open, the following `DROP TABLE
+    bronze.x` is correctly a NEW statement start and still fires the
+    bronze-source-of-truth ERROR. The buffer-sending meta-commands `\\g`/`\\gx`/
+    `\\gexec` are the converse case: they DO close the current statement (they send
+    the query buffer, like ``;``), so they are members of `_STATEMENT_TERMINATORS`
+    and an unguarded `DROP TABLE bronze.x \\g` before another statement is not
+    masked as a sub-clause. The tokenizer preserves the backslash so `\\g` is a
+    distinct token, not an identifier `g`.
+    """
+    return not stmt_open
+
+
+@dataclass(frozen=True)
+class _S4bScanState:
+    """The two flags a single left-to-right S4b walk carries: whether a
+    BEGIN/COMMIT transaction is open, and whether a DDL statement is open
+    (a statement-starting DDL verb not yet closed by ``;``, #442). Bundled so
+    the per-verb evaluator receives the scan state as one value.
+    """
+
+    in_txn: bool
+    stmt_open: bool
+
+
+def _s4b_ddl_finding(
+    rel: str, toks: list[SqlToken], idx: int, state: _S4bScanState
+) -> Finding | None:
+    """The S4b finding for the DDL verb at ``idx``, or ``None`` when it passes.
+
+    Passes (returns ``None``) when the verb is not a statement-starting DDL verb
+    (a mid-statement sub-clause keyword like the inner ALTER of `ALTER COLUMN`
+    while a statement is already open, #442), is a guarded form, or is a
+    silver/gold statement inside a transaction (the idempotent DROP+CREATE rebuild
+    pattern). bronze bare DDL is an ERROR; everything else is the WARNING built by
+    ``_s4b_finding_for_bare_ddl``.
+    """
+    if not _is_statement_start_verb(state.stmt_open) or _is_guarded(toks, idx):
+        return None
+    upper = toks[idx].text.upper()
+    tok = toks[idx]
+    zone = schema_zone(toks, idx)
+    if zone == "bronze":
+        return Finding(
+            rule_id="S4b",
+            severity=Severity.ERROR,
+            message=(
+                f"S4b bronze.* bare {upper} destroys/clobbers source-of-truth; "
+                "use a guarded form (IF [NOT] EXISTS)"
+            ),
+            locator=f"{rel}:{tok.line}",
+        )
+    if zone in ("silver", "gold") and state.in_txn:
+        return None  # DROP+CREATE-in-transaction pattern: PASS (idempotent rebuild)
+    return _s4b_finding_for_bare_ddl(rel, tok, upper, zone)
+
+
 def _s4b_findings_for_file(rel: str, toks: list[SqlToken]) -> list[Finding]:
     """S4b findings for one file's already-tokenized content."""
     findings: list[Finding] = []
     in_txn = False  # stateful flag toggled by BEGIN / COMMIT / ROLLBACK
+    stmt_open = False  # a DDL statement is open until its `;` (sub-clause tracking)
 
     for idx, tok in enumerate(toks):
-        upper = tok.text.upper()
-
+        if tok.text in _STATEMENT_TERMINATORS:
+            stmt_open = False  # `;` or a buffer-sending psql meta-command (\g/\gx)
+            continue
         boundary_state = _txn_boundary_state(toks, idx, in_txn)
         if boundary_state is not None:
             in_txn = boundary_state
             continue
-
-        if upper not in _DDL_VERBS:
+        if tok.text.upper() not in _DDL_VERBS:
             continue
-
-        # Guarded forms pass unconditionally (any zone).
-        if _is_guarded(toks, idx):
-            continue
-
-        zone = schema_zone(toks, idx)
-
-        if zone == "bronze":
-            findings.append(
-                Finding(
-                    rule_id="S4b",
-                    severity=Severity.ERROR,
-                    message=(
-                        f"S4b bronze.* bare {upper} destroys/clobbers "
-                        "source-of-truth; use a guarded form "
-                        "(IF [NOT] EXISTS)"
-                    ),
-                    locator=f"{rel}:{tok.line}",
-                )
-            )
-            continue
-
-        if zone in ("silver", "gold") and in_txn:
-            # DROP+CREATE-in-transaction pattern: PASS (idempotent rebuild).
-            continue
-
-        findings.append(_s4b_finding_for_bare_ddl(rel, tok, upper, zone))
+        state = _S4bScanState(in_txn=in_txn, stmt_open=stmt_open)
+        finding = _s4b_ddl_finding(rel, toks, idx, state)
+        if finding is not None:
+            findings.append(finding)
+        # A statement-starting DDL verb opens a statement (until its `;`); a
+        # sub-clause DDL keyword while one is already open does not change state.
+        stmt_open = True
 
     return findings
 

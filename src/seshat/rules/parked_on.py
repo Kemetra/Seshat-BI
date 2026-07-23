@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from ..core import Finding, RuleContext, RuleTier, Severity
+from ..core import Finding, RuleContext, RuleTier, Severity, read_tracked_text
 from ..registry import register
 
 _MANIFEST = "docs/quality/parked-on.yaml"
@@ -54,7 +54,13 @@ def _finding(message: str, locator: str) -> Finding:
     tier=RuleTier.KIT_SELF,
 )
 def check_parked_on(ctx: RuleContext) -> Iterable[Finding]:
-    if _MANIFEST not in ctx.tracked_files:
+    # A presence-required governance manifest: absent (untracked) OR
+    # tracked-but-deleted-on-disk (#430; still listed by `git ls-files`) both
+    # fail closed with the SAME finding -- never a vacuous pass, never a crash.
+    raw = None
+    if _MANIFEST in ctx.tracked_files:
+        raw = read_tracked_text(ctx.repo_root / _MANIFEST)
+    if raw is None:
         return [
             _finding(
                 f"parked-on manifest {_MANIFEST!r} is missing or untracked; "
@@ -65,7 +71,6 @@ def check_parked_on(ctx: RuleContext) -> Iterable[Finding]:
 
     import yaml  # lazy: dev/optional dep, kept out of the retail check core chain
 
-    raw = (ctx.repo_root / _MANIFEST).read_text(encoding="utf-8")
     try:
         data = yaml.safe_load(raw)
     except yaml.YAMLError as exc:  # malformed YAML -> fail loud
@@ -110,7 +115,18 @@ def check_parked_on(ctx: RuleContext) -> Iterable[Finding]:
             continue
 
         anchor = edge["anchor"]
-        doc_text = (ctx.repo_root / doc).read_text(encoding="utf-8")
+        doc_text = read_tracked_text(ctx.repo_root / doc)
+        if doc_text is None:
+            # Tracked but deleted on disk (#430): the anchor cannot be verified;
+            # fail loud rather than crash.
+            findings.append(
+                _finding(
+                    f"edge {eid!r} names doc {doc!r}, which is tracked but missing on "
+                    f"disk; the parked-on anchor cannot be verified",
+                    loc,
+                )
+            )
+            continue
         if anchor not in doc_text:
             findings.append(
                 _finding(

@@ -11,6 +11,8 @@ or clobber another's rows. Both merges add only what is missing.
 
 from __future__ import annotations
 
+import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import yaml
@@ -218,6 +220,76 @@ def _model_dir(plan: ScaffoldPlan, model: ModelSpec) -> str:
     return f"dbt/models/{model.layer}/{plan.table_id}"
 
 
+def _iter_sql_no_symlinks(models_root: Path, basename: str) -> Iterator[Path]:
+    """Yield every ``basename`` under ``models_root`` WITHOUT following symlinks.
+
+    ``Path.rglob`` descends into symlinked subdirectories, which could scan an
+    external tree (Codex #444); ``os.walk(followlinks=False)`` stays inside the
+    workspace, so symlinked directory entries are pruned from the descent
+    (never followed into). A symlinked FILE matching ``basename`` is still
+    yielded, not skipped: detecting it is a basename match on the directory
+    entry itself, which does not require following the link, and the model it
+    names is still a collision under ``dbt/models`` -- silently skipping it
+    would let the target model be written at a new path while the symlinked
+    duplicate remains a live model entry (Codex #444 follow-up). The caller's
+    same-path check still excludes the ordinary rerun case.
+    """
+    for dirpath, dirnames, filenames in os.walk(models_root, followlinks=False):
+        dirnames[:] = [d for d in dirnames if not (Path(dirpath) / d).is_symlink()]
+        if basename in filenames:
+            yield Path(dirpath) / basename
+
+
+def _refuse_model_name_collision(root: Path, relative: str) -> None:
+    """Refuse a ``.sql`` model file whose dbt model NAME (its basename) already
+    exists at a DIFFERENT path under ``dbt/models/`` -- e.g. a pre-existing
+    FLAT-layout ``dbt/models/audit/audit_<t>_parity.sql`` colliding with this
+    scaffold's NESTED ``dbt/models/audit/<t>/audit_<t>_parity.sql`` (#431b).
+
+    dbt resolves a model by its file's base name, not its directory: two ``.sql``
+    files sharing a basename anywhere under ``models/`` compile to the SAME model
+    name and ``dbt parse``/``plan`` fails DBT_ARTIFACT_INTEGRITY ("two models with
+    the name X"). ``write_if_absent`` only checks the EXACT target path, so a
+    stale flat-layout file at a different path would silently survive and this
+    collision would only surface later, at a live ``dbt`` run. Scanning here fails
+    it closed at scaffold time instead, naming both paths.
+
+    A file at the SAME relative path is the ordinary non-destructive rerun (kept
+    by ``write_if_absent`` below) -- not a collision, so it must never be flagged
+    here.
+    """
+    target = Path(relative)
+    if target.suffix != ".sql":
+        return  # only .sql files carry a dbt MODEL name; _models.yml does not
+    models_root = root / "dbt" / "models"
+    if not models_root.is_dir():
+        return
+    # Before scanning, refuse a symlinked `dbt/`, `dbt/models`, or any component
+    # up to the repo root: `rglob` would follow such a starting symlink and scan
+    # an EXTERNAL target (a hang/DoS risk, and a basename match outside the
+    # workspace would raise a misleading collision) -- Codex #444. The write
+    # itself is independently symlink-guarded by write_if_absent below.
+    _refuse_symlinked_components(root, models_root / target.name)
+    for existing in _iter_sql_no_symlinks(models_root, target.name):
+        if existing.resolve() == (root / relative).resolve():
+            continue  # the rerun/no-collision case: same path, not a collision
+        raise ScaffoldError(
+            f"refusing to scaffold {relative!r}: a model file with the same name "
+            f"already exists at {existing.relative_to(root).as_posix()!r}. dbt "
+            "resolves models by file basename, not directory -- two files named "
+            f"{target.name!r} would compile to the same model and fail "
+            "DBT_ARTIFACT_INTEGRITY at `dbt parse`/`plan`. Remove or rename the "
+            "stale file before re-running scaffold."
+        )
+
+
 def write_model_file(root: Path, relative: str, text: str) -> bool:
-    """Write one model artifact non-destructively; True when written."""
+    """Write one model artifact non-destructively; True when written.
+
+    Refuses closed (:class:`ScaffoldError`) if a ``.sql`` model file with the
+    same basename already exists at a different path under ``dbt/models/``
+    (#431b) -- a same-named model in a different layout, never silently
+    written as a second colliding model.
+    """
+    _refuse_model_name_collision(root, relative)
     return write_if_absent(root, relative, text.encode("utf-8"))

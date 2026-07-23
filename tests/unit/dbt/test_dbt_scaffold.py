@@ -827,5 +827,115 @@ def test_plain_missing_attribute_still_names_derived_columns_remedy() -> None:
     assert "customer_segment" in str(err.value)
 
 
+# --------------------------------------------------------------------------- #
+# #434 regression -- a gold_star reference to a decision:drop column fails
+# closed with a message naming the drop conflict, never silently materialized.
+# --------------------------------------------------------------------------- #
+def test_degenerate_dimension_referencing_a_dropped_column_fails_closed() -> None:
+    """legacy_flag (decision: drop, #434's own fixture row) is referenced as a
+    degenerate dimension -- it must NEVER leak into the fact model, and the
+    error must name the real conflict (dropped, not merely unstaged)."""
+    dropped_ref = {
+        **_MAP,
+        "gold_star": {
+            **_MAP["gold_star"],
+            "degenerate_dimensions": ["legacy_flag"],
+        },
+    }
+    with pytest.raises(model_plan.ScaffoldError, match="legacy_flag") as err:
+        model_plan.build_scaffold_plan(_source(dropped_ref), TABLE_ID, _FACT)
+    assert "decision: drop" in str(err.value) or "decision 'drop'" in str(err.value)
+
+
+def test_dimension_attribute_referencing_a_dropped_column_fails_closed() -> None:
+    """A dimension attribute citing a decision:drop column must also fail closed
+    (never materialized), with the same drop-aware message."""
+    dropped_ref = {
+        **_MAP,
+        "gold_star": {
+            **_MAP["gold_star"],
+            "dimensions": [
+                {
+                    "name": "gold.dim_customer_rss",
+                    "surrogate_key": "customer_sk",
+                    "attributes": ["legacy_flag"],
+                },
+            ],
+        },
+    }
+    with pytest.raises(model_plan.ScaffoldError, match="legacy_flag") as err:
+        model_plan.build_scaffold_plan(_source(dropped_ref), TABLE_ID, _FACT)
+    assert "decision: drop" in str(err.value) or "decision 'drop'" in str(err.value)
+
+
+def test_dropped_name_shadowed_by_a_resolvable_derived_column_fails_closed() -> None:
+    """Codex #444 (P2): a name marked ``decision: drop`` in columns[] that is ALSO
+    declared as a same-named ``derived_columns`` entry with a filled, resolvable
+    ``derived_from`` must still fail closed -- the derivation path must never
+    resolve a dropped name to a real bronze citation ahead of the drop guard.
+
+    ``customer_segment`` is dropped in columns[] (present only as its own drop
+    row) AND re-declared in derived_columns with a derived_from that DOES resolve
+    to a real kept bronze column (``seg_src``). Pre-fix, ``_bronze_citation``
+    resolves through the derived_columns path and returns that citation BEFORE
+    ever consulting ``dropped_column_names`` -- silently un-dropping the column.
+    """
+    dropped_and_derived = {
+        **_MAP,
+        "columns": [
+            {"source_name": "seg_src", "decision": "keep", "rename_to": "seg_src"},
+            {"source_name": "customer_segment", "decision": "drop"},
+            *_MAP["columns"],
+        ],
+        "derived_columns": [
+            {
+                "name": "customer_segment",
+                "type": "text",
+                "derived_from": "seg_src",
+                "mapping_source": "templates/assumptions.md",
+                "unmapped_default": "UNMAPPED",
+            }
+        ],
+        "gold_star": {
+            **_MAP["gold_star"],
+            "dimensions": [
+                {
+                    "name": "gold.dim_customer_rss",
+                    "surrogate_key": "customer_sk",
+                    "attributes": ["customer_segment"],
+                },
+            ],
+        },
+    }
+    with pytest.raises(model_plan.ScaffoldError, match="customer_segment") as err:
+        model_plan.build_scaffold_plan(_source(dropped_and_derived), TABLE_ID, _FACT)
+    assert "decision: drop" in str(err.value) or "decision 'drop'" in str(err.value)
+
+
+def test_dropped_column_never_materializes_in_any_model_or_contract() -> None:
+    """The issue-title guarantee (#434): a ``decision: drop`` column present only
+    in ``columns[]`` (NOT referenced anywhere in gold_star) must be absent from
+    EVERY generated model's SELECT list AND every rendered ``_models.yml`` column
+    contract, in the ordinary (non-fail-closed) scaffold. ``legacy_flag`` is _MAP's
+    own drop row. This locks the pre-existing ``_kept_columns`` exclusion against
+    regression across staging, dims, fact, and their YAML contracts."""
+    plan = _plan()
+
+    # No model's column list carries the dropped column.
+    for model in _all_models(plan):
+        assert "legacy_flag" not in {col.name for col in model.columns}, model.name
+
+    # No generated SQL SELECT list carries it.
+    assert "legacy_flag" not in sql_render.render_staging_sql(plan)
+    for dim in plan.dimensions:
+        assert "legacy_flag" not in sql_render.render_dimension_sql(dim, plan)
+    assert "legacy_flag" not in sql_render.render_fact_sql(plan)
+
+    # No _models.yml column contract carries it, in any layer.
+    for models in ((plan.staging,), tuple(plan.dimensions), (plan.fact_model,)):
+        doc = yaml_render.render_models_document(models, plan, SELECTOR)
+        assert "legacy_flag" not in yaml.safe_dump(doc)
+
+
 # #418-P1 conformed-dimension reuse tests live in test_scaffold_conformed_reuse.py
 # (self-contained, to keep this file focused and under the module-size threshold).

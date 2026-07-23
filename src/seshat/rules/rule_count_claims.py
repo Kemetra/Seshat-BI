@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from ..core import Finding, RuleContext, RuleTier, Severity
+from ..core import Finding, RuleContext, RuleTier, Severity, read_tracked_text
 from ..registry import register
 
 _MANIFEST = "docs/quality/rule-count-claims.yaml"
@@ -57,9 +57,13 @@ def _finding(message: str, locator: str) -> Finding:
     tier=RuleTier.KIT_SELF,
 )
 def check_rule_count_claims(ctx: RuleContext) -> Iterable[Finding]:
-    # 1. The manifest must be a tracked file; if absent the gate fails loud rather
-    #    than passing with nothing to check.
-    if _MANIFEST not in ctx.tracked_files:
+    # 1. The manifest must be a tracked file whose content is present on disk; if
+    #    untracked OR tracked-but-deleted-on-disk (#430) the gate fails loud rather
+    #    than passing with nothing to check -- and never crashes on the read.
+    raw = None
+    if _MANIFEST in ctx.tracked_files:
+        raw = read_tracked_text(ctx.repo_root / _MANIFEST)
+    if raw is None:
         return [
             _finding(
                 f"rule-count-claims manifest {_MANIFEST!r} is missing or untracked; "
@@ -70,7 +74,6 @@ def check_rule_count_claims(ctx: RuleContext) -> Iterable[Finding]:
 
     import yaml  # lazy: dev/optional dep, kept out of the retail check core chain
 
-    raw = (ctx.repo_root / _MANIFEST).read_text(encoding="utf-8")
     try:
         data = yaml.safe_load(raw)
     except yaml.YAMLError as exc:  # malformed YAML -> fail loud
@@ -88,9 +91,12 @@ def check_rule_count_claims(ctx: RuleContext) -> Iterable[Finding]:
 
     # 2. Establish the authoritative count from the committed rule-count JSON, read
     #    with stdlib json (never by importing the rules package). A missing/untracked
-    #    or unparseable/non-list source fails loud -- SC2 cannot compare against an
-    #    unknown count.
-    if _COUNT_SOURCE not in ctx.tracked_files:
+    #    (or tracked-but-deleted-on-disk, #430) or unparseable/non-list source fails
+    #    loud -- SC2 cannot compare against an unknown count, and never crashes.
+    count_raw = None
+    if _COUNT_SOURCE in ctx.tracked_files:
+        count_raw = read_tracked_text(ctx.repo_root / _COUNT_SOURCE)
+    if count_raw is None:
         return [
             _finding(
                 f"rule-count source {_COUNT_SOURCE!r} is missing or untracked; "
@@ -101,7 +107,6 @@ def check_rule_count_claims(ctx: RuleContext) -> Iterable[Finding]:
 
     import json  # stdlib
 
-    count_raw = (ctx.repo_root / _COUNT_SOURCE).read_text(encoding="utf-8")
     try:
         parsed = json.loads(count_raw)
     except json.JSONDecodeError as exc:
@@ -175,9 +180,19 @@ def check_rule_count_claims(ctx: RuleContext) -> Iterable[Finding]:
             continue
 
         # 4e. the anchor must literally be present in the claiming doc -- else the
-        #     manifest entry points at a sentence that has moved or been deleted.
+        #     manifest entry points at a sentence that has moved or been deleted. A
+        #     tracked-but-deleted-on-disk doc (#430) fails loud, never crashes.
         anchor = claim["anchor"]
-        doc_text = (ctx.repo_root / doc).read_text(encoding="utf-8")
+        doc_text = read_tracked_text(ctx.repo_root / doc)
+        if doc_text is None:
+            findings.append(
+                _finding(
+                    f"claim {cid!r} names doc {doc!r}, which is tracked but missing "
+                    f"on disk; SC2 cannot verify the claimed anchor",
+                    loc,
+                )
+            )
+            continue
         if anchor not in doc_text:
             findings.append(
                 _finding(
