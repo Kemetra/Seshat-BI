@@ -27,6 +27,13 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+### Fixed
+- `seshat dbt doctor` no longer reports `SESHAT_DBT_PORT`, `SESHAT_DBT_SCHEMA`, and
+  `SESHAT_DBT_SSLMODE` as missing required keys; these carry documented
+  `env_var(NAME, DEFAULT)` defaults in `profiles.example.yml` and are optional. Only
+  the four keys with no default (host/user/password/dbname) are flagged when absent.
+  (#437)
+
 ## [0.6.1] -- 2026-07-22
 
 ### Fixed

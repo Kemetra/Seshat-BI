@@ -50,7 +50,7 @@ from seshat.dbt.planning import (
 )
 from seshat.dbt.project import validate_project
 from seshat.dbt.redaction import (
-    DBT_ENVIRONMENT_KEYS,
+    REQUIRED_DBT_ENVIRONMENT_KEYS,
     EnvironmentConfigError,
     load_child_environment,
     sanitize,
@@ -206,7 +206,9 @@ def _verify_profile_git_boundary(root: Path) -> None:
 
 def _verify_environment(root: Path) -> None:
     environment = load_child_environment(root)
-    missing_keys = [key for key in DBT_ENVIRONMENT_KEYS if not environment.get(key)]
+    missing_keys = [
+        key for key in REQUIRED_DBT_ENVIRONMENT_KEYS if not environment.get(key)
+    ]
     if missing_keys:
         raise _pending(
             "required dbt environment keys are missing: " + ", ".join(missing_keys)
