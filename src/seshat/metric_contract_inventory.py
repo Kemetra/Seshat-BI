@@ -182,6 +182,54 @@ def _metric_contract(raw: dict, path: Path, scope: str) -> MetricContract:
     )
 
 
+def _resolve_contract(
+    path: Path, resolved_root: Path, yaml
+) -> tuple[MetricContract | None, str | None]:
+    """Parse one path into a validated contract, or the reason it is refused."""
+    resolved_path = path.resolve()
+    try:
+        relative = resolved_path.relative_to(resolved_root).as_posix()
+    except ValueError:
+        return None, f"{path}: metric contract escapes repository root"
+    scope = _scope_from_path(relative)
+    if scope is None:
+        return None, f"{relative}: metric contract is outside mappings/<scope>/metrics"
+    raw, read_error = _read_mapping(path, relative, yaml)
+    if read_error is not None:
+        return None, read_error
+    assert raw is not None
+    semantic_approval = _named_semantic_approval(
+        resolved_root, scope, raw.get("name"), yaml
+    )
+    validation_error = _contract_error(raw, path, relative, semantic_approval)
+    if validation_error is not None:
+        return None, validation_error
+    return _metric_contract(raw, path, scope), None
+
+
+def _duplicate_error(
+    contract: MetricContract,
+    resolved_root: Path,
+    approved: dict[ContractKey, MetricContract],
+    bindings: dict[MeasureBinding, MetricContract],
+) -> str | None:
+    """Refuse a contract that collides with one already registered."""
+    relative = contract.path.resolve().relative_to(resolved_root).as_posix()
+    if (contract.scope, contract.name) in approved:
+        return (
+            f"{relative}: duplicate metric contract name {contract.name!r} "
+            f"within scope {contract.scope!r}"
+        )
+    previous = bindings.get(contract.binding)
+    if previous is not None:
+        previous_relative = previous.path.resolve().relative_to(resolved_root)
+        return (
+            f"{relative}: duplicate semantic binding {contract.binding!r}; "
+            f"already claimed by {previous_relative.as_posix()}"
+        )
+    return None
+
+
 def load_contract_inventory(paths: Iterable[Path], root: Path) -> ContractInventory:
     """Load complete contracts backed by a named approval in their own scope."""
     import yaml
@@ -191,46 +239,15 @@ def load_contract_inventory(paths: Iterable[Path], root: Path) -> ContractInvent
     errors: list[str] = []
     resolved_root = Path(root).resolve()
     for path in sorted(Path(item) for item in paths):
-        resolved_path = path.resolve()
-        try:
-            relative = resolved_path.relative_to(resolved_root).as_posix()
-        except ValueError:
-            errors.append(f"{path}: metric contract escapes repository root")
+        contract, error = _resolve_contract(path, resolved_root, yaml)
+        if error is not None:
+            errors.append(error)
             continue
-        scope = _scope_from_path(relative)
-        if scope is None:
-            errors.append(
-                f"{relative}: metric contract is outside mappings/<scope>/metrics"
-            )
+        assert contract is not None
+        duplicate = _duplicate_error(contract, resolved_root, approved, bindings)
+        if duplicate is not None:
+            errors.append(duplicate)
             continue
-        raw, read_error = _read_mapping(path, relative, yaml)
-        if read_error is not None:
-            errors.append(read_error)
-            continue
-        assert raw is not None
-        semantic_approval = _named_semantic_approval(
-            resolved_root, scope, raw.get("name"), yaml
-        )
-        validation_error = _contract_error(raw, path, relative, semantic_approval)
-        if validation_error is not None:
-            errors.append(validation_error)
-            continue
-        contract = _metric_contract(raw, path, scope)
-        key = (scope, contract.name)
-        if key in approved:
-            errors.append(
-                f"{relative}: duplicate metric contract name {contract.name!r} "
-                f"within scope {scope!r}"
-            )
-            continue
-        previous = bindings.get(contract.binding)
-        if previous is not None:
-            previous_relative = previous.path.resolve().relative_to(resolved_root)
-            errors.append(
-                f"{relative}: duplicate semantic binding {contract.binding!r}; "
-                f"already claimed by {previous_relative.as_posix()}"
-            )
-            continue
-        approved[key] = contract
+        approved[(contract.scope, contract.name)] = contract
         bindings[contract.binding] = contract
     return ContractInventory(approved, tuple(errors))

@@ -108,6 +108,10 @@ approvals:
     owner: "Ahmed Shaaban (metric_owner)"   # named human, metric_owner authority (F009 metric-contract policy)
     at: "2026-07-05"
     note: "AMENDMENT (not a re-pass): ruled the YTD-year-start policies H9 did not cover -- E1=A calendar year (no fiscal calendar; seedable on the existing date table), E2=C both partial-period comparisons (to-date-vs-to-date primary, full-prior-year secondary; mirrors D3=C). Unblocks future F009 authoring of ytd-net-sales. Stage remains pass on its original 5-contract evidence; record: approval-decision-YTD-year-start.md."
+  - stage: "semantic_model_ready"
+    owner: "Ahmed Shaaban (metric_owner)"   # named human, metric_owner authority (F009 metric-contract policy)
+    at: "2026-07-23"
+    note: "metric_owner sign-off on the 5 base metric contracts: TotalSales, TotalQuantity, TransactionCount, AvgTransactionValue, DiscountedTransactionRate. Confirms the base-measure definitions under metric_owner authority to satisfy the hardened L3 named-approval gate (this PR). The 2026-06-25 data_owner approval of the same 5 contracts stands as-is; this adds the metric_owner authority the tightened rule now requires. Stage remains pass -- not a re-pass, an authority confirmation."
   - stage: "publish_ready"
     owner: "Ahmed Shaaban (data_owner)"   # named human, BI publish/data owner
     at: "2026-07-05"

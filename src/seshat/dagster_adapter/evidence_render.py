@@ -175,24 +175,43 @@ def _halted_field_errors(label: str, row: dict) -> list[str]:
     return [f"{label}: halted outcome requires blocking_reason + owner"]
 
 
-def _record_shape_errors(label: str, row: dict) -> list[str]:
-    errors: list[str] = []
+def _run_id_error(label: str, row: dict) -> list[str]:
     run_id = row.get("run_id")
     if not isinstance(run_id, str) or not _RUN_ID_RE.fullmatch(run_id):
-        errors.append(f"{label}: run_id must match the run-id schema")
-    for field in ("table", "gate_command"):
-        value = row.get(field)
-        if not isinstance(value, str) or not value:
-            errors.append(f"{label}: {field} must be a non-empty string")
+        return [f"{label}: run_id must match the run-id schema"]
+    return []
+
+
+def _required_string_errors(label: str, row: dict) -> list[str]:
+    return [
+        f"{label}: {field} must be a non-empty string"
+        for field in ("table", "gate_command")
+        if not (isinstance(row.get(field), str) and row.get(field))
+    ]
+
+
+def _optional_string_errors(label: str, row: dict) -> list[str]:
+    return [
+        f"{label}: {field} must be a string or null"
+        for field in ("blocking_reason", "owner")
+        if row.get(field) is not None and not isinstance(row.get(field), str)
+    ]
+
+
+def _exit_code_error(label: str, row: dict) -> list[str]:
     exit_code = row.get("exit_code")
     if exit_code is not None and type(exit_code) is not int:
-        errors.append(f"{label}: exit_code must be an integer or null")
+        return [f"{label}: exit_code must be an integer or null"]
+    return []
+
+
+def _record_shape_errors(label: str, row: dict) -> list[str]:
+    errors = _run_id_error(label, row)
+    errors += _required_string_errors(label, row)
+    errors += _exit_code_error(label, row)
     if not isinstance(row.get("measured"), dict):
         errors.append(f"{label}: measured must be an object")
-    for field in ("blocking_reason", "owner"):
-        value = row.get(field)
-        if value is not None and not isinstance(value, str):
-            errors.append(f"{label}: {field} must be a string or null")
+    errors += _optional_string_errors(label, row)
     if not _is_datetime(row.get("ts")):
         errors.append(f"{label}: ts must be an offset-aware date-time")
     return errors
