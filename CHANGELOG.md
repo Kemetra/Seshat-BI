@@ -27,6 +27,14 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+### Changed
+- `seshat generate` now accepts an inline aggregation-call denominator
+  (e.g. `DIVIDE(SUM(...), DISTINCTCOUNT(...))`) in a `kind: ratio` contract, verified
+  through the same L3 shape recognition the `kind: base` path uses, making Average
+  Transaction Value and similar ratios machine-generatable inside the
+  generate->verify guarantee. Genuinely unrecognized denominators still escalate.
+  (#432)
+
 ## [0.6.1] -- 2026-07-22
 
 ### Fixed

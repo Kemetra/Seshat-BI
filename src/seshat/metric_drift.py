@@ -382,6 +382,47 @@ def _is_ratio_needing_additive_default(d: dict[str, Any] | None) -> bool:
     return bool(d) and d.get("kind") == "ratio" and "additive" not in d
 
 
+def _is_measure_ref(base: str) -> bool:
+    """True when `base` is a bare `[Name]` measure reference (the OPAQUE base form)."""
+    return bool(re.fullmatch(r"\[[^\]]+\]", base))
+
+
+def _ratio_denominator_filters(
+    dax_denominator: str, contract_side: dict[str, Any]
+) -> frozenset[Filter] | Verdict:
+    """Resolve a DIVIDE denominator's filter-set, dispatching on its base shape.
+
+    Two recognized families (audit #432 widened the second):
+      * measure-ref base ([Measure] / CALCULATE([Measure], ...)) -- OPAQUE: the
+        base measure is its own contract, so only its filter-set is compared; its
+        aggregation is never read here (unchanged pre-#432 behavior).
+      * inline aggregation-call base (AGG(col) / CALCULATE(AGG(col), ...)) --
+        reuses `_base_dax_filters` (the same shape logic the kind:base path
+        already trusts), which ALSO checks the aggregation function against
+        `contract_side['aggregation']` -- the inline call is not opaque, there is
+        no separate contract for it to defer to.
+    Anything genuinely unrecognized (VAR/RETURN, nested CALCULATE, a non-AGG
+    call) still escalates, via `_base_dax_filters`'s own ESCALATE-by-default.
+    """
+    den = _normalize_denominator(dax_denominator)
+    if den is not None and _is_measure_ref(den[0]):
+        _base_ref, pred_texts = den
+        return _recognize_filters(pred_texts, detail_noun="denominator predicate")
+
+    # Not a measure-ref shape (either _normalize_denominator returned None -- a
+    # bare AGG(col) -- or it returned a CALCULATE(...) whose base is an inline
+    # AGG(col) call, not `[Measure]`). Reuse the base-measure shape logic, which
+    # recognizes AGG(col) and CALCULATE(AGG(col), p1, ...) and checks the
+    # aggregation function en route.
+    agg = contract_side.get("aggregation")
+    want_func = _BASE_AGG_FUNC.get(agg) if agg else None
+    if want_func is None:
+        return Verdict(
+            "escalate", f"contract denominator aggregation {agg!r} not recognized"
+        )
+    return _base_dax_filters(dax_denominator.strip(), want_func)
+
+
 def _check_ratio_drift(dax_expr: str, definition: dict[str, Any]) -> Verdict:
     """Verify a ratio (DIVIDE) measure's denominator filter-set vs its contract.
 
@@ -407,16 +448,9 @@ def _check_ratio_drift(dax_expr: str, definition: dict[str, Any]) -> Verdict:
     if args is None or len(args) not in (2, 3):
         return Verdict("escalate", "DIVIDE does not have 2 or 3 balanced arguments")
 
-    den = _normalize_denominator(args[1])
-    if den is None:
-        return Verdict(
-            "escalate",
-            "denominator shape not recognized (not a bare measure or CALCULATE)",
-        )
-    _base_ref, pred_texts = den
-
-    # Map each denominator predicate to a recognized Filter; any unknown -> escalate.
-    filters = _recognize_filters(pred_texts, detail_noun="denominator predicate")
+    # denominator shape: bare/CALCULATE-wrapped measure ref (opaque) OR an inline
+    # aggregation call (#432 widening) -- see _ratio_denominator_filters.
+    filters = _ratio_denominator_filters(args[1], definition["denominator"])
     if isinstance(filters, Verdict):
         return filters
 
