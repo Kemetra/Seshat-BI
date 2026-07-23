@@ -54,7 +54,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from .core import RuleContext, is_test_path
+from .core import RuleContext, is_test_path, read_tracked_text
 
 DATE_TABLE_MARKER = "annotation PBI_DateTable = true"
 # One of TWO accepted date-table markers (see D7 in rules/dax.py). The
@@ -556,12 +556,12 @@ def iter_model_files(ctx: RuleContext, suffix: str) -> Iterable[tuple[str, str]]
     for rel in ctx.tracked_files:
         if is_test_path(rel):
             continue
-        if ".SemanticModel/definition/" in rel and rel.endswith(suffix):
-            try:
-                text = (ctx.repo_root / Path(rel)).read_text(encoding="utf-8-sig")
-            except FileNotFoundError:
-                continue
-            yield rel, text
+        if ".SemanticModel/definition/" not in rel or not rel.endswith(suffix):
+            continue
+        text = read_tracked_text(ctx.repo_root / Path(rel), encoding="utf-8-sig")
+        if text is None:
+            continue  # tracked-but-deleted-on-disk (#430): nothing to read
+        yield rel, text
 
 
 def normalize_measure_body(expression: str) -> str:

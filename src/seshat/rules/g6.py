@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from typing import Iterable
 
-from ..core import Finding, RuleContext, Severity, is_test_path
+from ..core import Finding, RuleContext, Severity, is_test_path, read_tracked_text
 from ..registry import register
 
 # A PBIP M parameter line:
@@ -53,9 +53,8 @@ def check_pbip_param_no_real_value(ctx: RuleContext) -> Iterable[Finding]:
         # A tracked-but-deleted-on-disk parameter file (#430) has no content to
         # scan for a leaked value; skip it rather than crash. This is a content
         # scan, not a presence check.
-        try:
-            text = (ctx.repo_root / rel).read_text(encoding="utf-8-sig")
-        except FileNotFoundError:
+        text = read_tracked_text(ctx.repo_root / rel, encoding="utf-8-sig")
+        if text is None:
             continue
         for lineno, line in enumerate(text.splitlines(), start=1):
             m = _PARAM_RE.search(line)
