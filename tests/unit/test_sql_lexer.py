@@ -36,3 +36,27 @@ def test_stale_schema_flags_create_schema_raw() -> None:
 def test_stale_schema_flags_qualifier_and_from() -> None:
     hits = stale_schema_tokens("SELECT * FROM marts.orders;")
     assert ("marts", 1) in hits
+
+
+def test_tokenize_preserves_psql_meta_command_backslash() -> None:
+    # #448 (Codex P1): a psql `\`-meta-command must keep its backslash so a rule can
+    # tell the buffer-sending family (`\g`/`\gx`/`\gexec`) apart from an identifier.
+    bs = chr(92)
+    for cmd in (bs + "g", bs + "gx", bs + "gexec", bs + "set", bs + "d+"):
+        toks = [t.text for t in tokenize_sql("SELECT 1 " + cmd) if t.text]
+        assert cmd in toks, (cmd, toks)
+
+
+def test_tokenize_g_meta_command_is_a_distinct_token_not_identifier_g() -> None:
+    bs = chr(92)
+    toks = [t.text for t in tokenize_sql("DROP TABLE bronze.x " + bs + "g") if t.text]
+    assert toks[-1] == bs + "g"  # not a bare "g"
+
+
+def test_tokenize_bare_trailing_backslash_is_skipped() -> None:
+    # A lone backslash (EOL or `\` + non-command char) matches no meta-command and is
+    # skipped, not emitted as a token. (Bare digits never tokenize -- leading-digit
+    # is not a _WORD -- so use identifier tokens to isolate the backslash behavior.)
+    bs = chr(92)
+    assert [t.text for t in tokenize_sql("SELECT x " + bs) if t.text] == ["SELECT", "x"]
+    assert [t.text for t in tokenize_sql("a " + bs + " b") if t.text] == ["a", "b"]

@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from ..core import Finding, RuleContext, RuleTier, Severity
+from ..core import Finding, RuleContext, RuleTier, Severity, read_tracked_text
 from ..registry import register
 
 _MANIFEST = "docs/quality/status-claims.yaml"
@@ -55,9 +55,14 @@ def _finding(message: str, locator: str) -> Finding:
     tier=RuleTier.KIT_SELF,
 )
 def check_status_claims(ctx: RuleContext) -> Iterable[Finding]:
-    # The manifest must be a tracked file; if absent the gate fails loud rather than
-    # passing with nothing to check.
-    if _MANIFEST not in ctx.tracked_files:
+    # The manifest must be a tracked file present on disk. Absent (untracked) OR
+    # tracked-but-deleted-on-disk (#430; still listed by `git ls-files`) both
+    # fail loud with the SAME finding rather than passing with nothing to check
+    # -- and never crash on the missing read.
+    raw = None
+    if _MANIFEST in ctx.tracked_files:
+        raw = read_tracked_text(ctx.repo_root / _MANIFEST)
+    if raw is None:
         return [
             _finding(
                 f"status-claims manifest {_MANIFEST!r} is missing or untracked; "
@@ -68,7 +73,6 @@ def check_status_claims(ctx: RuleContext) -> Iterable[Finding]:
 
     import yaml  # lazy: dev/optional dep, kept out of the retail check core chain
 
-    raw = (ctx.repo_root / _MANIFEST).read_text(encoding="utf-8")
     try:
         data = yaml.safe_load(raw)
     except yaml.YAMLError as exc:  # malformed YAML -> fail loud
@@ -128,7 +132,17 @@ def check_status_claims(ctx: RuleContext) -> Iterable[Finding]:
         # The anchor must literally be present in the claiming doc -- else the
         # manifest entry points at a sentence that has moved or been deleted.
         anchor = claim["anchor"]
-        doc_text = (ctx.repo_root / doc).read_text(encoding="utf-8")
+        doc_text = read_tracked_text(ctx.repo_root / doc)
+        if doc_text is None:
+            # Tracked but deleted on disk (#430): fail loud rather than crash.
+            findings.append(
+                _finding(
+                    f"claim {cid!r} names doc {doc!r}, which is tracked but missing "
+                    f"on disk; the claimed anchor cannot be verified",
+                    loc,
+                )
+            )
+            continue
         if anchor not in doc_text:
             findings.append(
                 _finding(

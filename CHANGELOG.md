@@ -27,12 +27,42 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+### Changed
+- `seshat profile --format json` no longer prints the human progress banner to
+  stderr, so a merged-stream pipe (`seshat profile ... --format json 2>&1 | jq`)
+  receives pure JSON. The banner is retained in the default (text) output mode;
+  DB-boundary errors stay on stderr in both modes. (#436)
+- `seshat generate` now accepts an inline aggregation-call denominator
+  (e.g. `DIVIDE(SUM(...), DISTINCTCOUNT(...))`) in a `kind: ratio` contract, verified
+  through the same L3 shape recognition the `kind: base` path uses, making Average
+  Transaction Value and similar ratios machine-generatable inside the
+  generate->verify guarantee. Genuinely unrecognized denominators still escalate.
+  (#432)
+
 ### Fixed
+- S4b no longer false-flags a schema-qualified `ALTER TABLE <schema>.<t> ALTER COLUMN
+  ... SET NOT NULL` inside a `BEGIN/COMMIT` block as "target schema undetermined". The
+  inner `ALTER` keyword of the `ALTER COLUMN` sub-clause was re-evaluated as a
+  top-level DDL verb; S4b now only evaluates a DDL verb that starts a statement. (#442)
+- `seshat check` no longer crashes with `FileNotFoundError` when a git-tracked file
+  is deleted from disk but the deletion is not yet staged; content-scanning rules
+  (G3, S-family, B1, G6, R1, TMDL) skip the absent path gracefully, the
+  presence-required governance-manifest rules (SC1/SC2, A1/A3, DF1, DR1) fail loud,
+  and file-presence rules (AL1/AL2/HR11) still flag a deleted required artifact. (#430)
 - `seshat dbt doctor` no longer reports `SESHAT_DBT_PORT`, `SESHAT_DBT_SCHEMA`, and
   `SESHAT_DBT_SSLMODE` as missing required keys; these carry documented
   `env_var(NAME, DEFAULT)` defaults in `profiles.example.yml` and are optional. Only
   the four keys with no default (host/user/password/dbname) are flagged when absent.
-  (#437)
+  A present-but-empty override (`SESHAT_DBT_SCHEMA=`) is still rejected. (#437)
+- `seshat dbt scaffold` fails closed when a `gold_star` dimension attribute, fact
+  measure, or degenerate dimension references a column marked `decision: drop` in
+  the source map, naming the drop conflict instead of silently materializing (or
+  emitting a generic "unresolved") — a dropped column can never appear in a
+  generated model or its `_models.yml` contract, in any layout. (#434)
+- `seshat dbt scaffold` refuses to write a `.sql` model whose dbt model name (file
+  basename) already exists at a different path under `dbt/models/`, instead of
+  silently producing a duplicate that breaks `dbt plan` with a
+  `DBT_ARTIFACT_INTEGRITY` "two models with the name" error. (#431)
 
 ## [0.6.1] -- 2026-07-22
 

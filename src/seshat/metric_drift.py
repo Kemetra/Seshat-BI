@@ -382,6 +382,104 @@ def _is_ratio_needing_additive_default(d: dict[str, Any] | None) -> bool:
     return bool(d) and d.get("kind") == "ratio" and "additive" not in d
 
 
+def _is_measure_ref(base: str) -> bool:
+    """True when `base` is a bare `[Name]` measure reference (the OPAQUE base form)."""
+    return bool(re.fullmatch(r"\[[^\]]+\]", base))
+
+
+def _expected_inline_operand(contract_side: dict[str, Any]) -> str | None:
+    """The DAX operand text a contract's inline aggregation source must emit.
+
+    Mirrors the generator's `_qualify`: ``{table: "gold.x", column: "c"}`` ->
+    ``'gold x'[c]``; a table-only source (e.g. count_rows) -> ``'gold x'``.
+    Returns None when the source shape is absent/mis-typed (caller escalates --
+    it cannot verify what it cannot resolve).
+    """
+    source = contract_side.get("source")
+    if not isinstance(source, dict):
+        return None
+    table = source.get("table")
+    if not isinstance(table, str) or not table:
+        return None
+    quoted = "'" + table.replace(".", " ") + "'"
+    column = source.get("column")
+    if isinstance(column, str) and column:
+        return f"{quoted}[{column}]"
+    return quoted
+
+
+def _inline_operand_matches(dax_agg_expr: str, contract_side: dict[str, Any]) -> bool:
+    """True when the DAX ``AGG(<operand>)`` operand equals the contract source.
+
+    Compares the argument inside the recognized aggregation call to
+    `_expected_inline_operand`, ignoring surrounding whitespace. False when the
+    operand cannot be extracted or does not match -- so a denominator that
+    aggregates a DIFFERENT column than the contract declares (e.g. a
+    `DISTINCTCOUNT(order_id)` contract with `DISTINCTCOUNT(customer_id)` DAX) is
+    NOT silently accepted (#432 / Codex #449).
+    """
+    func = _recognized_agg_func(dax_agg_expr)
+    if func is None:
+        return False
+    inner = _outer_call(dax_agg_expr, func)
+    expected = _expected_inline_operand(contract_side)
+    if inner is None or expected is None:
+        return False
+    return inner.strip() == expected
+
+
+def _ratio_denominator_filters(
+    dax_denominator: str, contract_side: dict[str, Any]
+) -> frozenset[Filter] | Verdict:
+    """Resolve a DIVIDE denominator's filter-set, dispatching on its base shape.
+
+    Two recognized families (audit #432 widened the second):
+      * measure-ref base ([Measure] / CALCULATE([Measure], ...)) -- OPAQUE: the
+        base measure is its own contract, so only its filter-set is compared; its
+        aggregation is never read here (unchanged pre-#432 behavior).
+      * inline aggregation-call base (AGG(col) / CALCULATE(AGG(col), ...)) --
+        reuses `_base_dax_filters` (the same shape logic the kind:base path
+        already trusts), which checks the aggregation FUNCTION against
+        `contract_side['aggregation']`, AND -- because the inline call is not
+        opaque and has no separate contract to defer to -- verifies the aggregated
+        OPERAND matches `contract_side['source']` (Codex #449: otherwise a
+        different-column denominator computing a different KPI would pass).
+    Anything genuinely unrecognized (VAR/RETURN, nested CALCULATE, a non-AGG
+    call), or an operand that does not match the contract source, escalates.
+    """
+    den = _normalize_denominator(dax_denominator)
+    if den is not None and _is_measure_ref(den[0]):
+        _base_ref, pred_texts = den
+        return _recognize_filters(pred_texts, detail_noun="denominator predicate")
+
+    # Not a measure-ref shape (either _normalize_denominator returned None -- a
+    # bare AGG(col) -- or it returned a CALCULATE(...) whose base is an inline
+    # AGG(col) call, not `[Measure]`). Reuse the base-measure shape logic, which
+    # recognizes AGG(col) and CALCULATE(AGG(col), p1, ...) and checks the
+    # aggregation function en route.
+    agg = contract_side.get("aggregation")
+    want_func = _BASE_AGG_FUNC.get(agg) if agg else None
+    if want_func is None:
+        return Verdict(
+            "escalate", f"contract denominator aggregation {agg!r} not recognized"
+        )
+    # Verify the aggregated operand matches the contract source before trusting the
+    # inline call: the CALCULATE arm's base is parts[0], the bare arm is the whole
+    # expr. Escalate (never silently pass) when the operand cannot be confirmed.
+    inner_agg = dax_denominator.strip()
+    calc = _outer_call(inner_agg, "CALCULATE")
+    if calc is not None:
+        parts = _split_balanced(calc)
+        inner_agg = parts[0].strip() if parts else inner_agg
+    if not _inline_operand_matches(inner_agg, contract_side):
+        return Verdict(
+            "escalate",
+            "denominator aggregates an operand that does not match the contract "
+            "source (or the operand could not be verified)",
+        )
+    return _base_dax_filters(dax_denominator.strip(), want_func)
+
+
 def _check_ratio_drift(dax_expr: str, definition: dict[str, Any]) -> Verdict:
     """Verify a ratio (DIVIDE) measure's denominator filter-set vs its contract.
 
@@ -407,16 +505,9 @@ def _check_ratio_drift(dax_expr: str, definition: dict[str, Any]) -> Verdict:
     if args is None or len(args) not in (2, 3):
         return Verdict("escalate", "DIVIDE does not have 2 or 3 balanced arguments")
 
-    den = _normalize_denominator(args[1])
-    if den is None:
-        return Verdict(
-            "escalate",
-            "denominator shape not recognized (not a bare measure or CALCULATE)",
-        )
-    _base_ref, pred_texts = den
-
-    # Map each denominator predicate to a recognized Filter; any unknown -> escalate.
-    filters = _recognize_filters(pred_texts, detail_noun="denominator predicate")
+    # denominator shape: bare/CALCULATE-wrapped measure ref (opaque) OR an inline
+    # aggregation call (#432 widening) -- see _ratio_denominator_filters.
+    filters = _ratio_denominator_filters(args[1], definition["denominator"])
     if isinstance(filters, Verdict):
         return filters
 

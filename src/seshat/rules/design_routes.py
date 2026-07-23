@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from ..core import Finding, RuleContext, RuleTier, Severity
+from ..core import Finding, RuleContext, RuleTier, Severity, read_tracked_text
 from ..registry import register
 
 RULE_ID = "DR1"
@@ -68,7 +68,11 @@ def _check_footgun_paths(ctx: RuleContext) -> list[Finding]:
 
 
 def _check_stale_phrases(ctx: RuleContext) -> list[Finding]:
-    if _STALE_MANIFEST not in ctx.tracked_files:
+    raw = None
+    if _STALE_MANIFEST in ctx.tracked_files:
+        raw = read_tracked_text(ctx.repo_root / _STALE_MANIFEST)
+    if raw is None:
+        # Untracked OR tracked-but-deleted-on-disk (#430) both fail loud.
         return [
             _finding(
                 f"stale-phrase manifest {_STALE_MANIFEST!r} is missing or untracked; "
@@ -79,7 +83,6 @@ def _check_stale_phrases(ctx: RuleContext) -> list[Finding]:
 
     import yaml  # lazy: dev/optional dep, kept out of the retail check core chain
 
-    raw = (ctx.repo_root / _STALE_MANIFEST).read_text(encoding="utf-8")
     try:
         data = yaml.safe_load(raw)
     except yaml.YAMLError as exc:
@@ -123,7 +126,12 @@ def _check_stale_phrases(ctx: RuleContext) -> list[Finding]:
                 )
             )
             continue
-        text = (ctx.repo_root / doc).read_text(encoding="utf-8-sig")
+        text = read_tracked_text(ctx.repo_root / doc, encoding="utf-8-sig")
+        if text is None:
+            # Tracked but deleted on disk (#430): the anchor cannot be verified.
+            # DR1 is a "stale phrase still PRESENT" check, so a missing doc means
+            # the phrase is not present -- silently skip (no false stale finding).
+            continue
         if anchor in text:
             findings.append(
                 _finding(

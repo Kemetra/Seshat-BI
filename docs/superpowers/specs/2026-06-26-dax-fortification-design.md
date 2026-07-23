@@ -142,13 +142,34 @@ if definition.get("additive") is not False:
 Non-breaking — both shipped measures (`DiscountedTransactionRate`, `AvgTransactionValue`)
 set `additive: False`.
 
-### 1c. Recognized measure shapes (no change; documented for clarity)
+### 1c. Recognized measure shapes
 
 `_normalize_denominator` (lines 145-169) recognizes bare `[Measure]`,
 `CALCULATE([Measure])` (empty wrapper → bare), and
-`CALCULATE([Measure], p1, p2, …)`. These stay. The following **stay escalating** (do not
-widen): `CALCULATE([M], TRUE())` (semantic no-op keeps its predicate), nested
-`CALCULATE`, `VAR/RETURN`, `DIVIDE(num, SUM(...))` (aggregation denominator).
+`CALCULATE([Measure], p1, p2, …)`. These stay unchanged and remain OPAQUE — the
+referenced measure is its own contract, so only its filter-set is compared here, its
+aggregation is never read.
+
+**Widened per issue #432:** `DIVIDE(num, SUM(...))` — an inline aggregation-call
+denominator (not a measure reference) — was originally listed as staying escalating.
+The owner has since widened this: an inline `AGG(col)` or `CALCULATE(AGG(col), p1, …)`
+denominator, where `AGG` is one of the generator's known vocabulary (`SUM` / `COUNT` /
+`DISTINCTCOUNT` / `AVERAGE` / `COUNTROWS`, see `_AGG_TO_DAX` in `dax_gen.py`), is now
+L3-verifiable. The seam (`_ratio_denominator_filters` in `metric_drift.py`) dispatches
+on the denominator's base shape: a measure-ref base stays on the original opaque path;
+anything else reuses `_base_dax_filters` — the SAME shape-recognition + aggregation
+check the `kind:base` path already trusts — rather than inventing new parsing. This was
+needed to make `AvgTransactionValue`'s literal shape,
+`DIVIDE(SUM(gross_sales), DISTINCTCOUNT(reference_no))`, machine-generatable via
+`seshat generate`: an *unfiltered* inline-aggregation denominator previously fell
+through every recognized shape and escalated, even though the identical *filtered* form
+(`CALCULATE(DISTINCTCOUNT(col), pred)`) already passed (its CALCULATE wrapper made
+`_normalize_denominator` treat arg0 as opaque, masking the gap).
+
+The genuinely-unrecognized shapes still **stay escalating** (this widening does not
+extend to them): `CALCULATE([M], TRUE())` (semantic no-op on a measure-ref base keeps
+its predicate `TRUE()`, an unrecognized spelling), nested `CALCULATE`, and `VAR/RETURN`
+or any other non-`AGG(col)` denominator expression.
 
 ### 1d. New `retail semantic-check` subcommand (`cli.py`)
 

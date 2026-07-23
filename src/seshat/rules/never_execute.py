@@ -26,7 +26,7 @@ from __future__ import annotations
 import ast
 from typing import Iterable
 
-from ..core import Finding, RuleContext, Severity
+from ..core import Finding, RuleContext, Severity, read_tracked_text
 from ..registry import register
 
 # Connection-capable import roots. A module-scope import of any of these in a core
@@ -159,7 +159,11 @@ def _is_governed(path: str) -> bool:
 def check_no_module_scope_execution_imports(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
     for rel in sorted(p for p in ctx.tracked_files if _is_governed(p)):
-        source = (ctx.repo_root / rel).read_text(encoding="utf-8")
+        # Tracked-but-deleted-on-disk (#430): nothing to scan for a module-scope
+        # import, skip rather than crash. Content scan, not a presence check.
+        source = read_tracked_text(ctx.repo_root / rel)
+        if source is None:
+            continue
         try:
             names = module_scope_violations(source)
         except SyntaxError as exc:

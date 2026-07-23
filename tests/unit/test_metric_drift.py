@@ -512,3 +512,139 @@ def test_retail_rules_pulls_neither_dax_gen_nor_yaml():
         [sys.executable, "-c", code], capture_output=True, text=True, env=env
     )
     assert r.returncode == 0, r.stderr
+
+
+# --- #432: unfiltered inline-aggregation ratio denominator (ATV class) -------
+# ROOT CAUSE: `_normalize_denominator` only recognized a bare `[Measure]` ref or
+# `CALCULATE([Measure], ...)`. A raw inline aggregation call like a bare
+# `DISTINCTCOUNT(col)` denominator (no CALCULATE wrapper, so no filter to hide
+# behind) fell through to escalate, even though the generator's own base-measure
+# shape logic (`_base_dax_filters`) already knows how to recognize and verify
+# exactly this shape. Widened to reuse that logic for an inline-agg denominator,
+# while a measure-ref denominator stays on the original OPAQUE path unchanged.
+
+# AvgTransactionValue: numerator = SUM(gross_sales), denominator = unfiltered
+# DISTINCTCOUNT(reference_no) -- the LITERAL DIVIDE shape from the issue report.
+DEF_ATV = {
+    "kind": "ratio",
+    "additive": False,
+    "numerator": {
+        "aggregation": "sum",
+        "source": {"table": "gold.fct_sales_rss", "column": "gross_sales"},
+    },
+    "denominator": {
+        "aggregation": "distinct_count",
+        "source": {"table": "gold.fct_sales_rss", "column": "reference_no"},
+    },
+}
+DAX_ATV = (
+    "DIVIDE(SUM('gold fct_sales_rss'[gross_sales]), "
+    "DISTINCTCOUNT('gold fct_sales_rss'[reference_no]))"
+)
+
+
+def test_unfiltered_inline_agg_denominator_passes() -> None:
+    """The literal #432 case: a bare (unfiltered) DISTINCTCOUNT(col) denominator
+    must now verify as `pass`, not escalate. `CALCULATE(DISTINCTCOUNT(col), pred)`
+    already passed before this fix (the CALCULATE branch treated arg0 as opaque);
+    the bug was specifically the FILTERLESS bare-call form."""
+    v = check_measure_drift(DAX_ATV, DEF_ATV)
+    assert v.status == "pass", v
+
+
+def test_inline_agg_denominator_wrong_operand_does_not_pass() -> None:
+    """Codex #449: the #432 widening must verify the aggregated OPERAND, not just
+    the function + filters. A denominator whose contract declares
+    `DISTINCTCOUNT(reference_no)` but whose DAX aggregates a DIFFERENT column
+    (`customer_id`) computes a different KPI and must NOT pass -- it escalates
+    (before the widening it escalated too; the widening must not silently accept
+    it). This is the load-bearing safety of the widening."""
+    dax_wrong_col = (
+        "DIVIDE(SUM('gold fct_sales_rss'[gross_sales]), "
+        "DISTINCTCOUNT('gold fct_sales_rss'[customer_id]))"
+    )
+    v = check_measure_drift(dax_wrong_col, DEF_ATV)
+    assert v.status != "pass", v
+
+
+def test_filtered_inline_agg_denominator_still_passes() -> None:
+    """A CALCULATE-wrapped inline-agg denominator with a recognized predicate
+    must still pass, comparing its filter-set to the contract as before."""
+    defn = {
+        **DEF_ATV,
+        "denominator": {
+            "aggregation": "distinct_count",
+            "source": {"table": "gold.fct_sales_rss", "column": "reference_no"},
+            "filter": [{"column": "reference_no", "op": "is_not_null"}],
+        },
+    }
+    dax = (
+        "DIVIDE(SUM('gold fct_sales_rss'[gross_sales]), "
+        "CALCULATE(DISTINCTCOUNT('gold fct_sales_rss'[reference_no]), "
+        "NOT(ISBLANK('gold fct_sales_rss'[reference_no]))))"
+    )
+    v = check_measure_drift(dax, defn)
+    assert v.status == "pass", v
+
+
+def test_inline_agg_denominator_wrong_aggregation_is_drift() -> None:
+    """A wrong inline aggregation function (contract says distinct_count, DAX
+    uses SUM) is a recognized mismatch -> drift, not a silent pass. Proves the
+    widened path checks the aggregation, it does not just wave filters through."""
+    wrong_func = (
+        "DIVIDE(SUM('gold fct_sales_rss'[gross_sales]), "
+        "SUM('gold fct_sales_rss'[reference_no]))"
+    )
+    v = check_measure_drift(wrong_func, DEF_ATV)
+    assert v.status == "drift", v
+
+
+def test_generate_measure_atv_no_longer_refuses() -> None:
+    """`seshat generate` on the ATV contract shape must no longer refuse at L3.
+
+    Exercises the full generator round-trip (dax_gen.generate_measure), not just
+    the checker in isolation -- this is the actual CLI-visible symptom in #432.
+    """
+    from seshat.dax_gen import generate_measure
+
+    r = generate_measure(DEF_ATV, name="AvgTransactionValue", doc_intent="ATV")
+    assert r.ok is True, r.reason
+    assert check_measure_drift(r.dax, DEF_ATV).status == "pass"
+
+
+# --- over-widening guard: genuinely unrecognized denominators still escalate --
+
+
+@pytest.mark.parametrize(
+    "bad_denominator",
+    [
+        "VAR x = 1 RETURN x",  # VAR/RETURN -- not an AGG(col) or measure ref
+        "CALCULATE(CALCULATE(DISTINCTCOUNT("
+        "'gold fct_sales_rss'[reference_no])))",  # nested CALCULATE
+    ],
+)
+def test_unrecognized_ratio_denominator_still_escalates(bad_denominator: str) -> None:
+    """Guards conservatism: widening to inline-AGG must NOT admit VAR/RETURN or a
+    nested CALCULATE denominator. This must stay GREEN both before and after the
+    #432 fix -- it proves the widening did not over-widen."""
+    dax = f"DIVIDE(SUM('gold fct_sales_rss'[gross_sales]), {bad_denominator})"
+    v = check_measure_drift(dax, DEF_ATV)
+    assert v.status == "escalate", v
+
+
+def test_calculate_measure_true_noop_denominator_still_escalates() -> None:
+    """`CALCULATE([M], TRUE())` is a semantic no-op on a MEASURE-REF base; the
+    predicate `TRUE()` is not a recognized spelling -> still escalates. Guards
+    that the measure-ref (opaque) path is untouched by the inline-agg widening."""
+    defn = {
+        "kind": "ratio",
+        "additive": False,
+        "numerator": {"aggregation": "sum", "filter": []},
+        "denominator": {
+            "aggregation": "count_rows",
+            "filter": [{"column": "total_spent", "op": "is_not_null"}],
+        },
+    }
+    dax = "DIVIDE([TotalSales], CALCULATE([TransactionCount], TRUE()))"
+    v = check_measure_drift(dax, defn)
+    assert v.status == "escalate", v

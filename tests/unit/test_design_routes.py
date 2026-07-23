@@ -120,6 +120,31 @@ def test_missing_manifest_fails_loud(tmp_path: Path) -> None:
     assert "missing or untracked" in findings[0].message
 
 
+def test_tracked_but_deleted_manifest_on_disk_still_fails_loud(tmp_path: Path) -> None:
+    # #430 + Codex #443 P1: the stale-phrase manifest is TRACKED but deleted-but-
+    # unstaged (absent on disk). DR1 must fail loud -- NOT crash on the read.
+    ctx = _stage(tmp_path, manifest_text="phrases: []\n")
+    (tmp_path / _STALE_MANIFEST).unlink()
+    findings = list(check_design_routes(ctx))
+    assert len(findings) == 1
+    assert "missing or untracked" in findings[0].message
+
+
+def test_tracked_but_deleted_doc_on_disk_is_not_stale(tmp_path: Path) -> None:
+    # A listed doc is tracked but deleted on disk (#430). DR1 checks a phrase is
+    # still PRESENT, so a missing doc means "not present" -> skip, never crash and
+    # never a false stale finding.
+    ctx = _stage(
+        tmp_path,
+        manifest_text=(
+            'phrases:\n  - doc: "docs/a.md"\n    anchor: "spec-only today"\n'
+        ),
+        docs={"docs/a.md": "the verb is spec-only today, oops"},
+    )
+    (tmp_path / "docs/a.md").unlink()  # tracked, but now missing on disk
+    assert list(check_design_routes(ctx)) == []
+
+
 def test_malformed_manifest_fails_loud(tmp_path: Path) -> None:
     ctx = _stage(tmp_path, manifest_text="phrases: {not a list}\n")
     findings = list(check_design_routes(ctx))

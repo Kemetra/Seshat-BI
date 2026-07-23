@@ -133,6 +133,25 @@ def test_missing_manifest_fails_loud(tmp_path: Path) -> None:
     assert "missing" in msg or "untracked" in msg
 
 
+def test_tracked_but_deleted_manifest_on_disk_still_fails_loud(tmp_path: Path) -> None:
+    # #430 + Codex #443 P1: the manifest is TRACKED but deleted-but-unstaged (absent
+    # on disk). A3 must fail loud -- NOT crash on the read (was FileNotFoundError).
+    ctx = _stage(tmp_path, ("1",), _manifest_with(("1",)))
+    (tmp_path / _MANIFEST).unlink()  # tracked, but now missing on disk
+    findings = list(check_route_coverage(ctx))
+    assert len(findings) == 1
+    assert _MANIFEST in findings[0].message
+
+
+def test_tracked_but_deleted_map_on_disk_still_fails_loud(tmp_path: Path) -> None:
+    # The knowledge map, too: tracked-but-deleted-on-disk fails loud, not crash.
+    ctx = _stage(tmp_path, ("1",), _manifest_with(("1",)))
+    (tmp_path / _MAP).unlink()
+    findings = list(check_route_coverage(ctx))
+    assert len(findings) == 1
+    assert _MAP in findings[0].message
+
+
 def test_manifest_not_routes_mapping_fails(tmp_path: Path) -> None:
     ctx = _stage(tmp_path, ("1",), "not_routes: 1\n")
     findings = list(check_route_coverage(ctx))

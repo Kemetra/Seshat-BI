@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from ..core import Finding, RuleContext, RuleTier, Severity
+from ..core import Finding, RuleContext, RuleTier, Severity, read_tracked_text
 
 # The registry decorator is imported, not the manifest. The manifest is read at
 # rule-run time from the tracked file below.
@@ -63,9 +63,14 @@ def _finding(message: str, locator: str) -> Finding:
     tier=RuleTier.KIT_SELF,
 )
 def check_routes_resolve(ctx: RuleContext) -> Iterable[Finding]:
-    # Read-only: the manifest must be a tracked file. If it is absent the gate
-    # fails loud rather than passing with nothing to check.
-    if _MANIFEST not in ctx.tracked_files:
+    # Read-only: the manifest must be a tracked file present on disk. Absent
+    # (untracked) OR tracked-but-deleted-on-disk (#430; still listed by
+    # `git ls-files`) both fail loud with the SAME finding rather than passing
+    # with nothing to check -- and never crash on the missing read.
+    raw = None
+    if _MANIFEST in ctx.tracked_files:
+        raw = read_tracked_text(ctx.repo_root / _MANIFEST)
+    if raw is None:
         return [
             _finding(
                 f"route registry manifest {_MANIFEST!r} is missing or untracked; "
@@ -76,7 +81,6 @@ def check_routes_resolve(ctx: RuleContext) -> Iterable[Finding]:
 
     import yaml  # lazy: dev/optional dep, kept out of the retail check core chain
 
-    raw = (ctx.repo_root / _MANIFEST).read_text(encoding="utf-8")
     try:
         data = yaml.safe_load(raw)
     except yaml.YAMLError as exc:  # malformed YAML -> fail loud, never vacuous

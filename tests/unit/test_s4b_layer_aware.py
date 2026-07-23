@@ -380,3 +380,96 @@ def test_s4b_regression_gold_bare_outside_txn_warns(tmp_path: Path) -> None:
         "warehouse/fail_s4b_bare.sql:1",
         "warehouse/fail_s4b_bare.sql:2",
     }
+
+
+def test_s4b_qualified_alter_column_in_txn_no_finding(tmp_path: Path) -> None:
+    """#442 regression: a schema-qualified `ALTER TABLE gold.<t> ALTER COLUMN ...
+    SET NOT NULL` inside a BEGIN/COMMIT block must NOT warn. The inner `ALTER`
+    keyword of the ALTER COLUMN sub-clause was wrongly re-evaluated as a
+    top-level DDL verb whose (column) target had no schema qualifier, yielding a
+    spurious `target schema undetermined` warning even though the statement is
+    gold-qualified and txn-wrapped. The sibling ADD PRIMARY KEY never warned, so
+    the false positive was specific to the ALTER COLUMN variant."""
+    sql = (
+        "BEGIN;\n"
+        "ALTER TABLE gold.fct_sales_c086 ADD PRIMARY KEY (sale_id);\n"
+        "ALTER TABLE gold.fct_sales_c086 ALTER COLUMN date_sk SET NOT NULL;\n"
+        "COMMIT;\n"
+    )
+    rel = _write(tmp_path, "warehouse/gold/pass_s4b_alter_column.sql", sql)
+    findings = list(s4b_guard_form(_ctx(tmp_path, rel)))
+    s4b = [f for f in findings if f.rule_id == "S4b"]
+    assert s4b == [], (
+        f"Expected no S4b findings for a qualified txn ALTER COLUMN, got: {s4b}"
+    )
+
+
+def test_s4b_qualified_alter_column_outside_txn_still_warns(tmp_path: Path) -> None:
+    """The #442 fix must not over-suppress: a gold-qualified ALTER COLUMN NOT in
+    a transaction is still a WARNING (the txn requirement is unchanged), and the
+    inner ALTER sub-clause must not double-count it into a second finding."""
+    sql = "ALTER TABLE gold.fct_sales_c086 ALTER COLUMN date_sk SET NOT NULL;\n"
+    rel = _write(tmp_path, "warehouse/gold/warn_s4b_alter_column.sql", sql)
+    findings = list(s4b_guard_form(_ctx(tmp_path, rel)))
+    s4b = [f for f in findings if f.rule_id == "S4b"]
+    assert len(s4b) == 1
+    assert s4b[0].severity is Severity.WARNING
+    assert "gold.* bare ALTER not in a transaction" in s4b[0].message
+
+
+def test_s4b_bronze_drop_after_psql_metacommand_still_errors(tmp_path: Path) -> None:
+    """#442 follow-up (Codex P1): a line-oriented psql meta-command (`\set
+    ON_ERROR_STOP on`) carries no `;`, so a following `DROP TABLE bronze.<t>` must
+    NOT be mistaken for a sub-clause and skipped -- that would let an unguarded
+    source-of-truth deletion pass the gate. warehouse/README.md applies these files
+    with `psql -f`, so meta-commands are a valid context. `\set` does NOT send the
+    query buffer, so it is not a terminator; the statement-open tracker treats the
+    DROP as a new statement (no DDL statement is open) and still fires the bronze
+    ERROR."""
+    sql = "\set ON_ERROR_STOP on\nDROP TABLE bronze.raw_sales;\n"
+    rel = _write(tmp_path, "warehouse/error_s4b_psql_bronze.sql", sql)
+    findings = list(s4b_guard_form(_ctx(tmp_path, rel)))
+    s4b = [f for f in findings if f.rule_id == "S4b"]
+    assert len(s4b) == 1
+    assert s4b[0].severity is Severity.ERROR
+    assert "bronze.* bare DROP" in s4b[0].message
+
+
+def test_s4b_bronze_drop_terminated_by_g_meta_command_still_errors(
+    tmp_path: Path,
+) -> None:
+    r"""#442/#448 follow-up (Codex P1): the psql buffer-sending meta-command `\g`
+    is documented as equivalent to `;` -- it terminates the statement. A `psql -f`
+    migration may write `DROP TABLE bronze.x \g` then a SECOND statement; because
+    the tokenizer preserves the backslash, `\g` closes the first statement so the
+    second bronze DDL is a NEW statement start and still fires the bronze ERROR --
+    it is not swallowed as a sub-clause of an (incorrectly) still-open statement.
+    `\gx` and `\gexec` are in the same buffer-sending family."""
+    sql = "DROP TABLE bronze.raw_sales \\g\nDROP TABLE bronze.raw_orders;\n"
+    rel = _write(tmp_path, "warehouse/error_s4b_g_meta_bronze.sql", sql)
+    findings = list(s4b_guard_form(_ctx(tmp_path, rel)))
+    s4b = [f for f in findings if f.rule_id == "S4b"]
+    # BOTH bronze DROPs must ERROR: the first is a statement start; `\g` closes it,
+    # so the second is a fresh statement start, not a masked sub-clause.
+    assert len(s4b) == 2, findings
+    assert all(f.severity is Severity.ERROR for f in s4b)
+    assert all("bronze.* bare DROP" in f.message for f in s4b)
+
+
+def test_s4b_alter_column_on_its_own_line_in_txn_no_finding(tmp_path: Path) -> None:
+    """The #442 fix must hold when the ALTER COLUMN sub-clause is wrapped onto its
+    OWN line: `ALTER TABLE gold.t\n  ALTER COLUMN c ...`. A line-position heuristic
+    would wrongly re-flag the inner ALTER; the statement-open tracker does not,
+    because the ALTER TABLE statement is still open (no intervening `;`)."""
+    sql = (
+        "BEGIN;\n"
+        "ALTER TABLE gold.fct_x\n"
+        "  ALTER COLUMN date_sk SET NOT NULL;\n"
+        "COMMIT;\n"
+    )
+    rel = _write(tmp_path, "warehouse/gold/pass_s4b_wrapped_alter.sql", sql)
+    findings = list(s4b_guard_form(_ctx(tmp_path, rel)))
+    s4b = [f for f in findings if f.rule_id == "S4b"]
+    assert s4b == [], (
+        f"Expected no S4b finding for a wrapped qualified ALTER COLUMN, got: {s4b}"
+    )

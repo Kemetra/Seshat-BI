@@ -214,6 +214,50 @@ def test_missing_manifest_fails_loud(tmp_path: Path) -> None:
     assert _MANIFEST in findings[0].message
 
 
+def test_tracked_but_deleted_manifest_on_disk_still_fails_loud(tmp_path: Path) -> None:
+    # #430 + Codex #443 P1: the manifest is TRACKED (`git ls-files` still lists it)
+    # but deleted-but-unstaged (absent on disk). SC2 must emit its documented
+    # fail-closed finding -- NOT crash on the read (was FileNotFoundError), and NOT
+    # pass vacuously.
+    ctx = RuleContext(repo_root=tmp_path, tracked_files=(_MANIFEST,))
+    findings = list(check_rule_count_claims(ctx))
+    assert len(findings) == 1
+    assert _MANIFEST in findings[0].message
+
+
+def test_tracked_but_deleted_count_source_on_disk_still_fails_loud(
+    tmp_path: Path,
+) -> None:
+    # The count source, too: tracked-but-deleted-on-disk must fail loud, not crash.
+    ctx = _stage(
+        tmp_path,
+        _claim(7),
+        docs={"docs/x.md": "Currently 7 rules\n"},
+        track_count_source=True,
+    )
+    # Delete only the count source on disk; it remains in tracked_files.
+    (tmp_path / _COUNT_SOURCE).unlink()
+    findings = list(check_rule_count_claims(ctx))
+    assert len(findings) == 1
+    assert _COUNT_SOURCE in findings[0].message
+
+
+def test_tracked_but_deleted_claiming_doc_on_disk_still_fails_loud(
+    tmp_path: Path,
+) -> None:
+    # The claiming doc (loop read) is tracked but deleted on disk -> the anchor
+    # cannot be verified; fail loud rather than crash.
+    ctx = _stage(
+        tmp_path,
+        _claim(7),
+        docs={"docs/x.md": "Currently 7 rules\n"},
+    )
+    (tmp_path / "docs/x.md").unlink()
+    findings = list(check_rule_count_claims(ctx))
+    assert len(findings) == 1
+    assert "docs/x.md" in findings[0].message
+
+
 def test_malformed_yaml_fails_loud(tmp_path: Path) -> None:
     ctx = _stage(tmp_path, "claims:\n  - id: [unbalanced\n")
     findings = list(check_rule_count_claims(ctx))

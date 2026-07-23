@@ -54,7 +54,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from .core import RuleContext, is_test_path
+from .core import RuleContext, is_test_path, read_tracked_text
 
 DATE_TABLE_MARKER = "annotation PBI_DateTable = true"
 # One of TWO accepted date-table markers (see D7 in rules/dax.py). The
@@ -548,13 +548,20 @@ def iter_model_files(ctx: RuleContext, suffix: str) -> Iterable[tuple[str, str]]
 
     Reads files from ``ctx.repo_root`` using ``encoding="utf-8-sig"`` (BOM-
     tolerant).
+
+    A tracked path that is absent on disk (e.g. deleted-but-unstaged -- #430)
+    is silently skipped rather than raising ``FileNotFoundError``: this is a
+    content scan, not a presence check, so there is simply nothing to read.
     """
     for rel in ctx.tracked_files:
         if is_test_path(rel):
             continue
-        if ".SemanticModel/definition/" in rel and rel.endswith(suffix):
-            text = (ctx.repo_root / Path(rel)).read_text(encoding="utf-8-sig")
-            yield rel, text
+        if ".SemanticModel/definition/" not in rel or not rel.endswith(suffix):
+            continue
+        text = read_tracked_text(ctx.repo_root / Path(rel), encoding="utf-8-sig")
+        if text is None:
+            continue  # tracked-but-deleted-on-disk (#430): nothing to read
+        yield rel, text
 
 
 def normalize_measure_body(expression: str) -> str:
@@ -653,6 +660,11 @@ def _tmdl_files_to_scan(
         try:
             text = (repo_root / Path(rel)).read_text(encoding="utf-8-sig")
         except OSError:
+            # Pre-existing broad tolerance (NOT narrowed by #430): this M-scan
+            # reader's contract is to skip ANY unreadable tracked file -- a
+            # deleted-but-unstaged path (FileNotFoundError), but also an unstaged
+            # dir-for-file replacement (IsADirectoryError) or a permission/IO
+            # error -- so the C1/D8 M scans never abort the whole check.
             continue
         yield rel, text
 
