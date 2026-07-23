@@ -132,7 +132,17 @@ def check_status_claims(ctx: RuleContext) -> Iterable[Finding]:
         # The anchor must literally be present in the claiming doc -- else the
         # manifest entry points at a sentence that has moved or been deleted.
         anchor = claim["anchor"]
-        doc_text = (ctx.repo_root / doc).read_text(encoding="utf-8")
+        doc_text = read_tracked_text(ctx.repo_root / doc)
+        if doc_text is None:
+            # Tracked but deleted on disk (#430): fail loud rather than crash.
+            findings.append(
+                _finding(
+                    f"claim {cid!r} names doc {doc!r}, which is tracked but missing "
+                    f"on disk; the claimed anchor cannot be verified",
+                    loc,
+                )
+            )
+            continue
         if anchor not in doc_text:
             findings.append(
                 _finding(
