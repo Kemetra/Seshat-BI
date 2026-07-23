@@ -276,35 +276,43 @@ def _s4b_finding_for_bare_ddl(
     )
 
 
-def _is_statement_start_verb(toks: list[SqlToken], idx: int) -> bool:
-    """True when the DDL verb at ``idx`` STARTS a statement, not a sub-clause.
+def _is_statement_start_verb(stmt_open: bool) -> bool:
+    """True when a DDL verb STARTS a statement, not a sub-clause.
 
-    A DDL keyword only introduces a statement whose target `schema_zone` must be
-    determined when it is the first token of a statement -- i.e. preceded by a
-    statement boundary (``;``) or a transaction-boundary keyword, or at the start
-    of the file. The same keyword appearing MID-statement is a sub-clause, not a
+    A DDL keyword STARTS a statement unless a DDL statement is already open --
+    i.e. a prior statement-starting DDL verb has not yet been closed by ``;``.
+    ``stmt_open`` carries that state from the caller's single left-to-right walk.
+    The same keyword appearing while a statement is open is a sub-clause, not a
     new statement: `ALTER TABLE gold.t ALTER COLUMN c ...` carries a SECOND
     `ALTER` whose target (the column) has no schema qualifier, so re-evaluating it
     as a top-level verb yielded a spurious "target schema undetermined" S4b
     warning even though the statement is schema-qualified and txn-wrapped (#442).
-    Only the leading `ALTER` (which resolves to `gold`) governs the statement.
+    Only the leading `ALTER` governs the statement -- regardless of whether the
+    sub-clause sits on the same physical line or a wrapped one.
+
+    Tracking open-vs-closed (rather than the previous token) also closes a hole a
+    naive `prev == ";"` check left: a line-oriented psql meta-command such as
+    `\\set ON_ERROR_STOP on` carries no ``;`` (warehouse/README.md applies these
+    files with `psql -f`), and the tokenizer strips its leading backslash. With no
+    statement open, the following `DROP TABLE bronze.x` is correctly a NEW
+    statement start and still fires the bronze-source-of-truth ERROR.
     """
-    prev = toks[idx - 1].text.upper() if idx > 0 else ""
-    return idx == 0 or prev == ";" or prev in _TXN_BOUNDARY_VERBS
+    return not stmt_open
 
 
 def _s4b_ddl_finding(
-    rel: str, toks: list[SqlToken], idx: int, *, in_txn: bool
+    rel: str, toks: list[SqlToken], idx: int, *, in_txn: bool, stmt_open: bool
 ) -> Finding | None:
     """The S4b finding for the DDL verb at ``idx``, or ``None`` when it passes.
 
     Passes (returns ``None``) when the verb is not a statement-starting DDL verb
-    (a mid-statement sub-clause keyword like the inner ALTER of `ALTER COLUMN`,
-    #442), is a guarded form, or is a silver/gold statement inside a transaction
-    (the idempotent DROP+CREATE rebuild pattern). bronze bare DDL is an ERROR;
-    everything else is the WARNING built by ``_s4b_finding_for_bare_ddl``.
+    (a mid-statement sub-clause keyword like the inner ALTER of `ALTER COLUMN`
+    while a statement is already open, #442), is a guarded form, or is a
+    silver/gold statement inside a transaction (the idempotent DROP+CREATE rebuild
+    pattern). bronze bare DDL is an ERROR; everything else is the WARNING built by
+    ``_s4b_finding_for_bare_ddl``.
     """
-    if not _is_statement_start_verb(toks, idx) or _is_guarded(toks, idx):
+    if not _is_statement_start_verb(stmt_open) or _is_guarded(toks, idx):
         return None
     upper = toks[idx].text.upper()
     tok = toks[idx]
@@ -328,17 +336,24 @@ def _s4b_findings_for_file(rel: str, toks: list[SqlToken]) -> list[Finding]:
     """S4b findings for one file's already-tokenized content."""
     findings: list[Finding] = []
     in_txn = False  # stateful flag toggled by BEGIN / COMMIT / ROLLBACK
+    stmt_open = False  # a DDL statement is open until its `;` (sub-clause tracking)
 
     for idx, tok in enumerate(toks):
+        if tok.text == ";":
+            stmt_open = False  # statement terminator closes the open DDL statement
+            continue
         boundary_state = _txn_boundary_state(toks, idx, in_txn)
         if boundary_state is not None:
             in_txn = boundary_state
             continue
         if tok.text.upper() not in _DDL_VERBS:
             continue
-        finding = _s4b_ddl_finding(rel, toks, idx, in_txn=in_txn)
+        finding = _s4b_ddl_finding(rel, toks, idx, in_txn=in_txn, stmt_open=stmt_open)
         if finding is not None:
             findings.append(finding)
+        # A statement-starting DDL verb opens a statement (until its `;`); a
+        # sub-clause DDL keyword while one is already open does not change state.
+        stmt_open = True
 
     return findings
 
