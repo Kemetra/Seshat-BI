@@ -84,7 +84,7 @@ skills/bi-analyst-knowledge/
   framing-period-variance.md   # card 2 (YoY/PoP/YTD-pace; seasonality-aware)
   framing-contribution-mix.md  # card 3
   framing-concentration.md     # card 4 (Pareto/ABC)
-  framing-rate-decomposition.md# card 5 (value = traffic x conversion x basket)
+  framing-rate-decomposition.md# card 5 (total -> driver rates; domain-neutral)
   framing-segment-behavior.md  # card 6
   framing-benchmark-threshold.md # card 7
   framing-signal-vs-noise.md   # card 8 (statistical guardrails home card)

@@ -24,7 +24,11 @@
       purpose line, route list (8 cards + derivation route + story order +
       2 examples), and the pack-level stop rules -- no metric meaning here
       (contracts + `retail-kpi-knowledge` own meaning), no invented numbers,
-      unanswerable question -> [GAP] (FR-001).
+      unanswerable question -> [GAP] (FR-001). GENERALITY RULE: every card
+      and route is domain-neutral; domain flavor enters ONLY via domain
+      knowledge packs and the client's own contracts/profile at runtime --
+      domain instances live in the worked examples, never in a card or
+      route (Principle VII).
 - [ ] T002 [SETUP] Freeze the narrative-brief schema in
       `skills/bi-analyst-knowledge/derivation-route.md`: machine-readable
       front section (table id, contract citations, ranked questions each

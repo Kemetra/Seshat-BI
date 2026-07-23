@@ -71,8 +71,9 @@ the shipped shapes, never fork them):
    `bi-sql-knowledge`, `bi-dax-knowledge`; INDEX.md + routed cards):
    - **Framing catalog** -- eight core framings, one card each: trend+anomaly,
      period variance (YoY/PoP/YTD-pace), contribution & mix-shift,
-     concentration (Pareto/ABC), rate decomposition (value = traffic x
-     conversion x basket), segment behavior, benchmark & threshold, and
+     concentration (Pareto/ABC), rate decomposition (a headline total
+     decomposed into its driver rates -- domain instances live in the
+     examples, never in the card), segment behavior, benchmark & threshold, and
      **signal vs noise (statistical guardrails)**. Each card: the question
      shape it answers -> required inputs (contract kinds + dims) -> visual
      guidance -> a statistical guardrail -> a "so-what" sentence template.
