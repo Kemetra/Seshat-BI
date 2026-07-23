@@ -35,8 +35,15 @@ Without the gates, stop and name the missing one. For metric meaning load
 
 Review a screenshot or built report against the design guidance above and
 report concrete, advisory findings. Validate a page blueprint with the
-installed `seshat pbir-validate-blueprint` helper when available. A clean
-review is evidence for a named human, never an approval.
+installed `seshat pbir-validate-blueprint` helper when available. Before a
+human opens Desktop on any agent-touched report, run the installed
+`seshat pbir-validate-bindings --report <X.Report> --model <X.SemanticModel>`
+helper when available: it resolves every bound field (projections, filters,
+sorts) against the model's TMDL and blocks on unresolved bindings -- missing
+measures/columns, unknown entities, PII-masked renames -- the exact class that
+otherwise surfaces as Desktop error cards. It needs no blueprint or binding
+map, so it also covers Desktop-owned reports. A clean review is evidence for a
+named human, never an approval.
 
 ## Theme and backgrounds
 

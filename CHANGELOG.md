@@ -28,6 +28,14 @@ explicitly identifies a public release event.
 ## [Unreleased]
 
 ### Added
+- `seshat pbir-validate-bindings` -- offline, read-only PBIR binding-resolution
+  validator: resolves every bound field reference in a report's definition JSON
+  (queryState projections, filters, sorts; `From`-alias aware) against the
+  semantic model's TMDL, blocking on unknown entities and missing fields (the
+  PII-masked-rename class that otherwise ships as Desktop error cards) and
+  warning on projection-kind mismatches (the #456 detection side). Fail-closed
+  on empty/corrupt inputs; needs no blueprint or binding map, so it covers
+  Desktop-owned reports. Grants no approval. (#454)
 - `seshat scaffold-design` materializes the Stage-6/7 design + handoff templates
   (dashboard-page-blueprint, visual-spec, report-composition, the 16x9 grid, the
   handoff pack + review checklist) into a workspace, so package-only (pipx /

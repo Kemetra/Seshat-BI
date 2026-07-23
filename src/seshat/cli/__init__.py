@@ -172,6 +172,9 @@ _DISPATCH: dict[str, Callable[[object], int]] = {
     "pbir-validate-blueprint": _lazy(
         "..pbir_validate_blueprint", "pbir_validate_blueprint_main"
     ),
+    "pbir-validate-bindings": _lazy(
+        "..pbir_validate_bindings", "pbir_validate_bindings_main"
+    ),
     "manifest": _lazy(".commands.manifest", "run_manifest"),
     "severity-posture": _lazy(".commands.severity_posture", "run_severity_posture"),
     "scaffold": _lazy(".commands.scaffold", "run_scaffold"),

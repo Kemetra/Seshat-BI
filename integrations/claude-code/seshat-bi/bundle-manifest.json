@@ -174,10 +174,10 @@
     {
       "classification": "generated_wrapper",
       "destination": "commands/powerbi-review.md",
-      "output_sha256": "8bea65f01cb6952995dde4e535c925789913b1b57ab5b397e5e25e34d0787f3c",
+      "output_sha256": "1609ebc429dc9670304da609624dc63e8f6d3abaf75774b700cddab99b0b7ffd",
       "source": "distribution/bundle-templates/claude/commands/powerbi-review.md",
       "source_id": "claude-powerbi-review",
-      "source_sha256": "8bea65f01cb6952995dde4e535c925789913b1b57ab5b397e5e25e34d0787f3c",
+      "source_sha256": "1609ebc429dc9670304da609624dc63e8f6d3abaf75774b700cddab99b0b7ffd",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1713,10 +1713,10 @@
     {
       "classification": "generated_wrapper",
       "destination": "skills/powerbi-workflows/SKILL.md",
-      "output_sha256": "f4fd52b1c6e74b314e0d91fd52e8283a4ea4965bb6f1c3dd965de3bd9632bb80",
+      "output_sha256": "a9a794b81d7e96922a56effd347433a250706a565dea563b10561f69de7963c3",
       "source": "distribution/bundle-templates/shared/skills/powerbi-workflows/SKILL.md",
       "source_id": "powerbi-workflows-skill",
-      "source_sha256": "f4fd52b1c6e74b314e0d91fd52e8283a4ea4965bb6f1c3dd965de3bd9632bb80",
+      "source_sha256": "a9a794b81d7e96922a56effd347433a250706a565dea563b10561f69de7963c3",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1802,10 +1802,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "23ae580d9db93c75e7e96930c971327e110e0613abfb23c0b91ce42b6474e467",
+  "manifest_digest": "d63eb5fc7da5b25ac3286eace41ed009fff2701eaa7796052588fd6d96af4b55",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "c68182ba37f465d63c36115d99dfc28f3f1565e4",
+  "source_revision": "6a55ce172064abe275c727dc54f5acebb1606ff3",
   "target": "claude",
   "version": "0.6.1"
 }

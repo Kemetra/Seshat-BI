@@ -605,6 +605,33 @@ def _add_pbir_validate_blueprint_parser(sub: argparse._SubParsersAction) -> None
     )
 
 
+def _add_pbir_validate_bindings_parser(sub: argparse._SubParsersAction) -> None:
+    """Offline PBIR binding-resolution validator (#454). The same check-surface
+    precedent as `pbir-validate-blueprint` (it POLICES what a writer -- the
+    compiler, pbi-cli, or a human Desktop build -- already produced), but needs
+    NO blueprint or binding map: it resolves every bound Entity+Property in the
+    report's definition JSON against the semantic model's TMDL, so unresolved
+    bindings (missing measure/column, unknown entity, PII-masked rename) are
+    caught BEFORE a human opens Desktop and hits error cards. Read-only; exits
+    non-zero on any blocked finding; grants NO approval."""
+    pbirbindings = sub.add_parser(
+        "pbir-validate-bindings",
+        help=(
+            "resolve every report field binding against the semantic model's "
+            "TMDL (read-only; grants no approval)"
+        ),
+    )
+    pbirbindings.add_argument(
+        "--report", required=True, metavar="DIR", help="the *.Report/ dir to validate"
+    )
+    pbirbindings.add_argument(
+        "--model",
+        required=True,
+        metavar="DIR",
+        help="the *.SemanticModel/ dir to resolve bindings against",
+    )
+
+
 def _add_manifest_parser(sub: argparse._SubParsersAction) -> None:
     """Rule-registry snapshot manifest (feature 043). Writes the golden inventory
     docs/rules/rules-manifest.json from the live registry. Test-only consumer
@@ -761,6 +788,7 @@ def _build_parser(prog: str = "retail") -> argparse.ArgumentParser:
     _add_pbir_page_background_parser(sub)
     _add_pbir_geometry_parser(sub)
     _add_pbir_validate_blueprint_parser(sub)
+    _add_pbir_validate_bindings_parser(sub)
     _add_manifest_parser(sub)
     _add_severity_posture_parser(sub)
     _add_scaffold_parser(sub)

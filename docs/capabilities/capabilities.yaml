@@ -378,6 +378,22 @@ capabilities:
       dispatch: "pbir-validate-blueprint"
       skill: "powerbi-dashboard-design"
 
+  - id: pbir-validate-bindings
+    name: "seshat pbir-validate-bindings"
+    summary: "Read-only: resolves every bound field reference in a report's PBIR definition (queryState projections, filters, sorts) against the semantic model's TMDL tables/columns/measures; blocks on unknown entities, missing fields (e.g. PII-masked renames), and fail-closed empty inputs; warns on projection-kind mismatches; grants no approval."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: dashboard_ready
+    command: "pbir-validate-bindings"
+    documentation: "docs/tools/pbir-binding-validator.md"
+    references:
+      dispatch: "pbir-validate-bindings"
+      skill: "powerbi-dashboard-design"
+      roadmap: "issue #454"
+
   - id: retail-blockers
     name: "retail blockers"
     summary: "Explains committed readiness blockers across tables: category, plain-language explanation, and next surface to use."
