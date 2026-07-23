@@ -40,6 +40,26 @@ _SECRET_ENVIRONMENT_KEYS = tuple(
     key for key in DBT_ENVIRONMENT_KEYS if key not in _NON_SECRET_ENVIRONMENT_KEYS
 )
 
+# Three governed dbt env vars carry a documented `env_var(NAME, DEFAULT)` default
+# in profiles.example.yml, so dbt runs fine without them set:
+#   - SESHAT_DBT_PORT    -> env_var('SESHAT_DBT_PORT', '5432')
+#   - SESHAT_DBT_SCHEMA  -> env_var('SESHAT_DBT_SCHEMA', 'seshat_dbt_shadow')
+#   - SESHAT_DBT_SSLMODE -> env_var('SESHAT_DBT_SSLMODE', 'prefer')
+# This is a DIFFERENT axis from _NON_SECRET_ENVIRONMENT_KEYS above (that set is
+# about redaction exemption, not required-ness) -- they happen to share members
+# today only because the same three connection-metadata values are both public
+# and defaulted. `seshat dbt doctor` must not flag these as missing required
+# keys; the remaining keys (host/user/password/dbname) have no YAML default and
+# stay required.
+# Public: `dbt doctor` (_verify_environment) reads this to treat these keys as
+# optional-when-absent but reject a present-but-empty override (#437, #445).
+DEFAULTED_DBT_ENVIRONMENT_KEYS = frozenset(
+    {"SESHAT_DBT_PORT", "SESHAT_DBT_SCHEMA", "SESHAT_DBT_SSLMODE"}
+)
+REQUIRED_DBT_ENVIRONMENT_KEYS = tuple(
+    key for key in DBT_ENVIRONMENT_KEYS if key not in DEFAULTED_DBT_ENVIRONMENT_KEYS
+)
+
 _RUNTIME_ENVIRONMENT_KEYS = (
     "COMSPEC",
     "LANG",

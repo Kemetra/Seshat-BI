@@ -206,6 +206,63 @@ def test_doctor_requires_runtime_profile_to_be_ignored_and_untracked(
         module._verify_profile_git_boundary(tmp_path)
 
 
+def _clear_dbt_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    from seshat.dbt.redaction import DBT_ENVIRONMENT_KEYS
+
+    for key in DBT_ENVIRONMENT_KEYS:
+        monkeypatch.delenv(key, raising=False)
+
+
+def test_doctor_environment_check_allows_defaulted_keys_to_be_unset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PORT/SCHEMA/SSLMODE carry an env_var(NAME, DEFAULT) in profiles.example.yml,
+    so doctor must not flag them as missing required keys."""
+    import seshat.cli.commands.dbt as module
+
+    _clear_dbt_environment(monkeypatch)
+    monkeypatch.setenv("SESHAT_DBT_HOST", "db.example.com")
+    monkeypatch.setenv("SESHAT_DBT_USER", "seshat")
+    monkeypatch.setenv("SESHAT_DBT_PASSWORD", "hunter2")
+    monkeypatch.setenv("SESHAT_DBT_DBNAME", "ezaby_demo")
+
+    module._verify_environment(tmp_path)
+
+
+def test_doctor_environment_check_still_requires_genuine_keys(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import seshat.cli.commands.dbt as module
+
+    _clear_dbt_environment(monkeypatch)
+    monkeypatch.setenv("SESHAT_DBT_HOST", "db.example.com")
+    monkeypatch.setenv("SESHAT_DBT_USER", "seshat")
+    monkeypatch.setenv("SESHAT_DBT_PASSWORD", "hunter2")
+
+    with pytest.raises(module.DbtUnavailable, match="SESHAT_DBT_DBNAME"):
+        module._verify_environment(tmp_path)
+
+
+def test_doctor_rejects_a_present_but_empty_defaulted_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Codex #445: a defaulted key may be ABSENT (dbt uses env_var's default), but
+    an explicitly EMPTY override (`SESHAT_DBT_PORT=`) is forwarded verbatim and does
+    NOT trigger dbt's fallback -- so doctor must reject it, not pass and let dbt
+    receive an empty port/schema/sslmode."""
+    import seshat.cli.commands.dbt as module
+
+    _clear_dbt_environment(monkeypatch)
+    monkeypatch.setenv("SESHAT_DBT_HOST", "db.example.com")
+    monkeypatch.setenv("SESHAT_DBT_USER", "seshat")
+    monkeypatch.setenv("SESHAT_DBT_PASSWORD", "hunter2")
+    monkeypatch.setenv("SESHAT_DBT_DBNAME", "ezaby_demo")
+    monkeypatch.setenv("SESHAT_DBT_SCHEMA", "")  # present but empty -> must reject
+
+    with pytest.raises(module.DbtUnavailable, match="SESHAT_DBT_SCHEMA"):
+        module._verify_environment(tmp_path)
+
+
 @pytest.mark.parametrize(
     "case",
     (

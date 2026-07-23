@@ -167,6 +167,28 @@ def _scan_dollar_token(
 
 _WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*|[().,;*]")
 
+# A psql backslash meta-command: `\` + a run of command chars (letters/digits/`?`/
+# `+`). PostgreSQL's psql applies migration files with `psql -f` (warehouse/
+# README.md), and the tokenizer must PRESERVE the backslash so a downstream rule can
+# tell a buffer-sending meta-command (`\g`, `\gx`, `\gexec`) apart from an ordinary
+# identifier named `g` -- which is impossible once the `\` is dropped. Only the
+# command word is captured; its arguments are ordinary tokens on the same line.
+_META_COMMAND = re.compile(r"\\[A-Za-z?]+[+]?|\\[gG][xX]?")
+
+
+def _scan_meta_command(
+    text: str, i: int, line: int
+) -> tuple[SqlToken | None, int, int]:
+    """A psql ``\\``-meta-command emits a single token with the backslash preserved
+    (e.g. ``\\g``, ``\\set``), so a rule can recognize the buffer-sending family as a
+    statement terminator. A bare trailing ``\\`` (end of input, or ``\\`` followed by
+    a non-command char) matches nothing -> decline (return ``i`` unchanged) so the
+    caller falls through and the lone ``\\`` is skipped as an unknown char."""
+    m = _META_COMMAND.match(text, i)
+    if not m:
+        return None, line, i  # bare/backslash-only: decline, caller skips the char
+    return SqlToken(m.group(0), line), line, m.end()
+
 
 def _scan_span(
     text: str, i: int, ch: str, line: int
@@ -259,6 +281,8 @@ def _tokenize_producer(text: str, i: int, ch: str) -> _TokenProducer | None:
         return _scan_quoted_token
     if ch == "$":
         return _scan_dollar_token
+    if ch == "\\":
+        return _scan_meta_command
     return None
 
 

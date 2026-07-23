@@ -201,3 +201,66 @@ def test_importing_runner_does_not_import_rules_package():
     importlib.import_module("seshat.runner")
 
     assert "seshat.rules" not in sys.modules
+
+
+@pytest.mark.unit
+def test_check_does_not_crash_on_git_tracked_but_unstaged_deletions(tmp_path):
+    """Issue #430: `seshat check` must not raise FileNotFoundError when a
+    tracked file is deleted on disk but the deletion is not staged/committed
+    (i.e. still listed by `git ls-files`).
+
+    Covers one committed fixture per known content-scanning family (G3 TMDL/
+    JSON scan, the S1-S8 SQL family, B1 never-execute, G6 PBIP parameter scan,
+    R1 PBIR reference scan) AND the presence-required governance-manifest
+    families (SC2 rule-count-claims + its count source, A3 route-registry + its
+    knowledge map, DF1 parked-on, SC1 status-claims, DR1 stale-phrase manifest)
+    whose membership guards otherwise pass while the direct manifest read raises
+    FileNotFoundError (Codex #443 P1). Proven across every reader, not just the
+    single rule the issue happened to reproduce with.
+    """
+    import seshat.rules  # noqa: F401  (side effect: registers the real rule set)
+    from seshat.registry import all_rules
+    from seshat.runner import collect_findings
+    from tests.unit._gitfix import commit_all, make_git_repo
+
+    repo = make_git_repo(tmp_path)
+
+    fixtures = {
+        "model.tmdl": "table Sales\n",
+        "warehouse/migrations/0001_init.sql": "create table bronze.x (a text);\n",
+        "src/seshat/rules/fake_governed.py": "x = 1\n",
+        "demo.SemanticModel/definition/expressions.tmdl": (
+            'expression Host = "<your-db-host>" meta [IsParameterQuery=true];\n'
+        ),
+        "demo.Report/definition.pbir": (
+            '{"datasetReference": {"byPath": {"path": "../demo.SemanticModel"}}}\n'
+        ),
+        # Presence-required governance manifests (+ their referenced sources): each
+        # rule guards `path in tracked_files` then reads directly, so a tracked-but-
+        # deleted manifest crashes the read unless routed through read_tracked_text.
+        "docs/quality/rule-count-claims.yaml": "claims: []\n",  # SC2 manifest
+        "docs/rules/rules-manifest.json": "[]\n",  # SC2 count source
+        "docs/routing/routes.yaml": "routes: []\n",  # A3 manifest
+        "docs/knowledge-map.md": "# Map\n\n## Route by task\n\n| Task |\n|---|\n",
+        "docs/quality/parked-on.yaml": "edges: []\n",  # DF1 manifest
+        "docs/quality/status-claims.yaml": "claims: []\n",  # SC1 manifest
+        "docs/quality/design-stale-phrases.yaml": "phrases: []\n",  # DR1 manifest
+    }
+    for rel, body in fixtures.items():
+        path = repo / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body, encoding="utf-8")
+    commit_all(repo, "chore: add fixtures")
+
+    # Delete on disk WITHOUT `git rm` -- tracked-but-unstaged deletion, exactly
+    # the scenario reported in #430.
+    for rel in fixtures:
+        (repo / rel).unlink()
+
+    ctx = build_context(repo)
+    for rel in fixtures:
+        assert rel in ctx.tracked_files  # still enumerated (needed by AL1/AL2/HR11)
+
+    # Must not raise -- this is the crash the issue reports.
+    findings = collect_findings(all_rules(), ctx)
+    assert isinstance(findings, list)
