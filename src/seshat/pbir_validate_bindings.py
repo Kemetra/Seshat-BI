@@ -65,7 +65,7 @@ import difflib
 import json
 import re
 from pathlib import Path
-from typing import Any, Iterator, NamedTuple
+from typing import Any, Iterable, Iterator, NamedTuple
 
 from .tmdl import parse_tmdl
 
@@ -124,6 +124,38 @@ def _split_table_segments(text: str) -> list[str]:
     ]
 
 
+def _model_files(model_dir: Path) -> list[Path]:
+    definition = model_dir / "definition"
+    if not definition.is_dir():
+        return []
+    return sorted(definition.rglob("*.tmdl"))
+
+
+def _unreadable_model_finding(tmdl_path: Path) -> BindingFinding:
+    return BindingFinding(
+        dimension="unreadable_source",
+        locator=str(tmdl_path),
+        message=(
+            f"model definition file {tmdl_path.name} is unreadable -- "
+            f"validation blocked (fail closed): an unread table file "
+            f"would misreport its bindings as unknown entities"
+        ),
+    )
+
+
+def _tables_in_text(text: str) -> Iterator[_ModelTable]:
+    """Every parsed table in one TMDL file's text (multi-table tolerant)."""
+    parsed_tables = (parse_tmdl(s) for s in _split_table_segments(text))
+    for parsed in parsed_tables:
+        if parsed is None:
+            continue
+        yield _ModelTable(
+            name=parsed.name,
+            columns={c.name.casefold(): c.name for c in parsed.columns},
+            measures={m.name.casefold(): m.name for m in parsed.measures},
+        )
+
+
 def _model_symbol_table(
     model_dir: Path,
 ) -> tuple[dict[str, _ModelTable], list[BindingFinding]]:
@@ -135,34 +167,13 @@ def _model_symbol_table(
     """
     tables: dict[str, _ModelTable] = {}
     blockers: list[BindingFinding] = []
-    definition = model_dir / "definition"
-    if not definition.is_dir():
-        return tables, blockers
-    for tmdl_path in sorted(definition.rglob("*.tmdl")):
+    for tmdl_path in _model_files(model_dir):
         try:
             text = tmdl_path.read_text(encoding="utf-8-sig")
         except (OSError, UnicodeDecodeError):
-            blockers.append(
-                BindingFinding(
-                    dimension="unreadable_source",
-                    locator=str(tmdl_path),
-                    message=(
-                        f"model definition file {tmdl_path.name} is unreadable -- "
-                        f"validation blocked (fail closed): an unread table file "
-                        f"would misreport its bindings as unknown entities"
-                    ),
-                )
-            )
+            blockers.append(_unreadable_model_finding(tmdl_path))
             continue
-        for segment in _split_table_segments(text):
-            parsed = parse_tmdl(segment)
-            if parsed is None:
-                continue
-            tables[parsed.name.casefold()] = _ModelTable(
-                name=parsed.name,
-                columns={c.name.casefold(): c.name for c in parsed.columns},
-                measures={m.name.casefold(): m.name for m in parsed.measures},
-            )
+        tables.update({t.name.casefold(): t for t in _tables_in_text(text)})
     return tables, blockers
 
 
@@ -178,32 +189,42 @@ class _FieldRef(NamedTuple):
     prop: str
 
 
+def _children(node: Any) -> Iterable[Any]:
+    if isinstance(node, dict):
+        return node.values()
+    return node if isinstance(node, list) else ()
+
+
 def _iter_dicts(node: Any) -> Iterator[dict[str, Any]]:
     """Every dict anywhere in a parsed JSON document, depth-first."""
     if isinstance(node, dict):
         yield node
-        for value in node.values():
-            yield from _iter_dicts(value)
-    elif isinstance(node, list):
-        for item in node:
-            yield from _iter_dicts(item)
+    for child in _children(node):
+        yield from _iter_dicts(child)
+
+
+def _from_entries(doc: Any) -> Iterator[Any]:
+    """Every entry of every ``"From"`` declaration list, document-wide."""
+    for node in _iter_dicts(doc):
+        entries = node.get("From")
+        if isinstance(entries, list):
+            yield from entries
+
+
+def _alias_pair(entry: Any) -> tuple[str, str] | None:
+    """One ``(alias, entity)`` from a ``From`` entry, or ``None`` if malformed."""
+    if not isinstance(entry, dict):
+        return None
+    name, entity = entry.get("Name"), entry.get("Entity")
+    if isinstance(name, str) and isinstance(entity, str):
+        return name, entity
+    return None
 
 
 def _collect_aliases(doc: Any) -> dict[str, str]:
     """Document-wide ``{alias: entity}`` from every ``"From"`` declaration list."""
-    aliases: dict[str, str] = {}
-    for node in _iter_dicts(doc):
-        entries = node.get("From")
-        if not isinstance(entries, list):
-            continue
-        for entry in entries:
-            if (
-                isinstance(entry, dict)
-                and isinstance(entry.get("Name"), str)
-                and isinstance(entry.get("Entity"), str)
-            ):
-                aliases[entry["Name"]] = entry["Entity"]
-    return aliases
+    pairs = (_alias_pair(entry) for entry in _from_entries(doc))
+    return dict(pair for pair in pairs if pair is not None)
 
 
 def _wrapped_ref(node: dict[str, Any], kind: str) -> tuple[str | None, str] | None:
@@ -229,26 +250,38 @@ def _wrapped_ref(node: dict[str, Any], kind: str) -> tuple[str | None, str] | No
     return None
 
 
-def _refs_in_doc(doc: Any, path: Path) -> list[_FieldRef]:
-    """Every alias-resolved ``Column``/``Measure`` field reference in one
-    document. An unresolvable alias is skipped -- never invented into a
+def _alias_entity(inner: dict[str, Any], aliases: dict[str, str]) -> str | None:
+    """The entity a wrapper's ``SourceRef.Source`` alias declares, or ``None``."""
+    alias = inner["Expression"]["SourceRef"].get("Source")
+    return aliases.get(alias) if isinstance(alias, str) else None
+
+
+def _ref_from_node(
+    node: dict[str, Any], kind: str, aliases: dict[str, str], path: Path
+) -> _FieldRef | None:
+    """The alias-resolved reference a node's ``kind`` wrapper carries, or
+    ``None`` -- an unresolvable alias is skipped, never invented into a
     finding (the walker only reports what it can actually ground)."""
+    wrapped = _wrapped_ref(node, kind)
+    if wrapped is None:
+        return None
+    entity, prop = wrapped
+    if entity is None:
+        entity = _alias_entity(node[kind], aliases)
+    if entity is None:
+        return None
+    return _FieldRef(path=path, kind=kind, entity=entity, prop=prop)
+
+
+def _refs_in_doc(doc: Any, path: Path) -> list[_FieldRef]:
+    """Every alias-resolved ``Column``/``Measure`` field reference in one doc."""
     aliases = _collect_aliases(doc)
-    refs: list[_FieldRef] = []
-    for node in _iter_dicts(doc):
-        for kind in ("Column", "Measure"):
-            wrapped = _wrapped_ref(node, kind)
-            if wrapped is None:
-                continue
-            entity, prop = wrapped
-            if entity is None:
-                inner = node[kind]
-                alias = inner["Expression"]["SourceRef"].get("Source")
-                entity = aliases.get(alias) if isinstance(alias, str) else None
-                if entity is None:
-                    continue  # unresolvable alias: skip, don't fabricate
-            refs.append(_FieldRef(path=path, kind=kind, entity=entity, prop=prop))
-    return refs
+    candidates = (
+        _ref_from_node(node, kind, aliases, path)
+        for node in _iter_dicts(doc)
+        for kind in ("Column", "Measure")
+    )
+    return [ref for ref in candidates if ref is not None]
 
 
 def _rel_locator(base_dir: Path, path: Path) -> str:
@@ -273,38 +306,43 @@ def _walk_report(
     if not definition.is_dir():
         return refs, blockers
     for json_path in sorted(definition.rglob("*.json")):
-        locator = _rel_locator(report_dir, json_path)
-        try:
-            text = json_path.read_text(encoding="utf-8-sig")
-        except (OSError, UnicodeDecodeError):
-            blockers.append(
-                BindingFinding(
-                    dimension="unreadable_source",
-                    locator=locator,
-                    message=(
-                        "report definition file is unreadable -- "
-                        "validation blocked (fail closed)"
-                    ),
-                )
-            )
-            continue
-        try:
-            doc = json.loads(text)
-        except json.JSONDecodeError as exc:
-            blockers.append(
-                BindingFinding(
-                    dimension="unparseable_json",
-                    locator=locator,
-                    message=(
-                        f"report definition file is not valid JSON ({exc.msg}, "
-                        f"line {exc.lineno}) -- a corrupt definition is itself "
-                        f"an error-card source; validation blocked (fail closed)"
-                    ),
-                )
-            )
+        doc, blocker = _load_definition_doc(
+            json_path, _rel_locator(report_dir, json_path)
+        )
+        if blocker is not None:
+            blockers.append(blocker)
             continue
         refs.extend(_refs_in_doc(doc, json_path))
     return refs, blockers
+
+
+def _load_definition_doc(
+    json_path: Path, locator: str
+) -> tuple[Any, BindingFinding | None]:
+    """One definition JSON parsed, or the fail-closed blocker naming it."""
+    try:
+        text = json_path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return None, BindingFinding(
+            dimension="unreadable_source",
+            locator=locator,
+            message=(
+                "report definition file is unreadable -- "
+                "validation blocked (fail closed)"
+            ),
+        )
+    try:
+        return json.loads(text), None
+    except json.JSONDecodeError as exc:
+        return None, BindingFinding(
+            dimension="unparseable_json",
+            locator=locator,
+            message=(
+                f"report definition file is not valid JSON ({exc.msg}, "
+                f"line {exc.lineno}) -- a corrupt definition is itself "
+                f"an error-card source; validation blocked (fail closed)"
+            ),
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -361,6 +399,25 @@ def _kind_mismatch_finding(
     )
 
 
+def _unknown_entity_finding(ref: _FieldRef, locator: str) -> BindingFinding:
+    return BindingFinding(
+        dimension="unknown_entity",
+        locator=locator,
+        message=(
+            f"field reference {ref.entity}[{ref.prop}] names entity "
+            f"{ref.entity!r}, which is not a table in the model"
+        ),
+    )
+
+
+def _kind_conflicts(kind: str, is_column: bool, is_measure: bool) -> bool:
+    """True when the wrapper kind contradicts what the property actually is --
+    a column wrapped as ``Measure`` or a measure wrapped as ``Column``."""
+    if kind == "Measure":
+        return is_column and not is_measure
+    return is_measure and not is_column
+
+
 def _resolve_ref(
     ref: _FieldRef,
     tables: dict[str, _ModelTable],
@@ -371,25 +428,13 @@ def _resolve_ref(
     locator = _rel_locator(report_dir, ref.path)
     table = tables.get(ref.entity.casefold())
     if table is None:
-        return (
-            BindingFinding(
-                dimension="unknown_entity",
-                locator=locator,
-                message=(
-                    f"field reference {ref.entity}[{ref.prop}] names entity "
-                    f"{ref.entity!r}, which is not a table in the model"
-                ),
-            ),
-            None,
-        )
+        return _unknown_entity_finding(ref, locator), None
     prop_key = ref.prop.casefold()
     is_column = prop_key in table.columns
     is_measure = prop_key in table.measures
     if not is_column and not is_measure:
         return _unresolved_field_finding(ref, table, locator), None
-    if (ref.kind == "Measure" and is_column and not is_measure) or (
-        ref.kind == "Column" and is_measure and not is_column
-    ):
+    if _kind_conflicts(ref.kind, is_column, is_measure):
         return None, _kind_mismatch_finding(ref, table, locator)
     return None, None
 
@@ -454,16 +499,12 @@ def validate_bindings(*, report_dir: Path, model_dir: Path) -> BindingValidation
         *report_blockers,
     ]
 
-    unresolved: list[BindingFinding] = list(blockers)
-    kind_mismatches: list[BindingFinding] = []
     deduped = _dedupe(refs)
-    if tables:  # an empty model already blocked; don't cascade unknown_entity
-        for ref in deduped:
-            blocked, warned = _resolve_ref(ref, tables, report_dir)
-            if blocked is not None:
-                unresolved.append(blocked)
-            if warned is not None:
-                kind_mismatches.append(warned)
+    # An empty model already blocked; don't cascade per-ref unknown_entity noise.
+    resolved, kind_mismatches = (
+        _resolve_all(deduped, tables, report_dir) if tables else ([], [])
+    )
+    unresolved = [*blockers, *resolved]
 
     evidence = (
         f"PBIR report dir: {report_dir}",
@@ -471,19 +512,38 @@ def validate_bindings(*, report_dir: Path, model_dir: Path) -> BindingValidation
         f"{len(deduped)} field reference(s) checked against "
         f"{len(tables)} model table(s)",
     )
-    if unresolved:
-        status = "blocked"
-    elif kind_mismatches:
-        status = "warning"
-    else:
-        status = "pass"
     return BindingValidationResult(
-        status=status,
+        status=_rollup_status(unresolved, kind_mismatches),
         unresolved=tuple(unresolved),
         kind_mismatches=tuple(kind_mismatches),
         evidence=evidence,
         grants_approval=False,
     )
+
+
+def _resolve_all(
+    refs: list[_FieldRef],
+    tables: dict[str, _ModelTable],
+    report_dir: Path,
+) -> tuple[list[BindingFinding], list[BindingFinding]]:
+    """``(blocked, warnings)`` across all references."""
+    blocked: list[BindingFinding] = []
+    warnings: list[BindingFinding] = []
+    for ref in refs:
+        block, warn = _resolve_ref(ref, tables, report_dir)
+        blocked.extend([block] if block is not None else [])
+        warnings.extend([warn] if warn is not None else [])
+    return blocked, warnings
+
+
+def _rollup_status(
+    unresolved: list[BindingFinding], kind_mismatches: list[BindingFinding]
+) -> str:
+    """Worst-first roll-up: any blocked-class finding blocks; kind mismatches
+    alone warn; a clean resolution is ``pass``."""
+    if unresolved:
+        return "blocked"
+    return "warning" if kind_mismatches else "pass"
 
 
 def pbir_validate_bindings_main(args: object) -> int:
