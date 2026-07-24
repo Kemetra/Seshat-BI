@@ -13,21 +13,49 @@
   to approved F009 contracts) and NEVER self-grants dashboard_ready: pass.
 -->
 
+## Machine-readable three-way front section (spec 021, Phase B)
+
+`seshat narrative-check --table <table> --binding-map` reads this fenced `yaml`
+block. It proves the THREE-way binding (visual -> contract -> decision-question):
+every visual answers >=1 brief decision-question (no orphan, FR-005), every
+declared page serves >=1 decision (coverage), and every headline visual answers
+an `overview` question (no bare-total headline, FR-006). Fill the placeholders;
+keep it in sync with the human table below. ASCII, UTF-8 no BOM.
+
+```yaml
+schema: seshat.binding-map/v1
+table: <table>                              # matches mappings/<table>/
+brief: mappings/<table>/narrative-brief.md  # the brief whose Q-ids this map references
+pages:
+  - id: <page id>                           # a page may be a bare id or {id, regions}
+    regions: [<region>, ...]
+visuals:
+  - visual_id: v01
+    page: <page id>
+    region: <region>
+    visual_type: <card|bar|line|table>
+    contract: <approved-contract-name>      # the F011 leg (unchanged)
+    decision_questions: [<Qn>, ...]         # a LIST: >=1 brief question id (the NEW leg)
+    headline: <true|false>                  # true = KPI-card class -> must answer an overview Q
+```
+
 ## Subject area
 
 - subject_area: `<schema.table or model name>`
 - governed_model: `<relative path>`
 - semantic_model_ready: `pass`
 
-## Binding map (every visual -> exactly one APPROVED contract)
+## Binding map (every visual -> exactly one APPROVED contract + decision-question)
 
-| visual_id | visual_type | business_question | bound_contract (approved) | semantic_model_field(s) |
-|-----------|-------------|-------------------|---------------------------|-------------------------|
-| `v01` | `<card/bar/line/table>` | `<question>` | `<approved-contract-name>` | `<mapped field(s)>` |
-| `v02` | `<...>` | `<...>` | `<approved-contract-name>` | `<...>` |
+| visual_id | visual_type | decision_question(s) | bound_contract (approved) | semantic_model_field(s) |
+|-----------|-------------|----------------------|---------------------------|-------------------------|
+| `v01` | `<card/bar/line/table>` | `<Qn[, Qm]>` | `<approved-contract-name>` | `<mapped field(s)>` |
+| `v02` | `<...>` | `<Qn>` | `<approved-contract-name>` | `<...>` |
 
-> Every row MUST cite one APPROVED contract by name and mapped model field(s).
-> A visual with no backing approved contract is an ORPHAN -> do not emit it -> STOP.
+> Every row MUST cite one APPROVED contract by name, the mapped model field(s), AND
+> >=1 brief decision-question id. A visual with no backing approved contract is an
+> unbound ORPHAN; a visual answering no decision-question is a narrative ORPHAN
+> (FR-005) -> do not emit it -> STOP.
 
 ## Dropped contracts (more approved contracts than visuals -- record each, no silent omission)
 

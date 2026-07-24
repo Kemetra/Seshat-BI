@@ -71,19 +71,33 @@
 
 ## Phase 4: User Story 2 - Design guidance is narrative-gated and three-way bound (P1)
 
-- [ ] T009 [US2] In `.claude/skills/dashboard-design/SKILL.md`, add the
-      narrative precondition to the STOP-unless list: a committed
-      `mappings/<table>/narrative-brief.md` conforming to the T002 schema
-      MUST exist before any layout/visual guidance is authored; absence is a
-      named blocker, not a warning (FR-004).
-- [ ] T010 [US2] In the same skill, upgrade the binding map to three-way
-      (visual -> contract -> decision-question): orphan in either direction is
-      a defect; headline (KPI-card class) visuals MUST name a comparison
-      framing from the catalog -- a bare total is a defect (FR-005, FR-006).
-- [ ] T011 [US2] Mirror the same route language in the marketplace
-      `powerbi-workflows` skill source (locate via the distribution pipeline;
-      keep wording identical to avoid drift), and add `bi-analyst-knowledge`
-      to the skill's load-for-meaning routing list.
+- [x] T009 [US2] In `.claude/skills/dashboard-design/SKILL.md`, added the
+      narrative precondition to the STOP-unless list (precondition 5 + the "no
+      layout before narrative" gate section): a committed
+      `mappings/<table>/narrative-brief.md` conforming to the T002 schema MUST
+      exist before any layout/visual guidance; absence is the named blocker
+      `narrative_brief_missing`, not a warning (FR-004). Blocking-reasons and
+      "must NOT do" lists updated to match.
+- [x] T010 [US2] Upgraded the binding map to three-way (visual -> contract ->
+      decision-question) in the skill AND made it CHECKABLE: the shipped
+      `narrative-check` verb gains an opt-in `--binding-map` design-stage mode
+      (`src/seshat/narrative_check.py::check_binding_map`) reading a
+      `seshat.binding-map/v1` front section -- orphan in either direction
+      (`orphan_visual`, FR-005), page-serves-no-decision, and a headline visual
+      answering no overview question (`bare_total_headline_visual`, FR-006, via
+      the brief's already-enforced overview-comparison rule). `decision_questions`
+      is LIST-valued (a visual may answer >1 decision -- the real worked
+      example's basket-value card answers Q1+Q5). Fail-closed on missing/
+      malformed map or absent referenced brief (opt-in so US1 brief-stage callers
+      are not broken). Template + `example-specialty-retail.md` teach the shape;
+      capabilities.yaml entry updated (oracle 45 pass).
+- [x] T011 [US2] Mirrored the narrative gate + three-way route in the marketplace
+      `powerbi-workflows` skill SOURCE
+      (`distribution/bundle-templates/shared/skills/powerbi-workflows/SKILL.md`),
+      added `bi-analyst-knowledge` to its load-for-meaning routing list, and
+      regenerated the `integrations/{claude-code,codex}` mirrors via
+      `scripts/export_agent_bundles.py` (parity: "generated bundles match
+      reviewed inputs").
 
 ## Phase 5: User Story 3 - Read-only narrative check (P2)
 
@@ -96,9 +110,12 @@
       stage, empty callout, missing guardrail basis), non-zero exit; (c)
       malformed/missing brief -> fail-closed parse error naming the problem,
       never "classified nothing" with exit 0 (FR-007, FR-008, FR-009).
-      SCOPE: the two BINDING-MAP fixtures (orphan visual, missing question on a
-      page) are visible `@pytest.mark.skip` -- they need the Phase-B three-way
-      map (T010), which does not exist yet; never faked as a silent pass.
+      SCOPE (Phase C): the two BINDING-MAP fixtures (orphan visual, missing
+      question on a page) shipped as visible `@pytest.mark.skip` -- they needed
+      the Phase-B three-way map (T010). Phase B replaced both skips with real
+      tests (orphan visual, page-missing-question, headline-visual, multi-question
+      visual, fail-closed cases) built from the committed teaching file, plus a
+      guard test asserting the real retail_store_sales map still needs migration.
 - [x] T013 [US3] Implement `src/seshat/narrative_check.py`: parse the T002
       front section; enforce the derivation-route.md checker rules (grounded
       cites, fresh contract revisions, story-order coverage/stage-match/

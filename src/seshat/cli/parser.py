@@ -673,6 +673,18 @@ def _add_narrative_check_parser(sub: argparse._SubParsersAction) -> None:
         default="text",
         help="output format (default: text)",
     )
+    narrative.add_argument(
+        "--binding-map",
+        action="store_true",
+        help=(
+            "design-stage mode (Phase B): check the three-way binding map "
+            "(visual -> contract -> decision-question) at "
+            "mappings/<table>/design/visual-contract-binding-map.md instead of "
+            "the brief. Opt-in so brief-stage callers (no map yet) are not "
+            "broken; fails closed on a missing/malformed map (read-only, grants "
+            "no approval)"
+        ),
+    )
 
 
 def _add_manifest_parser(sub: argparse._SubParsersAction) -> None:
