@@ -116,22 +116,28 @@
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T015 [P] [POLISH] Propagate the pack through the existing pipeline:
-      `distribution/bundle-templates/shared/skills/`, `integrations/
-      claude-code/seshat-bi/knowledge/`, `integrations/codex/`, and the
-      `distribution/public-knowledge-allowlist.yaml` entry; add the pack to
-      whatever copy-parity check guards the other packs.
-- [ ] T016 [P] [POLISH] Sanitization + secrets scan over every new file
-      (no C086 client numbers outside the sanitized example, no PII, no DSN,
-      no absolute paths) -- Principles VII and IX (FR-010).
+- [x] T015 [P] [POLISH] Propagate the pack through the existing pipeline via
+      `scripts/export_agent_bundles.py` (full pack ->
+      `integrations/{claude-code,codex}/seshat-bi/knowledge/bi-analyst-knowledge/`,
+      thin redirect stub at `skills/<pack>/SKILL.md`, matching the peer packs),
+      plus the `distribution/public-knowledge-allowlist.yaml` entries
+      (kb-156..169 + wrapper), `public-command-surface.yaml`, and the shared
+      router. Guarded by the existing copy-parity + bundle contract tests
+      (43 pass; exporter idempotent; 14/14 knowledge copies byte-identical).
+- [x] T016 [P] [POLISH] Sanitization + secrets scan over every new file
+      (no client numbers outside the sanitized example, no PII, no DSN,
+      no absolute paths) -- Principles VII and IX (FR-010). CLEAN across all
+      five categories; the only c086 hit is a deviation note documenting the
+      T007 rename.
 - [x] T017 [POLISH] Verify each spec Success Criterion: SC-001/SC-002 by
       walking the worked example end to end, SC-003 against the T012
       fixtures, SC-004 by tracing the #452 four sub-gaps to their shipped
       countermeasures. Recorded in `phase-c-verification.md`. (SC-002 walk
       confirmed the full worked-example brief passes the checker;
       flow-style YAML verified.)
-- [ ] T018 [POLISH] CHANGELOG entry + close-the-loop comment on #452
-      linking spec/plan/tasks and the shipped artifacts.
+- [x] T018 [POLISH] CHANGELOG entry (under [Unreleased] Added) done. The
+      close-the-loop comment on #452 is a GitHub action deferred to PR time
+      (this branch is not yet pushed; owner drives the push/PR).
 
 ## Dependencies
 
