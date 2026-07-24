@@ -126,6 +126,7 @@ def _print_preflight_text(prog: str, result) -> None:
 def _run_preflight(args) -> int:
     from seshat.pbi_mcp.preflight import (
         MissingRuntimeTransport,
+        PreflightRequest,
         render_result_json,
         run_preflight,
         write_artifact,
@@ -133,11 +134,13 @@ def _run_preflight(args) -> int:
     from seshat.pbi_mcp.scan import GeneratedSecretError
 
     result = run_preflight(
-        Path(args.repo),
-        MissingRuntimeTransport(),
-        target=args.target,
-        target_allowlist=tuple(args.allow),
-        required_tools=tuple(args.require_tool),
+        PreflightRequest(
+            repo_root=Path(args.repo),
+            transport=MissingRuntimeTransport(),
+            target=args.target,
+            target_allowlist=tuple(args.allow),
+            required_tools=tuple(args.require_tool),
+        )
     )
     if args.as_json:
         print(render_result_json(result, generated_at="(not written)"), end="")

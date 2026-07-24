@@ -232,49 +232,62 @@ def _target_blockers(
     return [], True
 
 
-def run_preflight(
-    repo_root: Path,
-    transport: McpTransport,
-    *,
-    target: str | None = None,
-    target_allowlist: tuple[str, ...] = (),
-    required_tools: tuple[str, ...] = (),
-    supported_protocol_versions: tuple[str, ...] = SUPPORTED_PROTOCOL_VERSIONS,
+@dataclass(frozen=True)
+class PreflightRequest:
+    """Everything one read-only preflight run needs, bundled immutably."""
+
+    repo_root: Path
+    transport: McpTransport
+    target: str | None = None
+    target_allowlist: tuple[str, ...] = ()
+    required_tools: tuple[str, ...] = ()
+    supported_protocol_versions: tuple[str, ...] = SUPPORTED_PROTOCOL_VERSIONS
+
+
+def _uncontacted_result(
+    status: str,
+    target: str | None,
+    blockers: tuple[PreflightBlocker, ...],
+    notes: tuple[str, ...],
 ) -> PreflightResult:
+    """A result for a run that never described the server (blocked/skipped)."""
+    return PreflightResult(
+        status=status,
+        mode="read-only",
+        server=None,
+        tools_present=(),
+        tools_missing=(),
+        target=target,
+        target_allowlisted=None,
+        blockers=blockers,
+        notes=notes,
+    )
+
+
+def run_preflight(request: PreflightRequest) -> PreflightResult:
     """Run the read-only preflight; see the module docstring for the order."""
-    blockers = _config_blockers(repo_root) + _readiness_blockers(repo_root)
+    blockers = _config_blockers(request.repo_root) + _readiness_blockers(
+        request.repo_root
+    )
     if blockers:
         # Fail-closed BEFORE any contact: a config that demands write mode or
         # a not-passed gate means the server is never even described.
-        return PreflightResult(
-            status=STATUS_BLOCKED,
-            mode="read-only",
-            server=None,
-            tools_present=(),
-            tools_missing=(),
-            target=target,
-            target_allowlisted=None,
-            blockers=tuple(blockers),
-            notes=("server not contacted -- blocked before discovery",),
+        return _uncontacted_result(
+            STATUS_BLOCKED,
+            request.target,
+            tuple(blockers),
+            ("server not contacted -- blocked before discovery",),
         )
     try:
-        server = transport.describe()
+        server = request.transport.describe()
     except RuntimeUnavailable as absence:
-        return PreflightResult(
-            status=STATUS_SKIPPED,
-            mode="read-only",
-            server=None,
-            tools_present=(),
-            tools_missing=(),
-            target=target,
-            target_allowlisted=None,
-            blockers=(),
-            notes=(str(absence),),
-        )
+        return _uncontacted_result(STATUS_SKIPPED, request.target, (), (str(absence),))
     cap_blockers, present, missing = _capability_blockers(
-        server, required_tools, supported_protocol_versions
+        server, request.required_tools, request.supported_protocol_versions
     )
-    tgt_blockers, allowlisted = _target_blockers(target, target_allowlist)
+    tgt_blockers, allowlisted = _target_blockers(
+        request.target, request.target_allowlist
+    )
     all_blockers = tuple(cap_blockers + tgt_blockers)
     return PreflightResult(
         status=STATUS_BLOCKED if all_blockers else STATUS_OK,
@@ -282,7 +295,7 @@ def run_preflight(
         server=server,
         tools_present=present,
         tools_missing=missing,
-        target=target,
+        target=request.target,
         target_allowlisted=allowlisted,
         blockers=all_blockers,
         notes=(),

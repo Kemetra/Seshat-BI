@@ -16,6 +16,7 @@ from seshat.pbi_mcp.preflight import (
     STATUS_SKIPPED,
     SUPPORTED_PROTOCOL_VERSIONS,
     MissingRuntimeTransport,
+    PreflightRequest,
     PreflightResult,
     RuntimeUnavailable,
     ServerDescription,
@@ -88,11 +89,13 @@ def _blocker_ids(result: PreflightResult) -> set[str]:
 
 def test_capability_match_passes(tmp_path: Path) -> None:
     result = run_preflight(
-        _ready_repo(tmp_path),
-        FakeTransport(_server()),
-        required_tools=("get_model",),
-        target="orders",
-        target_allowlist=("orders",),
+        PreflightRequest(
+            _ready_repo(tmp_path),
+            FakeTransport(_server()),
+            required_tools=("get_model",),
+            target="orders",
+            target_allowlist=("orders",),
+        )
     )
     assert result.status == STATUS_OK
     assert result.tools_present == ("get_model",)
@@ -102,9 +105,11 @@ def test_capability_match_passes(tmp_path: Path) -> None:
 
 def test_capability_mismatch_blocks_naming_the_tool(tmp_path: Path) -> None:
     result = run_preflight(
-        _ready_repo(tmp_path),
-        FakeTransport(_server(tools=("get_model",))),
-        required_tools=("get_model", "export_tmdl"),
+        PreflightRequest(
+            _ready_repo(tmp_path),
+            FakeTransport(_server(tools=("get_model",))),
+            required_tools=("get_model", "export_tmdl"),
+        )
     )
     assert result.status == STATUS_BLOCKED
     assert "PBIMCP-CAP-01" in _blocker_ids(result)
@@ -113,15 +118,19 @@ def test_capability_mismatch_blocks_naming_the_tool(tmp_path: Path) -> None:
 
 
 def test_empty_tool_list_blocks(tmp_path: Path) -> None:
-    result = run_preflight(_ready_repo(tmp_path), FakeTransport(_server(tools=())))
+    result = run_preflight(
+        PreflightRequest(_ready_repo(tmp_path), FakeTransport(_server(tools=())))
+    )
     assert result.status == STATUS_BLOCKED
     assert "PBIMCP-CAP-02" in _blocker_ids(result)
 
 
 def test_unsupported_protocol_version_blocks_naming_it(tmp_path: Path) -> None:
     result = run_preflight(
-        _ready_repo(tmp_path),
-        FakeTransport(_server(protocol="1999-01-01")),
+        PreflightRequest(
+            _ready_repo(tmp_path),
+            FakeTransport(_server(protocol="1999-01-01")),
+        )
     )
     assert result.status == STATUS_BLOCKED
     assert "PBIMCP-VER-01" in _blocker_ids(result)
@@ -131,10 +140,12 @@ def test_unsupported_protocol_version_blocks_naming_it(tmp_path: Path) -> None:
 
 def test_target_off_allowlist_blocks(tmp_path: Path) -> None:
     result = run_preflight(
-        _ready_repo(tmp_path),
-        FakeTransport(_server()),
-        target="prod-model",
-        target_allowlist=("orders",),
+        PreflightRequest(
+            _ready_repo(tmp_path),
+            FakeTransport(_server()),
+            target="prod-model",
+            target_allowlist=("orders",),
+        )
     )
     assert result.status == STATUS_BLOCKED
     assert "PBIMCP-TGT-01" in _blocker_ids(result)
@@ -143,7 +154,9 @@ def test_target_off_allowlist_blocks(tmp_path: Path) -> None:
 
 def test_target_without_any_allowlist_blocks(tmp_path: Path) -> None:
     result = run_preflight(
-        _ready_repo(tmp_path), FakeTransport(_server()), target="orders"
+        PreflightRequest(
+            _ready_repo(tmp_path), FakeTransport(_server()), target="orders"
+        )
     )
     assert result.status == STATUS_BLOCKED
     assert "PBIMCP-TGT-02" in _blocker_ids(result)
@@ -157,7 +170,7 @@ def test_target_without_any_allowlist_blocks(tmp_path: Path) -> None:
 def test_write_mode_config_is_refused_before_contact(tmp_path: Path) -> None:
     root = _ready_repo(tmp_path)
     _write_mcp_json(root, ["--readwrite"])
-    result = run_preflight(root, ExplodingTransport())
+    result = run_preflight(PreflightRequest(root, ExplodingTransport()))
     assert result.status == STATUS_BLOCKED
     assert "PBIMCP-CONF-02" in _blocker_ids(result)
     assert result.server is None
@@ -166,7 +179,7 @@ def test_write_mode_config_is_refused_before_contact(tmp_path: Path) -> None:
 def test_skipconfirmation_anywhere_is_a_hard_refusal(tmp_path: Path) -> None:
     root = _ready_repo(tmp_path)
     _write_mcp_json(root, ["--readonly", "--skipconfirmation"])
-    result = run_preflight(root, ExplodingTransport())
+    result = run_preflight(PreflightRequest(root, ExplodingTransport()))
     assert result.status == STATUS_BLOCKED
     assert "PBIMCP-CONF-01" in _blocker_ids(result)
     assert any("forbidden" in blocker.detail for blocker in result.blockers)
@@ -174,14 +187,16 @@ def test_skipconfirmation_anywhere_is_a_hard_refusal(tmp_path: Path) -> None:
 
 def test_gate_not_passed_blocks_naming_the_gate(tmp_path: Path) -> None:
     # No readiness record at all -> fail-closed, gate named, no contact.
-    result = run_preflight(tmp_path, ExplodingTransport())
+    result = run_preflight(PreflightRequest(tmp_path, ExplodingTransport()))
     assert result.status == STATUS_BLOCKED
     assert "PBIMCP-GATE-01" in _blocker_ids(result)
     assert any("semantic_model_ready" in blocker.detail for blocker in result.blockers)
 
 
 def test_missing_runtime_skips_gracefully(tmp_path: Path) -> None:
-    result = run_preflight(_ready_repo(tmp_path), MissingRuntimeTransport())
+    result = run_preflight(
+        PreflightRequest(_ready_repo(tmp_path), MissingRuntimeTransport())
+    )
     assert result.status == STATUS_SKIPPED
     assert result.blockers == ()
     assert any("preflight skipped" in note for note in result.notes)
@@ -200,10 +215,12 @@ def test_shipped_transport_raises_the_graceful_signal() -> None:
 def test_artifact_shape_and_write(tmp_path: Path) -> None:
     root = _ready_repo(tmp_path)
     result = run_preflight(
-        root,
-        FakeTransport(_server()),
-        target="orders",
-        target_allowlist=("orders",),
+        PreflightRequest(
+            root,
+            FakeTransport(_server()),
+            target="orders",
+            target_allowlist=("orders",),
+        )
     )
     written = write_artifact(root, result, generated_at="2026-07-24T00:00:00Z")
     assert written == root / ARTIFACT_RELPATH
@@ -231,7 +248,7 @@ def test_artifact_shape_and_write(tmp_path: Path) -> None:
 
 
 def test_blocked_artifact_records_blockers_and_no_server(tmp_path: Path) -> None:
-    result = run_preflight(tmp_path, ExplodingTransport())
+    result = run_preflight(PreflightRequest(tmp_path, ExplodingTransport()))
     text = render_result_json(result, "2026-07-24T00:00:00Z")
     payload = json.loads(text)
     assert payload["status"] == "blocked"

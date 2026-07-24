@@ -76,6 +76,27 @@ def _server_args(entry: dict) -> list[str]:
     return [str(arg).lower() for arg in args]
 
 
+def _powerbi_server_args(servers: dict) -> list[list[str]]:
+    """Args of every Power BI-shaped server entry, one list per server."""
+    return [
+        _server_args(entry)
+        for name, entry in servers.items()
+        if isinstance(entry, dict) and _is_powerbi_server(str(name), entry)
+    ]
+
+
+def _carries_forbidden_flag(per_server_args: list[list[str]]) -> bool:
+    return any(_FORBIDDEN_FLAG in arg for args in per_server_args for arg in args)
+
+
+def _requests_write_mode(per_server_args: list[list[str]]) -> bool:
+    return any(arg in _WRITE_FLAGS for args in per_server_args for arg in args)
+
+
+def _all_read_only(per_server_args: list[list[str]]) -> bool:
+    return all(_READONLY_FLAG in args for args in per_server_args)
+
+
 def _classify_servers(servers: dict) -> str:
     """Fold every Power BI server's args into one categorical verdict.
 
@@ -83,19 +104,14 @@ def _classify_servers(servers: dict) -> str:
     write flag -- or the mere ABSENCE of ``--readonly`` (the local server's
     documented default is write-enabled) -- reads as write mode.
     """
-    relevant = [
-        _server_args(entry)
-        for name, entry in servers.items()
-        if isinstance(entry, dict) and _is_powerbi_server(str(name), entry)
-    ]
+    relevant = _powerbi_server_args(servers)
     if not relevant:
         return CONFIG_ABSENT
-    flat = [arg for args in relevant for arg in args]
-    if any(_FORBIDDEN_FLAG in arg for arg in flat):
+    if _carries_forbidden_flag(relevant):
         return CONFIG_FORBIDDEN_FLAG
-    if any(arg in _WRITE_FLAGS for arg in flat):
+    if _requests_write_mode(relevant):
         return CONFIG_WRITE_MODE
-    if all(_READONLY_FLAG in args for args in relevant):
+    if _all_read_only(relevant):
         return CONFIG_READ_ONLY
     return CONFIG_WRITE_MODE
 
@@ -114,16 +130,18 @@ def classify_mcp_config(path: Path) -> str:
     return _classify_servers(servers)
 
 
+def _pbip_marker_at(root: Path, depth: str) -> bool:
+    """A ``*.pbip`` pointer file or a ``*.SemanticModel`` DIRECTORY at one
+    glob depth."""
+    if next(root.glob(f"{depth}*.pbip"), None) is not None:
+        return True
+    return any(hit.is_dir() for hit in root.glob(f"{depth}*.SemanticModel"))
+
+
 def _pbip_project_present(root: Path) -> bool:
-    """A ``*.pbip`` pointer file or a ``*.SemanticModel`` folder within three
-    levels of the root (bounded probe -- never a full-tree walk)."""
-    for depth in ("", "*/", "*/*/"):
-        if next(root.glob(f"{depth}*.pbip"), None) is not None:
-            return True
-        for hit in root.glob(f"{depth}*.SemanticModel"):
-            if hit.is_dir():
-                return True
-    return False
+    """A PBIP marker within three levels of the root (bounded probe -- never
+    a full-tree walk)."""
+    return any(_pbip_marker_at(root, depth) for depth in ("", "*/", "*/*/"))
 
 
 def _stage_status(data: dict, stage: str) -> str:
@@ -142,6 +160,35 @@ def _has_publish_approval(data: dict) -> bool:
     )
 
 
+def _load_readiness_record(record: Path) -> dict | None:
+    """Parse one readiness record; ``None`` means unreadable/mis-shaped --
+    treated as not-pass by the caller, never as pass."""
+    import yaml  # lazy: mirrors the gate reader's dependency-light discipline
+
+    try:
+        data = yaml.safe_load(record.read_text(encoding="utf-8-sig")) or {}
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _fold_readiness_records(
+    records: list[Path],
+) -> tuple[tuple[str, ...], str]:
+    """Fold parsed records into (semantic-ready tables, publish approval)."""
+    ready: list[str] = []
+    approval = APPROVAL_ABSENT
+    for record in records:
+        data = _load_readiness_record(record)
+        if data is None:
+            continue
+        if _stage_status(data, "semantic_model_ready") == "pass":
+            ready.append(record.parent.name)
+        if _has_publish_approval(data):
+            approval = APPROVAL_RECORDED
+    return tuple(ready), approval
+
+
 def read_semantic_readiness(repo_root: Path) -> tuple[str, tuple[str, ...], str]:
     """Read every ``mappings/<table>/readiness-status.yaml`` and summarize.
 
@@ -154,30 +201,12 @@ def read_semantic_readiness(repo_root: Path) -> tuple[str, tuple[str, ...], str]
     mappings = Path(repo_root) / "mappings"
     if not mappings.is_dir():
         return READINESS_MISSING, (), APPROVAL_ABSENT
-    import yaml  # lazy: mirrors the gate reader's dependency-light discipline
-
-    ready: list[str] = []
-    seen_any = False
-    approval = APPROVAL_ABSENT
-    for record in sorted(mappings.glob("*/readiness-status.yaml")):
-        try:
-            data = yaml.safe_load(record.read_text(encoding="utf-8-sig")) or {}
-        except (OSError, UnicodeDecodeError, yaml.YAMLError):
-            # An unreadable record is treated as not-pass, never as pass.
-            seen_any = True
-            continue
-        if not isinstance(data, dict):
-            seen_any = True
-            continue
-        seen_any = True
-        if _stage_status(data, "semantic_model_ready") == "pass":
-            ready.append(record.parent.name)
-        if _has_publish_approval(data):
-            approval = APPROVAL_RECORDED
-    if not seen_any:
-        return READINESS_MISSING, (), approval
+    records = sorted(mappings.glob("*/readiness-status.yaml"))
+    if not records:
+        return READINESS_MISSING, (), APPROVAL_ABSENT
+    ready, approval = _fold_readiness_records(records)
     status = READINESS_PASS if ready else READINESS_NOT_PASS
-    return status, tuple(ready), approval
+    return status, ready, approval
 
 
 def detect_facts(
