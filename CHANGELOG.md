@@ -116,6 +116,19 @@ explicitly identifies a public release event.
   the project is reopened via File Explorer (not the Recent list; "Don't Save" on
   the stale-session prompt). The `pbip-workflow` gotcha row now points at the full
   protocol instead of the insufficient "restart Desktop" tip. (#455)
+- Docs-only slice 1 for the parked F016 Power BI execution adapter: fixed
+  `.mcp.json.example` to default to `--readonly` (was write-enabled with a
+  misspelled `--read-write` flag); added `templates/pbi-mcp-adapter-contract.md`
+  (the generic adapter-contract skeleton specialized for F016) and
+  `docs/integrations/pbi-mcp-adapter.md` (disambiguates Seshat's own governor
+  MCP server, the gitignored vendored Power BI Modeling MCP binary, and
+  Microsoft's official local/remote Power BI MCP servers, both public preview
+  with no published release); updated `docs/powerbi-connection.md` and
+  `docs/operations/adapter-compatibility-matrix.md` to point at the new doc.
+  No runtime code, no new CLI verb, no MCP call; F016 remains parked pending an
+  owner-ratified ADR. (#450)
+
+## [0.6.1] -- 2026-07-22
 
 ### Fixed
 

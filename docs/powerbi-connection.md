@@ -107,8 +107,17 @@ The Power BI Modeling MCP can do steps 1-2 (`named_expression CreateParameter` +
 `partition Update`). To enable it, vendor the extension under
 `tools/powerbi-modeling-mcp/` (gitignored) and copy `.mcp.json.example` ->
 `.mcp.json` (also gitignored -- the config points at the untracked vendored
-tree, so it stays machine-local). But **Desktop's Save may re-emit the literal** if its UI state
-still holds the original Get-Data step — verify the on-disk TMDL after saving:
+tree, so it stays machine-local). The committed example now defaults to
+`--readonly` (Microsoft's opt-in safe mode for this server) rather than write
+mode -- Seshat's posture is read-only until the parked F016 adapter is
+un-parked by an owner-ratified ADR (see `templates/pbi-mcp-adapter-contract.md`).
+If a step genuinely needs a write call, that is an explicit, reviewed opt-in
+gated on a named-human approval, never the default. For the three unrelated
+things that all get called "MCP" near this repo -- Seshat's own governor MCP
+server, the vendored binary above, and Microsoft's official Power BI MCP
+servers -- see `docs/integrations/pbi-mcp-adapter.md`. But **Desktop's Save may
+re-emit the literal** if its UI state still holds the original Get-Data step —
+verify the on-disk TMDL after saving:
 `grep -r "ondigitalocean\|PostgreSQL.Database(\"" powerbi/` must return nothing.
 
 > The parameter names here (`Server`/`Database`) match the golden fixture
