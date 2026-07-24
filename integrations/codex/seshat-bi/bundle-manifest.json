@@ -1496,6 +1496,15 @@
     },
     {
       "classification": "generated_wrapper",
+      "destination": "skills/pbi-mcp-doctor/SKILL.md",
+      "output_sha256": "b794f788b043edcb39d927fb0e6cd1bf65b50d9b538a5c0eea8146918b54e6dd",
+      "source": "distribution/bundle-templates/shared/skills/pbi-mcp-doctor/SKILL.md",
+      "source_id": "pbi-mcp-doctor-skill",
+      "source_sha256": "b794f788b043edcb39d927fb0e6cd1bf65b50d9b538a5c0eea8146918b54e6dd",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "generated_wrapper",
       "destination": "skills/powerbi-workflows/SKILL.md",
       "output_sha256": "d6afa225d8f896ada721e505f050a95e0a932917f8872a3ee444b9f8f1878e85",
       "source": "distribution/bundle-templates/shared/skills/powerbi-workflows/SKILL.md",
@@ -1515,10 +1524,10 @@
     {
       "classification": "generated_wrapper",
       "destination": "skills/seshat-bi/SKILL.md",
-      "output_sha256": "a244f37ca935eda3d7c9b0ddac4b6b25880ba79e318960d518ffa4ec54d2967a",
+      "output_sha256": "28a70acc0736a46be5d574eb1bba0d43c8c62e77359c0a42fe4e7e18db0bd444",
       "source": "distribution/bundle-templates/shared/skills/seshat-bi/SKILL.md",
       "source_id": "router",
-      "source_sha256": "a244f37ca935eda3d7c9b0ddac4b6b25880ba79e318960d518ffa4ec54d2967a",
+      "source_sha256": "28a70acc0736a46be5d574eb1bba0d43c8c62e77359c0a42fe4e7e18db0bd444",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1586,10 +1595,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "44a29795fddbb2b7b7c261565ab530450645db8bcf966f33cd4ef2a9964ec8aa",
+  "manifest_digest": "dd208d8e559780d057146e0bb65cf58329f500c303e23ad8392ea916cf1e10b8",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "6f0cc93a77a5f2387caab4dad03c218267dfc1e2",
+  "source_revision": "967ed659782c0b0754fe270a5f6866050977e36c",
   "target": "codex",
   "version": "0.6.1"
 }

@@ -28,6 +28,26 @@ explicitly identifies a public release event.
 ## [Unreleased]
 
 ### Added
+- `seshat pbi-mcp doctor|generate-config|preflight` -- the read-only Power BI
+  MCP doctor family (#450 slices 2-4, the F016 slot; same Option-B narrow
+  adapter-family shape as `seshat dagster doctor`). `doctor` detects the local
+  environment without network (Node runtime, vendored modeling MCP, `.mcp.json`
+  mode, PBIP on disk, `semantic_model_ready` state) and implements the issue's
+  section-7 recommendation matrix as a pure decision function -- a not-passed
+  gate is a blocked recommendation naming `semantic_model_ready`; the advisory
+  record `.seshat/powerbi-mcp-recommendation.yaml` is written only under
+  `--write-advisory` and is write-once. `generate-config` emits placeholder-only
+  read-only `.mcp.json` templates (local stdio / remote HTTP) plus the generated
+  `docs/generated/powerbi-mcp-setup.md`, every byte passing a C1/C2-style secret
+  scan before emission, refusing overwrites. `preflight` does capability
+  discovery + target-allowlist validation through a transport Protocol whose
+  real runtime is deliberately absent (graceful "runtime not present" skip),
+  hard-refuses `--skipconfirmation`/write-mode configs, blocks on unsupported
+  protocol versions (unknown is never compatible), and records
+  `.seshat/powerbi-mcp-preflight.json` -- the F016 row's smoke-test evidence
+  shape in the adapter-compatibility matrix. New `pbi-mcp-doctor` companion
+  skill in both public bundles. No mutation path exists; F016 stays parked
+  pending the owner-ratified ADR (slice 5). (#450)
 - `seshat adopt-pbip measure-sync` -- governed, file-only upsert of APPROVED
   metric-contract measures into one table of an already-adopted PBIP semantic
   model. Serves only models recorded by an accepted adoption manifest

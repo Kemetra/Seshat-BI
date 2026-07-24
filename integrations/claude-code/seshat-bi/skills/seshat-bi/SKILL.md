@@ -26,6 +26,8 @@ For subject reasoning, load only the relevant bundled skill:
   `dbt-workflows`
 - governed Dagster preflight, gated medallion runs, and run-evidence review:
   `dagster-workflows`
+- read-only Power BI MCP doctor, surface recommendation, and preflight:
+  `pbi-mcp-doctor`
 
 End with one next action or one blocked stop. Cite evidence and named blockers;
 never invent a pass or score.

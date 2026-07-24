@@ -86,6 +86,13 @@ ceiling by construction.
 
 ## See also
 
+- The read-only doctor family shipped by #450 slices 2-4: `seshat pbi-mcp
+  doctor|generate-config|preflight` (routed by the `pbi-mcp-doctor` skill) --
+  environment detection + the section-7 surface recommendation, placeholder-only
+  read-only config generation, and the transport-mocked preflight whose artifact
+  `.seshat/powerbi-mcp-preflight.json` is the F016 smoke-test evidence shape. All
+  read-only; none of it lifts the park.
+- The generated setup guidance (placeholder-only): `docs/generated/powerbi-mcp-setup.md`.
 - The F016 adapter contract (this integration's specialization):
   `templates/pbi-mcp-adapter-contract.md`.
 - The generic Execution Adapter skeleton: `templates/adapter-contract.md`.
