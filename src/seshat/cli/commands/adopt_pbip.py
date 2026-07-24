@@ -40,6 +40,32 @@ def _emit(document: dict[str, Any], output_format: str, text_renderer) -> None:
 def adopt_pbip_main(args: object) -> int:
     command = args.adopt_pbip_command  # type: ignore[attr-defined]
     output_format = args.output_format  # type: ignore[attr-defined]
+    if command == "measure-sync":
+        # Lazy import: measure-sync pulls the contract inventory + DAX
+        # generator chain, which assess/scaffold never need.
+        from seshat import cli
+        from seshat.pbip_measure_sync import (
+            MeasureSyncRequest,
+            measure_sync_exit_code,
+            render_measure_sync_text,
+            sync_measures,
+        )
+
+        prog = cli._prog(args)  # brand the client typed (`seshat`/`retail`), #402
+        request = MeasureSyncRequest(
+            repo=args.repo,  # type: ignore[attr-defined]
+            model=args.model,  # type: ignore[attr-defined]
+            table=args.table,  # type: ignore[attr-defined]
+            metrics_dir=args.metrics_dir,  # type: ignore[attr-defined]
+            dry_run=args.dry_run,  # type: ignore[attr-defined]
+        )
+        result = sync_measures(request)
+        _emit(
+            result,
+            output_format,
+            lambda document: render_measure_sync_text(document, prog),
+        )
+        return measure_sync_exit_code(result)
     if command == "assess":
         try:
             assessment = assess_pbip(args.project)  # type: ignore[attr-defined]

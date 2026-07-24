@@ -50,6 +50,35 @@ explicitly identifies a public release event.
   Phase-B design-gate arming (dashboard-design narrative precondition + three-way
   binding map) is intentionally NOT included here -- it remains owner-gated.
   (#452)
+- `seshat pbi-mcp doctor|generate-config|preflight` -- the read-only Power BI
+  MCP doctor family (#450 slices 2-4, the F016 slot; same Option-B narrow
+  adapter-family shape as `seshat dagster doctor`). `doctor` detects the local
+  environment without network (Node runtime, vendored modeling MCP, `.mcp.json`
+  mode, PBIP on disk, `semantic_model_ready` state) and implements the issue's
+  section-7 recommendation matrix as a pure decision function -- a not-passed
+  gate is a blocked recommendation naming `semantic_model_ready`; the advisory
+  record `.seshat/powerbi-mcp-recommendation.yaml` is written only under
+  `--write-advisory` and is write-once. `generate-config` emits placeholder-only
+  read-only `.mcp.json` templates (local stdio / remote HTTP) plus the generated
+  `docs/generated/powerbi-mcp-setup.md`, every byte passing a C1/C2-style secret
+  scan before emission, refusing overwrites. `preflight` does capability
+  discovery + target-allowlist validation through a transport Protocol whose
+  real runtime is deliberately absent (graceful "runtime not present" skip),
+  hard-refuses `--skipconfirmation`/write-mode configs, blocks on unsupported
+  protocol versions (unknown is never compatible), and records
+  `.seshat/powerbi-mcp-preflight.json` -- the F016 row's smoke-test evidence
+  shape in the adapter-compatibility matrix. New `pbi-mcp-doctor` companion
+  skill in both public bundles. No mutation path exists; F016 stays parked
+  pending the owner-ratified ADR (slice 5). (#450)
+- `seshat adopt-pbip measure-sync` -- governed, file-only upsert of APPROVED
+  metric-contract measures into one table of an already-adopted PBIP semantic
+  model. Serves only models recorded by an accepted adoption manifest
+  (`assess` -> `scaffold` first); each measure passes the owner-approval
+  inventory gate and re-verifies through the generate->verify chain (L3 +
+  D1-D11) before any write; the upsert is idempotent (insert/update/skip),
+  atomic (one bad contract refuses the whole run), and proves the
+  partition/M-source region byte-identical after every write. `--dry-run`
+  prints the plan; partition/M content is never echoed to any output. (#457)
 - `seshat pbir-validate-bindings` -- offline, read-only PBIR binding-resolution
   validator: resolves every bound field reference in a report's definition JSON
   (queryState projections, filters, sorts; `From`-alias aware) against the
@@ -77,6 +106,15 @@ explicitly identifies a public release event.
   (#432)
 
 ### Fixed
+- `seshat dashboard-gaps` no longer fails open on an unusable `--page-intent`: the
+  four unusable shapes (missing, unreadable, invalid YAML, valid-YAML-but-wrong-shape
+  -- e.g. a Markdown file, whose bullets parse as a YAML list) now get four distinct
+  named errors and CLI exit 2 (a usage error; classification outcomes still always
+  exit 0, no gate added). A wrong-format file previously collapsed into the
+  misleading "not found or unreadable" + "No required items were classified" with
+  exit 0 -- false comfort on a QA surface. A copyable
+  `templates/page-intent.example.yaml` now ships, and the shape is documented in the
+  `powerbi-workflows` skill routing. (#453)
 - S4b no longer false-flags a schema-qualified `ALTER TABLE <schema>.<t> ALTER COLUMN
   ... SET NOT NULL` inside a `BEGIN/COMMIT` block as "target schema undetermined". The
   inner `ALTER` keyword of the `ALTER COLUMN` sub-clause was re-evaluated as a
@@ -112,6 +150,25 @@ explicitly identifies a public release event.
 - `seshat-bi` skill: added a "Resetting / re-running a project" section documenting
   the interim manual reset file-set and the stage-deletions-before-`seshat check`
   workaround (until a native `seshat reset` verb ships). (#439)
+- `powerbi-workflows` skill: documented the PBIR external-edit reload protocol --
+  Desktop serves its in-memory session and restores cached view state from
+  `.pbi/localSettings.json`, so agent-authored on-disk PBIR edits stay invisible
+  until Desktop is fully quit (`PBIDesktop.exe` AND `msmdsrv.exe` gone),
+  `localSettings.json` is moved aside for both `.Report` and `.SemanticModel`, and
+  the project is reopened via File Explorer (not the Recent list; "Don't Save" on
+  the stale-session prompt). The `pbip-workflow` gotcha row now points at the full
+  protocol instead of the insufficient "restart Desktop" tip. (#455)
+- Docs-only slice 1 for the parked F016 Power BI execution adapter: fixed
+  `.mcp.json.example` to default to `--readonly` (was write-enabled with a
+  misspelled `--read-write` flag); added `templates/pbi-mcp-adapter-contract.md`
+  (the generic adapter-contract skeleton specialized for F016) and
+  `docs/integrations/pbi-mcp-adapter.md` (disambiguates Seshat's own governor
+  MCP server, the gitignored vendored Power BI Modeling MCP binary, and
+  Microsoft's official local/remote Power BI MCP servers, both public preview
+  with no published release); updated `docs/powerbi-connection.md` and
+  `docs/operations/adapter-compatibility-matrix.md` to point at the new doc.
+  No runtime code, no new CLI verb, no MCP call; F016 remains parked pending an
+  owner-ratified ADR. (#450)
 
 ## [0.6.1] -- 2026-07-22
 

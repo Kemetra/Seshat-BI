@@ -427,6 +427,102 @@ def test_cli_writes_nothing(tmp_path):
     assert {p.name for p in tdir.rglob("*")} == before, "detector must write nothing"
 
 
+# --------------------------------------------------------------------------- #
+# #453 -- an unusable EXPLICIT page-intent is a NAMED input error, fail-closed:
+# the four unusable shapes get four distinct messages (never the misleading
+# catch-all "not found or unreadable"), and the CLI exits non-zero so a wrong
+# file can never masquerade as "no design-blocking gaps".
+# --------------------------------------------------------------------------- #
+def _cli_args(tmp_path, intent, fmt="text"):
+    return argparse.Namespace(
+        repo=str(tmp_path), table="widget", page_intent=intent, output_format=fmt
+    )
+
+
+def test_page_intent_missing_file_named_missing(tmp_path):
+    _write_table(tmp_path, "widget", {"A": _metric_yaml("A", "pass", ["amount"])})
+    view = build_gap_inventory(tmp_path, "widget", str(tmp_path / "nope.yaml"))
+    assert view["page_intent_error"]
+    gaps = " ".join(view["document_gaps"])
+    assert "not found" in gaps
+    assert "unreadable" not in gaps  # missing != unreadable: name the real cause
+
+
+def test_page_intent_markdown_wrong_shape_named(tmp_path):
+    # The exact ex-2 failure: a Markdown file IS valid YAML (bullets parse as a
+    # list), so no parse error fires -- it must be reported as a format error
+    # naming the required shape, never as "not found or unreadable".
+    _write_table(tmp_path, "widget", {"A": _metric_yaml("A", "pass", ["amount"])})
+    intent = _write_intent(
+        tmp_path, "page-intent.md", "- Metric: TotalSales\n- Metric: Transactions\n"
+    )
+    view = build_gap_inventory(tmp_path, "widget", intent)
+    assert view["page_intent_error"]
+    gaps = " ".join(view["document_gaps"])
+    assert "not found" not in gaps
+    assert "mapping" in gaps  # names what the top level must be
+    assert "questions" in gaps  # names the required key
+    assert "docs/tools/dashboard-gap-detector.md" in gaps  # points at the schema
+
+
+def test_page_intent_invalid_yaml_named(tmp_path):
+    _write_table(tmp_path, "widget", {"A": _metric_yaml("A", "pass", ["amount"])})
+    intent = _write_intent(tmp_path, "bad.yaml", "questions: [unclosed\n")
+    view = build_gap_inventory(tmp_path, "widget", intent)
+    assert view["page_intent_error"]
+    gaps = " ".join(view["document_gaps"])
+    assert "not valid YAML" in gaps
+    assert "not found" not in gaps
+
+
+def test_page_intent_mapping_without_questions_is_error(tmp_path):
+    _write_table(tmp_path, "widget", {"A": _metric_yaml("A", "pass", ["amount"])})
+    intent = _write_intent(tmp_path, "noq.yaml", "title: hello\n")
+    view = build_gap_inventory(tmp_path, "widget", intent)
+    assert view["page_intent_error"]
+    assert any("questions" in g for g in view["document_gaps"])
+
+
+def test_page_intent_empty_questions_list_is_not_error(tmp_path):
+    # `questions: []` is the documented shape with zero items -- legitimate
+    # empty classification, NOT an input error.
+    _write_table(tmp_path, "widget", {"A": _metric_yaml("A", "pass", ["amount"])})
+    intent = _write_intent(tmp_path, "empty.yaml", "questions: []\n")
+    view = build_gap_inventory(tmp_path, "widget", intent)
+    assert not view["page_intent_error"]
+    assert view["items"] == []
+
+
+def test_no_page_intent_supplied_is_not_an_input_error(tmp_path):
+    # Omitting --page-intent stays a document gap (existing behavior), not a
+    # usage error: the user did not point the tool at a file that failed.
+    _write_table(tmp_path, "widget", {"A": _metric_yaml("A", "pass", ["amount"])})
+    view = build_gap_inventory(tmp_path, "widget", None)
+    assert not view["page_intent_error"]
+
+
+def test_cli_unusable_page_intent_fails_closed(tmp_path, capsys):
+    from seshat.cli.commands.gap_detector import gap_detector_main
+
+    _write_table(tmp_path, "widget", MIXED_METRICS)
+    intent = _write_intent(tmp_path, "intent.md", "- Metric: TotalSales\n")
+    assert gap_detector_main(_cli_args(tmp_path, intent)) != 0
+    out = capsys.readouterr().out
+    assert "No required items were classified" not in out  # no false comfort
+
+
+def test_cli_json_carries_page_intent_error_and_fails_closed(tmp_path, capsys):
+    import json as _json
+
+    from seshat.cli.commands.gap_detector import gap_detector_main
+
+    _write_table(tmp_path, "widget", MIXED_METRICS)
+    intent = _write_intent(tmp_path, "intent.md", "- Metric: TotalSales\n")
+    assert gap_detector_main(_cli_args(tmp_path, intent, fmt="json")) != 0
+    view = _json.loads(capsys.readouterr().out)
+    assert view["page_intent_error"]
+
+
 def test_vocabulary_is_exactly_sl1(tmp_path):
     # SC-002: the detector's status set equals SL1's enum -- no minted status.
     _write_table(tmp_path, "widget", MIXED_METRICS)

@@ -1847,11 +1847,20 @@
     },
     {
       "classification": "generated_wrapper",
+      "destination": "skills/pbi-mcp-doctor/SKILL.md",
+      "output_sha256": "b794f788b043edcb39d927fb0e6cd1bf65b50d9b538a5c0eea8146918b54e6dd",
+      "source": "distribution/bundle-templates/shared/skills/pbi-mcp-doctor/SKILL.md",
+      "source_id": "pbi-mcp-doctor-skill",
+      "source_sha256": "b794f788b043edcb39d927fb0e6cd1bf65b50d9b538a5c0eea8146918b54e6dd",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "generated_wrapper",
       "destination": "skills/powerbi-workflows/SKILL.md",
-      "output_sha256": "a9a794b81d7e96922a56effd347433a250706a565dea563b10561f69de7963c3",
+      "output_sha256": "d6afa225d8f896ada721e505f050a95e0a932917f8872a3ee444b9f8f1878e85",
       "source": "distribution/bundle-templates/shared/skills/powerbi-workflows/SKILL.md",
       "source_id": "powerbi-workflows-skill",
-      "source_sha256": "a9a794b81d7e96922a56effd347433a250706a565dea563b10561f69de7963c3",
+      "source_sha256": "d6afa225d8f896ada721e505f050a95e0a932917f8872a3ee444b9f8f1878e85",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1866,10 +1875,10 @@
     {
       "classification": "generated_wrapper",
       "destination": "skills/seshat-bi/SKILL.md",
-      "output_sha256": "cd5f3c65e60fdffc8f674cdc3603fb10c06e93f3c9b4c4c9b34d793ab4c9bcf8",
+      "output_sha256": "18a69d9005a16554d38ec09ff04740011299f4a06e108025e4fe65c6c5abaabc",
       "source": "distribution/bundle-templates/shared/skills/seshat-bi/SKILL.md",
       "source_id": "router",
-      "source_sha256": "cd5f3c65e60fdffc8f674cdc3603fb10c06e93f3c9b4c4c9b34d793ab4c9bcf8",
+      "source_sha256": "18a69d9005a16554d38ec09ff04740011299f4a06e108025e4fe65c6c5abaabc",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1937,10 +1946,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "c731abdefc1a4d7e087e9142fee951ef6d4b2f76d458256736d87edc0888e4d6",
+  "manifest_digest": "f99a024b7c6add4a4851332f2e2004b232fa1cf9ad8c345b1fd931a8c694f434",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "898992af7dd68d43026cbcb57808331816bb3ce7",
+  "source_revision": "1edcfd5ff4b4c4af7e3d59dfe6e9fc38cb5a073f",
   "target": "claude",
   "version": "0.6.1"
 }

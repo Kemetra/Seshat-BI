@@ -125,7 +125,7 @@ These come straight from Microsoft's docs and quietly break teams:
 | **260-char path limit** | PBIP nests folders + files; long table/object names overflow it and saves fail | Keep the repo at a short root path; keep project/table names short |
 | **CRLF line endings** | Power BI Desktop writes CRLF; mixed endings make diffs noisy | `git config core.autocrlf true` and commit a `.gitattributes` |
 | **UTF-8 *without* BOM** | Editing TMDL/JSON externally with a BOM can corrupt the file | Save external edits as UTF-8 without BOM |
-| **Desktop is unaware of external edits** | It won't see changes made by VS Code/Tabular Editor while open | Restart Power BI Desktop after external edits |
+| **Desktop is unaware of external edits** | It serves its in-memory session and restores cached view state from `.pbi/localSettings.json` — a plain restart or a Recent-list reopen can still show the OLD layout | Follow the full reload protocol in the `powerbi-workflows` skill: quit Desktop (verify `PBIDesktop.exe` AND `msmdsrv.exe` are gone), move `.pbi/localSettings.json` aside for both `.Report` and `.SemanticModel`, reopen via File Explorer (not Recent), choose Don't Save on the stale-session prompt |
 
 ## Editing the model as text
 

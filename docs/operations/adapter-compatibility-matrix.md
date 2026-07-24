@@ -143,7 +143,19 @@ live in its `templates/adapter-version-record.md` copy. The load-bearing fixed e
   the note "adapter parked, not yet exercised -> unknown (parked is a note, not a status)".
   It is NOT marked supported and is NOT omitted. `pbi-cli` is no longer the preferred path
   -- the official Power BI MCP / connection is the preferred future adapter, and this matrix
-  tracks its STATUS, not its implementation (record/build boundary).
+  tracks its STATUS, not its implementation (record/build boundary). The preferred adapter
+  is specifically Microsoft's official Power BI MCP offering -- both the local
+  `@microsoft/powerbi-modeling-mcp` server and the remote
+  `https://api.fabric.microsoft.com/v1/mcp/powerbi` server are public preview with no
+  published release, so the supported range stays `unknown` for both until a release
+  ships and is smoke-tested; this does not affect the park (un-parking F016 still needs
+  a separate owner-ratified ADR). The named smoke test `<pbi-mcp-smoke>` now has a
+  defined EVIDENCE SHAPE (#450 slice 4): the read-only preflight artifact
+  `.seshat/powerbi-mcp-preflight.json` written by `seshat pbi-mcp preflight
+  --write-artifact` (derived evidence only -- capability discovery, protocol-version
+  check, target-allowlist validation; no score). Producing that artifact is NOT an
+  attestation and does not change this row: the status stays `unknown` until a named
+  owner attests a passed run per the rules below.
 - **Any row with an untested ceiling:** the range states the tested floor and marks the
   ceiling `unknown`; `blocking_reasons[]` records "upper bound untested -> ceiling unknown,
   not assumed compatible". Newer-is-fine is never assumed.
@@ -210,7 +222,9 @@ force-fitting a spine stage.
   `specs/018-companion-tools-architecture/`.
 - The four-status vocabulary + no-fake-confidence rule: `docs/readiness/readiness-model.md`.
 - The tracked adapters (recorded here, NOT built here): F029 (dbt) `specs/023-dbt-transformation-adapter/`,
-  F030 (Dagster) `specs/024-dagster-orchestration-adapter/`, F016 (Power BI execution adapter).
+  F030 (Dagster) `specs/024-dagster-orchestration-adapter/`, F016 (Power BI execution adapter,
+  parked) -- see `docs/integrations/pbi-mcp-adapter.md` (the three-MCP-senses
+  disambiguation) and `templates/pbi-mcp-adapter-contract.md` (its adapter contract).
 - The roadmap row + hard rules 7/8/9: `docs/roadmap/roadmap.md` (F032).
 - The constitution: `.specify/memory/constitution.md` (Principles V, VII, VIII, IX).
 - The spec: `specs/026-adapter-compatibility-matrix/spec.md`.

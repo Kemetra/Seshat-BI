@@ -409,6 +409,22 @@ capabilities:
       dispatch: "narrative-check"
       roadmap: "issue #452"
 
+  - id: pbi-mcp-doctor
+    name: "seshat pbi-mcp"
+    summary: "Read-only Power BI MCP doctor family (issue #450 slices 2-4, the F016 slot): detects the local environment (Node runtime, vendored modeling MCP, .mcp.json mode, PBIP on disk, semantic_model_ready state) and maps a declared task intent onto the governed surface recommendation; generates placeholder-only read-only .mcp.json templates and setup guidance behind a secret-scan refusal; runs a transport-mocked read-only preflight (capability discovery + target allowlist) that hard-refuses --skipconfirmation/write-mode configs and fails closed while semantic_model_ready has not passed. Grants no approval, emits no score; F016 stays parked -- no mutation path exists."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "pbi-mcp"
+    documentation: "docs/integrations/pbi-mcp-adapter.md"
+    references:
+      dispatch: "pbi-mcp"
+      public_skill: "pbi-mcp-doctor"
+      roadmap: "issue #450"
+
   - id: retail-blockers
     name: "retail blockers"
     summary: "Explains committed readiness blockers across tables: category, plain-language explanation, and next surface to use."

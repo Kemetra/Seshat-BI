@@ -1,0 +1,135 @@
+<!--
+=============================================================================
+ pbi-mcp-adapter-contract.md  --  the F016 specialization of templates/adapter-contract.md
+=============================================================================
+ Specializes the GENERIC Execution Adapter contract for the Power BI Modeling
+ MCP integration (F016, parked). This is Slice 1 of issue #450: docs and
+ contract only -- no runtime code, no new CLI verb, no MCP call is authorized
+ by this file. F016 stays parked until an owner-ratified ADR lifts it; this
+ contract documents the shape the adapter MUST take if/when that happens.
+
+ Read alongside: docs/integrations/pbi-mcp-adapter.md (the three-MCP-senses
+ disambiguation), docs/operations/adapter-compatibility-matrix.md (F016's
+ tracked status row), .specify/memory/constitution.md Principle II
+ (Depend, Never Fork -- binds the adapter ROLE, not any one tool).
+=============================================================================
+-->
+
+# Adapter Contract -- Power BI Modeling MCP (F016)
+
+- **Authority category:** Execution Adapter / publish-capable (PARKED)
+- **Connectivity level:** `publish-capable` *(the strongest it uses; also DB/host-adjacent via the on-disk PBIP/TMDL it edits and, for the remote server, the published-model query path)*
+- **Product layer:** `6` *(Publish -- see docs/roadmap/roadmap.md; orthogonal to category)*
+- **Roadmap feature:** `F016`  **On-disk spec:** `<none -- parked, pending owner-ratified ADR>`
+- **Owner:** `UNASSIGNED`
+- **Status:** `Parked` -- pending an owner-ratified ADR that un-parks F016. Nothing in
+  this contract authorizes running the adapter today; it declares the shape it MUST
+  take if the park is lifted.
+
+## What it does (one line)
+
+> Drives Microsoft's official Power BI Modeling MCP server (local, stdio) or the
+> remote Power BI MCP server (published-model queries) to materialize or query an
+> already-approved Power BI semantic model -- never to author metrics, mappings, or
+> semantic logic itself.
+
+## Gate it is DOWNSTREAM of
+
+An adapter only runs after a readiness gate has passed. Name the stage and the approval
+it requires; the adapter fails closed if that approval/evidence is absent.
+
+- **Gated on stage:** `Semantic Model Ready = pass`
+- **Required approval / evidence:** a named-human `publish_ready` approval recorded for
+  any mutating (write/publish) call. Read-only/query calls still require Semantic Model
+  Ready = `pass`; they do not additionally require `publish_ready`.
+- **Fail-closed behavior:** refuses to run and reports the missing stage/approval as a
+  blocker. It never infers or self-grants the approval, and never runs ahead of the gate
+  because a human is "probably fine with it."
+
+## Boundaries it CROSSES (connectivity)
+
+Enumerate EVERY external boundary this adapter touches. `publish-capable` implies the
+publish gate applies. Record the strongest connectivity above; list all here.
+
+- Opens a local stdio process to the vendored Power BI Modeling MCP binary
+  (`tools/powerbi-modeling-mcp/`, gitignored), which in turn reads/writes the local
+  Power BI Desktop / Fabric / on-disk PBIP-TMDL project (`local-file` + `local-service`
+  boundary).
+- For the remote server: opens a Streamable HTTP connection to the published Power BI
+  MCP endpoint, which queries an already-published semantic model in the Power BI
+  Service (`external-service-connected` boundary; query-only, no local file writes).
+- Any call that would materialize/publish a semantic model change is `publish-capable`
+  and MUST clear the publish gate above.
+
+## Approved artifact it MATERIALIZES / PUBLISHES
+
+The definition MUST already exist in Core Authority. The adapter executes it; it does not
+author it.
+
+- Materializes an already-approved PBIP/TMDL semantic model edit (e.g. a parameter
+  definition or partition repoint already decided upstream -- see
+  `docs/powerbi-connection.md`'s parameterize-before-commit flow).
+- Publishes an already-approved semantic model to the Power BI Service (mutating calls
+  only, gated on `publish_ready`).
+- Queries an already-published semantic model (remote server, read-only; no publish
+  gate needed, but still downstream of Semantic Model Ready).
+
+## Derived run-evidence it WRITES
+
+An adapter may write a RUN RECORD (what ran, when, with what result) as derived evidence.
+This is never a new truth or approval.
+
+- A run record (tool called, mode -- readonly/readwrite --, target, timestamp, result)
+  committed as derived evidence, redacted of any host/tenant/credential value.
+
+## Secrets handling (Principle IX)
+
+- **Credentials:** Entra ID (interactive) / Service Principal / access-token env var, all machine-local (never committed); the live-Desktop mode rides the local session. No separate DSN.
+  Any local launcher config lives in the git-ignored `.mcp.json` (copied from the
+  committed `.mcp.json.example`), never inline in a tracked file. The remote server's
+  auth (tenant setting + Build permission + Copilot license for Generate Query) is
+  configured outside this repo.
+- **Committed example only:** `.mcp.json.example` (placeholder command path, no real
+  host/tenant/user path), read-only (`--readonly`) by default.
+
+## Forbidden operations (the matrix says NO)
+
+These hold for EVERY Execution Adapter regardless of connectivity level:
+
+- MUST NOT define metrics, mappings, semantic logic, or dashboard design (execution-only).
+- MUST NOT create truth or grant approval / move a stage to `pass` (named-human / Core
+  Authority only).
+- MUST NOT execute when its required approval/evidence is absent -- it fails closed.
+- MUST NOT publish unless its connectivity level is `publish-capable` AND `publish_ready`
+  is recorded.
+- MUST NOT emit a numeric / maturity / confidence score (hard rule #9).
+- MUST NOT commit real hostnames / DSNs / credentials (Principle IX).
+- MUST NOT run the local server with `--skipconfirmation` -- that flag bypasses the
+  server's own per-write confirmation and is forbidden outright, in every mode.
+- MUST NOT default to `--readwrite` -- the committed example and every invocation this
+  contract authorizes default to `--readonly`; a write mode is an explicit, reviewed
+  opt-in gated on `publish_ready`, never the default.
+- MUST NOT rely on the remote server for RLS-sensitive access under a Service Principal
+  -- the remote server does not enforce RLS for Service Principal callers, so any query
+  that depends on row-level security MUST go through a path that does enforce it.
+
+## How it handles a missing definition or approval
+
+When the artifact it would execute is undefined, or the gate it is downstream of is not
+`pass`, the adapter SURFACES it as a blocker and fails closed -- it never invents the
+definition, self-approves, or executes past the missing gate (Principle V; stop-and-ask).
+Because F016 is parked, the current correct behavior for ANY invocation is to report the
+park (and the absent ADR) as the blocker, full stop.
+
+## See also
+
+- The normative reference: `docs/architecture/product-modules.md`.
+- The seam (Adapter vs Module): `docs/architecture/core-vs-modules-and-adapters.md`.
+- The generic skeleton this specializes: `templates/adapter-contract.md`.
+- The three-MCP-senses disambiguation: `docs/integrations/pbi-mcp-adapter.md`.
+- The tracked status row (parked, `unknown`, `UNASSIGNED`):
+  `docs/operations/adapter-compatibility-matrix.md`.
+- The Lane C update governance for this adapter: `docs/operations/adapter-update-policy.md`.
+- The constitution's Depend-Never-Fork binding for the adapter role:
+  `.specify/memory/constitution.md` Principle II.
+- The committed example launcher config (read-only default): `.mcp.json.example`.
