@@ -16,6 +16,7 @@ import pytest
 from seshat.cli import main
 from seshat.pbip_adoption import MANIFEST_PATH
 from seshat.pbip_measure_sync import (
+    MeasureSyncRequest,
     measure_sync_exit_code,
     render_measure_sync_text,
     sync_measures,
@@ -56,13 +57,11 @@ TABLE_TMDL = (
 )
 
 
-def _contract_yaml(
-    name: str,
-    column: str,
-    aggregation: str = "sum",
-    table: str = "gold.fct_sales",
-    status: str = "pass",
-) -> str:
+def _contract_yaml(name: str, column: str, **overrides: str) -> str:
+    aggregation = overrides.pop("aggregation", "sum")
+    table = overrides.pop("table", "gold.fct_sales")
+    status = overrides.pop("status", "pass")
+    assert not overrides, f"unknown contract override(s): {sorted(overrides)}"
     return (
         f'name: "{name}"\n'
         'owner: "data_owner"\n'
@@ -147,7 +146,7 @@ def _partition_text(path: Path) -> str:
 
 
 def _sync(repo: Path, model_dir: Path, **kwargs: object) -> dict:
-    return sync_measures(repo, model_dir, TABLE, **kwargs)
+    return sync_measures(MeasureSyncRequest(repo, model_dir, TABLE, **kwargs))  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------

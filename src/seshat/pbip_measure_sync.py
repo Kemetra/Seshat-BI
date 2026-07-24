@@ -24,7 +24,7 @@ from __future__ import annotations
 import os
 import re
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -85,32 +85,36 @@ _PARTITION_DRIFT = (
 # ---------------------------------------------------------------------------
 
 
-def _result(
-    outcome: str,
-    *,
-    table: str,
-    table_file: str | None = None,
-    actions: Iterable[dict[str, str]] = (),
-    excluded: Iterable[str] = (),
-    blockers: Iterable[str] = (),
-    dry_run: bool = False,
-) -> dict[str, Any]:
-    action_list = list(actions)
-    counts = {"insert": 0, "update": 0, "skip": 0}
-    for action in action_list:
-        counts[action["action"]] += 1
-    return {
-        "schema_version": SCHEMA_VERSION,
-        "outcome": outcome,
-        "table": table,
-        "table_file": table_file,
-        "dry_run": dry_run,
-        "actions": action_list,
-        "counts": counts,
-        "excluded": list(excluded),
-        "blocking_reasons": list(blockers),
-        "next_step": "value-check",
-    }
+@dataclass(frozen=True)
+class _RunReport:
+    """Everything a result document needs besides the outcome itself.
+
+    Accumulated along the run (``dataclasses.replace``) so refusal sites emit
+    a fully-cited document without re-threading loose arguments.
+    """
+
+    table: str
+    table_file: str | None = None
+    actions: tuple[dict[str, str], ...] = ()
+    excluded: tuple[str, ...] = ()
+    dry_run: bool = False
+
+    def doc(self, outcome: str, blockers: Iterable[str] = ()) -> dict[str, Any]:
+        counts = {"insert": 0, "update": 0, "skip": 0}
+        for action in self.actions:
+            counts[action["action"]] += 1
+        return {
+            "schema_version": SCHEMA_VERSION,
+            "outcome": outcome,
+            "table": self.table,
+            "table_file": self.table_file,
+            "dry_run": self.dry_run,
+            "actions": list(self.actions),
+            "counts": counts,
+            "excluded": list(self.excluded),
+            "blocking_reasons": list(blockers),
+            "next_step": "value-check",
+        }
 
 
 def measure_sync_exit_code(result: dict[str, Any]) -> int:
@@ -283,15 +287,19 @@ def _trim_trailing_blanks(lines: list[str], start: int, end: int) -> int:
     return end
 
 
+def _is_doc_line(lines: list[str], idx: int, ind: int) -> bool:
+    if idx < 0:
+        return False
+    if _indent(lines[idx]) != ind:
+        return False
+    return lines[idx].strip().startswith("///")
+
+
 def _doc_start(lines: list[str], header: int) -> int:
     """First line of the contiguous ``///`` doc comment above ``header``."""
     ind = _indent(lines[header])
     start = header
-    while (
-        start > 0
-        and _indent(lines[start - 1]) == ind
-        and lines[start - 1].strip().startswith("///")
-    ):
+    while _is_doc_line(lines, start - 1, ind):
         start -= 1
     return start
 
@@ -302,6 +310,36 @@ def _lineage_tag(lines: list[str], start: int, end: int) -> str | None:
         if match:
             return match.group("value")
     return None
+
+
+def _measure_header_at(lines: list[str], i: int) -> re.Match[str] | None:
+    if _indent(lines[i]) != 1:
+        return None
+    return _is_measure_header(lines[i].strip())
+
+
+def _is_anchor_line(line: str) -> bool:
+    if _indent(line) != 1:
+        return False
+    stripped = line.strip()
+    return bool(_is_column_header(stripped) or _is_source_header(stripped))
+
+
+def _register_measure(
+    lines: list[str], i: int, name: str, measures: dict[str, _MeasureBlock]
+) -> tuple[int, str | None]:
+    """Record the measure block headed at ``i``; (next line, duplicate error)."""
+    end = _block_end(lines, i, len(lines))
+    if name in measures:
+        return end, _DUPLICATE_MEASURE
+    trimmed = _trim_trailing_blanks(lines, i, end)
+    measures[name] = _MeasureBlock(
+        name=name,
+        start=_doc_start(lines, i),
+        end=trimmed,
+        lineage_tag=_lineage_tag(lines, i, trimmed),
+    )
+    return end, None
 
 
 def _scan_measures(
@@ -317,25 +355,14 @@ def _scan_measures(
     anchor: int | None = None
     i = 0
     while i < n:
-        stripped = lines[i].strip()
-        ind = _indent(lines[i])
-        header = _is_measure_header(stripped)
-        if header and ind == 1:
-            end = _block_end(lines, i, n)
+        header = _measure_header_at(lines, i)
+        if header:
             name = header.group("name").strip()
-            if name in measures:
-                return measures, n, _DUPLICATE_MEASURE
-            trimmed = _trim_trailing_blanks(lines, i, end)
-            measures[name] = _MeasureBlock(
-                name=name,
-                start=_doc_start(lines, i),
-                end=trimmed,
-                lineage_tag=_lineage_tag(lines, i, trimmed),
-            )
-            i = end
+            i, duplicate = _register_measure(lines, i, name, measures)
+            if duplicate is not None:
+                return measures, n, duplicate
             continue
-        is_anchor = _is_column_header(stripped) or _is_source_header(stripped)
-        if ind == 1 and is_anchor and anchor is None:
+        if anchor is None and _is_anchor_line(lines[i]):
             anchor = i
         i += 1
     return measures, n if anchor is None else anchor, None
@@ -388,36 +415,50 @@ def _desired_lines(tmdl_block: str, lineage_tag: str | None) -> list[str]:
     return lines
 
 
+@dataclass(frozen=True)
+class _TableScan:
+    """The structure `_scan_measures` proved about the target table file."""
+
+    measures: dict[str, _MeasureBlock]
+    anchor: int
+
+
+def _measure_change(
+    target: _SyncTarget, existing: _MeasureBlock | None, block: str
+) -> tuple[str, tuple[str, ...]]:
+    """(action, desired logical lines) for ONE rendered measure."""
+    desired = tuple(_desired_lines(block, existing.lineage_tag if existing else None))
+    if existing is None:
+        return "insert", desired
+    current = "".join(target.lines[existing.start : existing.end])
+    wanted = "".join(line + target.newline for line in desired)
+    return ("skip" if current == wanted else "update"), desired
+
+
+def _insertion_edit(target: _SyncTarget, anchor: int, inserted: list[str]) -> _Edit:
+    if anchor > 0 and target.lines[anchor - 1].strip():
+        inserted = ["", *inserted]
+    return _Edit(anchor, anchor, tuple(inserted))
+
+
 def _plan(
-    lines: list[str],
-    newline: str,
-    rendered: dict[str, str],
-    measures: dict[str, _MeasureBlock],
-    anchor: int,
+    target: _SyncTarget, scan: _TableScan, rendered: dict[str, str]
 ) -> tuple[list[dict[str, str]], list[_Edit]]:
     """Per-measure action plan plus the concrete line edits (all-or-nothing)."""
     actions: list[dict[str, str]] = []
     edits: list[_Edit] = []
     inserted: list[str] = []
     for name in sorted(rendered):
-        existing = measures.get(name)
-        desired = _desired_lines(
-            rendered[name], existing.lineage_tag if existing else None
-        )
-        if existing is None:
-            actions.append({"measure": name, "action": "insert"})
+        existing = scan.measures.get(name)
+        action, desired = _measure_change(target, existing, rendered[name])
+        actions.append({"measure": name, "action": action})
+        if action == "insert":
             inserted.extend([*desired, ""])
-            continue
-        current = "".join(lines[existing.start : existing.end])
-        if current == "".join(line + newline for line in desired):
-            actions.append({"measure": name, "action": "skip"})
-        else:
-            actions.append({"measure": name, "action": "update"})
-            edits.append(_Edit(existing.start, existing.end, tuple(desired)))
+        elif action == "update":
+            assert existing is not None
+            edits.append(_Edit(existing.start, existing.end, desired))
     if inserted:
-        if anchor > 0 and lines[anchor - 1].strip():
-            inserted.insert(0, "")
-        edits.append(_Edit(anchor, anchor, tuple(inserted)))
+        edits.append(_insertion_edit(target, scan.anchor, inserted))
     return actions, edits
 
 
@@ -548,117 +589,97 @@ def _input_defect_reason(repo_root: Path, model_dir: Path) -> str | None:
 
 
 def _write_synced(
-    target: _SyncTarget,
-    edits: list[_Edit],
-    actions: list[dict[str, str]],
-    excluded: list[str],
-    table: str,
+    target: _SyncTarget, edits: list[_Edit], report: _RunReport
 ) -> dict[str, Any]:
     """Apply the planned edits atomically and prove the partitions untouched."""
     expected = _partition_texts(target.lines)
     new_lines = _apply(target.lines, edits, target.newline)
     data = target.bom + "".join(new_lines).encode("utf-8")
     error = _atomic_replace(target.table_path, data)
+    refusal = replace(report, actions=())
     if error is not None:
-        return _result(
-            "refused",
-            table=table,
-            table_file=target.table_file,
-            excluded=excluded,
-            blockers=[f"The table file could not be published safely ({error})."],
-        )
+        blocker = f"The table file could not be published safely ({error})."
+        return refusal.doc("refused", [blocker])
     drift = _postwrite_partition_check(target.table_path, target.original, expected)
     if drift is not None:
-        return _result(
-            "refused",
-            table=table,
-            table_file=target.table_file,
-            excluded=excluded,
-            blockers=[drift],
-        )
-    return _result(
-        "synced",
-        table=table,
-        table_file=target.table_file,
-        actions=actions,
-        excluded=excluded,
+        return refusal.doc("refused", [drift])
+    return report.doc("synced")
+
+
+@dataclass(frozen=True)
+class MeasureSyncRequest:
+    """One measure-sync invocation (the CLI's argument bundle)."""
+
+    repo: Path | str
+    model: Path | str
+    table: str
+    metrics_dir: str = "mappings"
+    dry_run: bool = False
+
+
+def _approved_rendered(
+    request: MeasureSyncRequest, report: _RunReport
+) -> tuple[dict[str, str], _RunReport, dict[str, Any] | None]:
+    """Render every approved contract; (rendered, report, failure document)."""
+    contracts, excluded = _approved_for_table(
+        Path(request.repo), request.metrics_dir, request.table
     )
-
-
-def sync_measures(
-    repo: Path | str,
-    model: Path | str,
-    table: str,
-    *,
-    metrics_dir: str = "mappings",
-    dry_run: bool = False,
-) -> dict[str, Any]:
-    """Upsert approved contract measures into one adopted model table.
-
-    Returns the normalized result document (see :func:`_result`); the CLI
-    renders it and maps it to an exit code via :func:`measure_sync_exit_code`.
-    """
-    repo_root = Path(repo)
-    model_dir = Path(model)
-    defect = _input_defect_reason(repo_root, model_dir)
-    if defect is not None:
-        return _result("input_defect", table=table, blockers=[defect])
-    gate = _manifest_gate(model_dir)
-    if gate is not None:
-        return _result("refused", table=table, blockers=[gate])
-    contracts, excluded = _approved_for_table(repo_root, metrics_dir, table)
+    report = replace(report, excluded=tuple(excluded))
     if not contracts:
-        return _result(
-            "refused", table=table, excluded=excluded, blockers=[_NO_APPROVED]
-        )
+        return {}, report, report.doc("refused", [_NO_APPROVED])
     rendered, render_errors = _render_contracts(contracts)
     if render_errors:
-        return _result(
-            "refused", table=table, excluded=excluded, blockers=render_errors
-        )
-    target = _load_target(model_dir, table)
-    if isinstance(target, tuple):
-        outcome, reason = target
-        return _result(outcome, table=table, excluded=excluded, blockers=[reason])
+        return {}, report, report.doc("refused", render_errors)
+    return rendered, report, None
+
+
+def _planned_edits(
+    target: _SyncTarget, rendered: dict[str, str], report: _RunReport
+) -> tuple[list[dict[str, str]], list[_Edit], dict[str, Any] | None]:
+    """Plan the safe edit set; (actions, edits, failure document)."""
     measures, anchor, duplicate = _scan_measures(target.lines)
     if duplicate is not None:
-        return _result(
-            "refused",
-            table=table,
-            table_file=target.table_file,
-            excluded=excluded,
-            blockers=[duplicate],
-        )
-    actions, edits = _plan(target.lines, target.newline, rendered, measures, anchor)
+        return [], [], report.doc("refused", [duplicate])
+    actions, edits = _plan(target, _TableScan(measures, anchor), rendered)
     if _touches_partition(edits, _partition_regions(target.lines)):
-        return _result(
-            "refused",
-            table=table,
-            table_file=target.table_file,
-            excluded=excluded,
-            blockers=[_PARTITION_TOUCH],
-        )
-    if dry_run:
-        return _result(
-            "planned",
-            table=table,
-            table_file=target.table_file,
-            actions=actions,
-            excluded=excluded,
-            dry_run=True,
-        )
+        return [], [], report.doc("refused", [_PARTITION_TOUCH])
+    return actions, edits, None
+
+
+def sync_measures(request: MeasureSyncRequest) -> dict[str, Any]:
+    """Upsert approved contract measures into one adopted model table.
+
+    Returns the normalized result document (see :class:`_RunReport`); the CLI
+    renders it and maps it to an exit code via :func:`measure_sync_exit_code`.
+    """
+    report = _RunReport(table=request.table)
+    defect = _input_defect_reason(Path(request.repo), Path(request.model))
+    if defect is not None:
+        return report.doc("input_defect", [defect])
+    gate = _manifest_gate(Path(request.model))
+    if gate is not None:
+        return report.doc("refused", [gate])
+    rendered, report, failure = _approved_rendered(request, report)
+    if failure is not None:
+        return failure
+    target = _load_target(Path(request.model), request.table)
+    if isinstance(target, tuple):
+        outcome, reason = target
+        return report.doc(outcome, [reason])
+    report = replace(report, table_file=target.table_file)
+    actions, edits, failure = _planned_edits(target, rendered, report)
+    if failure is not None:
+        return failure
+    report = replace(report, actions=tuple(actions), dry_run=request.dry_run)
+    if request.dry_run:
+        return report.doc("planned")
     if not edits:
-        return _result(
-            "synced",
-            table=table,
-            table_file=target.table_file,
-            actions=actions,
-            excluded=excluded,
-        )
-    return _write_synced(target, edits, actions, excluded, table)
+        return report.doc("synced")
+    return _write_synced(target, edits, report)
 
 
 __all__ = [
+    "MeasureSyncRequest",
     "measure_sync_exit_code",
     "render_measure_sync_text",
     "sync_measures",
