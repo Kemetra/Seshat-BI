@@ -69,6 +69,17 @@ def _ready_repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def _table_readiness(root: Path, table: str, status: str) -> Path:
+    """Record ``semantic_model_ready: <status>`` for ONE table under root."""
+    record = root / "mappings" / table / "readiness-status.yaml"
+    record.parent.mkdir(parents=True, exist_ok=True)
+    record.write_text(
+        f'stages:\n  semantic_model_ready:\n    status: "{status}"\napprovals: []\n',
+        encoding="utf-8",
+    )
+    return root
+
+
 def _write_mcp_json(root: Path, args: list[str]) -> None:
     (root / ".mcp.json").write_text(
         json.dumps(
@@ -139,9 +150,12 @@ def test_unsupported_protocol_version_blocks_naming_it(tmp_path: Path) -> None:
 
 
 def test_target_off_allowlist_blocks(tmp_path: Path) -> None:
+    # prod-model records its OWN readiness pass, so only the allowlist can
+    # block here: being ready never authorizes an unlisted target.
+    root = _table_readiness(_ready_repo(tmp_path), "prod-model", "pass")
     result = run_preflight(
         PreflightRequest(
-            _ready_repo(tmp_path),
+            root,
             FakeTransport(_server()),
             target="prod-model",
             target_allowlist=("orders",),
@@ -205,6 +219,137 @@ def test_missing_runtime_skips_gracefully(tmp_path: Path) -> None:
 def test_shipped_transport_raises_the_graceful_signal() -> None:
     with pytest.raises(RuntimeUnavailable, match="preflight skipped"):
         MissingRuntimeTransport().describe()
+
+
+# --------------------------------------------------------------------------- #
+# readiness is resolved for the DECLARED TARGET, never borrowed (#477)
+# --------------------------------------------------------------------------- #
+
+
+def test_another_tables_pass_does_not_unblock_the_declared_target(
+    tmp_path: Path,
+) -> None:
+    """#477: table_a passing must not arm a preflight declared for table_b.
+
+    ExplodingTransport also proves this blocks BEFORE any contact.
+    """
+    root = _table_readiness(tmp_path, "table_a", "pass")
+    result = run_preflight(
+        PreflightRequest(
+            root,
+            ExplodingTransport(),
+            target="table_b",
+            target_allowlist=("table_b",),
+            required_tools=("get_model",),
+        )
+    )
+    assert result.status == STATUS_BLOCKED
+    assert "PBIMCP-GATE-03" in _blocker_ids(result)
+    assert any("table_b" in blocker.detail for blocker in result.blockers)
+
+
+def test_declared_target_recording_not_pass_blocks(tmp_path: Path) -> None:
+    root = _table_readiness(tmp_path, "table_b", "warning")
+    result = run_preflight(
+        PreflightRequest(
+            root,
+            ExplodingTransport(),
+            target="table_b",
+            target_allowlist=("table_b",),
+        )
+    )
+    assert result.status == STATUS_BLOCKED
+    assert "PBIMCP-GATE-02" in _blocker_ids(result)
+    assert any("table_b" in blocker.detail for blocker in result.blockers)
+
+
+def test_generated_remote_config_does_not_block_the_preflight(tmp_path: Path) -> None:
+    """#477: the remote HTTP server has no --readonly arg to carry, so the
+    detector must not read its absence as write mode."""
+    from seshat.pbi_mcp.generate import render_mcp_template
+
+    root = _ready_repo(tmp_path)
+    (root / ".mcp.json").write_text(render_mcp_template("remote"), encoding="utf-8")
+    result = run_preflight(
+        PreflightRequest(
+            root,
+            FakeTransport(_server()),
+            target="orders",
+            target_allowlist=("orders",),
+        )
+    )
+    assert result.status == STATUS_OK
+
+
+def test_generated_both_config_does_not_block_the_preflight(tmp_path: Path) -> None:
+    from seshat.pbi_mcp.generate import render_mcp_template
+
+    root = _ready_repo(tmp_path)
+    (root / ".mcp.json").write_text(render_mcp_template("both"), encoding="utf-8")
+    result = run_preflight(
+        PreflightRequest(
+            root,
+            FakeTransport(_server()),
+            target="orders",
+            target_allowlist=("orders",),
+        )
+    )
+    assert result.status == STATUS_OK
+
+
+# --------------------------------------------------------------------------- #
+# an uncontacted server is never verified success (#477)
+# --------------------------------------------------------------------------- #
+
+
+def test_required_capabilities_cannot_be_satisfied_by_a_skip(tmp_path: Path) -> None:
+    """Discovery never happened, so a demanded capability is unverified.
+
+    The shipped CLI always constructs MissingRuntimeTransport, so without this
+    a caller could demand a tool, contact nothing, and still read exit 0.
+    """
+    result = run_preflight(
+        PreflightRequest(
+            _ready_repo(tmp_path),
+            MissingRuntimeTransport(),
+            required_tools=("get_model",),
+        )
+    )
+    assert result.status == STATUS_BLOCKED
+    assert "PBIMCP-CAP-03" in _blocker_ids(result)
+    assert result.capabilities_verified is False
+
+
+def test_plain_skip_without_required_tools_stays_advisory(tmp_path: Path) -> None:
+    result = run_preflight(
+        PreflightRequest(_ready_repo(tmp_path), MissingRuntimeTransport())
+    )
+    assert result.status == STATUS_SKIPPED
+    assert result.blockers == ()
+    assert result.capabilities_verified is False
+
+
+def test_contacted_server_with_its_tools_reports_verified(tmp_path: Path) -> None:
+    result = run_preflight(
+        PreflightRequest(
+            _ready_repo(tmp_path),
+            FakeTransport(_server()),
+            required_tools=("get_model",),
+            target="orders",
+            target_allowlist=("orders",),
+        )
+    )
+    assert result.status == STATUS_OK
+    assert result.capabilities_verified is True
+
+
+def test_rendered_json_exposes_capabilities_verified(tmp_path: Path) -> None:
+    result = run_preflight(
+        PreflightRequest(_ready_repo(tmp_path), MissingRuntimeTransport())
+    )
+    payload = json.loads(render_result_json(result, "2026-07-24T00:00:00Z"))
+    assert payload["capabilities_verified"] is False
+    assert payload["status"] == "skipped"
 
 
 # --------------------------------------------------------------------------- #

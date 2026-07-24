@@ -115,6 +115,13 @@ def _print_preflight_text(prog: str, result) -> None:
             f"(protocol {result.server.protocol_version}, "
             f"{len(result.server.tools)} tool(s))"
         )
+    else:
+        # Never let an uncontacted server read as verified success (#477).
+        print(
+            "  discovery: not-performed -- no read-only transport is wired "
+            "into the shipped verb, so no capability was verified "
+            "(capabilities_verified=false)"
+        )
     if result.target is not None:
         print(f"  target: {result.target} allowlisted={result.target_allowlisted}")
     for blocker in result.blockers:
