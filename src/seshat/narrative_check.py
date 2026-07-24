@@ -53,6 +53,22 @@ from .gitstate import run_git
 SCHEMA_LITERAL = "seshat.narrative-brief/v1"
 _STAGES = ("overview", "change", "why_where", "action")
 
+# The eight framing cards (skills/bi-analyst-knowledge/framing-*.md). A framing
+# outside this set is a typo/unknown card -- validated so a misspelling cannot
+# silently escape the guardrail rule below.
+_ALL_FRAMINGS = frozenset(
+    {
+        "benchmark-threshold",
+        "concentration",
+        "contribution-mix",
+        "period-variance",
+        "rate-decomposition",
+        "segment-behavior",
+        "signal-vs-noise",
+        "trend-anomaly",
+    }
+)
+
 # Framings that carry a guardrail (derivation-route.md FR-002a). A question with
 # one of these framings MUST state a named ``guardrail.basis``.
 _GUARDRAIL_FRAMINGS = frozenset(
@@ -168,41 +184,34 @@ def _load_front(
 
 
 # --------------------------------------------------------------------------- #
-# Grounding: the ids a question may cite (contracts + profile dimensions)
+# Grounding: the measure ids a question may cite
 # --------------------------------------------------------------------------- #
-
-_PROFILE_DIM = re.compile(r"^[-*]\s+([A-Za-z0-9_]+\.[A-Za-z0-9_]+)\s*$")
-
-
-def _profile_dimensions(profile_path: Path) -> set[str]:
-    """Dotted ``entity.attribute`` dimension ids listed in the source-profile.
-    A profile we cannot read yields an empty set -- the cite then reads as
-    ungrounded, which is the safe (fail-closed) direction."""
-    try:
-        text = profile_path.read_text(encoding="utf-8-sig")
-    except (OSError, UnicodeDecodeError):
-        return set()
-    return {
-        m.group(1)
-        for line in text.splitlines()
-        if (m := _PROFILE_DIM.match(line.strip()))
-    }
+#
+# v1 SCOPE (see phase-c-verification.md): grounding is enforced for MEASURE
+# cites only -- ``cites.measures`` MUST be among the brief's declared approved
+# contracts. DIMENSION-grounding-against-the-profile is deliberately OUT of v1:
+# a brief cites a dimension as a semantic-model reference (dotted
+# ``entity.attribute``), but the committed source-profile carries only bare
+# source columns in a pipe table (see mappings/*/source-profile.md); resolving
+# one to the other requires a THIRD artifact (the semantic model / mapping)
+# that the frozen two-input rule forbids. Rather than fake a grounding it cannot
+# verify -- which false-flagged EVERY real brief with the earlier dotted-bullet
+# regex -- the checker does not ground-check dimension cites in v1. This is the
+# same "check only what the inputs support" posture as the deferred
+# visual<->question binding-map check. The frozen schema's dotted-dimension
+# grammar vs the bare-column profile format is a recorded inconsistency for the
+# owner (phase-c-verification.md), not something this checker guesses past.
 
 
-def _grounded_ids(
-    data: dict[str, Any], repo_root: Path, table: str
-) -> tuple[set[str], set[str]]:
-    """``(measure_ids, dimension_ids)`` a question may cite: contract ids from
-    the brief's ``contracts`` block, dimensions from the committed profile."""
+def _grounded_measure_ids(data: dict[str, Any]) -> set[str]:
+    """Contract ids from the brief's ``contracts`` block -- the set a
+    ``cites.measures`` entry must be drawn from (grounded-only, v1)."""
     contracts = data.get("contracts") or []
-    measure_ids = {
+    return {
         c["id"]
         for c in contracts
         if isinstance(c, dict) and isinstance(c.get("id"), str)
     }
-    profile_rel = data.get("source_profile") or f"mappings/{table}/source-profile.md"
-    dimension_ids = _profile_dimensions(repo_root / profile_rel)
-    return measure_ids, dimension_ids
 
 
 # --------------------------------------------------------------------------- #
@@ -258,109 +267,135 @@ def _check_contract_revisions(
 # --------------------------------------------------------------------------- #
 
 
-def _cited_ids(question: dict[str, Any]) -> tuple[list[str], list[str]]:
+def _cited_measures(question: dict[str, Any]) -> list[str]:
     cites = question.get("cites") or {}
     if not isinstance(cites, dict):
-        return [], []
-    measures = [m for m in (cites.get("measures") or []) if isinstance(m, str)]
-    dimensions = [d for d in (cites.get("dimensions") or []) if isinstance(d, str)]
-    return measures, dimensions
+        return []
+    return [m for m in (cites.get("measures") or []) if isinstance(m, str)]
 
 
-def _check_question(
-    question: dict[str, Any],
-    measure_ids: set[str],
-    dimension_ids: set[str],
-    gap_questions: set[str],
-) -> list[NarrativeFinding]:
-    findings: list[NarrativeFinding] = []
-    qid = str(question.get("id", "<no id>"))
-    stage = question.get("stage")
-
-    if stage not in _STAGES:
-        findings.append(
-            NarrativeFinding(
-                "invalid_stage",
-                qid,
-                f"question {qid} stage is {stage!r}; must be one of {_STAGES}",
-            )
+def _check_stage(qid: str, stage: Any) -> list[NarrativeFinding]:
+    if stage in _STAGES:
+        return []
+    return [
+        NarrativeFinding(
+            "invalid_stage",
+            qid,
+            f"question {qid} stage is {stage!r}; must be one of {_STAGES}",
         )
+    ]
 
+
+def _check_callout(qid: str, question: dict[str, Any]) -> list[NarrativeFinding]:
     callout = question.get("callout")
-    if not (isinstance(callout, str) and callout.strip()):
-        findings.append(
-            NarrativeFinding(
-                "empty_callout", qid, f"question {qid} has an empty callout"
-            )
+    if isinstance(callout, str) and callout.strip():
+        return []
+    return [
+        NarrativeFinding("empty_callout", qid, f"question {qid} has an empty callout")
+    ]
+
+
+def _check_headline(
+    qid: str, stage: Any, question: dict[str, Any]
+) -> list[NarrativeFinding]:
+    """Headline rule (FR-006): an overview question MUST name a comparison."""
+    if stage != "overview":
+        return []
+    comparison = question.get("comparison")
+    if (
+        isinstance(comparison, str)
+        and comparison.strip()
+        and comparison.strip().lower() != "none"
+    ):
+        return []
+    return [
+        NarrativeFinding(
+            "bare_total_headline",
+            qid,
+            f"overview question {qid} has comparison {comparison!r}; a headline "
+            f"MUST name a comparison -- a bare total is a defect",
         )
+    ]
 
-    # Headline rule (FR-006): an overview question must name a comparison.
-    if stage == "overview":
-        comparison = question.get("comparison")
-        if not (
-            isinstance(comparison, str)
-            and comparison.strip()
-            and comparison.strip().lower() != "none"
-        ):
-            findings.append(
-                NarrativeFinding(
-                    "bare_total_headline",
-                    qid,
-                    f"overview question {qid} has comparison {comparison!r}; a "
-                    f"headline MUST name a comparison -- a bare total is a defect",
-                )
-            )
 
-    # Guardrail rule (FR-002a): a guardrail-bearing framing must state a basis.
+def _check_framing(qid: str, question: dict[str, Any]) -> list[NarrativeFinding]:
+    """The framing must be one of the eight cards; a guardrail-bearing framing
+    must state a named ``guardrail.basis`` (FR-002a). Validating the literal
+    first stops a typo from silently escaping the guardrail rule."""
     framing = question.get("framing")
-    if framing in _GUARDRAIL_FRAMINGS:
-        guardrail = question.get("guardrail") or {}
-        basis = guardrail.get("basis") if isinstance(guardrail, dict) else None
-        if not (isinstance(basis, str) and basis.strip()):
-            findings.append(
-                NarrativeFinding(
-                    "missing_guardrail_basis",
-                    qid,
-                    f"question {qid} uses guardrail-bearing framing {framing!r} "
-                    f"but states no guardrail.basis -- a claim with no basis is "
-                    f"a defect (the checker asserts presence, not wisdom)",
-                )
+    if framing not in _ALL_FRAMINGS:
+        return [
+            NarrativeFinding(
+                "invalid_framing",
+                qid,
+                f"question {qid} framing is {framing!r}; must be one of the eight "
+                f"framing cards {sorted(_ALL_FRAMINGS)}",
             )
+        ]
+    if framing not in _GUARDRAIL_FRAMINGS:
+        return []
+    guardrail = question.get("guardrail") or {}
+    basis = guardrail.get("basis") if isinstance(guardrail, dict) else None
+    if isinstance(basis, str) and basis.strip():
+        return []
+    return [
+        NarrativeFinding(
+            "missing_guardrail_basis",
+            qid,
+            f"question {qid} uses guardrail-bearing framing {framing!r} but states "
+            f"no guardrail.basis -- a claim with no basis is a defect (the checker "
+            f"asserts presence, not wisdom)",
+        )
+    ]
 
-    # Grounded-only: every cited id must be a declared contract or profile dim.
-    measures, dimensions = _cited_ids(question)
-    for m in measures:
-        if m not in measure_ids:
-            findings.append(
-                NarrativeFinding(
-                    "ungrounded_cite",
-                    qid,
-                    f"question {qid} cites measure {m!r}, not among the brief's "
-                    f"declared approved contracts",
-                )
-            )
-    for d in dimensions:
-        if d not in dimension_ids:
-            findings.append(
-                NarrativeFinding(
-                    "ungrounded_cite",
-                    qid,
-                    f"question {qid} cites dimension {d!r}, not present in the "
-                    f"committed source-profile",
-                )
-            )
 
-    # A [GAP] cannot also be framed as a question.
+def _check_measure_grounding(
+    qid: str, question: dict[str, Any], measure_ids: set[str]
+) -> list[NarrativeFinding]:
+    """Grounded-only (v1): every cited MEASURE must be a declared contract.
+    Dimension cites are not ground-checked in v1 (see module note)."""
+    return [
+        NarrativeFinding(
+            "ungrounded_cite",
+            qid,
+            f"question {qid} cites measure {m!r}, not among the brief's declared "
+            f"approved contracts",
+        )
+        for m in _cited_measures(question)
+        if m not in measure_ids
+    ]
+
+
+def _check_gap_not_framed(
+    qid: str, question: dict[str, Any], gap_questions: set[str]
+) -> list[NarrativeFinding]:
     decision = question.get("decision")
     if isinstance(decision, str) and decision.strip() in gap_questions:
-        findings.append(
+        return [
             NarrativeFinding(
                 "gap_framed_as_question",
                 qid,
                 f"question {qid} frames a decision also listed as a [GAP] -- you "
                 f"cannot frame what the data cannot answer",
             )
-        )
+        ]
+    return []
+
+
+def _check_question(
+    question: dict[str, Any],
+    measure_ids: set[str],
+    gap_questions: set[str],
+) -> list[NarrativeFinding]:
+    qid = str(question.get("id", "<no id>"))
+    stage = question.get("stage")
+    findings: list[NarrativeFinding] = []
+    findings += _check_stage(qid, stage)
+    findings += _check_callout(qid, question)
+    findings += _check_headline(qid, stage, question)
+    findings += _check_framing(qid, question)
+    findings += _check_measure_grounding(qid, question, measure_ids)
+    findings += _check_gap_not_framed(qid, question, gap_questions)
     return findings
 
 
@@ -396,47 +431,69 @@ def _check_story_order(
 
     placed: dict[str, str] = {}
     for stage in _STAGES:
-        for qid in story.get(stage) or []:
-            qid = str(qid)
-            if qid in placed:
-                findings.append(
-                    NarrativeFinding(
-                        "story_order_mismatch",
-                        qid,
-                        f"question {qid} appears in more than one story_order "
-                        f"stage ({placed[qid]} and {stage})",
-                    )
-                )
-                continue
-            placed[qid] = stage
-            if qid not in question_stage:
-                findings.append(
-                    NarrativeFinding(
-                        "story_order_mismatch",
-                        qid,
-                        f"story_order.{stage} lists {qid}, which is not a "
-                        f"declared question (phantom id)",
-                    )
-                )
-            elif question_stage[qid] != stage:
-                findings.append(
-                    NarrativeFinding(
-                        "story_order_mismatch",
-                        qid,
-                        f"question {qid} declares stage "
-                        f"{question_stage[qid]!r} but story_order places it "
-                        f"under {stage!r}",
-                    )
-                )
+        findings += _place_stage(stage, story.get(stage), placed, question_stage)
 
-    for qid, stage in question_stage.items():
-        if qid not in placed:
+    findings += [
+        NarrativeFinding(
+            "story_order_mismatch",
+            qid,
+            f"question {qid} (stage {stage!r}) is missing from story_order (orphan id)",
+        )
+        for qid, stage in question_stage.items()
+        if qid not in placed
+    ]
+    return findings
+
+
+def _place_stage(
+    stage: str,
+    ids: Any,
+    placed: dict[str, str],
+    question_stage: dict[str, Any],
+) -> list[NarrativeFinding]:
+    """Record every question id under ``stage`` into ``placed`` (mutated), and
+    return findings for a non-list stage value, a duplicate placement, a phantom
+    id, or a declared-stage mismatch."""
+    if not isinstance(ids, list):
+        return [
+            NarrativeFinding(
+                "story_order_not_a_list",
+                f"story_order.{stage}",
+                f"story_order.{stage} is {ids!r}; each stage value MUST be a list "
+                f"of question ids (a scalar is a defect -- did you omit the "
+                f"brackets?)",
+            )
+        ]
+    findings: list[NarrativeFinding] = []
+    for raw in ids:
+        qid = str(raw)
+        if qid in placed:
             findings.append(
                 NarrativeFinding(
                     "story_order_mismatch",
                     qid,
-                    f"question {qid} (stage {stage!r}) is missing from "
-                    f"story_order (orphan id)",
+                    f"question {qid} appears in more than one story_order stage "
+                    f"({placed[qid]} and {stage})",
+                )
+            )
+            continue
+        placed[qid] = stage
+        if qid not in question_stage:
+            findings.append(
+                NarrativeFinding(
+                    "story_order_mismatch",
+                    qid,
+                    f"story_order.{stage} lists {qid}, which is not a declared "
+                    f"question (phantom id)",
+                )
+            )
+        elif question_stage[qid] != stage:
+            findings.append(
+                NarrativeFinding(
+                    "story_order_mismatch",
+                    qid,
+                    f"question {qid} declares stage {question_stage[qid]!r} but "
+                    f"story_order places it under {stage!r}",
                 )
             )
     return findings
@@ -455,6 +512,52 @@ def _gap_question_texts(data: dict[str, Any]) -> set[str]:
     }
 
 
+def _question_stage_map(questions: Any) -> dict[str, Any]:
+    """``{id: stage}`` for every question carrying an id. A later duplicate id
+    overwrites -- the collision itself is reported by ``_check_question_ids``,
+    so this map is only used for story-order cross-referencing."""
+    return {
+        str(q["id"]): q.get("stage")
+        for q in questions
+        if isinstance(q, dict) and "id" in q
+    }
+
+
+def _check_question_ids(questions: Any) -> list[NarrativeFinding]:
+    """Every question MUST carry a UNIQUE id (schema: the id is the stable
+    binding-map reference). A missing id or a duplicate id is a defect -- a
+    duplicate would otherwise silently collapse in the stage map and pass
+    unchecked."""
+    findings: list[NarrativeFinding] = []
+    seen: set[str] = set()
+    for index, q in enumerate(questions):
+        if not isinstance(q, dict):
+            continue
+        if "id" not in q or not str(q.get("id")).strip():
+            findings.append(
+                NarrativeFinding(
+                    "missing_question_id",
+                    f"questions[{index}]",
+                    f"question at index {index} has no id -- every question needs "
+                    f"a stable id (it is the binding-map reference)",
+                )
+            )
+            continue
+        qid = str(q["id"])
+        if qid in seen:
+            findings.append(
+                NarrativeFinding(
+                    "duplicate_question_id",
+                    qid,
+                    f"question id {qid!r} is used by more than one question -- ids "
+                    f"MUST be unique (rank and the binding-map reference are "
+                    f"otherwise ambiguous)",
+                )
+            )
+        seen.add(qid)
+    return findings
+
+
 def check_narrative(*, table: str, repo_root: Path) -> NarrativeCheckResult:
     """Validate ``mappings/<table>/narrative-brief.md`` against the frozen
     schema. READ-ONLY: opens nothing for write, sets no readiness stage. Returns
@@ -467,23 +570,18 @@ def check_narrative(*, table: str, repo_root: Path) -> NarrativeCheckResult:
         return failure
     assert data is not None  # narrowing for type-checkers; _load_front's contract
 
-    measure_ids, dimension_ids = _grounded_ids(data, repo_root, table)
+    measure_ids = _grounded_measure_ids(data)
     gap_questions = _gap_question_texts(data)
 
     findings: list[NarrativeFinding] = []
     findings.extend(_check_contract_revisions(data, repo_root, table))
 
     questions = data.get("questions") or []
-    question_stage: dict[str, Any] = {
-        str(q["id"]): q.get("stage")
-        for q in questions
-        if isinstance(q, dict) and "id" in q
-    }
+    findings.extend(_check_question_ids(questions))
+    question_stage = _question_stage_map(questions)
     for question in questions:
         if isinstance(question, dict):
-            findings.extend(
-                _check_question(question, measure_ids, dimension_ids, gap_questions)
-            )
+            findings.extend(_check_question(question, measure_ids, gap_questions))
 
     findings.extend(_check_story_order(data, question_stage))
 
@@ -500,9 +598,10 @@ def check_narrative(*, table: str, repo_root: Path) -> NarrativeCheckResult:
     evidence = (
         f"narrative brief: {brief_path}",
         f"{len(questions)} question(s) checked against {len(measure_ids)} "
-        f"declared contract(s) and {len(dimension_ids)} profiled dimension(s)",
+        f"declared contract(s)",
         "this is EVIDENCE for the named human design review and grants NO "
-        "approval; the visual<->question binding-map check lands with Phase B",
+        "approval; dimension-cite grounding and the visual<->question "
+        "binding-map check are out of v1 scope (see phase-c-verification.md)",
     )
     return NarrativeCheckResult(
         status="blocked" if findings else "pass",

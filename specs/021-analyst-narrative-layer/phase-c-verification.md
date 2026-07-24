@@ -17,28 +17,52 @@ arms enforced behavior off a still-Draft spec).
 - `tests/unit/test_narrative_check.py` + `test_narrative_check_cli.py` — the
   three SC-003 outcome classes.
 
-## Scope boundary (honest seam)
+## Scope boundary (honest seams)
 
-The checker validates the BRIEF only. The visual<->question binding-map orphan
-checks (orphan visual, page-missing-question) require the three-way map authored
-by Phase B / T010, which does not exist yet. Those two fixtures are visible
-`@pytest.mark.skip` in the test file — never a silent pass over an absent map.
-Brief-absence is fail-closed input (FR-008); binding-map absence is out of this
-verb's scope, not fail-closed.
+**Binding-map (Phase B):** the checker validates the BRIEF only. The
+visual<->question binding-map orphan checks (orphan visual, page-missing-question)
+require the three-way map authored by Phase B / T010, which does not exist yet.
+Those two fixtures are visible `@pytest.mark.skip` in the test file — never a
+silent pass over an absent map. Brief-absence is fail-closed input (FR-008);
+binding-map absence is out of this verb's scope, not fail-closed.
+
+**Dimension-cite grounding (v1 scope cut, found in whole-branch review):**
+grounding is enforced for MEASURE cites only (`cites.measures` MUST be a declared
+approved contract). Dimension cites are NOT ground-checked in v1. Reason: the
+frozen schema cites dimensions as semantic-model references (dotted
+`entity.attribute`, e.g. `product.division`), but every committed
+`mappings/*/source-profile.md` lists only bare source columns in a pipe table
+(e.g. `division`); resolving one to the other needs a THIRD artifact (the
+semantic model / mapping) that the frozen two-input rule forbids. An earlier
+dotted-bullet profile regex matched ZERO real profiles and thus false-flagged
+`ungrounded_cite` on every real brief — a whole-branch (Opus) review caught it;
+the checker now refuses to fake a grounding it cannot verify, the same posture as
+the deferred binding-map check.
+
+**OWNER FLAG — frozen-schema inconsistency:** the Phase-A schema's dotted
+dimension grammar (`<dim.attribute>`) and the worked example's dotted cites are
+inconsistent with the bare-column pipe-table profile format every workspace
+ships. Reconciling them (make the grammar bare-column, or add a dimension
+vocabulary to profiles, then enable dimension-grounding) is a follow-up that
+edits frozen Phase-A artifacts — left for the owner, not decided by this checker.
 
 ## Success Criteria
 
-- **SC-001 (grounded cites)** — VERIFIED. The checker's grounded-only rule
-  (`ungrounded_cite`) rejects any cite not among the declared contracts or the
-  committed profile's dimensions; the clean-brief fixture and the worked-example
-  walk both cite only grounded ids.
-- **SC-002 (zero orphan visuals / zero bare-total headlines on the worked
-  example)** — VERIFIED end to end. The full brief the shipped
+- **SC-001 (grounded cites)** — VERIFIED (v1 scope). The grounded-only rule is
+  enforced for MEASURE cites (`ungrounded_cite` rejects any measure not among the
+  declared approved contracts); dimension-cite grounding is out of v1 scope (see
+  above). The clean-brief fixture and the worked-example walk cite only grounded
+  measures.
+- **SC-002 (zero bare-total headlines on the worked example)** — VERIFIED end to
+  end AGAINST THE REAL PROFILE FORMAT. NOTE: the first walk used an invented
+  `## Dimensions` profile shape and so did not verify against reality; it was
+  redone using a pipe-table profile of bare columns (the shape every committed
+  `mappings/*/source-profile.md` uses). The full brief the shipped
   `example-specialty-retail.md` teaches (flow-style YAML, all Q1-Q7, a real
   [GAP], guardrail-bearing framings, named overview comparisons) passes the
   checker with `status: pass`, `grants_approval: False`. Confirms the pack's own
-  canonical example passes its own checker (no skill/checker contradiction) and
-  that flow-style YAML parses.
+  canonical example passes its own checker (no skill/checker contradiction), that
+  flow-style YAML parses, and that a real-format profile no longer false-blocks.
 - **SC-003 (three outcome classes, no silent-nothing)** — VERIFIED by the test
   suite: clean -> `pass`/exit 0; each single mutation -> exactly its named
   finding/`blocked`/exit 1; missing/unreadable/malformed -> fail-closed

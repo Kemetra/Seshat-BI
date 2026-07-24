@@ -21,7 +21,13 @@ pytestmark = pytest.mark.unit
 
 
 _CONTRACT_TEXT = "metric: NetSales\nowner: analytics\nstatus: approved\n"
-_PROFILE_TEXT = "# source-profile: orders\n\n## Dimensions\n- division.name\n"
+# Real profile shape: a per-column pipe table of bare column names.
+_PROFILE_TEXT = (
+    "# source-profile: orders\n\n## Per-column profile\n\n"
+    "| Column | Type | Missing | Distinct | PK? | Notes |\n"
+    "|--------|------|---------|----------|-----|-------|\n"
+    "| `division` | TEXT | 0 / 0.00% | 6 | no | dim attribute |\n"
+)
 
 
 def _blob_sha(path: Path) -> str:
@@ -46,7 +52,7 @@ questions:
     framing: concentration
     cites:
       measures: [NetSales]
-      dimensions: [division.name]
+      dimensions: [division]
     comparison: portfolio average
     guardrail:
       basis: portfolio average

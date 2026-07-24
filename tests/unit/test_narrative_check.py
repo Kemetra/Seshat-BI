@@ -37,11 +37,18 @@ pytestmark = pytest.mark.unit
 
 _CONTRACT_TEXT = "metric: NetSales\nowner: analytics\nstatus: approved\n"
 
+# A REAL-format source-profile: the committed convention is a per-column PIPE
+# TABLE of bare column names (see mappings/*/source-profile.md), NOT a
+# `## Dimensions` bullet list of dotted `entity.attribute` ids. Fixtures must
+# mirror the shape real profiles ship, not a shape invented to match the code.
 _PROFILE_TEXT = """# source-profile: orders
 
-## Dimensions
-- division.name
-- store.region
+## Per-column profile
+
+| Column | Type as landed | Missing | Distinct | PK? | Notes |
+|--------|----------------|---------|----------|-----|-------|
+| `division` | TEXT | 0 / 0.00% | 6 | no | product division -> dim attribute |
+| `region` | TEXT | 0 / 0.00% | 4 | no | store region -> dim attribute |
 """
 
 
@@ -72,7 +79,7 @@ questions:
     framing: concentration
     cites:
       measures: [NetSales]
-      dimensions: [division.name]
+      dimensions: [division]
     comparison: portfolio average
     guardrail:
       basis: portfolio average
@@ -83,7 +90,7 @@ questions:
     framing: period-variance
     cites:
       measures: [NetSales]
-      dimensions: [store.region]
+      dimensions: [region]
     comparison: same period last year
     guardrail:
       basis: same period last year
@@ -209,24 +216,31 @@ def test_gap_rendered_as_question_is_a_finding(workspace: Path):
     assert "gap_framed_as_question" in {f.dimension for f in result.findings}
 
 
-def test_ungrounded_cite_is_a_finding(workspace: Path):
-    # Q1 cites a dimension present in neither the profile nor the contracts.
-    _mutate_brief(workspace, "dimensions: [division.name]", "dimensions: [ghost.attr]")
-    result = _run(workspace)
-    assert result.status == "blocked"
-    assert "ungrounded_cite" in {f.dimension for f in result.findings}
-
-
 def test_ungrounded_measure_cite_is_a_finding(workspace: Path):
-    # A measure not among the declared contracts.
+    # A measure not among the declared contracts (measure-grounding is the v1
+    # grounded-only enforcement: cites.measures MUST be declared contracts).
     _mutate_brief(
         workspace,
-        "measures: [NetSales]\n      dimensions: [division.name]",
-        "measures: [PhantomMeasure]\n      dimensions: [division.name]",
+        "measures: [NetSales]\n      dimensions: [division]",
+        "measures: [PhantomMeasure]\n      dimensions: [division]",
     )
     result = _run(workspace)
     assert result.status == "blocked"
     assert "ungrounded_cite" in {f.dimension for f in result.findings}
+
+
+def test_dimension_cite_is_not_grounded_checked_in_v1(workspace: Path):
+    # Dimension-grounding against the profile is OUT of v1 scope: a dimension
+    # cite is a semantic-model reference (dotted entity.attribute), the v1
+    # source-profile carries only bare source columns, and resolving one to the
+    # other needs a THIRD artifact the two-input rule forbids. So a not-in-
+    # profile dimension must NOT be flagged -- the checker never claims a
+    # grounding it cannot actually verify (no false ungrounded_cite; the HIGH
+    # from the Opus review). Measure grounding still applies (test above).
+    _mutate_brief(workspace, "dimensions: [division]", "dimensions: [product.anything]")
+    result = _run(workspace)
+    assert result.status == "pass"
+    assert not any(f.dimension == "ungrounded_cite" for f in result.findings)
 
 
 def test_stale_contract_revision_is_a_finding(workspace: Path):
@@ -269,6 +283,34 @@ def test_missing_guardrail_basis_is_a_finding(workspace: Path):
     result = _run(workspace)
     assert result.status == "blocked"
     assert "missing_guardrail_basis" in {f.dimension for f in result.findings}
+
+
+def test_invalid_framing_is_a_finding(workspace: Path):
+    # A framing that is not one of the eight cards -- a typo (e.g. a
+    # guardrail-bearing framing misspelled) must NOT silently escape the
+    # guardrail rule; the framing literal is validated.
+    _mutate_brief(workspace, "framing: period-variance", "framing: period-varyance")
+    result = _run(workspace)
+    assert result.status == "blocked"
+    assert "invalid_framing" in {f.dimension for f in result.findings}
+
+
+def test_story_order_stage_not_a_list_fails_closed(workspace: Path):
+    # A stage value that is a scalar/string (author forgot the list brackets)
+    # must be a NAMED finding, never a crash (FR-008).
+    _mutate_brief(workspace, "  change:    [Q2]", "  change:    Q2")
+    result = _run(workspace)
+    assert result.status == "blocked"
+    assert "story_order_not_a_list" in {f.dimension for f in result.findings}
+
+
+def test_duplicate_question_id_is_a_finding(workspace: Path):
+    # Two questions sharing an id -> ambiguous rank + non-unique binding-map
+    # reference; must be flagged, not silently collapsed to one.
+    _mutate_brief(workspace, "  - id: Q2", "  - id: Q1")
+    result = _run(workspace)
+    assert result.status == "blocked"
+    assert "duplicate_question_id" in {f.dimension for f in result.findings}
 
 
 # --------------------------------------------------------------------------- #
