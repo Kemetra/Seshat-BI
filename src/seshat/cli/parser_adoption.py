@@ -49,5 +49,46 @@ def _add_adopt_pbip_parser(sub: argparse._SubParsersAction) -> None:
         help="text is human-reviewable; json is the stable scaffold-result contract",
     )
 
+    measure_sync = commands.add_parser(
+        "measure-sync",
+        help=(
+            "upsert APPROVED contract measures into one table of an already-"
+            "adopted (scaffolded) semantic model; partition/M source stays "
+            "byte-identical"
+        ),
+    )
+    measure_sync.add_argument(
+        "--repo",
+        default=".",
+        help="governed repository root holding mappings/<scope>/metrics",
+    )
+    measure_sync.add_argument(
+        "--model",
+        required=True,
+        help="path to the adopted .SemanticModel directory",
+    )
+    measure_sync.add_argument(
+        "--table",
+        required=True,
+        help="target table name as parsed from TMDL (e.g. 'gold fct_sales')",
+    )
+    measure_sync.add_argument(
+        "--metrics-dir",
+        default="mappings",
+        help="metric-contract root under --repo (default: mappings)",
+    )
+    measure_sync.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the per-measure plan (insert/update/skip) and write nothing",
+    )
+    measure_sync.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("text", "json"),
+        default="text",
+        help="text is human-reviewable; json is the stable sync-result contract",
+    )
+
 
 __all__ = ["_add_adopt_pbip_parser"]
