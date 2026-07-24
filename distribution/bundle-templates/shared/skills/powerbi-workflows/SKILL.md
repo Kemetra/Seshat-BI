@@ -19,8 +19,14 @@ dashboard-ready claim without committed evidence.
 
 Check the proposal first with the installed read-only helpers when available:
 `seshat dashboard-planner` returns a categorical new/extends/duplicate verdict
-against the committed dashboard set, and `seshat dashboard-gaps` inventories
-design-blocking gaps before any layout work.
+against the committed dashboard set (`--proposal`/`--tuple`), and
+`seshat dashboard-gaps` inventories design-blocking gaps before any layout
+work. The `dashboard-gaps` `--page-intent` file is a YAML mapping with a
+`questions:` list (each question naming its required metrics and dimensions);
+start from `templates/page-intent.example.yaml` and see
+`docs/tools/dashboard-gap-detector.md` for the shape. A missing, unreadable,
+or wrong-format page-intent is refused with a named error and exit 2 -- it is
+never an empty "no gaps" read.
 
 Data-bound visual design requires approved metric contracts and committed
 semantic-model evidence. With both present, produce reviewable design guidance
@@ -44,6 +50,28 @@ measures/columns, unknown entities, PII-masked renames -- the exact class that
 otherwise surfaces as Desktop error cards. It needs no blueprint or binding
 map, so it also covers Desktop-owned reports. A clean review is evidence for a
 named human, never an approval.
+
+## Reopening Desktop after an external edit
+
+Power BI Desktop does not re-read PBIR/TMDL files edited on disk: a running
+Desktop serves its in-memory session, and a reopen via File > Open or the
+Recent list restores cached view state from `.pbi/localSettings.json` -- the
+on-disk edits stay invisible and the old layout (plus phantom error cards) can
+persist across close/reopen cycles. After any agent-authored write to a
+Desktop-owned project, follow this protocol before a human looks at the
+report:
+
+1. Fully quit Desktop and verify both `PBIDesktop.exe` and `msmdsrv.exe` are
+   gone -- closing the report tab is not enough.
+2. Bump the modification times of the edited `definition/` files so they are
+   newer than Desktop's last-known state.
+3. Move `.pbi/localSettings.json` aside for BOTH the `.Report` and the
+   `.SemanticModel` folders (Desktop regenerates it, with no stale view state
+   left to restore).
+4. Reopen the project by double-clicking the `.pbip` in File Explorer, not
+   from Desktop's Recent list.
+5. If Desktop prompts to save a stale session, choose "Don't Save" so the old
+   in-memory layout does not overwrite the good on-disk edits.
 
 ## Theme and backgrounds
 
