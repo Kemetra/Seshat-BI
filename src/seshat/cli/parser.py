@@ -842,7 +842,7 @@ def _build_parser(prog: str = "retail") -> argparse.ArgumentParser:
     _add_dbt_parser(sub)
     add_core_parsers(sub, "status")
     _add_dashboard_parser(sub)
-    add_core_parsers(sub, "next", "approvals", "evidence_pack", "blockers")
+    add_core_parsers(sub, "next", "approvals", "evidence_pack", "blockers", "reset")
     _add_orchestration_assess_parser(sub)
     _add_pii_notice_parser(sub)
     _add_approver_view_parser(sub)

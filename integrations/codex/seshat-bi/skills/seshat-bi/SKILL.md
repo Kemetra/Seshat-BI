@@ -87,12 +87,30 @@ Git, overwrites existing files, grants approval, or advances readiness.
 
 ## Resetting / re-running a project
 
-There is no `seshat reset` verb yet (tracked separately). Until it ships, reset
-a single table's derived state by hand, preserving its bronze landing, then
-re-run readiness from Source.
+Use the native verb first: `seshat reset <table>` removes the complete derived
+file-set for ONE table (its `mappings/<table>/` incl. `dbt-evidence/`, the
+exact-token silver/gold migrations, the three nested `dbt/models/*/<table>/`
+folders, only this table's rows in the shared dbt files, and the table-scoped
+dagster run evidence under `.seshat/dagster/runs/`), preserves the bronze
+landing, and STAGES the deletions so `seshat check` runs clean afterwards. It
+never touches a live database.
 
-**STOP first -- two cases this manual reset does NOT cover; hand them to the
-owner rather than deleting blindly:**
+```powershell
+seshat reset <table> --dry-run   # print the exact plan first (writes nothing)
+seshat reset <table>             # interactive confirm; --yes for automation
+seshat next --table <table>      # should now report a fresh Source stage
+```
+
+Refusals exit non-zero with a named reason (an unsafe table name, a symlinked
+path, a shared dbt file the surgical row-edit cannot verify -- hand-edit that
+file, then retry). In a non-interactive shell, pass `--yes` or the verb refuses
+rather than hanging.
+
+The MANUAL checklist below is the fallback for when the verb refuses or is
+unavailable.
+
+**STOP first -- two cases neither the verb nor this manual reset covers; hand
+them to the owner rather than deleting blindly:**
 
 1. **Shared conformed dimension.** If this table OWNS a conformed dimension that
    another star reuses, its `dbt/models/marts/<table>/` holds the sole dbt model
@@ -111,7 +129,8 @@ owner rather than deleting blindly:**
    deleted).
 
 If neither case applies (no conformed-dimension ownership, no downstream PBIP),
-this table's artifacts are table-local and the reset below is safe.
+this table's artifacts are table-local and the reset is safe -- prefer
+`seshat reset <table>` above; the manual fallback follows.
 
 First LIST what you are about to remove and confirm every path is for THIS
 table -- never delete by a bare `<table>*` wildcard. A prefix wildcard is
