@@ -124,6 +124,22 @@ explicitly identifies a public release event.
   Non-destructive; wheel-data-first with a dev-checkout fallback. (#440, #441)
 
 ### Changed
+- **Hardened Dagster and semantic/readiness boundaries** (2026-07-22 main review
+  remediation). Semantic readiness now depends on a validated approved-contract
+  inventory (new `metric_contract_inventory`): an L3 gate requires each base metric
+  contract to carry a `semantic_model_ready` approval with `metric_owner` authority
+  whose note names that contract, so an unnamed blanket approval no longer binds.
+  Dagster boundary safety is consolidated into shared helpers for output handling,
+  child environments, and run-path identity: redaction always precedes truncation and
+  serialization, and child processes receive a positive environment allowlist rather
+  than an ambient copy of `os.environ`. Run evidence rejects dirty (uncommitted)
+  evidence and gains freshness signals; the terminal live gate stays
+  `[PENDING LIVE PROFILE]` with no DSN/driver. Filesystem-derived inputs are
+  repository-contained and tracked-only in git workspaces, with a documented
+  non-git fallback. No stage is ever changed to `pass` and no readiness approval is
+  self-granted. The highest-churn CLI hotspot is split behind behavior-preserving
+  tests (`cli/parser.py` -> `parser_core` / `parser_dagster` / `parser_validation`).
+  (#429)
 - **The `dashboard-design` skill is now narrative-gated (spec 021, Phase B, T009).**
   It STOPs unless a committed `mappings/<table>/narrative-brief.md` (frozen
   `seshat.narrative-brief/v1`) exists before any layout/visual guidance -- absence
@@ -148,6 +164,12 @@ explicitly identifies a public release event.
   (#432)
 
 ### Fixed
+- `seshat narrative-check`'s contract-revision guard now resolves contracts in
+  `mappings/<table>/metrics/` -- the F009 contract-store convention the rest of the
+  kit already uses (`gap_detector`, `dashboard_coordinator`, the `--metrics-dir`
+  default) -- instead of a `contracts/` directory that no real workspace ships. The
+  wrong path made every real brief fail closed on `stale_contract_revision: cannot be
+  located`, so the freshness rule was unreachable on real data. (#471)
 - `seshat dashboard-gaps` no longer fails open on an unusable `--page-intent`: the
   four unusable shapes (missing, unreadable, invalid YAML, valid-YAML-but-wrong-shape
   -- e.g. a Markdown file, whose bullets parse as a YAML list) now get four distinct
