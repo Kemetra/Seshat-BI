@@ -28,14 +28,31 @@ start from `templates/page-intent.example.yaml` and see
 or wrong-format page-intent is refused with a named error and exit 2 -- it is
 never an empty "no gaps" read.
 
-Data-bound visual design requires approved metric contracts and committed
-semantic-model evidence. With both present, produce reviewable design guidance
--- a layout plan, a visual list, and a visual-to-contract binding map where
-every data-bound visual binds to exactly one approved contract. Slicers and
-filters belong to a compact filter rail that never dominates the canvas, and
-each slicer's field and default selection is part of the reviewable design.
-Without the gates, stop and name the missing one. For metric meaning load
-`retail-kpi-knowledge`; for measure semantics load `bi-dax-knowledge`.
+Data-bound visual design requires approved metric contracts, committed
+semantic-model evidence, AND a committed narrative brief. The narrative brief
+(`mappings/<table>/narrative-brief.md`, frozen `seshat.narrative-brief/v1`
+schema) is the NEW narrative gate: a design that binds visuals to contracts but
+cannot say which owner decision each page serves is itself a gap. Author the
+brief FIRST via the `bi-analyst-knowledge` derivation route (ranked
+decision-questions, one framing per question, a story order, honest `[GAP]`
+entries); its absence is a named blocker, not a warning -- stop and name it.
+
+With all three gates present, produce reviewable design guidance -- a layout
+plan, a visual list, and a THREE-WAY binding map (visual -> contract ->
+decision-question) where every data-bound visual binds to exactly one approved
+contract AND answers at least one brief decision-question. An orphan in either
+direction is a defect; every declared page must serve at least one decision; and
+every headline (KPI-card class) visual must answer a `stage: overview` question
+that names a comparison -- a bare total on a headline is a defect. Give the map a
+machine-readable `seshat.binding-map/v1` front section and check it read-only
+with `seshat narrative-check --table <t> --binding-map` (and the brief with
+`seshat narrative-check --table <t>`); a clean check is evidence for the human
+review, never an approval. Slicers and filters belong to a compact filter rail
+that never dominates the canvas, and each slicer's field and default selection is
+part of the reviewable design. Without the gates, stop and name the missing one.
+For the analyst framing catalog + derivation route load `bi-analyst-knowledge`;
+for metric meaning load `retail-kpi-knowledge`; for measure semantics load
+`bi-dax-knowledge`.
 
 ## Review and QA
 

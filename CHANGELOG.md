@@ -38,8 +38,20 @@ explicitly identifies a public release event.
   missing/unreadable/malformed brief; emits named categorical findings; grants no
   approval. Out of v1 scope: dimension-cite grounding (the frozen dotted-dimension
   grammar does not match the bare-column profile format; a follow-up owner
-  reconciliation) and the visual->question binding-map orphan check (a Phase-B
-  addition). Phase C of spec 021; delivers User Story 3. (#452)
+  reconciliation). Phase C of spec 021; delivers User Story 3. (#452)
+- `seshat narrative-check --binding-map` -- Phase B, opt-in design-stage mode:
+  checks the THREE-way binding map (visual -> contract -> decision-question) at
+  `mappings/<table>/design/visual-contract-binding-map.md` against the new
+  `seshat.binding-map/v1` schema. Finds orphan visuals in EITHER direction (a
+  visual whose `contract` is missing or not a declared approved contract, or whose
+  `decision_questions` is empty or undeclared -- FR-005), brief decision-questions
+  that no visual answers (`unanswered_question`, FR-005), pages that serve no owner
+  decision, and bare-total headline visuals (a `headline: true` KPI-card visual
+  answering no `overview` question -- FR-006, transitive to the brief's
+  overview-comparison rule). `decision_questions` is list-valued (a visual may
+  answer more than one decision). Fails closed on a missing/malformed map or an
+  absent referenced brief; opt-in so brief-stage (US1) callers are not broken.
+  Grants no approval. Delivers spec 021 User Story 2 (T010). (#452)
 - `bi-analyst-knowledge` skill pack (spec 021, Phase A + D) -- the analyst
   judgment layer between semantic-model readiness and dashboard layout: a
   derivation route (approved contracts + committed profile -> ranked
@@ -47,9 +59,7 @@ explicitly identifies a public release event.
   and two worked examples, plus the frozen narrative-brief schema the checker
   consumes. Docs-only; propagated to the distribution/integration bundles and
   the public-knowledge allowlist alongside the other knowledge packs. The
-  Phase-B design-gate arming (dashboard-design narrative precondition + three-way
-  binding map) is intentionally NOT included here -- it remains owner-gated.
-  (#452)
+  Phase-B design-gate arming shipped separately (see Changed, below). (#452)
 - `seshat pbi-mcp doctor|generate-config|preflight` -- the read-only Power BI
   MCP doctor family (#450 slices 2-4, the F016 slot; same Option-B narrow
   adapter-family shape as `seshat dagster doctor`). `doctor` detects the local
@@ -114,6 +124,18 @@ explicitly identifies a public release event.
   Non-destructive; wheel-data-first with a dev-checkout fallback. (#440, #441)
 
 ### Changed
+- **The `dashboard-design` skill is now narrative-gated (spec 021, Phase B, T009).**
+  It STOPs unless a committed `mappings/<table>/narrative-brief.md` (frozen
+  `seshat.narrative-brief/v1`) exists before any layout/visual guidance -- absence
+  is the named blocker `narrative_brief_missing`, not a warning (FR-004). Its
+  binding map is upgraded from two-way (visual -> contract) to THREE-way
+  (visual -> contract -> decision-question); an orphan in either direction, a page
+  serving no decision, or a bare-total headline visual is a defect (FR-005,
+  FR-006). The same gate + route language is mirrored in the marketplace
+  `powerbi-workflows` skill, which now also routes to `bi-analyst-knowledge` for
+  the framing catalog (T011). The `visual-contract-binding-map.md` template gains a
+  machine-readable `seshat.binding-map/v1` front section. This ARMS enforced
+  behavior on already-shipped skills; it was owner-gated pending this build. (#452)
 - `seshat profile --format json` no longer prints the human progress banner to
   stderr, so a merged-stream pipe (`seshat profile ... --format json 2>&1 | jq`)
   receives pure JSON. The banner is retained in the default (text) output mode;

@@ -21,12 +21,18 @@ Read-only: the checker opens nothing for write, sets no readiness stage, and
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 
-from seshat.narrative_check import NarrativeCheckResult, check_narrative
+from seshat.narrative_check import (
+    NarrativeCheckResult,
+    check_binding_map,
+    check_narrative,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -362,17 +368,373 @@ def test_never_silent_nothing(workspace: Path):
 
 
 # --------------------------------------------------------------------------- #
-# Deferred to Phase B (T010): the visual<->question binding-map orphan checks.
-# The three-way map is authored by the Phase-B dashboard-design upgrade and does
-# not exist yet. Visible skips, never a silent pass over an absent map.
+# Phase B (T010): the three-way binding-map checks (visual -> contract ->
+# decision-question). The map is authored by the Phase-B dashboard-design
+# upgrade and lives at mappings/<table>/design/visual-contract-binding-map.md
+# with a machine-readable ``seshat.binding-map/v1`` front section, mirroring the
+# brief's fenced-yaml pattern. The checker (``check_binding_map``) reads the map
+# AND the brief it names, and reports categorical findings with named blockers:
+#   - orphan_visual        : a visual whose decision_question is empty or not a
+#                            declared brief question id (FR-005)
+#   - page_missing_question: a declared page carrying no decision-question at all
+#                            (coverage -- a page must serve >=1 owner decision)
+#   - bare_total_headline_visual : a headline (KPI-card) visual whose bound
+#                            question is not an overview-stage question -- a bare
+#                            total on the headline (FR-006), transitive to the
+#                            brief's already-enforced headline comparison rule
+# Fail-closed on a missing / unreadable / schema-invalid map, and on an absent
+# brief it references -- consistent with the brief-check posture, never a silent
+# pass over an absent map.
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.skip(
-    reason="visual->question binding-map orphan check lands with Phase B / T010"
+def _clean_binding_map() -> str:
+    """A clean three-way map for the ``orders`` workspace: two pages, every
+    visual answering a declared brief question, a headline visual on Q1 (an
+    overview question) and a visual answering TWO questions (Q1 + Q2) to exercise
+    the list-valued ``decision_questions`` form the real worked example needs
+    (v03 answers Q1/Q5). Mirrors the taught ``seshat.binding-map/v1`` shape."""
+    return """```yaml
+schema: seshat.binding-map/v1
+table: orders
+brief: mappings/orders/narrative-brief.md
+pages:
+  - id: overview
+    regions: [kpi_strip]
+  - id: drivers
+    regions: [main_insight]
+visuals:
+  - visual_id: v01
+    page: overview
+    region: kpi_strip
+    visual_type: card
+    contract: NetSales
+    decision_questions: [Q1]
+    headline: true
+  - visual_id: v02
+    page: drivers
+    region: main_insight
+    visual_type: bar
+    contract: NetSales
+    decision_questions: [Q2]
+    headline: false
+```
+
+# Visual -> contract -> decision-question binding map: orders
+
+The three-way map the design review signs off.
+"""
+
+
+@pytest.fixture()
+def mapped_workspace(workspace: Path) -> Path:
+    """The clean-brief workspace plus a clean three-way binding map."""
+    design_dir = workspace / "mappings" / "orders" / "design"
+    design_dir.mkdir(parents=True)
+    (design_dir / "visual-contract-binding-map.md").write_text(
+        _clean_binding_map(), encoding="utf-8"
+    )
+    return workspace
+
+
+def _mutate_map(workspace: Path, old: str, new: str) -> None:
+    m = workspace / "mappings" / "orders" / "design" / "visual-contract-binding-map.md"
+    text = m.read_text(encoding="utf-8")
+    assert old in text, f"fixture drift: {old!r} not in the clean binding map"
+    m.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+
+def _run_map(workspace: Path) -> NarrativeCheckResult:
+    return check_binding_map(table="orders", repo_root=workspace)
+
+
+def test_clean_binding_map_passes(mapped_workspace: Path):
+    result = _run_map(mapped_workspace)
+    assert result.status == "pass"
+    assert result.findings == ()
+    assert result.grants_approval is False
+
+
+def test_clean_binding_map_evidence_states_not_approval(mapped_workspace: Path):
+    result = _run_map(mapped_workspace)
+    joined = " ".join(result.evidence).lower()
+    assert "evidence" in joined and "approval" in joined
+
+
+def test_visual_answering_two_questions_passes(mapped_workspace: Path):
+    # The spec edge case: one visual may answer >1 decision-question (the real
+    # worked example's basket-value card answers Q1 AND Q5). Both listed -> no
+    # orphan, and because Q1 is overview the headline rule is satisfied.
+    _mutate_map(
+        mapped_workspace,
+        "    decision_questions: [Q1]\n    headline: true",
+        "    decision_questions: [Q1, Q2]\n    headline: true",
+    )
+    result = _run_map(mapped_workspace)
+    assert result.status == "pass"
+    assert result.findings == ()
+
+
+def test_orphan_visual_no_question(mapped_workspace: Path):
+    # A measure-bearing visual with an empty decision_questions list -> orphan
+    # (FR-005: a visual bound to a contract but answering no question is a defect
+    # of the same class as an unbound visual).
+    _mutate_map(mapped_workspace, "decision_questions: [Q2]", "decision_questions: []")
+    result = _run_map(mapped_workspace)
+    assert result.status == "blocked"
+    assert "orphan_visual" in {f.dimension for f in result.findings}
+    assert any("v02" in f.locator for f in result.findings)
+
+
+def test_visual_cites_undeclared_question_is_orphan(mapped_workspace: Path):
+    # A decision_question that is not a declared brief question id is also an
+    # orphan -- the map cannot reach past the brief's questions.
+    _mutate_map(
+        mapped_workspace, "decision_questions: [Q2]", "decision_questions: [Q99]"
+    )
+    result = _run_map(mapped_workspace)
+    assert result.status == "blocked"
+    assert "orphan_visual" in {f.dimension for f in result.findings}
+    assert any("Q99" in f.message for f in result.findings)
+
+
+def test_one_undeclared_among_valid_is_still_orphan(mapped_workspace: Path):
+    # A visual listing a valid AND an undeclared question is still an orphan for
+    # the undeclared one -- the check is per-question, not "any grounded => ok".
+    _mutate_map(
+        mapped_workspace, "decision_questions: [Q2]", "decision_questions: [Q2, Q99]"
+    )
+    result = _run_map(mapped_workspace)
+    assert result.status == "blocked"
+    assert "orphan_visual" in {f.dimension for f in result.findings}
+    assert any("Q99" in f.message for f in result.findings)
+
+
+def test_visual_with_no_contract_is_orphan(mapped_workspace: Path):
+    # The CONTRACT leg (FR-005, "orphan in EITHER direction"): a visual with no
+    # `contract` field is an orphan -- the three-way map must bind every visual to
+    # an approved contract, not just to a question. (The old two-way markdown table
+    # got human review; this machine-readable YAML section did not, so the checker
+    # must police the contract leg it introduced.)
+    _mutate_map(
+        mapped_workspace,
+        "    visual_type: bar\n    contract: NetSales\n",
+        "    visual_type: bar\n",
+    )
+    result = _run_map(mapped_workspace)
+    assert result.status == "blocked"
+    assert "orphan_visual" in {f.dimension for f in result.findings}
+    assert any("v02" in f.locator and "contract" in f.message for f in result.findings)
+
+
+def test_visual_with_undeclared_contract_is_orphan(mapped_workspace: Path):
+    # A `contract` that is not among the brief's declared approved contracts is an
+    # orphan -- the map cannot bind a visual to a metric the brief never approved
+    # (same grounded-only posture as the brief's measure cites).
+    _mutate_map(mapped_workspace, "contract: NetSales", "contract: TotallyFakeMetric")
+    result = _run_map(mapped_workspace)
+    assert result.status == "blocked"
+    assert "orphan_visual" in {f.dimension for f in result.findings}
+    assert any("TotallyFakeMetric" in f.message for f in result.findings)
+
+
+def test_page_missing_question(mapped_workspace: Path):
+    # A declared page whose only visual carries no question -> the page serves no
+    # owner decision (coverage defect). Blank Q2 so page `drivers` has no
+    # question-bearing visual.
+    _mutate_map(mapped_workspace, "decision_questions: [Q2]", "decision_questions: []")
+    result = _run_map(mapped_workspace)
+    assert result.status == "blocked"
+    dims = {f.dimension for f in result.findings}
+    assert "page_missing_question" in dims
+    assert any("drivers" in f.locator for f in result.findings)
+
+
+def test_unanswered_brief_question_is_a_finding(mapped_workspace: Path):
+    # The other orphan direction (FR-005 "either direction"): a brief
+    # decision-question that NO visual answers. Q2 is declared in the brief;
+    # remove the only visual that answers it (v02) so Q2 goes unanswered.
+    _mutate_map(
+        mapped_workspace,
+        """  - visual_id: v02
+    page: drivers
+    region: main_insight
+    visual_type: bar
+    contract: NetSales
+    decision_questions: [Q2]
+    headline: false
+""",
+        "",
+    )
+    result = _run_map(mapped_workspace)
+    assert result.status == "blocked"
+    assert "unanswered_question" in {f.dimension for f in result.findings}
+    assert any("Q2" in f.locator or "Q2" in f.message for f in result.findings)
+
+
+def test_headline_visual_on_nonoverview_question_is_a_finding(mapped_workspace: Path):
+    # FR-006: a headline (KPI-card class) visual MUST carry a comparison framing.
+    # Structurally, a headline visual answers an overview-stage question (which
+    # the brief already forces to name a comparison). A headline answering only a
+    # non-overview question is a bare-total headline defect.
+    _mutate_map(
+        mapped_workspace,
+        "    decision_questions: [Q1]\n    headline: true",
+        "    decision_questions: [Q2]\n    headline: true",
+    )
+    result = _run_map(mapped_workspace)
+    assert result.status == "blocked"
+    assert "bare_total_headline_visual" in {f.dimension for f in result.findings}
+
+
+def test_missing_binding_map_fails_closed(workspace: Path):
+    # The brief exists but no three-way map -> Phase B flips map-absence to
+    # fail-closed (a design gated on the brief but with no committed map is not
+    # reviewable). Never a silent pass over an absent map.
+    result = _run_map(workspace)
+    assert result.status == "blocked"
+    assert result.grants_approval is False
+    assert any(f.dimension == "missing_binding_map" for f in result.findings)
+
+
+def test_binding_map_missing_brief_fails_closed(tmp_path: Path):
+    # A map that references a brief which does not exist -> fail closed naming the
+    # absent brief (the map's question ids cannot be grounded).
+    design_dir = tmp_path / "mappings" / "orders" / "design"
+    design_dir.mkdir(parents=True)
+    (design_dir / "visual-contract-binding-map.md").write_text(
+        _clean_binding_map(), encoding="utf-8"
+    )
+    result = check_binding_map(table="orders", repo_root=tmp_path)
+    assert result.status == "blocked"
+    assert any(
+        f.dimension in {"missing_brief", "missing_referenced_brief"}
+        for f in result.findings
+    )
+
+
+def test_malformed_binding_map_fails_closed(mapped_workspace: Path):
+    m = (
+        mapped_workspace
+        / "mappings"
+        / "orders"
+        / "design"
+        / "visual-contract-binding-map.md"
+    )
+    m.write_text("```yaml\n: : not: valid: yaml\n```\n", encoding="utf-8")
+    result = _run_map(mapped_workspace)
+    assert result.status == "blocked"
+    assert result.status != "pass"
+    assert result.findings
+
+
+def test_binding_map_wrong_schema_fails_closed(mapped_workspace: Path):
+    _mutate_map(mapped_workspace, "schema: seshat.binding-map/v1", "schema: other/v9")
+    result = _run_map(mapped_workspace)
+    assert result.status == "blocked"
+    assert any(f.dimension == "wrong_schema" for f in result.findings)
+
+
+# --------------------------------------------------------------------------- #
+# Anti-circularity anchors (the circular-fixture lesson): the schema is proven
+# against a REAL committed artifact, not only against fixtures this test wrote.
+# --------------------------------------------------------------------------- #
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_TAUGHT_EXAMPLE = (
+    _REPO_ROOT / "skills" / "bi-analyst-knowledge" / "example-specialty-retail.md"
 )
-def test_orphan_visual_no_question(): ...
+_REAL_MAP = (
+    _REPO_ROOT
+    / "mappings"
+    / "retail_store_sales"
+    / "design"
+    / "visual-contract-binding-map.md"
+)
 
 
-@pytest.mark.skip(reason="page->question coverage check lands with Phase B / T010")
-def test_page_missing_question(): ...
+def _second_yaml_block(text: str) -> str:
+    """The SECOND fenced yaml block in the teaching file -- the first teaches the
+    brief front section, the second teaches the three-way binding map."""
+    blocks = re.findall(r"```ya?ml\s*\n(.*?)\n```", text, re.DOTALL)
+    assert len(blocks) >= 2, "teaching file must teach both brief AND binding map"
+    return blocks[1]
+
+
+def test_taught_binding_map_example_parses_and_passes(tmp_path: Path):
+    # HONESTY (SC-002-class): the bi-analyst-knowledge pack's OWN taught
+    # binding-map example must parse under seshat.binding-map/v1 AND pass the
+    # checker against a brief declaring the Q-ids it references. Built from the
+    # committed teaching file verbatim -- never a shape invented here (the
+    # circular-fixture trap: green on a self-invented format proves nothing).
+    taught = _second_yaml_block(_TAUGHT_EXAMPLE.read_text(encoding="utf-8"))
+    taught_map = taught.replace("<table>", "orders")
+    taught_data = yaml.safe_load(taught_map)
+
+    # Ground the fabricated brief in the taught map ITSELF: declare exactly the
+    # Q-ids the map answers (so no unanswered-question orphan) AND exactly the
+    # contracts the map binds (so the contract-leg grounding is exercised, not
+    # bypassed). A brief with a mismatched single contract would let the honesty
+    # test pass hollow -- the advisor's point.
+    qids = sorted({q for v in taught_data["visuals"] for q in v["decision_questions"]})
+    contracts = sorted({v["contract"] for v in taught_data["visuals"]})
+    assert qids, "the taught map must reference decision-question ids"
+    assert contracts, "the taught map must bind approved contracts"
+    q_blocks = "\n".join(
+        f"""  - id: {qid}
+    decision: taught decision {qid}
+    stage: {"overview" if qid == "Q1" else "why_where"}
+    framing: contribution-mix
+    cites:
+      measures: [{contracts[0]}]
+    comparison: {"same period last year" if qid == "Q1" else "none"}
+    callout: taught callout {qid}"""
+        for qid in qids
+    )
+    contract_blocks = "\n".join(
+        f"  - id: {cid}\n    revision: deadbeef" for cid in contracts
+    )
+    overview_ids = ", ".join(q for q in qids if q == "Q1")
+    other_ids = ", ".join(q for q in qids if q != "Q1")
+    brief = f"""```yaml
+schema: seshat.narrative-brief/v1
+table: orders
+source_profile: mappings/orders/source-profile.md
+contracts:
+{contract_blocks}
+questions:
+{q_blocks}
+story_order:
+  overview:  [{overview_ids}]
+  change:    []
+  why_where: [{other_ids}]
+  action:    []
+gaps: []
+```
+# taught brief
+"""
+    table_dir = tmp_path / "mappings" / "orders"
+    (table_dir / "design").mkdir(parents=True)
+    (table_dir / "narrative-brief.md").write_text(brief, encoding="utf-8")
+    (table_dir / "design" / "visual-contract-binding-map.md").write_text(
+        f"# taught map\n\n```yaml\n{taught_map}\n```\n", encoding="utf-8"
+    )
+
+    result = check_binding_map(table="orders", repo_root=tmp_path)
+    assert result.status == "pass", [f._asdict() for f in result.findings]
+    assert result.grants_approval is False
+
+
+def test_real_worked_example_map_still_needs_phase_b_migration():
+    # GUARD (owner-requested): the ONE real committed binding map
+    # (retail_store_sales) is still the F011 two-way MARKDOWN pipe-table format
+    # with no seshat.binding-map/v1 front section. The checker therefore fails
+    # closed (no_front_section) on it -- Phase B ships the checker + the taught
+    # example, and migrating this signed-off artifact into the new format is an
+    # explicit owner-gated follow-up (Option A). This test makes "DOA on
+    # reality" VISIBLE instead of hidden behind fixture-only green: when the map
+    # is migrated, this test flips and must be updated deliberately.
+    assert _REAL_MAP.is_file(), f"expected the real worked-example map at {_REAL_MAP}"
+    result = check_binding_map(table="retail_store_sales", repo_root=_REPO_ROOT)
+    assert result.status == "blocked"
+    assert any(f.dimension == "no_front_section" for f in result.findings)

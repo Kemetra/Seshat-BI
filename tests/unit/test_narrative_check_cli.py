@@ -128,3 +128,84 @@ def test_cli_json_format_carries_findings(tmp_path: Path, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "blocked"
     assert any(f["dimension"] == "missing_brief" for f in payload["findings"])
+
+
+# --------------------------------------------------------------------------- #
+# --binding-map: design-stage mode (Phase B). Opt-in so brief-stage callers
+# (US1: a brief exists, no map yet) are NOT broken by map-absence fail-close.
+# --------------------------------------------------------------------------- #
+
+
+def _clean_map() -> str:
+    return """```yaml
+schema: seshat.binding-map/v1
+table: orders
+brief: mappings/orders/narrative-brief.md
+pages:
+  - id: overview
+    regions: [kpi_strip]
+visuals:
+  - visual_id: v01
+    page: overview
+    region: kpi_strip
+    visual_type: card
+    contract: NetSales
+    decision_questions: [Q1]
+    headline: true
+```
+# body
+"""
+
+
+def _workspace_with_map(tmp_path: Path) -> Path:
+    ws = _workspace(tmp_path)
+    design = ws / "mappings" / "orders" / "design"
+    design.mkdir(parents=True)
+    (design / "visual-contract-binding-map.md").write_text(
+        _clean_map(), encoding="utf-8"
+    )
+    return ws
+
+
+def test_cli_binding_map_clean_exit_zero(tmp_path: Path, capsys):
+    ws = _workspace_with_map(tmp_path)
+    assert _run(ws, "--binding-map") == 0
+    out = capsys.readouterr().out
+    assert "status: pass" in out
+    assert "grants no approval" in out
+
+
+def test_cli_binding_map_orphan_exit_one(tmp_path: Path, capsys):
+    ws = _workspace_with_map(tmp_path)
+    m = ws / "mappings" / "orders" / "design" / "visual-contract-binding-map.md"
+    m.write_text(
+        m.read_text(encoding="utf-8").replace(
+            "decision_questions: [Q1]", "decision_questions: [Q99]"
+        ),
+        encoding="utf-8",
+    )
+    assert _run(ws, "--binding-map") == 1
+    out = capsys.readouterr().out
+    assert "status: blocked" in out
+    assert "orphan_visual" in out
+
+
+def test_cli_binding_map_missing_map_fails_closed(tmp_path: Path):
+    # A brief exists but no map, and the caller asked for --binding-map ->
+    # fail closed (missing_binding_map), never a silent pass.
+    ws = _workspace(tmp_path)
+    assert _run(ws, "--binding-map") == 1
+
+
+def test_cli_without_binding_map_ignores_absent_map(tmp_path: Path):
+    # Brief-stage (default) mode: a brief with no map is NOT a failure -- the map
+    # is out of scope unless --binding-map is asked for (US1 not broken).
+    assert _run(_workspace(tmp_path)) == 0
+
+
+def test_cli_binding_map_json(tmp_path: Path, capsys):
+    ws = _workspace_with_map(tmp_path)
+    assert _run(ws, "--binding-map", "--format", "json") == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "pass"
+    assert payload["grants_approval"] is False

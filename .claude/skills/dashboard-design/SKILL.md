@@ -85,9 +85,30 @@ to publish or author the PBIR via automation, STOP and hand off to F016.
 3. The governed PBIP model (F010) is present and binds measures to those contracts.
 4. The analyst has supplied the business questions the page must answer. This is a
    Principle V input -- if missing, ASK for it; do NOT invent a generic page.
+5. **A committed narrative brief exists** at `mappings/<table>/narrative-brief.md`
+   conforming to the frozen `seshat.narrative-brief/v1` schema
+   (`bi-analyst-knowledge` derivation route). This is the NEW narrative gate
+   (spec 021, FR-004): a design that binds visuals to contracts but cannot say
+   which owner decision each page serves is itself a gap. The brief must exist
+   and be committed BEFORE any layout/visual guidance is authored, exactly as
+   contracts must exist before design. Its ABSENCE is a NAMED BLOCKER, not a
+   warning -- author no layout, record the blocking reason, and STOP.
 
 If any precondition fails, record the matching `dashboard_ready` status + blocking
 reason and STOP.
+
+### The narrative gate (rule: no layout before narrative)
+
+Before authoring any layout, read `mappings/<table>/narrative-brief.md`. If it is
+absent, author no design and STOP with the named blocker
+`narrative_brief_missing` (`next_action: "author the narrative brief via
+bi-analyst-knowledge (the derivation route) and get it committed first"`). The
+brief supplies the ranked owner decision-questions (each with a stable id `Q1`,
+`Q2`, ...) that the three-way binding map below binds every visual to. Frame the
+analysis, never invent it: the brief cites only approved contracts + the profiled
+source; a question the data cannot answer is a `[GAP]` in the brief, never a
+visual. This skill does NOT author the brief -- that is the `bi-analyst-knowledge`
+route's job; this skill CONSUMES it.
 
 ## Procedure (numbered; do not reorder)
 
@@ -105,18 +126,56 @@ filter rail / footer-status -- and design principles, use the F011A foundation:
 `../powerbi-dashboard-design/workflows/page-blueprint.md`.)
 
 ### 3. Author the visual list
-For each proposed visual record: its type, the business question it answers, and
-the ONE approved metric contract it binds to. Choose the visual type to fit the
-contract's GRAIN (a single additive measure -> KPI card; a measure by a dimension
--> bar/column; a measure over time -> line; row-level detail -> table). A visual
-with no backing approved contract MUST NOT be emitted (see Blocking reasons).
+For each proposed visual record: its type, the ONE approved metric contract it
+binds to, AND the brief decision-question(s) it answers (by id -- `Q1`, `Q5`, ...).
+Choose the visual type to fit the contract's GRAIN (a single additive measure ->
+KPI card; a measure by a dimension -> bar/column; a measure over time -> line;
+row-level detail -> table). Two things a visual MUST NOT be: with no backing
+approved contract (an unbound orphan), or answering no brief decision-question (a
+narrative orphan) -- both are defects (see Blocking reasons).
 
-### 4. Author the visual->contract binding map
-Author the committed note proving each visual maps to exactly one approved contract
-(no orphan visual). This is the artifact the design review signs off. Cite each
-contract by name. If more approved contracts exist than visuals on the page, record
-each DROPPED contract with a reason (e.g. "covered by the Stage 7 handoff pack, not
-the dashboard") -- never a silent omission.
+### 4. Author the three-way visual -> contract -> decision-question binding map
+Author the committed note proving each visual binds to exactly one approved
+contract AND answers at least one brief decision-question. This is the THREE-WAY
+map (spec 021, FR-005): the F011 two-way map (visual -> contract) extended with
+the decision-question leg. It is the artifact the design review signs off.
+
+Give the map a machine-readable `seshat.binding-map/v1` fenced-`yaml` front section
+(mirroring the brief) so `seshat narrative-check --binding-map` can read it. Each
+visual records: `visual_id`, `page`, `region`, `visual_type`, `contract`
+(approved), `decision_questions` (a LIST of brief question ids -- one visual may
+answer more than one owner decision, e.g. a basket-value card that is both a
+headline number and the basket-value answer), and `headline` (true for KPI-card
+class). Rules the map obeys, each an orphan/coverage defect:
+
+- **No orphan visual, either direction (FR-005)**: every visual MUST bind to one
+  approved `contract` (present + declared in the brief) AND name >=1
+  `decision_questions` entry, each a question the brief declares. A visual missing
+  either leg -- an undeclared/absent contract, or answering no owner decision --
+  is an orphan.
+- **No unanswered question (FR-005)**: every ranked brief decision-question MUST
+  be answered by >=1 visual. A decision the design declares but serves no visual
+  for is an orphan question.
+- **No page serves nothing**: every declared page carries >=1 question-bearing
+  visual.
+- **No bare-total headline (FR-006)**: every `headline: true` (KPI-card class)
+  visual MUST answer at least one `stage: overview` question. Because the brief
+  forces every overview question to name a `comparison` (never "none"), this is
+  how "the headline carries a comparison" is enforced -- a bare total on a
+  headline is a defect; offer the framing catalog's comparisons as the fix.
+
+If more approved contracts exist than visuals on the page, record each DROPPED
+contract with a reason (e.g. "covered by the Stage 7 handoff pack, not the
+dashboard") -- never a silent omission. The generic taught shape lives in
+`bi-analyst-knowledge/example-specialty-retail.md` (the three-way map section).
+
+### 4a. Run the read-only narrative check (evidence for the review)
+Before requesting the design review, run `seshat narrative-check --table <table>`
+(the brief) and `seshat narrative-check --table <table> --binding-map` (the
+three-way map). Both are READ-ONLY, categorical, and grant NO approval -- a clean
+check is EVIDENCE for the human review, never a substitute for it. A finding is a
+STOP: fix the brief/map and re-run. A missing/malformed brief or map fails closed
+(named blocker), never a silent pass.
 
 ### 5. Record readiness (warning, never pass)
 Record `dashboard_ready: warning` with `evidence[]` (the committed layout plan +
@@ -142,7 +201,15 @@ R1 rule; it adds no new `seshat check` rule.
 ## Blocking reasons (each maps to a STOP)
 
 - `semantic_model_ready` is not `pass` (the hard gate -- contracts must exist first).
-- A visual has no backing approved metric contract (orphan visual).
+- No committed `narrative-brief.md` (the narrative gate -- `narrative_brief_missing`).
+- A visual has no backing approved metric contract, or one not declared in the
+  brief (unbound orphan visual, FR-005).
+- A visual answers no brief decision-question, or an undeclared one (narrative
+  orphan visual, FR-005).
+- A brief decision-question is answered by no visual (unanswered question, FR-005).
+- A declared page carries no question-bearing visual (page serves no decision).
+- A headline (KPI-card class) visual answers no `overview` question -- a bare
+  total on the headline (FR-006).
 - A metric is invented at design time instead of reusing an approved contract.
 - The PBIR references the model by an absolute/remote path (R1 fails).
 
@@ -185,6 +252,11 @@ REVIEWER, not by this skill. When that approval is recorded by the reviewer,
 
 - Do NOT invent, define, or alter a metric at design time -- only bind to approved
   contracts (metric definition is F009).
+- Do NOT author any layout before a committed `narrative-brief.md` exists (the
+  narrative gate, FR-004) -- the brief supplies the decision-questions the map
+  binds to; author the brief via `bi-analyst-knowledge` first.
+- Do NOT emit a visual that answers no brief decision-question (narrative orphan),
+  nor a headline visual that answers no `overview` question (bare-total headline).
 - Do NOT design any visual before its metric contract exists / before
   `semantic_model_ready: pass` (rule 5).
 - Do NOT call the Power BI execution adapter (official Power BI MCP / connection;
@@ -213,6 +285,12 @@ first worked example, not the schema (Principle VII).
 - The visual-design FOUNDATION this verb reasons with: the `powerbi-dashboard-design`
   router skill + `docs/powerbi/` + `templates/` + `design/` + `themes/` +
   `reports/blueprints/` (F011A).
+- The narrative gate + framing catalog (spec 021): the `bi-analyst-knowledge`
+  pack (INDEX.md, `derivation-route.md`, the eight `framing-*.md` cards,
+  `story-order.md`, and the worked examples). The brief this skill consumes is
+  authored via that route.
+- The read-only evidence surface: `seshat narrative-check --table <t>` (brief) and
+  `seshat narrative-check --table <t> --binding-map` (three-way map).
 - Generic scaffolds: `templates/dashboard-layout.md`,
   `templates/visual-contract-binding-map.md`.
 

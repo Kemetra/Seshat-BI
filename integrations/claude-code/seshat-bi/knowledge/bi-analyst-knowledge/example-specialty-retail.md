@@ -119,6 +119,68 @@ rare-but-expensive returns) is the actual insight, not either rate alone.
   inventory turnover (no inventory snapshot) and target attainment (no target
   feed).
 
+## The three-way binding map this produces (Phase B, the enforceable shape)
+
+Once the brief is committed and `dashboard-design` authors the layout, the
+binding map is upgraded from F011's two-way (visual -> contract) to THREE-way:
+**visual -> contract -> decision-question**. It lives at
+`mappings/<table>/design/visual-contract-binding-map.md` and, like the brief,
+carries a machine-readable `seshat.binding-map/v1` front section the
+`narrative-check --binding-map` verb reads. Values are illustrative (no client
+numbers); it references the SAME question ids the brief above declares (Q1, Q5,
+...), so the two artifacts compose.
+
+```yaml
+schema: seshat.binding-map/v1
+table: <table>
+brief: mappings/<table>/narrative-brief.md    # the brief whose Q-ids this map references
+pages:
+  - id: executive_overview                    # a page may be a bare id or {id, regions}
+    regions: [kpi_strip, main_insight, why_where]
+visuals:
+  - visual_id: v01
+    page: executive_overview
+    region: kpi_strip
+    visual_type: card
+    contract: TotalSales
+    decision_questions: [Q1]                   # a LIST: one visual may answer >1 decision
+    headline: true                             # KPI-card class -> must answer an overview question
+  - visual_id: v03
+    page: executive_overview
+    region: kpi_strip
+    visual_type: card
+    contract: AvgTransactionValue
+    decision_questions: [Q1, Q5]               # basket-value card serves BOTH the headline and Q5
+    headline: true
+  - visual_id: v09
+    page: executive_overview
+    region: why_where
+    visual_type: bar
+    contract: ReturnRate
+    decision_questions: [Q5]                    # a diagnostic visual answering one why/where question
+    headline: false
+```
+
+Note how the three-way map makes the analysis ENFORCEABLE, one level past the
+brief:
+
+- **No orphan visual (FR-005).** Every visual names >=1 `decision_questions`
+  entry, and each entry MUST be a question the brief declares. A visual bound to
+  a contract but answering no owner decision is an orphan -- the same defect
+  class as an unbound visual, now checkable.
+- **No page serves nothing.** Every declared page carries at least one
+  question-bearing visual; a page that answers no owner decision is a coverage
+  defect.
+- **No bare-total headline (FR-006).** A `headline: true` (KPI-card class)
+  visual MUST answer at least one `stage: overview` question -- and the brief
+  already forces every overview question to name a `comparison` (never "none").
+  So "the headline carries a comparison" is enforced by the two artifacts
+  together, without the map restating the comparison rule.
+- **One visual, many decisions (allowed, explicit).** v03 answers Q1 AND Q5;
+  the map lists both -- no implicit reuse. This is the spec edge case: two
+  decision-questions answered by the same visual are allowed, but both triples
+  must be stated.
+
 ## What changed vs the traditional baseline
 
 - Every page opens with a decision, not a subject.
@@ -129,3 +191,6 @@ rare-but-expensive returns) is the actual insight, not either rate alone.
 - Unanswerable owner questions are honest [GAP]s, not faked visuals.
 - The product hierarchy is used to LOCALIZE a change (why/where), not just to
   display a matrix of totals.
+- The three-way binding map ties every visual to the decision it serves
+  (Phase B) -- an orphan visual, an empty page, or a bare-total headline is now
+  a named, checkable defect, not a judgment call.
