@@ -291,6 +291,121 @@ def test_second_run_skips_everything_and_file_is_byte_identical(
     assert _table_path(model_dir).read_bytes() == after_first
 
 
+# ---------------------------------------------------------------------------
+# Case-insensitive measure identity (issue #476)
+# ---------------------------------------------------------------------------
+
+_LINEAGE = "f8a7ec1c-0000-4000-8000-000000000000"
+
+
+def _measure_block(name: str, *, lineage: str = _LINEAGE) -> str:
+    """One existing measure declaration, spelled exactly as given."""
+    return (
+        f"\tmeasure {name} = SUM('gold fct_sales'[amount])\n"
+        "\t\tformatString: #,0.00\n"
+        f"\t\tlineageTag: {lineage}\n"
+        "\n"
+    )
+
+
+def _with_measures(*blocks: str) -> str:
+    joined = "".join(blocks)
+    return TABLE_TMDL.replace("\tcolumn amount", joined + "\tcolumn amount")
+
+
+def _project_with(tmp_path: Path, *blocks: str) -> Path:
+    return _make_project(tmp_path, table_text=_with_measures(*blocks))
+
+
+def test_case_only_contract_match_refuses_instead_of_inserting_duplicate(
+    tmp_path: Path,
+) -> None:
+    repo = _make_repo(tmp_path, {"TotalSales": _contract_yaml("TotalSales", "amount")})
+    model_dir = _project_with(tmp_path, _measure_block("totalsales"))
+    before = _table_path(model_dir).read_bytes()
+    result = _sync(repo, model_dir)
+    assert result["outcome"] == "refused"
+    assert result["actions"] == []
+    assert any("case-insensitive" in reason for reason in result["blocking_reasons"])
+    assert any(
+        "TotalSales" in reason and "totalsales" in reason
+        for reason in result["blocking_reasons"]
+    )
+    assert _table_path(model_dir).read_bytes() == before
+    assert measure_sync_exit_code(result) == 1
+    parsed = parse_tmdl(_table_path(model_dir).read_text(encoding="utf-8-sig"))
+    assert parsed is not None
+    assert [measure.name for measure in parsed.measures] == ["totalsales"]
+
+
+@pytest.mark.parametrize(
+    "spellings",
+    [("TotalSales", "TotalSales"), ("totalsales", "TotalSales")],
+    ids=["exact", "case-only"],
+)
+def test_duplicate_measure_declarations_refuse_before_planning(
+    tmp_path: Path, spellings: tuple[str, str]
+) -> None:
+    repo = _make_repo(tmp_path, {"TotalSales": _contract_yaml("TotalSales", "amount")})
+    blocks = [
+        _measure_block(name, lineage=_LINEAGE[:-1] + str(index))
+        for index, name in enumerate(spellings)
+    ]
+    model_dir = _project_with(tmp_path, *blocks)
+    before = _table_path(model_dir).read_bytes()
+    result = _sync(repo, model_dir)
+    assert result["outcome"] == "refused"
+    assert any("more than once" in reason for reason in result["blocking_reasons"])
+    assert _table_path(model_dir).read_bytes() == before
+
+
+def test_dry_run_case_only_collision_refuses_and_plans_nothing(tmp_path: Path) -> None:
+    repo = _make_repo(tmp_path, {"TotalSales": _contract_yaml("TotalSales", "amount")})
+    model_dir = _project_with(tmp_path, _measure_block("totalsales"))
+    before = _table_path(model_dir).read_bytes()
+    result = _sync(repo, model_dir, dry_run=True)
+    assert result["outcome"] == "refused"
+    assert result["actions"] == []
+    assert result["counts"] == {"insert": 0, "update": 0, "skip": 0}
+    assert _table_path(model_dir).read_bytes() == before
+
+
+def test_case_only_collision_leaves_partition_region_byte_identical(
+    tmp_path: Path,
+) -> None:
+    repo = _make_repo(tmp_path, {"TotalSales": _contract_yaml("TotalSales", "amount")})
+    model_dir = _project_with(tmp_path, _measure_block("totalsales"))
+    before = _partition_text(_table_path(model_dir))
+    assert PARTITION_TOKEN in before
+    result = _sync(repo, model_dir)
+    assert result["outcome"] == "refused"
+    assert _partition_text(_table_path(model_dir)) == before
+
+
+def test_two_approved_contracts_differing_only_by_case_are_refused() -> None:
+    """Two approved contracts colliding by case alone can never both be written.
+
+    Proven directly: an end-to-end fixture needs a case-sensitive filesystem,
+    because a contract's name must equal its file stem -- so ``TotalSales.yaml``
+    and ``totalsales.yaml`` are ONE file on Windows. The inventory dedupes on
+    exact name and on semantic binding, so a differently-cased pair over
+    different columns still reaches the sync planner on Linux/CI.
+    """
+    from seshat.pbip_measure_sync import _contract_case_clashes
+
+    clashes = _contract_case_clashes({"TotalSales": "block", "totalsales": "block"})
+    assert len(clashes) == 1
+    assert "TotalSales" in clashes[0]
+    assert "totalsales" in clashes[0]
+    assert "case-insensitive" in clashes[0]
+
+
+def test_distinctly_named_contracts_are_not_reported_as_case_clashes() -> None:
+    from seshat.pbip_measure_sync import _contract_case_clashes
+
+    assert _contract_case_clashes({"TotalSales": "b", "TotalQty": "b"}) == []
+
+
 def test_partition_region_is_byte_identical_after_every_write(tmp_path: Path) -> None:
     repo = _make_repo(tmp_path, {"TotalSales": _contract_yaml("TotalSales", "amount")})
     model_dir = _make_project(tmp_path)

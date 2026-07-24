@@ -80,6 +80,24 @@ _PARTITION_DRIFT = (
 )
 
 
+def _existing_case_reason(contract: str, existing: str) -> str:
+    """Refusal prose: a contract differs only by case from a live measure."""
+    return (
+        f"{contract}: the table already declares this measure as {existing}; "
+        "Power BI object names are case-insensitive, so align the contract "
+        "name with the existing measure spelling before syncing."
+    )
+
+
+def _contract_case_reason(first: str, second: str) -> str:
+    """Refusal prose: two approved contracts collide by letter case alone."""
+    return (
+        f"{second}: another approved contract already renders a measure named "
+        f"{first}; Power BI object names are case-insensitive, so rename one "
+        "contract before syncing."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Result document
 # ---------------------------------------------------------------------------
@@ -328,12 +346,18 @@ def _is_anchor_line(line: str) -> bool:
 def _register_measure(
     lines: list[str], i: int, name: str, measures: dict[str, _MeasureBlock]
 ) -> tuple[int, str | None]:
-    """Record the measure block headed at ``i``; (next line, duplicate error)."""
+    """Record the measure block headed at ``i``; (next line, duplicate error).
+
+    Keyed by ``casefold()`` because Power BI object names are case-insensitive:
+    ``netsales`` and ``NetSales`` are ONE measure, so a second declaration is a
+    duplicate however it is spelled. ``_MeasureBlock.name`` keeps the exact
+    spelling the file established.
+    """
     end = _block_end(lines, i, len(lines))
-    if name in measures:
+    if name.casefold() in measures:
         return end, _DUPLICATE_MEASURE
     trimmed = _trim_trailing_blanks(lines, i, end)
-    measures[name] = _MeasureBlock(
+    measures[name.casefold()] = _MeasureBlock(
         name=name,
         start=_doc_start(lines, i),
         end=trimmed,
@@ -346,6 +370,9 @@ def _scan_measures(
     lines: list[str],
 ) -> tuple[dict[str, _MeasureBlock], int, str | None]:
     """Existing measure regions, the insertion anchor, and a duplicate error.
+
+    Measures are keyed by casefolded name (Power BI object-name semantics); the
+    block's ``name`` preserves the file's own spelling.
 
     The anchor is the first indent-1 ``column``/``partition``/``source`` header
     OUTSIDE any measure block (new measures insert before it), or end-of-file.
@@ -417,10 +444,44 @@ def _desired_lines(tmdl_block: str, lineage_tag: str | None) -> list[str]:
 
 @dataclass(frozen=True)
 class _TableScan:
-    """The structure `_scan_measures` proved about the target table file."""
+    """The structure `_scan_measures` proved about the target table file.
+
+    ``measures`` is keyed by casefolded measure name.
+    """
 
     measures: dict[str, _MeasureBlock]
     anchor: int
+
+
+def _existing_case_clashes(
+    measures: dict[str, _MeasureBlock], rendered: dict[str, str]
+) -> list[str]:
+    """Every contract whose name differs ONLY by case from a live measure.
+
+    Such a pair cannot be an insert (Power BI would see one ambiguous name) and
+    must not be silently re-spelled, so the run refuses and names both.
+    """
+    clashes: list[str] = []
+    for name in sorted(rendered):
+        existing = measures.get(name.casefold())
+        if existing is not None and existing.name != name:
+            clashes.append(_existing_case_reason(name, existing.name))
+    return clashes
+
+
+def _contract_case_clashes(rendered: dict[str, str]) -> list[str]:
+    """Approved contracts that collide with EACH OTHER by case alone.
+
+    The contract inventory dedupes on exact name and on semantic binding, so two
+    differently-cased contracts over different columns both arrive here.
+    """
+    seen: dict[str, str] = {}
+    clashes: list[str] = []
+    for name in sorted(rendered):
+        previous = seen.setdefault(name.casefold(), name)
+        if previous != name:
+            clashes.append(_contract_case_reason(previous, name))
+    return clashes
 
 
 def _measure_change(
@@ -449,7 +510,7 @@ def _plan(
     edits: list[_Edit] = []
     inserted: list[str] = []
     for name in sorted(rendered):
-        existing = scan.measures.get(name)
+        existing = scan.measures.get(name.casefold())
         action, desired = _measure_change(target, existing, rendered[name])
         actions.append({"measure": name, "action": action})
         if action == "insert":
@@ -640,6 +701,11 @@ def _planned_edits(
     measures, anchor, duplicate = _scan_measures(target.lines)
     if duplicate is not None:
         return [], [], report.doc("refused", [duplicate])
+    clashes = _contract_case_clashes(rendered) + _existing_case_clashes(
+        measures, rendered
+    )
+    if clashes:
+        return [], [], report.doc("refused", clashes)
     actions, edits = _plan(target, _TableScan(measures, anchor), rendered)
     if _touches_partition(edits, _partition_regions(target.lines)):
         return [], [], report.doc("refused", [_PARTITION_TOUCH])
