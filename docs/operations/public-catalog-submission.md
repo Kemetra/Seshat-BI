@@ -9,20 +9,25 @@ Submission is a human action in each platform's portal under a verified identity
 there is no CLI, workflow, or API for it, and it is deliberately not automated.
 Both catalogs are **free**; the gate is identity verification, not payment.
 
-Everything below is prepared and verified against the live v0.5.2 release. Copy
+Everything below is prepared and verified against the live v0.7.1 release. Copy
 the listing fields into each portal form.
 
 ---
 
-## Pre-submission checklist (all ✅ as of v0.5.2)
+## Pre-submission checklist (all ✅ as of v0.7.1, verified 2026-07-24)
 
 - [x] Plugin published & installable from the repo marketplace (Claude + Codex).
-- [x] `plugin.json` version (`0.5.2`) matches `CHANGELOG.md` and git tag `v0.5.2`
-      — version mismatch is the #1 rejection reason.
+- [x] `plugin.json` version (`0.7.1`) matches `CHANGELOG.md` (`## [0.7.1]`) and
+      git tag `v0.7.1` — version mismatch is the #1 rejection reason, so re-verify
+      all three before every submission.
 - [x] Valid `.claude-plugin/plugin.json` (name, version, description, author,
-      homepage, repository, license) and `.codex-plugin/plugin.json` present.
+      homepage, repository, license) and `.codex-plugin/plugin.json` present —
+      all seven fields confirmed present in both.
 - [x] License present (Apache-2.0).
-- [x] PyPI package live (`seshat-bi==0.5.2`) for the CLI dependency.
+- [x] PyPI package live (`seshat-bi==0.7.1`) for the CLI dependency — verified via
+      the PyPI JSON API and `/simple/` index, plus a clean-venv
+      `pip install seshat-bi==0.7.1` that reports `seshat 0.7.1`.
+- [x] GitHub Release published at annotated tag `v0.7.1`, marked Latest.
 - [ ] **Owner:** complete identity verification in each portal (individual or
       business) — required before the form will accept a submission.
 
@@ -42,7 +47,7 @@ listed. Do **not** open a PR against the mirror repo (auto-closed).
 |---|---|
 | Plugin name | `seshat-bi` |
 | Marketplace source | `Kemetra/Seshat-BI` (GitHub) |
-| Version | `0.5.2` |
+| Version | `0.7.1` |
 | Author | Ahmed Shaaban |
 | Homepage / Repository | `https://github.com/Kemetra/Seshat-BI` |
 | License | Apache-2.0 |
@@ -77,7 +82,9 @@ company name.
 - **MCP** — server + auth config. Seshat's plugin is **skills-only** (no MCP
   server required); declare none.
 - **Skills** — upload the final skill package: the `integrations/codex/seshat-bi`
-  bundle (9 skills, `.codex-plugin/plugin.json` v0.5.2).
+  bundle (11 skills as of v0.7.1, `.codex-plugin/plugin.json` v0.7.1). Count the
+  directories under `integrations/codex/seshat-bi/skills/` rather than trusting
+  this number — the 0.7 line added `bi-analyst-knowledge` and `pbi-mcp-doctor`.
 - **Prompts** — example starting prompts (see below).
 - **Testing** — test cases (see below).
 - **Global** — available countries/regions (owner's choice; default: all).
@@ -96,12 +103,13 @@ company name.
 
 ## After submission — record the outcome
 
-Update the **v0.5.2 record** in
-[`release-acceptance-checklist.md`](release-acceptance-checklist.md): change
-"Claude public catalog: not submitted" / "OpenAI public plugin listing: not
-submitted" to the actual state (`submitted` / `under review` / `listed`) with the
-submission date and the public listing URL once live. Capture sanitized evidence
-in a `docs/releases/v0.5.2-public-acceptance.md` following the prior
+Update the **current release record** in
+[`release-acceptance-checklist.md`](release-acceptance-checklist.md) (the v0.7.1
+record as of this revision): change "Claude public catalog: not submitted" /
+"OpenAI public plugin listing: not submitted" to the actual state (`submitted` /
+`under review` / `listed`) with the submission date and the public listing URL
+once live. Capture sanitized evidence in a
+`docs/releases/v<VERSION>-public-acceptance.md` following the prior
 `*-public-acceptance.md` records.
 
 Rollback (if a listing must be corrected/withdrawn): ask the eligible
