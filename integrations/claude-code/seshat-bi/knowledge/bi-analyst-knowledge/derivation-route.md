@@ -104,8 +104,27 @@ section is what the machine checks.
 
 ## Rules the checker enforces against this schema
 
-- Every `questions[].cites` id MUST appear in `contracts` or the profile's
-  dimensions (grounded-only).
+- Every `questions[].cites.measures` id MUST appear in `contracts`
+  (grounded-only). **`cites.dimensions` is NOT ground-checked in v1**: a brief
+  cites a dimension as a dotted semantic-model reference
+  (`entity.attribute`), while the committed `source-profile.md` carries bare
+  source columns in a pipe table. Resolving one to the other needs a THIRD
+  artifact (the semantic model / mapping) that the frozen two-input rule
+  forbids, so the checker states the limit instead of faking a grounding it
+  cannot verify — an earlier dotted-bullet regex false-flagged every real
+  brief. Closing this needs a schema revision (a `v2` that either drops the
+  dotted grammar or admits the mapping as a third input), which is an owner
+  decision, not a checker change.
+- **Every visual in the binding map must bind a contract the decision-question
+  it answers actually cites.** Membership in the two sets separately is not
+  enough: `Q1 -> NetSales` paired with `v1 -> AverageBasket -> Q1` is a visual
+  that does not answer the question it claims to.
+- Required keys are validated for PRESENCE and TYPE (`table` — which must name
+  the table whose directory holds the brief — `source_profile`, `contracts`
+  with `id` + `revision` per entry, `questions` with `decision` + `cites` per
+  entry, `story_order`, `gaps` with all three fields per entry), and a
+  human-first body must follow the front section. A malformed list entry (a
+  scalar where a mapping belongs) is a named finding, never filtered out.
 - Every `contracts[].revision` MUST match the committed contract's current
   blob sha, or the citation is STALE (same posture as dbt model citations).
 - `questions[].stage` MUST be one of the four literals; `questions[].callout`
