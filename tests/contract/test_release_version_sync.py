@@ -263,9 +263,12 @@ def test_coordinated_release_commits_version_before_bundle_export() -> None:
     assert "from scripts.release_note_gate import validate_release_note" in workflow
     assert "validate_release_note(Path.cwd(), version)" in workflow
     assert 'r"seshat-bi==\\d+\\.\\d+\\.\\d+"' in workflow
-    for install_doc in (
-        "docs/install/agent-install.md",
-        "docs/install/support-matrix.md",
-        "docs/install/user-install.md",
-    ):
-        assert install_doc in workflow
+    # The workflow must project EVERY pinned docs/install/*.md, not a hardcoded
+    # subset -- test_install_docs_version_pins_match_the_packaged_version globs
+    # the whole directory, so a literal list here rots the moment a new install
+    # doc lands (client-quickstart.md did exactly that and blocked v0.7.0).
+    assert 'Path("docs/install").glob("*.md")' in workflow
+    assert "docs/install \\" in workflow, (
+        "the version-projection commit must stage the whole docs/install "
+        "directory, or a projected-but-unstaged doc leaks into the bundle diff"
+    )

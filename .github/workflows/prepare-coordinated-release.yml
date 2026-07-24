@@ -208,18 +208,50 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "${RELEASE_BRANCH}"
-          git add -- \
+          # Stage the whole docs/install directory, not a hardcoded subset: the
+          # projection step globs docs/install/*.md, so naming three files here
+          # left a projected-but-unstaged doc behind, which then surfaced as an
+          # "unexpected generated bundle file" in the later bundle-diff guard.
+          # The preceding step already asserted the exact projected file set.
+          # -u so only TRACKED modifications are staged: the preceding guard uses
+          # `git diff --name-only`, which cannot see untracked files, so a plain
+          # `git add docs/install` could sweep in a stray the guard never checked.
+          git add -u -- \
             pyproject.toml \
             CHANGELOG.md \
-            docs/install/agent-install.md \
-            docs/install/support-matrix.md \
-            docs/install/user-install.md \
+            docs/install \
             .claude-plugin/marketplace.json
           git diff --cached --check
           git commit -m "chore: project v${VERSION} version metadata"
 
       - name: Regenerate Claude and Codex bundles from the version projection
         run: python scripts/export_agent_bundles.py
+
+      - name: Build and inspect the real artifacts before any tag exists
+        shell: bash
+        run: |
+          # THE point of this step: inspect_release_artifacts.py used to run only
+          # in release.yml, i.e. AFTER the immutable v* tag was pushed. Anything it
+          # blocks on therefore cost a whole version number -- v0.6.0 died on a
+          # docstring spoof URL, v0.7.0 on scan.py's own macOS-path detection regex
+          # (the secret scanner tripping itself). Both were unpublishable the moment
+          # they were tagged. Running the same inspector here means a content block
+          # fails the DISPATCH: no release branch, no PR, no tag, no burned version.
+          #
+          # This scans the BUILT wheel + sdist (all of src/seshat/), which is a
+          # strictly larger corpus than export_agent_bundles.py's per-entry
+          # _scan_public_content -- that only covers allowlisted bundle sources, so
+          # shipped-but-not-bundled Python (exactly scan.py) was never pre-scanned.
+          #
+          # dist/, build/ and release-staging/ are gitignored, so this leaves the
+          # tree clean for the `git diff --check` and bundle-diff guards below.
+          python -m pip install --quiet build
+          rm -rf dist release-staging
+          mkdir -p release-staging
+          python -m build
+          python scripts/inspect_release_artifacts.py \
+            --dist dist \
+            --output release-staging/python-artifact-report.json
 
       - name: Validate synchronized release candidate
         shell: bash
