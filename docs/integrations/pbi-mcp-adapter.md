@@ -40,10 +40,10 @@ flag/behavior drift until Microsoft ships a release.
 | Default mode | readwrite | query-only (no write surface) |
 | Safe/opt-in mode | `--readonly` (opt-in flag; this repo's committed example sets it) | n/a -- server is inherently query-only |
 | Dangerous flag | `--skipconfirmation` (bypasses per-write confirmation) -- **forbidden in this repo, in every mode** | n/a |
-| Auth | local Desktop/Fabric session | tenant setting + Build permission; Copilot license required for Generate Query |
+| Auth | Entra ID (interactive) / Service Principal (`--authmode=serviceprincipal`) / access-token env var -- machine-local, never committed; the live-Desktop mode rides the local session | tenant setting + Build permission; Copilot license required for Generate Query |
 | RLS enforcement | n/a (local file, not a live query surface) | **not enforced for Service Principal callers** -- a real gap if a query depends on row-level security |
 | Preview status | Public preview, no published release | Public preview, no published release |
-| CI-suitability | No -- local, stateful, requires a running Desktop/Fabric session; not something CI can spin up headlessly | No -- requires tenant/license prerequisites and queries live published state; not a hermetic CI dependency either |
+| CI-suitability | Yes for the PBIP/TMDL file-on-disk mode (deterministic, no tenant, no Desktop required); No for the live Desktop/Fabric modes | No -- requires tenant/license prerequisites and queries live published state; not a hermetic CI dependency |
 
 *(access date for the above: 2026-07-23; see Microsoft's own pages under See also for
 current details, since preview products move.)*

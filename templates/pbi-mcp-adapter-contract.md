@@ -84,7 +84,7 @@ This is never a new truth or approval.
 
 ## Secrets handling (Principle IX)
 
-- **Credentials:** local Power BI Desktop / Fabric session state only; no separate DSN.
+- **Credentials:** Entra ID (interactive) / Service Principal / access-token env var, all machine-local (never committed); the live-Desktop mode rides the local session. No separate DSN.
   Any local launcher config lives in the git-ignored `.mcp.json` (copied from the
   committed `.mcp.json.example`), never inline in a tracked file. The remote server's
   auth (tenant setting + Build permission + Copilot license for Generate Query) is
