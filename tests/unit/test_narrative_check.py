@@ -664,6 +664,15 @@ def _second_yaml_block(text: str) -> str:
     return blocks[1]
 
 
+def _taught_question_measures(taught_data: dict) -> dict[str, set[str]]:
+    """``{question id: {contracts the taught map binds to it}}``."""
+    q_measures: dict[str, set[str]] = {}
+    for visual in taught_data["visuals"]:
+        for qid in visual["decision_questions"]:
+            q_measures.setdefault(qid, set()).add(visual["contract"])
+    return q_measures
+
+
 def test_taught_binding_map_example_parses_and_passes(tmp_path: Path):
     # HONESTY (SC-002-class): the bi-analyst-knowledge pack's OWN taught
     # binding-map example must parse under seshat.binding-map/v1 AND pass the
@@ -687,10 +696,7 @@ def test_taught_binding_map_example_parses_and_passes(tmp_path: Path):
     # the contract-to-question LINKAGE (#474) is exercised rather than bypassed:
     # citing one shared measure everywhere would make every other visual bind a
     # metric its own question never cites.
-    q_measures: dict[str, set[str]] = {}
-    for visual in taught_data["visuals"]:
-        for qid in visual["decision_questions"]:
-            q_measures.setdefault(qid, set()).add(visual["contract"])
+    q_measures = _taught_question_measures(taught_data)
     q_blocks = "\n".join(
         f"""  - id: {qid}
     decision: taught decision {qid}

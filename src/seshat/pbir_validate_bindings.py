@@ -308,63 +308,77 @@ def _unresolved_alias_finding(
     )
 
 
+class _WrapperContext(NamedTuple):
+    """Where a wrapper was found: the wrapper key, its file, and its locator.
+
+    Threaded as ONE value so the classifier and its helpers stay inside the
+    argument budget while every finding can still name its exact origin.
+    """
+
+    kind: str
+    path: Path
+    locator: str
+
+
 def _grounded_ref(
-    kind: str,
+    context: _WrapperContext,
     prop: str,
     source_ref: dict[str, Any],
     aliases: dict[str, str],
-    path: Path,
-    locator: str,
 ) -> tuple[_FieldRef | None, BindingFinding | None]:
     """Ground a well-formed ``SourceRef`` on its entity, direct or by alias."""
     entity = source_ref.get("Entity")
     if isinstance(entity, str):
-        return _FieldRef(path=path, kind=kind, entity=entity, prop=prop), None
+        return _field_ref(context, entity, prop), None
     alias = source_ref.get("Source")
     if not isinstance(alias, str):
         return None, _malformed_binding_finding(
-            kind,
+            context.kind,
             f"{prop!r} names neither SourceRef.Entity nor SourceRef.Source",
-            locator,
+            context.locator,
         )
     resolved = aliases.get(alias)
     if resolved is None:
-        return None, _unresolved_alias_finding(kind, alias, prop, locator)
-    return _FieldRef(path=path, kind=kind, entity=resolved, prop=prop), None
+        return None, _unresolved_alias_finding(
+            context.kind, alias, prop, context.locator
+        )
+    return _field_ref(context, resolved, prop), None
+
+
+def _field_ref(context: _WrapperContext, entity: str, prop: str) -> _FieldRef:
+    return _FieldRef(path=context.path, kind=context.kind, entity=entity, prop=prop)
 
 
 def _classified_ref(
     node: dict[str, Any],
-    kind: str,
+    context: _WrapperContext,
     aliases: dict[str, str],
-    path: Path,
-    locator: str,
 ) -> tuple[_FieldRef | None, BindingFinding | None]:
-    """``(reference, defect)`` for one node's ``kind`` wrapper.
+    """``(reference, defect)`` for one node's wrapper of ``context.kind``.
 
     Both ``None`` only when the node declares no binding of that kind at all;
     a declared binding always yields one or the other -- never silence.
     """
-    inner = node.get(kind)
+    inner = node.get(context.kind)
     if not _declares_binding(inner):
         return None, None
     assert isinstance(inner, dict)
     prop = inner.get("Property")
     if not isinstance(prop, str):
         return None, _malformed_binding_finding(
-            kind, "it carries no string Property", locator
+            context.kind, "it carries no string Property", context.locator
         )
     expression = inner.get("Expression")
     if not isinstance(expression, dict):
         return None, _malformed_binding_finding(
-            kind, f"{prop!r} carries no Expression object", locator
+            context.kind, f"{prop!r} carries no Expression object", context.locator
         )
     source_ref = expression.get("SourceRef")
     if not isinstance(source_ref, dict):
         return None, _malformed_binding_finding(
-            kind, f"{prop!r} has no Expression.SourceRef", locator
+            context.kind, f"{prop!r} has no Expression.SourceRef", context.locator
         )
-    return _grounded_ref(kind, prop, source_ref, aliases, path, locator)
+    return _grounded_ref(context, prop, source_ref, aliases)
 
 
 def _refs_in_doc(
@@ -377,7 +391,8 @@ def _refs_in_doc(
     defects: list[BindingFinding] = []
     for node in _iter_dicts(doc):
         for kind in ("Column", "Measure"):
-            ref, defect = _classified_ref(node, kind, aliases, path, locator)
+            context = _WrapperContext(kind=kind, path=path, locator=locator)
+            ref, defect = _classified_ref(node, context, aliases)
             if ref is not None:
                 refs.append(ref)
             elif defect is not None:

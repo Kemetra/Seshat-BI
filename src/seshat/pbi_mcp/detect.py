@@ -136,11 +136,21 @@ def _classify_servers(servers: dict) -> str:
     relevant = _powerbi_servers(servers)
     if not relevant:
         return CONFIG_ABSENT
-    every_arg_list = [_server_args(entry) for entry in relevant]
+    flagged = _flag_verdict([_server_args(entry) for entry in relevant])
+    return flagged if flagged is not None else _transport_verdict(relevant)
+
+
+def _flag_verdict(every_arg_list: list[list[str]]) -> str | None:
+    """The verdicts a FLAG forces regardless of transport shape, or None."""
     if _carries_forbidden_flag(every_arg_list):
         return CONFIG_FORBIDDEN_FLAG
     if _requests_write_mode(every_arg_list):
         return CONFIG_WRITE_MODE
+    return None
+
+
+def _transport_verdict(relevant: list[dict]) -> str:
+    """The shape-driven verdict once no flag has forced one."""
     local = [entry for entry in relevant if _is_local_server(entry)]
     remote = [
         entry

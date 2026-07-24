@@ -565,6 +565,11 @@ def _check_gap_not_framed(
     return []
 
 
+def _is_measure_id_list(value: Any) -> bool:
+    """True when ``cites.measures`` is a list of contract-id strings."""
+    return isinstance(value, list) and all(isinstance(m, str) for m in value)
+
+
 def _check_question_fields(
     qid: str, question: dict[str, Any]
 ) -> list[NarrativeFinding]:
@@ -598,9 +603,7 @@ def _check_question_fields(
         )
         return findings
     measures = cites.get("measures")
-    if measures is not None and (
-        not isinstance(measures, list) or any(not isinstance(m, str) for m in measures)
-    ):
+    if measures is not None and not _is_measure_id_list(measures):
         findings.append(
             NarrativeFinding(
                 "invalid_question_field",
