@@ -20,7 +20,7 @@
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 [SETUP] Create `skills/bi-analyst-knowledge/INDEX.md` skeleton:
+- [x] T001 [SETUP] Create `skills/bi-analyst-knowledge/INDEX.md` skeleton:
       purpose line, route list (8 cards + derivation route + story order +
       2 examples), and the pack-level stop rules -- no metric meaning here
       (contracts + `retail-kpi-knowledge` own meaning), no invented numbers,
@@ -29,7 +29,7 @@
       knowledge packs and the client's own contracts/profile at runtime --
       domain instances live in the worked examples, never in a card or
       route (Principle VII).
-- [ ] T002 [SETUP] Freeze the narrative-brief schema in
+- [x] T002 [SETUP] Freeze the narrative-brief schema in
       `skills/bi-analyst-knowledge/derivation-route.md`: machine-readable
       front section (table id, contract citations, ranked questions each
       carrying a framing-card id, story order, [GAP] list) + human-first body.
@@ -37,33 +37,35 @@
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-- [ ] T003 [US1] Author the derivation route body: inputs bounded to exactly
+- [x] T003 [US1] Author the derivation route body: inputs bounded to exactly
       two committed artifacts (approved metric contracts, source-profile);
       ranked-question procedure; the grounded-only rule (a question may cite
       only measures/dims/facts those artifacts contain); [GAP] entry format
       (question + missing source fact + unlocking feed) (FR-003).
-- [ ] T004 [US1] Author `skills/bi-analyst-knowledge/story-order.md`:
+- [x] T004 [US1] Author `skills/bi-analyst-knowledge/story-order.md`:
       overview -> what changed -> why/where -> action, carrying the five
       decision-driven elements (priority, thresholds, signals, driver
       relationships, action cues); single-page zone variant.
 
 ## Phase 3: User Story 1 - Author a narrative brief from approved contracts (P1)
 
-- [ ] T005 [P] [US1] Author framing cards 1-4 (trend-anomaly,
+- [x] T005 [P] [US1] Author framing cards 1-4 (trend-anomaly,
       period-variance, contribution-mix, concentration). Each card: question
       shape -> required inputs (contract kinds + dims) -> visual guidance ->
       statistical guardrail -> so-what template.
-- [ ] T006 [P] [US1] Author framing cards 5-8 (rate-decomposition,
+- [x] T006 [P] [US1] Author framing cards 5-8 (rate-decomposition,
       segment-behavior, benchmark-threshold, signal-vs-noise). Card 8 is the
       guardrails home: control bands as labeled DISPLAY DERIVATIONS of
       approved measures, seasonality-aware comparison, minimum-sample caveat
       for rates, correlation-vs-causation caution; regression/forecasting/
       significance testing explicitly out of scope (FR-002a).
-- [ ] T007 [P] [US1] Author `example-c086-retail.md`: sanitize the ex-2
+- [x] T007 [P] [US1] Author `example-specialty-retail.md` (shipped name; was
+      drafted as `example-c086-retail.md`, renamed in the generality pass):
+      sanitize the ex-2
       analyst redesign (generic divisions, no client numbers, no PII, no
       hosts) showing the full decision -> framing -> visual -> so-what chain
       including at least one [GAP] entry (Principles VII, IX).
-- [ ] T008 [P] [US1] Author `example-weekly-business-review.md`: generic
+- [x] T008 [P] [US1] Author `example-weekly-business-review.md`: generic
       retail WBR example (variance vs prior-year, ABC concentration,
       threshold callouts) grounded in the research anchors cited in the spec.
 
@@ -85,22 +87,32 @@
 
 ## Phase 5: User Story 3 - Read-only narrative check (P2)
 
-- [ ] T012 [US3] Write failing tests first in
-      `tests/unit/test_narrative_check.py` with three fixture classes:
-      (a) clean brief+guidance -> no findings, exit 0, output states
+- [x] T012 [US3] Write failing tests first in
+      `tests/unit/test_narrative_check.py` (+ `_cli.py`) with three fixture
+      classes: (a) clean brief -> no findings, exit 0, output states
       "evidence, not approval"; (b) mutated fixtures -> exactly the named
-      findings (orphan visual, bare-total headline, missing question on a
-      page, undeclared story order, [GAP] rendered as a visual), non-zero
-      exit; (c) malformed/missing brief -> fail-closed parse error naming the
-      problem, never "classified nothing" with exit 0 (FR-007, FR-008,
-      FR-009).
-- [ ] T013 [US3] Implement `src/seshat/narrative_check.py`: parse the T002
-      front section + design-guidance binding map; emit categorical findings
-      with named blockers; no score, no approval verb, stdlib only.
-- [ ] T014 [US3] Wire the CLI verb (`seshat narrative-check --table <table>
+      findings (bare-total headline, undeclared/mismatched story order, [GAP]
+      framed as a question, ungrounded cite, stale contract revision, invalid
+      stage, empty callout, missing guardrail basis), non-zero exit; (c)
+      malformed/missing brief -> fail-closed parse error naming the problem,
+      never "classified nothing" with exit 0 (FR-007, FR-008, FR-009).
+      SCOPE: the two BINDING-MAP fixtures (orphan visual, missing question on a
+      page) are visible `@pytest.mark.skip` -- they need the Phase-B three-way
+      map (T010), which does not exist yet; never faked as a silent pass.
+- [x] T013 [US3] Implement `src/seshat/narrative_check.py`: parse the T002
+      front section; enforce the derivation-route.md checker rules (grounded
+      cites, fresh contract revisions, story-order coverage/stage-match/
+      non-empty overview, headline comparison, guardrail basis, GAP-not-framed);
+      emit categorical findings with named blockers; no score, no approval verb,
+      stdlib + PyYAML + the shared hardened read-only git probe. The
+      design-guidance BINDING-MAP check is a Phase-B addition (T010), documented
+      as out of scope here (see phase-c-verification.md).
+- [x] T014 [US3] Wire the CLI verb (`seshat narrative-check --table <table>
       [--report DIR] --format {text,json}`) following the house pattern in
       `src/seshat/cli/`; document exit meanings in the verb help; register in
-      the command surface the same way the other helpers are.
+      the command surface the same way the other helpers are (parser fn + call
+      + lazy dispatch + capability-manifest entry -- the manifest oracle caught
+      the missing entry).
 
 ## Phase 6: Polish & Cross-Cutting
 
@@ -112,10 +124,12 @@
 - [ ] T016 [P] [POLISH] Sanitization + secrets scan over every new file
       (no C086 client numbers outside the sanitized example, no PII, no DSN,
       no absolute paths) -- Principles VII and IX (FR-010).
-- [ ] T017 [POLISH] Verify each spec Success Criterion: SC-001/SC-002 by
+- [x] T017 [POLISH] Verify each spec Success Criterion: SC-001/SC-002 by
       walking the worked example end to end, SC-003 against the T012
       fixtures, SC-004 by tracing the #452 four sub-gaps to their shipped
-      countermeasures. Record the walk in the PR/commit body.
+      countermeasures. Recorded in `phase-c-verification.md`. (SC-002 walk
+      confirmed the full worked-example brief passes the checker;
+      flow-style YAML verified.)
 - [ ] T018 [POLISH] CHANGELOG entry + close-the-loop comment on #452
       linking spec/plan/tasks and the shipped artifacts.
 
