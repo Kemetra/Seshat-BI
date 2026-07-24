@@ -27,6 +27,8 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+## [0.7.1] -- 2026-07-24
+
 ### Fixed
 - Release inspector false positive that blocked the v0.7.0 PyPI publish: the
   macOS-user-path detection pattern in `seshat/pbi_mcp/scan.py` spelled the
