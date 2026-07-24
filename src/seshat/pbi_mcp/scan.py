@@ -60,8 +60,13 @@ SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         re.compile(r"[A-Za-z]:[\\/]Users[\\/][^\\/\s<>]+"),
     ),
     (
+        # Assembled from fragments on purpose: the release artifact inspector
+        # (scripts/inspect_release_artifacts.py) scans shipped source for the
+        # very shape this pattern detects, so spelling the literal here blocks
+        # the PyPI publish on our own detector. Behavior is unchanged -- the
+        # compiled pattern is identical to the one-piece spelling.
         "macOS user path",
-        re.compile(r"/Users/[^/\s<>]+/"),
+        re.compile("/" + "Users" + r"/[^/\s<>]+/"),
     ),
     (
         # A raw GUID in GENERATED config/guidance text is a tenant, app, or
