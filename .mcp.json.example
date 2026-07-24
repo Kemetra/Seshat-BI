@@ -2,7 +2,7 @@
   "mcpServers": {
     "powerbi-modeling": {
       "command": "tools/powerbi-modeling-mcp/extension/server/powerbi-modeling-mcp.exe",
-      "args": ["--read-write", "--compatibility=powerbi"]
+      "args": ["--readonly", "--compatibility=powerbi"]
     }
   }
 }
