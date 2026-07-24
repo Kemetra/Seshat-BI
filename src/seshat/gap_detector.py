@@ -65,6 +65,45 @@ def _read_text(path: Path) -> str | None:
         return None
 
 
+_INTENT_DOC = "see docs/tools/dashboard-gap-detector.md for the documented shape"
+
+
+def _load_page_intent(path: Path) -> tuple[dict[str, Any] | None, str | None]:
+    """Load an EXPLICITLY supplied page-intent: (mapping, None) on success, else
+    (None, named error). The four unusable shapes -- missing, unreadable, invalid
+    YAML, wrong shape -- get four distinct messages (#453): a Markdown file parses
+    as VALID YAML (a list, not a mapping), so the old catch-all "not found or
+    unreadable" misnamed the real problem and read as false comfort."""
+    import yaml
+
+    rel = str(path)
+    if not path.exists():
+        return None, f"page-intent not found at {rel}"
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return None, f"page-intent unreadable at {rel} -- check permissions/encoding"
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return None, (
+            f"page-intent at {rel} is not valid YAML -- fix the syntax; {_INTENT_DOC}"
+        )
+    if not isinstance(data, dict):
+        kind = type(data).__name__
+        return None, (
+            f"page-intent at {rel} is valid YAML but parses as a {kind}, not a "
+            f"mapping -- the top level must be a mapping with a `questions:` list; "
+            f"{_INTENT_DOC}"
+        )
+    if not isinstance(data.get("questions"), list):
+        return None, (
+            f"page-intent at {rel} has no `questions:` list -- nothing to "
+            f"classify; {_INTENT_DOC}"
+        )
+    return data, None
+
+
 # --------------------------------------------------------------------------- #
 # page-intent (the human-supplied required set) -- read, never authored
 # --------------------------------------------------------------------------- #
@@ -443,15 +482,21 @@ def build_gap_inventory(
     tdir = root / "mappings" / table
     intent_rel = str(page_intent_path) if page_intent_path else "(none supplied)"
 
-    page_intent = (
-        _load_yaml_mapping(Path(page_intent_path)) if page_intent_path else None
-    )
+    page_intent: dict[str, Any] | None = None
+    intent_error: str | None = None
+    if page_intent_path:
+        page_intent, intent_error = _load_page_intent(Path(page_intent_path))
     if page_intent is None:
+        gap = intent_error or (
+            f"page-intent not supplied ({intent_rel}) -- pass --page-intent <file>; "
+            f"{_INTENT_DOC}"
+        )
         return {
             "table": table,
             "page_intent_path": intent_rel,
             "items": [],
-            "document_gaps": [f"page-intent not found or unreadable at {intent_rel}"],
+            "document_gaps": [gap],
+            "page_intent_error": intent_error,
             "read_only": True,
         }
 
@@ -474,6 +519,7 @@ def build_gap_inventory(
         "page_intent_path": intent_rel,
         "items": classified,
         "document_gaps": _document_gaps(table, items, ctx),
+        "page_intent_error": None,
         "read_only": True,
     }
 
@@ -495,8 +541,17 @@ def _item_line(item: dict[str, Any]) -> str:
     return f"- [{item['status']}] {item['kind']} `{item['name']}`{tail}{cite}"
 
 
-def _inventory_section(items: list[dict[str, Any]]) -> list[str]:
+def _inventory_section(
+    items: list[dict[str, Any]], intent_unusable: bool = False
+) -> list[str]:
     lines = ["## Design-blocking gap inventory", ""]
+    if intent_unusable:
+        # An unusable EXPLICIT page-intent must never read as a clean empty
+        # classification (#453 false-comfort trap).
+        return lines + [
+            "Nothing was classified -- the supplied page-intent could not be "
+            "used (see `Inputs not available` below)."
+        ]
     if not items:
         return lines + ["No required items were classified."]
     seen_q: list[str] = []
@@ -527,7 +582,7 @@ def render_view(view: dict[str, Any]) -> str:
     """Render the ASCII read-only inventory (UTF-8 no BOM). Writes nothing."""
     lines = [f"# Dashboard Gap Detector -- {view['table']}", "", _HEADER, ""]
     lines += [f"page-intent: `{view['page_intent_path']}`", ""]
-    lines += _inventory_section(view["items"])
+    lines += _inventory_section(view["items"], bool(view.get("page_intent_error")))
     lines += _document_gap_section(view["document_gaps"])
     lines += _closing(view)
     return "\n".join(lines) + "\n"
