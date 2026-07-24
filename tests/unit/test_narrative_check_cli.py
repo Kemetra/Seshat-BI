@@ -72,8 +72,9 @@ prose
 
 def _workspace(tmp_path: Path, brief_body: str | None = None) -> Path:
     table_dir = tmp_path / "mappings" / "orders"
-    (table_dir / "contracts").mkdir(parents=True)
-    contract = table_dir / "contracts" / "NetSales.yaml"
+    # Contracts live under metrics/ -- the F009 store convention (not contracts/).
+    (table_dir / "metrics").mkdir(parents=True)
+    contract = table_dir / "metrics" / "NetSales.yaml"
     contract.write_text(_CONTRACT_TEXT, encoding="utf-8")
     (table_dir / "source-profile.md").write_text(_PROFILE_TEXT, encoding="utf-8")
     brief = table_dir / "narrative-brief.md"

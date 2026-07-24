@@ -239,7 +239,12 @@ def _check_contract_revisions(
             continue
         cid = contract.get("id")
         declared = contract.get("revision")
-        contract_path = repo_root / "mappings" / table / "contracts" / f"{cid}.yaml"
+        # The F009 contract store is mappings/<table>/metrics/<Measure>.yaml --
+        # the convention the rest of the kit uses (gap_detector,
+        # dashboard_coordinator, the --metrics-dir default). A real workspace
+        # ships no `contracts/` dir, so resolving there fail-closed EVERY real
+        # brief on `stale_contract_revision: cannot be located`.
+        contract_path = repo_root / "mappings" / table / "metrics" / f"{cid}.yaml"
         actual = _blob_sha(repo_root, contract_path)
         if actual is None:
             findings.append(
