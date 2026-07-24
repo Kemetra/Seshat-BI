@@ -28,6 +28,25 @@ explicitly identifies a public release event.
 ## [Unreleased]
 
 ### Added
+- `seshat narrative-check` -- offline, read-only checker for the analyst
+  narrative brief (`mappings/<table>/narrative-brief.md`) against the frozen
+  `seshat.narrative-brief/v1` schema: grounded-only cites, fresh contract
+  revision shas, story-order coverage + stage-match + non-empty overview, the
+  overview-headline comparison rule, the guardrail-basis-present rule, and
+  [GAP]-not-framed-as-a-question. Fails closed on a missing/unreadable/malformed
+  brief; emits named categorical findings; grants no approval. The
+  visual->question binding-map orphan check is a later (Phase-B) addition and is
+  out of this verb's scope. Phase C of spec 021; delivers User Story 3. (#452)
+- `bi-analyst-knowledge` skill pack (spec 021, Phase A + D) -- the analyst
+  judgment layer between semantic-model readiness and dashboard layout: a
+  derivation route (approved contracts + committed profile -> ranked
+  decision-questions), eight domain-neutral framing cards, a story-order rule,
+  and two worked examples, plus the frozen narrative-brief schema the checker
+  consumes. Docs-only; propagated to the distribution/integration bundles and
+  the public-knowledge allowlist alongside the other knowledge packs. The
+  Phase-B design-gate arming (dashboard-design narrative precondition + three-way
+  binding map) is intentionally NOT included here -- it remains owner-gated.
+  (#452)
 - `seshat pbir-validate-bindings` -- offline, read-only PBIR binding-resolution
   validator: resolves every bound field reference in a report's definition JSON
   (queryState projections, filters, sorts; `From`-alias aware) against the

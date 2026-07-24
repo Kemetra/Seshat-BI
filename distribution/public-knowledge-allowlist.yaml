@@ -1720,6 +1720,160 @@ entries:
     required: true
     generated_notice: manifest
     review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-156
+    source: skills/bi-analyst-knowledge/INDEX.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-analyst-knowledge/INDEX.md
+      codex: knowledge/bi-analyst-knowledge/INDEX.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-157
+    source: skills/bi-analyst-knowledge/SKILL.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-analyst-knowledge/SKILL.md
+      codex: knowledge/bi-analyst-knowledge/SKILL.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-158
+    source: skills/bi-analyst-knowledge/derivation-route.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-analyst-knowledge/derivation-route.md
+      codex: knowledge/bi-analyst-knowledge/derivation-route.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-159
+    source: skills/bi-analyst-knowledge/example-specialty-retail.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-analyst-knowledge/example-specialty-retail.md
+      codex: knowledge/bi-analyst-knowledge/example-specialty-retail.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-160
+    source: skills/bi-analyst-knowledge/example-weekly-business-review.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-analyst-knowledge/example-weekly-business-review.md
+      codex: knowledge/bi-analyst-knowledge/example-weekly-business-review.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-161
+    source: skills/bi-analyst-knowledge/framing-benchmark-threshold.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-analyst-knowledge/framing-benchmark-threshold.md
+      codex: knowledge/bi-analyst-knowledge/framing-benchmark-threshold.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-162
+    source: skills/bi-analyst-knowledge/framing-concentration.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-analyst-knowledge/framing-concentration.md
+      codex: knowledge/bi-analyst-knowledge/framing-concentration.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-163
+    source: skills/bi-analyst-knowledge/framing-contribution-mix.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-analyst-knowledge/framing-contribution-mix.md
+      codex: knowledge/bi-analyst-knowledge/framing-contribution-mix.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-164
+    source: skills/bi-analyst-knowledge/framing-period-variance.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-analyst-knowledge/framing-period-variance.md
+      codex: knowledge/bi-analyst-knowledge/framing-period-variance.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-165
+    source: skills/bi-analyst-knowledge/framing-rate-decomposition.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-analyst-knowledge/framing-rate-decomposition.md
+      codex: knowledge/bi-analyst-knowledge/framing-rate-decomposition.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-166
+    source: skills/bi-analyst-knowledge/framing-segment-behavior.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-analyst-knowledge/framing-segment-behavior.md
+      codex: knowledge/bi-analyst-knowledge/framing-segment-behavior.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-167
+    source: skills/bi-analyst-knowledge/framing-signal-vs-noise.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-analyst-knowledge/framing-signal-vs-noise.md
+      codex: knowledge/bi-analyst-knowledge/framing-signal-vs-noise.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-168
+    source: skills/bi-analyst-knowledge/framing-trend-anomaly.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-analyst-knowledge/framing-trend-anomaly.md
+      codex: knowledge/bi-analyst-knowledge/framing-trend-anomaly.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-169
+    source: skills/bi-analyst-knowledge/story-order.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-analyst-knowledge/story-order.md
+      codex: knowledge/bi-analyst-knowledge/story-order.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
   - entry_id: shared-kpi-sufficiency-template
     source: templates/kpi-sufficiency-card.md
     classification: public_knowledge
@@ -1893,6 +2047,17 @@ template_entries:
     targets:
       claude: skills/retail-kpi-knowledge/SKILL.md
       codex: skills/retail-kpi-knowledge/SKILL.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required platform wrapper or manifest for the generated public bundle.
+  - template_id: analyst-skill
+    source: distribution/bundle-templates/shared/skills/bi-analyst-knowledge/SKILL.md
+    classification: generated_wrapper
+    media_type: text/markdown
+    targets:
+      claude: skills/bi-analyst-knowledge/SKILL.md
+      codex: skills/bi-analyst-knowledge/SKILL.md
     transform: copy-normalized-v1
     required: true
     generated_notice: manifest
