@@ -13,8 +13,21 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+
+@dataclass(frozen=True)
+class _Console:
+    """How this invocation speaks: brand prefix + output format."""
+
+    prog: str
+    output_format: str
+
+    @property
+    def as_json(self) -> bool:
+        return self.output_format == "json"
 
 
 def _plan_document(plan: Any, outcome: str, reason: str | None) -> dict[str, Any]:
@@ -40,32 +53,44 @@ def _plan_document(plan: Any, outcome: str, reason: str | None) -> dict[str, Any
     }
 
 
+def _bullets(rows: list[str], empty: str) -> list[str]:
+    return rows or [empty]
+
+
+def _edit_lines(shared_edits: Any) -> list[str]:
+    if not shared_edits:
+        return ["  (none)"]
+    return [
+        f"  - {edit.path} -- "
+        f"{'remove file' if edit.remove_file else 'remove rows'}: "
+        f"{', '.join(edit.removed_rows)}"
+        for edit in shared_edits
+    ]
+
+
 def _render_plan_text(plan: Any, prog: str, repo: str) -> str:
     lines = [
         f"{prog} reset: plan for table '{plan.table}' (repo: {repo})",
         "removes (directories):",
     ]
-    lines += [f"  - {rel}/" for rel in plan.remove_dirs] or ["  (none)"]
+    lines += _bullets([f"  - {rel}/" for rel in plan.remove_dirs], "  (none)")
     lines.append("removes (files):")
-    lines += [f"  - {rel}" for rel in plan.remove_files] or ["  (none)"]
+    lines += _bullets([f"  - {rel}" for rel in plan.remove_files], "  (none)")
     lines.append("shared-file edits (only this table's rows):")
-    if not plan.shared_edits:
-        lines.append("  (none)")
-    for edit in plan.shared_edits:
-        action = "remove file" if edit.remove_file else "remove rows"
-        lines.append(f"  - {edit.path} -- {action}: {', '.join(edit.removed_rows)}")
+    lines += _edit_lines(plan.shared_edits)
     lines.append("preserves:")
-    lines += [f"  - {rel} (bronze landing)" for rel in plan.preserved] or [
-        "  (no bronze landing found)"
-    ]
+    lines += _bullets(
+        [f"  - {rel} (bronze landing)" for rel in plan.preserved],
+        "  (no bronze landing found)",
+    )
     lines.append(
         "never touched: the live database; other tables' files; orchestration/dagster/"
     )
     return "\n".join(lines)
 
 
-def _emit_refusal(prog: str, reason: str, detail: str, output_format: str) -> int:
-    if output_format == "json":
+def _emit_refusal(console: _Console, reason: str, detail: str) -> int:
+    if console.as_json:
         print(
             json.dumps(
                 {"outcome": "refused", "reason": reason, "detail": detail},
@@ -73,19 +98,48 @@ def _emit_refusal(prog: str, reason: str, detail: str, output_format: str) -> in
             )
         )
     else:
-        print(f"{prog} reset: refused ({reason}) -- {detail}", file=sys.stderr)
+        print(f"{console.prog} reset: refused ({reason}) -- {detail}", file=sys.stderr)
     return 2
 
 
-def _confirmed(prog: str, plan_text: str, output_format: str) -> str | None:
+def _emit_nothing_to_reset(console: _Console, plan: Any) -> int:
+    if console.as_json:
+        print(json.dumps(_plan_document(plan, "nothing_to_reset", None)))
+    else:
+        print(
+            f"{console.prog} reset: nothing to reset -- no derived artifacts "
+            f"found for table '{plan.table}'"
+        )
+    return 0
+
+
+def _emit_dry_run(console: _Console, document: dict[str, Any], plan_text: str) -> int:
+    if console.as_json:
+        print(json.dumps(document, indent=2, sort_keys=True))
+    else:
+        print(plan_text)
+        print(f"{console.prog} reset: dry run -- nothing was removed")
+    return 0
+
+
+def _refusal_detail(reason: str) -> str:
+    if reason == "confirmation_required":
+        return (
+            "stdin is not interactive and --yes was not passed; refusing "
+            "rather than hanging (pass --yes to confirm in automation)"
+        )
+    return "confirmation declined; nothing was removed"
+
+
+def _confirmed(console: _Console, plan_text: str) -> str | None:
     """None when confirmed; else the named refusal reason."""
-    if output_format != "json":
+    if not console.as_json:
         print(plan_text)
     if not _stdin_is_interactive():
         return "confirmation_required"
     try:
         answer = input(
-            f"{prog} reset: remove these paths and stage the deletions? [y/N] "
+            f"{console.prog} reset: remove these paths and stage the deletions? [y/N] "
         )
     except EOFError:
         return "declined"
@@ -112,18 +166,19 @@ def _post_reset_state(repo: str, table: str) -> dict[str, Any]:
     return {"stage": response.get("stage"), "outcome": response.get("outcome")}
 
 
-def _finish(document: dict[str, Any], prog: str, output_format: str) -> int:
+def _finish(console: _Console, document: dict[str, Any]) -> int:
     findings = document["verification_findings"]
-    if output_format == "json":
+    if console.as_json:
         print(json.dumps(document, indent=2, sort_keys=True))
     else:
-        _print_result_text(document, prog, findings)
+        _print_result_text(console, document, findings)
     return 1 if findings else 0
 
 
 def _print_result_text(
-    document: dict[str, Any], prog: str, findings: list[str]
+    console: _Console, document: dict[str, Any], findings: list[str]
 ) -> None:
+    prog = console.prog
     removed_count = len(document["remove_dirs"]) + len(document["remove_files"])
     print(
         f"{prog} reset: table '{document['table']}' reset -- "
@@ -143,70 +198,62 @@ def _print_result_text(
         print(f"{prog} reset: residual state -- {finding}", file=sys.stderr)
 
 
-def reset_main(args: argparse.Namespace) -> int:
-    from seshat import cli
+def _emit_execution_error(console: _Console, exc: Any) -> int:
+    print(f"{console.prog} reset: error -- {exc}", file=sys.stderr)
+    for rel in exc.removed:
+        print(f"{console.prog} reset: already removed -- {rel}", file=sys.stderr)
+    return 1
+
+
+def _execute_and_finish(
+    console: _Console, args: argparse.Namespace, plan: Any, document: dict[str, Any]
+) -> int:
     from seshat.reset import (
         ResetError,
         ResetExecutionError,
         execute_reset,
-        plan_reset,
         verify_reset,
     )
-
-    prog = cli._prog(args)
-    output_format = getattr(args, "output_format", "text")
-    try:
-        plan = plan_reset(args.repo, args.table)
-    except ResetError as exc:
-        return _emit_refusal(prog, exc.reason, str(exc), output_format)
-
-    if plan.is_empty:
-        if output_format == "json":
-            print(json.dumps(_plan_document(plan, "nothing_to_reset", None)))
-        else:
-            print(
-                f"{prog} reset: nothing to reset -- no derived artifacts "
-                f"found for table '{plan.table}'"
-            )
-        return 0
-
-    document = _plan_document(plan, "plan", None)
-    plan_text = _render_plan_text(plan, prog, args.repo)
-    if args.dry_run:
-        if output_format == "json":
-            print(json.dumps(document, indent=2, sort_keys=True))
-        else:
-            print(plan_text)
-            print(f"{prog} reset: dry run -- nothing was removed")
-        return 0
-
-    if not args.yes:
-        refusal = _confirmed(prog, plan_text, output_format)
-        if refusal is not None:
-            detail = (
-                "stdin is not interactive and --yes was not passed; refusing "
-                "rather than hanging (pass --yes to confirm in automation)"
-                if refusal == "confirmation_required"
-                else "confirmation declined; nothing was removed"
-            )
-            return _emit_refusal(prog, refusal, detail, output_format)
 
     try:
         report = execute_reset(args.repo, plan)
     except ResetError as exc:
-        return _emit_refusal(prog, exc.reason, str(exc), output_format)
+        return _emit_refusal(console, exc.reason, str(exc))
     except ResetExecutionError as exc:
-        print(f"{prog} reset: error -- {exc}", file=sys.stderr)
-        for rel in exc.removed:
-            print(f"{prog} reset: already removed -- {rel}", file=sys.stderr)
-        return 1
+        return _emit_execution_error(console, exc)
 
     document["outcome"] = "reset"
     document["staged"] = list(report.staged)
     document["staging_note"] = report.staging_note
     document["verification_findings"] = list(verify_reset(args.repo, plan.table, plan))
     document["post_reset"] = _post_reset_state(args.repo, plan.table)
-    return _finish(document, prog, output_format)
+    return _finish(console, document)
+
+
+def reset_main(args: argparse.Namespace) -> int:
+    from seshat import cli
+    from seshat.reset import ResetError, plan_reset
+
+    console = _Console(cli._prog(args), getattr(args, "output_format", "text"))
+    try:
+        plan = plan_reset(args.repo, args.table)
+    except ResetError as exc:
+        return _emit_refusal(console, exc.reason, str(exc))
+
+    if plan.is_empty:
+        return _emit_nothing_to_reset(console, plan)
+
+    document = _plan_document(plan, "plan", None)
+    plan_text = _render_plan_text(plan, console.prog, args.repo)
+    if args.dry_run:
+        return _emit_dry_run(console, document, plan_text)
+
+    if not args.yes:
+        refusal = _confirmed(console, plan_text)
+        if refusal is not None:
+            return _emit_refusal(console, refusal, _refusal_detail(refusal))
+
+    return _execute_and_finish(console, args, plan, document)
 
 
 __all__ = ["reset_main"]

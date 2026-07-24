@@ -164,22 +164,33 @@ def _known_tables(root: Path, table: str) -> frozenset[str]:
     return frozenset(names)
 
 
+def _token_bounded_at(name: str, token: str, start: int) -> bool:
+    """``token`` occurs at ``start`` and ends at ``_``, ``.``, or end-of-name."""
+    if not name.startswith(token, start):
+        return False
+    end = start + len(token)
+    return end == len(name) or name[end] in "_."
+
+
+def _claimed_by_longer(
+    name: str, table: str, start: int, known: frozenset[str]
+) -> bool:
+    """A LONGER known table id also matches at ``start`` and owns the occurrence."""
+    return any(
+        other != table
+        and len(other) > len(table)
+        and _token_bounded_at(name, other, start)
+        for other in known
+    )
+
+
 def _owned_occurrence(name: str, table: str, start: int, known: frozenset[str]) -> bool:
     """``table`` occurs at ``start`` bounded by ``_``/``.``/end, and no LONGER
     known table id also matches there (``orders`` never claims
     ``orders_archive``'s files)."""
-    end = start + len(table)
-    if not name.startswith(table, start):
+    if not _token_bounded_at(name, table, start):
         return False
-    if end != len(name) and name[end] not in "_.":
-        return False
-    return not any(
-        other != table
-        and len(other) > len(table)
-        and name.startswith(other, start)
-        and (start + len(other) == len(name) or name[start + len(other)] in "_.")
-        for other in known
-    )
+    return not _claimed_by_longer(name, table, start, known)
 
 
 def _migration_matches(filename: str, table: str, known: frozenset[str]) -> bool:
@@ -209,6 +220,18 @@ def _bounded_spans(name: str, token: str) -> list[tuple[int, int]]:
     return spans
 
 
+def _span_covered_by_other(
+    start: int, end: int, other_spans: list[tuple[int, int]]
+) -> bool:
+    """The span sits inside a strictly larger span of another table id."""
+    return any(
+        outer_start <= start
+        and end <= outer_end
+        and (outer_start, outer_end) != (start, end)
+        for outer_start, outer_end in other_spans
+    )
+
+
 def _name_carries_table(name: str, table: str, known: frozenset[str]) -> bool:
     """Exact-token occurrence of ``table`` in a generated artifact name that is
     not explainable as part of a LONGER known table id's occurrence."""
@@ -222,13 +245,7 @@ def _name_carries_table(name: str, table: str, known: frozenset[str]) -> bool:
         for span in _bounded_spans(name, other)
     ]
     return any(
-        not any(
-            outer_start <= start
-            and end <= outer_end
-            and (outer_start, outer_end) != (start, end)
-            for outer_start, outer_end in other_spans
-        )
-        for start, end in own
+        not _span_covered_by_other(start, end, other_spans) for start, end in own
     )
 
 
@@ -288,6 +305,20 @@ def _migration_files(root: Path, table: str, known: frozenset[str]) -> list[str]
     ]
 
 
+def _split_generated_entries(
+    base: Path, rel_dir: str, table: str, known: frozenset[str]
+) -> tuple[list[str], list[str]]:
+    """(dirs, files) directly under ``base`` carrying the table's exact token."""
+    dirs: list[str] = []
+    files: list[str] = []
+    for entry in sorted(base.iterdir()):
+        if not _name_carries_table(entry.name, table, known):
+            continue
+        target = dirs if entry.is_dir() and not entry.is_symlink() else files
+        target.append(f"{rel_dir}/{entry.name}")
+    return dirs, files
+
+
 def _generated_outputs(
     root: Path, table: str, known: frozenset[str]
 ) -> tuple[list[str], list[str]]:
@@ -297,39 +328,38 @@ def _generated_outputs(
     files: list[str] = []
     for rel_dir in _GENERATED_DIRS:
         base = root / Path(*rel_dir.split("/"))
-        if not base.is_dir():
-            continue
-        for entry in sorted(base.iterdir()):
-            if not _name_carries_table(entry.name, table, known):
-                continue
-            rel = f"{rel_dir}/{entry.name}"
-            if entry.is_dir() and not entry.is_symlink():
-                dirs.append(rel)
-            else:
-                files.append(rel)
+        if base.is_dir():
+            sub_dirs, sub_files = _split_generated_entries(base, rel_dir, table, known)
+            dirs.extend(sub_dirs)
+            files.extend(sub_files)
     return dirs, files
+
+
+def _run_scoped_to(run_dir: Path, table: str) -> bool:
+    """summary.json says the run covered EXACTLY this table; an unreadable
+    summary is unattributable and preserved (fail-safe for evidence)."""
+    if not run_dir.is_dir() or run_dir.is_symlink():
+        return False
+    try:
+        payload = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(payload, dict) and payload.get("tables") == [table]
 
 
 def _dagster_run_dirs(root: Path, table: str) -> list[str]:
     """Run dirs whose summary.json is scoped to EXACTLY this table (Q2).
 
     A run covering multiple tables is other tables' evidence too, so it is
-    preserved; an unreadable summary is unattributable and preserved
-    (fail-safe for evidence)."""
+    preserved."""
     runs = root / Path(*_DAGSTER_RUNS_REL.split("/"))
     if not runs.is_dir():
         return []
-    matched: list[str] = []
-    for run_dir in sorted(runs.iterdir()):
-        if not run_dir.is_dir() or run_dir.is_symlink():
-            continue
-        try:
-            payload = json.loads((run_dir / "summary.json").read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        if isinstance(payload, dict) and payload.get("tables") == [table]:
-            matched.append(f"{_DAGSTER_RUNS_REL}/{run_dir.name}")
-    return matched
+    return [
+        f"{_DAGSTER_RUNS_REL}/{run_dir.name}"
+        for run_dir in sorted(runs.iterdir())
+        if _run_scoped_to(run_dir, table)
+    ]
 
 
 def _preserved(root: Path, table: str) -> tuple[str, ...]:
@@ -380,13 +410,32 @@ class _Block:
     name: str | None
 
 
+def _unquoted(value: str) -> str:
+    """Strip one matching pair of surrounding quotes, if present."""
+    if len(value) < 2:
+        return value
+    if value[0] != value[-1] or value[0] not in "'\"":
+        return value
+    return value[1:-1]
+
+
 def _item_name(stripped: str) -> str | None:
     if not stripped.startswith("- name:"):
         return None
-    value = stripped[len("- name:") :].strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
-        value = value[1:-1]
+    value = _unquoted(stripped[len("- name:") :].strip())
     return value or None
+
+
+def _block_end(lines: list[str], start: int, indent: int) -> int:
+    """First line after ``start`` that is non-blank and not deeper-indented."""
+    end = start + 1
+    while end < len(lines):
+        follower = lines[end]
+        follower_indent = len(follower) - len(follower.lstrip(" "))
+        if follower.strip() and follower_indent <= indent:
+            break
+        end += 1
+    return end
 
 
 def _sequence_blocks(lines: list[str]) -> list[_Block]:
@@ -397,13 +446,7 @@ def _sequence_blocks(lines: list[str]) -> list[_Block]:
         if not stripped.startswith("- "):
             continue
         indent = len(line) - len(line.lstrip(" "))
-        end = index + 1
-        while end < len(lines):
-            follower = lines[end]
-            follower_indent = len(follower) - len(follower.lstrip(" "))
-            if follower.strip() and follower_indent <= indent:
-                break
-            end += 1
+        end = _block_end(lines, index, indent)
         blocks.append(_Block(index, end, indent, _item_name(stripped)))
     return blocks
 
@@ -434,6 +477,31 @@ def _verify_edit(rel: str, new_text: str, expected: object) -> None:
         raise _edit_refusal(rel)
 
 
+def _has_named_row(rows: object, name: str) -> bool:
+    """``rows`` is a list carrying a ``{name: <name>}`` mapping row."""
+    if not isinstance(rows, list):
+        return False
+    return any(isinstance(row, dict) and row.get("name") == name for row in rows)
+
+
+def _selectors_expected(document: dict, rows: list, selector: str) -> tuple[list, dict]:
+    """(surviving rows, expected post-edit document) without ``selector``."""
+    expected_rows = [
+        row
+        for row in rows
+        if not (isinstance(row, dict) and row.get("name") == selector)
+    ]
+    return expected_rows, {**document, "selectors": expected_rows}
+
+
+def _selector_block_ranges(lines: list[str], selector: str) -> list[tuple[int, int]]:
+    return [
+        (block.start, block.end)
+        for block in _sequence_blocks(lines)
+        if block.name == selector
+    ]
+
+
 def _selectors_edit(root: Path, table: str) -> SharedFileEdit | None:
     path = root / Path(*_SELECTORS_REL.split("/"))
     if not path.is_file():
@@ -441,22 +509,11 @@ def _selectors_edit(root: Path, table: str) -> SharedFileEdit | None:
     text, document = _read_shared(path, _SELECTORS_REL)
     selector = f"seshat_table_{table}"
     rows = document.get("selectors") if isinstance(document, dict) else None
-    if not isinstance(rows, list) or not any(
-        isinstance(row, dict) and row.get("name") == selector for row in rows
-    ):
+    if not _has_named_row(rows, selector):
         return None
-    expected_rows = [
-        row
-        for row in rows
-        if not (isinstance(row, dict) and row.get("name") == selector)
-    ]
-    expected = {**document, "selectors": expected_rows}
+    expected_rows, expected = _selectors_expected(document, rows, selector)
     lines = text.splitlines(keepends=True)
-    targets = [
-        (block.start, block.end)
-        for block in _sequence_blocks(lines)
-        if block.name == selector
-    ]
+    targets = _selector_block_ranges(lines, selector)
     if not targets:
         raise _edit_refusal(_SELECTORS_REL)
     new_text = _splice_out(lines, targets)
@@ -486,47 +543,74 @@ def _marts_model_names(root: Path, table: str) -> frozenset[str]:
     )
 
 
+def _group_rows_matching(
+    group: object, removable: dict[str, set[str]]
+) -> tuple[str, set[str]] | None:
+    """(group name, matched row names) when the group carries removable rows."""
+    if not isinstance(group, dict):
+        return None
+    allowed = removable.get(group.get("name"))
+    tables = group.get("tables")
+    if allowed is None or not isinstance(tables, list):
+        return None
+    matched = {
+        row.get("name")
+        for row in tables
+        if isinstance(row, dict) and row.get("name") in allowed
+    }
+    return (group.get("name"), matched) if matched else None
+
+
 def _rows_to_remove(
     document: dict, table: str, gold_names: frozenset[str]
 ) -> dict[str, set[str]]:
     removable = {"bronze": {table}, "migration_gold": set(gold_names)}
     planned: dict[str, set[str]] = {}
     for group in document.get("sources", []) or []:
-        if not isinstance(group, dict):
-            continue
-        group_name = group.get("name")
-        allowed = removable.get(group_name)
-        if allowed is None:
-            continue
-        tables = group.get("tables")
-        if not isinstance(tables, list):
-            continue
-        matched = {
-            row.get("name")
-            for row in tables
-            if isinstance(row, dict) and row.get("name") in allowed
-        }
-        if matched:
-            planned[group_name] = matched
+        match = _group_rows_matching(group, removable)
+        if match is not None:
+            planned[match[0]] = match[1]
     return planned
+
+
+def _surviving_group(group: object, planned: dict[str, set[str]]) -> object | None:
+    """The group with its planned rows removed; None when it empties entirely."""
+    if not (isinstance(group, dict) and group.get("name") in planned):
+        return group
+    removed = planned[group["name"]]
+    group["tables"] = [
+        row
+        for row in group.get("tables", [])
+        if not (isinstance(row, dict) and row.get("name") in removed)
+    ]
+    return group if group["tables"] else None
 
 
 def _expected_sources(document: dict, planned: dict[str, set[str]]) -> dict:
     expected = copy.deepcopy(document)
     remaining_groups: list = []
     for group in expected.get("sources", []) or []:
-        if isinstance(group, dict) and group.get("name") in planned:
-            removed = planned[group["name"]]
-            group["tables"] = [
-                row
-                for row in group.get("tables", [])
-                if not (isinstance(row, dict) and row.get("name") in removed)
-            ]
-            if not group["tables"]:
-                continue
-        remaining_groups.append(group)
+        survivor = _surviving_group(group, planned)
+        if survivor is not None:
+            remaining_groups.append(survivor)
     expected["sources"] = remaining_groups
     return expected
+
+
+def _removes_whole_group(
+    name: str | None, planned: dict[str, set[str]], surviving: set
+) -> bool:
+    """The plan empties this top-level group, so its whole block goes."""
+    return name in planned and name not in surviving
+
+
+def _removes_row(
+    block: _Block, group: str | None, planned: dict[str, set[str]], surviving: set
+) -> bool:
+    """The block is a planned row inside a group that otherwise survives."""
+    if group not in planned or group not in surviving:
+        return False
+    return block.name in planned[group]
 
 
 def _sources_row_ranges(
@@ -545,15 +629,41 @@ def _sources_row_ranges(
     for block in blocks:
         if block.indent == top_indent:
             current_group = block.name
-            if current_group in planned and current_group not in surviving:
+            if _removes_whole_group(current_group, planned, surviving):
                 ranges.append((block.start, block.end))
-        elif (
-            current_group in planned
-            and current_group in surviving
-            and block.name in planned[current_group]
-        ):
+        elif _removes_row(block, current_group, planned, surviving):
             ranges.append((block.start, block.end))
     return ranges
+
+
+def _require_sources_mapping(document: object) -> dict:
+    if not isinstance(document, dict):
+        raise ResetError(
+            "shared_file_unreadable",
+            f"{_SOURCES_REL} is not a YAML mapping; fix it by hand before resetting",
+        )
+    return document
+
+
+def _removed_row_labels(planned: dict[str, set[str]]) -> tuple[str, ...]:
+    return tuple(
+        f"{group}: {name}"
+        for group in sorted(planned)
+        for name in sorted(planned[group])
+    )
+
+
+def _spliced_sources_text(
+    text: str, planned: dict[str, set[str]], expected: dict
+) -> str:
+    """The byte-faithful post-edit text, verified against ``expected``."""
+    lines = text.splitlines(keepends=True)
+    ranges = _sources_row_ranges(lines, planned, expected)
+    if not ranges:
+        raise _edit_refusal(_SOURCES_REL)
+    new_text = _splice_out(lines, ranges)
+    _verify_edit(_SOURCES_REL, new_text, expected)
+    return new_text
 
 
 def _sources_edit(root: Path, table: str) -> SharedFileEdit | None:
@@ -561,20 +671,12 @@ def _sources_edit(root: Path, table: str) -> SharedFileEdit | None:
     if not path.is_file():
         return None
     text, document = _read_shared(path, _SOURCES_REL)
-    if not isinstance(document, dict):
-        raise ResetError(
-            "shared_file_unreadable",
-            f"{_SOURCES_REL} is not a YAML mapping; fix it by hand before resetting",
-        )
+    document = _require_sources_mapping(document)
     planned = _rows_to_remove(document, table, _marts_model_names(root, table))
     if not planned:
         return None
     expected = _expected_sources(document, planned)
-    removed_rows = tuple(
-        f"{group}: {name}"
-        for group in sorted(planned)
-        for name in sorted(planned[group])
-    )
+    removed_rows = _removed_row_labels(planned)
     if not expected["sources"]:
         # Every group emptied: the shared file is entirely this table's
         # residue, so the plan removes the file itself.
@@ -585,17 +687,11 @@ def _sources_edit(root: Path, table: str) -> SharedFileEdit | None:
             new_text="",
             remove_file=True,
         )
-    lines = text.splitlines(keepends=True)
-    ranges = _sources_row_ranges(lines, planned, expected)
-    if not ranges:
-        raise _edit_refusal(_SOURCES_REL)
-    new_text = _splice_out(lines, ranges)
-    _verify_edit(_SOURCES_REL, new_text, expected)
     return SharedFileEdit(
         path=_SOURCES_REL,
         removed_rows=removed_rows,
         original_text=text,
-        new_text=new_text,
+        new_text=_spliced_sources_text(text, planned, expected),
     )
 
 
@@ -639,10 +735,8 @@ def plan_reset(repo_root: Path | str, table: str) -> ResetPlan:
 # ---------------------------------------------------------------------------
 
 
-def _validate_plan(root: Path, plan: ResetPlan) -> None:
-    """Fail closed BEFORE removing anything: every planned path still exists,
-    resolves strictly under root with no symlink escapes, and every shared
-    file is byte-identical to what the plan was computed against."""
+def _validate_removals(root: Path, plan: ResetPlan) -> None:
+    """Every planned removal still exists and resolves strictly under root."""
     for rel in [*plan.remove_dirs, *plan.remove_files]:
         target = root / Path(*rel.split("/"))
         if not (target.exists() or target.is_symlink()):
@@ -651,23 +745,39 @@ def _validate_plan(root: Path, plan: ResetPlan) -> None:
                 f"planned path no longer exists: {rel} -- re-run the plan",
             )
         _guard_removable_within_root(root, rel)
+
+
+def _reread_shared(root: Path, edit: SharedFileEdit) -> str:
+    target = root / Path(*edit.path.split("/"))
+    try:
+        with target.open("r", encoding="utf-8", newline="") as handle:
+            return handle.read()
+    except (OSError, UnicodeError) as exc:
+        raise ResetError(
+            "plan_stale",
+            f"planned shared file could not be re-read: {edit.path} "
+            f"({exc.__class__.__name__}) -- re-run the plan",
+        ) from exc
+
+
+def _validate_shared_edits(root: Path, plan: ResetPlan) -> None:
+    """Every shared file is byte-identical to what the plan was computed
+    against, and its path resolves strictly under root."""
     for edit in plan.shared_edits:
-        target = root / Path(*edit.path.split("/"))
         _guard_removable_within_root(root, edit.path)
-        try:
-            with target.open("r", encoding="utf-8", newline="") as handle:
-                current = handle.read()
-        except (OSError, UnicodeError) as exc:
-            raise ResetError(
-                "plan_stale",
-                f"planned shared file could not be re-read: {edit.path} "
-                f"({exc.__class__.__name__}) -- re-run the plan",
-            ) from exc
-        if current != edit.original_text:
+        if _reread_shared(root, edit) != edit.original_text:
             raise ResetError(
                 "shared_file_changed",
                 f"{edit.path} changed since the plan was computed -- re-run the plan",
             )
+
+
+def _validate_plan(root: Path, plan: ResetPlan) -> None:
+    """Fail closed BEFORE removing anything: every planned path still exists,
+    resolves strictly under root with no symlink escapes, and every shared
+    file is byte-identical to what the plan was computed against."""
+    _validate_removals(root, plan)
+    _validate_shared_edits(root, plan)
 
 
 def _remove_planned_paths(root: Path, plan: ResetPlan) -> list[str]:
@@ -759,25 +869,52 @@ def execute_reset(repo_root: Path | str, plan: ResetPlan) -> ResetReport:
 # ---------------------------------------------------------------------------
 
 
-def _shared_residue(root: Path, table: str, plan: ResetPlan) -> list[str]:
-    findings: list[str] = []
+def _selectors_residue(root: Path, table: str) -> list[str]:
     selectors = root / Path(*_SELECTORS_REL.split("/"))
-    if selectors.is_file():
-        try:
-            document = yaml.safe_load(selectors.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, yaml.YAMLError):
-            findings.append(f"{_SELECTORS_REL} could not be verified")
-            document = None
-        rows = document.get("selectors") if isinstance(document, dict) else []
-        if isinstance(rows, list) and any(
-            isinstance(row, dict) and row.get("name") == f"seshat_table_{table}"
-            for row in rows
-        ):
-            findings.append(
-                f"{_SELECTORS_REL} still carries selector seshat_table_{table}"
-            )
+    if not selectors.is_file():
+        return []
+    try:
+        document = yaml.safe_load(selectors.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, yaml.YAMLError):
+        return [f"{_SELECTORS_REL} could not be verified"]
+    rows = document.get("selectors") if isinstance(document, dict) else []
+    if _has_named_row(rows, f"seshat_table_{table}"):
+        return [f"{_SELECTORS_REL} still carries selector seshat_table_{table}"]
+    return []
+
+
+def _shared_residue(root: Path, table: str, plan: ResetPlan) -> list[str]:
+    findings = _selectors_residue(root, table)
     findings.extend(_sources_residue(root, table, plan))
     return findings
+
+
+def _planned_source_rows(plan: ResetPlan) -> set[str]:
+    """The ``group: name`` labels the plan claimed to remove from _sources.yml."""
+    return {
+        row
+        for edit in plan.shared_edits
+        if edit.path == _SOURCES_REL
+        for row in edit.removed_rows
+    }
+
+
+def _row_is_residue(group: dict, row: dict, table: str, planned_rows: set[str]) -> bool:
+    """The row is this table's bronze row or one the plan claimed to remove."""
+    if group.get("name") == "bronze" and row.get("name") == table:
+        return True
+    return f"{group.get('name')}: {row.get('name')}" in planned_rows
+
+
+def _group_residue(group: object, table: str, planned_rows: set[str]) -> list[str]:
+    """Residual-row findings within one sources group."""
+    if not isinstance(group, dict):
+        return []
+    return [
+        f"{_SOURCES_REL} still carries row {group.get('name')}: {row.get('name')}"
+        for row in group.get("tables") or []
+        if isinstance(row, dict) and _row_is_residue(group, row, table, planned_rows)
+    ]
 
 
 def _sources_residue(root: Path, table: str, plan: ResetPlan) -> list[str]:
@@ -788,23 +925,10 @@ def _sources_residue(root: Path, table: str, plan: ResetPlan) -> list[str]:
         document = yaml.safe_load(sources.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, yaml.YAMLError):
         return [f"{_SOURCES_REL} could not be verified"]
-    planned_rows = {
-        row
-        for edit in plan.shared_edits
-        if edit.path == _SOURCES_REL
-        for row in edit.removed_rows
-    }
+    planned_rows = _planned_source_rows(plan)
     findings: list[str] = []
     for group in document.get("sources", []) if isinstance(document, dict) else []:
-        if not isinstance(group, dict):
-            continue
-        for row in group.get("tables") or []:
-            if not isinstance(row, dict):
-                continue
-            label = f"{group.get('name')}: {row.get('name')}"
-            is_bronze_row = group.get("name") == "bronze" and row.get("name") == table
-            if is_bronze_row or label in planned_rows:
-                findings.append(f"{_SOURCES_REL} still carries row {label}")
+        findings.extend(_group_residue(group, table, planned_rows))
     return findings
 
 

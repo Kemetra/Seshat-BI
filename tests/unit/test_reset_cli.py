@@ -51,14 +51,19 @@ def test_non_interactive_without_yes_is_refused(capsys, tmp_path: Path) -> None:
     assert (repo / "mappings" / "orders").is_dir()
 
 
+def _interactive_reset(repo: Path, monkeypatch: pytest.MonkeyPatch, answer: str) -> int:
+    """Run ``seshat reset orders`` with a fake interactive stdin answering."""
+    fake_stdin = io.StringIO(answer)
+    fake_stdin.isatty = lambda: True  # type: ignore[method-assign]
+    monkeypatch.setattr("sys.stdin", fake_stdin)
+    return main(["reset", "orders", "--repo", str(repo)], prog="seshat")
+
+
 def test_declined_confirmation_removes_nothing(
     capsys, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     repo = _onboarded_repo(tmp_path)
-    fake_stdin = io.StringIO("n\n")
-    fake_stdin.isatty = lambda: True  # type: ignore[method-assign]
-    monkeypatch.setattr("sys.stdin", fake_stdin)
-    rc = main(["reset", "orders", "--repo", str(repo)], prog="seshat")
+    rc = _interactive_reset(repo, monkeypatch, "n\n")
     err = capsys.readouterr().err
     assert rc == 2
     assert "refused (declined)" in err
@@ -69,10 +74,7 @@ def test_confirmed_on_stdin_executes(
     capsys, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     repo = _onboarded_repo(tmp_path)
-    fake_stdin = io.StringIO("y\n")
-    fake_stdin.isatty = lambda: True  # type: ignore[method-assign]
-    monkeypatch.setattr("sys.stdin", fake_stdin)
-    rc = main(["reset", "orders", "--repo", str(repo)], prog="seshat")
+    rc = _interactive_reset(repo, monkeypatch, "y\n")
     assert rc == 0
     assert not (repo / "mappings" / "orders").exists()
 
