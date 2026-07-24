@@ -48,6 +48,26 @@ explicitly identifies a public release event.
   shape in the adapter-compatibility matrix. New `pbi-mcp-doctor` companion
   skill in both public bundles. No mutation path exists; F016 stays parked
   pending the owner-ratified ADR (slice 5). (#450)
+- `seshat reset <table>` -- tear ONE table back to a fresh Source stage by
+  removing its complete derived file-set: `mappings/<table>/` (incl.
+  `dbt-evidence/`), the exact-token silver/gold DDL migrations (full
+  `_create_(silver|gold)_<table>` token match with a prefix-collision guard --
+  `orders` never sweeps `orders_archive`), generated `warehouse/gold`/
+  `warehouse/schema` outputs, the three nested `dbt/models/*/<table>/` folders,
+  only this table's rows in the shared dbt files (surgical, byte-faithful edit
+  of `dbt/selectors.yml` + `dbt/models/sources/_sources.yml`), and the
+  table-scoped dagster run evidence under `.seshat/dagster/runs/` (never the
+  materialized `orchestration/dagster/` project). Preserves the bronze landing
+  and every other table; never touches a live database. The whole plan is
+  validated (containment, no symlink escapes) BEFORE anything is removed; the
+  deletions are staged (`git add -A -- <paths>`) so `seshat check` runs clean
+  afterwards (the #430 workaround made native); post-reset verification
+  inspects the actual artifacts and `seshat next --table` reports a fresh
+  Source stage. `--dry-run` prints the exact plan; interactive confirm with
+  `--yes` for automation (fail-closed refusal on non-interactive stdin);
+  `--format json` emits the stable reset document. The consolidated skill's
+  "Resetting / re-running a project" section now points at the verb first,
+  keeping the manual set as fallback. (#433)
 - `seshat adopt-pbip measure-sync` -- governed, file-only upsert of APPROVED
   metric-contract measures into one table of an already-adopted PBIP semantic
   model. Serves only models recorded by an accepted adoption manifest

@@ -187,6 +187,20 @@ capabilities:
     references:
       dispatch: "scaffold-source"
 
+  - id: reset-table
+    name: "seshat reset"
+    summary: "Tears ONE table back to a fresh Source stage: removes its complete derived file-set (mappings/, exact-token migrations, nested dbt models, shared dbt rows, table-scoped dagster run evidence), preserves the bronze landing, stages the deletions; confirm-gated (--yes), never touches a live database."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "reset"
+    documentation: "docs/superpowers/specs/2026-07-23-seshat-reset-verb-design.md"
+    references:
+      dispatch: "reset"
+
   - id: scaffold-design
     name: "seshat scaffold-design"
     summary: "Writes the six Stage-6/7 design + handoff blank templates (dashboard-page-blueprint.yaml, visual-spec.yaml, report-composition.yaml, design/grids/16x9-grid.yaml, handoff/bi-handoff-pack.md, handoff/handoff-review-checklist.md) into the workspace so a pip-only workspace has the Dashboard-Ready / Publish-Ready artifacts to fill."
