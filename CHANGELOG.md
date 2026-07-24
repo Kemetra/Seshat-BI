@@ -28,6 +28,15 @@ explicitly identifies a public release event.
 ## [Unreleased]
 
 ### Added
+- `seshat adopt-pbip measure-sync` -- governed, file-only upsert of APPROVED
+  metric-contract measures into one table of an already-adopted PBIP semantic
+  model. Serves only models recorded by an accepted adoption manifest
+  (`assess` -> `scaffold` first); each measure passes the owner-approval
+  inventory gate and re-verifies through the generate->verify chain (L3 +
+  D1-D11) before any write; the upsert is idempotent (insert/update/skip),
+  atomic (one bad contract refuses the whole run), and proves the
+  partition/M-source region byte-identical after every write. `--dry-run`
+  prints the plan; partition/M content is never echoed to any output. (#457)
 - `seshat pbir-validate-bindings` -- offline, read-only PBIR binding-resolution
   validator: resolves every bound field reference in a report's definition JSON
   (queryState projections, filters, sorts; `From`-alias aware) against the
