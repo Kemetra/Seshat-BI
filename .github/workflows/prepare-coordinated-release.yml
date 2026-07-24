@@ -245,7 +245,14 @@ jobs:
           #
           # dist/, build/ and release-staging/ are gitignored, so this leaves the
           # tree clean for the `git diff --check` and bundle-diff guards below.
-          python -m pip install --quiet build
+          # Must match release.yml's install set: the inspector shells out to
+          # `python -m twine check --strict`, so a missing twine is reported as a
+          # blocking_reason indistinguishable from a real artifact defect (it read
+          # "returned non-zero exit status 1" with "No module named twine" logged
+          # above it). Do NOT reach for --skip-twine: the strict check validates
+          # that the README renders on PyPI, which is a genuine publish blocker
+          # and exactly the kind of post-tag surprise this step exists to catch.
+          python -m pip install --quiet build twine
           rm -rf dist release-staging
           mkdir -p release-staging
           python -m build
