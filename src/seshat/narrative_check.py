@@ -286,9 +286,20 @@ def _check_stage(qid: str, stage: Any) -> list[NarrativeFinding]:
     ]
 
 
+def _is_nonempty_str(value: Any) -> bool:
+    """True for a string with non-whitespace content (a stated value)."""
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _names_comparison(value: Any) -> bool:
+    """True when ``value`` is a stated comparison, i.e. a non-empty string that
+    is not the literal ``none`` -- the headline rule's condition, named so it is
+    a single predicate rather than a complex inline conditional."""
+    return _is_nonempty_str(value) and value.strip().lower() != "none"
+
+
 def _check_callout(qid: str, question: dict[str, Any]) -> list[NarrativeFinding]:
-    callout = question.get("callout")
-    if isinstance(callout, str) and callout.strip():
+    if _is_nonempty_str(question.get("callout")):
         return []
     return [
         NarrativeFinding("empty_callout", qid, f"question {qid} has an empty callout")
@@ -302,11 +313,7 @@ def _check_headline(
     if stage != "overview":
         return []
     comparison = question.get("comparison")
-    if (
-        isinstance(comparison, str)
-        and comparison.strip()
-        and comparison.strip().lower() != "none"
-    ):
+    if _names_comparison(comparison):
         return []
     return [
         NarrativeFinding(
@@ -336,7 +343,7 @@ def _check_framing(qid: str, question: dict[str, Any]) -> list[NarrativeFinding]
         return []
     guardrail = question.get("guardrail") or {}
     basis = guardrail.get("basis") if isinstance(guardrail, dict) else None
-    if isinstance(basis, str) and basis.strip():
+    if _is_nonempty_str(basis):
         return []
     return [
         NarrativeFinding(
