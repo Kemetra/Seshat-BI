@@ -1930,6 +1930,17 @@ template_entries:
     required: true
     generated_notice: manifest
     review_reason: Required governed Dagster orchestration workflow for both public bundles.
+  - template_id: pbi-mcp-doctor-skill
+    source: distribution/bundle-templates/shared/skills/pbi-mcp-doctor/SKILL.md
+    classification: generated_wrapper
+    media_type: text/markdown
+    targets:
+      claude: skills/pbi-mcp-doctor/SKILL.md
+      codex: skills/pbi-mcp-doctor/SKILL.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required read-only Power BI MCP doctor/preflight routing for both public bundles.
   - template_id: claude-manifest
     source: distribution/bundle-templates/claude/.claude-plugin/plugin.json
     classification: generated_wrapper

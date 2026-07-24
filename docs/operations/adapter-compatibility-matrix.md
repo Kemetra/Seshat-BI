@@ -149,7 +149,13 @@ live in its `templates/adapter-version-record.md` copy. The load-bearing fixed e
   `https://api.fabric.microsoft.com/v1/mcp/powerbi` server are public preview with no
   published release, so the supported range stays `unknown` for both until a release
   ships and is smoke-tested; this does not affect the park (un-parking F016 still needs
-  a separate owner-ratified ADR).
+  a separate owner-ratified ADR). The named smoke test `<pbi-mcp-smoke>` now has a
+  defined EVIDENCE SHAPE (#450 slice 4): the read-only preflight artifact
+  `.seshat/powerbi-mcp-preflight.json` written by `seshat pbi-mcp preflight
+  --write-artifact` (derived evidence only -- capability discovery, protocol-version
+  check, target-allowlist validation; no score). Producing that artifact is NOT an
+  attestation and does not change this row: the status stays `unknown` until a named
+  owner attests a passed run per the rules below.
 - **Any row with an untested ceiling:** the range states the tested floor and marks the
   ceiling `unknown`; `blocking_reasons[]` records "upper bound untested -> ceiling unknown,
   not assumed compatible". Newer-is-fine is never assumed.
