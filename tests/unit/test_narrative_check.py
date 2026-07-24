@@ -683,13 +683,21 @@ def test_taught_binding_map_example_parses_and_passes(tmp_path: Path):
     contracts = sorted({v["contract"] for v in taught_data["visuals"]})
     assert qids, "the taught map must reference decision-question ids"
     assert contracts, "the taught map must bind approved contracts"
+    # Each question cites exactly the contracts the taught map binds to it, so
+    # the contract-to-question LINKAGE (#474) is exercised rather than bypassed:
+    # citing one shared measure everywhere would make every other visual bind a
+    # metric its own question never cites.
+    q_measures: dict[str, set[str]] = {}
+    for visual in taught_data["visuals"]:
+        for qid in visual["decision_questions"]:
+            q_measures.setdefault(qid, set()).add(visual["contract"])
     q_blocks = "\n".join(
         f"""  - id: {qid}
     decision: taught decision {qid}
     stage: {"overview" if qid == "Q1" else "why_where"}
     framing: contribution-mix
     cites:
-      measures: [{contracts[0]}]
+      measures: [{", ".join(sorted(q_measures[qid]))}]
     comparison: {"same period last year" if qid == "Q1" else "none"}
     callout: taught callout {qid}"""
         for qid in qids
@@ -741,3 +749,177 @@ def test_real_worked_example_map_still_needs_phase_b_migration():
     result = check_binding_map(table="retail_store_sales", repo_root=_REPO_ROOT)
     assert result.status == "blocked"
     assert any(f.dimension == "no_front_section" for f in result.findings)
+
+
+# --------------------------------------------------------------------------- #
+# Adversarial: the frozen schema is validated, not assumed (#474)
+#
+# Every test below reproduces one step of issue #474: a brief or map that the
+# checker reported as `pass` while it did not satisfy the frozen v1 schema, or
+# whose malformed entries were silently filtered out of existence.
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize("key", ["table", "source_profile", "contracts", "questions"])
+def test_missing_required_top_level_key_blocks(workspace: Path, key: str):
+    # Renaming the key (rather than deleting a nested block) makes it ABSENT
+    # while keeping the document parseable.
+    _mutate_brief(workspace, f"{key}:", f"{key}_absent:")
+    result = _run(workspace)
+    assert result.status == "blocked"
+    assert any(
+        f.dimension == "missing_required_key" and key in f.locator
+        for f in result.findings
+    )
+
+
+def test_required_key_with_the_wrong_type_blocks(workspace: Path):
+    _mutate_brief(workspace, "table: orders", "table: [orders]")
+    result = _run(workspace)
+    assert result.status == "blocked"
+    assert any(f.dimension == "invalid_required_key" for f in result.findings)
+
+
+def test_table_key_must_name_the_table_being_checked(workspace: Path):
+    _mutate_brief(workspace, "table: orders", "table: not_orders")
+    result = _run(workspace)
+    assert result.status == "blocked"
+    finding = next(f for f in result.findings if f.dimension == "table_mismatch")
+    assert "not_orders" in finding.message
+
+
+def _strip_body(workspace: Path, replacement: str = "\n") -> None:
+    """Replace everything after the front section's closing fence."""
+    brief = workspace / "mappings" / "orders" / "narrative-brief.md"
+    text = brief.read_text(encoding="utf-8")
+    closing = text.index("```", text.index("```yaml") + 3)
+    brief.write_text(text[: closing + 3] + replacement, encoding="utf-8")
+
+
+def test_brief_without_a_human_first_body_blocks(workspace: Path):
+    """The body is what the named human reviews -- a front section alone is not
+    a reviewable brief."""
+    _strip_body(workspace)
+    result = _run(workspace)
+    assert result.status == "blocked"
+    assert any(f.dimension == "missing_body" for f in result.findings)
+
+
+def test_a_trailing_fenced_block_is_not_a_human_first_body(workspace: Path):
+    _strip_body(workspace, "\n```text\nnot prose\n```\n")
+    result = _run(workspace)
+    assert result.status == "blocked"
+    assert any(f.dimension == "missing_body" for f in result.findings)
+
+
+@pytest.mark.parametrize(
+    "field,removal",
+    [
+        (
+            "decision",
+            "    decision: Where is net sales concentrated so I know where "
+            "to defend?\n",
+        ),
+        (
+            "cites",
+            "    cites:\n      measures: [NetSales]\n      dimensions: [division]\n",
+        ),
+    ],
+)
+def test_question_missing_a_required_field_blocks(
+    workspace: Path, field: str, removal: str
+):
+    _mutate_brief(workspace, removal, "")
+    result = _run(workspace)
+    assert result.status == "blocked"
+    finding = next(
+        f for f in result.findings if f.dimension == "missing_question_field"
+    )
+    assert field in finding.message
+    assert finding.locator == "Q1"
+
+
+@pytest.mark.parametrize(
+    "block,dimension",
+    [
+        ("questions:\n", "malformed_question_entry"),
+        ("contracts:\n", "malformed_contract_entry"),
+        ("gaps:\n", "malformed_gap_entry"),
+    ],
+)
+def test_malformed_list_entry_blocks_instead_of_being_filtered(
+    workspace: Path, block: str, dimension: str
+):
+    """#474 step 6, brief side: a scalar where a mapping belongs was silently
+    discarded, so the document still passed."""
+    _mutate_brief(workspace, block, f"{block}  - malformed-scalar\n")
+    result = _run(workspace)
+    assert result.status == "blocked"
+    assert any(f.dimension == dimension for f in result.findings)
+
+
+def test_gap_missing_a_required_field_blocks(workspace: Path):
+    _mutate_brief(workspace, "    unlocking_feed: add a cost feed to the source\n", "")
+    result = _run(workspace)
+    assert result.status == "blocked"
+    finding = next(f for f in result.findings if f.dimension == "missing_gap_field")
+    assert "unlocking_feed" in finding.message
+
+
+def _add_uncited_contract(workspace: Path) -> None:
+    """Declare a SECOND approved contract in the brief that no question cites."""
+    contract = workspace / "mappings" / "orders" / "metrics" / "AverageBasket.yaml"
+    contract.write_text(
+        "metric: AverageBasket\nowner: analytics\nstatus: approved\n", encoding="utf-8"
+    )
+    _mutate_brief(
+        workspace,
+        "questions:",
+        f"  - id: AverageBasket\n    revision: {_blob_sha(contract)}\nquestions:",
+    )
+
+
+def test_visual_contract_must_be_cited_by_the_question_it_answers(
+    mapped_workspace: Path,
+):
+    """#474 steps 3-5: contract membership and question membership were checked
+    INDEPENDENTLY, so binding a visual to an approved contract the question it
+    claims to answer never cites still passed."""
+    _add_uncited_contract(mapped_workspace)
+    _mutate_map(
+        mapped_workspace,
+        "    contract: NetSales\n    decision_questions: [Q2]",
+        "    contract: AverageBasket\n    decision_questions: [Q2]",
+    )
+    result = _run_map(mapped_workspace)
+    assert result.status == "blocked"
+    finding = next(
+        f for f in result.findings if f.dimension == "contract_not_cited_by_question"
+    )
+    assert "AverageBasket" in finding.message
+    assert "Q2" in finding.message
+
+
+def test_clean_map_still_passes_the_linkage_check(mapped_workspace: Path):
+    """Guard: both clean visuals bind NetSales, which both questions cite."""
+    assert _run_map(mapped_workspace).status == "pass"
+
+
+def test_malformed_visual_entry_blocks_instead_of_being_discarded(
+    mapped_workspace: Path,
+):
+    """#474 step 6: `- malformed-scalar` beside a valid visual was silently
+    dropped and the map still passed."""
+    _mutate_map(mapped_workspace, "visuals:\n", "visuals:\n  - malformed-scalar\n")
+    result = _run_map(mapped_workspace)
+    assert result.status == "blocked"
+    assert any(f.dimension == "malformed_visual_entry" for f in result.findings)
+
+
+def test_malformed_page_entry_blocks_instead_of_being_discarded(
+    mapped_workspace: Path,
+):
+    _mutate_map(mapped_workspace, "pages:\n", "pages:\n  - 12345\n")
+    result = _run_map(mapped_workspace)
+    assert result.status == "blocked"
+    assert any(f.dimension == "malformed_page_entry" for f in result.findings)
