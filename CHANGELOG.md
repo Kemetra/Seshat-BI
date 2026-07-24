@@ -27,6 +27,19 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+### Fixed
+- Release inspector false positive that blocked the v0.7.0 PyPI publish: the
+  macOS-user-path detection pattern in `seshat/pbi_mcp/scan.py` spelled the
+  literal byte shape (`/Users/...`) that `scripts/inspect_release_artifacts.py`
+  scans shipped source for. `scan.py` is itself the secret scanner, so the
+  detector tripped on its own detection regex; no real path leaked (the matched
+  text was `/Users/[^/`, regex syntax, and a repo-wide scan found one hit). The
+  pattern is now assembled from fragments so the literal never appears in
+  shipped bytes -- the compiled regex is identical and every detection case
+  still fires. The inspector regex is left strict; no release guard was
+  weakened. v0.7.0's tag is frozen by the `v*` immutability ruleset, so the fix
+  ships as v0.7.1 (#478).
+
 ## [0.7.0] -- 2026-07-24
 
 ### Added
