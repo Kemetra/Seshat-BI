@@ -28,6 +28,28 @@ explicitly identifies a public release event.
 ## [Unreleased]
 
 ### Added
+- `seshat narrative-check` -- offline, read-only checker for the analyst
+  narrative brief (`mappings/<table>/narrative-brief.md`) against the frozen
+  `seshat.narrative-brief/v1` schema: grounded-only MEASURE cites (each must be a
+  declared approved contract), fresh contract revision shas, unique question ids,
+  valid framing + stage literals, story-order coverage + stage-match + non-empty
+  overview, the overview-headline comparison rule, the guardrail-basis-present
+  rule, and [GAP]-not-framed-as-a-question. Fails closed on a
+  missing/unreadable/malformed brief; emits named categorical findings; grants no
+  approval. Out of v1 scope: dimension-cite grounding (the frozen dotted-dimension
+  grammar does not match the bare-column profile format; a follow-up owner
+  reconciliation) and the visual->question binding-map orphan check (a Phase-B
+  addition). Phase C of spec 021; delivers User Story 3. (#452)
+- `bi-analyst-knowledge` skill pack (spec 021, Phase A + D) -- the analyst
+  judgment layer between semantic-model readiness and dashboard layout: a
+  derivation route (approved contracts + committed profile -> ranked
+  decision-questions), eight domain-neutral framing cards, a story-order rule,
+  and two worked examples, plus the frozen narrative-brief schema the checker
+  consumes. Docs-only; propagated to the distribution/integration bundles and
+  the public-knowledge allowlist alongside the other knowledge packs. The
+  Phase-B design-gate arming (dashboard-design narrative precondition + three-way
+  binding map) is intentionally NOT included here -- it remains owner-gated.
+  (#452)
 - `seshat pbi-mcp doctor|generate-config|preflight` -- the read-only Power BI
   MCP doctor family (#450 slices 2-4, the F016 slot; same Option-B narrow
   adapter-family shape as `seshat dagster doctor`). `doctor` detects the local

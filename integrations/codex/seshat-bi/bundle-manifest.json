@@ -38,6 +38,132 @@
     },
     {
       "classification": "public_knowledge",
+      "destination": "knowledge/bi-analyst-knowledge/INDEX.md",
+      "output_sha256": "34f279b6318dfd312d98c603d144d9ffc97f26b962915dcf5f50f2ca4152b521",
+      "source": "skills/bi-analyst-knowledge/INDEX.md",
+      "source_id": "kb-156",
+      "source_sha256": "34f279b6318dfd312d98c603d144d9ffc97f26b962915dcf5f50f2ca4152b521",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-analyst-knowledge/SKILL.md",
+      "output_sha256": "522f288b2475a7591fed9c1a7239809283c828a67c4f285d76d9c4208da91759",
+      "source": "skills/bi-analyst-knowledge/SKILL.md",
+      "source_id": "kb-157",
+      "source_sha256": "522f288b2475a7591fed9c1a7239809283c828a67c4f285d76d9c4208da91759",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-analyst-knowledge/derivation-route.md",
+      "output_sha256": "2f6a4c0f5a1458fb4fbed49657048b94d565aab046872fe19782978e92dbd3ed",
+      "source": "skills/bi-analyst-knowledge/derivation-route.md",
+      "source_id": "kb-158",
+      "source_sha256": "2f6a4c0f5a1458fb4fbed49657048b94d565aab046872fe19782978e92dbd3ed",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-analyst-knowledge/example-specialty-retail.md",
+      "output_sha256": "11a359c83217b4050be90640b1b6c36a20188a8c31c29df2845d35fef0f89df5",
+      "source": "skills/bi-analyst-knowledge/example-specialty-retail.md",
+      "source_id": "kb-159",
+      "source_sha256": "11a359c83217b4050be90640b1b6c36a20188a8c31c29df2845d35fef0f89df5",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-analyst-knowledge/example-weekly-business-review.md",
+      "output_sha256": "1c601ece72f9d537cec58a088b9040030497505f8a38e0612292f2d654131ac3",
+      "source": "skills/bi-analyst-knowledge/example-weekly-business-review.md",
+      "source_id": "kb-160",
+      "source_sha256": "1c601ece72f9d537cec58a088b9040030497505f8a38e0612292f2d654131ac3",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-analyst-knowledge/framing-benchmark-threshold.md",
+      "output_sha256": "a01acddb97d75f62b689d5e52bfddd4e34a84e12a0c9e81f503bc930f7bf0d07",
+      "source": "skills/bi-analyst-knowledge/framing-benchmark-threshold.md",
+      "source_id": "kb-161",
+      "source_sha256": "a01acddb97d75f62b689d5e52bfddd4e34a84e12a0c9e81f503bc930f7bf0d07",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-analyst-knowledge/framing-concentration.md",
+      "output_sha256": "400b3e933a2298ecc46656530f65e5291a29319c5ccbbd84540fb0f63117fad7",
+      "source": "skills/bi-analyst-knowledge/framing-concentration.md",
+      "source_id": "kb-162",
+      "source_sha256": "400b3e933a2298ecc46656530f65e5291a29319c5ccbbd84540fb0f63117fad7",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-analyst-knowledge/framing-contribution-mix.md",
+      "output_sha256": "e5b19c716963c12396114efbaf53beab2a8e9784a3f01c61828fad19186d7cda",
+      "source": "skills/bi-analyst-knowledge/framing-contribution-mix.md",
+      "source_id": "kb-163",
+      "source_sha256": "e5b19c716963c12396114efbaf53beab2a8e9784a3f01c61828fad19186d7cda",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-analyst-knowledge/framing-period-variance.md",
+      "output_sha256": "e36d88d8c5491e1108a1c7facb0fbab34a97f9b99dac61e0983cd0ce9bbc6f27",
+      "source": "skills/bi-analyst-knowledge/framing-period-variance.md",
+      "source_id": "kb-164",
+      "source_sha256": "e36d88d8c5491e1108a1c7facb0fbab34a97f9b99dac61e0983cd0ce9bbc6f27",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-analyst-knowledge/framing-rate-decomposition.md",
+      "output_sha256": "f0fd57b2bc2866dc4f41b76607514c7ae52b41d2e24a60c23438c194049fc5bd",
+      "source": "skills/bi-analyst-knowledge/framing-rate-decomposition.md",
+      "source_id": "kb-165",
+      "source_sha256": "f0fd57b2bc2866dc4f41b76607514c7ae52b41d2e24a60c23438c194049fc5bd",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-analyst-knowledge/framing-segment-behavior.md",
+      "output_sha256": "8939f08de8d21b886751b40f3d6464cb747faded010afd0f7ccba79606aae442",
+      "source": "skills/bi-analyst-knowledge/framing-segment-behavior.md",
+      "source_id": "kb-166",
+      "source_sha256": "8939f08de8d21b886751b40f3d6464cb747faded010afd0f7ccba79606aae442",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-analyst-knowledge/framing-signal-vs-noise.md",
+      "output_sha256": "b322ec154b139bb5eda6327ae3d12cebe96f171d558a48153f8f233d6311096b",
+      "source": "skills/bi-analyst-knowledge/framing-signal-vs-noise.md",
+      "source_id": "kb-167",
+      "source_sha256": "b322ec154b139bb5eda6327ae3d12cebe96f171d558a48153f8f233d6311096b",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-analyst-knowledge/framing-trend-anomaly.md",
+      "output_sha256": "78bba080c7ddfc9d3a1feba4024cbbb6dbbe2af8363c3b3b357c6faa93831975",
+      "source": "skills/bi-analyst-knowledge/framing-trend-anomaly.md",
+      "source_id": "kb-168",
+      "source_sha256": "78bba080c7ddfc9d3a1feba4024cbbb6dbbe2af8363c3b3b357c6faa93831975",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-analyst-knowledge/story-order.md",
+      "output_sha256": "0c0d34a81b445d60f2834499cbbfe19644041a334f0ba0c5aa13d24876540505",
+      "source": "skills/bi-analyst-knowledge/story-order.md",
+      "source_id": "kb-169",
+      "source_sha256": "0c0d34a81b445d60f2834499cbbfe19644041a334f0ba0c5aa13d24876540505",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
       "destination": "knowledge/bi-bigdata-knowledge/INDEX.md",
       "output_sha256": "ff4f5aceef52cbacac0785a1466fafd1f72e56425d2f75c1f5a23c36ea1a3101",
       "source": "skills/bi-bigdata-knowledge/INDEX.md",
@@ -1442,6 +1568,15 @@
     },
     {
       "classification": "generated_wrapper",
+      "destination": "skills/bi-analyst-knowledge/SKILL.md",
+      "output_sha256": "2ba299885d5222c13250eaf7bbbc60ee942bec142d9f5ed98d370fa68732e517",
+      "source": "distribution/bundle-templates/shared/skills/bi-analyst-knowledge/SKILL.md",
+      "source_id": "analyst-skill",
+      "source_sha256": "2ba299885d5222c13250eaf7bbbc60ee942bec142d9f5ed98d370fa68732e517",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "generated_wrapper",
       "destination": "skills/bi-bigdata-knowledge/SKILL.md",
       "output_sha256": "1660a73c00da06295d07783b78728790aafa2d55f88e728f87812bf611417a6a",
       "source": "distribution/bundle-templates/shared/skills/bi-bigdata-knowledge/SKILL.md",
@@ -1524,10 +1659,10 @@
     {
       "classification": "generated_wrapper",
       "destination": "skills/seshat-bi/SKILL.md",
-      "output_sha256": "3c9c4290ad57174842c67efd1cd7a255d67e97a9f69576879c916a3a5d7b75d1",
+      "output_sha256": "da6458ff68d9d31c5be2c0648cf725e358a4a71cf6aebc03ce11ebfc98195126",
       "source": "distribution/bundle-templates/shared/skills/seshat-bi/SKILL.md",
       "source_id": "router",
-      "source_sha256": "3c9c4290ad57174842c67efd1cd7a255d67e97a9f69576879c916a3a5d7b75d1",
+      "source_sha256": "da6458ff68d9d31c5be2c0648cf725e358a4a71cf6aebc03ce11ebfc98195126",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1595,10 +1730,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "27fc5a98798360de0621d0c3af1eac54862e52f67d0a5e8aeaa3539147d19a81",
+  "manifest_digest": "a43c5dd3b2a20f5f401e449fd803d15acb45b0e78fa6bf3d8c85a5fc98313170",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "787aa1710984a621f06d6375be5fafc65902bff4",
+  "source_revision": "81edf11e122bcefac461a8a34aa3ec4941a866e5",
   "target": "codex",
   "version": "0.6.1"
 }

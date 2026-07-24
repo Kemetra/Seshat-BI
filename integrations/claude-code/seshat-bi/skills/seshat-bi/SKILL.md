@@ -20,6 +20,8 @@ For subject reasoning, load only the relevant bundled skill:
 - Python/dataframe preparation: `bi-python-knowledge`
 - distributed data: `bi-bigdata-knowledge`
 - retail KPI meaning and contracts: `retail-kpi-knowledge`
+- decision-questions, framing, and story order from approved metrics:
+  `bi-analyst-knowledge`
 - Power BI design, review, theme, formatting, and PBIP adoption:
   `powerbi-workflows`
 - governed dbt prerequisite, plan, shadow build, and evidence review:

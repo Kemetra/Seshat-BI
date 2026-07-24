@@ -175,6 +175,7 @@ _DISPATCH: dict[str, Callable[[object], int]] = {
     "pbir-validate-bindings": _lazy(
         "..pbir_validate_bindings", "pbir_validate_bindings_main"
     ),
+    "narrative-check": _lazy("..narrative_check", "narrative_check_main"),
     "manifest": _lazy(".commands.manifest", "run_manifest"),
     "severity-posture": _lazy(".commands.severity_posture", "run_severity_posture"),
     "scaffold": _lazy(".commands.scaffold", "run_scaffold"),

@@ -345,3 +345,10 @@ skills:
     bundle_destination: skills/retail-kpi-knowledge/SKILL.md
     documentation: docs/install/agent-install.md
     status: shipped
+  - name: bi-analyst-knowledge
+    platforms: [claude, codex]
+    intent: Public analyst-judgment knowledge for decision-questions, framing, and story order.
+    wrapper_template: distribution/bundle-templates/shared/skills/bi-analyst-knowledge/SKILL.md
+    bundle_destination: skills/bi-analyst-knowledge/SKILL.md
+    documentation: docs/install/agent-install.md
+    status: shipped

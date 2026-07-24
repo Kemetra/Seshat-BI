@@ -408,6 +408,21 @@ capabilities:
       skill: "powerbi-dashboard-design"
       roadmap: "issue #454"
 
+  - id: narrative-check
+    name: "seshat narrative-check"
+    summary: "Read-only: validates a committed mappings/<table>/narrative-brief.md against the frozen seshat.narrative-brief/v1 schema (grounded-only cites, fresh contract-revision shas, story-order coverage + stage-match + non-empty overview, headline comparison, guardrail basis, [GAP]-not-framed); fails closed on a missing/unreadable/malformed brief; emits named categorical findings and grants no approval. The visual->question binding-map orphan check is a Phase-B addition, not in this verb's scope."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: dashboard_ready
+    command: "narrative-check"
+    documentation: "specs/021-analyst-narrative-layer/phase-c-verification.md"
+    references:
+      dispatch: "narrative-check"
+      roadmap: "issue #452"
+
   - id: pbi-mcp-doctor
     name: "seshat pbi-mcp"
     summary: "Read-only Power BI MCP doctor family (issue #450 slices 2-4, the F016 slot): detects the local environment (Node runtime, vendored modeling MCP, .mcp.json mode, PBIP on disk, semantic_model_ready state) and maps a declared task intent onto the governed surface recommendation; generates placeholder-only read-only .mcp.json templates and setup guidance behind a secret-scan refusal; runs a transport-mocked read-only preflight (capability discovery + target allowlist) that hard-refuses --skipconfirmation/write-mode configs and fails closed while semantic_model_ready has not passed. Grants no approval, emits no score; F016 stays parked -- no mutation path exists."

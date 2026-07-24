@@ -633,6 +633,48 @@ def _add_pbir_validate_bindings_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_narrative_check_parser(sub: argparse._SubParsersAction) -> None:
+    """Read-only narrative-brief checker (spec 021). The same check-surface
+    precedent as `pbir-validate-bindings` (it POLICES an artifact a writer --
+    the bi-analyst-knowledge derivation route -- already produced): it validates
+    `mappings/<table>/narrative-brief.md` against the frozen
+    `seshat.narrative-brief/v1` schema (grounded-only cites, fresh contract
+    revisions, story-order coverage, headline comparison, guardrail basis) and
+    fails closed on a missing/malformed brief. Read-only; exits non-zero on any
+    finding; grants NO approval (a clean check is evidence for the human design
+    review, never a substitute for it)."""
+    narrative = sub.add_parser(
+        "narrative-check",
+        help=(
+            "validate a narrative brief against the frozen schema (read-only; "
+            "grants no approval)"
+        ),
+        description=(
+            "Exit 0 = the brief is structurally sound (EVIDENCE for the human "
+            "design review, not an approval). Exit 1 = blocked: named findings, "
+            "or a fail-closed input problem (missing/unreadable/malformed brief)."
+        ),
+    )
+    narrative.add_argument(
+        "--table",
+        required=True,
+        metavar="TABLE",
+        help="the table id under mappings/<table>/ whose brief to check",
+    )
+    narrative.add_argument(
+        "--report",
+        default=".",
+        metavar="DIR",
+        help="workspace root containing mappings/<table>/ (default: .)",
+    )
+    narrative.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="output format (default: text)",
+    )
+
+
 def _add_manifest_parser(sub: argparse._SubParsersAction) -> None:
     """Rule-registry snapshot manifest (feature 043). Writes the golden inventory
     docs/rules/rules-manifest.json from the live registry. Test-only consumer
@@ -790,6 +832,7 @@ def _build_parser(prog: str = "retail") -> argparse.ArgumentParser:
     _add_pbir_geometry_parser(sub)
     _add_pbir_validate_blueprint_parser(sub)
     _add_pbir_validate_bindings_parser(sub)
+    _add_narrative_check_parser(sub)
     _add_manifest_parser(sub)
     _add_severity_posture_parser(sub)
     _add_scaffold_parser(sub)
