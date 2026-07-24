@@ -165,6 +165,52 @@ def _add_evidence_pack_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_reset_parser(sub: argparse._SubParsersAction) -> None:
+    """`reset` (issue #433): tear ONE table back to a fresh Source stage by
+    removing its complete DERIVED file-set (mappings/, exact-token silver/gold
+    migrations, nested dbt models, shared dbt rows, table-scoped dagster run
+    evidence) and STAGING the deletions (the #430 workaround made native).
+    Preserves the bronze landing and every other table; never touches a live
+    database. Prints the exact plan and asks for confirmation (`--yes` to
+    skip); refuses fail-closed when stdin is non-interactive without `--yes`."""
+    p = sub.add_parser(
+        "reset",
+        help=(
+            "remove ONE table's derived file-set (mappings/, migrations, dbt "
+            "models, shared-file rows, dagster run evidence) and stage the "
+            "deletions, returning it to a fresh Source stage; preserves the "
+            "bronze landing; never touches a live database"
+        ),
+    )
+    p.add_argument(
+        "table",
+        metavar="TABLE",
+        help="table id (the mappings/<table>/ directory name)",
+    )
+    p.add_argument("--repo", default=".", help="repo root to reset in")
+    p.add_argument(
+        "--dry-run",
+        dest="dry_run",
+        action="store_true",
+        help="print the exact removal plan and exit 0 without removing anything",
+    )
+    p.add_argument(
+        "--yes",
+        action="store_true",
+        help="skip the interactive confirmation (for automation)",
+    )
+    p.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("text", "json"),
+        default="text",
+        help=(
+            "'text' (default) is human-readable; 'json' emits the stable "
+            "reset document -- never a numeric score."
+        ),
+    )
+
+
 _FAMILIES: dict[str, Callable[[argparse._SubParsersAction], None]] = {
     "first_arrival": _add_init_project_parser,
     "scaffold_source": _add_scaffold_source_parser,
@@ -183,6 +229,7 @@ _FAMILIES: dict[str, Callable[[argparse._SubParsersAction], None]] = {
         ),
     ),
     "evidence_pack": _add_evidence_pack_parser,
+    "reset": _add_reset_parser,
     "blockers": partial(
         _add_readiness_report_parser,
         command="blockers",
