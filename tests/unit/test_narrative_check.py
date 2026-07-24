@@ -122,10 +122,13 @@ The owner defends the biggest contributors first...
 @pytest.fixture()
 def workspace(tmp_path: Path) -> Path:
     """A committed-shape workspace: an approved contract, a source-profile, and
-    a clean narrative brief citing the contract's current blob sha."""
+    a clean narrative brief citing the contract's current blob sha. The contract
+    lives under ``mappings/<table>/metrics/`` -- the F009 store convention the
+    rest of the kit uses (gap_detector, dashboard_coordinator, --metrics-dir);
+    NOT a ``contracts/`` dir, which no real workspace ships."""
     table_dir = tmp_path / "mappings" / "orders"
-    (table_dir / "contracts").mkdir(parents=True)
-    contract = table_dir / "contracts" / "NetSales.yaml"
+    (table_dir / "metrics").mkdir(parents=True)
+    contract = table_dir / "metrics" / "NetSales.yaml"
     contract.write_text(_CONTRACT_TEXT, encoding="utf-8")
     (table_dir / "source-profile.md").write_text(_PROFILE_TEXT, encoding="utf-8")
     brief = table_dir / "narrative-brief.md"
