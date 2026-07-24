@@ -23,7 +23,10 @@ retail dashboard-gaps --table retail_store_sales --page-intent ./page-intent.yam
 ### Page-intent shape
 
 The page-intent is a caller-supplied YAML file (a Principle-V human input; the
-detector reads it, never authors it):
+detector reads it, never authors it). The top level MUST be a YAML mapping with
+a `questions:` list; a copyable starting point ships at
+`templates/page-intent.example.yaml`. (Note: `--page-intent` belongs to
+`dashboard-gaps` only -- `dashboard-planner` takes `--proposal`/`--tuple`.)
 
 ```yaml
 questions:
@@ -71,6 +74,25 @@ A missing page-intent, or a missing `metrics/` / `source-map.yaml` /
 never an empty inventory that reads as "nothing blocks design", and never a
 fabricated required list. An item that could not be checked is reported as a gap,
 never a silent `Covered`.
+
+## Unusable page-intent (fail-closed, #453)
+
+An EXPLICITLY supplied `--page-intent` that cannot be used is a named input
+error, and the CLI exits `2` (a usage error, not a gate -- classification
+outcomes still always exit `0`). The four unusable shapes get four distinct
+messages, so a wrong file can never masquerade as a clean empty inventory:
+
+- the path does not exist -> `page-intent not found at <path>`;
+- the file cannot be read (permissions/encoding) -> `page-intent unreadable`;
+- the content is not valid YAML -> `page-intent ... is not valid YAML`;
+- the content is valid YAML but the wrong shape (e.g. a Markdown file, whose
+  bullets parse as a YAML *list*, or a mapping without a `questions:` list) ->
+  the error names the required shape and points here.
+
+`questions: []` is the documented shape with zero items -- a legitimate empty
+classification, exit `0`. Omitting `--page-intent` entirely also stays exit `0`
+with a document-level gap (the user did not point the tool at a file that
+failed).
 
 ## What it will NOT do (the scope wall)
 

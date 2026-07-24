@@ -1,0 +1,18 @@
+# page-intent -- the human-supplied required set for ONE dashboard page.
+# Input to `seshat dashboard-gaps --table <table> --page-intent <this file>`.
+# Shape contract: the TOP LEVEL is a YAML mapping with a `questions:` list.
+# A file of any other shape (Markdown, a bare list, prose) is refused with a
+# named format error -- it is never silently treated as "no gaps".
+# Full documentation: docs/tools/dashboard-gap-detector.md
+questions:
+  - question: "Q1 headline revenue"
+    metrics: ["TotalSales", "TransactionCount"]
+    dimensions: []
+  - question: "Q2 revenue by category"
+    metrics:
+      - name: "TotalSales"
+        depends_on: ["D1"]     # optional: unresolved-questions.md row id(s)
+    dimensions: ["category"]
+  - question: "Inventory on hand"
+    out_of_scope: true         # the human notes the table cannot serve this
+    metrics: ["InventoryOnHand"]

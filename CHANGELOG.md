@@ -55,6 +55,15 @@ explicitly identifies a public release event.
   (#432)
 
 ### Fixed
+- `seshat dashboard-gaps` no longer fails open on an unusable `--page-intent`: the
+  four unusable shapes (missing, unreadable, invalid YAML, valid-YAML-but-wrong-shape
+  -- e.g. a Markdown file, whose bullets parse as a YAML list) now get four distinct
+  named errors and CLI exit 2 (a usage error; classification outcomes still always
+  exit 0, no gate added). A wrong-format file previously collapsed into the
+  misleading "not found or unreadable" + "No required items were classified" with
+  exit 0 -- false comfort on a QA surface. A copyable
+  `templates/page-intent.example.yaml` now ships, and the shape is documented in the
+  `powerbi-workflows` skill routing. (#453)
 - S4b no longer false-flags a schema-qualified `ALTER TABLE <schema>.<t> ALTER COLUMN
   ... SET NOT NULL` inside a `BEGIN/COMMIT` block as "target schema undetermined". The
   inner `ALTER` keyword of the `ALTER COLUMN` sub-clause was re-evaluated as a
@@ -90,8 +99,14 @@ explicitly identifies a public release event.
 - `seshat-bi` skill: added a "Resetting / re-running a project" section documenting
   the interim manual reset file-set and the stage-deletions-before-`seshat check`
   workaround (until a native `seshat reset` verb ships). (#439)
-
-## [0.6.1] -- 2026-07-22
+- `powerbi-workflows` skill: documented the PBIR external-edit reload protocol --
+  Desktop serves its in-memory session and restores cached view state from
+  `.pbi/localSettings.json`, so agent-authored on-disk PBIR edits stay invisible
+  until Desktop is fully quit (`PBIDesktop.exe` AND `msmdsrv.exe` gone),
+  `localSettings.json` is moved aside for both `.Report` and `.SemanticModel`, and
+  the project is reopened via File Explorer (not the Recent list; "Don't Save" on
+  the stale-session prompt). The `pbip-workflow` gotcha row now points at the full
+  protocol instead of the insufficient "restart Desktop" tip. (#455)
 
 ### Fixed
 
