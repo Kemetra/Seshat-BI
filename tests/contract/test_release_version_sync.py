@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -272,3 +273,44 @@ def test_coordinated_release_commits_version_before_bundle_export() -> None:
         "the version-projection commit must stage the whole docs/install "
         "directory, or a projected-but-unstaged doc leaks into the bundle diff"
     )
+
+
+def test_pre_tag_artifact_inspection_installs_every_tool_it_shells_out_to() -> None:
+    """The dispatch workflow must inspect the built artifacts before any tag
+    exists, and must install every external tool the inspector shells out to.
+
+    inspect_release_artifacts.py reports a missing tool as a `blocking_reason`
+    rather than crashing, so an absent dependency is indistinguishable from a
+    real artifact defect. That is exactly how the first 0.7.1 dispatch failed:
+    the step installed `build` but not `twine`, and the inspector reported
+    "returned non-zero exit status 1". The requirement is DERIVED from the
+    inspector's own source so this keeps holding if it gains another dependency.
+    """
+
+    workflow = (ROOT / ".github/workflows/prepare-coordinated-release.yml").read_text(
+        encoding="utf-8"
+    )
+    inspector = (ROOT / "scripts/inspect_release_artifacts.py").read_text(
+        encoding="utf-8"
+    )
+
+    # The inspection must happen before the release branch is pushed, or a block
+    # costs a whole version number instead of a dispatch (v0.6.0 and v0.7.0 both
+    # died this way, post-tag and therefore unpublishable).
+    inspect_at = workflow.index("scripts/inspect_release_artifacts.py")
+    push_at = workflow.index("git push")
+    assert inspect_at < push_at, (
+        "artifact inspection must run BEFORE the release branch is pushed"
+    )
+    assert "python -m build" in workflow
+
+    # Every `python -m <tool>` the inspector invokes must be pip-installed by the
+    # step that runs it.
+    invoked = set(re.findall(r'"-m",\s*\n?\s*"([a-z_][a-z0-9_]*)"', inspector))
+    installed = " ".join(re.findall(r"python -m pip install ([^\n]*)", workflow))
+    for tool in sorted(invoked):
+        assert tool in installed, (
+            f"inspect_release_artifacts.py shells out to `python -m {tool}` but "
+            f"prepare-coordinated-release.yml never installs it; a missing tool "
+            f"is reported as a blocking_reason and looks like a real defect"
+        )
