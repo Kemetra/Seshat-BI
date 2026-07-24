@@ -27,6 +27,8 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+## [0.7.0] -- 2026-07-24
+
 ### Added
 - `seshat narrative-check` -- offline, read-only checker for the analyst
   narrative brief (`mappings/<table>/narrative-brief.md`) against the frozen

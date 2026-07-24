@@ -107,11 +107,13 @@ jobs:
               raise SystemExit("could not update exactly one project.version line")
           pyproject_path.write_text(updated_pyproject, encoding="utf-8")
 
-          install_doc_paths = (
-              Path("docs/install/agent-install.md"),
-              Path("docs/install/support-matrix.md"),
-              Path("docs/install/user-install.md"),
-          )
+          # Glob the whole directory, matching the authority that enforces this:
+          # test_install_docs_version_pins_match_the_packaged_version reconciles
+          # EVERY docs/install/*.md pin against pyproject. A hardcoded subset here
+          # silently drifts the moment a new install doc lands (client-quickstart.md
+          # did exactly that and failed the v0.7.0 release PR).
+          install_doc_paths = sorted(Path("docs/install").glob("*.md"))
+          projected_install_docs = []
           for install_doc_path in install_doc_paths:
               install_doc = install_doc_path.read_text(encoding="utf-8")
               updated_install_doc, replacements = re.subn(
@@ -119,11 +121,15 @@ jobs:
                   f"seshat-bi=={version}",
                   install_doc,
               )
-              if replacements != 1:
+              if replacements > 1:
                   raise SystemExit(
-                      f"{install_doc_path} must contain exactly one seshat-bi version pin"
+                      f"{install_doc_path} must contain at most one seshat-bi version pin"
                   )
-              install_doc_path.write_text(updated_install_doc, encoding="utf-8")
+              if replacements == 1:
+                  install_doc_path.write_text(updated_install_doc, encoding="utf-8")
+                  projected_install_docs.append(install_doc_path.as_posix())
+          if not projected_install_docs:
+              raise SystemExit("no docs/install/*.md file carries a seshat-bi version pin")
 
           marketplace_path = Path(".claude-plugin/marketplace.json")
           marketplace = json.loads(marketplace_path.read_text(encoding="utf-8"))
@@ -164,16 +170,24 @@ jobs:
         shell: bash
         run: |
           python - <<'PY'
+          import re
           import subprocess
+          from pathlib import Path
 
+          # Derived, not hardcoded: every docs/install/*.md that carries a pin was
+          # projected by the previous step, so it must appear in the diff. Keeping a
+          # literal list here is what let client-quickstart.md drift out of sync.
+          pin = re.compile(r"seshat-bi==\d+\.\d+\.\d+")
+          install_docs = {
+              path.as_posix()
+              for path in Path("docs/install").glob("*.md")
+              if pin.search(path.read_text(encoding="utf-8"))
+          }
           expected = {
               ".claude-plugin/marketplace.json",
               "CHANGELOG.md",
-              "docs/install/agent-install.md",
-              "docs/install/support-matrix.md",
-              "docs/install/user-install.md",
               "pyproject.toml",
-          }
+          } | install_docs
           changed = set(
               subprocess.run(
                   ["git", "diff", "--name-only"],
