@@ -16,7 +16,21 @@ import json
 
 def _render_text(projection: dict, prog: str = "seshat") -> str:
     """Human-readable rendering: status/evidence/blockers/next_action per table,
-    never a score. Mirrors ``demo/report.py``'s render_text posture."""
+    never a score. Mirrors ``demo/report.py``'s render_text posture.
+
+    Also states the #485 live-DB provenance limit for any table whose
+    silver/gold evidence is ``pass``: this surface reads committed YAML only and
+    that evidence carries no machine-checkable database identity, so a `pass`
+    cannot be correlated with the currently configured connection. The wording
+    is the SAME string `next` emits (``run_next.provenance_caveat_for_stages``),
+    never a second sentence for one condition.
+
+    This is the RENDER layer, so it adds no field to the closed
+    ``schemas/agent-status.schema.json`` contract and no derived value to
+    ``status_surface``'s verbatim projection -- both stay untouched.
+    """
+    from seshat.run_next import provenance_caveat_for_stages
+
     tables = projection.get("tables", [])
     if not tables:
         return f"{prog} status: no readiness-status.yaml committed under mappings/."
@@ -34,6 +48,9 @@ def _render_text(projection: dict, prog: str = "seshat") -> str:
         for reason in table.get("blocking_reasons", []):
             lines.append(f"  blocking_reason: {reason}")
         lines.append(f"  next_action: {table['next_action']}")
+        caveat = provenance_caveat_for_stages(table.get("stages"))
+        if caveat is not None:
+            lines.append(f"  caveat: {caveat['kind']}: {caveat['detail']}")
         lines.append("")
     return "\n".join(lines).rstrip("\n")
 

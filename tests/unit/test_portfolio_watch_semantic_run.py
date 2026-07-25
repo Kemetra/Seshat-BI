@@ -57,7 +57,18 @@ def _semantic_approval() -> list[dict[str, str]]:
     ]
 
 
-def _finalize_live_run(root: Path, scope: str = "scope_alpha") -> None:
+def _finalize_live_run(
+    root: Path, scope: str = "scope_alpha", *, commit_evidence: bool = False
+) -> None:
+    """Record one succeeded live run under the GIT-IGNORED scratch.
+
+    ``commit_evidence=True`` also renders AND COMMITS
+    ``orchestration/dagster/run-evidence/<run-id>.md``, which a `verified` live
+    state now requires -- the git-ignored scratch alone must not silence the
+    live-profile caveat, and the record is read from ``HEAD`` so merely rendering
+    it is not enough (issue #493). Left off by default so the tests that expect a
+    non-`verified` state keep exercising the scratch-only path.
+    """
     writer = evidence.EvidenceWriter(root, "run-live-001")
     writer.record(
         evidence.AssetOutcome(
@@ -75,6 +86,18 @@ def _finalize_live_run(root: Path, scope: str = "scope_alpha") -> None:
         [scope],
         evidence.RunMeta(started="2026-07-22T00:00:00Z"),
     )
+    if commit_evidence:
+        import subprocess
+
+        from seshat.dagster_adapter.evidence_render import write_run_evidence
+
+        write_run_evidence(root, "run-live-001")
+        record = "orchestration/dagster/run-evidence/run-live-001.md"
+        for argv in (
+            ["add", record],
+            ["commit", "--no-gpg-sign", "-m", "evidence: record run-live-001"],
+        ):
+            subprocess.run(["git", *argv], cwd=root, capture_output=True, check=True)
 
 
 def _scope(summary: dict) -> dict:
@@ -125,7 +148,7 @@ def test_approved_bound_contract_and_current_live_run_are_verified(
         generic_artifact(class_="pass"),
     )
     init_git_repo(tmp_path)
-    _finalize_live_run(tmp_path)
+    _finalize_live_run(tmp_path, commit_evidence=True)
 
     scope = _scope(pw.build_portfolio_watch_summary(tmp_path))
 
@@ -144,7 +167,7 @@ def test_live_run_matches_mapping_directory_when_display_table_differs(
         current_stage="gold_ready",
     )
     init_git_repo(tmp_path)
-    _finalize_live_run(tmp_path, "retail_store_sales")
+    _finalize_live_run(tmp_path, "retail_store_sales", commit_evidence=True)
 
     scope = _scope(pw.build_portfolio_watch_summary(tmp_path))
 

@@ -127,7 +127,24 @@ DIMENSIONS: tuple[str, ...] = (
 )
 
 CONTRACT_BINDING_STATES = frozenset({"missing", "blocked", "verified"})
-LIVE_VALIDATION_STATES = frozenset({"pending_live", "blocked", "stale", "verified"})
+
+# A succeeded live run whose ONLY record is the git-ignored
+# `.seshat/dagster/runs/` scratch, with no matching committed
+# `orchestration/dagster/run-evidence/<run-id>.md`. Distinct from
+# `pending_live` on purpose: validation DID run, so telling the reader to
+# install the db extra would be false -- what is missing is the reviewable
+# record, not the connection (issue #493).
+STATE_UNCOMMITTED_EVIDENCE = "uncommitted_evidence"
+
+LIVE_VALIDATION_STATES = frozenset(
+    {
+        "pending_live",
+        "blocked",
+        "stale",
+        STATE_UNCOMMITTED_EVIDENCE,
+        "verified",
+    }
+)
 LAST_DAGSTER_RUN_STATES = frozenset(
     {"unavailable", "invalid", "failed", "stale", "verified"}
 )
@@ -476,6 +493,147 @@ def _run_inputs_are_stale(root: Path, summary: dict[str, Any]) -> bool:
     return False
 
 
+_EVIDENCE_DIR_POSIX = "orchestration/dagster/run-evidence/"
+
+
+def _git_try(root: Path, *args: str) -> str | None:
+    """Run a read-only git command; ``None`` on ANY failure.
+
+    Deliberately tolerant, mirroring ``gitutil.git_check_ignore``'s exit-128
+    posture: a non-repo workspace, an unknown revision, or a path absent at
+    ``HEAD`` are all ANSWERS here ("cannot prove it") and must never raise into
+    a read-only reporting surface.
+
+    Carries the same ``safe.directory`` opt-in as ``_source_revision`` above.
+    Without it, a checkout owned by a different UID -- the norm for
+    container-mounted workspaces -- makes git refuse for "dubious ownership",
+    which this helper would convert to ``None`` and thereby report a correctly
+    committed record as unverifiable FOREVER. That is the same
+    unpassable-gate failure mode as the staleness deadlock, so the two
+    revision-reading paths must agree on this option.
+    """
+    from .gitutil import _GIT_HARDENING
+
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                *_GIT_HARDENING,
+                "-c",
+                f"safe.directory={root.as_posix()}",
+                "-C",
+                str(root),
+                *args,
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+    except OSError:
+        return None
+    return result.stdout if result.returncode == 0 else None
+
+
+def _committed_evidence_agrees(
+    root: Path, summary: dict[str, Any], records: list[dict[str, Any]]
+) -> bool:
+    """Whether the record COMMITTED AT ``HEAD`` reproduces this run's records.
+
+    ``.seshat/dagster/runs/`` is git-ignored scratch (``.gitignore:111``); the
+    reviewable record is ``orchestration/dagster/run-evidence/<run-id>.md``. A
+    ``verified`` live state SILENCES the ``[PENDING LIVE PROFILE]`` caveat on a
+    shared read-only surface, so it must rest on evidence a REVIEWER CAN
+    OBTAIN FROM GIT (issue #493).
+
+    The content is therefore read from ``HEAD`` (``git show HEAD:<path>``), not
+    from the worktree. Reading the worktree would accept a merely-rendered,
+    untracked file that no reviewer can fetch -- the very state this gate exists
+    to reject. An absent path, an untracked file, or a non-repo workspace all
+    read as "not committed".
+
+    Reading ``HEAD`` also means a LOCAL edit to an already-committed record
+    changes nothing: the answer follows what a reviewer would fetch, so a
+    scribble cannot revoke properly committed evidence, and equally cannot
+    manufacture a pass. Both directions are intended.
+
+    Byte-agreement (newline-normalized) with what this run's raw records render
+    to is required. Agreement means the committed file is what a reviewer would
+    read; the scratch may then only NARROW the state (via the existing
+    staleness/outcome checks), never widen it. The committed record alone can
+    never grant ``verified``: ``render_markdown`` records only a COUNT of
+    ``input_artifacts``, not the per-file digests ``_run_inputs_are_stale``
+    compares, so deriving the state from the markdown alone would silently
+    weaken the staleness check.
+    """
+    from .dagster_adapter.evidence_render import render_markdown
+    from .dagster_adapter.run_identity import validate_run_id
+
+    try:
+        run_id = validate_run_id(summary["run_id"])
+    except (KeyError, ValueError):
+        return False
+    recorded = _git_try(root, "show", f"HEAD:{_EVIDENCE_DIR_POSIX}{run_id}.md")
+    if recorded is None:
+        return False
+    try:
+        rendered = render_markdown(summary, records)
+    except (KeyError, ValueError):
+        return False
+    return recorded.replace("\r\n", "\n").rstrip("\n") == rendered.rstrip("\n")
+
+
+def _revision_moved_beyond_evidence(
+    root: Path, commit_sha: object, source_revision: str | None
+) -> bool:
+    """Whether ``HEAD`` moved past the run in a way that INVALIDATES it.
+
+    Exists because the two halves of #493's fix would otherwise deadlock. The
+    committed record is, by construction, committed AFTER the run it describes,
+    so that commit necessarily advances ``HEAD`` beyond the run's recorded
+    ``commit_sha``. A bare equality check (``_is_stale_captured_at``) therefore
+    calls the documented render-plus-commit workflow ``stale``, which would stop
+    the committed record from EVER being recognised -- making the honest path
+    unreachable while an untracked file passed.
+
+    So this distinguishes "the workspace moved in ways that invalidate the run"
+    from "the evidence for this run was committed afterwards": if every path
+    changed between ``commit_sha`` and ``HEAD`` lives under
+    ``orchestration/dagster/run-evidence/``, the run is NOT stale.
+
+    This narrows ONLY the revision comparison. ``workspace_dirty`` and
+    ``_run_inputs_are_stale`` keep full force at the call site -- a changed
+    input is still stale regardless of this exemption (the R1 amendment's
+    condition 2).
+
+    Note the deliberate consequence: committing the record TOGETHER WITH
+    unrelated changes makes the run stale. The record must be committed on its
+    own; that keeps the exemption impossible to widen by bundling.
+
+    ``--no-renames`` is load-bearing, not a stylistic choice. With rename
+    detection on, moving an unrelated TRACKED file INTO the evidence directory
+    reports only the destination path (``R100 source/x.md
+    orchestration/dagster/run-evidence/x.md`` collapses to the second path under
+    ``--name-only``). Every reported path would then satisfy the prefix and the
+    run would be exempted even though a file left ``source/`` in that same
+    commit. Disabling rename detection surfaces the deletion as its own path, so
+    a bundled rename cannot bypass the revision check.
+    """
+    if not _is_stale_captured_at(commit_sha, source_revision):
+        return False  # equal (or nothing to compare): the fast, common path
+    assert isinstance(commit_sha, str)
+    if _git_try(root, "merge-base", "--is-ancestor", commit_sha, "HEAD") is None:
+        return True  # unknown sha, or HEAD is not a descendant -- cannot exempt
+    changed = _git_try(root, "diff", "--name-only", "--no-renames", commit_sha, "HEAD")
+    if changed is None:
+        return True
+    paths = [line.strip() for line in changed.splitlines() if line.strip()]
+    if not paths:
+        return True  # an empty diff cannot be the evidence commit; stay strict
+    return not all(path.startswith(_EVIDENCE_DIR_POSIX) for path in paths)
+
+
 def _dagster_run_states(
     root: Path, mapping_scope: str, source_revision: str | None
 ) -> tuple[str, str]:
@@ -512,28 +670,52 @@ def _dagster_run_states(
         key=lambda pair: (str(pair[0].get("finished", "")), pair[0]["run_id"]),
     )
     stale = bool(summary.get("workspace_dirty"))
-    stale = stale or _is_stale_captured_at(summary.get("commit_sha"), source_revision)
+    # Not a bare equality check: committing the run's own evidence record
+    # necessarily advances HEAD past `commit_sha`, and treating that as stale
+    # would make the documented render-plus-commit workflow unreachable (#493).
+    stale = stale or _revision_moved_beyond_evidence(
+        root, summary.get("commit_sha"), source_revision
+    )
+    # Full force, unchanged: a modified input is stale no matter what HEAD did.
     stale = stale or _run_inputs_are_stale(root, summary)
     run_state = (
         "stale"
         if stale
         else ("verified" if summary.get("run_status") == "succeeded" else "failed")
     )
+    if stale:
+        return run_state, "stale"
+    return run_state, _live_state_for_run(root, mapping_scope, summary, records)
+
+
+def _live_state_for_run(
+    root: Path,
+    mapping_scope: str,
+    summary: dict[str, Any],
+    records: list[dict[str, Any]],
+) -> str:
+    """The live-validation state of one already-selected, non-stale run.
+
+    Split out of ``_dagster_run_states`` so the committed-record requirement
+    (#493) reads as its own decision rather than another nested branch.
+    """
     live_rows = [
         row
         for row in records
         if row.get("table") == mapping_scope and row.get("asset") == "live_validate"
     ]
-    if stale:
-        return run_state, "stale"
     if not live_rows:
-        return run_state, "pending_live"
+        return "pending_live"
     outcome = live_rows[-1].get("outcome")
-    if outcome == "materialized":
-        return run_state, "verified"
-    if outcome == "deferred" or outcome == "skipped":
-        return run_state, "pending_live"
-    return run_state, "blocked"
+    if outcome in {"deferred", "skipped"}:
+        return "pending_live"
+    if outcome != "materialized":
+        return "blocked"
+    # `verified` is the state that silences the live-profile caveat, so it must
+    # rest on the committed record, not the git-ignored scratch (#493).
+    if _committed_evidence_agrees(root, summary, records):
+        return "verified"
+    return STATE_UNCOMMITTED_EVIDENCE
 
 
 def live_validation_state(repo_root: Path | str, mapping_scope: str) -> str:
