@@ -297,6 +297,47 @@ def test_evidence_commit_bundled_with_unrelated_changes_is_stale(
     assert _scope_doc(tmp_path)["live_validation_state"] == "stale"
 
 
+def _is_git_argv(argv: object) -> bool:
+    """Whether a `subprocess.run` first argument is a git argv list."""
+    if not isinstance(argv, list):
+        return False
+    return bool(argv) and argv[0] == "git"
+
+
+def test_evidence_git_reads_opt_into_safe_directory(tmp_path: Path) -> None:
+    """Every evidence git read must carry `-c safe.directory=<root>`.
+
+    A checkout owned by a different UID -- the norm for container-mounted
+    workspaces -- makes git refuse for "dubious ownership". `_git_try` converts
+    any failure to `None`, so without this option a correctly committed record
+    would report as unverifiable forever: the same unpassable-gate failure mode
+    as the staleness deadlock. `_source_revision` already opts in, so the two
+    revision-reading paths must agree.
+    """
+    seen: list[list[str]] = []
+    real_run = subprocess.run
+
+    def spy(argv, *args, **kwargs):  # type: ignore[no-untyped-def]
+        if _is_git_argv(argv):
+            seen.append(argv)
+        return real_run(argv, *args, **kwargs)
+
+    _repo_with_live_run(tmp_path)
+    _commit_run_evidence(tmp_path)
+
+    expected = f"safe.directory={tmp_path.as_posix()}"
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(pw.subprocess, "run", spy)
+        assert _scope_doc(tmp_path)["live_validation_state"] == "verified"
+
+    evidence_reads = [
+        argv for argv in seen if {"show", "merge-base", "diff"} & set(argv)
+    ]
+    assert evidence_reads, "expected the HEAD/revision reads to run"
+    for argv in evidence_reads:
+        assert expected in argv, f"missing safe.directory opt-in: {argv}"
+
+
 def test_state_is_in_the_declared_vocabulary(tmp_path: Path) -> None:
     """The new state joins the module's closed state set, not an ad-hoc string."""
     assert pw.STATE_UNCOMMITTED_EVIDENCE in pw.LIVE_VALIDATION_STATES

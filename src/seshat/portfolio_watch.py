@@ -503,12 +503,28 @@ def _git_try(root: Path, *args: str) -> str | None:
     posture: a non-repo workspace, an unknown revision, or a path absent at
     ``HEAD`` are all ANSWERS here ("cannot prove it") and must never raise into
     a read-only reporting surface.
+
+    Carries the same ``safe.directory`` opt-in as ``_source_revision`` above.
+    Without it, a checkout owned by a different UID -- the norm for
+    container-mounted workspaces -- makes git refuse for "dubious ownership",
+    which this helper would convert to ``None`` and thereby report a correctly
+    committed record as unverifiable FOREVER. That is the same
+    unpassable-gate failure mode as the staleness deadlock, so the two
+    revision-reading paths must agree on this option.
     """
     from .gitutil import _GIT_HARDENING
 
     try:
         result = subprocess.run(
-            ["git", *_GIT_HARDENING, "-C", str(root), *args],
+            [
+                "git",
+                *_GIT_HARDENING,
+                "-c",
+                f"safe.directory={root.as_posix()}",
+                "-C",
+                str(root),
+                *args,
+            ],
             capture_output=True,
             text=True,
             encoding="utf-8",
