@@ -182,6 +182,30 @@ scenarios:
       - derivation-route.md
     terminal_contains: narrative-brief.md
 
+  - layer: bi-analyst-knowledge
+    task_contains: Headline changed what should we investigate
+    expect_resources:
+      - diagnostic-question-tree.md
+    terminal_contains: diagnostic question tree
+
+  - layer: bi-analyst-knowledge
+    task_contains: Contract revision changed the story
+    expect_resources:
+      - narrative-change-review.md
+    terminal_contains: narrative-change verdict
+
+  - layer: bi-analyst-knowledge
+    task_contains: Source drift invalidated a question
+    expect_resources:
+      - narrative-change-review.md
+    terminal_contains: narrative-change verdict
+
+  - layer: bi-analyst-knowledge
+    task_contains: Insight has no owner or review cadence
+    expect_resources:
+      - action-and-review-cadence.md
+    terminal_contains: action/cadence handoff
+
   - layer: retail-kpi-knowledge
     task_contains: Prepare a cross-layer handoff
     expect_resources:
