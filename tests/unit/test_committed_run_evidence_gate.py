@@ -357,10 +357,14 @@ def test_status_text_and_next_use_one_shared_wording() -> None:
 
 
 def test_status_json_projection_is_unchanged_by_the_caveat(tmp_path: Path) -> None:
-    """The closed schema / verbatim projection contract stays intact (#485)."""
-    import jsonschema
+    """The closed schema / verbatim projection contract stays intact (#485).
 
+    Uses this repo's stdlib-only ``_schema_check`` helper, not ``jsonschema``:
+    CI installs `pip install -e ".[dev]"` on a clean runner and that extra does
+    not declare ``jsonschema``, so importing it fails the gate.
+    """
     from seshat.status_surface import build_status_projection
+    from tests.unit._schema_check import assert_matches_schema
 
     write_readiness_status(tmp_path, _SCOPE, current_stage="gold_ready")
     projection = build_status_projection(tmp_path)
@@ -370,7 +374,7 @@ def test_status_json_projection_is_unchanged_by_the_caveat(tmp_path: Path) -> No
             Path(__file__).resolve().parents[2] / "schemas" / "agent-status.schema.json"
         ).read_text(encoding="utf-8")
     )
-    jsonschema.validate(projection, schema)
+    assert_matches_schema(projection, schema)
 
     for table in projection["tables"]:
         assert "caveats" not in table
