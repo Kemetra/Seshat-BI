@@ -26,6 +26,24 @@ renumbered, or repointed. Retired IDs are marked deprecated, not deleted.
 - Each candidate (`PY-ARC-*`) keeps its ID when promoted only if it does not collide;
   otherwise it receives a fresh `PY-AR-*` and the candidate is marked promoted.
 
+## Allocated live foundation ranges
+
+| Range | Owner |
+|---|---|
+| `PY-CN-086..097` | dataframe mental model and deterministic BI preparation |
+| `PY-CN-098..104`, `PY-PB-012` | source profiling and inspection |
+| `PY-CN-105..110`, `PY-PB-013` | dtypes and schema drift |
+| `PY-CN-111..116`, `PY-PB-014` | null, blank, and sentinel classification |
+| `PY-CN-117..124`, `PY-PB-015..016` | merge cardinality and fan-out |
+| `PY-CN-125..132`, `PY-PB-017` | dates, timezones, and calendars |
+| `PY-BP-008..014` | evidence-first defaults for the ranges above |
+| `PY-CN-133..140`, `PY-VP-005..016` | validation and reconciliation |
+| `PY-CN-141..147`, `PY-PB-018..020` | performance, memory, and scale boundary |
+| `PY-AP-026..035` | active pipeline-review failure modes |
+
+These ranges extend the earlier seed allocations. They do not renumber or repoint
+existing IDs.
+
 ## Cross-referencing
 
 Refer to content by ID in prose and in JSON `id` / `detects` / `refs` fields. A

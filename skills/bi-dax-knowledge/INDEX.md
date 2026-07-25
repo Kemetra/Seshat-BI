@@ -30,6 +30,12 @@
 | **10. Explain a DAX concept** | `knowledge/dax-core-concepts.md`, relevant deep dive if needed | concise explanation tied to user's model/problem |
 | **11. Use analyzer rules** | `patterns/analyzer-rules.json`, `patterns/analyzer-rule-candidates.json` | rule-based review or staged candidate note |
 | **12. Use retail examples** | `knowledge/dax-retail-examples.md`, `references/retail-schema.md` | adapted pattern mapped to the user's model, not copied blindly |
+| **13. Prepare a cross-layer handoff** | `../../contracts/knowledge/knowledge-layer-handoff.yaml` | knowledge-layer handoff populated from the measure/model verdict and contract reference |
+| **14. Diagnose ambiguous relationships** | `knowledge/dax-relationships-and-virtual-filters.md` (DX-REL-001..010) | `checklists/dax-diagnostic-checklist.md` |
+| **15. Diagnose a virtual filter** | `knowledge/dax-relationships-and-virtual-filters.md` (DX-REL-007..010) | `checklists/dax-diagnostic-checklist.md` |
+| **16. Diagnose calculation-group precedence** | `knowledge/dax-calculation-groups-and-precedence.md` (DX-CG-001..008) | `checklists/dax-diagnostic-checklist.md` |
+| **17. Diagnose semi-additive totals** | `knowledge/dax-semi-additive-and-blank-semantics.md` (DX-SA-001..006,010) | `checklists/dax-diagnostic-checklist.md` |
+| **18. Diagnose blank versus zero display** | `knowledge/dax-semi-additive-and-blank-semantics.md` (DX-SA-007..010) | `checklists/dax-diagnostic-checklist.md` |
 
 ## Route by symptom
 
@@ -43,6 +49,11 @@
 | Measure slow | Tune DAX performance (row 9) |
 | Visual KPI requested but no metric definition exists | Define the business meaning first in `skills/retail-kpi-knowledge/` (then return for row 2) |
 | Date intelligence requested but no date table confirmed | Check semantic model prerequisites (row 8) |
+| Slicers reach a fact through multiple paths | Diagnose ambiguous relationships (row 14) |
+| TREATAS result drops or admits unexpected members | Diagnose a virtual filter (row 15) |
+| Calculation items work alone but not together | Diagnose calculation-group precedence (row 16) |
+| Balance/ratio total across time is wrong | Diagnose semi-additive totals (row 17) |
+| Missing values display or aggregate as zero | Diagnose blank versus zero display (row 18) |
 
 ## DAX stop rules
 
@@ -78,6 +89,9 @@ bi-dax-knowledge/
   - dax-anti-patterns.md                         AP-xxx mistakes
   - dax-performance-notes.md                     intro performance primer
   - dax-retail-examples.md                       worked original examples
+  - dax-relationships-and-virtual-filters.md     DX-REL-* physical/virtual propagation diagnostics
+  - dax-calculation-groups-and-precedence.md     DX-CG-* calculation-item composition diagnostics
+  - dax-semi-additive-and-blank-semantics.md     DX-SA-* totals, snapshots, blank/zero diagnostics
 - patterns/
   - dax-patterns.json                            pattern library
   - metric-contract-patterns.json                reusable metric specs
@@ -89,4 +103,5 @@ bi-dax-knowledge/
   - metric-contract-checklist.md                 fill a metric contract before writing DAX
   - dax-measure-review-checklist.md              pre-merge review of a measure
   - dax-model-review-checklist.md                semantic-model DAX prerequisites
+  - dax-diagnostic-checklist.md                  evidence-gated semantic diagnostic verdict
 ```

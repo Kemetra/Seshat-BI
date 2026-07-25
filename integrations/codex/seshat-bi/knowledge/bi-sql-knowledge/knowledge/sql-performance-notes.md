@@ -1,6 +1,8 @@
 # SQL Performance Notes
 
-> Correctness-oriented performance reasoning: sargability, filter-early, SELECT *, cross joins, grain across CTEs (SC-033..038). NOT execution-plan analysis (deferred -- see `../INDEX.md`). See `../references/source-map.md`.
+> Correctness-oriented performance reasoning: sargability, filter-early, SELECT *, cross joins,
+> grain across CTEs (SC-033..038). For a supplied PostgreSQL JSON plan, route to
+> `postgresql-execution-plans.md`. See `../references/source-map.md`.
 
 ## Slice 6 overview -- why this matters for Seshat BI
 
@@ -125,8 +127,9 @@ let the engine keep its index/scan advantages.*
   and dropping `SELECT *`.
 - **"Index exists but isn't used"** -> non-sargable predicate (SC-033); unwrap the column.
 - **"Can't tell if a deep query is right"** -> grain not tracked across CTEs (SC-038); annotate each.
-- **Stop & note** that exact tuning (indexes, partitioning, distribution keys) is engine-specific and
-  belongs to a later, engine-aware phase -- this slice is reasoning, not tuning.
+- **Stop & note** that exact tuning (indexes, partitioning, distribution keys) is engine-specific.
+  PostgreSQL plan interpretation is available in `postgresql-execution-plans.md`, but it remains
+  evidence-gated reasoning, not tuning or execution.
 
 ## Feeds
 

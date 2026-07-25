@@ -6,10 +6,10 @@ description: >-
   decision-questions, choosing an analytical framing (trend/anomaly, period variance,
   contribution & mix-shift, concentration/Pareto, rate decomposition, segment behavior,
   benchmark/threshold, signal-vs-noise statistical guardrails), and ordering pages into a
-  story (overview -> what changed -> why/where -> action) BEFORE any layout or visual work.
-  It teaches HOW to frame approved numbers, never WHAT a metric means (meaning lives in
-  metric contracts and domain packs such as retail-kpi-knowledge). A thinking layer, not a
-  layout engine, a chart renderer, or a metric definer.
+  story (overview, what changed, why/where, action), building grounded diagnostic
+  question trees, reviewing narrative drift, and defining action/review-cadence handoffs
+  BEFORE layout. It teaches HOW to frame approved numbers, never WHAT a metric means. A
+  thinking layer, not a layout engine, chart renderer, metric definer, or owner assigner.
 ---
 
 # BI Analyst Knowledge (Seshat BI)
@@ -45,8 +45,9 @@ Deriving ranked decision-questions from approved contracts + profile; choosing t
 analytical framing per question; attaching statistical guardrails (control bands,
 seasonality-aware comparison, minimum-sample caveats, correlation caution);
 ordering questions into a story; and recording unanswerable owner questions as
-honest [GAP]s. Its output is the narrative brief the `dashboard-design` skill
-requires before it may author any layout.
+honest [GAP]s. It also diagnoses headline changes, reviews contract/profile revision
+impact on an existing brief, and structures a supplied owner/cadence handoff. Its output
+is the narrative brief and review evidence `dashboard-design` needs before layout.
 
 ## What this skill is NOT for
 
@@ -89,3 +90,5 @@ Where it sits:
   worked examples.
 - **No self-granted pass.** A brief or a clean check is evidence for the named
   human design review, never an approval.
+- **No owner invention.** Action handoffs use an already named owner role. If none exists,
+  record an owner `[GAP]` and stop.

@@ -61,6 +61,14 @@ _DEVELOPMENT_PATHS = (".claude/skills/", "docs/powerbi/")
 _NAME_TOKEN = re.compile(r"`((?:seshat|powerbi)-[a-z][a-z-]*)`")
 _NAMESPACED = re.compile(r"/seshat-bi:([a-z0-9][a-z0-9-]*)")
 _VERSION_PIN = re.compile(r"seshat-bi==(\d+\.\d+\.\d+)")
+_CANONICAL_KNOWLEDGE_SKILLS = {
+    "bi-sql-knowledge",
+    "bi-dax-knowledge",
+    "bi-python-knowledge",
+    "bi-bigdata-knowledge",
+    "retail-kpi-knowledge",
+    "bi-analyst-knowledge",
+}
 
 
 def _surface() -> dict:
@@ -147,6 +155,13 @@ def test_surface_manifest_schema() -> None:
         assert skill["status"] in _STATUSES, skill["name"]
         assert set(skill["platforms"]) <= {"claude", "codex"}, skill["name"]
         assert (ROOT / skill["documentation"]).is_file(), skill["name"]
+
+
+def test_surface_exposes_each_canonical_knowledge_layer_once() -> None:
+    names = [skill["name"] for skill in _shipped_skills(_surface())]
+    canonical = [name for name in names if name in _CANONICAL_KNOWLEDGE_SKILLS]
+    assert set(canonical) == _CANONICAL_KNOWLEDGE_SKILLS
+    assert len(canonical) == len(_CANONICAL_KNOWLEDGE_SKILLS)
 
 
 # ---------------------------------------------------------------------------

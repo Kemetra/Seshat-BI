@@ -43,7 +43,8 @@ Metric contracts (`KPI-MC-*`):
 | KPI-MC-22 | Promotion Uplift (planned) |
 
 Packs: KPI-PK-01 … KPI-PK-07. Concepts: KPI-CN-01 … KPI-CN-08. Checklists: KPI-CHK-01 …
-KPI-CHK-03. Patterns, anti-patterns, and candidates are numbered inside their JSON files.
+KPI-CHK-04, where KPI-CHK-04 is the owner-policy decision checklist. Patterns, anti-patterns,
+and candidates are numbered inside their JSON files.
 
 ## Rules
 

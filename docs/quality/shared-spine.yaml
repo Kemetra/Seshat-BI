@@ -17,6 +17,13 @@
 # Ratified 2026-07-04 (Ahmed Shaaban): aggregation-grain-checklist.md is DISTINCT
 # -- the bi-bigdata copy is the distributed/at-scale route; the bi-python copy is
 # the single-node groupby route. They are intentionally different-scope artifacts.
+#
+# Ratified 2026-07-25 (Ahmed Shaaban): validation-reconciliation-checklist.md is
+# DISTINCT -- the bi-bigdata copy is the distributed route (BD-VP-* ids, per-stage
+# shuffle reconciliation, approximate-distinct bounds); the bi-python copy is the
+# single-node dataframe route (PY-VP-* ids, merge-verdict reconciliation). Their
+# verdict vocabularies differ by design.
 
 checklists:
   aggregation-grain-checklist.md: distinct
+  validation-reconciliation-checklist.md: distinct

@@ -29,7 +29,8 @@ not syntax errors — the counterpart to "state the grain first" in `bi-sql-know
 - **`knowledge/`** — Markdown for reasoning: the core concepts (`CC-xxx`) and deep dives
   (evaluation context, CALCULATE, function semantics, engine internals, performance diagnostics),
   best practices (`BP-xxx`), anti-patterns (`AP-xxx`), a performance primer, and worked original
-  retail examples.
+  retail examples. Focused diagnostics cover relationships/virtual filters (`DX-REL-*`),
+  calculation groups (`DX-CG-*`), and semi-additive/blank semantics (`DX-SA-*`).
 - **`patterns/`** — structured JSON: the pattern library (`dax-patterns.json`), reusable metric
   specs (`metric-contract-patterns.json`), enforceable analyzer rules (`AR-xxx`,
   `analyzer-rules.json`), and staged analyzer-rule candidates (`ARC-xxx`). The `AR-*` rules are
@@ -46,7 +47,9 @@ context and context transition; CALCULATE and its modifiers; metric contracts (g
 filter behavior, required model features); base-measure composition; time-intelligence
 (YTD/YOY/rolling/running totals); ranking, segmentation, ABC, new/returning customers, what-if
 parameters, currency conversion; semantic-model prerequisite checks (marked Date table, star
-schema, relationships, uniqueness); analyzer-style review; and DAX performance reasoning.
+schema, relationships, uniqueness); physical/virtual filter diagnostics; calculation-group
+precedence; semi-additive totals and blank/zero semantics; analyzer-style review; and DAX
+performance reasoning.
 
 ## What this is NOT
 

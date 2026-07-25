@@ -42,11 +42,12 @@ Stages:
 | Source understanding / onboarding | `docs/readiness/readiness-model.md` + `docs/knowledge-map.md` | readiness status / source profile |
 | Source profiling | `docs/readiness/readiness-model.md` + `docs/knowledge-map.md` | source profile |
 | Source mapping / grain / PII / unresolved questions | `docs/readiness/readiness-model.md` + `docs/knowledge-map.md` | source map + unresolved questions |
-| SQL validation / SQL reconciliation / transformation logic | `skills/bi-sql-knowledge/SKILL.md` then `skills/bi-sql-knowledge/INDEX.md` | SQL validation / reconciliation checklist |
+| SQL validation / reconciliation / transformation / supplied PostgreSQL plan review | `skills/bi-sql-knowledge/SKILL.md` then `skills/bi-sql-knowledge/INDEX.md` | SQL validation / reconciliation / plan-review checklist |
 | KPI business meaning / metric-contract definition / additivity / grain / ambiguity / KPI-pack selection | `skills/retail-kpi-knowledge/SKILL.md` then `skills/retail-kpi-knowledge/INDEX.md` | metric contract (business meaning) + implementation handoff note (SQL / DAX / Python / Big-data) |
 | DAX / measure generation / measure review / semantic-model prerequisites (after the business contract is ready) | `skills/bi-dax-knowledge/SKILL.md` then `skills/bi-dax-knowledge/INDEX.md` | generated/reviewed measure + semantic-model handoff |
-| Python / pandas / dataframe source-prep reasoning, cleaning, aggregation-grain review (single-node) | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | cleaning / aggregation-grain review artifact (planned routes deferred) |
-| Big-data / distributed / larger-than-memory: engine selection, partitioning/shuffle, skew, distributed joins/aggregation, file formats, incremental, scale validation | `skills/bi-bigdata-knowledge/SKILL.md` then `skills/bi-bigdata-knowledge/INDEX.md` | engine-selection / partitioning / join-skew / pipeline-review / validation checklist or verdict |
+| Python / pandas / dataframe source-prep, profiling, merge/fan-out, validation, performance, pipeline review (single-node) | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | focused dataframe / validation / pipeline-review artifact |
+| Big-data / distributed / larger-than-memory: engine selection, partitioning/shuffle, skew, distributed joins/aggregation, operational evidence, backfills | `skills/bi-bigdata-knowledge/SKILL.md` then `skills/bi-bigdata-knowledge/INDEX.md` | focused scale or operational-evidence checklist/verdict |
+| Analyst judgment / diagnostic questions / narrative-change review / action cadence (after approved contracts) | `skills/bi-analyst-knowledge/SKILL.md` then `skills/bi-analyst-knowledge/INDEX.md` | narrative brief, diagnostic tree, change verdict, [GAP], or action/cadence handoff |
 | Dashboard / visual design / audience / layout | `.claude/skills/powerbi-dashboard-design/` (gated "design from contracts" verb: `.claude/skills/dashboard-design/`) | dashboard blueprint |
 | Power BI execution / publish | STOP unless `semantic_model_ready` and publish gates have passed | blocked verdict or BI handoff pack |
 | Unknown or ambiguous task | `docs/knowledge-map.md` | clarifying question or blocked verdict |
@@ -56,7 +57,7 @@ Power BI execution remains execution-only and gated: **F016** advances only when
 
 ## The knowledge layer
 
-The reasoning skills are the deepest assets the routes above point into. All are
+The six canonical reasoning skills are the deepest assets the routes above point into. All are
 *reasoning and validation* layers, never executors — they reason about SQL/DAX/Python,
 they never run a query, run DAX, run Python, or touch a database.
 
@@ -67,6 +68,7 @@ they never run a query, run DAX, run Python, or touch a database.
 | `skills/bi-dax-knowledge/` | **filter context** + context transition | measure generation/review, time-intelligence, ranking/segmentation, semantic-model prerequisites, DAX performance (implements a business contract from `retail-kpi-knowledge`) |
 | `skills/bi-python-knowledge/` | **dataframe grain** + source-prep reasoning | pandas/dataframe source-prep reasoning, cleaning/standardization review, aggregation-grain review, Python BI analyzer candidates, reasoning training/eval seed (*initial seed*) |
 | `skills/bi-bigdata-knowledge/` | **execution topology** (single-node → distributed) | engine selection (Spark/Dask/Polars/DuckDB/warehouse), partitioning/shuffle/skew, distributed joins & aggregation, file/table formats (Parquet/Delta/Iceberg), incremental/idempotent processing, validation & cost at scale; the scale-out sibling of bi-python (borrows its grain/additivity spine, owns only the distributed twist) |
+| `skills/bi-analyst-knowledge/` | **decision relevance** + evidence grounding | ranked questions, diagnostic trees, narrative-change review, action/cadence handoffs, framing and story order after approved contracts/profile; no metric definition or layout |
 
 Mandatory flow inside any of these skills: **`SKILL.md` → `INDEX.md` → ONLY the file(s)
 the route names → an artifact** (checklist, metric/validation contract, or
@@ -79,10 +81,9 @@ Use `skills/bi-python-knowledge/SKILL.md` for Python / pandas / dataframe source
 reasoning. Route through `skills/bi-python-knowledge/INDEX.md` and open only the named
 files.
 
-Current seed coverage includes cleaning/standardization, aggregation-grain review,
-analyzer rule candidates, and a training/eval seed. Treat this layer as an **initial
-seed**: planned dataframe, dtype/profiling, merge/fan-out, validation, and performance
-routes remain deferred until implemented.
+Coverage includes dataframe semantics, profiling/schema/dtypes, null/sentinel policy,
+dates, merge/fan-out, aggregation grain, validation/reconciliation, performance/memory,
+anti-pattern review, reusable patterns, and a worked example.
 
 This layer is reasoning/review only. It does not execute Python, define metrics,
 approve readiness gates, replace SQL/DAX, or own dashboard design.
@@ -94,9 +95,9 @@ pandas** and the task is about *distributed or larger-than-memory execution*: ch
 engine (Spark / Dask / Polars / DuckDB / push-down to the warehouse), controlling
 partitioning and shuffle, avoiding skew and fan-out at scale, aggregating at a declared
 grain over very large data, choosing a file/table format (Parquet / Delta / Iceberg),
-incremental/idempotent processing, validating/reconciling at scale, or diagnosing
-performance/cost. Route through `skills/bi-bigdata-knowledge/INDEX.md`; end on an
-engine-selection / partitioning / join-skew / pipeline-review / validation checklist.
+incremental/idempotent processing, validating/reconciling at scale, diagnosing
+performance/cost or partial outputs, and reviewing backfills/partition evolution.
+Route through `skills/bi-bigdata-knowledge/INDEX.md`; end on its focused checklist.
 
 It is the scale-out companion to `bi-python-knowledge`: the shared spine (grain, fan-out,
 additivity, null semantics, reconciliation) is **borrowed by `PY-` ID, not repeated** (see
@@ -126,7 +127,7 @@ measure and semantic-model prerequisites; `skills/bi-python-knowledge/` for sing
 source-prep (dtypes/cleaning of the required fields); `skills/bi-bigdata-knowledge/` for
 distributed / at-scale aggregation and reconciliation when the data is too large for a
 single node. Those layers implement meaning, they do not redefine it. Treat this layer as
-an **initial seed**: 10 live metric contracts; the
+an **initial seed**: 14 seeded metric contracts; the
 KPIs named in `patterns/metric-contract-candidates.json` are planned/deferred and
 their routes return a planned note, never a fabricated contract.
 

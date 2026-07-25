@@ -1,0 +1,243 @@
+schema_version: 1
+scenarios:
+  - layer: bi-python-knowledge
+    task_contains: Aggregate / groupby at a correct grain
+    expect_resources:
+      - knowledge/groupby-aggregation-and-grain.md
+    terminal_contains: aggregation-grain-checklist
+
+  - layer: bi-python-knowledge
+    task_contains: Profile a freshly loaded dataframe
+    expect_resources:
+      - knowledge/profiling-and-source-inspection.md
+    terminal_contains: dataframe-review-checklist
+
+  - layer: bi-python-knowledge
+    task_contains: Understand dataframe semantics for BI
+    expect_resources:
+      - knowledge/dataframe-mental-model.md
+      - knowledge/python-core-concepts-for-bi.md
+    terminal_contains: dataframe-review-checklist
+
+  - layer: bi-python-knowledge
+    task_contains: Judge dtypes or schema drift
+    expect_resources:
+      - knowledge/pandas-dtypes-and-schema.md
+    terminal_contains: dataframe-review-checklist
+
+  - layer: bi-python-knowledge
+    task_contains: Merge two dataframes safely
+    expect_resources:
+      - knowledge/joins-merge-and-fanout.md
+    terminal_contains: merge-fanout-checklist
+
+  - layer: bi-python-knowledge
+    task_contains: Classify nulls blanks and sentinels
+    expect_resources:
+      - knowledge/nulls-missing-values-and-blanks.md
+    terminal_contains: dataframe-review-checklist
+
+  - layer: bi-python-knowledge
+    task_contains: Parse dates and periods
+    expect_resources:
+      - knowledge/dates-times-and-calendars.md
+    terminal_contains: dataframe-review-checklist
+
+  - layer: bi-python-knowledge
+    task_contains: Validate and reconcile a dataframe result
+    expect_resources:
+      - knowledge/validation-and-reconciliation.md
+      - patterns/validation-patterns.json
+    terminal_contains: validation-reconciliation-checklist
+
+  - layer: bi-python-knowledge
+    task_contains: Diagnose dataframe performance or memory
+    expect_resources:
+      - knowledge/performance-and-memory.md
+    terminal_contains: performance and memory verdict
+
+  - layer: bi-python-knowledge
+    task_contains: Review a Python pipeline against active rules
+    expect_resources:
+      - knowledge/python-anti-patterns.md
+      - patterns/analyzer-rules.json
+    terminal_contains: python-pipeline-review-checklist
+
+  - layer: bi-python-knowledge
+    task_contains: Apply recommended Python BI patterns
+    expect_resources:
+      - patterns/python-patterns.json
+    terminal_contains: python-pipeline-review-checklist
+
+  - layer: bi-python-knowledge
+    task_contains: Study the worked dataframe example
+    expect_resources:
+      - knowledge/python-retail-examples.md
+    terminal_contains: worked example evidence ledger
+
+  - layer: bi-sql-knowledge
+    task_contains: Write validation queries
+    expect_resources:
+      - patterns/sql-validation-patterns.json
+      - knowledge/sql-reconciliation-playbook.md
+    terminal_contains: sql-validation-checklist
+
+  - layer: bi-sql-knowledge
+    task_contains: Review a PostgreSQL execution plan
+    expect_resources:
+      - knowledge/postgresql-execution-plans.md
+      - patterns/postgresql-plan-patterns.json
+    terminal_contains: postgresql-plan-review-checklist
+
+  - layer: bi-dax-knowledge
+    task_contains: Review existing DAX
+    expect_resources:
+      - patterns/analyzer-rules.json
+      - knowledge/dax-best-practices.md
+      - knowledge/dax-anti-patterns.md
+      - checklists/dax-measure-review-checklist.md
+    terminal_contains: dax-measure-review-checklist
+
+  - layer: bi-dax-knowledge
+    task_contains: Diagnose ambiguous relationships
+    expect_resources:
+      - knowledge/dax-relationships-and-virtual-filters.md
+    terminal_contains: dax-diagnostic-checklist
+
+  - layer: bi-dax-knowledge
+    task_contains: Diagnose a virtual filter
+    expect_resources:
+      - knowledge/dax-relationships-and-virtual-filters.md
+    terminal_contains: dax-diagnostic-checklist
+
+  - layer: bi-dax-knowledge
+    task_contains: Diagnose calculation-group precedence
+    expect_resources:
+      - knowledge/dax-calculation-groups-and-precedence.md
+    terminal_contains: dax-diagnostic-checklist
+
+  - layer: bi-dax-knowledge
+    task_contains: Diagnose semi-additive totals
+    expect_resources:
+      - knowledge/dax-semi-additive-and-blank-semantics.md
+    terminal_contains: dax-diagnostic-checklist
+
+  - layer: bi-dax-knowledge
+    task_contains: Diagnose blank versus zero display
+    expect_resources:
+      - knowledge/dax-semi-additive-and-blank-semantics.md
+    terminal_contains: dax-diagnostic-checklist
+
+  - layer: retail-kpi-knowledge
+    task_contains: Write a brand-new KPI contract
+    expect_resources:
+      - references/metric-contract-template.md
+    terminal_contains: metric-contract-review-checklist
+
+  - layer: retail-kpi-knowledge
+    task_contains: Prepare an owner policy decision packet
+    expect_resources:
+      - knowledge/kpi-sufficiency-and-policy-decisions.md
+    terminal_contains: kpi-policy-decision-checklist
+
+  - layer: bi-bigdata-knowledge
+    task_contains: Decide whether to scale out at all / pick an engine
+    expect_resources:
+      - knowledge/engine-selection.md
+    terminal_contains: engine-selection-checklist
+
+  - layer: bi-bigdata-knowledge
+    task_contains: Diagnose partial output after retry
+    expect_resources:
+      - knowledge/observability-and-partial-failures.md
+    terminal_contains: operational-evidence-checklist
+
+  - layer: bi-bigdata-knowledge
+    task_contains: Review backfill safety
+    expect_resources:
+      - knowledge/backfills-and-partition-evolution.md
+    terminal_contains: operational-evidence-checklist
+
+  - layer: bi-bigdata-knowledge
+    task_contains: Review partition evolution
+    expect_resources:
+      - knowledge/backfills-and-partition-evolution.md
+    terminal_contains: operational-evidence-checklist
+
+  - layer: bi-bigdata-knowledge
+    task_contains: Review compaction evidence
+    expect_resources:
+      - knowledge/backfills-and-partition-evolution.md
+    terminal_contains: operational-evidence-checklist
+
+  - layer: bi-bigdata-knowledge
+    task_contains: Prepare a cost/performance evidence packet
+    expect_resources:
+      - knowledge/observability-and-partial-failures.md
+    terminal_contains: operational-evidence-checklist
+
+  - layer: bi-analyst-knowledge
+    task_contains: Author the narrative brief
+    expect_resources:
+      - derivation-route.md
+    terminal_contains: narrative-brief.md
+
+  - layer: bi-analyst-knowledge
+    task_contains: Headline changed what should we investigate
+    expect_resources:
+      - diagnostic-question-tree.md
+    terminal_contains: diagnostic question tree
+
+  - layer: bi-analyst-knowledge
+    task_contains: Contract revision changed the story
+    expect_resources:
+      - narrative-change-review.md
+    terminal_contains: narrative-change verdict
+
+  - layer: bi-analyst-knowledge
+    task_contains: Source drift invalidated a question
+    expect_resources:
+      - narrative-change-review.md
+    terminal_contains: narrative-change verdict
+
+  - layer: bi-analyst-knowledge
+    task_contains: Insight has no owner or review cadence
+    expect_resources:
+      - action-and-review-cadence.md
+    terminal_contains: action/cadence handoff
+
+  - layer: retail-kpi-knowledge
+    task_contains: Prepare a cross-layer handoff
+    expect_resources:
+      - ../../contracts/knowledge/knowledge-layer-handoff.yaml
+    terminal_contains: knowledge-layer handoff
+
+  - layer: bi-sql-knowledge
+    task_contains: Prepare a cross-layer handoff
+    expect_resources:
+      - ../../contracts/knowledge/knowledge-layer-handoff.yaml
+    terminal_contains: knowledge-layer handoff
+
+  - layer: bi-dax-knowledge
+    task_contains: Prepare a cross-layer handoff
+    expect_resources:
+      - ../../contracts/knowledge/knowledge-layer-handoff.yaml
+    terminal_contains: knowledge-layer handoff
+
+  - layer: bi-python-knowledge
+    task_contains: Prepare a cross-layer handoff
+    expect_resources:
+      - ../../contracts/knowledge/knowledge-layer-handoff.yaml
+    terminal_contains: knowledge-layer handoff
+
+  - layer: bi-bigdata-knowledge
+    task_contains: Prepare a cross-layer handoff
+    expect_resources:
+      - ../../contracts/knowledge/knowledge-layer-handoff.yaml
+    terminal_contains: knowledge-layer handoff
+
+  - layer: bi-analyst-knowledge
+    task_contains: Prepare a cross-layer handoff
+    expect_resources:
+      - ../../contracts/knowledge/knowledge-layer-handoff.yaml
+    terminal_contains: knowledge-layer handoff

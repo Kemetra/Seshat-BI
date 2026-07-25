@@ -1,0 +1,87 @@
+# Knowledge-layer handoff envelope.
+#
+# This contract transfers evidence and an exact next action between reasoning layers.
+# It grants no approval, advances no readiness stage, and executes no workload.
+
+version: 1
+schema: seshat.knowledge-layer-handoff/v1
+
+layers:
+  - retail-kpi
+  - sql
+  - dax
+  - python
+  - bigdata
+  - analyst
+
+required_fields:
+  - origin_layer
+  - terminal_artifact
+  - input_grain
+  - output_grain
+  - evidence
+  - assumptions
+  - blockers
+  - destination_layer
+  - next_action
+
+optional_fields:
+  - metric_contract_ref
+  - physical_bindings
+  - null_and_sentinel_decisions
+  - filters_and_exclusions
+  - additivity_constraints
+  - reconciliation_obligations
+  - named_authority
+
+authority:
+  grants_approval: false
+  advances_readiness: false
+  executes_workload: false
+
+field_contract:
+  origin_layer:
+    type: enum
+    values: [retail-kpi, sql, dax, python, bigdata, analyst]
+    description: Layer that produced the terminal artifact.
+  terminal_artifact:
+    type: repository_reference
+    description: Reviewable contract, checklist, verdict, or evidence packet being handed off.
+  input_grain:
+    type: statement
+    description: Business meaning of one input row; unknown is a blocker, not an empty value.
+  output_grain:
+    type: statement
+    description: Business meaning of one output row; unchanged must be stated explicitly.
+  evidence:
+    type: list
+    description: Committed or observed facts supporting the handoff.
+  assumptions:
+    type: list
+    description: Unverified statements kept separate from evidence.
+  blockers:
+    type: list
+    description: Concrete unresolved facts or decisions; use an empty list only when none remain.
+  destination_layer:
+    type: enum
+    values: [retail-kpi, sql, dax, python, bigdata, analyst, readiness, dashboard-design]
+    description: One owner for the next reasoning action.
+  next_action:
+    type: statement
+    description: One exact action at the destination boundary.
+
+handoff_rules:
+  - The origin layer fills the envelope from its terminal artifact; it does not redefine destination-owned knowledge.
+  - Metric meaning references an approved Retail KPI contract whenever a metric is involved.
+  - Physical bindings, null dispositions, filters, and additivity remain traceable to their owning decisions.
+  - Evidence and assumptions are never merged into one list.
+  - A blocker names the missing fact or decision and the authority or evidence that can resolve it.
+  - Exactly one destination layer and one next action are declared.
+
+stop_rules:
+  - unresolved_owner_decision
+  - missing_required_evidence
+  - unknown_input_or_output_grain
+  - destination_boundary_unclear
+  - attempted_approval_or_readiness_advance
+  - attempted_workload_execution

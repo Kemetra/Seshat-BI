@@ -30,9 +30,11 @@
 | **Write silver / gold SQL transformation logic** | `knowledge/sql-transformation-patterns.md` (SC-044..058), `knowledge/sql-reconciliation-playbook.md` (SC-032 idempotency) | `checklists/sql-review-checklist.md`; VP-DEDUP, VP-CONTROLTOTAL |
 | **Review SQL for anti-patterns** | `knowledge/sql-anti-patterns.md` (SQL-AP-001..061) | `patterns/sql-analyzer-rules.json` (SAR-*); `checklists/sql-review-checklist.md` |
 | **Reason about performance** | `knowledge/sql-performance-notes.md` (SC-033..038) | `knowledge/sql-diagnostics-playbook.md` PB-SQL-11/12 |
+| **Review a PostgreSQL execution plan** | `knowledge/postgresql-execution-plans.md` (EP-001..014), `patterns/postgresql-plan-patterns.json` (EP-PAT-*) | `checklists/postgresql-plan-review-checklist.md` |
 | **Run a diagnostic playbook** | `knowledge/sql-diagnostics-playbook.md` (PB-SQL-01..19) | the matching PB-SQL-* verdict + fix + stop rule |
 | **Get training questions** | `references/agent-training-set.json` (84 graded items) | a scored answer against the rubric |
 | **Get analyzer-rule candidates** | `patterns/sql-analyzer-rule-candidates.json` (SARC-*, staged), `patterns/sql-analyzer-rules.json` (10 SAR-*, static draft) | -- (review artifact; not runtime) |
+| **Prepare a cross-layer handoff** | `../../contracts/knowledge/knowledge-layer-handoff.yaml` | knowledge-layer handoff populated from the SQL checklist, reconciliation evidence, or blocker |
 
 ## Route by symptom (jump straight to a playbook)
 
@@ -77,6 +79,7 @@ bi-sql-knowledge/
   - sql-transformation-patterns.md           SC-044..058  silver/gold: DML/MERGE, reshaping, string cleaning
   - sql-anti-patterns.md                     SQL-AP-001..061
   - sql-performance-notes.md                 SC-033..038  sargability, SELECT *, cross joins, CTE grain
+  - postgresql-execution-plans.md            EP-001..014  supplied PostgreSQL JSON-plan reasoning
   - sql-diagnostics-playbook.md              PB-SQL-01..19  symptom -> cause -> checks -> fix -> stop rule
   - sql-cookbook-extension-notes.md          SC-039..043, 059..070  set ops, date recipes, gaps/islands, hierarchy, metadata
 - patterns/
@@ -84,6 +87,7 @@ bi-sql-knowledge/
   - sql-validation-patterns.json             VP-* validation/reconciliation gate shapes (11)
   - sql-analyzer-rule-candidates.json        SARC-* staged candidates
   - sql-analyzer-rules.json                  SAR-* 10 promoted draft rules (static, not runtime)
+  - postgresql-plan-patterns.json            EP-PAT-* supplied-plan diagnostic hypotheses
 - references/
   - agent-training-set.json                  84 graded Q&A across all topics
   - source-map.md                            attribution + per-slice derivation log
@@ -93,15 +97,15 @@ bi-sql-knowledge/
   - sql-review-checklist.md                  pre-merge review of a SELECT/transform
   - sql-validation-checklist.md              build a validation gate set for a table
   - sql-reconciliation-checklist.md          tie source <-> silver <-> gold
+  - postgresql-plan-review-checklist.md      evidence-gated PostgreSQL plan review
 ```
 
 ## Future extension
 
-**PostgreSQL execution-plan reasoning is deferred to a later EP slice.** This layer reasons
-about SQL *correctness and trust*; engine-specific plan reading (EXPLAIN/ANALYZE, costs, index
-and join strategies) is intentionally out of scope here and will arrive as a separate slice.
-Performance content in `knowledge/sql-performance-notes.md` is *reasoning* (sargability, filter
-early, grain across CTEs), not plan analysis.
+PostgreSQL execution-plan reasoning is available for a user-supplied, sanitized
+`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` artifact. It remains read-only: this layer does not run
+the statement, automatically tune PostgreSQL, or generalize one sampled plan to every workload.
+General SQL performance reasoning remains in `knowledge/sql-performance-notes.md`.
 
 **Deferred seams (explicitly unclaimed here -- routed elsewhere, not silently missing):**
 

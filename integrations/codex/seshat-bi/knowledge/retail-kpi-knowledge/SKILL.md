@@ -6,11 +6,11 @@ description: >-
   implementation — defining a KPI in business terms, classifying additivity
   (fully/semi/non-additive), identifying grain, listing required source fields, resolving
   ambiguity (gross vs net, VAT, returns, cost method, same-store), choosing an MVP KPI
-  pack, reviewing a metric contract for completeness, or preparing a clean handoff to the
-  DAX / semantic-model layer. This is a meaning/definition + review layer, not an executor:
-  it does not write DAX/SQL/Python, grant readiness, or design dashboards. See INDEX.md
-  for the live and planned routes; registry.yaml is the authoritative machine-readable
-  inventory.
+  pack, reviewing a metric contract for completeness, or preparing a clean handoff to an
+  implementation layer. Also use it to classify KPI sufficiency or prepare an owner policy
+  decision packet. This is a meaning/definition + review layer, not an executor: it does not
+  write DAX/SQL/Python, grant readiness, approve policy, or design dashboards. See INDEX.md
+  for live/planned routes; registry.yaml is the authoritative machine-readable inventory.
 ---
 
 # Retail KPI Knowledge Skill
@@ -43,6 +43,8 @@ The agent needs to:
 - prepare a handoff to an implementation layer (SQL for fields/grain/transform, DAX for
   the measure, Python for single-node source-prep, Big-data for distributed/at-scale
   aggregation & reconciliation)
+- classify a candidate as answerable, source-blocked, policy-blocked, or not applicable
+- prepare a neutral decision packet for a named policy authority
 
 ## Do not use when
 
@@ -65,8 +67,7 @@ SKILL.md  ->  INDEX.md  ->  relevant knowledge / contract / pack file(s)  ->  me
 2. Go to `INDEX.md` and pick the matching task / symptom / domain / pack route.
 3. Open only the file(s) that route names.
 4. End on a deliverable: a completed metric contract, a checklist result, a verdict,
-   or an implementation handoff note (to SQL, DAX, or Python). Never end inside raw
-   knowledge.
+   an owner decision packet, or an implementation handoff note. Never end inside raw knowledge.
 
 ## Boundaries
 
@@ -86,6 +87,6 @@ Stop and hand off (do not continue) when any of these is true:
 - The task asks whether a dataset/model is *ready* to ship → hand off to Readiness.
 - The task asks for a dashboard page or visual design → hand off to Dashboard design.
 - A KPI's policy is undefined (VAT, returns, cost method, same-store, snapshot date) →
-  mark the contract **Needs business definition** and stop; do not invent the policy.
+  mark `blocked_by_policy`, prepare the decision packet, and stop; do not invent the policy.
 - A required source field cannot be confirmed to exist → mark it as an assumption or
   dependency; do not pretend the field exists.

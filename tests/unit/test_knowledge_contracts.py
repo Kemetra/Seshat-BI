@@ -19,6 +19,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _FLOW = _REPO_ROOT / "contracts/knowledge/database-to-pbip-flow.yaml"
 _BLUEPRINT = _REPO_ROOT / "contracts/report/dashboard-blueprint.yaml"
 _AUTHORITY = _REPO_ROOT / "contracts/knowledge/approval-authority.yaml"
+_HANDOFF = _REPO_ROOT / "contracts/knowledge/knowledge-layer-handoff.yaml"
+_KPI_REGISTRY = _REPO_ROOT / "skills/retail-kpi-knowledge/registry.yaml"
 
 _ALLOWED_ROUTES = {
     "readiness",
@@ -75,6 +77,15 @@ def _load(path: Path) -> dict:
 
 def _stages(path: Path) -> list[dict]:
     return _load(path)["stages"]
+
+
+def _all_keys(value: object) -> set[str]:
+    if isinstance(value, dict):
+        nested = set().union(*(_all_keys(item) for item in value.values()))
+        return {str(key) for key in value} | nested
+    if isinstance(value, list):
+        return set().union(*(_all_keys(item) for item in value))
+    return set()
 
 
 # ---- structural validity --------------------------------------------------
@@ -180,3 +191,51 @@ def test_approval_authority_covers_every_critical_type() -> None:
     for dtype in _CRITICAL_TYPES:
         assert dtype in eligibility, f"no authority mapping for {dtype!r}"
         assert eligibility[dtype], f"empty eligibility for {dtype!r}"
+
+
+def test_knowledge_layer_handoff_contract_is_closed_and_safe() -> None:
+    data = _load(_HANDOFF)
+
+    assert data["schema"] == "seshat.knowledge-layer-handoff/v1"
+    assert data["layers"] == [
+        "retail-kpi",
+        "sql",
+        "dax",
+        "python",
+        "bigdata",
+        "analyst",
+    ]
+    assert data["authority"] == {
+        "grants_approval": False,
+        "advances_readiness": False,
+        "executes_workload": False,
+    }
+    assert set(data["required_fields"]) == {
+        "origin_layer",
+        "terminal_artifact",
+        "input_grain",
+        "output_grain",
+        "evidence",
+        "assumptions",
+        "blockers",
+        "destination_layer",
+        "next_action",
+    }
+    assert _all_keys(data).isdisjoint({"score", "confidence_score", "readiness_score"})
+
+
+def test_same_store_kpi_remains_planned_on_owner_policy_blockers() -> None:
+    entries = _load(_KPI_REGISTRY)["entries"]
+    same_store = next(
+        entry for entry in entries if entry["slug"] == "same-store-sales-growth"
+    )
+
+    assert same_store["lifecycle"] == "planned"
+    assert same_store["policy_blocker_ids"] == [
+        "A11",
+        "comparison-period-policy",
+    ]
+    assert same_store["blockers"] == [
+        "comparable-store policy is not approved",
+        "comparison-period policy is not approved",
+    ]

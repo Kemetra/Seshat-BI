@@ -81,6 +81,12 @@ routes:
     targets:
       - "skills/bi-sql-knowledge/INDEX.md"
     status: built
+  - id: "9a"
+    task: "Supplied PostgreSQL execution-plan review"
+    targets:
+      - "skills/bi-sql-knowledge/SKILL.md"
+      - "skills/bi-sql-knowledge/INDEX.md"
+    status: built
 
   # --- DAX knowledge (two-hop) ----------------------------------------------
   - id: "10"
@@ -91,6 +97,12 @@ routes:
     status: built
   - id: "11"
     task: "DAX measure review"
+    targets:
+      - "skills/bi-dax-knowledge/SKILL.md"
+      - "skills/bi-dax-knowledge/INDEX.md"
+    status: built
+  - id: "11a"
+    task: "DAX semantic diagnostic"
     targets:
       - "skills/bi-dax-knowledge/SKILL.md"
       - "skills/bi-dax-knowledge/INDEX.md"
@@ -120,6 +132,12 @@ routes:
     task: "Measure generation for a ready business contract"
     targets:
       - "skills/bi-dax-knowledge/INDEX.md"
+    status: built
+  - id: "12d"
+    task: "KPI sufficiency / owner policy decision packet"
+    targets:
+      - "skills/retail-kpi-knowledge/SKILL.md"
+      - "skills/retail-kpi-knowledge/INDEX.md"
     status: built
 
   # --- Semantic model readiness (DAX + Readiness) ---------------------------
@@ -181,6 +199,30 @@ routes:
     targets:
       - "skills/bi-bigdata-knowledge/SKILL.md"
       - "skills/bi-bigdata-knowledge/INDEX.md"
+    status: built
+  - id: "17e"
+    task: "Distributed operational evidence / backfill review"
+    targets:
+      - "skills/bi-bigdata-knowledge/SKILL.md"
+      - "skills/bi-bigdata-knowledge/INDEX.md"
+    status: built
+
+  # --- Analyst judgment (approved contracts/profile only) ------------------
+  - id: "17f"
+    task: "Analyst narrative brief / diagnostic question tree"
+    targets:
+      - "skills/bi-analyst-knowledge/SKILL.md"
+      - "skills/bi-analyst-knowledge/INDEX.md"
+    status: built
+  - id: "17g"
+    task: "Analyst narrative-change review"
+    targets:
+      - "skills/bi-analyst-knowledge/INDEX.md"
+    status: built
+  - id: "17h"
+    task: "Analyst action / review cadence handoff"
+    targets:
+      - "skills/bi-analyst-knowledge/INDEX.md"
     status: built
 
   # --- Dashboard design -----------------------------------------------------

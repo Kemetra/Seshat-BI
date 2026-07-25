@@ -9,7 +9,7 @@ SQL, DAX, or readiness; it points you at the one layer that does.
 ## Routing rule
 
 Open only what the route names. Do not read the whole repo. Do not duplicate
-knowledge from skills into this file. For a knowledge-layer route (SQL or DAX),
+knowledge from skills into this file. For any of the six canonical knowledge-layer routes,
 the two-hop is mandatory: open the skill's `SKILL.md`, then its `INDEX.md`, then
 ONLY the file(s) that `INDEX.md` names — never the whole knowledge base.
 
@@ -27,21 +27,28 @@ ONLY the file(s) that `INDEX.md` names — never the whole knowledge base.
 | 7. SQL reconciliation | SQL | `skills/bi-sql-knowledge/SKILL.md` then `skills/bi-sql-knowledge/INDEX.md` | SQL reconciliation checklist |
 | 8. Silver/gold SQL transformation | SQL | `skills/bi-sql-knowledge/SKILL.md` then `skills/bi-sql-knowledge/INDEX.md` | SQL review checklist |
 | 9. SQL anti-pattern review | SQL | `skills/bi-sql-knowledge/INDEX.md` | analyzer-style SQL verdict |
+| 9a. Supplied PostgreSQL execution-plan review | SQL | `skills/bi-sql-knowledge/SKILL.md` then `skills/bi-sql-knowledge/INDEX.md` | evidence-gated PostgreSQL plan-review verdict |
 | 10. DAX measure generation | DAX | `skills/bi-dax-knowledge/SKILL.md` then `skills/bi-dax-knowledge/INDEX.md` | generated measure + contract assumptions |
 | 11. DAX measure review | DAX | `skills/bi-dax-knowledge/SKILL.md` then `skills/bi-dax-knowledge/INDEX.md` | analyzer-style DAX verdict |
+| 11a. DAX relationship / calculation-group / semi-additive diagnostic | DAX | `skills/bi-dax-knowledge/SKILL.md` then `skills/bi-dax-knowledge/INDEX.md` | DAX diagnostic checklist verdict |
 | 12. Metric contract definition (business meaning) | Retail KPI | `skills/retail-kpi-knowledge/SKILL.md` then `skills/retail-kpi-knowledge/INDEX.md` | `skills/retail-kpi-knowledge/checklists/metric-contract-review-checklist.md` (+ implementation handoff note to SQL / DAX / Python / Big-data) |
 | 12a. KPI additivity / grain / ambiguity | Retail KPI | `skills/retail-kpi-knowledge/SKILL.md` then `skills/retail-kpi-knowledge/INDEX.md` | metric-contract-review / metric-ambiguity checklist verdict |
 | 12b. KPI-pack selection (MVP / first dashboard) | Retail KPI | `skills/retail-kpi-knowledge/INDEX.md` | `skills/retail-kpi-knowledge/checklists/kpi-pack-review-checklist.md` |
 | 12c. Measure generation / semantic-model prerequisites for a *ready* business contract | DAX | `skills/bi-dax-knowledge/INDEX.md` | generated/reviewed measure + model prerequisites |
+| 12d. KPI sufficiency / owner policy decision packet | Retail KPI | `skills/retail-kpi-knowledge/SKILL.md` then `skills/retail-kpi-knowledge/INDEX.md` | categorical sufficiency verdict, owner packet, or implementation handoff |
 | 13. Semantic model readiness | DAX + Readiness | `skills/bi-dax-knowledge/INDEX.md` + `docs/readiness/semantic-model-ready.md` | model-review checklist / semantic model handoff |
 | 14. Python cleaning / standardization review | Python | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | cleaning review artifact / shipped cleaning route |
 | 15. Python aggregation / groupby grain review | Python | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | `skills/bi-python-knowledge/checklists/aggregation-grain-checklist.md` |
-| 16. Python / pandas dataframe pipeline review | Python | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | analyzer-candidate / review artifact if available; otherwise planned/deferred |
-| 17. Python source-prep reasoning | Python | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | relevant shipped or planned route (planned routes deferred) |
+| 16. Python / pandas dataframe pipeline review | Python | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | active-rule pipeline-review verdict |
+| 17. Python profiling / dtype / merge / date / null / validation / performance reasoning | Python | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | focused dataframe, fan-out, validation, or performance artifact |
 | 17a. Decide whether to scale out / choose a compute engine | Big-data | `skills/bi-bigdata-knowledge/SKILL.md` then `skills/bi-bigdata-knowledge/INDEX.md` | `skills/bi-bigdata-knowledge/checklists/engine-selection-checklist.md` |
 | 17b. Distributed partitioning / shuffle / skew / large joins | Big-data | `skills/bi-bigdata-knowledge/SKILL.md` then `skills/bi-bigdata-knowledge/INDEX.md` | partitioning-shuffle / join-skew checklist |
 | 17c. Aggregate at grain over very large data / incremental & idempotent processing / file formats | Big-data | `skills/bi-bigdata-knowledge/INDEX.md` | aggregation-grain / pipeline-review checklist |
 | 17d. Distributed pipeline review / validation & reconciliation at scale / cost-perf diagnosis | Big-data | `skills/bi-bigdata-knowledge/SKILL.md` then `skills/bi-bigdata-knowledge/INDEX.md` | pipeline-review / validation-reconciliation checklist or perf/cost verdict |
+| 17e. Distributed partial-output / retry / backfill / partition-evolution review | Big-data | `skills/bi-bigdata-knowledge/SKILL.md` then `skills/bi-bigdata-knowledge/INDEX.md` | operational-evidence packet |
+| 17f. Analyst narrative brief / diagnostic question tree | Analyst | `skills/bi-analyst-knowledge/SKILL.md` then `skills/bi-analyst-knowledge/INDEX.md` | grounded narrative brief, diagnostic tree, or [GAP] |
+| 17g. Contract/profile drift changed the story | Analyst | `skills/bi-analyst-knowledge/INDEX.md` | `unchanged` / `revise` / `blocked` narrative-change verdict |
+| 17h. Insight action owner / review cadence | Analyst | `skills/bi-analyst-knowledge/INDEX.md` | action/cadence handoff or owner [GAP] |
 | 18. Dashboard design | Dashboard | `.claude/skills/powerbi-dashboard-design/` (see boundary below) | dashboard blueprint |
 | 19. Data quality control room | Readiness | `docs/readiness/readiness-model.md` | data issues / blocking reasons |
 | 20. BI handoff pack | Readiness | `docs/readiness/publish-ready.md` | BI handoff pack |
@@ -62,8 +69,9 @@ map only points; the cause → checks → fix → stop rule lives in the skill.
 | Gross and net sales mixed, discount looks double-counted, return rate differs by report, "is this KPI additive?", a tile has no agreed definition, KPI means different things in different reports | Retail KPI | `skills/retail-kpi-knowledge/SKILL.md` → `skills/retail-kpi-knowledge/INDEX.md` → "Symptom routes" → metric-ambiguity / metric-contract-review checklist (planned routes deferred) |
 | Totals doubled / inflated, row count changed after a join, COUNT/AVG wrong, reload doubled the data, gold won't reconcile to source, slow-but-correct SQL | SQL | `skills/bi-sql-knowledge/INDEX.md` → "Route by symptom" → PB-SQL-* verdict |
 | Measure ignores slicers, total row wrong, YOY/YTD wrong, ranking changes unexpectedly, DISTINCTCOUNT off, measure slow | DAX | `skills/bi-dax-knowledge/INDEX.md` → "Route by symptom" → analyzer-style verdict |
-| Messy category/string/currency cleaning, dataframe grain/aggregation question, pandas source-prep review (single-node) | Python | `skills/bi-python-knowledge/SKILL.md` → `skills/bi-python-knowledge/INDEX.md` → cleaning / aggregation-grain review artifact (planned routes deferred) |
-| One task runs forever / executor or driver OOM / spill to disk, row count exploded after a large join, thousands of tiny output files, reruns create duplicates, job slow-and-expensive but "works", late data changes yesterday's totals | Big-data | `skills/bi-bigdata-knowledge/SKILL.md` → `skills/bi-bigdata-knowledge/INDEX.md` → "Symptom routes" → join-skew / partitioning-shuffle / pipeline-review / perf-cost verdict |
+| Messy values, dtype/schema drift, merge fan-out, null/sentinel ambiguity, bad dates, dataframe validation or memory issue | Python | `skills/bi-python-knowledge/SKILL.md` → `skills/bi-python-knowledge/INDEX.md` → focused route/checklist |
+| One task runs forever / executor or driver OOM / spill, partial retry output, unsafe backfill, partition drift, compaction changed totals | Big-data | `skills/bi-bigdata-knowledge/SKILL.md` → `skills/bi-bigdata-knowledge/INDEX.md` → focused scale/operational checklist |
+| Headline moved without explanation, contract/profile revision changed the story, or an insight lacks an owner/cadence | Analyst | `skills/bi-analyst-knowledge/SKILL.md` → `skills/bi-analyst-knowledge/INDEX.md` → diagnostic tree / narrative-change verdict / action handoff |
 
 Supporting references:
 
@@ -118,6 +126,9 @@ Power BI execution: route to `docs/roadmap/roadmap.md` and treat as gated **F016
   formats, incremental/idempotent processing, validation & cost at scale. The scale-out
   sibling of Python; it borrows the shared grain/additivity spine rather than redefining it,
   and does not run jobs, define metric meaning, write SQL/DAX, or grant readiness.
+- **Analyst knowledge** owns grounded decision-questions, diagnostic trees, narrative-change
+  review, action/cadence handoffs, framing, and story order after approved contracts/profile.
+  It does not define metrics, invent facts, choose layout, appoint owners, or grant approval.
 - **Dashboard design** owns visual/page design after metric contracts.
 - **Execution adapters** cannot define mappings, metrics, semantic logic, or
   dashboard design.
@@ -149,7 +160,6 @@ to SQL/warehouse instead of scaling out).
 - approving mappings automatically
 - replacing human business decisions
 - bypassing readiness gates
-- treating the Python layer as complete (it is an initial seed)
-- treating the Retail KPI layer as complete (it is an initial seed: 10 live contracts)
+- treating the Retail KPI layer as an exhaustive KPI encyclopedia
 - redefining a KPI's business meaning inside the DAX layer (meaning lives in Retail KPI)
 - treating C086 as a generic schema

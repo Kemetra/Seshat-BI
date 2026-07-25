@@ -36,6 +36,7 @@ CANONICAL_ROOTS = frozenset(
         "skills/bi-python-knowledge/SKILL.md",
         "skills/bi-bigdata-knowledge/SKILL.md",
         "skills/retail-kpi-knowledge/SKILL.md",
+        "skills/bi-analyst-knowledge/SKILL.md",
     }
 )
 ALLOWED_MEDIA_TYPES = {
@@ -237,9 +238,9 @@ def _validate_allowlist_identity(document: Mapping[str, Any]) -> None:
 def _canonical_root_values(document: Mapping[str, Any]) -> list[object]:
     roots = document.get("canonical_roots")
     if not isinstance(roots, list):
-        raise ExportError("allowlist must declare the five canonical entrypoints")
-    if len(roots) != 5:
-        raise ExportError("allowlist must declare the five canonical entrypoints")
+        raise ExportError("allowlist must declare the six canonical entrypoints")
+    if len(roots) != 6:
+        raise ExportError("allowlist must declare the six canonical entrypoints")
     return roots
 
 
@@ -250,7 +251,7 @@ def _validate_allowlist_header(document: Mapping[str, Any]) -> set[str]:
         for item in _canonical_root_values(document)
     }
     if root_set != CANONICAL_ROOTS:
-        raise ExportError("allowlist canonical_roots must match the five Seshat skills")
+        raise ExportError("allowlist canonical_roots must match the six Seshat skills")
     return root_set
 
 

@@ -36,6 +36,22 @@ answerable question.
 6. **Record [GAP]s explicitly** (see format). A [GAP] is a first-class output,
    not an omission.
 
+## Follow-up routes after the initial brief
+
+The frozen two-input procedure above authors the first brief. Later review work must not silently
+re-run it against changed evidence:
+
+- when a headline changes, use `diagnostic-question-tree.md` to investigate
+  overview -> change -> driver -> segment -> exception -> action;
+- when a cited contract revision or source-profile revision changes, use
+  `narrative-change-review.md` and return `unchanged`, `revise`, or `blocked`;
+- when an insight lacks a named owner, trigger, or cadence, use
+  `action-and-review-cadence.md`; never appoint the owner;
+- review each artifact with `checklists/narrative-judgment-review-checklist.md`.
+
+These follow-up routes consume the prior brief and revision evidence in addition to the original
+grounding artifacts. They do not change the frozen narrative-brief schema.
+
 ## [GAP] format (an unanswerable question is a first-class output)
 
 Each [GAP] states three things and stops:

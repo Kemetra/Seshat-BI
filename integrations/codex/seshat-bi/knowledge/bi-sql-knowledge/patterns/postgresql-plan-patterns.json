@@ -1,0 +1,97 @@
+{
+  "$schema_version": "1.0",
+  "status": "Read-only PostgreSQL plan-review patterns. Hypotheses only; not runtime rules or automatic tuning.",
+  "required_plan_format": "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON), sanitized and supplied by the user",
+  "pattern_field_spec": [
+    "pattern_id",
+    "symptom",
+    "required_evidence",
+    "observation",
+    "plausible_causes",
+    "confirming_checks",
+    "stop_rule",
+    "related_concepts"
+  ],
+  "patterns": [
+    {
+      "pattern_id": "EP-PAT-CARDINALITY",
+      "symptom": "Actual rows materially diverge from estimated rows on a consequential node.",
+      "required_evidence": ["Plan Rows", "Actual Rows", "Actual Loops", "statistics context", "representative parameters"],
+      "observation": "Record direction, magnitude, loops, and downstream join or scan choice.",
+      "plausible_causes": ["stale statistics", "column correlation", "data skew", "parameter-sensitive selectivity"],
+      "confirming_checks": ["statistics age and target", "extended-statistics availability", "plans for representative parameter classes"],
+      "stop_rule": "Do not prescribe a join, index, or statistics change until the mismatch is repeatable and its cause is evidenced.",
+      "related_concepts": ["EP-003", "EP-013"]
+    },
+    {
+      "pattern_id": "EP-PAT-LOOPS",
+      "symptom": "A small inner node is executed many times.",
+      "required_evidence": ["Actual Rows", "Actual Loops", "actual node time", "buffer counts"],
+      "observation": "Calculate repeated work and identify the outer node producing the loops.",
+      "plausible_causes": ["underestimated outer rows", "nested-loop lookup cost", "fan-out before the join"],
+      "confirming_checks": ["outer-side cardinality", "join-key uniqueness", "buffer reads per loop"],
+      "stop_rule": "Do not condemn a nested loop from node type alone.",
+      "related_concepts": ["EP-004", "EP-006"]
+    },
+    {
+      "pattern_id": "EP-PAT-SCAN",
+      "symptom": "A large scan appears on the dominant branch.",
+      "required_evidence": ["scan node", "table rows/pages", "rows returned", "filter rows removed", "buffer counts"],
+      "observation": "Describe the fraction read and returned plus physical/logical I/O.",
+      "plausible_causes": ["low-selectivity predicate", "non-sargable predicate", "missing useful access path", "cold cache"],
+      "confirming_checks": ["predicate selectivity", "existing index definitions and usage", "visibility/correlation", "repeat under comparable cache state"],
+      "stop_rule": "A sequential scan is not evidence of a missing index.",
+      "related_concepts": ["EP-005", "EP-009", "EP-011"]
+    },
+    {
+      "pattern_id": "EP-PAT-HASH-SPILL",
+      "symptom": "Hash batches or temporary I/O indicate a hash operation exceeded its in-memory shape.",
+      "required_evidence": ["Hash Batches", "Peak Memory Usage", "temp blocks", "concurrency context"],
+      "observation": "Record build-side rows, batches, memory, and temp read/write evidence.",
+      "plausible_causes": ["underestimated build side", "insufficient per-operation memory", "wide hash tuples"],
+      "confirming_checks": ["build-side cardinality", "tuple width", "repeatability", "workload concurrency"],
+      "stop_rule": "Do not raise memory settings without workload-wide concurrency evidence.",
+      "related_concepts": ["EP-007", "EP-010"]
+    },
+    {
+      "pattern_id": "EP-PAT-SORT-SPILL",
+      "symptom": "A sort uses disk or produces substantial temporary I/O.",
+      "required_evidence": ["Sort Method", "Sort Space Used", "Sort Space Type", "temp blocks"],
+      "observation": "Record rows, width, ordering requirement, disk use, and temp I/O.",
+      "plausible_causes": ["large ordering set", "wide rows", "memory pressure", "avoidable upstream rows"],
+      "confirming_checks": ["required output order", "early row/column reduction", "concurrency and memory context"],
+      "stop_rule": "Do not remove a required sort or change memory from disk use alone.",
+      "related_concepts": ["EP-008", "EP-010"]
+    },
+    {
+      "pattern_id": "EP-PAT-PARALLEL",
+      "symptom": "Parallel execution launches fewer workers than planned or shows uneven work.",
+      "required_evidence": ["Workers Planned", "Workers Launched", "per-worker rows", "gather timing", "system capacity context"],
+      "observation": "Record launch shortfall, skew, leader contribution, and gather overhead.",
+      "plausible_causes": ["worker scarcity", "data skew", "parallel overhead exceeding benefit"],
+      "confirming_checks": ["concurrent workload", "per-worker detail", "comparable serial or prior evidence"],
+      "stop_rule": "Do not change server-wide parallel settings from one plan.",
+      "related_concepts": ["EP-012"]
+    },
+    {
+      "pattern_id": "EP-PAT-FILTER-WASTE",
+      "symptom": "Many rows are removed by a filter after expensive input work.",
+      "required_evidence": ["Rows Removed by Filter", "Actual Rows", "Actual Loops", "child-node work"],
+      "observation": "Locate where rows are discarded and quantify the upstream work feeding them.",
+      "plausible_causes": ["late predicate application", "non-sargable condition", "join produced avoidable rows"],
+      "confirming_checks": ["predicate semantics", "pushdown legality", "grain and join cardinality"],
+      "stop_rule": "Never push a predicate if doing so changes null, join, or aggregation semantics.",
+      "related_concepts": ["EP-009"]
+    },
+    {
+      "pattern_id": "EP-PAT-BEFORE-AFTER",
+      "symptom": "A change is claimed to improve the query.",
+      "required_evidence": ["before and after JSON plans", "result reconciliation", "representative parameters", "comparable load/cache", "write/storage impact"],
+      "observation": "Compare equivalent node work, buffers, spills, execution time, and output.",
+      "plausible_causes": ["genuine work reduction", "cache difference", "parameter difference", "concurrent-load difference"],
+      "confirming_checks": ["repeat trials", "same result fingerprint", "same parameter class", "maintenance-cost evidence"],
+      "stop_rule": "Without equivalent results and comparable conditions, return needs-evidence.",
+      "related_concepts": ["EP-014"]
+    }
+  ]
+}
