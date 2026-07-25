@@ -33,6 +33,27 @@ class _RouteRow:
     terminal: str
 
 
+@dataclass(frozen=True)
+class _Scenario:
+    layer: str
+    task: str
+    resources: tuple[str, ...]
+    terminal: str
+
+
+@dataclass(frozen=True)
+class _FindingContext:
+    layer: str
+    task: str
+
+
+@dataclass(frozen=True)
+class _ValidationContext:
+    root: Path
+    layer_root: Path
+    finding: _FindingContext
+
+
 def _clean_markdown(value: str) -> str:
     return " ".join(_MARKDOWN_MARK_RE.sub("", value).split())
 
@@ -70,32 +91,149 @@ def _route_rows(index_path: Path) -> list[_RouteRow]:
 
 
 def _finding(
-    *,
+    context: _FindingContext,
     code: str,
-    layer: str,
-    task: str,
-    resource: str = "",
     message: str,
+    resource: str = "",
 ) -> RouteFinding:
     return RouteFinding(
         code=code,
-        layer=layer,
-        task=task,
+        layer=context.layer,
+        task=context.task,
         resource=resource,
         message=message,
     )
 
 
-def _scenario_list(path: Path) -> list[dict[str, Any]]:
-    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+def _require_scenario_document(document: Any) -> dict[str, Any]:
     if not isinstance(document, dict) or document.get("schema_version") != 1:
         raise ValueError("scenario document must declare schema_version: 1")
+    return document
+
+
+def _require_scenario_items(document: dict[str, Any]) -> list[dict[str, Any]]:
     scenarios = document.get("scenarios")
     if not isinstance(scenarios, list):
         raise ValueError("scenario document must contain a scenarios list")
     if not all(isinstance(item, dict) for item in scenarios):
         raise ValueError("every route scenario must be an object")
     return scenarios
+
+
+def _scenario_list(path: Path) -> list[dict[str, Any]]:
+    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    return _require_scenario_items(_require_scenario_document(document))
+
+
+def _scenario(raw: dict[str, Any]) -> _Scenario:
+    return _Scenario(
+        layer=str(raw["layer"]).strip(),
+        task=str(raw["task_contains"]).strip(),
+        resources=tuple(str(item) for item in raw["expect_resources"]),
+        terminal=str(raw["terminal_contains"]).strip(),
+    )
+
+
+def _cached_rows(
+    layer: str,
+    index_path: Path,
+    row_cache: dict[str, list[_RouteRow]],
+) -> list[_RouteRow]:
+    rows = row_cache.get(layer)
+    if rows is None:
+        rows = _route_rows(index_path)
+        row_cache[layer] = rows
+    return rows
+
+
+def _resolve_route(
+    layer_root: Path,
+    context: _FindingContext,
+    row_cache: dict[str, list[_RouteRow]],
+) -> tuple[_RouteRow | None, RouteFinding | None]:
+    index_path = layer_root / "INDEX.md"
+    if not index_path.is_file():
+        return None, _finding(
+            context,
+            "missing_index",
+            f"missing knowledge router: {index_path}",
+            "INDEX.md",
+        )
+
+    rows = _cached_rows(context.layer, index_path, row_cache)
+    matches = [row for row in rows if context.task.casefold() in row.task.casefold()]
+    if not matches:
+        return None, _finding(
+            context,
+            "missing_route",
+            f"no task row contains {context.task!r}",
+        )
+    if len(matches) > 1:
+        return None, _finding(
+            context,
+            "ambiguous_route",
+            f"{len(matches)} task rows contain {context.task!r}",
+        )
+    return matches[0], None
+
+
+def _validate_resource(
+    context: _ValidationContext,
+    resource: str,
+) -> RouteFinding | None:
+    resource_path = (context.layer_root / resource).resolve()
+    if not resource_path.is_relative_to(context.root):
+        return _finding(
+            context.finding,
+            "unsafe_resource",
+            "routed resource escapes the repository",
+            resource,
+        )
+    if not resource_path.is_file():
+        return _finding(
+            context.finding,
+            "missing_resource",
+            f"routed resource does not exist: {resource_path}",
+            resource,
+        )
+    return None
+
+
+def _resource_findings(
+    context: _ValidationContext,
+    route: _RouteRow,
+    resources: tuple[str, ...],
+) -> list[RouteFinding]:
+    findings: list[RouteFinding] = []
+    for resource in resources:
+        if resource not in route.resources:
+            findings.append(
+                _finding(
+                    context.finding,
+                    "missing_resource_reference",
+                    f"matched route does not name {resource!r}",
+                    resource,
+                )
+            )
+            continue
+        finding = _validate_resource(context, resource)
+        if finding is not None:
+            findings.append(finding)
+    return findings
+
+
+def _terminal_finding(
+    context: _FindingContext,
+    route: _RouteRow,
+    terminal: str,
+) -> RouteFinding | None:
+    if terminal.casefold() in route.terminal.casefold():
+        return None
+    return _finding(
+        context,
+        "terminal_mismatch",
+        f"terminal cell does not contain {terminal!r}: {route.terminal!r}",
+    )
 
 
 def validate_repository(
@@ -108,97 +246,25 @@ def validate_repository(
     findings: list[RouteFinding] = []
     row_cache: dict[str, list[_RouteRow]] = {}
 
-    for scenario in scenarios:
-        layer = str(scenario["layer"]).strip()
-        task = str(scenario["task_contains"]).strip()
-        expected_resources = scenario["expect_resources"]
-        terminal = str(scenario["terminal_contains"]).strip()
-        layer_root = resolved_root / "skills" / layer
-        index_path = layer_root / "INDEX.md"
-        if not index_path.is_file():
-            findings.append(
-                _finding(
-                    code="missing_index",
-                    layer=layer,
-                    task=task,
-                    resource="INDEX.md",
-                    message=f"missing knowledge router: {index_path}",
-                )
-            )
+    for raw_scenario in scenarios:
+        scenario = _scenario(raw_scenario)
+        finding_context = _FindingContext(scenario.layer, scenario.task)
+        layer_root = resolved_root / "skills" / scenario.layer
+        context = _ValidationContext(resolved_root, layer_root, finding_context)
+        route, route_finding = _resolve_route(layer_root, finding_context, row_cache)
+        if route_finding is not None:
+            findings.append(route_finding)
             continue
 
-        rows = row_cache.setdefault(layer, _route_rows(index_path))
-        matches = [row for row in rows if task.casefold() in row.task.casefold()]
-        if not matches:
-            findings.append(
-                _finding(
-                    code="missing_route",
-                    layer=layer,
-                    task=task,
-                    message=f"no task row contains {task!r}",
-                )
-            )
-            continue
-        if len(matches) > 1:
-            findings.append(
-                _finding(
-                    code="ambiguous_route",
-                    layer=layer,
-                    task=task,
-                    message=f"{len(matches)} task rows contain {task!r}",
-                )
-            )
-            continue
-
-        route = matches[0]
-        for raw_resource in expected_resources:
-            resource = str(raw_resource)
-            if resource not in route.resources:
-                findings.append(
-                    _finding(
-                        code="missing_resource_reference",
-                        layer=layer,
-                        task=task,
-                        resource=resource,
-                        message=f"matched route does not name {resource!r}",
-                    )
-                )
-                continue
-
-            resource_path = (layer_root / resource).resolve()
-            if not resource_path.is_relative_to(resolved_root):
-                findings.append(
-                    _finding(
-                        code="unsafe_resource",
-                        layer=layer,
-                        task=task,
-                        resource=resource,
-                        message="routed resource escapes the repository",
-                    )
-                )
-            elif not resource_path.is_file():
-                findings.append(
-                    _finding(
-                        code="missing_resource",
-                        layer=layer,
-                        task=task,
-                        resource=resource,
-                        message=f"routed resource does not exist: {resource_path}",
-                    )
-                )
-
-        if terminal.casefold() not in route.terminal.casefold():
-            findings.append(
-                _finding(
-                    code="terminal_mismatch",
-                    layer=layer,
-                    task=task,
-                    message=(
-                        f"terminal cell does not contain {terminal!r}: "
-                        f"{route.terminal!r}"
-                    ),
-                )
-            )
+        assert route is not None
+        findings.extend(_resource_findings(context, route, scenario.resources))
+        terminal_finding = _terminal_finding(
+            finding_context,
+            route,
+            scenario.terminal,
+        )
+        if terminal_finding is not None:
+            findings.append(terminal_finding)
 
     return findings
 
@@ -231,10 +297,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (OSError, ValueError, yaml.YAMLError) as exc:
         findings = [
             _finding(
-                code="invalid_input",
-                layer="",
-                task="",
-                message=str(exc),
+                _FindingContext("", ""),
+                "invalid_input",
+                str(exc),
             )
         ]
 

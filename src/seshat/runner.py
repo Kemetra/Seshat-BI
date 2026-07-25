@@ -99,11 +99,17 @@ def _format(finding: Finding) -> str:
 
 
 def _skip_finding(registered: RegisteredRule) -> Finding:
-    """The INFO finding emitted in place of a skipped KIT_SELF rule (Spec A)."""
+    """The INFO finding emitted in place of a skipped KIT_SELF rule (Spec A).
+
+    Says "not the kit's own repo" rather than "not kit-bootstrapped": since issue
+    #486 the tier keys on kit identity, and a repo that ran ``seshat init`` IS
+    bootstrapped while still correctly skipping here -- the old wording described
+    that repo inaccurately.
+    """
     return Finding(
         rule_id=registered.id,
         severity=Severity.INFO,
-        message="skipped (kit-self rule; repo not kit-bootstrapped)",
+        message="skipped (kit-self rule; not the kit's own repo)",
         locator="(foreign repo)",
     )
 

@@ -93,13 +93,14 @@ def _run_check(args: object) -> int:
             f"error: git is required to run 'check' but failed: {exc}", file=sys.stderr
         )
         return 1
-    # Spec A drop-in fitness: in a repo the kit was merely downloaded into
-    # (not bootstrapped), KIT_SELF rules SKIP (INFO) instead of ERROR-ing on
-    # internal manifests that repo can't have. The kit's own repo IS
-    # bootstrapped, so nothing skips there -- behavior is unchanged.
-    from ..kit_lint import is_bootstrapped
+    # Spec A drop-in fitness: in a repo the kit was merely downloaded into,
+    # KIT_SELF rules SKIP (INFO) instead of ERROR-ing on internal manifests that
+    # repo can't have. Keyed on kit IDENTITY, not on substrate presence: `seshat
+    # init` writes the substrate into consumer repos too, which made the golden
+    # path (init -> check) fire 10 hard errors (issue #486).
+    from ..kit_lint import is_kit_self_repo
 
-    bootstrapped = is_bootstrapped(Path(args.repo))  # type: ignore[attr-defined]
+    bootstrapped = is_kit_self_repo(Path(args.repo))  # type: ignore[attr-defined]
     # Default 'text' calls the unchanged run(); 'json' is the opt-in path.
     if args.output_format == "json":  # type: ignore[attr-defined]
         return run_json(all_rules(), ctx, bootstrapped=bootstrapped)

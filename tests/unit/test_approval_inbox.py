@@ -9,6 +9,7 @@ import pytest
 
 from seshat.approval_inbox import build_approval_inbox
 from seshat.cli import main
+from seshat.rules.readiness_status import APPROVAL_SHAPE_HINT
 
 pytestmark = pytest.mark.unit
 
@@ -51,8 +52,12 @@ approvals: []
             "status": "pass",
             "required_authority": "analyst",
             "issue": "missing_approval",
+            # The detail now NAMES the shape it requires (issue #487): the old
+            # wording said "shape-valid" without ever stating the shape, so it had
+            # to be reverse-engineered from approval_inbox.py.
             "detail": (
-                "stage 'mapping_ready' is pass but no shape-valid approval is recorded"
+                "stage 'mapping_ready' is pass but no shape-valid approval is "
+                "recorded; " + APPROVAL_SHAPE_HINT
             ),
             "blocking_reasons": [],
             "invalid_approvals": [],

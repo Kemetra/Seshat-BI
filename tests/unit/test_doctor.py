@@ -15,6 +15,7 @@ import pytest
 
 from seshat.core import RuleContext
 from seshat.doctor import collect_findings, format_digest, run_doctor
+from tests.unit._gitfix import make_kit_self_repo
 
 pytestmark = pytest.mark.unit
 
@@ -22,11 +23,13 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _bootstrap(repo: Path) -> None:
-    """Make `repo` kit-bootstrapped so the KIT_SELF checks actually run (#377).
+    """Make `repo` look like the KIT ITSELF so the KIT_SELF checks run (#377).
 
     Since Spec A, doctor SKIPS the aggregated kit-self checks in a repo that is not
-    kit-bootstrapped (to agree with `check` and not over-report on a foreign repo).
-    So a test that wants to see GENUINE drift must bootstrap first.
+    the kit (to agree with `check` and not over-report on a foreign repo). So a test
+    that wants to see GENUINE drift must shape the fixture as the kit. Substrate
+    alone no longer qualifies -- `seshat init` writes that into consumer repos too
+    (issue #486).
     """
     (repo / ".seshat").mkdir(parents=True, exist_ok=True)
     shutil.copyfile(
@@ -35,6 +38,7 @@ def _bootstrap(repo: Path) -> None:
     shutil.copyfile(
         _REPO_ROOT / ".seshat" / "compass.yaml", repo / ".seshat" / "compass.yaml"
     )
+    make_kit_self_repo(repo)
 
 
 def _ctx_missing_everything(tmp_path: Path) -> RuleContext:

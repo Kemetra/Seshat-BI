@@ -76,7 +76,7 @@ def _foreign_repo_skip() -> Finding:
     return Finding(
         rule_id="DOCTOR",
         severity=Severity.INFO,
-        message="skipped (kit-self checks; repo not kit-bootstrapped)",
+        message="skipped (kit-self checks; not the kit's own repo)",
         locator="(foreign repo)",
     )
 
@@ -87,15 +87,16 @@ def collect_findings(ctx: RuleContext) -> list[Finding]:
     Pure: context in, findings out. No writes, no DB, no execution.
 
     Every aggregated check (A1/A3/SC1) is a KIT_SELF check, and the load-bearing
-    docs are all kit-authored artifacts. A repo that is not kit-bootstrapped can't
+    docs are all kit-authored artifacts. A repo that is not the kit itself can't
     have them, so -- exactly as ``check`` does (Spec A) -- doctor SKIPS the whole
     aggregation there with a single INFO, rather than ERROR-ing on manifests a
     downloaded-into repo will never carry (#377). This keeps doctor and check in
-    agreement on the same tree.
+    agreement on the same tree, including on a consumer repo that has run
+    ``seshat init`` (issue #486).
     """
-    from .kit_lint import is_bootstrapped
+    from .kit_lint import is_kit_self_repo
 
-    if not is_bootstrapped(ctx.repo_root):
+    if not is_kit_self_repo(ctx.repo_root):
         return [_foreign_repo_skip()]
 
     findings: list[Finding] = []

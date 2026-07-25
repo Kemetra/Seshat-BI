@@ -68,9 +68,7 @@ def test_repository_allowlist_has_literal_reviewed_entries() -> None:
     document = load_allowlist(ROOT)
     assert set(document["canonical_roots"]) == EXPECTED_CANONICAL_ROOTS
     entries = validate_allowlist(ROOT, document, allow_untracked_inputs=True)
-    assert EXPECTED_EXPANDED_SOURCES <= {
-        str(entry["source"]) for entry in entries
-    }
+    assert EXPECTED_EXPANDED_SOURCES <= {str(entry["source"]) for entry in entries}
     assert len(entries) > 100
     assert all("*" not in str(entry["source"]) for entry in entries)
 
