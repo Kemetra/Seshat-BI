@@ -32,6 +32,35 @@ def bare_dim_name(name: object) -> str | None:
     return name.rsplit(".", 1)[-1].strip().lower()
 
 
+# The attribute set an RC15 date dimension carries, declared ONCE so no reader
+# invents its own (issue #497). A Seshat date dimension is a CONTIGUOUS calendar
+# generated over the approved span -- these columns are DERIVED from the calendar,
+# not mapped from a source column, so no `columns[].gold_placement` can ever point
+# at them and no map declares them. That is precisely why a reader that only looks
+# at declared attributes reports every date attribute absent (issue #491).
+#
+# The surrogate key is NOT here: it is declared per-map as
+# `date_dimension.surrogate_key` and read from there.
+#
+# Kept in sync with the reference star `warehouse/migrations/0004_*.sql`
+# (gold.dim_date_rss), which is the de-facto definition of a Seshat calendar.
+# `tests/unit/test_issue_regression_491.py` asserts the two agree, so this cannot
+# drift silently.
+RC15_CALENDAR_ATTRIBUTES: frozenset[str] = frozenset(
+    {
+        "full_date",
+        "year",
+        "quarter",
+        "month",
+        "month_name",
+        "day",
+        "day_name",
+        "iso_week",
+        "is_weekend",
+    }
+)
+
+
 def star_id(document: dict, table_dir: str) -> str:
     """The governed star id: ``meta.table_id`` -> ``source_id`` -> ``table_dir``."""
     meta = document.get("meta")

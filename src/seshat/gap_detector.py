@@ -215,7 +215,34 @@ def _collect_gold(source_map: dict[str, Any]) -> tuple[set[str], set[str]]:
     date_dim = star.get("date_dimension")
     if isinstance(date_dim, dict):
         dims.update(_name_tokens(date_dim.get("name")))
+        _add_date_attributes(dims, cols, date_dim)
     return dims, cols
+
+
+def _add_date_attributes(
+    dims: set[str], cols: set[str], date_dim: dict[str, Any]
+) -> None:
+    """Contribute a date dimension's ATTRIBUTES, not just its table name (#491).
+
+    The entity-dimension loop above pushes each dim's ``attributes`` into both
+    token sets; this path used to contribute only the table name, so every date
+    attribute (``year``, ``month``, ...) was reported "absent from gold_star" no
+    matter what the star actually built -- and an APPROVED metric contract binding
+    one false-blocked, which is the tool contradicting a recorded human approval.
+
+    A date dimension's attributes are not declared per-map and cannot be: the RC15
+    calendar GENERATES them, so there is no source column for a
+    ``columns[].gold_placement`` to point at. They come from the one shared
+    declaration in ``star_discovery`` instead. The surrogate key IS declared
+    per-map, so it is read from the map.
+    """
+    from seshat.star_discovery import RC15_CALENDAR_ATTRIBUTES
+
+    dims.update(RC15_CALENDAR_ATTRIBUTES)
+    cols.update(RC15_CALENDAR_ATTRIBUTES)
+    surrogate = date_dim.get("surrogate_key")
+    if isinstance(surrogate, str) and surrogate.strip():
+        cols.add(surrogate.strip())
 
 
 def _name_tokens(name: object) -> set[str]:
