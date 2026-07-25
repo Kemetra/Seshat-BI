@@ -24,6 +24,173 @@
 
 ---
 
+### Task 0: Build the knowledge-route contract validator
+
+**Files:**
+- Create: `scripts/validate_knowledge_routes.py`
+- Create: `tests/unit/test_knowledge_route_validator.py`
+- Create: `tests/fixtures/knowledge-route-scenarios.yaml`
+
+**Interfaces:**
+- Consumes: repository root plus scenario records with `layer`, `task_contains`,
+  `expect_resources`, and `terminal_contains`.
+- Produces: `list[RouteFinding]`; CLI exit 0 when every route selects existing
+  resources and names its terminal artifact, exit 1 with JSON findings otherwise.
+
+- [ ] **Step 1: Write failing validator tests**
+
+```python
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+import yaml
+
+SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "validate_knowledge_routes.py"
+
+
+def run_validator(repo: Path, scenarios: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--repo",
+            str(repo),
+            "--scenarios",
+            str(scenarios),
+            "--format",
+            "json",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_missing_routed_resource_returns_finding(tmp_path: Path) -> None:
+    layer = tmp_path / "skills" / "example-knowledge"
+    layer.mkdir(parents=True)
+    (layer / "INDEX.md").write_text(
+        "| Task | Open | End on |\n"
+        "|---|---|---|\n"
+        "| Profile data | `knowledge/profile.md` | profile verdict |\n",
+        encoding="utf-8",
+    )
+    scenarios = tmp_path / "scenarios.yaml"
+    scenarios.write_text(
+        yaml.safe_dump({"schema_version": 1, "scenarios": [{
+            "layer": "example-knowledge",
+            "task_contains": "Profile data",
+            "expect_resources": ["knowledge/profile.md"],
+            "terminal_contains": "profile verdict",
+        }]}),
+        encoding="utf-8",
+    )
+
+    result = run_validator(tmp_path, scenarios)
+
+    assert result.returncode == 1
+    assert [
+        (item["code"], item["resource"]) for item in json.loads(result.stdout)
+    ] == [
+        ("missing_resource", "knowledge/profile.md")
+    ]
+
+
+def test_complete_route_returns_no_findings(tmp_path: Path) -> None:
+    layer = tmp_path / "skills" / "example-knowledge"
+    (layer / "knowledge").mkdir(parents=True)
+    (layer / "knowledge" / "profile.md").write_text("# Profile\n", encoding="utf-8")
+    (layer / "INDEX.md").write_text(
+        "| Task | Open | End on |\n"
+        "|---|---|---|\n"
+        "| Profile data | `knowledge/profile.md` | profile verdict |\n",
+        encoding="utf-8",
+    )
+    scenarios = tmp_path / "scenarios.yaml"
+    scenarios.write_text(
+        yaml.safe_dump({"schema_version": 1, "scenarios": [{
+            "layer": "example-knowledge",
+            "task_contains": "Profile data",
+            "expect_resources": ["knowledge/profile.md"],
+            "terminal_contains": "profile verdict",
+        }]}),
+        encoding="utf-8",
+    )
+
+    result = run_validator(tmp_path, scenarios)
+
+    assert result.returncode == 0
+    assert json.loads(result.stdout) == []
+```
+
+- [ ] **Step 2: Run tests and verify RED**
+
+```powershell
+python -m pytest --no-cov --basetemp .pytest_cache/knowledge-expansion `
+  tests/unit/test_knowledge_route_validator.py -q
+```
+
+Expected: both tests FAIL because the missing script returns exit 2 instead of the
+contractual exits 1 and 0.
+
+- [ ] **Step 3: Implement the minimal validator**
+
+Implement:
+
+```python
+@dataclass(frozen=True)
+class RouteFinding:
+    code: str
+    layer: str
+    task: str
+    resource: str
+    message: str
+
+
+def validate_repository(
+    repo_root: Path, scenarios: list[dict[str, object]]
+) -> list[RouteFinding]:
+    """Match each scenario to one INDEX task row and validate its resources/end artifact."""
+```
+
+Parse Markdown table rows only inside `INDEX.md`; normalize backtick-quoted
+repo-relative paths; reject missing, ambiguous, or duplicate task matches; check every
+expected resource resolves from `skills/<layer>/` to a path that remains inside the
+repository (safe `../../contracts/` and `../../templates/` references are valid); and
+verify the matched terminal cell contains the expected artifact text. Do not infer
+routes from prose outside tables.
+
+- [ ] **Step 4: Add the initial six-layer scenario fixture**
+
+Seed one existing route per layer so the validator is useful before expansion:
+
+```yaml
+schema_version: 1
+scenarios:
+  - layer: bi-python-knowledge
+    task_contains: Review a dataframe groupby
+    expect_resources: [knowledge/groupby-aggregation-and-grain.md]
+    terminal_contains: aggregation-grain-checklist
+```
+
+Add corresponding existing rows for SQL validation, DAX measure review, KPI contract
+definition, Big Data engine selection, and Analyst narrative brief authoring.
+
+- [ ] **Step 5: Verify GREEN and commit**
+
+```powershell
+python -m pytest --no-cov --basetemp .pytest_cache/knowledge-expansion `
+  tests/unit/test_knowledge_route_validator.py -q
+git add scripts/validate_knowledge_routes.py `
+  tests/unit/test_knowledge_route_validator.py `
+  tests/fixtures/knowledge-route-scenarios.yaml
+git commit --no-gpg-sign -m "test: validate knowledge route contracts"
+```
+
+---
+
 ### Task 1: Activate the Python foundation routes
 
 **Files:**
@@ -40,34 +207,34 @@
 - Modify: `skills/bi-python-knowledge/INDEX.md`
 - Modify: `skills/bi-python-knowledge/README.md`
 - Modify: `skills/bi-python-knowledge/references/id-conventions.md`
-- Test: `tests/fixtures/nav-scenarios.yaml`
-- Test: `tests/unit/test_navigation_regression.py`
+- Test: `tests/fixtures/knowledge-route-scenarios.yaml`
+- Test: `tests/unit/test_knowledge_route_validator.py`
 
 **Interfaces:**
 - Consumes: source-profile evidence, declared row grain, expected schema, source-map null/sentinel decisions.
 - Produces: dataframe profile verdict, dtype/schema verdict, null-policy blocker, merge fan-out verdict, and a handoff to validation.
 
-- [ ] **Step 1: Add failing Python route-presence tests**
+- [ ] **Step 1: Add failing Python route scenarios**
 
-Add a parameterized resource test to `tests/unit/test_navigation_regression.py`:
+Append scenarios for the following task/resource/artifact triples:
 
-```python
-@pytest.mark.parametrize(
-    ("route_text", "resource"),
-    [
-        ("Profile a freshly loaded dataframe", "knowledge/profiling-and-source-inspection.md"),
-        ("Judge dtypes or schema drift", "knowledge/pandas-dtypes-and-schema.md"),
-        ("Merge two dataframes safely", "knowledge/joins-merge-and-fanout.md"),
-        ("Parse dates and periods", "knowledge/dates-times-and-calendars.md"),
-    ],
-)
-def test_python_live_routes_resolve(route_text: str, resource: str) -> None:
-    index = (_REPO_ROOT / "skills/bi-python-knowledge/INDEX.md").read_text(
-        encoding="utf-8"
-    )
-    assert route_text in index
-    assert resource in index
-    assert (_REPO_ROOT / "skills/bi-python-knowledge" / resource).is_file()
+```yaml
+- layer: bi-python-knowledge
+  task_contains: Profile a freshly loaded dataframe
+  expect_resources: [knowledge/profiling-and-source-inspection.md]
+  terminal_contains: dataframe-review-checklist
+- layer: bi-python-knowledge
+  task_contains: Judge dtypes or schema drift
+  expect_resources: [knowledge/pandas-dtypes-and-schema.md]
+  terminal_contains: dataframe-review-checklist
+- layer: bi-python-knowledge
+  task_contains: Merge two dataframes safely
+  expect_resources: [knowledge/joins-merge-and-fanout.md]
+  terminal_contains: merge-fanout-checklist
+- layer: bi-python-knowledge
+  task_contains: Parse dates and periods
+  expect_resources: [knowledge/dates-times-and-calendars.md]
+  terminal_contains: dataframe-review-checklist
 ```
 
 - [ ] **Step 2: Run the new test and confirm it fails**
@@ -76,7 +243,7 @@ Run:
 
 ```powershell
 python -m pytest --no-cov --basetemp .pytest_cache/knowledge-expansion `
-  tests/unit/test_navigation_regression.py::test_python_live_routes_resolve -q
+  tests/unit/test_knowledge_route_validator.py -q
 ```
 
 Expected: FAIL because the named live resources do not exist.
@@ -130,7 +297,7 @@ Run:
 
 ```powershell
 python -m pytest --no-cov --basetemp .pytest_cache/knowledge-expansion `
-  tests/unit/test_navigation_regression.py tests/unit/test_knowledge_contracts.py -q
+  tests/unit/test_knowledge_route_validator.py tests/unit/test_knowledge_contracts.py -q
 ```
 
 Expected: PASS.
@@ -138,8 +305,7 @@ Expected: PASS.
 - [ ] **Step 7: Commit**
 
 ```powershell
-git add skills/bi-python-knowledge tests/fixtures/nav-scenarios.yaml `
-  tests/unit/test_navigation_regression.py
+git add skills/bi-python-knowledge tests/fixtures/knowledge-route-scenarios.yaml
 git commit --no-gpg-sign -m "feat: activate Python dataframe reasoning routes"
 ```
 
@@ -161,44 +327,23 @@ git commit --no-gpg-sign -m "feat: activate Python dataframe reasoning routes"
 - Modify: `skills/bi-python-knowledge/README.md`
 - Modify: `skills/bi-python-knowledge/SKILL.md`
 - Modify: `skills/bi-python-knowledge/references/id-conventions.md`
-- Test: `tests/unit/test_navigation_regression.py`
+- Test: `tests/fixtures/knowledge-route-scenarios.yaml`
+- Test: `tests/unit/test_knowledge_route_validator.py`
 
 **Interfaces:**
 - Consumes: Task 1 profile/merge artifacts and expected source/control totals.
 - Produces: validation/reconciliation verdict, performance/memory verdict, analyzer-style findings, pipeline review.
 
-- [ ] **Step 1: Add failing tests for the remaining live routes and JSON shapes**
+- [ ] **Step 1: Add failing scenarios for the remaining live routes**
 
-```python
-def test_python_validation_and_review_routes_are_live() -> None:
-    root = _REPO_ROOT / "skills/bi-python-knowledge"
-    index = (root / "INDEX.md").read_text(encoding="utf-8")
-    for resource in (
-        "knowledge/validation-and-reconciliation.md",
-        "knowledge/performance-and-memory.md",
-        "knowledge/python-anti-patterns.md",
-        "patterns/validation-patterns.json",
-        "patterns/analyzer-rules.json",
-        "patterns/python-patterns.json",
-        "checklists/validation-reconciliation-checklist.md",
-        "checklists/python-pipeline-review-checklist.md",
-    ):
-        assert resource in index
-        assert (root / resource).is_file()
-    assert "planned / not yet implemented" not in "\n".join(
-        line for line in index.splitlines() if any(
-            name in line for name in (
-                "validation-and-reconciliation",
-                "performance-and-memory",
-                "python-anti-patterns",
-            )
-        )
-    )
-```
+Add scenario rows for validation/reconciliation, performance/memory diagnosis,
+anti-pattern review, the worked example, and the pipeline review. Each scenario names
+all route resources and its exact terminal checklist or verdict.
 
 - [ ] **Step 2: Run and confirm failure**
 
-Run the new test directly. Expected: FAIL on missing resources.
+Run `tests/unit/test_knowledge_route_validator.py`. Expected: FAIL with
+`missing_route` or `missing_resource` findings for the new scenarios.
 
 - [ ] **Step 3: Author validation and performance knowledge**
 
@@ -243,7 +388,7 @@ the eleven routes completed in Tasks 1-2.
 Run JSON validation plus navigation/knowledge tests, then:
 
 ```powershell
-git add skills/bi-python-knowledge tests/unit/test_navigation_regression.py
+git add skills/bi-python-knowledge tests/fixtures/knowledge-route-scenarios.yaml
 git commit --no-gpg-sign -m "feat: complete Python validation knowledge"
 ```
 
@@ -260,7 +405,9 @@ git commit --no-gpg-sign -m "feat: complete Python validation knowledge"
 - Modify: `skills/bi-python-knowledge/INDEX.md`
 - Modify: `skills/bi-bigdata-knowledge/INDEX.md`
 - Modify: `skills/bi-analyst-knowledge/INDEX.md`
+- Test: `tests/fixtures/knowledge-route-scenarios.yaml`
 - Test: `tests/unit/test_knowledge_contracts.py`
+- Test: `tests/unit/test_knowledge_route_validator.py`
 
 **Interfaces:**
 - Consumes: terminal artifacts from any of the six layers.
@@ -276,7 +423,17 @@ def test_knowledge_layer_handoff_contract_is_closed_and_safe() -> None:
     assert data["layers"] == [
         "retail-kpi", "sql", "dax", "python", "bigdata", "analyst"
     ]
-    assert "score" not in path.read_text(encoding="utf-8").lower()
+    def all_keys(value: object) -> set[str]:
+        if isinstance(value, dict):
+            return {
+                str(key)
+                for key in value
+            } | set().union(*(all_keys(item) for item in value.values()))
+        if isinstance(value, list):
+            return set().union(*(all_keys(item) for item in value))
+        return set()
+
+    assert all_keys(data).isdisjoint({"score", "confidence_score", "readiness_score"})
     assert data["authority"]["grants_approval"] is False
     assert set(data["required_fields"]) == {
         "origin_layer", "terminal_artifact", "input_grain", "output_grain",
@@ -306,15 +463,20 @@ stop_rules:
 - [ ] **Step 4: Add an inbound and outbound handoff row to all six routers**
 
 Each row references the shared contract and names the layer-specific artifact used
-to fill it. Do not duplicate the YAML field descriptions in each index.
+to fill it. Do not duplicate the YAML field descriptions in each index. Add one
+`Prepare a cross-layer handoff` scenario per layer to
+`tests/fixtures/knowledge-route-scenarios.yaml`; each expects
+`../../contracts/knowledge/knowledge-layer-handoff.yaml` and ends on
+`knowledge-layer handoff`.
 
 - [ ] **Step 5: Verify and commit**
 
 ```powershell
 python -m pytest --no-cov --basetemp .pytest_cache/knowledge-expansion `
-  tests/unit/test_knowledge_contracts.py tests/unit/test_navigation_regression.py -q
+  tests/unit/test_knowledge_contracts.py tests/unit/test_knowledge_route_validator.py -q
 git add contracts/knowledge/knowledge-layer-handoff.yaml contracts/README.md `
-  skills/*-knowledge/INDEX.md
+  skills/*-knowledge/INDEX.md tests/fixtures/knowledge-route-scenarios.yaml `
+  tests/unit/test_knowledge_contracts.py
 git commit --no-gpg-sign -m "feat: standardize knowledge layer handoffs"
 ```
 
@@ -330,21 +492,22 @@ git commit --no-gpg-sign -m "feat: standardize knowledge layer handoffs"
 - Modify: `skills/bi-sql-knowledge/INDEX.md`
 - Modify: `skills/bi-sql-knowledge/README.md`
 - Modify: `skills/bi-sql-knowledge/references/id-conventions.md`
-- Test: `tests/unit/test_navigation_regression.py`
+- Test: `tests/fixtures/knowledge-route-scenarios.yaml`
+- Test: `tests/unit/test_knowledge_route_validator.py`
 
 **Interfaces:**
 - Consumes: supplied `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` evidence with secrets removed.
 - Produces: plan-review checklist and `clean`/`needs-evidence`/`blocked` diagnostic verdict.
 
-- [ ] **Step 1: Add a failing SQL plan-route test**
+- [ ] **Step 1: Add a failing SQL plan scenario**
 
-```python
-def test_sql_execution_plan_route_is_live() -> None:
-    root = _REPO_ROOT / "skills/bi-sql-knowledge"
-    index = (root / "INDEX.md").read_text(encoding="utf-8")
-    assert "Review a PostgreSQL execution plan" in index
-    assert "knowledge/postgresql-execution-plans.md" in index
-    assert (root / "checklists/postgresql-plan-review-checklist.md").is_file()
+```yaml
+- layer: bi-sql-knowledge
+  task_contains: Review a PostgreSQL execution plan
+  expect_resources:
+    - knowledge/postgresql-execution-plans.md
+    - patterns/postgresql-plan-patterns.json
+  terminal_contains: postgresql-plan-review-checklist
 ```
 
 - [ ] **Step 2: Run and confirm failure**
@@ -372,8 +535,8 @@ not database execution or automatic tuning.
 ```powershell
 python -m json.tool skills/bi-sql-knowledge/patterns/postgresql-plan-patterns.json
 python -m pytest --no-cov --basetemp .pytest_cache/knowledge-expansion `
-  tests/unit/test_navigation_regression.py -q
-git add skills/bi-sql-knowledge tests/unit/test_navigation_regression.py
+  tests/unit/test_knowledge_route_validator.py -q
+git add skills/bi-sql-knowledge tests/fixtures/knowledge-route-scenarios.yaml
 git commit --no-gpg-sign -m "feat: add PostgreSQL plan reasoning"
 ```
 
@@ -389,17 +552,19 @@ git commit --no-gpg-sign -m "feat: add PostgreSQL plan reasoning"
 - Modify: `skills/bi-dax-knowledge/INDEX.md`
 - Modify: `skills/bi-dax-knowledge/SKILL.md`
 - Modify: `skills/bi-dax-knowledge/patterns/analyzer-rule-candidates.json`
-- Test: `tests/unit/test_navigation_regression.py`
+- Test: `tests/fixtures/knowledge-route-scenarios.yaml`
+- Test: `tests/unit/test_knowledge_route_validator.py`
 
 **Interfaces:**
 - Consumes: approved metric contract, model relationships, measure definition, calculation-group metadata.
 - Produces: diagnostic verdict and semantic-model prerequisite handoff.
 
-- [ ] **Step 1: Add failing route tests**
+- [ ] **Step 1: Add failing DAX route scenarios**
 
-Test for live task and symptom routes covering ambiguous relationships, virtual
-filters, calculation-group precedence, semi-additive totals, and blank-versus-zero
-display.
+Add five scenarios covering ambiguous relationships, virtual filters,
+calculation-group precedence, semi-additive totals, and blank-versus-zero display.
+Each scenario names one focused knowledge resource and ends on
+`dax-diagnostic-checklist`.
 
 - [ ] **Step 2: Run and confirm failure**
 
@@ -420,8 +585,8 @@ to zero. Preserve the existing JSON schema.
 ```powershell
 python -m json.tool skills/bi-dax-knowledge/patterns/analyzer-rule-candidates.json
 python -m pytest --no-cov --basetemp .pytest_cache/knowledge-expansion `
-  tests/unit/test_navigation_regression.py -q
-git add skills/bi-dax-knowledge tests/unit/test_navigation_regression.py
+  tests/unit/test_knowledge_route_validator.py -q
+git add skills/bi-dax-knowledge tests/fixtures/knowledge-route-scenarios.yaml
 git commit --no-gpg-sign -m "feat: expand DAX semantic diagnostics"
 ```
 
@@ -438,26 +603,21 @@ git commit --no-gpg-sign -m "feat: expand DAX semantic diagnostics"
 - Modify: `skills/retail-kpi-knowledge/README.md`
 - Modify: `skills/retail-kpi-knowledge/registry.yaml`
 - Modify: `skills/retail-kpi-knowledge/references/kpi-derivation-lineage.md`
-- Test: `tests/unit/test_navigation_regression.py`
+- Test: `tests/fixtures/knowledge-route-scenarios.yaml`
+- Test: `tests/unit/test_knowledge_route_validator.py`
 - Test: `tests/unit/test_knowledge_contracts.py`
 
 **Interfaces:**
 - Consumes: candidate KPI, source-field evidence, ambiguity ledger, named authority.
 - Produces: sufficiency verdict, owner decision packet, or implementation handoff; never approval.
 
-- [ ] **Step 1: Add failing policy-safety tests**
+- [ ] **Step 1: Add failing route and policy-lifecycle tests**
 
-```python
-def test_kpi_policy_decision_route_never_promotes_owner_policy() -> None:
-    root = ROOT / "skills/retail-kpi-knowledge"
-    index = (root / "INDEX.md").read_text(encoding="utf-8")
-    packet = (root / "checklists/kpi-policy-decision-checklist.md")
-    assert "Prepare an owner policy decision packet" in index
-    assert packet.is_file()
-    text = packet.read_text(encoding="utf-8").lower()
-    assert "named authority" in text
-    assert "does not grant approval" in text
-```
+Add a route scenario for `Prepare an owner policy decision packet` ending on
+`kpi-policy-decision-checklist`. Add a registry test that loads `registry.yaml` and
+asserts `same-store-sales-growth` remains in its existing planned lifecycle with its
+owner-policy blockers; derive the expected lifecycle and blocker IDs as literals from
+the approved design, not from the registry loader.
 
 - [ ] **Step 2: Run and confirm failure**
 
@@ -483,8 +643,9 @@ Fix only factual count drift and add decision-packet routes.
 
 ```powershell
 python -m pytest --no-cov --basetemp .pytest_cache/knowledge-expansion `
-  tests/unit/test_knowledge_contracts.py tests/unit/test_navigation_regression.py -q
-git add skills/retail-kpi-knowledge tests/unit
+  tests/unit/test_knowledge_contracts.py tests/unit/test_knowledge_route_validator.py -q
+git add skills/retail-kpi-knowledge tests/fixtures/knowledge-route-scenarios.yaml `
+  tests/unit/test_knowledge_contracts.py
 git commit --no-gpg-sign -m "feat: add governed KPI decision packets"
 ```
 
@@ -500,16 +661,18 @@ git commit --no-gpg-sign -m "feat: add governed KPI decision packets"
 - Modify: `skills/bi-bigdata-knowledge/SKILL.md`
 - Modify: `skills/bi-bigdata-knowledge/patterns/analyzer-rule-candidates.json`
 - Modify: `skills/bi-bigdata-knowledge/references/id-conventions.md`
-- Test: `tests/unit/test_navigation_regression.py`
+- Test: `tests/fixtures/knowledge-route-scenarios.yaml`
+- Test: `tests/unit/test_knowledge_route_validator.py`
 
 **Interfaces:**
 - Consumes: run metadata, partition/file evidence, retry history, control totals, declared grain.
 - Produces: operational evidence packet and backfill/partition-evolution review.
 
-- [ ] **Step 1: Add failing operational route tests**
+- [ ] **Step 1: Add failing Big Data route scenarios**
 
-Assert routes for partial output after retry, backfill safety, partition evolution,
-compaction evidence, and cost/performance evidence packets.
+Add scenarios for partial output after retry, backfill safety, partition evolution,
+compaction evidence, and cost/performance evidence packets. End each on
+`operational-evidence-checklist`.
 
 - [ ] **Step 2: Run and confirm failure**
 
@@ -531,8 +694,8 @@ drift, and compaction changed control totals.
 ```powershell
 python -m json.tool skills/bi-bigdata-knowledge/patterns/analyzer-rule-candidates.json
 python -m pytest --no-cov --basetemp .pytest_cache/knowledge-expansion `
-  tests/unit/test_navigation_regression.py -q
-git add skills/bi-bigdata-knowledge tests/unit/test_navigation_regression.py
+  tests/unit/test_knowledge_route_validator.py -q
+git add skills/bi-bigdata-knowledge tests/fixtures/knowledge-route-scenarios.yaml
 git commit --no-gpg-sign -m "feat: add Big Data operational evidence"
 ```
 
@@ -548,17 +711,19 @@ git commit --no-gpg-sign -m "feat: add Big Data operational evidence"
 - Modify: `skills/bi-analyst-knowledge/INDEX.md`
 - Modify: `skills/bi-analyst-knowledge/SKILL.md`
 - Modify: `skills/bi-analyst-knowledge/derivation-route.md`
-- Test: `tests/unit/test_navigation_regression.py`
+- Test: `tests/fixtures/knowledge-route-scenarios.yaml`
+- Test: `tests/unit/test_knowledge_route_validator.py`
 
 **Interfaces:**
 - Consumes: approved contracts, source profile, prior narrative brief, contract/profile drift evidence.
 - Produces: ranked diagnostic question tree, narrative-change verdict, action-owner/cadence handoff.
 
-- [ ] **Step 1: Add failing Analyst route tests**
+- [ ] **Step 1: Add failing Analyst route scenarios**
 
-Assert routes for "headline changed, what should we investigate?", "contract revision
+Add scenarios for "headline changed, what should we investigate?", "contract revision
 changed the story", "source drift invalidated a question", and "insight has no owner or
-review cadence".
+review cadence". End them respectively on a diagnostic question tree,
+narrative-change verdict, or action/cadence handoff.
 
 - [ ] **Step 2: Run and confirm failure**
 
@@ -585,8 +750,8 @@ cadence, revision freshness, and no invented metrics.
 
 ```powershell
 python -m pytest --no-cov --basetemp .pytest_cache/knowledge-expansion `
-  tests/unit/test_navigation_regression.py -q
-git add skills/bi-analyst-knowledge tests/unit/test_navigation_regression.py
+  tests/unit/test_knowledge_route_validator.py -q
+git add skills/bi-analyst-knowledge tests/fixtures/knowledge-route-scenarios.yaml
 git commit --no-gpg-sign -m "feat: expand analyst narrative reasoning"
 ```
 
@@ -602,6 +767,7 @@ git commit --no-gpg-sign -m "feat: expand analyst narrative reasoning"
 - Modify: `distribution/public-command-surface.yaml`
 - Modify: `scripts/export_agent_bundles.py`
 - Modify: `tests/fixtures/nav-scenarios.yaml`
+- Modify: `tests/fixtures/knowledge-route-scenarios.yaml`
 - Modify: `tests/contract/test_public_knowledge_allowlist.py`
 - Modify: `tests/contract/test_generated_agent_bundles.py`
 - Modify: `tests/contract/test_public_command_surface.py`
@@ -649,7 +815,8 @@ python -m pytest --no-cov --basetemp .pytest_cache/knowledge-expansion `
   tests/contract/test_public_knowledge_allowlist.py `
   tests/contract/test_public_command_surface.py `
   tests/contract/test_generated_agent_bundles.py `
-  tests/unit/test_navigation_regression.py -q
+  tests/unit/test_navigation_regression.py `
+  tests/unit/test_knowledge_route_validator.py -q
 git add COMPASS.md docs/knowledge-map.md docs/routing/routes.yaml CONTRIBUTING.md `
   distribution/public-command-surface.yaml scripts/export_agent_bundles.py `
   tests/fixtures/nav-scenarios.yaml tests/contract tests/unit/test_navigation_regression.py
@@ -804,6 +971,7 @@ python -m pytest --no-cov --basetemp .pytest_cache/knowledge-expansion `
   tests/contract/test_claude_plugin_bundle.py `
   tests/unit/test_compass_project.py `
   tests/unit/test_navigation_regression.py `
+  tests/unit/test_knowledge_route_validator.py `
   tests/unit/test_knowledge_contracts.py -q
 ```
 
