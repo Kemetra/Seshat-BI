@@ -1,0 +1,90 @@
+{
+  "$schema_note": "Reusable single-node dataframe validation patterns. Patterns produce evidence; they do not execute or grant readiness.",
+  "version": "1.0.0",
+  "patterns": [
+    {
+      "id": "PY-VP-005",
+      "name": "schema_contract",
+      "requires": ["expected_fields", "logical_types", "nullable_policy"],
+      "evidence": ["missing_fields", "unexpected_fields", "type_differences"],
+      "blocked_when": ["expected_schema_missing"]
+    },
+    {
+      "id": "PY-VP-006",
+      "name": "row_count_control",
+      "requires": ["source_revision", "expected_row_count", "comparison_scope"],
+      "evidence": ["actual_row_count", "delta", "variance_reason"],
+      "blocked_when": ["independent_expected_count_missing"]
+    },
+    {
+      "id": "PY-VP-007",
+      "name": "grain_uniqueness",
+      "requires": ["declared_grain"],
+      "evidence": ["row_count", "distinct_grain_count", "duplicate_count"],
+      "blocked_when": ["declared_grain_missing"]
+    },
+    {
+      "id": "PY-VP-008",
+      "name": "critical_key_nulls",
+      "requires": ["critical_keys", "nullable_policy"],
+      "evidence": ["null_count_by_key"],
+      "blocked_when": ["key_policy_missing"]
+    },
+    {
+      "id": "PY-VP-009",
+      "name": "domain_and_range",
+      "requires": ["allowed_domains", "range_contracts"],
+      "evidence": ["invalid_count_by_field", "invalid_examples_masked"],
+      "blocked_when": ["domain_contract_missing"]
+    },
+    {
+      "id": "PY-VP-010",
+      "name": "merge_unmatched_keys",
+      "requires": ["join_keys", "expected_cardinality", "unmatched_policy"],
+      "evidence": ["left_only_count", "right_only_count", "fanout_factor"],
+      "blocked_when": ["merge_contract_missing"]
+    },
+    {
+      "id": "PY-VP-011",
+      "name": "additive_control_totals",
+      "requires": ["approved_additive_controls", "comparison_scope", "tolerance"],
+      "evidence": ["expected", "actual", "delta"],
+      "blocked_when": ["independent_control_missing"]
+    },
+    {
+      "id": "PY-VP-012",
+      "name": "segment_control_totals",
+      "requires": ["segment_keys", "approved_additive_controls"],
+      "evidence": ["segment_deltas", "largest_absolute_differences"],
+      "blocked_when": ["segment_scope_missing"]
+    },
+    {
+      "id": "PY-VP-013",
+      "name": "null_distribution_shift",
+      "requires": ["baseline_profile", "nullable_policy"],
+      "evidence": ["baseline_null_counts", "actual_null_counts", "delta"],
+      "blocked_when": ["baseline_missing"]
+    },
+    {
+      "id": "PY-VP-014",
+      "name": "date_coverage_and_freshness",
+      "requires": ["expected_period", "calendar_policy"],
+      "evidence": ["min_date", "max_date", "missing_periods", "invalid_dates"],
+      "blocked_when": ["calendar_policy_missing"]
+    },
+    {
+      "id": "PY-VP-015",
+      "name": "deterministic_repeat",
+      "requires": ["same_source_revision", "same_parameters"],
+      "evidence": ["first_artifact_digest", "second_artifact_digest"],
+      "blocked_when": ["input_revision_changed"]
+    },
+    {
+      "id": "PY-VP-016",
+      "name": "governed_evidence_handoff",
+      "requires": ["completed_checks", "destination_layer", "next_action"],
+      "evidence": ["expected", "actual", "delta", "tolerance", "source"],
+      "blocked_when": ["destination_or_owner_missing"]
+    }
+  ]
+}

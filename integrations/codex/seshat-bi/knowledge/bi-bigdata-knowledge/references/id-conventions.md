@@ -22,6 +22,8 @@ rather than minting a duplicate — see `references/cross-layer-map.md`.
 | `BD-PAT-*` | **Pattern** — a recommended positive design pattern (JSON) | `BD-PAT-002 Broadcast small dim` |
 | `BD-EX-*` | **Example** — an original fictional retail-at-scale example | `BD-EX-004 Skewed store join` |
 | `BD-QA-*` | **Training question** — a Q&A item in the training/eval set | `BD-QA-010 Why did one task hang?` |
+| `BD-OPS-*` | **Operational evidence concept** — run/attempt/manifest/publication reasoning | `BD-OPS-005 Commit visibility boundary` |
+| `BD-BF-*` | **Backfill/evolution concept** — historical rewrite and physical-layout safety | `BD-BF-008 Compaction preserves contents` |
 
 ## Numbering
 

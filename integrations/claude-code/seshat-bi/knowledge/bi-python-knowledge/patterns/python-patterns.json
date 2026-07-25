@@ -1,0 +1,62 @@
+{
+  "$schema_note": "Recommended evidence-preserving Python BI reasoning patterns. These are review defaults, not executable recipes.",
+  "version": "1.0.0",
+  "patterns": [
+    {
+      "id": "PY-PAT-001",
+      "name": "Profile before mutation",
+      "do": "Record source revision, grain candidates, shape, schema, missingness, cardinality, and ranges before cleaning.",
+      "guards_against": ["PY-AP-029"],
+      "refs": ["PY-CN-098", "PY-CN-104", "PY-BP-010"]
+    },
+    {
+      "id": "PY-PAT-002",
+      "name": "Coerce with a rejection ledger",
+      "do": "Record invalid literals, nulls created, precision effects, and approved disposition for every conversion.",
+      "guards_against": ["PY-AP-029", "PY-AP-030"],
+      "refs": ["PY-CN-105", "PY-CN-110", "PY-BP-011"]
+    },
+    {
+      "id": "PY-PAT-003",
+      "name": "Declare merge cardinality",
+      "do": "State both grains, verify uniqueness on the one-side, declare expected cardinality, and reconcile after merge.",
+      "guards_against": ["PY-AP-026", "PY-AP-033"],
+      "refs": ["PY-CN-117", "PY-CN-124", "PY-BP-013"]
+    },
+    {
+      "id": "PY-PAT-004",
+      "name": "Recompute non-additive metrics from components",
+      "do": "Aggregate approved additive components to target grain and recompute ratios or averages there.",
+      "guards_against": ["PY-AP-028"],
+      "refs": ["PY-CN-007", "PY-VP-011"]
+    },
+    {
+      "id": "PY-PAT-005",
+      "name": "Parse dates under governed policy",
+      "do": "Declare format, timezone, business-date cutoff, and calendar source; preserve raw values through validation.",
+      "guards_against": ["PY-AP-030"],
+      "refs": ["PY-CN-125", "PY-CN-129", "PY-BP-014"]
+    },
+    {
+      "id": "PY-PAT-006",
+      "name": "Reconcile against an independent boundary",
+      "do": "Match scope and compare grain, row counts, uniqueness, segment controls, and additive totals with predeclared tolerances.",
+      "guards_against": ["PY-AP-027", "PY-AP-034"],
+      "refs": ["PY-CN-134", "PY-CN-139", "PY-VP-005"]
+    },
+    {
+      "id": "PY-PAT-007",
+      "name": "Optimize the measured dominant stage",
+      "do": "Preserve correctness, measure stage time and memory, change one cause, and re-run controls.",
+      "guards_against": ["PY-AP-031", "PY-AP-033"],
+      "refs": ["PY-CN-141", "PY-CN-147"]
+    },
+    {
+      "id": "PY-PAT-008",
+      "name": "Hand evidence to the owning gate",
+      "do": "Package checks, findings, blockers, owner, destination, and next action without advancing readiness.",
+      "guards_against": ["PY-AP-035"],
+      "refs": ["PY-CN-140", "PY-VP-016"]
+    }
+  ]
+}

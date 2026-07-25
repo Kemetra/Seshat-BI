@@ -13,6 +13,11 @@ additive).
 references/id-conventions.md for lifecycle and IDs). Edges reference stable KPI-MC IDs,
 never filenames. Planned entries carry blockers in the registry and are not formulas.
 
+Policy decisions are a separate dependency axis. A derivation edge says what a KPI computes from;
+it does not settle number-moving policy. For example, KPI-MC-12 derives from KPI-MC-11 but remains
+planned until both `A11` (comparable-store membership) and `comparison-period-policy` are approved.
+Use `knowledge/kpi-sufficiency-and-policy-decisions.md` to package those decisions.
+
 ## Base KPIs (no derives-from edge)
 
 These are computed directly from fact-table fields (a SUM or distinct COUNT over sales
@@ -70,6 +75,10 @@ Margin), and KPI-MC-10 (Gross Margin %) -- one base ruling, six downstream KPIs 
 A change to an intermediate node has a smaller blast radius: a Net Sales (KPI-MC-02) ruling
 reaches its four dependents KPI-MC-05, KPI-MC-08, KPI-MC-09, and KPI-MC-10. Surfacing the
 graph makes this leverage visible instead of implicit.
+
+An owner policy packet must list this blast radius. For KPI-MC-12, an A11 or comparison-period
+ruling affects the same-store contract and every downstream implementation/report that references
+it, but it does not rewrite KPI-MC-11's generic definition.
 
 ## Provenance
 

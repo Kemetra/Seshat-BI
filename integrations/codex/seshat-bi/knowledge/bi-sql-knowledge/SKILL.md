@@ -6,9 +6,9 @@ description: >-
   source profiling, table grain, keys & uniqueness, joins & fan-out amplification, aggregation
   correctness, COUNT/NULL semantics, deduplication, validation queries, reconciliation queries,
   silver/gold transformation logic, window/date-time analytics, SQL anti-patterns, or basic SQL
-  performance reasoning. The SQL counterpart to bi-dax-knowledge. It is a thinking & validation
-  layer, not a database executor, runtime validator, dbt/Dagster project, or PostgreSQL
-  execution-plan layer.
+  performance reasoning, or interpretation of a supplied sanitized PostgreSQL JSON execution
+  plan. The SQL counterpart to bi-dax-knowledge. It is a thinking & validation layer, not a
+  database executor, runtime validator, dbt/Dagster project, or automatic tuning service.
 ---
 
 # BI SQL Knowledge (Seshat BI)
@@ -43,14 +43,15 @@ grain / keys / uniqueness; joins and **fan-out amplification**; aggregation corr
 and **reconciliation** queries; silver/gold transformation logic (DML, reshaping, cleaning,
 set operations, date recipes, gaps/islands, hierarchy, metadata-driven profiling); window and
 date/time analytics; SQL anti-patterns (including shell/encoding pitfalls like matching a
-non-ASCII/RTL literal on a command line); and basic performance reasoning.
+non-ASCII/RTL literal on a command line); basic performance reasoning; and evidence-gated,
+read-only interpretation of supplied PostgreSQL JSON execution plans.
 
 ## What this skill is NOT for
 
 Not a SQL tutorial; not a chapter-by-chapter book summary; not a replacement for any book;
-not a database execution tool; not a runtime validator; not a dbt/Dagster project; not a
-PostgreSQL execution-plan layer (deferred -- see `INDEX.md`); not the Power BI dashboard or DAX
-layer. It reasons about SQL; it never runs it.
+not a database execution tool; not a runtime validator; not a dbt/Dagster project; not an
+automatic PostgreSQL tuning service; not the Power BI dashboard or DAX layer. It reasons about
+SQL and supplied plans; it never runs them.
 
 ## Routing boundaries (pick the right skill before working)
 
@@ -83,19 +84,22 @@ A validated gold table with a known grain and verified unique keys is the hand-o
   hand off to the skill above instead of answering here.
 - **Stop before executing.** This layer produces SQL *reasoning* and *gate shapes*. It does not
   run queries, wire a runtime, build a CLI, or publish anything.
+- **Stop without plan evidence.** Bare SQL can support a hypothesis, not a PostgreSQL performance
+  verdict. Plan review requires a supplied, sanitized JSON plan and representative context.
 - **Never fake a pass.** Validation/reconciliation results are evidence-based; a gate with no
   evidence is `blocked`, never `pass`.
 
 ## ID conventions (full detail in `references/id-conventions.md`)
 
-Concepts `SC-001..070` - anti-patterns `SQL-AP-001..061` - validation gates `VP-*` -
-diagnostic playbooks `PB-SQL-01..19` - analyzer-rule candidates `SARC-*` (staged) -
-promoted draft analyzer rules `SAR-*` (static draft, not runtime-enforced).
+Concepts `SC-001..070` - plan concepts `EP-001..014` - plan patterns `EP-PAT-*` -
+anti-patterns `SQL-AP-001..061` - validation gates `VP-*` - diagnostic playbooks
+`PB-SQL-01..19` - analyzer-rule candidates `SARC-*` (staged) - promoted draft analyzer rules
+`SAR-*` (static draft, not runtime-enforced).
 
 ## Boundaries
 
 Not implementation, not database execution, not dbt/Dagster, not a runtime validator
 (validation patterns are reasoning templates, not an executing engine), not a replacement for
-any book, not the PostgreSQL execution-plan layer. An agent knowledge layer. All examples are
-original Seshat BI / retail examples on a fictional schema; no book text or datasets are
-reproduced (`references/copyright-safety.md`).
+any book, not automatic PostgreSQL tuning. An agent knowledge layer. All examples are original
+Seshat BI / retail examples on a fictional schema; no book text or datasets are reproduced
+(`references/copyright-safety.md`).

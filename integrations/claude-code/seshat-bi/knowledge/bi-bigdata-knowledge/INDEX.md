@@ -19,8 +19,14 @@ named artifact. Do not pre-load the whole `knowledge/` directory.
 | Design incremental / idempotent processing | `knowledge/incremental-and-idempotency.md` | `checklists/pipeline-review-checklist.md` |
 | Validate / reconcile at scale before handoff | `knowledge/validation-and-reconciliation-at-scale.md`, `patterns/validation-patterns.json` | `checklists/validation-reconciliation-checklist.md` |
 | Diagnose slowness / cost | `knowledge/performance-and-cost.md` | performance/cost verdict (in file) |
+| Prepare a cost/performance evidence packet | `knowledge/observability-and-partial-failures.md` (BD-OPS-010..012) | `checklists/operational-evidence-checklist.md` |
+| Diagnose partial output after retry | `knowledge/observability-and-partial-failures.md` (BD-OPS-001..009) | `checklists/operational-evidence-checklist.md` |
+| Review backfill safety | `knowledge/backfills-and-partition-evolution.md` (BD-BF-001..005,010) | `checklists/operational-evidence-checklist.md` |
+| Review partition evolution | `knowledge/backfills-and-partition-evolution.md` (BD-BF-006..007,010) | `checklists/operational-evidence-checklist.md` |
+| Review compaction evidence | `knowledge/backfills-and-partition-evolution.md` (BD-BF-008..010) | `checklists/operational-evidence-checklist.md` |
 | Review a distributed pipeline | `knowledge/bigdata-anti-patterns.md`, `patterns/analyzer-rules.json` | `checklists/pipeline-review-checklist.md` |
 | Find an original worked retail example | `knowledge/bigdata-retail-examples.md` | n/a (reference) |
+| Prepare a cross-layer handoff | `../../contracts/knowledge/knowledge-layer-handoff.yaml` | knowledge-layer handoff populated from the scale-specific checklist or verdict |
 
 ---
 
@@ -38,6 +44,9 @@ named artifact. Do not pre-load the whole `knowledge/` directory.
 | Totals don't match the source/SQL | Reconciliation gap at scale | `knowledge/validation-and-reconciliation-at-scale.md` | `checklists/validation-reconciliation-checklist.md` |
 | Job is slow and expensive but "works" | Caching/UDF/shuffle inefficiency | `knowledge/performance-and-cost.md` | performance/cost verdict |
 | Late data changes yesterday's totals | Late-arriving data not modeled | `knowledge/incremental-and-idempotency.md` | `checklists/pipeline-review-checklist.md` |
+| Failed run left some output visible | Partial commit / unsafe retry | `knowledge/observability-and-partial-failures.md` | `checklists/operational-evidence-checklist.md` |
+| Backfill collides with live ingestion | Overlapping windows / publication race | `knowledge/backfills-and-partition-evolution.md` | `checklists/operational-evidence-checklist.md` |
+| Compaction changed totals | Rewrite did not preserve logical contents | `knowledge/backfills-and-partition-evolution.md` | `checklists/operational-evidence-checklist.md` |
 
 ---
 

@@ -2,7 +2,7 @@
   "$schema_version": "0.1.0-staged",
   "status": "CANDIDATES — NOT ENFORCEABLE YET",
   "description": "Staged analyzer-rule candidates derived from the Definitive Guide enrichment. These are NOT merged into analyzer-rules.json. They carry mixed detectability (regex | heuristic | model_metadata | ast_required | human_review) and must be reviewed before any are promoted to the live rule set. Only candidates with future_phase='analyzer_v1' are promotion targets; 'analyzer_v2' and 'human_guidance_only' stay staged.",
-  "scope": "Slice 1 — evaluation context, row/filter context, context transition, CALCULATE evaluation order, predicate vs table filters, replace vs intersect, KEEPFILTERS, REMOVEFILTERS/ALL, USERELATIONSHIP/CROSSFILTER/TREATAS. Slice 2 — function semantics (return type, blank handling, grouping functions, TI scalar-vs-table). Slice 3 — engine internals / performance diagnostics (SE vs FE, callbacks, cardinality).",
+  "scope": "Slice 1 — evaluation context, row/filter context, context transition, CALCULATE evaluation order, predicate vs table filters, replace vs intersect, KEEPFILTERS, REMOVEFILTERS/ALL, USERELATIONSHIP/CROSSFILTER/TREATAS. Slice 2 — function semantics (return type, blank handling, grouping functions, TI scalar-vs-table). Slice 3 — engine internals / performance diagnostics (SE vs FE, callbacks, cardinality). Semantic diagnostics — relationship ambiguity, virtual-filter evidence, calculation-group precedence, semi-additive time behavior, and blank-versus-zero policy.",
   "promotion_policy": {
     "analyzer_v1": "static, low false-positive: candidate for promotion to analyzer-rules.json after review",
     "analyzer_v2": "needs AST or query-plan/visual context: keep staged",
@@ -222,6 +222,121 @@
       "extends_existing_rule": null,
       "promotion_status": "promoted",
       "promoted_to": "AR-REL-001"
+    },
+    {
+      "candidate_id": "ARC-REL-02",
+      "title": "Multiple bidirectional paths can make filter propagation ambiguous",
+      "category": "model",
+      "severity": "warning",
+      "detectability": "model_metadata",
+      "false_positive_risk": "medium",
+      "required_inputs": [
+        "model_metadata",
+        "metric_contract",
+        "visual_context"
+      ],
+      "suggested_fix": "Trace all active paths and prefer a single-direction star path; use a scoped measure override only when the approved contract requires it.",
+      "future_phase": "analyzer_v2",
+      "related_concepts": [
+        "DX-REL-001",
+        "DX-REL-003",
+        "DX-REL-004"
+      ],
+      "extends_existing_rule": "AR-BIDI-001",
+      "promotion_status": "staged"
+    },
+    {
+      "candidate_id": "ARC-REL-03",
+      "title": "Virtual relationship lacks compatible domain, lineage, or tuple evidence",
+      "category": "correctness",
+      "severity": "warning",
+      "detectability": "human_review",
+      "false_positive_risk": "medium",
+      "required_inputs": [
+        "dax_text",
+        "model_metadata",
+        "domain_profile",
+        "metric_contract"
+      ],
+      "suggested_fix": "Confirm TREATAS source and target types, column order, tuple grain, lineage, and unmatched-value reconciliation before trusting propagation.",
+      "future_phase": "human_guidance_only",
+      "related_concepts": [
+        "DX-REL-007",
+        "DX-REL-008",
+        "DX-REL-009",
+        "DX-REL-010"
+      ],
+      "extends_existing_rule": null,
+      "promotion_status": "staged"
+    },
+    {
+      "candidate_id": "ARC-CG-01",
+      "title": "Interacting calculation groups have conflicting or undocumented precedence",
+      "category": "model",
+      "severity": "warning",
+      "detectability": "model_metadata",
+      "false_positive_risk": "medium",
+      "required_inputs": [
+        "model_metadata",
+        "dax_text",
+        "metric_contract"
+      ],
+      "suggested_fix": "Document intended transformation order, assign distinct precedence where required, and test supported item combinations against the base measure.",
+      "future_phase": "analyzer_v2",
+      "related_concepts": [
+        "DX-CG-002",
+        "DX-CG-003",
+        "DX-CG-008"
+      ],
+      "extends_existing_rule": null,
+      "promotion_status": "staged"
+    },
+    {
+      "candidate_id": "ARC-ADD-02",
+      "title": "Semi-additive measure is summed across its non-additive time dimension",
+      "category": "correctness",
+      "severity": "error",
+      "detectability": "human_review",
+      "false_positive_risk": "medium",
+      "required_inputs": [
+        "dax_text",
+        "model_metadata",
+        "metric_contract",
+        "visual_context"
+      ],
+      "suggested_fix": "Implement the approved snapshot/last-observation policy and reconcile detail and total contexts; do not choose the policy in DAX.",
+      "future_phase": "human_guidance_only",
+      "related_concepts": [
+        "DX-SA-001",
+        "DX-SA-002",
+        "DX-SA-003",
+        "DX-SA-005"
+      ],
+      "extends_existing_rule": "AR-ADD-001",
+      "promotion_status": "staged"
+    },
+    {
+      "candidate_id": "ARC-BLANK-01",
+      "title": "BLANK is coerced to zero without an approved display or metric policy",
+      "category": "correctness",
+      "severity": "warning",
+      "detectability": "ast_required",
+      "false_positive_risk": "high",
+      "required_inputs": [
+        "dax_text",
+        "metric_contract",
+        "visual_context"
+      ],
+      "suggested_fix": "Preserve BLANK unless the approved contract states that absence is a numeric zero; validate population and aggregate effects.",
+      "future_phase": "analyzer_v2",
+      "related_concepts": [
+        "DX-SA-007",
+        "DX-SA-008",
+        "DX-SA-009",
+        "DX-SA-010"
+      ],
+      "extends_existing_rule": null,
+      "promotion_status": "staged"
     },
     {
       "candidate_id": "ARC-MODEL-01",

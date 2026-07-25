@@ -4,9 +4,10 @@ description: >-
   DAX knowledge base for teaching a BI agent to reason about, generate, review, and
   performance-tune DAX for Power BI / tabular models. Use when the task involves writing
   or auditing DAX measures, building time-intelligence / segmentation / ranking / customer
-  / currency calculations, reviewing a semantic model, or explaining DAX concepts and
-  pitfalls. Covers core concepts, best practices, anti-patterns, performance notes, a
-  curated pattern library, reusable metric contracts, and machine-checkable analyzer rules.
+  / currency calculations, reviewing a semantic model, diagnosing physical or virtual filter
+  propagation, calculation-group precedence, semi-additive totals, blank/zero semantics, or
+  explaining DAX concepts and pitfalls. Covers core concepts, best practices, anti-patterns,
+  performance notes, a curated pattern library, reusable metric contracts, and analyzer rules.
 ---
 
 # BI DAX Knowledge
@@ -21,6 +22,8 @@ Trigger for any of: writing a DAX measure or calculated column; reviewing/auditi
 DAX; building time intelligence (YTD, YOY, rolling, running totals), segmentation, ABC, ranking,
 new/returning customers, events-in-progress, what-if parameters, or currency conversion;
 reviewing a semantic model for DAX prerequisites; or explaining a DAX concept/pitfall.
+Also trigger for ambiguous relationship paths, `TREATAS`/virtual-filter defects, interacting
+calculation groups, semi-additive snapshot totals, and blank-versus-zero behavior.
 
 ## How to use it (recommended workflow)
 
@@ -40,6 +43,9 @@ reviewing a semantic model for DAX prerequisites; or explaining a DAX concept/pi
    and avoid everything in `knowledge/dax-anti-patterns.md`.
 6. **Tune.** Use `knowledge/dax-performance-notes.md` to choose between equivalent
    formulations and to explain *why* a rewrite is faster.
+7. **Diagnose semantic behavior.** For relationship, calculation-group, semi-additive, or blank
+   symptoms, use the focused `DX-*` route in `INDEX.md` and end on
+   `checklists/dax-diagnostic-checklist.md`.
 
 ## Phases the agent supports
 
@@ -70,7 +76,10 @@ bi-dax-knowledge/
 │  ├─ dax-best-practices.md         ← BP-xxx rules
 │  ├─ dax-anti-patterns.md          ← AP-xxx mistakes
 │  ├─ dax-performance-notes.md      ← intro perf primer (the "why" lives in engine-internals)
-│  └─ dax-retail-examples.md        ← worked original examples
+│  ├─ dax-retail-examples.md        ← worked original examples
+│  ├─ dax-relationships-and-virtual-filters.md ← DX-REL-* propagation diagnostics
+│  ├─ dax-calculation-groups-and-precedence.md ← DX-CG-* composition diagnostics
+│  └─ dax-semi-additive-and-blank-semantics.md ← DX-SA-* total/display diagnostics
 ├─ patterns/                        ← JSON: precise reusable rules (read for generation/review)
 │  ├─ dax-patterns.json             ← 20-pattern library (per-pattern schema)
 │  ├─ metric-contract-patterns.json ← 21 reusable metric specs (+ concept links, phase support)
@@ -79,7 +88,8 @@ bi-dax-knowledge/
 └─ checklists/                      ← short copy-me checklists (the artifact a route ends on)
    ├─ metric-contract-checklist.md  ← fill a metric contract before writing DAX
    ├─ dax-measure-review-checklist.md ← pre-merge review of a measure
-   └─ dax-model-review-checklist.md ← semantic-model DAX prerequisites
+   ├─ dax-model-review-checklist.md ← semantic-model DAX prerequisites
+   └─ dax-diagnostic-checklist.md   ← focused semantic diagnostic verdict
 
 references/agent-training-set.md   ← graded Q&A bank (36 items, 7 categories) for teaching/eval
 references/agent-training-set.json  ← machine-gradeable twin (same items)
@@ -87,7 +97,8 @@ references/agent-training-set.json  ← machine-gradeable twin (same items)
 
 ## Cross-reference scheme
 
-- Best practices: `BP-xxx` · Anti-patterns: `AP-xxx` · Analyzer rules: `AR-xxx`.
+- Best practices: `BP-xxx` · Anti-patterns: `AP-xxx` · Analyzer rules: `AR-xxx` ·
+  semantic diagnostics: `DX-REL-xxx`, `DX-CG-xxx`, `DX-SA-xxx`.
 - Patterns link to contracts via `related_metric_contract`; contracts link back via
   `maps_to_patterns`; analyzer rules link to BP/AP docs via `refs`.
 

@@ -1,0 +1,51 @@
+{
+  "$schema_note": "Active evidence-based review rules for Python BI pipelines. Rules emit findings; they do not execute, auto-fix, or grant readiness.",
+  "version": "1.0.0",
+  "rules": [
+    {
+      "id": "PY-AR-002",
+      "name": "Merge cardinality not evidenced",
+      "detects": "PY-AP-026",
+      "severity": "high",
+      "signal": "A merge lacks declared input grains, key uniqueness, or expected cardinality.",
+      "verdict_prompt": "Does the merge-fanout checklist prove cardinality and reconcile row counts?",
+      "refs": ["PY-CN-117", "PY-CN-124"]
+    },
+    {
+      "id": "PY-AR-006",
+      "name": "Unresolved object dtype",
+      "detects": "PY-AP-029",
+      "severity": "medium",
+      "signal": "A ready frame retains object dtype without a logical-type justification.",
+      "verdict_prompt": "Is every field bound to an explicit logical/storage type with rejection evidence?",
+      "refs": ["PY-CN-105", "PY-CN-107"]
+    },
+    {
+      "id": "PY-AR-012",
+      "name": "Python defines semantic time logic",
+      "detects": "PY-AP-030",
+      "severity": "high",
+      "signal": "Python invents fiscal, business-date, snapshot, or period-measure policy.",
+      "verdict_prompt": "Does Python only apply a governed calendar/metric contract?",
+      "refs": ["PY-CN-127", "PY-CN-129"]
+    },
+    {
+      "id": "PY-AR-015",
+      "name": "Reconciliation lacks independent controls",
+      "detects": "PY-AP-027",
+      "severity": "high",
+      "signal": "Expected and actual controls are derived through the same dataframe path.",
+      "verdict_prompt": "Is the expected boundary independent and scope-compatible?",
+      "refs": ["PY-CN-134", "PY-CN-136"]
+    },
+    {
+      "id": "PY-AR-016",
+      "name": "Python verdict bypasses readiness",
+      "detects": "PY-AP-035",
+      "severity": "high",
+      "signal": "A clean dataframe review is presented as readiness approval.",
+      "verdict_prompt": "Is the evidence packet handed to readiness without advancing a stage?",
+      "refs": ["PY-CN-140", "PY-VP-016"]
+    }
+  ]
+}

@@ -187,6 +187,7 @@ entries:
     blockers:
       - comparable-store policy is not approved
       - comparison-period policy is not approved
+    policy_blocker_ids: [A11, comparison-period-policy]
     knowledge_contract_ref: skills/retail-kpi-knowledge/contracts/same-store-sales-growth.md
     derives_from: [KPI-MC-11]
     required_concepts: [net_sales_value, comparable_store_membership, comparison_period]

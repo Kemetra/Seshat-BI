@@ -38,6 +38,11 @@ a metric means (meaning lives in metric contracts and domain packs such as
 |------|------|--------|
 | Derive decision-questions for a table | `derivation-route.md` | a ranked-question set citing only approved contracts + source-profile |
 | Author the narrative brief | `derivation-route.md` (schema section) | committed `mappings/<table>/narrative-brief.md` for human review |
+| Headline changed what should we investigate | `diagnostic-question-tree.md` | ranked diagnostic question tree with grounded nodes and [GAP]s |
+| Contract revision changed the story | `narrative-change-review.md` | `unchanged` / `revise` / `blocked` narrative-change verdict |
+| Source drift invalidated a question | `narrative-change-review.md` | `unchanged` / `revise` / `blocked` narrative-change verdict |
+| Insight has no owner or review cadence | `action-and-review-cadence.md` | action/cadence handoff or named-owner [GAP] |
+| Prepare a cross-layer handoff | `../../contracts/knowledge/knowledge-layer-handoff.yaml` | knowledge-layer handoff populated from the narrative brief, [GAP], or framing verdict |
 | Pick the framing for a question | the matching `framing-*.md` card | one named card id per question in the brief |
 | Order pages/zones into a story | `story-order.md` | declared story order in the brief |
 | Decide if a spike/change is real | `framing-signal-vs-noise.md` | a guardrailed claim, an insufficient-sample/insufficient-history statement, or no claim |
@@ -62,6 +67,9 @@ a metric means (meaning lives in metric contracts and domain packs such as
 | "A rate on a tiny slice drove a decision" | `framing-signal-vs-noise.md` (min-sample) | insufficient-sample statement |
 | "Owner asked for margin/turnover we don't have" | `derivation-route.md` ([GAP] format) | [GAP] entry, not a fabricated visual |
 | "Pages feel like disconnected topic buckets" | `story-order.md` | overview -> change -> why/where -> action order |
+| "Headline moved and we do not know where to look" | `diagnostic-question-tree.md` | overview -> change -> driver -> segment -> exception -> action tree |
+| "The brief cites an old contract/profile" | `narrative-change-review.md` | revision-specific narrative-change verdict |
+| "The insight never leads to a decision" | `action-and-review-cadence.md` | named decision, owner, trigger, cadence, and escalation handoff |
 
 ## 3. Consumers
 

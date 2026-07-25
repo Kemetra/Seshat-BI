@@ -44,6 +44,41 @@
       "rationale": "Re-inference per read invites drift; table-format schema evolution preferred (BD-CN-054).",
       "promote_when": "We can detect absence of an expected-schema check.",
       "refs": ["BD-CN-054", "PY-CN-022"]
+    },
+    {
+      "id": "BD-ARC-007",
+      "name": "Failed or retried run left partially visible output",
+      "rationale": "Task success is not dataset atomicity; attempt and output manifests may show visible partial commits (BD-OPS-004/005/006).",
+      "promote_when": "Run metadata and sink manifests expose attempt IDs plus the publication boundary.",
+      "refs": ["BD-OPS-004", "BD-OPS-005", "BD-OPS-006"]
+    },
+    {
+      "id": "BD-ARC-008",
+      "name": "Retry duplicated logical output",
+      "rationale": "Append-style or non-deterministic writes can publish both failed and successful attempt outputs (BD-OPS-007).",
+      "promote_when": "We can compare logical write identities and output manifests across attempts.",
+      "refs": ["BD-OPS-006", "BD-OPS-007"]
+    },
+    {
+      "id": "BD-ARC-009",
+      "name": "Backfill window overlaps live processing without coordination",
+      "rationale": "Concurrent writers over the same logical period can produce arrival-order-dependent history (BD-BF-002/003).",
+      "promote_when": "Declared live/backfill windows and publication ownership are machine-readable.",
+      "refs": ["BD-BF-002", "BD-BF-003", "BD-BF-005"]
+    },
+    {
+      "id": "BD-ARC-010",
+      "name": "Partition specification changed without consumer compatibility evidence",
+      "rationale": "Mixed partition specs may be safe through a table format but unsafe for path-reading consumers (BD-BF-006/007).",
+      "promote_when": "Old/new specs and downstream access modes are available.",
+      "refs": ["BD-BF-006", "BD-BF-007"]
+    },
+    {
+      "id": "BD-ARC-011",
+      "name": "Compaction changed logical control totals",
+      "rationale": "Compaction should alter file layout only; changed contents indicate a rewrite defect (BD-BF-008).",
+      "promote_when": "Before/after table versions and declared-grain controls are attached.",
+      "refs": ["BD-BF-008", "BD-BF-010"]
     }
   ]
 }
