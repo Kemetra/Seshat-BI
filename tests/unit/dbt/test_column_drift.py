@@ -269,8 +269,6 @@ def test_every_column_changing_alter_form_skips_the_table(
         "ALTER TABLE gold.dim_a DROP CONSTRAINT uq_a;",
         "ALTER TABLE gold.dim_a ALTER COLUMN a TYPE BIGINT;",
         "ALTER TABLE gold.dim_a ALTER COLUMN a SET NOT NULL;",
-        # Whole-TABLE rename: no column changes hands, so the shape stays knowable.
-        "ALTER TABLE gold.dim_a RENAME TO dim_a_old;",
         "ALTER TABLE gold.dim_a RENAME CONSTRAINT uq_a TO uq_b;",
     ],
 )
@@ -419,6 +417,194 @@ def test_non_gold_schema_alone_yields_no_comparison(tmp_path: Path) -> None:
     _migration(tmp_path, "0003_silver.sql", "CREATE TABLE silver.stg_x (\n  a INT\n);")
 
     assert migration_column_sets(tmp_path) == {}
+
+
+_REAL_MIGRATION_SHAPES = {
+    "dim_customer_rss": 2,
+    "dim_date_rss": 10,
+    "dim_location_rss": 2,
+    "dim_payment_method_rss": 2,
+    "dim_product_rss": 3,
+    "fct_sales_rss": 11,
+}
+
+
+def test_committed_migrations_still_yield_exactly_the_six_gold_tables() -> None:
+    """THE census guard (#501 review, finding B).
+
+    The committed `0004_..._star.sql` is idempotent: all six `DROP TABLE IF EXISTS`
+    statements (lines 22-27) precede ALL six `CREATE TABLE`s. Naive DROP handling
+    would therefore remove the fact and every dimension from the comparison, and the
+    advisory census would still read "0 advisories" -- for entirely the wrong reason.
+
+    So this asserts the table COUNT and every per-table column count, not just the
+    absence of findings. "0 advisories" alone is not evidence the check is running."""
+    root = Path(__file__).resolve().parents[3]
+    tables = migration_column_sets(root)
+
+    assert set(tables) == set(_REAL_MIGRATION_SHAPES), sorted(tables)
+    assert len(tables) == 6
+    actual = {name: len(shape[0]) for name, shape in tables.items()}
+    assert actual == _REAL_MIGRATION_SHAPES
+
+
+def test_drop_then_create_in_the_same_file_ends_up_created(tmp_path: Path) -> None:
+    """The idempotent preamble pattern, in miniature: DROP first, CREATE after, in
+    one file. Statement order decides -- the relation exists at the end."""
+    _migration(
+        tmp_path,
+        "0004_gold.sql",
+        "DROP TABLE IF EXISTS gold.dim_a;\nCREATE TABLE gold.dim_a (\n  a INT\n);",
+    )
+
+    columns, _ = migration_column_sets(tmp_path)["dim_a"]
+    assert columns == frozenset({"a"})
+
+
+def test_multiple_drops_before_all_creates_still_index_every_table(
+    tmp_path: Path,
+) -> None:
+    """The exact shape of the real 0004 migration: every DROP precedes every CREATE.
+    A per-file (rather than per-statement) order would empty the index here."""
+    _migration(
+        tmp_path,
+        "0004_gold.sql",
+        "DROP TABLE IF EXISTS gold.fct_x;\n"
+        "DROP TABLE IF EXISTS gold.dim_a;\n"
+        "DROP TABLE IF EXISTS gold.dim_b;\n"
+        "CREATE TABLE gold.dim_a (\n  a INT\n);\n"
+        "CREATE TABLE gold.dim_b (\n  b INT\n);\n"
+        "CREATE TABLE gold.fct_x (\n  x INT,\n  a_sk INT\n);\n",
+    )
+
+    tables = migration_column_sets(tmp_path)
+    assert set(tables) == {"dim_a", "dim_b", "fct_x"}
+    assert len(tables["fct_x"][0]) == 2
+
+
+def test_drop_without_recreate_is_omitted(tmp_path: Path) -> None:
+    """A relation that ENDS the sequence dropped no longer exists, so a lingering
+    shadow model must not be compared against it."""
+    _migration(tmp_path, "0004_gold.sql", "CREATE TABLE gold.dim_a (\n  a INT\n);")
+    _migration(tmp_path, "0005_drop.sql", "DROP TABLE gold.dim_a;")
+
+    assert "dim_a" not in migration_column_sets(tmp_path)
+    assert column_shape_advisories(tmp_path, [_contract("dim_a", "a")]) == ()
+
+
+def test_drop_in_a_later_file_after_recreate_still_drops(tmp_path: Path) -> None:
+    """File order matters as much as statement order."""
+    _migration(
+        tmp_path,
+        "0004_gold.sql",
+        "DROP TABLE IF EXISTS gold.dim_a;\nCREATE TABLE gold.dim_a (\n  a INT\n);",
+    )
+    _migration(tmp_path, "0006_drop.sql", "DROP TABLE IF EXISTS gold.dim_a CASCADE;")
+
+    assert "dim_a" not in migration_column_sets(tmp_path)
+
+
+def test_multi_target_drop_removes_every_named_relation(tmp_path: Path) -> None:
+    _migration(
+        tmp_path,
+        "0004_gold.sql",
+        "CREATE TABLE gold.dim_a (\n  a INT\n);\n"
+        "CREATE TABLE gold.dim_b (\n  b INT\n);",
+    )
+    _migration(tmp_path, "0005_drop.sql", "DROP TABLE gold.dim_a, gold.dim_b CASCADE;")
+
+    assert migration_column_sets(tmp_path) == {}
+
+
+def test_drop_of_a_silver_twin_leaves_the_gold_table_indexed(tmp_path: Path) -> None:
+    """DROP is schema-scoped, like the ALTER guard."""
+    _migration(
+        tmp_path, "0004_gold.sql", "CREATE TABLE gold.dim_customer (\n  a INT\n);"
+    )
+    _migration(
+        tmp_path,
+        "0005_silver.sql",
+        "CREATE TABLE silver.dim_customer (\n  a INT\n);\n"
+        "DROP TABLE silver.dim_customer;",
+    )
+
+    assert "dim_customer" in migration_column_sets(tmp_path)
+
+
+def test_whole_table_rename_omits_both_old_and_new_names(tmp_path: Path) -> None:
+    """#501 review, finding A: `RENAME TO` is correctly NOT a column change, but the
+    index is keyed by NAME -- the old name would keep a shape for a relation that no
+    longer exists, and the new name would have none. Omit both."""
+    _migration(tmp_path, "0004_gold.sql", "CREATE TABLE gold.dim_a (\n  a INT\n);")
+    _migration(tmp_path, "0005_rename.sql", "ALTER TABLE gold.dim_a RENAME TO dim_z;")
+
+    tables = migration_column_sets(tmp_path)
+    assert "dim_a" not in tables
+    assert "dim_z" not in tables
+    assert column_shape_advisories(tmp_path, [_contract("dim_a", "a")]) == ()
+    assert column_shape_advisories(tmp_path, [_contract("dim_z", "a")]) == ()
+
+
+def test_whole_table_rename_is_still_not_a_column_change(tmp_path: Path) -> None:
+    """The narrowness must hold: a renamed-away table is omitted because its NAME no
+    longer resolves, not because the parser thinks its columns changed. A table that
+    is renamed TO an existing indexed name is likewise not treated as reshaped."""
+    _migration(
+        tmp_path,
+        "0004_gold.sql",
+        "CREATE TABLE gold.dim_a (\n  a INT\n);\n"
+        "CREATE TABLE gold.dim_keep (\n  k INT\n);",
+    )
+    _migration(tmp_path, "0005_rename.sql", "ALTER TABLE gold.dim_a RENAME TO dim_z;")
+
+    # An unrelated table is untouched by someone else's rename.
+    assert "dim_keep" in migration_column_sets(tmp_path)
+
+
+def test_rename_to_is_not_classified_as_a_column_change(tmp_path: Path) -> None:
+    """Guards the distinction directly at the classifier, not just at the outcome:
+    `RENAME TO` must be absent from the column-changing set (`_altered_tables`) and
+    present in the rename set (`_renamed_tables`). Conflating them would make a bare
+    `RENAME a TO b` and a whole-table `RENAME TO b` indistinguishable."""
+    from seshat.dbt.column_drift import _altered_tables, _renamed_tables
+
+    whole_table = "ALTER TABLE gold.dim_a RENAME TO dim_z;"
+    bare_column = "ALTER TABLE gold.dim_a RENAME a TO b;"
+
+    assert _altered_tables(whole_table) == set()
+    assert _renamed_tables(whole_table) == {("gold", "dim_a"), ("gold", "dim_z")}
+    assert _altered_tables(bare_column) == {("gold", "dim_a")}
+    assert _renamed_tables(bare_column) == set()
+
+
+def test_quoted_mixed_case_identifier_makes_the_table_unparseable(
+    tmp_path: Path,
+) -> None:
+    """#501 review, finding C: Postgres folds unquoted names to lower case but keeps
+    quoted ones exactly, so `"CustomerID"` and `customerid` are DIFFERENT columns.
+    This comparison is case-insensitive, so folding them would hide real drift --
+    skip the table rather than compare on a wrong premise."""
+    _migration(
+        tmp_path,
+        "0004_gold.sql",
+        'CREATE TABLE gold.dim_q (\n  "CustomerID" INT,\n  plain TEXT\n);',
+    )
+
+    assert "dim_q" not in migration_column_sets(tmp_path)
+    assert column_shape_advisories(tmp_path, [_contract("dim_q", "customerid")]) == ()
+
+
+def test_quoted_all_lowercase_identifier_is_still_parsed(tmp_path: Path) -> None:
+    """Quoting alone is not the hazard -- CASE folding is. `"plain"` folds to itself,
+    so it stays comparable and must not be discarded."""
+    _migration(
+        tmp_path,
+        "0004_gold.sql",
+        'CREATE TABLE gold.dim_q (\n  "plain" TEXT,\n  other INT\n);',
+    )
+
+    columns, _ = migration_column_sets(tmp_path)["dim_q"]
+    assert columns == frozenset({"plain", "other"})
 
 
 def test_committed_migration_add_constraint_clauses_are_not_treated_as_alters() -> None:

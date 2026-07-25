@@ -125,6 +125,40 @@ _ALTER_RENAME_BARE = re.compile(
     re.IGNORECASE,
 )
 
+# `DROP TABLE [IF EXISTS] a.b [, c.d] [CASCADE]`. Processed in strict STATEMENT
+# order alongside CREATE, because the committed migrations are idempotent: every
+# `0004_*.sql` DROP is followed LATER IN THE SAME FILE by the CREATE that
+# re-establishes the relation. Treating a dropped table as permanently absent would
+# silently empty the comparison -- a false green (#501 review, finding B).
+_DROP_TABLE = re.compile(
+    r"drop\s+table\s+(?:if\s+exists\s+)?(?P<targets>[^;]+);",
+    re.IGNORECASE | re.DOTALL,
+)
+
+# One `schema.table` (or bare `table`) inside a DROP's comma-separated target list.
+_DROP_TARGET = re.compile(
+    r"(?:(?P<schema>[a-z_][a-z0-9_]*)\.)?(?P<table>[a-z_][a-z0-9_]*)",
+    re.IGNORECASE,
+)
+
+# Whole-TABLE `RENAME TO <new>`. The column set is unchanged, so this is NOT a
+# column-changing ALTER -- but the relation is no longer reachable under its old
+# name and does not yet exist under the new one as an indexed shape. Both names are
+# omitted rather than tracked through the rename (#501 review, finding A).
+_ALTER_RENAME_TABLE = re.compile(
+    r"alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?"
+    r"(?:(?P<schema>[a-z_][a-z0-9_]*)\.)?(?P<table>[a-z_][a-z0-9_]*)\s+"
+    r"rename\s+to\s+(?P<new_table>[a-z_][a-z0-9_]*)",
+    re.IGNORECASE,
+)
+
+# A double-quoted identifier in a CREATE body. PostgreSQL folds unquoted names to
+# lower case but preserves quoted ones EXACTLY, so `"CustomerID"` and `customerid`
+# are different columns. This parser compares case-insensitively, so a table using
+# quoted mixed-case identifiers is treated as unparseable rather than silently
+# folded into a false match (#501 review, finding C).
+_QUOTED_MIXED_CASE = re.compile(r'"[^"]*[A-Z][^"]*"')
+
 # `--` to end of line, or a `/* ... */` block, or a single-quoted string literal.
 # The string-literal alternative comes FIRST and is preserved verbatim, so a `--`
 # or `/*` INSIDE a quoted value is not mistaken for a comment (#501 review,
@@ -243,9 +277,18 @@ def _split_definition_body(body: str) -> list[str]:
 def _column_names(body: str) -> frozenset[str] | None:
     """Column names in one ``CREATE TABLE`` body, or None if unreadable.
 
-    None (-> no finding) whenever the body yields no column at all or a definition
-    line starts with something this parser cannot classify as a column name: a
-    half-understood column set would produce a bogus symmetric difference."""
+    None (-> no finding) whenever the body yields no column at all, a definition
+    line starts with something this parser cannot classify as a column name, or the
+    body uses a QUOTED MIXED-CASE identifier: a half-understood column set would
+    produce a bogus symmetric difference.
+
+    The quoted mixed-case rule closes a real folding hazard (#501 review). Postgres
+    lower-cases unquoted identifiers but preserves quoted ones verbatim, so
+    ``"CustomerID"`` and ``customerid`` are DISTINCT columns. This comparison is
+    case-insensitive, which would fold them together and hide genuine drift -- so
+    the table is skipped instead of compared on a wrong premise."""
+    if _QUOTED_MIXED_CASE.search(body):
+        return None
     names: list[str] = []
     for definition in _split_definition_body(body):
         text = definition.strip().strip(",").strip()
@@ -272,30 +315,42 @@ def migration_column_sets(repo_root: Path) -> dict[str, tuple[frozenset[str], st
     oracle by last-write-wins. An unqualified ``CREATE TABLE`` has no determinable
     layer and is therefore DROPPED rather than guessed at (#501 review).
 
-    A table created more than once IN THE SAME SCHEMA (idempotent drop/recreate, or
-    a later migration reshaping it) resolves to the LAST definition in filename
-    order -- that is the shape the oracle ends up with. Unreadable files are
-    skipped, never raised.
+    CREATE and DROP are replayed in strict STATEMENT order (file order, then
+    position within the file), so the idempotent ``DROP ... ; CREATE ...`` preamble
+    the committed migrations use resolves to CREATED. This ordering is load-bearing:
+    every ``DROP`` in ``0004_*.sql`` precedes ALL of its ``CREATE``s, so treating a
+    dropped relation as permanently absent would remove the fact and every dimension
+    from the comparison and leave a census of zero advisories that means nothing
+    (#501 review, finding B). A relation counts as absent only if it ENDS the
+    sequence dropped.
 
-    A table whose history contains a column-changing ``ALTER TABLE`` is OMITTED
-    entirely: its ``CREATE TABLE`` body no longer describes its final shape, and
-    this parser does not replay DDL. Silence on a shape we cannot know beats a
-    confidently wrong advisory (#501 review) -- both a false alarm on an aligned
-    pair and false reassurance on a divergent one."""
+    A table created more than once IN THE SAME SCHEMA resolves to the LAST
+    definition. Unreadable files are skipped, never raised.
+
+    OMITTED entirely, on the honest-silence rule -- a shape this parser cannot know
+    is better reported as nothing than guessed at:
+
+    - a table whose history contains a column-changing ``ALTER TABLE`` (the CREATE
+      body no longer describes its final shape; DDL is not replayed);
+    - both the old and new names of a whole-table ``ALTER TABLE ... RENAME TO``
+      (the old relation is gone, the new one has no indexed shape);
+    - a table using quoted mixed-case identifiers (case folding would hide drift);
+    - an unqualified ``CREATE TABLE`` (its layer resolves via ``search_path``)."""
     directory = Path(repo_root) / _MIGRATIONS_DIR
     if not directory.is_dir():
         return {}
     found: dict[tuple[str, str], tuple[frozenset[str], str]] = {}
-    altered: set[tuple[str, str]] = set()
+    excluded: set[tuple[str, str]] = set()
     for path in sorted(directory.glob("*.sql")):
         relpath = f"{_MIGRATIONS_DIR}/{path.name}"
         sql = _scannable(_read_text(path))
-        altered.update(_altered_tables(sql))
-        found.update(_created_tables(sql, relpath))
+        excluded.update(_altered_tables(sql))
+        excluded.update(_renamed_tables(sql))
+        _replay_statements(sql, relpath, found)
     return {
         table: shape
         for (schema, table), shape in found.items()
-        if schema == _ORACLE_SCHEMA and (schema, table) not in altered
+        if schema == _ORACLE_SCHEMA and (schema, table) not in excluded
     }
 
 
@@ -311,17 +366,58 @@ def _qualified(match: re.Match[str]) -> tuple[str, str] | None:
     return (schema.lower(), match.group("table").lower())
 
 
-def _created_tables(
-    sql: str, relpath: str
-) -> dict[tuple[str, str], tuple[frozenset[str], str]]:
-    """Schema-qualified ``CREATE TABLE`` shapes in one comment-stripped migration."""
-    created: dict[tuple[str, str], tuple[frozenset[str], str]] = {}
-    for match in _CREATE_TABLE.finditer(sql):
+def _replay_statements(
+    sql: str, relpath: str, found: dict[tuple[str, str], tuple[frozenset[str], str]]
+) -> None:
+    """Apply one migration's CREATE/DROP statements to ``found`` in the order they
+    appear, so a DROP followed by a CREATE of the same relation ends up CREATED."""
+    events = sorted(
+        [(m.start(), _CREATE_TABLE, m) for m in _CREATE_TABLE.finditer(sql)]
+        + [(m.start(), _DROP_TABLE, m) for m in _DROP_TABLE.finditer(sql)],
+        key=lambda event: event[0],
+    )
+    for _, pattern, match in events:
+        if pattern is _DROP_TABLE:
+            for key in _drop_targets(match.group("targets")):
+                found.pop(key, None)
+            continue
         key = _qualified(match)
         columns = _column_names(match.group("body"))
         if key is not None and columns is not None:
-            created[key] = (columns, relpath)
-    return created
+            found[key] = (columns, relpath)
+
+
+def _drop_targets(targets: str) -> set[tuple[str, str]]:
+    """The schema-qualified relations one ``DROP TABLE`` names.
+
+    ``CASCADE`` / ``RESTRICT`` trail the list and are not relations; an unqualified
+    target has no determinable layer, so it cannot match an indexed key anyway."""
+    keys: set[tuple[str, str]] = set()
+    for chunk in targets.split(","):
+        text = re.sub(r"\b(cascade|restrict)\b", " ", chunk, flags=re.IGNORECASE)
+        match = _DROP_TARGET.search(text)
+        key = _qualified(match) if match is not None else None
+        if key is not None:
+            keys.add(key)
+    return keys
+
+
+def _renamed_tables(sql: str) -> set[tuple[str, str]]:
+    """Both endpoints of every whole-table ``RENAME TO``.
+
+    The column set does not change, so this is deliberately NOT a column-changing
+    ALTER -- but the index is keyed by name, and after the rename the old name names
+    nothing while the new name has no indexed shape. Omitting BOTH is the honest
+    answer for either model that might look them up (#501 review, finding A)."""
+    keys: set[tuple[str, str]] = set()
+    for match in _ALTER_RENAME_TABLE.finditer(sql):
+        key = _qualified(match)
+        if key is None:
+            continue
+        schema, table = key
+        keys.add((schema, table))
+        keys.add((schema, match.group("new_table").lower()))
+    return keys
 
 
 def _altered_tables(sql: str) -> set[tuple[str, str]]:
