@@ -24,12 +24,53 @@ EXPECTED_CANONICAL_ROOTS = {
     "skills/retail-kpi-knowledge/SKILL.md",
     "skills/bi-analyst-knowledge/SKILL.md",
 }
+EXPECTED_EXPANDED_SOURCES = {
+    "contracts/knowledge/knowledge-layer-handoff.yaml",
+    "skills/bi-analyst-knowledge/action-and-review-cadence.md",
+    "skills/bi-analyst-knowledge/checklists/narrative-judgment-review-checklist.md",
+    "skills/bi-analyst-knowledge/diagnostic-question-tree.md",
+    "skills/bi-analyst-knowledge/narrative-change-review.md",
+    "skills/bi-bigdata-knowledge/checklists/operational-evidence-checklist.md",
+    "skills/bi-bigdata-knowledge/knowledge/backfills-and-partition-evolution.md",
+    "skills/bi-bigdata-knowledge/knowledge/observability-and-partial-failures.md",
+    "skills/bi-dax-knowledge/checklists/dax-diagnostic-checklist.md",
+    "skills/bi-dax-knowledge/knowledge/dax-calculation-groups-and-precedence.md",
+    "skills/bi-dax-knowledge/knowledge/dax-relationships-and-virtual-filters.md",
+    "skills/bi-dax-knowledge/knowledge/dax-semi-additive-and-blank-semantics.md",
+    "skills/bi-python-knowledge/checklists/dataframe-review-checklist.md",
+    "skills/bi-python-knowledge/checklists/merge-fanout-checklist.md",
+    "skills/bi-python-knowledge/checklists/python-pipeline-review-checklist.md",
+    "skills/bi-python-knowledge/checklists/validation-reconciliation-checklist.md",
+    "skills/bi-python-knowledge/knowledge/dataframe-mental-model.md",
+    "skills/bi-python-knowledge/knowledge/dates-times-and-calendars.md",
+    "skills/bi-python-knowledge/knowledge/joins-merge-and-fanout.md",
+    "skills/bi-python-knowledge/knowledge/nulls-missing-values-and-blanks.md",
+    "skills/bi-python-knowledge/knowledge/pandas-dtypes-and-schema.md",
+    "skills/bi-python-knowledge/knowledge/performance-and-memory.md",
+    "skills/bi-python-knowledge/knowledge/profiling-and-source-inspection.md",
+    "skills/bi-python-knowledge/knowledge/python-anti-patterns.md",
+    "skills/bi-python-knowledge/knowledge/python-core-concepts-for-bi.md",
+    "skills/bi-python-knowledge/knowledge/python-retail-examples.md",
+    "skills/bi-python-knowledge/knowledge/validation-and-reconciliation.md",
+    "skills/bi-python-knowledge/patterns/analyzer-rules.json",
+    "skills/bi-python-knowledge/patterns/python-patterns.json",
+    "skills/bi-python-knowledge/patterns/validation-patterns.json",
+    "skills/bi-sql-knowledge/checklists/postgresql-plan-review-checklist.md",
+    "skills/bi-sql-knowledge/knowledge/postgresql-execution-plans.md",
+    "skills/bi-sql-knowledge/patterns/postgresql-plan-patterns.json",
+    "skills/retail-kpi-knowledge/checklists/kpi-policy-decision-checklist.md",
+    "skills/retail-kpi-knowledge/knowledge/kpi-sufficiency-and-policy-decisions.md",
+    "skills/retail-kpi-knowledge/references/implementation-handoff-template.md",
+}
 
 
 def test_repository_allowlist_has_literal_reviewed_entries() -> None:
     document = load_allowlist(ROOT)
     assert set(document["canonical_roots"]) == EXPECTED_CANONICAL_ROOTS
     entries = validate_allowlist(ROOT, document, allow_untracked_inputs=True)
+    assert EXPECTED_EXPANDED_SOURCES <= {
+        str(entry["source"]) for entry in entries
+    }
     assert len(entries) > 100
     assert all("*" not in str(entry["source"]) for entry in entries)
 
