@@ -25,6 +25,18 @@ from seshat.core import is_test_path
 _MAPPING_RE = re.compile(r"^mappings/([^/]+)/source-map\.yaml$")
 
 
+def source_map_table(rel: str) -> str | None:
+    """The ``<table>`` a ``mappings/<table>/source-map.yaml`` path names, else None.
+
+    The ONE definition of "this path is a source-map" (issue #499). ``discover_stars``
+    returns documents keyed by star id and discards the path, so a rule whose finding
+    must point at the FILE (HR13) needs this predicate rather than a second regex --
+    duplicating the shape is how the gate and the generator drift apart.
+    """
+    m = _MAPPING_RE.match(rel)
+    return m.group(1) if m else None
+
+
 def bare_dim_name(name: object) -> str | None:
     """Bare dimension name: strip an optional ``<schema>.`` prefix, lowercased."""
     if not isinstance(name, str) or not name.strip():
@@ -122,11 +134,11 @@ def discover_stars(
     for rel in sorted(tracked_files):
         if is_test_path(rel):
             continue
-        m = _MAPPING_RE.match(rel)
-        if not m:
+        table = source_map_table(rel)
+        if table is None:
             continue
         data = load(rel)
         if data is None or not is_star(data):
             continue
-        found[star_id(data, m.group(1))] = data
+        found[star_id(data, table)] = data
     return found

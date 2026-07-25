@@ -66,7 +66,15 @@
 #     value containing ':' or quotes (see the quoted examples below).
 #   - Use snake_case for every silver name (rename_to). Keep names SHORT
 #     (Windows 260-char PBIP path limit; see repo CLAUDE.md).
-#   - `gold_placement` dim names MUST match a name under `gold_star.dimensions`.
+#   - `gold_placement` dim names MUST match a name under `gold_star.dimensions`
+#     (or `gold_star.date_dimension`) -- specifically its PHYSICAL BARE name: the
+#     declared `name:` with any `<schema>.` prefix stripped. If the star declares
+#     `name: "gold.dim_product_rss"`, the placement is `dim:dim_product_rss.item`
+#     -- NOT `dim:dim_product.item`. The physical name is canonical here; there is
+#     no logical alias and no suffix-tolerant matching (owner ruling, #499).
+#     Rule HR13 ERRORs on a placement prefix that resolves to no declared
+#     dimension, so a typo or a naming drift fails loudly at the gate rather than
+#     silently contributing nothing to the readers that consume placements.
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -131,7 +139,12 @@ defaults:
 #                 (never by scanning prose); a kept pii:true column with no
 #                 deviation_ref is reported as UNDECIDED, never as cleared.
 #   gold_placement  fact_measure | "dim:<dim_name>.<attr>" | degenerate_dim | dropped
-#                 (dim_name MUST match a name under gold_star.dimensions)
+#                 dim_name is the PHYSICAL BARE name of a dimension declared under
+#                 gold_star.dimensions[].name or gold_star.date_dimension.name --
+#                 that declared name with any `<schema>.` prefix stripped. A star
+#                 declaring `name: "gold.dim_product_rss"` takes
+#                 `dim:dim_product_rss.item`, never `dim:dim_product.item`. HR13
+#                 ERRORs on a prefix that names no declared dimension (#499).
 #
 # The 5 placeholder columns below show the shapes a column can take.
 # A real table has many more; these are obvious placeholders, NOT C086.

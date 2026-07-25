@@ -113,6 +113,7 @@ EXPECTED_RULE_IDS = frozenset(
         "HR8",  # date-spine: a gold date dim is contiguous / gap-free
         "HR11",  # currency-unit: a summed measure's inputs share a unit
         "HR12",  # source-data-contract: a forward source data-contract is well-formed
+        "HR13",  # placement-resolution: every dim: gold_placement prefix resolves
         "HR9",  # rename-impact: no orphaned column/measure reference after a rename
         "DS1",  # decision-store: layout/status/id/scope validity + PII-shape guard
         "DS2",  # decision-store: approval metadata complete + authority-eligible

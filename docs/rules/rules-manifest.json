@@ -204,6 +204,10 @@
     "title": "forward source data-contract presence"
   },
   {
+    "id": "HR13",
+    "title": "every dim: gold_placement prefix resolves to a declared dimension"
+  },
+  {
     "id": "HR4",
     "title": "source freshness declaration"
   },
