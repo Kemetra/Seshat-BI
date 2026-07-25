@@ -312,42 +312,42 @@ skills:
     status: shipped
   - name: bi-sql-knowledge
     platforms: [claude, codex]
-    intent: Public SQL reasoning knowledge (grain, joins, validation, reconciliation).
+    intent: Public SQL reasoning knowledge (grain, joins, validation, reconciliation, supplied PostgreSQL plan review).
     wrapper_template: distribution/bundle-templates/shared/skills/bi-sql-knowledge/SKILL.md
     bundle_destination: skills/bi-sql-knowledge/SKILL.md
     documentation: docs/install/agent-install.md
     status: shipped
   - name: bi-dax-knowledge
     platforms: [claude, codex]
-    intent: Public DAX and semantic-measure reasoning knowledge.
+    intent: Public DAX measure and semantic-model diagnostic reasoning knowledge.
     wrapper_template: distribution/bundle-templates/shared/skills/bi-dax-knowledge/SKILL.md
     bundle_destination: skills/bi-dax-knowledge/SKILL.md
     documentation: docs/install/agent-install.md
     status: shipped
   - name: bi-python-knowledge
     platforms: [claude, codex]
-    intent: Public Python/dataframe preparation reasoning knowledge.
+    intent: Public Python/dataframe preparation, validation, and pipeline-review knowledge.
     wrapper_template: distribution/bundle-templates/shared/skills/bi-python-knowledge/SKILL.md
     bundle_destination: skills/bi-python-knowledge/SKILL.md
     documentation: docs/install/agent-install.md
     status: shipped
   - name: bi-bigdata-knowledge
     platforms: [claude, codex]
-    intent: Public distributed-data reasoning knowledge.
+    intent: Public distributed-data and operational-evidence reasoning knowledge.
     wrapper_template: distribution/bundle-templates/shared/skills/bi-bigdata-knowledge/SKILL.md
     bundle_destination: skills/bi-bigdata-knowledge/SKILL.md
     documentation: docs/install/agent-install.md
     status: shipped
   - name: retail-kpi-knowledge
     platforms: [claude, codex]
-    intent: Public retail KPI meaning and metric-contract knowledge.
+    intent: Public retail KPI meaning, sufficiency, and policy-decision knowledge.
     wrapper_template: distribution/bundle-templates/shared/skills/retail-kpi-knowledge/SKILL.md
     bundle_destination: skills/retail-kpi-knowledge/SKILL.md
     documentation: docs/install/agent-install.md
     status: shipped
   - name: bi-analyst-knowledge
     platforms: [claude, codex]
-    intent: Public analyst-judgment knowledge for decision-questions, framing, and story order.
+    intent: Public analyst-judgment knowledge for diagnostic questions, narrative change, action cadence, framing, and story order.
     wrapper_template: distribution/bundle-templates/shared/skills/bi-analyst-knowledge/SKILL.md
     bundle_destination: skills/bi-analyst-knowledge/SKILL.md
     documentation: docs/install/agent-install.md

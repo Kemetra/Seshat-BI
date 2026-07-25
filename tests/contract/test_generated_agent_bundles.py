@@ -169,13 +169,14 @@ def test_generated_bundle_git_attributes_force_lf() -> None:
     assert result.stdout.splitlines() == [f"{path}: eol: lf" for path in paths]
 
 
-def test_all_five_canonical_entrypoints_and_reviewed_closure_have_provenance() -> None:
+def test_all_six_canonical_entrypoints_and_reviewed_closure_have_provenance() -> None:
     expected_roots = {
         "skills/bi-sql-knowledge/SKILL.md",
         "skills/bi-dax-knowledge/SKILL.md",
         "skills/bi-python-knowledge/SKILL.md",
         "skills/bi-bigdata-knowledge/SKILL.md",
         "skills/retail-kpi-knowledge/SKILL.md",
+        "skills/bi-analyst-knowledge/SKILL.md",
     }
     claude = json.loads(
         (ROOT / "integrations/claude-code/seshat-bi/bundle-manifest.json").read_text(

@@ -6,6 +6,7 @@ canonical_roots:
   - skills/bi-python-knowledge/SKILL.md
   - skills/bi-bigdata-knowledge/SKILL.md
   - skills/retail-kpi-knowledge/SKILL.md
+  - skills/bi-analyst-knowledge/SKILL.md
 policy:
   absence_means_excluded: true
   paths_are_repository_relative_posix: true

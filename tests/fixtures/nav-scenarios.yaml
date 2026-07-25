@@ -34,6 +34,10 @@ scenarios:
     expect_targets:
       - "skills/bi-bigdata-knowledge/SKILL.md"
       - "skills/bi-bigdata-knowledge/INDEX.md"
+  - task_contains: "Analyst judgment"
+    expect_targets:
+      - "skills/bi-analyst-knowledge/SKILL.md"
+      - "skills/bi-analyst-knowledge/INDEX.md"
   - task_contains: "Source understanding"
     expect_targets:
       - "docs/readiness/readiness-model.md"

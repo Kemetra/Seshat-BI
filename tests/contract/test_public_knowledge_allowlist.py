@@ -16,10 +16,19 @@ from scripts.export_agent_bundles import (
 pytestmark = pytest.mark.unit
 
 ROOT = Path(__file__).resolve().parents[2]
+EXPECTED_CANONICAL_ROOTS = {
+    "skills/bi-sql-knowledge/SKILL.md",
+    "skills/bi-dax-knowledge/SKILL.md",
+    "skills/bi-python-knowledge/SKILL.md",
+    "skills/bi-bigdata-knowledge/SKILL.md",
+    "skills/retail-kpi-knowledge/SKILL.md",
+    "skills/bi-analyst-knowledge/SKILL.md",
+}
 
 
 def test_repository_allowlist_has_literal_reviewed_entries() -> None:
     document = load_allowlist(ROOT)
+    assert set(document["canonical_roots"]) == EXPECTED_CANONICAL_ROOTS
     entries = validate_allowlist(ROOT, document, allow_untracked_inputs=True)
     assert len(entries) > 100
     assert all("*" not in str(entry["source"]) for entry in entries)
@@ -28,7 +37,7 @@ def test_repository_allowlist_has_literal_reviewed_entries() -> None:
 def test_canonical_roots_cannot_be_redefined_by_the_allowlist() -> None:
     document = copy.deepcopy(load_allowlist(ROOT))
     document["canonical_roots"][0] = "skills/other/SKILL.md"
-    with pytest.raises(ExportError, match="five Seshat skills"):
+    with pytest.raises(ExportError, match="six Seshat skills"):
         validate_allowlist(ROOT, document, allow_untracked_inputs=True)
 
 
