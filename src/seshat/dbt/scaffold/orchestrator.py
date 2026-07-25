@@ -170,13 +170,17 @@ def _discover_owner_view(root: Path) -> dict[str, dict[str, dict]]:
     """``{star_id: {bare_dim: raw_dim_dict}}`` across all committed governed stars --
     the cross-table view reconciliation needs (#418).
 
+    Each per-star map also records that star's date-slot classification (under
+    ``_stars.DATE_SLOT_KEY``), so reconciliation resolves EACH side's attributes by
+    the build path that side actually takes (#497).
+
     Fail-SAFE to ``{}`` (no git / no stars): reconciliation then treats every owner
     as absent and fails closed, rather than reusing against an unverifiable owner.
     """
     discovered = _stars.discover_stars(
         _committed_tracked_files(root), _committed_source_map(root)
     )
-    return {sid: _stars.star_dimensions(doc) for sid, doc in discovered.items()}
+    return {sid: _stars.star_dimension_view(doc) for sid, doc in discovered.items()}
 
 
 def _build_plan(root: Path, table_id: str) -> model_plan.ScaffoldPlan:
