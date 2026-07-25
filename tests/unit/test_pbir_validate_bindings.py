@@ -259,7 +259,12 @@ def test_filter_reference_through_from_alias_resolves(tmp_path: Path):
     assert "dim_date" in finding.message
 
 
-def test_unresolvable_alias_is_skipped_not_invented(tmp_path: Path):
+def test_unresolvable_alias_blocks_and_names_it(tmp_path: Path):
+    """#475: a wrapper whose alias resolves to nothing is a named blocker.
+
+    Omitting the reference recreated the exact fail-open this validator exists
+    to prevent -- Desktop shows an error card for it, so a pass here was a lie.
+    """
     model = _write_model(tmp_path)
     doc = _visual_doc(_field("Measure", "Sales", "Total Amount"))
     doc["orphanRef"] = {
@@ -271,7 +276,10 @@ def test_unresolvable_alias_is_skipped_not_invented(tmp_path: Path):
     report_dir = tmp_path / "Demo.Report"
     _write_visual(report_dir, doc)
     result = validate_bindings(report_dir=report_dir, model_dir=model)
-    assert result.status == "pass"
+    assert result.status == "blocked"
+    finding = next(f for f in result.unresolved if f.dimension == "unresolved_alias")
+    assert "zz" in finding.message
+    assert "whatever" in finding.message
 
 
 def test_hierarchy_level_wrapper_is_out_of_scope(tmp_path: Path):
@@ -399,6 +407,71 @@ def test_visuals_with_zero_references_pass_with_visible_count(tmp_path: Path):
     result = validate_bindings(report_dir=report_dir, model_dir=model)
     assert result.status == "pass"
     assert any("0 field reference" in line for line in result.evidence)
+
+
+# --------------------------------------------------------------------------- #
+# Declared-but-unclassifiable inputs (#475)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "wrapper",
+    [
+        {"Column": {"Expression": {"SourceRef": {"Entity": "Sales"}}}},
+        {"Column": {"Property": "Amount"}},
+        {"Column": {"Expression": {"SourceRef": {}}, "Property": "Amount"}},
+        {"Column": {"Expression": {}, "Property": "Amount"}},
+    ],
+    ids=["no-property", "no-expression", "empty-sourceref", "no-sourceref"],
+)
+def test_databound_wrapper_that_cannot_be_classified_blocks(
+    tmp_path: Path, wrapper: dict
+):
+    """A wrapper the author declared as a binding must be classified or blocked.
+
+    The discrimination that matters: a visual with NO Column/Measure wrapper is
+    intentionally unbound (see the card-visual and HierarchyLevel tests above)
+    and stays silent; a wrapper that IS present but unusable is a defect.
+    """
+    model = _write_model(tmp_path)
+    doc = _visual_doc(_field("Measure", "Sales", "Total Amount"))
+    doc["brokenRef"] = wrapper
+    report_dir = tmp_path / "Demo.Report"
+    _write_visual(report_dir, doc)
+    result = validate_bindings(report_dir=report_dir, model_dir=model)
+    assert result.status == "blocked"
+    assert any(f.dimension == "malformed_binding" for f in result.unresolved)
+
+
+def test_malformed_table_file_in_tables_tree_blocks(tmp_path: Path):
+    """A definition/tables/*.tmdl yielding no table symbol shrinks the symbol
+    table silently -- the #453 fail-open, so it is a named parse blocker."""
+    model = _write_split_model(tmp_path)
+    (model / "definition" / "tables" / "Broken.tmdl").write_text(
+        "this file declares no table\n", encoding="utf-8"
+    )
+    report = _write_report(tmp_path, _field("Column", "Sales", "Amount"))
+    result = validate_bindings(report_dir=report, model_dir=model)
+    assert result.status == "blocked"
+    finding = next(
+        f for f in result.unresolved if f.dimension == "unparseable_model_file"
+    )
+    assert "Broken.tmdl" in finding.locator
+
+
+def test_non_table_tmdl_outside_the_tables_tree_is_still_legal(tmp_path: Path):
+    """relationships/expressions/culture files legitimately declare no table."""
+    model = _write_split_model(tmp_path)
+    (model / "definition" / "relationships.tmdl").write_text(
+        "relationship abc\n\tfromColumn: Sales.Amount\n", encoding="utf-8"
+    )
+    (model / "definition" / "expressions.tmdl").write_text(
+        'expression Server = "localhost" meta [IsParameterQuery=true]\n',
+        encoding="utf-8",
+    )
+    report = _write_report(tmp_path, _field("Column", "Sales", "Amount"))
+    result = validate_bindings(report_dir=report, model_dir=model)
+    assert result.status == "pass"
 
 
 # --------------------------------------------------------------------------- #

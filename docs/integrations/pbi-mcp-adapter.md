@@ -92,6 +92,20 @@ ceiling by construction.
   read-only config generation, and the transport-mocked preflight whose artifact
   `.seshat/powerbi-mcp-preflight.json` is the F016 smoke-test evidence shape. All
   read-only; none of it lifts the park.
+- **`preflight` is an advisory scaffold, not an operational probe.** The shipped
+  verb wires no real transport, so it can validate the machine-local config, the
+  **target-scoped** `semantic_model_ready` gate, and the target allowlist — but
+  it cannot contact a server to verify a protocol version or tool list. When
+  discovery does not happen the record says so explicitly
+  (`discovery: "not-performed"`, `capabilities_verified: false`), and demanding a
+  capability with `--require-tool` while discovery cannot happen is a blocker
+  rather than a pass. Readiness is resolved from the declared target's own
+  `mappings/<target>/readiness-status.yaml` and is never borrowed from another
+  table.
+- Config classification is per transport shape: a local stdio server must carry
+  `--readonly` (its documented default is write-enabled), while a remote HTTP
+  server has no such flag and classifies as `query-only`. `--skipconfirmation`
+  is a hard refusal in every shape.
 - The generated setup guidance (placeholder-only): `docs/generated/powerbi-mcp-setup.md`.
 - The F016 adapter contract (this integration's specialization):
   `templates/pbi-mcp-adapter-contract.md`.

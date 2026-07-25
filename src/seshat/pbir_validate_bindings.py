@@ -34,9 +34,15 @@ RESOLUTION SEMANTICS
   comparison would fabricate error cards Desktop never shows.
 - ``SourceRef`` resolves directly (``{"Entity": e}``) or through the
   document-wide alias table collected from ``"From": [{"Name": n, "Entity": e}]``
-  lists; an unresolvable alias is SKIPPED, never invented into a finding.
+  lists; an alias no ``From`` declaration defines is a NAMED blocker (#475) --
+  Desktop shows an error card for it, so omitting the reference was a fail-open.
 - Wrappers other than ``Column``/``Measure`` (``HierarchyLevel``, variations,
   conditional-formatting expressions) are out of scope for this increment.
+- A wrapper is a DECLARED binding once it carries an ``Expression`` or a
+  ``Property``. Such a wrapper must be classified or blocked; a visual carrying
+  no wrapper at all is intentionally unbound (card, shape, text box) and stays
+  silent. That distinction is what keeps "0 findings" honest without inventing
+  findings for static visuals.
 - A model column bound under a ``Measure`` wrapper (or vice versa) resolves --
   Desktop renders it "by luck" -- but is reported as a ``projection_kind``
   WARNING: the detection side of #456; the authoring fix lives in the
@@ -75,6 +81,8 @@ class BindingFinding(NamedTuple):
 
     dimension: str  # "unknown_entity" | "unresolved_field" | "projection_kind"
     #                 | "unparseable_json" | "unreadable_source"
+    #                 | "unresolved_alias" | "malformed_binding"
+    #                 | "unparseable_model_file"
     locator: str  # where (report-relative-ish path, or the offending dir)
     message: str  # human-readable statement naming entity/property/cause
 
@@ -156,6 +164,34 @@ def _tables_in_text(text: str) -> Iterator[_ModelTable]:
         )
 
 
+def _in_tables_tree(model_dir: Path, tmdl_path: Path) -> bool:
+    """True when ``tmdl_path`` lives under ``definition/tables/``.
+
+    Only that tree is REQUIRED to yield a table symbol: ``model.tmdl``,
+    ``relationships.tmdl``, ``expressions.tmdl`` and ``cultures/*.tmdl``
+    legitimately declare no table, and blocking on those would fabricate
+    findings for a well-formed model.
+    """
+    try:
+        relative = tmdl_path.relative_to(model_dir / "definition")
+    except ValueError:
+        return False
+    return relative.parts[:1] == ("tables",)
+
+
+def _unparseable_model_finding(tmdl_path: Path) -> BindingFinding:
+    return BindingFinding(
+        dimension="unparseable_model_file",
+        locator=str(tmdl_path),
+        message=(
+            f"table definition file {tmdl_path.name} produced no table symbol "
+            f"-- an unparseable file under definition/tables/ silently shrinks "
+            f"the model symbol table and turns real bindings into false unknown "
+            f"entities; validation blocked (fail closed)"
+        ),
+    )
+
+
 def _model_symbol_table(
     model_dir: Path,
 ) -> tuple[dict[str, _ModelTable], list[BindingFinding]]:
@@ -164,6 +200,10 @@ def _model_symbol_table(
     An UNREADABLE tmdl file is a blocker, not a skip: silently shrinking the
     symbol table would turn every binding into that file's tables into a false
     ``unknown_entity`` -- a validator must fail closed, never guess smaller.
+
+    Same reasoning for a file under ``definition/tables/`` that parses to NO
+    table symbol (#475): it is the table-definition tree, so a file there that
+    yields nothing is a parse defect, not an absence.
     """
     tables: dict[str, _ModelTable] = {}
     blockers: list[BindingFinding] = []
@@ -173,7 +213,11 @@ def _model_symbol_table(
         except (OSError, UnicodeDecodeError):
             blockers.append(_unreadable_model_finding(tmdl_path))
             continue
-        tables.update({t.name.casefold(): t for t in _tables_in_text(text)})
+        parsed = list(_tables_in_text(text))
+        if not parsed and _in_tables_tree(model_dir, tmdl_path):
+            blockers.append(_unparseable_model_finding(tmdl_path))
+            continue
+        tables.update({table.name.casefold(): table for table in parsed})
     return tables, blockers
 
 
@@ -227,61 +271,133 @@ def _collect_aliases(doc: Any) -> dict[str, str]:
     return dict(pair for pair in pairs if pair is not None)
 
 
-def _wrapped_ref(node: dict[str, Any], kind: str) -> tuple[str | None, str] | None:
-    """The ``(entity_or_None, property)`` of a ``Column``/``Measure`` wrapper on
-    this node, with the entity still unresolved when referenced by alias --
-    returned as ``(None, prop)`` only when no direct Entity is present (the
-    caller resolves the alias). ``None`` when the node carries no such wrapper."""
-    inner = node.get(kind)
-    if not isinstance(inner, dict):
-        return None
-    prop = inner.get("Property")
-    expression = inner.get("Expression")
-    if not isinstance(prop, str) or not isinstance(expression, dict):
-        return None
-    source_ref = expression.get("SourceRef")
-    if not isinstance(source_ref, dict):
-        return None
+def _declares_binding(inner: Any) -> bool:
+    """True when a ``Column``/``Measure`` wrapper CLAIMS to be a field reference.
+
+    The distinction #475 turns on: a visual carrying no such wrapper is
+    intentionally unbound (card, shape, text box) and must stay silent, while a
+    wrapper that carries an ``Expression`` or a ``Property`` is a DECLARED
+    binding -- so failing to classify it is a defect, not an absent reference.
+    """
+    return isinstance(inner, dict) and ("Expression" in inner or "Property" in inner)
+
+
+def _malformed_binding_finding(kind: str, detail: str, locator: str) -> BindingFinding:
+    return BindingFinding(
+        dimension="malformed_binding",
+        locator=locator,
+        message=(
+            f"a {kind} projection is declared but cannot be classified: {detail} "
+            f"-- a declared binding that cannot be resolved is a defect, not an "
+            f"absent reference; validation blocked (fail closed)"
+        ),
+    )
+
+
+def _unresolved_alias_finding(
+    kind: str, alias: str, prop: str, locator: str
+) -> BindingFinding:
+    return BindingFinding(
+        dimension="unresolved_alias",
+        locator=locator,
+        message=(
+            f"{kind} projection {prop!r} sources its entity through alias "
+            f"{alias!r}, which no From declaration in this document defines -- "
+            f"Desktop shows an error card for it; validation blocked"
+        ),
+    )
+
+
+class _WrapperContext(NamedTuple):
+    """Where a wrapper was found: the wrapper key, its file, and its locator.
+
+    Threaded as ONE value so the classifier and its helpers stay inside the
+    argument budget while every finding can still name its exact origin.
+    """
+
+    kind: str
+    path: Path
+    locator: str
+
+
+def _grounded_ref(
+    context: _WrapperContext,
+    prop: str,
+    source_ref: dict[str, Any],
+    aliases: dict[str, str],
+) -> tuple[_FieldRef | None, BindingFinding | None]:
+    """Ground a well-formed ``SourceRef`` on its entity, direct or by alias."""
     entity = source_ref.get("Entity")
     if isinstance(entity, str):
-        return entity, prop
-    if isinstance(source_ref.get("Source"), str):
-        return None, prop  # alias resolved by the caller via _collect_aliases
-    return None
+        return _field_ref(context, entity, prop), None
+    alias = source_ref.get("Source")
+    if not isinstance(alias, str):
+        return None, _malformed_binding_finding(
+            context.kind,
+            f"{prop!r} names neither SourceRef.Entity nor SourceRef.Source",
+            context.locator,
+        )
+    resolved = aliases.get(alias)
+    if resolved is None:
+        return None, _unresolved_alias_finding(
+            context.kind, alias, prop, context.locator
+        )
+    return _field_ref(context, resolved, prop), None
 
 
-def _alias_entity(inner: dict[str, Any], aliases: dict[str, str]) -> str | None:
-    """The entity a wrapper's ``SourceRef.Source`` alias declares, or ``None``."""
-    alias = inner["Expression"]["SourceRef"].get("Source")
-    return aliases.get(alias) if isinstance(alias, str) else None
+def _field_ref(context: _WrapperContext, entity: str, prop: str) -> _FieldRef:
+    return _FieldRef(path=context.path, kind=context.kind, entity=entity, prop=prop)
 
 
-def _ref_from_node(
-    node: dict[str, Any], kind: str, aliases: dict[str, str], path: Path
-) -> _FieldRef | None:
-    """The alias-resolved reference a node's ``kind`` wrapper carries, or
-    ``None`` -- an unresolvable alias is skipped, never invented into a
-    finding (the walker only reports what it can actually ground)."""
-    wrapped = _wrapped_ref(node, kind)
-    if wrapped is None:
-        return None
-    entity, prop = wrapped
-    if entity is None:
-        entity = _alias_entity(node[kind], aliases)
-    if entity is None:
-        return None
-    return _FieldRef(path=path, kind=kind, entity=entity, prop=prop)
+def _classified_ref(
+    node: dict[str, Any],
+    context: _WrapperContext,
+    aliases: dict[str, str],
+) -> tuple[_FieldRef | None, BindingFinding | None]:
+    """``(reference, defect)`` for one node's wrapper of ``context.kind``.
+
+    Both ``None`` only when the node declares no binding of that kind at all;
+    a declared binding always yields one or the other -- never silence.
+    """
+    inner = node.get(context.kind)
+    if not _declares_binding(inner):
+        return None, None
+    assert isinstance(inner, dict)
+    prop = inner.get("Property")
+    if not isinstance(prop, str):
+        return None, _malformed_binding_finding(
+            context.kind, "it carries no string Property", context.locator
+        )
+    expression = inner.get("Expression")
+    if not isinstance(expression, dict):
+        return None, _malformed_binding_finding(
+            context.kind, f"{prop!r} carries no Expression object", context.locator
+        )
+    source_ref = expression.get("SourceRef")
+    if not isinstance(source_ref, dict):
+        return None, _malformed_binding_finding(
+            context.kind, f"{prop!r} has no Expression.SourceRef", context.locator
+        )
+    return _grounded_ref(context, prop, source_ref, aliases)
 
 
-def _refs_in_doc(doc: Any, path: Path) -> list[_FieldRef]:
-    """Every alias-resolved ``Column``/``Measure`` field reference in one doc."""
+def _refs_in_doc(
+    doc: Any, path: Path, locator: str
+) -> tuple[list[_FieldRef], list[BindingFinding]]:
+    """Every ``Column``/``Measure`` reference in one doc, plus every declared
+    binding that could not be classified (each a blocked-class finding)."""
     aliases = _collect_aliases(doc)
-    candidates = (
-        _ref_from_node(node, kind, aliases, path)
-        for node in _iter_dicts(doc)
-        for kind in ("Column", "Measure")
-    )
-    return [ref for ref in candidates if ref is not None]
+    refs: list[_FieldRef] = []
+    defects: list[BindingFinding] = []
+    for node in _iter_dicts(doc):
+        for kind in ("Column", "Measure"):
+            context = _WrapperContext(kind=kind, path=path, locator=locator)
+            ref, defect = _classified_ref(node, context, aliases)
+            if ref is not None:
+                refs.append(ref)
+            elif defect is not None:
+                defects.append(defect)
+    return refs, defects
 
 
 def _rel_locator(base_dir: Path, path: Path) -> str:
@@ -298,7 +414,8 @@ def _walk_report(
 
     A corrupt or unreadable definition JSON is a blocker, not a skip: a broken
     ``visual.json`` is itself an error-card source, and silently skipping it
-    would be the #453 fail-open pattern all over again.
+    would be the #453 fail-open pattern all over again. A declared binding that
+    cannot be classified joins those blockers for the same reason (#475).
     """
     refs: list[_FieldRef] = []
     blockers: list[BindingFinding] = []
@@ -306,13 +423,14 @@ def _walk_report(
     if not definition.is_dir():
         return refs, blockers
     for json_path in sorted(definition.rglob("*.json")):
-        doc, blocker = _load_definition_doc(
-            json_path, _rel_locator(report_dir, json_path)
-        )
+        locator = _rel_locator(report_dir, json_path)
+        doc, blocker = _load_definition_doc(json_path, locator)
         if blocker is not None:
             blockers.append(blocker)
             continue
-        refs.extend(_refs_in_doc(doc, json_path))
+        found, defects = _refs_in_doc(doc, json_path, locator)
+        refs.extend(found)
+        blockers.extend(defects)
     return refs, blockers
 
 

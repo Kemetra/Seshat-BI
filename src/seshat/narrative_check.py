@@ -109,10 +109,29 @@ class NarrativeCheckResult(NamedTuple):
 _FRONT_FENCE = re.compile(r"```ya?ml\s*\n(.*?)\n```", re.DOTALL)
 
 
+_FENCED_BLOCK = re.compile(r"```.*?```", re.DOTALL)
+
+
 def _extract_front_section(text: str) -> str | None:
     """The first fenced ``yaml`` block's body, or None when there is none."""
     match = _FRONT_FENCE.search(text)
     return match.group(1) if match else None
+
+
+def _front_body(text: str) -> str:
+    """Everything AFTER the front section's closing fence ("" when no fence)."""
+    match = _FRONT_FENCE.search(text)
+    return text[match.end() :] if match else ""
+
+
+def _has_human_body(body: str) -> bool:
+    """True when prose follows the front section (schema: "a human-first body").
+
+    Fenced blocks are stripped before the test: a brief whose only trailing
+    content is another code fence carries nothing for the named human to read,
+    and the body is precisely what the human design review reads.
+    """
+    return bool(_FENCED_BLOCK.sub("", body).strip())
 
 
 def _blocked(dimension: str, locator: str, message: str) -> NarrativeCheckResult:
@@ -130,10 +149,14 @@ def _blocked(dimension: str, locator: str, message: str) -> NarrativeCheckResult
 
 def _load_front(
     brief_path: Path,
-) -> tuple[dict[str, Any] | None, NarrativeCheckResult | None]:
-    """The parsed front-section mapping, or the fail-closed result naming why
-    it could not be produced (missing / unreadable / no fence / malformed /
-    non-mapping / wrong schema literal)."""
+) -> tuple[tuple[dict[str, Any], str] | None, NarrativeCheckResult | None]:
+    """``((front mapping, body), None)`` or the fail-closed result naming why the
+    front section could not be produced (missing / unreadable / no fence /
+    malformed / non-mapping / wrong schema literal).
+
+    The body travels with the mapping so the "human-first body" rule is checked
+    without re-reading the file at a second site.
+    """
     locator = str(brief_path)
     if not brief_path.is_file():
         return None, _blocked(
@@ -181,7 +204,7 @@ def _load_front(
             f"front section schema is {data.get('schema')!r}, expected "
             f"{SCHEMA_LITERAL!r} -- check blocked (fail closed)",
         )
-    return data, None
+    return (data, _front_body(text)), None
 
 
 # --------------------------------------------------------------------------- #
@@ -202,6 +225,151 @@ def _load_front(
 # visual<->question binding-map check. The frozen schema's dotted-dimension
 # grammar vs the bare-column profile format is a recorded inconsistency for the
 # owner (phase-c-verification.md), not something this checker guesses past.
+
+
+# Every key the frozen v1 schema requires, with the type it must carry.
+# ``story_order`` is absent from this table on purpose: ``_check_story_order``
+# already reports both its absence and a non-mapping value, and reporting it
+# twice would just double the noise. ``gaps`` keeps its long-standing
+# ``missing_gaps_key`` dimension for absence and is type-checked beside it.
+_REQUIRED_TOP_LEVEL: tuple[tuple[str, type], ...] = (
+    ("table", str),
+    ("source_profile", str),
+    ("contracts", list),
+    ("questions", list),
+)
+
+_REQUIRED_CONTRACT_FIELDS = ("id", "revision")
+_REQUIRED_GAP_FIELDS = ("question", "missing_source_fact", "unlocking_feed")
+
+
+def _stated(value: Any) -> bool:
+    """True when a scalar field carries content (a sha, an id, a sentence)."""
+    return value is not None and bool(str(value).strip())
+
+
+def _check_required_keys(data: dict[str, Any]) -> list[NarrativeFinding]:
+    """Every required top-level key must be PRESENT and carry its schema type."""
+    findings: list[NarrativeFinding] = []
+    for key, expected in _REQUIRED_TOP_LEVEL:
+        if key not in data:
+            findings.append(
+                NarrativeFinding(
+                    "missing_required_key",
+                    key,
+                    f"front section has no `{key}` key -- it is REQUIRED by "
+                    f"{SCHEMA_LITERAL} (fail closed: a brief missing a required "
+                    f"key is not a brief the schema describes)",
+                )
+            )
+        elif not isinstance(data[key], expected):
+            findings.append(
+                NarrativeFinding(
+                    "invalid_required_key",
+                    key,
+                    f"`{key}` is {type(data[key]).__name__}, but "
+                    f"{SCHEMA_LITERAL} requires {expected.__name__}",
+                )
+            )
+    if "gaps" in data and not isinstance(data["gaps"], list):
+        findings.append(
+            NarrativeFinding(
+                "invalid_required_key",
+                "gaps",
+                f"`gaps` is {type(data['gaps']).__name__}, but "
+                f"{SCHEMA_LITERAL} requires list (an EMPTY list is allowed)",
+            )
+        )
+    return findings
+
+
+def _check_table_identity(data: dict[str, Any], table: str) -> list[NarrativeFinding]:
+    """The brief must name the table whose directory holds it."""
+    declared = data.get("table")
+    if not isinstance(declared, str) or declared.strip() == table:
+        return []
+    return [
+        NarrativeFinding(
+            "table_mismatch",
+            "table",
+            f"front section declares table {declared.strip()!r} but this check "
+            f"ran for {table!r} -- the brief must name the table whose "
+            f"mappings/<table>/ directory holds it",
+        )
+    ]
+
+
+def _check_body(body: str, locator: str) -> list[NarrativeFinding]:
+    if _has_human_body(body):
+        return []
+    return [
+        NarrativeFinding(
+            "missing_body",
+            locator,
+            "the brief carries no human-first body after its front section "
+            "(prose, not another fenced block) -- the body is what the named "
+            "human design review reads; a front section alone is not reviewable",
+        )
+    ]
+
+
+def _check_contract_entries(contracts: Any) -> list[NarrativeFinding]:
+    """Each ``contracts`` entry must be a mapping stating id + revision."""
+    findings: list[NarrativeFinding] = []
+    for index, contract in enumerate(contracts if isinstance(contracts, list) else []):
+        locator = f"contracts[{index}]"
+        if not isinstance(contract, dict):
+            findings.append(
+                NarrativeFinding(
+                    "malformed_contract_entry",
+                    locator,
+                    f"{locator} is {contract!r}; every contracts entry MUST be a "
+                    f"mapping with id + revision -- a malformed entry is a "
+                    f"defect, never something to filter out",
+                )
+            )
+            continue
+        findings += [
+            NarrativeFinding(
+                "missing_contract_field",
+                str(contract.get("id")) if _stated(contract.get("id")) else locator,
+                f"contract entry {locator} states no `{field}` -- REQUIRED by "
+                f"{SCHEMA_LITERAL}",
+            )
+            for field in _REQUIRED_CONTRACT_FIELDS
+            if not _stated(contract.get(field))
+        ]
+    return findings
+
+
+def _check_gap_entries(gaps: Any) -> list[NarrativeFinding]:
+    """Each ``gaps`` entry must be a mapping stating all three GAP fields."""
+    findings: list[NarrativeFinding] = []
+    for index, gap in enumerate(gaps if isinstance(gaps, list) else []):
+        locator = f"gaps[{index}]"
+        if not isinstance(gap, dict):
+            findings.append(
+                NarrativeFinding(
+                    "malformed_gap_entry",
+                    locator,
+                    f"{locator} is {gap!r}; every gaps entry MUST be a mapping "
+                    f"with question + missing_source_fact + unlocking_feed -- a "
+                    f"malformed entry is a defect, never something to filter out",
+                )
+            )
+            continue
+        findings += [
+            NarrativeFinding(
+                "missing_gap_field",
+                locator,
+                f"gap entry {locator} states no `{field}` -- REQUIRED by "
+                f"{SCHEMA_LITERAL}: a named gap must say what is missing and "
+                f"what would unlock it",
+            )
+            for field in _REQUIRED_GAP_FIELDS
+            if not _stated(gap.get(field))
+        ]
+    return findings
 
 
 def _grounded_measure_ids(data: dict[str, Any]) -> set[str]:
@@ -239,6 +407,8 @@ def _check_contract_revisions(
             continue
         cid = contract.get("id")
         declared = contract.get("revision")
+        if not _stated(cid) or not _stated(declared):
+            continue  # shape already reported by _check_contract_entries
         # The F009 contract store is mappings/<table>/metrics/<Measure>.yaml --
         # the convention the rest of the kit uses (gap_detector,
         # dashboard_coordinator, the --metrics-dir default). A real workspace
@@ -395,6 +565,56 @@ def _check_gap_not_framed(
     return []
 
 
+def _is_measure_id_list(value: Any) -> bool:
+    """True when ``cites.measures`` is a list of contract-id strings."""
+    return isinstance(value, list) and all(isinstance(m, str) for m in value)
+
+
+def _check_question_fields(
+    qid: str, question: dict[str, Any]
+) -> list[NarrativeFinding]:
+    """``decision`` and ``cites`` are REQUIRED per question (frozen v1).
+
+    ``cites.measures`` must be a list of ids; it may be EMPTY -- the schema
+    states no minimum, and a question no visual can answer is caught at the
+    visual by the contract-to-question linkage check with both sides named.
+    """
+    findings: list[NarrativeFinding] = []
+    if not _is_nonempty_str(question.get("decision")):
+        findings.append(
+            NarrativeFinding(
+                "missing_question_field",
+                qid,
+                f"question {qid} states no `decision` -- REQUIRED by "
+                f"{SCHEMA_LITERAL}: a decision-question with no owner decision "
+                f"is not a decision-question",
+            )
+        )
+    cites = question.get("cites")
+    if not isinstance(cites, dict):
+        findings.append(
+            NarrativeFinding(
+                "missing_question_field",
+                qid,
+                f"question {qid} carries no `cites` mapping -- REQUIRED by "
+                f"{SCHEMA_LITERAL}: an ungrounded question cites nothing the "
+                f"brief approved",
+            )
+        )
+        return findings
+    measures = cites.get("measures")
+    if measures is not None and not _is_measure_id_list(measures):
+        findings.append(
+            NarrativeFinding(
+                "invalid_question_field",
+                qid,
+                f"question {qid} `cites.measures` is {measures!r}; it MUST be a "
+                f"list of contract ids",
+            )
+        )
+    return findings
+
+
 def _check_question(
     question: dict[str, Any],
     measure_ids: set[str],
@@ -403,6 +623,7 @@ def _check_question(
     qid = str(question.get("id", "<no id>"))
     stage = question.get("stage")
     findings: list[NarrativeFinding] = []
+    findings += _check_question_fields(qid, question)
     findings += _check_stage(qid, stage)
     findings += _check_callout(qid, question)
     findings += _check_headline(qid, stage, question)
@@ -578,23 +799,39 @@ def check_narrative(*, table: str, repo_root: Path) -> NarrativeCheckResult:
     repo_root = Path(repo_root)
     brief_path = repo_root / "mappings" / table / "narrative-brief.md"
 
-    data, failure = _load_front(brief_path)
+    loaded, failure = _load_front(brief_path)
     if failure is not None:
         return failure
-    assert data is not None  # narrowing for type-checkers; _load_front's contract
+    assert loaded is not None  # narrowing for type-checkers; _load_front's contract
+    data, body = loaded
 
     measure_ids = _grounded_measure_ids(data)
     gap_questions = _gap_question_texts(data)
 
     findings: list[NarrativeFinding] = []
+    findings.extend(_check_required_keys(data))
+    findings.extend(_check_table_identity(data, table))
+    findings.extend(_check_body(body, str(brief_path)))
+    findings.extend(_check_contract_entries(data.get("contracts")))
+    findings.extend(_check_gap_entries(data.get("gaps")))
     findings.extend(_check_contract_revisions(data, repo_root, table))
 
     questions = data.get("questions") or []
     findings.extend(_check_question_ids(questions))
     question_stage = _question_stage_map(questions)
-    for question in questions:
+    for index, question in enumerate(questions if isinstance(questions, list) else []):
         if isinstance(question, dict):
             findings.extend(_check_question(question, measure_ids, gap_questions))
+        else:
+            findings.append(
+                NarrativeFinding(
+                    "malformed_question_entry",
+                    f"questions[{index}]",
+                    f"questions[{index}] is {question!r}; every questions entry "
+                    f"MUST be a mapping -- a malformed entry is a defect, never "
+                    f"something to filter out (it would vanish from the rank)",
+                )
+            )
 
     findings.extend(_check_story_order(data, question_stage))
 
@@ -726,13 +963,25 @@ def _load_binding_map_front(
 
 
 class _BriefGrounding(NamedTuple):
-    """The two grounding sets a binding map must reach into: the brief's declared
-    questions (``{id: stage}``) and its declared approved contract ids. A visual
-    is an orphan unless BOTH its decision-question(s) AND its contract are in
-    these sets (FR-005, orphan in either direction)."""
+    """The grounding sets a binding map must reach into: the brief's declared
+    questions (``{id: stage}``), its declared approved contract ids, and the
+    measures EACH question cites. A visual is an orphan unless BOTH its
+    decision-question(s) AND its contract are in these sets (FR-005, orphan in
+    either direction) -- and set membership alone is not enough: the bound
+    contract must be one the question it answers actually cites (#474)."""
 
     question_stage: dict[str, Any]
     contract_ids: set[str]
+    question_measures: dict[str, set[str]]
+
+
+def _question_measure_map(questions: Any) -> dict[str, set[str]]:
+    """``{question id: {cited measure ids}}`` for every question with an id."""
+    return {
+        str(q["id"]): set(_cited_measures(q))
+        for q in (questions if isinstance(questions, list) else [])
+        if isinstance(q, dict) and "id" in q
+    }
 
 
 def _load_brief_grounding(brief_path: Path) -> _BriefGrounding | NarrativeCheckResult:
@@ -741,14 +990,17 @@ def _load_brief_grounding(brief_path: Path) -> _BriefGrounding | NarrativeCheckR
     loaded. The map's question ids AND contract names MUST ground against the
     brief; an absent/malformed brief means neither can be verified -> fail
     closed."""
-    data, failure = _load_front(brief_path)
+    loaded, failure = _load_front(brief_path)
     if failure is not None:
         # Keep the fail-closed posture and the original (brief-side) message.
         return failure
-    assert data is not None
+    assert loaded is not None
+    data, _body = loaded
+    questions = data.get("questions") or []
     return _BriefGrounding(
-        question_stage=_question_stage_map(data.get("questions") or []),
+        question_stage=_question_stage_map(questions),
         contract_ids=_grounded_measure_ids(data),
+        question_measures=_question_measure_map(questions),
     )
 
 
@@ -815,6 +1067,80 @@ def _check_visual_contract(
     return []
 
 
+def _check_contract_question_linkage(
+    visual: dict[str, Any],
+    locator: str,
+    grounded: list[str],
+    grounding: _BriefGrounding,
+) -> list[NarrativeFinding]:
+    """The THREE-WAY leg proper (#474): membership in both sets is not enough.
+
+    A visual bound to approved contract C while answering question Q is only
+    coherent when Q actually CITES C. Checking "C is approved" and "Q is
+    declared" independently let ``Q1 -> NetSales`` pair with
+    ``v1 -> AverageBasket -> Q1`` and still pass, which is a visual that does
+    not answer the question it claims to.
+    """
+    contract = visual.get("contract")
+    if not _is_nonempty_str(contract) or contract.strip() not in grounding.contract_ids:
+        return []  # the contract leg already reported this visual as an orphan
+    bound = contract.strip()
+    return [
+        NarrativeFinding(
+            "contract_not_cited_by_question",
+            locator,
+            f"visual {locator} binds contract {bound!r} but decision-question "
+            f"{dq!r} does not cite it (that question cites "
+            f"{sorted(grounding.question_measures.get(dq, set())) or 'no measure'})"
+            f" -- a visual must answer its question with a measure the question "
+            f"actually cites",
+        )
+        for dq in grounded
+        if bound not in grounding.question_measures.get(dq, set())
+    ]
+
+
+def _check_page_entries(pages: Any) -> list[NarrativeFinding]:
+    """A declared page must be an id string or a mapping carrying an ``id``."""
+    return [
+        NarrativeFinding(
+            "malformed_page_entry",
+            f"pages[{index}]",
+            f"pages[{index}] is {page!r}; a declared page MUST be an id string "
+            f"or a mapping with an `id` -- a malformed entry is a defect, never "
+            f"something to filter out (it would drop that page's coverage check)",
+        )
+        for index, page in enumerate(pages if isinstance(pages, list) else [])
+        if _page_id(page) is None
+    ]
+
+
+def _partition_visuals(
+    raw: Any,
+) -> tuple[list[dict[str, Any]], list[NarrativeFinding]]:
+    """``(well-formed visuals, findings for the malformed ones)``.
+
+    A scalar where a visual mapping belongs used to be filtered out silently,
+    so a map could carry junk beside one valid visual and still pass (#474).
+    """
+    visuals: list[dict[str, Any]] = []
+    findings: list[NarrativeFinding] = []
+    for index, visual in enumerate(raw if isinstance(raw, list) else []):
+        if isinstance(visual, dict):
+            visuals.append(visual)
+            continue
+        findings.append(
+            NarrativeFinding(
+                "malformed_visual_entry",
+                f"visuals[{index}]",
+                f"visuals[{index}] is {visual!r}; every visuals entry MUST be a "
+                f"mapping binding a contract and its decision-question(s) -- a "
+                f"malformed entry is a defect, never something to filter out",
+            )
+        )
+    return visuals, findings
+
+
 def _check_visual_binding(
     visual: dict[str, Any],
     index: int,
@@ -850,6 +1176,7 @@ def _check_visual_binding(
         if dq not in question_stage
     ]
     grounded = [dq for dq in questions if dq in question_stage]
+    findings += _check_contract_question_linkage(visual, locator, grounded, grounding)
     if visual.get("headline") is True and not any(
         question_stage.get(dq) == "overview" for dq in grounded
     ):
@@ -949,10 +1276,11 @@ def check_binding_map(*, table: str, repo_root: Path) -> NarrativeCheckResult:
         return grounding
     question_stage = grounding.question_stage
 
-    visuals = [v for v in (data.get("visuals") or []) if isinstance(v, dict)]
+    visuals, malformed = _partition_visuals(data.get("visuals") or [])
     declared_pages = data.get("pages") or []
 
-    findings: list[NarrativeFinding] = []
+    findings: list[NarrativeFinding] = [*malformed]
+    findings.extend(_check_page_entries(declared_pages))
     for index, visual in enumerate(visuals):
         findings.extend(_check_visual_binding(visual, index, grounding))
     findings.extend(_check_page_coverage(visuals, declared_pages, question_stage))

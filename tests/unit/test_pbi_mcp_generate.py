@@ -65,6 +65,30 @@ def test_unknown_transport_is_refused() -> None:
         render_mcp_template("carrier-pigeon")
 
 
+@pytest.mark.parametrize(
+    "transport,expected",
+    [
+        ("local", "read-only"),
+        ("remote", "query-only"),
+        ("both", "read-only"),
+    ],
+)
+def test_every_generated_transport_round_trips_its_classifier(
+    tmp_path: Path, transport: str, expected: str
+) -> None:
+    """#477: the detector rejected two of the three configs this tool generates.
+
+    The remote HTTP server has no --readonly argument to carry -- it queries
+    published models only -- so requiring that flag on every Power BI-shaped
+    server made the generated remote/both configs unusable with the preflight.
+    """
+    from seshat.pbi_mcp.detect import classify_mcp_config
+
+    config = tmp_path / ".mcp.json"
+    config.write_text(render_mcp_template(transport), encoding="utf-8")
+    assert classify_mcp_config(config) == expected
+
+
 # --------------------------------------------------------------------------- #
 # setup doc: generated banner + committed-copy parity
 # --------------------------------------------------------------------------- #

@@ -57,10 +57,10 @@
     {
       "classification": "public_knowledge",
       "destination": "knowledge/bi-analyst-knowledge/derivation-route.md",
-      "output_sha256": "2f6a4c0f5a1458fb4fbed49657048b94d565aab046872fe19782978e92dbd3ed",
+      "output_sha256": "133b9a811e7d697166c47e612e62b4a37a929d73499023780ef1586789bb0de2",
       "source": "skills/bi-analyst-knowledge/derivation-route.md",
       "source_id": "kb-158",
-      "source_sha256": "2f6a4c0f5a1458fb4fbed49657048b94d565aab046872fe19782978e92dbd3ed",
+      "source_sha256": "133b9a811e7d697166c47e612e62b4a37a929d73499023780ef1586789bb0de2",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1730,10 +1730,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "236c9a5aafe17e13bc66d6d44a655583736fcc0cbb41c3fe5945aa98c179e930",
+  "manifest_digest": "3607a4c0c4252489d3d94a16fc0648e87a391a772ccf9cac7c69754c82ee6349",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "c974c58c6ecf7efee4d81d56161230c6230e3580",
+  "source_revision": "d5b216c0081a3a26f7d971df2c96bbd56daced67",
   "target": "codex",
   "version": "0.7.1"
 }

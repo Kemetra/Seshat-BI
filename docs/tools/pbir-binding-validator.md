@@ -28,11 +28,21 @@ parsed from `<model>/definition/**/*.tmdl`.
 | `unresolved_field` | blocked | the property is neither a column nor a measure on its table; the message names the nearest model field — a governed rename / PII mask is the common cause |
 | `unparseable_json` | blocked | a corrupt definition file (itself an error-card source) |
 | `unreadable_source` | blocked | fail-closed guards: unreadable files, zero visuals under the report, or zero TMDL tables under the model |
+| `unresolved_alias` | blocked | the reference sources its entity through a `From` alias no declaration in that document defines — Desktop shows an error card for it |
+| `malformed_binding` | blocked | a `Column`/`Measure` wrapper is declared but cannot be classified (no string `Property`, no `Expression` object, no `SourceRef`, or a `SourceRef` naming neither `Entity` nor `Source`) |
+| `unparseable_model_file` | blocked | a file under `definition/tables/` produced no table symbol, which would silently shrink the model symbol table |
 | `projection_kind` | warning | a model **column** bound under a `Measure` wrapper (or vice versa) — renders by luck, semantically wrong (the detection side of #456) |
 
-Resolution is **case-insensitive** (Power BI object names are); an
-unresolvable `From`-alias is skipped, never invented into a finding;
+Resolution is **case-insensitive** (Power BI object names are);
 `HierarchyLevel`/variation wrappers are out of scope for this increment.
+
+A wrapper counts as a **declared binding** once it carries an `Expression` or a
+`Property`: such a wrapper is always classified or blocked, never omitted. A
+visual carrying no `Column`/`Measure` wrapper at all is intentionally unbound (a
+card, shape, or text box) and stays silent — that is what keeps a `pass` with
+"0 field references" honest rather than vacuous. Outside `definition/tables/`,
+TMDL files that declare no table (`model.tmdl`, `relationships.tmdl`,
+`expressions.tmdl`, `cultures/*.tmdl`) remain legal.
 
 ## Exit codes
 

@@ -7,13 +7,27 @@ transport (:class:`MissingRuntimeTransport`) reports "runtime not present --
 preflight skipped" gracefully; tests exercise the logic through an in-memory
 fake. Nothing here mutates any artifact, ever.
 
+SHIPPED SCOPE: AN ADVISORY SCAFFOLD, NOT AN OPERATIONAL PROBE
+--------------------------------------------------------------------------------
+The CLI (``seshat pbi-mcp preflight``) always constructs
+:class:`MissingRuntimeTransport`, so through the shipped verb this capability
+can only refuse before discovery or report ``skipped``. It CANNOT today verify
+a live server's protocol or tool list -- that needs a real discovery-only
+transport wired into the seam. Read the verb accordingly: it validates the
+machine-local config, the target-scoped gate, and the target allowlist, and it
+is explicit when discovery did not happen (``capabilities_verified: false``,
+``discovery: "not-performed"``). Demanding a capability with ``--require-tool``
+while discovery cannot happen is a BLOCKER, never a pass (#477).
+
 Fail-closed ordering (issue #450 section 8, step 3):
 
 1. the machine-local ``.mcp.json`` must not request write mode, and
    ``--skipconfirmation`` anywhere in it is a hard refusal;
-2. ``semantic_model_ready`` must record a pass (the gate-reader style read
-   from ``mappings/*/readiness-status.yaml``) -- otherwise the preflight is
-   blocked NAMING the gate and the server is never contacted;
+2. ``semantic_model_ready`` must record a pass -- for the DECLARED TARGET when
+   one is given (``mappings/<target>/readiness-status.yaml``), otherwise
+   repo-wide. Another table's pass is never borrowed (#477): readiness is a
+   property of a table, and a target-scoped question is answered from the
+   target's own record or blocked NAMING it;
 3. only then is the transport asked to describe itself; an unsupported
    protocol version or a missing required capability is a blocker naming it
    verbatim (F032 posture: unknown is never compatible).
@@ -37,9 +51,11 @@ from .detect import (
     CONFIG_FORBIDDEN_FLAG,
     CONFIG_UNPARSEABLE,
     CONFIG_WRITE_MODE,
+    READINESS_MISSING,
     READINESS_PASS,
     classify_mcp_config,
     read_semantic_readiness,
+    read_table_readiness,
 )
 from .scan import refuse_if_secret_shaped
 
@@ -117,6 +133,10 @@ class PreflightResult:
     target_allowlisted: bool | None  # None = no target declared
     blockers: tuple[PreflightBlocker, ...]
     notes: tuple[str, ...]
+    # True ONLY when a server was actually described and every required
+    # capability was found on it. A skipped discovery leaves this False so no
+    # caller can read an uncontacted server as verified success (#477).
+    capabilities_verified: bool = False
 
 
 def _config_blockers(repo_root: Path) -> list[PreflightBlocker]:
@@ -154,7 +174,45 @@ def _config_blockers(repo_root: Path) -> list[PreflightBlocker]:
     return []
 
 
-def _readiness_blockers(repo_root: Path) -> list[PreflightBlocker]:
+def _target_readiness_blockers(repo_root: Path, target: str) -> list[PreflightBlocker]:
+    """Readiness for the DECLARED target only -- never borrowed (#477).
+
+    A pass recorded by an unrelated table used to satisfy this check, which
+    would arm a future execution boundary against the wrong model.
+    """
+    status = read_table_readiness(Path(repo_root), target)
+    if status == READINESS_PASS:
+        return []
+    if status == READINESS_MISSING:
+        return [
+            PreflightBlocker(
+                id="PBIMCP-GATE-03",
+                detail=(
+                    f"declared target '{target}' has no readiness record at "
+                    f"mappings/{target}/readiness-status.yaml -- an "
+                    "unresolvable target-to-readiness mapping is never "
+                    "assumed ready, and another table's pass is never borrowed"
+                ),
+            )
+        ]
+    return [
+        PreflightBlocker(
+            id="PBIMCP-GATE-02",
+            detail=(
+                f"declared target '{target}' records semantic_model_ready "
+                f"'{status}' -- blocked fail-closed for THIS target (the gate, "
+                "not this tool, decides; another table's pass does not count)"
+            ),
+        )
+    ]
+
+
+def _readiness_blockers(
+    repo_root: Path, target: str | None = None
+) -> list[PreflightBlocker]:
+    """Gate blockers, scoped to the declared target when there is one."""
+    if target is not None:
+        return _target_readiness_blockers(repo_root, target)
     status, _tables, _approval = read_semantic_readiness(Path(repo_root))
     if status == READINESS_PASS:
         return []
@@ -264,10 +322,33 @@ def _uncontacted_result(
     )
 
 
+def _undiscovered_result(request: PreflightRequest, absence: str) -> PreflightResult:
+    """Discovery did not happen -- a graceful skip, unless it was asked to verify.
+
+    A run that DEMANDED capabilities cannot report a skip and be read as fine:
+    nothing was contacted, so nothing was verified (#477). The shipped CLI
+    always wires ``MissingRuntimeTransport``, so without this a caller could
+    demand a tool, contact no server, and still see a zero exit code.
+    """
+    if not request.required_tools:
+        return _uncontacted_result(STATUS_SKIPPED, request.target, (), (absence,))
+    demanded = ", ".join(request.required_tools)
+    blocker = PreflightBlocker(
+        id="PBIMCP-CAP-03",
+        detail=(
+            f"required capabilities ({demanded}) were demanded but discovery "
+            "never happened -- an uncontacted server is never verified "
+            "success; wire a read-only discovery transport or drop the "
+            "requirement"
+        ),
+    )
+    return _uncontacted_result(STATUS_BLOCKED, request.target, (blocker,), (absence,))
+
+
 def run_preflight(request: PreflightRequest) -> PreflightResult:
     """Run the read-only preflight; see the module docstring for the order."""
     blockers = _config_blockers(request.repo_root) + _readiness_blockers(
-        request.repo_root
+        request.repo_root, request.target
     )
     if blockers:
         # Fail-closed BEFORE any contact: a config that demands write mode or
@@ -281,7 +362,7 @@ def run_preflight(request: PreflightRequest) -> PreflightResult:
     try:
         server = request.transport.describe()
     except RuntimeUnavailable as absence:
-        return _uncontacted_result(STATUS_SKIPPED, request.target, (), (str(absence),))
+        return _undiscovered_result(request, str(absence))
     cap_blockers, present, missing = _capability_blockers(
         server, request.required_tools, request.supported_protocol_versions
     )
@@ -299,6 +380,7 @@ def run_preflight(request: PreflightRequest) -> PreflightResult:
         target_allowlisted=allowlisted,
         blockers=all_blockers,
         notes=(),
+        capabilities_verified=not cap_blockers,
     )
 
 
@@ -321,6 +403,8 @@ def render_result_json(result: PreflightResult, generated_at: str) -> str:
         "generated_note": GENERATED_NOTE,
         "mode": result.mode,
         "status": result.status,
+        "capabilities_verified": result.capabilities_verified,
+        "discovery": "performed" if result.server is not None else "not-performed",
         "server": server,
         "tools_present": list(result.tools_present),
         "tools_missing": list(result.tools_missing),

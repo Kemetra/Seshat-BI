@@ -27,6 +27,11 @@ ABSENT = "absent"
 
 CONFIG_ABSENT = "absent"
 CONFIG_READ_ONLY = "read-only"
+# Remote-HTTP-only configuration: the published endpoint queries
+# already-published models and exposes no write switch, so it has no
+# ``--readonly`` argument to carry. Classified separately from a local stdio
+# read-only config rather than mistaken for write mode (#477).
+CONFIG_QUERY_ONLY = "query-only"
 CONFIG_WRITE_MODE = "write-mode"
 CONFIG_FORBIDDEN_FLAG = "forbidden-flag"
 CONFIG_UNPARSEABLE = "unparseable"
@@ -76,13 +81,28 @@ def _server_args(entry: dict) -> list[str]:
     return [str(arg).lower() for arg in args]
 
 
-def _powerbi_server_args(servers: dict) -> list[list[str]]:
-    """Args of every Power BI-shaped server entry, one list per server."""
+def _powerbi_servers(servers: dict) -> list[dict]:
+    """Every Power BI-shaped server entry."""
     return [
-        _server_args(entry)
+        entry
         for name, entry in servers.items()
         if isinstance(entry, dict) and _is_powerbi_server(str(name), entry)
     ]
+
+
+def _powerbi_server_args(servers: dict) -> list[list[str]]:
+    """Args of every Power BI-shaped server entry, one list per server."""
+    return [_server_args(entry) for entry in _powerbi_servers(servers)]
+
+
+def _is_local_server(entry: dict) -> bool:
+    """A stdio server this machine launches -- it takes the ``--readonly`` flag."""
+    return bool(entry.get("command"))
+
+
+def _is_remote_server(entry: dict) -> bool:
+    """A remote HTTP server -- addressed by URL, with no local flags at all."""
+    return bool(entry.get("url")) or str(entry.get("type", "")).lower() == "http"
 
 
 def _carries_forbidden_flag(per_server_args: list[list[str]]) -> bool:
@@ -98,20 +118,50 @@ def _all_read_only(per_server_args: list[list[str]]) -> bool:
 
 
 def _classify_servers(servers: dict) -> str:
-    """Fold every Power BI server's args into one categorical verdict.
+    """Fold every Power BI server entry into one categorical verdict.
 
-    Fail-closed ordering: the forbidden flag wins over everything; an explicit
-    write flag -- or the mere ABSENCE of ``--readonly`` (the local server's
-    documented default is write-enabled) -- reads as write mode.
+    Fail-closed ordering: the forbidden flag wins over everything, then an
+    explicit write flag anywhere.
+
+    After that the verdict is per TRANSPORT SHAPE (#477), because the
+    ``--readonly`` rule only applies where the flag exists:
+
+    - local stdio (``command``): the documented default is write-enabled, so
+      the mere ABSENCE of ``--readonly`` reads as write mode;
+    - remote HTTP (``url`` / ``type: http``): query-only by construction, with
+      no local flag to carry -- requiring ``--readonly`` here rejected the
+      repo's own generated remote/both configurations;
+    - any other shape: unidentifiable transport, so not provably read-only.
     """
-    relevant = _powerbi_server_args(servers)
+    relevant = _powerbi_servers(servers)
     if not relevant:
         return CONFIG_ABSENT
-    if _carries_forbidden_flag(relevant):
+    flagged = _flag_verdict([_server_args(entry) for entry in relevant])
+    return flagged if flagged is not None else _transport_verdict(relevant)
+
+
+def _flag_verdict(every_arg_list: list[list[str]]) -> str | None:
+    """The verdicts a FLAG forces regardless of transport shape, or None."""
+    if _carries_forbidden_flag(every_arg_list):
         return CONFIG_FORBIDDEN_FLAG
-    if _requests_write_mode(relevant):
+    if _requests_write_mode(every_arg_list):
         return CONFIG_WRITE_MODE
-    if _all_read_only(relevant):
+    return None
+
+
+def _transport_verdict(relevant: list[dict]) -> str:
+    """The shape-driven verdict once no flag has forced one."""
+    local = [entry for entry in relevant if _is_local_server(entry)]
+    remote = [
+        entry
+        for entry in relevant
+        if not _is_local_server(entry) and _is_remote_server(entry)
+    ]
+    if len(local) + len(remote) != len(relevant):
+        return CONFIG_WRITE_MODE  # unidentifiable transport: never assume safe
+    if not local:
+        return CONFIG_QUERY_ONLY
+    if _all_read_only([_server_args(entry) for entry in local]):
         return CONFIG_READ_ONLY
     return CONFIG_WRITE_MODE
 
@@ -207,6 +257,26 @@ def read_semantic_readiness(repo_root: Path) -> tuple[str, tuple[str, ...], str]
     ready, approval = _fold_readiness_records(records)
     status = READINESS_PASS if ready else READINESS_NOT_PASS
     return status, ready, approval
+
+
+def read_table_readiness(repo_root: Path, table: str) -> str:
+    """``semantic_model_ready`` for ONE table: pass | not-pass | missing.
+
+    Deliberately exact (#477): the record must live at
+    ``mappings/<table>/readiness-status.yaml``. A declared target naming no such
+    record is ``missing`` -- never resolved by fuzzy match, and never satisfied
+    by some OTHER table's pass. Readiness is a property of a table, so a
+    target-scoped question must be answered from the target's own record.
+    """
+    record = Path(repo_root) / "mappings" / table / "readiness-status.yaml"
+    if not record.is_file():
+        return READINESS_MISSING
+    data = _load_readiness_record(record)
+    if data is None:
+        return READINESS_NOT_PASS
+    if _stage_status(data, "semantic_model_ready") == "pass":
+        return READINESS_PASS
+    return READINESS_NOT_PASS
 
 
 def detect_facts(
