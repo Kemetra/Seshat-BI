@@ -98,6 +98,36 @@ scenarios:
       - checklists/dax-measure-review-checklist.md
     terminal_contains: dax-measure-review-checklist
 
+  - layer: bi-dax-knowledge
+    task_contains: Diagnose ambiguous relationships
+    expect_resources:
+      - knowledge/dax-relationships-and-virtual-filters.md
+    terminal_contains: dax-diagnostic-checklist
+
+  - layer: bi-dax-knowledge
+    task_contains: Diagnose a virtual filter
+    expect_resources:
+      - knowledge/dax-relationships-and-virtual-filters.md
+    terminal_contains: dax-diagnostic-checklist
+
+  - layer: bi-dax-knowledge
+    task_contains: Diagnose calculation-group precedence
+    expect_resources:
+      - knowledge/dax-calculation-groups-and-precedence.md
+    terminal_contains: dax-diagnostic-checklist
+
+  - layer: bi-dax-knowledge
+    task_contains: Diagnose semi-additive totals
+    expect_resources:
+      - knowledge/dax-semi-additive-and-blank-semantics.md
+    terminal_contains: dax-diagnostic-checklist
+
+  - layer: bi-dax-knowledge
+    task_contains: Diagnose blank versus zero display
+    expect_resources:
+      - knowledge/dax-semi-additive-and-blank-semantics.md
+    terminal_contains: dax-diagnostic-checklist
+
   - layer: retail-kpi-knowledge
     task_contains: Write a brand-new KPI contract
     expect_resources:
