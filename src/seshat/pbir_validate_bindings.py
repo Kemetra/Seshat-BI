@@ -693,4 +693,11 @@ def pbir_validate_bindings_main(args: object) -> int:
         "declared measure/column. It does NOT verify TMDL syntax or that "
         "Desktop can load the model; a syntax defect can pass this check."
     )
+    # Point at the one TMDL mistake that IS checkable headlessly, without
+    # implying the pair closes the gap -- neither is a TMDL syntax validator.
+    print(
+        "see also: `seshat tmdl-doc-comment-lint` checks ONE TMDL rule (a /// "
+        "block must attach to a declaration). It is not a syntax validator "
+        "either; TMDL loadability stays unverified."
+    )
     return 1 if result.status == "blocked" else 0

@@ -1965,10 +1965,10 @@
     {
       "classification": "generated_wrapper",
       "destination": "skills/powerbi-workflows/SKILL.md",
-      "output_sha256": "c429e5f972ebb73f11bdd4dbc982e3dd80b678f894d55ed67fbe78fbcdec8661",
+      "output_sha256": "bfceaad9c77cb0436e56f18da844a6730cca9e370e8a1f7f34a76295bc79e441",
       "source": "distribution/bundle-templates/shared/skills/powerbi-workflows/SKILL.md",
       "source_id": "powerbi-workflows-skill",
-      "source_sha256": "c429e5f972ebb73f11bdd4dbc982e3dd80b678f894d55ed67fbe78fbcdec8661",
+      "source_sha256": "bfceaad9c77cb0436e56f18da844a6730cca9e370e8a1f7f34a76295bc79e441",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2054,10 +2054,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "f21492b83c57474808a6d81bd974e2fa7179ebb178c4fe86151c92f0b75e4725",
+  "manifest_digest": "2cc9fa34d795398628a5d99513d5bcda5790a3766b9f34afeca759e9dd4efdc8",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "cba59f91c2f8f9926c9d09ed9fa822c536dcef50",
+  "source_revision": "bf4c90cb686b67e4d3ed61a4bb8e199186a6b1e7",
   "target": "codex",
   "version": "0.7.1"
 }

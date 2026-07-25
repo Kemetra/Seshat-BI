@@ -74,6 +74,15 @@ still fail to open in Desktop. Never report "validated" or "Desktop-ready" on
 the strength of this check alone -- say bindings resolve, and name TMDL
 loadability as unverified.
 
+When you have hand-authored TMDL, the installed
+`seshat tmdl-doc-comment-lint --model <X.SemanticModel>` helper catches ONE
+mistake that is otherwise invisible until Desktop: a `///` documentation block
+followed by a blank line instead of the declaration it documents, which makes
+Desktop reject the whole project. It checks that one rule and nothing else --
+it is NOT a TMDL syntax validator, so a pass does NOT mean the TMDL is valid or
+that Desktop can load the model. TMDL loadability stays unverified either way;
+running both helpers narrows two known classes, it does not clear the model.
+
 ## Reopening Desktop after an external edit
 
 Power BI Desktop does not re-read PBIR/TMDL files edited on disk: a running
