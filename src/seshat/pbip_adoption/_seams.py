@@ -43,13 +43,14 @@ def _governance_findings(
     try:
         import seshat.rules  # noqa: F401
 
-        from ..kit_lint import is_bootstrapped
+        from ..kit_lint import is_kit_self_repo
         from ..registry import all_rules
         from ..runner import build_context, collect_findings
 
         context = build_context(root)
+        # KIT_SELF rules key on kit identity, not substrate presence (issue #486).
         findings = collect_findings(
-            all_rules(), context, bootstrapped=is_bootstrapped(root)
+            all_rules(), context, bootstrapped=is_kit_self_repo(root)
         )
     except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
         return [], [

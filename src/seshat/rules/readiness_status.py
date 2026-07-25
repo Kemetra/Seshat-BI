@@ -47,7 +47,7 @@ _APPROVAL_REQUIRED: frozenset[str] = frozenset(
     {"mapping_ready", "semantic_model_ready", "dashboard_ready", "publish_ready"}
 )
 # The authority classes an approval owner may carry (normalized: lower-case,
-# spaces/hyphens collapsed to underscore) -- exactly the four the docs/templates
+# spaces/hyphens collapsed to underscore) -- the same set the docs/templates
 # define. The named-human guarantee (Principle V / audit C4) requires the FULL
 # shape "Person Name (authority_class)", e.g. "Ahmed Shaaban (data_owner)": a
 # bare role token, a name with no class, or an unknown class all fail
@@ -181,18 +181,46 @@ def _source_kind(stage_block: object) -> str | None:
     return None
 
 
+# The canonical statement of what a recorded approval must look like, quoted by
+# every surface that has to explain the requirement to a human (issue #487).
+APPROVAL_SHAPE_HINT = (
+    'record it as a top-level approvals[] entry -- "- stage: <stage>" with '
+    'owner: "<Person Name> (<authority_class>)" and at: "<YYYY-MM-DD>" '
+    "-- see templates/readiness-status.yaml"
+)
+
+
+def approval_is_shape_valid(approval: object) -> bool:
+    """True for an approvals[] entry that actually satisfies a stage gate.
+
+    The single definition of "shape-valid", shared by every surface that decides
+    whether a GATE IS SATISFIED (issue #487): a named decider WITH an authority
+    class (C4) AND a parseable ISO ``at:`` date. Note ``_check_audit_freshness``
+    below deliberately keeps its own owner-only filter -- it must still SEE an
+    entry with a bad ``at:`` in order to report it, so it cannot use this
+    predicate. ``at:`` used to be required only by ``_check_audit_freshness``,
+    so an entry keyed ``date:`` made ``seshat approvals`` report clean and
+    ``seshat next`` advance while ``seshat check`` rejected it -- three surfaces
+    disagreeing about whether a gate was satisfied, failing OPEN on the approval
+    path. Every committed approvals[] entry in this repo already uses ``at:``, so
+    requiring it here is a no-op on real records.
+    """
+    if not isinstance(approval, dict):
+        return False
+    if not isinstance(approval.get("stage"), str):
+        return False
+    if not _owner_is_valid(approval.get("owner")):
+        return False
+    return _parse_iso_date(approval.get("at")) is not None
+
+
 def _approved_stages(approvals: list) -> set:
     """Stage names satisfied by a shape-valid approval (named decider + authority
-    class). An invalid owner is BOTH flagged by ``_check_approval_owners`` AND
-    excluded here, so a legacy bare-role or name-only entry cannot keep an
-    approval-required stage green (C4; Codex PR#143 review)."""
-    return {
-        a.get("stage")
-        for a in approvals
-        if isinstance(a, dict)
-        and isinstance(a.get("stage"), str)
-        and _owner_is_valid(a.get("owner"))
-    }
+    class + ISO ``at:`` date). An invalid entry is BOTH flagged by
+    ``_check_approval_owners``/``_check_audit_freshness`` AND excluded here, so a
+    legacy bare-role, name-only, or undated entry cannot keep an approval-required
+    stage green (C4; Codex PR#143 review; issue #487)."""
+    return {a.get("stage") for a in approvals if approval_is_shape_valid(a)}
 
 
 def _check_approval_owners(approvals: list, rel: str) -> list[Finding]:

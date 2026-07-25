@@ -130,7 +130,15 @@ next_action: "done"
     assert result["outcome"] == "approval_required"
     assert result["stage"] == "semantic_model_ready"
     assert result["required_authority"] == "metric_owner"
-    assert result["action_text"] is None
+    # An approval_required response now CARRIES its guidance (issue #487): with
+    # action_text None the default `next --table` text surface rendered no action
+    # line at all, so the reader was told to obtain an approval but never what a
+    # valid one looks like. The gate itself is unchanged -- the bare-role owner
+    # above still fails, which is why this is approval_required.
+    action_text = result["action_text"]
+    assert action_text is not None
+    assert "never self-grant it" in action_text
+    assert "approvals" in action_text
 
 
 def test_terminal_pass_when_all_approvals_are_shape_valid(tmp_path: Path) -> None:

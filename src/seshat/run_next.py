@@ -109,15 +109,16 @@ def _source_kind(stage_block: object) -> str | None:
 
 
 def _approved_stages(approvals: object) -> set[str]:
+    """Stages satisfied by a shape-valid approval -- one shared definition.
+
+    Delegates to ``readiness_status.approval_is_shape_valid`` so this surface
+    cannot drift from the gate rule or from the approval inbox (issue #487).
+    """
+    from seshat.rules.readiness_status import approval_is_shape_valid
+
     if not isinstance(approvals, list):
         return set()
-    return {
-        item.get("stage")
-        for item in approvals
-        if isinstance(item, dict)
-        and isinstance(item.get("stage"), str)
-        and _valid_owner(item.get("owner"))
-    }
+    return {item.get("stage") for item in approvals if approval_is_shape_valid(item)}
 
 
 def _table_candidate_names(table: str) -> list[str]:
@@ -367,11 +368,25 @@ def _pass_stage_result(
         caveats.append(caveat)
     if not _approval_missing(stage_name, block, context["approved"]):
         return None
+    from seshat.rules.readiness_status import APPROVAL_SHAPE_HINT
+
+    authority = _authority_for(stage_name)
+    # Without action_text the default `next --table X` text surface printed no
+    # guidance line at all -- the reporter's quoted advice only ever appeared
+    # under --format agent (issue #487).
     return _response(
         context["table"],
         "approval_required",
         stage_name,
-        {"required_authority": _authority_for(stage_name), "caveats": caveats},
+        {
+            "required_authority": authority,
+            "action_text": (
+                f"STOP -- obtain the named-human approval ({authority}) for "
+                f"stage {stage_name!r}; never self-grant it. Once that human "
+                f"has decided, {APPROVAL_SHAPE_HINT}."
+            ),
+            "caveats": caveats,
+        },
     )
 
 

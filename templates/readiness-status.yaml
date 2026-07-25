@@ -97,8 +97,10 @@ approvals: []
   # owner records the DECIDER by NAME + authority class in parens, so the approval
   # traces to a named human (not a role alone). A bare role token is a defect (C4).
   # - stage: "mapping_ready"
-  #   owner: "<Person Name> (<analyst | governance | data_owner | metric_owner>)"
-  #   at: "<YYYY-MM-DD>"             # quoted so it is not auto-typed as a date
+  #   owner: "<Person Name> (<analyst | governance | data_owner | metric_owner | report_owner>)"
+  #   at: "<YYYY-MM-DD>"             # REQUIRED -- quoted so it is not auto-typed
+  #                                  #   as a date. An entry without a valid ISO
+  #                                  #   `at:` does NOT satisfy the stage gate.
   # - stage: "source_ready"          # REQUIRED for a file source (source_kind csv/excel):
   #   owner: "<Person Name> (data_owner)"  # named owner confirming the [PROPOSED] encoding
   #   at: "<YYYY-MM-DD>"             #   (and delimiter/header) the profile's numbers rest on

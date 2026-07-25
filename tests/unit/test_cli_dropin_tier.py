@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from seshat.cli import main as main_under_test
-from tests.unit._gitfix import make_git_repo
+from tests.unit._gitfix import make_git_repo, make_kit_self_repo
 
 # A rule that reads a kit-internal manifest, so it errors in a foreign repo unless
 # the tier gate skips it. SC1 is tagged KIT_SELF (reconciles status-claims.yaml).
@@ -20,7 +20,11 @@ _KIT_SELF_ID = "SC1"
 
 
 def _bootstrap(repo: Path) -> None:
-    """Make ``repo`` look kit-bootstrapped (the is_bootstrapped predicate)."""
+    """Write the ``.seshat/`` substrate -- what ``seshat init`` leaves behind.
+
+    Note this is NOT kit identity: the same two files land in any consumer repo
+    that ran ``seshat init`` (issue #486).
+    """
     seshat = repo / ".seshat"
     seshat.mkdir(parents=True, exist_ok=True)
     (seshat / "kit-source.yaml").write_text("name: t\n", encoding="utf-8")
@@ -42,14 +46,32 @@ def test_check_skips_kit_self_rule_in_foreign_repo(tmp_path, capsys):
 
 
 @pytest.mark.unit
-def test_check_runs_kit_self_rule_in_bootstrapped_repo(tmp_path, capsys):
-    # Same bare repo, now bootstrapped -> the KIT_SELF rule RUNS (its skip line is
-    # absent). Its manifest is missing, so it fires as an ERROR -> no skip line.
+def test_check_runs_kit_self_rule_in_the_kits_own_repo(tmp_path, capsys):
+    # Shaped as the KIT ITSELF -> the KIT_SELF rule RUNS (its skip line is absent).
+    # Its manifest is missing, so it fires as an ERROR -> no skip line.
+    #
+    # This replaces test_check_runs_kit_self_rule_in_bootstrapped_repo, whose
+    # premise (substrate == kit) WAS the defect in issue #486: `seshat init` writes
+    # that substrate into consumer repos, so it unblocked the tier on the golden
+    # path. The intent -- "the tier runs where the manifests genuinely belong" --
+    # is unchanged; only the activation signal is.
+    repo = make_git_repo(tmp_path)
+    _bootstrap(repo)
+    make_kit_self_repo(repo)
+    main_under_test(["check", "--repo", str(repo)])
+    out = capsys.readouterr().out
+    assert f"[info] {_KIT_SELF_ID} skipped (kit-self rule" not in out
+
+
+@pytest.mark.unit
+def test_check_skips_kit_self_rule_after_init_in_a_consumer_repo(tmp_path, capsys):
+    # The regression itself: substrate present (init ran) but NOT the kit -> skip.
     repo = make_git_repo(tmp_path)
     _bootstrap(repo)
     main_under_test(["check", "--repo", str(repo)])
     out = capsys.readouterr().out
-    assert f"[info] {_KIT_SELF_ID} skipped (kit-self rule" not in out
+    assert f"[info] {_KIT_SELF_ID} skipped (kit-self rule" in out
+    assert f"[error] {_KIT_SELF_ID}" not in out
 
 
 @pytest.mark.unit
