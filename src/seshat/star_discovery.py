@@ -199,6 +199,41 @@ def star_dimensions(document: dict) -> dict[str, dict]:
     return out
 
 
+# The reserved key under which a per-star dimension map records WHICH bare name that
+# star reaches through its `date_dimension` slot (issue #497). Not a legal bare
+# dimension name (`bare_dim_name` lowercases and strips, and a dim name is a SQL
+# identifier), so it can never collide with a real entry.
+#
+# Carried INSIDE the per-star map rather than beside it on purpose: a separate
+# optional argument can be omitted by a caller, and an omitted classification
+# silently degrades a calendar to an entity dim -- which is exactly the asymmetry
+# this key exists to make impossible.
+DATE_SLOT_KEY = "#date_slot"
+
+
+def star_dimension_view(document: dict) -> dict[str, dict]:
+    """:func:`star_dimensions` plus the star's date-slot classification (#497).
+
+    The value under :data:`DATE_SLOT_KEY` is the bare name this star declares as its
+    ``date_dimension`` (or ``None``), so a cross-star consumer can resolve EACH
+    side's attributes by the build path that side actually uses. Reading a date
+    dimension's ``attributes`` raw expands a defaulted calendar to nothing; applying
+    a calendar default to an ENTITY dim invents columns ``_dimension_model`` never
+    builds. Both are wrong, in opposite directions.
+    """
+    view: dict[str, dict] = dict(star_dimensions(document))
+    view[DATE_SLOT_KEY] = {"name": date_dimension_name(document)}
+    return view
+
+
+def date_slot_of(star_view: dict[str, dict] | None) -> str | None:
+    """The date-slot bare name recorded in a per-star dimension view, if any."""
+    if not isinstance(star_view, dict):
+        return None
+    marker = star_view.get(DATE_SLOT_KEY)
+    return marker.get("name") if isinstance(marker, dict) else None
+
+
 def date_dimension_name(document: dict) -> str | None:
     """The bare name of the star's ``gold_star.date_dimension``, if it owns that
     slot outright (issue #497).

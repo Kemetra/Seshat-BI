@@ -580,15 +580,36 @@ def _date_dim(attributes: list[str] | None) -> dict:
     return dim
 
 
-def _reuse_plan(owner_attrs: list[str] | None, reuser_attrs: list[str] | None):
+def _owner_star_view(dim: dict, *, as_date_dim: bool = True) -> dict[str, dict]:
+    """A committed owner-view for `owner_star`, built the way the orchestrator builds
+    it -- via `star_dimension_view`, so the owner's date-slot classification travels
+    INSIDE the view and cannot be omitted (issue #497)."""
+    from seshat.star_discovery import star_dimension_view
+
+    star: dict = {"fact": {"name": "gold.fct_owner"}}
+    if as_date_dim:
+        star["dimensions"] = []
+        star["date_dimension"] = dim
+    else:
+        star["dimensions"] = [dim]
+    return {"owner_star": star_dimension_view({"gold_star": star})}
+
+
+def _reuse_plan(
+    owner_attrs: list[str] | None,
+    reuser_attrs: list[str] | None,
+    *,
+    owner_as_date_dim: bool = True,
+):
     """Build the REUSER's plan, reconciling its date dim against the owner star."""
-    owner_dim = _date_dim(owner_attrs)
     source = model_plan.MapSource(
         document=_map(_date_dim(reuser_attrs)),
         source_map=f"mappings/{TABLE_ID}/source-map.yaml",
         source_map_revision="0" * 40,
         conformed_map=_CONFORMED_DATE,
-        owner_view={"owner_star": {"dim_date": owner_dim}},
+        owner_view=_owner_star_view(
+            _date_dim(owner_attrs), as_date_dim=owner_as_date_dim
+        ),
     )
     return model_plan.build_scaffold_plan(source, TABLE_ID, _FACT)
 
@@ -633,6 +654,44 @@ def test_identical_default_calendars_reconcile_cleanly() -> None:
     plan = _reuse_plan(owner_attrs=None, reuser_attrs=None)
 
     assert "dim_date" in plan.reused_dimensions
+
+
+def test_a_mixed_classification_is_refused() -> None:
+    """Codex review P2 (second finding). The reuser declares `dim_date` as its
+    `date_dimension` while the OWNER exposes the same conformed name through
+    `dimensions[]`.
+
+    Applying the reuser's calendar classification to the owner expanded a bare ENTITY
+    dim to the full RC15 set -- columns `_dimension_model` never builds (it emits the
+    surrogate key alone). Reconciliation then PASSED, dropped the reuser's calendar
+    model, and left nine columns referenced on an owner model that emits one. Refuse
+    instead: neither side's classification may be imposed on the other.
+    """
+    with pytest.raises(model_plan.ScaffoldError) as excinfo:
+        _reuse_plan(owner_attrs=None, reuser_attrs=None, owner_as_date_dim=False)
+
+    message = str(excinfo.value)
+    assert "date_dimension" in message and "dimensions[]" in message
+    assert "distinct" in message
+
+
+def test_the_owner_classification_cannot_be_omitted_by_a_caller() -> None:
+    """The owner's date-slot classification travels INSIDE `owner_view`, so an
+    orchestrator-shaped view always carries it.
+
+    An earlier attempt passed it as a separate optional argument; any caller that
+    omitted it silently degraded the owner to an entity dim, reintroducing the same
+    asymmetry one layer down (it false-refused the both-sides-default case).
+    """
+    from seshat.star_discovery import DATE_SLOT_KEY, date_slot_of
+
+    view = _owner_star_view(_date_dim(None))["owner_star"]
+
+    assert DATE_SLOT_KEY in view
+    assert date_slot_of(view) == "dim_date"
+    # An explicit entity dim of the same name owns the slot instead -> not a date dim.
+    entity = _owner_star_view(_date_dim(None), as_date_dim=False)["owner_star"]
+    assert date_slot_of(entity) is None
 
 
 def test_entity_dimension_reuse_still_compares_declared_attributes() -> None:

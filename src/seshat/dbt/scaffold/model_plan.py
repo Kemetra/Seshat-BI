@@ -808,8 +808,9 @@ class _ReuseContext:
     star_id: str  # the reuser's governed star id (for the message)
     # The bare name THIS star calls its date dimension, so a reused calendar is
     # reconciled on its RESOLVED attribute set rather than its raw declaration
-    # (#497). One classification serves both sides -- see
-    # `_require_attributes_covered`. None -> no date dim -> today's behavior exactly.
+    # (#497). The OWNER's counterpart travels inside `owner_view` itself (under
+    # `_stars.DATE_SLOT_KEY`) so it cannot be omitted by a caller; each side is
+    # classified by its own slot. None -> no date dim -> today's behavior exactly.
     reuser_date_dim: str | None = None
 
 
@@ -889,25 +890,53 @@ def _require_surrogate_key_matches(
     )
 
 
+def _require_matching_classification(
+    bare: str, owner_is_date: bool, reuser_is_date: bool, ctx: _ReuseContext
+) -> None:
+    """Fail closed when the two stars reach ``bare`` through DIFFERENT slots (#497).
+
+    One star declaring ``bare`` as its ``date_dimension`` while the other declares it
+    in ``dimensions[]`` is a modelling error, not something to resolve silently: the
+    calendar side expects the full generated RC15 set, the entity side builds only
+    what it declares (a bare entity dim builds its surrogate key alone). Reusing
+    across that split drops the reuser's model and leaves its expected columns absent
+    from the referenced owner model -- a ``ref()`` that resolves but is missing
+    columns, which fails LATER and further from the cause.
+
+    Refusing also means neither side's classification is imposed on the other, which
+    is the trap this check replaced: applying the reuser's calendar default to an
+    owner ENTITY dim invents columns ``_dimension_model`` never emits.
+    """
+    if owner_is_date == reuser_is_date:
+        return
+    owner, reuser = ctx.owners[bare], ctx.star_id
+    date_star, entity_star = (owner, reuser) if owner_is_date else (reuser, owner)
+    raise ScaffoldError(
+        f"conformed dimension {bare!r} is declared as a date_dimension by star "
+        f"{date_star!r} but as an ordinary gold_star.dimensions[] entry by star "
+        f"{entity_star!r}. A generated RC15 calendar and a mapped entity dimension "
+        f"build different columns, so they cannot be reused across. Declare {bare!r} "
+        f"the same way in both stars, or mark it 'distinct' in the "
+        f"conformed-dimension map."
+    )
+
+
 def _require_attributes_covered(bare: str, owner_dim: dict, ctx: _ReuseContext) -> None:
     """Fail closed if the reuser declares an attribute on ``bare`` that the owner's
     dim does not carry (a silently-lost governed field, #418).
 
-    A reused DATE dimension is compared on its RESOLVED calendar, on BOTH sides, so
-    the conformed-reuse check agrees with the builder and the reader instead of
-    becoming a third consumer with its own answer (#497).
+    A reused DATE dimension is compared on its RESOLVED calendar, so the
+    conformed-reuse check agrees with the builder and the reader instead of becoming
+    a third consumer with its own answer (#497). EACH SIDE is classified by the slot
+    IT declares the dim through, because that is the build path that side actually
+    takes -- see :func:`_require_matching_classification` for why one side's
+    classification must never be applied to the other.
     """
-    # Classified ONCE, from the reuser, and applied to BOTH sides. A conformed
-    # dimension is the SAME dimension across stars: if this star calls `bare` its
-    # date dimension then `bare` IS a calendar, and the owner's dict for that name is
-    # the owner's declaration OF that calendar. Classifying each side independently
-    # would let a defaulted owner be compared as an entity dim against a resolved
-    # reuser -- an asymmetry that false-refuses the ordinary both-sides-default case.
-    # (A star whose `dim_date` is genuinely an entity dim belongs in the conformed map
-    # as 'distinct', not 'conformed'.)
-    is_date = ctx.reuser_date_dim == bare
-    owner_attrs = _reconciled_attributes(owner_dim, is_date)
-    reuser_attrs = _reconciled_attributes(ctx.reuser_dims.get(bare), is_date)
+    reuser_is_date = ctx.reuser_date_dim == bare
+    owner_is_date = _stars.date_slot_of(ctx.owner_view.get(ctx.owners[bare])) == bare
+    _require_matching_classification(bare, owner_is_date, reuser_is_date, ctx)
+    owner_attrs = _reconciled_attributes(owner_dim, owner_is_date)
+    reuser_attrs = _reconciled_attributes(ctx.reuser_dims.get(bare), reuser_is_date)
     missing = [a for a in reuser_attrs if a not in owner_attrs]
     if not missing:
         return

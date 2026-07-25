@@ -497,10 +497,24 @@ def test_reuse_of_a_conformed_date_dimension_does_not_false_refuse() -> None:
             }
         }
     }
+    # Built via star_dimension_view, the way the orchestrator builds it, so the
+    # owner's DATE-slot classification travels inside the view (#497): the owner
+    # declares dim_date_rss as its date_dimension, exactly like the reuser.
+    from seshat.star_discovery import star_dimension_view
+
     owner_view = {
-        _OWNER_TABLE: {
-            "dim_date_rss": {"name": "gold.dim_date_rss", "surrogate_key": "date_sk"}
-        }
+        _OWNER_TABLE: star_dimension_view(
+            {
+                "gold_star": {
+                    "fact": {"name": "gold.fct_sales_rss"},
+                    "dimensions": [],
+                    "date_dimension": {
+                        "name": "gold.dim_date_rss",
+                        "surrogate_key": "date_sk",
+                    },
+                }
+            }
+        )
     }
     plan = model_plan.build_scaffold_plan(
         _source_with_map(_doc_for(_REUSER_TABLE), date_conformed, owner_view),
