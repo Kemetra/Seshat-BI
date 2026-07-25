@@ -18,6 +18,7 @@ flow. Introduced by spec `specs/121-business-knowledge-interview`.
 |---|---|---|
 | `knowledge/database-to-pbip-flow.yaml` | One entry per flow stage: allowed knowledge routes, required inputs/outputs, stop rules, blocking decision categories, handoff, non-goals, evidence requirements. | FR-027..031 |
 | `knowledge/approval-authority.yaml` | Each critical decision type → the authority class(es) eligible to approve it. The single source of truth for approval eligibility (DS2 reads it). | FR-021 |
+| `knowledge/knowledge-layer-handoff.yaml` | Non-approving evidence envelope between the six reasoning layers: grains, evidence, assumptions, blockers, destination, and one next action. | Knowledge-layer expansion |
 | `interview/business-knowledge-interview.yaml` | The interview stage's behavior contract: question grouping, masking, pause/resume, recording obligations. | FR-006..012 |
 | `report/dashboard-blueprint.yaml` | The blueprint-approval stage contract that gates the future PBIP prototype. | FR-036..038 |
 

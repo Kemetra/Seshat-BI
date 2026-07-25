@@ -45,6 +45,7 @@ the named artifact. Do not pre-load the whole `knowledge/` directory.
 | Review a Python pipeline against active rules | `knowledge/python-anti-patterns.md`, `patterns/analyzer-rules.json` | `checklists/python-pipeline-review-checklist.md` |
 | Apply recommended Python BI patterns | `patterns/python-patterns.json` | `checklists/python-pipeline-review-checklist.md` |
 | Study the worked dataframe example | `knowledge/python-retail-examples.md` | worked example evidence ledger |
+| Prepare a cross-layer handoff | `../../contracts/knowledge/knowledge-layer-handoff.yaml` | knowledge-layer handoff populated from the Python checklist or verdict |
 | Review proposed (not-yet-active) static-analysis rules for Python pipelines | `patterns/analyzer-rule-candidates.json` | the candidate list itself (staging artifact) |
 | Confirm the business meaning of a retail column | `references/source-map.md` | n/a (reference) |
 | Confirm the fictional retail schema used by all examples | `references/retail-dataframe-schema.md` | n/a (reference) |

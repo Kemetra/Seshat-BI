@@ -30,6 +30,7 @@
 | **10. Explain a DAX concept** | `knowledge/dax-core-concepts.md`, relevant deep dive if needed | concise explanation tied to user's model/problem |
 | **11. Use analyzer rules** | `patterns/analyzer-rules.json`, `patterns/analyzer-rule-candidates.json` | rule-based review or staged candidate note |
 | **12. Use retail examples** | `knowledge/dax-retail-examples.md`, `references/retail-schema.md` | adapted pattern mapped to the user's model, not copied blindly |
+| **13. Prepare a cross-layer handoff** | `../../contracts/knowledge/knowledge-layer-handoff.yaml` | knowledge-layer handoff populated from the measure/model verdict and contract reference |
 
 ## Route by symptom
 

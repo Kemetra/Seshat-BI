@@ -33,6 +33,7 @@
 | **Run a diagnostic playbook** | `knowledge/sql-diagnostics-playbook.md` (PB-SQL-01..19) | the matching PB-SQL-* verdict + fix + stop rule |
 | **Get training questions** | `references/agent-training-set.json` (84 graded items) | a scored answer against the rubric |
 | **Get analyzer-rule candidates** | `patterns/sql-analyzer-rule-candidates.json` (SARC-*, staged), `patterns/sql-analyzer-rules.json` (10 SAR-*, static draft) | -- (review artifact; not runtime) |
+| **Prepare a cross-layer handoff** | `../../contracts/knowledge/knowledge-layer-handoff.yaml` | knowledge-layer handoff populated from the SQL checklist, reconciliation evidence, or blocker |
 
 ## Route by symptom (jump straight to a playbook)
 

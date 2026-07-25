@@ -108,3 +108,39 @@ scenarios:
     expect_resources:
       - derivation-route.md
     terminal_contains: narrative-brief.md
+
+  - layer: retail-kpi-knowledge
+    task_contains: Prepare a cross-layer handoff
+    expect_resources:
+      - ../../contracts/knowledge/knowledge-layer-handoff.yaml
+    terminal_contains: knowledge-layer handoff
+
+  - layer: bi-sql-knowledge
+    task_contains: Prepare a cross-layer handoff
+    expect_resources:
+      - ../../contracts/knowledge/knowledge-layer-handoff.yaml
+    terminal_contains: knowledge-layer handoff
+
+  - layer: bi-dax-knowledge
+    task_contains: Prepare a cross-layer handoff
+    expect_resources:
+      - ../../contracts/knowledge/knowledge-layer-handoff.yaml
+    terminal_contains: knowledge-layer handoff
+
+  - layer: bi-python-knowledge
+    task_contains: Prepare a cross-layer handoff
+    expect_resources:
+      - ../../contracts/knowledge/knowledge-layer-handoff.yaml
+    terminal_contains: knowledge-layer handoff
+
+  - layer: bi-bigdata-knowledge
+    task_contains: Prepare a cross-layer handoff
+    expect_resources:
+      - ../../contracts/knowledge/knowledge-layer-handoff.yaml
+    terminal_contains: knowledge-layer handoff
+
+  - layer: bi-analyst-knowledge
+    task_contains: Prepare a cross-layer handoff
+    expect_resources:
+      - ../../contracts/knowledge/knowledge-layer-handoff.yaml
+    terminal_contains: knowledge-layer handoff

@@ -38,6 +38,7 @@ a metric means (meaning lives in metric contracts and domain packs such as
 |------|------|--------|
 | Derive decision-questions for a table | `derivation-route.md` | a ranked-question set citing only approved contracts + source-profile |
 | Author the narrative brief | `derivation-route.md` (schema section) | committed `mappings/<table>/narrative-brief.md` for human review |
+| Prepare a cross-layer handoff | `../../contracts/knowledge/knowledge-layer-handoff.yaml` | knowledge-layer handoff populated from the narrative brief, [GAP], or framing verdict |
 | Pick the framing for a question | the matching `framing-*.md` card | one named card id per question in the brief |
 | Order pages/zones into a story | `story-order.md` | declared story order in the brief |
 | Decide if a spike/change is real | `framing-signal-vs-noise.md` | a guardrailed claim, an insufficient-sample/insufficient-history statement, or no claim |

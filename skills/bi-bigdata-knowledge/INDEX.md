@@ -21,6 +21,7 @@ named artifact. Do not pre-load the whole `knowledge/` directory.
 | Diagnose slowness / cost | `knowledge/performance-and-cost.md` | performance/cost verdict (in file) |
 | Review a distributed pipeline | `knowledge/bigdata-anti-patterns.md`, `patterns/analyzer-rules.json` | `checklists/pipeline-review-checklist.md` |
 | Find an original worked retail example | `knowledge/bigdata-retail-examples.md` | n/a (reference) |
+| Prepare a cross-layer handoff | `../../contracts/knowledge/knowledge-layer-handoff.yaml` | knowledge-layer handoff populated from the scale-specific checklist or verdict |
 
 ---
 

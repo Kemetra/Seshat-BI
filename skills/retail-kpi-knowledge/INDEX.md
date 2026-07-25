@@ -30,6 +30,7 @@ inventory; this router is a consumer view.
 | Produce governed KPI answerability | `registry.yaml` + `references/kpi-coverage-scorecard-template.md` | per-source answerability artifact with evidence + next action |
 | Draft a project metric contract | `registry.yaml` + `../../templates/metric-contract.yaml` | blocked-until-Gold F009 draft with decision and source provenance |
 | Add a generic KPI | `checklists/kpi-extension-checklist.md` + `registry.yaml` | reviewed extension proposal; never an automatic promotion |
+| Prepare a cross-layer handoff | `../../contracts/knowledge/knowledge-layer-handoff.yaml` | knowledge-layer handoff populated from the metric contract, sufficiency verdict, or decision blocker |
 
 ## 2. Symptom routes
 
