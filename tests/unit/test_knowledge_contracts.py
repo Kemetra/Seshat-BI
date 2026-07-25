@@ -20,6 +20,7 @@ _FLOW = _REPO_ROOT / "contracts/knowledge/database-to-pbip-flow.yaml"
 _BLUEPRINT = _REPO_ROOT / "contracts/report/dashboard-blueprint.yaml"
 _AUTHORITY = _REPO_ROOT / "contracts/knowledge/approval-authority.yaml"
 _HANDOFF = _REPO_ROOT / "contracts/knowledge/knowledge-layer-handoff.yaml"
+_KPI_REGISTRY = _REPO_ROOT / "skills/retail-kpi-knowledge/registry.yaml"
 
 _ALLOWED_ROUTES = {
     "readiness",
@@ -221,3 +222,20 @@ def test_knowledge_layer_handoff_contract_is_closed_and_safe() -> None:
         "next_action",
     }
     assert _all_keys(data).isdisjoint({"score", "confidence_score", "readiness_score"})
+
+
+def test_same_store_kpi_remains_planned_on_owner_policy_blockers() -> None:
+    entries = _load(_KPI_REGISTRY)["entries"]
+    same_store = next(
+        entry for entry in entries if entry["slug"] == "same-store-sales-growth"
+    )
+
+    assert same_store["lifecycle"] == "planned"
+    assert same_store["policy_blocker_ids"] == [
+        "A11",
+        "comparison-period-policy",
+    ]
+    assert same_store["blockers"] == [
+        "comparable-store policy is not approved",
+        "comparison-period policy is not approved",
+    ]

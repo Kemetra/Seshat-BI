@@ -26,6 +26,9 @@ inventory; this router is a consumer view.
 | Prepare Big-data handoff (distributed / at-scale aggregation & reconciliation) | relevant `contracts/*.md` + `references/source-field-requirements.md` | handoff note to Big-data (required fields, grain + additivity for distributed aggregation, scale reconciliation checks — not job code; only when too large for single-node) |
 | Confirm required source fields | `references/source-field-requirements.md` | metric-contract-review-checklist |
 | Check if one KPI's contract is complete enough to build | `../../templates/kpi-sufficiency-card.md` | per-KPI sufficiency card (`ready`/`blocked` + named blockers, never a score; grants no readiness) |
+| Classify KPI knowledge sufficiency | `knowledge/kpi-sufficiency-and-policy-decisions.md` | `answerable` / `blocked_by_source` / `blocked_by_policy` / `not_applicable` verdict |
+| Prepare an owner policy decision packet | `knowledge/kpi-sufficiency-and-policy-decisions.md` | `checklists/kpi-policy-decision-checklist.md` |
+| Prepare an implementation handoff from an answerable KPI | `references/implementation-handoff-template.md` + `../../contracts/knowledge/knowledge-layer-handoff.yaml` | KPI-specific shared handoff, no implementation code |
 | Assess which KPIs a source table can support | `references/kpi-coverage-scorecard-template.md` + `references/source-field-requirements.md` | per-table coverage scorecard (statuses + named blockers, never a score; grants no readiness) |
 | Produce governed KPI answerability | `registry.yaml` + `references/kpi-coverage-scorecard-template.md` | per-source answerability artifact with evidence + next action |
 | Draft a project metric contract | `registry.yaml` + `../../templates/metric-contract.yaml` | blocked-until-Gold F009 draft with decision and source provenance |
@@ -84,13 +87,13 @@ skills/retail-kpi-knowledge/
   SKILL.md            scope, workflow, boundaries, stop rules
   INDEX.md            this router
   README.md           seed scope and disclaimers
-  knowledge/          cross-cutting reasoning (concepts, contracts, additivity, ambiguity, domains)
+  knowledge/          cross-cutting reasoning (concepts, contracts, additivity, ambiguity, sufficiency)
   domains/            per-domain KPI overviews (12 files)
   registry.yaml        authoritative identity, lifecycle, and requirement metadata
   contracts/           15 generic knowledge contracts (14 seeded, 1 planned)
   packs/              7 KPI pack definitions
-  checklists/         contract review, pack review, ambiguity
-  references/         template, field requirements, id conventions, derivation lineage, source map, research notes
+  checklists/         contract, pack, ambiguity, extension, and policy-decision review
+  references/         templates, field requirements, IDs, lineage, source/research notes
   patterns/           metric patterns, anti-patterns, candidate KPIs (JSON)
 ```
 
@@ -104,5 +107,7 @@ average-basket-size-units. Same-store-sales-growth remains planned pending owner
 - A route ending in "DAX code", "SQL", "Python", "readiness pass", or "dashboard
   visual" is **out of scope** → emit a handoff note, do not produce the artifact.
 - A **[planned]** route returns a planned/deferred note, never a fabricated contract.
+- `blocked_by_policy` ends on a decision packet for a named authority; the agent never selects or
+  approves the policy.
 - If no route matches, return to `SKILL.md` boundaries; do not free-scan the base.
 - Never grant readiness or dashboard-readiness from this layer.

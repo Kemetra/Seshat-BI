@@ -134,6 +134,12 @@ scenarios:
       - references/metric-contract-template.md
     terminal_contains: metric-contract-review-checklist
 
+  - layer: retail-kpi-knowledge
+    task_contains: Prepare an owner policy decision packet
+    expect_resources:
+      - knowledge/kpi-sufficiency-and-policy-decisions.md
+    terminal_contains: kpi-policy-decision-checklist
+
   - layer: bi-bigdata-knowledge
     task_contains: Decide whether to scale out at all / pick an engine
     expect_resources:

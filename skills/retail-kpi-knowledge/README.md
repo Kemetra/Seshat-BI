@@ -57,16 +57,22 @@ Live (seeded) metric contracts:
 13. Discounted Transaction Rate - `contracts/discounted-transaction-rate.md`
 14. Average Basket Size (Units) - `contracts/average-basket-size-units.md`
 
-Also seeded: router/shell files, five knowledge concept files, eleven domain
-overviews, seven KPI packs, three review checklists, six reference files (incl. the
-KPI coverage scorecard template), and three pattern JSON files.
+Also seeded: router/shell files, six knowledge files, twelve domain overviews, seven KPI packs,
+five review checklists, nine reference files (including the KPI coverage scorecard and
+implementation-handoff templates), and three pattern JSON files.
+
+KPI sufficiency uses categorical states only: `answerable`, `blocked_by_source`,
+`blocked_by_policy`, or `not_applicable`. A policy-blocked KPI ends on a neutral owner decision
+packet; an answerable KPI may end on the shared implementation handoff. Neither artifact grants
+approval or readiness.
 
 ## Planned / deferred coverage
 
 The authoritative lifecycle and blockers live in `registry.yaml`. The following remain
 planned and receive no seeded contract in this feature:
 
-- Same-Store Sales Growth %, Inventory Turnover, Out-of-Stock Rate %, GMROI
+- Same-Store Sales Growth % (A11 + comparison-period policy), Inventory Turnover,
+  Out-of-Stock Rate %, GMROI
 - Customer Retention, Customer Lifetime Value, Net Sales vs Target %, Promotion Uplift
 - Sales per Square Meter, Returns Rate % (Units), Net Sales per Branch, Net Sales by Product
 - Sell-Through Rate %, Missing Key Dimensions Rate %, Late Data Arrival Count
