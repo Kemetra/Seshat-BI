@@ -554,3 +554,134 @@ def test_an_advisory_reader_tolerates_an_off_contract_calendar() -> None:
     )
 
     assert reported == set()
+
+
+# ---------------------------------------------------------------------------
+# THE THIRD CONSUMER: conformed-dimension reuse (Codex bot P2 on PR #502)
+# ---------------------------------------------------------------------------
+#
+# `_require_attributes_covered` reconciles a REUSED dim against its OWNER. It read
+# both sides' `attributes` RAW via `_dim_attributes`, so a DEFAULTED calendar looked
+# like it carried ZERO attributes. Same defect class as #497 itself: a third
+# consumer resolving date attributes from the raw declaration instead of the shared
+# resolver. Both directions below were reproduced against the pre-fix tree.
+
+_CONFORMED_DATE = {
+    "dimensions": {
+        "dim_date": {"status": "conformed", "stars": ["owner_star", TABLE_ID]}
+    }
+}
+
+
+def _date_dim(attributes: list[str] | None) -> dict:
+    dim = {"name": "gold.dim_date", "surrogate_key": "date_sk"}
+    if attributes is not None:
+        dim["attributes"] = attributes
+    return dim
+
+
+def _reuse_plan(owner_attrs: list[str] | None, reuser_attrs: list[str] | None):
+    """Build the REUSER's plan, reconciling its date dim against the owner star."""
+    owner_dim = _date_dim(owner_attrs)
+    source = model_plan.MapSource(
+        document=_map(_date_dim(reuser_attrs)),
+        source_map=f"mappings/{TABLE_ID}/source-map.yaml",
+        source_map_revision="0" * 40,
+        conformed_map=_CONFORMED_DATE,
+        owner_view={"owner_star": {"dim_date": owner_dim}},
+    )
+    return model_plan.build_scaffold_plan(source, TABLE_ID, _FACT)
+
+
+def test_default_full_owner_accepts_a_narrowed_reuser() -> None:
+    """Direction 1 -- must NOT be wrongly rejected.
+
+    The owner declares no `attributes`, so it builds the FULL RC15 calendar. A
+    reuser narrowing to a subset is therefore fully covered. Pre-fix the owner's
+    absent key read as zero attributes and this was REJECTED with "owner does not
+    carry full_date, year" -- about an owner that does build them.
+    """
+    plan = _reuse_plan(owner_attrs=None, reuser_attrs=["full_date", "year"])
+
+    assert "dim_date" in plan.reused_dimensions
+    assert plan.reused_dimension_owners["dim_date"] == "owner_star"
+
+
+def test_narrowed_owner_rejects_a_default_full_reuser() -> None:
+    """Direction 2 -- must NOT wrongly pass.
+
+    The owner narrowed to `[full_date]`; the reuser declares nothing, so its
+    resolver (and its `gap_detector`) says the calendar has all nine columns. Reusing
+    the owner's model would silently drop eight of them. Pre-fix this PASSED, because
+    the reuser's absent key read as zero attributes -- nothing to be missing.
+    """
+    from seshat.star_discovery import RC15_CALENDAR_COLUMNS
+
+    with pytest.raises(model_plan.ScaffoldError) as excinfo:
+        _reuse_plan(owner_attrs=["full_date"], reuser_attrs=None)
+
+    message = str(excinfo.value)
+    reported = message.split("attribute(s) ")[1].split(" on conformed")[0]
+    # Exactly the columns the owner narrowed away -- `full_date` IS carried, so it
+    # must not be named.
+    assert set(reported.split(", ")) == set(RC15_CALENDAR_COLUMNS) - {"full_date"}
+
+
+def test_identical_default_calendars_reconcile_cleanly() -> None:
+    """The common case: neither star narrows, so the resolved sets are equal and
+    reuse is permitted. This is every tracked map today (census: 0 narrow)."""
+    plan = _reuse_plan(owner_attrs=None, reuser_attrs=None)
+
+    assert "dim_date" in plan.reused_dimensions
+
+
+def test_entity_dimension_reuse_still_compares_declared_attributes() -> None:
+    """Only the DATE path resolves a default. An entity dim carries exactly what it
+    declares, so a reuser attribute the owner lacks must still fail closed."""
+    conformed = {
+        "dimensions": {
+            "dim_customer": {"status": "conformed", "stars": ["owner_star", TABLE_ID]}
+        }
+    }
+    document = _map(_DEFAULTED)
+    document["gold_star"]["dimensions"] = [
+        {
+            "name": "gold.dim_customer",
+            "surrogate_key": "customer_sk",
+            "attributes": ["customer_id"],
+        }
+    ]
+    source = model_plan.MapSource(
+        document=document,
+        source_map=f"mappings/{TABLE_ID}/source-map.yaml",
+        source_map_revision="0" * 40,
+        conformed_map=conformed,
+        owner_view={
+            "owner_star": {
+                "dim_customer": {
+                    "name": "gold.dim_customer",
+                    "surrogate_key": "customer_sk",
+                    "attributes": [],
+                }
+            }
+        },
+    )
+
+    with pytest.raises(model_plan.ScaffoldError, match="customer_id"):
+        model_plan.build_scaffold_plan(source, TABLE_ID, _FACT)
+
+
+def test_all_three_consumers_resolve_one_calendar() -> None:
+    """Builder, reader, and conformed-reuse reconciler must agree. This is the
+    invariant the R6 amendment states; the reuse path was the missing third."""
+    from seshat.star_discovery import resolve_date_attributes
+
+    narrowed = {**_DEFAULTED, "attributes": ["full_date", "year"]}
+    shared = set(resolve_date_attributes(narrowed))
+
+    assert _builder_calendar_columns(narrowed) == shared
+    assert _reader_calendar_columns(narrowed) == shared
+    # The reconciler compares the SAME resolved set, so a reuser narrowed exactly
+    # like its owner is covered.
+    narrowed_both = _reuse_plan(["full_date", "year"], ["full_date", "year"])
+    assert "dim_date" in narrowed_both.reused_dimensions

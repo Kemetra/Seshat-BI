@@ -806,6 +806,37 @@ class _ReuseContext:
     reuser_dims: dict[str, dict]  # this star's bare dim -> raw dim dict
     owner_view: dict[str, dict[str, dict]]  # star id -> bare dim -> raw dim dict
     star_id: str  # the reuser's governed star id (for the message)
+    # The bare name THIS star calls its date dimension, so a reused calendar is
+    # reconciled on its RESOLVED attribute set rather than its raw declaration
+    # (#497). One classification serves both sides -- see
+    # `_require_attributes_covered`. None -> no date dim -> today's behavior exactly.
+    reuser_date_dim: str | None = None
+
+
+def _reconciled_attributes(raw: dict | None, is_date: bool) -> tuple[str, ...]:
+    """The attribute set to reconcile ONE side of a conformed dim against (#497).
+
+    An entity dimension carries exactly what it declares. A DATE dimension carries
+    its RESOLVED calendar -- the RC15 default when the map declares no
+    ``attributes`` -- because that is what the builder will actually materialize
+    and what ``gap_detector`` will report as available.
+
+    Reading a date dimension's ``attributes`` RAW is the third-consumer instance of
+    the very defect #497 is about: a defaulted calendar looks like ZERO attributes,
+    so a default-full owner is wrongly reported as "not carrying" the columns it
+    does build, and a NARROWED owner wrongly passes against a default-full reuser
+    whose reader advertises nine columns the owner's model will never emit.
+
+    An off-contract declaration is not re-raised here: whichever side declared it
+    fails closed in its own ``_date_dimension`` build with the actionable message.
+    Contributing no attributes keeps reconciliation conservative in the meantime.
+    """
+    if not is_date:
+        return _dim_attributes(raw)
+    try:
+        return _stars.resolve_date_attributes(raw)
+    except _stars.CalendarContractError:
+        return ()
 
 
 def _owner_dim_or_refuse(bare: str, ctx: _ReuseContext) -> dict:
@@ -860,11 +891,24 @@ def _require_surrogate_key_matches(
 
 def _require_attributes_covered(bare: str, owner_dim: dict, ctx: _ReuseContext) -> None:
     """Fail closed if the reuser declares an attribute on ``bare`` that the owner's
-    dim does not carry (a silently-lost governed field, #418)."""
-    owner_attrs = _dim_attributes(owner_dim)
-    missing = [
-        a for a in _dim_attributes(ctx.reuser_dims.get(bare)) if a not in owner_attrs
-    ]
+    dim does not carry (a silently-lost governed field, #418).
+
+    A reused DATE dimension is compared on its RESOLVED calendar, on BOTH sides, so
+    the conformed-reuse check agrees with the builder and the reader instead of
+    becoming a third consumer with its own answer (#497).
+    """
+    # Classified ONCE, from the reuser, and applied to BOTH sides. A conformed
+    # dimension is the SAME dimension across stars: if this star calls `bare` its
+    # date dimension then `bare` IS a calendar, and the owner's dict for that name is
+    # the owner's declaration OF that calendar. Classifying each side independently
+    # would let a defaulted owner be compared as an entity dim against a resolved
+    # reuser -- an asymmetry that false-refuses the ordinary both-sides-default case.
+    # (A star whose `dim_date` is genuinely an entity dim belongs in the conformed map
+    # as 'distinct', not 'conformed'.)
+    is_date = ctx.reuser_date_dim == bare
+    owner_attrs = _reconciled_attributes(owner_dim, is_date)
+    reuser_attrs = _reconciled_attributes(ctx.reuser_dims.get(bare), is_date)
+    missing = [a for a in reuser_attrs if a not in owner_attrs]
     if not missing:
         return
     raise ScaffoldError(
@@ -911,6 +955,7 @@ def _partition_dimensions(
             reuser_dims=reuser_dims,
             owner_view=owner_view or {},
             star_id=star_id,
+            reuser_date_dim=_stars.date_dimension_name({"gold_star": inputs.gold_star}),
         ),
     )
     return _PartitionedDimensions(

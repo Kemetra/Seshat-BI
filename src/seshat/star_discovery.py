@@ -199,6 +199,37 @@ def star_dimensions(document: dict) -> dict[str, dict]:
     return out
 
 
+def date_dimension_name(document: dict) -> str | None:
+    """The bare name of the star's ``gold_star.date_dimension``, if it owns that
+    slot outright (issue #497).
+
+    Needed because a date dimension's attribute set is RESOLVED (the RC15 default
+    when the map declares none) while an entity dimension's is exactly what it
+    declares. Any consumer comparing attributes ACROSS stars -- the conformed-reuse
+    reconciler included -- must know which rule applies, or a defaulted calendar
+    reads as carrying ZERO attributes and reconciliation draws the wrong conclusion
+    in BOTH directions: a default-full owner looks like it carries nothing, and a
+    narrowed owner wrongly passes against a default-full reuser.
+
+    Decided by the SLOT, not by guessing at shape. Returns ``None`` when an
+    explicit ``dimensions[]`` entry shadows the date name, because
+    :func:`star_dimensions` is last-wins for explicit dims -- the dict that survives
+    is then the ENTITY dim and must be reconciled as one.
+    """
+    slot: dict[str, dict] = {}
+    gs = document.get("gold_star")
+    _add_dim(
+        slot, gs.get("date_dimension") if isinstance(gs, dict) else None, overwrite=True
+    )
+    # `star_dimensions` is last-wins for explicit dims, so the date slot only
+    # survives if no explicit entry shadows its name -- compare by identity.
+    resolved = star_dimensions(document)
+    return next(
+        (b for b, raw in slot.items() if resolved.get(b) is raw),
+        None,
+    )
+
+
 def discover_stars(
     tracked_files: Iterable[str],
     load: Callable[[str], dict | None],
