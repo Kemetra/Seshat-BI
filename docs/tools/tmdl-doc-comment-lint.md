@@ -49,7 +49,7 @@ is otherwise good practice, and it is invisible until Desktop.
 | A `///` block is not the last line of a file | Indentation, keywords, property names |
 | Every `*.tmdl` under `definition/` (incl. `relationships.tmdl`) | Whether Desktop can load the model |
 | Whitespace-only lines count as blank; CRLF and LF alike | DAX validity, bindings, refs, lineage |
-| Genuine indented docs (a measure doc under its table) | `///` inside an embedded M/DAX expression body |
+| Docs at a declaration's own indent level (a measure doc under its table) | A `///` indented deeper than a preceding line containing `=` |
 
 The output repeats this boundary on every run, including a passing one — that is
 where over-reading happens.
@@ -66,14 +66,27 @@ valid input, so a `///` inside an expression body is not evaluated and this lint
 makes no claim about it.
 
 The exclusion is structural rather than a `//`-vs-`///` special case. TMDL is
-indentation-based: a body is introduced by a line whose content **ends with `=`**
-(`source =`, `measure Margin =`) and covers the following lines indented
-**strictly deeper**. A blank line does **not** close a body — that is exactly the
-M-body case — so a body closes at the first non-blank line indented at or
-shallower than its introducer. `expression Server = "..."`, `annotation X = Y`
-and `partition p = m` do not end with `=`, so they open no body. Genuine
-**indented** documentation — a measure doc under its table, the shape this repo's
-committed TMDL uses — is still fully checked.
+indentation-based, so the implemented rule is: **a `///` indented strictly deeper
+than a preceding non-blank line containing `=` is read as that assignment's
+continuation** and is not evaluated. A blank line does **not** close a
+continuation — that is exactly the M-body case — so it closes at the first
+non-blank line indented at or shallower than the introducer.
+
+Stated as the actual scope rather than the narrower thing it reaches for: this is
+a **superset** of "expression body". It also skips property blocks under any
+assignment (`lineageTag:` under `expression Server = "..."`, `mode:` under
+`partition p = m`). That is deliberate — over-skipping costs a missed check,
+under-skipping **blocks a valid model**.
+
+The predicate is "contains `=`", not "ends with `=`", because the standard DAX
+idiom keeps the first token inline (`measure Margin = VAR Revenue = [Revenue]`)
+and **every** measure in this repo's committed TMDL is inline like that — so an
+ends-with test matched zero real measures and left the false positive live one
+form over.
+
+Documentation at a declaration's **own** indent level — a measure doc under its
+table, the shape this repo's committed TMDL uses — is still fully checked, because
+a continuation must be *strictly deeper* than its introducer.
 
 ## Why it is not named `tmdl-validate`
 

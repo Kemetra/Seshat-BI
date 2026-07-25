@@ -327,9 +327,15 @@ def test_blank_line_does_not_close_a_body() -> None:
     assert 7 in inside
 
 
-def test_assignment_with_a_value_on_the_same_line_opens_no_body() -> None:
-    """`expression X = "v"`, `annotation X = Y` and `partition p = m` do not end
-    with `=`, so they must not swallow the rest of the file into a body."""
+def test_property_lines_do_not_swallow_a_following_top_level_doc() -> None:
+    """`expression X = "v"`, `annotation X = Y` and `partition p = m` DO open a
+    body (their property lines are indented deeper), but that body closes at the
+    dedent -- so a later top-level `///` is still reached and still checked.
+
+    Deliberately NOT asserted as "these open no body": they do. `expression
+    Server = "..."` at indent 0 is followed by `lineageTag:` at indent 1, which
+    is deeper, so a body opens. Asserting otherwise would be a false claim.
+    """
     text = (
         '/// Postgres host:port.\nexpression Server = "<host>:25060"\n'
         "\tlineageTag: 5d36ae75\n"
@@ -349,6 +355,60 @@ def test_committed_corpus_shape_has_no_findings(tmp_path: Path) -> None:
     """End-to-end on the real `source =` shape through lint_model."""
     model_dir = _model(tmp_path, "tables/fct.tmdl", _VALID_M_BODY)
     assert lint_model(model_dir).status == "pass"
+
+
+# The VAR/RETURN idiom with the first DAX token kept INLINE on the declaration
+# line. Found in a second review round on PR #503: an "ends with `=`" predicate
+# matched ZERO real measures (every measure in this repo's committed TMDL is
+# inline), so it left the false positive live one form over.
+_INLINE_VAR_MEASURE = (
+    "table Sales\n"
+    "\tmeasure Margin = VAR Revenue = [Revenue]\n"
+    "\t\t\tVAR Cost = SUM(Sales[cost])\n"
+    "\t\t\t/// exclude unknown-status rows from the denominator\n"
+    "\n"
+    "\t\t\tRETURN DIVIDE(Revenue - Cost, Revenue)\n"
+    "\t\tformatString: 0.0%\n"
+)
+
+
+def test_inline_first_token_measure_body_is_not_flagged() -> None:
+    """A multiline measure keeping its first DAX token on the declaration line
+    still opens a body, so an indented `///` inside it is not TMDL doc."""
+    assert lint_text(_INLINE_VAR_MEASURE, document="t.tmdl") == ()
+
+
+def test_inline_measure_body_closes_so_later_top_level_doc_is_flagged() -> None:
+    """Body-exit guard for the inline form: the widened predicate must not
+    swallow the rest of the file."""
+    text = _INLINE_VAR_MEASURE + (
+        "\n/// a genuinely unattached top-level block\n\nrelationship r\n"
+    )
+    findings = lint_text(text, document="t.tmdl")
+    assert len(findings) == 1, findings
+    assert findings[0].doc_line == 9
+
+
+def test_single_line_inline_measures_stay_checkable() -> None:
+    """The real corpus shape: single-line inline measures with attached docs.
+
+    Their docs stay silent (correctly attached) and a genuinely unattached
+    top-level block after them is still caught -- the widened predicate must not
+    make the real committed shape unlintable.
+    """
+    text = (
+        "table 'gold fct_sales_rss'\n"
+        "\t/// Total money taken across all retail transactions.\n"
+        "\tmeasure TotalSales = SUM('gold fct_sales_rss'[total_spent])\n"
+        "\t\tformatString: #,0.00\n"
+        "\n"
+        "/// unattached top-level block, must be caught\n"
+        "\n"
+        "relationship r\n"
+    )
+    findings = lint_text(text, document="t.tmdl")
+    assert len(findings) == 1, findings
+    assert findings[0].doc_line == 6
 
 
 # --------------------------------------------------------------------------

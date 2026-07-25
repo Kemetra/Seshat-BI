@@ -416,7 +416,7 @@ capabilities:
     surface: cli
     requirements: []
     provenance: locally-verified
-    readiness_stage: dashboard_ready
+    readiness_stage: semantic_model_ready
     command: "tmdl-doc-comment-lint"
     documentation: "docs/tools/tmdl-doc-comment-lint.md"
     references:

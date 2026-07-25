@@ -54,15 +54,25 @@ is to stop trusting the verb. So a ``///`` inside an expression body is NOT
 evaluated, and this lint makes NO claim about it.
 
 The exclusion is structural, not a ``//``-vs-``///`` special case. TMDL is
-indentation-based: an expression body is introduced by a line whose content ends
-with ``=`` (``source =``, ``measure Margin =``) and consists of the following
-lines indented STRICTLY DEEPER than that introducer. A blank line does NOT close
-a body -- that is exactly the M-body case -- so a body closes only at the next
-NON-BLANK line indented at or shallower than its introducer. Note this correctly
-opens no body for ``expression Server = "..."``, ``annotation X = Y`` or
-``partition p = m``: those do not END with ``=``. Genuine INDENTED documentation
-(a measure doc under its table, the shape this repo's committed TMDL uses) is
-still checked -- only the inside of an expression body is skipped.
+indentation-based, so the implemented rule is: a ``///`` indented STRICTLY DEEPER
+than a preceding non-blank line CONTAINING ``=`` is treated as the continuation
+of that assignment and is not evaluated. A blank line does NOT close such a
+continuation -- that is exactly the M-body case -- so it closes only at the next
+NON-BLANK line indented at or shallower than the introducer.
+
+State that as the actual scope rather than the narrower thing it was reaching
+for: this is a SUPERSET of "expression body". It also skips property blocks under
+any assignment (``lineageTag:`` under ``expression Server = "..."``, ``mode:``
+under ``partition p = m``). That is deliberate -- over-skipping costs a missed
+check, under-skipping BLOCKS A VALID MODEL -- and it is why the predicate is
+"contains ``=``" rather than "ends with ``=``": the standard DAX idiom keeps the
+first token inline (``measure Margin = VAR Revenue = [Revenue]``), and every
+measure in this repo's committed TMDL is inline, so an ends-with test matched
+zero real measures and left the false positive live one form over.
+
+Genuine documentation at a declaration's OWN indent level -- a measure doc under
+its table, the shape this repo's committed TMDL uses -- is still fully checked,
+because a continuation must be strictly deeper than its introducer.
 
 This module is separate from ``seshat.tmdl`` on purpose: ``parse_tmdl`` there is
 an EXTRACTOR (unrecognized lines fall through by design), not a validator, and
@@ -148,10 +158,21 @@ def _indent_width(line: str) -> int:
 
 
 def embedded_body_lines(lines: list[str]) -> frozenset[int]:
-    """Indices of lines sitting INSIDE an embedded M/DAX expression body.
+    """Indices of lines treated as the indented CONTINUATION of an assignment.
 
-    A body opens on a line whose content ends with ``=`` (``source =``,
-    ``measure X =``) and covers the following lines indented strictly deeper.
+    A body opens on any non-blank line CONTAINING ``=`` and covers the following
+    lines indented strictly deeper. The predicate is "contains ``=``", not "ends
+    with ``=``": the standard DAX idiom keeps the first token inline on the
+    declaration line (``measure Margin = VAR Revenue = [Revenue]``, and every
+    measure in this repo's committed TMDL is inline like that), so an
+    ends-with-``=`` test matched ZERO real measures and left the false positive
+    live one form over.
+
+    "Indented strictly deeper" needs no lookahead: if the next non-blank line is
+    NOT deeper, the ``> body_indent`` test fails on it immediately, the body
+    resets, and that same line falls through to be re-evaluated as an introducer.
+    A body with nothing inside it is indistinguishable from no body at all.
+
     A blank line does NOT close a body -- M bodies legitimately contain blanks,
     and closing on one is precisely the false positive this exists to prevent.
     A body closes at the first NON-BLANK line indented at or shallower than its
@@ -159,7 +180,11 @@ def embedded_body_lines(lines: list[str]) -> frozenset[int]:
 
     Ambiguity is biased toward still-inside-body on purpose: exiting a body too
     early re-arms the false positive (blocking a valid model), while staying in
-    one line too long only skips a check this lint already disclaims.
+    one line too long only skips a check this lint already disclaims. Note this
+    means property blocks under ANY assignment count as continuation too (e.g.
+    ``lineageTag:`` under ``expression Server = "..."``) -- a deliberate
+    superset, since the cost of over-skipping is a missed check while the cost of
+    under-skipping is blocking a valid model.
     """
     inside: set[int] = set()
     body_indent: int | None = None
@@ -174,7 +199,7 @@ def embedded_body_lines(lines: list[str]) -> frozenset[int]:
                 continue
             body_indent = None  # dedented to introducer depth or shallower
         stripped = line.rstrip()
-        if stripped.strip() and stripped.endswith("="):
+        if stripped.strip() and "=" in stripped:
             body_indent = _indent_width(line)
     return frozenset(inside)
 
@@ -265,8 +290,9 @@ def lint_model(model_dir: Path) -> DocCommentLintResult:
         f"{len(scanned)} TMDL document(s) checked for the ///-must-attach rule only",
         "scope: ONE rule. This is NOT a TMDL syntax validator, and a pass does "
         "NOT mean Power BI Desktop can load the model.",
-        "scope: `///` inside an embedded M/DAX expression body is NOT checked -- "
-        "it is a legal line comment there, not TMDL documentation.",
+        "scope: a `///` indented deeper than a preceding line containing `=` is "
+        "treated as that assignment's continuation (an embedded M/DAX body, where "
+        "`///` is a legal line comment) and is NOT checked.",
         *unreadable,
     ]
     status = "blocked" if findings or unreadable else "pass"
@@ -304,9 +330,12 @@ def tmdl_doc_comment_lint_main(args: object) -> int:
         "Desktop can load the model."
     )
     print(
-        "scope: /// inside an embedded M or DAX expression body is deliberately "
-        "NOT checked -- /// is a legal line comment in those languages, so "
-        "flagging it would block a valid model."
+        "scope: a /// indented deeper than a preceding line containing `=` is "
+        "deliberately NOT checked -- it is read as that assignment's continuation "
+        "(an embedded M/DAX body, where /// is a legal line comment), and "
+        "flagging it would block a valid model. This skips property blocks under "
+        "any assignment too: a deliberate superset, because over-skipping costs a "
+        "missed check while under-skipping blocks a valid model."
     )
     print(
         "note: this is a read-only lint report; it grants no approval and never "
