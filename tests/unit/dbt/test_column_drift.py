@@ -210,6 +210,89 @@ def test_unparseable_definition_degrades_to_no_finding(tmp_path: Path) -> None:
     assert column_shape_advisories(tmp_path, [_contract("dim_weird", "c")]) == ()
 
 
+def test_alter_table_add_column_skips_the_table(tmp_path: Path) -> None:
+    """#501 review: the CREATE body is a STALE view once a later migration ADDs a
+    column, so the table is dropped from the comparison rather than compared
+    against a shape known to be out of date. The shadow here is ALIGNED with the
+    post-ALTER shape {a, b} -- the pre-fix behaviour would have falsely flagged
+    `b` as shadow-only."""
+    _migration(tmp_path, "0004_gold.sql", "CREATE TABLE gold.dim_a (\n  a INT\n);")
+    _migration(tmp_path, "0005_alter.sql", "ALTER TABLE gold.dim_a ADD COLUMN b TEXT;")
+
+    assert "dim_a" not in migration_column_sets(tmp_path)
+    assert column_shape_advisories(tmp_path, [_contract("dim_a", "a", "b")]) == ()
+
+
+def test_alter_table_add_column_also_silences_a_divergent_pair(tmp_path: Path) -> None:
+    """The skip is symmetric and deliberate: an unknown migration shape yields NO
+    finding in either direction. Guessing from a stale CREATE could just as easily
+    reassure falsely as alarm falsely."""
+    _migration(tmp_path, "0004_gold.sql", "CREATE TABLE gold.dim_a (\n  a INT\n);")
+    _migration(tmp_path, "0005_alter.sql", "ALTER TABLE gold.dim_a ADD COLUMN b TEXT;")
+
+    assert column_shape_advisories(tmp_path, [_contract("dim_a", "zzz")]) == ()
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "ALTER TABLE gold.dim_a DROP COLUMN a;",
+        "ALTER TABLE gold.dim_a RENAME COLUMN a TO b;",
+        "ALTER TABLE IF EXISTS gold.dim_a ADD COLUMN b TEXT;",
+        "ALTER TABLE ONLY gold.dim_a DROP COLUMN a;",
+        "alter table dim_a add column b text;",
+        # Postgres permits omitting the COLUMN keyword for ADD/DROP.
+        "ALTER TABLE gold.dim_a ADD b TEXT;",
+        "ALTER TABLE gold.dim_a DROP a;",
+    ],
+)
+def test_every_column_changing_alter_form_skips_the_table(
+    tmp_path: Path, statement: str
+) -> None:
+    _migration(tmp_path, "0004_gold.sql", "CREATE TABLE gold.dim_a (\n  a INT\n);")
+    _migration(tmp_path, "0005_alter.sql", statement)
+
+    assert "dim_a" not in migration_column_sets(tmp_path), statement
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "ALTER TABLE gold.dim_a ADD CONSTRAINT uq_a UNIQUE (a);",
+        "ALTER TABLE gold.dim_a ADD PRIMARY KEY (a);",
+        "ALTER TABLE gold.dim_a ADD FOREIGN KEY (a) REFERENCES gold.dim_b (b);",
+        "ALTER TABLE gold.dim_a ADD CHECK (a > 0);",
+        "ALTER TABLE gold.dim_a DROP CONSTRAINT uq_a;",
+        "ALTER TABLE gold.dim_a ALTER COLUMN a TYPE BIGINT;",
+        "ALTER TABLE gold.dim_a ALTER COLUMN a SET NOT NULL;",
+    ],
+)
+def test_non_column_altering_statements_do_not_suppress_a_finding(
+    tmp_path: Path, statement: str
+) -> None:
+    """A constraint-only or type-only ALTER does not change the column SET, so it
+    must NOT silence a genuine divergence -- otherwise one `ADD CONSTRAINT` (which
+    the real committed migration uses five times) would blind the whole check."""
+    _migration(tmp_path, "0004_gold.sql", "CREATE TABLE gold.dim_a (\n  a INT\n);")
+    _migration(tmp_path, "0005_alter.sql", statement)
+
+    assert "dim_a" in migration_column_sets(tmp_path), statement
+    advisories = column_shape_advisories(tmp_path, [_contract("dim_a", "a", "extra")])
+    assert advisories[0].shadow_only == ("extra",), statement
+
+
+def test_committed_migration_add_constraint_clauses_are_not_treated_as_alters() -> None:
+    """The shipped `0004_..._star.sql` ends with five `ADD CONSTRAINT` statements on
+    `fct_sales_rss`. If the ALTER guard over-matched them, the fact would silently
+    drop out of the comparison and the census would pass for the wrong reason."""
+    root = Path(__file__).resolve().parents[3]
+    tables = migration_column_sets(root)
+
+    assert "fct_sales_rss" in tables
+    columns, _ = tables["fct_sales_rss"]
+    assert "transaction_id" in columns
+
+
 def test_case_insensitive_on_both_sides(tmp_path: Path) -> None:
     _migration(
         tmp_path, "0004_gold.sql", "create table GOLD.Dim_Case (\n  Date_SK int\n);"
@@ -228,6 +311,35 @@ def test_last_definition_wins_when_a_table_is_recreated(tmp_path: Path) -> None:
     columns, relpath = migration_column_sets(tmp_path)["dim_r"]
     assert columns == frozenset({"a", "b"})
     assert relpath == "warehouse/migrations/0005_gold.sql"
+
+
+def test_advisory_message_states_it_compares_the_unenforced_declaration(
+    tmp_path: Path,
+) -> None:
+    """#501 review: the shadow side is the GOVERNED DECLARATION, which dbt does not
+    enforce as a contract, so a built model can drift from its own `_models.yml`
+    and stay invisible. The finding must say which shape it compared rather than
+    let a reader infer built-vs-built coverage it does not have."""
+    _migration(tmp_path, "0004_gold.sql", _DATE_DDL)
+
+    message = column_shape_advisories(
+        tmp_path, [_contract("dim_date_c086", "date_sk")]
+    )[0].message()
+
+    assert "DECLARED" in message
+    assert "_models.yml" in message
+    assert "does not enforce" in message
+
+
+def test_module_docstring_states_the_declared_vs_built_boundary() -> None:
+    """The scope note travels with the module, not only with one rendered line."""
+    from seshat.dbt import column_drift
+
+    doc = column_drift.__doc__ or ""
+
+    assert "DOES *NOT* COVER" in doc
+    assert "enforced: true" in doc
+    assert "information_schema" in doc
 
 
 def test_advisory_carries_no_assertion_or_blocker_vocabulary() -> None:

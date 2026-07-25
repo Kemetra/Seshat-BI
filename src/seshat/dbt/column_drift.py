@@ -31,6 +31,29 @@ therefore NOT the shadow shape.)
 Migrations side: the ``CREATE TABLE <schema>.<name> (...)`` column list in the
 committed ``warehouse/migrations/*.sql`` -- the parity oracle's shape.
 
+WHAT THIS DOES *NOT* COVER (stated, not implied)
+-----------------------------------------------
+The shadow side is a DECLARATION. Seshat's generated ``_models.yml`` carries the
+governed column list under ``meta.seshat``, but it does NOT set dbt's
+``contract: {enforced: true}``, so dbt never checks the built relation against it.
+This comparison is therefore DECLARED-vs-MIGRATION, not BUILT-vs-BUILT:
+
+- a model whose SELECT list drifts from its own ``_models.yml`` declaration is
+  INVISIBLE here (both sides can agree while the materialized relation differs);
+- a stale declaration can in principle produce an advisory for a pair whose built
+  shapes actually agree.
+
+That boundary is deliberate, not an oversight. The two alternatives were both
+rejected: reading the scaffold PLAN reported a phantom
+``{month_name, day_name, is_weekend}`` divergence on the committed worked example
+(the generated SQL is a skeleton the operator completes, so the plan is the
+pre-completion shape) and would have failed the no-finding census; and querying
+``information_schema`` for the built shape needs a live DSN, which this offline,
+driver-free static check does not have. The declaration is the best shape
+available without a database -- so the advisory names what it compared, and this
+note says what a clean result does not prove. Same discipline as the parity
+disclaimer this module extends: state the gap rather than imply coverage.
+
 FAIL-SAFE, NOT FAIL-CLOSED
 --------------------------
 Every uncertainty resolves to NO FINDING: no migrations directory, an unreadable
@@ -66,6 +89,31 @@ _TABLE_CONSTRAINT = re.compile(
 
 _IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]*$")
 
+# A column-CHANGING `ALTER TABLE`. The `CREATE TABLE` body alone is then a STALE
+# view of the table's final shape, so the table is dropped from the comparison
+# rather than compared against a shape we know to be out of date (#501 review).
+# Deliberately narrow: `ALTER TABLE ... ADD CONSTRAINT` / `ALTER COLUMN ... TYPE`
+# do not change the column SET and must not suppress a real finding.
+_ALTER_COLUMN = re.compile(
+    r"alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?"
+    r"(?:(?P<schema>[a-z_][a-z0-9_]*)\.)?(?P<table>[a-z_][a-z0-9_]*)\b"
+    r"(?P<rest>[^;]*?)\b(?:add|drop|rename)\s+column\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
+# The same three verbs with the optional `COLUMN` keyword omitted, which Postgres
+# permits for ADD/DROP (`ALTER TABLE t ADD c INT`). `RENAME COLUMN` always spells
+# the keyword, and a bare `ADD`/`DROP` followed by a constraint keyword is matched
+# out so `ADD CONSTRAINT` / `ADD PRIMARY KEY` stay ignored.
+_ALTER_BARE = re.compile(
+    r"alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?"
+    r"(?:(?P<schema>[a-z_][a-z0-9_]*)\.)?(?P<table>[a-z_][a-z0-9_]*)\b"
+    r"(?P<rest>[^;]*?)\b(?:add|drop)\s+"
+    r"(?!column\b|constraint\b|primary\s+key\b|foreign\s+key\b|unique\b|check\b"
+    r"|exclude\b)(?P<column>[a-z_][a-z0-9_]*)\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
 _MIGRATIONS_DIR = "warehouse/migrations"
 
 
@@ -91,34 +139,39 @@ class ColumnShapeAdvisory:
             parts.append(f"shadow-only {list(self.shadow_only)}")
         if self.migrations_only:
             parts.append(f"migrations-only {list(self.migrations_only)}")
+        # State the boundary in the finding itself, not only in the docs: the
+        # shadow side is the DECLARED column list, which dbt does not enforce.
+        # A reader who acts on this line must know which shape it describes.
         return (
-            f"{self.model}: column set differs from {self.migration_relpath} "
-            f"({'; '.join(parts)}). The four parity assertions are value-only and "
-            "cannot see this; confirm the divergence is intended."
+            f"{self.model}: DECLARED column set (_models.yml) differs from "
+            f"{self.migration_relpath} ({'; '.join(parts)}). The four parity "
+            "assertions are value-only and cannot see this; confirm the divergence "
+            "is intended. Scope: compares the GOVERNED DECLARATION, which dbt does "
+            "not enforce as a contract -- it cannot see a built model whose "
+            "projection drifts from its own declaration."
         )
+
+
+def _strip_comments(body: str) -> str:
+    """The body with `--` line comments removed, newlines preserved as separators."""
+    return "\n".join(line.split("--")[0] for line in body.splitlines())
 
 
 def _split_definition_body(body: str) -> list[str]:
     """Top-level comma-separated definition lines, ignoring commas nested in
     parentheses (``NUMERIC(12,2)``, ``PRIMARY KEY (a, b)``) and `--` comments."""
-    lines: list[str] = []
+    definitions: list[str] = []
     current: list[str] = []
     depth = 0
-    for raw_line in body.splitlines():
-        line = raw_line.split("--")[0]
-        for char in line:
-            if char == "(":
-                depth += 1
-            elif char == ")":
-                depth -= 1
-            if char == "," and depth == 0:
-                lines.append("".join(current))
-                current = []
-                continue
+    for char in _strip_comments(body):
+        depth += (char == "(") - (char == ")")
+        if char == "," and depth == 0:
+            definitions.append("".join(current))
+            current = []
+        else:
             current.append(char)
-        current.append("\n")
-    lines.append("".join(current))
-    return lines
+    definitions.append("".join(current))
+    return definitions
 
 
 def _column_names(body: str) -> frozenset[str] | None:
@@ -148,18 +201,38 @@ def migration_column_sets(repo_root: Path) -> dict[str, tuple[frozenset[str], st
 
     A table created more than once (idempotent drop/recreate, or a later migration
     reshaping it) resolves to the LAST definition in filename order -- that is the
-    shape the oracle ends up with. Unreadable files are skipped, never raised."""
+    shape the oracle ends up with. Unreadable files are skipped, never raised.
+
+    A table whose history contains a column-changing ``ALTER TABLE`` is OMITTED
+    entirely: its ``CREATE TABLE`` body no longer describes its final shape, and
+    this parser does not replay DDL. Silence on a shape we cannot know beats a
+    confidently wrong advisory (#501 review) -- both a false alarm on an aligned
+    pair and false reassurance on a divergent one."""
     directory = Path(repo_root) / _MIGRATIONS_DIR
     if not directory.is_dir():
         return {}
     found: dict[str, tuple[frozenset[str], str]] = {}
+    altered: set[str] = set()
     for path in sorted(directory.glob("*.sql")):
         relpath = f"{_MIGRATIONS_DIR}/{path.name}"
-        for match in _CREATE_TABLE.finditer(_read_text(path)):
+        text = _read_text(path)
+        altered.update(_altered_tables(text))
+        for match in _CREATE_TABLE.finditer(text):
             columns = _column_names(match.group("body"))
             if columns is not None:
                 found[match.group("table").lower()] = (columns, relpath)
-    return found
+    return {name: shape for name, shape in found.items() if name not in altered}
+
+
+def _altered_tables(text: str) -> set[str]:
+    """Bare names of tables one migration reshapes with a column-changing
+    ``ALTER TABLE``. Constraint-only and type-only ALTERs are ignored: they do not
+    change the column SET, so they must not suppress a genuine finding."""
+    return {
+        match.group("table").lower()
+        for pattern in (_ALTER_COLUMN, _ALTER_BARE)
+        for match in pattern.finditer(text)
+    }
 
 
 def _read_text(path: Path) -> str:
@@ -183,25 +256,23 @@ def column_shape_advisories(
     Returns () when nothing diverges, when migrations are absent, or when a model
     has no counterpart DDL. Never raises on malformed input: this is advisory."""
     migrations = migration_column_sets(repo_root)
-    if not migrations:
-        return ()
-    advisories: list[ColumnShapeAdvisory] = []
-    for contract in model_contracts:
-        if contract.name in skip:
-            continue
-        counterpart = migrations.get(contract.name.lower())
-        if counterpart is None:
-            continue
-        expected, relpath = counterpart
-        shadow = frozenset(column.name.lower() for column in contract.columns)
-        if shadow == expected:
-            continue
-        advisories.append(
-            ColumnShapeAdvisory(
-                model=contract.name,
-                migration_relpath=relpath,
-                shadow_only=tuple(sorted(shadow - expected)),
-                migrations_only=tuple(sorted(expected - shadow)),
-            )
-        )
-    return tuple(advisories)
+    candidates = (c for c in model_contracts if c.name not in skip)
+    advisories = (_compare(contract, migrations) for contract in candidates)
+    return tuple(advisory for advisory in advisories if advisory is not None)
+
+
+def _compare(contract, migrations) -> ColumnShapeAdvisory | None:
+    """The advisory for one model, or None when it agrees / has no counterpart."""
+    counterpart = migrations.get(contract.name.lower())
+    if counterpart is None:
+        return None
+    expected, relpath = counterpart
+    shadow = frozenset(column.name.lower() for column in contract.columns)
+    if shadow == expected:
+        return None
+    return ColumnShapeAdvisory(
+        model=contract.name,
+        migration_relpath=relpath,
+        shadow_only=tuple(sorted(shadow - expected)),
+        migrations_only=tuple(sorted(expected - shadow)),
+    )

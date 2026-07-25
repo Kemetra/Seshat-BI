@@ -67,6 +67,19 @@ changes an exit code, never enters the run-evidence JSON, and never lands in
 `blocking_reasons`; a model with no migrations counterpart (or an unreadable DDL) yields
 no finding rather than a false alarm.
 
+**What the advisory does NOT cover.** Its shadow side is the GOVERNED DECLARATION in
+`dbt/models/**/_models.yml`, not the built relation. Seshat does not set dbt's
+`contract: {enforced: true}`, so dbt never checks a materialized model against that
+declaration. The comparison is therefore DECLARED-vs-MIGRATION: a model whose SELECT
+list drifts from its own `_models.yml` is invisible to it, and a stale declaration can
+in principle flag a pair whose built shapes agree. Reading the built shape would need
+`information_schema` and a live DSN, which this offline static check deliberately does
+not have; reading the scaffold plan instead was rejected because the generated `.sql`
+files are skeletons an operator completes, so the plan describes a pre-completion shape
+and reported a phantom divergence on the committed worked example. A table whose
+migration history contains a column-changing `ALTER TABLE` is omitted from the
+comparison entirely rather than compared against a stale `CREATE TABLE` shape.
+
 The parity test asserts, against the migration-built gold fact:
 
 1. equal fact row count;
