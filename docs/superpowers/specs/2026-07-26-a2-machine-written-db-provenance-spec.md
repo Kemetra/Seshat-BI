@@ -41,8 +41,11 @@ value must come from a process that connected.
    its own name -- that is the property env-derived values cannot have.
 2. **The emit-only module built for exactly this and never wired.**
    `src/seshat/readiness_evidence.py` is EMIT-only per FR-013 (see its
-   docstring), returns a dict, writes nothing, and only tests call
-   `build_gold_ready_block`. A dead seam waiting for this payload.
+   docstring at `:26`), returns a dict, and writes nothing. No production caller
+   invokes `build_gold_ready_block`; the only call site in the tree is
+   `tests/live_db/test_live_validate_clean.py:56`. A dead seam waiting for this
+   payload -- and note that its one caller is already the live-DB test suite,
+   i.e. the very context A2's writer would run in.
 3. **The offline comparison helpers.** `seshat.validate.resolve_dsn(env)`
    (`validate.py:53-83`) is pure env -> string and explicitly driver-free
    (`validate.py:47`); `seshat.connection_env.connection_environment(repo_root)`
