@@ -69,9 +69,12 @@ def _add_validate_parser(sub: argparse._SubParsersAction) -> None:
         default=None,
         metavar="PATH",
         help=(
-            "Path to a filled source-map.yaml. When given (with a DSN + the 'db' "
-            "extra), the four live checks run against that table's targets. "
-            "Without it, validate reports the deferred state."
+            "Path to a filled source-map.yaml in the CANONICAL shape (meta + "
+            "columns + gold_star) -- write the blank with `seshat "
+            "scaffold-source <table>` rather than authoring one by hand. When "
+            "given (with a DSN + the 'db' extra), the four live checks run "
+            "against that table's targets. Without it, validate reports the "
+            "deferred state."
         ),
     )
 

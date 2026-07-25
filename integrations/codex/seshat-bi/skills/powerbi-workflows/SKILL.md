@@ -68,6 +68,12 @@ otherwise surfaces as Desktop error cards. It needs no blueprint or binding
 map, so it also covers Desktop-owned reports. A clean review is evidence for a
 named human, never an approval.
 
+A clean binding report does NOT mean the model loads. It checks BINDINGS only;
+it does not verify TMDL syntax, so a model with a TMDL defect can pass it and
+still fail to open in Desktop. Never report "validated" or "Desktop-ready" on
+the strength of this check alone -- say bindings resolve, and name TMDL
+loadability as unverified.
+
 ## Reopening Desktop after an external edit
 
 Power BI Desktop does not re-read PBIR/TMDL files edited on disk: a running

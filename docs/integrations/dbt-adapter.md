@@ -14,7 +14,8 @@
 > dbt is the build ENGINE for silver/gold; Seshat BI is the brain. dbt may build only
 > after Mapping Ready = `pass`, every model cites the approved map, dbt tests are
 > evidence (never an approval), and migrations stay the default until a reconciliation
-> parity test proves the dbt mart reproduces the existing gold tables.
+> parity test shows the dbt mart matches the existing gold tables on the four
+> numeric assertions below.
 
 ## Where dbt fits in the medallion flow
 
@@ -48,7 +49,14 @@ same gold tables.
 
 ## The reconciliation parity test (four assertions, exact to the cent)
 
-For a table already built by migrations, the dbt mart must reproduce the SAME gold output.
+For a table already built by migrations, the dbt mart must match the migration-built
+gold output on the four assertions below. Those four are the WHOLE contract -- they are
+value assertions, and the enum in `schemas/dbt-run-evidence.schema.json` is closed to
+exactly them. A pass therefore does NOT prove the two stars have the same column SET:
+a shadow model that gains or loses a column can still pass every assertion (issue #492).
+The per-dimension member count in (4) is the deliberate proxy for structural divergence,
+not a substitute for a schema comparison.
+
 The parity test asserts, against the migration-built gold fact:
 
 1. equal fact row count;

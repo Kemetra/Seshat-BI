@@ -685,4 +685,12 @@ def pbir_validate_bindings_main(args: object) -> int:
         "note: this is a read-only validation report; it grants no approval "
         "and never sets a readiness stage."
     )
+    # Name the boundary rather than letting a clean report imply more than it
+    # checked: bindings resolving says nothing about whether the TMDL parses or
+    # whether Desktop can load the model (issue #494).
+    print(
+        "scope: checks BINDINGS only -- that each bound field resolves to a "
+        "declared measure/column. It does NOT verify TMDL syntax or that "
+        "Desktop can load the model; a syntax defect can pass this check."
+    )
     return 1 if result.status == "blocked" else 0

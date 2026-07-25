@@ -145,7 +145,17 @@ def _run_validate_body(args: argparse.Namespace) -> int:
     try:
         targets = cli._load_targets(args.source_map)
     except (FileNotFoundError, OSError, ValueError) as exc:
+        # Name the canonical shape and how to get it: source-map.yaml has a
+        # required shape that only this command enforces, and the error used to
+        # leave the reader with no way to discover it (issue #488).
         print(f"error: could not load source-map: {exc}", file=sys.stderr)
+        print(
+            "hint: live checks need the canonical source-map.yaml shape (meta + "
+            "columns + gold_star). `seshat scaffold-source <table>` writes the "
+            "blank canonical set into mappings/<table>/; fill that rather than "
+            "authoring a map by hand.",
+            file=sys.stderr,
+        )
         return 1
 
     print(f"{prog} validate: running live checks against {safe_host}", file=sys.stderr)
