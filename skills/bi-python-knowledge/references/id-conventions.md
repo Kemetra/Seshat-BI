@@ -37,6 +37,9 @@ renumbered, or repointed. Retired IDs are marked deprecated, not deleted.
 | `PY-CN-117..124`, `PY-PB-015..016` | merge cardinality and fan-out |
 | `PY-CN-125..132`, `PY-PB-017` | dates, timezones, and calendars |
 | `PY-BP-008..014` | evidence-first defaults for the ranges above |
+| `PY-CN-133..140`, `PY-VP-005..016` | validation and reconciliation |
+| `PY-CN-141..147`, `PY-PB-018..020` | performance, memory, and scale boundary |
+| `PY-AP-026..035` | active pipeline-review failure modes |
 
 These ranges extend the earlier seed allocations. They do not renumber or repoint
 existing IDs.

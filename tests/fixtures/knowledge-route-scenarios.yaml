@@ -43,6 +43,38 @@ scenarios:
       - knowledge/dates-times-and-calendars.md
     terminal_contains: dataframe-review-checklist
 
+  - layer: bi-python-knowledge
+    task_contains: Validate and reconcile a dataframe result
+    expect_resources:
+      - knowledge/validation-and-reconciliation.md
+      - patterns/validation-patterns.json
+    terminal_contains: validation-reconciliation-checklist
+
+  - layer: bi-python-knowledge
+    task_contains: Diagnose dataframe performance or memory
+    expect_resources:
+      - knowledge/performance-and-memory.md
+    terminal_contains: performance and memory verdict
+
+  - layer: bi-python-knowledge
+    task_contains: Review a Python pipeline against active rules
+    expect_resources:
+      - knowledge/python-anti-patterns.md
+      - patterns/analyzer-rules.json
+    terminal_contains: python-pipeline-review-checklist
+
+  - layer: bi-python-knowledge
+    task_contains: Apply recommended Python BI patterns
+    expect_resources:
+      - patterns/python-patterns.json
+    terminal_contains: python-pipeline-review-checklist
+
+  - layer: bi-python-knowledge
+    task_contains: Study the worked dataframe example
+    expect_resources:
+      - knowledge/python-retail-examples.md
+    terminal_contains: worked example evidence ledger
+
   - layer: bi-sql-knowledge
     task_contains: Write validation queries
     expect_resources:

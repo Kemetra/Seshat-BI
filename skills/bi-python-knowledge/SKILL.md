@@ -7,8 +7,7 @@ description: >
   aggregating at a declared grain, parsing dates, validating/reconciling against
   SQL and readiness, diagnosing performance/memory, or reviewing a Python pipeline.
   This is a reasoning layer, not an executor and not a Python tutorial. It does not
-  run pipelines, define metrics, or own gating. See INDEX.md for live and planned
-  routes.
+  run pipelines, define metrics, or own gating. See INDEX.md for the live routes.
 ---
 
 # BI Python Knowledge Skill
@@ -18,10 +17,10 @@ agent **think correctly** about dataframe work and **hand off cleanly** into the
 SQL, DAX, readiness, and dashboard layers. It does not execute code or define
 business meaning.
 
-> **Status: expanded foundation.** Dataframe semantics, profiling, dtypes, missing
-> values, cleaning, merge/fan-out, aggregation grain, and dates/calendars are live.
-> Validation, performance, active analyzer, and full pipeline-review routes remain
-> explicit as planned in `INDEX.md`.
+> **Status: core routes live.** Dataframe semantics, profiling, dtypes, missing
+> values, cleaning, merge/fan-out, aggregation grain, dates/calendars, validation,
+> performance, active-rule review, positive patterns, and pipeline review all resolve
+> through `INDEX.md`.
 
 ## Use this skill when
 

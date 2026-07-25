@@ -3,9 +3,9 @@
 Route the task to the **fewest** files that answer it. Open those files only. End on
 the named artifact. Do not pre-load the whole `knowledge/` directory.
 
-> **Expanded foundation.** Every route in **Live routes** resolves to a shipped
-> resource. The remaining validation, performance, analyzer, and pipeline-review
-> slices stay explicit under **Planned routes** until their artifacts land.
+> **Core routes live.** Every route below resolves to a shipped resource and a named
+> terminal artifact. Future additions must enter through the same route-and-artifact
+> contract; do not invent an unlisted capability.
 >
 > **Boundary — KPI meaning lives upstream.** A KPI's *business meaning* (definition,
 > additivity, required fields, grain intent, ambiguity, owner rulings) is owned by
@@ -40,6 +40,11 @@ the named artifact. Do not pre-load the whole `knowledge/` directory.
 | Merge two dataframes safely | `knowledge/joins-merge-and-fanout.md` | `checklists/merge-fanout-checklist.md` |
 | Aggregate / groupby at a correct grain (use the checklist as a standalone review artifact) | `knowledge/groupby-aggregation-and-grain.md` | `checklists/aggregation-grain-checklist.md` |
 | Parse dates and periods | `knowledge/dates-times-and-calendars.md` | `checklists/dataframe-review-checklist.md` |
+| Validate and reconcile a dataframe result | `knowledge/validation-and-reconciliation.md`, `patterns/validation-patterns.json` | `checklists/validation-reconciliation-checklist.md` |
+| Diagnose dataframe performance or memory | `knowledge/performance-and-memory.md` | performance and memory verdict |
+| Review a Python pipeline against active rules | `knowledge/python-anti-patterns.md`, `patterns/analyzer-rules.json` | `checklists/python-pipeline-review-checklist.md` |
+| Apply recommended Python BI patterns | `patterns/python-patterns.json` | `checklists/python-pipeline-review-checklist.md` |
+| Study the worked dataframe example | `knowledge/python-retail-examples.md` | worked example evidence ledger |
 | Review proposed (not-yet-active) static-analysis rules for Python pipelines | `patterns/analyzer-rule-candidates.json` | the candidate list itself (staging artifact) |
 | Confirm the business meaning of a retail column | `references/source-map.md` | n/a (reference) |
 | Confirm the fictional retail schema used by all examples | `references/retail-dataframe-schema.md` | n/a (reference) |
@@ -67,23 +72,10 @@ the named artifact. Do not pre-load the whole `knowledge/` directory.
 | Rows multiplied or disappeared after merge | Wrong cardinality / unmatched keys / null keys | `knowledge/joins-merge-and-fanout.md` | `checklists/merge-fanout-checklist.md` |
 | Sums look too big after grouping | Double-counting / wrong grain / non-additive measure summed | `knowledge/groupby-aggregation-and-grain.md` | `checklists/aggregation-grain-checklist.md` |
 | Dates swap day/month, shift a day, or sort periods incorrectly | Locale/timezone/calendar contract missing | `knowledge/dates-times-and-calendars.md` | `checklists/dataframe-review-checklist.md` |
-
----
-
-## Planned routes (not yet implemented)
-
-These routes are part of the intended layer but their knowledge/checklist files are
-**not in this seed**. Do not open these files — they do not exist yet.
-
-| Intended route | Planned file | Status |
-|---|---|---|
-| Validate / reconcile a result before handoff | `knowledge/validation-and-reconciliation.md`, `patterns/validation-patterns.json` | planned / not yet implemented |
-| Diagnose slowness or memory blowup | `knowledge/performance-and-memory.md` | planned / not yet implemented |
-| Review a Python pipeline against active rules | `knowledge/python-anti-patterns.md`, `patterns/analyzer-rules.json` | planned / not yet implemented |
-| Recommended positive patterns | `patterns/python-patterns.json` | planned / not yet implemented |
-| Find an original worked retail example | `knowledge/python-retail-examples.md` | planned / not yet implemented |
-| Validation / reconciliation checklist | `checklists/validation-reconciliation-checklist.md` | planned / not yet implemented |
-| Python pipeline review checklist | `checklists/python-pipeline-review-checklist.md` | planned / not yet implemented |
+| Totals match globally but segments differ | Cancelling errors / scope mismatch | `knowledge/validation-and-reconciliation.md`, `patterns/validation-patterns.json` | `checklists/validation-reconciliation-checklist.md` |
+| A sample looks fine but controls are absent | Sample substituted for reconciliation | `knowledge/validation-and-reconciliation.md` | `checklists/validation-reconciliation-checklist.md` |
+| Pipeline is slow or memory grows by stage | Row-wise work / copies / object dtype / fan-out | `knowledge/performance-and-memory.md` | performance and memory verdict |
+| A clean notebook is claimed as readiness | Governance boundary bypass | `knowledge/python-anti-patterns.md`, `patterns/analyzer-rules.json` | `checklists/python-pipeline-review-checklist.md` |
 
 ---
 
@@ -94,9 +86,10 @@ knowledge/   reasoning content, one domain per file
              — live foundation: dataframe semantics, profiling, dtypes, missingness,
                cleaning, joins, groupby grain, and dates/calendars
 patterns/    machine-readable rule + pattern sets (JSON)
-             — shipped: analyzer-rule-candidates.json (candidates only, not active)
+             — active analyzer, validation, positive-pattern, and candidate catalogs
 checklists/  the artifacts routes end on
-             — live: dataframe, cleaning, merge/fan-out, aggregation/grain
+             — dataframe, cleaning, merge/fan-out, aggregation/grain, validation,
+               and pipeline review
 references/  shared schema, source map, copyright, ID conventions, training/eval seed
              — shipped: all four references + agent-training-set.{json,md}
 ```
@@ -105,7 +98,7 @@ references/  shared schema, source map, copyright, ID conventions, training/eval
 
 - If a single route answers the need, do not open a second file "for context".
 - If you cannot name the artifact you will end on, you are not ready to start.
-- If a route you want is under **Planned routes**, the file does not exist — do not
-  fabricate its contents; stop and note the slice is not yet built.
+- If no route matches, stop and name the missing capability; do not free-scan the
+  directory or fabricate an artifact.
 - If the task is metric definition, semantic logic, or gating — stop; it belongs to
   DAX / readiness, not here.

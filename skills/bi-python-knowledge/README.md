@@ -5,10 +5,9 @@ Seshat BI project. It mirrors the SQL and DAX knowledge layers: a thin router, a
 index, and focused knowledge files that always end on an artifact (checklist / JSON
 patterns / verdict).
 
-> **Foundation live; diagnostics still expanding.** Dataframe semantics, profiling,
-> dtypes, missing values, cleaning, merges, aggregation grain, and date/calendar
-> reasoning are live. The router (`INDEX.md`) keeps every unbuilt diagnostic slice
-> explicit as *planned / not yet implemented*.
+> **Core routes live.** The router covers dataframe semantics, profiling, dtypes,
+> missing values, cleaning, merges, aggregation grain, dates/calendars, validation,
+> performance, analyzer-style review, recommended patterns, and pipeline review.
 
 ## This is a reasoning layer, not an executor
 
@@ -47,20 +46,22 @@ need. Do not read the whole `knowledge/` directory.
 - **Aggregation and grain** — additive behavior, groupby grain, and reconciliation.
 - **Dates and calendars** — parse validity, timezone, business date, fiscal/ISO
   calendar roles, and snapshot-policy stops.
-- **Review artifacts** — dataframe, cleaning, merge/fan-out, and aggregation
-  checklists.
-- **Candidate/eval assets** — proposed analyzer candidates and the original training
-  seed; neither proves active enforcement.
+- **Validation and reconciliation** — independent controls, scope/tolerance parity,
+  segment checks, and governed evidence handoff.
+- **Performance and memory** — measured single-node diagnosis, SQL pushdown, and
+  Big Data boundary decisions.
+- **Active/candidate patterns** — evidence-based active rules, recommended positive
+  patterns, and separately labeled proposed candidates.
+- **Review artifacts** — dataframe, cleaning, merge/fan-out, aggregation,
+  validation/reconciliation, and pipeline-review checklists.
+- **Worked example/eval assets** — fictional trace and the original training seed;
+  neither is observed project evidence.
 
-## Not yet complete
+## Extension rule
 
-The following slices remain explicit and **not yet live**:
-
-- validation / reconciliation slice
-- performance / memory slice
-- active analyzer and positive-pattern catalogs
-- end-to-end worked example
-- validation and pipeline-review checklists
+New capabilities are not implied by this pack. They must add a task or symptom route,
+focused resource, terminal artifact, stable IDs where applicable, reviewed public
+classification, and route-contract evidence.
 
 ## Conventions
 
