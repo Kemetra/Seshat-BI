@@ -6,6 +6,43 @@ scenarios:
       - knowledge/groupby-aggregation-and-grain.md
     terminal_contains: aggregation-grain-checklist
 
+  - layer: bi-python-knowledge
+    task_contains: Profile a freshly loaded dataframe
+    expect_resources:
+      - knowledge/profiling-and-source-inspection.md
+    terminal_contains: dataframe-review-checklist
+
+  - layer: bi-python-knowledge
+    task_contains: Understand dataframe semantics for BI
+    expect_resources:
+      - knowledge/dataframe-mental-model.md
+      - knowledge/python-core-concepts-for-bi.md
+    terminal_contains: dataframe-review-checklist
+
+  - layer: bi-python-knowledge
+    task_contains: Judge dtypes or schema drift
+    expect_resources:
+      - knowledge/pandas-dtypes-and-schema.md
+    terminal_contains: dataframe-review-checklist
+
+  - layer: bi-python-knowledge
+    task_contains: Merge two dataframes safely
+    expect_resources:
+      - knowledge/joins-merge-and-fanout.md
+    terminal_contains: merge-fanout-checklist
+
+  - layer: bi-python-knowledge
+    task_contains: Classify nulls blanks and sentinels
+    expect_resources:
+      - knowledge/nulls-missing-values-and-blanks.md
+    terminal_contains: dataframe-review-checklist
+
+  - layer: bi-python-knowledge
+    task_contains: Parse dates and periods
+    expect_resources:
+      - knowledge/dates-times-and-calendars.md
+    terminal_contains: dataframe-review-checklist
+
   - layer: bi-sql-knowledge
     task_contains: Write validation queries
     expect_resources:

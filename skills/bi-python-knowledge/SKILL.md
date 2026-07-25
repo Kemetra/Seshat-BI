@@ -7,8 +7,8 @@ description: >
   aggregating at a declared grain, parsing dates, validating/reconciling against
   SQL and readiness, diagnosing performance/memory, or reviewing a Python pipeline.
   This is a reasoning layer, not an executor and not a Python tutorial. It does not
-  run pipelines, define metrics, or own gating. Initial seed — see INDEX.md for
-  which routes are live and which are planned.
+  run pipelines, define metrics, or own gating. See INDEX.md for live and planned
+  routes.
 ---
 
 # BI Python Knowledge Skill
@@ -18,10 +18,10 @@ agent **think correctly** about dataframe work and **hand off cleanly** into the
 SQL, DAX, readiness, and dashboard layers. It does not execute code or define
 business meaning.
 
-> **Status: initial seed.** This is the first slice of the Python knowledge layer,
-> not the complete layer. Only the routes marked **live** in `INDEX.md` resolve to
-> shipped files; everything else is marked **planned / not yet implemented**. See
-> `README.md` for current seed coverage and what is not yet built.
+> **Status: expanded foundation.** Dataframe semantics, profiling, dtypes, missing
+> values, cleaning, merge/fan-out, aggregation grain, and dates/calendars are live.
+> Validation, performance, active analyzer, and full pipeline-review routes remain
+> explicit as planned in `INDEX.md`.
 
 ## Use this skill when
 
@@ -57,7 +57,8 @@ Dataframe / pandas / source-prep reasoning and Python pipeline review.
 
 - **Readiness** owns stage and gating.
 - **SQL knowledge** owns SQL reasoning, SQL reconciliation, SQL transformation logic.
-- **DAX knowledge** owns measures, metric contracts, semantic-model prerequisites.
+- **Retail KPI knowledge** owns metric meaning and contracts.
+- **DAX knowledge** owns measures and semantic-model prerequisites for ready contracts.
 - **Dashboard design** owns visual/page design after metric contracts.
 - **Execution adapters** run things; they never define meaning, mapping, metrics,
   semantic logic, or approval.
@@ -69,6 +70,7 @@ Dataframe / pandas / source-prep reasoning and Python pipeline review.
 - Do not aggregate before declaring grain and additivity.
 - Do not infer business meaning from column names alone.
 - Do not claim reconciliation passed without evidence.
+- Do not fill nulls, coerce dtypes, or join frames without an evidence ledger.
 - Do not write production pipeline code in this layer.
 - Do not use Python to bypass SQL/readiness validation gates.
 - Do not read the whole knowledge base when a router can select files.

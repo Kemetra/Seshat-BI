@@ -1,15 +1,14 @@
 # BI Python Knowledge
 
-An **initial seed** of a Python/pandas reasoning and review layer for BI and data
-agents in the Seshat BI project. It mirrors the SQL and DAX knowledge layers: a thin
-router, an index, and focused knowledge files that always end on an artifact
-(checklist / JSON patterns / verdict).
+An expanded Python/pandas reasoning and review layer for BI and data agents in the
+Seshat BI project. It mirrors the SQL and DAX knowledge layers: a thin router, an
+index, and focused knowledge files that always end on an artifact (checklist / JSON
+patterns / verdict).
 
-> **This layer is not complete yet.** This PR seeds the skeleton, the router, the
-> shared references, and a first slice of content. Most knowledge slices are still
-> to come — see **Not yet complete** below. The router (`INDEX.md`) marks every
-> unbuilt route as *planned / not yet implemented* so nothing points at a missing
-> file.
+> **Foundation live; diagnostics still expanding.** Dataframe semantics, profiling,
+> dtypes, missing values, cleaning, merges, aggregation grain, and date/calendar
+> reasoning are live. The router (`INDEX.md`) keeps every unbuilt diagnostic slice
+> explicit as *planned / not yet implemented*.
 
 ## This is a reasoning layer, not an executor
 
@@ -32,39 +31,36 @@ SKILL.md  ->  INDEX.md  ->  relevant file(s)  ->  artifact / checklist / verdict
 Always start at `SKILL.md`, then `INDEX.md`. Let the router select the file(s) you
 need. Do not read the whole `knowledge/` directory.
 
-## Current seed coverage
+## Current live coverage
 
-This PR ships:
-
-- **Router / shell** — `SKILL.md`, `INDEX.md`, `README.md`.
-- **References** — `references/copyright-safety.md`, `references/id-conventions.md`,
-  `references/source-map.md`, `references/retail-dataframe-schema.md`.
-- **Cleaning and standardization** — `knowledge/cleaning-and-standardization.md`
-  (string/category/currency/sentinel/dedup reasoning), ending on its terminal artifact
-  `checklists/cleaning-review-checklist.md` (a categorical cleaning verdict + row-count
-  ledger).
-- **Aggregation / grain checklist** — `checklists/aggregation-grain-checklist.md`
-  (a standalone review artifact for groupby work).
-- **Analyzer rule candidates** — `patterns/analyzer-rule-candidates.json` (proposed
-  rules **only**, not active enforced rules).
-- **Training / eval seed** — `references/agent-training-set.json` and
-  `references/agent-training-set.md` (a machine-readable plus human-readable Q&A seed
-  for evaluating Python reasoning; **a seed/eval set, not proof the layer is
-  complete**).
+- **Semantics and provenance** — dataframe role, grain, identity, alignment, and
+  deterministic transformation boundaries.
+- **Source inspection** — structure, candidate keys, missingness, cardinality,
+  ranges, and observation-versus-expectation.
+- **Dtypes and schema** — logical/storage type separation, precision, identifiers,
+  booleans, categories, and drift classification.
+- **Missing values** — null/blank/sentinel classification with named-decision stops.
+- **Cleaning and standardization** — strings, categories, currency, units,
+  sentinels, and duplicates with a row-count ledger.
+- **Joins and fan-out** — declared input grains, cardinality, unmatched keys,
+  multiplicity, and post-merge controls.
+- **Aggregation and grain** — additive behavior, groupby grain, and reconciliation.
+- **Dates and calendars** — parse validity, timezone, business date, fiscal/ISO
+  calendar roles, and snapshot-policy stops.
+- **Review artifacts** — dataframe, cleaning, merge/fan-out, and aggregation
+  checklists.
+- **Candidate/eval assets** — proposed analyzer candidates and the original training
+  seed; neither proves active enforcement.
 
 ## Not yet complete
 
-The following slices are intended but **not built in this seed**:
+The following slices remain explicit and **not yet live**:
 
-- full dataframe mental model
-- full dtype / profiling slice
-- merge / fan-out slice
-- groupby / aggregation knowledge file (the checklist ships; the knowledge file does not)
-- dates / calendar slice
 - validation / reconciliation slice
 - performance / memory slice
-- full (active) analyzer rules
-- full Markdown training set
+- active analyzer and positive-pattern catalogs
+- end-to-end worked example
+- validation and pipeline-review checklists
 
 ## Conventions
 
@@ -77,6 +73,6 @@ The following slices are intended but **not built in this seed**:
 
 ## Integration status
 
-Repo-level routing (COMPASS / knowledge-map integration) is **intentionally not part
-of this PR**. It is wired only after the Python skill is reviewed and stable, the same
-way the SQL and DAX layers were added before being routed.
+`COMPASS.md` and `docs/knowledge-map.md` route Python work into this layer. Public
+Claude and Codex copies are generated from canonical files only after explicit
+allowlist review.
