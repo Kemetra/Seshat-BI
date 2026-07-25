@@ -152,9 +152,18 @@ def _attr_type_divergence(bare: str, stars: dict[str, dict]) -> str | None:
     """Shared-attribute silver_type divergence across >=2 stars, or None.
 
     Only attributes present on BOTH sides of a pair are compared (graceful
-    degradation). gold_placement in a source-map is written with the BARE dim
-    name (e.g. "dim:dim_product.item"), so resolve the placement prefix from
-    _bare(dim name), NOT the schema-qualified declared name.
+    degradation). gold_placement in a source-map is written with the dimension's
+    PHYSICAL BARE name -- the declared ``name:`` with any ``<schema>.`` prefix
+    stripped, e.g. ``name: "gold.dim_product_rss"`` -> ``dim:dim_product_rss.item``
+    -- so resolve the placement prefix from _bare(dim name), NOT the
+    schema-qualified declared name. That physical form is canonical (owner ruling,
+    #499); HR13 (``rules/placement_resolution.py``) enforces it per-map on every
+    committed map, reporting any placement THIS match would reject, so an
+    unresolvable prefix surfaces as an ERROR there instead of the empty typemap it
+    silently produces here. Note the match below stays exact and case-sensitive --
+    HR13 mirrors it rather than normalizing, so the gate and this reader agree on
+    what "resolves" means. Until HR13 existed, every placement in the reference map
+    named a LOGICAL dim and this limb silently compared nothing.
     """
     typemaps: dict[str, dict[str, str]] = {}
     for sid, (dim, data) in stars.items():

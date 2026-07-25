@@ -68,7 +68,7 @@ columns:
     missing_policy: "null"
     pii: true                              # flagged; governance decides publish-safety (Q1)
     deviation_ref: "RC4"                   # KEPT by the RC4 governance ruling (Q1 resolved); names its deviation
-    gold_placement: "dim:dim_customer.customer_id"
+    gold_placement: "dim:dim_customer_rss.customer_id"
 
   - source_name: "category"
     decision: "keep"
@@ -77,7 +77,7 @@ columns:
     silver_type: "text"
     missing_policy: "null"
     pii: false
-    gold_placement: "dim:dim_product.category"
+    gold_placement: "dim:dim_product_rss.category"
 
   - source_name: "item"
     decision: "keep"
@@ -86,7 +86,7 @@ columns:
     silver_type: "text"
     missing_policy: "null"                 # blank -> NULL (RC5); -1 unknown member in gold
     pii: false
-    gold_placement: "dim:dim_product.item"
+    gold_placement: "dim:dim_product_rss.item"
 
   - source_name: "price_per_unit"
     decision: "keep"
@@ -122,7 +122,7 @@ columns:
     silver_type: "text"
     missing_policy: "null"
     pii: false
-    gold_placement: "dim:dim_payment_method.payment_method"
+    gold_placement: "dim:dim_payment_method_rss.payment_method"
 
   - source_name: "location"
     decision: "keep"
@@ -131,7 +131,7 @@ columns:
     silver_type: "text"
     missing_policy: "null"
     pii: false
-    gold_placement: "dim:dim_location.location"
+    gold_placement: "dim:dim_location_rss.location"
 
   - source_name: "transaction_date"
     decision: "keep"
@@ -140,7 +140,7 @@ columns:
     silver_type: "date"                    # RC7: date -> DATE
     missing_policy: "null"
     pii: false
-    gold_placement: "dim:dim_date.full_date"
+    gold_placement: "dim:dim_date_rss.full_date"
 
   - source_name: "discount_applied"
     decision: "keep"

@@ -77,7 +77,12 @@
 #     value containing ':' or quotes (see the quoted examples below).
 #   - Use snake_case for every silver name (rename_to). Keep names SHORT
 #     (Windows 260-char PBIP path limit; see repo CLAUDE.md).
-#   - `gold_placement` dim names MUST match a name under `gold_star.dimensions`.
+#   - `gold_placement` dim names MUST match a name under `gold_star.dimensions`
+#     (or `gold_star.date_dimension`) -- its PHYSICAL BARE name: the declared
+#     `name:` with any `<schema>.` prefix stripped. A star declaring
+#     `name: "gold.dim_product_rss"` takes `dim:dim_product_rss.item`, NOT
+#     `dim:dim_product.item`. No logical alias, no suffix-tolerant matching
+#     (owner ruling, #499); HR13 ERRORs on an unresolvable prefix.
 #   - `gold_star.fact.measures` MUST stay `[]` (empty) for a factless fact.
 #     COUNT(*) over this fact's rows is a valid read ("how many combinations
 #     were on promotion") without being a stored measure column. Do NOT add a
