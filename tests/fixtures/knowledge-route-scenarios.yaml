@@ -1,0 +1,41 @@
+schema_version: 1
+scenarios:
+  - layer: bi-python-knowledge
+    task_contains: Aggregate / groupby at a correct grain
+    expect_resources:
+      - knowledge/groupby-aggregation-and-grain.md
+    terminal_contains: aggregation-grain-checklist
+
+  - layer: bi-sql-knowledge
+    task_contains: Write validation queries
+    expect_resources:
+      - patterns/sql-validation-patterns.json
+      - knowledge/sql-reconciliation-playbook.md
+    terminal_contains: sql-validation-checklist
+
+  - layer: bi-dax-knowledge
+    task_contains: Review existing DAX
+    expect_resources:
+      - patterns/analyzer-rules.json
+      - knowledge/dax-best-practices.md
+      - knowledge/dax-anti-patterns.md
+      - checklists/dax-measure-review-checklist.md
+    terminal_contains: dax-measure-review-checklist
+
+  - layer: retail-kpi-knowledge
+    task_contains: Write a brand-new KPI contract
+    expect_resources:
+      - references/metric-contract-template.md
+    terminal_contains: metric-contract-review-checklist
+
+  - layer: bi-bigdata-knowledge
+    task_contains: Decide whether to scale out at all / pick an engine
+    expect_resources:
+      - knowledge/engine-selection.md
+    terminal_contains: engine-selection-checklist
+
+  - layer: bi-analyst-knowledge
+    task_contains: Author the narrative brief
+    expect_resources:
+      - derivation-route.md
+    terminal_contains: narrative-brief.md
