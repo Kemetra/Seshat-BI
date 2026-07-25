@@ -278,11 +278,13 @@ def _live_validation_next_override(
         return (
             "CAUTION -- live validation passed locally, but the supporting "
             "evidence is machine-local and unreviewable: it exists only under "
-            "the git-ignored `.seshat/dagster/runs/`, with no matching committed "
+            "the git-ignored `.seshat/dagster/runs/`, with no matching record "
+            "committed at HEAD as "
             "`orchestration/dagster/run-evidence/<run-id>.md`. Run `seshat "
-            "dagster evidence --run-id <run-id>` and commit the rendered record "
-            "before treating this table as live-validated for anyone but "
-            "yourself."
+            "dagster evidence --run-id <run-id>`, then COMMIT the rendered "
+            "record on its own -- rendering alone leaves it untracked, and a "
+            "reviewer can only read what is committed. Until then, do not treat "
+            "this table as live-validated for anyone but yourself."
         )
     if live_state in {"stale", "blocked"}:
         return (

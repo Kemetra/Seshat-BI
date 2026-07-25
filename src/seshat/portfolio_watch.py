@@ -493,43 +493,120 @@ def _run_inputs_are_stale(root: Path, summary: dict[str, Any]) -> bool:
     return False
 
 
+_EVIDENCE_DIR_POSIX = "orchestration/dagster/run-evidence/"
+
+
+def _git_try(root: Path, *args: str) -> str | None:
+    """Run a read-only git command; ``None`` on ANY failure.
+
+    Deliberately tolerant, mirroring ``gitutil.git_check_ignore``'s exit-128
+    posture: a non-repo workspace, an unknown revision, or a path absent at
+    ``HEAD`` are all ANSWERS here ("cannot prove it") and must never raise into
+    a read-only reporting surface.
+    """
+    from .gitutil import _GIT_HARDENING
+
+    try:
+        result = subprocess.run(
+            ["git", *_GIT_HARDENING, "-C", str(root), *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+    except OSError:
+        return None
+    return result.stdout if result.returncode == 0 else None
+
+
 def _committed_evidence_agrees(
     root: Path, summary: dict[str, Any], records: list[dict[str, Any]]
 ) -> bool:
-    """Whether the COMMITTED run record reproduces this run's raw records.
+    """Whether the record COMMITTED AT ``HEAD`` reproduces this run's records.
 
     ``.seshat/dagster/runs/`` is git-ignored scratch (``.gitignore:111``); the
     reviewable record is ``orchestration/dagster/run-evidence/<run-id>.md``. A
     ``verified`` live state SILENCES the ``[PENDING LIVE PROFILE]`` caveat on a
-    shared read-only surface, so it must rest on the committed, reviewable file
-    -- not on an untracked local artifact (issue #493).
+    shared read-only surface, so it must rest on evidence a REVIEWER CAN
+    OBTAIN FROM GIT (issue #493).
 
-    The committed markdown is checked for byte-agreement (newline-normalized)
-    with what this run's raw records render to. Agreement means the committed
-    file is what a reviewer would read; the scratch may then only NARROW the
-    state (via the existing staleness/outcome checks), never widen it. The
-    committed record alone cannot grant ``verified``: ``render_markdown``
-    records only a COUNT of ``input_artifacts``, not the per-file digests
-    ``_run_inputs_are_stale`` compares, so deriving the state from the markdown
-    alone would silently weaken the staleness check.
+    The content is therefore read from ``HEAD`` (``git show HEAD:<path>``), not
+    from the worktree. Reading the worktree would accept a merely-rendered,
+    untracked file that no reviewer can fetch -- the very state this gate exists
+    to reject. An absent path, an untracked file, or a non-repo workspace all
+    read as "not committed".
+
+    Reading ``HEAD`` also means a LOCAL edit to an already-committed record
+    changes nothing: the answer follows what a reviewer would fetch, so a
+    scribble cannot revoke properly committed evidence, and equally cannot
+    manufacture a pass. Both directions are intended.
+
+    Byte-agreement (newline-normalized) with what this run's raw records render
+    to is required. Agreement means the committed file is what a reviewer would
+    read; the scratch may then only NARROW the state (via the existing
+    staleness/outcome checks), never widen it. The committed record alone can
+    never grant ``verified``: ``render_markdown`` records only a COUNT of
+    ``input_artifacts``, not the per-file digests ``_run_inputs_are_stale``
+    compares, so deriving the state from the markdown alone would silently
+    weaken the staleness check.
     """
-    from .dagster_adapter.evidence_render import evidence_out_path, render_markdown
+    from .dagster_adapter.evidence_render import render_markdown
+    from .dagster_adapter.run_identity import validate_run_id
 
     try:
-        committed = evidence_out_path(root, summary["run_id"])
+        run_id = validate_run_id(summary["run_id"])
     except (KeyError, ValueError):
         return False
-    if not committed.is_file():
-        return False
-    try:
-        recorded = committed.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+    recorded = _git_try(root, "show", f"HEAD:{_EVIDENCE_DIR_POSIX}{run_id}.md")
+    if recorded is None:
         return False
     try:
         rendered = render_markdown(summary, records)
     except (KeyError, ValueError):
         return False
     return recorded.replace("\r\n", "\n").rstrip("\n") == rendered.rstrip("\n")
+
+
+def _revision_moved_beyond_evidence(
+    root: Path, commit_sha: object, source_revision: str | None
+) -> bool:
+    """Whether ``HEAD`` moved past the run in a way that INVALIDATES it.
+
+    Exists because the two halves of #493's fix would otherwise deadlock. The
+    committed record is, by construction, committed AFTER the run it describes,
+    so that commit necessarily advances ``HEAD`` beyond the run's recorded
+    ``commit_sha``. A bare equality check (``_is_stale_captured_at``) therefore
+    calls the documented render-plus-commit workflow ``stale``, which would stop
+    the committed record from EVER being recognised -- making the honest path
+    unreachable while an untracked file passed.
+
+    So this distinguishes "the workspace moved in ways that invalidate the run"
+    from "the evidence for this run was committed afterwards": if every path
+    changed between ``commit_sha`` and ``HEAD`` lives under
+    ``orchestration/dagster/run-evidence/``, the run is NOT stale.
+
+    This narrows ONLY the revision comparison. ``workspace_dirty`` and
+    ``_run_inputs_are_stale`` keep full force at the call site -- a changed
+    input is still stale regardless of this exemption (the R1 amendment's
+    condition 2).
+
+    Note the deliberate consequence: committing the record TOGETHER WITH
+    unrelated changes makes the run stale. The record must be committed on its
+    own; that keeps the exemption impossible to widen by bundling.
+    """
+    if not _is_stale_captured_at(commit_sha, source_revision):
+        return False  # equal (or nothing to compare): the fast, common path
+    assert isinstance(commit_sha, str)
+    if _git_try(root, "merge-base", "--is-ancestor", commit_sha, "HEAD") is None:
+        return True  # unknown sha, or HEAD is not a descendant -- cannot exempt
+    changed = _git_try(root, "diff", "--name-only", commit_sha, "HEAD")
+    if changed is None:
+        return True
+    paths = [line.strip() for line in changed.splitlines() if line.strip()]
+    if not paths:
+        return True  # an empty diff cannot be the evidence commit; stay strict
+    return not all(path.startswith(_EVIDENCE_DIR_POSIX) for path in paths)
 
 
 def _dagster_run_states(
@@ -568,7 +645,13 @@ def _dagster_run_states(
         key=lambda pair: (str(pair[0].get("finished", "")), pair[0]["run_id"]),
     )
     stale = bool(summary.get("workspace_dirty"))
-    stale = stale or _is_stale_captured_at(summary.get("commit_sha"), source_revision)
+    # Not a bare equality check: committing the run's own evidence record
+    # necessarily advances HEAD past `commit_sha`, and treating that as stale
+    # would make the documented render-plus-commit workflow unreachable (#493).
+    stale = stale or _revision_moved_beyond_evidence(
+        root, summary.get("commit_sha"), source_revision
+    )
+    # Full force, unchanged: a modified input is stale no matter what HEAD did.
     stale = stale or _run_inputs_are_stale(root, summary)
     run_state = (
         "stale"

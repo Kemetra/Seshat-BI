@@ -49,14 +49,26 @@ are evidence context, not a readiness score or new gate:
   `.seshat/dagster/runs/` scratch, with no matching committed
   `orchestration/dagster/run-evidence/<run-id>.md` -- reviewable evidence is
   missing, not the connection, so the fix is `seshat dagster evidence --run-id
-  <run-id>` plus a commit (issue #493). `verified` requires BOTH the committed
-  record AND every check that reads the scratch `summary.json` -- commit sha,
-  workspace-dirty, and the per-input SHA-256 digests, which live ONLY in that
-  scratch file. The committed markdown records just a count of input artifacts,
-  so it can never grant `verified` on its own: keying suppression on the
-  markdown alone would lose stale-input detection entirely. Neither source is
-  sufficient by itself, and the committed record can only narrow the state,
-  never widen it.
+  <run-id>` plus a commit (issue #493). The record's content is read from
+  `HEAD`, not from the worktree, so **rendering it is not enough -- it must be
+  committed**: an untracked file is one no reviewer can obtain from Git, which
+  is the whole condition this state exists to report. `verified` requires BOTH
+  that committed record AND every check that reads the scratch `summary.json` --
+  commit sha, workspace-dirty, and the per-input SHA-256 digests, which live
+  ONLY in that scratch file. The committed markdown records just a count of
+  input artifacts, so it can never grant `verified` on its own: keying
+  suppression on the markdown alone would lose stale-input detection entirely.
+  Neither source is sufficient by itself, and the committed record can only
+  narrow the state, never widen it.
+
+  **Commit the record on its own.** Committing it necessarily advances `HEAD`
+  past the `commit_sha` the run captured, so that one commit is exempted from
+  the revision comparison -- otherwise the documented workflow could never reach
+  `verified`. The exemption is deliberately narrow: it holds only when *every*
+  path changed between the run's `commit_sha` and `HEAD` lives under
+  `orchestration/dagster/run-evidence/`. Bundling unrelated files into the same
+  commit means `HEAD` moved for reasons the run cannot account for, and the run
+  reads `stale`. A changed input is still `stale` regardless of the exemption.
 - `last_dagster_run`: `unavailable`, `invalid`, `failed`, `stale`, or
   `verified`, after raw evidence verification and input/revision comparison.
 

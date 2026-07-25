@@ -1,4 +1,4 @@
-"""A `verified` live state must rest on the COMMITTED record, not the scratch.
+"""A `verified` live state must rest on the record COMMITTED AT ``HEAD``.
 
 Issue #493. ``.seshat/dagster/runs/`` is git-ignored (``.gitignore:111``, whose
 own comment names ``orchestration/dagster/run-evidence/<run-id>.md`` as the
@@ -8,12 +8,23 @@ SILENCES the ``[PENDING LIVE PROFILE]`` caveat in
 ``agent_next._live_validation_next_override``. So an untracked machine-local file
 could silence a safety caveat on a shared read-only surface.
 
+Two properties are pinned here, and they had to be solved TOGETHER:
+
+  1. Rendering alone is not enough. The content is read from ``HEAD``, so an
+     untracked (or tracked-but-modified) record cannot grant ``verified`` -- a
+     reviewer must be able to obtain it from Git.
+  2. The render-plus-commit workflow must actually REACH ``verified``. Committing
+     the record necessarily advances ``HEAD`` past the run's ``commit_sha``, so a
+     bare equality check would call the honest path stale forever. Requiring (1)
+     without fixing (2) leaves a gate no real operator can pass.
+
 Plus the #485 option-B honest caveat on the human-readable `status` render.
 """
 
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -29,6 +40,25 @@ from tests.fixtures.portfolio_watch.builders import (
 pytestmark = pytest.mark.unit
 
 _SCOPE = "scope_alpha"
+_EVIDENCE_DIR = "orchestration/dagster/run-evidence"
+
+
+def _git(root: Path, *args: str) -> None:
+    subprocess.run(["git", *args], cwd=root, capture_output=True, check=True)
+
+
+def _commit_run_evidence(root: Path, run_id: str = "run-live-001") -> Path:
+    """Render the committed record AND actually commit it -- the real workflow.
+
+    Rendering without committing is what the pre-fix tests did, and it is exactly
+    why the deadlock in property (2) above stayed invisible: the file existed in
+    the worktree, so a worktree read accepted it, and ``HEAD`` never moved.
+    Committing it on its own is the documented operator path.
+    """
+    out_path = write_run_evidence(root, run_id)
+    _git(root, "add", f"{_EVIDENCE_DIR}/{run_id}.md")
+    _git(root, "commit", "--no-gpg-sign", "-m", f"evidence: record {run_id}")
+    return out_path
 
 
 def _finalize_live_run(
@@ -80,10 +110,50 @@ def test_scratch_only_live_run_is_not_verified(tmp_path: Path) -> None:
     assert scope["last_dagster_run"] == "verified"
 
 
-def test_committed_run_evidence_restores_verified(tmp_path: Path) -> None:
-    """With the reviewable committed record present, `verified` is honest."""
+def test_rendered_but_uncommitted_record_is_not_verified(tmp_path: Path) -> None:
+    """An UNTRACKED rendered record must not grant `verified` (finding 1).
+
+    Running `seshat dagster evidence` writes the file into the worktree but
+    commits nothing. A worktree read accepted that, so an operator who never
+    committed still silenced the caveat -- while no reviewer could obtain the
+    record from Git. That is precisely the state this gate exists to reject, so
+    the content is read from `HEAD` instead.
+    """
     _repo_with_live_run(tmp_path)
-    write_run_evidence(tmp_path, "run-live-001")
+    write_run_evidence(tmp_path, "run-live-001")  # rendered, deliberately NOT committed
+
+    scope = _scope_doc(tmp_path)
+
+    assert scope["live_validation_state"] == pw.STATE_UNCOMMITTED_EVIDENCE
+
+
+def test_render_plus_commit_workflow_reaches_verified(tmp_path: Path) -> None:
+    """The documented render-plus-commit workflow must actually reach `verified`.
+
+    The regression guard for finding 2, and the reason findings 1 and 2 had to be
+    fixed together. Committing the record necessarily advances `HEAD` beyond the
+    run's recorded `commit_sha`, so a bare equality check reports `stale` and the
+    committed record is never even examined. Requiring "tracked at HEAD" without
+    exempting the evidence commit therefore yields a gate NO operator can pass:
+    the only way to satisfy the requirement is the very commit that trips it.
+
+    A test that merely RENDERS the file cannot see this -- `HEAD` never moves --
+    which is exactly how the deadlock passed CI.
+    """
+    _repo_with_live_run(tmp_path)
+    _commit_run_evidence(tmp_path)
+
+    scope = _scope_doc(tmp_path)
+
+    assert scope["live_validation_state"] == "verified"
+    # The run's own state is untouched by the evidence commit.
+    assert scope["last_dagster_run"] == "verified"
+
+
+def test_committed_run_evidence_restores_verified(tmp_path: Path) -> None:
+    """With the reviewable record committed at `HEAD`, `verified` is honest."""
+    _repo_with_live_run(tmp_path)
+    _commit_run_evidence(tmp_path)
 
     scope = _scope_doc(tmp_path)
 
@@ -91,28 +161,59 @@ def test_committed_run_evidence_restores_verified(tmp_path: Path) -> None:
 
 
 def test_committed_record_that_disagrees_is_not_verified(tmp_path: Path) -> None:
-    """A committed record that does not reproduce the raw records is rejected."""
+    """A record committed at `HEAD` that does not reproduce the raw records.
+
+    The tampered content is COMMITTED, not merely written: otherwise this would
+    pass for the wrong reason (nothing at `HEAD` at all) and would not test
+    disagreement.
+    """
     _repo_with_live_run(tmp_path)
     committed = write_run_evidence(tmp_path, "run-live-001")
     committed.write_text(
         committed.read_text(encoding="utf-8").replace("materialized", "deferred"),
         encoding="utf-8",
     )
+    _git(tmp_path, "add", f"{_EVIDENCE_DIR}/run-live-001.md")
+    _git(tmp_path, "commit", "--no-gpg-sign", "-m", "evidence: tampered record")
 
     scope = _scope_doc(tmp_path)
 
     assert scope["live_validation_state"] == pw.STATE_UNCOMMITTED_EVIDENCE
 
 
+def test_verified_follows_head_not_a_local_edit_of_the_record(tmp_path: Path) -> None:
+    """A local edit to an already-committed record does NOT change the answer.
+
+    Deliberate, and the direction matters. The comparison reads `HEAD`, so a
+    worktree edit is invisible to it: the state stays `verified` because the
+    record a REVIEWER fetches from Git is still the correct one. A local scribble
+    cannot revoke evidence that is properly committed.
+
+    Note this is the SAFE direction of the HEAD read. The unsafe direction --
+    a local edit CREATING a pass -- is impossible for the same reason, and is
+    pinned by `test_rendered_but_uncommitted_record_is_not_verified` and
+    `test_committed_record_that_disagrees_is_not_verified`. (`workspace_dirty` is
+    recorded by `finalize_run` at run time, not sampled live, so it does not and
+    should not react to post-run edits.)
+    """
+    _repo_with_live_run(tmp_path)
+    committed = _commit_run_evidence(tmp_path)
+    assert _scope_doc(tmp_path)["live_validation_state"] == "verified"
+
+    committed.write_text("locally edited, never committed\n", encoding="utf-8")
+
+    assert _scope_doc(tmp_path)["live_validation_state"] == "verified"
+
+
 def test_committed_record_for_a_different_run_does_not_verify(tmp_path: Path) -> None:
     """The committed record must be THIS run's, not merely some committed file."""
     _repo_with_live_run(tmp_path, "run-live-001")
     _finalize_live_run(tmp_path, "run-live-002")
-    # Render run-001's record only after both runs exist, so run-002 is judged on
+    # Commit run-001's record only after both runs exist, so run-002 is judged on
     # its own missing record rather than on a dirtied workspace.
-    write_run_evidence(tmp_path, "run-live-001")
+    _commit_run_evidence(tmp_path, "run-live-001")
 
-    # run-live-002 is the latest run and is uncommitted.
+    # run-live-002 is the latest run and has no committed record.
     scope = _scope_doc(tmp_path)
 
     assert scope["live_validation_state"] == pw.STATE_UNCOMMITTED_EVIDENCE
@@ -129,25 +230,31 @@ def test_latest_run_is_selected_before_the_committed_requirement(
     """
     _repo_with_live_run(tmp_path, "run-live-001")
     # Finalize the newer run FIRST so both runs see the same workspace state --
-    # otherwise rendering run-001's record dirties the tree and run-002 reads
-    # `stale`, which would mask what this test is actually about.
+    # otherwise committing run-001's record moves HEAD and run-002 reads `stale`,
+    # which would mask what this test is actually about.
     _finalize_live_run(tmp_path, "run-live-002")
-    write_run_evidence(tmp_path, "run-live-001")
+    _commit_run_evidence(tmp_path, "run-live-001")
 
     scope = _scope_doc(tmp_path)
 
-    # The newer, uncommitted run wins the selection -- the older committed one
-    # must NOT be substituted for it.
+    # The newer run with no committed record wins the selection -- the older
+    # committed one must NOT be substituted for it.
     assert scope["live_validation_state"] == pw.STATE_UNCOMMITTED_EVIDENCE
 
 
 def test_crlf_committed_record_still_verifies(tmp_path: Path) -> None:
-    """core.autocrlf=true checkouts must not read as a disagreement."""
+    """core.autocrlf=true checkouts must not read as a disagreement.
+
+    The CRLF form is what gets committed here; `git show HEAD:<path>` hands back
+    the blob, so this pins that the comparison survives the round trip.
+    """
     _repo_with_live_run(tmp_path)
     committed = write_run_evidence(tmp_path, "run-live-001")
     committed.write_bytes(
         committed.read_text(encoding="utf-8").replace("\n", "\r\n").encode("utf-8")
     )
+    _git(tmp_path, "add", f"{_EVIDENCE_DIR}/run-live-001.md")
+    _git(tmp_path, "commit", "--no-gpg-sign", "-m", "evidence: crlf record")
 
     scope = _scope_doc(tmp_path)
 
@@ -155,7 +262,12 @@ def test_crlf_committed_record_still_verifies(tmp_path: Path) -> None:
 
 
 def test_unreadable_committed_record_is_not_verified(tmp_path: Path) -> None:
-    """A committed path that is not a readable file fails closed."""
+    """A record path that is not a committed blob fails closed.
+
+    A directory at the record's path cannot be committed as a file, so
+    `git show HEAD:<path>` fails and the gate reports uncommitted -- no worktree
+    stat is involved any more.
+    """
     _repo_with_live_run(tmp_path)
     out_path = evidence_out_path(tmp_path, "run-live-001")
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -164,6 +276,25 @@ def test_unreadable_committed_record_is_not_verified(tmp_path: Path) -> None:
     scope = _scope_doc(tmp_path)
 
     assert scope["live_validation_state"] == pw.STATE_UNCOMMITTED_EVIDENCE
+
+
+def test_evidence_commit_bundled_with_unrelated_changes_is_stale(
+    tmp_path: Path,
+) -> None:
+    """The HEAD exemption covers ONLY the evidence record, nothing bundled with it.
+
+    Documented consequence: the record must be committed on its own. Bundling
+    unrelated files into that commit means HEAD moved for reasons the run cannot
+    account for, so the run is stale -- which keeps the exemption from being
+    widened by simply adding files to the same commit.
+    """
+    _repo_with_live_run(tmp_path)
+    write_run_evidence(tmp_path, "run-live-001")
+    (tmp_path / "unrelated.txt").write_text("something else\n", encoding="utf-8")
+    _git(tmp_path, "add", f"{_EVIDENCE_DIR}/run-live-001.md", "unrelated.txt")
+    _git(tmp_path, "commit", "--no-gpg-sign", "-m", "evidence plus unrelated change")
+
+    assert _scope_doc(tmp_path)["live_validation_state"] == "stale"
 
 
 def test_state_is_in_the_declared_vocabulary(tmp_path: Path) -> None:
@@ -195,7 +326,7 @@ def test_modified_recorded_inputs_are_not_verified_even_when_committed(
     state must still not be `verified`.
     """
     _repo_with_live_run(tmp_path)
-    write_run_evidence(tmp_path, "run-live-001")
+    _commit_run_evidence(tmp_path)
     # Sanity: with inputs untouched this repo IS verified, so the assertion
     # below is caused by the input edit and nothing else.
     assert _scope_doc(tmp_path)["live_validation_state"] == "verified"
