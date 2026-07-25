@@ -57,7 +57,44 @@ reviewable evidence. `portfolio_watch.py:479-521` simply reads the wrong one
 of the two. Keying caveat-suppression on the committed record honours a
 convention this repo already wrote down.
 
-- #493 -> **closed** by this mission.
+#### R1 amendment -- the stale-input check MUST survive the source switch
+
+Raised in review of this note (P1) and **verified against the code**. The
+naive reading of R1 -- "just read the Markdown instead" -- would ship a
+fail-open, so the ruling is qualified here before any implementation:
+
+`_run_inputs_are_stale` (`portfolio_watch.py:456-476`) compares **each recorded
+input path against its SHA-256 digest** and returns stale on any mismatch. The
+rendered committed record does **not** carry that: `evidence_render.py:321-322`
+writes only
+
+```
+| Input artifacts | `{len(summary['input_artifacts'])}` tracked file(s) |
+```
+
+-- a **count**, not the per-path digests. So if a source map or other input is
+modified in the worktree after the recorded run, commit-SHA comparison alone is
+unchanged and the Markdown **cannot** detect it. Suppressing the caveat on the
+Markdown as it stands today would report `verified` for inputs that were never
+validated -- a worse fail-open than the one #493 reports.
+
+**Ruled:** #493's implementation must satisfy BOTH conditions, not just the
+first:
+
+1. caveat-suppressing evidence must be **committed and reviewable**, and
+2. the stale-input check must remain **equivalently strong** -- either the
+   committed format retains the per-path input digests, or the reader performs
+   an equivalent current-input check against them.
+
+If neither can be met without widening the committed record, prefer the
+issue's own fallback: **downgrade** the caveat rather than suppress it, naming
+the supporting evidence as machine-local and unreviewable. Losing stale-input
+detection to gain reviewability is not an acceptable trade.
+
+- #493 -> closed **only when the implementation PR lands**. This decision-only
+  note changes no code: `_dagster_run_states` still reads
+  `.seshat/dagster/runs/` until then, so #493 must **not** be marked closed by
+  this commit (P2, accepted).
 - #485 -> **honestly qualified**, remains open pending A2. Not claimed closed.
 
 ### R2 -- #499 placement naming: **physical name + resolution assertion**
@@ -148,12 +185,64 @@ So the default governs every existing map, and it must equal the **migrations
 DDL set**, not today's `_DATE_COLUMNS` -- otherwise the change merely
 relocates the divergence instead of removing it.
 
+#### R6 amendment -- ONE resolved attribute set, consumed by BOTH paths
+
+Raised in review of this note (P2) and **verified against the code**. As first
+written, R6 was underspecified in a way that would have contradicted a prior
+owner ruling -- so it is qualified here before any implementation.
+
+`gap_detector._collect_gold` (`gap_detector.py:239-242`) resolves date
+attributes from the **fixed** `RC15_CALENDAR_ATTRIBUTES` frozenset declared in
+`star_discovery.py:49`. If `_date_dimension` alone begins honouring a map's
+`date_dimension.attributes`, the two paths disagree the moment any map declares
+that key: added attributes produce **false missing-column findings**, omitted
+ones produce **false availability**.
+
+This is not a hypothetical. `tests/unit/test_issue_regression_491.py:13-17`
+records the prior ruling and names this exact trap:
+
+> Resolution (owner-ruled): a date dimension's attributes are the RC15
+> generated calendar set plus its declared surrogate key. That set is declared
+> ONCE, in `star_discovery`, so readers cannot each invent their own (issue
+> #497). Deliberately NOT done here: honoring a `date_dimension.attributes`
+> key. [...] honoring it in this one reader would manufacture a fresh
+> cross-surface disagreement, which is the #487 defect.
+
+**Ruled:** #497 is resolved by **one shared attribute-set resolver** -- a single
+helper, declared once (the natural home is `star_discovery`, alongside
+`RC15_CALENDAR_ATTRIBUTES`), consumed by **both** `dbt/scaffold/model_plan.py`
+and `gap_detector`. Neither path may keep a private list. `_DATE_COLUMNS` is
+deleted rather than corrected, because a second hardcoded tuple *is* the defect
+#497 reports.
+
+Consequences, stated so the implementation cannot drift:
+
+- The prior #491 ruling stands: **RC15 + declared surrogate key** remains the
+  resolved set when a map declares no `attributes`. It is not overturned here.
+- The migrations-DDL comparison in the issue is what makes the RC15 default
+  **auditable** -- if RC15 and the migrations DDL disagree, that gap must be
+  reported, not silently defaulted around. Reconcile them or name the
+  divergence explicitly.
+- Honouring a declared `attributes` key is permitted **only** if it flows
+  through the shared resolver so both consumers see the same set. If that
+  cannot be done cleanly in one PR, keep the fixed set and ship the
+  single-resolver refactor alone -- deduplicating the source of truth is the
+  part that closes #497.
+
 ## What is NOT claimed by this mission
 
 Stated plainly so no reader over-reads the result:
 
+- **This note changes no code.** It is decision-only. No issue is closed by
+  this commit -- each closes when its implementation PR lands. In particular
+  #493's `_dagster_run_states` still reads the gitignored path until then.
 - **#485 is not closed.** A2's writer is not built. The caveat is honest
   qualification, not provenance.
+- **R1 does not authorize losing stale-input detection.** See the R1 amendment:
+  the committed record carries only a count of input artifacts, not their
+  digests, so reviewability must not be bought by weakening staleness.
+- **R6 does not overturn the #491 ruling.** RC15 + surrogate key remains the
+  resolved set; R6 adds the requirement that ONE resolver serve both consumers.
 - **#474's real-example migration is not done** and remains owner-gated.
 - **ADR-0009 is not amended.** #492's advisory path deliberately routes around
   the ratified enum rather than editing it.
