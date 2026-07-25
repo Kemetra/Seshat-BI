@@ -48,6 +48,27 @@ harness to consume: `current_stage`, `readiness_state`, `evidence`,
 `blocking_reasons`, `next_allowed_action`, `forbidden_scope`,
 `validation_commands`, `stop_point`.
 
+Two further keys carry INFORMATIONAL guidance rather than gate state. Both are
+always present, and are `null` where they do not apply:
+
+- `source_map_shape_signpost` -- at **Mapping Ready only**, names the canonical
+  `source-map.yaml` shape (and `seshat scaffold-source`) that the Gold Ready live
+  checks will later require, so a shape mismatch surfaces while the map is being
+  written instead of four stages later. It is `null` at every other stage,
+  deliberately: once Mapping Ready passes, `source-map.yaml` is an artifact a
+  named human approved, and changing it means re-entering that gate for a fresh
+  approval -- not an edit a later stage may invite. Do not read a `null` here as
+  "guidance still to come", and do not treat Silver as a map-authoring stage.
+- `orchestration_checkpoint` -- at the stages where the choice is live (Dagster
+  at Source, dbt at Silver/Gold), the `orchestration-assess` verdict with the
+  tool's own reasoning and the questions only you can answer.
+
+Neither is a gate: neither blocks, neither appears in `blocking_reasons` or
+`forbidden_scope`, and neither changes `next_allowed_action`. `seshat next` never
+adopts an adapter and never grants readiness -- you decide, and declining is a
+valid answer. A `consider` verdict is not permission to skip the authoring the
+stage still requires.
+
 ## Forbidden jumps
 
 These orderings are the product; an agent must refuse to shortcut them:

@@ -8,13 +8,21 @@ Two read-only surfaces share this verb:
     next-action document (``seshat.agent_next``) -- stable keys
     ``current_stage`` / ``readiness_state`` / ``evidence`` /
     ``blocking_reasons`` / ``next_allowed_action`` / ``forbidden_scope`` /
-    ``validation_commands`` / ``stop_point``.
+    ``validation_commands`` / ``stop_point``, plus the two informational
+    guidance keys ``source_map_shape_signpost`` (issue #488) and
+    ``orchestration_checkpoint`` (issue #489).
+
+The two guidance keys are rendered AFTER ``stop_point`` and are explicitly
+labelled informational: they never gate, so they must never read like the
+next allowed action or a blocking reason.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+
+from seshat.cli.commands.next_guidance_render import guidance_lines
 
 
 def _render_text(response: dict) -> str:
@@ -71,6 +79,7 @@ def _render_agent_text(document: dict) -> str:
     lines += _agent_list_lines("forbidden_scope", document["forbidden_scope"])
     lines += _agent_list_lines("validation_commands", document["validation_commands"])
     lines.append(f"stop_point: {document['stop_point']}")
+    lines += guidance_lines(document)
     for caveat in document.get("caveats", []):
         lines.append(f"caveat: {caveat.get('kind')}: {caveat.get('detail')}")
     for entry in document.get("tables", []):

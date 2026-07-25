@@ -148,12 +148,11 @@ def _run_validate_body(args: argparse.Namespace) -> int:
         # Name the canonical shape and how to get it: source-map.yaml has a
         # required shape that only this command enforces, and the error used to
         # leave the reader with no way to discover it (issue #488).
+        from seshat.validate_targets import CANONICAL_SOURCE_MAP_SHAPE_HINT
+
         print(f"error: could not load source-map: {exc}", file=sys.stderr)
         print(
-            "hint: live checks need the canonical source-map.yaml shape (meta + "
-            "columns + gold_star). `seshat scaffold-source <table>` writes the "
-            "blank canonical set into mappings/<table>/; fill that rather than "
-            "authoring a map by hand.",
+            f"hint: this command needs {CANONICAL_SOURCE_MAP_SHAPE_HINT}",
             file=sys.stderr,
         )
         return 1

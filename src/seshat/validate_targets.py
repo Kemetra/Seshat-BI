@@ -33,7 +33,63 @@ from .validate import (
     ValidationTargets,
 )
 
-__all__ = ["ValidationTargets", "load_targets"]
+__all__ = [
+    "CANONICAL_SOURCE_MAP_SHAPE_HINT",
+    "REQUIRED_TOP_LEVEL_KEYS",
+    "ValidationTargets",
+    "load_targets",
+]
+
+# The top-level sections ``load_targets`` requires, in the order it reads them.
+# Named here (next to the code that enforces them) so every surface that TELLS a
+# user about the shape cites the same list instead of re-typing it -- the
+# shared-HINT pattern already used for ``APPROVAL_SHAPE_HINT`` (#487). Deliberately
+# EXACTLY what this loader requires: `columns` is read by OTHER consumers
+# (drift_semantics / pii_notice / currency_unit), never by `load_targets`, so
+# listing it here as required would over-claim (#488 follow-up).
+REQUIRED_TOP_LEVEL_KEYS: tuple[str, ...] = ("meta", "gold_star")
+
+# The NESTED fields ``load_targets`` requires, in dotted form and in read order.
+# Naming only the two top-level sections was not actionable: a reader who added a
+# bare `meta:`/`gold_star:` still discovered `gold_star.fact.name` as a CLI error
+# at Gold Ready -- the very late-discovery #488 is about (PR #506 review, P2).
+# Kept beside the ``_require`` calls that enforce them so the list cannot drift.
+REQUIRED_NESTED_FIELDS: tuple[str, ...] = (
+    "meta.table_id",
+    "meta.primary_key",
+    "gold_star.fact.name",
+    "gold_star.fact.measures",
+    "gold_star.dimensions[].name",
+    "gold_star.dimensions[].surrogate_key",
+    "gold_star.date_dimension.name",
+    "gold_star.date_dimension.surrogate_key",
+)
+
+# One sentence any surface can quote to route a reader to the canonical shape and
+# to the shipped scaffolder that materializes it. Issue #488: this shape is
+# enforced ONLY here, at Gold Ready, so a map hand-authored at Mapping Ready
+# silently misses it until a much later CLI error. Surfaces that mention the shape
+# EARLY (``seshat next``'s mapping/silver guidance) and the surface that reports
+# the late failure (``seshat validate``) must not drift apart, so both quote this.
+# Worded surface-NEUTRALLY: it is printed both by `seshat validate` itself (where
+# naming that command would be self-referential) and by `seshat next` several
+# stages earlier, so it names the Gold Ready live CHECKS, not the command.
+CANONICAL_SOURCE_MAP_SHAPE_HINT = (
+    "the canonical source-map.yaml shape the Gold Ready live checks require. "
+    f"Required: {', '.join(REQUIRED_NESTED_FIELDS)} "
+    "(`columns` is not required here, but is read by the drift / PII / currency "
+    "surfaces). Run the commands below FROM THE REPOSITORY ROOT, so `--repo .` "
+    "resolves to your workspace and no path needs quoting on any shell. For a NEW "
+    "table, `seshat scaffold-source <table> --repo .` writes the blank canonical "
+    "set into mappings/<table>/. For an EXISTING map, scaffold-source will NOT "
+    "rewrite it -- it keeps every file that is already there, so it cannot repair a "
+    "map. Compare your map against the required fields listed above and add "
+    "whatever is missing, in place; every one of them is named here precisely so "
+    "that no extra directory has to be materialized to discover the shape. Note "
+    "that editing a map whose Mapping Ready gate has already passed means "
+    "re-entering that gate for a fresh named-human approval -- never edit an "
+    "approved map in place."
+)
 
 
 def _require(mapping: dict[str, Any], key: str, ctx: str) -> Any:
