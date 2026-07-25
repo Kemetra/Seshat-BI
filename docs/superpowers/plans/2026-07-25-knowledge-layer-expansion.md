@@ -263,14 +263,15 @@ Every resource uses its real capability name as the H1 and these exact sections:
 ## Stop and handoff
 ```
 
-Assign:
+Allocate unused IDs inside the existing canonical families:
 
-- `PY-DF-001..006` to dataframe/grain concepts;
-- `PY-PROFILE-001..008` to source inspection;
-- `PY-DTYPE-001..008` to dtype/schema drift;
-- `PY-NULL-001..008` to null/blank/sentinel handling;
-- `PY-MERGE-001..010` to cardinality and fan-out;
-- `PY-DATE-001..008` to date/time/calendar preparation.
+- `PY-CN-086..097` to dataframe and Python-for-BI concepts;
+- `PY-CN-098..104` plus `PY-PB-012` to source inspection;
+- `PY-CN-105..110` plus `PY-PB-013` to dtype/schema drift;
+- `PY-CN-111..116` plus `PY-PB-014` to null/blank/sentinel handling;
+- `PY-CN-117..124` plus `PY-PB-015..016` to cardinality and fan-out;
+- `PY-CN-125..132` plus `PY-PB-017` to date/time/calendar preparation;
+- `PY-BP-008..014` to the corresponding evidence-first defaults.
 
 Each resource must require a declared grain, distinguish observed evidence from
 assumptions, and end with `clean`, `blocked`, or `handoff` plus named evidence.
@@ -347,11 +348,12 @@ Run `tests/unit/test_knowledge_route_validator.py`. Expected: FAIL with
 
 - [ ] **Step 3: Author validation and performance knowledge**
 
-Use `PY-VAL-001..012` for grain-aware row counts, uniqueness, null distribution,
-domain/range, unmatched keys, additive controls, stratified reconciliation, and
-sample limitations. Use `PY-PERF-001..010` for vectorization, copy amplification,
-object dtype, categorical encoding, chunking, pushdown, and the single-node-to-Big
-Data boundary.
+Use `PY-CN-133..140` and `PY-VP-005..016` for grain-aware row counts,
+uniqueness, null distribution, domain/range, unmatched keys, additive controls,
+stratified reconciliation, and sample limitations. Use `PY-CN-141..147` and
+`PY-PB-018..020` for vectorization, copy amplification, object dtype,
+categorical encoding, chunking, pushdown, and the single-node-to-Big Data boundary.
+Use `PY-AP-026..035` for the new active-review failure modes.
 
 - [ ] **Step 4: Author patterns and anti-patterns**
 
