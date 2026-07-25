@@ -93,6 +93,10 @@ class CommandResult:
     message: str
     evidence_path: str | None = None
     blocking_reasons: tuple[dict[str, str], ...] = ()
+    # NON-BLOCKING findings: rendered to the operator, never fed to an exit code and
+    # never written to the run-evidence JSON (issue #492). Separate from
+    # ``blocking_reasons`` precisely so a reader cannot confuse the two channels.
+    advisories: tuple[str, ...] = ()
 
 
 def _root(args: Any) -> Path:
@@ -271,8 +275,36 @@ def _validated_project(root: Path, table_id: str):
 
 
 def _validate(args: Any) -> CommandResult:
-    _validated_project(_root(args), args.table)
-    return _pass("validate", args.table, "static dbt validation completed")
+    root = _root(args)
+    project = _validated_project(root, args.table)
+    result = _pass("validate", args.table, "static dbt validation completed")
+    return replace(result, advisories=_column_shape_advisories(root, project))
+
+
+def _column_shape_advisories(root: Path, project) -> tuple[str, ...]:
+    """Advisory column-shape drift vs the migrations oracle (issue #492).
+
+    The four parity assertions are value-only, so a shadow model that gains, loses,
+    or renames a column passes them all; this makes that visible at the offline
+    re-check point WITHOUT adding a fifth assertion class. Advisory by design: an
+    intentional shadow-only column is legal mid-migration. Never blocks, never
+    reaches the evidence JSON, and never raises -- a failure to compare it degrades
+    to silence rather than to a false alarm on a clean project."""
+    from seshat.dbt.column_drift import column_shape_advisories
+
+    try:
+        advisories = column_shape_advisories(
+            root,
+            project.model_contracts,
+            # Derived parity evidence; the migrations path never builds it, so a
+            # counterpart could only ever be absent.
+            skip=frozenset({f"audit_{project.model_contracts[0].table_id}_parity"})
+            if project.model_contracts
+            else frozenset(),
+        )
+    except (OSError, UnicodeError, re.error):
+        return ()
+    return tuple(advisory.message() for advisory in advisories)
 
 
 def _plan(args: Any) -> PlanEnvelope:
@@ -638,6 +670,7 @@ def _emit_plan(args: Any, envelope: PlanEnvelope) -> None:
 def _emit_result(args: Any, result: CommandResult) -> None:
     payload = asdict(result)
     payload["blocking_reasons"] = list(result.blocking_reasons)
+    payload["advisories"] = list(result.advisories)
     if args.output_format == "json":
         print(
             json.dumps(
@@ -654,6 +687,10 @@ def _emit_result(args: Any, result: CommandResult) -> None:
         print(f"evidence: {result.evidence_path}")
     for blocker in result.blocking_reasons:
         print(f"blocker: {blocker['code']}: {blocker['message']}")
+    # ADVISORY, not blocking: prefixed distinctly from `blocker:` and emitted after
+    # a passing outcome, so a clean run that carries drift still reads as a pass.
+    for advisory in result.advisories:
+        print(f"advisory: column-shape drift: {advisory}")
 
 
 def dbt_main(args: Any) -> int:

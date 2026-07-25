@@ -57,6 +57,16 @@ a shadow model that gains or loses a column can still pass every assertion (issu
 The per-dimension member count in (4) is the deliberate proxy for structural divergence,
 not a substitute for a schema comparison.
 
+Column-set drift is therefore surfaced OUTSIDE the parity contract, as an ADVISORY
+finding: `seshat dbt validate --table <t>` compares each governed model's declared
+column set against its `warehouse/migrations` counterpart and prints an
+`advisory: column-shape drift` line per divergent pair. It is deliberately NOT a fifth
+assertion class -- an intentional shadow-only column is legitimate while a migration is
+in progress, so drift must be VISIBLE without being a failure. The advisory never
+changes an exit code, never enters the run-evidence JSON, and never lands in
+`blocking_reasons`; a model with no migrations counterpart (or an unreadable DDL) yields
+no finding rather than a false alarm.
+
 The parity test asserts, against the migration-built gold fact:
 
 1. equal fact row count;

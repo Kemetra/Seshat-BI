@@ -12,6 +12,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -181,3 +182,129 @@ def test_second_table_scaffold_extends_shared_sources_and_validates(
         working_set = resolve_working_set(root, table)
         result = validate_project(root, working_set, target_schema="seshat_dbt_shadow")
         assert result.valid, (table, [b.code for b in result.blocking_reasons])
+
+
+# --------------------------------------------------------------------------- #
+# Advisory column-shape drift at `seshat dbt validate` (issue #492).
+#
+# The four parity assertions are value-only, so a shadow model whose column SET
+# diverges passes them all. These drive the REAL CLI handler end to end and assert
+# on its RENDERED output -- the surface an operator actually reads.
+# --------------------------------------------------------------------------- #
+
+# The migrations counterpart of the scaffolded `dim_widget`, deliberately MISSING
+# the `widget_id` attribute the shadow contract declares -- the #492 shape.
+_DIVERGENT_MIGRATION = """\
+CREATE TABLE gold.dim_widget (
+  widget_sk INT PRIMARY KEY
+);
+"""
+
+_ALIGNED_MIGRATION = """\
+CREATE TABLE gold.dim_widget (
+  widget_sk INT PRIMARY KEY,
+  widget_id TEXT
+);
+"""
+
+
+def _write_migration(root: Path, body: str) -> None:
+    directory = root / "warehouse" / "migrations"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "0004_create_gold_widgets_star.sql").write_text(body, encoding="utf-8")
+
+
+def _run_validate(root: Path, table: str, capsys) -> tuple[int, str]:
+    from seshat.cli.commands.dbt import dbt_main
+
+    args = SimpleNamespace(
+        repo=str(root),
+        dbt_command="validate",
+        table=table,
+        output_format="text",
+    )
+    exit_code = dbt_main(args)
+    return exit_code, capsys.readouterr().out
+
+
+def _seeded_widgets_project(tmp_path: Path) -> Path:
+    from seshat.dbt.scaffold import scaffold_models
+
+    root = _seed_workspace(tmp_path)
+    _seed_second_table(root)
+    scaffold_models(root, _SECOND_TABLE)
+    return root
+
+
+def test_validate_reports_advisory_on_divergent_column_set(
+    tmp_path: Path, capsys
+) -> None:
+    """A shadow model carrying a column its migrations counterpart lacks must be
+    VISIBLE in the validate output -- the defect in #492 was that it was not."""
+    root = _seeded_widgets_project(tmp_path)
+    _write_migration(root, _DIVERGENT_MIGRATION)
+
+    exit_code, out = _run_validate(root, _SECOND_TABLE, capsys)
+
+    assert "advisory: column-shape drift" in out
+    assert "dim_widget" in out
+    assert "widget_id" in out
+    assert "0004_create_gold_widgets_star.sql" in out
+
+    # ADVISORY, not a failure: the ruling routes drift AROUND the parity enum, so it
+    # must not block, must not flip the outcome, and must not read as a blocker.
+    assert exit_code == 0
+    assert "dbt validate: pass" in out
+    assert "blocker:" not in out
+
+
+def test_validate_is_silent_when_column_sets_are_identical(
+    tmp_path: Path, capsys
+) -> None:
+    """The same pair, aligned: no advisory. Guards against noise on clean projects."""
+    root = _seeded_widgets_project(tmp_path)
+    _write_migration(root, _ALIGNED_MIGRATION)
+
+    exit_code, out = _run_validate(root, _SECOND_TABLE, capsys)
+
+    assert "advisory:" not in out
+    assert exit_code == 0
+    assert "dbt validate: pass" in out
+
+
+def test_validate_is_silent_when_migrations_are_absent(tmp_path: Path, capsys) -> None:
+    """No migrations counterpart at all -> nothing to compare, not a finding."""
+    root = _seeded_widgets_project(tmp_path)
+
+    exit_code, out = _run_validate(root, _SECOND_TABLE, capsys)
+
+    assert "advisory:" not in out
+    assert exit_code == 0
+
+
+def test_validate_json_output_separates_advisories_from_blockers(
+    tmp_path: Path, capsys
+) -> None:
+    """Machine-readable proof of the two-channel split: drift rides `advisories`,
+    and `blocking_reasons` stays empty on a passing validate."""
+    import json
+
+    from seshat.cli.commands.dbt import dbt_main
+
+    root = _seeded_widgets_project(tmp_path)
+    _write_migration(root, _DIVERGENT_MIGRATION)
+
+    args = SimpleNamespace(
+        repo=str(root),
+        dbt_command="validate",
+        table=_SECOND_TABLE,
+        output_format="json",
+    )
+    exit_code = dbt_main(args)
+    payload = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert payload["outcome"] == "pass"
+    assert payload["blocking_reasons"] == []
+    assert len(payload["advisories"]) == 1
+    assert "dim_widget" in payload["advisories"][0]
