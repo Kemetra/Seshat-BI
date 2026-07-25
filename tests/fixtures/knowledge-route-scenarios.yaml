@@ -146,6 +146,36 @@ scenarios:
       - knowledge/engine-selection.md
     terminal_contains: engine-selection-checklist
 
+  - layer: bi-bigdata-knowledge
+    task_contains: Diagnose partial output after retry
+    expect_resources:
+      - knowledge/observability-and-partial-failures.md
+    terminal_contains: operational-evidence-checklist
+
+  - layer: bi-bigdata-knowledge
+    task_contains: Review backfill safety
+    expect_resources:
+      - knowledge/backfills-and-partition-evolution.md
+    terminal_contains: operational-evidence-checklist
+
+  - layer: bi-bigdata-knowledge
+    task_contains: Review partition evolution
+    expect_resources:
+      - knowledge/backfills-and-partition-evolution.md
+    terminal_contains: operational-evidence-checklist
+
+  - layer: bi-bigdata-knowledge
+    task_contains: Review compaction evidence
+    expect_resources:
+      - knowledge/backfills-and-partition-evolution.md
+    terminal_contains: operational-evidence-checklist
+
+  - layer: bi-bigdata-knowledge
+    task_contains: Prepare a cost/performance evidence packet
+    expect_resources:
+      - knowledge/observability-and-partial-failures.md
+    terminal_contains: operational-evidence-checklist
+
   - layer: bi-analyst-knowledge
     task_contains: Author the narrative brief
     expect_resources:

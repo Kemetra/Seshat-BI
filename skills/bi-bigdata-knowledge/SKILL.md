@@ -7,8 +7,9 @@ description: >
   (Spark / Dask / Polars / DuckDB / warehouse), controlling partitioning and shuffle,
   avoiding skew and fan-out, aggregating at a declared grain at scale, choosing file
   formats (Parquet / Delta / Iceberg), incremental/idempotent processing, validating and
-  reconciling at scale, and diagnosing performance/cost. This is a reasoning layer, not
-  an executor and not a Spark tutorial. It does not run jobs, define metrics, or own gating.
+  reconciling at scale, diagnosing partial/retried output, reviewing backfills/partition
+  evolution/compaction, and collecting performance/cost evidence. This is a reasoning layer,
+  not an executor or Spark tutorial. It does not run jobs, define metrics, or own gating.
 ---
 
 # BI Big-Data Knowledge
@@ -46,6 +47,8 @@ The agent needs to:
 - design incremental, idempotent processing and handle late-arriving data;
 - validate and reconcile results at scale (control totals, sampling, scalable checks);
 - diagnose performance/cost (caching, spill, `collect()`, UDFs);
+- diagnose partial outputs, attempt/retry safety, and distributed commit visibility;
+- review backfills, partition-spec evolution, compaction, publication, and rollback evidence;
 - review a distributed pipeline.
 
 ## Do not use when
@@ -86,6 +89,8 @@ step to the SQL/warehouse layer" — that is a boundary call, not a failure.
 - Do not aggregate before declaring grain and additivity.
 - Do not `collect()` / pull a distributed result to the driver to "check" it.
 - Do not claim reconciliation passed without scale-appropriate evidence.
+- Do not infer atomic publication from job success/failure; require manifests and commit evidence.
+- Do not run/retry/backfill/compact from this layer; return the evidence packet and owner action.
 - Do not write production job code in this reasoning layer.
 - Do not use big-data tooling to bypass SQL/readiness validation gates.
 - Do not read the whole knowledge base when a router can select files.

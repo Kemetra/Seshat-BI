@@ -14,8 +14,9 @@ on an artifact (checklist / JSON patterns / verdict).
 
 It helps an agent reason about distributed and larger-than-memory data work — engine
 choice, partitioning, shuffle, skew, joins, aggregation grain at scale, file formats,
-incremental/idempotent processing, validation, performance/cost — and hand off cleanly
-into SQL, DAX, readiness, and dashboard layers.
+incremental/idempotent processing, validation, partial/retried-output diagnosis,
+backfills, partition evolution, compaction, and performance/cost evidence — and hand off
+cleanly into SQL, DAX, readiness, and dashboard layers.
 
 ## Relationship to bi-python-knowledge
 
@@ -24,6 +25,8 @@ reconciliation are engine-independent** — true in pandas, Spark, and SQL alike
 layer references those concepts (`references/cross-layer-map.md`) rather than restating
 them, and adds only what changes at scale: distributed execution, partitioning, shuffle,
 skew, broadcast joins, lazy DAGs, file/table formats, incrementality, and cost.
+It also owns scale-specific run/attempt identity, manifests, distributed commit visibility,
+historical rewrite windows, partition-spec evolution, and atomic publication/rollback reasoning.
 
 Rule of thumb: **single-node first.** If the workload fits on one machine (even a big
 one, via Polars/DuckDB chunking), it belongs to `bi-python-knowledge`. This layer is for
