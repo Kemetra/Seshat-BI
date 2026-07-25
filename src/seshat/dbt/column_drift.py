@@ -136,8 +136,10 @@ _DROP_TABLE = re.compile(
 )
 
 # One `schema.table` (or bare `table`) inside a DROP's comma-separated target list.
+# Either part may be double-quoted -- `DROP TABLE "gold"."dim_a"` is legal and
+# equivalent to the unquoted spelling for all-lower-case names (#501 review).
 _DROP_TARGET = re.compile(
-    r"(?:(?P<schema>[a-z_][a-z0-9_]*)\.)?(?P<table>[a-z_][a-z0-9_]*)",
+    r'(?:"?(?P<schema>[a-z_][a-z0-9_]*)"?\s*\.\s*)?"?(?P<table>[a-z_][a-z0-9_]*)"?',
     re.IGNORECASE,
 )
 
@@ -163,9 +165,18 @@ _QUOTED_MIXED_CASE = re.compile(r'"[^"]*[A-Z][^"]*"')
 # The string-literal alternative comes FIRST and is preserved verbatim, so a `--`
 # or `/*` INSIDE a quoted value is not mistaken for a comment (#501 review,
 # finding B). `''` is Postgres' escaped single quote inside a literal.
+# `dollar` covers Postgres dollar-quoting (`$$...$$` / `$tag$...$tag$`), whose body
+# is literal text -- DDL written inside one is DATA, not a statement (#501 review).
+# The backreference pins the closing tag to the opening one.
 _COMMENT_OR_LITERAL = re.compile(
-    r"(?P<literal>'(?:[^']|'')*')|(?P<line>--[^\n]*)|(?P<block>/\*.*?\*/)",
-    re.DOTALL,
+    # Tagged `$tag$...$tag$`: the backreference pins the close to the open. The
+    # untagged `$$...$$` form needs its own branch, because an optional tag group
+    # would make `(?P=tag)` unmatchable when the tag is absent.
+    r"(?P<dollar>\$(?P<tag>[a-z_][a-z0-9_]*)\$.*?\$(?P=tag)\$|\$\$.*?\$\$)"
+    r"|(?P<literal>'(?:[^']|'')*')"
+    r"|(?P<line>--[^\n]*)"
+    r"|(?P<block>/\*.*?\*/)",
+    re.DOTALL | re.IGNORECASE,
 )
 
 _MIGRATIONS_DIR = "warehouse/migrations"
@@ -219,23 +230,33 @@ def _blanked(text: str) -> str:
     return "".join("\n" if char == "\n" else " " for char in text)
 
 
+def _matched_literal(match: re.Match[str]) -> str | None:
+    """The single-quoted or dollar-quoted literal this match found, else None."""
+    return match.group("literal") or match.group("dollar")
+
+
 def _blank_comment(match: re.Match[str]) -> str:
     """Blank a comment; keep a string literal verbatim."""
-    literal = match.group("literal")
+    literal = _matched_literal(match)
     return literal if literal is not None else _blanked(match.group(0))
 
 
 def _blank_comment_and_literal(match: re.Match[str]) -> str:
-    """Blank comments AND string-literal CONTENTS, keeping the quotes.
+    """Blank comments AND string-literal CONTENTS, keeping the delimiters.
 
-    A literal is DATA, so DDL text quoted inside one is not a statement: an
-    ``INSERT ... VALUES ('ALTER TABLE gold.x ADD COLUMN y')`` must not register as a
-    real ALTER. Blanking the contents rather than the quotes keeps the literal a
-    single syntactic token so it cannot merge with surrounding SQL."""
-    literal = match.group("literal")
-    if literal is None:
+    A literal is DATA, so DDL text quoted inside one is not a statement: neither
+    ``INSERT ... VALUES ('ALTER TABLE gold.x ADD COLUMN y')`` nor its dollar-quoted
+    equivalent ``$tag$ALTER TABLE ...$tag$`` may register as a real ALTER. Blanking
+    the contents rather than the delimiters keeps the literal one syntactic token so
+    it cannot merge with surrounding SQL."""
+    quoted = match.group("literal")
+    if quoted is not None:
+        return f"'{_blanked(quoted[1:-1])}'"
+    dollar = match.group("dollar")
+    if dollar is None:
         return _blanked(match.group(0))
-    return f"'{_blanked(literal[1:-1])}'"
+    fence = f"${match.group('tag') or ''}$"
+    return f"{fence}{_blanked(dollar[len(fence) : -len(fence)])}{fence}"
 
 
 def _strip_comments(sql: str) -> str:
@@ -335,15 +356,24 @@ def migration_column_sets(repo_root: Path) -> dict[str, tuple[frozenset[str], st
     - both the old and new names of a whole-table ``ALTER TABLE ... RENAME TO``
       (the old relation is gone, the new one has no indexed shape);
     - a table using quoted mixed-case identifiers (case folding would hide drift);
-    - an unqualified ``CREATE TABLE`` (its layer resolves via ``search_path``)."""
+    - an unqualified ``CREATE TABLE`` (its layer resolves via ``search_path``).
+
+    Returns ``{}`` -- no comparison at all -- when ANY migration is unreadable, since
+    that file may be the one superseding what an earlier file created."""
     directory = Path(repo_root) / _MIGRATIONS_DIR
     if not directory.is_dir():
         return {}
     found: dict[tuple[str, str], tuple[frozenset[str], str]] = {}
     excluded: set[tuple[str, str]] = set()
     for path in sorted(directory.glob("*.sql")):
+        text = _read_text(path)
+        if text is None:
+            # An unreadable file may hold the DROP/ALTER that supersedes what an
+            # earlier file created; comparing against a possibly-stale view would be
+            # worse than not comparing at all.
+            return {}
         relpath = f"{_MIGRATIONS_DIR}/{path.name}"
-        sql = _scannable(_read_text(path))
+        sql = _scannable(text)
         excluded.update(_altered_tables(sql))
         excluded.update(_renamed_tables(sql))
         _replay_statements(sql, relpath, found)
@@ -430,12 +460,19 @@ def _altered_tables(sql: str) -> set[tuple[str, str]]:
     return {key for key in keys if key is not None}
 
 
-def _read_text(path: Path) -> str:
-    """The file's text, or '' when unreadable -- advisory input is never fatal."""
+def _read_text(path: Path) -> str | None:
+    """The file's text, or None when unreadable.
+
+    None INVALIDATES THE WHOLE INDEX rather than skipping just this file (#501
+    review). An unreadable migration is not a neutral gap: it may be the one that
+    drops or reshapes a relation an earlier file created, so silently omitting it
+    would leave a stale shape indexed and let the advisory speak from an
+    already-superseded view. Advisory input is never fatal, but it must not be
+    confidently wrong -- so the comparison goes quiet instead."""
     try:
         return path.read_text(encoding="utf-8")
     except (OSError, UnicodeError):
-        return ""
+        return None
 
 
 def column_shape_advisories(
