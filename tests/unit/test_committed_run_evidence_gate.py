@@ -297,6 +297,45 @@ def test_evidence_commit_bundled_with_unrelated_changes_is_stale(
     assert _scope_doc(tmp_path)["live_validation_state"] == "stale"
 
 
+def test_bundled_rename_into_the_evidence_dir_is_stale(tmp_path: Path) -> None:
+    """A rename INTO the evidence directory must not bypass the revision check.
+
+    Git's rename detection collapses `R100 source/x.md
+    orchestration/dagster/run-evidence/x.md` to only the destination path under
+    `--name-only`. Every reported path would then satisfy the evidence prefix and
+    the run would be exempted from staleness -- even though a file left `source/`
+    in that same commit. `--no-renames` surfaces the deletion as its own path.
+
+    Needs a real `.gitignore` for `.seshat/`, as any actual repo has: otherwise
+    the scratch gets committed too and the run reads stale for that reason
+    instead, masking what this test is about.
+    """
+    (tmp_path / ".gitignore").write_text(".seshat/\n", encoding="utf-8")
+    source = tmp_path / "source"
+    source.mkdir(parents=True)
+    # Content long enough that git scores the move as a rename.
+    (source / "unrelated.md").write_text("x" * 400 + "\n", encoding="utf-8")
+    _repo_with_live_run(tmp_path)
+
+    write_run_evidence(tmp_path, "run-live-001")
+    _git(
+        tmp_path,
+        "mv",
+        "source/unrelated.md",
+        f"{_EVIDENCE_DIR}/unrelated.md",
+    )
+    _git(
+        tmp_path,
+        "add",
+        f"{_EVIDENCE_DIR}/run-live-001.md",
+        f"{_EVIDENCE_DIR}/unrelated.md",
+        "source",
+    )
+    _git(tmp_path, "commit", "--no-gpg-sign", "-m", "evidence plus bundled rename")
+
+    assert _scope_doc(tmp_path)["live_validation_state"] == "stale"
+
+
 def _is_git_argv(argv: object) -> bool:
     """Whether a `subprocess.run` first argument is a git argv list."""
     if not isinstance(argv, list):

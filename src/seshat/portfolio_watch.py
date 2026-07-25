@@ -610,13 +610,22 @@ def _revision_moved_beyond_evidence(
     Note the deliberate consequence: committing the record TOGETHER WITH
     unrelated changes makes the run stale. The record must be committed on its
     own; that keeps the exemption impossible to widen by bundling.
+
+    ``--no-renames`` is load-bearing, not a stylistic choice. With rename
+    detection on, moving an unrelated TRACKED file INTO the evidence directory
+    reports only the destination path (``R100 source/x.md
+    orchestration/dagster/run-evidence/x.md`` collapses to the second path under
+    ``--name-only``). Every reported path would then satisfy the prefix and the
+    run would be exempted even though a file left ``source/`` in that same
+    commit. Disabling rename detection surfaces the deletion as its own path, so
+    a bundled rename cannot bypass the revision check.
     """
     if not _is_stale_captured_at(commit_sha, source_revision):
         return False  # equal (or nothing to compare): the fast, common path
     assert isinstance(commit_sha, str)
     if _git_try(root, "merge-base", "--is-ancestor", commit_sha, "HEAD") is None:
         return True  # unknown sha, or HEAD is not a descendant -- cannot exempt
-    changed = _git_try(root, "diff", "--name-only", commit_sha, "HEAD")
+    changed = _git_try(root, "diff", "--name-only", "--no-renames", commit_sha, "HEAD")
     if changed is None:
         return True
     paths = [line.strip() for line in changed.splitlines() if line.strip()]
