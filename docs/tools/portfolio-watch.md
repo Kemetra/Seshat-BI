@@ -50,9 +50,13 @@ are evidence context, not a readiness score or new gate:
   `orchestration/dagster/run-evidence/<run-id>.md` -- reviewable evidence is
   missing, not the connection, so the fix is `seshat dagster evidence --run-id
   <run-id>` plus a commit (issue #493). `verified` requires BOTH the committed
-  record AND every existing scratch check (commit sha, workspace-dirty, and the
-  per-input SHA-256 digests); the committed markdown records only a count of
-  input artifacts, so it can never grant `verified` on its own.
+  record AND every check that reads the scratch `summary.json` -- commit sha,
+  workspace-dirty, and the per-input SHA-256 digests, which live ONLY in that
+  scratch file. The committed markdown records just a count of input artifacts,
+  so it can never grant `verified` on its own: keying suppression on the
+  markdown alone would lose stale-input detection entirely. Neither source is
+  sufficient by itself, and the committed record can only narrow the state,
+  never widen it.
 - `last_dagster_run`: `unavailable`, `invalid`, `failed`, `stale`, or
   `verified`, after raw evidence verification and input/revision comparison.
 
