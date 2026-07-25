@@ -47,4 +47,3 @@ Return one verdict:
 
 Include evidence, observations, hypotheses, confirming checks, blockers, and next action. These
 labels are diagnostic states, not scores and not readiness approvals.
-

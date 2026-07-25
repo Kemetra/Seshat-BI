@@ -903,10 +903,10 @@
     {
       "classification": "public_knowledge",
       "destination": "knowledge/bi-python-knowledge/knowledge/joins-merge-and-fanout.md",
-      "output_sha256": "50701d195074eb4d2d0ac392da176b10a18a98b275e9bc30fa46326c4db33fee",
+      "output_sha256": "488781a214419362c8f86567479e942d971539cb36e0493282e5bb758a736d51",
       "source": "skills/bi-python-knowledge/knowledge/joins-merge-and-fanout.md",
       "source_id": "kb-188",
-      "source_sha256": "50701d195074eb4d2d0ac392da176b10a18a98b275e9bc30fa46326c4db33fee",
+      "source_sha256": "488781a214419362c8f86567479e942d971539cb36e0493282e5bb758a736d51",
       "transform": "copy-normalized-v1"
     },
     {
@@ -930,10 +930,10 @@
     {
       "classification": "public_knowledge",
       "destination": "knowledge/bi-python-knowledge/knowledge/performance-and-memory.md",
-      "output_sha256": "641e760200540005554f61feb4b7277be8c4af615cd30fad7ff6bb7ea08d82c2",
+      "output_sha256": "3bb0ef2e06e42a09e850905778a7bf2906eabada4640dfa0c75ade722d6360ae",
       "source": "skills/bi-python-knowledge/knowledge/performance-and-memory.md",
       "source_id": "kb-191",
-      "source_sha256": "641e760200540005554f61feb4b7277be8c4af615cd30fad7ff6bb7ea08d82c2",
+      "source_sha256": "3bb0ef2e06e42a09e850905778a7bf2906eabada4640dfa0c75ade722d6360ae",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2054,10 +2054,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "4cebcfd23b65fceb746dd31d41be15f16b449c14c68c82d393c8d9a1bb8c72bc",
+  "manifest_digest": "2c5176e91fcdb4760adcc393f328928b3d44ec14fcc814d4f3f1571b0b4358ef",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "5018e3c8063d12d1870756edee4d7c1a5c35e6c0",
+  "source_revision": "3f20997d4d411b88f2142065af2db8e0105a4211",
   "target": "codex",
   "version": "0.7.1"
 }

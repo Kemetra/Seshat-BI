@@ -72,4 +72,3 @@ does not prove correct propagation.
 5. For virtual filters, inspect lineage, tuple order, and unmatched values.
 6. Reconcile population and amount controls.
 7. End on `../checklists/dax-diagnostic-checklist.md`.
-

@@ -30,9 +30,9 @@ push work into SQL, or genuinely requires the Big Data layer.
 - **PY-CN-147 — Engine choice follows the post-pruning working set.**
 
 **PY-PB-018 — Memory blowup:** compare stage footprints, copies, object columns, and
-merge fan-out.  
+merge fan-out.
 **PY-PB-019 — Slow-but-correct:** isolate the dominant stage, change one cause, and
-remeasure with controls.  
+remeasure with controls.
 **PY-PB-020 — Scale boundary:** prefer SQL pushdown for heavy relational work; use Big
 Data only when the verified post-pruning workload exceeds a safe single node.
 

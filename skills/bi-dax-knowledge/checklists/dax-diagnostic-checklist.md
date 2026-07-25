@@ -31,4 +31,3 @@ Return:
 
 Verdict is `clean`, `needs-evidence`, or `blocked`. It is not a score, readiness pass, approval,
 or execution authorization.
-

@@ -114,4 +114,3 @@ cost before recommending an index. Otherwise return `needs-evidence`.
 
 Use `../patterns/postgresql-plan-patterns.json` to structure symptoms. Every plausible cause remains
 a hypothesis until its confirming evidence is present.
-

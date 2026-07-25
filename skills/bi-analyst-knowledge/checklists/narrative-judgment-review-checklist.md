@@ -28,4 +28,3 @@
 
 Return findings, evidence, `[GAP]`s/blockers, and next action. This checklist supports human review;
 it does not grant narrative, dashboard, readiness, or publish approval.
-

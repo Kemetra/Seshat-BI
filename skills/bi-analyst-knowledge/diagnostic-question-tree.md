@@ -69,4 +69,3 @@ node:
 Return the six-stage tree, ordered by owner decision relevance and evidence availability, plus
 explicit `[GAP]` nodes. End by reviewing it with
 `checklists/narrative-judgment-review-checklist.md`.
-

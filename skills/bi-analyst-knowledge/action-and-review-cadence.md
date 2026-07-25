@@ -49,4 +49,3 @@ next_action: ""
 
 Review with `checklists/narrative-judgment-review-checklist.md`. This handoff does not assign work,
 approve a design, or execute an action.
-

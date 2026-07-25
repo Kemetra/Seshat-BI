@@ -71,4 +71,3 @@ date distribution, blank count, and zero count.
 5. Reconcile values plus population/coverage.
 6. Stop if snapshot/date or blank/zero policy is undecided.
 7. End on `../checklists/dax-diagnostic-checklist.md`.
-

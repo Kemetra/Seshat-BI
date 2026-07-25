@@ -59,4 +59,3 @@ Reconcile the supported combinations named by the contract.
 5. Compare numeric result and format-string result separately.
 6. Return `blocked` if order or time/display policy is not approved.
 7. End on `../checklists/dax-diagnostic-checklist.md`.
-

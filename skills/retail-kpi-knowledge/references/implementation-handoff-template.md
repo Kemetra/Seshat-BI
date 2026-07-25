@@ -39,4 +39,3 @@ kpi:
 - If any required field lacks evidence, return `blocked_by_source`.
 - If any number-moving policy lacks an eligible human receipt, return `blocked_by_policy` and use
   the policy-decision checklist instead.
-

@@ -41,4 +41,3 @@ Return `clean`, `needs-evidence`, or `blocked`, followed by:
 
 This is evidence presence and diagnostic state, never a health score, readiness pass, approval, or
 authorization to run/retry/backfill/compact.
-

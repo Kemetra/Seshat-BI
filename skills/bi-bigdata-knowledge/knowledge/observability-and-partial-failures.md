@@ -82,4 +82,3 @@ next action. Use categorical findings; never collapse distributed uncertainty in
 5. Reconcile logical keys/control totals and quarantine counts.
 6. Classify `clean`, `needs-evidence`, or `blocked`; do not rerun.
 7. End on `../checklists/operational-evidence-checklist.md`.
-

@@ -1,7 +1,7 @@
 # Knowledge-Layer Expansion Design
 
-**Date:** 2026-07-25  
-**Status:** Approved direction; written-spec review pending  
+**Date:** 2026-07-25
+**Status:** Approved direction; written-spec review pending
 **Branch:** `codex/knowledge-layers-expansion`
 
 ## Objective

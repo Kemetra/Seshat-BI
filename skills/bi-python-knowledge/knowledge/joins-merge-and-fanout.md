@@ -33,7 +33,7 @@ and multiplied rows are acceptable under the source contract.
   totals that should be conserved.
 
 **PY-PB-015 — Pre-merge cardinality review:** declare grains, profile keys, and state
-the expected relationship.  
+the expected relationship.
 **PY-PB-016 — Post-merge fan-out diagnosis:** localize multiplicity by key, compare
 controls, and identify which side violates the contract.
 

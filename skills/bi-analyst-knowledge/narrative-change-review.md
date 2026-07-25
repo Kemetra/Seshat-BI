@@ -49,4 +49,3 @@ next_action: ""
 
 Validate the result with `checklists/narrative-judgment-review-checklist.md`. The verdict is not a
 readiness pass or design approval.
-

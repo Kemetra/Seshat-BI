@@ -70,4 +70,3 @@ until consumers can see one coherent version.
 5. Reconcile logical content before/after backfill or compaction.
 6. Record rollback evidence and named execution owner.
 7. End on `../checklists/operational-evidence-checklist.md`.
-

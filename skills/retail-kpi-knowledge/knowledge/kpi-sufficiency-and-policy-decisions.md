@@ -67,4 +67,3 @@ consequences and missing evidence, then stop at `../checklists/kpi-policy-decisi
 
 Resolving one does not resolve the other. Until both approved receipts exist, the packet may become
 more precise, but the generic contract is not promoted and no implementation handoff is emitted.
-

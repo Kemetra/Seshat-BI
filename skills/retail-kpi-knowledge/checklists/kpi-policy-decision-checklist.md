@@ -32,4 +32,3 @@ Return the completed owner decision packet plus:
 
 After a real receipt is supplied, re-run sufficiency. This checklist does not change lifecycle,
 readiness, or implementation state.
-
