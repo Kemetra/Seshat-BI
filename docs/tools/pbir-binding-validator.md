@@ -1,9 +1,18 @@
 # PBIR binding validator — `seshat pbir-validate-bindings`
 
 Offline, read-only resolution of every bound field reference in a report
-against its semantic model — the pre-Desktop check that converts
+against its semantic model — a pre-Desktop check that converts
 "open Desktop → see error cards → guess which field → repeat" into one
 deterministic command (issue #454).
+
+**Scope — what a clean report does NOT mean.** This validator checks BINDINGS:
+that each bound field resolves to a measure or column the model declares. It does
+NOT verify that the TMDL is syntactically valid or that Desktop can load the model
+at all. `parse_tmdl` is an extractor, not a validator — it tolerates unrecognized
+lines rather than rejecting them — so a model carrying a TMDL syntax defect can
+pass this check and still fail to open in Desktop (issue #494). Full-fidelity TMDL
+validation needs the Tabular/`TmdlSerializer` path that ADR 0001 deliberately
+excluded to keep this offline and headless.
 
 ```
 seshat pbir-validate-bindings --report <path/to/X.Report> --model <path/to/X.SemanticModel>

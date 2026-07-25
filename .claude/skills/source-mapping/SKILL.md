@@ -28,7 +28,15 @@ Desktop, and does NOT decide the judgment calls Principle V reserves for a human
 Silver is downstream of an APPROVED map -- approval is the reviewer's action, not
 this skill's.
 
-## The five artifacts (copy blanks from templates/ into mappings/<table>/)
+## The five artifacts (write the blanks with `seshat scaffold-source <table>`)
+
+Run `seshat scaffold-source <table>` to materialize the canonical blanks into
+`mappings/<table>/`. Do NOT hand-author these files, and do NOT copy from a
+`templates/` path: `templates/` exists only in the Seshat development repo, so
+that instruction fails for anyone who installed the kit as a tool -- and a
+hand-written `source-map.yaml` silently misses the canonical shape that
+`seshat validate` and the gold stages require (issue #488). The scaffolder ships
+inside the package and never overwrites an existing file.
 
 Per [ADR 0003](../../../docs/decisions/0003-mapping-artifact-location.md), a
 table's filled set lives in `mappings/<table>/`:
@@ -161,9 +169,10 @@ Principle VIII. In this mode:
   `pipx inject seshat-bi psycopg2-binary` (or `pip install "seshat-bi[db]"`), then
   set `DATABASE_URL` (or the `ANALYTICS_DB_*` vars) in the gitignored `.env`. Never
   commit a real DSN.
-- STAY USEFUL: copy the five template blanks into `mappings/<table>/`, fill their
-  STRUCTURE, mark the mechanical profile numbers `[PENDING LIVE PROFILE]`, still
-  drive the semantic stop-and-ask (Step 3) and the gate (Step 6).
+- STAY USEFUL: run `seshat scaffold-source <table>` to write the five canonical
+  blanks into `mappings/<table>/` (it needs no DB), fill their STRUCTURE, mark the
+  mechanical profile numbers `[PENDING LIVE PROFILE]`, still drive the semantic
+  stop-and-ask (Step 3) and the gate (Step 6).
 
 ## See also
 
