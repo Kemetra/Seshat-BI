@@ -127,6 +127,42 @@ Full sanitized evidence: [the v0.2.0 public acceptance record](../releases/v0.2.
 Full detail: [the v0.5.2 release note](../releases/v0.5.2.md) and the
 [support matrix](../install/support-matrix.md).
 
+### v0.7.1 record
+
+- Python: **available** -- `seshat-bi==0.7.1` published on public PyPI (release
+  workflow run `30119844768`, GitHub OIDC Trusted Publishing); listed in the
+  `/simple/` index with wheel (997,757 B) and sdist (797,149 B), both
+  `yanked=false`, uploaded 2026-07-24T19:12:32Z. Independently verified beyond
+  the workflow's own report: PyPI JSON API reports `latest = 0.7.1`, the
+  version-specific endpoint and project page both return HTTP 200, and a
+  clean-venv `pip install --no-cache-dir seshat-bi==0.7.1` produces a working
+  CLI (`seshat --version` -> `seshat 0.7.1`) exposing the 0.7 verbs
+  (`narrative-check`, `pbi-mcp`, `pbir-validate-bindings`, `reset`,
+  `scaffold-design`).
+- GitHub Release: published at annotated tag `v0.7.1` (merge commit `363c41a`),
+  marked Latest, notes sourced from `docs/releases/v0.7.1.md`; no assets attached
+  (PyPI is the distribution channel).
+- Claude Code repository plugin: **available** at v0.7.1 --
+  `.claude-plugin/marketplace.json` (metadata + plugin entry) and the
+  `integrations/claude-code/seshat-bi/` bundle manifest are bumped to 0.7.1 on
+  `main`. A fresh external public-path acceptance run has not been re-performed
+  for this patch (unverified for v0.7.1 specifically).
+- Codex repository plugin: **available** at v0.7.1 -- the
+  `integrations/codex/seshat-bi/` bundle manifest and `.codex-plugin/plugin.json`
+  are bumped to 0.7.1 on `main` (11 skills). External IDE/CLI acceptance not
+  re-performed for this patch (unverified).
+- Claude public catalog: not submitted.
+- OpenAI public plugin listing: not submitted.
+
+**v0.7.0 is deliberately absent from PyPI.** It was tagged (`24fb510`) but its
+publish leg failed closed on the release artifact inspector, and the `v*`
+immutability ruleset forbids moving the tag, so the fix shipped as v0.7.1. Every
+capability described in `docs/releases/v0.7.md` first became publicly installable
+at v0.7.1. The same is true of v0.6.0 -> v0.6.1.
+
+Full detail: [the v0.7.1 release note](../releases/v0.7.1.md), [the v0.7 release
+note](../releases/v0.7.md), and the [support matrix](../install/support-matrix.md).
+
 ## Repository candidate evidence (2026-07-13)
 
 - [x] Full repository suite passes: 2,235 tests passed and 9 optional tests
