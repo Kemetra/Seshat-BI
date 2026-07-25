@@ -488,11 +488,15 @@ def _date_dimension(inputs: _PlanInputs) -> ModelSpec | None:
         ColumnSpec(name=column, derivation="date_spine")
         for column in (surrogate, *attributes)
     )
-    # `full_date` is the calendar's natural key whenever it is materialized; only a
-    # map that deliberately omits it falls back to its first declared attribute (as
-    # `_dimension_model` does). Never blindly `attributes[0]` -- a map declaring
-    # `[year, full_date]` would otherwise key the calendar on `year`.
-    natural_key = "full_date" if "full_date" in attributes else attributes[0]
+    # The business key must be UNIQUE at the declared grain (one row per calendar
+    # date): `yaml_render` emits `unique`/`not_null` tests on it, so a non-unique
+    # choice both misstates the grain to contract consumers and generates a dbt test
+    # that fails at run. `full_date` is the calendar's natural daily key whenever it
+    # is materialized. Otherwise fall back to the SURROGATE (`date_sk`, a per-day
+    # smart key), NEVER to `attributes[0]` the way `_dimension_model` does -- a map
+    # narrowed to `[year, month]` would key a daily calendar on `year`, which hundreds
+    # of rows share.
+    natural_key = "full_date" if "full_date" in attributes else surrogate
     return ModelSpec(
         name=name,
         layer="marts",

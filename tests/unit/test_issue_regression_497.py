@@ -298,10 +298,47 @@ def test_the_default_business_key_is_unchanged() -> None:
     assert _date_model(_DEFAULTED).business_key == ("full_date",)
 
 
-def test_a_calendar_without_full_date_falls_back_to_its_first_attribute() -> None:
+def test_a_calendar_without_full_date_keys_on_its_surrogate_not_an_attribute() -> None:
+    """Codex review P2 (third finding). Falling back to `attributes[0]` the way
+    `_dimension_model` does keyed a DAILY calendar on `year` -- hundreds of rows share
+    it, so the generated `meta.seshat.business_key` misstated the grain AND
+    `yaml_render` emitted a `unique` test that would fail at run. The surrogate is
+    the per-day smart key, so it is always unique at the declared grain."""
     model = _date_model({**_DEFAULTED, "attributes": ["year", "month"]})
 
-    assert model.business_key == ("year",)
+    assert model.business_key == ("date_sk",)
+
+
+@pytest.mark.parametrize(
+    "attributes",
+    [
+        None,
+        ["full_date"],
+        ["full_date", "year"],
+        ["year", "full_date"],
+        ["year", "month"],
+    ],
+    ids=["defaulted", "minimal", "narrowed", "reordered", "no-full-date"],
+)
+def test_the_business_key_is_always_unique_per_calendar_day(
+    attributes: list[str] | None,
+) -> None:
+    """The grain sentence promises one row per calendar date, and `yaml_render` emits
+    `unique`/`not_null` on the business key -- so the key must be a per-DAY column in
+    every narrowing. `full_date` and `date_sk` are the only two that qualify."""
+    date_dimension = dict(_DEFAULTED)
+    if attributes is not None:
+        date_dimension["attributes"] = attributes
+    model = _date_model(date_dimension)
+
+    (key,) = model.business_key
+    assert key in {"full_date", "date_sk"}, (
+        f"business_key {key!r} is not unique per calendar day, but the grain is "
+        f"{model.grain!r}"
+    )
+    assert key in {c.name for c in model.columns}, (
+        f"business_key {key!r} is not among the model's columns"
+    )
 
 
 # ---------------------------------------------------------------------------
