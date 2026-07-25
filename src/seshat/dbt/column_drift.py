@@ -101,10 +101,10 @@ _ALTER_COLUMN = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
-# The same three verbs with the optional `COLUMN` keyword omitted, which Postgres
-# permits for ADD/DROP (`ALTER TABLE t ADD c INT`). `RENAME COLUMN` always spells
-# the keyword, and a bare `ADD`/`DROP` followed by a constraint keyword is matched
-# out so `ADD CONSTRAINT` / `ADD PRIMARY KEY` stay ignored.
+# The same verbs with the optional `COLUMN` keyword omitted, which Postgres permits
+# for ADD/DROP (`ALTER TABLE t ADD c INT`). A bare `ADD`/`DROP` followed by a
+# constraint keyword is matched out so `ADD CONSTRAINT` / `ADD PRIMARY KEY` stay
+# ignored -- the shipped 0004 migration uses `ADD CONSTRAINT` five times.
 _ALTER_BARE = re.compile(
     r"alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?"
     r"(?:(?P<schema>[a-z_][a-z0-9_]*)\.)?(?P<table>[a-z_][a-z0-9_]*)\b"
@@ -114,7 +114,34 @@ _ALTER_BARE = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
+# Bare `RENAME <old> TO <new>` (no COLUMN keyword), which Postgres also permits.
+# `RENAME TO <new>` renames the whole TABLE and does NOT change its column set, so
+# the negative lookahead on `to` keeps a whole-table rename from tripping the guard
+# (#501 review, finding A).
+_ALTER_RENAME_BARE = re.compile(
+    r"alter\s+table\s+(?:if\s+exists\s+)?(?:only\s+)?"
+    r"(?:(?P<schema>[a-z_][a-z0-9_]*)\.)?(?P<table>[a-z_][a-z0-9_]*)\s+"
+    r"rename\s+(?!to\b|column\b|constraint\b)(?P<column>[a-z_][a-z0-9_]*)\s+to\b",
+    re.IGNORECASE,
+)
+
+# `--` to end of line, or a `/* ... */` block, or a single-quoted string literal.
+# The string-literal alternative comes FIRST and is preserved verbatim, so a `--`
+# or `/*` INSIDE a quoted value is not mistaken for a comment (#501 review,
+# finding B). `''` is Postgres' escaped single quote inside a literal.
+_COMMENT_OR_LITERAL = re.compile(
+    r"(?P<literal>'(?:[^']|'')*')|(?P<line>--[^\n]*)|(?P<block>/\*.*?\*/)",
+    re.DOTALL,
+)
+
 _MIGRATIONS_DIR = "warehouse/migrations"
+
+# dbt materializes GOLD and stops (ADR-0009 decision 6), and the governed source
+# map declares every mart `gold.`-qualified, so the gold relation is the only
+# legitimate migrations counterpart for a mart. Keying the index by (schema, table)
+# and selecting this layer stops a same-named `silver.` table from replacing the
+# gold oracle on a last-write-wins basis (#501 review, finding C).
+_ORACLE_SCHEMA = "gold"
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,9 +179,48 @@ class ColumnShapeAdvisory:
         )
 
 
-def _strip_comments(body: str) -> str:
-    """The body with `--` line comments removed, newlines preserved as separators."""
-    return "\n".join(line.split("--")[0] for line in body.splitlines())
+def _blanked(text: str) -> str:
+    """``text`` as equivalent whitespace, preserving newlines so line-oriented
+    structure and the ``[^;]*?`` spans in the ALTER patterns still behave."""
+    return "".join("\n" if char == "\n" else " " for char in text)
+
+
+def _blank_comment(match: re.Match[str]) -> str:
+    """Blank a comment; keep a string literal verbatim."""
+    literal = match.group("literal")
+    return literal if literal is not None else _blanked(match.group(0))
+
+
+def _blank_comment_and_literal(match: re.Match[str]) -> str:
+    """Blank comments AND string-literal CONTENTS, keeping the quotes.
+
+    A literal is DATA, so DDL text quoted inside one is not a statement: an
+    ``INSERT ... VALUES ('ALTER TABLE gold.x ADD COLUMN y')`` must not register as a
+    real ALTER. Blanking the contents rather than the quotes keeps the literal a
+    single syntactic token so it cannot merge with surrounding SQL."""
+    literal = match.group("literal")
+    if literal is None:
+        return _blanked(match.group(0))
+    return f"'{_blanked(literal[1:-1])}'"
+
+
+def _strip_comments(sql: str) -> str:
+    """``sql`` with `--` line comments and `/* ... */` blocks removed.
+
+    Comment-like sequences INSIDE single-quoted literals survive: `'--not a
+    comment'` is data, not syntax (#501 review). Used where literal CONTENT still
+    matters -- e.g. a ``CREATE TABLE`` body, whose defaults may be quoted."""
+    return _COMMENT_OR_LITERAL.sub(_blank_comment, sql)
+
+
+def _scannable(sql: str) -> str:
+    """``sql`` reduced to what a STATEMENT scan may match: comments removed and
+    string-literal contents blanked.
+
+    Applied before the CREATE/ALTER scans so neither a commented-out statement nor
+    one quoted as data can register -- the first would silently disable a table's
+    shape check, the second would invent one."""
+    return _COMMENT_OR_LITERAL.sub(_blank_comment_and_literal, sql)
 
 
 def _split_definition_body(body: str) -> list[str]:
@@ -196,12 +262,20 @@ def _column_names(body: str) -> frozenset[str] | None:
 
 def migration_column_sets(repo_root: Path) -> dict[str, tuple[frozenset[str], str]]:
     """``{table_name: (column_names, migration_relpath)}`` for the committed
-    migrations, keyed on the BARE table name (the shadow star materializes the same
-    model name into its own shadow schema, so the schema qualifier cannot match).
+    migrations -- the ``gold`` relations only, keyed on the bare table name (the
+    shadow star materializes the same model name into its own shadow schema, so the
+    schema qualifier cannot match on the shadow side).
 
-    A table created more than once (idempotent drop/recreate, or a later migration
-    reshaping it) resolves to the LAST definition in filename order -- that is the
-    shape the oracle ends up with. Unreadable files are skipped, never raised.
+    Internally the index is keyed by ``(schema, table)`` and only the
+    ``_ORACLE_SCHEMA`` layer is returned, so a same-named table in another schema
+    (``silver.dim_customer`` beside ``gold.dim_customer``) cannot replace the gold
+    oracle by last-write-wins. An unqualified ``CREATE TABLE`` has no determinable
+    layer and is therefore DROPPED rather than guessed at (#501 review).
+
+    A table created more than once IN THE SAME SCHEMA (idempotent drop/recreate, or
+    a later migration reshaping it) resolves to the LAST definition in filename
+    order -- that is the shape the oracle ends up with. Unreadable files are
+    skipped, never raised.
 
     A table whose history contains a column-changing ``ALTER TABLE`` is OMITTED
     entirely: its ``CREATE TABLE`` body no longer describes its final shape, and
@@ -211,28 +285,53 @@ def migration_column_sets(repo_root: Path) -> dict[str, tuple[frozenset[str], st
     directory = Path(repo_root) / _MIGRATIONS_DIR
     if not directory.is_dir():
         return {}
-    found: dict[str, tuple[frozenset[str], str]] = {}
-    altered: set[str] = set()
+    found: dict[tuple[str, str], tuple[frozenset[str], str]] = {}
+    altered: set[tuple[str, str]] = set()
     for path in sorted(directory.glob("*.sql")):
         relpath = f"{_MIGRATIONS_DIR}/{path.name}"
-        text = _read_text(path)
-        altered.update(_altered_tables(text))
-        for match in _CREATE_TABLE.finditer(text):
-            columns = _column_names(match.group("body"))
-            if columns is not None:
-                found[match.group("table").lower()] = (columns, relpath)
-    return {name: shape for name, shape in found.items() if name not in altered}
-
-
-def _altered_tables(text: str) -> set[str]:
-    """Bare names of tables one migration reshapes with a column-changing
-    ``ALTER TABLE``. Constraint-only and type-only ALTERs are ignored: they do not
-    change the column SET, so they must not suppress a genuine finding."""
+        sql = _scannable(_read_text(path))
+        altered.update(_altered_tables(sql))
+        found.update(_created_tables(sql, relpath))
     return {
-        match.group("table").lower()
-        for pattern in (_ALTER_COLUMN, _ALTER_BARE)
-        for match in pattern.finditer(text)
+        table: shape
+        for (schema, table), shape in found.items()
+        if schema == _ORACLE_SCHEMA and (schema, table) not in altered
     }
+
+
+def _qualified(match: re.Match[str]) -> tuple[str, str] | None:
+    """``(schema, table)`` for one statement, or None when unqualified.
+
+    An unqualified name resolves through ``search_path`` at run time, which this
+    static read cannot know -- so its layer is indeterminate and the caller drops
+    it rather than assuming the oracle schema."""
+    schema = match.group("schema")
+    if schema is None:
+        return None
+    return (schema.lower(), match.group("table").lower())
+
+
+def _created_tables(
+    sql: str, relpath: str
+) -> dict[tuple[str, str], tuple[frozenset[str], str]]:
+    """Schema-qualified ``CREATE TABLE`` shapes in one comment-stripped migration."""
+    created: dict[tuple[str, str], tuple[frozenset[str], str]] = {}
+    for match in _CREATE_TABLE.finditer(sql):
+        key = _qualified(match)
+        columns = _column_names(match.group("body"))
+        if key is not None and columns is not None:
+            created[key] = (columns, relpath)
+    return created
+
+
+def _altered_tables(sql: str) -> set[tuple[str, str]]:
+    """``(schema, table)`` pairs one comment-stripped migration reshapes with a
+    column-changing ``ALTER TABLE``. Constraint-only, type-only, and whole-table
+    ``RENAME TO`` statements are ignored: they do not change the column SET, so they
+    must not suppress a genuine finding."""
+    patterns = (_ALTER_COLUMN, _ALTER_BARE, _ALTER_RENAME_BARE)
+    keys = (_qualified(m) for p in patterns for m in p.finditer(sql))
+    return {key for key in keys if key is not None}
 
 
 def _read_text(path: Path) -> str:

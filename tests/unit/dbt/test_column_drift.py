@@ -240,10 +240,14 @@ def test_alter_table_add_column_also_silences_a_divergent_pair(tmp_path: Path) -
         "ALTER TABLE gold.dim_a RENAME COLUMN a TO b;",
         "ALTER TABLE IF EXISTS gold.dim_a ADD COLUMN b TEXT;",
         "ALTER TABLE ONLY gold.dim_a DROP COLUMN a;",
-        "alter table dim_a add column b text;",
-        # Postgres permits omitting the COLUMN keyword for ADD/DROP.
+        "alter table gold.dim_a add column b text;",
+        # Postgres permits omitting the COLUMN keyword for ADD/DROP...
         "ALTER TABLE gold.dim_a ADD b TEXT;",
         "ALTER TABLE gold.dim_a DROP a;",
+        # ...and for RENAME (#501 review, finding A).
+        "ALTER TABLE gold.dim_a RENAME a TO b;",
+        "alter table gold.dim_a rename a to b;",
+        "ALTER TABLE IF EXISTS gold.dim_a RENAME a TO b;",
     ],
 )
 def test_every_column_changing_alter_form_skips_the_table(
@@ -265,6 +269,9 @@ def test_every_column_changing_alter_form_skips_the_table(
         "ALTER TABLE gold.dim_a DROP CONSTRAINT uq_a;",
         "ALTER TABLE gold.dim_a ALTER COLUMN a TYPE BIGINT;",
         "ALTER TABLE gold.dim_a ALTER COLUMN a SET NOT NULL;",
+        # Whole-TABLE rename: no column changes hands, so the shape stays knowable.
+        "ALTER TABLE gold.dim_a RENAME TO dim_a_old;",
+        "ALTER TABLE gold.dim_a RENAME CONSTRAINT uq_a TO uq_b;",
     ],
 )
 def test_non_column_altering_statements_do_not_suppress_a_finding(
@@ -279,6 +286,139 @@ def test_non_column_altering_statements_do_not_suppress_a_finding(
     assert "dim_a" in migration_column_sets(tmp_path), statement
     advisories = column_shape_advisories(tmp_path, [_contract("dim_a", "a", "extra")])
     assert advisories[0].shadow_only == ("extra",), statement
+
+
+def test_commented_out_alter_does_not_disable_shape_checking(tmp_path: Path) -> None:
+    """#501 review, finding B: the nastiest direction, because it fails SILENTLY
+    toward no-checking. A commented-out ALTER must not add the table to `altered`
+    and thereby switch off its shape comparison entirely."""
+    _migration(tmp_path, "0004_gold.sql", "CREATE TABLE gold.dim_a (\n  a INT\n);")
+    _migration(
+        tmp_path,
+        "0005_notes.sql",
+        "-- ALTER TABLE gold.dim_a ADD COLUMN b TEXT;  (planned, not applied)\n"
+        "/* ALTER TABLE gold.dim_a DROP COLUMN a; */\n",
+    )
+
+    assert "dim_a" in migration_column_sets(tmp_path)
+    advisories = column_shape_advisories(tmp_path, [_contract("dim_a", "a", "extra")])
+    assert advisories[0].shadow_only == ("extra",)
+
+
+def test_commented_out_create_does_not_override_the_real_shape(tmp_path: Path) -> None:
+    """A CREATE TABLE inside a comment must not become the compared shape."""
+    _migration(
+        tmp_path,
+        "0004_gold.sql",
+        "CREATE TABLE gold.dim_a (\n  a INT,\n  b TEXT\n);",
+    )
+    _migration(
+        tmp_path,
+        "0005_notes.sql",
+        "/*\nCREATE TABLE gold.dim_a (\n  only_this INT\n);\n*/\n",
+    )
+
+    columns, _ = migration_column_sets(tmp_path)["dim_a"]
+    assert columns == frozenset({"a", "b"})
+    assert column_shape_advisories(tmp_path, [_contract("dim_a", "a", "b")]) == ()
+
+
+def test_comment_markers_inside_string_literals_are_preserved(tmp_path: Path) -> None:
+    """The reviewer's own caveat: `--` inside a quoted literal is DATA, not a
+    comment. Blanking it would corrupt the statement being parsed."""
+    _migration(
+        tmp_path,
+        "0004_gold.sql",
+        "CREATE TABLE gold.dim_a (\n  a INT,\n  label TEXT\n);\n"
+        "INSERT INTO gold.dim_a VALUES (-1, 'UNKNOWN -- not a comment');\n"
+        "INSERT INTO gold.dim_a VALUES (-2, 'slash /* star */ inside');\n",
+    )
+
+    columns, _ = migration_column_sets(tmp_path)["dim_a"]
+    assert columns == frozenset({"a", "label"})
+
+
+def test_an_alter_inside_a_string_literal_does_not_trip_the_guard(
+    tmp_path: Path,
+) -> None:
+    """Symmetric to the above: ALTER text quoted as data is not a real statement."""
+    _migration(tmp_path, "0004_gold.sql", "CREATE TABLE gold.dim_a (\n  a INT\n);")
+    _migration(
+        tmp_path,
+        "0005_log.sql",
+        "INSERT INTO audit.log VALUES ('ALTER TABLE gold.dim_a ADD COLUMN b TEXT');\n",
+    )
+
+    assert "dim_a" in migration_column_sets(tmp_path)
+
+
+def test_same_name_in_another_schema_does_not_replace_the_gold_oracle(
+    tmp_path: Path,
+) -> None:
+    """#501 review, finding C: silver/gold mirror names are natural in a medallion
+    layout. The gold shape must win regardless of definition order, not lose to
+    last-write-wins on the bare table name."""
+    _migration(
+        tmp_path,
+        "0004_gold.sql",
+        "CREATE TABLE gold.dim_customer (\n  customer_sk INT,\n  customer_id TEXT\n);",
+    )
+    # Defined LATER, so a bare-name index would have overwritten the gold shape.
+    _migration(
+        tmp_path,
+        "0005_silver.sql",
+        "CREATE TABLE silver.dim_customer (\n  raw_id TEXT,\n  loaded_at TIMESTAMP\n);",
+    )
+
+    columns, relpath = migration_column_sets(tmp_path)["dim_customer"]
+    assert columns == frozenset({"customer_sk", "customer_id"})
+    assert relpath.endswith("0004_gold.sql")
+    assert (
+        column_shape_advisories(
+            tmp_path, [_contract("dim_customer", "customer_sk", "customer_id")]
+        )
+        == ()
+    )
+
+
+def test_an_alter_on_the_silver_twin_does_not_silence_the_gold_table(
+    tmp_path: Path,
+) -> None:
+    """The ALTER guard is schema-scoped too: reshaping `silver.dim_customer` says
+    nothing about the gold relation and must not suppress its comparison."""
+    _migration(
+        tmp_path, "0004_gold.sql", "CREATE TABLE gold.dim_customer (\n  a INT\n);"
+    )
+    _migration(
+        tmp_path,
+        "0005_silver.sql",
+        "CREATE TABLE silver.dim_customer (\n  a INT\n);\n"
+        "ALTER TABLE silver.dim_customer ADD COLUMN b TEXT;\n",
+    )
+
+    assert "dim_customer" in migration_column_sets(tmp_path)
+    advisories = column_shape_advisories(
+        tmp_path, [_contract("dim_customer", "a", "extra")]
+    )
+    assert advisories[0].shadow_only == ("extra",)
+
+
+def test_unqualified_create_table_is_dropped_as_indeterminate(tmp_path: Path) -> None:
+    """An unqualified name resolves through `search_path` at run time, which a static
+    read cannot know. Its layer is indeterminate, so it is skipped rather than
+    assumed to be the gold oracle -- the same honest-silence rule as ALTER."""
+    _migration(tmp_path, "0004_gold.sql", "CREATE TABLE dim_loose (\n  a INT\n);")
+
+    assert migration_column_sets(tmp_path) == {}
+    assert column_shape_advisories(tmp_path, [_contract("dim_loose", "zzz")]) == ()
+
+
+def test_non_gold_schema_alone_yields_no_comparison(tmp_path: Path) -> None:
+    """dbt materializes gold and stops (ADR-0009 d.6), so a silver-only table has no
+    legitimate mart counterpart to compare."""
+    _migration(tmp_path, "0003_silver.sql", "CREATE TABLE silver.stg_x (\n  a INT\n);")
+
+    assert migration_column_sets(tmp_path) == {}
 
 
 def test_committed_migration_add_constraint_clauses_are_not_treated_as_alters() -> None:
