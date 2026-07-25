@@ -49,9 +49,31 @@ is otherwise good practice, and it is invisible until Desktop.
 | A `///` block is not the last line of a file | Indentation, keywords, property names |
 | Every `*.tmdl` under `definition/` (incl. `relationships.tmdl`) | Whether Desktop can load the model |
 | Whitespace-only lines count as blank; CRLF and LF alike | DAX validity, bindings, refs, lineage |
+| Genuine indented docs (a measure doc under its table) | `///` inside an embedded M/DAX expression body |
 
 The output repeats this boundary on every run, including a passing one — that is
 where over-reading happens.
+
+### Embedded M/DAX bodies are excluded, deliberately
+
+`///` is **also** a legal line comment in M and DAX — both start line comments
+with `//`, so a third slash is just comment text — and an M `source =` body or a
+multiline measure body may legitimately contain blank lines. Flagging such a line
+would **block a valid model**, which for a brand-new lint is worse than the gap
+it closes: an agent hitting it cannot tell a real defect from a lint bug, and the
+rational response is to stop trusting the verb. Under-claiming beats blocking
+valid input, so a `///` inside an expression body is not evaluated and this lint
+makes no claim about it.
+
+The exclusion is structural rather than a `//`-vs-`///` special case. TMDL is
+indentation-based: a body is introduced by a line whose content **ends with `=`**
+(`source =`, `measure Margin =`) and covers the following lines indented
+**strictly deeper**. A blank line does **not** close a body — that is exactly the
+M-body case — so a body closes at the first non-blank line indented at or
+shallower than its introducer. `expression Server = "..."`, `annotation X = Y`
+and `partition p = m` do not end with `=`, so they open no body. Genuine
+**indented** documentation — a measure doc under its table, the shape this repo's
+committed TMDL uses — is still fully checked.
 
 ## Why it is not named `tmdl-validate`
 

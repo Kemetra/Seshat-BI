@@ -42,6 +42,28 @@ validator that fails closed on valid input. Blank-or-EOF is what Desktop itself
 reported (``Unexpected line type: Empty!``) and it cannot false-positive on a
 declaration keyword nobody enumerated.
 
+WHY EMBEDDED M/DAX BODIES ARE EXCLUDED (a deliberate narrowing)
+---------------------------------------------------------------
+``///`` is ALSO a legal line comment in M and DAX -- those languages start line
+comments with ``//``, so a third slash is just part of the comment text -- and
+an M ``source =`` body or a multiline measure body may legitimately contain
+blank lines. Treating such a line as TMDL documentation would BLOCK A VALID
+MODEL, which for a brand-new lint is worse than the gap it closes: an agent
+hitting it cannot tell a real defect from a lint bug, and the rational response
+is to stop trusting the verb. So a ``///`` inside an expression body is NOT
+evaluated, and this lint makes NO claim about it.
+
+The exclusion is structural, not a ``//``-vs-``///`` special case. TMDL is
+indentation-based: an expression body is introduced by a line whose content ends
+with ``=`` (``source =``, ``measure Margin =``) and consists of the following
+lines indented STRICTLY DEEPER than that introducer. A blank line does NOT close
+a body -- that is exactly the M-body case -- so a body closes only at the next
+NON-BLANK line indented at or shallower than its introducer. Note this correctly
+opens no body for ``expression Server = "..."``, ``annotation X = Y`` or
+``partition p = m``: those do not END with ``=``. Genuine INDENTED documentation
+(a measure doc under its table, the shape this repo's committed TMDL uses) is
+still checked -- only the inside of an expression body is skipped.
+
 This module is separate from ``seshat.tmdl`` on purpose: ``parse_tmdl`` there is
 an EXTRACTOR (unrecognized lines fall through by design), not a validator, and
 conflating the two is the confusion #494 is about.
@@ -118,16 +140,60 @@ def _is_blank(line: str) -> bool:
     return not line.strip()
 
 
+def _indent_width(line: str) -> int:
+    """Leading-whitespace width. Tabs count as one, which is enough: the only
+    comparison made is against another line's width in the SAME file, and TMDL
+    writers do not mix tabs and spaces within one nesting level."""
+    return len(line) - len(line.lstrip())
+
+
+def embedded_body_lines(lines: list[str]) -> frozenset[int]:
+    """Indices of lines sitting INSIDE an embedded M/DAX expression body.
+
+    A body opens on a line whose content ends with ``=`` (``source =``,
+    ``measure X =``) and covers the following lines indented strictly deeper.
+    A blank line does NOT close a body -- M bodies legitimately contain blanks,
+    and closing on one is precisely the false positive this exists to prevent.
+    A body closes at the first NON-BLANK line indented at or shallower than its
+    introducer.
+
+    Ambiguity is biased toward still-inside-body on purpose: exiting a body too
+    early re-arms the false positive (blocking a valid model), while staying in
+    one line too long only skips a check this lint already disclaims.
+    """
+    inside: set[int] = set()
+    body_indent: int | None = None
+    for index, line in enumerate(lines):
+        if body_indent is not None:
+            if not line.strip():
+                # Blank lines are transparent: they neither close the body nor
+                # get recorded (nothing checks a blank line directly).
+                continue
+            if _indent_width(line) > body_indent:
+                inside.add(index)
+                continue
+            body_indent = None  # dedented to introducer depth or shallower
+        stripped = line.rstrip()
+        if stripped.strip() and stripped.endswith("="):
+            body_indent = _indent_width(line)
+    return frozenset(inside)
+
+
 def lint_text(text: str, *, document: str) -> tuple[DocCommentFinding, ...]:
     """Return every unattached ``///`` block in ``text``.
 
     Pure function over already-read text: no filesystem, no network, no
     execution. Only the LAST ``///`` line of a contiguous run is considered --
     a multi-line block is one block, so one violation is reported once.
+    ``///`` lines inside an embedded M/DAX expression body are skipped, where
+    ``///`` is a legal line comment rather than TMDL documentation.
     """
     lines = text.splitlines()
+    in_body = embedded_body_lines(lines)
     findings: list[DocCommentFinding] = []
     for index, line in enumerate(lines):
+        if index in in_body:
+            continue
         if not line.strip().startswith(_DOC_MARKER):
             continue
         following = lines[index + 1] if index + 1 < len(lines) else None
@@ -199,6 +265,8 @@ def lint_model(model_dir: Path) -> DocCommentLintResult:
         f"{len(scanned)} TMDL document(s) checked for the ///-must-attach rule only",
         "scope: ONE rule. This is NOT a TMDL syntax validator, and a pass does "
         "NOT mean Power BI Desktop can load the model.",
+        "scope: `///` inside an embedded M/DAX expression body is NOT checked -- "
+        "it is a legal line comment there, not TMDL documentation.",
         *unreadable,
     ]
     status = "blocked" if findings or unreadable else "pass"
@@ -234,6 +302,11 @@ def tmdl_doc_comment_lint_main(args: object) -> int:
         "a declaration, never a blank line or EOF. It is NOT a TMDL syntax "
         "validator: a pass does NOT mean the TMDL is valid or that Power BI "
         "Desktop can load the model."
+    )
+    print(
+        "scope: /// inside an embedded M or DAX expression body is deliberately "
+        "NOT checked -- /// is a legal line comment in those languages, so "
+        "flagging it would block a valid model."
     )
     print(
         "note: this is a read-only lint report; it grants no approval and never "

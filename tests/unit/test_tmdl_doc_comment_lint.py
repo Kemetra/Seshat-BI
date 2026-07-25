@@ -19,6 +19,7 @@ import pytest
 from seshat.tmdl_doc_comment_lint import (
     FINDING_DOC_COMMENT_NOT_ATTACHED,
     collect_tmdl_files,
+    embedded_body_lines,
     lint_model,
     lint_text,
 )
@@ -226,6 +227,128 @@ def test_model_with_no_tmdl_is_blocked_not_passed(tmp_path: Path) -> None:
     result = lint_model(model_dir)
     assert result.status == "blocked"
     assert any("nothing was checked" in line for line in result.evidence)
+
+
+# --------------------------------------------------------------------------
+# Embedded M/DAX bodies: `///` there is a legal line comment, NOT TMDL doc.
+#
+# Found in review on PR #503. Both directions are pinned: the false positive
+# must not fire (blocking a VALID model is worse than a missed detection for a
+# brand-new lint), and the real rule must not be blunted while fixing it.
+# --------------------------------------------------------------------------
+
+
+# The shape the committed corpus actually uses: `source =` at indent 2, body
+# indented strictly deeper. `///` is a legal M comment and M bodies may contain
+# blank lines, so this VALID model must produce no finding.
+_VALID_M_BODY = (
+    "table 'gold fct_sales_rss'\n"
+    "\tpartition 'gold fct_sales_rss' = m\n"
+    "\t\tmode: import\n"
+    "\t\tsource =\n"
+    "\t\t\t\tlet\n"
+    "\t\t\t\t  /// pull the gold star; host+db come from parameters\n"
+    "\n"
+    "\t\t\t\t  Source = PostgreSQL.Database(Server, Database),\n"
+    '\t\t\t\t  #"Navigation 1" = Source{[Schema = "gold"]}[Data]\n'
+    "\t\t\t\tin\n"
+    '\t\t\t\t  #"Navigation 1"\n'
+)
+
+
+def test_doc_marker_inside_m_source_body_is_not_flagged() -> None:
+    """THE false positive: `///` + blank inside an M body must stay silent."""
+    assert lint_text(_VALID_M_BODY, document="t.tmdl") == ()
+
+
+def test_doc_marker_inside_multiline_dax_measure_body_is_not_flagged() -> None:
+    """`//` starts a DAX comment too, so `///` is legal inside a measure body."""
+    text = (
+        "table Sales\n"
+        "\tmeasure Margin =\n"
+        "\t\t\tVAR Rev = SUM(Sales[amount])\n"
+        "\t\t\t/// denominator excludes unknowns\n"
+        "\n"
+        "\t\t\tVAR Cost = SUM(Sales[cost])\n"
+        "\t\t\tRETURN DIVIDE(Rev - Cost, Rev)\n"
+    )
+    assert lint_text(text, document="t.tmdl") == ()
+
+
+def test_genuine_indented_measure_doc_is_still_checked() -> None:
+    """Do not over-correct: an INDENTED doc is real TMDL documentation (the
+    shape this repo's committed TMDL uses), so it is still subject to the rule."""
+    text = (
+        "table 'gold fct_sales_rss'\n"
+        "\tlineageTag: b8181b29\n"
+        "\n"
+        "\t/// Total money taken across all retail transactions.\n"
+        "\n"
+        "\tmeasure TotalSales = SUM('gold fct_sales_rss'[total_spent])\n"
+    )
+    findings = lint_text(text, document="t.tmdl")
+    assert len(findings) == 1
+    assert findings[0].doc_line == 4
+
+
+def test_body_closes_on_dedent_so_later_top_level_doc_is_still_flagged() -> None:
+    """The anti-blunting guard: a "suppress everything after the first `=`"
+    bug would silently kill the whole rule and STILL show a clean census."""
+    text = (
+        "table 'gold fct_sales_rss'\n"
+        "\tpartition p = m\n"
+        "\t\tsource =\n"
+        "\t\t\t\tlet\n"
+        "\t\t\t\t  /// legal M comment\n"
+        "\n"
+        "\t\t\t\t  Source = X\n"
+        "\t\t\t\tin\n"
+        "\t\t\t\t  Source\n"
+        "\n"
+        "\tannotation PBI_NavigationStepName = Navigation\n"
+        "\n"
+        "/// a genuinely unattached top-level block\n"
+        "\n"
+        "relationship r\n"
+    )
+    findings = lint_text(text, document="t.tmdl")
+    assert len(findings) == 1, findings
+    assert findings[0].doc_line == 13
+    assert findings[0].blank_line == 14
+
+
+def test_blank_line_does_not_close_a_body() -> None:
+    """Pinned so nobody "simplifies" blank-transparency away: real body content
+    follows the blank, and the `///` before it must stay unflagged."""
+    lines = _VALID_M_BODY.splitlines()
+    inside = embedded_body_lines(lines)
+    # index 5 is the `///` comment, index 7 the body content after the blank.
+    assert 5 in inside
+    assert 7 in inside
+
+
+def test_assignment_with_a_value_on_the_same_line_opens_no_body() -> None:
+    """`expression X = "v"`, `annotation X = Y` and `partition p = m` do not end
+    with `=`, so they must not swallow the rest of the file into a body."""
+    text = (
+        '/// Postgres host:port.\nexpression Server = "<host>:25060"\n'
+        "\tlineageTag: 5d36ae75\n"
+        "\n"
+        "\tannotation PBI_ResultType = Text\n"
+        "\n"
+        "/// unattached, and must still be caught\n"
+        "\n"
+        "relationship r\n"
+    )
+    findings = lint_text(text, document="expressions.tmdl")
+    assert len(findings) == 1
+    assert findings[0].doc_line == 7
+
+
+def test_committed_corpus_shape_has_no_findings(tmp_path: Path) -> None:
+    """End-to-end on the real `source =` shape through lint_model."""
+    model_dir = _model(tmp_path, "tables/fct.tmdl", _VALID_M_BODY)
+    assert lint_model(model_dir).status == "pass"
 
 
 # --------------------------------------------------------------------------
