@@ -8,6 +8,8 @@ each other precisely. Every ID is permanent once assigned; never renumber.
 | Prefix | Means | Range / form | Lives in |
 |---|---|---|---|
 | `SC-NNN` | **Concept card** | `SC-001` .. `SC-070` | `knowledge/*.md` (one `### SC-NNN` header) |
+| `EP-NNN` | **PostgreSQL execution-plan concept** | `EP-001` .. `EP-014` | `knowledge/postgresql-execution-plans.md` |
+| `EP-PAT-<NAME>` | **PostgreSQL plan symptom pattern** | named | `patterns/postgresql-plan-patterns.json` |
 | `SQL-AP-NNN` | **Anti-pattern** | `SQL-AP-001` .. `SQL-AP-061` | `knowledge/sql-anti-patterns.md` |
 | `VP-<NAME>` | **Validation / reconciliation gate** | named (e.g. `VP-UNIQUE`, `VP-DIFF`) | `patterns/sql-validation-patterns.json` |
 | `PB-SQL-NN` | **Diagnostic playbook** | `PB-SQL-01` .. `PB-SQL-19` | `knowledge/sql-diagnostics-playbook.md` |
@@ -43,6 +45,8 @@ them.)
 - An anti-pattern (`SQL-AP-NNN`) maps to an analyzer rule/candidate where one exists.
 - A pattern card (`SP-*`) links `related_concepts`, `related_anti_patterns`, `related_validation`.
 - A playbook (`PB-SQL-NN`) links the `SC` / `SQL-AP` / `VP` it draws on.
+- A plan pattern (`EP-PAT-*`) links its `EP-*` concepts and refuses a verdict without its
+  `required_evidence`.
 - An analyzer rule (`SAR-*`) carries `promoted_from` pointing at its `SARC-*` candidate.
 
 ## Analyzer status (important)

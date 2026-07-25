@@ -26,11 +26,11 @@ are grain errors; naming the grain usually reveals them.
 
 - **`knowledge/`** -- concept cards (`SC-001..070`), anti-patterns (`SQL-AP-001..061`), the
   consolidated diagnostics playbook (`PB-SQL-01..19`), and the transformation / Cookbook-extension
-  notes. Markdown for reasoning.
+  notes, plus supplied PostgreSQL plan concepts (`EP-001..014`). Markdown for reasoning.
 - **`patterns/`** -- structured JSON: practical pattern cards (`SP-*`), validation/reconciliation
-  gate shapes (`VP-*`), staged analyzer-rule candidates (`SARC-*`), and 10 promoted **draft**
-  analyzer rules (`SAR-*`). The `SAR-*` rules are **static skill artifacts**, not runtime
-  enforcement -- there is no analyzer wired here.
+  gate shapes (`VP-*`), supplied-plan symptom patterns (`EP-PAT-*`), staged analyzer-rule
+  candidates (`SARC-*`), and 10 promoted **draft** analyzer rules (`SAR-*`). The `SAR-*` rules
+  are **static skill artifacts**, not runtime enforcement -- there is no analyzer wired here.
 - **`references/`** -- the graded training set (84 items), the source map / attribution, the
   copyright-safety note, and the ID conventions.
 - **`checklists/`** -- short, copy-me checklists for review, validation, and reconciliation.
@@ -41,7 +41,8 @@ A thinking and validation layer for SQL in BI pipelines: source profiling; table
 uniqueness; joins and fan-out amplification; aggregation correctness and COUNT/NULL semantics;
 deduplication; validation and reconciliation queries; silver/gold transformation logic (DML,
 reshaping, string cleaning, set operations, date recipes, gaps/islands, hierarchy, metadata-driven
-profiling); window and date/time analytics; SQL anti-patterns; and basic performance reasoning.
+profiling); window and date/time analytics; SQL anti-patterns; basic performance reasoning; and
+read-only interpretation of supplied, sanitized PostgreSQL JSON execution plans.
 
 ## What this is NOT
 
@@ -50,7 +51,7 @@ profiling); window and date/time analytics; SQL anti-patterns; and basic perform
 - not a database execution tool, and not a runtime validator -- it reasons about SQL, it does
   not run it;
 - not a dbt / Dagster project, and not a CLI;
-- not the PostgreSQL execution-plan layer (see below);
+- not a PostgreSQL executor or automatic tuning service;
 - not the Power BI dashboard layer and not the DAX layer.
 
 ## Routing boundaries
@@ -62,11 +63,12 @@ profiling); window and date/time analytics; SQL anti-patterns; and basic perform
 | DAX generation / review / performance / model prerequisites | `bi-dax-knowledge` |
 | Dashboard / visual / page design | `powerbi-dashboard-design` |
 
-## Future extension
+## PostgreSQL plan boundary
 
-**PostgreSQL execution-plan reasoning is deferred to a later EP slice.** Engine-specific plan
-reading (EXPLAIN/ANALYZE, costs, index/join strategy) is intentionally out of scope here; the
-performance content is correctness-oriented reasoning, not plan analysis.
+Plan review requires a supplied, sanitized `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` artifact.
+Because `ANALYZE` executes the statement, the layer never runs it. It interprets evidence, records
+hypotheses and confirming checks, and refuses workload-wide or index advice without representative
+before/after and write-cost evidence.
 
 ## Copyright safety
 

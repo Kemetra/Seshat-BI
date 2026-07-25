@@ -82,6 +82,13 @@ scenarios:
       - knowledge/sql-reconciliation-playbook.md
     terminal_contains: sql-validation-checklist
 
+  - layer: bi-sql-knowledge
+    task_contains: Review a PostgreSQL execution plan
+    expect_resources:
+      - knowledge/postgresql-execution-plans.md
+      - patterns/postgresql-plan-patterns.json
+    terminal_contains: postgresql-plan-review-checklist
+
   - layer: bi-dax-knowledge
     task_contains: Review existing DAX
     expect_resources:
