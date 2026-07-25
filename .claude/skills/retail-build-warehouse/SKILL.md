@@ -47,6 +47,18 @@ carry the transform logic; an engine would emit only boilerplate). See
    list, CASE maps, is_return value set, sentinels, mojibake range) and
    `source-profile.md` (row counts to annotate, the date span for the calendar).
 4. Pick the next contiguous migration number `NNNN` over `warehouse/migrations/` (S4a).
+5. **Adapter checkpoint -- surface the choice before writing SQL by hand.** Run
+   `seshat orchestration-assess` and REPORT its verdict to the human before
+   authoring migrations. This repo ships two transformation/orchestration
+   adapters (dbt, Dagster); hand-written migrations are the default path, so
+   without this step they get bypassed silently rather than declined on purpose
+   (issue #489). The assessor is read-only: it emits a categorical verdict
+   (`consider` / `not_recommended` / `already_adopted`), never a numeric score,
+   and it never adopts anything. If it says `already_adopted`, prefer the adapter
+   over new hand-written SQL. If it says `consider`, state that and let the human
+   choose -- do NOT adopt an adapter on your own, and do NOT treat `consider` as
+   permission to skip authoring. If it says `not_recommended`, proceed here and
+   say so.
 
 ## Silver: the load-bearing Phase-5 order (NUMBERED -- do NOT reorder)
 
