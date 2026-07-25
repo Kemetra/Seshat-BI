@@ -2,10 +2,15 @@
 
 - **Date:** 2026-07-25
 - **Status:** **DESIGN NOTE -- decides nothing.** Written at owner direction
-  ("design note only, no code") because the fix requires a breaking schema change
-  and a migration of committed readiness records. No field is added, no schema is
-  edited, and no rule is wired by this note. It exists so the owner can rule on a
-  concrete shape rather than on a bug report.
+  ("design note only, no code"). No field is added, no schema is edited, and no
+  rule is wired by this note. It exists so the owner can rule on a concrete shape
+  rather than on a bug report.
+- **Revised 2026-07-25** after a follow-up investigation, which changed the
+  recommendation. Two claims in the first draft were wrong and are corrected
+  below: (1) the change is **not** a breaking schema change -- see "Cost
+  correction"; (2) the hard part is not adding the field but **wiring a writer
+  that cannot lie** -- see "The decisive question". A hand-authored provenance
+  field is now explicitly recommended AGAINST.
 - **Issue:** #485 -- `seshat next` reports `terminal_pass` from committed
   `mappings/` evidence without cross-checking live DB identity.
 - **Related:** #486 (rule-scope qualification), #487 (approval-shape
@@ -72,20 +77,81 @@ digests, and `run_status`. With verified run evidence present it returns
 against a different database. `outcome`, `readiness_state`, and `evidence[]` are
 never qualified on any path.
 
-## What a fix requires (the reason this is a note, not a patch)
+## The decisive question: would the field be TRUSTWORTHY?
 
-1. **A new structured provenance field** in `readiness-status.yaml`, recorded when
-   live evidence is captured.
-2. **`templates/readiness-status.yaml`** -- documents the field. (One edit covers
-   the packaged copy too: `pyproject.toml:159` force-includes it as
-   `seshat/stage1_templates/readiness-status.yaml` at wheel-build time.)
-3. **`schemas/agent-status.schema.json`** is `additionalProperties: false`, so
-   projecting the field is a **breaking** schema change, not an additive one.
-4. **RS1 enforcement** (`src/seshat/rules/readiness_status.py`).
-5. **Migration of committed records** -- `mappings/retail_store_sales`,
-   `mappings/demo_sample_orders`, the `tests/fixtures/**` readiness files, and
-   downstream consumer/fixture repos (e.g. Seshat-BI-Examples) that this repo does
-   not control.
+This is the question that actually chooses between the options below, and it was
+not asked in the first draft of this note. A structured field is only an
+improvement over prose if its value cannot be typed by whoever is claiming the
+readiness. Otherwise it relocates the honesty problem into a tidier format.
+
+**Finding: nothing in the codebase writes stage status today.** An exhaustive
+grep for writers of `readiness-status.yaml` yields three touch points, none of
+which authors a `status`, `evidence[]`, or `approvals[]` value:
+
+- `stage1_scaffold.py:36,232,307-349` -- copies the BLANK template via `O_EXCL`
+  atomic create; every stage `not_started`
+- `demo/fixtures.py:88` -- byte-copies an already-filled fixture
+- `reset.py:465-475` -- deletes/edits; never authors status
+
+Every real value is hand-authored by an agent or human through the skills
+(`retail-onboard-table/SKILL.md:99-100`, `approval-console/SKILL.md:163`). So a
+`sha256(host/dbname)` computed from `.env` is **forgeable by any agent that can
+read `.env` without ever opening a socket.** That field would be tool-formatted
+prose. It must not be added on those terms.
+
+**Where a trustworthy value could come from -- three existing seams:**
+
+1. **`seshat validate` is the natural capture point and records nothing today.**
+   It connects (`cli/commands/validate.py:93-112`), prints findings, sets an exit
+   code, and persists no artifact. It is the only place a *server-echoed*
+   identity is obtainable -- `select current_database()` through the `QueryRunner`
+   Protocol (`validate.py:34-37`). Server-echoed beats env-derived: the database
+   itself asserts its own name.
+2. **`readiness_evidence.py` is already built and UNWIRED.** It is EMIT-only by
+   FR-013 (`readiness_evidence.py:26`), returns a dict, writes nothing, and only
+   tests call `build_gold_ready_block`. A dead seam waiting for exactly this.
+3. **The dbt adapter already holds the value and deliberately throws it away.**
+   `dbt/project.py:30-38` reads the real host/dbname at run time;
+   `dbt/redaction.py:13-40` discards them. What it records instead is a *profile
+   alias*: `evidence.py:663` writes `target={"name": plan.runtime.target, ...}`
+   and the schema pins that to `{"const": "shadow"}`
+   (`dbt-run-evidence.schema.json:68`). Its write path is otherwise sound --
+   sanitize -> schema-validate -> atomic write into a COMMITTED
+   `mappings/<table>/dbt-evidence/<id>.json` (`dbt/evidence.py:785-797`).
+
+## Cost correction -- the schema break claim was WRONG
+
+The first draft of this note asserted that `schemas/agent-status.schema.json`
+being `additionalProperties: false` makes the field a breaking change. **That is
+refuted.** That schema self-describes (`:5`) as the contract for
+`retail status --format json` -- an OUTPUT projection. **No schema in `schemas/`
+validates `readiness-status.yaml` as an input file at all**; only rule RS1 reads
+it. And `status_surface.py:80-97` projects a strict six-key whitelist, silently
+dropping unknown input keys.
+
+Therefore: **adding the field to the YAML is ADDITIVE -- zero schema edit, zero
+break.** It becomes breaking only if someone *chooses* to project it into the
+output contract, which is severable and need not happen in the same change.
+
+**And the migration cost is avoidable too.** `source_kind` (commit `64e3f88`,
+#120) is the house precedent: an optional field added to an already-filled
+artifact, where absence carries a valid legacy meaning
+(`templates/readiness-status.yaml:56-59`) and the gate fires **only when the field
+is present** (`rules/readiness_status.py:393-400`). Zero migration was needed.
+The same shape applies here.
+
+So the real cost profile inverts the first draft: **the field is cheap; the
+writer that cannot lie is the expensive part.**
+
+## A separate defect found while investigating this
+
+Worth its own issue rather than being folded in here. Dagster raw run records are
+**gitignored** (`.gitignore:111`), yet `portfolio_watch.py:479-521`
+(`_dagster_run_states`) reads exactly that path and can return `verified` -- and
+`verified` is the state that SILENCES the `[PENDING LIVE PROFILE]` caveat in
+`agent_next.py:242-274`. So machine-local, unreviewable, uncommitted evidence can
+suppress a safety caveat on a surface another person then reads as authoritative.
+That is a trust-boundary problem independent of DB identity.
 
 ### Hard constraint: the field must not store a raw DSN
 
@@ -110,27 +176,46 @@ the no-DB contract intact:
 So the check reads config, never the database. Note `rules/live_surface_boundary.py`
 (B3) is an *import-boundary* guard and cannot be extended for this.
 
-## Options for the owner
+## Options for the owner (revised after the trustworthiness finding)
 
-**A -- Structured fingerprint field + RS1 enforcement (the real fix).**
-Detects the wrong-DB case. Costs a breaking schema change and a migration this
-repo cannot fully perform (downstream repos). Recommend pairing with a
-grandfather ruling: records without the field report a caveat, not a failure,
-until a stated date.
+The original A/B/C framing was wrong because it treated "add the field" as the
+hard part. The real axis is *who writes it*.
 
-**B -- Non-blocking caveat only (no schema change).**
-`next`/`status` always emit a caveat stating that stage evidence carries no
-machine-checkable DB provenance. Honest and non-breaking, but it does **not**
-detect the reporter's case -- it warns on every table equally, which risks being
-tuned out. Strictly a stopgap.
+**A1 -- Hand-authored provenance field. REJECT.**
+Add the field, document it, let the skills fill it. Cheap, additive, no
+migration -- and worthless: the only writers are agents editing YAML, so the
+digest is forgeable from `.env` without touching a database. This would let a
+table claim machine-checked provenance it never earned, which is strictly worse
+than today's honest silence. **Recommend against.**
 
-**C -- Do nothing, document the limitation.**
-Cheapest. Leaves an agent or analyst able to read `terminal_pass` for a database
-that has none of the claimed objects, which is the specific trust failure the
-readiness gate exists to prevent.
+**A2 -- Machine-written provenance, server-echoed (the real fix).**
+Wire `validate.py` (the code that already connects) through the built-but-unwired
+`readiness_evidence.py` to persist a digest of `select current_database()` at the
+moment findings were produced; have `next`/`status` compare that against the
+configured DSN and downgrade with a named blocker on mismatch. Use the
+`source_kind` shape: optional field, gate fires only when present, zero
+migration, no output-schema change. Optionally also stop `dbt/redaction.py`
+discarding the digest it already holds. **Cost is in the writer, not the field.**
 
-**Recommendation:** A, gated behind a grandfather ruling, with B's caveat shipped
-first as the interim signal. B alone should not be treated as closing #485.
+**B -- Non-blocking caveat only.**
+`next`/`status` always state that stage evidence carries no machine-checkable DB
+provenance. Honest and cheap, but warns identically on every table, so it will be
+tuned out and does not detect the reporter's case. Useful as an interim signal
+*alongside* A2, not as a resolution.
+
+**C -- Document the limitation, change nothing.**
+Leaves an agent or analyst able to read `terminal_pass` for a database that has
+none of the claimed objects -- the specific trust failure the gate exists to
+prevent.
+
+**Recommendation: A2, with B shipped first as the interim signal.** Explicitly
+reject A1 -- if A2's writer is not built, prefer B's honest silence over a field
+that can be typed. Neither B nor C should be treated as closing #485.
+
+**Sequencing note:** A2 is a genuine feature with a live-connection write path,
+not a bug fix. It wants its own spec and an owner decision on whether `validate`
+may write a committed artifact at all (today it deliberately writes nothing).
+That is the one question to settle before any code.
 
 ## Why this is the third instance of one seam
 
@@ -145,9 +230,18 @@ trusted for what it *asserts*, never qualified by *where it came from*.
   no field exists to answer it)
 
 Each fix adds a *qualifier* to a fail-closed gate, and adding a qualifier can flip
-currently-passing states. That is why #487's tightening was safe (a census proved
-every committed entry already used `at:`) and why #485's is not (no committed
-record carries provenance at all, so every one of them would newly fail).
+currently-passing states. #487's tightening was safe because a census proved every
+committed entry already used `at:`. #485 differs in kind: no committed record
+carries provenance at all, so the qualifier cannot be *required* -- it has to fire
+only when present (the `source_kind` shape), which is why the migration cost
+initially attributed to it does not actually apply.
+
+The sharper lesson from #485 is one the other two did not raise: **a qualifier is
+only worth adding if the party being qualified cannot author it.** #487's `at:` is
+weakly self-authored but harmless (a wrong date does not fake a database), and
+#486's predicate reads immutable repo facts. #485's provenance is the first
+qualifier where the writer's honesty is the entire question -- which is why A1 is
+rejected and A2 needs a spec.
 
 ## Governance
 
