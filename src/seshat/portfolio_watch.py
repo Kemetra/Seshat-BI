@@ -575,25 +575,39 @@ def _dagster_run_states(
         if stale
         else ("verified" if summary.get("run_status") == "succeeded" else "failed")
     )
+    if stale:
+        return run_state, "stale"
+    return run_state, _live_state_for_run(root, mapping_scope, summary, records)
+
+
+def _live_state_for_run(
+    root: Path,
+    mapping_scope: str,
+    summary: dict[str, Any],
+    records: list[dict[str, Any]],
+) -> str:
+    """The live-validation state of one already-selected, non-stale run.
+
+    Split out of ``_dagster_run_states`` so the committed-record requirement
+    (#493) reads as its own decision rather than another nested branch.
+    """
     live_rows = [
         row
         for row in records
         if row.get("table") == mapping_scope and row.get("asset") == "live_validate"
     ]
-    if stale:
-        return run_state, "stale"
     if not live_rows:
-        return run_state, "pending_live"
+        return "pending_live"
     outcome = live_rows[-1].get("outcome")
-    if outcome == "materialized":
-        # `verified` is the state that silences the live-profile caveat, so it
-        # must rest on the committed record, not the git-ignored scratch (#493).
-        if not _committed_evidence_agrees(root, summary, records):
-            return run_state, STATE_UNCOMMITTED_EVIDENCE
-        return run_state, "verified"
-    if outcome == "deferred" or outcome == "skipped":
-        return run_state, "pending_live"
-    return run_state, "blocked"
+    if outcome in {"deferred", "skipped"}:
+        return "pending_live"
+    if outcome != "materialized":
+        return "blocked"
+    # `verified` is the state that silences the live-profile caveat, so it must
+    # rest on the committed record, not the git-ignored scratch (#493).
+    if _committed_evidence_agrees(root, summary, records):
+        return "verified"
+    return STATE_UNCOMMITTED_EVIDENCE
 
 
 def live_validation_state(repo_root: Path | str, mapping_scope: str) -> str:
