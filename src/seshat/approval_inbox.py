@@ -87,8 +87,16 @@ def _stage_approvals(approvals: object, stage_name: str) -> list[dict[str, Any]]
 
 
 def _valid_stage_approval(approvals: object, stage_name: str) -> bool:
+    """Whether ``stage_name`` carries a shape-valid approval.
+
+    Delegates to the one shared definition so the inbox cannot bless an entry
+    that ``seshat check`` rejects -- e.g. one keyed ``date:`` instead of ``at:``
+    (issue #487).
+    """
+    from seshat.rules.readiness_status import approval_is_shape_valid
+
     return any(
-        _valid_owner(item.get("owner"))
+        approval_is_shape_valid(item)
         for item in _stage_approvals(approvals, stage_name)
     )
 
@@ -155,8 +163,16 @@ def _blocked_approval_item(
 def _missing_approval_item(
     item: dict[str, Any], blockers: list[str], invalid_owners: list[str]
 ) -> dict[str, Any]:
+    from seshat.rules.readiness_status import APPROVAL_SHAPE_HINT
+
     issue = "invalid_approval" if invalid_owners else "missing_approval"
-    detail = f"stage {item['stage']!r} is pass but no shape-valid approval is recorded"
+    # Naming the shape here is the whole fix for issue #487: "no shape-valid
+    # approval is recorded" told the reader a shape existed but never what it was,
+    # so it had to be reverse-engineered from this module's source.
+    detail = (
+        f"stage {item['stage']!r} is pass but no shape-valid approval is "
+        f"recorded; {APPROVAL_SHAPE_HINT}"
+    )
     return _with_issue(
         item,
         issue,

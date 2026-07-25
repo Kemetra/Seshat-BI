@@ -16,6 +16,7 @@ import pytest
 
 from seshat.core import RuleContext, Severity
 from seshat.doctor import collect_findings, run_doctor
+from tests.unit._gitfix import make_kit_self_repo
 
 pytestmark = pytest.mark.unit
 
@@ -23,7 +24,13 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _bootstrap(repo: Path) -> None:
-    """Make `repo` kit-bootstrapped (seed + compass) so KIT_SELF checks run."""
+    """Make `repo` look like the KIT ITSELF so the KIT_SELF checks run.
+
+    Substrate (seed + compass) alone is no longer enough, and must not be: `seshat
+    init` writes it into consumer repos too, so keying the tier on it fired 10 hard
+    errors on the golden path (issue #486). The kit-identity markers are what
+    activate the tier now.
+    """
     (repo / ".seshat").mkdir(parents=True, exist_ok=True)
     shutil.copyfile(
         _REPO_ROOT / ".seshat" / "kit-source.yaml", repo / ".seshat" / "kit-source.yaml"
@@ -31,6 +38,7 @@ def _bootstrap(repo: Path) -> None:
     shutil.copyfile(
         _REPO_ROOT / ".seshat" / "compass.yaml", repo / ".seshat" / "compass.yaml"
     )
+    make_kit_self_repo(repo)
 
 
 # ---------------------------------------------------------------------------

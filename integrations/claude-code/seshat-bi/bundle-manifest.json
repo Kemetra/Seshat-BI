@@ -1776,10 +1776,10 @@
     {
       "classification": "generated_wrapper",
       "destination": "portable-operating-contract.md",
-      "output_sha256": "d41f64e8c36378aafa43eebb66faac022e797a6a117bac62d716db641770e3ef",
+      "output_sha256": "4ceee84006e378a21317aed6d12d767c3df5b4f599dd880172acc3ed7174043d",
       "source": "distribution/bundle-templates/shared/portable-operating-contract.md",
       "source_id": "portable-contract",
-      "source_sha256": "d41f64e8c36378aafa43eebb66faac022e797a6a117bac62d716db641770e3ef",
+      "source_sha256": "4ceee84006e378a21317aed6d12d767c3df5b4f599dd880172acc3ed7174043d",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1946,10 +1946,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "72ab724c48d1a231b5d369ab928338a609f9a9f5db6907dd443dc0c5748cadf9",
+  "manifest_digest": "cd45b1473f09f38034a6962fbca4c742c73f379d6e496df8fa3ac54039d728a7",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "d5b216c0081a3a26f7d971df2c96bbd56daced67",
+  "source_revision": "f803c0257a3b11aefd4085847b67ccf58b0207c3",
   "target": "claude",
   "version": "0.7.1"
 }

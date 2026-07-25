@@ -196,13 +196,14 @@ class GovernorService:
         )
 
     def _static_check(self, request: dict[str, Any]) -> dict[str, Any]:
-        from seshat.kit_lint import is_bootstrapped
+        from seshat.kit_lint import is_kit_self_repo
         from seshat.registry import all_rules
         from seshat.runner import build_context, collect_findings
 
         ctx = build_context(self.root)
+        # KIT_SELF rules key on kit identity, not substrate presence (issue #486).
         findings = collect_findings(
-            all_rules(), ctx, bootstrapped=is_bootstrapped(self.root)
+            all_rules(), ctx, bootstrapped=is_kit_self_repo(self.root)
         )
         body = [finding.to_dict() for finding in findings]
         blocking = [item for item in body if item["severity"] == "error"]

@@ -206,10 +206,16 @@ def _next_allowed_action(response: dict[str, Any]) -> str:
             "blocking_reasons before any other pipeline work."
         )
     if outcome == "approval_required":
+        from seshat.rules.readiness_status import APPROVAL_SHAPE_HINT
+
         authority = response.get("required_authority") or "named human"
+        # Name the shape the gate requires (issue #487). This is guidance for the
+        # HUMAN who will decide -- it does not soften the gate, and the
+        # never-self-grant instruction stays first.
         return (
             f"STOP -- obtain the named-human approval ({authority}) for "
-            f"stage {stage!r}; never self-grant it."
+            f"stage {stage!r}; never self-grant it. Once that human has "
+            f"decided, {APPROVAL_SHAPE_HINT}."
         )
     if outcome == "terminal_pass":
         return "No pipeline action: all seven readiness stages pass for this table."

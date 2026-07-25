@@ -56,13 +56,71 @@ class LintReport:
 def is_bootstrapped(repo: Path) -> bool:
     """True once ``repo`` has a kit source + a compass projection.
 
-    Public since Spec A: the CLI check path and the generators (Spec C) reuse this
-    single predicate to decide whether a repo is the kit itself (run everything) or
-    a repo the kit was merely downloaded into (KIT_SELF rules skip; generators refuse).
+    This means "the kit substrate is installed HERE" -- nothing more. It is the
+    right predicate for the kit-lint drift checks below (there is a projection to
+    reconcile) and for the generators (Spec C).
+
+    It is deliberately NOT the predicate for the KIT_SELF rule tier: ``seshat
+    init`` (``kit_init.bootstrap`` + ``compass_project.seed_kit_source``) writes
+    exactly these two files into ANY repo the kit was installed into, so
+    substrate presence cannot distinguish the kit from its consumers. Use
+    ``is_kit_self_repo`` for that (issue #486).
     """
     return (repo / compass_project.SOURCE_REL).exists() and (
         repo / compass_project.COMPASS_REL
     ).exists()
+
+
+# The kit's own distribution name, as declared in its pyproject.
+_KIT_DIST_NAME = "seshat-bi"
+_KIT_PACKAGE_REL = "src/seshat/__init__.py"
+_PYPROJECT_REL = "pyproject.toml"
+
+
+def is_kit_self_repo(repo: Path) -> bool:
+    """True only for the kit's OWN source repo -- the ``seshat-bi`` distribution.
+
+    The KIT_SELF rule tier checks the kit's own internal manifests
+    (``docs/routing/routes.yaml``, ``docs/quality/status-claims.yaml``, the KPI
+    domain corpus, ...). Those are files only the kit's own repo has, and which a
+    consumer workspace "never has and must never fabricate" (FR-004, recorded in
+    ``workspace_init``'s spike note). So the tier must key on kit IDENTITY, not on
+    substrate presence.
+
+    Identity = the repo carries the kit's own package source AND declares itself
+    as the ``seshat-bi`` distribution. Neither ``seshat init``, ``init-project``,
+    nor ``seed_kit_source`` ever writes ``pyproject.toml`` or ``src/seshat/``, so
+    no supported setup flow can make a consumer repo satisfy this (issue #486:
+    ``is_bootstrapped`` could, which fired 10 hard errors on the golden path).
+    """
+    if not (repo / _KIT_PACKAGE_REL).exists():
+        return False
+    pyproject = repo / _PYPROJECT_REL
+    try:
+        text = pyproject.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return False
+    return _declares_kit_distribution(text)
+
+
+def _declares_kit_distribution(pyproject_text: str) -> bool:
+    """True when ``pyproject_text`` declares ``name = "seshat-bi"``.
+
+    Text-scanned rather than TOML-parsed: this runs on every ``check`` and must
+    never raise on a malformed or partially written pyproject -- an unreadable
+    manifest simply means "not provably the kit", which fails safe toward the
+    consumer-repo behavior (rules skip rather than error).
+    """
+    for raw_line in pyproject_text.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("name"):
+            continue
+        key, _, value = line.partition("=")
+        if key.strip() != "name":
+            continue
+        if value.strip().strip("\"'") == _KIT_DIST_NAME:
+            return True
+    return False
 
 
 # Back-compat alias for internal callers/tests that referenced the private name.
