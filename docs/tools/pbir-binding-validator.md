@@ -14,6 +14,11 @@ pass this check and still fail to open in Desktop (issue #494). Full-fidelity TM
 validation needs the Tabular/`TmdlSerializer` path that ADR 0001 deliberately
 excluded to keep this offline and headless.
 
+[`seshat tmdl-doc-comment-lint`](tmdl-doc-comment-lint.md) covers **one** TMDL
+mistake in that class — a `///` block followed by a blank line. It is not a TMDL
+syntax validator either, so running both still leaves TMDL loadability
+unverified; #494's broader gap remains open.
+
 ```
 seshat pbir-validate-bindings --report <path/to/X.Report> --model <path/to/X.SemanticModel>
 ```

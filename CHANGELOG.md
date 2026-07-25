@@ -27,6 +27,23 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+### Added
+- `seshat tmdl-doc-comment-lint` -- an offline, read-only lint for **one** TMDL
+  rule: a `///` documentation block must be followed by a declaration, never a
+  blank line and never EOF. An unattached block makes Power BI Desktop reject the
+  whole project (`InvalidLineType` / `Unexpected line type: Empty!` ->
+  `DataModelLoadFailed`), and no existing check saw it -- `pbir-validate-bindings`
+  emitted byte-identical output before and after the defect, and `parse_tmdl` is
+  an extractor that tolerates unrecognized lines. Walks the entire
+  `definition/**/*.tmdl` tree (the reported defect was in
+  `definition/relationships.tmdl`, which a `tables/`-only walk misses),
+  BOM-tolerant, fails closed on a missing/empty/unreadable input, grants no
+  approval. Deliberately narrow and deliberately **not** named as a TMDL
+  validator: it is NOT a TMDL syntax validator, and a pass does NOT mean the
+  model loads in Desktop. ADR 0001's headless exclusion of the
+  `TmdlSerializer`/TOM path is untouched (pure stdlib text reading), so issue
+  #494's broader TMDL-validation gap remains open (partial fix for #494).
+
 ## [0.7.1] -- 2026-07-24
 
 ### Fixed

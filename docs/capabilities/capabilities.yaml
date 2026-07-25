@@ -408,6 +408,22 @@ capabilities:
       skill: "powerbi-dashboard-design"
       roadmap: "issue #454"
 
+  - id: tmdl-doc-comment-lint
+    name: "seshat tmdl-doc-comment-lint"
+    summary: "Read-only: checks ONE TMDL rule across a semantic model's definition/**/*.tmdl -- that every /// documentation block is followed by a declaration, never a blank line and never EOF (an unattached block makes Power BI Desktop reject the whole project with InvalidLineType/DataModelLoadFailed). Deliberately NOT a TMDL syntax validator and named so it cannot be read as one: a pass means only that this one rule holds, NOT that the TMDL is valid or that Desktop can load the model. Fails closed on a missing model dir, no TMDL found, or an unreadable file; pure stdlib text reading, so ADR 0001's headless boundary (no Desktop, no .NET, no network) is untouched; grants no approval."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: semantic_model_ready
+    command: "tmdl-doc-comment-lint"
+    documentation: "docs/tools/tmdl-doc-comment-lint.md"
+    references:
+      dispatch: "tmdl-doc-comment-lint"
+      skill: "powerbi-dashboard-design"
+      roadmap: "issue #494"
+
   - id: narrative-check
     name: "seshat narrative-check"
     summary: "Read-only: validates a committed mappings/<table>/narrative-brief.md against the frozen seshat.narrative-brief/v1 schema (grounded-only cites, fresh contract-revision shas, story-order coverage + stage-match + non-empty overview, headline comparison, guardrail basis, [GAP]-not-framed); fails closed on a missing/unreadable/malformed brief; emits named categorical findings and grants no approval. Phase B adds --binding-map (design-stage, opt-in): checks the three-way visual->contract->decision-question map at mappings/<table>/design/visual-contract-binding-map.md against seshat.binding-map/v1 -- orphan visual in EITHER direction (a visual whose contract is missing/undeclared, or whose decision-question is missing/undeclared -- FR-005), unanswered brief question (a decision-question no visual answers -- FR-005), page-serves-no-decision (coverage), bare-total headline visual (a headline answering no overview question, FR-006); same fail-closed posture on a missing/malformed map or an absent referenced brief."

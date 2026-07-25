@@ -633,6 +633,44 @@ def _add_pbir_validate_bindings_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_tmdl_doc_comment_lint_parser(sub: argparse._SubParsersAction) -> None:
+    """ONE TMDL lint rule, deliberately narrow (#494): a `///` documentation
+    block must be followed by a declaration, never a blank line and never EOF.
+    An unattached block makes Power BI Desktop reject the WHOLE project
+    (`InvalidLineType / Unexpected line type: Empty!` -> `DataModelLoadFailed`),
+    and no existing check sees it -- `pbir-validate-bindings` resolves bindings
+    against TMDL it has already parsed as data, and `parse_tmdl` is an extractor
+    that tolerates unrecognized lines.
+
+    NOT a TMDL syntax validator, and named so it cannot be read as one. It
+    checks one rule; a pass is NOT clearance to open Desktop. Full-fidelity TMDL
+    validation needs the TmdlSerializer/TOM path ADR 0001 deliberately excluded
+    to keep this headless -- that boundary is untouched, this lint is pure
+    stdlib text reading. Read-only; exits non-zero on any finding or
+    fail-closed input; grants NO approval."""
+    doclint = sub.add_parser(
+        "tmdl-doc-comment-lint",
+        help=(
+            "check ONE rule: a TMDL /// block attaches to a declaration, never a "
+            "blank line (NOT a TMDL syntax validator; grants no approval)"
+        ),
+        description=(
+            "Exit 0 = every /// documentation block in the scanned files is "
+            "followed by a non-blank line. That is the ONLY thing checked: this "
+            "is NOT a TMDL syntax validator, and exit 0 does NOT mean the TMDL "
+            "is valid or that Power BI Desktop can load the model. Exit 1 = an "
+            "unattached /// block, or a fail-closed input problem (missing "
+            "model dir, no TMDL found, unreadable file)."
+        ),
+    )
+    doclint.add_argument(
+        "--model",
+        required=True,
+        metavar="DIR",
+        help="the *.SemanticModel/ dir whose definition/**/*.tmdl to lint",
+    )
+
+
 def _add_narrative_check_parser(sub: argparse._SubParsersAction) -> None:
     """Read-only narrative-brief checker (spec 021). The same check-surface
     precedent as `pbir-validate-bindings` (it POLICES an artifact a writer --
@@ -844,6 +882,7 @@ def _build_parser(prog: str = "retail") -> argparse.ArgumentParser:
     _add_pbir_geometry_parser(sub)
     _add_pbir_validate_blueprint_parser(sub)
     _add_pbir_validate_bindings_parser(sub)
+    _add_tmdl_doc_comment_lint_parser(sub)
     _add_narrative_check_parser(sub)
     _add_manifest_parser(sub)
     _add_severity_posture_parser(sub)
