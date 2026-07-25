@@ -260,12 +260,30 @@ def _live_validation_next_override(
     }
     if entry is None or not (terminal_pass or post_gold_stage):
         return None
-    from seshat.portfolio_watch import live_validation_state
+    from seshat.portfolio_watch import (
+        STATE_UNCOMMITTED_EVIDENCE,
+        live_validation_state,
+    )
 
     scope_dir = _dir_name(entry["source_path"])
     live_state = live_validation_state(root, scope_dir)
     if live_state == "verified":
         return None
+    if live_state == STATE_UNCOMMITTED_EVIDENCE:
+        # The run succeeded, but its only record is the git-ignored
+        # .seshat/dagster/runs/ scratch. An untracked machine-local file must not
+        # silence this caveat on a surface someone else reads as authoritative
+        # (issue #493) -- so the caveat is DOWNGRADED, not silenced, and names
+        # exactly why the supporting evidence is unreviewable.
+        return (
+            "CAUTION -- live validation passed locally, but the supporting "
+            "evidence is machine-local and unreviewable: it exists only under "
+            "the git-ignored `.seshat/dagster/runs/`, with no matching committed "
+            "`orchestration/dagster/run-evidence/<run-id>.md`. Run `seshat "
+            "dagster evidence --run-id <run-id>` and commit the rendered record "
+            "before treating this table as live-validated for anyone but "
+            "yourself."
+        )
     if live_state in {"stale", "blocked"}:
         return (
             f"STOP -- live validation evidence is {live_state}. Re-run `retail "

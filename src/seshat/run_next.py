@@ -354,6 +354,34 @@ def _provenance_caveat(stage_name: str) -> dict[str, str]:
     }
 
 
+def provenance_caveat_for_stages(stages: object) -> dict[str, str] | None:
+    """The #485 provenance caveat for a projected `stages` mapping, or ``None``.
+
+    ONE wording for ONE condition, shared with every surface that reports it --
+    `next` (via ``_add_provenance_caveat``) and the human-readable
+    `status --format text` render. Two surfaces drifting into two sentences for
+    one condition is exactly #487's failure mode, so both call this.
+
+    Fires for the FIRST live-materialization stage recorded ``pass`` -- at most
+    once, because one caveat per table reads as a fact about the table while one
+    per stage reads as noise.
+
+    `status --format json` deliberately does NOT carry it: that projection is
+    verbatim-only by contract (``status_surface`` docstring) and its schema
+    (``schemas/agent-status.schema.json``) is closed, so a DERIVED field has no
+    honest home there. That named limit is part of why #485 stays open.
+    """
+    if not isinstance(stages, dict):
+        return None
+    for stage_name in _STAGE_ORDER:
+        if stage_name not in _LIVE_MATERIALIZATION_STAGES:
+            continue
+        block = stages.get(stage_name)
+        if isinstance(block, dict) and block.get("status") == "pass":
+            return _provenance_caveat(stage_name)
+    return None
+
+
 def _add_provenance_caveat(caveats: list[dict[str, str]], stage_name: str) -> None:
     """Append the provenance caveat at most once per table, naming the first
     live-materialization stage that raised it -- one caveat per table reads as a

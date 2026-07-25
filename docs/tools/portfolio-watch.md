@@ -42,8 +42,17 @@ are evidence context, not a readiness score or new gate:
 - `contract_binding_state`: `missing`, `blocked`, or `verified`, based on the
   approved metric-contract inventory, model binding, and a clean recorded
   semantic-drift result. A blocked binding names the **metric owner**.
-- `live_validation_state`: `pending_live`, `blocked`, `stale`, or `verified`.
-  A missing live proof remains `pending_live`; it never reads as a pass.
+- `live_validation_state`: `pending_live`, `blocked`, `stale`,
+  `uncommitted_evidence`, or `verified`. A missing live proof remains
+  `pending_live`; it never reads as a pass. `uncommitted_evidence` means the
+  live run succeeded but its only record is the git-ignored
+  `.seshat/dagster/runs/` scratch, with no matching committed
+  `orchestration/dagster/run-evidence/<run-id>.md` -- reviewable evidence is
+  missing, not the connection, so the fix is `seshat dagster evidence --run-id
+  <run-id>` plus a commit (issue #493). `verified` requires BOTH the committed
+  record AND every existing scratch check (commit sha, workspace-dirty, and the
+  per-input SHA-256 digests); the committed markdown records only a count of
+  input artifacts, so it can never grant `verified` on its own.
 - `last_dagster_run`: `unavailable`, `invalid`, `failed`, `stale`, or
   `verified`, after raw evidence verification and input/revision comparison.
 

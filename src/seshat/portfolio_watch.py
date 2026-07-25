@@ -127,7 +127,24 @@ DIMENSIONS: tuple[str, ...] = (
 )
 
 CONTRACT_BINDING_STATES = frozenset({"missing", "blocked", "verified"})
-LIVE_VALIDATION_STATES = frozenset({"pending_live", "blocked", "stale", "verified"})
+
+# A succeeded live run whose ONLY record is the git-ignored
+# `.seshat/dagster/runs/` scratch, with no matching committed
+# `orchestration/dagster/run-evidence/<run-id>.md`. Distinct from
+# `pending_live` on purpose: validation DID run, so telling the reader to
+# install the db extra would be false -- what is missing is the reviewable
+# record, not the connection (issue #493).
+STATE_UNCOMMITTED_EVIDENCE = "uncommitted_evidence"
+
+LIVE_VALIDATION_STATES = frozenset(
+    {
+        "pending_live",
+        "blocked",
+        "stale",
+        STATE_UNCOMMITTED_EVIDENCE,
+        "verified",
+    }
+)
 LAST_DAGSTER_RUN_STATES = frozenset(
     {"unavailable", "invalid", "failed", "stale", "verified"}
 )
@@ -476,6 +493,45 @@ def _run_inputs_are_stale(root: Path, summary: dict[str, Any]) -> bool:
     return False
 
 
+def _committed_evidence_agrees(
+    root: Path, summary: dict[str, Any], records: list[dict[str, Any]]
+) -> bool:
+    """Whether the COMMITTED run record reproduces this run's raw records.
+
+    ``.seshat/dagster/runs/`` is git-ignored scratch (``.gitignore:111``); the
+    reviewable record is ``orchestration/dagster/run-evidence/<run-id>.md``. A
+    ``verified`` live state SILENCES the ``[PENDING LIVE PROFILE]`` caveat on a
+    shared read-only surface, so it must rest on the committed, reviewable file
+    -- not on an untracked local artifact (issue #493).
+
+    The committed markdown is checked for byte-agreement (newline-normalized)
+    with what this run's raw records render to. Agreement means the committed
+    file is what a reviewer would read; the scratch may then only NARROW the
+    state (via the existing staleness/outcome checks), never widen it. The
+    committed record alone cannot grant ``verified``: ``render_markdown``
+    records only a COUNT of ``input_artifacts``, not the per-file digests
+    ``_run_inputs_are_stale`` compares, so deriving the state from the markdown
+    alone would silently weaken the staleness check.
+    """
+    from .dagster_adapter.evidence_render import evidence_out_path, render_markdown
+
+    try:
+        committed = evidence_out_path(root, summary["run_id"])
+    except (KeyError, ValueError):
+        return False
+    if not committed.is_file():
+        return False
+    try:
+        recorded = committed.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    try:
+        rendered = render_markdown(summary, records)
+    except (KeyError, ValueError):
+        return False
+    return recorded.replace("\r\n", "\n").rstrip("\n") == rendered.rstrip("\n")
+
+
 def _dagster_run_states(
     root: Path, mapping_scope: str, source_revision: str | None
 ) -> tuple[str, str]:
@@ -530,6 +586,10 @@ def _dagster_run_states(
         return run_state, "pending_live"
     outcome = live_rows[-1].get("outcome")
     if outcome == "materialized":
+        # `verified` is the state that silences the live-profile caveat, so it
+        # must rest on the committed record, not the git-ignored scratch (#493).
+        if not _committed_evidence_agrees(root, summary, records):
+            return run_state, STATE_UNCOMMITTED_EVIDENCE
         return run_state, "verified"
     if outcome == "deferred" or outcome == "skipped":
         return run_state, "pending_live"
