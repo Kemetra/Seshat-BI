@@ -235,6 +235,137 @@ def test_correctly_shaped_approval_still_satisfies_both_surfaces(
     assert build_run_next_response(tmp_path, "orders")["outcome"] != "approval_required"
 
 
+# ---------------------------------------------------------------------------
+# #485 (interim) -- say out loud that live evidence carries no DB provenance
+# ---------------------------------------------------------------------------
+
+_ALL_PASS_APPROVED = """\
+table: "silver.orders"
+stages:
+  source_ready: {status: "pass", evidence: ["profile"]}
+  mapping_ready: {status: "pass", evidence: ["map"]}
+  silver_ready:
+    status: "pass"
+    evidence: ["0003_create_silver_orders.sql applied to training; 12,575 rows"]
+  gold_ready: {status: "pass", evidence: ["0004_gold.sql", "validate exit 0"]}
+  semantic_model_ready: {status: "pass", evidence: ["powerbi/Orders"]}
+  dashboard_ready: {status: "pass", evidence: ["report.json"]}
+  publish_ready: {status: "pass", evidence: ["published"]}
+approvals:
+  - stage: mapping_ready
+    owner: "Ada Lovelace (analyst)"
+    at: "2026-07-01"
+  - stage: semantic_model_ready
+    owner: "Ada Lovelace (metric_owner)"
+    at: "2026-07-01"
+  - stage: dashboard_ready
+    owner: "Ada Lovelace (governance)"
+    at: "2026-07-01"
+  - stage: publish_ready
+    owner: "Ada Lovelace (data_owner)"
+    at: "2026-07-01"
+last_checked_at: "2026-07-02"
+"""
+
+_EARLY_STAGES_ONLY = """\
+table: "silver.orders"
+stages:
+  source_ready: {status: "pass", evidence: ["profile"]}
+  mapping_ready: {status: "not_started"}
+  silver_ready: {status: "not_started"}
+  gold_ready: {status: "not_started"}
+  semantic_model_ready: {status: "not_started"}
+  dashboard_ready: {status: "not_started"}
+  publish_ready: {status: "not_started"}
+approvals: []
+"""
+
+_PROVENANCE_KIND = "unverified_db_provenance"
+
+
+def _caveat_kinds(response: dict) -> list[str]:
+    return [c.get("kind") for c in response.get("caveats", [])]
+
+
+def test_terminal_pass_says_its_live_evidence_has_no_db_provenance(
+    tmp_path: Path,
+) -> None:
+    """Issue #485 interim: terminal_pass was reported with `caveats: []`.
+
+    The reporter's case -- evidence earned against database "Ex-1", `.env` since
+    repointed at a different database -- produced a fully green report with no
+    indication anything was unverifiable. Until provenance can be captured
+    mechanically, the surface must at least SAY that it cannot correlate.
+    """
+    from seshat.run_next import build_run_next_response
+
+    _write_status(tmp_path, "orders", _ALL_PASS_APPROVED)
+
+    response = build_run_next_response(tmp_path, "orders")
+
+    assert response["outcome"] == "terminal_pass"
+    assert _PROVENANCE_KIND in _caveat_kinds(response)
+
+
+def test_provenance_caveat_is_non_blocking(tmp_path: Path) -> None:
+    """It must not flip a passing table to blocked -- it is a caveat, not a gate.
+
+    Adding a *blocking* provenance check would fail every committed record at
+    once, since none carries provenance today.
+    """
+    from seshat.run_next import build_run_next_response
+
+    _write_status(tmp_path, "orders", _ALL_PASS_APPROVED)
+
+    response = build_run_next_response(tmp_path, "orders")
+
+    assert response["outcome"] == "terminal_pass"
+    assert response["stage"] is None
+
+
+def test_provenance_caveat_is_targeted_not_blanket(tmp_path: Path) -> None:
+    """It fires only for stages whose evidence asserts live warehouse objects.
+
+    A blanket caveat on every table at every stage would be tuned out. A table
+    that has not built silver/gold has made no database-dependent claim yet, so
+    there is nothing to qualify.
+    """
+    from seshat.run_next import build_run_next_response
+
+    _write_status(tmp_path, "orders", _EARLY_STAGES_ONLY)
+
+    response = build_run_next_response(tmp_path, "orders")
+
+    assert _PROVENANCE_KIND not in _caveat_kinds(response)
+
+
+def test_provenance_caveat_names_the_dsn_env_vars(tmp_path: Path) -> None:
+    """The caveat has to be actionable: say what could not be compared."""
+    from seshat.run_next import build_run_next_response
+
+    _write_status(tmp_path, "orders", _ALL_PASS_APPROVED)
+
+    detail = next(
+        c["detail"]
+        for c in build_run_next_response(tmp_path, "orders")["caveats"]
+        if c["kind"] == _PROVENANCE_KIND
+    )
+
+    assert "silver_ready" in detail or "gold_ready" in detail
+    assert "database" in detail.lower()
+
+
+def test_agent_document_carries_the_provenance_caveat(tmp_path: Path) -> None:
+    """The agent surface is the one an agent trusts -- it must carry it too."""
+    from seshat.agent_next import build_agent_next_document
+
+    _write_status(tmp_path, "orders", _ALL_PASS_APPROVED)
+
+    document = build_agent_next_document(tmp_path, "orders")
+
+    assert _PROVENANCE_KIND in [c.get("kind") for c in document.get("caveats", [])]
+
+
 def test_template_documents_every_authority_class_the_code_accepts() -> None:
     """The template listed four classes; the code accepts five (report_owner).
 

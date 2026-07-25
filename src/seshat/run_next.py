@@ -320,6 +320,51 @@ def _warning_caveat(stage_name: str) -> dict[str, str]:
     }
 
 
+# Stages whose `pass` evidence asserts that objects EXIST IN A SPECIFIC DATABASE
+# ("migration applied to ..."). Deliberately narrow: source/mapping are profile
+# and decision work, and semantic-model/dashboard evidence is files on disk, so
+# none of those makes a database-dependent claim worth qualifying here.
+_LIVE_MATERIALIZATION_STAGES: frozenset[str] = frozenset({"silver_ready", "gold_ready"})
+_PROVENANCE_CAVEAT_KIND = "unverified_db_provenance"
+
+
+def _provenance_caveat(stage_name: str) -> dict[str, str]:
+    """Interim #485 signal: this surface cannot tell WHICH database earned this.
+
+    `readiness-status.yaml` records no structured live-DB identity -- database
+    names appear only as prose inside `evidence[]` -- and this module reads no
+    DSN and opens no connection by contract. So a table whose silver/gold
+    evidence was earned against one database still reports `pass` verbatim after
+    the configured DSN is repointed at another (issue #485).
+
+    A caveat, never a blocker: no committed record carries provenance today, so
+    enforcing it would fail every table at once. It states the limit rather than
+    implying a correlation that did not happen. The real fix is to capture the
+    identity mechanically at connect time -- see
+    docs/superpowers/specs/2026-07-25-live-db-provenance-design.md (option A2).
+    """
+    return {
+        "kind": _PROVENANCE_CAVEAT_KIND,
+        "detail": (
+            f"stage {stage_name!r} is pass, but its evidence records no "
+            "machine-checkable database identity, so it cannot be correlated "
+            "with the currently configured connection; confirm this evidence "
+            "was earned against the database you are now pointed at"
+        ),
+    }
+
+
+def _add_provenance_caveat(caveats: list[dict[str, str]], stage_name: str) -> None:
+    """Append the provenance caveat at most once per table, naming the first
+    live-materialization stage that raised it -- one caveat per table reads as a
+    fact about the table; one per stage reads as noise."""
+    if stage_name not in _LIVE_MATERIALIZATION_STAGES:
+        return
+    if any(c.get("kind") == _PROVENANCE_CAVEAT_KIND for c in caveats):
+        return
+    caveats.append(_provenance_caveat(stage_name))
+
+
 def _blocked_response(
     table: str, stage_name: str, block: dict[str, Any], stages: dict[str, object]
 ) -> dict[str, Any]:
@@ -366,6 +411,7 @@ def _pass_stage_result(
     caveat = _evidence_caveat(stage_name, block)
     if caveat is not None:
         caveats.append(caveat)
+    _add_provenance_caveat(caveats, stage_name)
     if not _approval_missing(stage_name, block, context["approved"]):
         return None
     from seshat.rules.readiness_status import APPROVAL_SHAPE_HINT
