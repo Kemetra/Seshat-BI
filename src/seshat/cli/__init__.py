@@ -315,45 +315,83 @@ def _db_extra_hint(engine: str = "postgres") -> str:
     )
 
 
+# The CONCRETE distributions each optional extra pulls in, mirroring
+# pyproject's [project.optional-dependencies] for the extras whose enable-step
+# this package actually emits (#513).
+#
+# Enumerated rather than read from `importlib.metadata.requires()` at runtime: the
+# emitted hint must be correct for the reader's INSTALLED build, and reading the
+# metadata of a build that is missing the extra tells us what THAT build declares,
+# which is the thing we are trying to add. A literal table is also greppable and
+# cannot fail on a stripped wheel. `_extra_dependency_specs` is the only reader;
+# `tests/unit/test_issue_regression_513_extra_enable.py` pins this table against
+# pyproject so the two cannot drift.
+_EXTRA_DEPENDENCIES: dict[str, tuple[str, ...]] = {
+    "mcp": ("mcp>=1.28,<2",),
+    "dbt": ("dbt-core==1.12.0", "dbt-postgres==1.10.2"),
+}
+
+
+def _extra_dependency_specs(extra: str) -> tuple[str, ...]:
+    """The concrete distributions ``extra`` pulls in, or ``()`` if unknown."""
+    return _EXTRA_DEPENDENCIES.get(extra, ())
+
+
 def _extra_install_hint(extra: str) -> str:
     """Install-path-aware guidance for an OPTIONAL EXTRA OF SESHAT ITSELF (#507).
 
-    A sibling of :func:`_db_extra_hint`, deliberately NOT a generalization of it,
-    because the two remedies are different commands for different things:
+    A sibling of :func:`_db_extra_hint`, and now the SAME SHAPE as it: both name
+    the concrete third-party distributions to add into the existing pipx venv via
+    ``pipx inject``, rather than re-resolving the ``seshat-bi`` distribution.
 
-      * ``_db_extra_hint`` names a THIRD-PARTY DRIVER distribution to add into the
-        existing pipx venv -- ``pipx inject seshat-bi psycopg2-binary``.
-      * an extra is a feature of the ``seshat-bi`` distribution, so it is selected
-        when the app itself is installed: ``pipx install "seshat-bi[mcp]"``. There
-        is no such command as ``pipx inject seshat-bi mcp`` -- ``mcp`` is not a
-        package you inject, it is an extra you resolve.
+    **Why not ``pipx install --force "seshat-bi[mcp]"`` (#513).** That was the
+    previous form, and it is a reinstall of an UNPINNED requirement: ``--force`` is
+    documented as "Modify existing virtual environment", and pipx implements it by
+    re-resolving the given spec from the configured index. So a reader who is not
+    running the current public release -- a release reviewer validating a candidate
+    wheel (``docs/install/user-install.md``: ``pipx install
+    .\\seshat_bi-<version>-py3-none-any.whl``), a pinned install, or a local build
+    -- would have had the build under validation REPLACED by whatever the index
+    serves, silently, as a side effect of enabling an extra.
+
+    Pinning the reinstall (``"seshat-bi[mcp]==<installed>"``) does not fix that: a
+    candidate version is by definition not on the index yet, so the command either
+    fails outright or resolves a DIFFERENT artifact carrying the same version
+    string. ``inject`` avoids the question entirely -- it adds packages to the venv
+    and never re-resolves the app, so the installed Seshat is preserved whatever its
+    provenance. No version needs to be known, which also sidesteps
+    ``_distribution_version()``'s ``0+unknown`` fallback off-package.
+
+    ``--force`` is still passed to ``inject``, for the reason PR #510 identified one
+    level down: without it pipx declines to modify an existing venv. Same form
+    ``commands/dbt.py`` already emits.
 
     Both lanes are named because both are supported: ``pipx`` is the documented
     external-customer lane (``docs/install/user-install.md``,
     ``docs/install/agent-install.md``), where a bare ``pip install`` targets the
     AMBIENT interpreter and so lands the extra somewhere Seshat cannot see it -- or
     is refused outright as externally-managed (PEP 668); ``pip install`` is correct
-    in a plain venv. Sourced from ONE place so the brand + remedy can't drift per
-    command, the same discipline ``_db_extra_hint`` established.
+    in a plain venv, where installing ``seshat-bi[extra]`` is in-place and does not
+    swap the build.
 
     DOUBLE quotes, matching ``docs/install/agent-install.md`` verbatim: ``cmd.exe``
     passes apostrophes through LITERALLY, so ``pip install 'seshat-bi[mcp]'``
     reaches pip as an invalid requirement, and this repo's release lane is Windows
     (the defect class PR #506 fixed for `seshat next`'s guidance).
 
-    ``--force`` is REQUIRED, not decoration (PR #510 review, P2). This hint is only
-    ever reached by a reader who ALREADY has ``seshat`` installed -- that is how
-    they ran the command that failed. On an existing venv, plain ``pipx install``
-    refuses to modify it ("already seems to be installed. Not modifying existing
-    installation ... Pass '--force'") and exits having changed NOTHING, so the
-    extra stays absent and the retry fails identically. ``pipx install --help``
-    documents ``--force`` as "Modify existing virtual environment". The fresh-install
-    form in the install docs is correct for a FIRST install and wrong here; this is
-    an enable-step for an installed app. Mirrors the ``--force`` the dbt remediation
-    hint already uses for the same reason (``commands/dbt.py``, release v0.6).
+    An extra with no known dependency table falls back to the previous
+    ``pipx install --force`` form: an incomplete table must not emit a command that
+    silently does nothing, and every extra this package emits a hint for is listed.
     """
+    specs = _extra_dependency_specs(extra)
+    if not specs:
+        return (
+            f'       pipx install:  pipx install --force "seshat-bi[{extra}]"\n'
+            f'       pip install:   pip install "seshat-bi[{extra}]"'
+        )
+    injected = " ".join(f'"{spec}"' for spec in specs)
     return (
-        f'       pipx install:  pipx install --force "seshat-bi[{extra}]"\n'
+        f"       pipx install:  pipx inject seshat-bi --force {injected}\n"
         f'       pip install:   pip install "seshat-bi[{extra}]"'
     )
 
@@ -543,6 +581,7 @@ __all__ = [
     "_prog",
     "_db_extra_hint",
     "_extra_install_hint",
+    "_extra_dependency_specs",
     "build_context",
     "run",
     "run_json",

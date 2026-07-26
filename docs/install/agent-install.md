@@ -26,6 +26,19 @@ For governed dbt shadow execution, install the pinned optional runtime instead:
 pipx install "seshat-bi[dbt]"
 ```
 
+That form is for a **first** install. To add an extra to a Seshat you have
+**already** installed, inject the extra's dependencies instead of reinstalling:
+
+```text
+pipx inject seshat-bi --force "dbt-core==1.12.0" "dbt-postgres==1.10.2"
+```
+
+`pipx install --force "seshat-bi[dbt]"` would also add the extra, but it
+re-resolves `seshat-bi` itself from the configured index — which replaces a
+pinned, locally built, or release-candidate install with whatever the index
+serves. `pipx inject` adds packages to the existing environment and leaves the
+installed Seshat untouched. This is the form the CLI's own guidance emits.
+
 The agent bundles carry the portable operating contract and reviewed Knowledge
 Bases. A fresh project does not need this development repository, `AGENTS.md`, or
 `CLAUDE.md`. The CLI helper is useful but does not grant a readiness pass or human
@@ -139,6 +152,12 @@ programmatically with no memorized command names:
 ```text
 pipx install "seshat-bi[mcp]"
 claude mcp add seshat-governor -- seshat mcp --repo <workspace>
+```
+
+If Seshat is already installed, enable the extra without reinstalling it:
+
+```text
+pipx inject seshat-bi --force "mcp>=1.28,<2"
 ```
 
 (For Codex, register the same `seshat mcp --repo <workspace>` stdio command as
