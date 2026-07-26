@@ -31,12 +31,17 @@
     GROUNDED in the two committed inputs. Ending on prose instead of a committed
     brief is the anti-pattern.
 
-    The boundary is APPROVAL, not authorship (`No self-granted pass`):
+    The boundary is DECIDING, not writing (`No self-granted pass`):
       - DO author the brief, and re-derive it when a contract revision changes.
       - DO record an unanswerable owner question as a `gaps[]` entry, not a guess.
-      - DO NOT fill the `Reviewed by:` line, and DO NOT treat a clean
-        `narrative-check` as an approval -- it is EVIDENCE FOR the named human
-        design review, never a substitute for it.
+      - DO transcribe a review a named human ACTUALLY gave into `Reviewed by:`
+        (their name + date, exactly as supplied) -- an approval that lives only in
+        chat cannot be reviewed or audited.
+      - DO NOT invent that review, supply the reviewer's name, or fill the line
+        before a human has reviewed. A field the human did not supply is left
+        unfilled, never guessed.
+      - DO NOT treat a clean `narrative-check` as an approval -- it is EVIDENCE
+        FOR the named human design review, never a substitute for it.
       - DO NOT set any readiness stage to `pass` on the strength of this brief.
 
     The checker asserts the brief obeys its own frozen schema; it never judges
@@ -121,7 +126,7 @@ first-class output, not an omission -- record it rather than dropping it.>
 ## Review
 
 - **Authored by:** <analyst name, date>
-- **Reviewed by:** <named human reviewer, date>  <!-- LEAVE EMPTY until the real review happens -->
+- **Reviewed by:** <named human reviewer, date>  <!-- fill ONLY by transcribing a review a named human actually gave; leave empty until then -->
 
 <!--
   The reviewer line is a Principle-V seam: it records that a named human
