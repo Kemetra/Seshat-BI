@@ -1,13 +1,23 @@
-"""Materialize the Stage-6/7 design + handoff blank templates (#440, #441).
+"""Materialize the Stage-6/7 design + handoff blank templates (#440, #441, #514).
 
-Dashboard-Ready (Stage 6) and Publish-Ready (Stage 7) authoring reads six
-templates as REPO-RELATIVE paths from the user's working tree --
+Seven blanks ship, in two categories.
+
+SIX are read at RUNTIME as REPO-RELATIVE paths from the user's working tree --
 ``templates/dashboard-page-blueprint.yaml``, ``templates/visual-spec.yaml``,
 ``templates/report-composition.yaml``, ``design/grids/16x9-grid.yaml``,
 ``templates/handoff/bi-handoff-pack.md``, and
 ``templates/handoff/handoff-review-checklist.md`` -- consumed by
 ``blueprint_preview``, ``dashboard_coordinator``, and the ``publish_pack``
-rule. Those blanks previously shipped only with the development repository, and
+rule.
+
+The SEVENTH, ``templates/narrative-brief.md``, is a COPY-ME blank, not a
+runtime input: nothing reads it in place. A human copies it to
+``mappings/<table>/narrative-brief.md`` and authors the brief there, which is
+what ``narrative_check`` then reads. It ships for the same self-sufficiency
+reason as the other six (issue #514: the brief is the FIRST Stage-6 artifact,
+authored before any layout work, and a pip-only workspace had no blank to copy).
+
+Those blanks previously shipped only with the development repository, and
 unlike the Stage-1 templates (``stage1_scaffold``), no verb materialized them
 into a pip-only workspace -- so a package-only user had nothing to copy.
 
@@ -87,7 +97,7 @@ def _resource_bytes(packaged_subpath: str, dest_relpath: str) -> bytes:
 
 
 def scaffold_design(repo_root: Path) -> DesignScaffoldResult:
-    """Write the six Stage-6/7 design + handoff blank templates into ``repo_root``.
+    """Write the seven Stage-6/7 design + handoff blank templates into ``repo_root``.
 
     Per-file non-destructive: an existing file is kept, never overwritten.
     Containment and symlink safety are delegated entirely to

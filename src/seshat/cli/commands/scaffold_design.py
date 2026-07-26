@@ -1,4 +1,4 @@
-"""`seshat scaffold-design` handler (issues #440, #441): write the six
+"""`seshat scaffold-design` handler (issues #440, #441, #514): write the seven
 Stage-6/7 design + handoff blank templates into the workspace so a pip-only
 user can produce Dashboard-Ready / Publish-Ready artifacts without the
 development repository.
