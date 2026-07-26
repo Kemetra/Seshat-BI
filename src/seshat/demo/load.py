@@ -57,10 +57,19 @@ def run_load(args) -> int:
     try:
         import psycopg2  # noqa: F401
     except ImportError:
+        # REUSE the CLI's one install-path-aware hint rather than hand-writing the
+        # remedy here (#507): a bare `pip install` is the wrong mechanism in the
+        # documented pipx lane, where it targets the ambient interpreter instead of
+        # the isolated venv Seshat lives in. Imported lazily inside the handler,
+        # matching this module's existing `from seshat.cli import _redact_dsn`.
+        # The hint is a two-line indented block, so it TERMINATES the message --
+        # the re-run instruction precedes it rather than trailing off mid-block.
+        from seshat.cli import _db_extra_hint
+
         print(
             "demo load: a DSN is configured but psycopg2 is not available "
-            "-- offline mode. Install it with:  pip install 'seshat-bi[db]'  "
-            "then re-run to exercise the live leg."
+            "-- offline mode. Install it, then re-run to exercise the live leg:\n"
+            f"{_db_extra_hint()}"
         )
         return 0
 

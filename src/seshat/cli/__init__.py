@@ -128,9 +128,11 @@ def _run_mcp(args: object) -> int:
     try:
         from ..governor.mcp_server import run_stdio
     except ImportError:
+        # Both install lanes, from the one shared source -- a bare `pip install`
+        # is the WRONG mechanism in the documented pipx lane (#507).
         print(
-            "error: MCP support is optional; install with "
-            "`pip install 'seshat-bi[mcp]'`.",
+            "error: MCP support is optional; install it with:\n"
+            f"{_extra_install_hint('mcp')}",
             file=sys.stderr,
         )
         return 2
@@ -310,6 +312,49 @@ def _db_extra_hint(engine: str = "postgres") -> str:
     return (
         f"       pipx install:  pipx inject seshat-bi {driver}\n"
         f"       pip install:   pip install 'seshat-bi[{extra}]'"
+    )
+
+
+def _extra_install_hint(extra: str) -> str:
+    """Install-path-aware guidance for an OPTIONAL EXTRA OF SESHAT ITSELF (#507).
+
+    A sibling of :func:`_db_extra_hint`, deliberately NOT a generalization of it,
+    because the two remedies are different commands for different things:
+
+      * ``_db_extra_hint`` names a THIRD-PARTY DRIVER distribution to add into the
+        existing pipx venv -- ``pipx inject seshat-bi psycopg2-binary``.
+      * an extra is a feature of the ``seshat-bi`` distribution, so it is selected
+        when the app itself is installed: ``pipx install "seshat-bi[mcp]"``. There
+        is no such command as ``pipx inject seshat-bi mcp`` -- ``mcp`` is not a
+        package you inject, it is an extra you resolve.
+
+    Both lanes are named because both are supported: ``pipx`` is the documented
+    external-customer lane (``docs/install/user-install.md``,
+    ``docs/install/agent-install.md``), where a bare ``pip install`` targets the
+    AMBIENT interpreter and so lands the extra somewhere Seshat cannot see it -- or
+    is refused outright as externally-managed (PEP 668); ``pip install`` is correct
+    in a plain venv. Sourced from ONE place so the brand + remedy can't drift per
+    command, the same discipline ``_db_extra_hint`` established.
+
+    DOUBLE quotes, matching ``docs/install/agent-install.md`` verbatim: ``cmd.exe``
+    passes apostrophes through LITERALLY, so ``pip install 'seshat-bi[mcp]'``
+    reaches pip as an invalid requirement, and this repo's release lane is Windows
+    (the defect class PR #506 fixed for `seshat next`'s guidance).
+
+    ``--force`` is REQUIRED, not decoration (PR #510 review, P2). This hint is only
+    ever reached by a reader who ALREADY has ``seshat`` installed -- that is how
+    they ran the command that failed. On an existing venv, plain ``pipx install``
+    refuses to modify it ("already seems to be installed. Not modifying existing
+    installation ... Pass '--force'") and exits having changed NOTHING, so the
+    extra stays absent and the retry fails identically. ``pipx install --help``
+    documents ``--force`` as "Modify existing virtual environment". The fresh-install
+    form in the install docs is correct for a FIRST install and wrong here; this is
+    an enable-step for an installed app. Mirrors the ``--force`` the dbt remediation
+    hint already uses for the same reason (``commands/dbt.py``, release v0.6).
+    """
+    return (
+        f'       pipx install:  pipx install --force "seshat-bi[{extra}]"\n'
+        f'       pip install:   pip install "seshat-bi[{extra}]"'
     )
 
 
@@ -497,6 +542,7 @@ __all__ = [
     "_redact_dsn",
     "_prog",
     "_db_extra_hint",
+    "_extra_install_hint",
     "build_context",
     "run",
     "run_json",

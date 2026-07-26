@@ -469,9 +469,12 @@ def test_validation_commands_are_present_and_runnable_shapes(
 ) -> None:
     document = build_agent_next_document(tmp_path)
     commands = document["validation_commands"]
-    assert "python -m seshat.cli check --repo ." in commands
-    assert "python -m seshat.cli status --repo . --format json" in commands
-    assert "python -m seshat.cli next --repo . --format json" in commands
+    # The INSTALLED console script -- see test_validation_commands_run_in_the_pipx
+    # _lane in test_issue_regression_507_install_lane.py for why `python -m` here
+    # is not a runnable shape in the documented install lane (#507).
+    assert "seshat check --repo ." in commands
+    assert "seshat status --repo . --format json" in commands
+    assert "seshat next --repo . --format json" in commands
 
 
 def test_agent_document_is_read_only(tmp_path: Path, capsys) -> None:
