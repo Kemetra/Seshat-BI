@@ -27,6 +27,14 @@ evidence/blocker strings (hard rule #9, Principle V). When evidence is missing
 the document degrades to the conservative evidence-first action (start at
 Source Ready), never a fabricated stage.
 
+The no-DB/no-network half of that contract is UNCHANGED by #485/A2, which added a
+live-DB provenance comparison to ``run_next``. That comparison reads a committed
+record plus the configured DSN *as a string* (the explicitly driver-free
+``validate.resolve_dsn``); it opens no connection and no socket. Determinism is
+therefore now relative to committed state AND the workspace connection
+configuration -- repointing `.env` can change a document, which is precisely the
+defect #485 reported.
+
 Two fields are purely INFORMATIONAL guidance, added for issues #488 / #489:
 ``source_map_shape_signpost`` and ``orchestration_checkpoint``. They exist to make
 a downstream requirement and an available option VISIBLE at the stage where the
@@ -646,12 +654,25 @@ def _readiness_state(
 ) -> str | None:
     """The RECORDED four-status of the current stage, read from the same
     committed projection -- never derived. ``input_defect`` has no honest
-    state, so it projects as ``None``."""
+    state, so it projects as ``None``.
+
+    ONE exception, and it is the whole of issue #485: when the decision surface
+    returned ``stop_blocked``, the recorded status must NOT override it. Echoing
+    the committed ``pass`` here is exactly the defect the issue reports -- the
+    reporter ran `next --format agent` and read ``readiness_state: pass`` for a
+    database that had none of the claimed objects, because this function trusted
+    the recorded value over the computed stop. A recorded `pass` that the gate has
+    just refused to honour is not the honest state of the table; the stop is.
+    """
     outcome = response["outcome"]
     if outcome == "terminal_pass":
         return "pass"
     if outcome == "input_defect":
         return None
+    if outcome == "stop_blocked":
+        # The gate stopped this table. Whatever the file records, the surface must
+        # not report `pass` -- see the #485 note above.
+        return "blocked"
     stage = response["stage"]
     if entry is not None and stage is not None:
         block = entry.get("stages", {}).get(stage)
@@ -659,7 +680,7 @@ def _readiness_state(
             return block["status"]
     # No readiness file (or stage block unreadable): the conservative,
     # non-fabricated state is the journey's start.
-    return "blocked" if outcome == "stop_blocked" else "not_started"
+    return "not_started"
 
 
 def _evidence(entry: dict[str, Any] | None) -> list[dict[str, Any]]:

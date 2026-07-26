@@ -1,9 +1,21 @@
 """Read-only run-next readiness surface (spec 080).
 
 This module answers one question for one table: what is the single next allowed
-readiness action, or why is the table stopped? It reads only
-``mappings/<table>/readiness-status.yaml`` state, writes nothing, opens no DB
-connection, and never grants an approval.
+readiness action, or why is the table stopped? It writes nothing, opens no DB
+connection, makes no network call, and never grants an approval.
+
+Reads, stated precisely (widened by #485/A2, and the no-DB/no-network contract
+above is UNCHANGED by that widening):
+
+  * ``mappings/<table>/readiness-status.yaml`` -- the readiness state, as always;
+  * ``mappings/<table>/db-provenance.json`` -- the machine-written, server-echoed
+    live-DB identity record, when one exists (see ``seshat.db_provenance``);
+  * the process environment and the workspace `.env`, to resolve the configured
+    DSN *as a string* via the explicitly driver-free ``validate.resolve_dsn``.
+
+The third of those is configuration, not a live system: nothing here connects to
+a database or opens a socket. It happens only when a provenance record exists,
+which is no committed table today.
 """
 
 from __future__ import annotations
@@ -327,6 +339,17 @@ def _warning_caveat(stage_name: str) -> dict[str, str]:
 _LIVE_MATERIALIZATION_STAGES: frozenset[str] = frozenset({"silver_ready", "gold_ready"})
 _PROVENANCE_CAVEAT_KIND = "unverified_db_provenance"
 
+# Every kind the A2 provenance check can emit. Used to enforce "at most one
+# provenance caveat per table" across all three non-blocking verdicts -- checking
+# only the legacy kind would let a `verified` and an `unverified` caveat coexist.
+_PROVENANCE_KINDS: frozenset[str] = frozenset(
+    {
+        _PROVENANCE_CAVEAT_KIND,
+        "db_provenance_verified",
+        "db_provenance_not_comparable",
+    }
+)
+
 
 def _provenance_caveat(stage_name: str) -> dict[str, str]:
     """Interim #485 signal: this surface cannot tell WHICH database earned this.
@@ -354,22 +377,11 @@ def _provenance_caveat(stage_name: str) -> dict[str, str]:
     }
 
 
-def provenance_caveat_for_stages(stages: object) -> dict[str, str] | None:
-    """The #485 provenance caveat for a projected `stages` mapping, or ``None``.
+def _first_live_pass_stage(stages: object) -> str | None:
+    """The FIRST live-materialization stage recorded ``pass``, or ``None``.
 
-    ONE wording for ONE condition, shared with every surface that reports it --
-    `next` (via ``_add_provenance_caveat``) and the human-readable
-    `status --format text` render. Two surfaces drifting into two sentences for
-    one condition is exactly #487's failure mode, so both call this.
-
-    Fires for the FIRST live-materialization stage recorded ``pass`` -- at most
-    once, because one caveat per table reads as a fact about the table while one
-    per stage reads as noise.
-
-    `status --format json` deliberately does NOT carry it: that projection is
-    verbatim-only by contract (``status_surface`` docstring) and its schema
-    (``schemas/agent-status.schema.json``) is closed, so a DERIVED field has no
-    honest home there. That named limit is part of why #485 stays open.
+    At most one stage, because one caveat per table reads as a fact about the
+    table while one per stage reads as noise.
     """
     if not isinstance(stages, dict):
         return None
@@ -378,19 +390,129 @@ def provenance_caveat_for_stages(stages: object) -> dict[str, str] | None:
             continue
         block = stages.get(stage_name)
         if isinstance(block, dict) and block.get("status") == "pass":
-            return _provenance_caveat(stage_name)
+            return stage_name
     return None
 
 
-def _add_provenance_caveat(caveats: list[dict[str, str]], stage_name: str) -> None:
-    """Append the provenance caveat at most once per table, naming the first
-    live-materialization stage that raised it -- one caveat per table reads as a
-    fact about the table; one per stage reads as noise."""
+def provenance_caveat_for_stages(
+    stages: object,
+    repo_root: Path | str | None = None,
+    table_dir: str | None = None,
+) -> dict[str, str] | None:
+    """The #485 provenance caveat for a projected `stages` mapping, or ``None``.
+
+    ONE wording per condition, shared with every surface that reports it --
+    `next` (via ``_add_provenance_caveat``) and the human-readable
+    `status --format text` render. Two surfaces drifting into two sentences for
+    one condition is exactly #487's failure mode, so both resolve through here.
+
+    ``repo_root`` / ``table_dir`` are OPTIONAL. Given both, this returns the A2
+    verdict for the table: the ``unverified_db_provenance`` caveat when no record
+    exists (the legacy path), a ``db_provenance_verified`` caveat when the
+    recorded identity matches the configured connection, a
+    ``db_provenance_not_comparable`` caveat when a record exists but cannot be
+    compared, and the named ``stale_evidence_wrong_database`` blocker text on a
+    MISMATCH. Omitting them yields the legacy caveat unconditionally, which is
+    what a caller with no directory context can honestly say.
+
+    `status --format json` deliberately carries none of this: that projection is
+    verbatim-only by contract (``status_surface`` docstring) and its schema
+    (``schemas/agent-status.schema.json``) is closed, so a DERIVED field has no
+    honest home there. The text render is where a human reads the qualification.
+    """
+    stage_name = _first_live_pass_stage(stages)
+    if stage_name is None:
+        return None
+    if repo_root is None or not table_dir:
+        return _provenance_caveat(stage_name)
+    from seshat import db_provenance
+    from seshat.db_provenance_reader import provenance_verdict
+
+    verdict, detail = provenance_verdict(repo_root, table_dir)
+    if verdict == "mismatch":
+        assert detail is not None
+        return {"kind": db_provenance.BLOCKER_ID, "detail": detail}
+    return _provenance_caveat_for_verdict(stage_name, verdict, detail)
+
+
+def _provenance_verdict(context: dict[str, Any]) -> tuple[str, str | None]:
+    """The A2 provenance verdict for this table, computed at most ONCE.
+
+    Memoized on the context because the verdict is a property of the TABLE (one
+    record, one configured DSN), not of a stage, and recomputing it per stage
+    would re-read the same file and the same `.env` for every live stage.
+
+    ``("absent", None)`` when the table has no record -- every committed table
+    today -- so the common path costs one failed ``open`` and no `.env` work.
+    """
+    cached = context.get("provenance_verdict")
+    if cached is not None:
+        return cached
+    root, table_dir = context.get("repo_root"), context.get("table_dir")
+    if root is None or not table_dir:
+        verdict: tuple[str, str | None] = ("absent", None)
+    else:
+        from seshat.db_provenance_reader import provenance_verdict
+
+        verdict = provenance_verdict(root, table_dir)
+    context["provenance_verdict"] = verdict
+    return verdict
+
+
+def _add_provenance_caveat(
+    caveats: list[dict[str, str]], stage_name: str, context: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Qualify a live-materialization `pass` by its A2 provenance verdict.
+
+    Returns a ``stop_blocked`` response when the recorded identity DISAGREES with
+    the configured connection, and ``None`` otherwise (the caller continues). At
+    most one provenance caveat per table: one reads as a fact about the table,
+    one per stage reads as noise.
+
+    The four verdicts, per ruling R7:
+
+      * ``absent``       -> the shipped option-B caveat, exactly as before. Never
+        a blocker: no committed record carries provenance, so gating on absence
+        would fail every table at once (the legacy path).
+      * ``match``        -> the option-B caveat DROPS and a ``verified`` caveat
+        states that the check ran and agreed. Silence would be indistinguishable
+        from "not checked", which is the ambiguity A2 exists to remove.
+      * ``mismatch``     -> DOWNGRADE with the named ``stale_evidence_wrong_database``
+        blocker. Never a fabricated pass and never a silent pass.
+      * ``uncomparable`` -> a record exists but could not be compared. Reported as
+        a caveat, never as agreement -- and never as a blocker either, because
+        failing to READ configuration is not evidence that the database is wrong.
+    """
     if stage_name not in _LIVE_MATERIALIZATION_STAGES:
-        return
-    if any(c.get("kind") == _PROVENANCE_CAVEAT_KIND for c in caveats):
-        return
-    caveats.append(_provenance_caveat(stage_name))
+        return None
+    verdict, detail = _provenance_verdict(context)
+    if verdict == "mismatch":
+        # A downgrade, not a caveat: this is the one A2 condition that must stop a
+        # reader, so it takes the same shape as any other blocked stage.
+        assert detail is not None
+        return _response(
+            context["table"],
+            "stop_blocked",
+            stage_name,
+            {"blocking_reasons": [detail], "caveats": list(caveats)},
+        )
+    if any(c.get("kind") in _PROVENANCE_KINDS for c in caveats):
+        return None
+    caveats.append(_provenance_caveat_for_verdict(stage_name, verdict, detail))
+    return None
+
+
+def _provenance_caveat_for_verdict(
+    stage_name: str, verdict: str, detail: str | None
+) -> dict[str, str]:
+    """The caveat for a non-mismatch provenance verdict."""
+    from seshat import db_provenance_reader
+
+    if verdict == "match":
+        return db_provenance_reader.verified_caveat(stage_name)
+    if verdict == "uncomparable" and detail is not None:
+        return db_provenance_reader.uncomparable_caveat(detail)
+    return _provenance_caveat(stage_name)
 
 
 def _blocked_response(
@@ -439,7 +561,12 @@ def _pass_stage_result(
     caveat = _evidence_caveat(stage_name, block)
     if caveat is not None:
         caveats.append(caveat)
-    _add_provenance_caveat(caveats, stage_name)
+    downgrade = _add_provenance_caveat(caveats, stage_name, context)
+    if downgrade is not None:
+        # The recorded database disagrees with the configured one: stop here
+        # rather than walking on to later stages whose pass rests on the same
+        # (now-unclaimable) live evidence.
+        return downgrade
     if not _approval_missing(stage_name, block, context["approved"]):
         return None
     from seshat.rules.readiness_status import APPROVAL_SHAPE_HINT
@@ -477,7 +604,20 @@ def _stage_decision(
     return _pass_stage_result(context, stage_name, block)
 
 
-def _build_from_data(table: str, data: dict[str, Any]) -> dict[str, Any]:
+def _build_from_data(
+    table: str,
+    data: dict[str, Any],
+    repo_root: Path | None = None,
+    table_dir: str | None = None,
+) -> dict[str, Any]:
+    """Decide the next action from one parsed readiness document.
+
+    ``repo_root`` / ``table_dir`` locate the table's ``mappings/<table>/`` so the
+    A2 provenance record can be read (#485). Both are optional and default to
+    ``None``, which yields the ``absent`` verdict -- i.e. exactly the behavior
+    before A2 -- so a caller that has no directory context still gets a correct
+    answer rather than an error.
+    """
     stages = data.get("stages")
     if not isinstance(stages, dict):
         return _input_defect(
@@ -491,6 +631,8 @@ def _build_from_data(table: str, data: dict[str, Any]) -> dict[str, Any]:
         "approved": _approved_stages(data.get("approvals")),
         "caveats": [],
         "stored_next_action": data.get("next_action"),
+        "repo_root": repo_root,
+        "table_dir": table_dir,
     }
 
     for stage_name in _STAGE_ORDER:
@@ -528,7 +670,7 @@ def build_run_next_response(repo_root: Path | str, table: str) -> dict[str, Any]
     writes and has no live-system dependency.
     """
     root = Path(repo_root)
-    _, data, error = _find_status_data(root, table)
+    status_path, data, error = _find_status_data(root, table)
     if error is not None:
         return _input_defect(table, None, error)
     if data is None:
@@ -538,4 +680,8 @@ def build_run_next_response(repo_root: Path | str, table: str) -> dict[str, Any]
             "source_ready",
             {"action_text": _NO_STATUS_FILE_ACTION},
         )
-    return _build_from_data(table, data)
+    # The provenance record is a SIBLING of the readiness file, so its directory
+    # is the one actually found -- never re-derived from `table`, which may be a
+    # schema-qualified name or an alias that resolved via `_matching_status_data`.
+    table_dir = status_path.parent.name if status_path is not None else None
+    return _build_from_data(table, data, root, table_dir)

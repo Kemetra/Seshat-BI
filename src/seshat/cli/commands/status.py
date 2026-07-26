@@ -14,16 +14,37 @@ import argparse
 import json
 
 
-def _render_text(projection: dict, prog: str = "seshat") -> str:
+def _table_dir(source_path: object) -> str | None:
+    """The ``mappings/<dir>/`` name from a projected ``source_path``.
+
+    The provenance record is a SIBLING of the readiness file, so its directory is
+    the projection's own path -- never re-derived from the table name, which may
+    be schema-qualified and need not equal the directory.
+    """
+    if not isinstance(source_path, str) or not source_path:
+        return None
+    parts = source_path.replace("\\", "/").split("/")
+    return parts[-2] if len(parts) >= 2 else None
+
+
+def _render_text(
+    projection: dict, prog: str = "seshat", repo_root: object = "."
+) -> str:
     """Human-readable rendering: status/evidence/blockers/next_action per table,
     never a score. Mirrors ``demo/report.py``'s render_text posture.
 
-    Also states the #485 live-DB provenance limit for any table whose
-    silver/gold evidence is ``pass``: this surface reads committed YAML only and
-    that evidence carries no machine-checkable database identity, so a `pass`
-    cannot be correlated with the currently configured connection. The wording
-    is the SAME string `next` emits (``run_next.provenance_caveat_for_stages``),
-    never a second sentence for one condition.
+    Also qualifies the live-DB provenance of any table whose silver/gold evidence
+    is ``pass`` (#485). With an A2 record present the line states whether the
+    recorded database identity MATCHES the configured connection, or names the
+    ``stale_evidence_wrong_database`` disagreement; with none present it states
+    the legacy limit -- that committed evidence carries no machine-checkable
+    database identity, so a `pass` cannot be correlated with the current
+    connection. Every wording is the SAME string `next` emits
+    (``run_next.provenance_caveat_for_stages``), never a second sentence for one
+    condition.
+
+    Still no DB and no network: the comparison reads the committed record and the
+    configured DSN string, exactly as `next` does.
 
     This is the RENDER layer, so it adds no field to the closed
     ``schemas/agent-status.schema.json`` contract and no derived value to
@@ -48,7 +69,9 @@ def _render_text(projection: dict, prog: str = "seshat") -> str:
         for reason in table.get("blocking_reasons", []):
             lines.append(f"  blocking_reason: {reason}")
         lines.append(f"  next_action: {table['next_action']}")
-        caveat = provenance_caveat_for_stages(table.get("stages"))
+        caveat = provenance_caveat_for_stages(
+            table.get("stages"), repo_root, _table_dir(table.get("source_path"))
+        )
         if caveat is not None:
             lines.append(f"  caveat: {caveat['kind']}: {caveat['detail']}")
         lines.append("")
@@ -65,5 +88,11 @@ def status_main(args: argparse.Namespace) -> int:
     if getattr(args, "output_format", "text") == "json":
         print(json.dumps(projection, indent=2))
     else:
-        print(_render_text(projection, getattr(args, "prog", "seshat")))
+        print(
+            _render_text(
+                projection,
+                getattr(args, "prog", "seshat"),
+                getattr(args, "repo", "."),
+            )
+        )
     return 0

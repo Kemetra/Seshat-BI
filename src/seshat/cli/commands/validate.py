@@ -164,16 +164,14 @@ def _run_validate_body(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(
             "error: live validation failed at the DB boundary "
-            f"({exc.__class__.__name__}): {dialect.redact(exc, config)}",
-            file=sys.stderr,
-        )
-        print(
+            f"({exc.__class__.__name__}): {dialect.redact(exc, config)}\n"
             "       verify the DSN, network access, database objects, and the "
-            "optional DB driver:\n"
-            f"{cli._db_extra_hint()}",
+            f"optional DB driver:\n{cli._db_extra_hint()}",
             file=sys.stderr,
         )
         return 1
+
+    _record_provenance(args, runner, (dialect, config, engine))
 
     for finding in findings:
         print(_format(finding))
@@ -181,3 +179,52 @@ def _run_validate_body(args: argparse.Namespace) -> int:
         return 1
     print(f"{prog} validate: all live checks passed (0 findings).", file=sys.stderr)
     return 0
+
+
+def _record_provenance(
+    args: argparse.Namespace,
+    runner: object,
+    resolved: tuple[object, object, str],
+) -> None:
+    """Record this run's server-confirmed DB provenance; never raise, never gate.
+
+    The ONE write ruling R7 authorizes (#485 / option A2): persist a digest of
+    this run's server-confirmed database identity so `next` / `status` can later
+    tell whether this evidence was earned against the database the reader is
+    pointed at. Called BEFORE the exit-code decision because the record describes
+    which database answered, which is worth knowing whether or not the findings
+    were clean.
+
+    ``resolved`` is the ``(dialect, config, engine)`` triple this body already
+    resolved together as one unit -- passed as one so this helper stays within the
+    argument budget without a second single-use wrapper type.
+
+    Extracted so ``_run_validate_body`` stays below the CodeScene complexity
+    threshold and so the single authorized write has one named home. Every failure
+    mode is handled inside ``db_provenance_writer`` and reported on stderr; this
+    wrapper additionally swallows anything unexpected, because a provenance
+    problem must never turn a completed validate run into a traceback, and must
+    never change its exit code.
+    """
+    from pathlib import Path
+
+    from seshat.db_provenance_writer import LiveRunContext, record_live_run
+
+    dialect, config, engine = resolved
+    try:
+        record_live_run(
+            LiveRunContext(
+                repo_root=Path.cwd(),
+                source_map=args.source_map,
+                runner=runner,
+                dialect=dialect,
+                configured_dsn=config,
+                engine=engine,
+            )
+        )
+    except Exception as exc:  # noqa: BLE001 -- never fail a completed run
+        print(
+            f"note: could not record live-DB provenance ({exc.__class__.__name__}). "
+            "The validate findings are unaffected.",
+            file=sys.stderr,
+        )

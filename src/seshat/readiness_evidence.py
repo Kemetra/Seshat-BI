@@ -24,6 +24,12 @@ Ratified rulings (spec 057 ## Clarifications):
     with recorded evidence); granting ``pass`` is a human/approval action (the
     Principle-V self-grant boundary).
   - FR-013: EMIT-only. This returns a dict; it writes no ``readiness-status.yaml``.
+    STILL TRUE after #485/A2. A2 wired a live `validate` run's DB-identity
+    provenance into a committed record, but that record is a SEPARATE sibling
+    artifact (``seshat.db_provenance``, written by
+    ``seshat.db_provenance_writer``) and carries no stage ``status``. Nothing
+    authors readiness stage status, here or anywhere: this module's FR-012
+    never-``pass`` rule and the Principle-V self-grant boundary are untouched.
   - FR-014: an empty V-RC2 (no duplicate) is recorded as the OBSERVATION "no duplicate
     observed on current rows", never as a ratified grain claim.
   - FR-006: any DSN/credential embedded in a finding message is scrubbed.
