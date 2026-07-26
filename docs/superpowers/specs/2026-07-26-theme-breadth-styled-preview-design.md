@@ -97,12 +97,13 @@ from those tokens.
 Deliberately unchanged: the geometry/sort/ordering logic, the absence of any
 data-source parameter, and the `PLACEHOLDER` literal for every value.
 
-### Component 3 — `theme-diff` (new read-only verb)
+### Not included: `theme-diff`
 
-Report `added` / `removed` / `changed` keys between two theme JSON files before
-`pbir-apply-theme` overwrites a committed theme. Read-only, exit 0 on a clean
-diff, grants nothing. Borrowed in concept from pbi-cli's `diff-theme`, implemented
-headlessly against our own JSON with no new dependency.
+A `theme-diff` verb (report added/removed/changed keys between two theme JSONs
+before `pbir-apply-theme` overwrites one, borrowed in concept from pbi-cli's
+`diff-theme`) was considered and **cut**. It is a third CLI verb with its own
+parser wiring, tests, and docs that the approved design did not ask for. YAGNI.
+Recorded here so the idea is not lost; it belongs in a later spec if wanted.
 
 ## Decisions
 
@@ -181,16 +182,34 @@ font/overlay change could never be recompiled over an existing theme."
 **Required**: extend `_GENERATOR_OWNED_VISUAL_STYLE_KEYS` with every §5 sub-key,
 and add a round-trip test that fails if a new generator-owned key is omitted.
 
-**C-2. DL1 could block a theme the generator itself produced.** DL1
-(`rules/design_theme.py:50-63`) is a SUBSTRING match against forbidden tokens in
-theme-JSON *key names*, and the list includes `"rule"`, `"threshold"`,
-`"expression"`, and `"validation"` — all plausible substrings in Power BI
-formatting key names. DL1 is `Severity.ERROR`, so a collision is a blocking
-`retail check` failure on a valid generated theme. **Required**: before
-implementation, enumerate every §5/§6/§7 key name to be emitted and assert none
-contains a forbidden token; if a real Power BI key name collides, that is an
-owner decision (widen DL1's allow-list vs. drop the key), not an implementer's
-call.
+**C-2. DL1 substring collision — CHECKED AND CLEAR (no owner ruling needed).**
+DL1 (`rules/design_theme.py:100-109`) is confirmed a SUBSTRING match
+(`if token in normalized`) on normalized theme-JSON key names, with an
+`_ALLOWED_KEYS` carve-out, at `Severity.ERROR`. A collision would therefore be a
+blocking `retail check` failure on a theme the generator itself produced. All 21
+realistic §5/§6/§7 key names were tested empirically against `_is_forbidden`:
+`gridline(s)`, `filterPane`, `filterCard`, `border`, `dataLabels`,
+`labelDisplayUnits`, `valueAxis`, `categoryAxis`, `wallpaper`, `page`,
+`outspace(Pane)`, `transparency`, `titleText`, `alignment`, `fontSize`,
+`background`, `foreground`, `visualStyles`, `labels` — **all clear**.
+**Required**: keep a test asserting every emitted key name passes
+`_is_forbidden`, so a future key addition cannot silently reintroduce this.
+
+**C-3. §7 page background lands INSIDE `visualStyles`, which widens C-1's fix.**
+`templates/theme-json-spec.md` §7 names the fields (page color/transparency,
+wallpaper color/transparency) but not a theme key. The shipped page-background
+adapter writes to `page.json` → `objects.background` (`pbir_page_background.py:9,18`)
+— a PAGE-LEVEL object, not a top-level report key. In a theme, the equivalent is
+therefore `visualStyles["page"]["*"]` with `background` / `wallpaper` objects, not
+a top-level `background`/`wallpaper` pair.
+Consequence: C-1's fix is **not** a flat addition of sub-keys to
+`visualStyles["*"]["*"]` — it must also treat a nested `page` visual-type entry as
+generator-owned. That is a nested-key traversal in the DL3-deferred conflict
+check, materially more than a one-line list extension.
+**Required**: confirm the exact key path against Microsoft's published theme
+schema during implementation (spec §9 already treats the schema as UNCERTAIN),
+and make the preview render from TOKENS rather than from the emitted JSON so a
+wrong key name cannot make the preview lie about what Desktop will show.
 - **Preview fidelity is approximate, permanently.** SVG is not Power BI's
   renderer. The stamped disclaimer is the mitigation; it is not a fix, and the
   spec does not claim otherwise.
