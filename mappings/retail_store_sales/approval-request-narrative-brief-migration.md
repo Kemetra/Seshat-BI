@@ -124,7 +124,8 @@ status: blocked
 |---|---|
 | A brief is **drafted** (agent-authored, unreviewed) | `mappings/retail_store_sales/narrative-brief.md` -- `narrative-check` -> `status: pass`, 6 questions / 5 contracts |
 | Map is **migrated** to `seshat.binding-map/v1` (draft, unsigned) | `design/visual-contract-binding-map.md` -- v1 front section added, signed two-way content preserved verbatim |
-| Both narrative-check modes pass | brief mode `pass`; `--binding-map` three-way mode `pass` (9 visuals / 6 questions / 5 contracts) |
+| Brief mode passes | `narrative-check` -> `status: pass` (6 questions / 5 contracts) |
+| Binding-map mode is **honestly BLOCKED** on v10 | `--binding-map` -> `blocked`, ONE finding: `orphan_visual` on v10 (10 visuals / 6 questions / 5 contracts). The migration itself succeeded -- `no_front_section` is gone -- and 9 of 10 visuals resolve. **Clears when you rule W3/D4.** |
 | The gate is genuinely enforcing, not vacuous | adversarial mutations block correctly: a `Q99` cite -> `orphan_visual` + `unanswered_question`; a headline on an action-stage question -> `bare_total_headline_visual` |
 | The pin test flipped, deliberately | `test_real_worked_example_map_passes_the_three_way_gate` in the NEW file **`tests/unit/test_narrative_worked_example.py`** replaces `test_real_worked_example_map_still_needs_phase_b_migration` (formerly in `test_narrative_check.py`), with STRONGER assertions (real counts >= 5, no findings, `grants_approval is False`) plus a companion brief test |
 | v10 is **held out** | no customer-level question exists; the `customer_id` PII question is open in `source-profile.md` (see `approval-request-source-profile-writethrough.md`) |
@@ -290,18 +291,37 @@ The signed map is two-way (`visual -> contract`). The v1 format adds a
 below is a **proposal read off the signed artifact** -- it needs owner
 confirmation, especially the multi-question rows.
 
-| visual | type | bound contract (signed) | proposed `decision_questions` | note |
-|---|---|---|---|---|
-| v01 | card | TotalSales | [Q1] | `headline: true` candidate |
-| v02 | card | TransactionCount | [Q1] | `headline: true` candidate |
-| v03 | card | AvgTransactionValue | [Q1, Q5] | map says "Q1/Q5" -- **two questions** |
-| v04 | card | DiscountedTransactionRate | [Q1] | carries the discount caveat |
-| v05 | line | TotalSales | [Q2] | by `dim_date_rss[full_date]` (month) |
-| v06 | bar | TotalSales | [Q3] | by `dim_product_rss[category]` |
-| v07 | bar | TotalQuantity | [Q3] | by `dim_product_rss[category]` |
-| v08 | bar/donut | TotalSales | [Q4] | by `dim_location_rss[location]` |
-| v09 | column | AvgTransactionValue | [Q5] | by `dim_payment_method_rss[payment_method]` |
-| v10 | table | TransactionCount | [Q6] | by `dim_customer_rss[customer_id]` (Top N) -- **see the `customer_id` PII note under D2's dimension material**: the profile still records that question as open |
+**This table is what the migrated map ACTUALLY declares** (read from the committed
+`seshat.binding-map/v1` front section, not proposed). The brief's Q-ids are used
+throughout -- remember they do **not** match the intent's q-ids:
+
+| visual | type | contract (signed) | committed `decision_questions` | headline | note |
+|---|---|---|---|---|---|
+| v01 | card | TotalSales | `Q1` | **true** | overview headline |
+| v02 | card | TransactionCount | `Q1` | **true** | overview headline |
+| v03 | card | AvgTransactionValue | `Q1`, `Q5` | **true** | serves TWO decisions -- headline number AND the basket answer |
+| v04 | card | DiscountedTransactionRate | `Q6` | false | **NOT a headline**: Q6 is action-stage, and a headline must answer an overview question (FR-006). The signed prose labels this "Q1 discount share"; the front section governs |
+| v05 | line | TotalSales | `Q2` | false | by `dim_date_rss[full_date]` (month) |
+| v06 | bar | TotalSales | `Q3` | false | by `dim_product_rss[category]` |
+| v07 | bar | TotalQuantity | `Q3` | false | by `dim_product_rss[category]` |
+| v08 | bar/donut | TotalSales | `Q4` | false | by `dim_location_rss[location]` |
+| v09 | column | AvgTransactionValue | `Q5` | false | by `dim_payment_method_rss[payment_method]` -- binds because the draft ADDED Q5 for payment mix |
+| **v10** | table | TransactionCount | **`[]` (empty)** | false | **DELIBERATELY UNBOUND** -- no customer question may exist while the PII question is open. This is why `--binding-map` reports `blocked` |
+
+> **The gate is currently BLOCKED, on purpose.** With v10 declared and unbound,
+> `narrative-check --binding-map` reports exactly one finding:
+>
+> ```
+> status: blocked
+> [finding] orphan_visual: visual v10 names no decision_question -- a visual bound
+>           to a contract but answering no owner decision is an orphan (FR-005)
+> evidence: 10 visual(s) checked against 6 declared brief question(s) ...
+> ```
+>
+> An earlier draft omitted v10 from the front section, which produced
+> `status: pass` over a curated nine while the real design carries ten. That was a
+> misleading green and was corrected in review: an honest block on a real defect is
+> worth more than a convenient pass. **The block clears when you rule W3/D4.**
 
 **What the owner reviews in the draft:**
 
@@ -314,6 +334,34 @@ confirmation, especially the multi-question rows.
 - **4c.** q4 covers *both* channel and payment method while v08 (location) and
   v09 (payment method) are separate visuals -- confirm whether q4 splits into
   two questions or both visuals answer the one.
+
+## Decision 5a -- readiness still reads `pass` over an unreviewed section
+
+Raised in review of PR #519, and it is a real inconsistency the agent will not
+resolve unilaterally:
+
+`readiness-status.yaml` still records `dashboard_ready: pass` and
+`publish_ready: pass`, carrying the 2026-06-25 approval — and `seshat next`
+accordingly reports `readiness_state: pass` / `terminal_pass`. But the binding map
+that approval attests to now carries an **added, unreviewed** v1 front section.
+So a readiness consumer reads `pass` over bindings no human has reviewed.
+
+**Why the agent did not simply set it to `blocked`.** Downgrading a stage is
+un-granting an approval a named human recorded. That is the mirror image of
+self-granting one, and it is equally not the agent's call — the same
+`never_self_grant_approval` seam in the other direction. Nor is it obviously
+correct: the *underlying design* (10 visuals, contracts, coverage) is exactly what
+was approved; only the machine-readable projection of it is new.
+
+**What the owner must rule (5a):** does the 2026-06-25 `dashboard_ready` approval
+stand while the front section is under review, or should `dashboard_ready` (and
+consequently `publish_ready`) be recomputed to `blocked` with a named blocking
+reason until D5 is recorded? Either answer is defensible; the current state is
+simply **undeclared**, which is the part worth fixing.
+
+Note that `narrative-check --binding-map` already reports `blocked` on v10, so the
+narrative gate is honest even while the readiness spine says `pass`. The two
+surfaces disagree, and that disagreement is what 5a resolves.
 
 ## Decision 5 -- re-signing the migrated map
 

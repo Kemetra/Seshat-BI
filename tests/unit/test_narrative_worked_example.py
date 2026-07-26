@@ -43,24 +43,49 @@ _REAL_BRIEF = _REPO_ROOT / "mappings" / _TABLE / "narrative-brief.md"
 _MIN_SUBSTANTIVE_COUNT = 5
 
 
-def test_real_worked_example_map_passes_the_three_way_gate():
-    """The three-way gate (visual -> contract -> decision-question) holds on the
-    real committed map, and the pass is SUBSTANTIVE rather than vacuous."""
+def test_real_worked_example_map_is_migrated_and_blocked_only_on_v10():
+    """The map IS migrated to `seshat.binding-map/v1` -- so the OLD fail-closed
+    reason (`no_front_section`) is gone -- and the three-way gate now resolves 9
+    of its 10 visuals cleanly.
+
+    It reports `blocked` on EXACTLY ONE remaining defect: v10 (the customer
+    visual) names no decision-question, because no customer question may exist
+    while `source-profile.md` records the `customer_id` PII question as open. That
+    is an HONEST block on a real defect, not a curated pass: declaring only the 9
+    bindable visuals would have produced `status: pass` over an artifact that
+    really carries 10 (raised in review of PR #519).
+
+    This test therefore pins BOTH halves -- the migration happened, AND the one
+    open item is exactly the owner decision W3/D4, no more and no less. It flips
+    to a clean pass when the owner rules.
+    """
     assert _REAL_MAP.is_file(), f"expected the real worked-example map at {_REAL_MAP}"
 
     result = check_binding_map(table=_TABLE, repo_root=_REPO_ROOT)
 
-    assert result.status == "pass", [f._asdict() for f in result.findings]
-    assert result.findings == ()
+    # The migration really happened: the pre-migration reason is gone.
+    dimensions = {f.dimension for f in result.findings}
+    assert "no_front_section" not in dimensions, (
+        "the map should be migrated to seshat.binding-map/v1 by now"
+    )
 
-    # The pass must be earned over real content, not an empty map. The evidence
-    # line carries the counts the checker actually resolved.
+    # Exactly one finding, and it is the v10 orphan -- nothing else regressed.
+    assert result.status == "blocked"
+    assert len(result.findings) == 1, [f._asdict() for f in result.findings]
+    only = result.findings[0]
+    assert only.dimension == "orphan_visual"
+    assert only.locator == "v10"
+
+    # The check ran over real content -- all ten visuals, not a curated subset.
     evidence = " ".join(result.evidence)
     counts = [int(n) for n in re.findall(r"(\d+) (?:visual|declared brief)", evidence)]
     assert counts, f"expected resolved counts in the evidence, got {evidence!r}"
     assert min(counts) >= _MIN_SUBSTANTIVE_COUNT, (
         f"expected a substantive map+brief (>= {_MIN_SUBSTANTIVE_COUNT} visuals and "
         f"questions), got counts {counts} from evidence: {evidence!r}"
+    )
+    assert "10 visual(s)" in evidence, (
+        f"all ten committed visuals must be checked, got: {evidence!r}"
     )
 
     # Read-only posture is unchanged by the migration (Principle VIII).

@@ -99,9 +99,17 @@ visuals:
       - Q5
     headline: false
 
-  # v10 (TransactionCount by dim_customer_rss[customer_id], "top customers") is
-  # HELD OUT of this list -- see the note below. Re-adding it needs the
-  # source-profile PII write-through first.
+  # v10 IS DECLARED, and it is DELIBERATELY UNBOUND -- see the note below. The
+  # design really does carry ten measure-bearing visuals, so omitting v10 here
+  # would make the checker report `pass` over a curated nine while the actual
+  # artifact contains an unbound visual. Declaring it keeps the gate HONESTLY
+  # BLOCKED on the real defect until the owner rules W3/D4.
+  - visual_id: v10
+    page: executive_overview
+    contract: TransactionCount
+    decision_questions: []           # NO customer question exists -- the PII
+                                     # question is open in source-profile.md
+    headline: false
 ```
 
 ### v10 held: the customer visual cannot bind yet

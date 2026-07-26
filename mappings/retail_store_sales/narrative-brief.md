@@ -61,12 +61,17 @@ questions:
       dimensions: [dim_date_rss.full_date]
     comparison: trailing band over the monthly series
     guardrail:
-      basis: trailing mean +/- 2 x trailing SD of monthly TotalSales
-      window: trailing 12 months, k=2
+      basis: >-
+        trailing mean +/- 2 x trailing SD of monthly TotalSales, over COMPLETE
+        months only -- the source ends mid-month (2025-01-18), so the final
+        partial month is EXCLUDED from the band and never flagged as an anomaly;
+        compare it month-to-date against the same cutoff instead
+      window: trailing 12 complete months, k=2
     callout: >-
       Monthly revenue is <inside / outside> its trailing band; <the flagged
       month> is <unusual / seasonal, not anomalous -- it recurs at the same
-      phase last year>.
+      phase last year>. The final month is partial (<n> of <m> days) and is
+      reported month-to-date, not compared to full months.
 
   - id: Q3
     decision: >-
@@ -78,11 +83,16 @@ questions:
       dimensions: [dim_product_rss.category]
     comparison: share of current total, and share vs same period last year
     guardrail:
-      basis: same period last year for the share shift
+      basis: >-
+        same period last year for the share shift; and shares are reported
+        against TOTAL revenue with the `Unknown` product member SHOWN, never
+        against attributed-only revenue
     callout: >-
-      <n> of 8 categories drive <X%> of revenue; <category> is <gaining /
-      losing> share, and its units move <with / against> its revenue -- so the
-      shift is <demand / price-mix>.
+      <n> of 8 categories drive <X%> of revenue, with <U%> unattributed to the
+      `Unknown` product member; <category> is <gaining / losing> share, and its
+      units move <with / against> its revenue -- so the shift is <demand /
+      price-mix>. Ranking below <U%> apart is not separable from the
+      unattributed bucket.
 
   - id: Q4
     decision: >-
@@ -216,10 +226,33 @@ Two guardrails from the card: a member's share can rise simply because the total
 shrank, so share-shift is read alongside the absolute before claiming a category
 "gained"; and sub-1% categories are grouped rather than narrated individually.
 
-One caveat this question must carry: `item` is **9.65% missing** (1,213 rows).
-Those rows land on the `-1` unknown product member by design, so category-level
-revenue is complete while item-level detail is not. A category reading is sound;
-an item-level ranking would be quietly incomplete.
+### The caveat this question MUST carry: ~9.65% of revenue is unattributed
+
+`item` is **9.65% missing** (1,213 rows). Those rows land on the `-1` unknown
+product member by design (Q4's ruling: keep the sales, COALESCE the FK).
+
+**That means their category is lost, not preserved.** The gold star joins the fact
+to the product dimension on `item` alone
+(`0004_create_gold_retail_store_sales_star.sql`: `LEFT JOIN gold.dim_product_rss
+dp ON dp.item = s.item`), and the `-1` member's category is the literal
+`'Unknown'`. So even though the SOURCE `category` is 0.00% missing, those 1,213
+rows report as category `Unknown` in any category breakdown.
+
+Consequences Q3 must state, not assume away:
+
+- Roughly **1 in 10 transactions is unattributed** to a real category. The
+  `Unknown` bucket is not noise to hide -- it may be the largest single "category".
+- A category **share** is therefore a share of *attributed* revenue unless
+  `Unknown` is shown. Suppressing it silently inflates every real category's share.
+- A push/drop recommendation made against shares that exclude a ~10% unattributed
+  bucket can be **wrong about rank order**, which is the decision this question
+  drives.
+
+So the callout reports the unattributed share alongside the ranking, and the
+visual keeps `Unknown` visible rather than filtering it. Recovering those rows to
+their true category would need the fact to carry the source `category`
+independently of the `item` FK -- a model change, not a narrative choice, and
+therefore out of scope for this brief.
 
 ## Q4 -- in-store or online? (why/where)
 
@@ -234,7 +267,29 @@ With only two members, the "group the tiny members" rule is moot — but the
 composition caveat still bites, since with two members one share cannot move
 without the other moving.
 
-## Q5 -- is discounting working? (action)
+## Q5 -- does payment mix move the basket? (why/where)
+
+`payment_method` is fully populated (0.00% missing) with three values — Cash,
+Credit Card, Digital Wallet — so this is a complete comparison, not a sample.
+
+The framing is **segment behaviour**, not contribution, and that distinction is
+deliberate: the card requires a *rate* measure and explicitly forbids forcing a
+raw total into it. `AvgTransactionValue` is the behavioural measure here (how big
+a basket is), and `TransactionCount` rides along only to expose the base size —
+never as the finding itself.
+
+Two guardrails the card demands. The `min_sample_floor: 100` means a method below
+that count of transactions in a filter is reported as **insufficient-sample** and
+is not ranked or narrated. And the **mix confound**: a method's higher average
+basket may reflect *what* is bought through it rather than the method changing
+behaviour — so a difference is stated as association, never cause.
+
+The decision this informs is narrow but real: whether to steer customers toward a
+method, or renegotiate the cost of one. If the three methods' baskets sit inside
+the noise of each other, the honest answer is "payment mix is not worth acting
+on" — which is a useful finding, not a failed one.
+
+## Q6 -- is discounting working? (action)
 
 This is the action-stage question, and the one most easily reported wrongly.
 
