@@ -22,6 +22,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .color import composite_over, contrast_ratio, delta_e76, format_pt, is_valid_hex
+from .theme_style_cards import build_star_cards
 
 AA_FLOOR = 4.5
 MIN_TITLE_FONT_PT = 12.0
@@ -77,6 +78,10 @@ class ThemeSeed:
     # transparency declared -- every existing caller is unaffected and no
     # transparency block is emitted.
     transparency: dict | None = None
+    # Section-5 visual chrome (gridline/border/title_align/data_labels/
+    # number_format). None (default) means no chrome declared -- every existing
+    # caller is unaffected and no section-5 card is emitted.
+    chrome: dict | None = None
 
 
 def _hex_to_hls(h: str) -> tuple[float, float, float]:
@@ -492,6 +497,14 @@ def render_theme_json(palette: dict, seed: ThemeSeed) -> str:
                 "transparency": format_pt(overlay["transparency_pct"]),
             }
         ]
+    # Merge, not replace: title/labels already carry font cards above, and
+    # build_star_cards can return "title": [{"alignment": ...}] / "labels":
+    # [{"show": ...}] -- a plain dict.update would drop fontFamily/fontSize.
+    for card, value in build_star_cards(seed.chrome or {}).items():
+        if card in star_style:
+            star_style[card][0].update(value[0])
+        else:
+            star_style[card] = value
     doc = {
         "name": seed.name,
         "dataColors": c["data_colors"],
