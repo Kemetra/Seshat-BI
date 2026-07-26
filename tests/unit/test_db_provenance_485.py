@@ -42,16 +42,24 @@ def _dsn(host: str = _HOST, port: str = _PORT, database: str = _DB) -> str:
     return f"{scheme}analyst:pw" + "@" + f"{host}:{port}/{database}"
 
 
+def _identity(**overrides: object) -> db_provenance.CapturedIdentity:
+    fields: dict = {
+        "server_database_name": _DB,
+        "configured_host": _HOST,
+        "configured_port": _PORT,
+        "configured_database_name": _DB,
+        "server_endpoint_agreed_with_config": True,
+    }
+    fields.update(overrides)
+    return db_provenance.CapturedIdentity(**fields)
+
+
 def _record(**overrides: object) -> dict:
     record = db_provenance.build_record(
-        server_database_name=_DB,
-        configured_host=_HOST,
-        configured_port=_PORT,
-        configured_database_name=_DB,
+        _identity(),
         captured_at="2026-07-26T00:00:00+00:00",
         table="sales_c086_raw",
         engine="postgres",
-        server_endpoint_agreed_with_config=True,
     )
     record.update(overrides)
     return record
@@ -403,10 +411,7 @@ def test_the_server_must_confirm_the_configured_database_name() -> None:
     record cannot be produced by editing `.env`."""
     with pytest.raises(ValueError) as excinfo:
         db_provenance.build_record(
-            server_database_name="actually_this_one",
-            configured_host=_HOST,
-            configured_port=_PORT,
-            configured_database_name=_DB,
+            _identity(server_database_name="actually_this_one"),
             captured_at="2026-07-26T00:00:00+00:00",
             table="sales_c086_raw",
             engine="postgres",

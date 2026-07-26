@@ -112,6 +112,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -314,16 +315,44 @@ def digest_for_dsn(dsn: str) -> str | None:
     return identity_digest(host, dsn_port(dsn) or DEFAULT_PORT, name)
 
 
+@dataclass(frozen=True)
+class CapturedIdentity:
+    """One live run's observed identity, as the writer captured it.
+
+    Groups the values that are only ever passed together, so the record builder
+    takes a subject rather than a long parameter list. Frozen: a captured
+    observation is a fact about a completed run and must not be edited afterwards.
+
+    ``server_database_name`` is what the SERVER reported for
+    ``Dialect.identity_query()``; the three ``configured_*`` values come from the
+    DSN the run connected with. ``server_endpoint_agreed_with_config`` is
+    INFORMATION ONLY (``None`` = not compared) -- never a digest component and
+    never a gate, because a value the offline reader cannot reproduce must not
+    decide a comparison.
+    """
+
+    server_database_name: str
+    configured_host: str
+    configured_port: object
+    configured_database_name: str
+    server_endpoint_agreed_with_config: bool | None = None
+
+    @property
+    def digest(self) -> str:
+        """The canonical identity digest for this capture."""
+        return identity_digest(
+            self.configured_host,
+            normalized_port(self.configured_port),
+            self.configured_database_name,
+        )
+
+
 def build_record(
+    identity: CapturedIdentity,
     *,
-    server_database_name: str,
-    configured_host: str,
-    configured_port: object,
-    configured_database_name: str,
     captured_at: str,
     table: str,
     engine: str,
-    server_endpoint_agreed_with_config: bool | None = None,
 ) -> dict[str, Any]:
     """Build the provenance record for ONE live validate run.
 
@@ -331,31 +360,28 @@ def build_record(
     timestamp is an explicit argument, mirroring ``readiness_evidence``'s
     determinism rule so the writer's output is reproducible in a test.
 
-    ``server_database_name`` MUST be the value the SERVER reported for
-    ``Dialect.identity_query()``. It is CHECKED against
-    ``configured_database_name`` (raising ``ValueError`` on disagreement) and is
-    what makes this record unforgeable; the digest itself is computed over the
+    The identity's server-reported database name is CHECKED against its
+    configured one (raising ``ValueError`` on disagreement); that check is what
+    makes this record unforgeable, while the digest itself is computed over the
     offline-reproducible canonical form. See this module's docstring.
-
-    ``server_endpoint_agreed_with_config`` is INFORMATION ONLY -- recorded so a
-    human can see a proxy/alias deployment, never a digest component and never a
-    gate. ``None`` means the comparison was not made.
 
     Only a digest is stored: no raw host, port, or database name reaches the
     returned dict, so a caller cannot accidentally persist one.
     """
-    assert_database_name_agrees(server_database_name, configured_database_name)
+    assert_database_name_agrees(
+        identity.server_database_name, identity.configured_database_name
+    )
     return {
         "schema_version": _SCHEMA_VERSION,
         "table": table.strip(),
         "engine": engine,
-        "database_identity_digest": identity_digest(
-            configured_host, normalized_port(configured_port), configured_database_name
-        ),
+        "database_identity_digest": identity.digest,
         "identity_components": list(IDENTITY_COMPONENTS),
         "digest_algorithm": DIGEST_ALGORITHM,
         "database_name_server_confirmed": True,
-        "server_endpoint_agreed_with_config": server_endpoint_agreed_with_config,
+        "server_endpoint_agreed_with_config": (
+            identity.server_endpoint_agreed_with_config
+        ),
         "source": SERVER_ECHO,
         "captured_at": captured_at,
         "captured_by": "seshat validate",

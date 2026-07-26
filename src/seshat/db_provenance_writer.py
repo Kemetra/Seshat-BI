@@ -45,6 +45,7 @@ false POSITIVE (valid evidence blocked).
 from __future__ import annotations
 
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -123,50 +124,53 @@ def _table_directory(source_map: str) -> str | None:
     return parent.name or None
 
 
-def record_live_run(
-    *,
-    repo_root: Path | str,
-    source_map: str,
-    runner: Any,
-    dialect: Any,
-    configured_dsn: object,
-    engine: str,
-    stream: Any = None,
-) -> Path | None:
-    """Persist ONE server-echoed provenance record for a completed live run.
+@dataclass(frozen=True)
+class LiveRunContext:
+    """Everything the provenance writer needs about one completed live run.
 
-    Returns the record's path, or ``None`` when nothing was recorded (with the
-    reason on ``stream``). Never raises and never influences the caller's exit
-    code -- see this module's docstring.
+    Grouped because these values are only ever passed together, from the single
+    call site in ``cli/commands/validate.py``. Frozen: a completed run's context
+    is a fact, not a mutable workspace.
 
     ``configured_dsn`` is the DSN the run connected WITH, used for the
-    config-derived half of the record so the offline reader has a like-for-like
+    offline-reproducible half of the identity so the reader has a like-for-like
     value to compare. It is only ever digested; the raw string never reaches the
-    file.
+    written file.
     """
-    from seshat import db_provenance
 
-    out = stream if stream is not None else sys.stderr
-    identity = _server_identity(runner, dialect)
+    repo_root: Path | str
+    source_map: str
+    runner: Any
+    dialect: Any
+    configured_dsn: object
+    engine: str
+    stream: Any = None
+
+    @property
+    def out(self) -> Any:
+        """Where explanatory notes go -- stderr unless a test supplies a stream."""
+        return self.stream if self.stream is not None else sys.stderr
+
+
+def record_live_run(context: LiveRunContext) -> Path | None:
+    """Persist ONE server-confirmed provenance record for a completed live run.
+
+    Returns the record's path, or ``None`` when nothing was recorded (with the
+    reason on the context's stream). Never raises and never influences the
+    caller's exit code -- see this module's docstring.
+    """
+    identity = _server_identity(context.runner, context.dialect)
     if identity is None:
         print(
-            f"note: recorded no live-DB provenance for this run -- the {engine!r} "
-            "connection did not report a database name this tool can confirm "
-            "(the engine may supply no identity query, or the role may lack "
-            "permission). Readiness surfaces keep the unverified-provenance "
-            "caveat, which is the honest state.",
-            file=out,
+            f"note: recorded no live-DB provenance for this run -- the "
+            f"{context.engine!r} connection did not report a database name this "
+            "tool can confirm (the engine may supply no identity query, or the "
+            "role may lack permission). Readiness surfaces keep the "
+            "unverified-provenance caveat, which is the honest state.",
+            file=context.out,
         )
         return None
-    return _write(
-        repo_root=repo_root,
-        source_map=source_map,
-        identity=identity,
-        configured_dsn=configured_dsn,
-        engine=engine,
-        out=out,
-        db_provenance=db_provenance,
-    )
+    return _write(context, identity)
 
 
 def _configured_parts(configured_dsn: object) -> tuple[str, str, str] | None:
@@ -192,58 +196,55 @@ def _configured_parts(configured_dsn: object) -> tuple[str, str, str] | None:
     return host, dsn_port(configured_dsn) or DEFAULT_PORT, name
 
 
-def _write(
-    *,
-    repo_root: Path | str,
-    source_map: str,
-    identity: tuple[str | None, str],
-    configured_dsn: object,
-    engine: str,
-    out: Any,
-    db_provenance: Any,
-) -> Path | None:
+def _write(context: LiveRunContext, identity: tuple[str | None, str]) -> Path | None:
     """Build and atomically write the record; report and return ``None`` on any
     failure, so a provenance problem never fails a successful validate run."""
-    table_dir = _table_directory(source_map)
-    configured = _configured_parts(configured_dsn)
+    from seshat import db_provenance
+
+    table_dir = _table_directory(context.source_map)
+    configured = _configured_parts(context.configured_dsn)
     if table_dir is None or configured is None:
         print(
             "note: recorded no live-DB provenance for this run -- could not "
             "resolve the mapping directory and the configured host/database from "
             "the connection settings.",
-            file=out,
+            file=context.out,
         )
         return None
     endpoint, server_database = identity
     host, port, configured_name = configured
+    captured = db_provenance.CapturedIdentity(
+        server_database_name=server_database,
+        configured_host=host,
+        configured_port=port,
+        configured_database_name=configured_name,
+        server_endpoint_agreed_with_config=_endpoint_agreement(
+            endpoint, context.configured_dsn
+        ),
+    )
     try:
         record = db_provenance.build_record(
-            server_database_name=server_database,
-            configured_host=host,
-            configured_port=port,
-            configured_database_name=configured_name,
+            captured,
             captured_at=_now_iso(),
             table=table_dir,
-            engine=engine,
-            server_endpoint_agreed_with_config=_endpoint_agreement(
-                endpoint, configured_dsn
-            ),
+            engine=context.engine,
         )
-        path = db_provenance.write_record(repo_root, table_dir, record)
+        path = db_provenance.write_record(context.repo_root, table_dir, record)
     except (OSError, ValueError, FileNotFoundError) as exc:
         # ValueError includes the server-vs-configured database-name
         # disagreement: no coherent identity exists, so record nothing.
         print(
             f"note: recorded no live-DB provenance for this run ({exc}). The "
             "validate findings above are unaffected.",
-            file=out,
+            file=context.out,
         )
         return None
     print(
-        f"note: recorded server-echoed live-DB provenance at "
-        f"{path.relative_to(Path(repo_root)).as_posix()} -- digests only, no raw "
-        "host or database name. Commit it so `seshat next` / `seshat status` can "
-        "verify this evidence was earned against the database you are pointed at.",
-        file=out,
+        f"note: recorded server-confirmed live-DB provenance at "
+        f"{path.relative_to(Path(context.repo_root)).as_posix()} -- digests only, "
+        "no raw host or database name. Commit it so `seshat next` / `seshat "
+        "status` can verify this evidence was earned against the database you are "
+        "pointed at.",
+        file=context.out,
     )
     return path

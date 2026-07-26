@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
-from urllib.parse import unquote, urlsplit
+from urllib.parse import SplitResult, unquote, urlsplit
 
 # libpq credential keywords that may appear either as URI query params
 # (`?user=..&password=..`) or as keyword conninfo (`user=.. password=..`). Host
@@ -150,9 +150,19 @@ def dsn_dbname(dsn: str) -> str | None:
     except ValueError:
         return None
     name = unquote(parsed.path.lstrip("/")).strip()
-    if name and (parsed.netloc or parsed.scheme):
+    if _is_uri_shaped(parsed) and name:
         return name
     return _conninfo_dbname(dsn)
+
+
+def _is_uri_shaped(parsed: SplitResult) -> bool:
+    """Whether a parsed DSN is URI-shaped (has an authority or a scheme).
+
+    Gated on either, not on ``scheme`` alone: a scheme-relative DSN carries its
+    authority without a ``scheme://``, and a ``postgresql:///db`` form carries a
+    scheme with an empty authority.
+    """
+    return bool(parsed.netloc or parsed.scheme)
 
 
 def dsn_host(dsn: str) -> str | None:
@@ -209,10 +219,22 @@ def _query_value(dsn: str, key: str) -> str | None:
     except ValueError:
         return None
     for pair in query.split("&"):
-        name, sep, value = pair.partition("=")
-        if sep and name.strip().lower() == key and value:
+        value = _value_for_key(pair, key)
+        if value is not None:
             return unquote(value).strip().lower() or None
     return None
+
+
+def _value_for_key(pair: str, key: str) -> str | None:
+    """The value of ``pair`` when it is ``key=<non-empty>``, else ``None``.
+
+    The ONE ``key=value`` matcher shared by the query-string and keyword-conninfo
+    readers, so neither grows its own copy of the same three-part condition.
+    """
+    name, sep, value = pair.partition("=")
+    if not sep or not value:
+        return None
+    return value if name.strip().lower() == key else None
 
 
 def _conninfo_dbname(dsn: str) -> str | None:
@@ -230,11 +252,11 @@ def _conninfo_value(dsn: str, key: str, *, lower: bool = True) -> str | None:
         return None
     normalized = re.sub(r"\s*=\s*", "=", dsn)
     for token in normalized.split():
-        name, sep, value = token.partition("=")
-        if sep and name.strip().lower() == key and value:
-            bare = value[1:-1] if _is_single_quoted(value) else value
-            bare = bare.strip()
-            return (bare.lower() if lower else bare) or None
+        value = _value_for_key(token, key)
+        if value is None:
+            continue
+        bare = (value[1:-1] if _is_single_quoted(value) else value).strip()
+        return (bare.lower() if lower else bare) or None
     return None
 
 
