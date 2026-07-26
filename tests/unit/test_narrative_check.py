@@ -742,19 +742,46 @@ gaps: []
     assert result.grants_approval is False
 
 
-def test_real_worked_example_map_still_needs_phase_b_migration():
-    # GUARD (owner-requested): the ONE real committed binding map
-    # (retail_store_sales) is still the F011 two-way MARKDOWN pipe-table format
-    # with no seshat.binding-map/v1 front section. The checker therefore fails
-    # closed (no_front_section) on it -- Phase B ships the checker + the taught
-    # example, and migrating this signed-off artifact into the new format is an
-    # explicit owner-gated follow-up (Option A). This test makes "DOA on
-    # reality" VISIBLE instead of hidden behind fixture-only green: when the map
-    # is migrated, this test flips and must be updated deliberately.
+def test_real_worked_example_map_passes_the_three_way_gate():
+    # THE DELIBERATE FLIP (issue #514). This test previously asserted the
+    # fail-closed state -- the one real committed binding map was still the F011
+    # two-way MARKDOWN pipe-table with no seshat.binding-map/v1 front section, so
+    # `check_binding_map` returned `no_front_section` and the gate had never been
+    # exercised against anything but synthetic fixtures. Its docstring said: "when
+    # the map is migrated, this test flips and must be updated deliberately."
+    #
+    # The map IS now migrated, so this is that deliberate update. The assertions
+    # are deliberately STRONGER than a bare `status == "pass"`, which would still
+    # hold if someone gutted the artifact to zero visuals to make it green. This
+    # is the ONE non-synthetic end-to-end proof of the Stage-6 three-way gate, so
+    # it asserts the pass is SUBSTANTIVE: a real brief, real visuals, real
+    # questions, and no approval granted.
     assert _REAL_MAP.is_file(), f"expected the real worked-example map at {_REAL_MAP}"
     result = check_binding_map(table="retail_store_sales", repo_root=_REPO_ROOT)
-    assert result.status == "blocked"
-    assert any(f.dimension == "no_front_section" for f in result.findings)
+
+    assert result.status == "pass", [f._asdict() for f in result.findings]
+    assert result.findings == ()
+
+    # The pass must be earned over real content, not an empty map.
+    evidence = " ".join(result.evidence)
+    counts = [int(n) for n in re.findall(r"(\d+) (?:visual|declared brief)", evidence)]
+    assert counts and min(counts) >= 5, (
+        f"expected a substantive map+brief, got evidence: {evidence!r}"
+    )
+
+    # Read-only posture is unchanged by the migration (Principle VIII).
+    assert result.grants_approval is False
+
+
+def test_real_worked_example_brief_passes_and_grants_nothing():
+    # The brief half of the same non-synthetic proof: the committed
+    # narrative-brief.md conforms to the frozen v1 schema, over the REAL approved
+    # contracts (so the stale-revision guard is exercised against real blob shas,
+    # not a fixture), and still grants no approval.
+    result = check_narrative(table="retail_store_sales", repo_root=_REPO_ROOT)
+
+    assert result.status == "pass", [f._asdict() for f in result.findings]
+    assert result.grants_approval is False
 
 
 # --------------------------------------------------------------------------- #

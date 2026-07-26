@@ -102,6 +102,24 @@ questions:
 
   - id: Q5
     decision: >-
+      Whether payment mix is worth acting on -- steering customers toward a
+      method, or renegotiating the cost of one.
+    stage: why_where
+    framing: segment-behavior
+    cites:
+      measures: [AvgTransactionValue, TransactionCount]
+      dimensions: [dim_payment_method_rss.payment_method]
+    comparison: each method against the all-method average basket
+    guardrail:
+      basis: the all-method average AvgTransactionValue
+      min_sample_floor: 100
+    callout: >-
+      <method> baskets average <A> vs <B> across all methods on <n>
+      transactions -- so payment mix <does / does not> move basket value enough
+      to act on.
+
+  - id: Q6
+    decision: >-
       Whether the discount posture is working, or is quietly funding volume.
     stage: action
     framing: benchmark-threshold
@@ -120,8 +138,8 @@ questions:
 story_order:
   overview:  [Q1]
   change:    [Q2]
-  why_where: [Q3, Q4]
-  action:    [Q5]
+  why_where: [Q3, Q4, Q5]
+  action:    [Q6]
 
 gaps:
   - question: >-

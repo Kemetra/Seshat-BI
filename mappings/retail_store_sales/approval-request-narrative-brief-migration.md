@@ -88,6 +88,29 @@ What that boundary does and does not cover:
 It pins today's fail-closed state on purpose; its flipping is the signal that
 this migration really happened.
 
+## One rule interaction this migration surfaced (FYI -- no action needed here)
+
+Migrating the first REAL artifact exposed a notation collision between two shipped
+features, which fixture-only testing could not have found:
+
+**HR9** (`rename_impact_guard`) scans a binding map for `[Something]` and resolves
+it against the committed TMDL measure set — a valuable guard, since a renamed
+measure would otherwise silently orphan its references. But
+`seshat.binding-map/v1`'s `decision_questions: [Q3]` is **YAML flow-list syntax**,
+not a DAX measure reference, so HR9 read `Q3` as an orphaned measure and errored.
+
+Worked around **in this example only**, by writing every `decision_questions` as a
+YAML **block sequence** (`- Q1` on its own line) rather than a flow list. Both
+forms are identical YAML and `narrative-check` accepts both; only the bracket
+notation trips HR9. `seshat check` is clean again.
+
+The general fix — teaching HR9 to skip a `seshat.binding-map/v1` front section, or
+narrowing `_BARE_MEASURE_REF` so it cannot match a YAML list — is a **tooling
+change proposed separately**, not folded into this owner-gated example. Worth
+noting because any FUTURE binding map written with flow lists will hit the same
+error, and the fix is one line of the author's YAML style until the rule is
+adjusted.
+
 ## Verified current state (run, not assumed)
 
 ```
@@ -99,10 +122,14 @@ status: blocked
 
 | Fact | Evidence |
 |---|---|
-| No brief exists | `mappings/retail_store_sales/narrative-brief.md` absent |
-| Map is still F011 two-way Markdown | `design/visual-contract-binding-map.md` -- pipe table, no fenced `yaml` front section |
+| A brief is **drafted** (agent-authored, unreviewed) | `mappings/retail_store_sales/narrative-brief.md` -- `narrative-check` -> `status: pass`, 6 questions / 5 contracts |
+| Map is **migrated** to `seshat.binding-map/v1` (draft, unsigned) | `design/visual-contract-binding-map.md` -- v1 front section added, signed two-way content preserved verbatim |
+| Both narrative-check modes pass | brief mode `pass`; `--binding-map` three-way mode `pass` (9 visuals / 6 questions / 5 contracts) |
+| The gate is genuinely enforcing, not vacuous | adversarial mutations block correctly: a `Q99` cite -> `orphan_visual` + `unanswered_question`; a headline on an action-stage question -> `bare_total_headline_visual` |
+| The pin test flipped, deliberately | `test_real_worked_example_map_passes_the_three_way_gate` replaces the fail-closed assertion, with STRONGER assertions (real counts >= 5, no findings, `grants_approval is False`) |
+| v10 is **held out** | no customer-level question exists; the `customer_id` PII question is open in `source-profile.md` (see `approval-request-source-profile-writethrough.md`) |
 | 5 contracts approved `pass` | `metrics/*.yaml`, owner-approved 2026-06-25 |
-| Stage is otherwise complete | `seshat next --table retail_store_sales` -> `terminal_pass` (all seven gates `pass`) |
+| No readiness stage moved | `seshat next --table retail_store_sales` -> `terminal_pass`, unchanged; nothing here grants an approval |
 
 > **This request is not auto-discovered.** `seshat approvals` reads only
 > `mappings/*/readiness-status.yaml`, and `seshat next` reads only the seven-stage
@@ -158,14 +185,28 @@ only**, not as the derivation's starting set:
 
 **What the owner reviews in the draft:**
 
-- **1a.** **Accept, modify, or reject each of q1-q6.** They are proposals from a
-  `blocked` intent, so none carries forward by default; silence is not acceptance.
-- **1b.** **Rank them.** Index order IS the rank (owner priority x data
-  strength) -- the intent file states no ranking, so this is genuinely new.
-- **1c.** Each must be **re-phrased as a decision**, not a metric request. The
-  derivation route requires "where do I push spend", not "show TotalSales by x".
-  The intent text is currently phrased as questions.
-- **1d.** One `callout` per question -- the so-what sentence it yields.
+A **drafted brief now exists** at `mappings/retail_store_sales/narrative-brief.md`
+(`narrative-check` -> `status: pass`, 6 questions / 5 contracts). It was derived
+from the two permitted inputs only; the intent questions above were **not** its
+source. So D1 is a review of concrete text, not a blank-page exercise:
+
+- **1a.** **Accept, modify, or reject each drafted question Q1-Q6.** The draft's
+  questions are the agent's derivation, not the intent list -- compare the two and
+  say where the derivation missed something you care about.
+- **1b.** **Confirm or re-order the rank.** Index order IS the rank. The draft
+  ranks by owner-priority x data-strength as the route requires; the intent file
+  states no ranking, so this remains genuinely yours.
+- **1c.** **Confirm each is phrased as a DECISION**, not a metric request (the
+  route requires "where do I push spend", not "show TotalSales by x"). The draft
+  attempts this; judge whether each lands.
+- **1d.** **Confirm each `callout`** -- the so-what sentence the question yields.
+
+> **D1 carries a required write-through.** Ruling D1 settles the six
+> `report-intent.yaml` questions, which makes it **also** a
+> `report_intent_approval`. Recording only the narrative-brief decision file would
+> leave `dashboard_coordinator._check_intent_approved` blocking. See
+> **"Required write-throughs -- D1 is ALSO a `report_intent_approval`"** below for
+> both targets; both must appear in the decision file's `artifacts_updated`.
 
 ## Decision 2 -- framing + guardrail basis per question
 

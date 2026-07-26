@@ -5,6 +5,127 @@ to exactly ONE approved metric contract (no orphan visual) and that no approved
 contract is silently dropped. Authored by `dashboard-design`; it NEVER invents a
 metric and NEVER self-grants `dashboard_ready: pass`. ASCII, UTF-8 no BOM.
 
+<!--
+  MIGRATED to `seshat.binding-map/v1` (issue #514, Phase B) -- DRAFT AWAITING
+  OWNER RE-SIGN (D5).
+
+  What changed: a machine-readable `seshat.binding-map/v1` front section was
+  ADDED, carrying the THIRD leg the F011 two-way format lacked -- the
+  decision-question(s) each visual answers, resolved against the committed
+  narrative brief. The signed two-way content below is PRESERVED VERBATIM: the
+  same 10 visuals, the same contract per visual, the same coverage table, the same
+  v04 caveat, and the original 2026-06-25 sign-off block unaltered.
+
+  The agent did NOT re-sign this artifact. Whether the 2026-06-25 sign-off carries
+  forward over the added front section, or a fresh design review is required, is
+  decision D5 in `../approval-request-narrative-brief-migration.md` -- an owner
+  ruling R5 explicitly reserved (a delegated mandate does not cover re-signing a
+  signed artifact).
+
+  v10 IS DELIBERATELY UNBOUND. See the "v10 held" note below the front section.
+-->
+
+```yaml
+# binding-map front section -- FROZEN schema seshat.binding-map/v1
+schema: seshat.binding-map/v1
+table: retail_store_sales
+brief: mappings/retail_store_sales/narrative-brief.md
+
+pages:
+  - id: executive_overview
+
+visuals:
+  # --- overview band: every headline answers the overview question -----------
+  - visual_id: v01
+    page: executive_overview
+    contract: TotalSales
+    decision_questions:
+      - Q1
+    headline: true
+  - visual_id: v02
+    page: executive_overview
+    contract: TransactionCount
+    decision_questions:
+      - Q1
+    headline: true
+  - visual_id: v03
+    page: executive_overview
+    contract: AvgTransactionValue
+    # serves TWO owner decisions: a headline number AND the basket-value answer
+    decision_questions:
+      - Q1
+      - Q5
+    headline: true
+  - visual_id: v04
+    page: executive_overview
+    contract: DiscountedTransactionRate
+    decision_questions:
+      - Q6
+    headline: false                # NOT a headline: Q6 is action-stage, and a
+                                   # headline visual MUST answer an overview
+                                   # question (FR-006)
+
+  # --- change band ----------------------------------------------------------
+  - visual_id: v05
+    page: executive_overview
+    contract: TotalSales
+    decision_questions:
+      - Q2
+    headline: false
+
+  # --- driver band (why / where) -------------------------------------------
+  - visual_id: v06
+    page: executive_overview
+    contract: TotalSales
+    decision_questions:
+      - Q3
+    headline: false
+  - visual_id: v07
+    page: executive_overview
+    contract: TotalQuantity
+    decision_questions:
+      - Q3
+    headline: false
+  - visual_id: v08
+    page: executive_overview
+    contract: TotalSales
+    decision_questions:
+      - Q4
+    headline: false
+  - visual_id: v09
+    page: executive_overview
+    contract: AvgTransactionValue
+    decision_questions:
+      - Q5
+    headline: false
+
+  # v10 (TransactionCount by dim_customer_rss[customer_id], "top customers") is
+  # HELD OUT of this list -- see the note below. Re-adding it needs the
+  # source-profile PII write-through first.
+```
+
+### v10 held: the customer visual cannot bind yet
+
+The signed map's tenth visual is `TransactionCount` by
+`dim_customer_rss[customer_id]` ("Q6 top customers"). It is **not** in the front
+section above, and that is deliberate rather than an omission:
+
+- The narrative brief has **no customer-level question**. Customer analysis is
+  `gaps[]` entry 3, because `source-profile.md` -- one of the only two permitted
+  derivation inputs -- still records the `customer_id` PII question as **open**
+  with `Source-ready status: warning`.
+- Listing v10 with an empty or invented `decision_questions` would be an
+  `orphan_visual` finding; inventing a customer question to bind it would derive
+  from an input the route forbids. Both are worse than holding it.
+
+**Unblocking it is an owner action**, prepared in
+`../approval-request-source-profile-writethrough.md`: writing the already-recorded
+2026-06-25 Q1 keep-ruling through to `source-profile.md` makes customer-level
+publishing derivable, the gap becomes a question, and v10 binds to it.
+
+Until then the owner's D4/W3 choice is: **write the ruling through** (v10 returns),
+or **drop v10** from the design. The agent makes neither call.
+
 ## Subject area
 
 - subject_area: `RetailStoreSales` (`gold.fct_sales_rss`)
