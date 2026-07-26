@@ -38,6 +38,23 @@ class Dialect(Protocol):
     def columns_query(self) -> str: ...
     def normalize_catalog_literal(self, value: str) -> str: ...
 
+    # #485 / ruling R7 amendment 2 -- the SERVER-ASSERTED connection identity.
+    #
+    # Returns a single-row SELECT yielding exactly two columns, in this fixed
+    # order: (server_endpoint, database_name). Both must be values the SERVER
+    # reports about THIS connection -- not values echoed back from the client's
+    # own config -- because the whole point of the provenance record is that the
+    # party claiming readiness cannot type it.
+    #
+    # ``None`` means THIS ENGINE RECORDS NO PROVENANCE. That is the deliberate
+    # answer for an engine that can name its database but not its own network
+    # endpoint: a name-only digest cannot distinguish a staging and a production
+    # system that share a database name, so a digest that looks authoritative
+    # while being unable to tell them apart is worse than no field at all. The
+    # absent path is already safe (it is every committed table's state today), so
+    # returning None costs nothing and claims nothing.
+    def identity_query(self) -> str | None: ...
+
     # R4 -- resolve_config/connect/redact. The config shape differs by engine
     # (a DSN/ODBC keyword string for Postgres/SQL-Server, a kwargs dict for
     # MySQL/Snowflake), hence the union return/param types. This is a
@@ -116,6 +133,17 @@ class PostgresDialect:
         return (
             "SELECT column_name, data_type FROM information_schema.columns "
             "WHERE table_schema = %s AND table_name = %s ORDER BY ordinal_position"
+        )
+
+    def identity_query(self) -> str | None:
+        # inet_server_addr()/inet_server_port() report the address and port of the
+        # interface THIS SERVER accepted THIS connection on -- server-side facts,
+        # not a client echo. Both are NULL over a Unix-domain socket, which the
+        # caller treats as "no server-confirmable endpoint" and records nothing:
+        # see db_provenance's no-name-only-fallback rule.
+        return (
+            "SELECT host(inet_server_addr()) || ':' || inet_server_port()::text, "
+            "current_database()"
         )
 
     def normalize_catalog_literal(self, value: str) -> str:
@@ -436,6 +464,18 @@ class SqlServerDialect(_LazyDriverDialect):
             "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION"
         )
 
+    def identity_query(self) -> str | None:
+        # CONNECTIONPROPERTY('local_net_address'/'local_tcp_port') report the
+        # SERVER-side endpoint of THIS connection. Both are NULL over shared
+        # memory or a named pipe, which the caller treats as "no
+        # server-confirmable endpoint" and records nothing. DB_NAME() is the
+        # SQL-Server spelling of current_database().
+        return (
+            "SELECT CONVERT(varchar(64), "
+            "CONNECTIONPROPERTY('local_net_address')) + ':' + "
+            "CONVERT(varchar(16), CONNECTIONPROPERTY('local_tcp_port')), DB_NAME()"
+        )
+
     def normalize_catalog_literal(self, value: str) -> str:
         return value
 
@@ -495,6 +535,21 @@ class MySqlDialect(_DictConfigDialect):
             "FROM information_schema.COLUMNS "
             "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s ORDER BY ORDINAL_POSITION"
         )
+
+    def identity_query(self) -> str | None:
+        # MySQL RECORDS NO PROVENANCE, deliberately. DATABASE() names the schema,
+        # but MySQL exposes no server-side function for the endpoint THIS
+        # connection was accepted on: @@hostname is the server's own configured
+        # hostname (which two hosts behind a load balancer or in two environments
+        # can share, and which says nothing about the accepted interface), and
+        # @@port is server-wide config. Neither confirms the endpoint.
+        #
+        # Rather than fall back to a DATABASE()-only digest -- which matches for a
+        # staging and a production server sharing a schema name, i.e. exactly the
+        # confusion this record exists to detect -- this engine returns None and
+        # takes the legacy absent path. An honest gap beats an authoritative-
+        # looking digest that cannot tell two systems apart.
+        return None
 
     def normalize_catalog_literal(self, value: str) -> str:
         return value
@@ -557,6 +612,19 @@ class SnowflakeDialect(_DictConfigDialect):
             "WHERE UPPER(TABLE_SCHEMA) = %s AND UPPER(TABLE_NAME) = %s "
             "ORDER BY ORDINAL_POSITION"
         )
+
+    def identity_query(self) -> str | None:
+        # Snowflake RECORDS NO PROVENANCE, deliberately. CURRENT_DATABASE() names
+        # the database and CURRENT_ACCOUNT()/CURRENT_REGION() identify the
+        # ACCOUNT, but Snowflake is a managed service with no client-visible
+        # server endpoint at all -- there is no address the server can confirm it
+        # accepted this connection on. Account+region is arguably a coarse
+        # equivalent, but it is a different KIND of value from the two other
+        # engines' endpoints, and silently substituting it would make one
+        # `database_identity_digest` field mean two incomparable things across
+        # engines. Deferred as its own decision rather than guessed here; until
+        # then this engine takes the legacy absent path, which claims nothing.
+        return None
 
     def normalize_catalog_literal(self, value: str) -> str:
         return value.upper()

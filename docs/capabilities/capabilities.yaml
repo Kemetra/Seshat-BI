@@ -603,7 +603,7 @@ capabilities:
 
   - id: retail-validate
     name: "retail validate"
-    summary: "Live data checks against a materialized table: PK uniqueness, date coverage, orphan FKs, reconciliation."
+    summary: "Live data checks against a materialized table: PK uniqueness, date coverage, orphan FKs, reconciliation. Also records ONE committed provenance record per live run (mappings/<table>/db-provenance.json): a digest of the canonical database identity whose database-name component the server itself confirmed, so `seshat next` / `seshat status` can later tell whether this evidence was earned against the database the reader is pointed at (issue #485). Digests only -- never a raw host, port, or database name. It authors no readiness stage status, grants no approval, and a failed provenance capture never changes the exit code."
     state: shipped
     authority: agent-runnable
     surface: cli

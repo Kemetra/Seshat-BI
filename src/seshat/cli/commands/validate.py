@@ -175,9 +175,54 @@ def _run_validate_body(args: argparse.Namespace) -> int:
         )
         return 1
 
+    # The ONE write ruling R7 authorizes (#485 / option A2): persist a digest of
+    # this run's server-confirmed database identity, so `next` / `status` can
+    # later tell whether this evidence was earned against the database the reader
+    # is pointed at. Runs BEFORE the exit-code decision below because the record
+    # describes which database answered, which is worth knowing whether or not the
+    # findings were clean. It can never change the exit code -- provenance is an
+    # addition to this verb's contract, not a new failure mode.
+    _record_provenance(args, runner, dialect, config, engine)
+
     for finding in findings:
         print(_format(finding))
     if any(f.severity is Severity.ERROR for f in findings):
         return 1
     print(f"{prog} validate: all live checks passed (0 findings).", file=sys.stderr)
     return 0
+
+
+def _record_provenance(
+    args: argparse.Namespace,
+    runner: object,
+    dialect: object,
+    config: object,
+    engine: str,
+) -> None:
+    """Record this run's server-confirmed DB provenance; never raise, never gate.
+
+    Extracted so ``_run_validate_body`` stays below the CodeScene complexity
+    threshold and so the single authorized write has one named home. Every
+    failure mode is handled inside ``db_provenance_writer`` and reported on
+    stderr; this wrapper additionally swallows anything unexpected, because a
+    provenance problem must never turn a completed validate run into a traceback.
+    """
+    from pathlib import Path
+
+    from seshat.db_provenance_writer import record_live_run
+
+    try:
+        record_live_run(
+            repo_root=Path.cwd(),
+            source_map=args.source_map,
+            runner=runner,
+            dialect=dialect,
+            configured_dsn=config,
+            engine=engine,
+        )
+    except Exception as exc:  # noqa: BLE001 -- never fail a completed run
+        print(
+            f"note: could not record live-DB provenance ({exc.__class__.__name__}). "
+            "The validate findings are unaffected.",
+            file=sys.stderr,
+        )

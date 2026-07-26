@@ -118,6 +118,126 @@ def uri_component_values(secret: str) -> tuple[str, ...]:
     return tuple(components)
 
 
+def dsn_dbname(dsn: str) -> str | None:
+    """The DATABASE NAME carried by a DSN, or ``None`` when it carries none.
+
+    A narrow, single-purpose accessor added for the #485 provenance comparison,
+    which needs one named component rather than the undifferentiated credential
+    soup :func:`uri_components` returns. It lives HERE, beside the hardened
+    decomposition, rather than in the caller: a second hand-rolled DSN parser is
+    exactly the drift the #365/#366 consolidation removed.
+
+    Covers both shapes a ``DATABASE_URL`` may take, because psycopg2 connects with
+    either:
+
+      * the URI form (scheme, then ``userinfo``, then ``@host:port/dbname``) -> the
+        path segment, percent-DECODED (a database name may legitimately contain an
+        escaped character, and the server echoes the decoded name). Described in
+        words rather than shown: a literal scheme-userinfo-at-sign sequence in this
+        file is the shape the C2 secret-scanner (correctly) flags as a possibly
+        committed DSN, exactly as ``validate.resolve_dsn`` notes at its own
+        assembly;
+      * the libpq KEYWORD conninfo form ``host=h dbname=d user=u`` -> the
+        ``dbname=`` value, with matching single quotes stripped.
+
+    Returns ``None`` for an empty/absent name, a malformed URI (``urlsplit`` can
+    raise on a bad IPv6 literal -- total here, like every other function in this
+    module), or a string that declares no database at all. The caller must treat
+    ``None`` as "cannot determine", never as agreement.
+    """
+    try:
+        parsed = urlsplit(dsn)
+    except ValueError:
+        return None
+    name = unquote(parsed.path.lstrip("/")).strip()
+    if name and (parsed.netloc or parsed.scheme):
+        return name
+    return _conninfo_dbname(dsn)
+
+
+def dsn_host(dsn: str) -> str | None:
+    """The HOST carried by a DSN, lowercased, or ``None`` when it carries none.
+
+    The sibling of :func:`dsn_dbname`, added for the same #485 comparison and
+    living here for the same reason: one hardened decomposition, never a second
+    hand-rolled parser. Covers the URI authority (``//user:pw@host:5432/db``) and
+    the libpq keyword form (``host=h dbname=d``), and reads the URI QUERY too
+    (``postgresql:///db?host=h`` -- a PostgreSQL-manual form that carries the host
+    there).
+
+    Lowercased deliberately: hostnames are case-insensitive, so ``DB.Example.com``
+    and ``db.example.com`` are the SAME target and must digest identically. This
+    is the opposite of the redaction path's original-case recovery -- redaction
+    over-recovers to avoid a leak, whereas comparison must normalize to avoid a
+    false mismatch.
+
+    Returns ``None`` for an absent host or a malformed URI (total, like every
+    other function here). The caller must treat ``None`` as "cannot determine",
+    never as agreement.
+    """
+    try:
+        parsed = urlsplit(dsn)
+    except ValueError:
+        return None
+    if parsed.hostname:
+        return parsed.hostname.strip().lower() or None
+    return _conninfo_value(dsn, "host") or _query_value(dsn, "host")
+
+
+def dsn_port(dsn: str) -> str | None:
+    """The PORT carried by a DSN as a string, or ``None`` when it carries none.
+
+    A string, not an int, because it is a digest component and the digest must be
+    byte-stable: ``"5432"`` and ``5432`` would otherwise depend on the caller's
+    formatting. Covers the URI authority, the libpq ``port=`` keyword, and the URI
+    query. Malformed input yields ``None`` (total, like every function here) --
+    ``urlsplit.port`` raises ValueError on a non-numeric port, which is caught.
+    """
+    try:
+        parsed = urlsplit(dsn)
+        if parsed.port is not None:
+            return str(parsed.port)
+    except ValueError:
+        return _conninfo_value(dsn, "port")
+    return _conninfo_value(dsn, "port") or _query_value(dsn, "port")
+
+
+def _query_value(dsn: str, key: str) -> str | None:
+    """The value of one query-string key, lowercased, or ``None``."""
+    try:
+        query = urlsplit(dsn).query
+    except ValueError:
+        return None
+    for pair in query.split("&"):
+        name, sep, value = pair.partition("=")
+        if sep and name.strip().lower() == key and value:
+            return unquote(value).strip().lower() or None
+    return None
+
+
+def _conninfo_dbname(dsn: str) -> str | None:
+    """The ``dbname=`` value of a libpq keyword conninfo string, or ``None``."""
+    return _conninfo_value(dsn, "dbname", lower=False)
+
+
+def _conninfo_value(dsn: str, key: str, *, lower: bool = True) -> str | None:
+    """The value of one keyword-conninfo key, or ``None``.
+
+    Shares :func:`_is_single_quoted` with the redaction path so a quoted value
+    (``host='db.example.com'``) yields its bare form here too.
+    """
+    if "=" not in dsn:
+        return None
+    normalized = re.sub(r"\s*=\s*", "=", dsn)
+    for token in normalized.split():
+        name, sep, value = token.partition("=")
+        if sep and name.strip().lower() == key and value:
+            bare = value[1:-1] if _is_single_quoted(value) else value
+            bare = bare.strip()
+            return (bare.lower() if lower else bare) or None
+    return None
+
+
 def _is_single_quoted(value: str) -> bool:
     """True when ``value`` is wrapped in matching single quotes (length >= 2).
 
