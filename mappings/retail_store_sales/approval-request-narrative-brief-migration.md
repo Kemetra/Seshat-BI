@@ -228,7 +228,7 @@ confirmation, especially the multi-question rows.
 | v07 | bar | TotalQuantity | [Q3] | by `dim_product_rss[category]` |
 | v08 | bar/donut | TotalSales | [Q4] | by `dim_location_rss[location]` |
 | v09 | column | AvgTransactionValue | [Q5] | by `dim_payment_method_rss[payment_method]` |
-| v10 | table | TransactionCount | [Q6] | by `dim_customer_rss[customer_id]` (Top N) |
+| v10 | table | TransactionCount | [Q6] | by `dim_customer_rss[customer_id]` (Top N) -- **see the `customer_id` PII note under D2's dimension material**: the profile still records that question as open |
 
 **What the owner reviews in the draft:**
 
@@ -281,7 +281,7 @@ and `source-profile.md` carries them with measured cardinality and missingness:
 | `item` | 201 | 9.65% | 1:1 with `category` (0 fan-out) |
 | `payment_method` | 3 | 0.00% | Cash / Credit Card / Digital Wallet |
 | `location` | 2 | 0.00% | In-store / Online |
-| `customer_id` | 25 | 0.00% | pseudonymous surrogate; PII question ruled Q1-keep |
+| `customer_id` | 25 | 0.00% | `CUST_xx` pseudonymous surrogate -> dim candidate. **PII question OPEN in the profile** (see below) |
 
 The v1 schema's `cites.dimensions` wants a **dotted semantic-model** reference
 (`dim_product_rss.category`), which the two permitted inputs do not carry -- that
@@ -294,6 +294,30 @@ So: derive *which* dimensions a question needs from the profiled columns above;
 treat the dotted spelling as a mechanical translation, and do not let the
 un-ground-checked field become a route for material the two inputs never
 supported.
+
+#### `customer_id` -- do NOT assume the PII question is settled
+
+`source-profile.md` records the PII question as **open** and its own
+`Source-ready status: warning` for that reason:
+
+> "the `customer_id` PII question is open. Not `pass` until the analyst confirms
+> the semantics and governance rules on the PII column."
+
+The Q1 ruling that answers it (`2026-06-25 (data owner): KEEP customer_id as
+dim_customer -- pseudonymous surrogate, no raw PII`) lives in
+`unresolved-questions.md` and the readiness `approvals[]` -- **neither of which is
+one of the two permitted derivation inputs.** The profile was never updated with
+the outcome.
+
+Consequences for a customer-level question (the q6 candidate):
+
+- An agent deriving strictly from the two inputs must treat customer-level
+  publishing as **unresolved**, and either omit it or record it as a `gaps[]`
+  entry -- never assume it is approved.
+- **This is a live D-level item for the owner**, and arguably the cleanest fix is
+  to write the Q1 outcome (and the resulting `Source-ready status`) THROUGH to
+  `source-profile.md`, so the permitted input carries the ruling it depends on.
+  That is a profile edit, so it is the owner's call, not the agent's.
 
 ## Known caveat that any narrative must carry
 
