@@ -69,8 +69,21 @@ def _load_yaml(ctx: RuleContext, rel: str) -> dict | None:
     import yaml  # lazy: kept out of the retail check static-core chain
 
     try:
-        data = yaml.safe_load((ctx.repo_root / rel).read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
+        data = yaml.safe_load((ctx.repo_root / rel).read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        # UnicodeDecodeError is a ValueError, NOT an OSError: without it an
+        # undecodable byte in ANY committed map propagates out of this rule and
+        # through `runner.run` (which calls `registered.rule(ctx)` unguarded),
+        # taking the ENTIRE `retail check` run down -- no findings reported at all.
+        # HR13 (`placement_resolution.py`) reads the SAME maps and already degrades
+        # to None here; the two must agree on whether a file is parseable, or one
+        # governance rule crashes the gate where its twin passes cleanly (#508).
+        #
+        # `utf-8-sig` matches HR13 and every other YAML-artifact reader in this
+        # package. It is a no-op on the committed maps: PyYAML's Reader strips a
+        # leading U+FEFF itself, so a BOM parses identically under plain `utf-8`
+        # (verified -- the #508 report's BOM premise does not hold). Aligned for
+        # house consistency, not for a behavior change.
         return None
     return data if isinstance(data, dict) else None
 
@@ -148,7 +161,7 @@ def _surrogate_key_divergence(stars: dict[str, dict]) -> str | None:
     return None
 
 
-def _attr_type_divergence(bare: str, stars: dict[str, dict]) -> str | None:
+def _attr_type_divergence(stars: dict[str, dict]) -> str | None:
     """Shared-attribute silver_type divergence across >=2 stars, or None.
 
     Only attributes present on BOTH sides of a pair are compared (graceful
@@ -164,10 +177,20 @@ def _attr_type_divergence(bare: str, stars: dict[str, dict]) -> str | None:
     HR13 mirrors it rather than normalizing, so the gate and this reader agree on
     what "resolves" means. Until HR13 existed, every placement in the reference map
     named a LOGICAL dim and this limb silently compared nothing.
+
+    Resolves each side's prefix from ITS OWN declared name with no fallback: every
+    dim reaching this loop arrives via ``star_dimensions`` -> ``_add_dim``, which
+    drops any dim whose ``bare_dim_name(name)`` is falsy (absent, non-str, empty,
+    whitespace, or schema-only like ``"gold."``) BEFORE it can be indexed. So
+    ``_bare(dim["name"])`` is always truthy here and always equals the bare name
+    this dim was keyed under -- a ``or bare`` fallback was unreachable, and even if
+    reached would have been a no-op (#508). Do not reintroduce one: it would read as
+    handling a case the boundary filter makes impossible.
     """
     typemaps: dict[str, dict[str, str]] = {}
     for sid, (dim, data) in stars.items():
-        dim_bare = _bare(dim.get("name")) or bare
+        dim_bare = _bare(dim.get("name"))
+        assert dim_bare, "star_dimensions drops falsy-bare dims before indexing"
         typemaps[sid] = _attr_silver_types(data, dim_bare)
     # attributes shared by 2+ stars whose type is known on both
     all_attrs: set[str] = set()
@@ -181,13 +204,13 @@ def _attr_type_divergence(bare: str, stars: dict[str, dict]) -> str | None:
     return None
 
 
-def _conformed_divergence(bare: str, stars: dict[str, dict]) -> str | None:
+def _conformed_divergence(stars: dict[str, dict]) -> str | None:
     """Return a human-readable divergence description across >=2 stars, or None.
 
     Compares surrogate_key and shared-attribute silver_type; only fields present
     on BOTH sides of any pair are compared (graceful degradation).
     """
-    return _surrogate_key_divergence(stars) or _attr_type_divergence(bare, stars)
+    return _surrogate_key_divergence(stars) or _attr_type_divergence(stars)
 
 
 def _discover_stars(ctx: RuleContext) -> dict[str, dict]:
@@ -233,7 +256,7 @@ def _evaluate_dimension(
     if decl["status"] == "distinct":
         return []  # deliberately separate -- never fires
     # conformed: verify grain/key/type agree across the covered stars
-    divergence = _conformed_divergence(bare, star_map)
+    divergence = _conformed_divergence(star_map)
     if divergence is None:
         return []
     return [
