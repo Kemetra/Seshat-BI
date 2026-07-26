@@ -247,9 +247,23 @@ def _group_from_tokens(
     default that keeps every pre-existing tokens file's compiled output
     byte-identical (chrome=None/page=None emit no section-5/6/7 card at all;
     see render_theme_json).
+
+    A PRESENT-but-mistyped group (e.g. ``chrome: []`` or ``page: "dark"``) is
+    a different case entirely and must not collapse into the same None: that
+    would compile successfully while silently dropping every requested
+    section 5/6/7 card, with theme_style_cards' own validators never seeing
+    the value (finding B). Only a genuinely ABSENT key skips the type check;
+    once the key is present, its value must be a mapping (empty is fine --
+    it is a no-op group, not a type error).
     """
-    block = tokens_doc.get(group)
-    if not isinstance(block, dict) or not block:
+    if group not in tokens_doc:
+        return None
+    block = tokens_doc[group]
+    if not isinstance(block, dict):
+        raise ThemeCompileError(
+            f"tokens {group!r} must be a mapping, got {type(block).__name__}"
+        )
+    if not block:
         return None
     return {k: block[k] for k in keys if k in block}
 

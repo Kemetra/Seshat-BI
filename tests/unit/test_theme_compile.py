@@ -494,6 +494,70 @@ def test_tokens_without_chrome_or_page_is_byte_identical_regression(tmp_path: Pa
     assert out.read_bytes() == ref_theme
 
 
+# --- Finding B: a present-but-malformed chrome/page group must raise, not
+# be silently treated as absent (which drops the requested section 5/6/7
+# output without a trace).
+
+
+def test_chrome_from_tokens_raises_on_non_mapping_value():
+    from seshat.theme_compile import chrome_from_tokens
+
+    with pytest.raises(ThemeCompileError, match="chrome"):
+        chrome_from_tokens({"chrome": []})
+
+
+def test_page_from_tokens_raises_on_non_mapping_value():
+    from seshat.theme_compile import page_from_tokens
+
+    with pytest.raises(ThemeCompileError, match="page"):
+        page_from_tokens({"page": "dark"})
+
+
+def test_chrome_from_tokens_absent_key_is_unchanged():
+    """Regression: a genuinely ABSENT chrome key is still None, not an error."""
+    from seshat.theme_compile import chrome_from_tokens
+
+    assert chrome_from_tokens({}) is None
+
+
+def test_chrome_from_tokens_empty_mapping_is_unchanged():
+    """Regression: a present-but-EMPTY chrome mapping is still None, not an
+    error -- that distinction (empty vs. wrong-typed) is the point of the fix."""
+    from seshat.theme_compile import chrome_from_tokens
+
+    assert chrome_from_tokens({"chrome": {}}) is None
+
+
+def test_page_from_tokens_absent_key_is_unchanged():
+    from seshat.theme_compile import page_from_tokens
+
+    assert page_from_tokens({}) is None
+
+
+def test_page_from_tokens_empty_mapping_is_unchanged():
+    from seshat.theme_compile import page_from_tokens
+
+    assert page_from_tokens({"page": {}}) is None
+
+
+def test_compile_raises_on_malformed_chrome_group_end_to_end(tmp_path: Path):
+    """A tokens file with `chrome: []` must refuse compilation, not silently
+    emit a theme with no section-5 cards at all."""
+    doc = {**LIGHT_TOKENS, "chrome": []}
+    tokens_path = _write_tokens(tmp_path, doc)
+    with pytest.raises(ThemeCompileError, match="chrome"):
+        compile_theme(tokens_path, out_path=None, force=False)
+
+
+def test_compile_raises_on_malformed_page_group_end_to_end(tmp_path: Path):
+    """A tokens file with `page: "dark"` must refuse compilation, not
+    silently emit a theme with no section-6/7 page cards at all."""
+    doc = {**LIGHT_TOKENS, "page": "dark"}
+    tokens_path = _write_tokens(tmp_path, doc)
+    with pytest.raises(ThemeCompileError, match="page"):
+        compile_theme(tokens_path, out_path=None, force=False)
+
+
 def test_compile_refuses_invisible_gridline_against_background(tmp_path: Path):
     """A chrome.gridline invisible against the background (F4: the non-text
     WCAG 3:1 gate must run at compile time too, not just at generate time)."""

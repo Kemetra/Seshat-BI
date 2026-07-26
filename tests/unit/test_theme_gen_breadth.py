@@ -135,6 +135,55 @@ def test_malformed_gridline_hex_raises_theme_gen_error_not_traceback():
         check_non_text_contrast_or_raise(build_palette(seed), seed)
 
 
+# --- Finding A: the non-text contrast gate must measure against the EMITTED
+# page background (seed.page["background"]), not the palette background --
+# when a page.background override is declared, it is what gridlines/borders
+# actually render against in the compiled theme.
+
+
+def test_gridline_invisible_against_declared_page_background_is_refused():
+    """Repro: gridline #767676 passes against the palette bg #FFFFFF (4.54:1)
+    but is truly invisible (1.00:1) against the DECLARED page.background
+    #767676 that theme-spec sections 6/7 actually paint behind it. The gate
+    must use the emitted ground, or an invisible gridline sails through the
+    very check meant to catch invisible gridlines."""
+    seed = _seed(chrome={"gridline": "#767676"}, page={"background": "#767676"})
+    assert contrast_ratio("#767676", "#FFFFFF") >= AA_NON_TEXT_FLOOR  # passes on palette bg
+    assert contrast_ratio("#767676", "#767676") < AA_NON_TEXT_FLOOR  # fails on real ground
+    with pytest.raises(ThemeGenError, match="gridline"):
+        check_non_text_contrast_or_raise(build_palette(seed), seed)
+
+
+def test_no_page_group_gridline_check_is_unchanged():
+    """Regression: with no `page` declared at all, the ground is still the
+    palette background -- a #767676 gridline on a #FFFFFF palette bg still
+    passes, exactly as before this fix."""
+    seed = _seed(chrome={"gridline": "#767676"})
+    assert seed.page is None
+    check_non_text_contrast_or_raise(build_palette(seed), seed)
+
+
+def test_gridline_legible_against_declared_page_background_passes():
+    """Proves the RIGHT ground is used, not just a tightened floor: a
+    gridline that would FAIL against the palette background must still PASS
+    when it is legible against the declared page.background it actually
+    renders on."""
+    seed = _seed(chrome={"gridline": "#F5F5F5"}, page={"background": "#000000"})
+    # Fails against the (irrelevant) palette background:
+    assert contrast_ratio("#F5F5F5", "#FFFFFF") < AA_NON_TEXT_FLOOR
+    # Passes against the declared page background it actually renders on:
+    assert contrast_ratio("#F5F5F5", "#000000") >= AA_NON_TEXT_FLOOR
+    check_non_text_contrast_or_raise(build_palette(seed), seed)
+
+
+def test_page_group_without_background_key_falls_back_to_palette():
+    """A `page` group that declares no `background` key must not change the
+    ground -- only a page.background OVERRIDE changes what gridlines render
+    against."""
+    seed = _seed(chrome={"gridline": "#767676"}, page={"wallpaper": "#F3F2F1"})
+    check_non_text_contrast_or_raise(build_palette(seed), seed)
+
+
 def _forbidden_dict_keys(node: dict, is_forbidden: Callable[[str], bool]) -> list[str]:
     """``_collect_forbidden_keys`` helper: check + recurse over one dict's items."""
     offenders: list[str] = []

@@ -430,17 +430,37 @@ def check_font_floor_or_raise(seed: ThemeSeed) -> None:
         )
 
 
+def _non_text_ground(palette: dict, seed: ThemeSeed) -> str:
+    """The color gridlines/borders actually render against.
+
+    ``seed.page["background"]`` (theme-spec sections 6/7), when declared,
+    OVERRIDES the palette background as the page's real fill -- that is what
+    ``render_theme_json`` writes into ``visualStyles["page"]["*"]["background"]``.
+    Preferring it here keeps the gate measuring the same ground the compiled
+    theme actually paints, instead of a palette color the page may no longer
+    show. Falls back to the palette background when no ``page`` group is
+    declared, or when it is declared without a ``background`` key -- both keep
+    today's behavior unchanged.
+    """
+    page = seed.page or {}
+    declared = page.get("background")
+    return declared if declared is not None else palette["colors"]["background"]
+
+
 def check_non_text_contrast_or_raise(
     palette: dict, seed: ThemeSeed, floor: float = AA_NON_TEXT_FLOOR
 ) -> None:
     """Every declared non-text chrome color must clear ``floor`` on its ground.
 
-    Gridlines and borders sit on the page background. A ``None`` color is an
-    explicit "off" declaration, not a faint color, so it is skipped rather than
-    failed. Raises ``ThemeGenError`` naming the offending token.
+    Gridlines and borders sit on the page background -- the EMITTED one (see
+    ``_non_text_ground``), not necessarily the palette's, since a declared
+    ``page.background`` overrides what the page actually renders. A ``None``
+    color is an explicit "off" declaration, not a faint color, so it is
+    skipped rather than failed. Raises ``ThemeGenError`` naming the offending
+    token.
     """
     chrome = seed.chrome or {}
-    ground = palette["colors"]["background"]
+    ground = _non_text_ground(palette, seed)
     for field in ("gridline", "border"):
         color = chrome.get(field)
         if color is None:
