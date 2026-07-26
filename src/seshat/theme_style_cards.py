@@ -196,8 +196,19 @@ def build_star_cards(chrome: dict) -> dict[str, list[dict]]:
 
 
 def _colored_card(page: dict, color_key: str, pct_key: str) -> list[dict] | None:
-    """One color+transparency card, or None when the color is not declared."""
+    """One color+transparency card, or None when the color is not declared.
+
+    A transparency declared WITHOUT its colour is refused rather than dropped
+    (#521): Power BI has no card to hang it on, so the early return would leave
+    a valid-looking committed token with no effect and no explanation.
+    """
     if color_key not in page:
+        if pct_key in page:
+            raise StyleCardError(
+                f"{pct_key} is declared without {color_key}; a transparency "
+                f"needs the colour it applies to -- declare {color_key} or "
+                f"remove {pct_key}"
+            )
         return None
     color = _require_hex(page[color_key], color_key)
     card: dict = {"color": _fill(color)}
@@ -207,17 +218,47 @@ def _colored_card(page: dict, color_key: str, pct_key: str) -> list[dict] | None
 
 
 def _outspace_pane_card(page: dict) -> list[dict] | None:
-    """The ``outspacePane`` card (filter pane background/text), or None."""
+    """The ``outspacePane`` card (filter pane background/text), or None.
+
+    When BOTH halves are declared they are gated against the WCAG AA text floor
+    (#521). The palette-level contrast checks look at the palette text roles and
+    the chrome borders/gridlines, never at this pair, so an unreadable filter
+    pane -- identical fg/bg is the degenerate case -- otherwise validates as two
+    fine hex values and ships.
+
+    Presence is tested with ``in``, never ``.get(...) is not None``: a key
+    PRESENT with a null value is a malformed input, not an absent one, and must
+    reach ``_require_hex`` to be refused. Skipping it would silently drop the
+    setting -- and silently skip the contrast gate when only one half is null.
+    """
     pane: dict = {}
-    if "filter_pane_background" in page:
+    has_bg = "filter_pane_background" in page
+    has_text = "filter_pane_text" in page
+    if has_bg:
         pane["backgroundColor"] = _fill(
             _require_hex(page["filter_pane_background"], "filter_pane_background")
         )
-    if "filter_pane_text" in page:
+    if has_text:
         pane["foregroundColor"] = _fill(
             _require_hex(page["filter_pane_text"], "filter_pane_text")
         )
+    if has_bg and has_text:
+        _require_readable_pair(page["filter_pane_text"], page["filter_pane_background"])
     return [pane] if pane else None
+
+
+def _require_readable_pair(text: str, background: str) -> None:
+    """Refuse a filter-pane pair below the AA text contrast floor."""
+    from seshat.color import contrast_ratio
+    from seshat.theme_gen import AA_FLOOR
+
+    ratio = contrast_ratio(text, background)
+    if ratio < AA_FLOOR:
+        raise StyleCardError(
+            f"filter_pane_text {text} on filter_pane_background {background} "
+            f"has contrast {ratio:.2f}:1 -- below the {AA_FLOOR}:1 WCAG AA text "
+            f"floor; the filter pane would be unreadable"
+        )
 
 
 def _filter_state_cards(page: dict) -> list[dict] | None:
