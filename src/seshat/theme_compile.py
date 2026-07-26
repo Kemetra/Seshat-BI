@@ -78,15 +78,73 @@ _GENERATOR_OWNED_CARDS: dict[str, tuple[str, ...]] = {
 _GENERATOR_OWNED_VISUAL_STYLE_KEYS = _GENERATOR_OWNED_CARDS["*"]
 
 
-def _prune_generator_cards(style: object, owned: tuple[str, ...]) -> object:
-    """One style-preset dict with the generator-owned cards removed."""
+def _prune_generator_cards(
+    style: object, owned: tuple[str, ...], rendered_cards: dict[str, frozenset[str]]
+) -> object:
+    """One style-preset dict with the generator-written PROPERTIES removed.
+
+    Pruning is property-level, not card-level (#520). The generator writes
+    individual properties into a card, so removing the whole card would strip a
+    human's hand-tune sitting beside them -- from BOTH sides of the deferred
+    comparison, which registers no conflict and lets ``--force`` overwrite it
+    silently. A card is emptied (and dropped) only when every property in it
+    was generator-written.
+    """
     if not isinstance(style, dict):
         return style
-    return {k: v for k, v in style.items() if k not in owned}
+    kept: dict[str, object] = {}
+    for card, value in style.items():
+        if card not in owned:
+            kept[card] = value
+            continue
+        remainder = _human_owned_card(value, rendered_cards.get(card, frozenset()))
+        if remainder:
+            kept[card] = remainder
+    return kept
 
 
-def _rendered_star_cards(rendered: object, visual_type: str) -> frozenset[str]:
-    """Card names the RENDERED theme actually emits for ``visual_type``'s
+def _card_properties(card: object) -> frozenset[str]:
+    """Property names inside a theme-JSON card.
+
+    A card is a LIST of property bags -- ``[{prop: value, ...}]`` -- per the
+    published schema (``visualStyles > visual > preset > card > [{...}]``), not
+    a bare mapping. Reading it as a mapping yields list indices, so the shape is
+    handled in one place rather than at each call site.
+    """
+    if not isinstance(card, list):
+        return frozenset()
+    names: set[str] = set()
+    for entry in card:
+        if isinstance(entry, dict):
+            names.update(entry)
+    return frozenset(names)
+
+
+def _human_owned_card(card: object, rendered_props: frozenset[str]) -> object:
+    """One card's property bags minus the properties the renderer emitted.
+
+    Returns a card in the same ``[{...}]`` shape carrying only the leftover
+    human properties, or ``None`` when nothing is left. A card that is not a
+    list cannot be compared property-wise, so it survives whole rather than
+    being silently dropped.
+    """
+    if not isinstance(card, list):
+        return card
+    kept_entries: list[dict] = []
+    for entry in card:
+        if not isinstance(entry, dict):
+            kept_entries.append(entry)
+            continue
+        remainder = {k: v for k, v in entry.items() if k not in rendered_props}
+        if remainder:
+            kept_entries.append(remainder)
+    return kept_entries or None
+
+
+def _rendered_star_cards(
+    rendered: object, visual_type: str
+) -> dict[str, frozenset[str]]:
+    """Card name -> property names the RENDERED theme emits for ``visual_type``'s
     ``"*"`` preset.
 
     Emission is conditional on the tokens (a tokens file with no ``chrome:``
@@ -94,18 +152,23 @@ def _rendered_star_cards(rendered: object, visual_type: str) -> frozenset[str]:
     be treated as generator-owned when the rendered document proves the
     generator actually wrote it -- never from the static
     ``_GENERATOR_OWNED_CARDS`` table alone (finding 1 / P1).
+
+    Carrying the PROPERTY names, not just the card names, is what lets pruning
+    match the generator's real write granularity (#520).
     """
     if not isinstance(rendered, dict):
-        return frozenset()
+        return {}
     presets = rendered.get(visual_type)
     star = presets.get("*") if isinstance(presets, dict) else None
-    return frozenset(star) if isinstance(star, dict) else frozenset()
+    if not isinstance(star, dict):
+        return {}
+    return {card: _card_properties(value) for card, value in star.items()}
 
 
 def _human_owned_presets(
-    presets: dict, owned: tuple[str, ...], rendered_cards: frozenset[str]
+    presets: dict, owned: tuple[str, ...], rendered_cards: dict[str, frozenset[str]]
 ) -> dict[str, object]:
-    """One visual type's style presets with generator-owned cards pruned.
+    """One visual type's style presets with generator-written properties pruned.
 
     A NAMED style preset (anything but ``"*"``) is human-authored by definition
     and survives verbatim; the ``"*"`` preset is pruned of the cards that are
@@ -113,6 +176,9 @@ def _human_owned_presets(
     (``rendered_cards``) -- a card absent from the rendered document is
     human-owned regardless of the static table, and dropped entirely if that
     empties it, so it cannot register as a spurious conflict.
+
+    Within an emitted card the pruning is per-PROPERTY (#520), so a human
+    property beside a generated one survives and stays visible to the guard.
     """
     effective_owned = tuple(c for c in owned if c in rendered_cards)
     kept_presets: dict[str, object] = {}
@@ -120,7 +186,7 @@ def _human_owned_presets(
         if preset_name != "*":
             kept_presets[preset_name] = style
             continue
-        pruned = _prune_generator_cards(style, effective_owned)
+        pruned = _prune_generator_cards(style, effective_owned, rendered_cards)
         if pruned:
             kept_presets[preset_name] = pruned
     return kept_presets
@@ -255,6 +321,13 @@ def _group_from_tokens(
     the value (finding B). Only a genuinely ABSENT key skips the type check;
     once the key is present, its value must be a mapping (empty is fine --
     it is a no-op group, not a type error).
+
+    An UNKNOWN key inside the group is rejected rather than filtered away
+    (#521). Silently dropping ``chrome.data_label`` or
+    ``page.wallpaper_transparancy`` makes a typo indistinguishable from an
+    intentionally absent setting: compilation succeeds, the requested styling
+    never appears, and nothing says why. The vocabulary is closed and small, so
+    naming the offender and the accepted keys is strictly better than guessing.
     """
     if group not in tokens_doc:
         return None
@@ -265,6 +338,12 @@ def _group_from_tokens(
         )
     if not block:
         return None
+    unknown = sorted(k for k in block if k not in keys)
+    if unknown:
+        raise ThemeCompileError(
+            f"tokens {group!r} has unknown key(s) {', '.join(map(repr, unknown))}; "
+            f"accepted keys are {', '.join(keys)}"
+        )
     return {k: block[k] for k in keys if k in block}
 
 
