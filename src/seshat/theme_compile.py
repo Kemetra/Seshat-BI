@@ -63,44 +63,55 @@ _DL3_DEFERRED_FIELDS = (
     "visualStyles",
 )
 
-# ``visualStyles`` is deferred (above) but is NOT wholly human-owned: the
-# generator itself writes the ``*``/``*`` title/label fonts (token-driven since
-# T8) and the opt-in overlay ``background`` (T18). Those sub-keys must NOT count
-# as hand-tuned -- otherwise a legitimate token-declared font/overlay change
-# could never be recompiled over an existing theme (even with --force). Only the
-# REMAINDER of visualStyles (any other visual type or property a human added) is
-# the human-owned surface the deferred-field guard protects.
-_GENERATOR_OWNED_VISUAL_STYLE_KEYS = ("title", "labels", "background")
+# Generator-owned cards per visual type. A card listed here is written by
+# theme_gen from committed tokens, so it is NEVER a human hand-tune -- pruning it
+# before the DL3-deferred comparison is what lets a token change recompile over an
+# existing theme (T8/T18, and spec 5/6/7). Any card NOT listed is human-owned.
+_GENERATOR_OWNED_CARDS: dict[str, tuple[str, ...]] = {
+    "*": ("title", "labels", "background", "categoryAxis", "valueAxis", "border"),
+    "page": ("background", "outspace", "outspacePane", "filterCard"),
+}
+
+# Back-compat alias: the original name, now derived from the table above.
+_GENERATOR_OWNED_VISUAL_STYLE_KEYS = _GENERATOR_OWNED_CARDS["*"]
+
+
+def _prune_generator_cards(style: object, owned: tuple[str, ...]) -> object:
+    """One style-preset dict with the generator-owned cards removed."""
+    if not isinstance(style, dict):
+        return style
+    return {k: v for k, v in style.items() if k not in owned}
 
 
 def _human_owned_visual_styles(vs: object) -> object:
-    """``visualStyles`` with the generator-owned ``*``/``*`` keys removed.
+    """``visualStyles`` with every generator-owned card removed.
 
-    Leaves everything else untouched, so comparing the returned value across
-    existing-vs-rendered detects a hand-tuned visualStyle a human added while
-    ignoring token-driven font/overlay churn the generator legitimately owns.
+    Table-driven over ``_GENERATOR_OWNED_CARDS`` so a new emission target (a new
+    visual type or card) is declared in one place. Comparing the returned value
+    across existing-vs-rendered detects a hand-tuned visualStyle a human added
+    while ignoring token-driven churn the generator legitimately owns. An empty
+    style preset or visual type is dropped entirely so it cannot register as a
+    spurious conflict.
     """
     if not isinstance(vs, dict):
         return vs
-    result = {k: v for k, v in vs.items()}
-    star = result.get("*")
-    if isinstance(star, dict):
-        new_star = {k: v for k, v in star.items()}
-        star_star = new_star.get("*")
-        if isinstance(star_star, dict):
-            pruned = {
-                k: v
-                for k, v in star_star.items()
-                if k not in _GENERATOR_OWNED_VISUAL_STYLE_KEYS
-            }
+    result: dict[str, object] = {}
+    for visual_type, presets in vs.items():
+        owned = _GENERATOR_OWNED_CARDS.get(visual_type)
+        if owned is None or not isinstance(presets, dict):
+            result[visual_type] = presets
+            continue
+        kept_presets: dict[str, object] = {}
+        for preset_name, style in presets.items():
+            if preset_name != "*":
+                # A NAMED style preset is human-authored by definition.
+                kept_presets[preset_name] = style
+                continue
+            pruned = _prune_generator_cards(style, owned)
             if pruned:
-                new_star["*"] = pruned
-            else:
-                new_star.pop("*", None)
-        if new_star:
-            result["*"] = new_star
-        else:
-            result.pop("*", None)
+                kept_presets[preset_name] = pruned
+        if kept_presets:
+            result[visual_type] = kept_presets
     return result
 
 
