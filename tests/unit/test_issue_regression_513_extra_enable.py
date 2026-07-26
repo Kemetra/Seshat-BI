@@ -245,6 +245,103 @@ def test_portable_quoting_is_still_surgical_and_idempotent() -> None:
     assert _portable_quoting(once) == once, "not idempotent"
 
 
+def test_a_lazily_imported_sdk_still_reaches_the_hint_not_a_traceback() -> None:
+    """The hint is useless if the reader never sees it.
+
+    `governor/mcp_server.py` imports the SDK LAZILY, inside `create_server`
+    (mcp_server.py:12). So `from ..governor.mcp_server import run_stdio` SUCCEEDS
+    with the extra absent, the old guard never fired, and the real
+    `ModuleNotFoundError` escaped as a raw traceback -- hiding the one message that
+    tells the reader how to fix it.
+
+    Found by running `seshat mcp` in a venv without the extra while verifying #513
+    end-to-end; the string tests all passed and the user-visible path was broken.
+    Simulated here by making the SDK import fail at CALL time, not import time.
+    """
+    import builtins
+
+    from seshat import cli
+
+    original = builtins.__import__
+
+    def sdk_missing(name, *args, **kwargs):
+        if name.startswith("mcp"):
+            raise ModuleNotFoundError("No module named 'mcp'")
+        return original(name, *args, **kwargs)
+
+    monkeypatch = pytest.MonkeyPatch()
+    try:
+        monkeypatch.setattr(builtins, "__import__", sdk_missing)
+        code = cli._run_mcp(Namespace(repo="."))
+    finally:
+        monkeypatch.undo()
+
+    assert code == 2, "a missing SDK must exit 2, not raise"
+
+
+def test_the_emitted_dependency_makes_the_feature_importable() -> None:
+    """The table must name the extra's REAL import closure, not a subset.
+
+    A hint that installs an incomplete closure runs clean and leaves the feature
+    still broken -- the reader retries, fails identically, and sees the same hint.
+    Verified end-to-end in a clean venv before shipping: `seshat mcp` went from
+    `ModuleNotFoundError: No module named 'mcp'` to `create_server` returning a
+    working `FastMCP` after running exactly the emitted spec.
+
+    Pinned statically here (the e2e run needs a network install): the module the
+    SDK import actually needs must be the distribution the table names.
+    """
+    from seshat.cli import _extra_dependency_specs
+
+    specs = _extra_dependency_specs("mcp")
+
+    # `mcp_server.py` does `from mcp.server.fastmcp import FastMCP`, so the top
+    # level package the table installs must be `mcp`.
+    assert any(spec.startswith("mcp") for spec in specs)
+    source = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "seshat"
+        / "governor"
+        / "mcp_server.py"
+    ).read_text(encoding="utf-8")
+    assert "from mcp.server.fastmcp import FastMCP" in source, (
+        "the SDK import moved -- re-verify the dependency table against it"
+    )
+
+
+def test_every_extra_with_a_hint_call_site_has_a_dependency_table() -> None:
+    """`_EMITTED_EXTRAS` must not certify coverage it does not have.
+
+    The table is only consulted for extras this package actually emits a hint for.
+    If a new `_extra_install_hint('files')` call site appears and `files` is not in
+    the table, the fallback silently emits the RE-RESOLVING form #513 exists to
+    kill -- and a hardcoded test list would not notice. So the call sites are
+    DISCOVERED from the source rather than declared here.
+    """
+    from seshat.cli import _EXTRA_DEPENDENCIES
+
+    src = Path(__file__).resolve().parents[2] / "src" / "seshat"
+    called: set[str] = set()
+    for path in src.rglob("*.py"):
+        called |= set(
+            re.findall(
+                r"_extra_install_hint\(\s*['\"]([A-Za-z0-9_-]+)['\"]",
+                path.read_text(encoding="utf-8"),
+            )
+        )
+
+    assert called, "no call sites found -- the discovery regex is broken"
+    missing = called - set(_EXTRA_DEPENDENCIES)
+    assert not missing, (
+        f"these extras are emitted but have no dependency table, so they fall "
+        f"back to the re-resolving form: {sorted(missing)}"
+    )
+    # Every table entry must also be a real extra.
+    declared = _pyproject_extras()
+    assert not set(_EXTRA_DEPENDENCIES) - set(declared), "table names a fake extra"
+
+
 def test_the_driver_hint_is_untouched() -> None:
     """#513 changes the EXTRA hint; `_db_extra_hint`'s six callers must not move.
 

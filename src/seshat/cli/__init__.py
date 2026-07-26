@@ -125,18 +125,36 @@ def _run_doctor(args: object) -> int:
 
 
 def _run_mcp(args: object) -> int:
+    # The guard covers the CALL, not just the module import. `mcp_server` imports
+    # the SDK lazily INSIDE `create_server` (mcp_server.py:12), so
+    # `from ..governor.mcp_server import run_stdio` SUCCEEDS with the extra absent
+    # and the real `ModuleNotFoundError` escaped from `run_stdio()` on the next
+    # line -- the reader got a raw traceback instead of this hint, which is the one
+    # surface that tells them how to fix it. Found while verifying #513
+    # end-to-end: `seshat mcp` in a venv without the extra printed
+    # `ModuleNotFoundError: No module named 'mcp'` and never reached the except.
+    #
+    # `ModuleNotFoundError` is a subclass of `ImportError`, so one clause covers
+    # both the absent-module and absent-symbol cases.
+    #
+    # Only SERVER CONSTRUCTION is guarded, not the serve loop: `create_server` is
+    # where the SDK import happens, and a running stdio server that later raises
+    # ImportError from some other path must NOT be misreported as a missing extra.
     try:
-        from ..governor.mcp_server import run_stdio
+        from ..governor.mcp_server import create_server
+
+        server = create_server(Path(args.repo))  # type: ignore[attr-defined]
     except ImportError:
         # Both install lanes, from the one shared source -- a bare `pip install`
-        # is the WRONG mechanism in the documented pipx lane (#507).
+        # is the WRONG mechanism in the documented pipx lane (#507), and enabling
+        # the extra must not re-resolve seshat-bi itself (#513).
         print(
             "error: MCP support is optional; install it with:\n"
             f"{_extra_install_hint('mcp')}",
             file=sys.stderr,
         )
         return 2
-    run_stdio(Path(args.repo))  # type: ignore[attr-defined]
+    server.run(transport="stdio")
     return 0
 
 
