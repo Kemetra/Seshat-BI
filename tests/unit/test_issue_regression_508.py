@@ -102,14 +102,26 @@ def test_an_undecodable_byte_never_escapes_hr1_through_the_runner(
     unreadable artifact; it never takes the gate down.
 
     FAILS PRE-FIX with ``UnicodeDecodeError`` escaping ``check_hr1``.
+
+    The guarantee under test is "does not RAISE", not "reports nothing": degrading
+    silently would be a fail-open, so an unreadable map is now an ERROR finding
+    (#511 review) -- pinned in
+    ``test_issue_regression_511_unreadable_map.py``. Asserting ``== []`` here would
+    pin the fail-open instead, so this asserts the crash guarantee directly.
     """
+    from seshat.core import Severity
     from seshat.rules.conformed_dimension import check_hr1
     from seshat.rules.placement_resolution import check_hr13
 
     ctx = _ctx(tmp_path, _MAP_BODY.encode("utf-8") + b"comment: \xff\n")
 
-    assert list(check_hr1(ctx)) == []
-    assert list(check_hr13(ctx)) == []
+    for rule in (check_hr1, check_hr13):
+        findings = list(rule(ctx))  # must not raise -- that is the #508 fix
+        # ...and must not degrade in silence -- that is the #511-review fix.
+        assert [f for f in findings if f.severity is Severity.ERROR], (
+            f"{rule.__name__} dropped an unreadable map without reporting it"
+        )
+        assert all(_MAP_REL in (f.locator or "") for f in findings)
 
 
 def test_a_bom_prefixed_source_map_parses_identically_under_both_encodings(

@@ -49,7 +49,7 @@ from collections.abc import Iterable
 
 from seshat import star_discovery as _stars
 
-from ..core import Finding, RuleContext, Severity
+from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
 
 RULE_ID = "HR1"
@@ -86,6 +86,72 @@ def _load_yaml(ctx: RuleContext, rel: str) -> dict | None:
         # house consistency, not for a behavior change.
         return None
     return data if isinstance(data, dict) else None
+
+
+def _is_unreadable(ctx: RuleContext, rel: str) -> bool:
+    """Did this file fail to READ/PARSE, as opposed to parsing to a non-dict?
+
+    ``_load_yaml`` collapses two very different outcomes into one ``None``:
+
+      * a genuine read failure -- undecodable bytes, invalid YAML syntax. The
+        artifact is BROKEN and a governance gate must say so.
+      * a successful parse whose result is simply not a mapping -- an EMPTY file
+        (``yaml.safe_load("") is None``), a bare scalar, a top-level list. Those are
+        a different rule's business, and reporting them here would fire on committed
+        artifacts that are merely not stars.
+
+    Only the first is "unreadable". Same encoding and exception tuple as
+    ``_load_yaml``, rather than widening that function's return type -- which would
+    ripple through ``discover_stars``'s injected-loader contract and its
+    ``dbt scaffold`` caller for no gain. HR13 carries the twin of this helper; the
+    two governance rules must agree on what "unreadable" means (#508).
+    """
+    import yaml  # lazy: kept out of the retail check static-core chain
+
+    try:
+        yaml.safe_load((ctx.repo_root / rel).read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return True
+    return False
+
+
+def _unreadable_source_maps(ctx: RuleContext) -> list[Finding]:
+    """ERROR for every tracked source-map path that failed to read/parse.
+
+    ``discover_stars`` silently drops a path whose ``load`` returns ``None``. That is
+    the right behavior for its GENERATOR caller (``dbt scaffold``: "build from
+    whatever I can read"), but wrong for a governance gate -- a corrupted, tracked
+    ``source-map.yaml`` becomes indistinguishable from "not a star", so HR1 stops
+    comparing a dimension across stars the moment one star's map goes unreadable and
+    reports nothing at all.
+
+    Degrading without reporting is a FAIL-OPEN; raising takes the whole
+    ``retail check`` run down (``runner.run`` calls rules unguarded). This is the
+    third option: name the broken artifact and let every other rule keep running.
+
+    Uses the same path predicate (``source_map_table``, ``is_test_path``) as HR13, so
+    both rules agree on which files are in scope; ``discover_stars`` itself is left
+    untouched so its generator caller stays silent.
+    """
+    findings: list[Finding] = []
+    for rel in sorted(ctx.tracked_files):
+        if is_test_path(rel) or _stars.source_map_table(rel) is None:
+            continue
+        if _is_unreadable(ctx, rel):
+            findings.append(
+                Finding(
+                    rule_id=RULE_ID,
+                    severity=Severity.ERROR,
+                    message=(
+                        f"{rel} could not be read as YAML (undecodable bytes or "
+                        "invalid syntax); any dimension it shares with another star "
+                        "cannot be checked for conformance, so the file must be "
+                        "fixed or removed"
+                    ),
+                    locator=rel,
+                )
+            )
+    return findings
 
 
 def _attr_silver_types(data: dict, dim_name: str) -> dict[str, str]:
@@ -274,7 +340,13 @@ def _evaluate_dimension(
 
 @register(RULE_ID, "cross-star conformed-dimension conformance")
 def check_hr1(ctx: RuleContext) -> Iterable[Finding]:
-    findings: list[Finding] = []
+    # BEFORE the star-count threshold, deliberately: an unreadable map is DROPPED by
+    # discovery, so a corrupted second map takes the count from 2 to 1 and the FR-007
+    # early return below would exit with ZERO findings -- silently ceasing to check
+    # conformance for exactly the reason a human needs to hear about. Reported
+    # unconditionally: the artifact is broken whether or not enough OTHER stars
+    # survive to make the cross-star limbs engage.
+    findings: list[Finding] = _unreadable_source_maps(ctx)
 
     stars = _discover_stars(ctx)
     # FR-007: engage only when >1 star exists
