@@ -77,11 +77,38 @@ source of the theme's JSON shape" — but its `palette_from_tokens` reader must
 learn the new token groups, and its DL3-deferred conflict list must be reviewed
 so newly-generated keys are not treated as human-owned hand-tuning.
 
-| Spec section | Emitted into | Fields |
+Emission targets are VERIFIED against Microsoft's published validation schema
+(`reportThemeSchema-2.156.json` in `microsoft/powerbi-desktop-samples`), not
+inferred. The canonical nesting, from Microsoft's own documentation, is:
+
+```
+visualStyles > <visualName> > <stylePresetName> > <cardName> > [{ <propertyName>: <value> }]
+```
+
+| Spec section | Verified emission target | Fields |
 |---|---|---|
-| §5 visual defaults | `visualStyles["*"]["*"]` | background/fill, border (on/off + color), title (on/off + alignment), data labels (on/off), gridlines (on/off + color), default number format |
-| §6 filter-pane defaults | `filterPane`, `filterCard` | pane background/border/text; card background/border/text (LOOK only) |
-| §7 page background | page + wallpaper defaults | page color + transparency, wallpaper color + transparency |
+| §5 visual defaults | `visualStyles["*"]["*"]["<card>"]` | `categoryAxis`/`valueAxis` (gridlines), `border`, `title`, `labels`, `background`, number format |
+| §6 filter-pane defaults | `visualStyles["page"]["*"]["outspacePane"]` + `["filterCard"]` | pane and card appearance (LOOK only) |
+| §7 page background | `visualStyles["page"]["*"]["background"]` + `["outspace"]` | color + transparency (`outspace` IS the wallpaper) |
+
+**§6 and §7 are SIBLINGS under one `page` visual type** — not two separate
+destinations, as an earlier draft of this spec assumed. Per the schema,
+`visualStyles["page"]["*"]` admits exactly 10 cards: `*`, `background`,
+`displayArea`, `filterCard`, `outspace`, `outspacePane`, `pageInformation`,
+`pageRefresh`, `pageSize`, `personalizeVisual`. Only `background`, `outspace`,
+`outspacePane`, and `filterCard` are in scope.
+
+`filterCard` takes a `$id` discriminator for its two states (`"Applied"` /
+`"Available"`) per Microsoft's documented example, so the emitter writes an ARRAY
+of two card objects, not one.
+
+**Schema version is a design input, not a constant.** Microsoft publishes the
+schema per Desktop release (2.114 … 2.156 at time of writing). This spec is
+written against **2.156**; a version bump is a deliberate, reviewed change, and
+the emitted `$schema` reference should name the pinned version.
+
+Note the schema file is served UTF-8 **with a BOM** — read it with `utf-8-sig`,
+the same encoding this repo's own TMDL/JSON readers already use.
 
 Number format values are constrained to the spec's stated vocabulary
 (`#,##0`, `#,##0.00`, `0.0%`) — refuse anything else, consistent with how
@@ -153,13 +180,14 @@ fail-open findings from the 2026-07-26 inventory stay out of scope and unfixed.
 
 ## Risks
 
-- **Power BI theme schema uncertainty.** `templates/theme-json-spec.md` §9 already
-  treats the schema as UNCERTAIN. Filter-pane and wallpaper key names must be
-  verified against Microsoft's published schema before implementation; a wrong
-  key name is silently ignored by Desktop, which is a fail-open of its own.
-  Mitigation: verify key names during implementation, and have the preview render
-  from tokens rather than from the emitted JSON so a bad key name cannot make the
-  preview lie.
+- **Power BI theme schema uncertainty — RESOLVED for the keys in scope.**
+  `templates/theme-json-spec.md` §9 treats the schema as UNCERTAIN. That caveat is
+  now retired for this work: all §5/§6/§7 key paths were verified directly against
+  Microsoft's published validation schema (`reportThemeSchema-2.156.json`), which
+  Power BI itself uses to validate a theme on import. Residual risk is only that
+  the schema is versioned per Desktop release — mitigated by pinning 2.156 and
+  treating a bump as a reviewed change. The preview still renders from tokens
+  rather than the emitted JSON, so a valid-but-wrong key cannot make it lie.
 - **DL3 fidelity rule interaction.** DL3 reconciles declared token↔theme
   correspondences and blocks on drift. New token groups must either be covered by
   DL3 or explicitly deferred like the existing DL3-deferred set — not left
@@ -195,21 +223,25 @@ realistic §5/§6/§7 key names were tested empirically against `_is_forbidden`:
 **Required**: keep a test asserting every emitted key name passes
 `_is_forbidden`, so a future key addition cannot silently reintroduce this.
 
-**C-3. §7 page background lands INSIDE `visualStyles`, which widens C-1's fix.**
-`templates/theme-json-spec.md` §7 names the fields (page color/transparency,
-wallpaper color/transparency) but not a theme key. The shipped page-background
-adapter writes to `page.json` → `objects.background` (`pbir_page_background.py:9,18`)
-— a PAGE-LEVEL object, not a top-level report key. In a theme, the equivalent is
-therefore `visualStyles["page"]["*"]` with `background` / `wallpaper` objects, not
-a top-level `background`/`wallpaper` pair.
+**C-3. §6 AND §7 both land INSIDE `visualStyles["page"]`, which widens C-1's fix
+— now CONFIRMED against the published schema, no longer an inference.**
+Verified in `reportThemeSchema-2.156.json`: there is **no** top-level `page`,
+`wallpaper`, `outspacePane`, or `filterCard` property (only `background`,
+`foreground`, `visualStyles`, and 39 others). All four in-scope cards live at
+`visualStyles["page"]["*"]`. This matches the shipped adapter, which writes
+`page.json` → `objects.background` (`pbir_page_background.py:9,18`) — a
+page-level object, never a top-level report key.
 Consequence: C-1's fix is **not** a flat addition of sub-keys to
-`visualStyles["*"]["*"]` — it must also treat a nested `page` visual-type entry as
-generator-owned. That is a nested-key traversal in the DL3-deferred conflict
-check, materially more than a one-line list extension.
-**Required**: confirm the exact key path against Microsoft's published theme
-schema during implementation (spec §9 already treats the schema as UNCERTAIN),
-and make the preview render from TOKENS rather than from the emitted JSON so a
-wrong key name cannot make the preview lie about what Desktop will show.
+`visualStyles["*"]["*"]`. It must treat a nested `page` visual-type entry as
+generator-owned too — a nested-key traversal in the DL3-deferred conflict check,
+materially more than a one-line list extension. Since §6 and §7 share the one
+`page` entry, a single traversal covers both.
+**Required**: extend the generator-owned carve-out to cover
+`visualStyles["page"]["*"]` cards, and render the preview from TOKENS rather than
+from the emitted JSON so a wrong key name cannot make the preview lie about what
+Desktop will show. (Microsoft's docs confirm an unrecognized theme key is a
+validation error on import — but a key that is valid-but-wrong is silently
+accepted, which is why the preview must not read the emitted JSON.)
 - **Preview fidelity is approximate, permanently.** SVG is not Power BI's
   renderer. The stamped disclaimer is the mitigation; it is not a fix, and the
   spec does not claim otherwise.
