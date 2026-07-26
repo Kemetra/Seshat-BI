@@ -331,20 +331,30 @@ def _group_from_tokens(
     """
     if group not in tokens_doc:
         return None
-    block = tokens_doc[group]
+    block = _require_group_mapping(tokens_doc[group], group)
+    if not block:
+        return None
+    _reject_unknown_keys(block, group, keys)
+    return {k: block[k] for k in keys if k in block}
+
+
+def _require_group_mapping(block: object, group: str) -> dict:
+    """``block`` as a mapping, or raise naming the group and the wrong type."""
     if not isinstance(block, dict):
         raise ThemeCompileError(
             f"tokens {group!r} must be a mapping, got {type(block).__name__}"
         )
-    if not block:
-        return None
+    return block
+
+
+def _reject_unknown_keys(block: dict, group: str, keys: tuple[str, ...]) -> None:
+    """Refuse any key outside the group's closed vocabulary (#521)."""
     unknown = sorted(k for k in block if k not in keys)
     if unknown:
         raise ThemeCompileError(
             f"tokens {group!r} has unknown key(s) {', '.join(map(repr, unknown))}; "
             f"accepted keys are {', '.join(keys)}"
         )
-    return {k: block[k] for k in keys if k in block}
 
 
 def chrome_from_tokens(tokens_doc: dict) -> dict | None:
