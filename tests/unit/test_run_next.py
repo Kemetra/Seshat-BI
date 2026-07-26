@@ -308,23 +308,107 @@ def test_open_approval_request_surfaces_as_a_caveat_on_terminal_pass(
     assert "approval-request-narrative-brief-migration.md" in detail
 
 
-def test_answered_approval_request_emits_no_caveat(tmp_path: Path) -> None:
-    """A request the named human already answered is not pending work. Keyed on
-    the request's own `status:` field, so an answered package goes quiet."""
-    _write_status(tmp_path, "orders", _ALL_PASS_STATUS)
+_DECISION = """\
+# Approval Decision -- `already-ruled`
+
+- **question_id:** `already-ruled`
+- **owner:** `Ahmed Shaaban (report_owner)`
+- **date:** `2026-07-26`
+"""
+
+
+def _write_decision(root: Path, table: str, name: str, body: str) -> None:
+    target = root / "mappings" / table / f"approval-decision-{name}.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(body, encoding="utf-8")
+
+
+def _answered_request(root: Path) -> None:
+    _write_status(root, "orders", _ALL_PASS_STATUS)
     _write_request(
-        tmp_path,
-        "orders",
-        "already-ruled",
-        _OPEN_REQUEST.replace("`open`", "`answered`"),
+        root, "orders", "already-ruled", _OPEN_REQUEST.replace("`open`", "`answered`")
     )
+
+
+def test_answered_request_goes_quiet_only_with_a_valid_decision_file(
+    tmp_path: Path,
+) -> None:
+    """`answered` is honoured ONLY when the paired decision file corroborates it
+    (matching question_id + a named owner). Then the request is settled."""
+    _answered_request(tmp_path)
+    _write_decision(tmp_path, "orders", "already-ruled", _DECISION)
 
     result = build_run_next_response(tmp_path, "orders")
 
     assert result["outcome"] == "terminal_pass"
-    assert not [c for c in result["caveats"] if c["kind"] == "open_approval_request"], (
-        "an answered request must not be reported as pending"
+    kinds = {c["kind"] for c in result["caveats"]}
+    assert "open_approval_request" not in kinds
+    assert "unverified_answered_request" not in kinds
+
+
+def test_answered_without_a_decision_file_is_not_trusted(tmp_path: Path) -> None:
+    """THE FORGERY GUARD: flipping `status:` to `answered` must NOT silence the
+    request when no paired decision file exists. A one-token edit cannot make the
+    product behave as though a named human ruled."""
+    _answered_request(tmp_path)
+
+    result = build_run_next_response(tmp_path, "orders")
+
+    caveats = [
+        c for c in result["caveats"] if c["kind"] == "unverified_answered_request"
+    ]
+    assert caveats, f"an unbacked `answered` must stay visible, got {result['caveats']}"
+    assert "no paired approval-decision-already-ruled.md exists" in caveats[0]["detail"]
+
+
+def test_answered_with_a_mismatched_decision_question_id_is_not_trusted(
+    tmp_path: Path,
+) -> None:
+    """A decision file for a DIFFERENT question does not settle this request."""
+    _answered_request(tmp_path)
+    _write_decision(
+        tmp_path,
+        "orders",
+        "already-ruled",
+        _DECISION.replace("question_id:** `already-ruled`", "question_id:** `other`"),
     )
+
+    result = build_run_next_response(tmp_path, "orders")
+
+    assert [c for c in result["caveats"] if c["kind"] == "unverified_answered_request"]
+
+
+def test_answered_with_an_ownerless_decision_file_is_not_trusted(
+    tmp_path: Path,
+) -> None:
+    """A decision record naming no owner is not a named-human ruling."""
+    _answered_request(tmp_path)
+    _write_decision(
+        tmp_path,
+        "orders",
+        "already-ruled",
+        "# Approval Decision\n\n- **question_id:** `already-ruled`\n",
+    )
+
+    result = build_run_next_response(tmp_path, "orders")
+
+    caveats = [
+        c for c in result["caveats"] if c["kind"] == "unverified_answered_request"
+    ]
+    assert caveats and "names no owner" in caveats[0]["detail"]
+
+
+def test_unknown_request_status_is_reported_not_skipped(tmp_path: Path) -> None:
+    """An unrecognized status word must not fall through as a silent pass."""
+    _write_status(tmp_path, "orders", _ALL_PASS_STATUS)
+    _write_request(
+        tmp_path, "orders", "typo-status", _OPEN_REQUEST.replace("`open`", "`opne`")
+    )
+
+    result = build_run_next_response(tmp_path, "orders")
+
+    kinds = {c["kind"] for c in result["caveats"]}
+    assert "unparsed_approval_request" in kinds
 
 
 def test_open_request_caveat_does_not_fabricate_a_blocked_verdict(

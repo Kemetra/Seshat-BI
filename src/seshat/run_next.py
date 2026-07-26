@@ -362,6 +362,40 @@ def _request_status(text: str) -> str | None:
     return match.group("status").strip().lower() if match else None
 
 
+# A request's own `status: answered` is a CLAIM, not proof. Trusting the word
+# alone would let a one-token edit make the product behave as though a named
+# human ruled -- the forgeable-field failure mode. So `answered` is only honoured
+# when the PAIRED decision file exists and independently corroborates it:
+# matching question_id and a named owner. Anything else stays visible.
+_DECISION_QUESTION_ID = re.compile(
+    r"^\s*[-*]?\s*\*{0,2}question_id:?\*{0,2}\s*:?\s*`?(?P<value>[^`\n*]+)`?",
+    re.MULTILINE,
+)
+_DECISION_OWNER = re.compile(
+    r"^\s*[-*]?\s*\*{0,2}owner:?\*{0,2}\s*:?\s*`?(?P<value>[^`\n*]+)`?",
+    re.MULTILINE,
+)
+
+
+def _decision_defect(directory: Path, question_id: str) -> str | None:
+    """``None`` when a paired decision file corroborates ``question_id``, else the
+    named reason it does not (missing / unreadable / mismatched / no owner)."""
+    path = directory / f"approval-decision-{question_id}.md"
+    if not path.is_file():
+        return f"no paired {path.name} exists"
+    try:
+        text = path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return f"the paired {path.name} is unreadable"
+    found = _DECISION_QUESTION_ID.search(text)
+    if found is None or found.group("value").strip().strip("`") != question_id:
+        return f"the paired {path.name} does not declare question_id {question_id!r}"
+    owner = _DECISION_OWNER.search(text)
+    if owner is None or not owner.group("value").strip():
+        return f"the paired {path.name} names no owner"
+    return None
+
+
 def _open_request_caveats(
     repo_root: Path | None, table_dir: str | None
 ) -> list[dict[str, str]]:
@@ -404,6 +438,20 @@ def _open_request_caveats(
                     ),
                 }
             )
+        elif status == "answered":
+            # Corroborate the claim; an unbacked `answered` stays visible.
+            defect = _decision_defect(directory, question_id)
+            if defect is not None:
+                caveats.append(
+                    {
+                        "kind": "unverified_answered_request",
+                        "detail": (
+                            f"approval request {question_id!r} claims "
+                            f"`answered` but {defect} -- the ruling is not "
+                            f"corroborated, so it is still reported ({path.name})"
+                        ),
+                    }
+                )
         elif status == "open":
             caveats.append(
                 {
@@ -413,6 +461,18 @@ def _open_request_caveats(
                         f"named human ruling ({path.name}); present it to the "
                         f"owner -- no readiness stage records this decision, and "
                         f"the agent never answers it itself"
+                    ),
+                }
+            )
+        else:
+            # An unknown status word is not a silent pass (P1, #516 review).
+            caveats.append(
+                {
+                    "kind": "unparsed_approval_request",
+                    "detail": (
+                        f"approval request {question_id!r} declares unknown "
+                        f"status {status!r} ({path.name}); expected `open` or "
+                        f"`answered`, so it is reported rather than skipped"
                     ),
                 }
             )

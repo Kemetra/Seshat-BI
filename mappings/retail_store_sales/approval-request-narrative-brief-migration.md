@@ -80,10 +80,19 @@ status: blocked
 
 ## Decision 1 -- the ranked decision-questions
 
-**The raw material is already owner-authored**, so this is a ratification plus a
-ranking, not an invention. `design/report-intent.yaml` declares six
-`business_questions` authored via `report-intent-interview` under
-`owner: "Ahmed Shaaban (report_owner)"`:
+**These six are UNAPPROVED PROPOSALS, not established owner input.**
+`design/report-intent.yaml` declares them via `report-intent-interview` and names
+`owner: "Ahmed Shaaban (report_owner)"`, but that same file records its own
+readiness as **`blocked`**:
+
+> `no report_intent_approval decision recorded yet for branch_performance_weekly
+> -- awaiting named report_owner approval (Principle V; never self-granted)`
+
+So the file naming an owner does **not** make its questions approved. Each one
+below needs explicit **acceptance, modification, or rejection** — the migration
+must not inherit decisions the named owner has never approved. They are listed
+here as the starting proposal set so the owner has something concrete to react
+to, not as settled input:
 
 | Intent id | Owner's question text (verbatim) |
 |---|---|
@@ -96,8 +105,8 @@ ranking, not an invention. `design/report-intent.yaml` declares six
 
 **What the owner must rule:**
 
-- **1a.** Do q1-q6 carry over as the brief's `questions[]` as-is, or are any
-  dropped as vanity / merged?
+- **1a.** **Accept, modify, or reject each of q1-q6.** They are proposals from a
+  `blocked` intent, so none carries forward by default; silence is not acceptance.
 - **1b.** **Rank them.** Index order IS the rank (owner priority x data
   strength) -- the intent file states no ranking, so this is genuinely new.
 - **1c.** Each must be **re-phrased as a decision**, not a metric request. The

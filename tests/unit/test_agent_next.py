@@ -506,3 +506,68 @@ def test_per_table_json_path_is_unchanged(tmp_path: Path, capsys) -> None:
     assert parsed["outcome"] == "next_action"
     assert parsed["stage"] == "mapping_ready"
     assert "next_allowed_action" not in parsed
+
+
+# --------------------------------------------------------------------------- #
+# An unanswered approval request must reach the GOVERNED action field.
+#
+# Codex review of PR #516 (P1): `run_next` reported the open request as a caveat,
+# but on `terminal_pass` the agent document's `next_allowed_action` still read
+# "No pipeline action", so a conductor following `next --format agent` stopped
+# and never presented the decision. A caveat is informational; the action field
+# is what orchestration obeys.
+# --------------------------------------------------------------------------- #
+
+_ALL_PASS = """\
+table: "silver.orders"
+current_stage: "publish_ready"
+stages:
+  source_ready: {status: "pass", evidence: ["profile"]}
+  mapping_ready: {status: "pass", evidence: ["map"]}
+  silver_ready: {status: "pass", evidence: ["silver"]}
+  gold_ready: {status: "pass", evidence: ["gold"]}
+  semantic_model_ready: {status: "pass", evidence: ["model"]}
+  dashboard_ready: {status: "pass", evidence: ["dashboard"]}
+  publish_ready: {status: "pass", evidence: ["handoff"]}
+approvals:
+  - {stage: mapping_ready, owner: "Ada Lovelace (analyst)", at: "2026-07-01"}
+  - stage: semantic_model_ready
+    owner: "Grace Hopper (metric_owner)"
+    at: "2026-07-01"
+  - {stage: dashboard_ready, owner: "Katherine Johnson (governance)", at: "2026-07-01"}
+  - {stage: publish_ready, owner: "Ahmed Shaaban (data_owner)", at: "2026-07-01"}
+next_action: "done"
+"""
+
+
+def test_open_approval_request_becomes_the_governed_next_action(
+    tmp_path: Path,
+) -> None:
+    """The action field must STOP on the pending ruling, not read
+    "No pipeline action" -- otherwise the conductor never presents it."""
+    _write_status(tmp_path, "orders", _ALL_PASS)
+    request = tmp_path / "mappings" / "orders" / "approval-request-brief-migration.md"
+    request.write_text("# Approval Request\n\n- **status:** `open`\n", encoding="utf-8")
+
+    document = build_agent_next_document(tmp_path, table="orders")
+
+    action = document["next_allowed_action"]
+    assert "No pipeline action" not in action, (
+        f"an open request must not read as nothing-to-do: {action}"
+    )
+    assert action.startswith("STOP")
+    assert "brief-migration" in action
+    assert "never self-grant" in action
+
+
+def test_no_request_on_disk_leaves_the_action_field_alone(tmp_path: Path) -> None:
+    """The override must NOT fire on a table with nothing pending: with no
+    approval-request file the action is whatever the pre-existing chain produced
+    (here the live-validation override), never a fabricated approval STOP."""
+    _write_status(tmp_path, "orders", _ALL_PASS)
+
+    document = build_agent_next_document(tmp_path, table="orders")
+
+    action = document["next_allowed_action"]
+    assert "approval request" not in action
+    assert "never self-grant it." not in action
