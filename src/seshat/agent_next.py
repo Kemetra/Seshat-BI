@@ -95,19 +95,31 @@ _ALWAYS_FORBIDDEN: tuple[str, ...] = (
     "Never run the Power BI execution adapter (F016) from this surface.",
 )
 
+# The INSTALLED console script, not `python -m seshat.cli` -- the same reasoning
+# already applied to `full_assessment_command` below (PR #506 review, P2), now
+# applied to the validation commands this document emits (#507). The validated
+# install lane is `pipx install seshat-bi` (docs/install/user-install.md,
+# docs/install/agent-install.md), which puts `seshat` on PATH inside an ISOLATED
+# environment; the ambient `python` there cannot import `seshat` at all, so
+# `python -m seshat.cli ...` fails with ModuleNotFoundError for exactly the readers
+# this guidance is written for. `seshat` is declared in pyproject's
+# [project.scripts] and is on PATH in the pipx lane AND in an editable dev install,
+# so it is the one form correct in both. (`python -m seshat.cli` remains correct for
+# THIS repo's own dev loop under PYTHONPATH=src -- but this document is emitted into
+# a CONSUMER workspace, which is not that.)
 _BASE_VALIDATION_COMMANDS: tuple[str, ...] = (
-    "python -m seshat.cli check --repo .",
-    "python -m seshat.cli status --repo . --format json",
-    "python -m seshat.cli next --repo . --format json",
+    "seshat check --repo .",
+    "seshat status --repo . --format json",
+    "seshat next --repo . --format json",
 )
 
 _VALIDATION_EXTRAS_BY_STAGE: dict[str, tuple[str, ...]] = {
     "gold_ready": (
-        "python -m seshat.cli validate --source-map "
+        "seshat validate --source-map "
         "mappings/<table>/source-map.yaml  # needs the db extra + a DSN; "
         "without them, report the deferred state -- never fake a pass",
     ),
-    "semantic_model_ready": ("python -m seshat.cli semantic-check --repo .",),
+    "semantic_model_ready": ("seshat semantic-check --repo .",),
 }
 
 _STOP_POINT_BY_STAGE: dict[str, str] = {

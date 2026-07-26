@@ -33,7 +33,18 @@ def _render_adapter(name: str, block: dict) -> list[str]:
     lines += _render_list(
         "open questions (you answer)", block.get("open_questions", [])
     )
-    lines.append(f"    opt-in (only if YOU decide): {block['opt_in_command']}")
+    # Rewrite the install head to the documented pipx form at THIS render boundary
+    # too (#507). `seshat next`'s renderer already does this
+    # (next_guidance_render._portable_quoting); this is the engine string's SECOND
+    # consumer, and it was still emitting the bare `pip install` that fails in the
+    # documented pipx lane. Reusing the one reviewed rewriter -- rather than editing
+    # `orchestration_assess._DBT_OPT_IN` -- honors the deliberate decision recorded
+    # in next_guidance_render.py that the engine owns its own wording.
+    from .next_guidance_render import _portable_quoting
+
+    lines.append(
+        f"    opt-in (only if YOU decide): {_portable_quoting(block['opt_in_command'])}"
+    )
     return lines
 
 
