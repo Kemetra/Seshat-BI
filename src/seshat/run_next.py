@@ -20,6 +20,7 @@ which is no committed table today.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -330,6 +331,92 @@ def _warning_caveat(stage_name: str) -> dict[str, str]:
         "kind": "warning_carried_forward",
         "detail": f"stage {stage_name!r} is warning",
     }
+
+
+# An `open` approval-request document is pending OWNER work that no readiness
+# stage records: the signed stages are legitimately `pass` (the artifact they
+# attest to IS complete) while a follow-up decision on the SAME table is still
+# unanswered. Before this, `next` read stages only, so such a request was
+# unreachable through the product interface -- an agent on the conductor path
+# stopped at a bare `terminal_pass` and never presented the decision (issue
+# #514, raised in review of PR #516).
+#
+# A CAVEAT, never a blocker: fabricating `blocked` on a stage a named human
+# already approved would falsify that approval. The caveat rides the
+# non-blocking verdict so the decision is visible without rewriting history.
+_REQUEST_GLOB = "approval-request-*.md"
+_REQUEST_STATUS = re.compile(
+    r"^\s*[-*]?\s*\*{0,2}status:?\*{0,2}\s*:?\s*`?(?P<status>[A-Za-z_-]+)`?",
+    re.MULTILINE,
+)
+
+
+def _request_status(text: str) -> str | None:
+    """The request's own declared ``status:``, lowercased, or None when absent.
+
+    None is NOT treated as answered -- the caller reports an unparsed request
+    rather than skipping it, because a silent skip on an unreadable artifact is
+    a fail-open (the #453 posture).
+    """
+    match = _REQUEST_STATUS.search(text)
+    return match.group("status").strip().lower() if match else None
+
+
+def _open_request_caveats(
+    repo_root: Path | None, table_dir: str | None
+) -> list[dict[str, str]]:
+    """One caveat per unanswered (or unparseable) ``approval-request-*.md``.
+
+    Read-only and best-effort on location: with no directory context there is
+    nothing to scan, which yields exactly the pre-existing behavior.
+    """
+    if repo_root is None or table_dir is None:
+        return []
+    directory = Path(repo_root) / "mappings" / table_dir
+    if not directory.is_dir():
+        return []
+    caveats: list[dict[str, str]] = []
+    for path in sorted(directory.glob(_REQUEST_GLOB)):
+        question_id = path.stem[len("approval-request-") :]
+        try:
+            text = path.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeDecodeError):
+            caveats.append(
+                {
+                    "kind": "unparsed_approval_request",
+                    "detail": (
+                        f"approval request {question_id!r} is unreadable "
+                        f"({path.name}); it cannot be confirmed answered, so it "
+                        f"is reported rather than skipped"
+                    ),
+                }
+            )
+            continue
+        status = _request_status(text)
+        if status is None:
+            caveats.append(
+                {
+                    "kind": "unparsed_approval_request",
+                    "detail": (
+                        f"approval request {question_id!r} declares no "
+                        f"`status:` ({path.name}); it cannot be confirmed "
+                        f"answered, so it is reported rather than skipped"
+                    ),
+                }
+            )
+        elif status == "open":
+            caveats.append(
+                {
+                    "kind": "open_approval_request",
+                    "detail": (
+                        f"approval request {question_id!r} is OPEN and awaits a "
+                        f"named human ruling ({path.name}); present it to the "
+                        f"owner -- no readiness stage records this decision, and "
+                        f"the agent never answers it itself"
+                    ),
+                }
+            )
+    return caveats
 
 
 # Stages whose `pass` evidence asserts that objects EXIST IN A SPECIFIC DATABASE
@@ -647,6 +734,10 @@ def _build_from_data(
         )
         if result is not None:
             return result
+
+    # An open owner decision recorded outside the stage spine would otherwise be
+    # invisible on the clean verdict (see `_open_request_caveats`).
+    context["caveats"].extend(_open_request_caveats(repo_root, table_dir))
 
     return _response(
         response_table, "terminal_pass", None, {"caveats": context["caveats"]}

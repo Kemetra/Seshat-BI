@@ -25,12 +25,22 @@
     evidence to invent an answerable question.
 
   WHO FILLS THIS
-    An ANALYST/OWNER authors it. Choosing the decision-questions, each
-    question's framing, the story order, and the callouts are Principle-V
-    judgment calls -- an agent MUST NOT self-author or self-approve them. The
-    checker asserts the brief obeys its own frozen schema; it never judges
-    whether a question is the RIGHT question. A clean `narrative-check` is
-    EVIDENCE FOR the named human design review, never a substitute for it.
+    The AGENT derives and authors the brief -- that is exactly what the
+    `bi-analyst-knowledge` route is for: ranked decision-questions, the framing
+    per question, the guardrail basis, the story order, and the callouts, all
+    GROUNDED in the two committed inputs. Ending on prose instead of a committed
+    brief is the anti-pattern.
+
+    The boundary is APPROVAL, not authorship (`No self-granted pass`):
+      - DO author the brief, and re-derive it when a contract revision changes.
+      - DO record an unanswerable owner question as a `gaps[]` entry, not a guess.
+      - DO NOT fill the `Reviewed by:` line, and DO NOT treat a clean
+        `narrative-check` as an approval -- it is EVIDENCE FOR the named human
+        design review, never a substitute for it.
+      - DO NOT set any readiness stage to `pass` on the strength of this brief.
+
+    The checker asserts the brief obeys its own frozen schema; it never judges
+    whether a question is the RIGHT question. That judgment is the human review.
 
   VERIFY BEFORE REVIEW
     seshat narrative-check --table <table> --report .

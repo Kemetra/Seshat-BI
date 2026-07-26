@@ -241,3 +241,118 @@ next_action: "Begin Mapping Ready (Stage 2) -- the source-mapping gate."
         assert banned not in dumped
     after = sorted(p.relative_to(tmp_path) for p in tmp_path.rglob("*") if p.is_file())
     assert before == after
+
+
+# --------------------------------------------------------------------------- #
+# Open approval requests must be REACHABLE through the product interface.
+#
+# Codex review of PR #516 (P1): a packaged approval-request document created an
+# `open` owner decision, but `next` returned a bare `terminal_pass` because it
+# reads readiness STAGES only -- so an agent following the conductor path stopped
+# and the pending decision was unreachable. The stages are legitimately `pass`
+# (the signed design IS complete), so the honest surface is a CAVEAT on the
+# non-blocking verdict, not a fabricated `blocked`.
+# --------------------------------------------------------------------------- #
+
+_ALL_PASS_STATUS = """\
+table: "silver.orders"
+current_stage: "publish_ready"
+stages:
+  source_ready: {status: "pass", evidence: ["profile"]}
+  mapping_ready: {status: "pass", evidence: ["map"]}
+  silver_ready: {status: "pass", evidence: ["silver"]}
+  gold_ready: {status: "pass", evidence: ["gold"]}
+  semantic_model_ready: {status: "pass", evidence: ["model"]}
+  dashboard_ready: {status: "pass", evidence: ["dashboard"]}
+  publish_ready: {status: "pass", evidence: ["handoff"]}
+approvals:
+  - {stage: mapping_ready, owner: "Ada Lovelace (analyst)", at: "2026-07-01"}
+  - stage: semantic_model_ready
+    owner: "Grace Hopper (metric_owner)"
+    at: "2026-07-01"
+  - {stage: dashboard_ready, owner: "Katherine Johnson (governance)", at: "2026-07-01"}
+  - {stage: publish_ready, owner: "Ahmed Shaaban (data_owner)", at: "2026-07-01"}
+next_action: "done"
+"""
+
+_OPEN_REQUEST = """\
+# Approval Request -- `narrative-brief-migration`
+
+- **question_id:** `narrative-brief-migration`
+- **stage:** `dashboard_ready`
+- **status:** `open`
+"""
+
+
+def _write_request(root: Path, table: str, name: str, body: str) -> None:
+    target = root / "mappings" / table / f"approval-request-{name}.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(body, encoding="utf-8")
+
+
+def test_open_approval_request_surfaces_as_a_caveat_on_terminal_pass(
+    tmp_path: Path,
+) -> None:
+    """An `open` request must be VISIBLE on the otherwise-clean verdict, so the
+    conductor can present it instead of stopping at a bare `terminal_pass`."""
+    _write_status(tmp_path, "orders", _ALL_PASS_STATUS)
+    _write_request(tmp_path, "orders", "narrative-brief-migration", _OPEN_REQUEST)
+
+    result = build_run_next_response(tmp_path, "orders")
+
+    assert result["outcome"] == "terminal_pass"
+    caveats = [c for c in result["caveats"] if c["kind"] == "open_approval_request"]
+    assert caveats, f"expected an open_approval_request caveat, got {result['caveats']}"
+    detail = caveats[0]["detail"]
+    assert "narrative-brief-migration" in detail
+    assert "approval-request-narrative-brief-migration.md" in detail
+
+
+def test_answered_approval_request_emits_no_caveat(tmp_path: Path) -> None:
+    """A request the named human already answered is not pending work. Keyed on
+    the request's own `status:` field, so an answered package goes quiet."""
+    _write_status(tmp_path, "orders", _ALL_PASS_STATUS)
+    _write_request(
+        tmp_path,
+        "orders",
+        "already-ruled",
+        _OPEN_REQUEST.replace("`open`", "`answered`"),
+    )
+
+    result = build_run_next_response(tmp_path, "orders")
+
+    assert result["outcome"] == "terminal_pass"
+    assert not [c for c in result["caveats"] if c["kind"] == "open_approval_request"], (
+        "an answered request must not be reported as pending"
+    )
+
+
+def test_open_request_caveat_does_not_fabricate_a_blocked_verdict(
+    tmp_path: Path,
+) -> None:
+    """The signed stages stay `pass`: an open follow-up decision is a caveat, not
+    a blocker. Flipping a real approval to `blocked` would falsify it."""
+    _write_status(tmp_path, "orders", _ALL_PASS_STATUS)
+    _write_request(tmp_path, "orders", "narrative-brief-migration", _OPEN_REQUEST)
+
+    result = build_run_next_response(tmp_path, "orders")
+
+    assert result["outcome"] == "terminal_pass"
+    assert result["stage"] is None
+    assert result.get("blocking_reasons") in (None, [], ())
+
+
+def test_unreadable_request_is_reported_not_silently_skipped(tmp_path: Path) -> None:
+    """A request whose `status:` cannot be parsed must NOT be treated as
+    answered -- a silent skip on an unreadable artifact is a fail-open."""
+    _write_status(tmp_path, "orders", _ALL_PASS_STATUS)
+    _write_request(
+        tmp_path, "orders", "no-status-field", "# Approval Request\n\nprose\n"
+    )
+
+    result = build_run_next_response(tmp_path, "orders")
+
+    kinds = {c["kind"] for c in result["caveats"]}
+    assert "unparsed_approval_request" in kinds, (
+        f"an unreadable request must be reported, got {result['caveats']}"
+    )
