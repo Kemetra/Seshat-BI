@@ -79,9 +79,10 @@ What that boundary does and does not cover:
 2. **The brief itself IS the agent's to draft** -- deriving the questions,
    framings, guardrail bases, story order, and callouts from the two committed
    inputs is the `bi-analyst-knowledge` route's job. What the agent may not do is
-   APPROVE that draft, or record the ruling on the owner's behalf
-   (`never_self_grant_approval`). D1-D4 below are therefore the review agenda for
-   a draft, not work handed to the owner.
+   APPROVE that draft, or DECIDE any of D1-D5 on the owner's behalf
+   (`never_self_grant_approval`) -- though it may TRANSCRIBE a ruling the owner
+   supplied (see "TRANSCRIPTION vs DECIDING" below). D1-D4 are therefore the
+   review agenda for a draft, not work handed to the owner.
 
 **Do not "fix"** `tests/unit/test_narrative_check.py::test_real_worked_example_map_still_needs_phase_b_migration`.
 It pins today's fail-closed state on purpose; its flipping is the signal that
@@ -181,8 +182,14 @@ checker:
 ```
 
 The checker asserts a basis is *present*; **whether the basis is wise is exactly
-this review.** `report-intent.yaml` offers `comparisons: ["vs prior period",
-"trend over time (month)"]` as candidate bases, but assigns none to a question.
+this review.** The basis must be grounded in the two permitted inputs -- and
+`source-profile.md` is what makes a time-based basis defensible here: it measures
+`transaction_date` as `0.00%` missing with 1,114 distinct values spanning
+**2022-01-01 .. 2025-01-18**, and the source carries no separate posting or return
+date -- so a period comparison has exactly one date to compare on, over three
+full years. `report-intent.yaml` happens to list
+`comparisons: ["vs prior period", "trend over time (month)"]` and assigns none to
+a question -- **review context only**, not the derivation's source.
 
 **What the owner reviews in the draft:** the framing card for each question, and for every
 guardrail-bearing choice, the named `basis` (plus optional `window` /
@@ -263,29 +270,57 @@ contracts:
 
 **Re-stamp these if any contract changes before the brief is committed.**
 
-Dimensions available for `cites.dimensions` (from `report-intent.yaml`):
-`dim_date_rss.full_date`, `dim_product_rss.category`, `dim_location_rss.location`,
-`dim_payment_method_rss.payment_method`, `dim_customer_rss.customer_id`.
-Note `cites.dimensions` is **not** ground-checked in v1 (the dotted-ref vs
-bare-column mismatch is a recorded owner inconsistency, not a checker gap).
+### Dimension material -- ground it in the source-profile, not this list
+
+The **profiled source columns** are the permitted grounding for a dimension cite,
+and `source-profile.md` carries them with measured cardinality and missingness:
+
+| Column | Distinct | Missing | Profile note |
+|---|---|---|---|
+| `category` | 8 | 0.00% | clean product category -> dim attribute / rollup |
+| `item` | 201 | 9.65% | 1:1 with `category` (0 fan-out) |
+| `payment_method` | 3 | 0.00% | Cash / Credit Card / Digital Wallet |
+| `location` | 2 | 0.00% | In-store / Online |
+| `customer_id` | 25 | 0.00% | pseudonymous surrogate; PII question ruled Q1-keep |
+
+The v1 schema's `cites.dimensions` wants a **dotted semantic-model** reference
+(`dim_product_rss.category`), which the two permitted inputs do not carry -- that
+resolution needs the mapping/semantic model, a third artifact. This is the
+**recorded v1 inconsistency**, not a checker gap: `cites.dimensions` is
+deliberately **not** ground-checked in v1 for exactly this reason, and closing it
+needs a schema revision (an owner decision).
+
+So: derive *which* dimensions a question needs from the profiled columns above;
+treat the dotted spelling as a mechanical translation, and do not let the
+un-ground-checked field become a route for material the two inputs never
+supported.
 
 ## Known caveat that any narrative must carry
 
-`report-intent.yaml` and the publish pack both record: **33.39% of transactions
-have unknown discount status** (floor 33.55% if treated as not-discounted;
-handoff re-approved 2026-07-05 on the corrected 50.37% known-status framing).
-Any q1/v04 callout mentioning discount share must state this, or the brief
-narrates a number the data does not support.
+Grounded in **`source-profile.md`** (the permitted input), which measures it
+directly:
+
+> `discount_applied` | TEXT | **4,199 / 33.39%** missing | 3 distinct |
+> ``True``/``False``/``''``; a discount FLAG (not a return). Blank semantics OPEN
+
+and lists it as open item 1: "blank semantics undecided (unknown vs False);
+**drives every discount metric downstream**". The publish pack records the same
+figure with the corrected framing (floor 33.55% if blanks are treated as
+not-discounted; re-approved 2026-07-05 on the 50.37% known-status framing).
+
+Any callout mentioning discount share **must** state this, or the brief narrates a
+number the data does not support.
 
 ## Candidate `gaps[]` (agent-identified, owner to confirm)
 
-`gaps` must be present (may be `[]`). `report-intent.yaml` declares
-`exclusions_and_non_goals`, which are gap candidates:
+`gaps` must be present (may be `[]`). Both candidates below are grounded in
+**`source-profile.md`** -- the permitted input -- not in `report-intent.yaml`'s
+`exclusions_and_non_goals` (which happens to agree, and is review context only):
 
-| Owner decision | Missing source fact | Unlocking feed |
-|---|---|---|
-| Which categories are actually profitable? | no cost/margin column in this source | a cost or purchase-price feed |
-| What is being returned, and why? | no returns rows in this source (RC8 N/A) | a returns/credit-note feed |
+| Owner decision | Missing source fact | Profile evidence | Unlocking feed |
+|---|---|---|---|
+| Which categories are actually profitable? | no cost/margin column | the profiled column list carries price/quantity/total only -- no cost column exists | a cost or purchase-price feed |
+| What is being returned, and why? | no returns rows | "**Returns population & how identified. NONE in this source.** No negative or zero rows, no transaction-type / return-flag column. Confirmed with the data owner: returns exist in a SEPARATE system NOT loaded here. RC8 N/A" | a returns/credit-note feed |
 
 A gap must **not** also appear as a `questions[]` entry -- you cannot frame what
 you cannot answer.
