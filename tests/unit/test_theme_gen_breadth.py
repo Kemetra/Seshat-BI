@@ -148,8 +148,12 @@ def test_gridline_invisible_against_declared_page_background_is_refused():
     must use the emitted ground, or an invisible gridline sails through the
     very check meant to catch invisible gridlines."""
     seed = _seed(chrome={"gridline": "#767676"}, page={"background": "#767676"})
-    assert contrast_ratio("#767676", "#FFFFFF") >= AA_NON_TEXT_FLOOR  # passes on palette bg
-    assert contrast_ratio("#767676", "#767676") < AA_NON_TEXT_FLOOR  # fails on real ground
+    assert (
+        contrast_ratio("#767676", "#FFFFFF") >= AA_NON_TEXT_FLOOR
+    )  # passes on palette bg
+    assert (
+        contrast_ratio("#767676", "#767676") < AA_NON_TEXT_FLOOR
+    )  # fails on real ground
     with pytest.raises(ThemeGenError, match="gridline"):
         check_non_text_contrast_or_raise(build_palette(seed), seed)
 
