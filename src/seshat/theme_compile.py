@@ -79,7 +79,9 @@ _GENERATOR_OWNED_VISUAL_STYLE_KEYS = _GENERATOR_OWNED_CARDS["*"]
 
 
 def _prune_generator_cards(
-    style: object, owned: tuple[str, ...], rendered_cards: dict[str, frozenset[str]]
+    style: object,
+    owned: tuple[str, ...],
+    rendered_cards: dict[str, dict[object, frozenset[str]]],
 ) -> object:
     """One style-preset dict with the generator-written PROPERTIES removed.
 
@@ -97,31 +99,55 @@ def _prune_generator_cards(
         if card not in owned:
             kept[card] = value
             continue
-        remainder = _human_owned_card(value, rendered_cards.get(card, frozenset()))
+        remainder = _human_owned_card(value, rendered_cards.get(card, {}))
         if remainder:
             kept[card] = remainder
     return kept
 
 
-def _card_properties(card: object) -> frozenset[str]:
-    """Property names inside a theme-JSON card.
+def _entry_key(entry: object) -> object:
+    """The identity of one property bag within a card.
+
+    Some cards are ``$id``-DISCRIMINATED ARRAYS (``filterCard`` carries an
+    ``Applied`` and an ``Available`` state). Those entries share the same
+    property NAMES, so identity has to come from ``$id`` -- matching on names
+    would make a human-added state look generator-owned. A card with no ``$id``
+    is a single bag, keyed ``None``.
+    """
+    if isinstance(entry, dict):
+        return entry.get("$id")
+    return None
+
+
+def _card_properties(card: object) -> dict[object, frozenset[str]]:
+    """``$id`` -> property names, for one theme-JSON card.
 
     A card is a LIST of property bags -- ``[{prop: value, ...}]`` -- per the
     published schema (``visualStyles > visual > preset > card > [{...}]``), not
     a bare mapping. Reading it as a mapping yields list indices, so the shape is
     handled in one place rather than at each call site.
+
+    Keyed PER ENTRY rather than unioned across the card: a union would let a
+    human-added ``$id`` state inherit the generated state's property names and
+    prune away silently (#520, entry axis).
     """
     if not isinstance(card, list):
-        return frozenset()
-    names: set[str] = set()
+        return {}
+    by_id: dict[object, set[str]] = {}
     for entry in card:
         if isinstance(entry, dict):
-            names.update(entry)
-    return frozenset(names)
+            by_id.setdefault(_entry_key(entry), set()).update(entry)
+    return {key: frozenset(names) for key, names in by_id.items()}
 
 
-def _human_owned_card(card: object, rendered_props: frozenset[str]) -> object:
+def _human_owned_card(
+    card: object, rendered_props: dict[object, frozenset[str]]
+) -> object:
     """One card's property bags minus the properties the renderer emitted.
+
+    Each entry is compared against the RENDERED entry with the same ``$id``. An
+    entry whose ``$id`` the generator never emitted has no counterpart, so it
+    survives whole -- it is human-added, not generator churn.
 
     Returns a card in the same ``[{...}]`` shape carrying only the leftover
     human properties, or ``None`` when nothing is left. A card that is not a
@@ -130,12 +156,16 @@ def _human_owned_card(card: object, rendered_props: frozenset[str]) -> object:
     """
     if not isinstance(card, list):
         return card
-    kept_entries: list[dict] = []
+    kept_entries: list[object] = []
     for entry in card:
         if not isinstance(entry, dict):
             kept_entries.append(entry)
             continue
-        remainder = {k: v for k, v in entry.items() if k not in rendered_props}
+        emitted = rendered_props.get(_entry_key(entry))
+        if emitted is None:
+            kept_entries.append(entry)
+            continue
+        remainder = {k: v for k, v in entry.items() if k not in emitted}
         if remainder:
             kept_entries.append(remainder)
     return kept_entries or None
@@ -143,7 +173,7 @@ def _human_owned_card(card: object, rendered_props: frozenset[str]) -> object:
 
 def _rendered_star_cards(
     rendered: object, visual_type: str
-) -> dict[str, frozenset[str]]:
+) -> dict[str, dict[object, frozenset[str]]]:
     """Card name -> property names the RENDERED theme emits for ``visual_type``'s
     ``"*"`` preset.
 
@@ -166,7 +196,9 @@ def _rendered_star_cards(
 
 
 def _human_owned_presets(
-    presets: dict, owned: tuple[str, ...], rendered_cards: dict[str, frozenset[str]]
+    presets: dict,
+    owned: tuple[str, ...],
+    rendered_cards: dict[str, dict[object, frozenset[str]]],
 ) -> dict[str, object]:
     """One visual type's style presets with generator-written properties pruned.
 

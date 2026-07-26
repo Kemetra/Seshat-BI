@@ -94,6 +94,32 @@ def test_a_card_the_generator_never_emitted_survives_whole():
     assert _human_owned_visual_styles(existing, rendered) == existing
 
 
+def test_human_added_filter_card_state_survives_pruning():
+    """#520, entry axis: `filterCard` is an $id-discriminated ARRAY, so two
+    entries carry identical property NAMES. Pruning every entry against the
+    union of names across all entries makes a human-added state (a $id the
+    generator never emitted) look fully generator-owned -- it prunes to nothing
+    on both sides and `--force` deletes it silently.
+    """
+    rendered = _rendered(page={"filter_card_applied": "#E1E1E1"})
+    emitted = rendered["page"]["*"]["filterCard"]
+    assert [e["$id"] for e in emitted] == ["Applied"], "precondition: only Applied"
+
+    human = {"$id": "Available", "backgroundColor": {"solid": {"color": "#FF0000"}}}
+    existing = {"page": {"*": {"filterCard": [*emitted, human]}}}
+    remainder = _human_owned_visual_styles(existing, rendered)
+    assert remainder["page"]["*"]["filterCard"] == [human]
+
+
+def test_a_matched_filter_card_state_still_prunes_to_nothing():
+    """The negative half: the generated $id must still prune away, or every
+    token change would register a false conflict on filterCard."""
+    rendered = _rendered(page={"filter_card_applied": "#E1E1E1"})
+    emitted = rendered["page"]["*"]["filterCard"]
+    existing = {"page": {"*": {"filterCard": list(emitted)}}}
+    assert _human_owned_visual_styles(existing, rendered) == {}
+
+
 # --------------------------------------------------------------------------
 # #521 -- unknown / misspelled token keys
 # --------------------------------------------------------------------------
@@ -151,6 +177,25 @@ def test_filter_pane_colour_alone_is_not_contrast_checked():
     """One half of the pair cannot be checked against an undeclared other half;
     it must not raise."""
     assert "outspacePane" in build_page_cards({"filter_pane_text": "#1A1A1A"})
+
+
+@pytest.mark.parametrize(
+    "page",
+    [
+        {"filter_pane_text": None, "filter_pane_background": None},
+        {"filter_pane_text": None, "filter_pane_background": "#FFFFFF"},
+        {"filter_pane_text": "#1A1A1A", "filter_pane_background": None},
+    ],
+)
+def test_present_but_null_filter_pane_value_is_rejected(page):
+    """A key PRESENT with a null value is a malformed input, not an absent one.
+
+    Testing presence with ``.get(...) is not None`` instead of ``in`` would skip
+    it silently -- the exact #521 no-op shape, and it would also skip the
+    contrast gate whenever one half is null-present.
+    """
+    with pytest.raises(StyleCardError, match="filter_pane"):
+        build_page_cards(page)
 
 
 # --------------------------------------------------------------------------

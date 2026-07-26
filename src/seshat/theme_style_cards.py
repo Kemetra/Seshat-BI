@@ -225,18 +225,25 @@ def _outspace_pane_card(page: dict) -> list[dict] | None:
     the chrome borders/gridlines, never at this pair, so an unreadable filter
     pane -- identical fg/bg is the degenerate case -- otherwise validates as two
     fine hex values and ships.
+
+    Presence is tested with ``in``, never ``.get(...) is not None``: a key
+    PRESENT with a null value is a malformed input, not an absent one, and must
+    reach ``_require_hex`` to be refused. Skipping it would silently drop the
+    setting -- and silently skip the contrast gate when only one half is null.
     """
     pane: dict = {}
-    background = page.get("filter_pane_background")
-    text = page.get("filter_pane_text")
-    if background is not None:
+    has_bg = "filter_pane_background" in page
+    has_text = "filter_pane_text" in page
+    if has_bg:
         pane["backgroundColor"] = _fill(
-            _require_hex(background, "filter_pane_background")
+            _require_hex(page["filter_pane_background"], "filter_pane_background")
         )
-    if text is not None:
-        pane["foregroundColor"] = _fill(_require_hex(text, "filter_pane_text"))
-    if background is not None and text is not None:
-        _require_readable_pair(text, background)
+    if has_text:
+        pane["foregroundColor"] = _fill(
+            _require_hex(page["filter_pane_text"], "filter_pane_text")
+        )
+    if has_bg and has_text:
+        _require_readable_pair(page["filter_pane_text"], page["filter_pane_background"])
     return [pane] if pane else None
 
 
