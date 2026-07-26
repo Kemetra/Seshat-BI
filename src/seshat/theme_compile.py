@@ -85,6 +85,25 @@ def _prune_generator_cards(style: object, owned: tuple[str, ...]) -> object:
     return {k: v for k, v in style.items() if k not in owned}
 
 
+def _human_owned_presets(presets: dict, owned: tuple[str, ...]) -> dict[str, object]:
+    """One visual type's style presets with generator-owned cards pruned.
+
+    A NAMED style preset (anything but ``"*"``) is human-authored by definition
+    and survives verbatim; the ``"*"`` preset is pruned of ``owned`` cards and
+    dropped entirely if that empties it, so it cannot register as a spurious
+    conflict.
+    """
+    kept_presets: dict[str, object] = {}
+    for preset_name, style in presets.items():
+        if preset_name != "*":
+            kept_presets[preset_name] = style
+            continue
+        pruned = _prune_generator_cards(style, owned)
+        if pruned:
+            kept_presets[preset_name] = pruned
+    return kept_presets
+
+
 def _human_owned_visual_styles(vs: object) -> object:
     """``visualStyles`` with every generator-owned card removed.
 
@@ -103,15 +122,7 @@ def _human_owned_visual_styles(vs: object) -> object:
         if owned is None or not isinstance(presets, dict):
             result[visual_type] = presets
             continue
-        kept_presets: dict[str, object] = {}
-        for preset_name, style in presets.items():
-            if preset_name != "*":
-                # A NAMED style preset is human-authored by definition.
-                kept_presets[preset_name] = style
-                continue
-            pruned = _prune_generator_cards(style, owned)
-            if pruned:
-                kept_presets[preset_name] = pruned
+        kept_presets = _human_owned_presets(presets, owned)
         if kept_presets:
             result[visual_type] = kept_presets
     return result

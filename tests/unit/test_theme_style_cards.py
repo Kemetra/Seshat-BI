@@ -103,17 +103,30 @@ def test_empty_page_emits_no_cards():
     assert build_page_cards({}) == {}
 
 
+def _flatten_dict_keys(value: dict) -> list[str]:
+    """``_flatten_keys`` helper: a dict's own keys plus every nested key."""
+    keys: list[str] = []
+    for k, v in value.items():
+        keys.append(k)
+        keys.extend(_flatten_keys(v))
+    return keys
+
+
+def _flatten_list_keys(value: list) -> list[str]:
+    """``_flatten_keys`` helper: every nested key across a list's items."""
+    keys: list[str] = []
+    for item in value:
+        keys.extend(_flatten_keys(item))
+    return keys
+
+
 def _flatten_keys(value: object) -> list[str]:
     """Every dict key anywhere in ``value``, recursively (order not asserted)."""
-    keys: list[str] = []
     if isinstance(value, dict):
-        for k, v in value.items():
-            keys.append(k)
-            keys.extend(_flatten_keys(v))
-    elif isinstance(value, list):
-        for item in value:
-            keys.extend(_flatten_keys(item))
-    return keys
+        return _flatten_dict_keys(value)
+    if isinstance(value, list):
+        return _flatten_list_keys(value)
+    return []
 
 
 # Independent literal (not imported from the builder): every key this appearance

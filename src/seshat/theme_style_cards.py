@@ -15,6 +15,8 @@ Stdlib only. Uses no pbi-cli, no live Power BI, no network.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from seshat.color import is_valid_hex
 
 # The theme spec's stated number-format vocabulary (section 5). Anything else is
@@ -67,12 +69,8 @@ def _axis_card(gridline: object) -> list[dict]:
     return [{"gridlineColor": _fill(color), "gridlineShow": True}]
 
 
-def build_star_cards(chrome: dict) -> dict[str, list[dict]]:
-    """Section 5 cards for ``visualStyles["*"]["*"]``.
-
-    ``chrome`` keys (all optional): ``gridline`` (hex or None), ``border`` (hex or
-    None), ``title_align``, ``data_labels`` (bool), ``number_format``. An empty
-    mapping yields no cards, so a theme that declares no chrome is unchanged.
+def _apply_number_format(chrome: dict, cards: dict[str, list[dict]]) -> None:
+    """Validate ``number_format`` against the vocabulary; emits no card (yet).
 
     NOTE: ``number_format`` is validated against ``VALID_NUMBER_FORMATS`` (refuse
     fast on a bad token) but does not yet emit a card -- the brief that specified
@@ -82,45 +80,82 @@ def build_star_cards(chrome: dict) -> dict[str, list[dict]]:
     wildcard this builder targets). Flagged as a known gap rather than guessing a
     key; a follow-up task should confirm the correct path before wiring emission.
     """
+    fmt = chrome["number_format"]
+    if fmt not in VALID_NUMBER_FORMATS:
+        raise StyleCardError(
+            f"number_format must be one of {VALID_NUMBER_FORMATS}, got {fmt!r}"
+        )
+
+
+def _apply_gridline(chrome: dict, cards: dict[str, list[dict]]) -> None:
+    """Emit matching ``categoryAxis``/``valueAxis`` gridline cards."""
+    axis = _axis_card(chrome["gridline"])
+    cards["categoryAxis"] = axis
+    cards["valueAxis"] = list(axis)
+
+
+def _apply_border(chrome: dict, cards: dict[str, list[dict]]) -> None:
+    """Emit the ``border`` card: visible with a color, or explicitly off."""
+    border = chrome["border"]
+    if border is None:
+        cards["border"] = [{"show": False}]
+    else:
+        cards["border"] = [
+            {"color": _fill(_require_hex(border, "border")), "show": True}
+        ]
+
+
+def _apply_title_align(chrome: dict, cards: dict[str, list[dict]]) -> None:
+    """Merge ``alignment`` into the existing title card rather than replace it.
+
+    ``cards.setdefault("title", [{}])`` preserves any font card already present
+    (or later added) for "title" -- ``render_theme_json`` relies on this merge,
+    not overwrite, semantics.
+    """
+    align = chrome["title_align"]
+    if align not in VALID_TITLE_ALIGNMENTS:
+        raise StyleCardError(
+            f"title_align must be one of {VALID_TITLE_ALIGNMENTS}, got {align!r}"
+        )
+    cards.setdefault("title", [{}])[0]["alignment"] = align
+
+
+def _apply_data_labels(chrome: dict, cards: dict[str, list[dict]]) -> None:
+    """Emit the ``labels`` card's ``show`` flag."""
+    show = chrome["data_labels"]
+    if not isinstance(show, bool):
+        raise StyleCardError(f"data_labels must be true or false, got {show!r}")
+    cards["labels"] = [{"show": show}]
+
+
+# Dispatch table: token key -> the builder that handles it. Each builder reads
+# its own key from ``chrome`` and mutates ``cards`` in place; ``build_star_cards``
+# is then a single loop over this table instead of one branching block per key.
+_STAR_CARD_BUILDERS: dict[str, Callable[[dict, dict[str, list[dict]]], None]] = {
+    "number_format": _apply_number_format,
+    "gridline": _apply_gridline,
+    "border": _apply_border,
+    "title_align": _apply_title_align,
+    "data_labels": _apply_data_labels,
+}
+
+
+def build_star_cards(chrome: dict) -> dict[str, list[dict]]:
+    """Section 5 cards for ``visualStyles["*"]["*"]``.
+
+    ``chrome`` keys (all optional): ``gridline`` (hex or None), ``border`` (hex or
+    None), ``title_align``, ``data_labels`` (bool), ``number_format``. An empty
+    mapping yields no cards, so a theme that declares no chrome is unchanged.
+
+    Dispatches to ``_STAR_CARD_BUILDERS`` -- one small function per token key --
+    so adding/reviewing a key touches one function, not a growing if-chain.
+    """
     if not chrome:
         return {}
     cards: dict[str, list[dict]] = {}
-
-    if "number_format" in chrome:
-        fmt = chrome["number_format"]
-        if fmt not in VALID_NUMBER_FORMATS:
-            raise StyleCardError(
-                f"number_format must be one of {VALID_NUMBER_FORMATS}, got {fmt!r}"
-            )
-
-    if "gridline" in chrome:
-        axis = _axis_card(chrome["gridline"])
-        cards["categoryAxis"] = axis
-        cards["valueAxis"] = list(axis)
-
-    if "border" in chrome:
-        border = chrome["border"]
-        if border is None:
-            cards["border"] = [{"show": False}]
-        else:
-            cards["border"] = [
-                {"color": _fill(_require_hex(border, "border")), "show": True}
-            ]
-
-    if "title_align" in chrome:
-        align = chrome["title_align"]
-        if align not in VALID_TITLE_ALIGNMENTS:
-            raise StyleCardError(
-                f"title_align must be one of {VALID_TITLE_ALIGNMENTS}, got {align!r}"
-            )
-        cards.setdefault("title", [{}])[0]["alignment"] = align
-
-    if "data_labels" in chrome:
-        show = chrome["data_labels"]
-        if not isinstance(show, bool):
-            raise StyleCardError(f"data_labels must be true or false, got {show!r}")
-        cards["labels"] = [{"show": show}]
-
+    for key, builder in _STAR_CARD_BUILDERS.items():
+        if key in chrome:
+            builder(chrome, cards)
     return cards
 
 
@@ -133,6 +168,37 @@ def _colored_card(page: dict, color_key: str, pct_key: str) -> list[dict] | None
     if pct_key in page:
         card["transparency"] = _require_pct(page[pct_key], pct_key)
     return [card]
+
+
+def _outspace_pane_card(page: dict) -> list[dict] | None:
+    """The ``outspacePane`` card (filter pane background/text), or None."""
+    pane: dict = {}
+    if "filter_pane_background" in page:
+        pane["backgroundColor"] = _fill(
+            _require_hex(page["filter_pane_background"], "filter_pane_background")
+        )
+    if "filter_pane_text" in page:
+        pane["foregroundColor"] = _fill(
+            _require_hex(page["filter_pane_text"], "filter_pane_text")
+        )
+    return [pane] if pane else None
+
+
+def _filter_state_cards(page: dict) -> list[dict] | None:
+    """The ``filterCard`` array (one object per $id state), or None.
+
+    filterCard is an ARRAY discriminated by $id -- one object per state.
+    """
+    filter_cards: list[dict] = []
+    for state, key in (
+        ("Applied", "filter_card_applied"),
+        ("Available", "filter_card_available"),
+    ):
+        if key in page:
+            filter_cards.append(
+                {"$id": state, "backgroundColor": _fill(_require_hex(page[key], key))}
+            )
+    return filter_cards if filter_cards else None
 
 
 def build_page_cards(page: dict) -> dict[str, list[dict]]:
@@ -149,38 +215,12 @@ def build_page_cards(page: dict) -> dict[str, list[dict]]:
     if not page:
         return {}
     cards: dict[str, list[dict]] = {}
-
-    background = _colored_card(page, "background", "background_transparency")
-    if background is not None:
-        cards["background"] = background
-
-    wallpaper = _colored_card(page, "wallpaper", "wallpaper_transparency")
-    if wallpaper is not None:
-        cards["outspace"] = wallpaper
-
-    pane: dict = {}
-    if "filter_pane_background" in page:
-        pane["backgroundColor"] = _fill(
-            _require_hex(page["filter_pane_background"], "filter_pane_background")
-        )
-    if "filter_pane_text" in page:
-        pane["foregroundColor"] = _fill(
-            _require_hex(page["filter_pane_text"], "filter_pane_text")
-        )
-    if pane:
-        cards["outspacePane"] = [pane]
-
-    # filterCard is an ARRAY discriminated by $id -- one object per state.
-    filter_cards: list[dict] = []
-    for state, key in (
-        ("Applied", "filter_card_applied"),
-        ("Available", "filter_card_available"),
+    for card_name, value in (
+        ("background", _colored_card(page, "background", "background_transparency")),
+        ("outspace", _colored_card(page, "wallpaper", "wallpaper_transparency")),
+        ("outspacePane", _outspace_pane_card(page)),
+        ("filterCard", _filter_state_cards(page)),
     ):
-        if key in page:
-            filter_cards.append(
-                {"$id": state, "backgroundColor": _fill(_require_hex(page[key], key))}
-            )
-    if filter_cards:
-        cards["filterCard"] = filter_cards
-
+        if value is not None:
+            cards[card_name] = value
     return cards

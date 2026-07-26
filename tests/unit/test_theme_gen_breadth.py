@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 
 import pytest
 
@@ -133,6 +134,35 @@ def test_malformed_gridline_hex_raises_theme_gen_error_not_traceback():
         check_non_text_contrast_or_raise(build_palette(seed), seed)
 
 
+def _forbidden_dict_keys(node: dict, is_forbidden: Callable[[str], bool]) -> list[str]:
+    """``_collect_forbidden_keys`` helper: check + recurse over one dict's items."""
+    offenders: list[str] = []
+    for key, value in node.items():
+        if is_forbidden(key):
+            offenders.append(key)
+        offenders.extend(_collect_forbidden_keys(value, is_forbidden))
+    return offenders
+
+
+def _forbidden_list_keys(node: list, is_forbidden: Callable[[str], bool]) -> list[str]:
+    """``_collect_forbidden_keys`` helper: recurse over one list's items."""
+    offenders: list[str] = []
+    for item in node:
+        offenders.extend(_collect_forbidden_keys(item, is_forbidden))
+    return offenders
+
+
+def _collect_forbidden_keys(
+    node: object, is_forbidden: Callable[[str], bool]
+) -> list[str]:
+    """Every dict key anywhere in ``node`` that ``is_forbidden`` flags."""
+    if isinstance(node, dict):
+        return _forbidden_dict_keys(node, is_forbidden)
+    if isinstance(node, list):
+        return _forbidden_list_keys(node, is_forbidden)
+    return []
+
+
 def test_no_emitted_key_name_trips_dl1():
     """DL1 substring-matches forbidden tokens in theme key NAMES at ERROR
     severity. All current section 5/6/7 names were verified clear; this test
@@ -158,17 +188,5 @@ def test_no_emitted_key_name_trips_dl1():
     )
     doc = json.loads(render_theme_json(build_palette(seed), seed))
 
-    offenders = []
-
-    def walk(node):
-        if isinstance(node, dict):
-            for key, value in node.items():
-                if _is_forbidden(key):
-                    offenders.append(key)
-                walk(value)
-        elif isinstance(node, list):
-            for item in node:
-                walk(item)
-
-    walk(doc)
+    offenders = _collect_forbidden_keys(doc, _is_forbidden)
     assert offenders == [], f"emitted key names trip DL1: {offenders}"
