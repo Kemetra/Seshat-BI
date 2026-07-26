@@ -648,9 +648,43 @@ def _build_from_data(
         if result is not None:
             return result
 
-    return _response(
-        response_table, "terminal_pass", None, {"caveats": context["caveats"]}
+    return _terminal_response(response_table, context, data.get("approvals"))
+
+
+def _mapping_directory(context: dict[str, Any]) -> Path | None:
+    """The table's ``mappings/<table>/``, or ``None`` without directory context."""
+    root, table_dir = context.get("repo_root"), context.get("table_dir")
+    if root is None or not table_dir:
+        return None
+    return Path(root) / "mappings" / table_dir
+
+
+def _terminal_response(
+    response_table: str, context: dict[str, Any], approvals: object
+) -> dict[str, Any]:
+    """The every-stage-passes response, which is NOT automatically 'nothing to do'.
+
+    A table can pass all seven stages while an owner decision sits unanswered
+    (issue #517). Those requests are surfaced as caveats AND, when present,
+    override ``action_text`` -- a caveat alone is informational and a conductor
+    routes straight past it.
+
+    No readiness stage is touched. Flipping a stage a named human approved to
+    ``blocked`` to make a follow-up visible would falsify that approval; the
+    outcome stays ``terminal_pass`` and only the recommended action changes.
+    """
+    from seshat.approval_requests import (
+        OPEN_REQUEST_ACTION,
+        has_open_request,
+        open_request_caveats,
     )
+
+    caveats = context["caveats"]
+    caveats.extend(open_request_caveats(_mapping_directory(context), approvals))
+    details: dict[str, Any] = {"caveats": caveats}
+    if has_open_request(caveats):
+        details["action_text"] = OPEN_REQUEST_ACTION
+    return _response(response_table, "terminal_pass", None, details)
 
 
 def _all_blocked_stages(stages: dict[str, object]) -> list[str]:
