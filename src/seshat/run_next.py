@@ -365,21 +365,66 @@ def _request_status(text: str) -> str | None:
 # A request's own `status: answered` is a CLAIM, not proof. Trusting the word
 # alone would let a one-token edit make the product behave as though a named
 # human ruled -- the forgeable-field failure mode. So `answered` is only honoured
-# when the PAIRED decision file exists and independently corroborates it:
-# matching question_id and a named owner. Anything else stays visible.
-_DECISION_QUESTION_ID = re.compile(
-    r"^\s*[-*]?\s*\*{0,2}question_id:?\*{0,2}\s*:?\s*`?(?P<value>[^`\n*]+)`?",
-    re.MULTILINE,
-)
-_DECISION_OWNER = re.compile(
-    r"^\s*[-*]?\s*\*{0,2}owner:?\*{0,2}\s*:?\s*`?(?P<value>[^`\n*]+)`?",
-    re.MULTILINE,
-)
+# when the PAIRED decision file independently corroborates it on FOUR counts
+# (P1, #516 review): the question_id matches, the ruling is COMPLETE per the
+# protocol the request itself declares (selected_option / date / rationale), it
+# names an owner, and that owner carries the AUTHORITY CLASS the request
+# requires. A two-line stub naming the wrong authority is not a ruling -- it
+# would close a report-owner decision on a metric-owner's signature.
+def _field(name: str) -> re.Pattern[str]:
+    """Matcher for one ``- **key:** value`` / ``key: value`` decision field."""
+    return re.compile(
+        rf"^\s*[-*]?\s*\*{{0,2}}{name}:?\*{{0,2}}\s*:?\s*`?(?P<value>[^`\n*]+)`?",
+        re.MULTILINE,
+    )
 
 
-def _decision_defect(directory: Path, question_id: str) -> str | None:
+_DECISION_QUESTION_ID = _field("question_id")
+_DECISION_OWNER = _field("owner")
+_REQUEST_AUTHORITY = _field("owner_required")
+
+# Every field the request protocol requires of a completed ruling. `owner` is
+# checked separately (it also feeds the authority check), and `artifacts_updated`
+# is a section heading rather than a field, so it is matched as free text.
+_REQUIRED_DECISION_FIELDS: tuple[str, ...] = ("selected_option", "date", "rationale")
+
+
+def _stated_field(pattern: re.Pattern[str], text: str) -> str | None:
+    """The field's value with markdown noise stripped, or None when unstated."""
+    match = pattern.search(text)
+    if match is None:
+        return None
+    value = match.group("value").strip().strip("`").strip()
+    return value or None
+
+
+def _authority_defect(request_text: str, owner: str, name: str) -> str | None:
+    """``None`` when ``owner`` satisfies the request's ``owner_required`` class.
+
+    Absent ``owner_required`` means the request states no authority constraint,
+    so any named owner satisfies it -- the check cannot invent a requirement the
+    request never made.
+    """
+    required = _stated_field(_REQUEST_AUTHORITY, request_text)
+    if required is None:
+        return None
+    # `report-owner` and `report_owner` name the same class; compare loosely on
+    # separators so a decision is not rejected over a hyphen.
+    wanted = required.lower().replace("-", "_")
+    if wanted in owner.lower().replace("-", "_"):
+        return None
+    return (
+        f"the paired {name} names owner {owner!r}, which does not carry the "
+        f"required {required!r} authority"
+    )
+
+
+def _decision_defect(
+    directory: Path, question_id: str, request_text: str
+) -> str | None:
     """``None`` when a paired decision file corroborates ``question_id``, else the
-    named reason it does not (missing / unreadable / mismatched / no owner)."""
+    named reason it does not (missing / unreadable / mismatched / incomplete /
+    ownerless / wrong authority)."""
     path = directory / f"approval-decision-{question_id}.md"
     if not path.is_file():
         return f"no paired {path.name} exists"
@@ -387,13 +432,20 @@ def _decision_defect(directory: Path, question_id: str) -> str | None:
         text = path.read_text(encoding="utf-8-sig")
     except (OSError, UnicodeDecodeError):
         return f"the paired {path.name} is unreadable"
-    found = _DECISION_QUESTION_ID.search(text)
-    if found is None or found.group("value").strip().strip("`") != question_id:
+    if _stated_field(_DECISION_QUESTION_ID, text) != question_id:
         return f"the paired {path.name} does not declare question_id {question_id!r}"
-    owner = _DECISION_OWNER.search(text)
-    if owner is None or not owner.group("value").strip():
+    missing = [
+        f for f in _REQUIRED_DECISION_FIELDS if _stated_field(_field(f), text) is None
+    ]
+    if missing:
+        return (
+            f"the paired {path.name} is an incomplete ruling -- it states no "
+            f"{', '.join(missing)}"
+        )
+    owner = _stated_field(_DECISION_OWNER, text)
+    if owner is None:
         return f"the paired {path.name} names no owner"
-    return None
+    return _authority_defect(request_text, owner, path.name)
 
 
 def _unparsed_request(question_id: str, name: str, why: str) -> dict[str, str]:
@@ -416,11 +468,15 @@ def _read_request(path: Path) -> str | None:
 
 
 def _answered_caveat(
-    directory: Path, question_id: str, name: str
+    directory: Path, question_id: str, name: str, request_text: str
 ) -> dict[str, str] | None:
     """``None`` when a paired decision file corroborates the ``answered`` claim,
-    else the caveat naming why the claim is not yet trustworthy."""
-    defect = _decision_defect(directory, question_id)
+    else the caveat naming why the claim is not yet trustworthy.
+
+    ``request_text`` travels in so the decision can be checked against the
+    authority class the REQUEST declared, not against a guess.
+    """
+    defect = _decision_defect(directory, question_id, request_text)
     if defect is None:
         return None
     return {
@@ -444,7 +500,7 @@ def _request_caveat(directory: Path, path: Path) -> dict[str, str] | None:
     if status is None:
         return _unparsed_request(question_id, name, "declares no `status:`")
     if status == "answered":
-        return _answered_caveat(directory, question_id, name)
+        return _answered_caveat(directory, question_id, name, text)
     if status == "open":
         return {
             "kind": "open_approval_request",

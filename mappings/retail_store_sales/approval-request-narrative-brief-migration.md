@@ -12,20 +12,42 @@
 - **prepared:** 2026-07-26 (agent-assembled evidence package)
 - **governing ruling:** R5, `docs/superpowers/specs/2026-07-26-nine-issue-rulings.md`
 
-> **Why this is packaged, not decided.** Every decision below is a Principle-V
-> judgment call, and the artifact being migrated is already SIGNED. The kit is
-> forbidden to resolve either class on its own
-> (`never_self_grant_approval`). Until the named report owner rules, no brief is
-> authored and the binding map keeps its current F011 two-way format. This
-> package poses the five sub-decisions; it records none of them.
+> **What is packaged, and what is not.** The AGENT authors the brief -- deriving
+> ranked decision-questions, framings, guardrail bases, story order, and callouts
+> from the two committed inputs is exactly what `bi-analyst-knowledge` is for, and
+> ending on prose instead of a committed brief is the anti-pattern. What the agent
+> may **not** do is APPROVE it (`No self-granted pass`), and it may **not**
+> re-sign the already-SIGNED binding map -- the gate R5 named.
+>
+> So this request does **not** ask the owner to perform the derivation. It asks
+> the owner to **approve or revise a drafted brief**, and to rule the one call no
+> draft can settle (D5, re-signing). The proposals below are the agent's grounded
+> draft positions, offered as something concrete to react to.
 
 ## Decision needed (one sentence)
 
-> Rule the five judgment calls the `retail_store_sales` narrative brief requires
-> -- (D1) the decision-questions and their ranking, (D2) each question's framing
-> and guardrail basis, (D3) the story order, (D4) the three-way visual bindings
-> and which visuals are headlines, and (D5) whether the 2026-06-25 sign-off
-> carries forward or a fresh design review is required.
+> Review the drafted `retail_store_sales` narrative brief and either approve it or
+> return revisions -- D1-D4 are the agent's draft positions on the questions,
+> framings, story order, and visual bindings; D5 is the one ruling the owner alone
+> can make (whether the 2026-06-25 sign-off carries forward or a fresh design
+> review is required).
+
+## How to use this package
+
+1. **The agent drafts** `mappings/retail_store_sales/narrative-brief.md` from
+   `templates/narrative-brief.md`, grounded in the 5 approved contracts and the
+   committed source-profile, and runs
+   `seshat narrative-check --table retail_store_sales --report .` until it passes.
+   A clean check is **evidence for** this review, never an approval.
+2. **The owner reviews that draft** against D1-D4 below -- accept, or return
+   revisions. The draft is a proposal, not a fait accompli: the checker asserts
+   the brief obeys its schema, never that a question is the RIGHT question.
+3. **The owner rules D5** and records everything in the paired
+   `approval-decision-narrative-brief-migration.md`.
+
+D1-D4 are listed as explicit decisions because each involves a judgment the
+checker cannot make. They are the review agenda for the draft, not homework
+assigned to the owner.
 
 ## Authority class
 
@@ -47,15 +69,19 @@ stating the boundary plainly:
 > that names a *different* review (named-owner review of the signed map). The
 > delegation covers design rulings, not re-signing signed artifacts.
 
-Two independent reasons the agent may not simply author the migration:
+What that boundary does and does not cover:
 
-1. **The binding map is already signed.** `design/visual-contract-binding-map.md:58-68`
-   records reviewer `data_owner`, decision `approved`, at `2026-06-25`, and
-   `readiness-status.yaml` carries the matching `dashboard_ready: pass`.
-   Rewriting it into the v1 front-section format re-issues a signed artifact.
-2. **The brief's content is Principle-V judgment.** Which decision-questions the
-   example asks, each question's framing and guardrail basis, the story order,
-   and the callouts are owner rulings, not derivations (`never_self_grant_approval`).
+1. **The binding map is already signed -- so its migration is NOT the agent's.**
+   `design/visual-contract-binding-map.md:58-68` records reviewer `data_owner`,
+   decision `approved`, at `2026-06-25`, and `readiness-status.yaml` carries the
+   matching `dashboard_ready: pass`. Rewriting it into the v1 front-section
+   format re-issues a signed artifact, which is the gate R5 named.
+2. **The brief itself IS the agent's to draft** -- deriving the questions,
+   framings, guardrail bases, story order, and callouts from the two committed
+   inputs is the `bi-analyst-knowledge` route's job. What the agent may not do is
+   APPROVE that draft, or record the ruling on the owner's behalf
+   (`never_self_grant_approval`). D1-D4 below are therefore the review agenda for
+   a draft, not work handed to the owner.
 
 **Do not "fix"** `tests/unit/test_narrative_check.py::test_real_worked_example_map_still_needs_phase_b_migration`.
 It pins today's fail-closed state on purpose; its flipping is the signal that
@@ -103,7 +129,7 @@ to, not as settled input:
 | q5 | What is the basket value (avg transaction value) and how does it vary by channel? |
 | q6 | Who are the highest-activity customers (transaction count)? |
 
-**What the owner must rule:**
+**What the owner reviews in the draft:**
 
 - **1a.** **Accept, modify, or reject each of q1-q6.** They are proposals from a
   `blocked` intent, so none carries forward by default; silence is not acceptance.
@@ -132,7 +158,7 @@ The checker asserts a basis is *present*; **whether the basis is wise is exactly
 this review.** `report-intent.yaml` offers `comparisons: ["vs prior period",
 "trend over time (month)"]` as candidate bases, but assigns none to a question.
 
-**What the owner must rule:** the framing card for each question, and for every
+**What the owner reviews in the draft:** the framing card for each question, and for every
 guardrail-bearing choice, the named `basis` (plus optional `window` /
 `min_sample_floor`).
 
@@ -142,7 +168,7 @@ guardrail-bearing choice, the named `basis` (plus optional `window` /
 stage; a question's stage there must equal its own `stage` field; and `overview`
 **must be non-empty**.
 
-**What the owner must rule:** the assignment of each question to
+**What the owner reviews in the draft:** the assignment of each question to
 `overview` / `change` / `why_where` / `action`, and the order within each stage.
 
 **Headline rule (FR-006):** every `stage: overview` question must set
@@ -171,7 +197,7 @@ confirmation, especially the multi-question rows.
 | v09 | column | AvgTransactionValue | [Q5] | by `dim_payment_method_rss[payment_method]` |
 | v10 | table | TransactionCount | [Q6] | by `dim_customer_rss[customer_id]` (Top N) |
 
-**What the owner must rule:**
+**What the owner reviews in the draft:**
 
 - **4a.** Confirm or correct each `decision_questions` list. The checker's
   `orphan_visual` rule requires the bound contract to be one the answered

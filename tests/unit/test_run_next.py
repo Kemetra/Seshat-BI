@@ -312,8 +312,10 @@ _DECISION = """\
 # Approval Decision -- `already-ruled`
 
 - **question_id:** `already-ruled`
+- **selected_option:** `D1=A`
 - **owner:** `Ahmed Shaaban (report_owner)`
 - **date:** `2026-07-26`
+- **rationale:** the named owner ruled as recorded above.
 """
 
 
@@ -381,13 +383,17 @@ def test_answered_with_a_mismatched_decision_question_id_is_not_trusted(
 def test_answered_with_an_ownerless_decision_file_is_not_trusted(
     tmp_path: Path,
 ) -> None:
-    """A decision record naming no owner is not a named-human ruling."""
+    """A decision record naming no owner is not a named-human ruling.
+
+    Complete in every OTHER respect, so this test isolates the ownerless risk
+    rather than tripping the completeness check first.
+    """
     _answered_request(tmp_path)
     _write_decision(
         tmp_path,
         "orders",
         "already-ruled",
-        "# Approval Decision\n\n- **question_id:** `already-ruled`\n",
+        _DECISION.replace("- **owner:** `Ahmed Shaaban (report_owner)`\n", ""),
     )
 
     result = build_run_next_response(tmp_path, "orders")
@@ -440,3 +446,132 @@ def test_unreadable_request_is_reported_not_silently_skipped(tmp_path: Path) -> 
     assert "unparsed_approval_request" in kinds, (
         f"an unreadable request must be reported, got {result['caveats']}"
     )
+
+
+# --------------------------------------------------------------------------- #
+# A decision file must be a COMPLETE, CORRECTLY-AUTHORIZED ruling.
+#
+# Codex review of PR #516 (P1): corroborating only "filename-derived id + any
+# nonempty owner" let a two-line stub naming the WRONG authority class close a
+# request. The request declares `owner_required`, and its protocol requires
+# selected_option / date / rationale -- so both are checked here.
+# --------------------------------------------------------------------------- #
+
+_REQUEST_WITH_AUTHORITY = """\
+# Approval Request -- `needs-report-owner`
+
+- **question_id:** `needs-report-owner`
+- **owner_required:** `report-owner`
+- **status:** `answered`
+"""
+
+_COMPLETE_DECISION = """\
+# Approval Decision -- `needs-report-owner`
+
+- **question_id:** `needs-report-owner`
+- **selected_option:** `D1=A, D2=B`
+- **owner:** `Ahmed Shaaban (report_owner)`
+- **date:** `2026-07-26`
+- **rationale:** the named report owner ruled as recorded above.
+"""
+
+
+def _authority_case(root: Path, decision: str) -> dict:
+    _write_status(root, "orders", _ALL_PASS_STATUS)
+    _write_request(root, "orders", "needs-report-owner", _REQUEST_WITH_AUTHORITY)
+    _write_decision(root, "orders", "needs-report-owner", decision)
+    return build_run_next_response(root, "orders")
+
+
+def _unverified(result: dict) -> list[dict]:
+    return [c for c in result["caveats"] if c["kind"] == "unverified_answered_request"]
+
+
+def test_complete_correctly_authorized_decision_settles_the_request(
+    tmp_path: Path,
+) -> None:
+    """The positive control: a ruling that IS complete and correctly authorized
+    genuinely settles the request, so the guard is not simply always-on."""
+    result = _authority_case(tmp_path, _COMPLETE_DECISION)
+
+    assert not _unverified(result), result["caveats"]
+
+
+def test_decision_from_the_wrong_authority_class_does_not_settle_it(
+    tmp_path: Path,
+) -> None:
+    """THE AUTHORITY GUARD: a `metric_owner` signature cannot close a request
+    whose `owner_required` is `report-owner`."""
+    result = _authority_case(
+        tmp_path,
+        _COMPLETE_DECISION.replace(
+            "Ahmed Shaaban (report_owner)", "Mallory (metric_owner)"
+        ),
+    )
+
+    caveats = _unverified(result)
+    assert caveats, "a wrong-authority ruling must not settle the request"
+    assert "does not carry the required" in caveats[0]["detail"]
+
+
+def test_incomplete_decision_does_not_settle_the_request(tmp_path: Path) -> None:
+    """A stub missing the protocol's fields is not a ruling, even from the right
+    owner: it answers none of the sub-decisions."""
+    result = _authority_case(
+        tmp_path,
+        "# Approval Decision\n\n- **question_id:** `needs-report-owner`\n"
+        "- **owner:** `Ahmed Shaaban (report_owner)`\n",
+    )
+
+    caveats = _unverified(result)
+    assert caveats, "an incomplete ruling must not settle the request"
+    assert "incomplete ruling" in caveats[0]["detail"]
+    detail = caveats[0]["detail"]
+    assert "selected_option" in detail and "date" in detail and "rationale" in detail
+
+
+def test_hyphen_vs_underscore_authority_still_matches(tmp_path: Path) -> None:
+    """`report-owner` and `report_owner` name the same class -- a decision must
+    not be rejected over a separator."""
+    result = _authority_case(tmp_path, _COMPLETE_DECISION)
+
+    assert not _unverified(result)
+
+
+def test_request_without_owner_required_accepts_any_named_owner(
+    tmp_path: Path,
+) -> None:
+    """The check cannot invent a requirement the request never made."""
+    result = _authority_case(
+        tmp_path,
+        _COMPLETE_DECISION.replace(
+            "Ahmed Shaaban (report_owner)", "Someone Else (governance)"
+        ),
+    )
+    # This request DOES declare owner_required, so the above must be rejected...
+    assert _unverified(result)
+
+    # ...but one that does not declare it accepts the same owner.
+    _write_request(
+        tmp_path,
+        "orders",
+        "no-authority-stated",
+        _REQUEST_WITH_AUTHORITY.replace(
+            "- **owner_required:** `report-owner`\n", ""
+        ).replace("needs-report-owner", "no-authority-stated"),
+    )
+    _write_decision(
+        tmp_path,
+        "orders",
+        "no-authority-stated",
+        _COMPLETE_DECISION.replace("needs-report-owner", "no-authority-stated").replace(
+            "Ahmed Shaaban (report_owner)", "Someone Else (governance)"
+        ),
+    )
+    second = build_run_next_response(tmp_path, "orders")
+    assert not [
+        c
+        for c in second["caveats"]
+        if c["kind"] == "unverified_answered_request"
+        and "no-authority-stated" in c["detail"]
+    ]
