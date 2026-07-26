@@ -131,3 +131,44 @@ def test_malformed_gridline_hex_raises_theme_gen_error_not_traceback():
     seed = _seed(chrome={"gridline": "nope"})
     with pytest.raises(ThemeGenError, match="gridline"):
         check_non_text_contrast_or_raise(build_palette(seed), seed)
+
+
+def test_no_emitted_key_name_trips_dl1():
+    """DL1 substring-matches forbidden tokens in theme key NAMES at ERROR
+    severity. All current section 5/6/7 names were verified clear; this test
+    stops a future key addition from silently reintroducing a blocking rule
+    failure on a theme the generator itself produced."""
+    from seshat.rules.design_theme import _is_forbidden
+
+    seed = _seed(
+        chrome={
+            "gridline": "#767676",
+            "border": "#767676",
+            "title_align": "left",
+            "data_labels": False,
+            "number_format": "#,##0",
+        },
+        page={
+            "background": "#FFFFFF",
+            "wallpaper": "#F3F2F1",
+            "filter_pane_background": "#FFFFFF",
+            "filter_card_applied": "#E1DFDD",
+            "filter_card_available": "#FFFFFF",
+        },
+    )
+    doc = json.loads(render_theme_json(build_palette(seed), seed))
+
+    offenders = []
+
+    def walk(node):
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if _is_forbidden(key):
+                    offenders.append(key)
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(doc)
+    assert offenders == [], f"emitted key names trip DL1: {offenders}"
