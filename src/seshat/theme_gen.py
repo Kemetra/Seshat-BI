@@ -473,6 +473,69 @@ def _render_transparency_yaml(palette: dict) -> str:
     return "".join(lines)
 
 
+def _yaml_scalar(value: object) -> str:
+    """One token value as a YAML scalar, in the shape ``theme_compile`` reads
+    back: a hex/string is double-quoted, ``None`` is the bare YAML null
+    (``null``, never the Python-repr string ``"None"``), a bool is lowercase
+    (``true``/``false``, never Python's ``True``/``False``), and a number
+    passes through ``format_pt`` (matching ``_render_transparency_yaml``'s
+    existing numeric convention).
+
+    A single choke point for every chrome/page scalar so
+    ``_render_chrome_yaml``/``_render_page_yaml`` stay a plain per-key loop
+    with no per-type branching of their own (keeps cyclomatic complexity low).
+    """
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return format_pt(value)
+    return f'"{value}"'
+
+
+def _render_token_group_yaml(header: str, group: dict | None, keys: tuple) -> str:
+    """A ``header:`` YAML block over ``keys`` present in ``group``, or "".
+
+    Shared by chrome/page: both are "a header line, then one ``  key: scalar``
+    line per declared key, in the fixed ``keys`` order" -- identical shape,
+    different vocabulary. Returns "" when ``group`` is None/empty so an
+    unset seed field emits nothing (byte-identical to a pre-chrome/page
+    tokens file).
+    """
+    if not group:
+        return ""
+    lines = [f"{header}:\n"]
+    for key in keys:
+        if key in group:
+            lines.append(f"  {key}: {_yaml_scalar(group[key])}\n")
+    return "".join(lines)
+
+
+def _render_chrome_yaml(chrome: dict | None) -> str:
+    """The optional ``chrome:`` block (theme-spec section 5), or "".
+
+    Key order and vocabulary match ``CHROME_TOKEN_KEYS`` -- the same list
+    ``theme_compile.chrome_from_tokens`` reads -- so the writer and reader
+    agree key-for-key (finding 2).
+    """
+    from .theme_style_cards import CHROME_TOKEN_KEYS
+
+    return _render_token_group_yaml("chrome", chrome, CHROME_TOKEN_KEYS)
+
+
+def _render_page_yaml(page: dict | None) -> str:
+    """The optional ``page:`` block (theme-spec sections 6+7), or "".
+
+    Key order and vocabulary match ``PAGE_TOKEN_KEYS`` -- the same list
+    ``theme_compile.page_from_tokens`` reads -- so the writer and reader agree
+    key-for-key (finding 2).
+    """
+    from .theme_style_cards import PAGE_TOKEN_KEYS
+
+    return _render_token_group_yaml("page", page, PAGE_TOKEN_KEYS)
+
+
 def render_tokens_yaml(palette: dict, seed: ThemeSeed) -> str:
     c = palette["colors"]
     ramp = "\n".join(f'    - "{h}"' for h in c["data_colors"])
@@ -507,6 +570,8 @@ def render_tokens_yaml(palette: dict, seed: ThemeSeed) -> str:
         "  # monochromatic ramp: CVD is a named-reviewer call (Principle V)\n"
         "  colorblind_considerate_categoricals: false\n"
         "  do_not_rely_on_color_alone: true\n"
+        f"{_render_chrome_yaml(seed.chrome)}"
+        f"{_render_page_yaml(seed.page)}"
     )
 
 

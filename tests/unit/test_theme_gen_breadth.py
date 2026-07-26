@@ -89,7 +89,8 @@ def test_page_cards_survive_a_compile_round_trip():
 
     seed = _seed(page={"background": "#FFFFFF"}, chrome={"gridline": "#E1DFDD"})
     doc = json.loads(render_theme_json(build_palette(seed), seed))
-    assert _human_owned_visual_styles(doc["visualStyles"]) == {}
+    vs = doc["visualStyles"]
+    assert _human_owned_visual_styles(vs, vs) == {}
 
 
 def test_invisible_gridline_is_refused():
@@ -176,7 +177,9 @@ def test_no_emitted_key_name_trips_dl1():
             "border": "#767676",
             "title_align": "left",
             "data_labels": False,
-            "number_format": "#,##0",
+            # number_format intentionally omitted: finding 3 makes it a
+            # refusal (StyleCardError), not an emitted card -- see
+            # test_theme_style_cards.py's number-format refusal test.
         },
         page={
             "background": "#FFFFFF",

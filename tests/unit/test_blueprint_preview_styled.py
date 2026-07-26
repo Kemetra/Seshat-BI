@@ -89,6 +89,30 @@ def _write_min_inputs(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def _write_tokens_with_chrome(tmp_path: Path, chrome_yaml: str) -> Path:
+    """Same tokens shape as `_write_min_inputs`, plus a `chrome:` block."""
+    tmp_path = _write_min_inputs(tmp_path)
+    tokens = tmp_path / "tokens.yaml"
+    tokens.write_text(
+        tokens.read_text(encoding="utf-8") + chrome_yaml, encoding="utf-8"
+    )
+    return tmp_path
+
+
+def _write_one_visual_spec(tmp_path: Path) -> Path:
+    """A minimal visual-spec YAML file: enough to make `_visual_group` emit a
+    `<rect class="visual-box">` so a border/stroke assertion has something
+    real to check, rather than passing vacuously on an empty visuals list."""
+    p = tmp_path / "visual.yaml"
+    p.write_text(
+        "visual_id: v1\n"
+        "visual_type: card\n"
+        "position:\n  section: kpi_strip\n  x: 0\n  y: 0\n  width: 1\n  height: 1\n",
+        encoding="utf-8",
+    )
+    return p
+
+
 def test_disclaimer_is_stamped_on_every_render(tmp_path: Path) -> None:
     """Mirrors tmdl-doc-comment-lint: the limit is stated even on success."""
     d = _write_min_inputs(tmp_path)
@@ -164,3 +188,73 @@ def test_preview_never_fabricates_a_number(tmp_path: Path) -> None:
         tokens_path=d / "tokens.yaml",
     )
     assert "PLACEHOLDER" in svg
+
+
+# --- Finding 4 (P2): visual borders/gridlines source from chrome, not secondary --
+
+
+def test_chrome_border_colors_the_visual_box_stroke_not_secondary(
+    tmp_path: Path,
+) -> None:
+    """chrome.border must reach the visual-box stroke; colors.secondary must
+    NOT appear, so the SVG cannot disagree with the compiled theme's border."""
+    d = _write_tokens_with_chrome(tmp_path, "chrome:\n  border: '#AA0000'\n")
+    visual = _write_one_visual_spec(d)
+    styled = render_blueprint_preview(
+        blueprint_path=d / "bp.yaml",
+        visual_spec_paths=[visual],
+        composition_path=d / "comp.yaml",
+        grid_path=d / "grid.yaml",
+        tokens_path=d / "tokens.yaml",
+    )
+    assert 'class="visual-box" stroke="#AA0000"' in styled
+    assert "#E66C37" not in styled  # colors.secondary must not leak through
+
+
+def test_chrome_border_null_draws_no_stroke_at_all(tmp_path: Path) -> None:
+    """chrome.border: null means borders OFF -- an explicit null must not
+    silently fall through to colors.secondary; assert the ABSENCE of a stroke,
+    not a substitute color."""
+    d = _write_tokens_with_chrome(tmp_path, "chrome:\n  border: null\n")
+    visual = _write_one_visual_spec(d)
+    styled = render_blueprint_preview(
+        blueprint_path=d / "bp.yaml",
+        visual_spec_paths=[visual],
+        composition_path=d / "comp.yaml",
+        grid_path=d / "grid.yaml",
+        tokens_path=d / "tokens.yaml",
+    )
+    assert "stroke=" not in styled
+    assert "#E66C37" not in styled  # colors.secondary must not leak through either
+
+
+def test_no_chrome_falls_back_to_secondary_color_unchanged(tmp_path: Path) -> None:
+    """Regression: with no chrome: group at all, the border falls back to
+    colors.secondary exactly as it did before this fix."""
+    d = _write_min_inputs(tmp_path)
+    visual = _write_one_visual_spec(d)
+    styled = render_blueprint_preview(
+        blueprint_path=d / "bp.yaml",
+        visual_spec_paths=[visual],
+        composition_path=d / "comp.yaml",
+        grid_path=d / "grid.yaml",
+        tokens_path=d / "tokens.yaml",
+    )
+    assert 'class="visual-box" stroke="#E66C37"' in styled
+
+
+def test_chrome_gridline_colors_the_stroke_when_border_absent(tmp_path: Path) -> None:
+    """The middle fallback tier: chrome.border ABSENT but chrome.gridline
+    present must still reach the stroke -- gridline is the second-choice
+    source, checked before falling back to colors.secondary."""
+    d = _write_tokens_with_chrome(tmp_path, "chrome:\n  gridline: '#00AA00'\n")
+    visual = _write_one_visual_spec(d)
+    styled = render_blueprint_preview(
+        blueprint_path=d / "bp.yaml",
+        visual_spec_paths=[visual],
+        composition_path=d / "comp.yaml",
+        grid_path=d / "grid.yaml",
+        tokens_path=d / "tokens.yaml",
+    )
+    assert 'class="visual-box" stroke="#00AA00"' in styled
+    assert "#E66C37" not in styled  # colors.secondary must not leak through

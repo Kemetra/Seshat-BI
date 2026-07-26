@@ -114,7 +114,31 @@ def _load_yaml_mapping(path: Path | str) -> dict[str, Any]:
     return data
 
 
-def _style_from_tokens(tokens_path: Path | str | None) -> dict[str, str]:
+def _line_color_from_tokens(tokens: dict[str, Any]) -> str | None:
+    """The visual-box border/gridline color: ``chrome.border``, else
+    ``chrome.gridline``, else ``colors.secondary`` (finding 4).
+
+    The compiled theme draws visual borders/gridlines from ``chrome.border``/
+    ``chrome.gridline`` (theme-spec section 5), not from ``colors.secondary``
+    -- so this preview must source the SAME field, or a chrome override (or an
+    explicit ``chrome.border: null`` turning borders OFF) would make the SVG
+    disagree with the theme Power BI actually renders. Key PRESENCE decides
+    fallback, not truthiness: an explicit ``null`` for ``border``/``gridline``
+    is a real "borders off" declaration and must return ``None`` (no stroke
+    drawn) rather than silently falling through to the next source.
+    """
+    chrome = tokens.get("chrome")
+    chrome = chrome if isinstance(chrome, dict) else {}
+    if "border" in chrome:
+        return chrome["border"]
+    if "gridline" in chrome:
+        return chrome["gridline"]
+    colors = tokens.get("colors")
+    colors = colors if isinstance(colors, dict) else {}
+    return colors.get("secondary", _DEFAULT_STYLE["line"])
+
+
+def _style_from_tokens(tokens_path: Path | str | None) -> dict[str, str | None]:
     """Preview colors from a committed tokens YAML, or nothing at all.
 
     Reads the SAME tokens file ``theme_compile`` consumes, so the preview and
@@ -130,7 +154,9 @@ def _style_from_tokens(tokens_path: Path | str | None) -> dict[str, str]:
     naturally emits no style attribute at all, keeping the no-tokens render
     byte-identical to before this parameter existed (only the disclaimer text
     is new). ``_DEFAULT_STYLE`` is the per-key fallback used only once tokens
-    ARE present but a specific key is missing from them.
+    ARE present but a specific key is missing from them. ``"line"`` may be
+    ``None`` (chrome.border/gridline explicitly off) -- ``_style_attr`` already
+    treats a falsy value as "no attribute", so that flows through unchanged.
     """
     if tokens_path is None:
         return {}
@@ -145,7 +171,7 @@ def _style_from_tokens(tokens_path: Path | str | None) -> dict[str, str]:
         "ground": colors.get("background", _DEFAULT_STYLE["ground"]),
         "ink": text.get("primary", _DEFAULT_STYLE["ink"]),
         "ink_muted": text.get("muted", _DEFAULT_STYLE["ink_muted"]),
-        "line": colors.get("secondary", _DEFAULT_STYLE["line"]),
+        "line": _line_color_from_tokens(tokens),
     }
 
 
@@ -256,7 +282,7 @@ def _visual_group(
     profile: dict[str, Any],
     origin_x: int,
     origin_y: int,
-    style: dict[str, str],
+    style: dict[str, str | None],
 ) -> str:
     position = (
         visual.get("position") if isinstance(visual.get("position"), dict) else {}
@@ -398,7 +424,7 @@ def _page_svg(
     visual_specs: list[dict[str, Any]],
     composition: dict[str, Any],
     grid: dict[str, Any],
-    style: dict[str, str],
+    style: dict[str, str | None],
 ) -> str:
     profile = _grid_profile(grid)
     canvas_w, canvas_h = _canvas_size(profile)
@@ -474,7 +500,7 @@ def _render(
     visual_specs: list[dict[str, Any]],
     composition: dict[str, Any],
     grid: dict[str, Any],
-    style: dict[str, str],
+    style: dict[str, str | None],
 ) -> str:
     """Pure render: already-loaded dicts in, deterministic SVG text out. No I/O."""
     return _page_svg(blueprint, visual_specs, composition, grid, style)

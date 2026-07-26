@@ -43,29 +43,47 @@ svg = render_blueprint_preview(
     visual_spec_paths=[Path("mappings/<subject-area>/design/visuals/<v>.yaml"), ...],
     composition_path=Path("mappings/<subject-area>/design/report-composition.yaml"),
     grid_path=Path("design/grids/16x9-grid.yaml"),
+    tokens_path=Path("design/tokens/<theme>-design-tokens.yaml"),  # optional
 )
 ```
 
 `render_blueprint_preview` (`src/seshat/blueprint_preview.py`) is read-only: it
-opens exactly the four YAML paths given and returns a string. It performs no
-write of its own -- if you want the preview committed for review, write the
-returned text yourself (see "Where the preview lives" below).
+opens the four required YAML paths given (plus `tokens_path` when supplied) and
+returns a string. It performs no write of its own -- if you want the preview
+committed for review, write the returned text yourself (see "Where the preview
+lives" below).
+
+`tokens_path` is optional and keyword-only. Pass the SAME committed design-
+tokens file `theme-compile` reads (`design/tokens/<theme>-design-tokens.yaml`)
+to render a preview colored from that theme -- background, text, and visual
+borders/gridlines all read from the tokens, never from a theme JSON, so the
+preview cannot show styling Desktop would not actually apply. Omitting
+`tokens_path` yields the plain monochrome render (the pre-existing behavior);
+neither form changes the scope limits below -- a styled preview is still an
+approximation, not a rendering guarantee.
 
 ## Step 1 -- Confirm the artifacts exist and are the APPROVED set
 
 Preview the blueprint the reviewer is actually going to approve, not a draft
 mid-edit. Confirm the page blueprint, its visual specs, and the composition are
 the committed files under `mappings/<subject-area>/design/` (not
-`templates/`), and name each path explicitly rather than guessing.
+`templates/`), and name each path explicitly rather than guessing. If a styled
+(not monochrome) preview is wanted, also identify the committed design-tokens
+file (`design/tokens/<theme>-design-tokens.yaml`) and pass it as `tokens_path`
+-- this is the fourth, OPTIONAL input; the four required inputs above still
+render on their own (monochrome) when it is omitted.
 
-If any of the four inputs is MISSING (not yet authored), `render_blueprint_preview`
-degrades that input to an empty structure rather than raising (never fabricates a
-substitute) -- treat a suspiciously bare-looking preview (missing sections,
-missing visuals) as a signal to STOP and confirm the right paths were passed,
-not as "the design is actually simple." If an input instead EXISTS but is
-unreadable, malformed YAML, or the wrong shape (e.g. a list instead of a
-mapping), `render_blueprint_preview` raises `PreviewInputError` naming the
-file -- fix that input rather than treating the traceback as a tool bug.
+If any of the four REQUIRED inputs is MISSING (not yet authored),
+`render_blueprint_preview` degrades that input to an empty structure rather
+than raising (never fabricates a substitute) -- treat a suspiciously
+bare-looking preview (missing sections, missing visuals) as a signal to STOP
+and confirm the right paths were passed, not as "the design is actually
+simple." If an input instead EXISTS but is unreadable, malformed YAML, or the
+wrong shape (e.g. a list instead of a mapping), `render_blueprint_preview`
+raises `PreviewInputError` naming the file -- fix that input rather than
+treating the traceback as a tool bug. `tokens_path` follows the same
+degrade/raise split when given; when omitted entirely, the render is simply
+monochrome (not an error).
 
 ## Step 2 -- Render, once per page
 
@@ -133,7 +151,9 @@ STOP and ask rather than guessing when:
 - The design-authoring workflow this previews: `page-blueprint.md`.
 - The BUILT-PBIR counterpart (after the fact, not before): `visual-implementation-review.md`.
 - The pure function itself: `src/seshat/blueprint_preview.py`.
-- The four input shapes: `templates/dashboard-page-blueprint.yaml`,
+- The four required input shapes: `templates/dashboard-page-blueprint.yaml`,
   `templates/visual-spec.yaml`, `templates/report-composition.yaml`,
   `design/grids/16x9-grid.yaml` (desktop) / `design/grids/mobile-grid.yaml` (phone).
+- The optional styling input: a committed `design/tokens/<theme>-design-tokens.yaml`
+  (the same file `theme-compile` reads), passed as `tokens_path`.
 - Where the preview's committed location is decided: `specs/123-governed-dashboard-intelligence/data-model.md` (US4).

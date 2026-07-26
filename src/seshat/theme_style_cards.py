@@ -26,6 +26,30 @@ VALID_NUMBER_FORMATS: tuple[str, ...] = ("#,##0", "#,##0.00", "0.0%")
 
 VALID_TITLE_ALIGNMENTS: tuple[str, ...] = ("left", "center", "right")
 
+# The token keys ``build_star_cards``/``build_page_cards`` read, single-sourced
+# here so both the reader (``theme_compile.chrome_from_tokens``/
+# ``page_from_tokens``) and the writer (``theme_gen.render_tokens_yaml``) agree
+# key-for-key on the same allow-list -- a key present in one but not the other
+# is exactly the kind of drift that silently drops a generated card on a
+# tokens->theme->tokens round trip (finding 2).
+CHROME_TOKEN_KEYS: tuple[str, ...] = (
+    "gridline",
+    "border",
+    "title_align",
+    "data_labels",
+    "number_format",
+)
+PAGE_TOKEN_KEYS: tuple[str, ...] = (
+    "background",
+    "background_transparency",
+    "wallpaper",
+    "wallpaper_transparency",
+    "filter_pane_background",
+    "filter_pane_text",
+    "filter_card_applied",
+    "filter_card_available",
+)
+
 
 class StyleCardError(Exception):
     """A style-card token problem surfaced cleanly (no traceback)."""
@@ -70,21 +94,33 @@ def _axis_card(gridline: object) -> list[dict]:
 
 
 def _apply_number_format(chrome: dict, cards: dict[str, list[dict]]) -> None:
-    """Validate ``number_format`` against the vocabulary; emits no card (yet).
+    """Refuse ``chrome.number_format`` outright -- no verified emission key.
 
-    NOTE: ``number_format`` is validated against ``VALID_NUMBER_FORMATS`` (refuse
-    fast on a bad token) but does not yet emit a card -- the brief that specified
-    this builder gives a vocabulary to validate against but no verified
-    ``reportThemeSchema-2.156.json`` key path to write it to (the per-visual
-    ``labelPrecision``/format keys live under named visual types, not the ``"*"``
-    wildcard this builder targets). Flagged as a known gap rather than guessing a
-    key; a follow-up task should confirm the correct path before wiring emission.
+    OWNER-RULED (finding 3, PR #518 review): Power BI's ``"*"`` wildcard theme
+    section accepts ANY key name (``patternProperties: ^.+$``), so a guessed
+    key would be silently ignored by Desktop -- a fail-open in the artifact,
+    worse than emitting nothing. The verified key names that DO exist in the
+    published schema (``formatString``, ``labelDisplayUnits``, ``labelFormat``,
+    ``labelPrecision``, ``displayUnits``) live under NAMED visual types, not
+    the ``"*"`` wildcard this builder targets, so none of them apply here.
+    Rather than accept the token and silently drop it (the prior behaviour --
+    validate-then-discard, invisible to the caller), refuse it explicitly so
+    a caller cannot believe ``number_format`` took effect. ``VALID_NUMBER_FORMATS``
+    stays exported: other code/tests still reference the vocabulary.
     """
     fmt = chrome["number_format"]
     if fmt not in VALID_NUMBER_FORMATS:
         raise StyleCardError(
             f"number_format must be one of {VALID_NUMBER_FORMATS}, got {fmt!r}"
         )
+    raise StyleCardError(
+        f"number_format {fmt!r} is a valid theme-spec value but no verified "
+        "reportThemeSchema key exists to emit it under visualStyles['*']['*'] "
+        "-- Power BI's '*' wildcard section accepts any key name and would "
+        "silently ignore a guessed one, so this is refused rather than "
+        "accepted-then-dropped. Omit chrome.number_format until a verified "
+        "emission key is confirmed."
+    )
 
 
 def _apply_gridline(chrome: dict, cards: dict[str, list[dict]]) -> None:

@@ -14,7 +14,6 @@ CHROME = {
     "border": "#C8C6C4",
     "title_align": "left",
     "data_labels": False,
-    "number_format": "#,##0",
 }
 
 
@@ -38,9 +37,15 @@ def test_out_of_vocabulary_number_format_is_refused():
         build_star_cards({**CHROME, "number_format": "0.000"})
 
 
-def test_every_valid_number_format_is_accepted():
+def test_every_valid_number_format_is_refused_no_verified_emission_key():
+    """Finding 3: owner ruled against inventing a wildcard theme key -- Power
+    BI's "*" section accepts ANY key name (patternProperties ^.+$), so a
+    guessed key would be silently ignored by Desktop. No verified emission key
+    exists yet, so chrome.number_format is refused outright rather than
+    accepted and silently dropped (a fail-open in the artifact)."""
     for fmt in VALID_NUMBER_FORMATS:
-        build_star_cards({**CHROME, "number_format": fmt})
+        with pytest.raises(StyleCardError, match="number_format"):
+            build_star_cards({**CHROME, "number_format": fmt})
 
 
 def test_invalid_hex_is_refused():

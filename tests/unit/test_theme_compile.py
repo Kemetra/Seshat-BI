@@ -517,6 +517,99 @@ def test_compile_bad_hex_in_page_raises_theme_compile_error_not_style_card_error
         compile_theme(tokens_path, out_path=None, force=False)
 
 
+def test_generate_then_compile_round_trip_preserves_chrome_and_page(tmp_path: Path):
+    """Finding 2 acceptance test: theme-gen must serialize chrome/page into the
+    tokens YAML it writes, or a subsequent theme-compile from that same tokens
+    file reconstructs a seed missing them and DELETES the cards it just wrote.
+
+    Proven end-to-end before this fix:
+        theme-gen      -> star cards [border, categoryAxis, labels, title,
+                           valueAxis], page present: True
+        theme-compile from the tokens file it just wrote
+                       -> star cards [labels, title], page present: False
+    """
+    from seshat.theme_gen import ThemeSeed, generate
+
+    seed = ThemeSeed(
+        name="roundtrip-chrome-page",
+        mode="light",
+        accent="#2E7D5B",
+        background="#FFFFFF",
+        text_primary="#111111",
+        text_secondary="#333333",
+        text_muted="#555555",
+        data_colors=("#2E7D5B", "#4FA57B", "#7BC79E"),
+        good="#2E7D5B",
+        neutral="#B5832A",
+        bad="#B23A3A",
+        chrome={
+            "gridline": "#767676",
+            "border": "#767676",
+            "title_align": "left",
+            "data_labels": True,
+        },
+        page={"background": "#FFFFFF", "wallpaper": "#F3F2F1"},
+    )
+    generate(seed, tmp_path, force=True)
+    theme_path = tmp_path / "themes/roundtrip-chrome-page.theme.json"
+    gen_theme = json.loads(theme_path.read_text(encoding="utf-8"))
+    theme_path.unlink()
+
+    tokens_path = tmp_path / "design/tokens/roundtrip-chrome-page-design-tokens.yaml"
+    out = compile_theme(tokens_path, out_path=None, force=True)
+    recompiled = json.loads(out.read_text(encoding="utf-8"))
+
+    # The theme-gen visualStyles must be UNCHANGED across the round trip --
+    # not silently pruned back down to just title/labels.
+    assert recompiled["visualStyles"] == gen_theme["visualStyles"]
+    star = recompiled["visualStyles"]["*"]["*"]
+    assert set(star) == {"title", "labels", "categoryAxis", "valueAxis", "border"}
+    assert "page" in recompiled["visualStyles"]
+
+
+def test_generate_then_compile_round_trip_preserves_null_gridline_and_border(
+    tmp_path: Path,
+):
+    """Finding 2 edge case: chrome.gridline/border of None ("off") and
+    data_labels of False are the highest-risk YAML scalars to round-trip --
+    a wrong emission (the Python-repr string "None", or capitalized "False")
+    fails loudly on recompile (_require_hex rejects "None"; a non-bool value
+    trips data_labels' type check) rather than differing quietly. Assert the
+    full round trip is unchanged, exactly as the hex-value round-trip test
+    does."""
+    from seshat.theme_gen import ThemeSeed, generate
+
+    seed = ThemeSeed(
+        name="roundtrip-null-chrome",
+        mode="light",
+        accent="#2E7D5B",
+        background="#FFFFFF",
+        text_primary="#111111",
+        text_secondary="#333333",
+        text_muted="#555555",
+        data_colors=("#2E7D5B", "#4FA57B", "#7BC79E"),
+        good="#2E7D5B",
+        neutral="#B5832A",
+        bad="#B23A3A",
+        chrome={"gridline": None, "border": None, "data_labels": False},
+    )
+    generate(seed, tmp_path, force=True)
+    theme_path = tmp_path / "themes/roundtrip-null-chrome.theme.json"
+    gen_theme = json.loads(theme_path.read_text(encoding="utf-8"))
+    theme_path.unlink()
+
+    tokens_path = tmp_path / "design/tokens/roundtrip-null-chrome-design-tokens.yaml"
+    out = compile_theme(tokens_path, out_path=None, force=True)
+    recompiled = json.loads(out.read_text(encoding="utf-8"))
+
+    assert recompiled["visualStyles"] == gen_theme["visualStyles"]
+    star = recompiled["visualStyles"]["*"]["*"]
+    assert star["categoryAxis"] == [{"gridlineShow": False}]
+    assert star["valueAxis"] == [{"gridlineShow": False}]
+    assert star["border"] == [{"show": False}]
+    assert star["labels"][0]["show"] is False
+
+
 def test_round_trip_guard_generator_owns_everything_it_claims(tmp_path: Path):
     """The finding-2 proof: generate a theme from tokens declaring chrome+page,
     then _human_owned_visual_styles on the RENDERED visualStyles must be {} --
@@ -542,4 +635,6 @@ def test_round_trip_guard_generator_owns_everything_it_claims(tmp_path: Path):
     tokens_path = _write_tokens(tmp_path, doc)
     out = compile_theme(tokens_path, out_path=None, force=False)
     theme = json.loads(out.read_text(encoding="utf-8"))
-    assert _human_owned_visual_styles(theme["visualStyles"]) == {}
+    assert (
+        _human_owned_visual_styles(theme["visualStyles"], theme["visualStyles"]) == {}
+    )
