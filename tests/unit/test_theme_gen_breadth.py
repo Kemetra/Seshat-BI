@@ -2,7 +2,16 @@ import json
 
 import pytest
 
-from seshat.theme_gen import ThemeSeed, build_palette, render_theme_json
+from seshat.color import contrast_ratio
+from seshat.theme_gen import (
+    AA_NON_TEXT_FLOOR,
+    ThemeGenError,
+    ThemeSeed,
+    _validate_and_collect,
+    build_palette,
+    check_non_text_contrast_or_raise,
+    render_theme_json,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -80,3 +89,45 @@ def test_page_cards_survive_a_compile_round_trip():
     seed = _seed(page={"background": "#FFFFFF"}, chrome={"gridline": "#E1DFDD"})
     doc = json.loads(render_theme_json(build_palette(seed), seed))
     assert _human_owned_visual_styles(doc["visualStyles"]) == {}
+
+
+def test_invisible_gridline_is_refused():
+    """A gridline nearly identical to the background must not pass."""
+    seed = _seed(chrome={"gridline": "#FEFEFE"})  # on #FFFFFF background
+    # Oracle: compute the ratio independently rather than trusting the module.
+    assert contrast_ratio("#FEFEFE", "#FFFFFF") < AA_NON_TEXT_FLOOR
+    with pytest.raises(ThemeGenError, match="gridline"):
+        check_non_text_contrast_or_raise(build_palette(seed), seed)
+
+
+def test_legible_gridline_passes():
+    seed = _seed(chrome={"gridline": "#767676"})
+    assert contrast_ratio("#767676", "#FFFFFF") >= AA_NON_TEXT_FLOOR
+    check_non_text_contrast_or_raise(build_palette(seed), seed)
+
+
+def test_no_chrome_is_vacuously_fine():
+    seed = _seed()
+    check_non_text_contrast_or_raise(build_palette(seed), seed)
+
+
+def test_gridlines_off_is_not_a_contrast_failure():
+    """None means gridlines off -- there is nothing to be invisible."""
+    seed = _seed(chrome={"gridline": None})
+    check_non_text_contrast_or_raise(build_palette(seed), seed)
+
+
+def test_generate_refuses_an_invisible_border_end_to_end(tmp_path):
+    """The gate must run in the validate-before-write path, not just standalone."""
+    seed = _seed(chrome={"border": "#FEFEFE"})
+    with pytest.raises(ThemeGenError, match="border"):
+        _validate_and_collect(seed, tmp_path, False)
+
+
+def test_malformed_gridline_hex_raises_theme_gen_error_not_traceback():
+    """A non-hex chrome color must fail cleanly, matching the module's
+    "never a traceback" contract -- not leak a raw ValueError from
+    contrast_ratio's hex parsing."""
+    seed = _seed(chrome={"gridline": "nope"})
+    with pytest.raises(ThemeGenError, match="gridline"):
+        check_non_text_contrast_or_raise(build_palette(seed), seed)

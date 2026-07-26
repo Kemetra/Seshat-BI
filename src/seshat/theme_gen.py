@@ -25,6 +25,10 @@ from .color import composite_over, contrast_ratio, delta_e76, format_pt, is_vali
 from .theme_style_cards import build_page_cards, build_star_cards
 
 AA_FLOOR = 4.5
+# WCAG 2.x non-text contrast floor. Gridlines, borders, and visual fills are
+# non-text elements: their floor is 3:1, not the 4.5:1 that applies to text. Kept
+# separate from AA_FLOOR so neither can be loosened by editing the other.
+AA_NON_TEXT_FLOOR = 3.0
 MIN_TITLE_FONT_PT = 12.0
 MIN_LABEL_FONT_PT = 9.0
 MIN_CATEGORICAL_DELTAE = (
@@ -426,6 +430,32 @@ def check_font_floor_or_raise(seed: ThemeSeed) -> None:
         )
 
 
+def check_non_text_contrast_or_raise(
+    palette: dict, seed: ThemeSeed, floor: float = AA_NON_TEXT_FLOOR
+) -> None:
+    """Every declared non-text chrome color must clear ``floor`` on its ground.
+
+    Gridlines and borders sit on the page background. A ``None`` color is an
+    explicit "off" declaration, not a faint color, so it is skipped rather than
+    failed. Raises ``ThemeGenError`` naming the offending token.
+    """
+    chrome = seed.chrome or {}
+    ground = palette["colors"]["background"]
+    for field in ("gridline", "border"):
+        color = chrome.get(field)
+        if color is None:
+            continue
+        if not is_valid_hex(color):
+            raise ThemeGenError(f"{field} is not a #RRGGBB hex: {color!r}")
+        ratio = contrast_ratio(color, ground)
+        if ratio < floor:
+            raise ThemeGenError(
+                f"{field} {color} has contrast {ratio:.2f}:1 against background "
+                f"{ground} -- below the {floor:g}:1 WCAG non-text floor; it would "
+                f"be effectively invisible"
+            )
+
+
 def _render_transparency_yaml(palette: dict) -> str:
     """A top-level ``transparency:`` block (sibling of ``colors:``), or "".
 
@@ -641,6 +671,7 @@ def _validate_and_collect(
     check_categorical_distinctness_or_raise(palette)
     check_ramp_deltae_or_raise(palette, MIN_ADJACENT_DELTAE)
     check_composite_contrast_or_raise(palette)
+    check_non_text_contrast_or_raise(palette, seed)
     targets = _targets_for(seed, repo_root, palette)
     if not force:
         for p in targets:
