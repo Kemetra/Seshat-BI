@@ -37,10 +37,48 @@ licence to write:
 
 - `validate` may persist **one** committed provenance record, via the
   already-built-but-unwired `readiness_evidence.py` (EMIT-only per FR-013).
-- The value is a **digest of the server-echoed** `select current_database()` --
-  not an env-derived string. Server-echoed is the whole point: the database
-  asserts its own identity, so the claimant cannot type it. This is what makes
-  A2 trustworthy where A1 was not.
+- The value is a **digest of a server-echoed identity** -- not an env-derived
+  string. Server-echoed is the whole point: the database asserts its own
+  identity, so the claimant cannot type it. This is what makes A2 trustworthy
+  where A1 was not. **See the two amendments below for what that identity must
+  contain and how it must be obtained** -- the first draft of this ruling was
+  wrong on both counts.
+
+#### R7 amendment 1 -- the digest MUST include the SERVER, not just the database
+
+Raised in review of this record (P1) and **verified**. The first draft said "a
+digest of the server-echoed `select current_database()`", which is
+**insufficient**: staging and production commonly share a database *name* on
+different hosts, so a name-only digest **matches for both** and `next`/`status`
+could not detect that validation ran against the wrong live system. That defeats
+A2's entire stated purpose -- proving *which* system earned the evidence.
+
+It also silently narrowed the parent design note, which already specified
+`sha256("<host>/<dbname>")` (`2026-07-25-live-db-provenance-design.md:163`).
+
+**Ruled:** derive the digest from a **server-confirmed endpoint plus the echoed
+database name** -- both server-asserted, so neither is typed by the claimant --
+while continuing to persist **neither raw value**. The endpoint component must
+come from the connection the server confirms, not from `.env`; if a
+server-confirmable endpoint cannot be obtained for a given engine, say so and
+record the limitation rather than silently falling back to a name-only digest
+that cannot distinguish two systems.
+
+#### R7 amendment 2 -- the identity query MUST be dialect-provided
+
+Raised in review (P2) and **verified**: `src/seshat/dialect.py` implements
+**four** engines (`postgres`, `sqlserver` at `:219`, `mysql` at `:452`,
+`snowflake`), and `validate`'s body selects among them. Mandating
+`select current_database()` would **fail** on SQL Server (`DB_NAME()`) and MySQL
+(`DATABASE()`).
+
+**Ruled:** the identity expression is **dialect-provided**, resolved through the
+existing dialect layer alongside every other engine-specific query -- never a
+Postgres literal hardcoded into the provenance path. Follow the precedent already
+set by `_db_extra_hint(engine)` (`cli/__init__.py:291`), which selects the right
+driver per engine rather than assuming Postgres. If an engine cannot supply an
+identity expression, that engine records no provenance field (the legacy
+absent path) rather than a wrong one.
 - **Never a raw host or dbname.** `ANALYTICS_DB_NAME` is on this repo's own
   secret/redaction lists (`dagster_adapter/redaction.py:53`,
   `rules/git_meta.py:506,513`, `severity_posture.py:375`); committing one would
