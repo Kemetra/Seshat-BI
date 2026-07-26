@@ -174,3 +174,39 @@ def test_unreadable_request_still_counts_as_outstanding(tmp_path):
 def test_has_open_request_is_false_for_unrelated_caveats():
     assert has_open_request([{"kind": "unverified_db_provenance"}]) is False
     assert has_open_request([]) is False
+
+
+# --------------------------------------------------------------------------
+# The two surfaces that make the caveat actionable rather than informational
+# --------------------------------------------------------------------------
+
+
+def test_terminal_pass_action_reaches_next_allowed_action():
+    """A caveat alone is informational and a conductor routes past it, so the
+    action field itself must change (issue #517)."""
+    from seshat.agent_next import _next_allowed_action
+
+    clean = {"outcome": "terminal_pass", "stage": None, "action_text": None}
+    assert _next_allowed_action(clean).startswith("No pipeline action")
+
+    with_request = dict(clean, action_text="Present the open approval request(s)")
+    assert _next_allowed_action(with_request) == "Present the open approval request(s)"
+
+
+def test_portfolio_rank_puts_a_request_bearing_table_ahead_of_a_clean_one():
+    """Portfolio mode picks ONE focus; a request-bearing table must not be
+    hidden behind a passing one -- while real pipeline work still outranks it."""
+    from seshat.agent_next import _rank
+
+    clean = {"outcome": "terminal_pass", "stage": None, "caveats": []}
+    with_request = {
+        "outcome": "terminal_pass",
+        "stage": None,
+        "caveats": [{"kind": OPEN_REQUEST_KIND, "detail": "x"}],
+    }
+    staged = {"outcome": "next_action", "stage": "gold_ready", "caveats": []}
+    defect = {"outcome": "input_defect", "stage": None, "caveats": []}
+
+    assert _rank(with_request) < _rank(clean)
+    assert _rank(staged) < _rank(with_request)
+    assert _rank(defect) < _rank(staged)
