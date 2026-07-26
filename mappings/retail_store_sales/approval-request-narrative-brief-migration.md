@@ -126,7 +126,7 @@ status: blocked
 | Map is **migrated** to `seshat.binding-map/v1` (draft, unsigned) | `design/visual-contract-binding-map.md` -- v1 front section added, signed two-way content preserved verbatim |
 | Both narrative-check modes pass | brief mode `pass`; `--binding-map` three-way mode `pass` (9 visuals / 6 questions / 5 contracts) |
 | The gate is genuinely enforcing, not vacuous | adversarial mutations block correctly: a `Q99` cite -> `orphan_visual` + `unanswered_question`; a headline on an action-stage question -> `bare_total_headline_visual` |
-| The pin test flipped, deliberately | `test_real_worked_example_map_passes_the_three_way_gate` replaces the fail-closed assertion, with STRONGER assertions (real counts >= 5, no findings, `grants_approval is False`) |
+| The pin test flipped, deliberately | `test_real_worked_example_map_passes_the_three_way_gate` in the NEW file **`tests/unit/test_narrative_worked_example.py`** replaces `test_real_worked_example_map_still_needs_phase_b_migration` (formerly in `test_narrative_check.py`), with STRONGER assertions (real counts >= 5, no findings, `grants_approval is False`) plus a companion brief test |
 | v10 is **held out** | no customer-level question exists; the `customer_id` PII question is open in `source-profile.md` (see `approval-request-source-profile-writethrough.md`) |
 | 5 contracts approved `pass` | `metrics/*.yaml`, owner-approved 2026-06-25 |
 | No readiness stage moved | `seshat next --table retail_store_sales` -> `terminal_pass`, unchanged; nothing here grants an approval |
@@ -174,6 +174,24 @@ explicit **acceptance, modification, or rejection** — the migration must not
 inherit decisions the named owner has never approved. For **review context
 only**, not as the derivation's starting set:
 
+> ### ⚠ The numbers do NOT line up -- compare by CONTENT, not by id
+>
+> The drafted brief's `Q1`-`Q6` are the agent's own derivation and **do not
+> correspond** to this intent's `q1`-`q6`. The collision is real and easy to
+> misread:
+>
+> | | intent `q6` | brief `Q6` |
+> |---|---|---|
+> | is about | **customers** (highest-activity) | **discounting** (is the posture working) |
+>
+> And the intent's customer question has **no** brief equivalent at all — it is
+> `gaps[]` entry 3, because the `customer_id` PII question is still open in
+> `source-profile.md` (see the D2 dimension note and
+> `approval-request-source-profile-writethrough.md`).
+>
+> So when ruling D1, read each drafted question's `decision:` text against the
+> intent text below. **Matching on the number alone will pair the wrong two.**
+
 | Intent id | Owner's question text (verbatim) |
 |---|---|
 | q1 | How are we doing overall right now? (headline volume + basket value + discount share) |
@@ -188,7 +206,21 @@ only**, not as the derivation's starting set:
 A **drafted brief now exists** at `mappings/retail_store_sales/narrative-brief.md`
 (`narrative-check` -> `status: pass`, 6 questions / 5 contracts). It was derived
 from the two permitted inputs only; the intent questions above were **not** its
-source. So D1 is a review of concrete text, not a blank-page exercise:
+source.
+
+### The content pairing (what to actually compare)
+
+| Intent (context) | Drafted brief | Same decision? |
+|---|---|---|
+| q1 headline volume + basket + discount share | **Q1** overall trading, YoY | yes -- but the drafted Q1 drops discount share into Q6, where the caveat can be stated properly |
+| q2 trend / seasonality | **Q2** is the swing real (banded) | yes -- the draft adds the band so a spike is not over-read |
+| q3 categories drive sales and units | **Q3** which categories to push/protect/drop | yes |
+| q4 channel **and** payment method | **Q4** channel (in-store vs online) | **split** -- the draft separates channel from payment method |
+| q5 basket value, varies by channel | **Q5** payment-method basket behaviour | **partly** -- the draft frames it as payment mix; channel basket is read in Q4 |
+| q6 highest-activity customers | *(none)* -> `gaps[]` 3 | **NO** -- blocked on the open PII question |
+| *(none)* | **Q6** is discounting working | **new** -- the draft promotes the discount caveat to its own action question |
+
+So D1 is a review of concrete text, not a blank-page exercise:
 
 - **1a.** **Accept, modify, or reject each drafted question Q1-Q6.** The draft's
   questions are the agent's derivation, not the intent list -- compare the two and
