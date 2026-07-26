@@ -1,11 +1,42 @@
-# Approval request -- narrative brief + `seshat.binding-map/v1` migration (issue #514)
+# Approval Request -- `narrative-brief-migration`
 
-- **Table:** `retail_store_sales`
-- **Prepared:** 2026-07-26 (agent-assembled evidence package)
-- **Decision owner:** the named BI report owner / data owner
-- **Governing ruling:** R5, `docs/superpowers/specs/2026-07-26-nine-issue-rulings.md`
-- **Status:** **AWAITING OWNER RULING.** Nothing in this file is an approval,
-  and no readiness stage is advanced by it.
+- **question_id:** `narrative-brief-migration`
+- **table:** `retail_store_sales`
+- **stage:** `dashboard_ready`  *(the signed Stage-6 design artifacts; issue #514)*
+- **subject:** the `seshat.narrative-brief/v1` brief and the
+  `seshat.binding-map/v1` migration of the signed `visual-contract-binding-map.md`
+- **owner_required:** `report-owner`  *(the named human who signed the binding map
+  2026-06-25; see Authority class below)*
+- **status:** `open`  *(a request is `open` until a named human answers it via
+  `approval-decision-narrative-brief-migration.md`; it never answers itself)*
+- **prepared:** 2026-07-26 (agent-assembled evidence package)
+- **governing ruling:** R5, `docs/superpowers/specs/2026-07-26-nine-issue-rulings.md`
+
+> **Why this is packaged, not decided.** Every decision below is a Principle-V
+> judgment call, and the artifact being migrated is already SIGNED. The kit is
+> forbidden to resolve either class on its own
+> (`never_self_grant_approval`). Until the named report owner rules, no brief is
+> authored and the binding map keeps its current F011 two-way format. This
+> package poses the five sub-decisions; it records none of them.
+
+## Decision needed (one sentence)
+
+> Rule the five judgment calls the `retail_store_sales` narrative brief requires
+> -- (D1) the decision-questions and their ranking, (D2) each question's framing
+> and guardrail basis, (D3) the story order, (D4) the three-way visual bindings
+> and which visuals are headlines, and (D5) whether the 2026-06-25 sign-off
+> carries forward or a fresh design review is required.
+
+## Authority class
+
+`report-owner`. The binding map's own sign-off block
+(`design/visual-contract-binding-map.md:58-68`) names the reviewer as the BI
+report owner, and `report-intent.yaml` names `owner: "Ahmed Shaaban
+(report_owner)"`. R5 ruled that the delegated-ruling mandate covers design
+rulings but **not** re-signing signed artifacts, so this specific gate needs the
+named signer, not a delegate.
+
+---
 
 ## Why this is a request and not a patch
 
@@ -210,18 +241,27 @@ you cannot answer.
       **deliberately** to assert the new passing state.
 - [ ] Named-owner review recorded per the usual approval seam.
 
-## Ruling
+## How this request gets answered
 
-<!--
-  PRINCIPLE-V SEAM. Left EMPTY on purpose. The agent that assembled this package
-  is structurally forbidden from filling any line below. Only the named human
-  decision owner writes here.
--->
+**Not in this file.** Per the convention the two sibling packages in this
+directory already follow (`approval-request-H9-time-intel.md` pairs with
+`approval-decision-H9-time-intel.md`; same for `YTD-year-start`), the named human
+records the ruling in a **separate** decision file:
 
-- **Decision 1 (questions + ranking):**
-- **Decision 2 (framing + guardrail basis):**
-- **Decision 3 (story order):**
-- **Decision 4 (three-way bindings + headlines):**
-- **Decision 5 (re-sign or carry forward):**
-- **Ruled by:**
-- **Date:**
+```
+mappings/retail_store_sales/approval-decision-narrative-brief-migration.md
+```
+
+That file states `question_id` (matching this request), `selected_option` for
+each of D1-D5, `owner` (the named human plus authority class), `date`,
+`rationale`, and an `artifacts_updated` section listing the committed artifacts
+the decision was written through to.
+
+When it exists and names this `question_id`, this request's `status:` flips from
+`open` to `answered` with a pointer to it.
+
+**The agent that assembled this package is structurally forbidden from creating
+that decision file, or from flipping the `status:` field above.** Only the named
+report owner writes the ruling. A "do the recommended actions" instruction does
+**not** clear this seam -- R5 named it, and it is the one item in issue #514 that
+no delegated mandate covers.

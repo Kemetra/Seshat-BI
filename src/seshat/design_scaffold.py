@@ -38,9 +38,15 @@ _PACKAGED_ROOT = "design_templates"
 # (packaged_subpath, dest_relpath) -- the packaged tree is flattened (no
 # templates/ prefix, grids/ instead of design/grids/); the destination is the
 # exact repo-relative path blueprint_preview / dashboard_coordinator /
-# publish_pack expect. Only these six ship (constitution VII): the rest of the
+# publish_pack expect. Only these seven ship (constitution VII): the rest of the
 # ~dozen design/handoff templates stay dev-only.
+#
+# narrative-brief.md is the FIRST Stage-6 blank (the derivation route runs before
+# any layout work) and `seshat narrative-check` reads it as the repo-relative
+# mappings/<table>/narrative-brief.md -- so a package-only user needs the blank
+# for the same reason the six below ship (issue #514).
 _DESIGN_FILES: tuple[tuple[str, str], ...] = (
+    ("narrative-brief.md", "templates/narrative-brief.md"),
     ("dashboard-page-blueprint.yaml", "templates/dashboard-page-blueprint.yaml"),
     ("visual-spec.yaml", "templates/visual-spec.yaml"),
     ("report-composition.yaml", "templates/report-composition.yaml"),

@@ -1,8 +1,9 @@
-"""`seshat scaffold-design` self-sufficiency (issues #440, #441).
+"""`seshat scaffold-design` self-sufficiency (issues #440, #441, #514).
 
-The six Stage-6/7 design + handoff templates (dashboard-page-blueprint.yaml,
-visual-spec.yaml, report-composition.yaml, design/grids/16x9-grid.yaml,
-handoff/bi-handoff-pack.md, handoff/handoff-review-checklist.md) previously
+The seven Stage-6/7 design + handoff templates (narrative-brief.md,
+dashboard-page-blueprint.yaml, visual-spec.yaml, report-composition.yaml,
+design/grids/16x9-grid.yaml, handoff/bi-handoff-pack.md,
+handoff/handoff-review-checklist.md) previously
 shipped only with the development repository, and no verb materialized them
 into a pip-only workspace -- so `blueprint_preview` / `dashboard_coordinator` /
 the `publish_pack` rule (all of which read these as repo-relative paths) had
@@ -24,6 +25,7 @@ pytestmark = pytest.mark.unit
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 _DESIGN_FILES = (
+    "templates/narrative-brief.md",
     "templates/dashboard-page-blueprint.yaml",
     "templates/visual-spec.yaml",
     "templates/report-composition.yaml",
@@ -36,6 +38,7 @@ _DESIGN_FILES = (
 # deliberately flattened under seshat/design_templates/ (no templates/ prefix,
 # grids/ instead of design/grids/); see the pyproject force-include comment.
 _FORCE_INCLUDE_MAP = {
+    "templates/narrative-brief.md": "seshat/design_templates/narrative-brief.md",
     "templates/dashboard-page-blueprint.yaml": (
         "seshat/design_templates/dashboard-page-blueprint.yaml"
     ),
@@ -54,7 +57,7 @@ _FORCE_INCLUDE_MAP = {
 
 
 def test_pyproject_ships_design_templates_into_the_package() -> None:
-    """The wheel force-include (and sdist include) must carry all six Stage-6/7
+    """The wheel force-include (and sdist include) must carry all seven Stage-6/7
     design + handoff templates under the package, so `scaffold_design` finds
     them in a non-editable install (issues #440, #441)."""
     raw = (_REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
@@ -73,7 +76,7 @@ def test_pyproject_ships_design_templates_into_the_package() -> None:
         )
 
 
-def test_scaffold_design_writes_all_six_templates_to_repo_relative_paths(
+def test_scaffold_design_writes_all_seven_templates_to_repo_relative_paths(
     tmp_path: Path,
 ) -> None:
     from seshat.design_scaffold import scaffold_design
@@ -103,7 +106,7 @@ def test_scaffold_design_is_non_destructive_and_idempotent(tmp_path: Path) -> No
 
 def test_scaffold_design_dev_checkout_fallback_resolves(tmp_path: Path) -> None:
     """No wheel data needed in the dev suite: the _SOURCE_ROOT fallback must
-    find the repo-root templates/ and design/ dirs so all six files still
+    find the repo-root templates/ and design/ dirs so all seven files still
     materialize byte-for-byte."""
     from seshat.design_scaffold import scaffold_design
 
@@ -149,7 +152,7 @@ def test_scaffold_design_creates_missing_parent_dirs(tmp_path: Path) -> None:
 
 def test_cli_scaffold_design_smoke(tmp_path: Path) -> None:
     """The `scaffold-design` verb is wired into the CLI dispatch table and
-    writes the six templates via `seshat scaffold-design --repo <dir>`."""
+    writes the seven templates via `seshat scaffold-design --repo <dir>`."""
     from seshat.cli import main
 
     exit_code = main(["scaffold-design", "--repo", str(tmp_path)])

@@ -174,8 +174,9 @@ packages = ["src/seshat", "src/retail"]
 # dashboard_coordinator, the publish_pack rule) read these as REPO-RELATIVE
 # paths, so the packaged layout is deliberately flattened under
 # seshat/design_templates/ while the materializer reproduces the original
-# templates/ + design/grids/ destinations (only these six ship; the other
+# templates/ + design/grids/ destinations (only these seven ship; the other
 # design/handoff templates stay dev-only, constitution VII).
+"templates/narrative-brief.md" = "seshat/design_templates/narrative-brief.md"
 "templates/dashboard-page-blueprint.yaml" = "seshat/design_templates/dashboard-page-blueprint.yaml"
 "templates/visual-spec.yaml" = "seshat/design_templates/visual-spec.yaml"
 "templates/report-composition.yaml" = "seshat/design_templates/report-composition.yaml"
@@ -218,6 +219,7 @@ include = [
     # Stage-6/7 design + handoff blank templates the scaffold-design verb
     # bundles (issues #440, #441); the wheel is built from the sdist, so the
     # sdist must carry them.
+    "/templates/narrative-brief.md",
     "/templates/dashboard-page-blueprint.yaml",
     "/templates/visual-spec.yaml",
     "/templates/report-composition.yaml",
