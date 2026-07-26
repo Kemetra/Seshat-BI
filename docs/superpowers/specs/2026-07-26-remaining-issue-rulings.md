@@ -58,11 +58,49 @@ It also silently narrowed the parent design note, which already specified
 
 **Ruled:** derive the digest from a **server-confirmed endpoint plus the echoed
 database name** -- both server-asserted, so neither is typed by the claimant --
-while continuing to persist **neither raw value**. The endpoint component must
-come from the connection the server confirms, not from `.env`; if a
-server-confirmable endpoint cannot be obtained for a given engine, say so and
-record the limitation rather than silently falling back to a name-only digest
-that cannot distinguish two systems.
+while continuing to persist **neither raw value**. If a server-confirmable
+endpoint cannot be obtained for a given engine, say so and record the limitation
+rather than silently falling back to a name-only digest that cannot distinguish
+two systems.
+
+#### R7 amendment 3 -- the identity must be COMPARABLE OFFLINE, or it is not usable
+
+Raised in review (P1) and **verified as a real hole in amendment 1**. Amendment 1
+said the endpoint "must come from the connection the server confirms, not from
+`.env`". Taken literally that breaks the comparison, because the **reader is
+configuration-only and never connects** (a hard constraint of R7):
+
+- with a DNS alias, proxy, PgBouncer, or load balancer in front of the database,
+  the server-confirmed endpoint commonly reports a **backend address or instance**
+  rather than the configured hostname;
+- the writer would then hash a different value than the config-only reader derives
+  for the *same* database, and A2's present-but-mismatching path would
+  **downgrade valid evidence with a blocker** -- a false positive on the exact
+  signal A2 exists to provide.
+
+A provenance check that cries wolf gets disabled, so this must be settled before
+implementation, not after.
+
+**Ruled:** A2 requires a **canonical identity that BOTH sides can derive
+independently** -- the writer at connect time and the reader from configuration
+alone -- and the digest is computed over that canonical form. Concretely, the
+implementation must:
+
+1. define the canonicalization explicitly (normalized host as configured, port,
+   database name), and document which components are included;
+2. use the server-echoed values to **confirm and correct** the *database name*
+   (which the server reports reliably and the claimant would otherwise be free to
+   type), rather than to source a backend address the reader can never see;
+3. where the server-reported endpoint and the configured endpoint disagree,
+   treat that as **outside the digest** -- do not silently fold an unreachable
+   value into a hash the reader must reproduce;
+4. if no canonical form can be derived that both sides reproduce for a given
+   deployment shape, record **no field** (the safe legacy absent path) rather than
+   one that mismatches for a correct setup.
+
+The governing principle: **the digest's job is to make a wrong database
+detectable without making a right one look wrong.** Prefer a false *negative*
+(no field, caveat persists) over a false *positive* (valid evidence blocked).
 
 #### R7 amendment 2 -- the identity query MUST be dialect-provided
 
@@ -113,8 +151,10 @@ fresh named-human approval. The reader now learns the shape **before** Gold
 Ready, which was the defect.
 
 The rule remains blocked by evidence, not by preference:
-`mappings/demo_sample_orders/source-map.yaml` is a **real gate artifact** (six
-`pass` entries in its `readiness-status.yaml`) with `meta` absent **and** a bare
+`mappings/demo_sample_orders/source-map.yaml` is a **real gate artifact** --
+`source_ready`, `mapping_ready`, and `silver_ready` are all `pass` (`gold_ready`
+is `blocked`; the remaining three stages are `not_started`) -- with `meta` absent
+**and** a bare
 `str` at `gold_star.fact` where canonical is a `dict` -- so even a *present-only*
 structural rule fires on main's own artifact, and a new rule must be no-finding
 on main to land.
@@ -129,11 +169,23 @@ loses nothing.
 Recorded so the boundary is visible rather than implied:
 
 - **#494's full TMDL validation** needs the `TmdlSerializer`/TOM path that
-  **ADR-0001 deliberately excluded** to keep this toolchain headless, routing to
-  F016 under **unratified ADR-0018**. Ratifying an ADR is owner work, and #469
-  (the F016 slice) is out of scope by the owner's own instruction. The shipped
-  narrow lint is complete for its scope; there is no further headless increment.
-  Status recorded on the issue; it stays open.
+  **ADR-0001 deliberately excluded** from the static core to keep this toolchain
+  headless. The shipped narrow lint is complete for its scope; there is no
+  further *headless* increment. It stays open.
+
+  **Correction (raised in review of this record, verified):** an earlier draft
+  routed this through "unratified ADR-0018", which is **wrong**. ADR-0018
+  (`docs/decisions/0018-unpark-f016-power-bi-mcp-execution-adapter.md`) is the
+  gate for F016's **execution-only** slices -- approval-gated *mutations* (slice
+  5) and the remote server (slice 6) via Microsoft's Power BI MCP. It neither
+  authorizes nor provides a TOM **validation** path, so ratifying it would leave
+  #494's gap exactly where it is.
+
+  What #494 actually needs is a **separate optional-validator decision** against
+  ADR-0001 -- i.e. whether a TOM-dependent validator may ship as an *optional
+  extra* outside the static core, which is a different question from unparking an
+  execution adapter. That decision is not made here, and #494 must not be
+  described as blocked on #469 or on ADR-0018.
 - **#474's remaining criterion** is authoring
   `mappings/retail_store_sales/narrative-brief.md`, which **does not exist** --
   so it is not "migrate a map" but *write a decision-questions document from
