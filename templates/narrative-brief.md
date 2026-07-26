@@ -124,6 +124,10 @@ first-class output, not an omission -- record it rather than dropping it.>
 - **Reviewed by:** <named human reviewer, date>  <!-- LEAVE EMPTY until the real review happens -->
 
 <!--
-  The reviewer line is a Principle-V seam. An agent NEVER fills it, and
-  `narrative-check` NEVER grants the approval it records.
+  The reviewer line is a Principle-V seam: it records that a named human
+  REVIEWED this brief. An agent never invents that review, never supplies the
+  reviewer's name, and never treats a clean `narrative-check` as the approval it
+  is evidence for. An agent MAY transcribe a review a named human actually gave
+  (name + date, as supplied) -- the boundary is DECIDING, not writing down. A
+  field the human did not supply is left unfilled, never guessed.
 -->

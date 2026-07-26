@@ -117,19 +117,34 @@ status: blocked
 
 ## Decision 1 -- the ranked decision-questions
 
-**These six are UNAPPROVED PROPOSALS, not established owner input.**
-`design/report-intent.yaml` declares them via `report-intent-interview` and names
-`owner: "Ahmed Shaaban (report_owner)"`, but that same file records its own
-readiness as **`blocked`**:
+**The initial questions must be DERIVED, not inherited from the list below.**
+`derivation-route.md` names its inputs as "exactly two; nothing else" — the
+approved metric contracts and the committed `source-profile.md`. `report-intent.yaml`
+is a **third artifact**, so it may not seed the derivation: an agent that starts
+from it produces a brief whose questions came from a forbidden input, and
+`narrative-check` would not catch that (it validates measure cites, not question
+provenance).
+
+So the drafting order is:
+
+1. **Derive** the ranked questions from the two permitted inputs only — the 5
+   approved contracts (`metrics/*.yaml`) and `source-profile.md`.
+2. **Then** compare the draft against the intent questions below, as *review
+   context* for the owner: a gap between the two is a useful signal (either the
+   derivation missed something the owner cares about, or the intent asked for
+   something the data cannot answer — which is a `gaps[]` entry, not a question).
+
+**And they are UNAPPROVED PROPOSALS regardless.** `report-intent.yaml` names
+`owner: "Ahmed Shaaban (report_owner)"` but records its own readiness as
+**`blocked`**:
 
 > `no report_intent_approval decision recorded yet for branch_performance_weekly
 > -- awaiting named report_owner approval (Principle V; never self-granted)`
 
-So the file naming an owner does **not** make its questions approved. Each one
-below needs explicit **acceptance, modification, or rejection** — the migration
-must not inherit decisions the named owner has never approved. They are listed
-here as the starting proposal set so the owner has something concrete to react
-to, not as settled input:
+So the file naming an owner does **not** make its questions approved. Each needs
+explicit **acceptance, modification, or rejection** — the migration must not
+inherit decisions the named owner has never approved. For **review context
+only**, not as the derivation's starting set:
 
 | Intent id | Owner's question text (verbatim) |
 |---|---|
@@ -338,8 +353,25 @@ List both in the decision file's `artifacts_updated` section, following the
 sibling pattern in `approval-decision-H9-time-intel.md`. Without them, D1-D5 can
 all be ruled and Stage-6 authoring still stops on a gate nobody notices.
 
-**The agent that assembled this package is structurally forbidden from creating
-that decision file, or from flipping the `status:` field above.** Only the named
-report owner writes the ruling. A "do the recommended actions" instruction does
-**not** clear this seam -- R5 named it, and it is the one item in issue #514 that
-no delegated mandate covers.
+### Who may write the decision file: TRANSCRIPTION vs DECIDING
+
+The agent **may transcribe** a ruling the named human supplied, and should -- that
+is the `approval-console` skill's job (it "only TRANSCRIBES a decision a named
+human supplied"), and an approval that lives only in chat cannot be reviewed,
+advance a gate, or be audited. Requiring the owner to hand-edit the repository
+would leave answered requests sitting `open` and unauditable.
+
+What the agent must **never** do, per that same skill:
+
+- pick the `selected_option` for any of D1-D5;
+- supply or forge the `owner`;
+- invent the `rationale`;
+- auto-accept a recommended default, or treat silence as acceptance;
+- flip `status:` to `answered` when no human has actually answered.
+
+A field the human did not supply is **left unfilled** -- never guessed. So:
+**the owner decides, the agent may write down what they decided.**
+
+A "do the recommended actions" instruction authorizes the transcription, never
+the decision. R5 named this seam, and it is the one item in issue #514 that no
+delegated mandate covers.
