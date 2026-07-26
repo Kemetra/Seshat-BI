@@ -86,7 +86,11 @@ def test_text_names_the_opt_in_commands_but_does_not_run_them(
     _write_gold_table(tmp_path, "orders")
     main(["orchestration-assess", "--repo", str(tmp_path)])
     out = capsys.readouterr().out
-    assert "seshat-bi[dbt]" in out
+    # The dbt opt-in names the extra's DEPENDENCIES, not `seshat-bi[dbt]`: enabling
+    # an extra must not re-resolve the seshat-bi distribution and replace a pinned
+    # or candidate build (#513).
+    assert "pipx inject seshat-bi --force" in out
+    assert "dbt-core" in out
     assert "dagster init" in out
 
 

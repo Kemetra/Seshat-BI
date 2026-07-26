@@ -80,10 +80,11 @@ def test_mcp_extra_hint_names_both_install_lanes(monkeypatch, capsys) -> None:
     assert cli._run_mcp(Namespace(repo=".")) == 2
     err = capsys.readouterr().err
 
-    # Both lanes are named, and the pipx one MODIFIES the existing install.
-    assert 'pipx install --force "seshat-bi[mcp]"' in err
+    # Both lanes are named, and the pipx one MODIFIES the existing install without
+    # re-resolving seshat-bi itself (#513).
+    assert 'pipx inject seshat-bi --force "mcp>=1.28,<2"' in err
     assert "pip install" in err
-    assert "seshat-bi[mcp]" in err
+    assert "seshat-bi[mcp]" in err  # the pip lane still names the extra
     # No pip-only line: every `pip install` mention must sit on a labelled lane.
     assert "pipx" in err, "pip-only remedy is wrong in the documented pipx lane"
 
@@ -100,17 +101,31 @@ def test_mcp_hint_uses_double_quotes_for_cmd_exe() -> None:
     assert '"seshat-bi[mcp]"' in hint
 
 
-def test_extra_hint_is_not_the_driver_hint_shape() -> None:
-    """An extra is resolved by `pipx install`, never by `pipx inject`.
+def test_the_extra_hint_injects_dependencies_never_the_extra_name() -> None:
+    """An extra NAME is not injectable; its DEPENDENCIES are.
 
-    `pipx inject seshat-bi mcp` is not a command -- `mcp` is an extra of the
-    `seshat-bi` distribution, not a package to inject. This is why #507 added a
-    SIBLING helper instead of generalizing `_db_extra_hint`.
+    #507 originally read this as "an extra must therefore be resolved by
+    `pipx install`", and that premise was half right: `pipx inject seshat-bi mcp`
+    is indeed not a command, because `mcp` there is an extra of the `seshat-bi`
+    distribution rather than a package. But `pipx inject seshat-bi "mcp>=1.28,<2"`
+    IS valid -- it names the dependency the extra pulls in.
+
+    That distinction is what #513 turns on: injecting the dependencies enables the
+    feature WITHOUT re-resolving `seshat-bi`, so a pinned or candidate build
+    survives. Pinned here so nobody "simplifies" the hint back to injecting a bare
+    extra name (which would fail) or to `pipx install` (which would re-resolve).
     """
     from seshat.cli import _db_extra_hint, _extra_install_hint
 
-    assert "pipx inject" not in _extra_install_hint("mcp")
-    # ...while the driver hint legitimately still uses inject (unchanged).
+    hint = _extra_install_hint("mcp")
+
+    assert "pipx inject seshat-bi --force" in hint
+    # The bare extra NAME is never handed to inject as a package...
+    assert "inject seshat-bi mcp" not in hint
+    assert "inject seshat-bi --force mcp\n" not in hint
+    # ...a real requirement specifier is.
+    assert '"mcp>=1.28,<2"' in hint
+    # The driver hint keeps its own (already inject-shaped) form, unchanged.
     assert "pipx inject seshat-bi psycopg2-binary" in _db_extra_hint()
 
 
@@ -201,7 +216,7 @@ def test_orchestration_assess_text_emits_the_pipx_install_form(
     """
     out = _assess_output(tmp_path, capsys)
 
-    assert 'pipx install --force "seshat-bi[dbt]"' in out
+    assert "pipx inject seshat-bi --force" in out
     assert _bare_pip_installs(out) == [], "a pip-only install step reached the user"
 
 
@@ -287,15 +302,20 @@ def test_emitted_pipx_forms_match_the_documented_commands() -> None:
         encoding="utf-8"
     )
 
-    # The doc's example is a FIRST install, so it carries no `--force`...
+    # The doc teaches the FIRST-install form, which carries no `--force`...
     assert 'pipx install "seshat-bi[dbt]"' in doc
-    # ...while an enable-step for an ALREADY-installed seshat must modify the
-    # existing venv. Same distribution, extra and quoting as the doc; `--force`
-    # is the documented option for "Modify existing virtual environment".
+    # ...and, beside it, the ENABLE-ON-EXISTING-INSTALL form the CLI emits, which
+    # injects the extra's dependencies so `seshat-bi` is never re-resolved (#513).
+    # Every emitted pipx line must appear in the doc VERBATIM -- the emitted
+    # guidance may never be an invented variant.
     for extra in ("mcp", "dbt"):
-        hint = _extra_install_hint(extra)
-        assert f'pipx install --force "seshat-bi[{extra}]"' in hint
-        assert f'pipx install "seshat-bi[{extra}]"' in hint.replace("--force ", "")
+        pipx_line = next(
+            line.split(":", 1)[1].strip()
+            for line in _extra_install_hint(extra).splitlines()
+            if "pipx" in line
+        )
+        assert pipx_line.startswith("pipx inject seshat-bi --force ")
+        assert pipx_line in doc, f"{extra}: emitted {pipx_line!r} is not documented"
 
 
 # --- the six existing `_db_extra_hint` callers are UNTOUCHED ------------------

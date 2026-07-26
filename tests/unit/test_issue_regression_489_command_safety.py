@@ -387,11 +387,13 @@ def test_emitted_commands_target_the_documented_pipx_install_lane() -> None:
 
       * invocations must use the installed console script `seshat`, which is what
         pipx puts on PATH (declared in pyproject `[project.scripts]`);
-      * an extra must be installed with `pipx install --force "seshat-bi[...]"` --
+      * an extra must be enabled with `pipx inject seshat-bi --force <deps>` --
         agent-install.md documents the bare `pipx install "seshat-bi[dbt]"` for a
         FIRST install, but this guidance is only ever read by someone who ALREADY
-        has `seshat` installed, and on an existing venv plain `pipx install`
-        refuses to modify it and changes nothing (#510 review, P2).
+        has `seshat` installed. `--force` is required because plain pipx refuses to
+        modify an existing venv (#510 review, P2), and `inject` rather than
+        `install` because re-resolving `seshat-bi` would replace a pinned or
+        candidate build with the index's (#513).
     """
     from seshat.cli.commands.next_guidance_render import _opt_in_step_lines
     from seshat.orchestration_assess import _DAGSTER_OPT_IN, _DBT_OPT_IN
@@ -402,11 +404,13 @@ def test_emitted_commands_target_the_documented_pipx_install_lane() -> None:
         for line in _opt_in_step_lines({"opt_in_command": opt_in})
     ]
 
-    assert any('pipx install --force "seshat-bi[dbt]"' in line for line in steps)
+    assert any("pipx inject seshat-bi --force" in line for line in steps)
     for line in steps:
         assert "python -m seshat" not in line, line
-        # `pipx install` is fine; a bare `pip install` is not.
+        # `pipx inject` is fine; a bare `pip install` is not.
         assert "pip install" not in line.replace("pipx install", ""), line
+        # ...and no step may re-resolve the seshat-bi distribution itself (#513).
+        assert "pipx install" not in line, line
 
 
 def test_the_pipx_form_matches_the_repos_own_install_doc() -> None:
@@ -422,14 +426,15 @@ def test_the_pipx_form_matches_the_repos_own_install_doc() -> None:
     )
     emitted = _portable_quoting("pip install 'seshat-bi[dbt]'")
 
-    # The DISTRIBUTION + EXTRA + quoting must match the documented command; the
-    # emitted step adds `--force` because, unlike the doc's first-install example,
-    # this guidance is read by someone who already has seshat installed (#510).
-    assert emitted == 'pipx install --force "seshat-bi[dbt]"'
-    assert 'pipx install "seshat-bi[dbt]"' in doc
-    assert emitted.replace("--force ", "") in doc, (
-        "emitted install step is not the documented command"
+    # The emitted step is the ENABLE-ON-EXISTING-INSTALL form, which the doc now
+    # documents verbatim beside its first-install example (#513). Matching the doc
+    # exactly is the point: the emitted guidance must never be an invented variant.
+    assert emitted == (
+        'pipx inject seshat-bi --force "dbt-core==1.12.0" "dbt-postgres==1.10.2"'
     )
+    assert emitted in doc, "emitted install step is not the documented command"
+    # The doc still teaches the first-install form too.
+    assert 'pipx install "seshat-bi[dbt]"' in doc
 
 
 def test_full_assessment_command_uses_the_installed_console_script(
@@ -458,7 +463,9 @@ def test_pip_extra_is_double_quoted_for_cmd_exe(tmp_path: Path) -> None:
 
     steps = _opt_in_step_lines({"opt_in_command": _DBT_OPT_IN})
 
-    assert steps[0].endswith('pipx install --force "seshat-bi[dbt]"')
+    assert steps[0].endswith(
+        'pipx inject seshat-bi --force "dbt-core==1.12.0" "dbt-postgres==1.10.2"'
+    )
     for line in steps:
         assert "'" not in line, f"single quote survived into {line!r}"
 
@@ -467,11 +474,14 @@ def test_portable_quoting_is_surgical_and_idempotent() -> None:
     """It may rewrite a seshat-bi install step and nothing else, never double-apply."""
     from seshat.cli.commands.next_guidance_render import _portable_quoting
 
-    # Both quote styles of the wrong-environment form are rewritten...
-    assert (
-        _portable_quoting("pip install 'seshat-bi[dbt]'")
-        == 'pipx install --force "seshat-bi[dbt]"'
+    # Both quote styles of the wrong-environment form are rewritten; a KNOWN extra
+    # becomes the version-preserving inject form (#513)...
+    assert _portable_quoting("pip install 'seshat-bi[dbt]'") == (
+        'pipx inject seshat-bi --force "dbt-core==1.12.0" "dbt-postgres==1.10.2"'
     )
+    # ...while an extra with no dependency table falls back to the previous form
+    # rather than emitting an `inject` with no packages, which would do nothing.
+    # `db` is a driver extra whose remedy is `_db_extra_hint`'s, not this path's.
     assert (
         _portable_quoting('pip install "seshat-bi[db]"')
         == 'pipx install --force "seshat-bi[db]"'
@@ -481,10 +491,8 @@ def test_portable_quoting_is_surgical_and_idempotent() -> None:
     # ...a step with no install head passes through...
     assert _portable_quoting("seshat dbt init") == "seshat dbt init"
     # ...and an already-correct step is unchanged (idempotent).
-    assert (
-        _portable_quoting('pipx install --force "seshat-bi[dbt]"')
-        == 'pipx install --force "seshat-bi[dbt]"'
-    )
+    already = 'pipx inject seshat-bi --force "dbt-core==1.12.0"'
+    assert _portable_quoting(already) == already
 
 
 def test_no_emitted_opt_in_step_uses_posix_only_quoting() -> None:
@@ -517,7 +525,9 @@ def test_opt_in_sequence_renders_as_individually_runnable_steps() -> None:
     assert len(dbt_steps) == 3
     # Double-quoted: portable across cmd.exe / PowerShell / POSIX sh -- see
     # test_pip_extra_is_double_quoted_for_cmd_exe.
-    assert dbt_steps[0].endswith('pipx install --force "seshat-bi[dbt]"')
+    assert dbt_steps[0].endswith(
+        'pipx inject seshat-bi --force "dbt-core==1.12.0" "dbt-postgres==1.10.2"'
+    )
     assert dbt_steps[1].endswith("seshat dbt init")
     assert dbt_steps[2].endswith("seshat dbt doctor")
 

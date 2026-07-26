@@ -56,28 +56,43 @@ _PIP_INSTALL_EXTRA = re.compile(
     r"""\bpip\s+install\s+['"]?(seshat-bi\[[^\]'"]+\])['"]?"""
 )
 
-# The form docs/install/agent-install.md:26 documents, plus `--force`.
+
+# A CALLABLE replacement, not a static template, because the emitted command names
+# the extra's CONCRETE dependencies rather than the `seshat-bi[extra]` spec (#513).
 #
-# `--force` is REQUIRED here, not decoration (PR #510 review, P2). Every reader of
-# this guidance ALREADY has `seshat` installed -- that is how they ran the command
-# that produced it. On an existing venv, plain `pipx install` REFUSES to modify it
-# ("already seems to be installed. Not modifying existing installation ... Pass
-# '--force'") and exits having changed nothing, so the extra stays absent and the
-# retry fails identically. `pipx install --help` documents `--force` as "Modify
-# existing virtual environment". The bare form in the install docs is correct for a
-# FIRST install; an opt-in step for an installed app is a different situation. Same
-# reason the dbt remediation hint already passes `--force` (commands/dbt.py, v0.6).
-_PIPX_INSTALL = r'pipx install --force "\1"'
+# `pipx install --force "seshat-bi[dbt]"` -- the previous form -- re-resolves the
+# UNPINNED `seshat-bi` requirement from the configured index, so enabling an extra
+# silently replaced a candidate wheel / pinned / local build with whatever the index
+# serves. `pipx inject seshat-bi --force <deps>` adds the dependencies without
+# re-resolving the app, so the installed Seshat survives whatever its provenance.
+# `--force` is still needed: without it pipx declines to modify an existing venv
+# (the PR #510 finding, one level down). Same form `commands/dbt.py` already emits.
+#
+# Extras are resolved through `cli._extra_dependency_specs`, the ONE table shared
+# with `cli._extra_install_hint`, so the two emitting surfaces cannot drift.
+def _pipx_replacement(match: re.Match[str]) -> str:
+    """`pip install seshat-bi[x]` -> the version-preserving pipx form."""
+    from .. import _extra_dependency_specs
+
+    spec = match.group(1)  # e.g. `seshat-bi[dbt]`
+    extra = spec[spec.index("[") + 1 : spec.rindex("]")]
+    specs = _extra_dependency_specs(extra)
+    if not specs:
+        # An extra with no known dependency table: keep the previous form rather
+        # than emit an `inject` with no packages, which would do nothing silently.
+        return f'pipx install --force "{spec}"'
+    injected = " ".join(f'"{dep}"' for dep in specs)
+    return f"pipx inject seshat-bi --force {injected}"
 
 
 def _portable_quoting(step: str) -> str:
     """Rewrite an install step to the documented, shell-portable pipx form.
 
-    Idempotent: an already-``pipx install "seshat-bi[...]"`` step is unchanged,
-    because the pattern requires a ``pip install`` head and ``pipx install`` does
-    not match it. Steps with no install head pass through untouched.
+    Idempotent: an already-rewritten step is unchanged, because the pattern requires
+    a ``pip install`` head and neither ``pipx install`` nor ``pipx inject`` matches
+    it. Steps with no install head pass through untouched.
     """
-    return _PIP_INSTALL_EXTRA.sub(_PIPX_INSTALL, step)
+    return _PIP_INSTALL_EXTRA.sub(_pipx_replacement, step)
 
 
 def _opt_in_step_lines(note: dict) -> list[str]:
