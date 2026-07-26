@@ -1,13 +1,25 @@
-"""Materialize the Stage-6/7 design + handoff blank templates (#440, #441).
+"""Materialize the Stage-6/7 design + handoff blank templates (#440, #441, #514).
 
-Dashboard-Ready (Stage 6) and Publish-Ready (Stage 7) authoring reads six
-templates as REPO-RELATIVE paths from the user's working tree --
+Seven blanks ship, in two categories.
+
+SIX are read at RUNTIME as REPO-RELATIVE paths from the user's working tree --
 ``templates/dashboard-page-blueprint.yaml``, ``templates/visual-spec.yaml``,
 ``templates/report-composition.yaml``, ``design/grids/16x9-grid.yaml``,
 ``templates/handoff/bi-handoff-pack.md``, and
 ``templates/handoff/handoff-review-checklist.md`` -- consumed by
 ``blueprint_preview``, ``dashboard_coordinator``, and the ``publish_pack``
-rule. Those blanks previously shipped only with the development repository, and
+rule.
+
+The SEVENTH, ``templates/narrative-brief.md``, is a COPY-ME blank, not a
+runtime input: nothing reads it in place. It is copied to
+``mappings/<table>/narrative-brief.md`` and the brief is authored there -- by the
+AGENT, via the ``bi-analyst-knowledge`` derivation route -- which is what
+``narrative_check`` then reads. The human seam is APPROVAL of that draft, not its
+authorship. It ships for the same self-sufficiency reason as the other six
+(issue #514: the brief is the FIRST Stage-6 artifact, authored before any layout
+work, and a pip-only workspace had no blank to copy).
+
+Those blanks previously shipped only with the development repository, and
 unlike the Stage-1 templates (``stage1_scaffold``), no verb materialized them
 into a pip-only workspace -- so a package-only user had nothing to copy.
 
@@ -38,9 +50,15 @@ _PACKAGED_ROOT = "design_templates"
 # (packaged_subpath, dest_relpath) -- the packaged tree is flattened (no
 # templates/ prefix, grids/ instead of design/grids/); the destination is the
 # exact repo-relative path blueprint_preview / dashboard_coordinator /
-# publish_pack expect. Only these six ship (constitution VII): the rest of the
+# publish_pack expect. Only these seven ship (constitution VII): the rest of the
 # ~dozen design/handoff templates stay dev-only.
+#
+# narrative-brief.md is the FIRST Stage-6 blank (the derivation route runs before
+# any layout work) and `seshat narrative-check` reads it as the repo-relative
+# mappings/<table>/narrative-brief.md -- so a package-only user needs the blank
+# for the same reason the six below ship (issue #514).
 _DESIGN_FILES: tuple[tuple[str, str], ...] = (
+    ("narrative-brief.md", "templates/narrative-brief.md"),
     ("dashboard-page-blueprint.yaml", "templates/dashboard-page-blueprint.yaml"),
     ("visual-spec.yaml", "templates/visual-spec.yaml"),
     ("report-composition.yaml", "templates/report-composition.yaml"),
@@ -81,7 +99,7 @@ def _resource_bytes(packaged_subpath: str, dest_relpath: str) -> bytes:
 
 
 def scaffold_design(repo_root: Path) -> DesignScaffoldResult:
-    """Write the six Stage-6/7 design + handoff blank templates into ``repo_root``.
+    """Write the seven Stage-6/7 design + handoff blank templates into ``repo_root``.
 
     Per-file non-destructive: an existing file is kept, never overwritten.
     Containment and symlink safety are delegated entirely to

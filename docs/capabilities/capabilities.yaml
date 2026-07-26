@@ -203,7 +203,7 @@ capabilities:
 
   - id: scaffold-design
     name: "seshat scaffold-design"
-    summary: "Writes the six Stage-6/7 design + handoff blank templates (dashboard-page-blueprint.yaml, visual-spec.yaml, report-composition.yaml, design/grids/16x9-grid.yaml, handoff/bi-handoff-pack.md, handoff/handoff-review-checklist.md) into the workspace so a pip-only workspace has the Dashboard-Ready / Publish-Ready artifacts to fill."
+    summary: "Writes the seven Stage-6/7 design + handoff blank templates (narrative-brief.md, dashboard-page-blueprint.yaml, visual-spec.yaml, report-composition.yaml, design/grids/16x9-grid.yaml, handoff/bi-handoff-pack.md, handoff/handoff-review-checklist.md) into the workspace so a pip-only workspace has the Dashboard-Ready / Publish-Ready artifacts to fill."
     state: shipped
     authority: agent-runnable
     surface: cli
