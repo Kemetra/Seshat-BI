@@ -104,6 +104,28 @@ def _load_yaml(ctx: RuleContext, rel: str) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+def _is_unreadable(ctx: RuleContext, rel: str) -> bool:
+    """Did this file fail to READ/PARSE, as opposed to parsing to a non-dict?
+
+    ``_load_yaml`` collapses two very different outcomes into one ``None``: a genuine
+    read failure (undecodable bytes, invalid YAML) versus a successful parse that is
+    simply not a mapping -- an EMPTY file (``yaml.safe_load("") is None``), a bare
+    scalar, a top-level list. Only the first is a broken artifact a governance gate
+    must report; the second is a different rule's business, and firing on it would
+    flag committed maps that are merely not stars.
+
+    Same encoding and exception tuple as ``_load_yaml``, and the twin of HR1's
+    helper -- the two rules must agree on what "unreadable" means (#508).
+    """
+    import yaml  # lazy: kept out of the retail check static-core chain
+
+    try:
+        yaml.safe_load((ctx.repo_root / rel).read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return True
+    return False
+
+
 def _placement_prefix(placement: object) -> str | None:
     """The dim name a ``dim:<prefix>.<attr>`` placement references, else ``None``.
 
@@ -267,30 +289,56 @@ def _finding(
     )
 
 
-def _star_maps(ctx: RuleContext) -> list[tuple[str, dict]]:
-    """``(rel_path, document)`` for every committed source-map that IS a star.
+def _unreadable_finding(rel: str) -> Finding:
+    """A tracked source-map that cannot be read is a broken governance artifact."""
+    return Finding(
+        rule_id=RULE_ID,
+        severity=Severity.ERROR,
+        message=(
+            f"{rel} could not be read as YAML (undecodable bytes or invalid syntax); "
+            "its gold_placement values cannot be checked, so the file must be fixed "
+            "or removed"
+        ),
+        locator=rel,
+    )
+
+
+def _star_maps(ctx: RuleContext) -> tuple[list[tuple[str, dict]], list[Finding]]:
+    """``(rel_path, document)`` for every committed source-map that IS a star, plus an
+    ERROR finding for every tracked source-map path that failed to read/parse.
 
     ``discover_stars`` keys by star id and discards the path, but a finding must
     point at the FILE to fix, so this walks the same paths applying the SAME shared
     predicates (``source_map_table``, ``is_test_path``, ``is_star``) -- which keeps
     the template's placeholder placements and the test fixtures out of scope exactly
     as HR1 sees them, without a second copy of the path shape.
+
+    Skipping an unreadable map silently made a corrupted, tracked governance artifact
+    indistinguishable from "nothing to check here" -- a fail-open. Reporting is gated
+    on ``_is_unreadable``, never on ``is_star`` being ``False``, so a legitimate
+    compact-form or non-star map (which PARSES fine) stays silent.
     """
     found: list[tuple[str, dict]] = []
+    findings: list[Finding] = []
     for rel in sorted(ctx.tracked_files):
         if is_test_path(rel) or _stars.source_map_table(rel) is None:
             continue
         document = _load_yaml(ctx, rel)
+        if document is None and _is_unreadable(ctx, rel):
+            findings.append(_unreadable_finding(rel))
+            continue
+        # A parseable non-mapping (empty file, bare scalar, top-level list) also
+        # loads as None -- not reported, and not a star either.
         if document is None or not _stars.is_star(document):
             continue
         found.append((rel, document))
-    return found
+    return found, findings
 
 
 @register(RULE_ID, "every dim: gold_placement prefix resolves to a declared dimension")
 def check_hr13(ctx: RuleContext) -> Iterable[Finding]:
-    findings: list[Finding] = []
-    for rel, document in _star_maps(ctx):
+    star_maps, findings = _star_maps(ctx)
+    for rel, document in star_maps:
         declared = _declared_bare_names(document)
         for placement, prefix in _unresolved_placements(document):
             findings.append(_finding(rel, placement, prefix, declared))

@@ -529,7 +529,13 @@ def test_hr13_does_not_crash_on_an_undecodable_map(tmp_path: Path) -> None:
     `UnicodeDecodeError` is a ValueError, not an OSError, so an exception tuple
     catching only OSError lets one bad byte in any committed map propagate out and
     crash the whole `retail check` run. Mirrors HR11's posture.
+
+    "Degrades" means "does not RAISE", not "reports nothing": dropping the map in
+    silence is a fail-open, so an unreadable map is an ERROR finding (#511 review),
+    pinned in `test_issue_regression_511_unreadable_map.py`. The crash guarantee is
+    asserted directly here rather than via `== []`, which pinned the fail-open.
     """
+    from seshat.core import Severity
     from seshat.rules.placement_resolution import check_hr13
 
     rel = "mappings/s1/source-map.yaml"
@@ -539,7 +545,12 @@ def test_hr13_does_not_crash_on_an_undecodable_map(tmp_path: Path) -> None:
         b"source_id: s1\ncomment: \xff\xfe bad utf8\ngold_star:\n  fact: f\n"
     )
 
-    assert list(check_hr13(_ctx(tmp_path, rel))) == []
+    findings = list(check_hr13(_ctx(tmp_path, rel)))  # must not raise
+
+    assert [f for f in findings if f.severity is Severity.ERROR], (
+        "an unreadable map was dropped without being reported"
+    )
+    assert all(rel in (f.locator or "") for f in findings)
 
 
 def test_hr13_is_silent_on_a_compact_map_with_no_columns(tmp_path: Path) -> None:

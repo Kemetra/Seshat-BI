@@ -49,7 +49,7 @@ from collections.abc import Iterable
 
 from seshat import star_discovery as _stars
 
-from ..core import Finding, RuleContext, Severity
+from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
 
 RULE_ID = "HR1"
@@ -69,10 +69,91 @@ def _load_yaml(ctx: RuleContext, rel: str) -> dict | None:
     import yaml  # lazy: kept out of the retail check static-core chain
 
     try:
-        data = yaml.safe_load((ctx.repo_root / rel).read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError):
+        data = yaml.safe_load((ctx.repo_root / rel).read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        # UnicodeDecodeError is a ValueError, NOT an OSError: without it an
+        # undecodable byte in ANY committed map propagates out of this rule and
+        # through `runner.run` (which calls `registered.rule(ctx)` unguarded),
+        # taking the ENTIRE `retail check` run down -- no findings reported at all.
+        # HR13 (`placement_resolution.py`) reads the SAME maps and already degrades
+        # to None here; the two must agree on whether a file is parseable, or one
+        # governance rule crashes the gate where its twin passes cleanly (#508).
+        #
+        # `utf-8-sig` matches HR13 and every other YAML-artifact reader in this
+        # package. It is a no-op on the committed maps: PyYAML's Reader strips a
+        # leading U+FEFF itself, so a BOM parses identically under plain `utf-8`
+        # (verified -- the #508 report's BOM premise does not hold). Aligned for
+        # house consistency, not for a behavior change.
         return None
     return data if isinstance(data, dict) else None
+
+
+def _is_unreadable(ctx: RuleContext, rel: str) -> bool:
+    """Did this file fail to READ/PARSE, as opposed to parsing to a non-dict?
+
+    ``_load_yaml`` collapses two very different outcomes into one ``None``:
+
+      * a genuine read failure -- undecodable bytes, invalid YAML syntax. The
+        artifact is BROKEN and a governance gate must say so.
+      * a successful parse whose result is simply not a mapping -- an EMPTY file
+        (``yaml.safe_load("") is None``), a bare scalar, a top-level list. Those are
+        a different rule's business, and reporting them here would fire on committed
+        artifacts that are merely not stars.
+
+    Only the first is "unreadable". Same encoding and exception tuple as
+    ``_load_yaml``, rather than widening that function's return type -- which would
+    ripple through ``discover_stars``'s injected-loader contract and its
+    ``dbt scaffold`` caller for no gain. HR13 carries the twin of this helper; the
+    two governance rules must agree on what "unreadable" means (#508).
+    """
+    import yaml  # lazy: kept out of the retail check static-core chain
+
+    try:
+        yaml.safe_load((ctx.repo_root / rel).read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+        return True
+    return False
+
+
+def _unreadable_finding(rel: str) -> Finding:
+    """A tracked source-map that cannot be read is a broken governance artifact."""
+    return Finding(
+        rule_id=RULE_ID,
+        severity=Severity.ERROR,
+        message=(
+            f"{rel} could not be read as YAML (undecodable bytes or invalid syntax); "
+            "any dimension it shares with another star cannot be checked for "
+            "conformance, so the file must be fixed or removed"
+        ),
+        locator=rel,
+    )
+
+
+def _unreadable_source_maps(ctx: RuleContext) -> list[Finding]:
+    """ERROR for every tracked source-map path that failed to read/parse.
+
+    ``discover_stars`` silently drops a path whose ``load`` returns ``None``. That is
+    the right behavior for its GENERATOR caller (``dbt scaffold``: "build from
+    whatever I can read"), but wrong for a governance gate -- a corrupted, tracked
+    ``source-map.yaml`` becomes indistinguishable from "not a star", so HR1 stops
+    comparing a dimension across stars the moment one star's map goes unreadable and
+    reports nothing at all.
+
+    Degrading without reporting is a FAIL-OPEN; raising takes the whole
+    ``retail check`` run down (``runner.run`` calls rules unguarded). This is the
+    third option: name the broken artifact and let every other rule keep running.
+
+    Uses the same path predicate (``source_map_table``, ``is_test_path``) as HR13, so
+    both rules agree on which files are in scope; ``discover_stars`` itself is left
+    untouched so its generator caller stays silent.
+    """
+    return [
+        _unreadable_finding(rel)
+        for rel in sorted(ctx.tracked_files)
+        if not is_test_path(rel)
+        and _stars.source_map_table(rel) is not None
+        and _is_unreadable(ctx, rel)
+    ]
 
 
 def _attr_silver_types(data: dict, dim_name: str) -> dict[str, str]:
@@ -148,7 +229,7 @@ def _surrogate_key_divergence(stars: dict[str, dict]) -> str | None:
     return None
 
 
-def _attr_type_divergence(bare: str, stars: dict[str, dict]) -> str | None:
+def _attr_type_divergence(stars: dict[str, dict]) -> str | None:
     """Shared-attribute silver_type divergence across >=2 stars, or None.
 
     Only attributes present on BOTH sides of a pair are compared (graceful
@@ -164,10 +245,20 @@ def _attr_type_divergence(bare: str, stars: dict[str, dict]) -> str | None:
     HR13 mirrors it rather than normalizing, so the gate and this reader agree on
     what "resolves" means. Until HR13 existed, every placement in the reference map
     named a LOGICAL dim and this limb silently compared nothing.
+
+    Resolves each side's prefix from ITS OWN declared name with no fallback: every
+    dim reaching this loop arrives via ``star_dimensions`` -> ``_add_dim``, which
+    drops any dim whose ``bare_dim_name(name)`` is falsy (absent, non-str, empty,
+    whitespace, or schema-only like ``"gold."``) BEFORE it can be indexed. So
+    ``_bare(dim["name"])`` is always truthy here and always equals the bare name
+    this dim was keyed under -- a ``or bare`` fallback was unreachable, and even if
+    reached would have been a no-op (#508). Do not reintroduce one: it would read as
+    handling a case the boundary filter makes impossible.
     """
     typemaps: dict[str, dict[str, str]] = {}
     for sid, (dim, data) in stars.items():
-        dim_bare = _bare(dim.get("name")) or bare
+        dim_bare = _bare(dim.get("name"))
+        assert dim_bare, "star_dimensions drops falsy-bare dims before indexing"
         typemaps[sid] = _attr_silver_types(data, dim_bare)
     # attributes shared by 2+ stars whose type is known on both
     all_attrs: set[str] = set()
@@ -181,13 +272,13 @@ def _attr_type_divergence(bare: str, stars: dict[str, dict]) -> str | None:
     return None
 
 
-def _conformed_divergence(bare: str, stars: dict[str, dict]) -> str | None:
+def _conformed_divergence(stars: dict[str, dict]) -> str | None:
     """Return a human-readable divergence description across >=2 stars, or None.
 
     Compares surrogate_key and shared-attribute silver_type; only fields present
     on BOTH sides of any pair are compared (graceful degradation).
     """
-    return _surrogate_key_divergence(stars) or _attr_type_divergence(bare, stars)
+    return _surrogate_key_divergence(stars) or _attr_type_divergence(stars)
 
 
 def _discover_stars(ctx: RuleContext) -> dict[str, dict]:
@@ -233,7 +324,7 @@ def _evaluate_dimension(
     if decl["status"] == "distinct":
         return []  # deliberately separate -- never fires
     # conformed: verify grain/key/type agree across the covered stars
-    divergence = _conformed_divergence(bare, star_map)
+    divergence = _conformed_divergence(star_map)
     if divergence is None:
         return []
     return [
@@ -251,7 +342,13 @@ def _evaluate_dimension(
 
 @register(RULE_ID, "cross-star conformed-dimension conformance")
 def check_hr1(ctx: RuleContext) -> Iterable[Finding]:
-    findings: list[Finding] = []
+    # BEFORE the star-count threshold, deliberately: an unreadable map is DROPPED by
+    # discovery, so a corrupted second map takes the count from 2 to 1 and the FR-007
+    # early return below would exit with ZERO findings -- silently ceasing to check
+    # conformance for exactly the reason a human needs to hear about. Reported
+    # unconditionally: the artifact is broken whether or not enough OTHER stars
+    # survive to make the cross-star limbs engage.
+    findings: list[Finding] = _unreadable_source_maps(ctx)
 
     stars = _discover_stars(ctx)
     # FR-007: engage only when >1 star exists
