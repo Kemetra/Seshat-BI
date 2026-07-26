@@ -556,7 +556,15 @@ def _next_allowed_action(response: dict[str, Any]) -> str:
             f"decided, {APPROVAL_SHAPE_HINT}."
         )
     if outcome == "terminal_pass":
-        return "No pipeline action: all seven readiness stages pass for this table."
+        # Every stage passing is NOT automatically "nothing to do": an owner
+        # decision may be unanswered (issue #517). `run_next` sets `action_text`
+        # in exactly that case, so honour it here -- a caveat alone is
+        # informational and a conductor routes straight past it. No stage is
+        # flipped; only the recommended action changes.
+        return str(
+            response.get("action_text")
+            or "No pipeline action: all seven readiness stages pass for this table."
+        )
     return "Repair the readiness-status.yaml input defect before any pipeline work."
 
 
@@ -716,10 +724,22 @@ def _summaries(
 
 def _rank(response: dict[str, Any]) -> int:
     """Focus ranking: a malformed file is the most urgent, then the earliest
-    incomplete stage; a fully-passed table sorts last."""
+    incomplete stage; a fully-passed table sorts last.
+
+    A terminal table carrying an OPEN APPROVAL REQUEST sorts between the two
+    (issue #517): genuine pipeline work still outranks it, but an unanswered
+    owner decision outranks nothing-to-do, so a request-bearing table can never
+    be hidden behind a clean one when portfolio mode picks a single focus.
+    """
     if response["outcome"] == "input_defect":
         return -1
-    return _stage_index(response["stage"])
+    index = _stage_index(response["stage"])
+    if index < len(_STAGE_ORDER):
+        return index
+    from seshat.approval_requests import has_open_request
+
+    # Terminal: ahead of a clean terminal table when a decision is outstanding.
+    return index if has_open_request(response.get("caveats", [])) else index + 1
 
 
 @dataclass(frozen=True)
