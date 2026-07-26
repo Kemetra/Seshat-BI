@@ -88,6 +88,29 @@ What that boundary does and does not cover:
 It pins today's fail-closed state on purpose; its flipping is the signal that
 this migration really happened.
 
+## One rule interaction this migration surfaced (FYI -- no action needed here)
+
+Migrating the first REAL artifact exposed a notation collision between two shipped
+features, which fixture-only testing could not have found:
+
+**HR9** (`rename_impact_guard`) scans a binding map for `[Something]` and resolves
+it against the committed TMDL measure set — a valuable guard, since a renamed
+measure would otherwise silently orphan its references. But
+`seshat.binding-map/v1`'s `decision_questions: [Q3]` is **YAML flow-list syntax**,
+not a DAX measure reference, so HR9 read `Q3` as an orphaned measure and errored.
+
+Worked around **in this example only**, by writing every `decision_questions` as a
+YAML **block sequence** (`- Q1` on its own line) rather than a flow list. Both
+forms are identical YAML and `narrative-check` accepts both; only the bracket
+notation trips HR9. `seshat check` is clean again.
+
+The general fix — teaching HR9 to skip a `seshat.binding-map/v1` front section, or
+narrowing `_BARE_MEASURE_REF` so it cannot match a YAML list — is a **tooling
+change proposed separately**, not folded into this owner-gated example. Worth
+noting because any FUTURE binding map written with flow lists will hit the same
+error, and the fix is one line of the author's YAML style until the rule is
+adjusted.
+
 ## Verified current state (run, not assumed)
 
 ```
@@ -99,10 +122,15 @@ status: blocked
 
 | Fact | Evidence |
 |---|---|
-| No brief exists | `mappings/retail_store_sales/narrative-brief.md` absent |
-| Map is still F011 two-way Markdown | `design/visual-contract-binding-map.md` -- pipe table, no fenced `yaml` front section |
+| A brief is **drafted** (agent-authored, unreviewed) | `mappings/retail_store_sales/narrative-brief.md` -- `narrative-check` -> `status: pass`, 6 questions / 5 contracts |
+| Map is **migrated** to `seshat.binding-map/v1` (draft, unsigned) | `design/visual-contract-binding-map.md` -- v1 front section added, signed two-way content preserved verbatim |
+| Brief mode passes | `narrative-check` -> `status: pass` (6 questions / 5 contracts) |
+| Binding-map mode is **honestly BLOCKED** on v10 | `--binding-map` -> `blocked`, ONE finding: `orphan_visual` on v10 (10 visuals / 6 questions / 5 contracts). The migration itself succeeded -- `no_front_section` is gone -- and 9 of 10 visuals resolve. **Clears when you rule W3/D4.** |
+| The gate is genuinely enforcing, not vacuous | adversarial mutations block correctly: a `Q99` cite -> `orphan_visual` + `unanswered_question`; a headline on an action-stage question -> `bare_total_headline_visual` |
+| The pin test flipped, deliberately | `test_real_worked_example_map_passes_the_three_way_gate` in the NEW file **`tests/unit/test_narrative_worked_example.py`** replaces `test_real_worked_example_map_still_needs_phase_b_migration` (formerly in `test_narrative_check.py`), with STRONGER assertions (real counts >= 5, no findings, `grants_approval is False`) plus a companion brief test |
+| v10 is **held out** | no customer-level question exists; the `customer_id` PII question is open in `source-profile.md` (see `approval-request-source-profile-writethrough.md`) |
 | 5 contracts approved `pass` | `metrics/*.yaml`, owner-approved 2026-06-25 |
-| Stage is otherwise complete | `seshat next --table retail_store_sales` -> `terminal_pass` (all seven gates `pass`) |
+| No readiness stage moved | `seshat next --table retail_store_sales` -> `terminal_pass`, unchanged; nothing here grants an approval |
 
 > **This request is not auto-discovered.** `seshat approvals` reads only
 > `mappings/*/readiness-status.yaml`, and `seshat next` reads only the seven-stage
@@ -147,6 +175,24 @@ explicit **acceptance, modification, or rejection** — the migration must not
 inherit decisions the named owner has never approved. For **review context
 only**, not as the derivation's starting set:
 
+> ### ⚠ The numbers do NOT line up -- compare by CONTENT, not by id
+>
+> The drafted brief's `Q1`-`Q6` are the agent's own derivation and **do not
+> correspond** to this intent's `q1`-`q6`. The collision is real and easy to
+> misread:
+>
+> | | intent `q6` | brief `Q6` |
+> |---|---|---|
+> | is about | **customers** (highest-activity) | **discounting** (is the posture working) |
+>
+> And the intent's customer question has **no** brief equivalent at all — it is
+> `gaps[]` entry 3, because the `customer_id` PII question is still open in
+> `source-profile.md` (see the D2 dimension note and
+> `approval-request-source-profile-writethrough.md`).
+>
+> So when ruling D1, read each drafted question's `decision:` text against the
+> intent text below. **Matching on the number alone will pair the wrong two.**
+
 | Intent id | Owner's question text (verbatim) |
 |---|---|
 | q1 | How are we doing overall right now? (headline volume + basket value + discount share) |
@@ -158,14 +204,42 @@ only**, not as the derivation's starting set:
 
 **What the owner reviews in the draft:**
 
-- **1a.** **Accept, modify, or reject each of q1-q6.** They are proposals from a
-  `blocked` intent, so none carries forward by default; silence is not acceptance.
-- **1b.** **Rank them.** Index order IS the rank (owner priority x data
-  strength) -- the intent file states no ranking, so this is genuinely new.
-- **1c.** Each must be **re-phrased as a decision**, not a metric request. The
-  derivation route requires "where do I push spend", not "show TotalSales by x".
-  The intent text is currently phrased as questions.
-- **1d.** One `callout` per question -- the so-what sentence it yields.
+A **drafted brief now exists** at `mappings/retail_store_sales/narrative-brief.md`
+(`narrative-check` -> `status: pass`, 6 questions / 5 contracts). It was derived
+from the two permitted inputs only; the intent questions above were **not** its
+source.
+
+### The content pairing (what to actually compare)
+
+| Intent (context) | Drafted brief | Same decision? |
+|---|---|---|
+| q1 headline volume + basket + discount share | **Q1** overall trading, YoY | yes -- but the drafted Q1 drops discount share into Q6, where the caveat can be stated properly |
+| q2 trend / seasonality | **Q2** is the swing real (banded) | yes -- the draft adds the band so a spike is not over-read |
+| q3 categories drive sales and units | **Q3** which categories to push/protect/drop | yes |
+| q4 channel **and** payment method | **Q4** channel (in-store vs online) | **split** -- the draft separates channel from payment method |
+| q5 basket value, varies by channel | **Q5** payment-method basket behaviour | **partly** -- the draft frames it as payment mix; channel basket is read in Q4 |
+| q6 highest-activity customers | *(none)* -> `gaps[]` 3 | **NO** -- blocked on the open PII question |
+| *(none)* | **Q6** is discounting working | **new** -- the draft promotes the discount caveat to its own action question |
+
+So D1 is a review of concrete text, not a blank-page exercise:
+
+- **1a.** **Accept, modify, or reject each drafted question Q1-Q6.** The draft's
+  questions are the agent's derivation, not the intent list -- compare the two and
+  say where the derivation missed something you care about.
+- **1b.** **Confirm or re-order the rank.** Index order IS the rank. The draft
+  ranks by owner-priority x data-strength as the route requires; the intent file
+  states no ranking, so this remains genuinely yours.
+- **1c.** **Confirm each is phrased as a DECISION**, not a metric request (the
+  route requires "where do I push spend", not "show TotalSales by x"). The draft
+  attempts this; judge whether each lands.
+- **1d.** **Confirm each `callout`** -- the so-what sentence the question yields.
+
+> **D1 carries a required write-through.** Ruling D1 settles the six
+> `report-intent.yaml` questions, which makes it **also** a
+> `report_intent_approval`. Recording only the narrative-brief decision file would
+> leave `dashboard_coordinator._check_intent_approved` blocking. See
+> **"Required write-throughs -- D1 is ALSO a `report_intent_approval`"** below for
+> both targets; both must appear in the decision file's `artifacts_updated`.
 
 ## Decision 2 -- framing + guardrail basis per question
 
@@ -217,18 +291,37 @@ The signed map is two-way (`visual -> contract`). The v1 format adds a
 below is a **proposal read off the signed artifact** -- it needs owner
 confirmation, especially the multi-question rows.
 
-| visual | type | bound contract (signed) | proposed `decision_questions` | note |
-|---|---|---|---|---|
-| v01 | card | TotalSales | [Q1] | `headline: true` candidate |
-| v02 | card | TransactionCount | [Q1] | `headline: true` candidate |
-| v03 | card | AvgTransactionValue | [Q1, Q5] | map says "Q1/Q5" -- **two questions** |
-| v04 | card | DiscountedTransactionRate | [Q1] | carries the discount caveat |
-| v05 | line | TotalSales | [Q2] | by `dim_date_rss[full_date]` (month) |
-| v06 | bar | TotalSales | [Q3] | by `dim_product_rss[category]` |
-| v07 | bar | TotalQuantity | [Q3] | by `dim_product_rss[category]` |
-| v08 | bar/donut | TotalSales | [Q4] | by `dim_location_rss[location]` |
-| v09 | column | AvgTransactionValue | [Q5] | by `dim_payment_method_rss[payment_method]` |
-| v10 | table | TransactionCount | [Q6] | by `dim_customer_rss[customer_id]` (Top N) -- **see the `customer_id` PII note under D2's dimension material**: the profile still records that question as open |
+**This table is what the migrated map ACTUALLY declares** (read from the committed
+`seshat.binding-map/v1` front section, not proposed). The brief's Q-ids are used
+throughout -- remember they do **not** match the intent's q-ids:
+
+| visual | type | contract (signed) | committed `decision_questions` | headline | note |
+|---|---|---|---|---|---|
+| v01 | card | TotalSales | `Q1` | **true** | overview headline |
+| v02 | card | TransactionCount | `Q1` | **true** | overview headline |
+| v03 | card | AvgTransactionValue | `Q1`, `Q5` | **true** | serves TWO decisions -- headline number AND the basket answer |
+| v04 | card | DiscountedTransactionRate | `Q6` | false | **NOT a headline**: Q6 is action-stage, and a headline must answer an overview question (FR-006). The signed prose labels this "Q1 discount share"; the front section governs |
+| v05 | line | TotalSales | `Q2` | false | by `dim_date_rss[full_date]` (month) |
+| v06 | bar | TotalSales | `Q3` | false | by `dim_product_rss[category]` |
+| v07 | bar | TotalQuantity | `Q3` | false | by `dim_product_rss[category]` |
+| v08 | bar/donut | TotalSales | `Q4` | false | by `dim_location_rss[location]` |
+| v09 | column | AvgTransactionValue | `Q5` | false | by `dim_payment_method_rss[payment_method]` -- binds because the draft ADDED Q5 for payment mix |
+| **v10** | table | TransactionCount | **`[]` (empty)** | false | **DELIBERATELY UNBOUND** -- no customer question may exist while the PII question is open. This is why `--binding-map` reports `blocked` |
+
+> **The gate is currently BLOCKED, on purpose.** With v10 declared and unbound,
+> `narrative-check --binding-map` reports exactly one finding:
+>
+> ```
+> status: blocked
+> [finding] orphan_visual: visual v10 names no decision_question -- a visual bound
+>           to a contract but answering no owner decision is an orphan (FR-005)
+> evidence: 10 visual(s) checked against 6 declared brief question(s) ...
+> ```
+>
+> An earlier draft omitted v10 from the front section, which produced
+> `status: pass` over a curated nine while the real design carries ten. That was a
+> misleading green and was corrected in review: an honest block on a real defect is
+> worth more than a convenient pass. **The block clears when you rule W3/D4.**
 
 **What the owner reviews in the draft:**
 
@@ -241,6 +334,34 @@ confirmation, especially the multi-question rows.
 - **4c.** q4 covers *both* channel and payment method while v08 (location) and
   v09 (payment method) are separate visuals -- confirm whether q4 splits into
   two questions or both visuals answer the one.
+
+## Decision 5a -- readiness still reads `pass` over an unreviewed section
+
+Raised in review of PR #519, and it is a real inconsistency the agent will not
+resolve unilaterally:
+
+`readiness-status.yaml` still records `dashboard_ready: pass` and
+`publish_ready: pass`, carrying the 2026-06-25 approval — and `seshat next`
+accordingly reports `readiness_state: pass` / `terminal_pass`. But the binding map
+that approval attests to now carries an **added, unreviewed** v1 front section.
+So a readiness consumer reads `pass` over bindings no human has reviewed.
+
+**Why the agent did not simply set it to `blocked`.** Downgrading a stage is
+un-granting an approval a named human recorded. That is the mirror image of
+self-granting one, and it is equally not the agent's call — the same
+`never_self_grant_approval` seam in the other direction. Nor is it obviously
+correct: the *underlying design* (10 visuals, contracts, coverage) is exactly what
+was approved; only the machine-readable projection of it is new.
+
+**What the owner must rule (5a):** does the 2026-06-25 `dashboard_ready` approval
+stand while the front section is under review, or should `dashboard_ready` (and
+consequently `publish_ready`) be recomputed to `blocked` with a named blocking
+reason until D5 is recorded? Either answer is defensible; the current state is
+simply **undeclared**, which is the part worth fixing.
+
+Note that `narrative-check --binding-map` already reports `blocked` on v10, so the
+narrative gate is honest even while the readiness spine says `pass`. The two
+surfaces disagree, and that disagreement is what 5a resolves.
 
 ## Decision 5 -- re-signing the migrated map
 

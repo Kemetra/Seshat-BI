@@ -742,21 +742,6 @@ gaps: []
     assert result.grants_approval is False
 
 
-def test_real_worked_example_map_still_needs_phase_b_migration():
-    # GUARD (owner-requested): the ONE real committed binding map
-    # (retail_store_sales) is still the F011 two-way MARKDOWN pipe-table format
-    # with no seshat.binding-map/v1 front section. The checker therefore fails
-    # closed (no_front_section) on it -- Phase B ships the checker + the taught
-    # example, and migrating this signed-off artifact into the new format is an
-    # explicit owner-gated follow-up (Option A). This test makes "DOA on
-    # reality" VISIBLE instead of hidden behind fixture-only green: when the map
-    # is migrated, this test flips and must be updated deliberately.
-    assert _REAL_MAP.is_file(), f"expected the real worked-example map at {_REAL_MAP}"
-    result = check_binding_map(table="retail_store_sales", repo_root=_REPO_ROOT)
-    assert result.status == "blocked"
-    assert any(f.dimension == "no_front_section" for f in result.findings)
-
-
 # --------------------------------------------------------------------------- #
 # Adversarial: the frozen schema is validated, not assumed (#474)
 #
