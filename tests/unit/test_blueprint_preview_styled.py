@@ -13,7 +13,12 @@ from pathlib import Path
 
 import pytest
 
-from seshat.blueprint_preview import PreviewInputError, _load_yaml_mapping
+from seshat.blueprint_preview import (
+    PREVIEW_DISCLAIMER,
+    PreviewInputError,
+    _load_yaml_mapping,
+    render_blueprint_preview,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -60,3 +65,102 @@ def test_undecodable_bytes_are_reported(tmp_path: Path) -> None:
     undecodable.write_bytes(raw)
     with pytest.raises(PreviewInputError, match="undecodable.yaml"):
         _load_yaml_mapping(undecodable)
+
+
+def _write_min_inputs(tmp_path: Path) -> Path:
+    """The four minimal preview inputs, as YAML the renderer accepts."""
+    (tmp_path / "bp.yaml").write_text(
+        "pages:\n  - name: Overview\n    order: 1\n", encoding="utf-8"
+    )
+    (tmp_path / "comp.yaml").write_text("pages: []\n", encoding="utf-8")
+    (tmp_path / "grid.yaml").write_text(
+        "width: 1280\nheight: 720\ncolumns: 12\n", encoding="utf-8"
+    )
+    (tmp_path / "tokens.yaml").write_text(
+        "meta:\n  name: t\ncolors:\n"
+        "  primary: '#118DFF'\n  secondary: '#E66C37'\n  background: '#101820'\n"
+        "  text:\n    primary: '#F2F2F2'\n    secondary: '#C8C8C8'\n"
+        "    muted: '#A0A0A0'\n"
+        "  sentiment:\n    success: '#1AAB40'\n    warning: '#D9B300'\n"
+        "    danger: '#D64550'\n"
+        "  data_colors: ['#118DFF', '#E66C37']\n",
+        encoding="utf-8",
+    )
+    return tmp_path
+
+
+def test_disclaimer_is_stamped_on_every_render(tmp_path: Path) -> None:
+    """Mirrors tmdl-doc-comment-lint: the limit is stated even on success."""
+    d = _write_min_inputs(tmp_path)
+    svg = render_blueprint_preview(
+        blueprint_path=d / "bp.yaml",
+        visual_spec_paths=[],
+        composition_path=d / "comp.yaml",
+        grid_path=d / "grid.yaml",
+    )
+    assert PREVIEW_DISCLAIMER in svg
+
+
+def test_tokens_color_the_render(tmp_path: Path) -> None:
+    d = _write_min_inputs(tmp_path)
+    styled = render_blueprint_preview(
+        blueprint_path=d / "bp.yaml",
+        visual_spec_paths=[],
+        composition_path=d / "comp.yaml",
+        grid_path=d / "grid.yaml",
+        tokens_path=d / "tokens.yaml",
+    )
+    assert "#101820" in styled
+
+
+def test_omitting_tokens_leaves_output_unchanged(tmp_path: Path) -> None:
+    """Regression: the no-tokens path must not shift for existing callers."""
+    d = _write_min_inputs(tmp_path)
+    kwargs = dict(
+        blueprint_path=d / "bp.yaml",
+        visual_spec_paths=[],
+        composition_path=d / "comp.yaml",
+        grid_path=d / "grid.yaml",
+    )
+    assert render_blueprint_preview(**kwargs) == render_blueprint_preview(**kwargs)
+    unstyled = render_blueprint_preview(**kwargs)
+    assert "#101820" not in unstyled
+    # Sits ON the risk: a monochrome-fallback dict passed through unconditionally
+    # would satisfy the check above while silently baking in default colors no
+    # caller asked for. Assert none of the internal fallback hexes leak either.
+    for default_hex in ("#FFFFFF", "#252423", "#605E5C", "#C8C6C4"):
+        assert default_hex not in unstyled
+    # Sits ON the risk more directly still: the failure mode caught in
+    # self-review was not "a default hex leaked" but "a new SVG ATTRIBUTE
+    # appeared" (e.g. stroke="#C8C6C4") even though its value happened to
+    # match a fallback that could change independently. No fill/stroke
+    # attribute at all may appear on the no-tokens path.
+    assert "fill=" not in unstyled
+    assert "stroke=" not in unstyled
+
+
+def test_tokens_color_the_canvas_ground_specifically(tmp_path: Path) -> None:
+    """The background token must reach the page canvas rect's fill, not just
+    appear somewhere incidental in the SVG text."""
+    d = _write_min_inputs(tmp_path)
+    styled = render_blueprint_preview(
+        blueprint_path=d / "bp.yaml",
+        visual_spec_paths=[],
+        composition_path=d / "comp.yaml",
+        grid_path=d / "grid.yaml",
+        tokens_path=d / "tokens.yaml",
+    )
+    assert 'class="canvas" fill="#101820"' in styled
+
+
+def test_preview_never_fabricates_a_number(tmp_path: Path) -> None:
+    """PLACEHOLDER only -- the structural no-data guarantee holds."""
+    d = _write_min_inputs(tmp_path)
+    svg = render_blueprint_preview(
+        blueprint_path=d / "bp.yaml",
+        visual_spec_paths=[],
+        composition_path=d / "comp.yaml",
+        grid_path=d / "grid.yaml",
+        tokens_path=d / "tokens.yaml",
+    )
+    assert "PLACEHOLDER" in svg

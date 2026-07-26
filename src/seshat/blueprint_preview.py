@@ -40,6 +40,26 @@ from typing import Any
 
 _PLACEHOLDER = "PLACEHOLDER"
 
+# Stated on EVERY render including a clean one. An SVG approximation is not
+# Power BI's renderer: a preview that looks right proves nothing about what
+# Desktop will draw. Mirrors the tmdl-doc-comment-lint posture, where the scope
+# limit is printed on a pass -- a pass is exactly where over-reading happens.
+PREVIEW_DISCLAIMER = (
+    "APPROXIMATION -- an SVG preview of committed design intent. "
+    "It does NOT prove Power BI Desktop will render this way, and grants no approval."
+)
+
+# Per-key fallbacks used ONLY when tokens ARE present but a specific key is
+# missing from them (e.g. `colors.text.muted` absent). Deliberately NOT used on
+# the no-tokens path -- `_style_from_tokens(None)` returns `{}`, not this dict,
+# so existing (pre-styling) output stays byte-identical: see its docstring.
+_DEFAULT_STYLE = {
+    "ground": "#FFFFFF",
+    "ink": "#252423",
+    "ink_muted": "#605E5C",
+    "line": "#C8C6C4",
+}
+
 
 class PreviewInputError(Exception):
     """A preview input that exists but cannot be used, named for the caller."""
@@ -92,6 +112,51 @@ def _load_yaml_mapping(path: Path | str) -> dict[str, Any]:
             f"preview input {p} must be a YAML mapping, got {type(data).__name__}"
         )
     return data
+
+
+def _style_from_tokens(tokens_path: Path | str | None) -> dict[str, str]:
+    """Preview colors from a committed tokens YAML, or nothing at all.
+
+    Reads the SAME tokens file ``theme_compile`` consumes, so the preview and
+    the emitted theme.json cannot disagree. Renders from TOKENS, never from a
+    theme JSON -- the theme schema's ``"*"`` wildcard section accepts any key
+    (patternProperties ``^.+$``), so a valid-but-wrong theme key is silently
+    ignored by Desktop rather than rejected; reading tokens instead makes it
+    structurally impossible for the preview to show styling Desktop will not
+    apply.
+
+    Returns ``{}`` when ``tokens_path`` is ``None`` -- NOT the monochrome
+    defaults -- so every emission site that consults this dict via ``.get()``
+    naturally emits no style attribute at all, keeping the no-tokens render
+    byte-identical to before this parameter existed (only the disclaimer text
+    is new). ``_DEFAULT_STYLE`` is the per-key fallback used only once tokens
+    ARE present but a specific key is missing from them.
+    """
+    if tokens_path is None:
+        return {}
+    tokens = _load_yaml_mapping(tokens_path)
+    colors = tokens.get("colors")
+    if not isinstance(colors, dict):
+        raise PreviewInputError(
+            f"tokens {tokens_path} has no 'colors' mapping -- cannot style the preview"
+        )
+    text = colors.get("text") if isinstance(colors.get("text"), dict) else {}
+    return {
+        "ground": colors.get("background", _DEFAULT_STYLE["ground"]),
+        "ink": text.get("primary", _DEFAULT_STYLE["ink"]),
+        "ink_muted": text.get("muted", _DEFAULT_STYLE["ink_muted"]),
+        "line": colors.get("secondary", _DEFAULT_STYLE["line"]),
+    }
+
+
+def _style_attr(name: str, value: object) -> str:
+    """A single SVG attribute (` name="value"`), or empty when ``value`` is
+    unset -- keeps every styled element's no-tokens form byte-identical to its
+    pre-styling form instead of emitting a default-colored attribute nobody
+    asked for."""
+    if not value:
+        return ""
+    return f' {name}="{_esc(str(value))}"'
 
 
 def _section_rank(section: object) -> int:
@@ -166,13 +231,32 @@ def _margin(profile: dict[str, Any]) -> tuple[int, int]:
     return _num(margin.get("left"), default=0), _num(margin.get("top"), default=0)
 
 
-def _text(x: int, y: int, content: str, *, cls: str = "") -> str:
+def _text(
+    x: int,
+    y: int,
+    content: str,
+    *,
+    cls: str = "",
+    fill: str | None = None,
+    font_size: int | None = None,
+) -> str:
+    """A ``<text>`` element. ``fill``/``font_size`` are omitted entirely when
+    ``None`` (the pre-styling default) so existing call sites stay
+    byte-identical; only a caller that passes them changes the emitted attrs.
+    """
     cls_attr = f' class="{_esc(cls)}"' if cls else ""
-    return f'<text x="{x}" y="{y}"{cls_attr}>{_esc(content)}</text>'
+    style_attr = _style_attr("fill", fill)
+    if font_size is not None:
+        style_attr += f' font-size="{font_size}"'
+    return f'<text x="{x}" y="{y}"{cls_attr}{style_attr}>{_esc(content)}</text>'
 
 
 def _visual_group(
-    visual: dict[str, Any], profile: dict[str, Any], origin_x: int, origin_y: int
+    visual: dict[str, Any],
+    profile: dict[str, Any],
+    origin_x: int,
+    origin_y: int,
+    style: dict[str, str],
 ) -> str:
     position = (
         visual.get("position") if isinstance(visual.get("position"), dict) else {}
@@ -204,11 +288,17 @@ def _visual_group(
         f'<g class="visual" data-visual-id="{_esc(visual_id)}" '
         f'data-visual-type="{esc_type}" data-contract="{esc_contract}">',
         f'<rect x="{x}" y="{y}" width="{width}" height="{height}" '
-        'class="visual-box" />',
+        f'class="visual-box"{_style_attr("stroke", style.get("line"))} />',
         _text(x + 4, y + 14, f"{title} [{visual_type}]", cls="visual-title"),
         _text(x + 4, y + 28, f"Q: {question}", cls="visual-question"),
         _text(x + 4, y + 42, f"contract: {contract_name}", cls="visual-contract"),
-        _text(x + 4, y + 56, _PLACEHOLDER, cls="visual-value"),
+        _text(
+            x + 4,
+            y + 56,
+            _PLACEHOLDER,
+            cls="visual-value",
+            fill=style.get("ink_muted"),
+        ),
         "</g>",
     ]
     return "".join(lines)
@@ -308,6 +398,7 @@ def _page_svg(
     visual_specs: list[dict[str, Any]],
     composition: dict[str, Any],
     grid: dict[str, Any],
+    style: dict[str, str],
 ) -> str:
     profile = _grid_profile(grid)
     canvas_w, canvas_h = _canvas_size(profile)
@@ -325,12 +416,14 @@ def _page_svg(
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{canvas_w}" '
         f'height="{canvas_h}" viewBox="0 0 {canvas_w} {canvas_h}" '
         f'data-page-id="{_esc(page_name)}">',
-        f'<rect x="0" y="0" width="{canvas_w}" height="{canvas_h}" class="canvas" />',
+        f'<rect x="0" y="0" width="{canvas_w}" height="{canvas_h}" class="canvas"'
+        f"{_style_attr('fill', style.get('ground'))} />",
         _text(
             origin_x,
             origin_y + 10,
             f"page: {page_name} ({order_label})",
             cls="page-title",
+            fill=style.get("ink"),
         ),
         _text(origin_x, origin_y + 24, f"audience: {audience}", cls="page-audience"),
         _text(
@@ -347,7 +440,7 @@ def _page_svg(
             parts.append(f'<g class="section" data-section="{_esc(section_name)}"></g>')
 
     for visual in _sorted_visuals(visual_specs):
-        parts.append(_visual_group(visual, profile, origin_x, origin_y + 50))
+        parts.append(_visual_group(visual, profile, origin_x, origin_y + 50, style))
 
     parts.append(
         _slicers_block(blueprint.get("slicers") or [], origin_x, origin_y + 200)
@@ -358,6 +451,20 @@ def _page_svg(
     parts.append(_navigation_block(composition, origin_x, origin_y + 320))
     parts.append(_footer_block(blueprint, origin_x, origin_y + 380))
 
+    # Stated on EVERY render, unconditionally -- see PREVIEW_DISCLAIMER's
+    # docstring. Not gated on `style`/tokens: a monochrome render is exactly as
+    # capable of being over-read as a styled one.
+    parts.append(
+        _text(
+            origin_x,
+            origin_y + 440,
+            PREVIEW_DISCLAIMER,
+            cls="preview-disclaimer",
+            fill=style.get("ink_muted"),
+            font_size=9,
+        )
+    )
+
     parts.append("</svg>")
     return "".join(parts)
 
@@ -367,9 +474,10 @@ def _render(
     visual_specs: list[dict[str, Any]],
     composition: dict[str, Any],
     grid: dict[str, Any],
+    style: dict[str, str],
 ) -> str:
     """Pure render: already-loaded dicts in, deterministic SVG text out. No I/O."""
-    return _page_svg(blueprint, visual_specs, composition, grid)
+    return _page_svg(blueprint, visual_specs, composition, grid, style)
 
 
 def render_blueprint_preview(
@@ -378,19 +486,31 @@ def render_blueprint_preview(
     visual_spec_paths: list[Path | str],
     composition_path: Path | str,
     grid_path: Path | str,
+    tokens_path: Path | str | None = None,
 ) -> str:
     """Read the four committed YAML artifacts and render a deterministic,
     placeholder-only SVG (FR-015/FR-016/SC-006).
 
-    Read-only: opens exactly the four paths given (plus each visual-spec path);
-    writes nothing, reaches no database, creates no PBIR/DAX. A MISSING path
-    degrades to an empty mapping (a not-yet-authored artifact is a legitimate
-    preview subject) but an UNREADABLE or MALFORMED path raises
-    ``PreviewInputError`` naming the file -- a corrupt input must never
-    silently render as an empty-but-valid-looking preview.
+    Read-only: opens exactly the four paths given (plus each visual-spec path,
+    plus ``tokens_path`` when given); writes nothing, reaches no database,
+    creates no PBIR/DAX. A MISSING path degrades to an empty mapping (a
+    not-yet-authored artifact is a legitimate preview subject) but an
+    UNREADABLE or MALFORMED path raises ``PreviewInputError`` naming the file
+    -- a corrupt input must never silently render as an empty-but-valid-looking
+    preview.
+
+    ``tokens_path`` is keyword-only and optional (default ``None``): when
+    omitted, the render is byte-identical to the pre-existing monochrome
+    output plus the now-unconditional ``PREVIEW_DISCLAIMER``. When given, the
+    SAME tokens YAML ``theme_compile`` reads colors this SVG -- never a
+    theme.json -- so the preview cannot show styling Desktop would silently
+    ignore (see ``_style_from_tokens``). This function still has NO
+    data-source parameter: every business value stays the literal
+    ``PLACEHOLDER`` regardless of styling.
     """
     blueprint = _load_yaml_mapping(Path(blueprint_path))
     composition = _load_yaml_mapping(Path(composition_path))
     grid = _load_yaml_mapping(Path(grid_path))
     visual_specs = [_load_yaml_mapping(Path(p)) for p in visual_spec_paths]
-    return _render(blueprint, visual_specs, composition, grid)
+    style = _style_from_tokens(tokens_path)
+    return _render(blueprint, visual_specs, composition, grid, style)
