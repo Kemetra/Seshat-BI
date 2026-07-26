@@ -40,6 +40,11 @@ from typing import Any
 
 _PLACEHOLDER = "PLACEHOLDER"
 
+
+class PreviewInputError(Exception):
+    """A preview input that exists but cannot be used, named for the caller."""
+
+
 # The fixed seven-section reading-order vocabulary (dashboard-page-blueprint.yaml).
 # Visuals are ordered by this rank, THEN position.y, THEN position.x -- never
 # alphabetically (alphabetical would scramble the intended reading order).
@@ -54,17 +59,39 @@ _SECTION_ORDER = (
 )
 
 
-def _load_yaml_mapping(path: Path) -> dict[str, Any]:
-    """Load a YAML mapping; ``{}`` on any read/parse failure or non-mapping
-    content -- never raises, never fabricates a substitute value (shipped
-    ``_load_yaml_mapping`` idiom, e.g. ``gap_detector.py``)."""
+def _load_yaml_mapping(path: Path | str) -> dict[str, Any]:
+    """A preview input YAML as a mapping.
+
+    Three distinct states, never conflated: ABSENT returns ``{}`` (a
+    not-yet-authored artifact is a legitimate preview subject); UNPARSEABLE and
+    WRONG-SHAPE raise ``PreviewInputError`` naming the file. Silently returning
+    ``{}`` for a corrupt file would render an empty SVG indistinguishable from a
+    sparse one -- a degrade-without-reporting fail-open.
+    """
     import yaml
 
-    try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
-    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+    p = Path(path)
+    if not p.exists():
         return {}
-    return data if isinstance(data, dict) else {}
+    try:
+        text = p.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise PreviewInputError(
+            f"preview input {p} is unreadable ({exc}) -- check permissions/encoding"
+        ) from exc
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise PreviewInputError(
+            f"preview input {p} is not valid YAML ({exc}) -- fix the syntax"
+        ) from exc
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        raise PreviewInputError(
+            f"preview input {p} must be a YAML mapping, got {type(data).__name__}"
+        )
+    return data
 
 
 def _section_rank(section: object) -> int:
@@ -356,10 +383,11 @@ def render_blueprint_preview(
     placeholder-only SVG (FR-015/FR-016/SC-006).
 
     Read-only: opens exactly the four paths given (plus each visual-spec path);
-    writes nothing, reaches no database, creates no PBIR/DAX. A path that is
-    missing or unreadable degrades to an empty mapping (never fabricated
-    content) rather than raising, matching the shipped ``_load_yaml_mapping``
-    idiom used across the repo's other read-only composers.
+    writes nothing, reaches no database, creates no PBIR/DAX. A MISSING path
+    degrades to an empty mapping (a not-yet-authored artifact is a legitimate
+    preview subject) but an UNREADABLE or MALFORMED path raises
+    ``PreviewInputError`` naming the file -- a corrupt input must never
+    silently render as an empty-but-valid-looking preview.
     """
     blueprint = _load_yaml_mapping(Path(blueprint_path))
     composition = _load_yaml_mapping(Path(composition_path))

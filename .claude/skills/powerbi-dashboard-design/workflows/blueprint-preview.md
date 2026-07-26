@@ -58,11 +58,14 @@ mid-edit. Confirm the page blueprint, its visual specs, and the composition are
 the committed files under `mappings/<subject-area>/design/` (not
 `templates/`), and name each path explicitly rather than guessing.
 
-If any of the four inputs is missing, `render_blueprint_preview` degrades that
-input to an empty structure rather than raising (never fabricates a
+If any of the four inputs is MISSING (not yet authored), `render_blueprint_preview`
+degrades that input to an empty structure rather than raising (never fabricates a
 substitute) -- treat a suspiciously bare-looking preview (missing sections,
 missing visuals) as a signal to STOP and confirm the right paths were passed,
-not as "the design is actually simple."
+not as "the design is actually simple." If an input instead EXISTS but is
+unreadable, malformed YAML, or the wrong shape (e.g. a list instead of a
+mapping), `render_blueprint_preview` raises `PreviewInputError` naming the
+file -- fix that input rather than treating the traceback as a tool bug.
 
 ## Step 2 -- Render, once per page
 
