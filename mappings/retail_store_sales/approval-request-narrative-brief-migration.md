@@ -275,10 +275,17 @@ narrates a number the data does not support.
 A gap must **not** also appear as a `questions[]` entry -- you cannot frame what
 you cannot answer.
 
-## Definition of done (from issue #514, unchanged)
+## Definition of done
+
+Restated from issue #514. One wording change, deliberate: #514 says
+"owner-authored questions", which contradicts `bi-analyst-knowledge` -- the AGENT
+derives and drafts the questions, cites, and story order; the owner **approves or
+revises** them. An agent reading the original phrasing would hand the derivation
+back and stop, producing nothing for the owner to review.
 
 - [ ] `narrative-brief.md` with a `seshat.narrative-brief/v1` front section
-      (owner-authored questions, cites, story order) plus the human-first body.
+      (**agent-authored, owner-reviewed** questions, cites, story order) plus the
+      human-first body.
 - [ ] Binding map migrated to `seshat.binding-map/v1`, preserving the signed
       two-way content.
 - [ ] `seshat narrative-check --table retail_store_sales --report .` passes, and

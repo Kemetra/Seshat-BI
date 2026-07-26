@@ -11,11 +11,13 @@ SIX are read at RUNTIME as REPO-RELATIVE paths from the user's working tree --
 rule.
 
 The SEVENTH, ``templates/narrative-brief.md``, is a COPY-ME blank, not a
-runtime input: nothing reads it in place. A human copies it to
-``mappings/<table>/narrative-brief.md`` and authors the brief there, which is
-what ``narrative_check`` then reads. It ships for the same self-sufficiency
-reason as the other six (issue #514: the brief is the FIRST Stage-6 artifact,
-authored before any layout work, and a pip-only workspace had no blank to copy).
+runtime input: nothing reads it in place. It is copied to
+``mappings/<table>/narrative-brief.md`` and the brief is authored there -- by the
+AGENT, via the ``bi-analyst-knowledge`` derivation route -- which is what
+``narrative_check`` then reads. The human seam is APPROVAL of that draft, not its
+authorship. It ships for the same self-sufficiency reason as the other six
+(issue #514: the brief is the FIRST Stage-6 artifact, authored before any layout
+work, and a pip-only workspace had no blank to copy).
 
 Those blanks previously shipped only with the development repository, and
 unlike the Stage-1 templates (``stage1_scaffold``), no verb materialized them
