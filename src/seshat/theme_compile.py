@@ -36,8 +36,10 @@ from .theme_gen import (
     check_composite_contrast_or_raise,
     check_contrast_or_raise,
     check_font_floor_or_raise,
+    check_non_text_contrast_or_raise,
     render_theme_json,
 )
+from .theme_style_cards import StyleCardError
 
 
 class ThemeCompileError(Exception):
@@ -186,6 +188,59 @@ def palette_from_tokens(tokens_doc: dict) -> dict:
     return pal
 
 
+# Optional top-level token groups that feed theme-spec sections 5 (chrome) and
+# 6+7 (page). Read verbatim, no derivation/defaulting -- validation is entirely
+# theme_style_cards' job (build_star_cards / build_page_cards), so a bad value
+# here is deferred to render time and caught at the compile boundary below.
+# Keys are a plain allow-list copy: an ABSENT group returns None (not {}), so a
+# tokens file predating chrome/page is byte-identical to before (no chrome=/
+# page= divergence from the ThemeSeed default).
+_CHROME_KEYS = (
+    "gridline",
+    "border",
+    "title_align",
+    "data_labels",
+    "number_format",
+)
+_PAGE_KEYS = (
+    "background",
+    "background_transparency",
+    "wallpaper",
+    "wallpaper_transparency",
+    "filter_pane_background",
+    "filter_pane_text",
+    "filter_card_applied",
+    "filter_card_available",
+)
+
+
+def _group_from_tokens(
+    tokens_doc: dict, group: str, keys: tuple[str, ...]
+) -> dict | None:
+    """A shallow copy of tokens_doc[group] restricted to ``keys``, or None.
+
+    None (not {}) when the group is absent or empty, so seed_from_tokens
+    passes None through to ThemeSeed.chrome/page unchanged -- the exact
+    default that keeps every pre-existing tokens file's compiled output
+    byte-identical (chrome=None/page=None emit no section-5/6/7 card at all;
+    see render_theme_json).
+    """
+    block = tokens_doc.get(group)
+    if not isinstance(block, dict) or not block:
+        return None
+    return {k: block[k] for k in keys if k in block}
+
+
+def chrome_from_tokens(tokens_doc: dict) -> dict | None:
+    """The optional ``chrome:`` token group (theme-spec section 5), or None."""
+    return _group_from_tokens(tokens_doc, "chrome", _CHROME_KEYS)
+
+
+def page_from_tokens(tokens_doc: dict) -> dict | None:
+    """The optional ``page:`` token group (theme-spec sections 6+7), or None."""
+    return _group_from_tokens(tokens_doc, "page", _PAGE_KEYS)
+
+
 def _derive_name(tokens_doc: dict) -> str:
     meta = tokens_doc.get("meta") if isinstance(tokens_doc, dict) else None
     raw = meta.get("name") if isinstance(meta, dict) else None
@@ -243,6 +298,8 @@ def seed_from_tokens(tokens_doc: dict, name_override: str | None) -> ThemeSeed:
         title_font_pt=title_font_pt,
         label_font_pt=label_font_pt,
         transparency=pal.get("transparency"),
+        chrome=chrome_from_tokens(tokens_doc),
+        page=page_from_tokens(tokens_doc),
     )
 
 
@@ -333,10 +390,21 @@ def compile_theme(tokens_path: Path, out_path: Path | None, force: bool) -> Path
     try:
         check_font_floor_or_raise(seed)  # refuse a committed sub-floor font
         check_composite_contrast_or_raise(palette)  # refuse a failing overlay
+        # WCAG 3:1 non-text floor (gridline/border vs background) -- the same
+        # gate theme-gen runs before writing, now also enforced on a committed
+        # tokens file that declares an invisible gridline/border (finding 4).
+        check_non_text_contrast_or_raise(palette, seed)
     except ThemeGenError as exc:
         raise ThemeCompileError(str(exc)) from exc
     out = _resolve_out(tokens_doc, tokens_path, out_path)
-    rendered_str = render_theme_json(palette, seed)
+    try:
+        # render_theme_json calls into theme_style_cards (build_star_cards /
+        # build_page_cards) for the seed's chrome/page groups; a bad token
+        # there raises StyleCardError, which must surface as a clean
+        # ThemeCompileError at this boundary -- never a raw traceback.
+        rendered_str = render_theme_json(palette, seed)
+    except StyleCardError as exc:
+        raise ThemeCompileError(str(exc)) from exc
     if out.exists():
         existing = _load_existing_theme(out)
         conflicts = _deferred_field_conflicts(existing, json.loads(rendered_str))

@@ -46,3 +46,21 @@ def test_human_added_visual_type_survives():
     """Regression: an unrelated visual type is untouched."""
     vs = {"scatterChart": {"*": {"bubbles": [{"bubbleSize": -10}]}}}
     assert _human_owned_visual_styles(vs) == vs
+
+
+def test_named_style_preset_is_human_owned_and_survives_pruning():
+    """A NAMED style preset (anything other than "*") is human-authored by
+    definition and must survive pruning intact, while the "*" preset's
+    generator-owned cards are still pruned (F7)."""
+    vs = {
+        "page": {
+            "My Preset": {"background": [{"color": {"solid": {"color": "#FFFFFF"}}}]},
+            "*": {"background": [{"color": {"solid": {"color": "#F3F2F1"}}}]},
+        }
+    }
+    result = _human_owned_visual_styles(vs)
+    assert result == {
+        "page": {
+            "My Preset": {"background": [{"color": {"solid": {"color": "#FFFFFF"}}}]}
+        }
+    }

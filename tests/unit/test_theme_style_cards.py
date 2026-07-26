@@ -101,3 +101,71 @@ def test_page_transparency_out_of_range_is_refused():
 
 def test_empty_page_emits_no_cards():
     assert build_page_cards({}) == {}
+
+
+def _flatten_keys(value: object) -> list[str]:
+    """Every dict key anywhere in ``value``, recursively (order not asserted)."""
+    keys: list[str] = []
+    if isinstance(value, dict):
+        for k, v in value.items():
+            keys.append(k)
+            keys.extend(_flatten_keys(v))
+    elif isinstance(value, list):
+        for item in value:
+            keys.extend(_flatten_keys(item))
+    return keys
+
+
+# Independent literal (not imported from the builder): every key this appearance
+# card vocabulary is allowed to contain. $id is the filterCard state
+# discriminator, not filter STATE itself (Applied/Available are look presets,
+# not a selection).
+_APPEARANCE_ONLY_KEYS = {
+    "color",
+    "solid",
+    "transparency",
+    "backgroundColor",
+    "foregroundColor",
+    "$id",
+}
+
+# Words that would indicate the card touches filter STATE (a live selection,
+# a bound field, or a filter expression) rather than pure appearance. None of
+# these may appear anywhere in build_page_cards' output, as a substring of any
+# emitted key.
+_FILTER_STATE_WORDS = (
+    "selection",
+    "selected",
+    "field",
+    "expression",
+    "condition",
+    "restatement",
+    "value",
+    "target",
+    "operator",
+)
+
+
+def test_page_cards_never_touch_filter_state():
+    """Spec-promised boundary: build_page_cards is appearance-only. Within each
+    emitted card's own contents (not the top-level card names, which are
+    legitimate Power BI card identifiers like "outspacePane"/"filterCard"), the
+    key set is a subset of the appearance-only vocabulary and contains nothing
+    resembling a selection/field/filter-state key -- pin the guarantee so a
+    future card addition cannot silently smuggle in filter state."""
+    cards = build_page_cards(PAGE)  # maximal input: all 8 keys declared
+    assert cards, "sanity: the maximal PAGE fixture must emit at least one card"
+    inner_keys: set[str] = set()
+    for card_body in cards.values():
+        inner_keys.update(_flatten_keys(card_body))
+    assert inner_keys <= _APPEARANCE_ONLY_KEYS, (
+        f"unexpected key(s) outside the appearance-only vocabulary: "
+        f"{inner_keys - _APPEARANCE_ONLY_KEYS}"
+    )
+    for key in inner_keys:
+        lowered = key.lower()
+        for word in _FILTER_STATE_WORDS:
+            assert word not in lowered, (
+                f"key {key!r} contains filter-state word {word!r} -- "
+                "build_page_cards must never touch filter STATE"
+            )

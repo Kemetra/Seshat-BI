@@ -938,3 +938,95 @@ def test_c2_cluster_slug_placeholder_not_flagged(tmp_path: Path) -> None:
     )
     ctx = RuleContext(repo_root=tmp_path, tracked_files=("docs/conn.md",))
     assert _findings(_scan_contents, ctx) == []
+
+
+# ---------------------------------------------------------------------------
+# Finding 3 (review, powerbi-expansion): a bare `.superpowers/` ignore line
+# swallows every future file the SDD scratch tree writes, including inside the
+# 7 already-tracked reports at .superpowers/sdd/*.md. It must be narrowed to
+# only the per-plan scratch subdirectories (.superpowers/sdd/<plan>/) so the
+# pre-existing tracked reports stay visible to `git add` while a future
+# per-plan workspace still gets ignored automatically.
+# ---------------------------------------------------------------------------
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _real_gitignore_text() -> str:
+    return (_REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
+
+
+@pytest.mark.unit
+def test_gitignore_no_longer_swallows_the_whole_superpowers_tree() -> None:
+    """The bare `.superpowers/` line must be gone -- it hides the tracked
+    sibling reports from git's own eyes. A per-plan-scoped pattern must exist
+    instead so future plan workspaces (not existing tracked files) are the
+    only thing ignored."""
+    lines = {ln.strip() for ln in _real_gitignore_text().splitlines()}
+    assert ".superpowers/" not in lines, (
+        "a bare '.superpowers/' entry ignores the whole tree, including the "
+        "7 already-tracked .superpowers/sdd/*.md reports -- narrow it to the "
+        "per-plan scratch subdirectories only"
+    )
+
+
+@pytest.mark.unit
+def test_gitignore_ignores_a_new_per_plan_scratch_dir_but_not_sibling_reports(
+    tmp_path: Path,
+) -> None:
+    """Behavioral proof, on a synthetic repo seeded with the REAL .gitignore
+    content: a fresh per-plan subdirectory under .superpowers/sdd/ is ignored,
+    while a fresh top-level .md report sibling to the 7 pre-existing tracked
+    reports is NOT ignored (and shows up in `git status --porcelain`)."""
+    repo = make_git_repo(tmp_path)
+    (repo / ".gitignore").write_text(_real_gitignore_text(), encoding="utf-8")
+    commit_all(repo, "chore: seed real gitignore")
+
+    # Reproduce the 7 pre-existing tracked reports directly under sdd/. Force-add:
+    # under the CURRENT (buggy) bare `.superpowers/` ignore, a plain `git add -A`
+    # would skip this file and the commit would fail with nothing staged --
+    # `-f` mirrors how the 7 real reports got tracked before the ignore line
+    # existed, and keeps this fixture-setup step independent of the bug itself.
+    sdd = repo / ".superpowers" / "sdd"
+    sdd.mkdir(parents=True)
+    (sdd / "task-99-report.md").write_text("report\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "add", "-f", ".superpowers/sdd/task-99-report.md"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "chore: seed a pre-existing tracked report"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+
+    # A NEW per-plan scratch subdirectory this branch's workflow would create.
+    plan_dir = sdd / "2026-07-26-some-other-plan"
+    plan_dir.mkdir(parents=True)
+    (plan_dir / "progress.md").write_text("scratch\n", encoding="utf-8")
+
+    # A NEW top-level report sibling to the 7 pre-existing tracked ones.
+    (sdd / "task-100-report.md").write_text("another report\n", encoding="utf-8")
+
+    assert (
+        gitutil.git_check_ignore(
+            repo, ".superpowers/sdd/2026-07-26-some-other-plan/progress.md"
+        )
+        is True
+    )
+    assert (
+        gitutil.git_check_ignore(repo, ".superpowers/sdd/task-100-report.md") is False
+    )
+
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert "task-100-report.md" in status
+    assert "progress.md" not in status
