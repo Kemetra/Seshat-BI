@@ -306,6 +306,31 @@ the decision was written through to.
 When it exists and names this `question_id`, this request's `status:` flips from
 `open` to `answered` with a pointer to it.
 
+### Required write-throughs -- D1 is ALSO a `report_intent_approval`
+
+Ruling D1 settles the six `report-intent.yaml` questions, and that intent carries
+its **own** separate gate. Recording only the decision file above would leave the
+dashboard coordinator blocked even after all five decisions are ruled:
+
+- `dashboard_coordinator._check_intent_approved` reads the verdict through the
+  shipped decision gate (`verdict_for(root, tracked_files, "report_intent")`) and
+  returns `blocked` with `no valid report_intent_approval decision in the store`
+  whenever that verdict is not `pass`.
+- `design/report-intent.yaml` records its own `readiness.status: "blocked"` with
+  `no report_intent_approval decision recorded yet for branch_performance_weekly`.
+
+So the D1 ruling must be written through to **both**:
+
+1. a `report_intent_approval` decision record in the project Decision Store for
+   `branch_performance_weekly` (the `report_intent` flow stage, which contributes
+   to the `dashboard_ready` spine stage), and
+2. `design/report-intent.yaml` -- its `readiness` block updated from `blocked` to
+   reflect the recorded approval, and any question text the owner revised under D1.
+
+List both in the decision file's `artifacts_updated` section, following the
+sibling pattern in `approval-decision-H9-time-intel.md`. Without them, D1-D5 can
+all be ruled and Stage-6 authoring still stops on a gate nobody notices.
+
 **The agent that assembled this package is structurally forbidden from creating
 that decision file, or from flipping the `status:` field above.** Only the named
 report owner writes the ruling. A "do the recommended actions" instruction does
