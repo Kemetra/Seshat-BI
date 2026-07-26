@@ -102,6 +102,17 @@ status: blocked
 | Map is still F011 two-way Markdown | `design/visual-contract-binding-map.md` -- pipe table, no fenced `yaml` front section |
 | 5 contracts approved `pass` | `metrics/*.yaml`, owner-approved 2026-06-25 |
 | Stage is otherwise complete | `seshat next --table retail_store_sales` -> `terminal_pass` (all seven gates `pass`) |
+
+> **This request is not auto-discovered.** `seshat approvals` reads only
+> `mappings/*/readiness-status.yaml`, and `seshat next` reads only the seven-stage
+> spine -- neither scans `approval-request-*.md`. That is true of the two sibling
+> packages in this directory as well: they are **reviewer-facing documents**, and a
+> human (or an agent reading this directory) is what surfaces them. Wiring an
+> `approval-request-*.md` scanner into `next` was attempted in this PR and
+> reverted: trusting a markdown `status:` field as proof of a human ruling creates
+> a second, weaker approval-trust path beside the authoritative
+> `readiness-status.yaml` `approvals[]` one, which is a governance design decision
+> in its own right. Tracked separately.
 | A generic template now exists | `templates/narrative-brief.md` (added with this package; schema-verified `status: pass`) |
 
 ## Decision 1 -- the ranked decision-questions

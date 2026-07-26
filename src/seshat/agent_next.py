@@ -583,40 +583,6 @@ def _contract_next_override(
     )
 
 
-def _open_request_next_override(response: dict[str, Any]) -> str | None:
-    """Route an unanswered approval request into the GOVERNED action field.
-
-    `run_next` reports an open request as a caveat, but a caveat is informational:
-    on `terminal_pass` the action field otherwise reads "No pipeline action", so a
-    conductor following `next --format agent` stopped and never presented the
-    decision (P1, raised in review of PR #516). The pending ruling IS the next
-    action, so it belongs here -- while the readiness stages stay untouched,
-    because a named human legitimately approved them.
-
-    Covers the unverified/unparsed kinds too: an `answered` claim with no
-    corroborating decision file must not read as "nothing to do" either.
-    """
-    pending = [
-        caveat
-        for caveat in response.get("caveats", [])
-        if caveat.get("kind")
-        in {
-            "open_approval_request",
-            "unverified_answered_request",
-            "unparsed_approval_request",
-        }
-    ]
-    if not pending:
-        return None
-    details = "; ".join(caveat["detail"] for caveat in pending)
-    return (
-        "STOP -- an approval request on this table is unanswered: "
-        f"{details}. Present the decision to the named human owner and record "
-        "the ruling in the paired `approval-decision-<question_id>.md`; never "
-        "self-grant it."
-    )
-
-
 def _live_validation_next_override(
     root: Path, response: dict[str, Any], entry: dict[str, Any] | None
 ) -> str | None:
@@ -858,10 +824,7 @@ def _compose(
     outcome = response["outcome"]
     contract_override = _contract_next_override(root, response, entry)
     live_override = _live_validation_next_override(root, response, entry)
-    # An unanswered named-human ruling outranks the advisory overrides: it is a
-    # STOP, not a hint about what to run next.
-    request_override = _open_request_next_override(response)
-    next_override = request_override or live_override or contract_override
+    next_override = live_override or contract_override
     control_stage = _control_stage(stage, contract_override, live_override)
     control_outcome = "next_action" if next_override is not None else outcome
     control_response = {
