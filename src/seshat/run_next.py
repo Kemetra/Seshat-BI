@@ -396,6 +396,73 @@ def _decision_defect(directory: Path, question_id: str) -> str | None:
     return None
 
 
+def _unparsed_request(question_id: str, name: str, why: str) -> dict[str, str]:
+    """A request whose state could not be established. Reported, never skipped."""
+    return {
+        "kind": "unparsed_approval_request",
+        "detail": (
+            f"approval request {question_id!r} {why} ({name}); it cannot be "
+            f"confirmed answered, so it is reported rather than skipped"
+        ),
+    }
+
+
+def _read_request(path: Path) -> str | None:
+    """The request's text, or None when it cannot be read."""
+    try:
+        return path.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def _answered_caveat(
+    directory: Path, question_id: str, name: str
+) -> dict[str, str] | None:
+    """``None`` when a paired decision file corroborates the ``answered`` claim,
+    else the caveat naming why the claim is not yet trustworthy."""
+    defect = _decision_defect(directory, question_id)
+    if defect is None:
+        return None
+    return {
+        "kind": "unverified_answered_request",
+        "detail": (
+            f"approval request {question_id!r} claims `answered` but {defect} "
+            f"-- the ruling is not corroborated, so it is still reported ({name})"
+        ),
+    }
+
+
+def _request_caveat(directory: Path, path: Path) -> dict[str, str] | None:
+    """Classify ONE ``approval-request-*.md``: the caveat it warrants, or None
+    when it is a corroborated `answered` request (i.e. genuinely settled)."""
+    question_id = path.stem[len("approval-request-") :]
+    name = path.name
+    text = _read_request(path)
+    if text is None:
+        return _unparsed_request(question_id, name, "is unreadable")
+    status = _request_status(text)
+    if status is None:
+        return _unparsed_request(question_id, name, "declares no `status:`")
+    if status == "answered":
+        return _answered_caveat(directory, question_id, name)
+    if status == "open":
+        return {
+            "kind": "open_approval_request",
+            "detail": (
+                f"approval request {question_id!r} is OPEN and awaits a named "
+                f"human ruling ({name}); present it to the owner -- no readiness "
+                f"stage records this decision, and the agent never answers it "
+                f"itself"
+            ),
+        }
+    # An unknown status word is not a silent pass (P1, #516 review).
+    return _unparsed_request(
+        question_id,
+        name,
+        f"declares unknown status {status!r} (expected `open`/`answered`)",
+    )
+
+
 def _open_request_caveats(
     repo_root: Path | None, table_dir: str | None
 ) -> list[dict[str, str]]:
@@ -409,74 +476,11 @@ def _open_request_caveats(
     directory = Path(repo_root) / "mappings" / table_dir
     if not directory.is_dir():
         return []
-    caveats: list[dict[str, str]] = []
-    for path in sorted(directory.glob(_REQUEST_GLOB)):
-        question_id = path.stem[len("approval-request-") :]
-        try:
-            text = path.read_text(encoding="utf-8-sig")
-        except (OSError, UnicodeDecodeError):
-            caveats.append(
-                {
-                    "kind": "unparsed_approval_request",
-                    "detail": (
-                        f"approval request {question_id!r} is unreadable "
-                        f"({path.name}); it cannot be confirmed answered, so it "
-                        f"is reported rather than skipped"
-                    ),
-                }
-            )
-            continue
-        status = _request_status(text)
-        if status is None:
-            caveats.append(
-                {
-                    "kind": "unparsed_approval_request",
-                    "detail": (
-                        f"approval request {question_id!r} declares no "
-                        f"`status:` ({path.name}); it cannot be confirmed "
-                        f"answered, so it is reported rather than skipped"
-                    ),
-                }
-            )
-        elif status == "answered":
-            # Corroborate the claim; an unbacked `answered` stays visible.
-            defect = _decision_defect(directory, question_id)
-            if defect is not None:
-                caveats.append(
-                    {
-                        "kind": "unverified_answered_request",
-                        "detail": (
-                            f"approval request {question_id!r} claims "
-                            f"`answered` but {defect} -- the ruling is not "
-                            f"corroborated, so it is still reported ({path.name})"
-                        ),
-                    }
-                )
-        elif status == "open":
-            caveats.append(
-                {
-                    "kind": "open_approval_request",
-                    "detail": (
-                        f"approval request {question_id!r} is OPEN and awaits a "
-                        f"named human ruling ({path.name}); present it to the "
-                        f"owner -- no readiness stage records this decision, and "
-                        f"the agent never answers it itself"
-                    ),
-                }
-            )
-        else:
-            # An unknown status word is not a silent pass (P1, #516 review).
-            caveats.append(
-                {
-                    "kind": "unparsed_approval_request",
-                    "detail": (
-                        f"approval request {question_id!r} declares unknown "
-                        f"status {status!r} ({path.name}); expected `open` or "
-                        f"`answered`, so it is reported rather than skipped"
-                    ),
-                }
-            )
-    return caveats
+    found = (
+        _request_caveat(directory, path)
+        for path in sorted(directory.glob(_REQUEST_GLOB))
+    )
+    return [caveat for caveat in found if caveat is not None]
 
 
 # Stages whose `pass` evidence asserts that objects EXIST IN A SPECIFIC DATABASE
