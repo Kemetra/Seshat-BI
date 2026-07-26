@@ -80,8 +80,8 @@ def test_mcp_extra_hint_names_both_install_lanes(monkeypatch, capsys) -> None:
     assert cli._run_mcp(Namespace(repo=".")) == 2
     err = capsys.readouterr().err
 
-    # Both lanes are named, and the pipx one is the documented extra form.
-    assert 'pipx install "seshat-bi[mcp]"' in err
+    # Both lanes are named, and the pipx one MODIFIES the existing install.
+    assert 'pipx install --force "seshat-bi[mcp]"' in err
     assert "pip install" in err
     assert "seshat-bi[mcp]" in err
     # No pip-only line: every `pip install` mention must sit on a labelled lane.
@@ -201,7 +201,7 @@ def test_orchestration_assess_text_emits_the_pipx_install_form(
     """
     out = _assess_output(tmp_path, capsys)
 
-    assert 'pipx install "seshat-bi[dbt]"' in out
+    assert 'pipx install --force "seshat-bi[dbt]"' in out
     assert _bare_pip_installs(out) == [], "a pip-only install step reached the user"
 
 
@@ -287,7 +287,79 @@ def test_emitted_pipx_forms_match_the_documented_commands() -> None:
         encoding="utf-8"
     )
 
+    # The doc's example is a FIRST install, so it carries no `--force`...
     assert 'pipx install "seshat-bi[dbt]"' in doc
-    # The [mcp] hint is built by the same rule the doc documents for [dbt].
-    assert 'pipx install "seshat-bi[mcp]"' in _extra_install_hint("mcp")
-    assert 'pipx install "seshat-bi[dbt]"' in _extra_install_hint("dbt")
+    # ...while an enable-step for an ALREADY-installed seshat must modify the
+    # existing venv. Same distribution, extra and quoting as the doc; `--force`
+    # is the documented option for "Modify existing virtual environment".
+    for extra in ("mcp", "dbt"):
+        hint = _extra_install_hint(extra)
+        assert f'pipx install --force "seshat-bi[{extra}]"' in hint
+        assert f'pipx install "seshat-bi[{extra}]"' in hint.replace("--force ", "")
+
+
+# --- the six existing `_db_extra_hint` callers are UNTOUCHED ------------------
+
+
+def test_db_extra_hint_output_is_byte_identical_to_the_reviewed_strings() -> None:
+    """#507 must not alter `_db_extra_hint`'s output for its six existing callers.
+
+    Those strings are user-facing and were already reviewed (#399, refined per
+    engine in #409): `drift.py`, `profile.py` (x2), `validate.py` (x2) and
+    `value_check.py`. #507 REUSES this helper from `demo load` and adds a SIBLING
+    for extras -- neither may change what the six already emit. Pinned byte-for-byte
+    so a future edit to the sibling cannot silently drift the driver hint.
+
+    Note the deliberate asymmetry with `_extra_install_hint`: this one keeps SINGLE
+    quotes (`pip install 'seshat-bi[db]'`), a real `cmd.exe` inconsistency that is
+    nonetheless the reviewed status quo -- left for its own change and its own review.
+    """
+    from seshat.cli import _db_extra_hint
+
+    assert _db_extra_hint() == (
+        "       pipx install:  pipx inject seshat-bi psycopg2-binary\n"
+        "       pip install:   pip install 'seshat-bi[db]'"
+    )
+    assert _db_extra_hint("postgres") == _db_extra_hint()
+    assert _db_extra_hint("sqlserver") == (
+        "       pipx install:  pipx inject seshat-bi pyodbc\n"
+        "       pip install:   pip install 'seshat-bi[mssql]'"
+    )
+    assert _db_extra_hint("mysql") == (
+        "       pipx install:  pipx inject seshat-bi mysql-connector-python\n"
+        "       pip install:   pip install 'seshat-bi[mysql]'"
+    )
+    assert _db_extra_hint("snowflake") == (
+        "       pipx install:  pipx inject seshat-bi snowflake-connector-python\n"
+        "       pip install:   pip install 'seshat-bi[snowflake]'"
+    )
+    # An unknown engine still falls back to Postgres, unchanged.
+    assert _db_extra_hint("nonesuch") == _db_extra_hint()
+
+
+def test_a_real_db_hint_caller_still_renders_the_shared_block(
+    monkeypatch, capsys
+) -> None:
+    """End-to-end: a driver-missing `drift` run still emits the reviewed block.
+
+    Guards the reuse from the other direction -- the helper's output is pinned above,
+    and this proves a real caller still renders exactly that block, unchanged. Driven
+    the way the reviewed `test_cli_drift` test drives it: a `--dsn` is supplied (so
+    the DSN gate passes) and the driver probe is forced absent.
+    """
+    from seshat import cli
+    from seshat.cli import main
+
+    monkeypatch.setattr(cli, "_ensure_driver", lambda: False)
+    code = main(
+        [
+            "drift",
+            "--baseline",
+            "mappings/retail_store_sales/source-profile.md",
+            "--dsn",
+            "postgresql://x@h/db",
+        ]
+    )
+
+    assert code == 1
+    assert cli._db_extra_hint() in capsys.readouterr().err

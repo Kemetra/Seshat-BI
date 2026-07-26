@@ -56,8 +56,18 @@ _PIP_INSTALL_EXTRA = re.compile(
     r"""\bpip\s+install\s+['"]?(seshat-bi\[[^\]'"]+\])['"]?"""
 )
 
-# The form docs/install/agent-install.md:26 documents.
-_PIPX_INSTALL = r'pipx install "\1"'
+# The form docs/install/agent-install.md:26 documents, plus `--force`.
+#
+# `--force` is REQUIRED here, not decoration (PR #510 review, P2). Every reader of
+# this guidance ALREADY has `seshat` installed -- that is how they ran the command
+# that produced it. On an existing venv, plain `pipx install` REFUSES to modify it
+# ("already seems to be installed. Not modifying existing installation ... Pass
+# '--force'") and exits having changed nothing, so the extra stays absent and the
+# retry fails identically. `pipx install --help` documents `--force` as "Modify
+# existing virtual environment". The bare form in the install docs is correct for a
+# FIRST install; an opt-in step for an installed app is a different situation. Same
+# reason the dbt remediation hint already passes `--force` (commands/dbt.py, v0.6).
+_PIPX_INSTALL = r'pipx install --force "\1"'
 
 
 def _portable_quoting(step: str) -> str:

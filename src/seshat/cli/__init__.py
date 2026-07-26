@@ -340,9 +340,20 @@ def _extra_install_hint(extra: str) -> str:
     passes apostrophes through LITERALLY, so ``pip install 'seshat-bi[mcp]'``
     reaches pip as an invalid requirement, and this repo's release lane is Windows
     (the defect class PR #506 fixed for `seshat next`'s guidance).
+
+    ``--force`` is REQUIRED, not decoration (PR #510 review, P2). This hint is only
+    ever reached by a reader who ALREADY has ``seshat`` installed -- that is how
+    they ran the command that failed. On an existing venv, plain ``pipx install``
+    refuses to modify it ("already seems to be installed. Not modifying existing
+    installation ... Pass '--force'") and exits having changed NOTHING, so the
+    extra stays absent and the retry fails identically. ``pipx install --help``
+    documents ``--force`` as "Modify existing virtual environment". The fresh-install
+    form in the install docs is correct for a FIRST install and wrong here; this is
+    an enable-step for an installed app. Mirrors the ``--force`` the dbt remediation
+    hint already uses for the same reason (``commands/dbt.py``, release v0.6).
     """
     return (
-        f'       pipx install:  pipx install "seshat-bi[{extra}]"\n'
+        f'       pipx install:  pipx install --force "seshat-bi[{extra}]"\n'
         f'       pip install:   pip install "seshat-bi[{extra}]"'
     )
 

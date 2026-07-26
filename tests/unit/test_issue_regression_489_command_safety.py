@@ -387,8 +387,11 @@ def test_emitted_commands_target_the_documented_pipx_install_lane() -> None:
 
       * invocations must use the installed console script `seshat`, which is what
         pipx puts on PATH (declared in pyproject `[project.scripts]`);
-      * an extra must be installed with `pipx install "seshat-bi[...]"`, the exact
-        command agent-install.md already documents.
+      * an extra must be installed with `pipx install --force "seshat-bi[...]"` --
+        agent-install.md documents the bare `pipx install "seshat-bi[dbt]"` for a
+        FIRST install, but this guidance is only ever read by someone who ALREADY
+        has `seshat` installed, and on an existing venv plain `pipx install`
+        refuses to modify it and changes nothing (#510 review, P2).
     """
     from seshat.cli.commands.next_guidance_render import _opt_in_step_lines
     from seshat.orchestration_assess import _DAGSTER_OPT_IN, _DBT_OPT_IN
@@ -399,7 +402,7 @@ def test_emitted_commands_target_the_documented_pipx_install_lane() -> None:
         for line in _opt_in_step_lines({"opt_in_command": opt_in})
     ]
 
-    assert any('pipx install "seshat-bi[dbt]"' in line for line in steps)
+    assert any('pipx install --force "seshat-bi[dbt]"' in line for line in steps)
     for line in steps:
         assert "python -m seshat" not in line, line
         # `pipx install` is fine; a bare `pip install` is not.
@@ -419,8 +422,14 @@ def test_the_pipx_form_matches_the_repos_own_install_doc() -> None:
     )
     emitted = _portable_quoting("pip install 'seshat-bi[dbt]'")
 
-    assert emitted == 'pipx install "seshat-bi[dbt]"'
-    assert emitted in doc, "emitted install step is not the documented command"
+    # The DISTRIBUTION + EXTRA + quoting must match the documented command; the
+    # emitted step adds `--force` because, unlike the doc's first-install example,
+    # this guidance is read by someone who already has seshat installed (#510).
+    assert emitted == 'pipx install --force "seshat-bi[dbt]"'
+    assert 'pipx install "seshat-bi[dbt]"' in doc
+    assert emitted.replace("--force ", "") in doc, (
+        "emitted install step is not the documented command"
+    )
 
 
 def test_full_assessment_command_uses_the_installed_console_script(
@@ -449,7 +458,7 @@ def test_pip_extra_is_double_quoted_for_cmd_exe(tmp_path: Path) -> None:
 
     steps = _opt_in_step_lines({"opt_in_command": _DBT_OPT_IN})
 
-    assert steps[0].endswith('pipx install "seshat-bi[dbt]"')
+    assert steps[0].endswith('pipx install --force "seshat-bi[dbt]"')
     for line in steps:
         assert "'" not in line, f"single quote survived into {line!r}"
 
@@ -461,11 +470,11 @@ def test_portable_quoting_is_surgical_and_idempotent() -> None:
     # Both quote styles of the wrong-environment form are rewritten...
     assert (
         _portable_quoting("pip install 'seshat-bi[dbt]'")
-        == 'pipx install "seshat-bi[dbt]"'
+        == 'pipx install --force "seshat-bi[dbt]"'
     )
     assert (
         _portable_quoting('pip install "seshat-bi[db]"')
-        == 'pipx install "seshat-bi[db]"'
+        == 'pipx install --force "seshat-bi[db]"'
     )
     # ...unrelated quoting is left alone...
     assert _portable_quoting("echo 'keep me'") == "echo 'keep me'"
@@ -473,8 +482,8 @@ def test_portable_quoting_is_surgical_and_idempotent() -> None:
     assert _portable_quoting("seshat dbt init") == "seshat dbt init"
     # ...and an already-correct step is unchanged (idempotent).
     assert (
-        _portable_quoting('pipx install "seshat-bi[dbt]"')
-        == 'pipx install "seshat-bi[dbt]"'
+        _portable_quoting('pipx install --force "seshat-bi[dbt]"')
+        == 'pipx install --force "seshat-bi[dbt]"'
     )
 
 
@@ -508,7 +517,7 @@ def test_opt_in_sequence_renders_as_individually_runnable_steps() -> None:
     assert len(dbt_steps) == 3
     # Double-quoted: portable across cmd.exe / PowerShell / POSIX sh -- see
     # test_pip_extra_is_double_quoted_for_cmd_exe.
-    assert dbt_steps[0].endswith('pipx install "seshat-bi[dbt]"')
+    assert dbt_steps[0].endswith('pipx install --force "seshat-bi[dbt]"')
     assert dbt_steps[1].endswith("seshat dbt init")
     assert dbt_steps[2].endswith("seshat dbt doctor")
 
