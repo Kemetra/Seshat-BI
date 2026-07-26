@@ -513,6 +513,19 @@ def _stop_point(response: dict[str, Any]) -> str:
     outcome = response["outcome"]
     stage = response["stage"]
     if outcome == "terminal_pass":
+        # An outstanding owner decision changes where this surface stops
+        # (issue #517). Leaving the terminal "nothing further from this
+        # surface" text here would contradict the `next_allowed_action` that
+        # just asked for the request to be presented, and a conductor honouring
+        # `stop_point` would route straight past it -- the same
+        # guidance-outranks-a-gate defect PR #506 closed.
+        from seshat.approval_requests import has_open_request
+
+        if has_open_request(response.get("caveats", [])):
+            return (
+                "Stopped now: an approval request is open. Present it to the "
+                "named owner and stop -- never answer it on their behalf."
+            )
         return _TERMINAL_STOP_POINT
     if outcome == "stop_blocked":
         return (

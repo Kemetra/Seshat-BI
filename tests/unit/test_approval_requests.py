@@ -38,6 +38,13 @@ def _kinds(caveats) -> list[str]:
     return [c["kind"] for c in caveats]
 
 
+def _request_kinds(caveats) -> list[str]:
+    """Only the caveat kinds this feature emits, so an unrelated caveat from
+    some other rule cannot make these assertions pass or fail spuriously."""
+    mine = {OPEN_REQUEST_KIND, UNPARSED_REQUEST_KIND}
+    return [c["kind"] for c in caveats if c["kind"] in mine]
+
+
 def _qids(caveats) -> set[str]:
     """Question ids named in the caveat details."""
     return {c["detail"].split("'")[1] for c in caveats}
@@ -177,6 +184,84 @@ def test_has_open_request_is_false_for_unrelated_caveats():
 
 
 # --------------------------------------------------------------------------
+# Production wiring -- the oracle the reverted attempt lacked
+# --------------------------------------------------------------------------
+
+_TERMINAL_STATUS = """\
+table: "bronze.demo_sales"
+stages:
+  source_ready: {status: pass}
+  mapping_ready: {status: pass}
+  silver_ready: {status: pass}
+  gold_ready: {status: pass}
+  semantic_model_ready: {status: pass}
+  dashboard_ready: {status: pass}
+  publish_ready: {status: pass}
+approvals:
+  - stage: "mapping_ready"
+    owner: "Ada Lovelace (data_owner)"
+    at: "2026-07-05"
+    note: "signed off"
+  - stage: "semantic_model_ready"
+    owner: "Ada Lovelace (metric_owner)"
+    at: "2026-07-05"
+    note: "signed off"
+  - stage: "dashboard_ready"
+    owner: "Ada Lovelace (report_owner)"
+    at: "2026-07-05"
+    note: "signed off"
+  - stage: "publish_ready"
+    owner: "Ada Lovelace (data_owner)"
+    at: "2026-07-05"
+    note: "signed off"
+"""
+
+
+def _repo_with_table(tmp_path, *, request_qid: str | None):
+    """A minimal repo whose single table passes every stage."""
+    directory = tmp_path / "mappings" / "demo_sales"
+    directory.mkdir(parents=True)
+    (directory / "readiness-status.yaml").write_text(_TERMINAL_STATUS, encoding="utf-8")
+    if request_qid is not None:
+        _request(directory, request_qid)
+    return tmp_path
+
+
+def test_wiring_surfaces_an_open_request_through_the_public_entry_point(tmp_path):
+    """Pins run_next's REAL path, not the helper in isolation.
+
+    Every other test here calls ``open_request_caveats`` directly, so all of
+    them would stay green if ``_terminal_response`` or ``_mapping_directory``
+    were reverted/broken and requests silently stopped surfacing. That is the
+    exact oracle gap that let the reverted attempt pass three review rounds
+    while carrying a live fail-open, so the wiring gets its own pin.
+    """
+    from seshat.run_next import build_run_next_response
+
+    repo = _repo_with_table(tmp_path, request_qid="needs-a-ruling")
+    response = build_run_next_response(repo, "demo_sales")
+
+    assert response["outcome"] == "terminal_pass"  # no stage was falsified
+    # Filter to the kinds this feature owns: the fixture also raises unrelated
+    # evidence caveats, and asserting on the whole list would couple this test
+    # to them.
+    assert _request_kinds(response["caveats"]) == [OPEN_REQUEST_KIND]
+    assert "Present the open approval request" in (response["action_text"] or "")
+
+
+def test_wiring_leaves_a_clean_terminal_table_untouched(tmp_path):
+    """The negative half: no request means no caveat and no action override."""
+    from seshat.run_next import build_run_next_response
+
+    repo = _repo_with_table(tmp_path, request_qid=None)
+    response = build_run_next_response(repo, "demo_sales")
+
+    assert response["outcome"] == "terminal_pass"
+    assert _request_kinds(response["caveats"]) == []
+    assert response["action_text"] is None
+
+
+# --------------------------------------------------------------------------
 # The two surfaces that make the caveat actionable rather than informational
 # --------------------------------------------------------------------------
 
@@ -191,6 +276,23 @@ def test_terminal_pass_action_reaches_next_allowed_action():
 
     with_request = dict(clean, action_text="Present the open approval request(s)")
     assert _next_allowed_action(with_request) == "Present the open approval request(s)"
+
+
+def test_stop_point_agrees_with_the_action_when_a_request_is_open():
+    """`stop_point` must not say "nothing further" while the action asks for a
+    request to be presented -- a conductor honouring the stop routes past it."""
+    from seshat.agent_next import _stop_point
+
+    clean = {"outcome": "terminal_pass", "stage": None, "caveats": []}
+    with_request = {
+        "outcome": "terminal_pass",
+        "stage": None,
+        "caveats": [{"kind": OPEN_REQUEST_KIND, "detail": "x"}],
+    }
+    assert "nothing further" in _stop_point(clean)
+    stop = _stop_point(with_request)
+    assert "approval request is open" in stop
+    assert "never answer it on their behalf" in stop
 
 
 def test_portfolio_rank_puts_a_request_bearing_table_ahead_of_a_clean_one():
