@@ -36,8 +36,10 @@ from .theme_gen import (
     check_composite_contrast_or_raise,
     check_contrast_or_raise,
     check_font_floor_or_raise,
+    check_non_text_contrast_or_raise,
     render_theme_json,
 )
+from .theme_style_cards import CHROME_TOKEN_KEYS, PAGE_TOKEN_KEYS, StyleCardError
 
 
 class ThemeCompileError(Exception):
@@ -63,44 +65,93 @@ _DL3_DEFERRED_FIELDS = (
     "visualStyles",
 )
 
-# ``visualStyles`` is deferred (above) but is NOT wholly human-owned: the
-# generator itself writes the ``*``/``*`` title/label fonts (token-driven since
-# T8) and the opt-in overlay ``background`` (T18). Those sub-keys must NOT count
-# as hand-tuned -- otherwise a legitimate token-declared font/overlay change
-# could never be recompiled over an existing theme (even with --force). Only the
-# REMAINDER of visualStyles (any other visual type or property a human added) is
-# the human-owned surface the deferred-field guard protects.
-_GENERATOR_OWNED_VISUAL_STYLE_KEYS = ("title", "labels", "background")
+# Generator-owned cards per visual type. A card listed here is written by
+# theme_gen from committed tokens, so it is NEVER a human hand-tune -- pruning it
+# before the DL3-deferred comparison is what lets a token change recompile over an
+# existing theme (T8/T18, and spec 5/6/7). Any card NOT listed is human-owned.
+_GENERATOR_OWNED_CARDS: dict[str, tuple[str, ...]] = {
+    "*": ("title", "labels", "background", "categoryAxis", "valueAxis", "border"),
+    "page": ("background", "outspace", "outspacePane", "filterCard"),
+}
+
+# Back-compat alias: the original name, now derived from the table above.
+_GENERATOR_OWNED_VISUAL_STYLE_KEYS = _GENERATOR_OWNED_CARDS["*"]
 
 
-def _human_owned_visual_styles(vs: object) -> object:
-    """``visualStyles`` with the generator-owned ``*``/``*`` keys removed.
+def _prune_generator_cards(style: object, owned: tuple[str, ...]) -> object:
+    """One style-preset dict with the generator-owned cards removed."""
+    if not isinstance(style, dict):
+        return style
+    return {k: v for k, v in style.items() if k not in owned}
 
-    Leaves everything else untouched, so comparing the returned value across
-    existing-vs-rendered detects a hand-tuned visualStyle a human added while
-    ignoring token-driven font/overlay churn the generator legitimately owns.
+
+def _rendered_star_cards(rendered: object, visual_type: str) -> frozenset[str]:
+    """Card names the RENDERED theme actually emits for ``visual_type``'s
+    ``"*"`` preset.
+
+    Emission is conditional on the tokens (a tokens file with no ``chrome:``
+    or ``page:`` group emits none of these cards at all), so a card must only
+    be treated as generator-owned when the rendered document proves the
+    generator actually wrote it -- never from the static
+    ``_GENERATOR_OWNED_CARDS`` table alone (finding 1 / P1).
+    """
+    if not isinstance(rendered, dict):
+        return frozenset()
+    presets = rendered.get(visual_type)
+    star = presets.get("*") if isinstance(presets, dict) else None
+    return frozenset(star) if isinstance(star, dict) else frozenset()
+
+
+def _human_owned_presets(
+    presets: dict, owned: tuple[str, ...], rendered_cards: frozenset[str]
+) -> dict[str, object]:
+    """One visual type's style presets with generator-owned cards pruned.
+
+    A NAMED style preset (anything but ``"*"``) is human-authored by definition
+    and survives verbatim; the ``"*"`` preset is pruned of the cards that are
+    BOTH declared owned (``owned``) AND actually emitted by the rendered theme
+    (``rendered_cards``) -- a card absent from the rendered document is
+    human-owned regardless of the static table, and dropped entirely if that
+    empties it, so it cannot register as a spurious conflict.
+    """
+    effective_owned = tuple(c for c in owned if c in rendered_cards)
+    kept_presets: dict[str, object] = {}
+    for preset_name, style in presets.items():
+        if preset_name != "*":
+            kept_presets[preset_name] = style
+            continue
+        pruned = _prune_generator_cards(style, effective_owned)
+        if pruned:
+            kept_presets[preset_name] = pruned
+    return kept_presets
+
+
+def _human_owned_visual_styles(vs: object, rendered: object) -> object:
+    """``vs`` with every card the RENDERED theme actually emits removed.
+
+    Table-driven over ``_GENERATOR_OWNED_CARDS`` so a new emission target (a new
+    visual type or card) is declared in one place, but a card is only pruned
+    when ``rendered`` proves the generator actually wrote it there (finding 1):
+    emission is conditional on the tokens, so an older tokens file with no
+    ``chrome:``/``page:`` group must not have its hand-tuned cards pruned from
+    both sides of the comparison and silently deleted. Comparing the returned
+    value across existing-vs-rendered detects a hand-tuned visualStyle a human
+    added while ignoring token-driven churn the generator legitimately owns.
+    An empty style preset or visual type is dropped entirely so it cannot
+    register as a spurious conflict.
     """
     if not isinstance(vs, dict):
         return vs
-    result = {k: v for k, v in vs.items()}
-    star = result.get("*")
-    if isinstance(star, dict):
-        new_star = {k: v for k, v in star.items()}
-        star_star = new_star.get("*")
-        if isinstance(star_star, dict):
-            pruned = {
-                k: v
-                for k, v in star_star.items()
-                if k not in _GENERATOR_OWNED_VISUAL_STYLE_KEYS
-            }
-            if pruned:
-                new_star["*"] = pruned
-            else:
-                new_star.pop("*", None)
-        if new_star:
-            result["*"] = new_star
-        else:
-            result.pop("*", None)
+    result: dict[str, object] = {}
+    for visual_type, presets in vs.items():
+        owned = _GENERATOR_OWNED_CARDS.get(visual_type)
+        if owned is None or not isinstance(presets, dict):
+            result[visual_type] = presets
+            continue
+        rendered_cards = _rendered_star_cards(rendered, visual_type)
+        kept_presets = _human_owned_presets(presets, owned, rendered_cards)
+        if kept_presets:
+            result[visual_type] = kept_presets
     return result
 
 
@@ -175,6 +226,58 @@ def palette_from_tokens(tokens_doc: dict) -> dict:
     return pal
 
 
+# Optional top-level token groups that feed theme-spec sections 5 (chrome) and
+# 6+7 (page). Read verbatim, no derivation/defaulting -- validation is entirely
+# theme_style_cards' job (build_star_cards / build_page_cards), so a bad value
+# here is deferred to render time and caught at the compile boundary below.
+# CHROME_TOKEN_KEYS/PAGE_TOKEN_KEYS (imported from theme_style_cards, the single
+# source both this reader and theme_gen's writer share) are a plain allow-list
+# copy: an ABSENT group returns None (not {}), so a tokens file predating
+# chrome/page is byte-identical to before (no chrome=/page= divergence from
+# the ThemeSeed default).
+
+
+def _group_from_tokens(
+    tokens_doc: dict, group: str, keys: tuple[str, ...]
+) -> dict | None:
+    """A shallow copy of tokens_doc[group] restricted to ``keys``, or None.
+
+    None (not {}) when the group is absent or empty, so seed_from_tokens
+    passes None through to ThemeSeed.chrome/page unchanged -- the exact
+    default that keeps every pre-existing tokens file's compiled output
+    byte-identical (chrome=None/page=None emit no section-5/6/7 card at all;
+    see render_theme_json).
+
+    A PRESENT-but-mistyped group (e.g. ``chrome: []`` or ``page: "dark"``) is
+    a different case entirely and must not collapse into the same None: that
+    would compile successfully while silently dropping every requested
+    section 5/6/7 card, with theme_style_cards' own validators never seeing
+    the value (finding B). Only a genuinely ABSENT key skips the type check;
+    once the key is present, its value must be a mapping (empty is fine --
+    it is a no-op group, not a type error).
+    """
+    if group not in tokens_doc:
+        return None
+    block = tokens_doc[group]
+    if not isinstance(block, dict):
+        raise ThemeCompileError(
+            f"tokens {group!r} must be a mapping, got {type(block).__name__}"
+        )
+    if not block:
+        return None
+    return {k: block[k] for k in keys if k in block}
+
+
+def chrome_from_tokens(tokens_doc: dict) -> dict | None:
+    """The optional ``chrome:`` token group (theme-spec section 5), or None."""
+    return _group_from_tokens(tokens_doc, "chrome", CHROME_TOKEN_KEYS)
+
+
+def page_from_tokens(tokens_doc: dict) -> dict | None:
+    """The optional ``page:`` token group (theme-spec sections 6+7), or None."""
+    return _group_from_tokens(tokens_doc, "page", PAGE_TOKEN_KEYS)
+
+
 def _derive_name(tokens_doc: dict) -> str:
     meta = tokens_doc.get("meta") if isinstance(tokens_doc, dict) else None
     raw = meta.get("name") if isinstance(meta, dict) else None
@@ -232,6 +335,8 @@ def seed_from_tokens(tokens_doc: dict, name_override: str | None) -> ThemeSeed:
         title_font_pt=title_font_pt,
         label_font_pt=label_font_pt,
         transparency=pal.get("transparency"),
+        chrome=chrome_from_tokens(tokens_doc),
+        page=page_from_tokens(tokens_doc),
     )
 
 
@@ -289,9 +394,14 @@ def _deferred_field_conflicts(existing: dict, rendered: dict) -> list[str]:
         rendered_val = rendered.get(field)
         if field == "visualStyles":
             # Compare only the human-owned remainder -- token-driven font/overlay
-            # churn under the generator-owned *//* keys is not a hand-tuned conflict.
-            existing_val = _human_owned_visual_styles(existing_val)
-            rendered_val = _human_owned_visual_styles(rendered_val)
+            # churn under the generator-owned *//* keys is not a hand-tuned
+            # conflict. Both sides prune against the SAME rendered document
+            # (rendered_val): every card in rendered_val is trivially "in
+            # rendered_val", so the rendered side prunes to exactly what the
+            # generator emits, while the existing side only loses a card if
+            # the generator actually wrote it there too (finding 1).
+            existing_val = _human_owned_visual_styles(existing_val, rendered_val)
+            rendered_val = _human_owned_visual_styles(rendered_val, rendered_val)
         if existing_val != rendered_val:
             conflicts.append(field)
     return conflicts
@@ -322,10 +432,21 @@ def compile_theme(tokens_path: Path, out_path: Path | None, force: bool) -> Path
     try:
         check_font_floor_or_raise(seed)  # refuse a committed sub-floor font
         check_composite_contrast_or_raise(palette)  # refuse a failing overlay
+        # WCAG 3:1 non-text floor (gridline/border vs background) -- the same
+        # gate theme-gen runs before writing, now also enforced on a committed
+        # tokens file that declares an invisible gridline/border (finding 4).
+        check_non_text_contrast_or_raise(palette, seed)
     except ThemeGenError as exc:
         raise ThemeCompileError(str(exc)) from exc
     out = _resolve_out(tokens_doc, tokens_path, out_path)
-    rendered_str = render_theme_json(palette, seed)
+    try:
+        # render_theme_json calls into theme_style_cards (build_star_cards /
+        # build_page_cards) for the seed's chrome/page groups; a bad token
+        # there raises StyleCardError, which must surface as a clean
+        # ThemeCompileError at this boundary -- never a raw traceback.
+        rendered_str = render_theme_json(palette, seed)
+    except StyleCardError as exc:
+        raise ThemeCompileError(str(exc)) from exc
     if out.exists():
         existing = _load_existing_theme(out)
         conflicts = _deferred_field_conflicts(existing, json.loads(rendered_str))

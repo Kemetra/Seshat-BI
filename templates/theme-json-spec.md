@@ -118,6 +118,9 @@ list from the brand palette in section 1.
 
 ## 5. Visual defaults
 
+> **Emitted** by `seshat theme-gen` / `theme-compile` from committed design
+> tokens. Key paths verified against `reportThemeSchema-2.156.json`.
+
 Default formatting applied to all visuals unless a visual overrides it (an
 override is a `warning`-class per-visual deviation recorded with a reason, in
 `templates/visual-spec.yaml` -- defaults then deviations).
@@ -133,6 +136,9 @@ override is a `warning`-class per-visual deviation recorded with a reason, in
 
 ## 6. Filter-pane defaults
 
+> **Emitted** by `seshat theme-gen` / `theme-compile` from committed design
+> tokens. Key paths verified against `reportThemeSchema-2.156.json`.
+
 The default look of the filter pane and its cards (a `filterPane` /
 `filterCard` default in the theme). Presentation only.
 
@@ -144,6 +150,9 @@ The default look of the filter pane and its cards (a `filterPane` /
 | Available-filter card | background `<#RRGGBB>`, border `<#RRGGBB>` |
 
 ## 7. Page background
+
+> **Emitted** by `seshat theme-gen` / `theme-compile` from committed design
+> tokens. Key paths verified against `reportThemeSchema-2.156.json`.
 
 The theme's page/wallpaper DEFAULT fill -- a flat default color and transparency
 for the page and wallpaper. This is the theme default ONLY.

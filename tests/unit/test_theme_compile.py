@@ -10,6 +10,7 @@ import yaml
 
 from seshat.theme_compile import (
     ThemeCompileError,
+    _human_owned_visual_styles,
     compile_theme,
     palette_from_tokens,
     seed_from_tokens,
@@ -402,3 +403,302 @@ def test_custom_font_pt_round_trips_through_generate_then_compile(tmp_path: Path
     out = compile_theme(tokens_path, out_path=None, force=True)
     recompiled = json.loads(out.read_text())
     assert recompiled["visualStyles"]["*"]["*"]["title"][0]["fontSize"] == 14
+
+
+# --- Findings 1+2+4: chrome/page token groups reach theme-compile --------------
+
+# A light (white-background) tokens doc: text roles clear AA on #FFFFFF, so a
+# gate failure in these tests can only come from the chrome/page checks under
+# test, never from check_contrast_or_raise firing first.
+LIGHT_TOKENS = {
+    "meta": {
+        "name": "light-preview-design-tokens",
+        "style": "generated (light)",
+        "version": "1",
+        "compiles_to": "themes/light-preview.theme.json",
+    },
+    "colors": {
+        "primary": "#2E7D5B",
+        "secondary": "#4FA57B",
+        "background": "#FFFFFF",
+        "text": {"primary": "#111111", "secondary": "#333333", "muted": "#555555"},
+        "sentiment": {"success": "#2E7D5B", "warning": "#B5832A", "danger": "#B23A3A"},
+        "data_colors": ["#2E7D5B", "#4FA57B", "#7BC79E"],
+    },
+}
+
+
+def test_tokens_chrome_group_compiles_to_section_5_cards(tmp_path: Path):
+    """A tokens YAML declaring chrome: compiles a theme.json with the section-5
+    cards (F1/F2 fix: chrome must actually reach the rendered theme). #808080
+    clears the 3:1 WCAG non-text floor against the #FFFFFF background (F4's
+    gate must not itself block a legitimately visible gridline/border)."""
+    doc = {
+        **LIGHT_TOKENS,
+        "chrome": {
+            "gridline": "#808080",
+            "border": "#808080",
+            "title_align": "center",
+            "data_labels": True,
+        },
+    }
+    tokens_path = _write_tokens(tmp_path, doc)
+    out = compile_theme(tokens_path, out_path=None, force=False)
+    theme = json.loads(out.read_text(encoding="utf-8"))
+    star = theme["visualStyles"]["*"]["*"]
+    assert star["categoryAxis"][0]["gridlineColor"]["solid"]["color"] == "#808080"
+    assert star["valueAxis"][0]["gridlineColor"]["solid"]["color"] == "#808080"
+    assert star["border"][0]["color"]["solid"]["color"] == "#808080"
+    assert star["title"][0]["alignment"] == "center"
+    assert star["labels"][0]["show"] is True
+
+
+def test_tokens_page_group_compiles_to_page_background_and_outspace(tmp_path: Path):
+    """A tokens YAML declaring page: compiles a theme.json with
+    visualStyles["page"]["*"] carrying background + outspace (F1/F2 fix)."""
+    doc = {
+        **LIGHT_TOKENS,
+        "page": {"background": "#F7F7F7", "wallpaper": "#EDEDED"},
+    }
+    tokens_path = _write_tokens(tmp_path, doc)
+    out = compile_theme(tokens_path, out_path=None, force=False)
+    theme = json.loads(out.read_text(encoding="utf-8"))
+    page_star = theme["visualStyles"]["page"]["*"]
+    assert page_star["background"][0]["color"]["solid"]["color"] == "#F7F7F7"
+    assert page_star["outspace"][0]["color"]["solid"]["color"] == "#EDEDED"
+
+
+def test_tokens_without_chrome_or_page_is_byte_identical_regression(tmp_path: Path):
+    """Neither group present -> byte-identical output (must not regress)."""
+    from seshat.theme_gen import ThemeSeed, generate
+
+    seed = ThemeSeed(
+        name="light-preview",
+        mode="light",
+        accent="#2E7D5B",
+        background="#FFFFFF",
+        text_primary="#111111",
+        text_secondary="#333333",
+        text_muted="#555555",
+        data_colors=("#2E7D5B", "#4FA57B", "#7BC79E"),
+        good="#2E7D5B",
+        neutral="#B5832A",
+        bad="#B23A3A",
+    )
+    generate(seed, tmp_path, force=True)
+    ref_theme = (tmp_path / "themes/light-preview.theme.json").read_bytes()
+    (tmp_path / "themes/light-preview.theme.json").unlink()
+
+    tokens_path = tmp_path / "design/tokens/light-preview-design-tokens.yaml"
+    out = compile_theme(tokens_path, out_path=None, force=False)
+    assert out.read_bytes() == ref_theme
+
+
+# --- Finding B: a present-but-malformed chrome/page group must raise, not
+# be silently treated as absent (which drops the requested section 5/6/7
+# output without a trace).
+
+
+def test_chrome_from_tokens_raises_on_non_mapping_value():
+    from seshat.theme_compile import chrome_from_tokens
+
+    with pytest.raises(ThemeCompileError, match="chrome"):
+        chrome_from_tokens({"chrome": []})
+
+
+def test_page_from_tokens_raises_on_non_mapping_value():
+    from seshat.theme_compile import page_from_tokens
+
+    with pytest.raises(ThemeCompileError, match="page"):
+        page_from_tokens({"page": "dark"})
+
+
+def test_chrome_from_tokens_absent_key_is_unchanged():
+    """Regression: a genuinely ABSENT chrome key is still None, not an error."""
+    from seshat.theme_compile import chrome_from_tokens
+
+    assert chrome_from_tokens({}) is None
+
+
+def test_chrome_from_tokens_empty_mapping_is_unchanged():
+    """Regression: a present-but-EMPTY chrome mapping is still None, not an
+    error -- that distinction (empty vs. wrong-typed) is the point of the fix."""
+    from seshat.theme_compile import chrome_from_tokens
+
+    assert chrome_from_tokens({"chrome": {}}) is None
+
+
+def test_page_from_tokens_absent_key_is_unchanged():
+    from seshat.theme_compile import page_from_tokens
+
+    assert page_from_tokens({}) is None
+
+
+def test_page_from_tokens_empty_mapping_is_unchanged():
+    from seshat.theme_compile import page_from_tokens
+
+    assert page_from_tokens({"page": {}}) is None
+
+
+def test_compile_raises_on_malformed_chrome_group_end_to_end(tmp_path: Path):
+    """A tokens file with `chrome: []` must refuse compilation, not silently
+    emit a theme with no section-5 cards at all."""
+    doc = {**LIGHT_TOKENS, "chrome": []}
+    tokens_path = _write_tokens(tmp_path, doc)
+    with pytest.raises(ThemeCompileError, match="chrome"):
+        compile_theme(tokens_path, out_path=None, force=False)
+
+
+def test_compile_raises_on_malformed_page_group_end_to_end(tmp_path: Path):
+    """A tokens file with `page: "dark"` must refuse compilation, not
+    silently emit a theme with no section-6/7 page cards at all."""
+    doc = {**LIGHT_TOKENS, "page": "dark"}
+    tokens_path = _write_tokens(tmp_path, doc)
+    with pytest.raises(ThemeCompileError, match="page"):
+        compile_theme(tokens_path, out_path=None, force=False)
+
+
+def test_compile_refuses_invisible_gridline_against_background(tmp_path: Path):
+    """A chrome.gridline invisible against the background (F4: the non-text
+    WCAG 3:1 gate must run at compile time too, not just at generate time)."""
+    doc = {
+        **LIGHT_TOKENS,
+        "chrome": {"gridline": "#FEFEFE"},  # near-invisible on #FFFFFF background
+    }
+    tokens_path = _write_tokens(tmp_path, doc)
+    with pytest.raises(ThemeCompileError, match="gridline"):
+        compile_theme(tokens_path, out_path=None, force=False)
+
+
+def test_compile_bad_hex_in_page_raises_theme_compile_error_not_style_card_error(
+    tmp_path: Path,
+):
+    """A bad hex in page: must surface as ThemeCompileError, never a raw
+    StyleCardError or traceback (compile boundary conversion)."""
+    doc = {**LIGHT_TOKENS, "page": {"background": "not-a-hex"}}
+    tokens_path = _write_tokens(tmp_path, doc)
+    with pytest.raises(ThemeCompileError, match="#RRGGBB"):
+        compile_theme(tokens_path, out_path=None, force=False)
+
+
+def test_generate_then_compile_round_trip_preserves_chrome_and_page(tmp_path: Path):
+    """Finding 2 acceptance test: theme-gen must serialize chrome/page into the
+    tokens YAML it writes, or a subsequent theme-compile from that same tokens
+    file reconstructs a seed missing them and DELETES the cards it just wrote.
+
+    Proven end-to-end before this fix:
+        theme-gen      -> star cards [border, categoryAxis, labels, title,
+                           valueAxis], page present: True
+        theme-compile from the tokens file it just wrote
+                       -> star cards [labels, title], page present: False
+    """
+    from seshat.theme_gen import ThemeSeed, generate
+
+    seed = ThemeSeed(
+        name="roundtrip-chrome-page",
+        mode="light",
+        accent="#2E7D5B",
+        background="#FFFFFF",
+        text_primary="#111111",
+        text_secondary="#333333",
+        text_muted="#555555",
+        data_colors=("#2E7D5B", "#4FA57B", "#7BC79E"),
+        good="#2E7D5B",
+        neutral="#B5832A",
+        bad="#B23A3A",
+        chrome={
+            "gridline": "#767676",
+            "border": "#767676",
+            "title_align": "left",
+            "data_labels": True,
+        },
+        page={"background": "#FFFFFF", "wallpaper": "#F3F2F1"},
+    )
+    generate(seed, tmp_path, force=True)
+    theme_path = tmp_path / "themes/roundtrip-chrome-page.theme.json"
+    gen_theme = json.loads(theme_path.read_text(encoding="utf-8"))
+    theme_path.unlink()
+
+    tokens_path = tmp_path / "design/tokens/roundtrip-chrome-page-design-tokens.yaml"
+    out = compile_theme(tokens_path, out_path=None, force=True)
+    recompiled = json.loads(out.read_text(encoding="utf-8"))
+
+    # The theme-gen visualStyles must be UNCHANGED across the round trip --
+    # not silently pruned back down to just title/labels.
+    assert recompiled["visualStyles"] == gen_theme["visualStyles"]
+    star = recompiled["visualStyles"]["*"]["*"]
+    assert set(star) == {"title", "labels", "categoryAxis", "valueAxis", "border"}
+    assert "page" in recompiled["visualStyles"]
+
+
+def test_generate_then_compile_round_trip_preserves_null_gridline_and_border(
+    tmp_path: Path,
+):
+    """Finding 2 edge case: chrome.gridline/border of None ("off") and
+    data_labels of False are the highest-risk YAML scalars to round-trip --
+    a wrong emission (the Python-repr string "None", or capitalized "False")
+    fails loudly on recompile (_require_hex rejects "None"; a non-bool value
+    trips data_labels' type check) rather than differing quietly. Assert the
+    full round trip is unchanged, exactly as the hex-value round-trip test
+    does."""
+    from seshat.theme_gen import ThemeSeed, generate
+
+    seed = ThemeSeed(
+        name="roundtrip-null-chrome",
+        mode="light",
+        accent="#2E7D5B",
+        background="#FFFFFF",
+        text_primary="#111111",
+        text_secondary="#333333",
+        text_muted="#555555",
+        data_colors=("#2E7D5B", "#4FA57B", "#7BC79E"),
+        good="#2E7D5B",
+        neutral="#B5832A",
+        bad="#B23A3A",
+        chrome={"gridline": None, "border": None, "data_labels": False},
+    )
+    generate(seed, tmp_path, force=True)
+    theme_path = tmp_path / "themes/roundtrip-null-chrome.theme.json"
+    gen_theme = json.loads(theme_path.read_text(encoding="utf-8"))
+    theme_path.unlink()
+
+    tokens_path = tmp_path / "design/tokens/roundtrip-null-chrome-design-tokens.yaml"
+    out = compile_theme(tokens_path, out_path=None, force=True)
+    recompiled = json.loads(out.read_text(encoding="utf-8"))
+
+    assert recompiled["visualStyles"] == gen_theme["visualStyles"]
+    star = recompiled["visualStyles"]["*"]["*"]
+    assert star["categoryAxis"] == [{"gridlineShow": False}]
+    assert star["valueAxis"] == [{"gridlineShow": False}]
+    assert star["border"] == [{"show": False}]
+    assert star["labels"][0]["show"] is False
+
+
+def test_round_trip_guard_generator_owns_everything_it_claims(tmp_path: Path):
+    """The finding-2 proof: generate a theme from tokens declaring chrome+page,
+    then _human_owned_visual_styles on the RENDERED visualStyles must be {} --
+    i.e. everything _GENERATOR_OWNED_CARDS claims to own is genuinely written
+    by the generator, so nothing real can be silently pruned-then-destroyed."""
+    doc = {
+        **LIGHT_TOKENS,
+        "chrome": {
+            "gridline": "#808080",
+            "border": "#808080",
+            "title_align": "right",
+            "data_labels": False,
+        },
+        "page": {
+            "background": "#F7F7F7",
+            "wallpaper": "#EDEDED",
+            "filter_pane_background": "#FFFFFF",
+            "filter_pane_text": "#111111",
+            "filter_card_applied": "#DDEEDD",
+            "filter_card_available": "#EEEEEE",
+        },
+    }
+    tokens_path = _write_tokens(tmp_path, doc)
+    out = compile_theme(tokens_path, out_path=None, force=False)
+    theme = json.loads(out.read_text(encoding="utf-8"))
+    assert (
+        _human_owned_visual_styles(theme["visualStyles"], theme["visualStyles"]) == {}
+    )

@@ -22,8 +22,13 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .color import composite_over, contrast_ratio, delta_e76, format_pt, is_valid_hex
+from .theme_style_cards import build_page_cards, build_star_cards
 
 AA_FLOOR = 4.5
+# WCAG 2.x non-text contrast floor. Gridlines, borders, and visual fills are
+# non-text elements: their floor is 3:1, not the 4.5:1 that applies to text. Kept
+# separate from AA_FLOOR so neither can be loosened by editing the other.
+AA_NON_TEXT_FLOOR = 3.0
 MIN_TITLE_FONT_PT = 12.0
 MIN_LABEL_FONT_PT = 9.0
 MIN_CATEGORICAL_DELTAE = (
@@ -77,6 +82,13 @@ class ThemeSeed:
     # transparency declared -- every existing caller is unaffected and no
     # transparency block is emitted.
     transparency: dict | None = None
+    # Section-5 visual chrome (gridline/border/title_align/data_labels/
+    # number_format). None (default) means no chrome declared -- every existing
+    # caller is unaffected and no section-5 card is emitted.
+    chrome: dict | None = None
+    # Sections 6+7 page cards (page/wallpaper fill, filter-pane LOOK). None
+    # (default) emits no visualStyles["page"] entry at all.
+    page: dict | None = None
 
 
 def _hex_to_hls(h: str) -> tuple[float, float, float]:
@@ -418,6 +430,52 @@ def check_font_floor_or_raise(seed: ThemeSeed) -> None:
         )
 
 
+def _non_text_ground(palette: dict, seed: ThemeSeed) -> str:
+    """The color gridlines/borders actually render against.
+
+    ``seed.page["background"]`` (theme-spec sections 6/7), when declared,
+    OVERRIDES the palette background as the page's real fill -- that is what
+    ``render_theme_json`` writes into ``visualStyles["page"]["*"]["background"]``.
+    Preferring it here keeps the gate measuring the same ground the compiled
+    theme actually paints, instead of a palette color the page may no longer
+    show. Falls back to the palette background when no ``page`` group is
+    declared, or when it is declared without a ``background`` key -- both keep
+    today's behavior unchanged.
+    """
+    page = seed.page or {}
+    declared = page.get("background")
+    return declared if declared is not None else palette["colors"]["background"]
+
+
+def check_non_text_contrast_or_raise(
+    palette: dict, seed: ThemeSeed, floor: float = AA_NON_TEXT_FLOOR
+) -> None:
+    """Every declared non-text chrome color must clear ``floor`` on its ground.
+
+    Gridlines and borders sit on the page background -- the EMITTED one (see
+    ``_non_text_ground``), not necessarily the palette's, since a declared
+    ``page.background`` overrides what the page actually renders. A ``None``
+    color is an explicit "off" declaration, not a faint color, so it is
+    skipped rather than failed. Raises ``ThemeGenError`` naming the offending
+    token.
+    """
+    chrome = seed.chrome or {}
+    ground = _non_text_ground(palette, seed)
+    for field in ("gridline", "border"):
+        color = chrome.get(field)
+        if color is None:
+            continue
+        if not is_valid_hex(color):
+            raise ThemeGenError(f"{field} is not a #RRGGBB hex: {color!r}")
+        ratio = contrast_ratio(color, ground)
+        if ratio < floor:
+            raise ThemeGenError(
+                f"{field} {color} has contrast {ratio:.2f}:1 against background "
+                f"{ground} -- below the {floor:g}:1 WCAG non-text floor; it would "
+                f"be effectively invisible"
+            )
+
+
 def _render_transparency_yaml(palette: dict) -> str:
     """A top-level ``transparency:`` block (sibling of ``colors:``), or "".
 
@@ -433,6 +491,69 @@ def _render_transparency_yaml(palette: dict) -> str:
         lines.append(f'    fg: "{spec["fg"]}"\n')
         lines.append(f"    transparency_pct: {format_pt(spec['transparency_pct'])}\n")
     return "".join(lines)
+
+
+def _yaml_scalar(value: object) -> str:
+    """One token value as a YAML scalar, in the shape ``theme_compile`` reads
+    back: a hex/string is double-quoted, ``None`` is the bare YAML null
+    (``null``, never the Python-repr string ``"None"``), a bool is lowercase
+    (``true``/``false``, never Python's ``True``/``False``), and a number
+    passes through ``format_pt`` (matching ``_render_transparency_yaml``'s
+    existing numeric convention).
+
+    A single choke point for every chrome/page scalar so
+    ``_render_chrome_yaml``/``_render_page_yaml`` stay a plain per-key loop
+    with no per-type branching of their own (keeps cyclomatic complexity low).
+    """
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return format_pt(value)
+    return f'"{value}"'
+
+
+def _render_token_group_yaml(header: str, group: dict | None, keys: tuple) -> str:
+    """A ``header:`` YAML block over ``keys`` present in ``group``, or "".
+
+    Shared by chrome/page: both are "a header line, then one ``  key: scalar``
+    line per declared key, in the fixed ``keys`` order" -- identical shape,
+    different vocabulary. Returns "" when ``group`` is None/empty so an
+    unset seed field emits nothing (byte-identical to a pre-chrome/page
+    tokens file).
+    """
+    if not group:
+        return ""
+    lines = [f"{header}:\n"]
+    for key in keys:
+        if key in group:
+            lines.append(f"  {key}: {_yaml_scalar(group[key])}\n")
+    return "".join(lines)
+
+
+def _render_chrome_yaml(chrome: dict | None) -> str:
+    """The optional ``chrome:`` block (theme-spec section 5), or "".
+
+    Key order and vocabulary match ``CHROME_TOKEN_KEYS`` -- the same list
+    ``theme_compile.chrome_from_tokens`` reads -- so the writer and reader
+    agree key-for-key (finding 2).
+    """
+    from .theme_style_cards import CHROME_TOKEN_KEYS
+
+    return _render_token_group_yaml("chrome", chrome, CHROME_TOKEN_KEYS)
+
+
+def _render_page_yaml(page: dict | None) -> str:
+    """The optional ``page:`` block (theme-spec sections 6+7), or "".
+
+    Key order and vocabulary match ``PAGE_TOKEN_KEYS`` -- the same list
+    ``theme_compile.page_from_tokens`` reads -- so the writer and reader agree
+    key-for-key (finding 2).
+    """
+    from .theme_style_cards import PAGE_TOKEN_KEYS
+
+    return _render_token_group_yaml("page", page, PAGE_TOKEN_KEYS)
 
 
 def render_tokens_yaml(palette: dict, seed: ThemeSeed) -> str:
@@ -469,6 +590,8 @@ def render_tokens_yaml(palette: dict, seed: ThemeSeed) -> str:
         "  # monochromatic ramp: CVD is a named-reviewer call (Principle V)\n"
         "  colorblind_considerate_categoricals: false\n"
         "  do_not_rely_on_color_alone: true\n"
+        f"{_render_chrome_yaml(seed.chrome)}"
+        f"{_render_page_yaml(seed.page)}"
     )
 
 
@@ -492,6 +615,18 @@ def render_theme_json(palette: dict, seed: ThemeSeed) -> str:
                 "transparency": format_pt(overlay["transparency_pct"]),
             }
         ]
+    # Merge, not replace: title/labels already carry font cards above, and
+    # build_star_cards can return "title": [{"alignment": ...}] / "labels":
+    # [{"show": ...}] -- a plain dict.update would drop fontFamily/fontSize.
+    for card, value in build_star_cards(seed.chrome or {}).items():
+        if card in star_style:
+            star_style[card][0].update(value[0])
+        else:
+            star_style[card] = value
+    visual_styles: dict = {"*": {"*": star_style}}
+    page_cards = build_page_cards(seed.page or {})
+    if page_cards:
+        visual_styles["page"] = {"*": page_cards}
     doc = {
         "name": seed.name,
         "dataColors": c["data_colors"],
@@ -501,7 +636,7 @@ def render_theme_json(palette: dict, seed: ThemeSeed) -> str:
         "good": c["sentiment"]["success"],
         "neutral": c["sentiment"]["warning"],
         "bad": c["sentiment"]["danger"],
-        "visualStyles": {"*": {"*": star_style}},
+        "visualStyles": visual_styles,
     }
     return json.dumps(doc, indent=2) + "\n"
 
@@ -621,6 +756,7 @@ def _validate_and_collect(
     check_categorical_distinctness_or_raise(palette)
     check_ramp_deltae_or_raise(palette, MIN_ADJACENT_DELTAE)
     check_composite_contrast_or_raise(palette)
+    check_non_text_contrast_or_raise(palette, seed)
     targets = _targets_for(seed, repo_root, palette)
     if not force:
         for p in targets:
