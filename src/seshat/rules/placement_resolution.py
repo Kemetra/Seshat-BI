@@ -289,6 +289,20 @@ def _finding(
     )
 
 
+def _unreadable_finding(rel: str) -> Finding:
+    """A tracked source-map that cannot be read is a broken governance artifact."""
+    return Finding(
+        rule_id=RULE_ID,
+        severity=Severity.ERROR,
+        message=(
+            f"{rel} could not be read as YAML (undecodable bytes or invalid syntax); "
+            "its gold_placement values cannot be checked, so the file must be fixed "
+            "or removed"
+        ),
+        locator=rel,
+    )
+
+
 def _star_maps(ctx: RuleContext) -> tuple[list[tuple[str, dict]], list[Finding]]:
     """``(rel_path, document)`` for every committed source-map that IS a star, plus an
     ERROR finding for every tracked source-map path that failed to read/parse.
@@ -310,24 +324,12 @@ def _star_maps(ctx: RuleContext) -> tuple[list[tuple[str, dict]], list[Finding]]
         if is_test_path(rel) or _stars.source_map_table(rel) is None:
             continue
         document = _load_yaml(ctx, rel)
-        if document is None:
-            if _is_unreadable(ctx, rel):
-                findings.append(
-                    Finding(
-                        rule_id=RULE_ID,
-                        severity=Severity.ERROR,
-                        message=(
-                            f"{rel} could not be read as YAML (undecodable bytes or "
-                            "invalid syntax); its gold_placement values cannot be "
-                            "checked, so the file must be fixed or removed"
-                        ),
-                        locator=rel,
-                    )
-                )
-            # Either reported above, or a parseable non-mapping (empty file, bare
-            # scalar, top-level list) -- which is not a star either way.
+        if document is None and _is_unreadable(ctx, rel):
+            findings.append(_unreadable_finding(rel))
             continue
-        if not _stars.is_star(document):
+        # A parseable non-mapping (empty file, bare scalar, top-level list) also
+        # loads as None -- not reported, and not a star either.
+        if document is None or not _stars.is_star(document):
             continue
         found.append((rel, document))
     return found, findings

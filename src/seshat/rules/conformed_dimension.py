@@ -115,6 +115,20 @@ def _is_unreadable(ctx: RuleContext, rel: str) -> bool:
     return False
 
 
+def _unreadable_finding(rel: str) -> Finding:
+    """A tracked source-map that cannot be read is a broken governance artifact."""
+    return Finding(
+        rule_id=RULE_ID,
+        severity=Severity.ERROR,
+        message=(
+            f"{rel} could not be read as YAML (undecodable bytes or invalid syntax); "
+            "any dimension it shares with another star cannot be checked for "
+            "conformance, so the file must be fixed or removed"
+        ),
+        locator=rel,
+    )
+
+
 def _unreadable_source_maps(ctx: RuleContext) -> list[Finding]:
     """ERROR for every tracked source-map path that failed to read/parse.
 
@@ -133,25 +147,13 @@ def _unreadable_source_maps(ctx: RuleContext) -> list[Finding]:
     both rules agree on which files are in scope; ``discover_stars`` itself is left
     untouched so its generator caller stays silent.
     """
-    findings: list[Finding] = []
-    for rel in sorted(ctx.tracked_files):
-        if is_test_path(rel) or _stars.source_map_table(rel) is None:
-            continue
-        if _is_unreadable(ctx, rel):
-            findings.append(
-                Finding(
-                    rule_id=RULE_ID,
-                    severity=Severity.ERROR,
-                    message=(
-                        f"{rel} could not be read as YAML (undecodable bytes or "
-                        "invalid syntax); any dimension it shares with another star "
-                        "cannot be checked for conformance, so the file must be "
-                        "fixed or removed"
-                    ),
-                    locator=rel,
-                )
-            )
-    return findings
+    return [
+        _unreadable_finding(rel)
+        for rel in sorted(ctx.tracked_files)
+        if not is_test_path(rel)
+        and _stars.source_map_table(rel) is not None
+        and _is_unreadable(ctx, rel)
+    ]
 
 
 def _attr_silver_types(data: dict, dim_name: str) -> dict[str, str]:
