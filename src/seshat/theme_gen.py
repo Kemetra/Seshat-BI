@@ -22,7 +22,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .color import composite_over, contrast_ratio, delta_e76, format_pt, is_valid_hex
-from .theme_style_cards import build_star_cards
+from .theme_style_cards import build_page_cards, build_star_cards
 
 AA_FLOOR = 4.5
 MIN_TITLE_FONT_PT = 12.0
@@ -82,6 +82,9 @@ class ThemeSeed:
     # number_format). None (default) means no chrome declared -- every existing
     # caller is unaffected and no section-5 card is emitted.
     chrome: dict | None = None
+    # Sections 6+7 page cards (page/wallpaper fill, filter-pane LOOK). None
+    # (default) emits no visualStyles["page"] entry at all.
+    page: dict | None = None
 
 
 def _hex_to_hls(h: str) -> tuple[float, float, float]:
@@ -505,6 +508,10 @@ def render_theme_json(palette: dict, seed: ThemeSeed) -> str:
             star_style[card][0].update(value[0])
         else:
             star_style[card] = value
+    visual_styles: dict = {"*": {"*": star_style}}
+    page_cards = build_page_cards(seed.page or {})
+    if page_cards:
+        visual_styles["page"] = {"*": page_cards}
     doc = {
         "name": seed.name,
         "dataColors": c["data_colors"],
@@ -514,7 +521,7 @@ def render_theme_json(palette: dict, seed: ThemeSeed) -> str:
         "good": c["sentiment"]["success"],
         "neutral": c["sentiment"]["warning"],
         "bad": c["sentiment"]["danger"],
-        "visualStyles": {"*": {"*": star_style}},
+        "visualStyles": visual_styles,
     }
     return json.dumps(doc, indent=2) + "\n"
 

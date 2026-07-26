@@ -40,6 +40,20 @@ def _require_hex(value: object, field: str) -> str:
     return value
 
 
+def _require_pct(value: object, field: str) -> float:
+    """A transparency percent in [0, 100], or raise naming the offending field.
+
+    Mirrors ``_require_hex``'s "validate and return, or raise cleanly" shape so
+    every token guard in this module fails the same way (a ``StyleCardError``
+    naming the field, never a bare traceback).
+    """
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise StyleCardError(f"{field} must be a number, got {value!r}")
+    if not (0.0 <= float(value) <= 100.0):
+        raise StyleCardError(f"{field} must be in [0, 100], got {value!r}")
+    return float(value)
+
+
 def _axis_card(gridline: object) -> list[dict]:
     """One axis card: gridline color when declared, else gridlines off.
 
@@ -106,5 +120,67 @@ def build_star_cards(chrome: dict) -> dict[str, list[dict]]:
         if not isinstance(show, bool):
             raise StyleCardError(f"data_labels must be true or false, got {show!r}")
         cards["labels"] = [{"show": show}]
+
+    return cards
+
+
+def _colored_card(page: dict, color_key: str, pct_key: str) -> list[dict] | None:
+    """One color+transparency card, or None when the color is not declared."""
+    if color_key not in page:
+        return None
+    color = _require_hex(page[color_key], color_key)
+    card: dict = {"color": _fill(color)}
+    if pct_key in page:
+        card["transparency"] = _require_pct(page[pct_key], pct_key)
+    return [card]
+
+
+def build_page_cards(page: dict) -> dict[str, list[dict]]:
+    """Sections 6 and 7 cards for ``visualStyles["page"]["*"]``.
+
+    Both spec sections land under the SAME ``page`` visual type per the published
+    schema, which admits exactly ten cards there; four are in scope:
+    ``background`` and ``outspace`` (section 7 -- ``outspace`` IS the wallpaper),
+    plus ``outspacePane`` and ``filterCard`` (section 6).
+
+    Section 6 styles the filter pane's LOOK only. Nothing here reads or writes
+    filter state, selections, or bound fields.
+    """
+    if not page:
+        return {}
+    cards: dict[str, list[dict]] = {}
+
+    background = _colored_card(page, "background", "background_transparency")
+    if background is not None:
+        cards["background"] = background
+
+    wallpaper = _colored_card(page, "wallpaper", "wallpaper_transparency")
+    if wallpaper is not None:
+        cards["outspace"] = wallpaper
+
+    pane: dict = {}
+    if "filter_pane_background" in page:
+        pane["backgroundColor"] = _fill(
+            _require_hex(page["filter_pane_background"], "filter_pane_background")
+        )
+    if "filter_pane_text" in page:
+        pane["foregroundColor"] = _fill(
+            _require_hex(page["filter_pane_text"], "filter_pane_text")
+        )
+    if pane:
+        cards["outspacePane"] = [pane]
+
+    # filterCard is an ARRAY discriminated by $id -- one object per state.
+    filter_cards: list[dict] = []
+    for state, key in (
+        ("Applied", "filter_card_applied"),
+        ("Available", "filter_card_available"),
+    ):
+        if key in page:
+            filter_cards.append(
+                {"$id": state, "backgroundColor": _fill(_require_hex(page[key], key))}
+            )
+    if filter_cards:
+        cards["filterCard"] = filter_cards
 
     return cards

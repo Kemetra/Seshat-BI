@@ -57,3 +57,26 @@ def test_chrome_title_align_preserves_the_font_cards():
     assert star["title"][0]["alignment"] == "left"
     assert star["labels"][0]["fontFamily"] == "Segoe UI"
     assert star["labels"][0]["show"] is True
+
+
+def test_no_page_tokens_emits_no_page_visual_type():
+    """Regression: absent page tokens leave visualStyles shape unchanged."""
+    seed = _seed()
+    doc = json.loads(render_theme_json(build_palette(seed), seed))
+    assert set(doc["visualStyles"]) == {"*"}
+
+
+def test_page_tokens_emit_page_visual_type():
+    seed = _seed(page={"background": "#FFFFFF", "wallpaper": "#F3F2F1"})
+    doc = json.loads(render_theme_json(build_palette(seed), seed))
+    page = doc["visualStyles"]["page"]["*"]
+    assert set(page) == {"background", "outspace"}
+
+
+def test_page_cards_survive_a_compile_round_trip():
+    """The Task-1 carve-out must not read generated page cards as hand-tuning."""
+    from seshat.theme_compile import _human_owned_visual_styles
+
+    seed = _seed(page={"background": "#FFFFFF"}, chrome={"gridline": "#E1DFDD"})
+    doc = json.loads(render_theme_json(build_palette(seed), seed))
+    assert _human_owned_visual_styles(doc["visualStyles"]) == {}
