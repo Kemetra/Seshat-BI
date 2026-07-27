@@ -224,18 +224,30 @@ def _validated_transparency_fg(role: str, spec: dict) -> object:
 
 
 # Validate and return one spec's ``transparency_pct`` (T18: number in [0, 100]).
-def _validated_transparency_pct(role: str, spec: dict) -> float:
-    pct = spec.get("transparency_pct")
+def _validated_pct(pct: object, label: str) -> float:
+    """A percentage token as a float, or a ``ThemeGenError`` naming ``label``.
+
+    Shared by the T18 ``transparency`` roles and ``page.background_transparency``
+    (#521): both feed ``composite_over``, which raises a bare ``ValueError`` for
+    an out-of-range pct and a bare ``TypeError`` for a string -- either of which
+    would reach the user as a traceback naming neither the token nor the file,
+    breaking ``ThemeGenError``'s "surfaced cleanly" contract. ``label`` carries
+    the caller's field name so one message shape serves both.
+
+    ``bool`` is rejected explicitly: it is an ``int`` subclass, so ``True`` would
+    otherwise pass the range check and silently composite at 1% opacity.
+    """
     if not isinstance(pct, (int, float)) or isinstance(pct, bool):
-        raise ThemeGenError(
-            f"transparency role {role!r} transparency_pct must be a number, got {pct!r}"
-        )
+        raise ThemeGenError(f"{label} must be a number, got {pct!r}")
     if not (0.0 <= float(pct) <= 100.0):
-        raise ThemeGenError(
-            f"transparency role {role!r} transparency_pct {pct!r} is out of "
-            f"range -- must be in [0, 100]"
-        )
+        raise ThemeGenError(f"{label} {pct!r} is out of range -- must be in [0, 100]")
     return float(pct)
+
+
+def _validated_transparency_pct(role: str, spec: dict) -> float:
+    return _validated_pct(
+        spec.get("transparency_pct"), f"transparency role {role!r} transparency_pct"
+    )
 
 
 # Validate one transparency ``role``/``spec`` pair; return its clean spec.
@@ -515,24 +527,9 @@ def _non_text_ground(palette: dict, seed: ThemeSeed) -> str:
     pct = page.get("background_transparency")
     if pct is None:
         return declared
-    # Validate BEFORE compositing. ``composite_over`` raises a bare ValueError
-    # for an out-of-range pct and a bare TypeError for a string, and treats
-    # ``True`` as 1% -- so passing the raw token through would replace the clean
-    # field-named StyleCardError the render path already gives with a traceback
-    # naming neither the token nor the file, breaking ThemeGenError's
-    # "surfaced cleanly" contract for library callers of this gate.
-    # ``bool`` is excluded explicitly: it is an int subclass, so ``True`` would
-    # otherwise pass the range check and silently composite at 1% opacity.
-    if isinstance(pct, bool) or not isinstance(pct, (int, float)):
-        raise ThemeGenError(
-            f"page.background_transparency must be a number in [0, 100], got "
-            f"{pct!r} ({type(pct).__name__})"
-        )
-    if not 0 <= pct <= 100:
-        raise ThemeGenError(
-            f"page.background_transparency must be in [0, 100], got {pct!r}"
-        )
-    return composite_over(declared, palette_bg, pct)
+    return composite_over(
+        declared, palette_bg, _validated_pct(pct, "page.background_transparency")
+    )
 
 
 def check_non_text_contrast_or_raise(
@@ -853,6 +850,21 @@ def _gate_and_render(seed: ThemeSeed, repo_root: Path) -> dict[Path, str]:
     return _targets_for(seed, repo_root, palette)
 
 
+def _refuse_existing_targets(targets: dict[Path, str], force: bool) -> None:
+    """Refuse a target that already exists unless ``force``.
+
+    A collision is a filesystem fact, not a token-value fault, so callers that
+    attribute value failures to a derivation (``generate_pair``) must run this
+    OUTSIDE that attribution -- its "use --force" guidance has to reach the user
+    verbatim rather than wrapped in advice about adjusting token values.
+    """
+    if force:
+        return
+    for p in targets:
+        if p.exists():
+            raise ThemeGenError(f"{p} exists -- refusing to overwrite (use --force)")
+
+
 def _validate_and_collect(
     seed: ThemeSeed, repo_root: Path, force: bool
 ) -> dict[Path, str]:
@@ -865,12 +877,7 @@ def _validate_and_collect(
     seeds (e.g. a light/dark pair) can validate all of them before writing any.
     """
     targets = _gate_and_render(seed, repo_root)
-    if not force:
-        for p in targets:
-            if p.exists():
-                raise ThemeGenError(
-                    f"{p} exists -- refusing to overwrite (use --force)"
-                )
+    _refuse_existing_targets(targets, force)
     return targets
 
 
@@ -933,12 +940,7 @@ def generate_pair(
         ) from exc
     # OUTSIDE the wrapper: a collision is a filesystem fact, not a derivation
     # fault, and its "use --force" guidance must reach the caller verbatim.
-    if not force:
-        for p in dark_targets:
-            if p.exists():
-                raise ThemeGenError(
-                    f"{p} exists -- refusing to overwrite (use --force)"
-                )
+    _refuse_existing_targets(dark_targets, force)
     light_written = _write_targets(light_targets)
     dark_written = _write_targets(dark_targets)
     return light_written, dark_written
