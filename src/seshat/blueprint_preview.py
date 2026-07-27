@@ -512,6 +512,50 @@ def _page_order_label(page_name: str, composition: dict[str, Any]) -> str:
     return "page ?/?"
 
 
+def _page_header(
+    blueprint: dict[str, Any],
+    page_name: str,
+    order_label: str,
+    origin_x: int,
+    origin_y: int,
+    style: dict[str, str | None],
+) -> str:
+    """The three page-identity lines: title, audience, business question.
+
+    All three are primary content, so all three take ``ink`` -- before #521
+    finding 5 only the title was filled, leaving the other two at SVG-default
+    black on a dark canvas.
+    """
+    audience = str(blueprint.get("audience", ""))
+    business_question = str(blueprint.get("business_question", ""))
+    ink = style.get("ink")
+    return "".join(
+        (
+            _text(
+                origin_x,
+                origin_y + 10,
+                f"page: {page_name} ({order_label})",
+                cls="page-title",
+                fill=ink,
+            ),
+            _text(
+                origin_x,
+                origin_y + 24,
+                f"audience: {audience}",
+                cls="page-audience",
+                fill=ink,
+            ),
+            _text(
+                origin_x,
+                origin_y + 38,
+                f"question: {business_question}",
+                cls="page-question",
+                fill=ink,
+            ),
+        )
+    )
+
+
 def _page_svg(
     blueprint: dict[str, Any],
     visual_specs: list[dict[str, Any]],
@@ -524,8 +568,6 @@ def _page_svg(
     origin_x, origin_y = _margin(profile)
 
     page_name = str(blueprint.get("page_name", "<page>"))
-    audience = str(blueprint.get("audience", ""))
-    business_question = str(blueprint.get("business_question", ""))
     sections = (
         blueprint.get("sections") if isinstance(blueprint.get("sections"), dict) else {}
     )
@@ -537,27 +579,7 @@ def _page_svg(
         f'data-page-id="{_esc(page_name)}">',
         f'<rect x="0" y="0" width="{canvas_w}" height="{canvas_h}" class="canvas"'
         f"{_style_attr('fill', style.get('ground'))} />",
-        _text(
-            origin_x,
-            origin_y + 10,
-            f"page: {page_name} ({order_label})",
-            cls="page-title",
-            fill=style.get("ink"),
-        ),
-        _text(
-            origin_x,
-            origin_y + 24,
-            f"audience: {audience}",
-            cls="page-audience",
-            fill=style.get("ink"),
-        ),
-        _text(
-            origin_x,
-            origin_y + 38,
-            f"question: {business_question}",
-            cls="page-question",
-            fill=style.get("ink"),
-        ),
+        _page_header(blueprint, page_name, order_label, origin_x, origin_y, style),
     ]
 
     for section_name in _SECTION_ORDER:
