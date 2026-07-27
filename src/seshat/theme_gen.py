@@ -22,7 +22,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .color import composite_over, contrast_ratio, delta_e76, format_pt, is_valid_hex
-from .theme_style_cards import build_page_cards, build_star_cards
+from .theme_style_cards import StyleCardError, build_page_cards, build_star_cards
 
 AA_FLOOR = 4.5
 # WCAG 2.x non-text contrast floor. Gridlines, borders, and visual fills are
@@ -39,6 +39,24 @@ MIN_ADJACENT_DELTAE = (
 )
 TAP_TARGET_MIN_PX = 44  # doc-only floor (WCAG 2.5.8); never written to any artifact
 _TEXT_ROLES = ("primary", "secondary", "muted")
+
+# Which section 5/6/7 token keys hold a COLOR, and so must dark-derive (#521
+# finding 2). Deliberately a closed set rather than a "looks like a hex" sniff:
+# a value-shape guess would silently reclassify a key whose meaning changed.
+# ``test_theme_gen_page_derivation`` pins these as subsets of the shipped
+# CHROME_TOKEN_KEYS/PAGE_TOKEN_KEYS vocabularies AND pins that colour plus
+# non-colour keys EXHAUST each vocabulary -- so adding a token key without
+# classifying it here fails at test time instead of passing a light-mode colour
+# into a dark theme, which is exactly how finding 2 arose.
+_CHROME_COLOR_KEYS = ("gridline", "border")
+_PAGE_COLOR_KEYS = (
+    "background",
+    "wallpaper",
+    "filter_pane_background",
+    "filter_pane_text",
+    "filter_card_applied",
+    "filter_card_available",
+)
 
 # OWNER-ratified 2026-07-08 (T18): the transparency-role schema. Choice 1 froze a
 # SINGLE opt-in ``overlay`` role (background-overlay panels / card fills); choice 2
@@ -120,10 +138,43 @@ def _invert_lightness(hex_color: str) -> str:
     return _hls_to_hex(h, 1.0 - lightness, s)
 
 
+def _derive_group(group: dict | None, color_keys: tuple[str, ...]) -> dict | None:
+    """A ``chrome``/``page`` token group with its COLOR values dark-derived.
+
+    Only keys in ``color_keys`` invert; every other key (transparencies,
+    ``title_align``, ``data_labels``, ``number_format``) passes through, since a
+    50% transparency or a "left" alignment has no dark counterpart. Only keys
+    the author actually DECLARED appear in the result -- an absent key stays
+    absent rather than being fabricated at a derived default. An explicit
+    ``None`` is an "off" declaration, not a faint color, so it survives as
+    ``None`` instead of being fed to ``_invert_lightness``.
+
+    Returns the group unchanged (identity, including ``None``/empty) when it
+    declares no color key at all, so the overwhelmingly common seed that
+    declares neither group derives byte-identically to before #521.
+    """
+    if not group:
+        return group
+    return {
+        key: (
+            _invert_lightness(value)
+            if key in color_keys and value is not None
+            else value
+        )
+        for key, value in group.items()
+    }
+
+
 def derive_dark_seed(light: ThemeSeed) -> ThemeSeed:
     """Derive a dark-mode ThemeSeed from a light one by inverting bg/text
     lightness. Accent/data_colors/sentiment/fonts pass through unchanged --
     only the surface (background) and on-surface (text) roles invert.
+
+    The ``chrome``/``page`` groups (theme-spec sections 5/6/7) derive too: every
+    COLOR-valued key in them inverts, while transparencies and formatting keys
+    pass through. Before #521 the whole group passed through, so a light seed's
+    ``page.background: #FFFFFF`` reached the "dark" theme intact and the emitted
+    page card painted a white page under inverted palette text.
 
     Refuses a non-light input up front: --pair on an already-dark seed would
     otherwise double-invert (light -> dark -> "dark" that is really light).
@@ -141,6 +192,8 @@ def derive_dark_seed(light: ThemeSeed) -> ThemeSeed:
         text_primary=_invert_lightness(light.text_primary),
         text_secondary=_invert_lightness(light.text_secondary),
         text_muted=_invert_lightness(light.text_muted),
+        chrome=_derive_group(light.chrome, _CHROME_COLOR_KEYS),
+        page=_derive_group(light.page, _PAGE_COLOR_KEYS),
     )
 
 
@@ -441,10 +494,26 @@ def _non_text_ground(palette: dict, seed: ThemeSeed) -> str:
     show. Falls back to the palette background when no ``page`` group is
     declared, or when it is declared without a ``background`` key -- both keep
     today's behavior unchanged.
+
+    A declared ``background_transparency`` is composited in before the color is
+    returned (#521 finding 1): a page background is only the real ground to the
+    extent it is opaque. Measuring the raw declared color was wrong in BOTH
+    directions -- it let a near-white border pass at 14.60:1 against a
+    fully-transparent dark page while truly rendering at 1.23:1, and it refused
+    a dark border at 1.43:1 against a fully-transparent white page that truly
+    rendered at 12.55:1. So this composites rather than applying a one-sided
+    tolerance. Per ``composite_over``, 0 is fully opaque (ground is the declared
+    color) and 100 fully transparent (ground is the palette background).
     """
     page = seed.page or {}
     declared = page.get("background")
-    return declared if declared is not None else palette["colors"]["background"]
+    palette_bg = palette["colors"]["background"]
+    if declared is None:
+        return palette_bg
+    pct = page.get("background_transparency")
+    if pct is None:
+        return declared
+    return composite_over(declared, palette_bg, pct)
 
 
 def check_non_text_contrast_or_raise(
@@ -803,7 +872,22 @@ def generate_pair(
         )
     light_targets = _validate_and_collect(light, repo_root, force)
     dark = derive_dark_seed(light)
-    dark_targets = _validate_and_collect(dark, repo_root, force)
+    try:
+        dark_targets = _validate_and_collect(dark, repo_root, force)
+    except (ThemeGenError, StyleCardError) as exc:
+        # The dark seed is DERIVED, not authored, so an unattributed gate error
+        # here reads as a fault in the author's tokens and sends them to debug
+        # the wrong file. Inverting both halves of a pair does not preserve
+        # their contrast ratio, so a filter-pane pair that cleared AA in light
+        # mode can legitimately fail it once derived (issue #521, D1: that
+        # refusal is correct and stays -- only its attribution was missing).
+        raise ThemeGenError(
+            f"--pair: the DERIVED dark seed {dark.name!r} failed validation: "
+            f"{exc} -- this is the dark seed derived from your light tokens, "
+            f"not the light tokens themselves; adjust the light values it "
+            f"derives from, or author the dark theme explicitly instead of "
+            f"using --pair"
+        ) from exc
     light_written = _write_targets(light_targets)
     dark_written = _write_targets(dark_targets)
     return light_written, dark_written
