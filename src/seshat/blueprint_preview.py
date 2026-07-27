@@ -152,9 +152,21 @@ def _ground_from_tokens(tokens: dict[str, Any], colors: dict[str, Any]) -> str |
     composited in (owner ruling D3): preview fidelity stays approximate rather
     than reimplementing Power BI's compositor in SVG.
 
-    Key PRESENCE decides the fallback, matching ``_line_color_from_tokens``: an
-    explicit ``page.background: null`` is a real declaration, and falling back
-    keeps the canvas from emitting an empty fill.
+    Falls back on ``None``, NOT on key absence -- byte-for-byte the same
+    None-based test as ``theme_gen._non_text_ground``, which is the helper this
+    must agree with, since it resolves the ground the compiled theme measures.
+
+    This is deliberately the OPPOSITE of ``_line_color_from_tokens``, which
+    decides on key PRESENCE (``"border" in chrome``) and returns ``None`` for an
+    explicit ``chrome.border: null``. The asymmetry is real, not an oversight:
+    borders-off is a renderable intent (draw no stroke), while canvas-fill-off is
+    not -- a page always paints something. Note the compiled theme does not merely
+    ignore ``page.background: null``, it FAILS CLOSED on it
+    (``build_page_cards`` raises ``StyleCardError``: "background must be a
+    #RRGGBB hex color, got None"), so a preview that renders here is showing a
+    tokens file ``theme-compile`` would refuse. That is within this module's
+    stated bounds -- the preview cannot produce a wrong Power BI artifact and
+    ``PREVIEW_DISCLAIMER`` grants no approval -- but it is not agreement.
     """
     page = tokens.get("page")
     page = page if isinstance(page, dict) else {}

@@ -44,10 +44,28 @@ def _write_min_inputs(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _render(d: Path, tokens: Path | str | None) -> str:
+def _write_one_visual_spec(tmp_path: Path) -> Path:
+    """A minimal visual spec, so ``_visual_group`` actually emits its four text
+    sites. Without one the visuals block renders EMPTY and any assertion over
+    the whole SVG silently skips a quarter of the ``_text`` call sites."""
+    p = tmp_path / "visual.yaml"
+    p.write_text(
+        "visual_id: v1\n"
+        "visual_type: card\n"
+        "business_question: why\n"
+        "metric_contract:\n  name: c1\n"
+        "position:\n  section: kpi_strip\n  x: 0\n  y: 0\n  width: 1\n  height: 1\n",
+        encoding="utf-8",
+    )
+    return p
+
+
+def _render(
+    d: Path, tokens: Path | str | None, visuals: list[Path | str] | None = None
+) -> str:
     return render_blueprint_preview(
         blueprint_path=d / "bp.yaml",
-        visual_spec_paths=[],
+        visual_spec_paths=visuals if visuals is not None else [],
         composition_path=d / "comp.yaml",
         grid_path=d / "grid.yaml",
         tokens_path=tokens,
@@ -168,9 +186,14 @@ def _texts_without_fill(svg: str) -> list[str]:
 def test_every_text_element_is_filled_when_tokens_are_given(tmp_path: Path) -> None:
     """On a dark canvas an unfilled <text> falls back to SVG-default black.
 
-    Only 3 of 14 ``_text`` call sites passed ``fill``; four block helpers never
+    Only 3 of 16 ``_text`` call sites passed ``fill``; four block helpers never
     received the style dict at all. Asserting over EVERY emitted <text> rather
     than a named few keeps a newly-added site from silently reintroducing this.
+
+    The fixture must exercise every block that owns a text site -- narrative,
+    slicers, footer, navigation AND the visual group. A review of the first
+    version caught it passing ``visual_spec_paths=[]``, which rendered no visual
+    block at all and so skipped 4 of the 16 sites while still passing.
     """
     d = _write_min_inputs(tmp_path)
     (d / "comp.yaml").write_text(
@@ -187,7 +210,11 @@ def test_every_text_element_is_filled_when_tokens_are_given(tmp_path: Path) -> N
         "mobile_notes:\n  grid_ref: m.yaml\n",
         encoding="utf-8",
     )
-    unfilled = _texts_without_fill(_render(d, d / "tokens.yaml"))
+    svg = _render(d, d / "tokens.yaml", visuals=[_write_one_visual_spec(d)])
+    # Guard the guard: if the visual block silently stops rendering, the
+    # whole-SVG assertion below would go partly vacuous without failing.
+    assert 'class="visual"' in svg, "fixture did not render the visual block"
+    unfilled = _texts_without_fill(svg)
     assert not unfilled, f"{len(unfilled)} <text> element(s) carry no fill: {unfilled}"
 
 
