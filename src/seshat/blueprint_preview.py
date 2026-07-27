@@ -138,6 +138,44 @@ def _line_color_from_tokens(tokens: dict[str, Any]) -> str | None:
     return colors.get("secondary", _DEFAULT_STYLE["line"])
 
 
+def _ground_from_tokens(tokens: dict[str, Any], colors: dict[str, Any]) -> str | None:
+    """The page canvas fill: ``page.background``, else ``colors.background``.
+
+    A declared ``page.background`` (theme-spec sections 6/7) OVERRIDES the
+    palette background as the page's real fill -- ``theme_gen._non_text_ground``
+    documents exactly that, and it is what lands in
+    ``visualStyles["page"]["*"]["background"]``. Reading only ``colors`` made
+    the preview show a different page color than Desktop (#521 finding 6).
+
+    Still sourced from TOKENS, never from an emitted theme JSON, so the spec's
+    "render from tokens" rule holds. Transparency and wallpaper are NOT
+    composited in (owner ruling D3): preview fidelity stays approximate rather
+    than reimplementing Power BI's compositor in SVG.
+
+    Falls back on ``None``, NOT on key absence -- byte-for-byte the same
+    None-based test as ``theme_gen._non_text_ground``, which is the helper this
+    must agree with, since it resolves the ground the compiled theme measures.
+
+    This is deliberately the OPPOSITE of ``_line_color_from_tokens``, which
+    decides on key PRESENCE (``"border" in chrome``) and returns ``None`` for an
+    explicit ``chrome.border: null``. The asymmetry is real, not an oversight:
+    borders-off is a renderable intent (draw no stroke), while canvas-fill-off is
+    not -- a page always paints something. Note the compiled theme does not merely
+    ignore ``page.background: null``, it FAILS CLOSED on it
+    (``build_page_cards`` raises ``StyleCardError``: "background must be a
+    #RRGGBB hex color, got None"), so a preview that renders here is showing a
+    tokens file ``theme-compile`` would refuse. That is within this module's
+    stated bounds -- the preview cannot produce a wrong Power BI artifact and
+    ``PREVIEW_DISCLAIMER`` grants no approval -- but it is not agreement.
+    """
+    page = tokens.get("page")
+    page = page if isinstance(page, dict) else {}
+    declared = page.get("background")
+    if declared is not None:
+        return declared
+    return colors.get("background", _DEFAULT_STYLE["ground"])
+
+
 def _style_from_tokens(tokens_path: Path | str | None) -> dict[str, str | None]:
     """Preview colors from a committed tokens YAML, or nothing at all.
 
@@ -161,6 +199,14 @@ def _style_from_tokens(tokens_path: Path | str | None) -> dict[str, str | None]:
     if tokens_path is None:
         return {}
     tokens = _load_yaml_mapping(tokens_path)
+    if not tokens:
+        # ABSENT (or empty) -- the documented nonfatal degrade state, same as
+        # omitting tokens_path: the render is monochrome, not an error. Before
+        # #521 finding 3 the loader returned {} here and the `colors` check
+        # below raised anyway, reporting that a file which does not exist "has
+        # no 'colors' mapping" -- contradicting the committed degrade/raise
+        # split and naming a nonexistent file as malformed.
+        return {}
     colors = tokens.get("colors")
     if not isinstance(colors, dict):
         raise PreviewInputError(
@@ -168,7 +214,7 @@ def _style_from_tokens(tokens_path: Path | str | None) -> dict[str, str | None]:
         )
     text = colors.get("text") if isinstance(colors.get("text"), dict) else {}
     return {
-        "ground": colors.get("background", _DEFAULT_STYLE["ground"]),
+        "ground": _ground_from_tokens(tokens, colors),
         "ink": text.get("primary", _DEFAULT_STYLE["ink"]),
         "ink_muted": text.get("muted", _DEFAULT_STYLE["ink_muted"]),
         "line": _line_color_from_tokens(tokens),
@@ -315,9 +361,27 @@ def _visual_group(
         f'data-visual-type="{esc_type}" data-contract="{esc_contract}">',
         f'<rect x="{x}" y="{y}" width="{width}" height="{height}" '
         f'class="visual-box"{_style_attr("stroke", style.get("line"))} />',
-        _text(x + 4, y + 14, f"{title} [{visual_type}]", cls="visual-title"),
-        _text(x + 4, y + 28, f"Q: {question}", cls="visual-question"),
-        _text(x + 4, y + 42, f"contract: {contract_name}", cls="visual-contract"),
+        _text(
+            x + 4,
+            y + 14,
+            f"{title} [{visual_type}]",
+            cls="visual-title",
+            fill=style.get("ink"),
+        ),
+        _text(
+            x + 4,
+            y + 28,
+            f"Q: {question}",
+            cls="visual-question",
+            fill=style.get("ink"),
+        ),
+        _text(
+            x + 4,
+            y + 42,
+            f"contract: {contract_name}",
+            cls="visual-contract",
+            fill=style.get("ink_muted"),
+        ),
         _text(
             x + 4,
             y + 56,
@@ -330,7 +394,9 @@ def _visual_group(
     return "".join(lines)
 
 
-def _narrative_block(narrative: dict[str, Any], x: int, y: int) -> str:
+def _narrative_block(
+    narrative: dict[str, Any], x: int, y: int, style: dict[str, str | None]
+) -> str:
     if not narrative:
         return ""
     rows = [
@@ -339,27 +405,37 @@ def _narrative_block(narrative: dict[str, Any], x: int, y: int) -> str:
         ("recommended_action", narrative.get("recommended_action")),
         ("key_exception", narrative.get("key_exception")),
     ]
+    ink = style.get("ink")
     lines = [f'<g class="narrative" transform="translate({x},{y})">']
     for i, (label, value) in enumerate(rows):
         text = str(value) if value else _PLACEHOLDER
-        lines.append(_text(0, i * 14, f"{label}: {text}", cls="narrative-line"))
+        lines.append(
+            _text(0, i * 14, f"{label}: {text}", cls="narrative-line", fill=ink)
+        )
     lines.append("</g>")
     return "".join(lines)
 
 
-def _slicers_block(slicers: list[dict[str, Any]], x: int, y: int) -> str:
+def _slicers_block(
+    slicers: list[dict[str, Any]], x: int, y: int, style: dict[str, str | None]
+) -> str:
     typed = [s for s in slicers if isinstance(s, dict)]
     typed.sort(key=lambda s: str(s.get("field", "")))
+    ink = style.get("ink")
     lines = [f'<g class="slicers" transform="translate({x},{y})">']
     for i, slicer in enumerate(typed):
         field = str(slicer.get("field", ""))
         stype = str(slicer.get("type", ""))
-        lines.append(_text(0, i * 14, f"slicer: {field} ({stype})", cls="slicer-line"))
+        lines.append(
+            _text(0, i * 14, f"slicer: {field} ({stype})", cls="slicer-line", fill=ink)
+        )
     lines.append("</g>")
     return "".join(lines)
 
 
-def _footer_block(blueprint: dict[str, Any], x: int, y: int) -> str:
+def _footer_block(
+    blueprint: dict[str, Any], x: int, y: int, style: dict[str, str | None]
+) -> str:
     theme = (
         blueprint.get("theme_json")
         if isinstance(blueprint.get("theme_json"), dict)
@@ -371,13 +447,28 @@ def _footer_block(blueprint: dict[str, Any], x: int, y: int) -> str:
         if isinstance(blueprint.get("mobile_notes"), dict)
         else {}
     )
+    # Reference/metadata lines are secondary content: ink_muted, matching the
+    # visual PLACEHOLDER value and the disclaimer that already used it.
+    muted = style.get("ink_muted")
     lines = [f'<g class="footer" transform="translate({x},{y})">']
-    lines.append(_text(0, 0, f"freshness: {_PLACEHOLDER}", cls="freshness"))
+    lines.append(_text(0, 0, f"freshness: {_PLACEHOLDER}", cls="freshness", fill=muted))
     lines.append(
-        _text(0, 14, f"theme: {theme.get('theme_ref', 'none')}", cls="theme-ref")
+        _text(
+            0,
+            14,
+            f"theme: {theme.get('theme_ref', 'none')}",
+            cls="theme-ref",
+            fill=muted,
+        )
     )
     lines.append(
-        _text(0, 28, f"grid: {grid_ref.get('grid_ref', 'none')}", cls="grid-ref")
+        _text(
+            0,
+            28,
+            f"grid: {grid_ref.get('grid_ref', 'none')}",
+            cls="grid-ref",
+            fill=muted,
+        )
     )
     lines.append(
         _text(
@@ -385,24 +476,38 @@ def _footer_block(blueprint: dict[str, Any], x: int, y: int) -> str:
             42,
             f"mobile_grid: {mobile.get('grid_ref', 'none')}",
             cls="mobile-grid-ref",
+            fill=muted,
         )
     )
     a11y_rtl = "per a11y-rtl checklist" if mobile else _PLACEHOLDER
-    lines.append(_text(0, 56, f"accessibility/rtl: {a11y_rtl}", cls="a11y-rtl-ref"))
+    lines.append(
+        _text(
+            0,
+            56,
+            f"accessibility/rtl: {a11y_rtl}",
+            cls="a11y-rtl-ref",
+            fill=muted,
+        )
+    )
     lines.append("</g>")
     return "".join(lines)
 
 
-def _navigation_block(composition: dict[str, Any], x: int, y: int) -> str:
+def _navigation_block(
+    composition: dict[str, Any], x: int, y: int, style: dict[str, str | None]
+) -> str:
     nav = composition.get("navigation")
     typed = [n for n in nav if isinstance(n, dict)] if isinstance(nav, list) else []
     typed.sort(key=lambda n: (str(n.get("from_page", "")), str(n.get("to", ""))))
+    muted = style.get("ink_muted")
     lines = [f'<g class="navigation" transform="translate({x},{y})">']
     for i, link in enumerate(typed):
         label = str(link.get("label", ""))
         src = str(link.get("from_page", ""))
         dst = str(link.get("to", ""))
-        lines.append(_text(0, i * 14, f"{src} -> {dst}: {label}", cls="nav-line"))
+        lines.append(
+            _text(0, i * 14, f"{src} -> {dst}: {label}", cls="nav-line", fill=muted)
+        )
     lines.append("</g>")
     return "".join(lines)
 
@@ -419,6 +524,50 @@ def _page_order_label(page_name: str, composition: dict[str, Any]) -> str:
     return "page ?/?"
 
 
+def _page_header(
+    blueprint: dict[str, Any],
+    page_name: str,
+    order_label: str,
+    origin_x: int,
+    origin_y: int,
+    style: dict[str, str | None],
+) -> str:
+    """The three page-identity lines: title, audience, business question.
+
+    All three are primary content, so all three take ``ink`` -- before #521
+    finding 5 only the title was filled, leaving the other two at SVG-default
+    black on a dark canvas.
+    """
+    audience = str(blueprint.get("audience", ""))
+    business_question = str(blueprint.get("business_question", ""))
+    ink = style.get("ink")
+    return "".join(
+        (
+            _text(
+                origin_x,
+                origin_y + 10,
+                f"page: {page_name} ({order_label})",
+                cls="page-title",
+                fill=ink,
+            ),
+            _text(
+                origin_x,
+                origin_y + 24,
+                f"audience: {audience}",
+                cls="page-audience",
+                fill=ink,
+            ),
+            _text(
+                origin_x,
+                origin_y + 38,
+                f"question: {business_question}",
+                cls="page-question",
+                fill=ink,
+            ),
+        )
+    )
+
+
 def _page_svg(
     blueprint: dict[str, Any],
     visual_specs: list[dict[str, Any]],
@@ -431,8 +580,6 @@ def _page_svg(
     origin_x, origin_y = _margin(profile)
 
     page_name = str(blueprint.get("page_name", "<page>"))
-    audience = str(blueprint.get("audience", ""))
-    business_question = str(blueprint.get("business_question", ""))
     sections = (
         blueprint.get("sections") if isinstance(blueprint.get("sections"), dict) else {}
     )
@@ -444,20 +591,7 @@ def _page_svg(
         f'data-page-id="{_esc(page_name)}">',
         f'<rect x="0" y="0" width="{canvas_w}" height="{canvas_h}" class="canvas"'
         f"{_style_attr('fill', style.get('ground'))} />",
-        _text(
-            origin_x,
-            origin_y + 10,
-            f"page: {page_name} ({order_label})",
-            cls="page-title",
-            fill=style.get("ink"),
-        ),
-        _text(origin_x, origin_y + 24, f"audience: {audience}", cls="page-audience"),
-        _text(
-            origin_x,
-            origin_y + 38,
-            f"question: {business_question}",
-            cls="page-question",
-        ),
+        _page_header(blueprint, page_name, order_label, origin_x, origin_y, style),
     ]
 
     for section_name in _SECTION_ORDER:
@@ -469,13 +603,15 @@ def _page_svg(
         parts.append(_visual_group(visual, profile, origin_x, origin_y + 50, style))
 
     parts.append(
-        _slicers_block(blueprint.get("slicers") or [], origin_x, origin_y + 200)
+        _slicers_block(blueprint.get("slicers") or [], origin_x, origin_y + 200, style)
     )
     parts.append(
-        _narrative_block(blueprint.get("narrative") or {}, origin_x, origin_y + 260)
+        _narrative_block(
+            blueprint.get("narrative") or {}, origin_x, origin_y + 260, style
+        )
     )
-    parts.append(_navigation_block(composition, origin_x, origin_y + 320))
-    parts.append(_footer_block(blueprint, origin_x, origin_y + 380))
+    parts.append(_navigation_block(composition, origin_x, origin_y + 320, style))
+    parts.append(_footer_block(blueprint, origin_x, origin_y + 380, style))
 
     # Stated on EVERY render, unconditionally -- see PREVIEW_DISCLAIMER's
     # docstring. Not gated on `style`/tokens: a monochrome render is exactly as
