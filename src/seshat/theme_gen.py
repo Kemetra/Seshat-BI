@@ -22,7 +22,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .color import composite_over, contrast_ratio, delta_e76, format_pt, is_valid_hex
-from .theme_style_cards import build_page_cards, build_star_cards
+from .theme_style_cards import StyleCardError, build_page_cards, build_star_cards
 
 AA_FLOOR = 4.5
 # WCAG 2.x non-text contrast floor. Gridlines, borders, and visual fills are
@@ -39,6 +39,24 @@ MIN_ADJACENT_DELTAE = (
 )
 TAP_TARGET_MIN_PX = 44  # doc-only floor (WCAG 2.5.8); never written to any artifact
 _TEXT_ROLES = ("primary", "secondary", "muted")
+
+# Which section 5/6/7 token keys hold a COLOR, and so must dark-derive (#521
+# finding 2). Deliberately a closed set rather than a "looks like a hex" sniff:
+# a value-shape guess would silently reclassify a key whose meaning changed.
+# ``test_theme_gen_page_derivation`` pins these as subsets of the shipped
+# CHROME_TOKEN_KEYS/PAGE_TOKEN_KEYS vocabularies AND pins that colour plus
+# non-colour keys EXHAUST each vocabulary -- so adding a token key without
+# classifying it here fails at test time instead of passing a light-mode colour
+# into a dark theme, which is exactly how finding 2 arose.
+_CHROME_COLOR_KEYS = ("gridline", "border")
+_PAGE_COLOR_KEYS = (
+    "background",
+    "wallpaper",
+    "filter_pane_background",
+    "filter_pane_text",
+    "filter_card_applied",
+    "filter_card_available",
+)
 
 # OWNER-ratified 2026-07-08 (T18): the transparency-role schema. Choice 1 froze a
 # SINGLE opt-in ``overlay`` role (background-overlay panels / card fills); choice 2
@@ -120,10 +138,45 @@ def _invert_lightness(hex_color: str) -> str:
     return _hls_to_hex(h, 1.0 - lightness, s)
 
 
+def _derive_group(group: dict | None, color_keys: tuple[str, ...]) -> dict | None:
+    """A ``chrome``/``page`` token group with its COLOR values dark-derived.
+
+    Only keys in ``color_keys`` invert; every other key (transparencies,
+    ``title_align``, ``data_labels``, ``number_format``) passes through, since a
+    50% transparency or a "left" alignment has no dark counterpart. Only keys
+    the author actually DECLARED appear in the result -- an absent key stays
+    absent rather than being fabricated at a derived default. An explicit
+    ``None`` is an "off" declaration, not a faint color, so it survives as
+    ``None`` instead of being fed to ``_invert_lightness``.
+
+    A falsy group (``None`` or ``{}``) is returned as-is, so the overwhelmingly
+    common seed declaring neither group derives byte-identically to before #521.
+    A non-empty group with no color key returns a new dict that is value-equal
+    to the input -- equal, not the same object.
+    """
+    if not group:
+        return group
+    return {
+        key: (
+            _invert_lightness(value)
+            if key in color_keys and value is not None
+            else value
+        )
+        for key, value in group.items()
+    }
+
+
 def derive_dark_seed(light: ThemeSeed) -> ThemeSeed:
     """Derive a dark-mode ThemeSeed from a light one by inverting bg/text
-    lightness. Accent/data_colors/sentiment/fonts pass through unchanged --
-    only the surface (background) and on-surface (text) roles invert.
+    lightness. Accent/data_colors/sentiment/fonts pass through unchanged; the
+    surface (background), on-surface (text), and section 5/6/7 chrome/page
+    COLOR roles invert.
+
+    The ``chrome``/``page`` groups (theme-spec sections 5/6/7) derive too: every
+    COLOR-valued key in them inverts, while transparencies and formatting keys
+    pass through. Before #521 the whole group passed through, so a light seed's
+    ``page.background: #FFFFFF`` reached the "dark" theme intact and the emitted
+    page card painted a white page under inverted palette text.
 
     Refuses a non-light input up front: --pair on an already-dark seed would
     otherwise double-invert (light -> dark -> "dark" that is really light).
@@ -141,6 +194,8 @@ def derive_dark_seed(light: ThemeSeed) -> ThemeSeed:
         text_primary=_invert_lightness(light.text_primary),
         text_secondary=_invert_lightness(light.text_secondary),
         text_muted=_invert_lightness(light.text_muted),
+        chrome=_derive_group(light.chrome, _CHROME_COLOR_KEYS),
+        page=_derive_group(light.page, _PAGE_COLOR_KEYS),
     )
 
 
@@ -169,18 +224,30 @@ def _validated_transparency_fg(role: str, spec: dict) -> object:
 
 
 # Validate and return one spec's ``transparency_pct`` (T18: number in [0, 100]).
-def _validated_transparency_pct(role: str, spec: dict) -> float:
-    pct = spec.get("transparency_pct")
+def _validated_pct(pct: object, label: str) -> float:
+    """A percentage token as a float, or a ``ThemeGenError`` naming ``label``.
+
+    Shared by the T18 ``transparency`` roles and ``page.background_transparency``
+    (#521): both feed ``composite_over``, which raises a bare ``ValueError`` for
+    an out-of-range pct and a bare ``TypeError`` for a string -- either of which
+    would reach the user as a traceback naming neither the token nor the file,
+    breaking ``ThemeGenError``'s "surfaced cleanly" contract. ``label`` carries
+    the caller's field name so one message shape serves both.
+
+    ``bool`` is rejected explicitly: it is an ``int`` subclass, so ``True`` would
+    otherwise pass the range check and silently composite at 1% opacity.
+    """
     if not isinstance(pct, (int, float)) or isinstance(pct, bool):
-        raise ThemeGenError(
-            f"transparency role {role!r} transparency_pct must be a number, got {pct!r}"
-        )
+        raise ThemeGenError(f"{label} must be a number, got {pct!r}")
     if not (0.0 <= float(pct) <= 100.0):
-        raise ThemeGenError(
-            f"transparency role {role!r} transparency_pct {pct!r} is out of "
-            f"range -- must be in [0, 100]"
-        )
+        raise ThemeGenError(f"{label} {pct!r} is out of range -- must be in [0, 100]")
     return float(pct)
+
+
+def _validated_transparency_pct(role: str, spec: dict) -> float:
+    return _validated_pct(
+        spec.get("transparency_pct"), f"transparency role {role!r} transparency_pct"
+    )
 
 
 # Validate one transparency ``role``/``spec`` pair; return its clean spec.
@@ -441,10 +508,28 @@ def _non_text_ground(palette: dict, seed: ThemeSeed) -> str:
     show. Falls back to the palette background when no ``page`` group is
     declared, or when it is declared without a ``background`` key -- both keep
     today's behavior unchanged.
+
+    A declared ``background_transparency`` is composited in before the color is
+    returned (#521 finding 1): a page background is only the real ground to the
+    extent it is opaque. Measuring the raw declared color was wrong in BOTH
+    directions -- it let a near-white border pass at 14.60:1 against a
+    fully-transparent dark page while truly rendering at 1.23:1, and it refused
+    a dark border at 1.43:1 against a fully-transparent white page that truly
+    rendered at 12.55:1. So this composites rather than applying a one-sided
+    tolerance. Per ``composite_over``, 0 is fully opaque (ground is the declared
+    color) and 100 fully transparent (ground is the palette background).
     """
     page = seed.page or {}
     declared = page.get("background")
-    return declared if declared is not None else palette["colors"]["background"]
+    palette_bg = palette["colors"]["background"]
+    if declared is None:
+        return palette_bg
+    pct = page.get("background_transparency")
+    if pct is None:
+        return declared
+    return composite_over(
+        declared, palette_bg, _validated_pct(pct, "page.background_transparency")
+    )
 
 
 def check_non_text_contrast_or_raise(
@@ -739,6 +824,47 @@ def _targets_for(seed: ThemeSeed, repo_root: Path, palette: dict) -> dict[Path, 
     }
 
 
+def _gate_and_render(seed: ThemeSeed, repo_root: Path) -> dict[Path, str]:
+    """Every value-level self-check on ``seed``, plus the rendered target set.
+
+    Split out from ``_validate_and_collect`` so a caller can distinguish a
+    VALUE failure (a token the seed cannot legally carry) from a target-collision
+    failure (a file already on disk). ``generate_pair`` needs that distinction: a
+    value failure on a derived seed is attributable to the derivation, while a
+    collision is about the filesystem and is fixed with ``--force`` -- advice
+    about "the light values it derives from" would be actively wrong there.
+
+    Rendering is INSIDE this boundary, not after it, because several token gates
+    fire lazily while cards are built rather than in an explicit ``check_*``
+    call -- ``_outspace_pane_card``'s filter-pane AA floor is one, reached only
+    via ``render_theme_json``. Excluding rendering would leave those failures
+    unattributed, which is the very defect this split exists to fix.
+    """
+    palette = build_palette(seed)
+    check_contrast_or_raise(palette)
+    check_font_floor_or_raise(seed)
+    check_categorical_distinctness_or_raise(palette)
+    check_ramp_deltae_or_raise(palette, MIN_ADJACENT_DELTAE)
+    check_composite_contrast_or_raise(palette)
+    check_non_text_contrast_or_raise(palette, seed)
+    return _targets_for(seed, repo_root, palette)
+
+
+def _refuse_existing_targets(targets: dict[Path, str], force: bool) -> None:
+    """Refuse a target that already exists unless ``force``.
+
+    A collision is a filesystem fact, not a token-value fault, so callers that
+    attribute value failures to a derivation (``generate_pair``) must run this
+    OUTSIDE that attribution -- its "use --force" guidance has to reach the user
+    verbatim rather than wrapped in advice about adjusting token values.
+    """
+    if force:
+        return
+    for p in targets:
+        if p.exists():
+            raise ThemeGenError(f"{p} exists -- refusing to overwrite (use --force)")
+
+
 def _validate_and_collect(
     seed: ThemeSeed, repo_root: Path, force: bool
 ) -> dict[Path, str]:
@@ -750,20 +876,8 @@ def _validate_and_collect(
     future self-checks to slot in here too, so a caller validating multiple
     seeds (e.g. a light/dark pair) can validate all of them before writing any.
     """
-    palette = build_palette(seed)
-    check_contrast_or_raise(palette)
-    check_font_floor_or_raise(seed)
-    check_categorical_distinctness_or_raise(palette)
-    check_ramp_deltae_or_raise(palette, MIN_ADJACENT_DELTAE)
-    check_composite_contrast_or_raise(palette)
-    check_non_text_contrast_or_raise(palette, seed)
-    targets = _targets_for(seed, repo_root, palette)
-    if not force:
-        for p in targets:
-            if p.exists():
-                raise ThemeGenError(
-                    f"{p} exists -- refusing to overwrite (use --force)"
-                )
+    targets = _gate_and_render(seed, repo_root)
+    _refuse_existing_targets(targets, force)
     return targets
 
 
@@ -803,7 +917,30 @@ def generate_pair(
         )
     light_targets = _validate_and_collect(light, repo_root, force)
     dark = derive_dark_seed(light)
-    dark_targets = _validate_and_collect(dark, repo_root, force)
+    # Only the GATE phase is wrapped. The dark seed is DERIVED, not authored, so
+    # an unattributed gate error reads as a fault in the author's tokens and
+    # sends them to debug the wrong file: inverting both halves of a pair
+    # preserves neither their contrast ratio nor its sign, so a filter-pane pair
+    # that cleared AA in light mode can legitimately fail once derived (#521 D1
+    # -- that refusal is correct; only its attribution was missing).
+    # A target COLLISION is deliberately left outside this try: it is about the
+    # filesystem, not the derivation, and is fixed with --force. Wrapping it too
+    # would append "adjust the light values it derives from", which is actively
+    # wrong advice -- reproducing the very misattribution this block exists to
+    # prevent.
+    try:
+        dark_targets = _gate_and_render(dark, repo_root)
+    except (ThemeGenError, StyleCardError) as exc:
+        raise ThemeGenError(
+            f"--pair: the DERIVED dark seed {dark.name!r} failed validation: "
+            f"{exc} -- this is the dark seed derived from your light tokens, "
+            f"not the light tokens themselves; adjust the light values it "
+            f"derives from, or author the dark theme explicitly instead of "
+            f"using --pair"
+        ) from exc
+    # OUTSIDE the wrapper: a collision is a filesystem fact, not a derivation
+    # fault, and its "use --force" guidance must reach the caller verbatim.
+    _refuse_existing_targets(dark_targets, force)
     light_written = _write_targets(light_targets)
     dark_written = _write_targets(dark_targets)
     return light_written, dark_written
