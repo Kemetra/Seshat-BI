@@ -123,6 +123,11 @@ would mean two conflicting edits to one function.
 
 PR A lands first so PR B's fidelity tests assert against settled semantics.
 
+**Branching:** PR A (`fix/521-theme-token-fidelity-gaps`) carries this spec doc.
+PR B branches off `main` **after** A merges, so the doc is not duplicated and B
+needs no rebase. Merging sequentially also avoids the `capabilities.yaml` /
+strict-mode collisions that concurrent branches in this repo have hit before.
+
 ## PR A — theme correctness
 
 ### Finding 2: closed color-key sets
@@ -153,6 +158,14 @@ passing a light color into a dark theme — which is exactly how finding 2 arose
 `derive_dark_seed`'s docstring currently says "Accent/data_colors/sentiment/fonts
 pass through unchanged" without naming `page`/`chrome`. It must be corrected to
 state what now derives and what still passes through.
+
+**Attribute a derived-seed refusal to the derivation.** Inverting both halves of
+a filter-pane pair does not preserve their contrast ratio, so a pair that cleared
+AA in light mode can fail the pane gate (`theme_style_cards.py:250-261`) on the
+derived dark seed. Per D1 that refusal is correct and stays. But a bare pane-AA
+error would read as a fault in the authored tokens, so `generate_pair` must
+surface that the failing pair came from the **derived dark seed**, not the
+authored light one — otherwise the author debugs the wrong file.
 
 ### Finding 1: composite the ground before measuring
 
@@ -204,6 +217,10 @@ Thread the style dict into `_narrative_block`, `_slicers_block`,
 sites — `ink` for primary content, `ink_muted` for secondary/reference lines,
 matching the three sites that already do this.
 
+No test calls any of those four helpers directly (verified: no match for them
+under `tests/`), so adding a `style` parameter is safe and does not need a
+keyword-with-default to protect unrelated tests.
+
 **Constraint:** the no-tokens path must stay attribute-free.
 `_style_from_tokens(None)` returns `{}`, `.get()` yields `None`, and
 `_style_attr` suppresses falsy values — so the fix flows through only if it
@@ -218,7 +235,15 @@ The oracle matters more than the count. Three specific traps:
 2. **Write finding 2's RED test first.** No existing test passes a seed carrying a `page` group through `generate_pair`, so that path is entirely untested. The reproduction above is the oracle; the test must fail before the fix.
 3. **`test_tokens_color_the_canvas_ground_specifically`** (`test_blueprint_preview_styled.py:163-175`) asserts `fill="#101820"` from `colors.background` with no `page` group in its fixture — so it passes finding 6's fix without exercising it. It needs a sibling case where `page.background` differs from `colors.background` and the canvas follows the former.
 
-New coverage: both transparency endpoints for finding 1; both fail-open and false-refusal directions; the vocabulary-exhaustion guard; each row of the finding-3 table; a dark-canvas render asserting no text element lacks a `fill`.
+New coverage: both transparency endpoints for finding 1; both fail-open and
+false-refusal directions; the vocabulary-exhaustion guard; each row of the
+finding-3 table; a dark-canvas render asserting no text element lacks a `fill`.
+
+**Derived-dark tokens round-trip.** `render_tokens_yaml` persists `chrome`/`page`
+(#523), so `generate_pair` now writes *inverted* page/chrome into the dark tokens
+YAML. A test must assert that file carries the inverted `page.background` and
+that re-reading it through the readers does not raise. Without it the inversion
+could be right in the emitted theme and wrong in the artifact a human edits next.
 
 Existing suites that must stay green: `test_theme_gen.py`,
 `test_theme_gen_breadth.py`, `test_theme_compile*.py`,
