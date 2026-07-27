@@ -238,10 +238,14 @@ def test_derived_dark_tokens_file_carries_the_inverted_page_group(tmp_path):
 
     Without this the inversion could be right in the emitted theme.json and
     wrong in the artifact the author opens -- two sources of truth disagreeing.
-    Also asserts the file re-reads as a mapping, so the derived output does not
-    round-trip into a parse error.
+
+    Re-reads through the REAL reader (``compile_theme``), not just
+    ``yaml.safe_load``: a mapping-parses assertion would not catch a derived
+    value that the #523 closed-vocabulary readers reject.
     """
     import yaml
+
+    from seshat.theme_compile import compile_theme
 
     light = _seed(page={"background": "#FFFFFF"}, chrome={"gridline": "#767676"})
     _, dark_written = generate_pair(light, tmp_path)
@@ -251,6 +255,54 @@ def test_derived_dark_tokens_file_carries_the_inverted_page_group(tmp_path):
     parsed = yaml.safe_load(tokens[0].read_text(encoding="utf-8"))
     assert parsed["page"]["background"] == "#000000"
     assert parsed["chrome"]["gridline"] != "#767676"
+
+    # The derived tokens must survive the readers that consume them.
+    compile_theme(tokens[0], tmp_path / "recompiled.theme.json", force=True)
+
+
+@pytest.mark.parametrize(
+    "pct",
+    [150, -1, "50", True, False, [50]],
+    ids=["above-range", "below-range", "string", "true", "false", "list"],
+)
+def test_malformed_background_transparency_raises_cleanly(pct):
+    """A bad pct must surface as ThemeGenError naming the token, never as a
+    bare ValueError/TypeError from ``composite_over``.
+
+    ``ThemeGenError`` exists so a token problem reaches the user without a
+    traceback; feeding the raw value straight into ``composite_over`` produced
+    ``'<=' not supported between instances of 'float' and 'str'`` -- naming
+    neither the token nor the file. ``True``/``False`` are covered explicitly:
+    ``bool`` is an ``int`` subclass, so a naive range check accepts ``True`` and
+    silently composites it at 1% opacity.
+    """
+    seed = _seed(
+        page={"background": "#101820", "background_transparency": pct},
+        chrome={"border": "#E8E8E8"},
+    )
+    with pytest.raises(ThemeGenError, match="background_transparency"):
+        check_non_text_contrast_or_raise(build_palette(seed), seed)
+
+
+def test_pair_collision_error_is_not_misattributed_to_the_derivation(tmp_path):
+    """A dark-side FILE COLLISION must reach the caller verbatim.
+
+    The derived-seed wrapper appends "adjust the light values it derives from",
+    which is right for a gate failure and actively WRONG for a collision -- the
+    fix there is ``--force``. Wrapping both reproduced the same misattribution
+    defect the wrapper was written to prevent, so the collision path is pinned.
+    """
+    light = _seed(page={"background": "#FFFFFF"})
+    generate_pair(light, tmp_path)  # first run writes both sides
+
+    with pytest.raises(ThemeGenError) as caught:
+        generate_pair(light, tmp_path)  # second run collides, no --force
+    message = str(caught.value)
+    assert "refusing to overwrite" in message
+    assert "DERIVED dark seed" not in message, (
+        "a file collision was misattributed to the derivation"
+    )
+    assert "adjust the light values" not in message
 
 
 def test_pair_attributes_a_derived_seed_failure_to_the_derivation(tmp_path):

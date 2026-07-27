@@ -149,9 +149,10 @@ def _derive_group(group: dict | None, color_keys: tuple[str, ...]) -> dict | Non
     ``None`` is an "off" declaration, not a faint color, so it survives as
     ``None`` instead of being fed to ``_invert_lightness``.
 
-    Returns the group unchanged (identity, including ``None``/empty) when it
-    declares no color key at all, so the overwhelmingly common seed that
-    declares neither group derives byte-identically to before #521.
+    A falsy group (``None`` or ``{}``) is returned as-is, so the overwhelmingly
+    common seed declaring neither group derives byte-identically to before #521.
+    A non-empty group with no color key returns a new dict that is value-equal
+    to the input -- equal, not the same object.
     """
     if not group:
         return group
@@ -167,8 +168,9 @@ def _derive_group(group: dict | None, color_keys: tuple[str, ...]) -> dict | Non
 
 def derive_dark_seed(light: ThemeSeed) -> ThemeSeed:
     """Derive a dark-mode ThemeSeed from a light one by inverting bg/text
-    lightness. Accent/data_colors/sentiment/fonts pass through unchanged --
-    only the surface (background) and on-surface (text) roles invert.
+    lightness. Accent/data_colors/sentiment/fonts pass through unchanged; the
+    surface (background), on-surface (text), and section 5/6/7 chrome/page
+    COLOR roles invert.
 
     The ``chrome``/``page`` groups (theme-spec sections 5/6/7) derive too: every
     COLOR-valued key in them inverts, while transparencies and formatting keys
@@ -513,6 +515,23 @@ def _non_text_ground(palette: dict, seed: ThemeSeed) -> str:
     pct = page.get("background_transparency")
     if pct is None:
         return declared
+    # Validate BEFORE compositing. ``composite_over`` raises a bare ValueError
+    # for an out-of-range pct and a bare TypeError for a string, and treats
+    # ``True`` as 1% -- so passing the raw token through would replace the clean
+    # field-named StyleCardError the render path already gives with a traceback
+    # naming neither the token nor the file, breaking ThemeGenError's
+    # "surfaced cleanly" contract for library callers of this gate.
+    # ``bool`` is excluded explicitly: it is an int subclass, so ``True`` would
+    # otherwise pass the range check and silently composite at 1% opacity.
+    if isinstance(pct, bool) or not isinstance(pct, (int, float)):
+        raise ThemeGenError(
+            f"page.background_transparency must be a number in [0, 100], got "
+            f"{pct!r} ({type(pct).__name__})"
+        )
+    if not 0 <= pct <= 100:
+        raise ThemeGenError(
+            f"page.background_transparency must be in [0, 100], got {pct!r}"
+        )
     return composite_over(declared, palette_bg, pct)
 
 
@@ -808,6 +827,32 @@ def _targets_for(seed: ThemeSeed, repo_root: Path, palette: dict) -> dict[Path, 
     }
 
 
+def _gate_and_render(seed: ThemeSeed, repo_root: Path) -> dict[Path, str]:
+    """Every value-level self-check on ``seed``, plus the rendered target set.
+
+    Split out from ``_validate_and_collect`` so a caller can distinguish a
+    VALUE failure (a token the seed cannot legally carry) from a target-collision
+    failure (a file already on disk). ``generate_pair`` needs that distinction: a
+    value failure on a derived seed is attributable to the derivation, while a
+    collision is about the filesystem and is fixed with ``--force`` -- advice
+    about "the light values it derives from" would be actively wrong there.
+
+    Rendering is INSIDE this boundary, not after it, because several token gates
+    fire lazily while cards are built rather than in an explicit ``check_*``
+    call -- ``_outspace_pane_card``'s filter-pane AA floor is one, reached only
+    via ``render_theme_json``. Excluding rendering would leave those failures
+    unattributed, which is the very defect this split exists to fix.
+    """
+    palette = build_palette(seed)
+    check_contrast_or_raise(palette)
+    check_font_floor_or_raise(seed)
+    check_categorical_distinctness_or_raise(palette)
+    check_ramp_deltae_or_raise(palette, MIN_ADJACENT_DELTAE)
+    check_composite_contrast_or_raise(palette)
+    check_non_text_contrast_or_raise(palette, seed)
+    return _targets_for(seed, repo_root, palette)
+
+
 def _validate_and_collect(
     seed: ThemeSeed, repo_root: Path, force: bool
 ) -> dict[Path, str]:
@@ -819,14 +864,7 @@ def _validate_and_collect(
     future self-checks to slot in here too, so a caller validating multiple
     seeds (e.g. a light/dark pair) can validate all of them before writing any.
     """
-    palette = build_palette(seed)
-    check_contrast_or_raise(palette)
-    check_font_floor_or_raise(seed)
-    check_categorical_distinctness_or_raise(palette)
-    check_ramp_deltae_or_raise(palette, MIN_ADJACENT_DELTAE)
-    check_composite_contrast_or_raise(palette)
-    check_non_text_contrast_or_raise(palette, seed)
-    targets = _targets_for(seed, repo_root, palette)
+    targets = _gate_and_render(seed, repo_root)
     if not force:
         for p in targets:
             if p.exists():
@@ -872,15 +910,20 @@ def generate_pair(
         )
     light_targets = _validate_and_collect(light, repo_root, force)
     dark = derive_dark_seed(light)
+    # Only the GATE phase is wrapped. The dark seed is DERIVED, not authored, so
+    # an unattributed gate error reads as a fault in the author's tokens and
+    # sends them to debug the wrong file: inverting both halves of a pair
+    # preserves neither their contrast ratio nor its sign, so a filter-pane pair
+    # that cleared AA in light mode can legitimately fail once derived (#521 D1
+    # -- that refusal is correct; only its attribution was missing).
+    # A target COLLISION is deliberately left outside this try: it is about the
+    # filesystem, not the derivation, and is fixed with --force. Wrapping it too
+    # would append "adjust the light values it derives from", which is actively
+    # wrong advice -- reproducing the very misattribution this block exists to
+    # prevent.
     try:
-        dark_targets = _validate_and_collect(dark, repo_root, force)
+        dark_targets = _gate_and_render(dark, repo_root)
     except (ThemeGenError, StyleCardError) as exc:
-        # The dark seed is DERIVED, not authored, so an unattributed gate error
-        # here reads as a fault in the author's tokens and sends them to debug
-        # the wrong file. Inverting both halves of a pair does not preserve
-        # their contrast ratio, so a filter-pane pair that cleared AA in light
-        # mode can legitimately fail it once derived (issue #521, D1: that
-        # refusal is correct and stays -- only its attribution was missing).
         raise ThemeGenError(
             f"--pair: the DERIVED dark seed {dark.name!r} failed validation: "
             f"{exc} -- this is the dark seed derived from your light tokens, "
@@ -888,6 +931,14 @@ def generate_pair(
             f"derives from, or author the dark theme explicitly instead of "
             f"using --pair"
         ) from exc
+    # OUTSIDE the wrapper: a collision is a filesystem fact, not a derivation
+    # fault, and its "use --force" guidance must reach the caller verbatim.
+    if not force:
+        for p in dark_targets:
+            if p.exists():
+                raise ThemeGenError(
+                    f"{p} exists -- refusing to overwrite (use --force)"
+                )
     light_written = _write_targets(light_targets)
     dark_written = _write_targets(dark_targets)
     return light_written, dark_written
