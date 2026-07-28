@@ -435,7 +435,7 @@
       "properties": {
         "code": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9_-]*$"
+          "pattern": "^[A-Z][A-Z0-9_]*$"
         },
         "status": {
           "enum": [
@@ -473,7 +473,7 @@
       "properties": {
         "code": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9_-]*$"
+          "pattern": "^[A-Z][A-Z0-9_]*$"
         },
         "message": {
           "type": "string",

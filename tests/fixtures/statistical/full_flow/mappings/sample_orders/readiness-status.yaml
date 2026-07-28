@@ -1,0 +1,42 @@
+table: gold.sample_orders
+source_id: sample_orders
+mapping_version: "1"
+current_stage: dashboard_ready
+next_action: Review derived statistical evidence without changing readiness.
+stages:
+  source_ready:
+    status: pass
+    evidence: [synthetic source profile]
+    blocking_reasons: []
+  mapping_ready:
+    status: pass
+    evidence: [approved synthetic source map]
+    blocking_reasons: []
+  silver_ready:
+    status: pass
+    evidence: [synthetic silver migration]
+    blocking_reasons: []
+  gold_ready:
+    status: pass
+    evidence:
+      - "seshat validate --source-map mappings/sample_orders/source-map.yaml: PASS (exit 0)"
+    blocking_reasons: []
+  semantic_model_ready:
+    status: pass
+    evidence:
+      - mappings/sample_orders/metrics/TotalValue.yaml
+    blocking_reasons: []
+  dashboard_ready:
+    status: not_started
+    evidence: []
+    blocking_reasons: []
+  publish_ready:
+    status: not_started
+    evidence: []
+    blocking_reasons: []
+blocking_reasons: []
+approvals:
+  - stage: semantic_model_ready
+    owner: "Example Metric Owner (metric_owner)"
+    at: "2026-07-28"
+    note: "approved metric contract: TotalValue"

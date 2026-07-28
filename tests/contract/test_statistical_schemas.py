@@ -203,6 +203,17 @@ def test_evidence_authority_outcomes_and_readiness_effect_are_fixed() -> None:
     assert schema["properties"]["review_state"]["const"] == "pending"
 
 
+def test_evidence_codes_use_the_governed_uppercase_namespace() -> None:
+    schema = _schema(EVIDENCE_SCHEMA_PATH)
+
+    assert schema["$defs"]["diagnostic"]["properties"]["code"]["pattern"] == (
+        "^[A-Z][A-Z0-9_]*$"
+    )
+    assert schema["$defs"]["blocker"]["properties"]["code"]["pattern"] == (
+        "^[A-Z][A-Z0-9_]*$"
+    )
+
+
 def test_evidence_decimal_values_reject_json_numbers() -> None:
     schema = _schema(EVIDENCE_SCHEMA_PATH)
     payload = {

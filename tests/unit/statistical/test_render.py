@@ -17,7 +17,7 @@ def test_render_review_projects_evidence_without_recomputing() -> None:
     assert "describe (1.0)" in rendered
     assert "mean: 10.5 USD" in rendered
     assert "bootstrap" in rendered
-    assert "sample_size" in rendered
+    assert "STAT_SAMPLE_SIZE" in rendered
     assert "Derived evidence is not a causal claim." in rendered
     assert "readiness effect is none" in rendered.casefold()
     assert "## Human review decision" in rendered

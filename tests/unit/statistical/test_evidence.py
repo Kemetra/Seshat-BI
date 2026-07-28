@@ -71,7 +71,9 @@ def sample_evidence(**overrides: object) -> AnalysisEvidence:
                 "example",
             ),
         ),
-        "diagnostics": (Diagnostic("sample_size", "holds", "12", "Minimum data met."),),
+        "diagnostics": (
+            Diagnostic("STAT_SAMPLE_SIZE", "holds", "12", "Minimum data met."),
+        ),
         "warnings": (),
         "blockers": (),
         "cautions": ("Derived evidence is not a causal claim.",),
