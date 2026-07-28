@@ -31,8 +31,8 @@ _STAGE_HINTS = {
 # EXTERNALLY-AUTHORED tree; git reads its `.git/config` when we shell out inside
 # it, so harden against config-driven execution (core.fsmonitor/hooksPath).
 # `commit_range` is separately validated by gitutil._SAFE_RANGE_RE upstream
-# (option-injection guard). Keep in sync with
-# pbip_adoption._safety.GIT_UNTRUSTED_TREE_HARDENING.
+# (option-injection guard). The flags come from the single
+# `gitutil.GIT_HARDENING` definition, imported above.
 
 
 def _changed_files(repo_root: Path, commit_range: str | None) -> list[str]:

@@ -148,7 +148,13 @@ jobs:
         # metric-contract YAML (pyyaml, already installed via the [dev] extra) to
         # gate the contract<->DAX denominator drift class (drift => exit 1). No
         # --commit-range: it reads committed TMDL + contracts, not git diffs.
-        run: retail semantic-check --repo .
+        #
+        # --require-inputs is load-bearing: without it, discovering ZERO inputs
+        # printed "no drift (0 findings)" and exited 0 -- indistinguishable from a
+        # genuinely clean repo. This repo always carries contracts/TMDL, so zero
+        # discovery here means the glob stopped matching (a rename/move), and that
+        # must FAIL rather than report a green pass.
+        run: retail semantic-check --repo . --require-inputs
 
       - name: Retail kit-lint (compass projection drift)
         # Separate step (feature 072): like semantic-check, this parses yaml

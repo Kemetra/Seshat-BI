@@ -69,8 +69,6 @@ _DAGSTER_RUNS_REL = ".seshat/dagster/runs"
 _MIGRATION_MARKERS = ("_create_silver_", "_create_gold_")
 _RAW_LANDING_ENV = "SESHAT_RAW_LANDING_DIR"
 
-# Mirrors gitutil._GIT_HARDENING: neutralize config-driven exec vectors when
-# git runs against the workspace tree (fsmonitor/hooks/ext-protocol).
 _GIT_NOT_A_REPO = 128
 
 

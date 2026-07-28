@@ -64,6 +64,41 @@ def test_semantic_check_does_not_claim_no_drift_with_zero_inputs(
     )
 
 
+def test_semantic_check_zero_inputs_is_a_failure_under_require_inputs(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--require-inputs` makes zero-discovery BLOCK, which is what CI needs.
+
+    Reporting `[not_started]` on stderr while still exiting 0 leaves CI green: a
+    discovery regression would print a line nobody reads on a passing job. On a
+    repo that is KNOWN to carry contracts/TMDL (this one), zero discovery is
+    always a defect, so CI opts in and gets a real gate.
+    """
+    repo = _git_repo(tmp_path)
+
+    exit_code = main(["semantic-check", "--repo", str(repo), "--require-inputs"])
+    err = capsys.readouterr().err
+
+    assert exit_code == 1, "--require-inputs must FAIL on zero discovered inputs"
+    assert "no drift" not in err
+
+
+def test_semantic_check_require_inputs_passes_when_inputs_exist(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--require-inputs` must not fail a repo that does have discoverable inputs."""
+    repo = _git_repo(tmp_path)
+    tmdl = repo / "powerbi" / "Model.SemanticModel" / "definition" / "model.tmdl"
+    tmdl.parent.mkdir(parents=True, exist_ok=True)
+    tmdl.write_text("table 'gold fct_x'\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True, capture_output=True)
+
+    exit_code = main(["semantic-check", "--repo", str(repo), "--require-inputs"])
+    err = capsys.readouterr().err
+
+    assert exit_code == 0, f"inputs exist, so --require-inputs must pass: {err!r}"
+
+
 def test_semantic_check_still_reports_no_drift_on_a_clean_repo(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -142,18 +177,25 @@ def test_git_hardening_has_a_single_definition() -> None:
             f"the shared tuple is missing {flag!r}"
         )
 
+    # Trigger on ANY of the three flags, not just `core.hooksPath`: the defect
+    # actually found (F1) was a PARTIAL re-listing -- `core.fsmonitor=false` alone,
+    # with hooksPath/protocol.ext missing. A hooksPath-only trigger would let that
+    # exact regression back in silently, since the offending module never mentions
+    # hooksPath. Catch partial and full duplication alike.
     src_root = Path(gitutil.__file__).parent
     offenders: list[str] = []
     for path in sorted(src_root.rglob("*.py")):
         if path.name in ("gitutil.py", "severity_posture.py"):
             continue  # the definition itself; and the documented throwaway-repo case
         text = path.read_text(encoding="utf-8")
-        if "core.hooksPath" in text and "GIT_HARDENING" not in text:
+        names_a_flag = any(flag in text for flag in _REQUIRED_HARDENING)
+        if names_a_flag and "GIT_HARDENING" not in text:
             offenders.append(path.name)
 
     assert not offenders, (
-        "these modules re-list the hardening flags instead of importing the "
-        f"shared tuple: {offenders}"
+        "these modules name a git hardening flag without importing the shared "
+        f"`gitutil.GIT_HARDENING` tuple (partial re-listing is how F1 drifted): "
+        f"{offenders}"
     )
 
 
@@ -232,4 +274,29 @@ def test_connection_config_error_never_carries_the_dsn() -> None:
         assert fragment not in message, (
             f"ConnectionConfigError leaked {fragment!r} into a message that "
             f"drift/profile/validate print unredacted: {message!r}"
+        )
+
+
+def test_connection_config_error_scrubs_keyword_conninfo_too() -> None:
+    """libpq accepts TWO DSN spellings and both must be scrubbed.
+
+    ``redaction_core`` documents keyword conninfo (``host=.. password=..``) as a
+    distinct form from the URI shape, so a scrub that only decomposed
+    ``postgresql://`` would leave this one intact.
+    """
+    from seshat.connection_env import ConnectionConfigError, as_connection_config
+
+    def _resolve_raising_with_conninfo():
+        raise ValueError(
+            "could not connect using host=db.example.com user=alice "
+            "password=s3cr3t dbname=analytics"
+        )
+
+    with pytest.raises(ConnectionConfigError) as caught:
+        as_connection_config(_resolve_raising_with_conninfo)
+
+    message = str(caught.value)
+    for fragment in ("s3cr3t", "alice", "db.example.com"):
+        assert fragment not in message, (
+            f"keyword-conninfo form leaked {fragment!r}: {message!r}"
         )

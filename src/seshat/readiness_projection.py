@@ -28,8 +28,8 @@ _STAGE_ORDER = (
 # via the adoption seams). Git reads that tree's own `.git/config` when we shell
 # out inside it, so an attacker-supplied `core.fsmonitor`/`core.hooksPath` would
 # execute -> RCE. safe.directory only bypasses the ownership check, NOT config
-# exec, so it is not sufficient on its own. Keep in sync with
-# pbip_adoption._safety.GIT_UNTRUSTED_TREE_HARDENING.
+# exec, so it is not sufficient on its own. The flags come from the single
+# `gitutil.GIT_HARDENING` definition, imported above.
 
 
 def _source_revision(root: Path) -> str | None:

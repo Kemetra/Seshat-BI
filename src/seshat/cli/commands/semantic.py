@@ -88,14 +88,20 @@ def run_semantic_check(args: argparse.Namespace) -> int:
     # `not_started` rather than `pass` on an empty expected design.
     if not inputs:
         prog = getattr(args, "prog", "seshat")
+        strict = bool(getattr(args, "require_inputs", False))
         print(
             f"{prog} semantic-check: [not_started] no input discovered under "
             f"{repo} -- nothing was verified. Expected tracked `*.tmdl` and/or "
             f"metric contract `*.yaml` files (searched --metrics-dir "
-            f"{args.metrics_dir!r}). This is NOT a clean result.",
+            f"{args.metrics_dir!r}). This is NOT a clean result."
+            + ("" if strict else " Pass --require-inputs to make this an error."),
             file=sys.stderr,
         )
-        return 0
+        # Exit 0 by default: a legitimately empty/scaffold repo must not fail.
+        # `--require-inputs` (what CI passes) turns zero-discovery into a real
+        # gate, since reporting on stderr while exiting 0 leaves CI green and a
+        # discovery regression would go unnoticed on a passing job.
+        return 1 if strict else 0
 
     contract_paths = tuple(
         path
