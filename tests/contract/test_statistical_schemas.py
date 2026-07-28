@@ -128,7 +128,12 @@ def valid_spec(method_id: str, parameters: dict[str, object]) -> dict[str, objec
         (
             "forecast",
             {
-                "candidates": ["seasonal_naive", "ets_add"],
+                "candidates": [
+                    "seasonal_naive",
+                    "ets_add_trend",
+                    "ets_add_damped",
+                    "ets_add_seasonal",
+                ],
                 "period": 12,
                 "horizon": 6,
                 "confidence_level": "0.95",
@@ -136,6 +141,8 @@ def valid_spec(method_id: str, parameters: dict[str, object]) -> dict[str, objec
                 "initial_window": 24,
                 "step": 1,
                 "max_folds": 6,
+                "final_period": "complete",
+                "partial_period_policy": "fail",
             },
         ),
     ],
@@ -166,6 +173,8 @@ def test_decimal_parameters_are_strings_and_resource_bounds_are_enforced() -> No
             "initial_window": 24,
             "step": 1,
             "max_folds": 6,
+            "final_period": "complete",
+            "partial_period_policy": "fail",
         },
     )
 

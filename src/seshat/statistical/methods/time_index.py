@@ -132,6 +132,18 @@ def regular_series(context: MethodContext) -> RegularSeries:
             "Normalize timestamps to one approved timezone.",
         )
     parsed.sort(key=lambda item: item[0])
+    excluded_partial_period = None
+    parameters = context.spec.method.parameters
+    if parameters.get("final_period", "complete") == "partial":
+        if parameters.get("partial_period_policy", "fail") != "exclude":
+            raise _withheld(
+                "STAT_PARTIAL_PERIOD",
+                "The final observation is declared partial and policy forbids use.",
+                "Complete the period or approve explicit exclusion.",
+            )
+        if parsed:
+            excluded_partial_period = parsed[-1][1]
+            parsed.pop()
     frequency = _frequency(context.spec.cadence)
     for previous, current in zip(parsed, parsed[1:], strict=False):
         if not _contiguous(previous[0], current[0], frequency):
@@ -161,7 +173,7 @@ def regular_series(context: MethodContext) -> RegularSeries:
         values,
         frequency,
         period,
-        None,
+        excluded_partial_period,
     )
 
 

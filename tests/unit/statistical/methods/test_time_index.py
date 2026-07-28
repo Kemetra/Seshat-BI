@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 
@@ -138,3 +139,43 @@ def test_rolling_origins_never_include_the_evaluated_point() -> None:
         (7, 8),
     ]
     assert all(item.source_end == item.evaluate_index - 1 for item in origins)
+
+
+def test_declared_partial_final_period_is_excluded_or_withheld() -> None:
+    context = time_context(["2026-01-01", "2026-01-02", "2026-01-03"], [1, 2, 999])
+    excluded = replace(
+        context,
+        spec=replace(
+            context.spec,
+            method=MethodSpec(
+                "detect_anomalies",
+                "1.0",
+                {
+                    **context.spec.method.parameters,
+                    "final_period": "partial",
+                    "partial_period_policy": "exclude",
+                },
+            ),
+        ),
+    )
+    result = regular_series(excluded)
+    assert result.values.tolist() == [1.0, 2.0]
+    assert result.excluded_partial_period == "2026-01-03"
+
+    failed = replace(
+        excluded,
+        spec=replace(
+            excluded.spec,
+            method=MethodSpec(
+                "detect_anomalies",
+                "1.0",
+                {
+                    **excluded.spec.method.parameters,
+                    "partial_period_policy": "fail",
+                },
+            ),
+        ),
+    )
+    with pytest.raises(AnalysisWithheld) as exc_info:
+        regular_series(failed)
+    assert exc_info.value.blockers[0].code == "STAT_PARTIAL_PERIOD"
