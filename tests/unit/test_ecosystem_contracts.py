@@ -90,6 +90,52 @@ def test_contract_validator_resolves_local_ref_and_exactly_one_branch() -> None:
     assert validate_json_contract({"a": "valid", "b": 1}, schema)
 
 
+def test_contract_validator_enforces_all_of_and_conditional_requirements() -> None:
+    # A committed contract that expresses conditionally required fields must be
+    # enforced, not skipped: an unevaluated keyword silently admits an invalid
+    # document and lets execution substitute its own defaults.
+    schema = {
+        "type": "object",
+        "required": ["mode"],
+        "properties": {
+            "mode": {"enum": ["fixed", "penalized"]},
+            "count": {"type": "integer"},
+            "penalty": {"type": "string"},
+        },
+        "allOf": [
+            {
+                "if": {
+                    "required": ["mode"],
+                    "properties": {"mode": {"const": "fixed"}},
+                },
+                "then": {"required": ["count"]},
+                "else": {"required": ["penalty"]},
+            }
+        ],
+    }
+
+    assert validate_json_contract({"mode": "fixed", "count": 3}, schema) == []
+    assert validate_json_contract({"mode": "penalized", "penalty": "1.5"}, schema) == []
+    assert any(
+        "'count'" in error
+        for error in validate_json_contract({"mode": "fixed"}, schema)
+    )
+    assert any(
+        "'penalty'" in error
+        for error in validate_json_contract({"mode": "penalized"}, schema)
+    )
+
+
+@pytest.mark.parametrize(
+    "branches",
+    ["not-a-list", [1], ["not-a-schema"]],
+)
+def test_contract_validator_fails_closed_on_invalid_all_of(branches: object) -> None:
+    schema = {"type": "object", "allOf": branches}
+
+    assert validate_json_contract({}, schema)
+
+
 def test_contract_validator_enforces_maximum_and_max_items() -> None:
     schema = {
         "type": "object",

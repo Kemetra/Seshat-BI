@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 
@@ -192,6 +193,29 @@ def test_runtime_refuses_policy_without_calling_provider(
 
     assert evidence.outcome is Outcome.REFUSED
     assert evidence.blockers == (blocker,)
+    assert provider.calls == 0
+
+
+def test_runtime_refuses_a_method_version_it_cannot_execute(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # The registry ships one implementation per method id. Executing it for a
+    # spec that declares a different version would file 1.0 computations as
+    # another version's evidence.
+    _allow(monkeypatch, tmp_path)
+    loaded: list[object] = []
+    monkeypatch.setattr(
+        "seshat.statistical.runtime.load_runner",
+        lambda descriptor: loaded.append(descriptor),
+    )
+    spec = replace(_spec(), method=MethodSpec("describe", "2.0", MappingProxyType({})))
+    provider = Provider()
+
+    evidence = run_analysis(tmp_path, spec, provider)
+
+    assert evidence.outcome is Outcome.REFUSED
+    assert evidence.blockers[0].code == "STAT_METHOD_VERSION_UNKNOWN"
+    assert loaded == []
     assert provider.calls == 0
 
 

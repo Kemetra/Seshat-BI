@@ -279,6 +279,25 @@ def run_analysis(
             ),
         )
 
+    if spec.method.version != descriptor.version:
+        # The registry ships exactly one implementation per method id. Running it
+        # for another declared version would file this computation as evidence
+        # for a version that was never executed.
+        return _evidence(
+            repo_root=root,
+            spec=spec,
+            invocation_id=invocation_id,
+            started_at=started_at,
+            outcome=Outcome.REFUSED,
+            context=context,
+            blockers=_single_blocker(
+                "STAT_METHOD_VERSION_UNKNOWN",
+                "The requested method version is not the governed implementation "
+                f"version {descriptor.version}.",
+                "Declare the governed method version recorded by the registry.",
+            ),
+        )
+
     missing_roles = descriptor.required_roles - set(spec.roles)
     if missing_roles:
         return _evidence(

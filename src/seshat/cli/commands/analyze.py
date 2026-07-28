@@ -173,6 +173,7 @@ def _gold_provider():
     from seshat import cli
     from seshat.connection_env import as_connection_config
     from seshat.dialect import get_dialect
+    from seshat.statistical.providers.base import ResourceLimits
     from seshat.statistical.providers.gold import GoldProvider
 
     try:
@@ -197,8 +198,21 @@ def _gold_provider():
             "The optional Gold database driver is unavailable.",
             cli._extra_install_hint("db"),
         )
+    limits = ResourceLimits()
+    if not getattr(dialect, "supports_statement_timeout", False):
+        # The provider advertises an enforceable query ceiling. An engine that
+        # cannot cap a statement server-side would run unbounded under that
+        # claim, so refuse instead of pretending the limit exists.
+        return _unavailable_provider(
+            "STAT_PROVIDER_UNAVAILABLE",
+            "The configured Gold engine cannot enforce the governed query timeout.",
+            "Point the analysis at the documented PostgreSQL Gold connection.",
+        )
     try:
-        return GoldProvider(cli._make_runner(config), dialect)
+        runner = cli._make_runner(
+            config, statement_timeout_ms=limits.timeout_seconds * 1000
+        )
+        return GoldProvider(runner, dialect, limits=limits)
     except Exception:
         return _unavailable_provider(
             "STAT_PROVIDER_UNAVAILABLE",

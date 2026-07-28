@@ -529,7 +529,7 @@ def _ensure_driver() -> bool:
     return True
 
 
-def _make_runner(dsn: str) -> QueryRunner:
+def _make_runner(dsn: str, *, statement_timeout_ms: int | None = None) -> QueryRunner:
     """Build a real (lazy driver) QueryRunner for the current engine.
 
     Indirected through cli so tests can monkeypatch it with a fake -- no real
@@ -537,10 +537,17 @@ def _make_runner(dsn: str) -> QueryRunner:
     ``resolve_config`` produced for the active engine (a DSN string for
     Postgres/SQL-Server's ODBC string, a kwargs dict for MySQL/Snowflake); the
     name is kept for Postgres call-site/monkeypatch compatibility.
+
+    ``statement_timeout_ms`` is forwarded ONLY when a caller asks for it, so a
+    dialect that declares no timeout support keeps its existing single-argument
+    ``connect`` contract.
     """
     from ..dialect import get_dialect
 
-    return get_dialect(_current_engine()).connect(dsn)
+    dialect = get_dialect(_current_engine())
+    if statement_timeout_ms is None:
+        return dialect.connect(dsn)
+    return dialect.connect(dsn, statement_timeout_ms=statement_timeout_ms)
 
 
 def _load_targets(source_map: str) -> ValidationTargets:

@@ -239,6 +239,48 @@ def _validate_one_of(
     return [summary]
 
 
+def _validate_all_of(
+    value: object,
+    schema: Mapping[str, Any],
+    path: str,
+    root_schema: Mapping[str, Any],
+) -> list[str]:
+    branches = schema.get("allOf")
+    if branches is None:
+        return []
+    if not isinstance(branches, list):
+        return [f"{path}: allOf must contain a list of schemas"]
+    errors: list[str] = []
+    for branch in branches:
+        if not isinstance(branch, Mapping):
+            errors.append(f"{path}: allOf entries must be schemas")
+            continue
+        errors.extend(validate_json_contract(value, branch, path, root_schema))
+    return errors
+
+
+def _validate_conditional(
+    value: object,
+    schema: Mapping[str, Any],
+    path: str,
+    root_schema: Mapping[str, Any],
+) -> list[str]:
+    """Apply ``then``/``else`` per the ``if`` subschema's own outcome.
+
+    The ``if`` subschema is a selector, so its own errors are never reported --
+    failing it selects ``else`` instead.
+    """
+
+    condition = schema.get("if")
+    if not isinstance(condition, Mapping):
+        return []
+    matched = not validate_json_contract(value, condition, path, root_schema)
+    applied = schema.get("then" if matched else "else")
+    if not isinstance(applied, Mapping):
+        return []
+    return validate_json_contract(value, applied, path, root_schema)
+
+
 def validate_json_contract(
     value: object,
     schema: Mapping[str, Any],
@@ -259,4 +301,9 @@ def validate_json_contract(
         errors.extend(_validate_object(value, resolved, path, root))
     elif isinstance(value, list):
         errors.extend(_validate_array(value, resolved, path, root))
+    # Applicator keywords stay ADDITIVE: their errors join this schema's own
+    # rather than short-circuiting them, so a oneOf branch is still ranked by its
+    # full error count when the validator picks the closest one to report.
+    errors.extend(_validate_all_of(value, resolved, path, root))
+    errors.extend(_validate_conditional(value, resolved, path, root))
     return errors

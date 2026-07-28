@@ -103,6 +103,67 @@ def test_invalid_spec_emits_one_stable_json_object_without_artifact(
     assert captured.err == ""
 
 
+class _FakeDialect:
+    """A dialect stub whose timeout capability the test controls."""
+
+    name = "fake"
+
+    def __init__(self, *, supports_statement_timeout: bool) -> None:
+        self.supports_statement_timeout = supports_statement_timeout
+
+    def resolve_config(self, env) -> str:
+        del env
+        return "dsn"
+
+
+def _prepare_gold(monkeypatch, dialect) -> list[dict[str, object]]:
+    from seshat import cli
+
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(cli, "_current_engine", lambda: dialect.name)
+    monkeypatch.setattr(cli, "_ensure_driver", lambda: True)
+    monkeypatch.setattr("seshat.dialect.get_dialect", lambda engine: dialect)
+    monkeypatch.setattr(
+        cli,
+        "_make_runner",
+        lambda config, **kwargs: calls.append({"config": config, **kwargs}),
+    )
+    return calls
+
+
+def test_gold_provider_applies_the_governed_statement_timeout(monkeypatch) -> None:
+    from seshat.cli.commands.analyze import _gold_provider
+    from seshat.statistical.providers.base import ResourceLimits
+
+    calls = _prepare_gold(monkeypatch, _FakeDialect(supports_statement_timeout=True))
+
+    _gold_provider()
+
+    assert calls == [
+        {
+            "config": "dsn",
+            "statement_timeout_ms": ResourceLimits().timeout_seconds * 1000,
+        }
+    ]
+
+
+def test_gold_provider_refuses_an_engine_that_cannot_enforce_the_timeout(
+    monkeypatch,
+) -> None:
+    from seshat.cli.commands.analyze import _gold_provider
+    from seshat.statistical.providers.base import DataRequest, ProviderUnavailable
+
+    calls = _prepare_gold(monkeypatch, _FakeDialect(supports_statement_timeout=False))
+
+    provider = _gold_provider()
+
+    with pytest.raises(ProviderUnavailable) as exc_info:
+        provider.fetch(DataRequest())
+    assert exc_info.value.blocker.code == "STAT_PROVIDER_UNAVAILABLE"
+    assert "timeout" in exc_info.value.blocker.message
+    assert calls == []
+
+
 def test_cli_import_does_not_load_numerical_statistics() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     probe = (

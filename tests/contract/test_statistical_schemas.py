@@ -160,6 +160,32 @@ def test_method_variants_are_closed(
     assert validate_json_contract({**payload, "method": method}, schema)
 
 
+@pytest.mark.parametrize(
+    ("parameters", "missing"),
+    [
+        ({"model": "l2", "min_segment": 6}, "penalty"),
+        ({"model": "l2", "min_segment": 6, "algorithm": "pelt"}, "penalty"),
+        (
+            {"model": "l2", "min_segment": 6, "algorithm": "dynamic_programming"},
+            "change_count",
+        ),
+    ],
+)
+def test_change_point_conditional_parameters_are_required(
+    parameters: dict[str, object], missing: str
+) -> None:
+    # The committed schema makes penalty/change_count conditionally required. If
+    # the validator skipped those keywords, an incomplete spec would validate and
+    # the runner would quietly substitute its own default instead of refusing.
+    schema = _schema(SPEC_SCHEMA_PATH)
+
+    errors = validate_json_contract(
+        valid_spec("detect_change_points", parameters), schema
+    )
+
+    assert any(missing in error for error in errors)
+
+
 def test_decimal_parameters_are_strings_and_resource_bounds_are_enforced() -> None:
     schema = _schema(SPEC_SCHEMA_PATH)
     payload = valid_spec(

@@ -16,7 +16,10 @@ from seshat.status_surface import build_status_projection
 from .contracts import AnalysisSpec, Blocker
 
 _LIVE_COMMAND = re.compile(r"\b(?:seshat|retail)\s+validate\b", re.IGNORECASE)
-_LIVE_SUCCESS = re.compile(r"(?:\bexit\s*0\b|\bpass\b)", re.IGNORECASE)
+# Only an explicit exit status proves a live run succeeded. A bare verdict word
+# also matches its own negation ("retail validate did not pass"), which would let
+# failed -- or merely narrated -- validation clear the live-proof gate.
+_LIVE_SUCCESS = re.compile(r"\bexit\s*0\b", re.IGNORECASE)
 _CODE_ORDER = (
     "STAT_GOLD_NOT_READY",
     "STAT_LIVE_VALIDATION_MISSING",

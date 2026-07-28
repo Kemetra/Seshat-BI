@@ -77,6 +77,26 @@ def test_valid_policy_resolves_immutable_authority_context(tmp_path: Path) -> No
             "STAT_LIVE_VALIDATION_MISSING",
         ),
         (
+            # Negative evidence must never read as a successful live run.
+            lambda root: _edit(
+                root / "mappings/sample/readiness-status.yaml",
+                lambda doc: doc["stages"]["gold_ready"].update(
+                    evidence=["retail validate did not pass"]
+                ),
+            ),
+            "STAT_LIVE_VALIDATION_MISSING",
+        ),
+        (
+            # A bare verdict word is not proof; the exit status is.
+            lambda root: _edit(
+                root / "mappings/sample/readiness-status.yaml",
+                lambda doc: doc["stages"]["gold_ready"].update(
+                    evidence=["retail validate: PASS"]
+                ),
+            ),
+            "STAT_LIVE_VALIDATION_MISSING",
+        ),
+        (
             lambda root: _edit(
                 root / "mappings/sample/readiness-status.yaml",
                 lambda doc: doc["stages"]["semantic_model_ready"].update(
