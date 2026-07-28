@@ -268,7 +268,9 @@ The exact commands can change, but the product promise should not:
 
   * not a one-click dashboard generator,
   * not a Fabric deployment platform,
-  * not an ML/forecasting system,
+  * not an autonomous ML training, model-deployment, or causal-inference system;
+    governed baseline forecasting is available only as derived evidence through
+    `seshat analyze`,
   * not a universal ERP connector,
   * not a self-approval engine.
 * Explicitly reuses existing shipped surfaces instead of replacing them.

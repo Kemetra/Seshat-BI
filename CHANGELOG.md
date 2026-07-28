@@ -28,6 +28,15 @@ explicitly identifies a public release event.
 ## [Unreleased]
 
 ### Added
+- Governed statistical evidence engine -- a locally executable Product Module
+  with eight closed methods (`describe`, group comparison, proportions,
+  correlation, associational regression, anomaly detection, change-point
+  detection, and forecast), strict schemas, immutable derived evidence,
+  categorical outcomes, deterministic pending-human review, a fail-closed local
+  CSV provider, and a PostgreSQL-only read-only Gold adapter. This capability
+  supersedes the former universal statistical/forecasting exclusion: knowledge
+  cards still do not compute models, autonomous ML/deployment and causal claims
+  remain excluded, and no result grants approval or changes readiness.
 - `seshat tmdl-doc-comment-lint` -- an offline, read-only lint for **one** TMDL
   rule: a `///` documentation block must be followed by a declaration, never a
   blank line and never EOF. An unattached block makes Power BI Desktop reject the

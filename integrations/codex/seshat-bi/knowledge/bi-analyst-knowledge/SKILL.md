@@ -31,7 +31,9 @@ this SKILL.md  ->  INDEX.md  ->  ONLY the route(s) named  ->  narrative brief / 
 
 1. **Open `INDEX.md` first.** It routes by task and by symptom.
 2. **Read only what the route names** -- the derivation route, one or two framing
-   cards, the story-order rule. Reading the whole pack is an anti-pattern.
+   cards, the story-order rule, or `statistical-evidence-workflow.md` when the
+   question needs governed numerical evidence. Reading the whole pack is an
+   anti-pattern.
 3. **Ground in the two committed inputs only** -- approved metric contracts and the
    committed source-profile. A question that reaches past them is a [GAP], not a
    question.
@@ -53,10 +55,11 @@ is the narrative brief and review evidence `dashboard-design` needs before layou
 
 Not metric definition (contracts + domain packs own meaning); not layout, pixel
 geometry, or chart rendering (that is `powerbi-workflows` / `dashboard-design`);
-not statistics beyond owner-grade guardrails (no regression, forecasting, or
-significance testing in v1 -- those are a [GAP], routed to a human); not a
-publisher; not a database executor. It frames approved numbers; it never invents
-one.
+not an autonomous ML, causal-inference, or deployment system; not a publisher;
+not a database executor. Knowledge cards never compute statistics themselves.
+When approved metrics and readiness permit governed derived evidence, route to
+`statistical-evidence-workflow.md` and the `seshat analyze` Product Module, then
+stop for named-human review. It frames approved numbers; it never invents one.
 
 ## Routing boundaries (pick the right skill first)
 
@@ -64,6 +67,7 @@ one.
 |---|---|
 | What a metric MEANS / defining a contract | `retail-kpi-knowledge` (+ metric contracts) |
 | HOW to frame approved metrics into an analysis / decision-questions / story | **`bi-analyst-knowledge`** (this skill) |
+| Governed descriptive, inferential, anomaly, change-point, regression, or forecast evidence | `statistical-evidence-workflow.md` -> `seshat analyze` |
 | Layout, visuals, pages, themes, PBIR authoring | `powerbi-workflows` / `dashboard-design` |
 | SQL grain / DAX measures | `bi-sql-knowledge` / `bi-dax-knowledge` |
 

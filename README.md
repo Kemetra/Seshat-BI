@@ -105,6 +105,7 @@ artifacts.
 | **Human judgment stays human** | Agents surface decisions but cannot approve grain, PII, rollups, or publication. |
 | **Safe sequencing by construction** | The agent reads readiness state and performs only the next allowed action. |
 | **Power BI consumes governed truth** | Reports read `gold`; measures trace to approved metric contracts. |
+| **Statistics remain derived evidence** | `seshat analyze` runs a closed governed method catalog over approved metrics, then stops for named-human review without changing readiness. |
 
 This makes Seshat useful to BI developers, analytics engineers, data engineers,
 analytics leaders, and teams building agents that must stay truthful around real
@@ -181,6 +182,10 @@ seshat init-project my-bi
 pipx install "seshat-bi[db]"
 # or inject it into an existing pipx install:
 pipx inject seshat-bi psycopg2-binary
+
+# governed statistical evidence (exact-pinned numerical environment)
+pipx install "seshat-bi[stats]"
+seshat analyze --help
 ```
 
 The `seshat` command is primary. `retail` is a deprecated compatibility alias kept
@@ -188,6 +193,13 @@ for one deprecation cycle. Live database validation needs the optional `db` extr
 (shown above) and a DSN stored only in a gitignored `.env`. If the driver is
 missing, `seshat validate` / `seshat drift` print the exact `pipx inject` /
 `pip install` remedy rather than a raw import error.
+
+The `stats` extra enables governed descriptive, inference, correlation,
+regression, anomaly, and forecast evidence. Change-point detection additionally
+uses the `stats-change` extra. The Gold statistical provider is read-only and
+initially PostgreSQL-only; offline local CSV evidence needs no database. See the
+[architecture boundary](docs/architecture/statistical-evidence-engine.md) and
+[synthetic workflow](docs/worked-examples/statistical-evidence-engine.md).
 
 ### Claude Code plugin
 

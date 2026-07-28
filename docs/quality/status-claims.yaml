@@ -18,6 +18,12 @@
 # checkable status claim worth locking against drift.
 
 claims:
+  - id: "governed-statistical-engine-built"
+    doc: "docs/architecture/statistical-evidence-engine.md"
+    anchor: "The statistical core is an execution-capable local **Product Module**."
+    claimed-artifact: "src/seshat/statistical/runtime.py"
+    claimed-status: "built"
+
   - id: "capability-state-net-sales-trace"
     doc: "docs/quality/post-idea-bank-capability-state.md"
     anchor: "(`docs/demo/net-sales-end-to-end-readiness-trace.md`, shipped)"

@@ -46,6 +46,7 @@ a metric means (meaning lives in metric contracts and domain packs such as
 | Pick the framing for a question | the matching `framing-*.md` card | one named card id per question in the brief |
 | Order pages/zones into a story | `story-order.md` | declared story order in the brief |
 | Decide if a spike/change is real | `framing-signal-vs-noise.md` | a guardrailed claim, an insufficient-sample/insufficient-history statement, or no claim |
+| Compute governed statistical evidence from approved metrics | `statistical-evidence-workflow.md` | immutable derived evidence plus a pending named-human review |
 | Frame growth vs last period | `framing-period-variance.md` | seasonality-aware variance framing |
 | Frame who drives the total | `framing-contribution-mix.md` | contribution/mix-shift framing |
 | Frame dependency risk | `framing-concentration.md` | Pareto/ABC concentration framing |
@@ -64,6 +65,7 @@ a metric means (meaning lives in metric contracts and domain packs such as
 | "KPI cards are bare totals" | `framing-period-variance.md` + `framing-benchmark-threshold.md` | every headline carries a named comparison |
 | "Visuals bound but no one knows why" | `derivation-route.md` | three-way map: visual -> contract -> question |
 | "A spike was called an insight and reversed next week" | `framing-signal-vs-noise.md` | band-based claim or withheld claim |
+| "This decision needs regression, uncertainty, anomaly, change-point, or forecast evidence" | `statistical-evidence-workflow.md` | `seshat analyze` evidence, blocker, or unavailable outcome; never self-approval |
 | "A rate on a tiny slice drove a decision" | `framing-signal-vs-noise.md` (min-sample) | insufficient-sample statement |
 | "Owner asked for margin/turnover we don't have" | `derivation-route.md` ([GAP] format) | [GAP] entry, not a fabricated visual |
 | "Pages feel like disconnected topic buckets" | `story-order.md` | overview -> change -> why/where -> action order |

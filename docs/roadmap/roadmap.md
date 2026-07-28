@@ -290,8 +290,11 @@ existing constitution (Principles I, IV, V, VIII), they do not replace it:
 
 - Still out of scope (unbuilt by design): the Power BI EXECUTION adapter (F016 --
   official Power BI MCP / connection preferred, `pbi-cli` no longer preferred;
-  execution-only, gated + last), Fabric deployment, ML, forecasting, a universal
-  ERP connector, and fully automated mapping approval.
+  execution-only, gated + last), Fabric deployment, autonomous ML/model
+  deployment, causal claims, a universal ERP connector, and fully automated
+  mapping approval. Governed descriptive/inferential methods and baseline
+  forecasts now ship through `seshat analyze` as derived evidence pending
+  named-human review.
 - The shipped F005-F015 slices are docs/skills/templates (agent-first, hard rule
   #8); they added NO new `seshat check` rule (the static gate was 27 rules at that
   slice; it grew to 31 after S8 + D9-D11 + G6, and then to **33** after the

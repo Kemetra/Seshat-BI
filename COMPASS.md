@@ -48,6 +48,7 @@ Stages:
 | Python / pandas / dataframe source-prep, profiling, merge/fan-out, validation, performance, pipeline review (single-node) | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | focused dataframe / validation / pipeline-review artifact |
 | Big-data / distributed / larger-than-memory: engine selection, partitioning/shuffle, skew, distributed joins/aggregation, operational evidence, backfills | `skills/bi-bigdata-knowledge/SKILL.md` then `skills/bi-bigdata-knowledge/INDEX.md` | focused scale or operational-evidence checklist/verdict |
 | Analyst judgment / diagnostic questions / narrative-change review / action cadence (after approved contracts) | `skills/bi-analyst-knowledge/SKILL.md` then `skills/bi-analyst-knowledge/INDEX.md` | narrative brief, diagnostic tree, change verdict, [GAP], or action/cadence handoff |
+| Governed descriptive/inferential statistics, regression, anomaly, change-point, or forecast evidence | `skills/bi-analyst-knowledge/statistical-evidence-workflow.md` then `seshat analyze` | immutable derived evidence + pending named-human review; no readiness effect |
 | Dashboard / visual design / audience / layout | `.claude/skills/powerbi-dashboard-design/` (gated "design from contracts" verb: `.claude/skills/dashboard-design/`) | dashboard blueprint |
 | Power BI execution / publish | STOP unless `semantic_model_ready` and publish gates have passed | blocked verdict or BI handoff pack |
 | Unknown or ambiguous task | `docs/knowledge-map.md` | clarifying question or blocked verdict |
@@ -69,6 +70,11 @@ they never run a query, run DAX, run Python, or touch a database.
 | `skills/bi-python-knowledge/` | **dataframe grain** + source-prep reasoning | pandas/dataframe source-prep reasoning, cleaning/standardization review, aggregation-grain review, Python BI analyzer candidates, reasoning training/eval seed (*initial seed*) |
 | `skills/bi-bigdata-knowledge/` | **execution topology** (single-node → distributed) | engine selection (Spark/Dask/Polars/DuckDB/warehouse), partitioning/shuffle/skew, distributed joins & aggregation, file/table formats (Parquet/Delta/Iceberg), incremental/idempotent processing, validation & cost at scale; the scale-out sibling of bi-python (borrows its grain/additivity spine, owns only the distributed twist) |
 | `skills/bi-analyst-knowledge/` | **decision relevance** + evidence grounding | ranked questions, diagnostic trees, narrative-change review, action/cadence handoffs, framing and story order after approved contracts/profile; no metric definition or layout |
+
+The statistical route is execution-capable only through the governed Product
+Module. Knowledge cards never compute a model; the read-only Gold adapter accepts
+compiler-produced Gold `SELECT` queries after Gold and Semantic Model readiness
+pass. `computed` remains derived evidence, never approval.
 
 Mandatory flow inside any of these skills: **`SKILL.md` → `INDEX.md` → ONLY the file(s)
 the route names → an artifact** (checklist, metric/validation contract, or

@@ -35,7 +35,10 @@ on?" Answers direction, tempo, and whether a spike/dip is signal or noise.
 - Seasonality: a "spike" that recurs every cycle is seasonal, not an anomaly
   -- compare to the same phase last cycle (see `framing-period-variance.md`)
   before calling it unusual.
-- Regression, forecasting, and significance testing are out of scope (v1).
+- This framing card does not compute statistical models. For governed
+  seasonality-aware anomaly, change-point, regression, uncertainty, or forecast
+  evidence, route to `statistical-evidence-workflow.md`; only accepted
+  named-human review evidence may support the narrative.
 
 ## So-what template
 
