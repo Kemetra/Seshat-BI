@@ -69,6 +69,16 @@ dev = [
 db = [
     "psycopg2-binary>=2.9",
 ]
+# Governed numerical execution environments. These remain outside the base
+# install and are imported only by the statistical method that needs them.
+stats = [
+    "numpy==2.5.1",
+    "scipy==1.18.0",
+    "statsmodels==0.14.6",
+]
+stats-change = [
+    "ruptures==1.1.10",
+]
 # `dbt` extra: the governed transformation adapter. Core + Postgres are pinned
 # together because Seshat validates their artifact schema and selector behavior
 # as one compatibility boundary. Imports remain lazy; base installs load no dbt.
@@ -247,6 +257,7 @@ markers = [
     "unit",
     "integration",
     "live_db",
+    "statistics",
     "seed: name the seed scenario .sql file for a live_db test (spec 082)",
 ]
 testpaths = ["tests"]

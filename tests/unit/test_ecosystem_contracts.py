@@ -13,6 +13,7 @@ from seshat.ecosystem_contracts import (
     ContractError,
     parse_schema_version,
     require_supported_schema,
+    validate_json_contract,
 )
 
 pytestmark = pytest.mark.unit
@@ -66,3 +67,51 @@ def test_missing_artifact_is_reported_without_a_fake_hash(tmp_path: Path) -> Non
     identity = artifact_identity(tmp_path, "missing.txt", kind="other")
     assert identity["verification"] == "missing"
     assert identity["sha256"] is None
+
+
+def test_contract_validator_resolves_local_ref_and_exactly_one_branch() -> None:
+    schema = {
+        "$defs": {"id": {"type": "string", "pattern": "^[a-z]+$"}},
+        "oneOf": [
+            {
+                "type": "object",
+                "required": ["a"],
+                "properties": {"a": {"$ref": "#/$defs/id"}},
+            },
+            {
+                "type": "object",
+                "required": ["b"],
+                "properties": {"b": {"type": "integer"}},
+            },
+        ],
+    }
+    assert validate_json_contract({"a": "valid"}, schema) == []
+    assert validate_json_contract({"a": "INVALID"}, schema)
+    assert validate_json_contract({"a": "valid", "b": 1}, schema)
+
+
+def test_contract_validator_enforces_maximum_and_max_items() -> None:
+    schema = {
+        "type": "object",
+        "properties": {
+            "n": {"type": "integer", "maximum": 10},
+            "items": {"type": "array", "maxItems": 2},
+        },
+    }
+    assert validate_json_contract({"n": 11, "items": [1, 2, 3]}, schema)
+
+
+@pytest.mark.parametrize(
+    "reference, definitions",
+    [
+        ("https://example.invalid/schema.json", {}),
+        ("#/$defs/missing", {}),
+        ("#/$defs/id", {"id": "not-a-schema"}),
+    ],
+)
+def test_contract_validator_fails_closed_on_invalid_reference(
+    reference: str, definitions: dict[str, object]
+) -> None:
+    schema = {"$defs": definitions, "$ref": reference}
+
+    assert validate_json_contract("value", schema)
