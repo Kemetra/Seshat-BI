@@ -224,14 +224,19 @@ def _validate_one_of(
         return []
     if not isinstance(branches, list):
         return [f"{path}: oneOf must contain a list of schemas"]
-    valid_count = sum(
-        isinstance(branch, Mapping)
-        and not validate_json_contract(value, branch, path, root_schema)
+    branch_results = [
+        validate_json_contract(value, branch, path, root_schema)
         for branch in branches
-    )
-    if valid_count == 1:
+        if isinstance(branch, Mapping)
+    ]
+    valid_count = sum(not errors for errors in branch_results)
+    if valid_count == 1 and len(branch_results) == len(branches):
         return []
-    return [f"{path}: value must validate against exactly one oneOf schema"]
+    summary = f"{path}: value must validate against exactly one oneOf schema"
+    if valid_count == 0 and branch_results:
+        closest = min(branch_results, key=len)
+        return [summary, *closest]
+    return [summary]
 
 
 def validate_json_contract(
