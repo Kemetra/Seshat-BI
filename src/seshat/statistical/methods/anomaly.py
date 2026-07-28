@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import math
 import sys
+from dataclasses import dataclass
 
 from ..contracts import (
-    AnalysisWithheld,
-    Blocker,
     Diagnostic,
     Estimate,
     MethodContext,
     MethodResult,
+    require,
 )
 from ..evidence import decimal_text
 from .time_index import regular_series, rolling_origins
@@ -25,10 +25,6 @@ _MAD_SCALE = 1.4826
 # toss. Anything at or below this fraction of the baseline's magnitude carries no
 # usable signal, so the point is reported as degenerate instead of flagged.
 _DISPERSION_RELATIVE_FLOOR = 1e-9
-
-
-def _withheld(code: str, message: str, recovery: str) -> AnalysisWithheld:
-    return AnalysisWithheld((Blocker(code, message, recovery),))
 
 
 def _is_noise_level(dispersion: float, scale: float) -> bool:
@@ -55,34 +51,114 @@ def _mad(values):
     return center, dispersion
 
 
-def run_detect_anomalies(context: MethodContext) -> MethodResult:
-    """Evaluate points only against strictly earlier robust baselines."""
+@dataclass(frozen=True, slots=True)
+class _Baseline:
+    """One prior-only baseline and the residual of the point it evaluates."""
+
+    center: float
+    dispersion: float
+    residual: float
+    scale: float
+    observed: float
+
+
+def _trailing_baseline(history, observed: float, period: int) -> _Baseline:
+    import numpy as np
+
+    baseline = history[-period:]
+    center, dispersion = _mad(baseline)
+    return _Baseline(
+        center,
+        dispersion,
+        observed - center,
+        float(np.max(np.abs(baseline))),
+        observed,
+    )
+
+
+def _seasonal_baseline(history, observed: float, period: int) -> _Baseline | None:
+    """Extrapolate one step from the prior-only robust STL decomposition."""
 
     import numpy as np
 
-    series = regular_series(context)
-    parameters = context.spec.method.parameters
-    model = str(parameters["model"])
-    threshold_multiplier = float(parameters["threshold"])
-    direction = str(parameters.get("direction", "two-sided"))
-    if not math.isfinite(threshold_multiplier) or threshold_multiplier <= 0:
-        raise _withheld(
-            "STAT_THRESHOLD_INVALID",
-            "The anomaly threshold must be finite and positive.",
-            "Use a positive governed MAD multiplier.",
-        )
-    period = series.seasonal_period
+    if len(history) < period * 2:
+        return None
+    trend, seasonal, residuals = seasonal_components(history, period)
+    center, dispersion = _mad(residuals)
+    trend_step = float(trend[-1] - trend[-2])
+    expected = float(trend[-1] + trend_step + seasonal[-period])
+    return _Baseline(
+        center,
+        dispersion,
+        observed - expected,
+        float(np.max(np.abs(history))),
+        observed,
+    )
+
+
+def _is_anomaly(deviation: float, limit: float, direction: str) -> bool:
+    if direction == "upper":
+        return deviation > limit
+    if direction == "lower":
+        return deviation < -limit
+    return abs(deviation) > limit
+
+
+def _required_history(context: MethodContext, model: str, period: int) -> int:
+    """Return the index of the first point that has a full governed baseline."""
+
     cycles = max(
         2 if model == "seasonal_mad" else 1,
         context.spec.minimum_data.get("seasonal_cycles", 0),
     )
-    initial = max(period * cycles, context.spec.minimum_data.get("observations", 1))
-    if initial >= len(series.values):
-        raise _withheld(
-            "STAT_ANOMALY_HISTORY",
-            "No observation remains after the required historical baseline.",
-            "Provide history plus at least one later evaluation point.",
-        )
+    return max(period * cycles, context.spec.minimum_data.get("observations", 1))
+
+
+def _point_estimates(
+    key: str, baseline: _Baseline, limit: float, origin
+) -> tuple[Estimate, ...]:
+    return (
+        Estimate(f"observed:{key}", decimal_text(baseline.observed), None),
+        Estimate(f"baseline_center:{key}", decimal_text(baseline.center), None),
+        Estimate(f"baseline_dispersion:{key}", decimal_text(baseline.dispersion), None),
+        Estimate(f"threshold:{key}", decimal_text(limit), None),
+        Estimate(f"baseline_source_end:{key}", str(origin.source_end), None),
+        Estimate(f"evaluated_index:{key}", str(origin.evaluate_index), None),
+    )
+
+
+def _degenerate(key: str) -> Diagnostic:
+    return Diagnostic(
+        "STAT_ANOMALY_BASELINE_DEGENERATE",
+        "warning",
+        key,
+        "The prior-only baseline has no robust dispersion above the numerical "
+        "noise of its own values.",
+    )
+
+
+def run_detect_anomalies(context: MethodContext) -> MethodResult:
+    """Evaluate points only against strictly earlier robust baselines."""
+
+    series = regular_series(context)
+    parameters = context.spec.method.parameters
+    model = str(parameters["model"])
+    multiplier = float(parameters["threshold"])
+    direction = str(parameters.get("direction", "two-sided"))
+    require(
+        math.isfinite(multiplier) and multiplier > 0,
+        "STAT_THRESHOLD_INVALID",
+        "The anomaly threshold must be finite and positive.",
+        "Use a positive governed MAD multiplier.",
+    )
+    period = series.seasonal_period
+    initial = _required_history(context, model, period)
+    require(
+        initial < len(series.values),
+        "STAT_ANOMALY_HISTORY",
+        "No observation remains after the required historical baseline.",
+        "Provide history plus at least one later evaluation point.",
+    )
 
     estimates: list[Estimate] = []
     diagnostics: list[Diagnostic] = []
@@ -90,59 +166,28 @@ def run_detect_anomalies(context: MethodContext) -> MethodResult:
     for origin in rolling_origins(len(series.values), initial):
         history = series.values[: origin.evaluate_index]
         observed = float(series.values[origin.evaluate_index])
-        if model == "trailing_mad":
-            baseline = history[-period:]
-            center, dispersion = _mad(baseline)
-            residual = observed - center
-            scale = float(np.max(np.abs(baseline)))
-        else:
-            if len(history) < period * 2:
-                continue
-            trend, seasonal, residuals = seasonal_components(history, period)
-            center, dispersion = _mad(residuals)
-            trend_step = float(trend[-1] - trend[-2])
-            expected = float(trend[-1] + trend_step + seasonal[-period])
-            residual = observed - expected
-            scale = float(np.max(np.abs(history)))
-        if _is_noise_level(dispersion, scale):
-            diagnostics.append(
-                Diagnostic(
-                    "STAT_ANOMALY_BASELINE_DEGENERATE",
-                    "warning",
-                    series.timestamps[origin.evaluate_index],
-                    "The prior-only baseline has no robust dispersion above the "
-                    "numerical noise of its own values.",
-                )
-            )
-            continue
-        limit = threshold_multiplier * dispersion
-        deviation = residual - center
-        if direction == "upper":
-            is_anomaly = deviation > limit
-        elif direction == "lower":
-            is_anomaly = deviation < -limit
-        else:
-            is_anomaly = abs(deviation) > limit
         key = series.timestamps[origin.evaluate_index]
-        estimates.extend(
-            (
-                Estimate(f"anomaly:{key}", "1" if is_anomaly else "0", None),
-                Estimate(f"observed:{key}", decimal_text(observed), None),
-                Estimate(f"baseline_center:{key}", decimal_text(center), None),
-                Estimate(f"baseline_dispersion:{key}", decimal_text(dispersion), None),
-                Estimate(f"threshold:{key}", decimal_text(limit), None),
-                Estimate(f"baseline_source_end:{key}", str(origin.source_end), None),
-                Estimate(f"evaluated_index:{key}", str(origin.evaluate_index), None),
-            )
+        baseline = (
+            _trailing_baseline(history, observed, period)
+            if model == "trailing_mad"
+            else _seasonal_baseline(history, observed, period)
         )
+        if baseline is None:
+            continue
+        if _is_noise_level(baseline.dispersion, baseline.scale):
+            diagnostics.append(_degenerate(key))
+            continue
+        limit = multiplier * baseline.dispersion
+        flagged = _is_anomaly(baseline.residual - baseline.center, limit, direction)
+        estimates.append(Estimate(f"anomaly:{key}", "1" if flagged else "0", None))
+        estimates.extend(_point_estimates(key, baseline, limit, origin))
         evaluated += 1
-    if not evaluated:
-        raise _withheld(
-            "STAT_ANOMALY_BASELINE_DEGENERATE",
-            "No prior-only baseline had robust dispersion above its own "
-            "numerical noise.",
-            "Provide more variable historical observations.",
-        )
+    require(
+        evaluated,
+        "STAT_ANOMALY_BASELINE_DEGENERATE",
+        "No prior-only baseline had robust dispersion above its own numerical noise.",
+        "Provide more variable historical observations.",
+    )
     diagnostics.append(
         Diagnostic(
             "STAT_ANOMALY_BASELINE",

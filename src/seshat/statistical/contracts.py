@@ -153,3 +153,21 @@ class AnalysisWithheld(RuntimeError):
     def __init__(self, blockers: tuple[Blocker, ...]) -> None:
         super().__init__("; ".join(item.message for item in blockers))
         self.blockers = blockers
+
+
+def withheld(code: str, message: str, recovery: str) -> AnalysisWithheld:
+    """Build the one-blocker withholding every governed method raises."""
+
+    return AnalysisWithheld((Blocker(code, message, recovery),))
+
+
+def require(condition: object, code: str, message: str, recovery: str) -> None:
+    """Withhold unless a governed precondition holds.
+
+    The methods are fail-closed, so they are mostly a sequence of preconditions.
+    Expressing each as one call keeps that sequence readable -- and keeps the
+    guard's branch in exactly one place instead of once per precondition.
+    """
+
+    if not condition:
+        raise withheld(code, message, recovery)
