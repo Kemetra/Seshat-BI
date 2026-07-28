@@ -35,8 +35,8 @@ pytestmark = pytest.mark.unit
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# The two surfaces that emit an extra-enable command.
-_EMITTED_EXTRAS = ("mcp", "dbt")
+# Extras currently emitted through the generic install-hint boundary.
+_EMITTED_EXTRAS = ("mcp", "dbt", "db")
 
 
 def _pyproject_extras() -> dict[str, list[str]]:

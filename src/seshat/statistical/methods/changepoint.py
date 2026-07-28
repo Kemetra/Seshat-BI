@@ -24,14 +24,7 @@ def _withheld(code: str, message: str, recovery: str) -> AnalysisWithheld:
 
 
 def _ruptures():
-    try:
-        return importlib.import_module("ruptures")
-    except ImportError as exc:
-        raise _withheld(
-            "STAT_OPTIONAL_DEPENDENCY",
-            "Change-point detection requires the optional ruptures dependency.",
-            "Install Seshat BI with the statistics extra and rerun.",
-        ) from exc
+    return importlib.import_module("ruptures")
 
 
 def run_detect_change_points(context: MethodContext) -> MethodResult:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.metadata
 import json
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
@@ -27,7 +28,7 @@ from .providers.base import (
     RectangularData,
     build_data_request,
 )
-from .registry import RegistryRefused, get_descriptor, load_runner
+from .registry import METHODS, RegistryRefused, get_descriptor, load_runner
 from .schema import SpecRefused
 
 _NO_INPUT_DIGEST = hashlib.sha256(b"no-input-acquired").hexdigest()
@@ -144,13 +145,32 @@ def _input(spec: AnalysisSpec, data: RectangularData | None) -> Mapping[str, obj
 
 
 def _method(spec: AnalysisSpec) -> Mapping[str, object]:
+    descriptor = METHODS.get(spec.method.method_id)
+    libraries = (
+        tuple(
+            {
+                "name": name,
+                "version": _library_version(name),
+            }
+            for name in descriptor.libraries
+        )
+        if descriptor is not None
+        else ()
+    )
     return {
         "id": spec.method.method_id,
         "version": spec.method.version,
-        "libraries": (),
+        "libraries": libraries,
         "parameters": spec.method.parameters,
         "random_seed": spec.random_seed,
     }
+
+
+def _library_version(name: str) -> str:
+    try:
+        return importlib.metadata.version(name)
+    except importlib.metadata.PackageNotFoundError:
+        return "unavailable"
 
 
 def _evidence(

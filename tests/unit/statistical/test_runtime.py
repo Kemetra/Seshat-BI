@@ -141,6 +141,11 @@ def test_runtime_computes_after_policy_and_provider_preflight(
     tmp_path: Path, monkeypatch
 ) -> None:
     _allow(monkeypatch, tmp_path)
+    versions = {"numpy": "2.5.1", "scipy": "1.18.0"}
+    monkeypatch.setattr(
+        "seshat.statistical.runtime.importlib.metadata.version",
+        versions.__getitem__,
+    )
     events: list[str] = []
 
     class OrderedProvider(Provider):
@@ -167,6 +172,10 @@ def test_runtime_computes_after_policy_and_provider_preflight(
     assert evidence.estimates == (Estimate("mean", "11", "USD"),)
     assert evidence.readiness_effect == "none; named-human approval required"
     assert evidence.input_provenance["source_digest"] == "b" * 64
+    assert evidence.method["libraries"] == (
+        {"name": "numpy", "version": "2.5.1"},
+        {"name": "scipy", "version": "1.18.0"},
+    )
 
 
 def test_runtime_refuses_policy_without_calling_provider(

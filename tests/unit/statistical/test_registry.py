@@ -62,6 +62,7 @@ def test_descriptor_outside_internal_methods_cannot_load() -> None:
         function="system",
         required_roles=frozenset({"response"}),
         optional_dependency="statistics",
+        libraries=("numpy",),
     )
     with pytest.raises(RegistryRefused, match="registered descriptor"):
         load_runner(descriptor)
@@ -73,3 +74,14 @@ def test_registered_descriptors_use_literal_internal_paths() -> None:
         for descriptor in METHODS.values()
     )
     assert all("." not in descriptor.function for descriptor in METHODS.values())
+
+
+def test_registered_descriptors_name_real_optional_extras_and_libraries() -> None:
+    assert {descriptor.optional_dependency for descriptor in METHODS.values()} == {
+        "stats",
+        "stats-change",
+    }
+    assert all(descriptor.libraries for descriptor in METHODS.values())
+    assert METHODS["describe"].libraries == ("numpy", "scipy")
+    assert METHODS["regress"].libraries == ("numpy", "scipy", "statsmodels")
+    assert METHODS["detect_change_points"].libraries == ("numpy", "ruptures")

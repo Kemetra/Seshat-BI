@@ -53,6 +53,14 @@ explicitly identifies a public release event.
   `TmdlSerializer`/TOM path is untouched (pure stdlib text reading), so issue
   #494's broader TMDL-validation gap remains open (partial fix for #494).
 
+### Fixed
+- Statistical evidence now records the exact installed versions of each
+  method's numerical libraries, missing change-point dependencies produce the
+  specified `unavailable` outcome, and recovery guidance names the actual
+  `stats` / `stats-change` extras. The optional PostgreSQL Gold-adapter test
+  also proves a read-only session and compiler-only `SELECT` statements; it
+  remains `[PENDING LIVE PROFILE]` when its live-test dependencies are absent.
+
 ## [0.7.1] -- 2026-07-24
 
 ### Fixed

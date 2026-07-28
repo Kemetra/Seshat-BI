@@ -8,13 +8,14 @@ from datetime import date, timedelta
 import numpy as np
 import pytest
 from statsmodels.tsa.seasonal import STL
-from test_time_index import time_context
 
 from seshat.statistical.contracts import AnalysisWithheld, MethodSpec
 from seshat.statistical.methods.anomaly import (
     run_detect_anomalies,
     seasonal_components,
 )
+
+from .test_time_index import time_context
 
 pytestmark = pytest.mark.statistics
 

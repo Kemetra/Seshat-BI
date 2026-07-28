@@ -479,12 +479,11 @@ def test_portable_quoting_is_surgical_and_idempotent() -> None:
     assert _portable_quoting("pip install 'seshat-bi[dbt]'") == (
         'pipx inject seshat-bi --force "dbt-core==1.12.0" "dbt-postgres==1.10.2"'
     )
-    # ...while an extra with no dependency table falls back to the previous form
-    # rather than emitting an `inject` with no packages, which would do nothing.
-    # `db` is a driver extra whose remedy is `_db_extra_hint`'s, not this path's.
+    # The Gold statistical CLI now uses the generic hint boundary for `db`, so its
+    # concrete driver is also injected without re-resolving the Seshat build.
     assert (
         _portable_quoting('pip install "seshat-bi[db]"')
-        == 'pipx install --force "seshat-bi[db]"'
+        == 'pipx inject seshat-bi --force "psycopg2-binary>=2.9"'
     )
     # ...unrelated quoting is left alone...
     assert _portable_quoting("echo 'keep me'") == "echo 'keep me'"

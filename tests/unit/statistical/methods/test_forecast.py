@@ -7,7 +7,6 @@ from datetime import date, timedelta
 
 import numpy as np
 import pytest
-from test_time_index import time_context
 
 from seshat.statistical.contracts import AnalysisWithheld, MethodSpec
 from seshat.statistical.methods.forecast import (
@@ -20,6 +19,8 @@ from seshat.statistical.methods.forecast import (
     seasonal_naive,
     smape,
 )
+
+from .test_time_index import time_context
 
 pytestmark = pytest.mark.statistics
 

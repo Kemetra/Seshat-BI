@@ -348,6 +348,7 @@ def _db_extra_hint(engine: str = "postgres") -> str:
 _EXTRA_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "mcp": ("mcp>=1.28,<2",),
     "dbt": ("dbt-core==1.12.0", "dbt-postgres==1.10.2"),
+    "db": ("psycopg2-binary>=2.9",),
 }
 
 

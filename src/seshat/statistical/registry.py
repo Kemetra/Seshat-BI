@@ -18,6 +18,7 @@ class MethodDescriptor:
     function: str
     required_roles: frozenset[str]
     optional_dependency: str
+    libraries: tuple[str, ...]
 
 
 class RegistryRefused(ValueError):
@@ -31,7 +32,8 @@ _DESCRIPTORS = (
         "seshat.statistical.methods.descriptive",
         "run_describe",
         frozenset({"response"}),
-        "statistics",
+        "stats",
+        ("numpy", "scipy"),
     ),
     MethodDescriptor(
         "compare_groups",
@@ -39,7 +41,8 @@ _DESCRIPTORS = (
         "seshat.statistical.methods.groups",
         "run_compare_groups",
         frozenset({"response", "group"}),
-        "statistics",
+        "stats",
+        ("numpy", "scipy"),
     ),
     MethodDescriptor(
         "proportion",
@@ -47,7 +50,8 @@ _DESCRIPTORS = (
         "seshat.statistical.methods.proportions",
         "run_proportion",
         frozenset({"numerator", "denominator"}),
-        "statistics",
+        "stats",
+        ("numpy", "scipy"),
     ),
     MethodDescriptor(
         "correlate",
@@ -55,7 +59,8 @@ _DESCRIPTORS = (
         "seshat.statistical.methods.correlation",
         "run_correlate",
         frozenset({"response", "predictor"}),
-        "statistics",
+        "stats",
+        ("numpy", "scipy"),
     ),
     MethodDescriptor(
         "regress",
@@ -63,7 +68,8 @@ _DESCRIPTORS = (
         "seshat.statistical.methods.regression",
         "run_regress",
         frozenset({"response", "predictor"}),
-        "statistics",
+        "stats",
+        ("numpy", "scipy", "statsmodels"),
     ),
     MethodDescriptor(
         "detect_anomalies",
@@ -71,7 +77,8 @@ _DESCRIPTORS = (
         "seshat.statistical.methods.anomaly",
         "run_detect_anomalies",
         frozenset({"response", "time"}),
-        "statistics",
+        "stats",
+        ("numpy", "statsmodels"),
     ),
     MethodDescriptor(
         "detect_change_points",
@@ -79,7 +86,8 @@ _DESCRIPTORS = (
         "seshat.statistical.methods.changepoint",
         "run_detect_change_points",
         frozenset({"response", "time"}),
-        "statistics",
+        "stats-change",
+        ("numpy", "ruptures"),
     ),
     MethodDescriptor(
         "forecast",
@@ -87,7 +95,8 @@ _DESCRIPTORS = (
         "seshat.statistical.methods.forecast",
         "run_forecast",
         frozenset({"response", "time"}),
-        "statistics",
+        "stats",
+        ("numpy", "statsmodels"),
     ),
 )
 

@@ -9,10 +9,11 @@ from datetime import date, timedelta
 import numpy as np
 import pytest
 import ruptures as rpt
-from test_time_index import time_context
 
 from seshat.statistical.contracts import AnalysisWithheld, MethodSpec
 from seshat.statistical.methods.changepoint import run_detect_change_points
+
+from .test_time_index import time_context
 
 pytestmark = pytest.mark.statistics
 
@@ -94,7 +95,7 @@ def test_no_detected_change_is_explicit() -> None:
     assert result.diagnostics[-1].code == "STAT_NO_CHANGEPOINT"
 
 
-def test_absent_optional_dependency_is_withheld(monkeypatch) -> None:
+def test_absent_optional_dependency_propagates_as_unavailable(monkeypatch) -> None:
     original = importlib.import_module
 
     def missing(name):
@@ -103,9 +104,8 @@ def test_absent_optional_dependency_is_withheld(monkeypatch) -> None:
         return original(name)
 
     monkeypatch.setattr(importlib, "import_module", missing)
-    with pytest.raises(AnalysisWithheld) as exc_info:
+    with pytest.raises(ImportError, match="ruptures"):
         run_detect_change_points(_context(np.arange(20.0)))
-    assert exc_info.value.blockers[0].code == "STAT_OPTIONAL_DEPENDENCY"
 
 
 @pytest.mark.parametrize(

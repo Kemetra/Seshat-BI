@@ -49,7 +49,8 @@ The run writes immutable JSON evidence plus a deterministic Markdown review.
 It records all 36 input observations as a count and digest, never as raw rows.
 The evidence contains descriptive estimates, the explicit
 `STAT_OUTLIER_RULE_NONE` diagnostic, the numerical method identity, input
-provenance, and hashes of the cited governance artifacts.
+provenance, exact installed numerical-library versions, and hashes of the cited
+governance artifacts.
 
 To recreate a lost or stale Markdown projection without recomputing statistics
 or rewriting evidence:
@@ -78,3 +79,23 @@ or changes requested, and states the permitted narrative claim and caveats.
 The agent must not fill that decision on the reviewer's behalf. Any accepted
 narrative cites the reviewed evidence; it does not alter the approved metric
 contract or readiness status.
+
+## Live Gold boundary
+
+The shipped optional smoke test materializes this same generic metric in an
+ephemeral PostgreSQL Gold table, verifies the analysis session is read-only,
+and records that the Gold adapter issues only compiler-produced `SELECT`
+statements. This environment does not currently include the live-test
+dependency, so the boundary remains:
+
+`[PENDING LIVE PROFILE]`
+
+Enable with:
+
+```console
+pip install -e ".[dev,stats,stats-change,db,livetest]"
+pytest tests/live_db/test_statistical_adapter.py -m "live_db and statistics"
+```
+
+An honest skip is not a pass. The live claim becomes evidenced only when that
+test completes against its disposable PostgreSQL container.
