@@ -275,6 +275,97 @@ def test_cli_imports_without_psycopg2() -> None:
     assert "check" in commands
 
 
+def test_psycopg2_runner_enforces_readonly_timeout(monkeypatch) -> None:
+    import sys
+    from types import SimpleNamespace
+
+    from seshat.validate import make_psycopg2_runner
+
+    calls: list[tuple[str, dict]] = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return None
+
+        def execute(self, sql, params):
+            calls.append(("execute", {"sql": sql, "params": params}))
+
+        def fetchall(self):
+            return [(1,)]
+
+    class Connection:
+        def __init__(self) -> None:
+            self.sessions: list[dict] = []
+
+        def set_session(self, **kwargs):
+            self.sessions.append(kwargs)
+
+        def cursor(self):
+            return Cursor()
+
+    connection = Connection()
+
+    def connect(dsn, **kwargs):
+        calls.append((dsn, kwargs))
+        return connection
+
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+
+    runner = make_psycopg2_runner("postgresql test dsn", statement_timeout_ms=45000)
+
+    assert calls[0] == (
+        "postgresql test dsn",
+        {"options": "-c statement_timeout=45000"},
+    )
+    assert connection.sessions == [{"readonly": True, "autocommit": True}]
+    assert runner.run("SELECT 1") == [(1,)]
+
+
+def test_psycopg2_runner_preserves_no_timeout_call_shape(monkeypatch) -> None:
+    import sys
+    from types import SimpleNamespace
+
+    from seshat.validate import make_psycopg2_runner
+
+    calls: list[tuple[str, dict]] = []
+
+    class Connection:
+        def set_session(self, **kwargs):
+            pass
+
+    def connect(dsn, **kwargs):
+        calls.append((dsn, kwargs))
+        return Connection()
+
+    monkeypatch.setitem(sys.modules, "psycopg2", SimpleNamespace(connect=connect))
+
+    make_psycopg2_runner("postgresql test dsn")
+
+    assert calls == [("postgresql test dsn", {})]
+
+
+@pytest.mark.parametrize(
+    "timeout", (0, -1, True, "1 -c default_transaction_read_only=off")
+)
+def test_psycopg2_runner_refuses_unsafe_timeout(monkeypatch, timeout) -> None:
+    import sys
+    from types import SimpleNamespace
+
+    from seshat.validate import make_psycopg2_runner
+
+    monkeypatch.setitem(
+        sys.modules,
+        "psycopg2",
+        SimpleNamespace(connect=lambda *args, **kwargs: None),
+    )
+
+    with pytest.raises(ValueError, match="positive integer"):
+        make_psycopg2_runner("postgresql test dsn", statement_timeout_ms=timeout)
+
+
 # ---------------------------------------------------------------------------
 # run_live_checks: the pure aggregator that runs all four checks against a
 # runner + a ValidationTargets bundle (driver-free; fake runner).

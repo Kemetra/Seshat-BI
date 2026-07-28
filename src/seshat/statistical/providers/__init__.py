@@ -12,6 +12,7 @@ from .base import (
     ResourceLimits,
     build_data_request,
 )
+from .gold import GoldProvider
 from .local_csv import LocalCsvProvider
 
 __all__ = [
@@ -19,6 +20,7 @@ __all__ = [
     "DataProvider",
     "DataRequest",
     "Filter",
+    "GoldProvider",
     "Join",
     "LocalCsvProvider",
     "ProviderProvenance",

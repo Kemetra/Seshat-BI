@@ -356,7 +356,9 @@ def run_live_checks(
     return findings
 
 
-def make_psycopg2_runner(dsn: str) -> QueryRunner:
+def make_psycopg2_runner(
+    dsn: str, *, statement_timeout_ms: int | None = None
+) -> QueryRunner:
     """Build a real QueryRunner over a Postgres DSN. LAZY: imports psycopg2 here,
     never at module scope, so the static core's import path stays driver-free.
 
@@ -368,7 +370,18 @@ def make_psycopg2_runner(dsn: str) -> QueryRunner:
     """
     import psycopg2  # lazy: only on a real live run
 
-    conn = psycopg2.connect(dsn)
+    if statement_timeout_ms is not None and (
+        isinstance(statement_timeout_ms, bool)
+        or not isinstance(statement_timeout_ms, int)
+        or statement_timeout_ms <= 0
+    ):
+        raise ValueError("statement_timeout_ms must be a positive integer")
+    kwargs = (
+        {"options": f"-c statement_timeout={statement_timeout_ms}"}
+        if statement_timeout_ms is not None
+        else {}
+    )
+    conn = psycopg2.connect(dsn, **kwargs)
     conn.set_session(readonly=True, autocommit=True)
 
     class _Psycopg2Runner:
