@@ -84,6 +84,12 @@ anomaly baseline, rolling-origin evaluation never trains on future values, and
 partial final periods must be explicitly declared and either excluded or
 refused.
 
+An anomaly baseline is judged degenerate whenever its robust dispersion is not
+distinguishable from the numerical noise of its own values -- the test is
+relative to the baseline's magnitude, not an absolute epsilon. An exactly
+reproducible series therefore reports `STAT_ANOMALY_BASELINE_DEGENERATE` rather
+than emitting flags that float round-off would decide.
+
 ## Dependencies and commands
 
 The base install imports no numerical library. Install the pinned `stats` extra

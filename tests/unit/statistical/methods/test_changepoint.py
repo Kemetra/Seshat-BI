@@ -6,14 +6,22 @@ import importlib
 from dataclasses import replace
 from datetime import date, timedelta
 
-import numpy as np
 import pytest
-import ruptures as rpt
 
-from seshat.statistical.contracts import AnalysisWithheld, MethodSpec
-from seshat.statistical.methods.changepoint import run_detect_change_points
+# The numerical stack is an optional extra; collection-skip without it so the
+# base `.[dev]` suite never fails on an import it is not meant to satisfy.
+pytest.importorskip("numpy")
+pytest.importorskip("ruptures")
 
-from .test_time_index import time_context
+import numpy as np  # noqa: E402
+import ruptures as rpt  # noqa: E402
+
+from seshat.statistical.contracts import AnalysisWithheld, MethodSpec  # noqa: E402
+from seshat.statistical.methods.changepoint import (  # noqa: E402
+    run_detect_change_points,
+)
+
+from .test_time_index import time_context  # noqa: E402
 
 pytestmark = pytest.mark.statistics
 

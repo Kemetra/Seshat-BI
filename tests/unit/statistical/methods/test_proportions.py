@@ -5,20 +5,29 @@ from __future__ import annotations
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 
-import numpy as np
 import pytest
-from scipy import stats
 
-from seshat.statistical.contracts import (
+# The numerical stack is an optional extra; collection-skip without it so the
+# base `.[dev]` suite never fails on an import it is not meant to satisfy.
+pytest.importorskip("numpy")
+pytest.importorskip("scipy")
+
+import numpy as np  # noqa: E402
+from scipy import stats  # noqa: E402
+
+from seshat.statistical.contracts import (  # noqa: E402
     AnalysisSpec,
     AnalysisWithheld,
     ColumnBinding,
     MethodContext,
     MethodSpec,
 )
-from seshat.statistical.methods.proportions import run_proportion
-from seshat.statistical.policy import PolicyContext
-from seshat.statistical.providers.base import ProviderProvenance, RectangularData
+from seshat.statistical.methods.proportions import run_proportion  # noqa: E402
+from seshat.statistical.policy import PolicyContext  # noqa: E402
+from seshat.statistical.providers.base import (  # noqa: E402
+    ProviderProvenance,
+    RectangularData,
+)
 
 pytestmark = pytest.mark.statistics
 

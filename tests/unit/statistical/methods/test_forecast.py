@@ -5,11 +5,17 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import date, timedelta
 
-import numpy as np
 import pytest
 
-from seshat.statistical.contracts import AnalysisWithheld, MethodSpec
-from seshat.statistical.methods.forecast import (
+# The numerical stack is an optional extra; collection-skip without it so the
+# base `.[dev]` suite never fails on an import it is not meant to satisfy.
+pytest.importorskip("numpy")
+pytest.importorskip("statsmodels")
+
+import numpy as np  # noqa: E402
+
+from seshat.statistical.contracts import AnalysisWithheld, MethodSpec  # noqa: E402
+from seshat.statistical.methods.forecast import (  # noqa: E402
     candidate_from_id,
     evaluate_candidate,
     fit_candidate,
@@ -20,7 +26,7 @@ from seshat.statistical.methods.forecast import (
     smape,
 )
 
-from .test_time_index import time_context
+from .test_time_index import time_context  # noqa: E402
 
 pytestmark = pytest.mark.statistics
 

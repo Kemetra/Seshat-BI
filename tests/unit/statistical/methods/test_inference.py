@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
-from scipy import stats
 
-from seshat.statistical.contracts import AnalysisWithheld
-from seshat.statistical.methods.inference import (
+# The numerical stack is an optional extra; collection-skip without it so the
+# base `.[dev]` suite never fails on an import it is not meant to satisfy.
+pytest.importorskip("numpy")
+pytest.importorskip("scipy")
+
+import numpy as np  # noqa: E402
+from scipy import stats  # noqa: E402
+
+from seshat.statistical.contracts import AnalysisWithheld  # noqa: E402
+from seshat.statistical.methods.inference import (  # noqa: E402
     adjust_pvalues,
     bootstrap_interval,
     epsilon_squared,

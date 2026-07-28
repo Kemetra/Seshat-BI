@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import sys
 
 from ..contracts import (
     AnalysisWithheld,
@@ -17,9 +18,24 @@ from .time_index import regular_series, rolling_origins
 
 _MAD_SCALE = 1.4826
 
+# A robust dispersion has to be judged RELATIVE to the magnitude of the values it
+# was measured from. An exactly periodic series leaves residuals at float
+# round-off (~1e-15 on values of order 10), which clears an absolute epsilon and
+# then makes round-off itself decide every flag -- a platform-dependent coin
+# toss. Anything at or below this fraction of the baseline's magnitude carries no
+# usable signal, so the point is reported as degenerate instead of flagged.
+_DISPERSION_RELATIVE_FLOOR = 1e-9
+
 
 def _withheld(code: str, message: str, recovery: str) -> AnalysisWithheld:
     return AnalysisWithheld((Blocker(code, message, recovery),))
+
+
+def _is_noise_level(dispersion: float, scale: float) -> bool:
+    """Report whether a robust dispersion is indistinguishable from round-off."""
+
+    floor = max(sys.float_info.epsilon, _DISPERSION_RELATIVE_FLOOR * scale)
+    return not math.isfinite(dispersion) or dispersion <= floor
 
 
 def seasonal_components(values, period: int):
@@ -78,6 +94,7 @@ def run_detect_anomalies(context: MethodContext) -> MethodResult:
             baseline = history[-period:]
             center, dispersion = _mad(baseline)
             residual = observed - center
+            scale = float(np.max(np.abs(baseline)))
         else:
             if len(history) < period * 2:
                 continue
@@ -86,13 +103,15 @@ def run_detect_anomalies(context: MethodContext) -> MethodResult:
             trend_step = float(trend[-1] - trend[-2])
             expected = float(trend[-1] + trend_step + seasonal[-period])
             residual = observed - expected
-        if not math.isfinite(dispersion) or dispersion <= np.finfo(float).eps:
+            scale = float(np.max(np.abs(history)))
+        if _is_noise_level(dispersion, scale):
             diagnostics.append(
                 Diagnostic(
                     "STAT_ANOMALY_BASELINE_DEGENERATE",
                     "warning",
                     series.timestamps[origin.evaluate_index],
-                    "The prior-only baseline has zero robust dispersion.",
+                    "The prior-only baseline has no robust dispersion above the "
+                    "numerical noise of its own values.",
                 )
             )
             continue
@@ -120,7 +139,8 @@ def run_detect_anomalies(context: MethodContext) -> MethodResult:
     if not evaluated:
         raise _withheld(
             "STAT_ANOMALY_BASELINE_DEGENERATE",
-            "No prior-only baseline had non-zero robust dispersion.",
+            "No prior-only baseline had robust dispersion above its own "
+            "numerical noise.",
             "Provide more variable historical observations.",
         )
     diagnostics.append(
