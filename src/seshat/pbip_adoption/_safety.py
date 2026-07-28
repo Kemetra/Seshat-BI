@@ -14,6 +14,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from seshat.gitutil import GIT_HARDENING as GIT_UNTRUSTED_TREE_HARDENING
+
 SCHEMA_VERSION = "1.0"
 MANIFEST_PATH = ".seshat/adoption/pbip-adoption.yaml"
 
@@ -25,14 +27,6 @@ MANIFEST_PATH = ".seshat/adoption/pbip-adoption.yaml"
 # owns the extracted files, so the dubious-ownership block never fires. Prepend
 # these to the argv (after "git") to neutralize the config-driven exec vectors.
 # On a trusted repo they are a harmless no-op (fsmonitor is only an optimization).
-GIT_UNTRUSTED_TREE_HARDENING: tuple[str, ...] = (
-    "-c",
-    "core.fsmonitor=false",
-    "-c",
-    "core.hooksPath=/dev/null",
-    "-c",
-    "protocol.ext.allow=never",
-)
 
 # Detection patterns: a boolean "does this text look like a credential or a
 # literal connection detail" used to raise a governance fact.  They match only

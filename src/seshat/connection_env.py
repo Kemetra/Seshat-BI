@@ -49,6 +49,30 @@ class ConnectionConfigError(ValueError):
 _T = TypeVar("_T")
 
 
+def _scrub_connection_values(message: str) -> str:
+    """Strip DSN-shaped credentials out of a wrapped resolution error.
+
+    ``ConnectionConfigError``'s text is printed BARE (no ``dialect.redact``) by
+    ``validate`` / ``drift`` / ``profile`` at their config-resolution boundary,
+    so whatever an upstream ``ValueError`` says reaches the terminal verbatim.
+    Today's upstream raisers are benign (``get_dialect`` names an ENGINE;
+    the port path names a PORT), but nothing enforced that -- a future
+    ``raise ValueError(f"...{dsn}...")`` anywhere under ``resolve_config`` /
+    ``resolve_dsn`` would leak a live credential with no code review signal.
+    Scrubbing at the wrapper makes the guarantee structural instead of
+    conventional; ``test_connection_config_error_never_carries_the_dsn`` pins it.
+    """
+    from seshat.redaction_core import replace_fragments, uri_components
+
+    candidates = [
+        token.strip("'\"")
+        for token in message.replace(",", " ").split()
+        if "://" in token or "=" in token
+    ]
+    fragments = uri_components(candidates)
+    return replace_fragments(message, fragments, "<redacted>")
+
+
 def as_connection_config(resolve: Callable[[], _T]) -> _T:
     """Run a connection-config resolution, converting a ``ValueError`` from an
     invalid setting into ``ConnectionConfigError``.
@@ -62,7 +86,7 @@ def as_connection_config(resolve: Callable[[], _T]) -> _T:
     except ConnectionConfigError:
         raise
     except ValueError as exc:
-        raise ConnectionConfigError(str(exc)) from exc
+        raise ConnectionConfigError(_scrub_connection_values(str(exc))) from exc
 
 
 def _dotenv_overlay(repo_root: Path | str) -> dict[str, str]:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -29,16 +30,29 @@ _GIT_NOT_A_REPO = 128
 # `safe.directory` does NOT help: the victim owns the extracted files, so the
 # dubious-ownership block never fires. These flags neutralize the config-driven
 # exec vectors at the shared git wrapper and are a harmless no-op on a trusted
-# repo (fsmonitor is only an optimization). Keep in sync with
-# pbip_adoption._safety.GIT_UNTRUSTED_TREE_HARDENING.
-_GIT_HARDENING = (
+# repo (fsmonitor is only an optimization).
+#
+# THE single definition: every module that shells out to git against a
+# possibly-externally-authored tree imports `GIT_HARDENING` from here. It was
+# previously re-listed locally in ~10 modules under a manual "keep in sync"
+# comment, and that contract drifted -- `cli/commands/dbt.py` carried only
+# `core.fsmonitor`, leaving hooksPath/protocol.ext live on a user-supplied
+# `--repo` tree. A shared constant makes that drift impossible; the
+# `test_git_hardening_has_a_single_definition` regression test enforces it.
+# `os.devnull` (not the "/dev/null" literal) so the hooksPath override names a
+# real null sink on Windows too -- several call sites already did this and the
+# shared tuple must not regress them to the Unix-only spelling.
+GIT_HARDENING = (
     "-c",
     "core.fsmonitor=false",
     "-c",
-    "core.hooksPath=/dev/null",
+    f"core.hooksPath={os.devnull}",
     "-c",
     "protocol.ext.allow=never",
 )
+
+# Back-compat alias for in-package callers that referenced the private name.
+_GIT_HARDENING = GIT_HARDENING
 
 
 def validate_commit_range(range_expr: str) -> str:

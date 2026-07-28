@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 import subprocess
 from datetime import date
@@ -12,6 +11,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+from seshat.gitutil import GIT_HARDENING
 
 from .contracts import (
     Blocker,
@@ -33,12 +34,7 @@ _ANSWERED = frozenset({"answered", "resolved", "n/a", "not applicable"})
 def _git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     command = [
         "git",
-        "-c",
-        "core.fsmonitor=false",
-        "-c",
-        f"core.hooksPath={os.devnull}",
-        "-c",
-        "protocol.ext.allow=never",
+        *GIT_HARDENING,
         "-c",
         f"safe.directory={repo_root.as_posix()}",
         *args,

@@ -191,8 +191,16 @@ def _verify_local_profile(root: Path) -> None:
 
 
 def _profile_git_result(root: Path, *args: str) -> int:
+    # `root` is a user-supplied `--repo`, and `cwd=root` makes git read THAT
+    # tree's `.git/config`, so the FULL untrusted-tree hardening set is required
+    # here -- `check-ignore` / `ls-files` (the two callers) are exactly the
+    # subcommands that trigger git's config-driven execution. Sourced from the
+    # single shared tuple: this site previously carried `core.fsmonitor` alone
+    # and left `core.hooksPath` / `protocol.ext` open.
+    from seshat.gitutil import GIT_HARDENING
+
     completed = subprocess.run(
-        ["git", "-c", "core.fsmonitor=false", *args, "--", "profiles.yml"],
+        ["git", *GIT_HARDENING, *args, "--", "profiles.yml"],
         cwd=root,
         capture_output=True,
         text=True,
