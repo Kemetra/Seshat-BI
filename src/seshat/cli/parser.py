@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 
 from .parser_adoption import _add_adopt_pbip_parser
+from .parser_analysis import add_analysis_parser
 from .parser_core import add_core_parsers
 from .parser_dagster import add_dagster_parsers
 from .parser_dbt import _add_dbt_parser
@@ -890,6 +891,7 @@ def _build_parser(prog: str = "retail") -> argparse.ArgumentParser:
     _add_init_parser(sub)
     add_core_parsers(sub, "first_arrival", "scaffold_source", "scaffold_design")
     _add_adopt_pbip_parser(sub)
+    add_analysis_parser(sub)
     _add_dbt_parser(sub)
     add_core_parsers(sub, "status")
     _add_dashboard_parser(sub)

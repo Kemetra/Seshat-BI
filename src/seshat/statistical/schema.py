@@ -38,6 +38,9 @@ def resolve_statistical_schema(repo_root: Path, name: str) -> Path:
     development = repo_root.resolve() / "schemas" / name
     if development.is_file():
         return development
+    editable_checkout = Path(__file__).resolve().parents[3] / "schemas" / name
+    if editable_checkout.is_file():
+        return editable_checkout
     packaged = Path(__file__).resolve().parent / "schemas" / name
     if packaged.is_file():
         return packaged
