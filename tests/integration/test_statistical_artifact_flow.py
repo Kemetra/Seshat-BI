@@ -33,63 +33,20 @@ _EVIDENCE = "mappings/sample_orders/analyses/weekly_signal.evidence.json"
 _REVIEW = "mappings/sample_orders/analyses/weekly_signal.review.md"
 
 
-def _run(argv: list[str], capsys) -> tuple[int, dict]:
-    """Run one analyze command and return its exit code with its JSON response."""
+def _analyze(root: Path, capsys, subcommand: str, *arguments: str) -> tuple[int, dict]:
+    """Run one analyze subcommand and return its exit code with its JSON response."""
 
+    argv = [
+        "analyze",
+        subcommand,
+        "--repo",
+        str(root),
+        *arguments,
+        "--format",
+        "json",
+    ]
     code = main(argv, prog="seshat")
     return code, json.loads(capsys.readouterr().out)
-
-
-def _validate(root: Path, capsys) -> tuple[int, dict]:
-    return _run(
-        [
-            "analyze",
-            "validate",
-            "--repo",
-            str(root),
-            "--spec",
-            _SPEC,
-            "--format",
-            "json",
-        ],
-        capsys,
-    )
-
-
-def _run_analysis(root: Path, capsys) -> tuple[int, dict]:
-    return _run(
-        [
-            "analyze",
-            "run",
-            "--repo",
-            str(root),
-            "--spec",
-            _SPEC,
-            "--provider",
-            "local_csv",
-            "--input",
-            "data/weekly_metric.csv",
-            "--format",
-            "json",
-        ],
-        capsys,
-    )
-
-
-def _render(root: Path, capsys) -> tuple[int, dict]:
-    return _run(
-        [
-            "analyze",
-            "render",
-            "--repo",
-            str(root),
-            "--evidence",
-            _EVIDENCE,
-            "--format",
-            "json",
-        ],
-        capsys,
-    )
 
 
 def _assert_derived_evidence(evidence: dict) -> None:
@@ -123,13 +80,23 @@ def test_synthetic_full_flow_writes_valid_derived_evidence(
     evidence_path = root / _EVIDENCE
     review_path = root / _REVIEW
 
-    validation_rc, validation = _validate(root, capsys)
+    validation_rc, validation = _analyze(root, capsys, "validate", "--spec", _SPEC)
     assert validation_rc == 0
     assert validation["outcome"] == "computed"
     assert not evidence_path.exists()
     assert not review_path.exists()
 
-    rc, response = _run_analysis(root, capsys)
+    rc, response = _analyze(
+        root,
+        capsys,
+        "run",
+        "--spec",
+        _SPEC,
+        "--provider",
+        "local_csv",
+        "--input",
+        "data/weekly_metric.csv",
+    )
     assert rc == 0
     assert response["evidence_path"] == _EVIDENCE
     assert response["review_path"] == _REVIEW
@@ -138,7 +105,7 @@ def test_synthetic_full_flow_writes_valid_derived_evidence(
 
     evidence_before_render = evidence_path.read_bytes()
     review_path.write_text("stale local projection\n", encoding="utf-8")
-    render_rc, rendered = _render(root, capsys)
+    render_rc, rendered = _analyze(root, capsys, "render", "--evidence", _EVIDENCE)
     assert render_rc == 0
     assert rendered["outcome"] == "computed"
     assert evidence_path.read_bytes() == evidence_before_render

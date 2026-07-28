@@ -225,29 +225,23 @@ def _refused(invocation: _Invocation, observed: _Observed) -> AnalysisEvidence:
     return _evidence(invocation, Outcome.REFUSED, observed)
 
 
-def _failed(
-    invocation: _Invocation, observed: _Observed, message: str, recovery: str
+def _blocked(
+    invocation: _Invocation,
+    observed: _Observed,
+    outcome: Outcome,
+    blocker: Blocker,
 ) -> AnalysisEvidence:
-    return _evidence(
-        invocation,
-        Outcome.FAILED,
-        replace(
-            observed, blockers=_single_blocker("STAT_RUNTIME_FAILED", message, recovery)
-        ),
-    )
+    """Report one categorical outcome carrying exactly one blocker."""
+
+    return _evidence(invocation, outcome, replace(observed, blockers=(blocker,)))
 
 
-def _unavailable(
-    invocation: _Invocation, observed: _Observed, message: str, recovery: str
-) -> AnalysisEvidence:
-    return _evidence(
-        invocation,
-        Outcome.UNAVAILABLE,
-        replace(
-            observed,
-            blockers=_single_blocker("STAT_DEPENDENCY_UNAVAILABLE", message, recovery),
-        ),
-    )
+def _runtime_failure(message: str, recovery: str) -> Blocker:
+    return Blocker("STAT_RUNTIME_FAILED", message, recovery)
+
+
+def _missing_dependency(message: str, recovery: str) -> Blocker:
+    return Blocker("STAT_DEPENDENCY_UNAVAILABLE", message, recovery)
 
 
 def _policy_decision(invocation: _Invocation):
@@ -266,11 +260,14 @@ def _policy_decision(invocation: _Invocation):
         )
         return None, _refused(invocation, _Observed(blockers=blockers))
     except Exception:
-        return None, _failed(
+        return None, _blocked(
             invocation,
             _Observed(),
-            "Statistical policy evaluation failed safely.",
-            "Inspect the local logs and retry after correcting the runtime.",
+            Outcome.FAILED,
+            _runtime_failure(
+                "Statistical policy evaluation failed safely.",
+                "Inspect the local logs and retry after correcting the runtime.",
+            ),
         )
 
 
@@ -335,24 +332,26 @@ def _acquired_data(
         request = build_data_request(invocation.spec, observed.context)
         return provider.fetch(request), None
     except ProviderUnavailable as exc:
-        return None, _evidence(
-            invocation,
-            Outcome.UNAVAILABLE,
-            replace(observed, blockers=(exc.blocker,)),
-        )
+        return None, _blocked(invocation, observed, Outcome.UNAVAILABLE, exc.blocker)
     except ImportError:
-        return None, _unavailable(
+        return None, _blocked(
             invocation,
             observed,
-            "A provider dependency is unavailable.",
-            "Install the required Seshat BI optional dependency.",
+            Outcome.UNAVAILABLE,
+            _missing_dependency(
+                "A provider dependency is unavailable.",
+                "Install the required Seshat BI optional dependency.",
+            ),
         )
     except Exception:
-        return None, _failed(
+        return None, _blocked(
             invocation,
             observed,
-            "Statistical data acquisition failed safely.",
-            "Inspect the local logs and retry after correcting the provider.",
+            Outcome.FAILED,
+            _runtime_failure(
+                "Statistical data acquisition failed safely.",
+                "Inspect the local logs and retry after correcting the provider.",
+            ),
         )
 
 
@@ -376,18 +375,24 @@ def _method_result(invocation: _Invocation, observed: _Observed, descriptor):
             replace(observed, blockers=exc.blockers),
         )
     except ImportError:
-        return None, _unavailable(
+        return None, _blocked(
             invocation,
             observed,
-            "A numerical method dependency is unavailable.",
-            f'Install the "{descriptor.optional_dependency}" optional extra.',
+            Outcome.UNAVAILABLE,
+            _missing_dependency(
+                "A numerical method dependency is unavailable.",
+                f'Install the "{descriptor.optional_dependency}" optional extra.',
+            ),
         )
     except Exception:
-        return None, _failed(
+        return None, _blocked(
             invocation,
             observed,
-            "Statistical method execution failed safely.",
-            "Inspect the local logs and retry after correcting the method input.",
+            Outcome.FAILED,
+            _runtime_failure(
+                "Statistical method execution failed safely.",
+                "Inspect the local logs and retry after correcting the method input.",
+            ),
         )
 
 
