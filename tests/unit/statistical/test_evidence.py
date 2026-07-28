@@ -21,7 +21,10 @@ from seshat.statistical.contracts import (
     TestStatistic as StatisticalTest,
 )
 from seshat.statistical.evidence import (
+    EvidenceFindings,
+    EvidenceReferences,
     EvidenceRefused,
+    EvidenceRun,
     NonFiniteResult,
     build_evidence,
     decimal_text,
@@ -138,15 +141,16 @@ def test_build_evidence_freezes_nested_provenance() -> None:
         "sha256": "a" * 64,
     }
     evidence = build_evidence(
-        engine_version="1.0",
-        invocation_id="invocation-002",
-        started_at="2026-07-28T12:00:00Z",
-        completed_at="2026-07-28T12:00:01Z",
-        analysis=analysis,
-        governance={"readiness": (), "metric_contracts": ()},
-        input_provenance=sample_evidence().input_provenance,
-        method=sample_evidence().method,
-        outcome=Outcome.COMPUTED,
+        EvidenceRun(
+            "1.0", "invocation-002", "2026-07-28T12:00:00Z", "2026-07-28T12:00:01Z"
+        ),
+        EvidenceReferences(
+            analysis=analysis,
+            governance={"readiness": (), "metric_contracts": ()},
+            input_provenance=sample_evidence().input_provenance,
+            method=sample_evidence().method,
+        ),
+        EvidenceFindings(Outcome.COMPUTED),
     )
     analysis["revision"] = 2
 

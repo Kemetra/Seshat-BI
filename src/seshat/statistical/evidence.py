@@ -7,21 +7,18 @@ import math
 import os
 import re
 import tempfile
-from dataclasses import fields, is_dataclass
+from dataclasses import dataclass, fields, is_dataclass
 from decimal import Decimal, InvalidOperation
 from enum import Enum
 from pathlib import Path, PurePath
 from types import MappingProxyType
-from typing import Mapping, Sequence
+from typing import Mapping
 
 from .contracts import (
     AnalysisEvidence,
     Blocker,
-    Diagnostic,
-    Estimate,
-    Interval,
+    MethodResult,
     Outcome,
-    TestStatistic,
 )
 
 _FORBIDDEN_KEYS = {
@@ -49,25 +46,36 @@ class EvidenceRefused(ValueError):
     """Evidence would violate containment, privacy, or serialization policy."""
 
 
-def decimal_text(value: Decimal | float | int) -> str:
-    """Return a stable finite decimal string without redundant zeroes."""
+def _as_decimal(value: Decimal | float | int) -> Decimal:
+    try:
+        return value if isinstance(value, Decimal) else Decimal(str(value))
+    except (InvalidOperation, ValueError) as exc:
+        raise NonFiniteResult("invalid numerical result") from exc
+
+
+def _finite_decimal(value: Decimal | float | int) -> Decimal:
+    """Convert a numerical result, refusing anything JSON cannot represent."""
 
     if isinstance(value, bool):
         raise TypeError("boolean values are not numerical evidence")
     if isinstance(value, float) and not math.isfinite(value):
         raise NonFiniteResult("non-finite numerical result")
-    try:
-        number = value if isinstance(value, Decimal) else Decimal(str(value))
-    except (InvalidOperation, ValueError) as exc:
-        raise NonFiniteResult("invalid numerical result") from exc
+    number = _as_decimal(value)
     if not number.is_finite():
         raise NonFiniteResult("non-finite numerical result")
+    return number
+
+
+def decimal_text(value: Decimal | float | int) -> str:
+    """Return a stable finite decimal string without redundant zeroes."""
+
+    number = _finite_decimal(value)
     if number == 0:
         return "0"
     rendered = format(number.normalize(), "f")
-    if "." in rendered:
-        rendered = rendered.rstrip("0").rstrip(".")
-    return rendered
+    if "." not in rendered:
+        return rendered
+    return rendered.rstrip("0").rstrip(".")
 
 
 def _freeze(value: object) -> object:
@@ -80,94 +88,134 @@ def _freeze(value: object) -> object:
     return value
 
 
+@dataclass(frozen=True, slots=True)
+class EvidenceRun:
+    """When this invocation ran, and which engine ran it."""
+
+    engine_version: str
+    invocation_id: str
+    started_at: str
+    completed_at: str
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceReferences:
+    """The committed artifacts and method this evidence is traced to."""
+
+    analysis: Mapping[str, object]
+    governance: Mapping[str, object]
+    input_provenance: Mapping[str, object]
+    method: Mapping[str, object]
+
+
+@dataclass(frozen=True, slots=True)
+class EvidenceFindings:
+    """What the invocation concluded: one outcome, its numbers, its blockers."""
+
+    outcome: Outcome
+    result: MethodResult = MethodResult()
+    blockers: tuple[Blocker, ...] = ()
+
+
 def build_evidence(
-    *,
-    engine_version: str,
-    invocation_id: str,
-    started_at: str,
-    completed_at: str,
-    analysis: Mapping[str, object],
-    governance: Mapping[str, object],
-    input_provenance: Mapping[str, object],
-    method: Mapping[str, object],
-    outcome: Outcome,
-    estimates: Sequence[Estimate] = (),
-    effect_sizes: Sequence[Estimate] = (),
-    intervals: Sequence[Interval] = (),
-    tests: Sequence[TestStatistic] = (),
-    diagnostics: Sequence[Diagnostic] = (),
-    warnings: Sequence[str] = (),
-    blockers: Sequence[Blocker] = (),
-    cautions: Sequence[str] = (),
+    run: EvidenceRun, references: EvidenceReferences, findings: EvidenceFindings
 ) -> AnalysisEvidence:
     """Build immutable evidence without assigning business authority."""
 
+    result = findings.result
     return AnalysisEvidence(
-        engine_version=engine_version,
-        invocation_id=invocation_id,
-        started_at=started_at,
-        completed_at=completed_at,
-        analysis=_freeze(analysis),
-        governance=_freeze(governance),
-        input_provenance=_freeze(input_provenance),
-        method=_freeze(method),
-        outcome=outcome,
-        estimates=tuple(estimates),
-        effect_sizes=tuple(effect_sizes),
-        intervals=tuple(intervals),
-        tests=tuple(tests),
-        diagnostics=tuple(diagnostics),
-        warnings=tuple(warnings),
-        blockers=tuple(blockers),
-        cautions=tuple(cautions),
+        engine_version=run.engine_version,
+        invocation_id=run.invocation_id,
+        started_at=run.started_at,
+        completed_at=run.completed_at,
+        analysis=_freeze(references.analysis),
+        governance=_freeze(references.governance),
+        input_provenance=_freeze(references.input_provenance),
+        method=_freeze(references.method),
+        outcome=findings.outcome,
+        estimates=tuple(result.estimates),
+        effect_sizes=tuple(result.effect_sizes),
+        intervals=tuple(result.intervals),
+        tests=tuple(result.tests),
+        diagnostics=tuple(result.diagnostics),
+        warnings=tuple(result.warnings),
+        blockers=tuple(findings.blockers),
+        cautions=tuple(result.interpretation_cautions),
     )
+
+
+def _assert_safe_mapping(value: Mapping[str, object], path: str) -> None:
+    for name, item in value.items():
+        key = str(name)
+        if key.casefold() in _FORBIDDEN_KEYS:
+            raise EvidenceRefused(f"{path}.{key}: prohibited evidence field")
+        _assert_safe(item, f"{path}.{key}")
+
+
+def _assert_safe_text(value: str, path: str) -> None:
+    """Refuse a local absolute path or any connection detail in evidence."""
+
+    if _WINDOWS_ABSOLUTE.match(value) or value.startswith(("/", "\\")):
+        raise EvidenceRefused(f"{path}: absolute local path is prohibited")
+    if _CONNECTION_URI.search(value):
+        raise EvidenceRefused(f"{path}: connection details are prohibited")
+
+
+def _assert_safe_scalar(value: object, path: str) -> None:
+    if isinstance(value, PurePath) and value.is_absolute():
+        raise EvidenceRefused(f"{path}: absolute local path is prohibited")
+    if isinstance(value, str):
+        _assert_safe_text(value, path)
 
 
 def _assert_safe(value: object, path: str = "$") -> None:
     if isinstance(value, Mapping):
-        for name, item in value.items():
-            key = str(name)
-            if key.casefold() in _FORBIDDEN_KEYS:
-                raise EvidenceRefused(f"{path}.{key}: prohibited evidence field")
-            _assert_safe(item, f"{path}.{key}")
+        _assert_safe_mapping(value, path)
         return
     if isinstance(value, (tuple, list)):
         for index, item in enumerate(value):
             _assert_safe(item, f"{path}[{index}]")
         return
+    _assert_safe_scalar(value, path)
+
+
+def _jsonable_dataclass(value: object) -> dict[str, object]:
+    """Project a dataclass, renaming input_provenance to its published key."""
+
+    return {
+        ("input" if field.name == "input_provenance" else field.name): _jsonable(
+            getattr(value, field.name)
+        )
+        for field in fields(value)
+    }
+
+
+def _jsonable_float(value: float) -> object:
+    if not math.isfinite(value):
+        raise NonFiniteResult("non-finite numerical result")
+    raise EvidenceRefused("floating evidence values must be decimal strings")
+
+
+def _jsonable_scalar(value: object) -> object:
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, Decimal):
+        return decimal_text(value)
+    if isinstance(value, float):
+        return _jsonable_float(value)
     if isinstance(value, PurePath):
-        if value.is_absolute():
-            raise EvidenceRefused(f"{path}: absolute local path is prohibited")
-        return
-    if isinstance(value, str):
-        if _WINDOWS_ABSOLUTE.match(value) or value.startswith(("/", "\\")):
-            raise EvidenceRefused(f"{path}: absolute local path is prohibited")
-        if _CONNECTION_URI.search(value):
-            raise EvidenceRefused(f"{path}: connection details are prohibited")
+        return value.as_posix()
+    return value
 
 
 def _jsonable(value: object) -> object:
     if is_dataclass(value) and not isinstance(value, type):
-        result: dict[str, object] = {}
-        for field in fields(value):
-            name = "input" if field.name == "input_provenance" else field.name
-            result[name] = _jsonable(getattr(value, field.name))
-        return result
-    if isinstance(value, Enum):
-        return value.value
+        return _jsonable_dataclass(value)
     if isinstance(value, Mapping):
         return {str(name): _jsonable(item) for name, item in value.items()}
     if isinstance(value, (tuple, list)):
         return [_jsonable(item) for item in value]
-    if isinstance(value, Decimal):
-        return decimal_text(value)
-    if isinstance(value, float):
-        if not math.isfinite(value):
-            raise NonFiniteResult("non-finite numerical result")
-        raise EvidenceRefused("floating evidence values must be decimal strings")
-    if isinstance(value, PurePath):
-        return value.as_posix()
-    return value
+    return _jsonable_scalar(value)
 
 
 def evidence_payload(evidence: AnalysisEvidence) -> dict[str, object]:

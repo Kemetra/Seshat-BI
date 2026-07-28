@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import importlib.metadata
 import json
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Mapping
@@ -20,7 +21,12 @@ from .contracts import (
     MethodResult,
     Outcome,
 )
-from .evidence import build_evidence
+from .evidence import (
+    EvidenceFindings,
+    EvidenceReferences,
+    EvidenceRun,
+    build_evidence,
+)
 from .policy import PolicyContext, evaluate_policy
 from .providers.base import (
     DataProvider,
@@ -173,37 +179,41 @@ def _library_version(name: str) -> str:
         return "unavailable"
 
 
+@dataclass(frozen=True, slots=True)
+class _Invocation:
+    """The identity of one run: which repository, spec, id, and start time."""
+
+    repo_root: Path
+    spec: AnalysisSpec
+    invocation_id: str
+    started_at: str
+
+
+@dataclass(frozen=True, slots=True)
+class _Observed:
+    """Whatever the run had actually established when it produced evidence."""
+
+    context: PolicyContext | None = None
+    data: RectangularData | None = None
+    result: MethodResult | None = None
+    blockers: tuple[Blocker, ...] = ()
+
+
 def _evidence(
-    *,
-    repo_root: Path,
-    spec: AnalysisSpec,
-    invocation_id: str,
-    started_at: str,
-    outcome: Outcome,
-    context: PolicyContext | None = None,
-    data: RectangularData | None = None,
-    result: MethodResult | None = None,
-    blockers: tuple[Blocker, ...] = (),
+    invocation: _Invocation, outcome: Outcome, observed: _Observed = _Observed()
 ) -> AnalysisEvidence:
-    result = result or MethodResult()
+    spec = invocation.spec
     return build_evidence(
-        engine_version=ENGINE_VERSION,
-        invocation_id=invocation_id,
-        started_at=started_at,
-        completed_at=_now(),
-        analysis=_analysis_reference(spec),
-        governance=_governance(repo_root, spec, context),
-        input_provenance=_input(spec, data),
-        method=_method(spec),
-        outcome=outcome,
-        estimates=result.estimates,
-        effect_sizes=result.effect_sizes,
-        intervals=result.intervals,
-        tests=result.tests,
-        diagnostics=result.diagnostics,
-        warnings=result.warnings,
-        blockers=blockers,
-        cautions=result.interpretation_cautions,
+        EvidenceRun(
+            ENGINE_VERSION, invocation.invocation_id, invocation.started_at, _now()
+        ),
+        EvidenceReferences(
+            analysis=_analysis_reference(spec),
+            governance=_governance(invocation.repo_root, spec, observed.context),
+            input_provenance=_input(spec, observed.data),
+            method=_method(spec),
+        ),
+        EvidenceFindings(outcome, observed.result or MethodResult(), observed.blockers),
     )
 
 
@@ -211,16 +221,40 @@ def _single_blocker(code: str, message: str, recovery: str) -> tuple[Blocker, ..
     return (Blocker(code=code, message=message, recovery=recovery),)
 
 
-def run_analysis(
-    repo_root: Path, spec: AnalysisSpec, provider: DataProvider
-) -> AnalysisEvidence:
-    """Run policy, acquisition, and one closed method into categorical evidence."""
+def _refused(invocation: _Invocation, observed: _Observed) -> AnalysisEvidence:
+    return _evidence(invocation, Outcome.REFUSED, observed)
 
-    root = repo_root.resolve()
-    invocation_id = f"stat-{uuid4().hex}"
-    started_at = _now()
+
+def _failed(
+    invocation: _Invocation, observed: _Observed, message: str, recovery: str
+) -> AnalysisEvidence:
+    return _evidence(
+        invocation,
+        Outcome.FAILED,
+        replace(
+            observed, blockers=_single_blocker("STAT_RUNTIME_FAILED", message, recovery)
+        ),
+    )
+
+
+def _unavailable(
+    invocation: _Invocation, observed: _Observed, message: str, recovery: str
+) -> AnalysisEvidence:
+    return _evidence(
+        invocation,
+        Outcome.UNAVAILABLE,
+        replace(
+            observed,
+            blockers=_single_blocker("STAT_DEPENDENCY_UNAVAILABLE", message, recovery),
+        ),
+    )
+
+
+def _policy_decision(invocation: _Invocation):
+    """Evaluate policy into (decision, evidence): exactly one is not None."""
+
     try:
-        decision = evaluate_policy(root, spec)
+        return evaluate_policy(invocation.repo_root, invocation.spec), None
     except SpecRefused as exc:
         blockers = tuple(
             Blocker(
@@ -230,186 +264,153 @@ def run_analysis(
             )
             for error in exc.errors
         )
-        return _evidence(
-            repo_root=root,
-            spec=spec,
-            invocation_id=invocation_id,
-            started_at=started_at,
-            outcome=Outcome.REFUSED,
-            blockers=blockers,
-        )
+        return None, _refused(invocation, _Observed(blockers=blockers))
     except Exception:
-        return _evidence(
-            repo_root=root,
-            spec=spec,
-            invocation_id=invocation_id,
-            started_at=started_at,
-            outcome=Outcome.FAILED,
-            blockers=_single_blocker(
-                "STAT_RUNTIME_FAILED",
-                "Statistical policy evaluation failed safely.",
-                "Inspect the local logs and retry after correcting the runtime.",
-            ),
+        return None, _failed(
+            invocation,
+            _Observed(),
+            "Statistical policy evaluation failed safely.",
+            "Inspect the local logs and retry after correcting the runtime.",
         )
 
-    if not decision.allowed or decision.context is None:
-        return _evidence(
-            repo_root=root,
-            spec=spec,
-            invocation_id=invocation_id,
-            started_at=started_at,
-            outcome=Outcome.REFUSED,
-            blockers=decision.blockers,
-        )
-    context = decision.context
+
+def _method_descriptor(invocation: _Invocation, observed: _Observed):
+    """Resolve the governed method descriptor, or the evidence that refuses it."""
+
+    spec = invocation.spec
     try:
         descriptor = get_descriptor(spec.method.method_id)
     except RegistryRefused:
-        return _evidence(
-            repo_root=root,
-            spec=spec,
-            invocation_id=invocation_id,
-            started_at=started_at,
-            outcome=Outcome.REFUSED,
-            context=context,
-            blockers=_single_blocker(
-                "STAT_METHOD_REFUSED",
-                "The requested statistical method is outside the governed catalog.",
-                "Choose a method defined by the analysis schema.",
+        return None, _refused(
+            invocation,
+            replace(
+                observed,
+                blockers=_single_blocker(
+                    "STAT_METHOD_REFUSED",
+                    "The requested statistical method is outside the governed catalog.",
+                    "Choose a method defined by the analysis schema.",
+                ),
             ),
         )
-
     if spec.method.version != descriptor.version:
         # The registry ships exactly one implementation per method id. Running it
         # for another declared version would file this computation as evidence
         # for a version that was never executed.
-        return _evidence(
-            repo_root=root,
-            spec=spec,
-            invocation_id=invocation_id,
-            started_at=started_at,
-            outcome=Outcome.REFUSED,
-            context=context,
-            blockers=_single_blocker(
-                "STAT_METHOD_VERSION_UNKNOWN",
-                "The requested method version is not the governed implementation "
-                f"version {descriptor.version}.",
-                "Declare the governed method version recorded by the registry.",
+        return None, _refused(
+            invocation,
+            replace(
+                observed,
+                blockers=_single_blocker(
+                    "STAT_METHOD_VERSION_UNKNOWN",
+                    "The requested method version is not the governed implementation "
+                    f"version {descriptor.version}.",
+                    "Declare the governed method version recorded by the registry.",
+                ),
             ),
         )
-
     missing_roles = descriptor.required_roles - set(spec.roles)
     if missing_roles:
-        return _evidence(
-            repo_root=root,
-            spec=spec,
-            invocation_id=invocation_id,
-            started_at=started_at,
-            outcome=Outcome.REFUSED,
-            context=context,
-            blockers=_single_blocker(
-                "STAT_METHOD_ROLE_MISSING",
-                "The method lacks required governed roles: "
-                + ", ".join(sorted(missing_roles))
-                + ".",
-                "Bind every required role to an approved column.",
+        return None, _refused(
+            invocation,
+            replace(
+                observed,
+                blockers=_single_blocker(
+                    "STAT_METHOD_ROLE_MISSING",
+                    "The method lacks required governed roles: "
+                    + ", ".join(sorted(missing_roles))
+                    + ".",
+                    "Bind every required role to an approved column.",
+                ),
             ),
         )
+    return descriptor, None
+
+
+def _acquired_data(
+    invocation: _Invocation, observed: _Observed, provider: DataProvider
+):
+    """Acquire provider data, or the evidence that reports why it is unavailable."""
 
     try:
-        data = provider.fetch(build_data_request(spec, context))
+        request = build_data_request(invocation.spec, observed.context)
+        return provider.fetch(request), None
     except ProviderUnavailable as exc:
-        return _evidence(
-            repo_root=root,
-            spec=spec,
-            invocation_id=invocation_id,
-            started_at=started_at,
-            outcome=Outcome.UNAVAILABLE,
-            context=context,
-            blockers=(exc.blocker,),
+        return None, _evidence(
+            invocation,
+            Outcome.UNAVAILABLE,
+            replace(observed, blockers=(exc.blocker,)),
         )
     except ImportError:
-        return _evidence(
-            repo_root=root,
-            spec=spec,
-            invocation_id=invocation_id,
-            started_at=started_at,
-            outcome=Outcome.UNAVAILABLE,
-            context=context,
-            blockers=_single_blocker(
-                "STAT_DEPENDENCY_UNAVAILABLE",
-                "A provider dependency is unavailable.",
-                "Install the required Seshat BI optional dependency.",
-            ),
+        return None, _unavailable(
+            invocation,
+            observed,
+            "A provider dependency is unavailable.",
+            "Install the required Seshat BI optional dependency.",
         )
     except Exception:
-        return _evidence(
-            repo_root=root,
-            spec=spec,
-            invocation_id=invocation_id,
-            started_at=started_at,
-            outcome=Outcome.FAILED,
-            context=context,
-            blockers=_single_blocker(
-                "STAT_RUNTIME_FAILED",
-                "Statistical data acquisition failed safely.",
-                "Inspect the local logs and retry after correcting the provider.",
-            ),
+        return None, _failed(
+            invocation,
+            observed,
+            "Statistical data acquisition failed safely.",
+            "Inspect the local logs and retry after correcting the provider.",
         )
+
+
+def _method_result(invocation: _Invocation, observed: _Observed, descriptor):
+    """Run the loaded method, or the evidence that withholds or reports failure."""
 
     try:
         runner = load_runner(descriptor)
-        result = runner(MethodContext(spec=spec, policy=context, data=data))
+        result = runner(
+            MethodContext(
+                spec=invocation.spec, policy=observed.context, data=observed.data
+            )
+        )
         if not isinstance(result, MethodResult):
             raise TypeError("method returned an invalid result contract")
+        return result, None
     except AnalysisWithheld as exc:
-        return _evidence(
-            repo_root=root,
-            spec=spec,
-            invocation_id=invocation_id,
-            started_at=started_at,
-            outcome=Outcome.WITHHELD,
-            context=context,
-            data=data,
-            blockers=exc.blockers,
+        return None, _evidence(
+            invocation,
+            Outcome.WITHHELD,
+            replace(observed, blockers=exc.blockers),
         )
     except ImportError:
-        return _evidence(
-            repo_root=root,
-            spec=spec,
-            invocation_id=invocation_id,
-            started_at=started_at,
-            outcome=Outcome.UNAVAILABLE,
-            context=context,
-            data=data,
-            blockers=_single_blocker(
-                "STAT_DEPENDENCY_UNAVAILABLE",
-                "A numerical method dependency is unavailable.",
-                f'Install the "{descriptor.optional_dependency}" optional extra.',
-            ),
+        return None, _unavailable(
+            invocation,
+            observed,
+            "A numerical method dependency is unavailable.",
+            f'Install the "{descriptor.optional_dependency}" optional extra.',
         )
     except Exception:
-        return _evidence(
-            repo_root=root,
-            spec=spec,
-            invocation_id=invocation_id,
-            started_at=started_at,
-            outcome=Outcome.FAILED,
-            context=context,
-            data=data,
-            blockers=_single_blocker(
-                "STAT_RUNTIME_FAILED",
-                "Statistical method execution failed safely.",
-                "Inspect the local logs and retry after correcting the method input.",
-            ),
+        return None, _failed(
+            invocation,
+            observed,
+            "Statistical method execution failed safely.",
+            "Inspect the local logs and retry after correcting the method input.",
         )
-    return _evidence(
-        repo_root=root,
-        spec=spec,
-        invocation_id=invocation_id,
-        started_at=started_at,
-        outcome=Outcome.COMPUTED,
-        context=context,
-        data=data,
-        result=result,
-    )
+
+
+def run_analysis(
+    repo_root: Path, spec: AnalysisSpec, provider: DataProvider
+) -> AnalysisEvidence:
+    """Run policy, acquisition, and one closed method into categorical evidence."""
+
+    invocation = _Invocation(repo_root.resolve(), spec, f"stat-{uuid4().hex}", _now())
+    decision, evidence = _policy_decision(invocation)
+    if evidence is not None:
+        return evidence
+    if not decision.allowed or decision.context is None:
+        return _refused(invocation, _Observed(blockers=decision.blockers))
+    observed = _Observed(context=decision.context)
+    descriptor, evidence = _method_descriptor(invocation, observed)
+    if evidence is not None:
+        return evidence
+    data, evidence = _acquired_data(invocation, observed, provider)
+    if evidence is not None:
+        return evidence
+    observed = replace(observed, data=data)
+    result, evidence = _method_result(invocation, observed, descriptor)
+    if evidence is not None:
+        return evidence
+    return _evidence(invocation, Outcome.COMPUTED, replace(observed, result=result))

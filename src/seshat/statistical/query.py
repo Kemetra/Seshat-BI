@@ -102,55 +102,104 @@ def _approved_identifier(
     return _quoted_identifier(name, dialect, context)
 
 
+_SCALAR_OPS = {
+    "eq": "=",
+    "ne": "<>",
+    "lt": "<",
+    "lte": "<=",
+    "gt": ">",
+    "gte": ">=",
+}
+
+_NULL_PREDICATES = {"is_null": "IS NULL", "is_not_null": "IS NOT NULL"}
+
+_AGGREGATE_FUNCTIONS = {
+    "sum": "SUM",
+    "count": "COUNT",
+    "distinct_count": "COUNT",
+    "average": "AVG",
+    "min": "MIN",
+    "max": "MAX",
+}
+
+
+def _assert_valueless(item: Filter, subject: str) -> None:
+    if item.value is not None:
+        raise _refuse(
+            f"Filter operator {item.operator!r} does not accept a value.",
+            f"Remove the value from the {subject} predicate.",
+        )
+
+
+def _compile_membership(
+    item: Filter, column: str, dialect: Dialect
+) -> tuple[str, tuple[object, ...]]:
+    if not isinstance(item.value, tuple) or not item.value:
+        raise _refuse(
+            "The 'in' filter requires a non-empty tuple of bound values.",
+            "Provide one or more typed values.",
+        )
+    placeholders = ", ".join(dialect.placeholder() for _ in item.value)
+    return f"{column} IN ({placeholders})", tuple(item.value)
+
+
+def _compile_scalar(
+    item: Filter, column: str, dialect: Dialect
+) -> tuple[str, tuple[object, ...]]:
+    if item.value is None or isinstance(item.value, tuple):
+        raise _refuse(
+            f"Filter operator {item.operator!r} requires one bound value.",
+            "Provide one scalar typed value.",
+        )
+    operator = _SCALAR_OPS[item.operator]
+    return f"{column} {operator} {dialect.placeholder()}", (item.value,)
+
+
 def _compile_filter(
     item: Filter,
     approved: set[str],
     dialect: Dialect,
 ) -> tuple[str, tuple[object, ...]]:
+    """Compile one closed predicate with every value parameter-bound."""
+
     if item.operator not in FILTER_OPS:
         raise _refuse(
             f"Filter operator {item.operator!r} is not allowed.",
             "Use one of the closed statistical filter operators.",
         )
     column = _approved_identifier(item.column, approved, dialect, "filter column")
-    if item.operator in {"is_null", "is_not_null"}:
-        if item.value is not None:
-            raise _refuse(
-                f"Filter operator {item.operator!r} does not accept a value.",
-                "Remove the value from the null predicate.",
-            )
-        suffix = "IS NULL" if item.operator == "is_null" else "IS NOT NULL"
-        return f"{column} {suffix}", ()
+    null_suffix = _NULL_PREDICATES.get(item.operator)
+    if null_suffix is not None:
+        _assert_valueless(item, "null")
+        return f"{column} {null_suffix}", ()
     if item.operator in {"is_true", "is_false"}:
-        if item.value is not None:
-            raise _refuse(
-                f"Filter operator {item.operator!r} does not accept a value.",
-                "Remove the value from the boolean predicate.",
-            )
-        value = item.operator == "is_true"
-        return f"{column} = {dialect.placeholder()}", (value,)
+        _assert_valueless(item, "boolean")
+        return f"{column} = {dialect.placeholder()}", (item.operator == "is_true",)
     if item.operator == "in":
-        if not isinstance(item.value, tuple) or not item.value:
+        return _compile_membership(item, column, dialect)
+    return _compile_scalar(item, column, dialect)
+
+
+def _aggregate_expression(item: Aggregate, approved: set[str], dialect: Dialect) -> str:
+    """Render one closed aggregation over an approved source column."""
+
+    if item.function == "count_rows":
+        if item.source_column is not None:
             raise _refuse(
-                "The 'in' filter requires a non-empty tuple of bound values.",
-                "Provide one or more typed values.",
+                "count_rows cannot contain a source expression.",
+                "Use source_column: null for count_rows.",
             )
-        placeholders = ", ".join(dialect.placeholder() for _ in item.value)
-        return f"{column} IN ({placeholders})", tuple(item.value)
-    if item.value is None or isinstance(item.value, tuple):
+        return "COUNT(*)"
+    if not isinstance(item.source_column, str):
         raise _refuse(
-            f"Filter operator {item.operator!r} requires one bound value.",
-            "Provide one scalar typed value.",
+            f"Aggregation {item.function!r} requires a source column.",
+            "Use one policy-approved source column.",
         )
-    sql_operator = {
-        "eq": "=",
-        "ne": "<>",
-        "lt": "<",
-        "lte": "<=",
-        "gt": ">",
-        "gte": ">=",
-    }[item.operator]
-    return f"{column} {sql_operator} {dialect.placeholder()}", (item.value,)
+    source = _approved_identifier(
+        item.source_column, approved, dialect, "aggregate source column"
+    )
+    distinct = "DISTINCT " if item.function == "distinct_count" else ""
+    return f"{_AGGREGATE_FUNCTIONS[item.function]}({distinct}{source})"
 
 
 def _compile_aggregate(
@@ -166,35 +215,7 @@ def _compile_aggregate(
     output = _approved_identifier(
         item.output_column, approved, dialect, "aggregate output column"
     )
-    if item.function == "count_rows":
-        if item.source_column is not None:
-            raise _refuse(
-                "count_rows cannot contain a source expression.",
-                "Use source_column: null for count_rows.",
-            )
-        expression = "COUNT(*)"
-    else:
-        if not isinstance(item.source_column, str):
-            raise _refuse(
-                f"Aggregation {item.function!r} requires a source column.",
-                "Use one policy-approved source column.",
-            )
-        source = _approved_identifier(
-            item.source_column,
-            approved,
-            dialect,
-            "aggregate source column",
-        )
-        function = {
-            "sum": "SUM",
-            "count": "COUNT",
-            "distinct_count": "COUNT",
-            "average": "AVG",
-            "min": "MIN",
-            "max": "MAX",
-        }[item.function]
-        distinct = "DISTINCT " if item.function == "distinct_count" else ""
-        expression = f"{function}({distinct}{source})"
+    expression = _aggregate_expression(item, approved, dialect)
     return f"{expression} AS {output}", item.output_column
 
 
@@ -247,6 +268,45 @@ def _compiled(
     )
 
 
+def _projection(
+    request: DataRequest, table: str, approved: set[str], dialect: Dialect
+) -> tuple[list[str], list[str], list[str]]:
+    """Return the SELECT list, its output names, and the GROUP BY list."""
+
+    group_sql = [
+        _approved_identifier(column, approved, dialect, "group-by column")
+        for column in request.group_by
+    ]
+    if not request.aggregates:
+        selections = [
+            (
+                f"{table}."
+                f"{_approved_identifier(column, approved, dialect, 'selected column')}"
+            )
+            for column in request.columns
+        ]
+        return selections, list(request.columns), group_sql
+    selections = list(group_sql)
+    output_columns = list(request.group_by)
+    for aggregate in request.aggregates:
+        selection, output = _compile_aggregate(aggregate, approved, dialect)
+        selections.append(selection)
+        output_columns.append(output)
+    return selections, output_columns, group_sql
+
+
+def _predicates(
+    request: DataRequest, approved: set[str], dialect: Dialect
+) -> tuple[list[str], list[object]]:
+    predicates: list[str] = []
+    params: list[object] = []
+    for item in request.filters:
+        predicate, values = _compile_filter(item, approved, dialect)
+        predicates.append(predicate)
+        params.extend(values)
+    return predicates, params
+
+
 def compile_select(request: DataRequest, dialect: Dialect) -> CompiledQuery:
     """Compile one restricted Gold SELECT with all values parameter-bound."""
 
@@ -257,43 +317,16 @@ def compile_select(request: DataRequest, dialect: Dialect) -> CompiledQuery:
             "The statistical request has no approved columns.",
             "Request at least one approved role column.",
         )
-
-    group_sql: list[str] = []
-    for column in request.group_by:
-        group_sql.append(
-            _approved_identifier(column, approved, dialect, "group-by column")
-        )
-
-    output_columns: list[str] = list(request.group_by)
-    if request.aggregates:
-        selections = list(group_sql)
-        for aggregate in request.aggregates:
-            selection, output = _compile_aggregate(aggregate, approved, dialect)
-            selections.append(selection)
-            output_columns.append(output)
-    else:
-        selections = [
-            (
-                f"{table}."
-                f"{_approved_identifier(column, approved, dialect, 'selected column')}"
-            )
-            for column in request.columns
-        ]
-        output_columns = list(request.columns)
+    selections, output_columns, group_sql = _projection(
+        request, table, approved, dialect
+    )
     if len(set(output_columns)) != len(output_columns):
         raise _refuse(
             "The compiled output columns are not unique.",
             "Use distinct group and aggregate output names.",
         )
-
     joins = [_compile_join(item, table, approved, dialect) for item in request.joins]
-    predicates: list[str] = []
-    params: list[object] = []
-    for item in request.filters:
-        predicate, values = _compile_filter(item, approved, dialect)
-        predicates.append(predicate)
-        params.extend(values)
-
+    predicates, params = _predicates(request, approved, dialect)
     clauses = [f"SELECT {', '.join(selections)} FROM {table}", *joins]
     if predicates:
         clauses.append("WHERE " + " AND ".join(predicates))

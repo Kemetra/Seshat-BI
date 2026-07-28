@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, Mapping, Protocol
 
-from ..contracts import AnalysisSpec, Blocker
+from ..contracts import AnalysisSpec, Blocker, ColumnBinding
 
 if TYPE_CHECKING:
     from ..policy import PolicyContext
@@ -106,13 +106,9 @@ def _request_refused(message: str, recovery: str) -> ProviderUnavailable:
     )
 
 
-def build_data_request(
-    spec: AnalysisSpec, policy_context: PolicyContext
-) -> DataRequest:
-    """Project an analysis spec through its already-approved policy context."""
+def _approved_table(requested: set[str], policy_context: PolicyContext) -> str:
+    """Resolve the one approved Gold relation that covers every requested column."""
 
-    role_items = tuple(spec.roles.items())
-    requested = {binding.column for _, binding in role_items}
     candidates = tuple(
         table
         for table, approved in policy_context.approved_columns.items()
@@ -124,6 +120,11 @@ def build_data_request(
             f"Requested columns are not approved for statistical use: {columns}.",
             "Use roles from one approved Gold metric-contract binding.",
         )
+    return candidates[0]
+
+
+def _projection(role_items: tuple[tuple[str, ColumnBinding], ...]):
+    """Deduplicate the role bindings into one column list with stable order."""
 
     columns: list[str] = []
     logical_types: list[str] = []
@@ -141,17 +142,32 @@ def build_data_request(
             logical_types.append(binding.logical_type)
             type_by_column[binding.column] = binding.logical_type
         roles[role] = binding.column
+    return tuple(columns), tuple(logical_types), roles
 
+
+def _privacy_floor(spec: AnalysisSpec) -> int:
     privacy_floor = spec.pii.get("minimum_group_count")
     if not isinstance(privacy_floor, int) or isinstance(privacy_floor, bool):
         raise _request_refused(
             "The analysis privacy floor is not a valid integer.",
             "Set pii.minimum_group_count to a positive approved integer.",
         )
+    return privacy_floor
+
+
+def build_data_request(
+    spec: AnalysisSpec, policy_context: PolicyContext
+) -> DataRequest:
+    """Project an analysis spec through its already-approved policy context."""
+
+    role_items = tuple(spec.roles.items())
+    requested = {binding.column for _, binding in role_items}
+    table = _approved_table(requested, policy_context)
+    columns, logical_types, roles = _projection(role_items)
     return DataRequest(
-        table=candidates[0],
-        columns=tuple(columns),
-        logical_types=tuple(logical_types),
+        table=table,
+        columns=columns,
+        logical_types=logical_types,
         roles=MappingProxyType(roles),
-        privacy_floor=privacy_floor,
+        privacy_floor=_privacy_floor(spec),
     )

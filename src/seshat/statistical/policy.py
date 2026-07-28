@@ -74,19 +74,26 @@ def _stage(table: dict | None, name: str) -> dict:
     return stage if isinstance(stage, dict) else {}
 
 
+def _names_a_column(key: str) -> bool:
+    return key.casefold().endswith(("column", "columns"))
+
+
 def _definition_columns(value: object, key: str = "") -> set[str]:
-    columns: set[str] = set()
+    """Collect every column name a contract definition mentions, at any depth."""
+
     if isinstance(value, dict):
-        for child_key, child in value.items():
-            columns.update(_definition_columns(child, str(child_key)))
-    elif isinstance(value, (list, tuple)):
-        for child in value:
-            columns.update(_definition_columns(child, key))
-    elif isinstance(value, str) and (
-        key.casefold().endswith("column") or key.casefold().endswith("columns")
-    ):
-        columns.add(value)
-    return columns
+        return set().union(
+            *(
+                _definition_columns(child, str(child_key))
+                for child_key, child in value.items()
+            ),
+            set(),
+        )
+    if isinstance(value, (list, tuple)):
+        return set().union(*(_definition_columns(child, key) for child in value), set())
+    if isinstance(value, str) and _names_a_column(key):
+        return {value}
+    return set()
 
 
 def _normalized_grain(value: object) -> str:
@@ -135,74 +142,110 @@ def _contract_authority(
     return contracts, blockers
 
 
+def _gold_binding_blocker(contracts: tuple[MetricContract, ...]) -> list[Blocker]:
+    outside_gold = any(
+        not contract.gold_table.casefold().startswith("gold.") for contract in contracts
+    )
+    if not contracts or not outside_gold:
+        return []
+    return [
+        _blocker(
+            "STAT_NON_GOLD_BINDING",
+            "At least one approved metric contract binds outside gold.*.",
+            "Bind the metric contract to a validated Gold relation.",
+        )
+    ]
+
+
+def _role_column_blocker(
+    spec: AnalysisSpec, contracts: tuple[MetricContract, ...]
+) -> list[Blocker]:
+    """Every analysis role must read a column an approved contract already names."""
+
+    approved: set[str] = set()
+    for contract in contracts:
+        approved.update(contract.columns)
+        approved.update(_definition_columns(contract.definition))
+    requested = {binding.column for binding in spec.roles.values()}
+    if not contracts or requested.issubset(approved):
+        return []
+    missing = ", ".join(sorted(requested - approved))
+    return [
+        _blocker(
+            "STAT_CONTRACT_NOT_APPROVED",
+            f"Analysis roles use columns outside approved contracts: {missing}.",
+            "Add the columns to an approved contract or revise the analysis roles.",
+        )
+    ]
+
+
+def _pii_blocker(
+    repo_root: Path, spec: AnalysisSpec, contracts: tuple[MetricContract, ...]
+) -> list[Blocker]:
+    sensitive = any(contract.pii_sensitive for contract in contracts)
+    if not sensitive or _pii_evidence_exists(repo_root, spec):
+        return []
+    return [
+        _blocker(
+            "STAT_PII_APPROVAL_MISSING",
+            "PII-sensitive statistical inputs lack cited approval evidence.",
+            "Cite an existing repo-relative PII approval artifact.",
+        )
+    ]
+
+
+def _grain_blocker(
+    spec: AnalysisSpec, contracts: tuple[MetricContract, ...]
+) -> list[Blocker]:
+    declared = _normalized_grain(spec.population.get("grain"))
+    approved = {
+        _normalized_grain(contract.grain) for contract in contracts if contract.grain
+    }
+    if not approved:
+        return []
+    agreed = len(approved) == 1 and declared in approved
+    if agreed:
+        return []
+    return [
+        _blocker(
+            "STAT_GRAIN_CONFLICT",
+            "The analysis observation grain conflicts with its approved contract.",
+            "Align population.grain with the named approved metric contracts.",
+        )
+    ]
+
+
 def _contract_policy_blockers(
     repo_root: Path, spec: AnalysisSpec, contracts: tuple[MetricContract, ...]
 ) -> list[Blocker]:
-    blockers: list[Blocker] = []
-    if contracts and any(
-        not contract.gold_table.casefold().startswith("gold.") for contract in contracts
-    ):
-        blockers.append(
-            _blocker(
-                "STAT_NON_GOLD_BINDING",
-                "At least one approved metric contract binds outside gold.*.",
-                "Bind the metric contract to a validated Gold relation.",
-            )
-        )
+    """Apply every contract-derived gate in its recorded reporting order."""
 
-    approved_role_columns: set[str] = set()
-    for contract in contracts:
-        approved_role_columns.update(contract.columns)
-        approved_role_columns.update(_definition_columns(contract.definition))
-    requested_role_columns = {binding.column for binding in spec.roles.values()}
-    if contracts and not requested_role_columns.issubset(approved_role_columns):
-        missing = ", ".join(sorted(requested_role_columns - approved_role_columns))
-        blockers.append(
-            _blocker(
-                "STAT_CONTRACT_NOT_APPROVED",
-                f"Analysis roles use columns outside approved contracts: {missing}.",
-                "Add the columns to an approved contract or revise the analysis roles.",
-            )
-        )
+    return [
+        *_gold_binding_blocker(contracts),
+        *_role_column_blocker(spec, contracts),
+        *_pii_blocker(repo_root, spec, contracts),
+        *_grain_blocker(spec, contracts),
+    ]
 
-    if any(contract.pii_sensitive for contract in contracts) and not (
-        _pii_evidence_exists(repo_root, spec)
-    ):
-        blockers.append(
-            _blocker(
-                "STAT_PII_APPROVAL_MISSING",
-                "PII-sensitive statistical inputs lack cited approval evidence.",
-                "Cite an existing repo-relative PII approval artifact.",
-            )
-        )
 
-    declared_grain = _normalized_grain(spec.population.get("grain"))
-    approved_grains = {
-        _normalized_grain(contract.grain) for contract in contracts if contract.grain
-    }
-    if approved_grains and (
-        len(approved_grains) != 1 or declared_grain not in approved_grains
-    ):
-        blockers.append(
-            _blocker(
-                "STAT_GRAIN_CONFLICT",
-                "The analysis observation grain conflicts with its approved contract.",
-                "Align population.grain with the named approved metric contracts.",
-            )
-        )
-    return blockers
+def _is_live_proof(item: object) -> bool:
+    """A single evidence line proves a live run only if it names one and its exit."""
+
+    if not isinstance(item, str):
+        return False
+    return bool(_LIVE_COMMAND.search(item)) and bool(_LIVE_SUCCESS.search(item))
+
+
+def _has_live_proof(evidence: object) -> bool:
+    if not isinstance(evidence, list):
+        return False
+    return any(_is_live_proof(item) for item in evidence)
 
 
 def _readiness_blockers(table: dict | None) -> list[Blocker]:
     gold = _stage(table, "gold_ready")
     semantic = _stage(table, "semantic_model_ready")
-    evidence = gold.get("evidence", [])
-    has_live_validation = isinstance(evidence, list) and any(
-        isinstance(item, str)
-        and _LIVE_COMMAND.search(item)
-        and _LIVE_SUCCESS.search(item)
-        for item in evidence
-    )
+    has_live_validation = _has_live_proof(gold.get("evidence", []))
     blockers: list[Blocker] = []
     if gold.get("status") != "pass":
         blockers.append(

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType
 from typing import Any, Mapping
@@ -70,72 +71,110 @@ def _load_schema(repo_root: Path) -> Mapping[str, Any]:
     return schema
 
 
+def _is_local_absolute(value: str) -> bool:
+    if value.startswith(("/", "\\")):
+        return True
+    return bool(_WINDOWS_ABSOLUTE.match(value)) or "\\" in value
+
+
+def _traverses(pure: PurePosixPath) -> bool:
+    if pure.is_absolute():
+        return True
+    return ".." in pure.parts or "." in pure.parts
+
+
 def _repo_relative_path(
     value: object,
     repo_root: Path,
     field: str,
     errors: list[str],
 ) -> PurePosixPath | None:
+    """Accept only a repo-relative path that still resolves under the repository."""
+
     if not isinstance(value, str) or not value:
         errors.append(f"{field}: path must be a non-empty repo-relative string")
         return None
-    if value.startswith(("/", "\\")) or _WINDOWS_ABSOLUTE.match(value) or "\\" in value:
+    if _is_local_absolute(value):
         errors.append(f"{field}: path must be repo-relative")
         return None
     pure = PurePosixPath(value)
-    if pure.is_absolute() or ".." in pure.parts or "." in pure.parts:
+    if _traverses(pure):
         errors.append(f"{field}: path must be repo-relative without traversal")
         return None
     root = repo_root.resolve()
-    resolved = (root / Path(*pure.parts)).resolve(strict=False)
-    if not resolved.is_relative_to(root):
+    if not (root / Path(*pure.parts)).resolve(strict=False).is_relative_to(root):
         errors.append(f"{field}: path must resolve under the repository")
         return None
     return pure
 
 
-def _collect_paths(
-    document: Mapping[str, Any], repo_root: Path
-) -> tuple[
-    PurePosixPath | None,
-    tuple[PurePosixPath, ...],
-    Mapping[str, PurePosixPath],
-    list[str],
-]:
+@dataclass(frozen=True, slots=True)
+class _DeclaredPaths:
+    """Every repo-relative path a specification declares, plus its path errors."""
+
+    readiness: PurePosixPath | None
+    metric_contracts: tuple[PurePosixPath, ...]
+    outputs: Mapping[str, PurePosixPath]
+    errors: list[str]
+
+
+def _listed_paths(
+    document: Mapping[str, Any], repo_root: Path, field: str, errors: list[str]
+) -> tuple[PurePosixPath, ...]:
+    """Path-check one declared list, keeping only the entries that hold."""
+
+    raw = document.get(field.rsplit(".", 1)[-1], [])
+    if not isinstance(raw, list):
+        return ()
+    checked = (
+        _repo_relative_path(value, repo_root, f"{field}[{index}]", errors)
+        for index, value in enumerate(raw)
+    )
+    return tuple(path for path in checked if path is not None)
+
+
+def _output_paths(
+    document: Mapping[str, Any], repo_root: Path, errors: list[str]
+) -> Mapping[str, PurePosixPath]:
+    raw_outputs = document.get("outputs")
+    if not isinstance(raw_outputs, Mapping):
+        return MappingProxyType({})
+    checked = {
+        name: _repo_relative_path(
+            raw_outputs.get(name), repo_root, f"$.outputs.{name}", errors
+        )
+        for name in ("evidence", "review")
+    }
+    return MappingProxyType(
+        {name: path for name, path in checked.items() if path is not None}
+    )
+
+
+def _check_pii_evidence(
+    document: Mapping[str, Any], repo_root: Path, errors: list[str]
+) -> None:
+    """Path-check the PII approval evidence, which is cited but never returned."""
+
+    raw_pii = document.get("pii")
+    if not isinstance(raw_pii, Mapping):
+        return
+    _listed_paths(
+        {"approval_evidence": raw_pii.get("approval_evidence", [])},
+        repo_root,
+        "$.pii.approval_evidence",
+        errors,
+    )
+
+
+def _collect_paths(document: Mapping[str, Any], repo_root: Path) -> _DeclaredPaths:
     errors: list[str] = []
     readiness = _repo_relative_path(
         document.get("readiness_status"), repo_root, "$.readiness_status", errors
     )
-    contracts: list[PurePosixPath] = []
-    raw_contracts = document.get("metric_contracts", [])
-    if isinstance(raw_contracts, list):
-        for index, value in enumerate(raw_contracts):
-            path = _repo_relative_path(
-                value, repo_root, f"$.metric_contracts[{index}]", errors
-            )
-            if path is not None:
-                contracts.append(path)
-    outputs: dict[str, PurePosixPath] = {}
-    raw_outputs = document.get("outputs")
-    if isinstance(raw_outputs, Mapping):
-        for name in ("evidence", "review"):
-            path = _repo_relative_path(
-                raw_outputs.get(name), repo_root, f"$.outputs.{name}", errors
-            )
-            if path is not None:
-                outputs[name] = path
-    raw_pii = document.get("pii")
-    if isinstance(raw_pii, Mapping):
-        approvals = raw_pii.get("approval_evidence", [])
-        if isinstance(approvals, list):
-            for index, value in enumerate(approvals):
-                _repo_relative_path(
-                    value,
-                    repo_root,
-                    f"$.pii.approval_evidence[{index}]",
-                    errors,
-                )
-    return readiness, tuple(contracts), MappingProxyType(outputs), errors
+    contracts = _listed_paths(document, repo_root, "$.metric_contracts", errors)
+    outputs = _output_paths(document, repo_root, errors)
+    _check_pii_evidence(document, repo_root, errors)
+    return _DeclaredPaths(readiness, contracts, outputs, errors)
 
 
 def _frozen_mapping(value: Mapping[str, Any]) -> Mapping[str, object]:
@@ -166,16 +205,26 @@ def _column_bindings(value: Mapping[str, Any]) -> Mapping[str, ColumnBinding]:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _Source:
+    """Where the loaded specification came from, and its committed digest."""
+
+    path: PurePosixPath | None
+    sha256: str
+
+
 def _normalize(
     document: Mapping[str, Any],
+    paths: _DeclaredPaths,
     readiness: PurePosixPath,
-    metric_contracts: tuple[PurePosixPath, ...],
-    outputs: Mapping[str, PurePosixPath],
-    source_path: PurePosixPath | None,
-    source_sha256: str,
+    source: _Source,
 ) -> AnalysisSpec:
     method = document["method"]
     missing_data = document["missing_data"]
+    metric_contracts = paths.metric_contracts
+    outputs = paths.outputs
+    source_path = source.path
+    source_sha256 = source.sha256
     return AnalysisSpec(
         schema_version=str(document["schema_version"]),
         analysis_id=str(document["analysis_id"]),
@@ -210,31 +259,23 @@ def load_analysis_spec(path: Path, repo_root: Path) -> AnalysisSpec:
     """Load, validate, path-check, and normalize a governed analysis spec."""
 
     document = _load_yaml_mapping(path)
-    schema = _load_schema(repo_root)
-    errors = validate_json_contract(document, schema)
-    readiness, metric_contracts, outputs, path_errors = _collect_paths(
-        document, repo_root
-    )
-    errors.extend(path_errors)
+    errors = validate_json_contract(document, _load_schema(repo_root))
+    paths = _collect_paths(document, repo_root)
+    errors.extend(paths.errors)
     if errors:
         raise SpecRefused(tuple(errors))
-    if readiness is None:
+    if paths.readiness is None:
         raise SpecRefused(("$.readiness_status: path is required",))
+    return _normalize(document, paths, paths.readiness, _source(path, repo_root))
+
+
+def _source(path: Path, repo_root: Path) -> _Source:
     try:
-        source_path = PurePosixPath(
-            path.resolve().relative_to(repo_root.resolve()).as_posix()
-        )
+        relative = path.resolve().relative_to(repo_root.resolve()).as_posix()
+        source_path = PurePosixPath(relative)
     except ValueError:
         source_path = None
     try:
-        source_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+        return _Source(source_path, hashlib.sha256(path.read_bytes()).hexdigest())
     except OSError as exc:
         raise SpecRefused((f"$: cannot hash analysis specification: {exc}",)) from exc
-    return _normalize(
-        document,
-        readiness,
-        metric_contracts,
-        outputs,
-        source_path,
-        source_sha256,
-    )

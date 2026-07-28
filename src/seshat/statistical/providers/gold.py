@@ -25,6 +25,17 @@ def _unavailable(code: str, message: str, recovery: str) -> ProviderUnavailable:
     return ProviderUnavailable(Blocker(code, message, recovery))
 
 
+def _is_single_count(rows: list[tuple]) -> bool:
+    """A count result is one row, one column, holding a non-negative integer."""
+
+    if len(rows) != 1 or len(rows[0]) != 1:
+        return False
+    value = rows[0][0]
+    if isinstance(value, bool) or not isinstance(value, int):
+        return False
+    return value >= 0
+
+
 class GoldProvider:
     """Execute only compiler-produced SELECT statements through a runner."""
 
@@ -58,13 +69,7 @@ class GoldProvider:
 
     @staticmethod
     def _count(rows: list[tuple]) -> int:
-        if (
-            len(rows) != 1
-            or len(rows[0]) != 1
-            or isinstance(rows[0][0], bool)
-            or not isinstance(rows[0][0], int)
-            or rows[0][0] < 0
-        ):
+        if not _is_single_count(rows):
             raise _unavailable(
                 "STAT_PROVIDER_INVALID_DATA",
                 "Gold count query returned an invalid result.",
@@ -72,27 +77,9 @@ class GoldProvider:
             )
         return rows[0][0]
 
-    def fetch(self, request: DataRequest) -> RectangularData:
-        """Count first, then fetch the whole approved result or refuse it."""
+    def _assert_row_shape(self, rows: list[tuple], selected, total_count: int) -> None:
+        """The measured count and compiled width both have to hold exactly."""
 
-        try:
-            counted = compile_count(request, self._dialect)
-            selected = compile_select(request, self._dialect)
-        except QueryRefused as exc:
-            raise ProviderUnavailable(exc.blocker) from exc
-
-        total_count = self._count(self._run(counted.sql, counted.params))
-        if total_count > self._limits.max_rows:
-            raise _unavailable(
-                "STAT_PROVIDER_RESOURCE_LIMIT",
-                (
-                    f"Measured Gold count {total_count} exceeds the row ceiling "
-                    f"{self._limits.max_rows}."
-                ),
-                "Narrow the governed request or raise an approved resource limit.",
-            )
-
-        rows = self._run(selected.sql, selected.params)
         if len(rows) != total_count:
             raise _unavailable(
                 "STAT_PROVIDER_INVALID_DATA",
@@ -107,6 +94,18 @@ class GoldProvider:
                 "Repair the runner or approved query definition.",
             )
 
+    def _assert_within_limits(self, total_count: int) -> None:
+        if total_count > self._limits.max_rows:
+            raise _unavailable(
+                "STAT_PROVIDER_RESOURCE_LIMIT",
+                (
+                    f"Measured Gold count {total_count} exceeds the row ceiling "
+                    f"{self._limits.max_rows}."
+                ),
+                "Narrow the governed request or raise an approved resource limit.",
+            )
+
+    def _assert_within_byte_ceiling(self, rows: list[tuple]) -> None:
         returned = json.dumps(
             rows, default=str, ensure_ascii=True, separators=(",", ":")
         ).encode("utf-8")
@@ -119,15 +118,33 @@ class GoldProvider:
                 ),
                 "Narrow the governed request or raise an approved resource limit.",
             )
+
+    def _compiled(self, request: DataRequest):
+        try:
+            return (
+                compile_count(request, self._dialect),
+                compile_select(request, self._dialect),
+            )
+        except QueryRefused as exc:
+            raise ProviderUnavailable(exc.blocker) from exc
+
+    def fetch(self, request: DataRequest) -> RectangularData:
+        """Count first, then fetch the whole approved result or refuse it."""
+
+        counted, selected = self._compiled(request)
+        total_count = self._count(self._run(counted.sql, counted.params))
+        self._assert_within_limits(total_count)
+        rows = self._run(selected.sql, selected.params)
+        self._assert_row_shape(rows, selected, total_count)
+        self._assert_within_byte_ceiling(rows)
         shape = json.dumps(
-            [selected.digest, total_count, width],
+            [selected.digest, total_count, len(selected.output_columns)],
             separators=(",", ":"),
         ).encode("utf-8")
-        data_digest = hashlib.sha256(shape).hexdigest()
         provenance = ProviderProvenance(
             kind="gold",
             safe_label=f"gold:{request.table}",
-            data_digest=data_digest,
+            data_digest=hashlib.sha256(shape).hexdigest(),
             query_digest=selected.digest,
             snapshot_id=None,
         )
