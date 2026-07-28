@@ -14,25 +14,17 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from seshat.gitutil import GIT_HARDENING as GIT_UNTRUSTED_TREE_HARDENING
+
 SCHEMA_VERSION = "1.0"
 MANIFEST_PATH = ".seshat/adoption/pbip-adoption.yaml"
 
-# Hardening flags for any `git` invocation whose cwd is an EXTERNALLY-AUTHORED
-# tree (an adopted PBIP project the user downloaded). Git reads that tree's own
-# `.git/config`, so an attacker-supplied `core.fsmonitor` (a command git runs on
-# `git status`) or `core.hooksPath` would execute in the analyst's shell -- RCE
-# from merely assessing a project. `safe.directory` does NOT help: the victim
-# owns the extracted files, so the dubious-ownership block never fires. Prepend
-# these to the argv (after "git") to neutralize the config-driven exec vectors.
-# On a trusted repo they are a harmless no-op (fsmonitor is only an optimization).
-GIT_UNTRUSTED_TREE_HARDENING: tuple[str, ...] = (
-    "-c",
-    "core.fsmonitor=false",
-    "-c",
-    "core.hooksPath=/dev/null",
-    "-c",
-    "protocol.ext.allow=never",
-)
+# `GIT_UNTRUSTED_TREE_HARDENING` is re-exported from `gitutil.GIT_HARDENING` (the
+# single definition) and kept under this name for the adoption call sites. Every
+# `git` invocation here runs with cwd = an EXTERNALLY-AUTHORED tree (an adopted
+# PBIP project the user downloaded), so the flags are load-bearing: git reads that
+# tree's own `.git/config`, and `safe.directory` does NOT help because the victim
+# owns the extracted files.
 
 # Detection patterns: a boolean "does this text look like a credential or a
 # literal connection detail" used to raise a governance fact.  They match only

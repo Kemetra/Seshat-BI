@@ -9,6 +9,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from seshat.gitutil import GIT_HARDENING as _GIT_HARDENING
+
 from .core import Finding, Severity
 
 SCHEMA_VERSION = "1.0"
@@ -29,16 +31,8 @@ _STAGE_HINTS = {
 # EXTERNALLY-AUTHORED tree; git reads its `.git/config` when we shell out inside
 # it, so harden against config-driven execution (core.fsmonitor/hooksPath).
 # `commit_range` is separately validated by gitutil._SAFE_RANGE_RE upstream
-# (option-injection guard). Keep in sync with
-# pbip_adoption._safety.GIT_UNTRUSTED_TREE_HARDENING.
-_GIT_HARDENING = (
-    "-c",
-    "core.fsmonitor=false",
-    "-c",
-    "core.hooksPath=/dev/null",
-    "-c",
-    "protocol.ext.allow=never",
-)
+# (option-injection guard). The flags come from the single
+# `gitutil.GIT_HARDENING` definition, imported above.
 
 
 def _changed_files(repo_root: Path, commit_range: str | None) -> list[str]:

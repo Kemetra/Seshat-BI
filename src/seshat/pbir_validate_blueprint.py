@@ -170,24 +170,59 @@ def _blueprint_visual_ids(blueprint: dict[str, Any]) -> dict[str, dict[str, Any]
 # --------------------------------------------------------------------------- #
 # PBIR tree readers (read-only; never write)
 # --------------------------------------------------------------------------- #
-def _iter_committed_visuals(report_dir: Path) -> dict[str, tuple[Path, dict[str, Any]]]:
-    """``{visual_id_from_dirname: (path, parsed_json)}`` for every
-    ``visuals/<id>/visual.json`` under the report's pages. The directory name is
-    read as the visual's binding-map id (the convention the compiler and a
-    Desktop build both follow: one folder per visual, named for its id)."""
+def _iter_committed_visuals(
+    report_dir: Path,
+) -> tuple[dict[str, tuple[Path, dict[str, Any]]], list[Deviation]]:
+    """``({visual_id_from_dirname: (path, parsed_json)}, unreadable_blockers)``
+    for every ``visuals/<id>/visual.json`` under the report's pages. The directory
+    name is read as the visual's binding-map id (the convention the compiler and a
+    Desktop build both follow: one folder per visual, named for its id).
+
+    An unparseable / unreadable / non-mapping ``visual.json`` is REPORTED as a
+    ``blocked`` deviation rather than skipped. Dropping it from the returned map
+    silently removed the visual from validation entirely -- it was then neither
+    checked nor reported, so a corrupt committed visual read as "absent" and the
+    roll-up could still say ``pass``. Gate on the FAILED PARSE, not the failed
+    shape, and fail closed the same way ``_unreadable_source_blockers`` does for
+    a missing blueprint."""
     out: dict[str, tuple[Path, dict[str, Any]]] = {}
+    unreadable: list[Deviation] = []
     pages_dir = report_dir / "definition" / "pages"
     if not pages_dir.is_dir():
-        return out
+        return out, unreadable
     for visual_json in sorted(pages_dir.glob("*/visuals/*/visual.json")):
         visual_id = visual_json.parent.name
         try:
             doc = json.loads(visual_json.read_text(encoding="utf-8-sig"))
-        except (OSError, json.JSONDecodeError):
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            unreadable.append(
+                Deviation(
+                    dimension="unreadable_source",
+                    locator=_rel_locator(report_dir, visual_json),
+                    message=(
+                        f"committed visual {visual_id!r} at {visual_json} is "
+                        f"unreadable or not valid JSON ({exc.__class__.__name__})"
+                        f" -- validation blocked (fail closed); a corrupt visual "
+                        f"must not be silently dropped from the comparison"
+                    ),
+                )
+            )
             continue
         if isinstance(doc, dict):
             out[visual_id] = (visual_json, doc)
-    return out
+        else:
+            unreadable.append(
+                Deviation(
+                    dimension="unreadable_source",
+                    locator=_rel_locator(report_dir, visual_json),
+                    message=(
+                        f"committed visual {visual_id!r} at {visual_json} is "
+                        f"valid JSON but not a mapping ({type(doc).__name__}) -- "
+                        f"validation blocked (fail closed)"
+                    ),
+                )
+            )
+    return out, unreadable
 
 
 def _rel_locator(report_dir: Path, path: Path) -> str:
@@ -472,11 +507,14 @@ def validate_blueprint(
 
     bindings = _build_bindings(binding_text)
     blueprint_visuals = _blueprint_visual_ids(blueprint)
-    committed = _iter_committed_visuals(report_dir)
+    committed, corrupt_visuals = _iter_committed_visuals(report_dir)
 
     deviations, unapproved, missing = _compare_visuals(
         blueprint_visuals, bindings, committed, report_dir
     )
+    # A corrupt committed visual is a blocking deviation, not an absence: it must
+    # reach the roll-up so `status` cannot be `pass` while a visual went unparsed.
+    deviations.extend(corrupt_visuals)
     deviations.extend(_relative_ref_deviations(report_dir))
 
     all_findings = [*deviations, *unapproved, *missing]

@@ -178,6 +178,16 @@ def _add_semantic_and_value_check_parsers(sub: argparse._SubParsersAction) -> No
         action="store_true",
         help="also inspect untracked semantic inputs (default: tracked files only)",
     )
+    semantic.add_argument(
+        "--require-inputs",
+        action="store_true",
+        help=(
+            "exit 1 when NO semantic input is discovered (default: report "
+            "[not_started] and exit 0). Use in CI on a repo known to carry "
+            "contracts/TMDL, so a discovery regression fails instead of "
+            "reporting a green 'no drift'."
+        ),
+    )
 
     value_check = sub.add_parser(
         "value-check",

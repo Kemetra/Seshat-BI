@@ -19,6 +19,7 @@ from seshat import star_discovery as _stars
 from seshat.dbt.contracts import GovernanceError
 from seshat.dbt.fact_semantics import load_fact_semantics
 from seshat.dbt.gate import evaluate_mapping_gate, resolve_working_set
+from seshat.gitutil import GIT_HARDENING
 
 from . import model_plan, sql_render, writer, yaml_render
 
@@ -74,18 +75,12 @@ def _git(root: Path, *args: str):
     raise ``UnicodeDecodeError`` mid-read and break the documented fail-safe;
     ``errors='replace'`` keeps the read total, and a mangled byte then fails the
     downstream ``yaml.safe_load``/``isinstance`` check -> None (fail-safe)."""
-    import os
     import subprocess
 
     return subprocess.run(
         [
             "git",
-            "-c",
-            "core.fsmonitor=false",
-            "-c",
-            f"core.hooksPath={os.devnull}",
-            "-c",
-            "protocol.ext.allow=never",
+            *GIT_HARDENING,
             "-c",
             f"safe.directory={root.as_posix()}",
             *args,

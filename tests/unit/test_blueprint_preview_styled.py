@@ -177,6 +177,62 @@ def test_tokens_color_the_canvas_ground_specifically(tmp_path: Path) -> None:
     assert 'class="canvas" fill="#101820"' in styled
 
 
+def test_styled_visual_box_is_an_outline_not_a_filled_slab(tmp_path: Path) -> None:
+    """#526: the visual-box rect carried `stroke` but no `fill`.
+
+    SVG defaults an unset `fill` to BLACK, so on a dark-canvas styled preview the
+    box rendered as an opaque slab that obscured the title/contract text drawn
+    inside it. It must be an outline: an explicit `fill="none"` on the same
+    element that carries the stroke.
+    """
+    d = _write_tokens_with_chrome(tmp_path, "chrome:\n  border: '#AA0000'\n")
+    visual = _write_one_visual_spec(d)
+    styled = render_blueprint_preview(
+        blueprint_path=d / "bp.yaml",
+        visual_spec_paths=[visual],
+        composition_path=d / "comp.yaml",
+        grid_path=d / "grid.yaml",
+        tokens_path=d / "tokens.yaml",
+    )
+    box_lines = [line for line in styled.splitlines() if 'class="visual-box"' in line]
+    assert box_lines, "expected a visual-box rect in the styled preview"
+    for line in box_lines:
+        assert 'fill="none"' in line, (
+            'the visual-box rect must declare fill="none" or SVG\'s default '
+            f"fill=black renders it as a slab over the text: {line!r}"
+        )
+
+
+def test_borderless_theme_visual_box_is_still_transparent(tmp_path: Path) -> None:
+    """#527 review (P2): `chrome.border: null` is a SUPPORTED borders-off theme.
+
+    `_line_color_from_tokens` returns None for it deliberately, so no `stroke` is
+    drawn. The first fix keyed `fill="none"` off the STROKE, which meant this
+    theme got neither attribute -- and SVG's default black fill brought the
+    opaque slab back for precisely the borders-disabled case. `fill` must key off
+    STYLING BEING PRESENT, not off the stroke.
+    """
+    d = _write_tokens_with_chrome(tmp_path, "chrome:\n  border: null\n")
+    visual = _write_one_visual_spec(d)
+    styled = render_blueprint_preview(
+        blueprint_path=d / "bp.yaml",
+        visual_spec_paths=[visual],
+        composition_path=d / "comp.yaml",
+        grid_path=d / "grid.yaml",
+        tokens_path=d / "tokens.yaml",
+    )
+    box_lines = [line for line in styled.splitlines() if 'class="visual-box"' in line]
+    assert box_lines, "expected a visual-box rect in the styled preview"
+    for line in box_lines:
+        assert 'fill="none"' in line, (
+            'a borders-off theme must still declare fill="none"; without it '
+            f"SVG paints the box black: {line!r}"
+        )
+        assert "stroke=" not in line, (
+            "chrome.border: null means borders OFF -- no stroke may be emitted"
+        )
+
+
 def test_preview_never_fabricates_a_number(tmp_path: Path) -> None:
     """PLACEHOLDER only -- the structural no-data guarantee holds."""
     d = _write_min_inputs(tmp_path)

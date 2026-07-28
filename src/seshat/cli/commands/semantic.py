@@ -79,6 +79,30 @@ def run_semantic_check(args: argparse.Namespace) -> int:
         return 1
 
     inputs = _semantic_files(repo, getattr(args, "include_untracked", False))
+    # A gate that discovered NOTHING has not verified anything, so it must not
+    # report the clean-repo success message: "zero findings" and "zero inputs"
+    # are different states and collapsing them is a fail-open (this command runs
+    # in CI, so a discovery regression -- a renamed path making the glob miss
+    # every real file -- would otherwise read as an affirmative "no drift").
+    # Mirrors `pbir_validate_blueprint._rollup_status`, which returns
+    # `not_started` rather than `pass` on an empty expected design.
+    if not inputs:
+        prog = getattr(args, "prog", "seshat")
+        strict = bool(getattr(args, "require_inputs", False))
+        print(
+            f"{prog} semantic-check: [not_started] no input discovered under "
+            f"{repo} -- nothing was verified. Expected tracked `*.tmdl` and/or "
+            f"metric contract `*.yaml` files (searched --metrics-dir "
+            f"{args.metrics_dir!r}). This is NOT a clean result."
+            + ("" if strict else " Pass --require-inputs to make this an error."),
+            file=sys.stderr,
+        )
+        # Exit 0 by default: a legitimately empty/scaffold repo must not fail.
+        # `--require-inputs` (what CI passes) turns zero-discovery into a real
+        # gate, since reporting on stderr while exiting 0 leaves CI green and a
+        # discovery regression would go unnoticed on a passing job.
+        return 1 if strict else 0
+
     contract_paths = tuple(
         path
         for path in inputs

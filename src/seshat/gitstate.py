@@ -12,21 +12,17 @@ not-committed. The git invocation is hardened the same way as
 
 from __future__ import annotations
 
-import os
 import subprocess
 from pathlib import Path
+
+from seshat.gitutil import GIT_HARDENING
 
 
 def run_git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     """Run one hardened, read-only git command rooted at ``repo_root``."""
     command = [
         "git",
-        "-c",
-        "core.fsmonitor=false",
-        "-c",
-        f"core.hooksPath={os.devnull}",
-        "-c",
-        "protocol.ext.allow=never",
+        *GIT_HARDENING,
         "-c",
         f"safe.directory={repo_root.as_posix()}",
         *args,

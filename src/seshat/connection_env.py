@@ -49,6 +49,73 @@ class ConnectionConfigError(ValueError):
 _T = TypeVar("_T")
 
 
+def _scrub_connection_values(message: str) -> str:
+    """Strip DSN-shaped credentials out of a wrapped resolution error.
+
+    ``ConnectionConfigError``'s text is printed BARE (no ``dialect.redact``) by
+    ``validate`` / ``drift`` / ``profile`` at their config-resolution boundary,
+    so whatever an upstream ``ValueError`` says reaches the terminal verbatim.
+    Today's upstream raisers are benign (``get_dialect`` names an ENGINE;
+    the port path names a PORT), but nothing enforced that -- a future
+    ``raise ValueError(f"...{dsn}...")`` anywhere under ``resolve_config`` /
+    ``resolve_dsn`` would leak a live credential with no code review signal.
+    Scrubbing at the wrapper makes the guarantee structural instead of
+    conventional; ``test_connection_config_error_never_carries_the_dsn`` pins it.
+
+    Redaction is by SPAN, not by substring fragment (#527, third review wave).
+    Fragment replacement produced five separate leaks across three waves, and
+    every one was a property of the mechanism rather than of a pattern:
+
+    * a fragment that was never extracted simply survives (the labeled ``dsn=``
+      form, the spaced form, backslash escapes);
+    * a shorter fragment replaced before a longer one leaves the tail behind
+      (``password=<redacted> cr3t'``);
+    * a fragment that also occurs OUTSIDE the value gets replaced there too --
+      a secret ``'pass word'`` rewrote the KEY into ``<redacted>word=``, and
+      ``.env line 12 is not KEY=VALUE`` (which holds no credential at all)
+      became ``KEY=<redacted>``.
+
+    So: consume each ``key = value`` pair whole and re-emit ``key=<redacted>``.
+    The key is echoed verbatim, so it can never be mangled; the value span is
+    consumed atomically, so no tail can survive; and the substitution only fires
+    when the key is a libpq CREDENTIAL keyword, so a benign diagnostic is left
+    byte-identical instead of being edited on suspicion.
+    """
+    import re
+
+    from seshat.redaction_core import _LIBPQ_SECRET_KEYS, replace_fragments
+    from seshat.redaction_core import uri_components as _uri_components
+
+    # One libpq value: single-quoted, double-quoted, or bare -- each alternative
+    # treating `\<char>` as one unit so an escaped quote/space does not terminate
+    # the value early (libpq's documented escaping).
+    value = r"'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"|(?:\\.|[^\s;,])+"
+    pair = re.compile(rf"\b([A-Za-z_][A-Za-z0-9_]*)(\s*=\s*)(?:{value})")
+
+    def _redact_pair(match: re.Match[str]) -> str:
+        key, sep = match.group(1), match.group(2)
+        if key.lower() not in _LIBPQ_SECRET_KEYS:
+            return match.group(0)  # not a credential keyword -- leave it alone
+        return f"{key}{sep}<redacted>"
+
+    scrubbed = pair.sub(_redact_pair, message)
+
+    # A URI-shaped DSN carries its credentials POSITIONALLY (userinfo before the
+    # `@`, i.e. scheme, then `://`, then `user:password@host`) rather than as
+    # key=value, so it needs the component decomposer. NOTE: that example is
+    # spelled out in words deliberately -- writing it as a literal would match
+    # the release inspector's "credential-bearing URL" scanner and block the
+    # publish, even though it is only a comment (see the same guard in
+    # `scripts/inspect_release_artifacts.py`). Only the
+    # matched URI runs are passed -- handing it the WHOLE message (as this did
+    # before) made it emit junk fragments like `"'pass` that then replaced text
+    # elsewhere.
+    uris = re.findall(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s'\"]+", scrubbed)
+    if uris:
+        scrubbed = replace_fragments(scrubbed, _uri_components(uris), "<redacted>")
+    return scrubbed
+
+
 def as_connection_config(resolve: Callable[[], _T]) -> _T:
     """Run a connection-config resolution, converting a ``ValueError`` from an
     invalid setting into ``ConnectionConfigError``.
@@ -62,7 +129,7 @@ def as_connection_config(resolve: Callable[[], _T]) -> _T:
     except ConnectionConfigError:
         raise
     except ValueError as exc:
-        raise ConnectionConfigError(str(exc)) from exc
+        raise ConnectionConfigError(_scrub_connection_values(str(exc))) from exc
 
 
 def _dotenv_overlay(repo_root: Path | str) -> dict[str, str]:

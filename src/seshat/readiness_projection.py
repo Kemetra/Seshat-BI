@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from seshat.gitutil import GIT_HARDENING as _GIT_HARDENING
+
 from .agent_next import build_agent_next_document, build_table_next_document
 from .disclosure import scan_disclosure
 from .status_surface import build_status_projection
@@ -26,16 +28,8 @@ _STAGE_ORDER = (
 # via the adoption seams). Git reads that tree's own `.git/config` when we shell
 # out inside it, so an attacker-supplied `core.fsmonitor`/`core.hooksPath` would
 # execute -> RCE. safe.directory only bypasses the ownership check, NOT config
-# exec, so it is not sufficient on its own. Keep in sync with
-# pbip_adoption._safety.GIT_UNTRUSTED_TREE_HARDENING.
-_GIT_HARDENING = (
-    "-c",
-    "core.fsmonitor=false",
-    "-c",
-    "core.hooksPath=/dev/null",
-    "-c",
-    "protocol.ext.allow=never",
-)
+# exec, so it is not sufficient on its own. The flags come from the single
+# `gitutil.GIT_HARDENING` definition, imported above.
 
 
 def _source_revision(root: Path) -> str | None:

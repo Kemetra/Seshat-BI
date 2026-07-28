@@ -359,8 +359,19 @@ def _visual_group(
     lines = [
         f'<g class="visual" data-visual-id="{_esc(visual_id)}" '
         f'data-visual-type="{esc_type}" data-contract="{esc_contract}">',
+        # `fill="none"` keys off STYLING BEING PRESENT (`if style`), NOT off the
+        # stroke (#526, corrected in #527 review): SVG defaults an unset fill to
+        # BLACK, so a styled dark-canvas preview drew the box as an opaque slab
+        # over its own title/contract text. Keying it off `style["line"]` left the
+        # slab in place for a SUPPORTED borders-off theme (`chrome.border: null`
+        # -> line is None -> neither attribute emitted). Borders-off means "draw
+        # no stroke", never "paint the box black". `style` is `{}` on the
+        # no-tokens path, so that render stays attribute-free --
+        # `test_omitting_tokens_leaves_output_unchanged` asserts `"fill=" not in
+        # unstyled`.
         f'<rect x="{x}" y="{y}" width="{width}" height="{height}" '
-        f'class="visual-box"{_style_attr("stroke", style.get("line"))} />',
+        f'class="visual-box"{_style_attr("stroke", style.get("line"))}'
+        f"{_style_attr('fill', 'none' if style else '')} />",
         _text(
             x + 4,
             y + 14,

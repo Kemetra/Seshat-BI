@@ -235,18 +235,12 @@ class GovernedScope:
 # EXTERNALLY-AUTHORED tree. safe.directory only bypasses the ownership check, NOT
 # git's config-driven execution (core.fsmonitor/hooksPath), so it must be paired
 # with the hardening flags or a poisoned .git/config in a downloaded tree yields
-# RCE. Keep in sync with pbip_adoption._safety.GIT_UNTRUSTED_TREE_HARDENING.
-_GIT_HARDENING = (
-    "-c",
-    "core.fsmonitor=false",
-    "-c",
-    "core.hooksPath=/dev/null",
-    "-c",
-    "protocol.ext.allow=never",
-)
+# RCE. Sourced from the single `gitutil.GIT_HARDENING` definition.
 
 
 def _source_revision(root: Path) -> str | None:
+    from .gitutil import GIT_HARDENING as _GIT_HARDENING
+
     result = subprocess.run(
         [
             "git",
