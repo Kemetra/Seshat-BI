@@ -62,66 +62,58 @@ def _scrub_connection_values(message: str) -> str:
     Scrubbing at the wrapper makes the guarantee structural instead of
     conventional; ``test_connection_config_error_never_carries_the_dsn`` pins it.
 
-    Candidates are extracted by PATTERN over the whole message, never by
-    whitespace-splitting (#527 review): splitting kept only tokens containing
-    ``://`` or ``=``, so a LABELED dsn (``dsn=postgresql://...``, whose token
-    starts ``dsn=`` and is not itself a parseable URI) and libpq's supported
-    SPACED form (``host = db  password = s3cr3t``, where the key, ``=`` and value
-    are three separate tokens) both survived untouched.
+    Redaction is by SPAN, not by substring fragment (#527, third review wave).
+    Fragment replacement produced five separate leaks across three waves, and
+    every one was a property of the mechanism rather than of a pattern:
+
+    * a fragment that was never extracted simply survives (the labeled ``dsn=``
+      form, the spaced form, backslash escapes);
+    * a shorter fragment replaced before a longer one leaves the tail behind
+      (``password=<redacted> cr3t'``);
+    * a fragment that also occurs OUTSIDE the value gets replaced there too --
+      a secret ``'pass word'`` rewrote the KEY into ``<redacted>word=``, and
+      ``.env line 12 is not KEY=VALUE`` (which holds no credential at all)
+      became ``KEY=<redacted>``.
+
+    So: consume each ``key = value`` pair whole and re-emit ``key=<redacted>``.
+    The key is echoed verbatim, so it can never be mangled; the value span is
+    consumed atomically, so no tail can survive; and the substitution only fires
+    when the key is a libpq CREDENTIAL keyword, so a benign diagnostic is left
+    byte-identical instead of being edited on suspicion.
     """
     import re
 
-    from seshat.redaction_core import (
-        conninfo_component_values,
-        replace_fragments,
-        uri_components,
-    )
+    from seshat.redaction_core import _LIBPQ_SECRET_KEYS, replace_fragments
+    from seshat.redaction_core import uri_components as _uri_components
 
-    # 1. Any URI-shaped run anywhere in the text, even when prefixed by a label
-    #    (`dsn=postgresql://...`) or wrapped in quotes.
-    uris = re.findall(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s'\"]+", message)
+    # One libpq value: single-quoted, double-quoted, or bare -- each alternative
+    # treating `\<char>` as one unit so an escaped quote/space does not terminate
+    # the value early (libpq's documented escaping).
+    value = r"'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"|(?:\\.|[^\s;,])+"
+    pair = re.compile(rf"\b([A-Za-z_][A-Za-z0-9_]*)(\s*=\s*)(?:{value})")
 
-    # 2. libpq keyword conninfo, tolerating whitespace around `=` and `;`/`,`
-    #    separators. The value alternation tries the QUOTED forms FIRST, so a
-    #    quoted value that contains whitespace or a separator
-    #    (`password='s3 cr3t'`) is captured WHOLE. Matching the bare form first
-    #    stopped at the opening quote and at the space, replacing only the first
-    #    fragment and leaving the rest in place -- `password=<redacted> cr3t'`,
-    #    which READS as sanitized while half the credential is still printed
-    #    (#527 second review wave). A partial redaction is worse than none.
-    pairs = re.findall(
-        r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"
-        r"(?:'([^']*)'|\"([^\"]*)\"|([^\s;,'\"]+))",
-        message,
-    )
-    # Each match yields exactly one non-empty value group; keep that one.
-    values = [next((g for g in groups if g), "") for _key, *groups in pairs]
-    conninfo = " ".join(
-        f"{key}={value}" for (key, *_), value in zip(pairs, values) if value
-    )
+    def _redact_pair(match: re.Match[str]) -> str:
+        key, sep = match.group(1), match.group(2)
+        if key.lower() not in _LIBPQ_SECRET_KEYS:
+            return match.group(0)  # not a credential keyword -- leave it alone
+        return f"{key}{sep}<redacted>"
 
-    # Every whitespace/separator-delimited piece of a MULTI-PIECE value, so a
-    # quoted multi-word secret cannot survive as a leftover fragment. Only split
-    # values contribute pieces, and only pieces of 3+ chars: a 1-2 char fragment
-    # ("s3") matches too much unrelated text, and a piece equal to the whole value
-    # is already covered by `values`. Over-redaction is the fail-SAFE direction,
-    # but a piece that also occurs inside a KEY name (`pa`/`ss`/`word` inside
-    # "password") would mangle the diagnostic, so keys are protected below.
-    quoted_pieces = [
-        piece
-        for value in values
-        if value
-        for piece in re.split(r"[\s;,]+", value)
-        if len(piece) >= 3 and piece != value
-    ]
-    keys = {key.lower() for key, *_ in pairs}
-    quoted_pieces = [p for p in quoted_pieces if not any(p in k for k in keys)]
+    scrubbed = pair.sub(_redact_pair, message)
 
-    fragments = uri_components([*uris, message])
-    fragments = (*fragments, *values, *quoted_pieces)
-    if conninfo:
-        fragments = (*fragments, *conninfo_component_values(conninfo))
-    return replace_fragments(message, fragments, "<redacted>")
+    # A URI-shaped DSN carries its credentials POSITIONALLY (userinfo before the
+    # `@`, i.e. scheme, then `://`, then `user:password@host`) rather than as
+    # key=value, so it needs the component decomposer. NOTE: that example is
+    # spelled out in words deliberately -- writing it as a literal would match
+    # the release inspector's "credential-bearing URL" scanner and block the
+    # publish, even though it is only a comment (see the same guard in
+    # `scripts/inspect_release_artifacts.py`). Only the
+    # matched URI runs are passed -- handing it the WHOLE message (as this did
+    # before) made it emit junk fragments like `"'pass` that then replaced text
+    # elsewhere.
+    uris = re.findall(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s'\"]+", scrubbed)
+    if uris:
+        scrubbed = replace_fragments(scrubbed, _uri_components(uris), "<redacted>")
+    return scrubbed
 
 
 def as_connection_config(resolve: Callable[[], _T]) -> _T:

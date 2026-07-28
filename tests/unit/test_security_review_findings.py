@@ -17,6 +17,7 @@ Each test pins ONE reviewed defect so the fix cannot silently regress:
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -375,6 +376,96 @@ def test_connection_config_error_scrubs_quoted_values_containing_whitespace(
             f"{label}: fragment {piece!r} of the quoted credential survived: "
             f"{scrubbed!r}"
         )
+
+
+@pytest.mark.parametrize(
+    ("label", "message", "must_not_survive"),
+    [
+        # #527 wave 3 -- libpq backslash escapes
+        ("backslash-space", "bad: password=sec\\ ret user=alice", ("sec", "ret")),
+        (
+            "backslash-quote",
+            "bad: password='sec\\'ret value' user=alice",
+            ("sec", "ret", "value"),
+        ),
+        # #527 wave 3 -- value pieces that are also key-name substrings
+        ("pieces-in-key-name", "bad: password='pass word' dbname=x", ("word",)),
+        # earlier waves, kept as regression coverage
+        ("quoted-space", "bad: password='s3 cr3t' dbname=analytics", ("s3", "cr3t")),
+        ("dquoted-space", 'bad: password="s3 cr3t" user=alice', ("s3", "cr3t")),
+        ("spaced", "x: host = db.example.com password = s3cr3t", ("s3cr3t",)),
+        ("semicolons", "bad: host=db.example.com;password=s3cr3t", ("s3cr3t",)),
+    ],
+)
+def test_connection_config_error_never_leaks_any_value_fragment(
+    label: str, message: str, must_not_survive: tuple[str, ...]
+) -> None:
+    """No fragment of a credential VALUE may survive, in any libpq spelling.
+
+    Fragment-substring replacement produced five separate leaks across three
+    review waves (unextracted fragments survive; shorter fragments replaced
+    before longer ones leave a tail). The fix replaces the whole ``key=value``
+    SPAN, so this asserts the property that actually matters: nothing outside a
+    ``<redacted>`` token resembles the secret.
+    """
+    from seshat.connection_env import ConnectionConfigError, as_connection_config
+
+    def _resolve():
+        raise ValueError(message)
+
+    with pytest.raises(ConnectionConfigError) as caught:
+        as_connection_config(_resolve)
+
+    scrubbed = str(caught.value)
+    # Strip the surviving `key=` names before hunting for residue. A PRESERVED
+    # key is the desired outcome (`test_scrub_never_mangles_a_key_name` requires
+    # it), but `password=` contains "pass" and "word" as substrings, so a naive
+    # search would flag the correct output. Everything else must be gone.
+    residue = re.sub(r"[A-Za-z_][A-Za-z0-9_]*\s*=", "", scrubbed)
+    residue = residue.replace("<redacted>", "")
+    for fragment in must_not_survive:
+        assert fragment not in residue, (
+            f"{label}: value fragment {fragment!r} survived in {scrubbed!r}"
+        )
+
+
+def test_scrub_never_mangles_a_key_name() -> None:
+    """The KEY must be re-emitted verbatim, never partially redacted.
+
+    Replacing value fragments as substrings hit key names too: a secret
+    ``'pass word'`` turned ``password=`` into ``<redacted>word=`` -- corrupting
+    the diagnostic AND still leaking. Span replacement makes this impossible.
+    """
+    from seshat.connection_env import _scrub_connection_values
+
+    out = _scrub_connection_values("bad: password='pass word' dbname=x")
+
+    assert "password=" in out, f"the key name was mangled: {out!r}"
+    assert "dbname=" in out, f"the key name was mangled: {out!r}"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "unknown DB engine 'mysql'; expected one of ['postgres', 'mysql']",
+        "invalid literal for int() with base 10: 'abc'",
+        "ANALYTICS_DB_PORT must be an integer, got 70000",
+        ".env line 12 is not KEY=VALUE",
+        ".env contains duplicate key ANALYTICS_DB_HOST",
+    ],
+)
+def test_scrub_leaves_benign_diagnostics_byte_identical(message: str) -> None:
+    """A message with no credential keyword must pass through UNCHANGED.
+
+    These are the real upstream raisers (`get_dialect` names an engine, the port
+    path names a port, the `.env` parser names lines/keys). The fragment approach
+    rewrote ``.env line 12 is not KEY=VALUE`` into ``KEY=<redacted>`` -- damaging
+    a diagnostic that never held a credential. Gating on the libpq secret-key
+    list keeps these intact.
+    """
+    from seshat.connection_env import _scrub_connection_values
+
+    assert _scrub_connection_values(message) == message
 
 
 def test_connection_config_error_scrubs_keyword_conninfo_too() -> None:
