@@ -411,6 +411,31 @@
                     "holm",
                     "benjamini-hochberg"
                   ]
+                },
+                "group_order": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 64,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "post_hoc_pairs": {
+                  "type": "array",
+                  "maxItems": 64,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
                 }
               }
             }
@@ -721,4 +746,3 @@
     }
   }
 }
-
