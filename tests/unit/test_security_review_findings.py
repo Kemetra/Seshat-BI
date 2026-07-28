@@ -277,6 +277,48 @@ def test_connection_config_error_never_carries_the_dsn() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("label", "message"),
+    [
+        (
+            "labeled",
+            "bad config: dsn=postgresql://alice:s3cr3t@db.example.com:5432/analytics",
+        ),
+        (
+            "spaced-conninfo",
+            "could not connect: host = db.example.com user = alice password = s3cr3t",
+        ),
+        (
+            "semicolon-separated",
+            "bad: host=db.example.com;user=alice;password=s3cr3t",
+        ),
+    ],
+)
+def test_connection_config_error_scrubs_awkwardly_spelled_dsns(
+    label: str, message: str
+) -> None:
+    """#527 review (P2): the scrub must not depend on convenient whitespace.
+
+    The first implementation split on whitespace and kept tokens containing
+    ``://`` or ``=``, so a LABELED dsn (``dsn=postgresql://...``) and libpq's
+    supported SPACED form (``host = x  password = y``) both survived untouched --
+    and `drift`/`profile`/`validate` print this text unredacted.
+    """
+    from seshat.connection_env import ConnectionConfigError, as_connection_config
+
+    def _resolve():
+        raise ValueError(message)
+
+    with pytest.raises(ConnectionConfigError) as caught:
+        as_connection_config(_resolve)
+
+    scrubbed = str(caught.value)
+    for fragment in ("s3cr3t", "alice", "db.example.com"):
+        assert fragment not in scrubbed, (
+            f"{label} form leaked {fragment!r}: {scrubbed!r}"
+        )
+
+
 def test_connection_config_error_scrubs_keyword_conninfo_too() -> None:
     """libpq accepts TWO DSN spellings and both must be scrubbed.
 

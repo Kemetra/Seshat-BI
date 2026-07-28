@@ -61,15 +61,37 @@ def _scrub_connection_values(message: str) -> str:
     ``resolve_dsn`` would leak a live credential with no code review signal.
     Scrubbing at the wrapper makes the guarantee structural instead of
     conventional; ``test_connection_config_error_never_carries_the_dsn`` pins it.
-    """
-    from seshat.redaction_core import replace_fragments, uri_components
 
-    candidates = [
-        token.strip("'\"")
-        for token in message.replace(",", " ").split()
-        if "://" in token or "=" in token
-    ]
-    fragments = uri_components(candidates)
+    Candidates are extracted by PATTERN over the whole message, never by
+    whitespace-splitting (#527 review): splitting kept only tokens containing
+    ``://`` or ``=``, so a LABELED dsn (``dsn=postgresql://...``, whose token
+    starts ``dsn=`` and is not itself a parseable URI) and libpq's supported
+    SPACED form (``host = db  password = s3cr3t``, where the key, ``=`` and value
+    are three separate tokens) both survived untouched.
+    """
+    import re
+
+    from seshat.redaction_core import (
+        conninfo_component_values,
+        replace_fragments,
+        uri_components,
+    )
+
+    # 1. Any URI-shaped run anywhere in the text, even when prefixed by a label
+    #    (`dsn=postgresql://...`) or wrapped in quotes.
+    uris = re.findall(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s'\"]+", message)
+
+    # 2. libpq keyword conninfo, tolerating whitespace around `=` and `;`/`,`
+    #    separators. Rebuilt into the canonical `key=value` spelling that
+    #    `conninfo_component_values` parses, so the decomposer sees a form it
+    #    understands while the ORIGINAL spacing is what gets replaced below
+    #    (replace_fragments matches the extracted VALUES, not the pairs).
+    pairs = re.findall(r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^\s;,'\"]+)", message)
+    conninfo = " ".join(f"{key}={value}" for key, value in pairs)
+
+    fragments = uri_components([*uris, message])
+    if conninfo:
+        fragments = (*fragments, *conninfo_component_values(conninfo))
     return replace_fragments(message, fragments, "<redacted>")
 
 
