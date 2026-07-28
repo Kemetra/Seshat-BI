@@ -117,7 +117,13 @@ def valid_spec(method_id: str, parameters: dict[str, object]) -> dict[str, objec
         ),
         (
             "detect_change_points",
-            {"model": "l2", "penalty": "10", "min_segment": 6},
+            {
+                "model": "l2",
+                "min_segment": 6,
+                "algorithm": "dynamic_programming",
+                "change_count": 2,
+                "jump": 1,
+            },
         ),
         (
             "forecast",

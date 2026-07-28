@@ -664,8 +664,31 @@
               "additionalProperties": false,
               "required": [
                 "model",
-                "penalty",
                 "min_segment"
+              ],
+              "allOf": [
+                {
+                  "if": {
+                    "required": [
+                      "algorithm"
+                    ],
+                    "properties": {
+                      "algorithm": {
+                        "const": "dynamic_programming"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "change_count"
+                    ]
+                  },
+                  "else": {
+                    "required": [
+                      "penalty"
+                    ]
+                  }
+                }
               ],
               "properties": {
                 "model": {
@@ -682,6 +705,22 @@
                   "type": "integer",
                   "minimum": 2,
                   "maximum": 100000
+                },
+                "algorithm": {
+                  "enum": [
+                    "pelt",
+                    "dynamic_programming"
+                  ]
+                },
+                "change_count": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "jump": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000
                 }
               }
             }
