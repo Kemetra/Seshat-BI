@@ -395,6 +395,16 @@ def test_connection_config_error_scrubs_quoted_values_containing_whitespace(
         ("dquoted-space", 'bad: password="s3 cr3t" user=alice', ("s3", "cr3t")),
         ("spaced", "x: host = db.example.com password = s3cr3t", ("s3cr3t",)),
         ("semicolons", "bad: host=db.example.com;password=s3cr3t", ("s3cr3t",)),
+        # #528 -- punctuation INSIDE an unquoted value. libpq separates
+        # keyword/value pairs by WHITESPACE, not by `;`/`,`, so treating those as
+        # value terminators cut the value short and leaked the tail.
+        ("bare-semicolon-in-value", "password=sec;ret host=x", ("ret",)),
+        ("bare-comma-in-value", "password=sec,ret user=alice", ("ret",)),
+        (
+            "bare-punctuation-then-real-pair",
+            "bad: password=a;b,c host=db.example.com",
+            ("a;b,c", "db.example.com"),
+        ),
     ],
 )
 def test_connection_config_error_never_leaks_any_value_fragment(

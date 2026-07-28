@@ -89,7 +89,18 @@ def _scrub_connection_values(message: str) -> str:
     # One libpq value: single-quoted, double-quoted, or bare -- each alternative
     # treating `\<char>` as one unit so an escaped quote/space does not terminate
     # the value early (libpq's documented escaping).
-    value = r"'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"|(?:\\.|[^\s;,])+"
+    #
+    # The BARE alternative admits `;` and `,` (#528): libpq separates keyword/value
+    # pairs by WHITESPACE, so punctuation is ordinary value content. Excluding it
+    # cut `password=sec;ret` short and leaked the `;ret` tail. It stops only at
+    # whitespace, or at punctuation that is immediately followed by another
+    # `key=` pair -- so a `;`-separated conninfo (`host=h;password=p`, a real
+    # spelling this must keep splitting) still yields two pairs instead of being
+    # swallowed into one. Over-consuming a nonstandard punctuation-separated run
+    # into a single redaction would be fail-SAFE, but keeping the split preserves
+    # the non-secret keys in the diagnostic.
+    bare = r"(?:\\.|[^\s;,]|[;,](?![A-Za-z_][A-Za-z0-9_]*\s*=))+"
+    value = rf"'(?:\\.|[^'\\])*'|\"(?:\\.|[^\"\\])*\"|{bare}"
     pair = re.compile(rf"\b([A-Za-z_][A-Za-z0-9_]*)(\s*=\s*)(?:{value})")
 
     def _redact_pair(match: re.Match[str]) -> str:
