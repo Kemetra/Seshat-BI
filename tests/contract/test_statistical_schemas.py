@@ -108,7 +108,12 @@ def valid_spec(method_id: str, parameters: dict[str, object]) -> dict[str, objec
         ),
         (
             "detect_anomalies",
-            {"model": "seasonal_mad", "period": 12, "threshold": "3.5"},
+            {
+                "model": "seasonal_mad",
+                "period": 12,
+                "threshold": "3.5",
+                "direction": "upper",
+            },
         ),
         (
             "detect_change_points",

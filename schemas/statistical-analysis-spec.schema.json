@@ -632,6 +632,13 @@
                 },
                 "threshold": {
                   "$ref": "#/$defs/decimal"
+                },
+                "direction": {
+                  "enum": [
+                    "two-sided",
+                    "upper",
+                    "lower"
+                  ]
                 }
               }
             }
