@@ -319,6 +319,64 @@ def test_connection_config_error_scrubs_awkwardly_spelled_dsns(
         )
 
 
+@pytest.mark.parametrize(
+    ("label", "message", "secret"),
+    [
+        (
+            "single-quoted-with-space",
+            "bad: host=db.example.com password='s3 cr3t' dbname=analytics",
+            "s3 cr3t",
+        ),
+        (
+            "double-quoted-with-space",
+            'bad: password="s3 cr3t" user=alice',
+            "s3 cr3t",
+        ),
+        (
+            "quoted-with-separator",
+            "bad: password='pa;ss,word' user=alice",
+            "pa;ss,word",
+        ),
+    ],
+)
+def test_connection_config_error_scrubs_quoted_values_containing_whitespace(
+    label: str, message: str, secret: str
+) -> None:
+    """#527 second wave (P2): a PARTIAL redaction leaks and looks scrubbed.
+
+    libpq allows a quoted value to contain whitespace and separators
+    (``password='s3 cr3t'``). The value regex stopped at both the quote and the
+    space, so only the first fragment was replaced and the remainder survived --
+    ``password=<redacted> cr3t'``, which reads as sanitized while half the
+    credential is still printed. Every fragment of the quoted run must go.
+    """
+    from seshat.connection_env import ConnectionConfigError, as_connection_config
+
+    def _resolve():
+        raise ValueError(message)
+
+    with pytest.raises(ConnectionConfigError) as caught:
+        as_connection_config(_resolve)
+
+    scrubbed = str(caught.value)
+    # Compare against the text with the redaction token removed, so a piece that
+    # legitimately survives inside a KEY name (`pa`/`ss`/`word` are substrings of
+    # "password") is not mistaken for a leaked value. The secret must be gone both
+    # whole and piecewise from everything that is NOT a key.
+    residue = scrubbed.replace("<redacted>", "")
+    assert secret not in residue, (
+        f"{label}: the quoted credential survived whole: {scrubbed!r}"
+    )
+    keys = {"host", "user", "password", "dbname", "port", "sslmode"}
+    for piece in secret.replace(";", " ").replace(",", " ").split():
+        if any(piece in key for key in keys):
+            continue  # indistinguishable from the key name; `values` covers it
+        assert piece not in residue, (
+            f"{label}: fragment {piece!r} of the quoted credential survived: "
+            f"{scrubbed!r}"
+        )
+
+
 def test_connection_config_error_scrubs_keyword_conninfo_too() -> None:
     """libpq accepts TWO DSN spellings and both must be scrubbed.
 

@@ -82,14 +82,43 @@ def _scrub_connection_values(message: str) -> str:
     uris = re.findall(r"[a-zA-Z][a-zA-Z0-9+.-]*://[^\s'\"]+", message)
 
     # 2. libpq keyword conninfo, tolerating whitespace around `=` and `;`/`,`
-    #    separators. Rebuilt into the canonical `key=value` spelling that
-    #    `conninfo_component_values` parses, so the decomposer sees a form it
-    #    understands while the ORIGINAL spacing is what gets replaced below
-    #    (replace_fragments matches the extracted VALUES, not the pairs).
-    pairs = re.findall(r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*([^\s;,'\"]+)", message)
-    conninfo = " ".join(f"{key}={value}" for key, value in pairs)
+    #    separators. The value alternation tries the QUOTED forms FIRST, so a
+    #    quoted value that contains whitespace or a separator
+    #    (`password='s3 cr3t'`) is captured WHOLE. Matching the bare form first
+    #    stopped at the opening quote and at the space, replacing only the first
+    #    fragment and leaving the rest in place -- `password=<redacted> cr3t'`,
+    #    which READS as sanitized while half the credential is still printed
+    #    (#527 second review wave). A partial redaction is worse than none.
+    pairs = re.findall(
+        r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*"
+        r"(?:'([^']*)'|\"([^\"]*)\"|([^\s;,'\"]+))",
+        message,
+    )
+    # Each match yields exactly one non-empty value group; keep that one.
+    values = [next((g for g in groups if g), "") for _key, *groups in pairs]
+    conninfo = " ".join(
+        f"{key}={value}" for (key, *_), value in zip(pairs, values) if value
+    )
+
+    # Every whitespace/separator-delimited piece of a MULTI-PIECE value, so a
+    # quoted multi-word secret cannot survive as a leftover fragment. Only split
+    # values contribute pieces, and only pieces of 3+ chars: a 1-2 char fragment
+    # ("s3") matches too much unrelated text, and a piece equal to the whole value
+    # is already covered by `values`. Over-redaction is the fail-SAFE direction,
+    # but a piece that also occurs inside a KEY name (`pa`/`ss`/`word` inside
+    # "password") would mangle the diagnostic, so keys are protected below.
+    quoted_pieces = [
+        piece
+        for value in values
+        if value
+        for piece in re.split(r"[\s;,]+", value)
+        if len(piece) >= 3 and piece != value
+    ]
+    keys = {key.lower() for key, *_ in pairs}
+    quoted_pieces = [p for p in quoted_pieces if not any(p in k for k in keys)]
 
     fragments = uri_components([*uris, message])
+    fragments = (*fragments, *values, *quoted_pieces)
     if conninfo:
         fragments = (*fragments, *conninfo_component_values(conninfo))
     return replace_fragments(message, fragments, "<redacted>")
