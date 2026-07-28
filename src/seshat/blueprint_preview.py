@@ -359,8 +359,16 @@ def _visual_group(
     lines = [
         f'<g class="visual" data-visual-id="{_esc(visual_id)}" '
         f'data-visual-type="{esc_type}" data-contract="{esc_contract}">',
+        # `fill="none"` rides the SAME token presence as `stroke` (#526): SVG
+        # defaults an unset fill to BLACK, so a styled dark-canvas preview drew
+        # the box as an opaque slab over its own title/contract text. It must be
+        # an outline. Gated on the style token rather than emitted
+        # unconditionally so the no-tokens path stays attribute-free --
+        # `test_omitting_tokens_leaves_output_unchanged` asserts `"fill=" not in
+        # unstyled`.
         f'<rect x="{x}" y="{y}" width="{width}" height="{height}" '
-        f'class="visual-box"{_style_attr("stroke", style.get("line"))} />',
+        f'class="visual-box"{_style_attr("stroke", style.get("line"))}'
+        f"{_style_attr('fill', 'none' if style.get('line') else '')} />",
         _text(
             x + 4,
             y + 14,
