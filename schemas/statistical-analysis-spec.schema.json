@@ -480,6 +480,24 @@
                 },
                 "confidence_level": {
                   "$ref": "#/$defs/confidence_level"
+                },
+                "comparison": {
+                  "enum": [
+                    "none",
+                    "chi_square",
+                    "fisher_exact"
+                  ]
+                },
+                "zero_cell_correction": {
+                  "enum": [
+                    "none",
+                    "haldane-anscombe"
+                  ]
+                },
+                "minimum_denominator": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000000
                 }
               }
             }
