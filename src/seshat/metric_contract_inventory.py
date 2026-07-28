@@ -26,6 +26,11 @@ class MetricContract:
     path: Path
     definition: dict
     evidence: tuple[str, ...]
+    columns: tuple[str, ...] = ()
+    pii_sensitive: bool = False
+    grain: str = ""
+    unit: str | None = None
+    time_additivity: str | None = None
 
     @property
     def binding(self) -> MeasureBinding:
@@ -158,6 +163,27 @@ def _definition_error(raw: dict, relative: str) -> str | None:
     return None
 
 
+def _statistical_binding_error(raw: dict, relative: str) -> str | None:
+    binding = raw.get("binds_to")
+    if not isinstance(binding, dict):
+        return None
+    columns = binding.get("columns")
+    if columns is not None and (
+        not isinstance(columns, list)
+        or not columns
+        or not all(isinstance(item, str) and item.strip() for item in columns)
+    ):
+        return f"{relative}: binds_to.columns must be non-empty strings"
+    pii_sensitive = binding.get("pii_sensitive")
+    if pii_sensitive is not None and not isinstance(pii_sensitive, bool):
+        return f"{relative}: binds_to.pii_sensitive must be boolean"
+    for name in ("grain", "unit", "time_additivity"):
+        value = raw.get(name)
+        if value is not None and (not isinstance(value, str) or not value.strip()):
+            return f"{relative}: {name} must be a non-empty string"
+    return None
+
+
 def _contract_error(
     raw: dict, path: Path, relative: str, semantic_approval: bool
 ) -> str | None:
@@ -166,19 +192,26 @@ def _contract_error(
         _readiness_error(raw, relative),
         _approval_error(raw, relative, semantic_approval),
         _definition_error(raw, relative),
+        _statistical_binding_error(raw, relative),
     )
     return next((error for error in errors if error is not None), None)
 
 
 def _metric_contract(raw: dict, path: Path, scope: str) -> MetricContract:
     readiness = raw["readiness"]
+    binding = raw["binds_to"]
     return MetricContract(
         name=raw["name"],
         scope=scope,
-        gold_table=raw["binds_to"]["gold_table"].strip(),
+        gold_table=binding["gold_table"].strip(),
         path=path,
         definition=raw["definition"],
         evidence=tuple(readiness["evidence"]),
+        columns=tuple(item.strip() for item in binding.get("columns", [])),
+        pii_sensitive=binding.get("pii_sensitive") is True,
+        grain=raw.get("grain", "").strip(),
+        unit=raw.get("unit"),
+        time_additivity=raw.get("time_additivity"),
     )
 
 

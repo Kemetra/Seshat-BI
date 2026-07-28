@@ -69,6 +69,34 @@ def test_approved_contract_is_indexed_by_scope_and_name(tmp_path: Path) -> None:
     assert inventory.for_scope("sales") == {"TotalSales": contract}
 
 
+def test_approved_contract_exposes_statistical_authority_fields(
+    tmp_path: Path,
+) -> None:
+    _write_approval(tmp_path, "sales")
+    body = _approved().replace(
+        'owner: metric_owner\nbinds_to:\n  gold_table: "gold.sales"\n',
+        "owner: metric_owner\n"
+        "grain: one row per completed week\n"
+        "unit: USD\n"
+        "time_additivity: additive\n"
+        "binds_to:\n"
+        '  gold_table: "gold.sales"\n'
+        "  columns: [metric_value, completed_week]\n"
+        "  pii_sensitive: true\n",
+    )
+    path = _write(_contract_path(tmp_path, "sales"), body)
+
+    inventory = load_contract_inventory([path], tmp_path)
+
+    assert inventory.errors == ()
+    contract = inventory.approved[("sales", "TotalSales")]
+    assert contract.columns == ("metric_value", "completed_week")
+    assert contract.pii_sensitive is True
+    assert contract.grain == "one row per completed week"
+    assert contract.unit == "USD"
+    assert contract.time_additivity == "additive"
+
+
 def test_zero_contracts_is_an_empty_valid_inventory(tmp_path: Path) -> None:
     inventory = load_contract_inventory([], tmp_path)
     assert inventory.approved == {}
