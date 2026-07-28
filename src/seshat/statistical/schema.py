@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path, PurePosixPath
@@ -167,6 +168,8 @@ def _normalize(
     readiness: PurePosixPath,
     metric_contracts: tuple[PurePosixPath, ...],
     outputs: Mapping[str, PurePosixPath],
+    source_path: PurePosixPath | None,
+    source_sha256: str,
 ) -> AnalysisSpec:
     method = document["method"]
     missing_data = document["missing_data"]
@@ -195,6 +198,8 @@ def _normalize(
         random_seed=int(document["random_seed"]),
         pii=_frozen_mapping(document["pii"]),
         outputs=outputs,
+        source_path=source_path,
+        source_sha256=source_sha256,
     )
 
 
@@ -212,4 +217,21 @@ def load_analysis_spec(path: Path, repo_root: Path) -> AnalysisSpec:
         raise SpecRefused(tuple(errors))
     if readiness is None:
         raise SpecRefused(("$.readiness_status: path is required",))
-    return _normalize(document, readiness, metric_contracts, outputs)
+    try:
+        source_path = PurePosixPath(
+            path.resolve().relative_to(repo_root.resolve()).as_posix()
+        )
+    except ValueError:
+        source_path = None
+    try:
+        source_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as exc:
+        raise SpecRefused((f"$: cannot hash analysis specification: {exc}",)) from exc
+    return _normalize(
+        document,
+        readiness,
+        metric_contracts,
+        outputs,
+        source_path,
+        source_sha256,
+    )

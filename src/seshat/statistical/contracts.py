@@ -5,7 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import PurePosixPath
-from typing import Literal, Mapping
+from typing import TYPE_CHECKING, Literal, Mapping
+
+if TYPE_CHECKING:
+    from .policy import PolicyContext
+    from .providers.base import RectangularData
 
 
 class Outcome(StrEnum):
@@ -64,6 +68,8 @@ class AnalysisSpec:
     random_seed: int
     pii: Mapping[str, object]
     outputs: Mapping[str, PurePosixPath]
+    source_path: PurePosixPath | None = None
+    source_sha256: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,3 +129,27 @@ class AnalysisEvidence:
     authority: str = "derived-evidence-only"
     readiness_effect: str = "none; named-human approval required"
     review_state: str = "pending"
+
+
+@dataclass(frozen=True, slots=True)
+class MethodContext:
+    spec: AnalysisSpec
+    policy: PolicyContext
+    data: RectangularData
+
+
+@dataclass(frozen=True, slots=True)
+class MethodResult:
+    estimates: tuple[Estimate, ...] = ()
+    effect_sizes: tuple[Estimate, ...] = ()
+    intervals: tuple[Interval, ...] = ()
+    tests: tuple[TestStatistic, ...] = ()
+    diagnostics: tuple[Diagnostic, ...] = ()
+    warnings: tuple[str, ...] = ()
+    interpretation_cautions: tuple[str, ...] = ()
+
+
+class AnalysisWithheld(RuntimeError):
+    def __init__(self, blockers: tuple[Blocker, ...]) -> None:
+        super().__init__("; ".join(item.message for item in blockers))
+        self.blockers = blockers
