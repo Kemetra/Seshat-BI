@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path, PurePosixPath
-from types import MappingProxyType
+from dataclasses import dataclass
 
 import pytest
 
@@ -16,32 +15,32 @@ import numpy as np  # noqa: E402
 from scipy import stats  # noqa: E402
 
 from seshat.statistical.contracts import (  # noqa: E402
-    AnalysisSpec,
     AnalysisWithheld,
     ColumnBinding,
     MethodContext,
-    MethodSpec,
 )
 from seshat.statistical.methods.descriptive import run_describe  # noqa: E402
-from seshat.statistical.policy import PolicyContext  # noqa: E402
-from seshat.statistical.providers.base import (  # noqa: E402
-    ProviderProvenance,
-    RectangularData,
-)
+
+from ._support import SpecSettings, method_context  # noqa: E402
 
 pytestmark = pytest.mark.statistics
 
 
-def _context(
-    values: list[object],
-    *,
-    groups: list[object] | None = None,
-    missing_policy: str = "complete_case",
-    minimum: int = 1,
-    privacy_floor: int = 2,
-    outlier_rule: str = "mad",
-    quantiles: tuple[str, ...] = ("0.25", "0.5", "0.75"),
-) -> MethodContext:
+@dataclass(frozen=True, slots=True)
+class _Options:
+    """The knobs a descriptive test varies on the governed specification."""
+
+    groups: list[object] | None = None
+    missing_policy: str = "complete_case"
+    minimum: int = 1
+    privacy_floor: int = 2
+    outlier_rule: str = "mad"
+    quantiles: tuple[str, ...] = ("0.25", "0.5", "0.75")
+
+
+def _context(values: list[object], **overrides: object) -> MethodContext:
+    options = _Options(**overrides)  # type: ignore[arg-type]
+    groups = options.groups
     columns = ("value", "group") if groups is not None else ("value",)
     rows = (
         tuple(zip(values, groups, strict=True))
@@ -51,61 +50,24 @@ def _context(
     roles = {"response": ColumnBinding("value", "number")}
     if groups is not None:
         roles["group"] = ColumnBinding("group", "category")
-    spec = AnalysisSpec(
-        schema_version="1.0",
+    settings = SpecSettings(
         analysis_id="describe_example",
-        revision=1,
-        subject="sample",
         question="What is the governed distribution?",
-        cadence="weekly",
-        owner="Example Analyst",
-        readiness_status=PurePosixPath("mappings/sample/readiness-status.yaml"),
-        metric_contracts=(
-            PurePosixPath("mappings/sample/metrics/ApprovedMetric.yaml"),
-        ),
-        provider=MappingProxyType({"kind": "local_csv", "dataset_id": "sample"}),
-        population=MappingProxyType(
-            {"grain": "one row", "inclusion": (), "exclusion": ()}
-        ),
-        roles=MappingProxyType(roles),
-        method=MethodSpec(
-            "describe",
-            "1.0",
-            MappingProxyType({"quantiles": quantiles, "outlier_rule": outlier_rule}),
-        ),
-        missing_policy=missing_policy,
-        minimum_data=MappingProxyType(
-            {"observations": minimum, "groups": 1, "seasonal_cycles": 0}
-        ),
-        random_seed=1729,
-        pii=MappingProxyType(
-            {
-                "classification": "none",
-                "approval_evidence": (),
-                "minimum_group_count": privacy_floor,
-            }
-        ),
-        outputs=MappingProxyType({}),
+        method_id="describe",
+        parameters={
+            "quantiles": options.quantiles,
+            "outlier_rule": options.outlier_rule,
+        },
+        roles=roles,
+        missing_policy=options.missing_policy,
+        minimum_data={
+            "observations": options.minimum,
+            "groups": 1,
+            "seasonal_cycles": 0,
+        },
+        privacy_floor=options.privacy_floor,
     )
-    data = RectangularData(
-        columns=columns,
-        rows=rows,
-        total_count=len(rows),
-        excluded_count=0,
-        exclusion_reasons=(),
-        provenance=ProviderProvenance(
-            "local_csv", "local_csv:test", "a" * 64, None, None
-        ),
-    )
-    policy = PolicyContext(
-        subject="sample",
-        readiness_path=Path("readiness-status.yaml"),
-        readiness_revision="1",
-        contracts=(),
-        approved_tables=frozenset({"gold.sample"}),
-        approved_columns=MappingProxyType({"gold.sample": frozenset(columns)}),
-    )
-    return MethodContext(spec, policy, data)
+    return method_context(settings, columns, rows)
 
 
 def _estimate(result, name: str) -> float | None:

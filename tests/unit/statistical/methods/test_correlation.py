@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path, PurePosixPath
-from types import MappingProxyType
+from dataclasses import dataclass
 
 import pytest
 
@@ -16,95 +15,61 @@ import numpy as np  # noqa: E402
 from scipy import stats  # noqa: E402
 
 from seshat.statistical.contracts import (  # noqa: E402
-    AnalysisSpec,
     AnalysisWithheld,
     ColumnBinding,
     MethodContext,
-    MethodSpec,
 )
 from seshat.statistical.methods.correlation import run_correlate  # noqa: E402
-from seshat.statistical.policy import PolicyContext  # noqa: E402
-from seshat.statistical.providers.base import (  # noqa: E402
-    ProviderProvenance,
-    RectangularData,
-)
+
+from ._support import SpecSettings, method_context  # noqa: E402
 
 pytestmark = pytest.mark.statistics
 
 
+@dataclass(frozen=True, slots=True)
+class _Options:
+    """The knobs an association test varies on the governed specification."""
+
+    coefficient: str = "pearson"
+    missing_policy: str = "pairwise"
+    minimum: int = 3
+
+
 def _context(
-    first,
-    second,
-    coefficient="pearson",
-    missing_policy="pairwise",
-    minimum=3,
+    first: list[object], second: list[object], **overrides: object
 ) -> MethodContext:
+    options = _Options(**overrides)  # type: ignore[arg-type]
+    columns = ("response", "predictor")
     rows = tuple(zip(first, second, strict=True))
-    spec = AnalysisSpec(
-        "1.0",
-        "correlation_example",
-        1,
-        "sample",
-        "Are approved metrics associated?",
-        "weekly",
-        "Example Analyst",
-        PurePosixPath("mappings/sample/readiness-status.yaml"),
-        (PurePosixPath("mappings/sample/metrics/ApprovedMetric.yaml"),),
-        MappingProxyType({"kind": "local_csv", "dataset_id": "sample"}),
-        MappingProxyType({"grain": "one row", "inclusion": (), "exclusion": ()}),
-        MappingProxyType(
-            {
-                "response": ColumnBinding("response", "number"),
-                "predictor": ColumnBinding("predictor", "number"),
-            }
-        ),
-        MethodSpec(
-            "correlate",
-            "1.0",
-            MappingProxyType(
-                {
-                    "coefficient": coefficient,
-                    "confidence_level": "0.95",
-                    "correction": "holm",
-                }
-            ),
-        ),
-        missing_policy,
-        MappingProxyType({"observations": minimum, "groups": 1, "seasonal_cycles": 0}),
-        1729,
-        MappingProxyType(
-            {
-                "classification": "none",
-                "approval_evidence": (),
-                "minimum_group_count": 1,
-            }
-        ),
-        MappingProxyType({}),
+    settings = SpecSettings(
+        analysis_id="correlation_example",
+        question="Are approved metrics associated?",
+        method_id="correlate",
+        parameters={
+            "coefficient": options.coefficient,
+            "confidence_level": "0.95",
+            "correction": "holm",
+        },
+        roles={
+            "response": ColumnBinding("response", "number"),
+            "predictor": ColumnBinding("predictor", "number"),
+        },
+        missing_policy=options.missing_policy,
+        minimum_data={
+            "observations": options.minimum,
+            "groups": 1,
+            "seasonal_cycles": 0,
+        },
+        privacy_floor=1,
     )
-    data = RectangularData(
-        ("response", "predictor"),
-        rows,
-        len(rows),
-        0,
-        (),
-        ProviderProvenance("local_csv", "local_csv:test", "a" * 64, None, None),
-    )
-    policy = PolicyContext(
-        "sample",
-        Path("readiness-status.yaml"),
-        "1",
-        (),
-        frozenset({"gold.sample"}),
-        MappingProxyType({"gold.sample": frozenset({"response", "predictor"})}),
-    )
-    return MethodContext(spec, policy, data)
+    return method_context(settings, columns, rows)
 
 
 @pytest.mark.parametrize("coefficient", ("pearson", "spearman"))
 def test_correlation_matches_scipy_and_has_seeded_interval(coefficient: str) -> None:
     first = np.array([1.0, 2.0, 4.0, 5.0, 7.0, 10.0])
     second = np.array([2.0, 1.0, 5.0, 4.0, 8.0, 9.0])
-    result = run_correlate(_context(first, second, coefficient))
+    result = run_correlate(_context(first, second, coefficient=coefficient))
     expected = (
         stats.pearsonr(first, second)
         if coefficient == "pearson"

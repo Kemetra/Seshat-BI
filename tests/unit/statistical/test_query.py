@@ -97,28 +97,24 @@ def test_compiler_refuses_raw_aggregate_expression() -> None:
         compile_select(request, get_dialect("postgres"))
 
 
-@pytest.mark.parametrize("cardinality", ["many_to_many", "one_to_many"])
-def test_compiler_refuses_unapproved_join_cardinality(
-    cardinality: str,
+@pytest.mark.parametrize(
+    ("left_column", "cardinality", "message"),
+    (
+        ("channel", "many_to_many", "cardinality"),
+        ("channel", "one_to_many", "cardinality"),
+        ("private_key", "many_to_one", "approved columns"),
+    ),
+)
+def test_compiler_refuses_an_unapproved_join(
+    left_column: str, cardinality: str, message: str
 ) -> None:
     join = Join(
         table="gold.dim_channel",
-        left_column="channel",
+        left_column=left_column,
         right_column="channel",
         cardinality=cardinality,
     )
-    with pytest.raises(QueryRefused, match="cardinality"):
-        compile_select(_request(joins=(join,)), get_dialect("postgres"))
-
-
-def test_compiler_refuses_join_column_outside_request() -> None:
-    join = Join(
-        table="gold.dim_channel",
-        left_column="private_key",
-        right_column="channel",
-        cardinality="many_to_one",
-    )
-    with pytest.raises(QueryRefused, match="approved columns"):
+    with pytest.raises(QueryRefused, match=message):
         compile_select(_request(joins=(join,)), get_dialect("postgres"))
 
 

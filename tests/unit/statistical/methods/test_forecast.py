@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 
 import pytest
@@ -32,22 +32,26 @@ from .test_time_index import time_context  # noqa: E402
 pytestmark = pytest.mark.statistics
 
 
-def _context(
-    values,
-    *,
-    candidates=("seasonal_naive", "ets_add_seasonal"),
-    period=4,
-    horizon=2,
-    initial_window=12,
-    step=2,
-    max_folds=4,
-    metric="mase",
-):
+@dataclass(frozen=True, slots=True)
+class _Declared:
+    """The declared candidates and evaluation geometry one test varies."""
+
+    candidates: tuple[str, ...] = ("seasonal_naive", "ets_add_seasonal")
+    period: int = 4
+    horizon: int = 2
+    initial_window: int = 12
+    step: int = 2
+    max_folds: int = 4
+    metric: str = "mase"
+
+
+def _context(values, **overrides: object):
+    declared = _Declared(**overrides)  # type: ignore[arg-type]
     start = date(2024, 1, 1)
     timestamps = [
         (start + timedelta(days=index)).isoformat() for index in range(len(values))
     ]
-    context = time_context(timestamps, values, period=period, cycles=2)
+    context = time_context(timestamps, values, period=declared.period, cycles=2)
     return replace(
         context,
         spec=replace(
@@ -57,14 +61,14 @@ def _context(
                 "forecast",
                 "1.0",
                 {
-                    "candidates": candidates,
-                    "period": period,
-                    "horizon": horizon,
+                    "candidates": declared.candidates,
+                    "period": declared.period,
+                    "horizon": declared.horizon,
                     "confidence_level": "0.95",
-                    "evaluation_metric": metric,
-                    "initial_window": initial_window,
-                    "step": step,
-                    "max_folds": max_folds,
+                    "evaluation_metric": declared.metric,
+                    "initial_window": declared.initial_window,
+                    "step": declared.step,
+                    "max_folds": declared.max_folds,
                     "final_period": "complete",
                     "partial_period_policy": "fail",
                 },

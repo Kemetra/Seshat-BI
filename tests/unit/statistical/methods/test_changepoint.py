@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import importlib
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 
 import pytest
@@ -26,40 +26,40 @@ from .test_time_index import time_context  # noqa: E402
 pytestmark = pytest.mark.statistics
 
 
-def _context(
-    values,
-    *,
-    model="l2",
-    penalty="10",
-    min_segment=6,
-    algorithm="pelt",
-    change_count=2,
-    jump=1,
-):
+@dataclass(frozen=True, slots=True)
+class _Search:
+    """The declared change-point search rule one test varies."""
+
+    model: str = "l2"
+    penalty: str | None = "10"
+    min_segment: int = 6
+    algorithm: str = "pelt"
+    change_count: int = 2
+    jump: int = 1
+
+
+def _context(values, **overrides: object):
+    search = _Search(**overrides)  # type: ignore[arg-type]
     start = date(2026, 1, 1)
     timestamps = [
         (start + timedelta(days=index)).isoformat() for index in range(len(values))
     ]
     context = time_context(timestamps, values, period=1)
-    parameters = {
-        "model": model,
-        "min_segment": min_segment,
-        "algorithm": algorithm,
-        "change_count": change_count,
-        "jump": jump,
+    parameters: dict[str, object] = {
+        "model": search.model,
+        "min_segment": search.min_segment,
+        "algorithm": search.algorithm,
+        "change_count": search.change_count,
+        "jump": search.jump,
     }
-    if penalty is not None:
-        parameters["penalty"] = penalty
+    if search.penalty is not None:
+        parameters["penalty"] = search.penalty
     return replace(
         context,
         spec=replace(
             context.spec,
             minimum_data={"observations": 2, "groups": 1, "seasonal_cycles": 0},
-            method=MethodSpec(
-                "detect_change_points",
-                "1.0",
-                parameters,
-            ),
+            method=MethodSpec("detect_change_points", "1.0", parameters),
         ),
     )
 

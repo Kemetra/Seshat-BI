@@ -2,82 +2,60 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
-from pathlib import Path, PurePosixPath
-from types import MappingProxyType
+from dataclasses import dataclass, replace
 
 import pytest
 
 from seshat.statistical.contracts import (
-    AnalysisSpec,
     AnalysisWithheld,
     ColumnBinding,
     MethodContext,
     MethodSpec,
 )
 from seshat.statistical.methods.time_index import regular_series, rolling_origins
-from seshat.statistical.policy import PolicyContext
-from seshat.statistical.providers.base import ProviderProvenance, RectangularData
+
+from ._support import SpecSettings, method_context
 
 pytestmark = pytest.mark.statistics
 
 
-def time_context(timestamps, values, *, cadence="daily", period=2, cycles=0):
+@dataclass(frozen=True, slots=True)
+class _Options:
+    """The cadence and seasonality a time-series test declares."""
+
+    cadence: str = "daily"
+    period: int = 2
+    cycles: int = 0
+
+
+def time_context(timestamps, values, **overrides: object) -> MethodContext:
+    """Build the governed context every regular-series method test starts from."""
+
+    options = _Options(**overrides)  # type: ignore[arg-type]
+    columns = ("time", "response")
     rows = tuple(zip(timestamps, values, strict=True))
-    spec = AnalysisSpec(
-        "1.0",
-        "time_example",
-        1,
-        "sample",
-        "Is the approved series unusual?",
-        cadence,
-        "Example Analyst",
-        PurePosixPath("mappings/sample/readiness-status.yaml"),
-        (PurePosixPath("mappings/sample/metrics/ApprovedMetric.yaml"),),
-        MappingProxyType({"kind": "local_csv", "dataset_id": "sample"}),
-        MappingProxyType({"grain": "one row", "inclusion": (), "exclusion": ()}),
-        MappingProxyType(
-            {
-                "time": ColumnBinding("time", "date"),
-                "response": ColumnBinding("response", "number"),
-            }
-        ),
-        MethodSpec(
-            "detect_anomalies",
-            "1.0",
-            MappingProxyType(
-                {"model": "trailing_mad", "period": period, "threshold": "3.5"}
-            ),
-        ),
-        "complete_case",
-        MappingProxyType({"observations": 2, "groups": 1, "seasonal_cycles": cycles}),
-        1729,
-        MappingProxyType(
-            {
-                "classification": "none",
-                "approval_evidence": (),
-                "minimum_group_count": 1,
-            }
-        ),
-        MappingProxyType({}),
+    settings = SpecSettings(
+        analysis_id="time_example",
+        question="Is the approved series unusual?",
+        method_id="detect_anomalies",
+        parameters={
+            "model": "trailing_mad",
+            "period": options.period,
+            "threshold": "3.5",
+        },
+        roles={
+            "time": ColumnBinding("time", "date"),
+            "response": ColumnBinding("response", "number"),
+        },
+        minimum_data={
+            "observations": 2,
+            "groups": 1,
+            "seasonal_cycles": options.cycles,
+        },
+        privacy_floor=1,
+        cadence=options.cadence,
     )
-    data = RectangularData(
-        ("time", "response"),
-        rows,
-        len(rows),
-        0,
-        (),
-        ProviderProvenance("local_csv", "local_csv:test", "a" * 64, None, None),
-    )
-    policy = PolicyContext(
-        "sample",
-        Path("readiness-status.yaml"),
-        "1",
-        (),
-        frozenset({"gold.sample"}),
-        MappingProxyType({"gold.sample": frozenset({"time", "response"})}),
-    )
-    return MethodContext(spec, policy, data)
+    return method_context(settings, columns, rows)
 
 
 def test_unsorted_unique_series_is_normalized_after_validation() -> None:

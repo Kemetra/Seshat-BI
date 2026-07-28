@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path, PurePosixPath
-from types import MappingProxyType
+from dataclasses import dataclass
 
 import pytest
 
@@ -16,41 +15,45 @@ import numpy as np  # noqa: E402
 from scipy import stats  # noqa: E402
 
 from seshat.statistical.contracts import (  # noqa: E402
-    AnalysisSpec,
     AnalysisWithheld,
     ColumnBinding,
     MethodContext,
-    MethodSpec,
 )
 from seshat.statistical.methods.groups import run_compare_groups  # noqa: E402
-from seshat.statistical.policy import PolicyContext  # noqa: E402
-from seshat.statistical.providers.base import (  # noqa: E402
-    ProviderProvenance,
-    RectangularData,
-)
+
+from ._support import SpecSettings, method_context  # noqa: E402
 
 pytestmark = pytest.mark.statistics
 
 
-def _context(
-    grouped: dict[str, list[float]],
-    test: str,
-    *,
-    identifiers: dict[str, list[str]] | None = None,
-    correction: str = "none",
-    post_hoc_pairs: tuple[tuple[str, str], ...] = (),
-    group_order: tuple[str, ...] | None = None,
-    privacy_floor: int = 2,
-) -> MethodContext:
-    paired = identifiers is not None
-    columns = ("value", "group", "identifier") if paired else ("value", "group")
-    rows = []
+@dataclass(frozen=True, slots=True)
+class _Options:
+    """The knobs a group-comparison test varies on the governed specification."""
+
+    identifiers: dict[str, list[str]] | None = None
+    correction: str = "none"
+    post_hoc_pairs: tuple[tuple[str, str], ...] = ()
+    group_order: tuple[str, ...] | None = None
+    privacy_floor: int = 2
+
+
+def _group_rows(grouped: dict[str, list[float]], identifiers) -> list[tuple]:
+    rows: list[tuple] = []
     for label, values in grouped.items():
         for index, value in enumerate(values):
             row = [value, label]
-            if paired:
+            if identifiers is not None:
                 row.append(identifiers[label][index])
             rows.append(tuple(row))
+    return rows
+
+
+def _context(
+    grouped: dict[str, list[float]], test: str, **overrides: object
+) -> MethodContext:
+    options = _Options(**overrides)  # type: ignore[arg-type]
+    paired = options.identifiers is not None
+    columns = ("value", "group", "identifier") if paired else ("value", "group")
     roles = {
         "response": ColumnBinding("value", "number"),
         "group": ColumnBinding("group", "category"),
@@ -61,54 +64,21 @@ def _context(
         "test": test,
         "alternative": "two-sided",
         "confidence_level": "0.95",
-        "correction": correction,
-        "group_order": group_order or tuple(grouped),
+        "correction": options.correction,
+        "group_order": options.group_order or tuple(grouped),
     }
-    if post_hoc_pairs:
-        parameters["post_hoc_pairs"] = post_hoc_pairs
-    spec = AnalysisSpec(
-        "1.0",
-        "groups_example",
-        1,
-        "sample",
-        "Do approved groups differ?",
-        "weekly",
-        "Example Analyst",
-        PurePosixPath("mappings/sample/readiness-status.yaml"),
-        (PurePosixPath("mappings/sample/metrics/ApprovedMetric.yaml"),),
-        MappingProxyType({"kind": "local_csv", "dataset_id": "sample"}),
-        MappingProxyType({"grain": "one row", "inclusion": (), "exclusion": ()}),
-        MappingProxyType(roles),
-        MethodSpec("compare_groups", "1.0", MappingProxyType(parameters)),
-        "complete_case",
-        MappingProxyType({"observations": 2, "groups": 2, "seasonal_cycles": 0}),
-        1729,
-        MappingProxyType(
-            {
-                "classification": "none",
-                "approval_evidence": (),
-                "minimum_group_count": privacy_floor,
-            }
-        ),
-        MappingProxyType({}),
+    if options.post_hoc_pairs:
+        parameters["post_hoc_pairs"] = options.post_hoc_pairs
+    settings = SpecSettings(
+        analysis_id="groups_example",
+        question="Do approved groups differ?",
+        method_id="compare_groups",
+        parameters=parameters,
+        roles=roles,
+        minimum_data={"observations": 2, "groups": 2, "seasonal_cycles": 0},
+        privacy_floor=options.privacy_floor,
     )
-    data = RectangularData(
-        columns,
-        tuple(rows),
-        len(rows),
-        0,
-        (),
-        ProviderProvenance("local_csv", "local_csv:test", "a" * 64, None, None),
-    )
-    policy = PolicyContext(
-        "sample",
-        Path("readiness-status.yaml"),
-        "1",
-        (),
-        frozenset({"gold.sample"}),
-        MappingProxyType({"gold.sample": frozenset(columns)}),
-    )
-    return MethodContext(spec, policy, data)
+    return method_context(settings, columns, _group_rows(grouped, options.identifiers))
 
 
 def _test(result, name: str):

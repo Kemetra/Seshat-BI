@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 
 import pytest
@@ -27,19 +27,23 @@ from .test_time_index import time_context  # noqa: E402
 pytestmark = pytest.mark.statistics
 
 
-def _anomaly_context(
-    values,
-    *,
-    model="trailing_mad",
-    period=6,
-    threshold="3.5",
-    direction="two-sided",
-):
+@dataclass(frozen=True, slots=True)
+class _AnomalyOptions:
+    """The declared anomaly rule one test varies."""
+
+    model: str = "trailing_mad"
+    period: int = 6
+    threshold: str = "3.5"
+    direction: str = "two-sided"
+
+
+def _anomaly_context(values, **overrides: object):
+    options = _AnomalyOptions(**overrides)  # type: ignore[arg-type]
     start = date(2026, 1, 1)
     timestamps = [
         (start + timedelta(days=index)).isoformat() for index in range(len(values))
     ]
-    context = time_context(timestamps, values, period=period)
+    context = time_context(timestamps, values, period=options.period)
     return replace(
         context,
         spec=replace(
@@ -48,10 +52,10 @@ def _anomaly_context(
                 "detect_anomalies",
                 "1.0",
                 {
-                    "model": model,
-                    "period": period,
-                    "threshold": threshold,
-                    "direction": direction,
+                    "model": options.model,
+                    "period": options.period,
+                    "threshold": options.threshold,
+                    "direction": options.direction,
                 },
             ),
         ),

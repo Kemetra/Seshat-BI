@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path, PurePosixPath
-from types import MappingProxyType
+from dataclasses import dataclass
 
 import pytest
 
@@ -16,95 +15,60 @@ import numpy as np  # noqa: E402
 from scipy import stats  # noqa: E402
 
 from seshat.statistical.contracts import (  # noqa: E402
-    AnalysisSpec,
     AnalysisWithheld,
     ColumnBinding,
     MethodContext,
-    MethodSpec,
 )
 from seshat.statistical.methods.proportions import run_proportion  # noqa: E402
-from seshat.statistical.policy import PolicyContext  # noqa: E402
-from seshat.statistical.providers.base import (  # noqa: E402
-    ProviderProvenance,
-    RectangularData,
-)
+
+from ._support import SpecSettings, method_context  # noqa: E402
 
 pytestmark = pytest.mark.statistics
 
 
-def _context(
-    rows: list[tuple[object, ...]],
-    *,
-    grouped: bool = False,
-    interval: str = "wilson",
-    comparison: str = "none",
-    correction: str = "none",
-    minimum_denominator: int = 1,
-    missing_policy: str = "complete_case",
-    privacy_floor: int = 1,
-) -> MethodContext:
-    columns = ("successes", "trials", "group") if grouped else ("successes", "trials")
+@dataclass(frozen=True, slots=True)
+class _Options:
+    """The knobs a proportion test varies on the governed specification."""
+
+    grouped: bool = False
+    interval: str = "wilson"
+    comparison: str = "none"
+    correction: str = "none"
+    minimum_denominator: int = 1
+    missing_policy: str = "complete_case"
+    privacy_floor: int = 1
+
+
+def _context(rows: list[tuple], **overrides: object) -> MethodContext:
+    options = _Options(**overrides)  # type: ignore[arg-type]
+    columns = (
+        ("successes", "trials", "group") if options.grouped else ("successes", "trials")
+    )
     roles = {
         "numerator": ColumnBinding("successes", "integer"),
         "denominator": ColumnBinding("trials", "integer"),
     }
-    if grouped:
+    if options.grouped:
         roles["group"] = ColumnBinding("group", "category")
-    parameters = MappingProxyType(
-        {
-            "interval": interval,
-            "alternative": "two-sided",
-            "confidence_level": "0.95",
-            "comparison": comparison,
-            "zero_cell_correction": correction,
-            "minimum_denominator": minimum_denominator,
-        }
+    parameters: dict[str, object] = {
+        "interval": options.interval,
+        "alternative": "two-sided",
+        "confidence_level": "0.95",
+        "comparison": options.comparison,
+        "zero_cell_correction": options.correction,
+        "minimum_denominator": options.minimum_denominator,
+    }
+    settings = SpecSettings(
+        analysis_id="proportion_example",
+        question="What is the governed rate?",
+        method_id="proportion",
+        parameters=parameters,
+        roles=roles,
+        missing_policy=options.missing_policy,
+        privacy_floor=options.privacy_floor,
+        grain="aggregated counts",
     )
-    spec = AnalysisSpec(
-        "1.0",
-        "proportion_example",
-        1,
-        "sample",
-        "What is the governed rate?",
-        "weekly",
-        "Example Analyst",
-        PurePosixPath("mappings/sample/readiness-status.yaml"),
-        (PurePosixPath("mappings/sample/metrics/ApprovedMetric.yaml"),),
-        MappingProxyType({"kind": "local_csv", "dataset_id": "sample"}),
-        MappingProxyType(
-            {"grain": "aggregated counts", "inclusion": (), "exclusion": ()}
-        ),
-        MappingProxyType(roles),
-        MethodSpec("proportion", "1.0", parameters),
-        missing_policy,
-        MappingProxyType({"observations": 1, "groups": 1, "seasonal_cycles": 0}),
-        1729,
-        MappingProxyType(
-            {
-                "classification": "none",
-                "approval_evidence": (),
-                "minimum_group_count": privacy_floor,
-            }
-        ),
-        MappingProxyType({}),
-    )
-    data = RectangularData(
-        columns,
-        tuple(rows),
-        len(rows),
-        0,
-        (),
-        ProviderProvenance("local_csv", "local_csv:test", "a" * 64, None, None),
-    )
-    policy = PolicyContext(
-        "sample",
-        Path("readiness-status.yaml"),
-        "1",
-        (),
-        frozenset({"gold.sample"}),
-        MappingProxyType({"gold.sample": frozenset(columns)}),
-    )
-    return MethodContext(spec, policy, data)
+    return method_context(settings, columns, rows)
 
 
 def _interval(result, name: str):

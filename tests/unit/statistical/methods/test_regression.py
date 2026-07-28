@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path, PurePosixPath
-from types import MappingProxyType
+from dataclasses import dataclass
 
 import pytest
 
@@ -16,90 +15,51 @@ import numpy as np  # noqa: E402
 import statsmodels.api as sm  # noqa: E402
 
 from seshat.statistical.contracts import (  # noqa: E402
-    AnalysisSpec,
     AnalysisWithheld,
     ColumnBinding,
     MethodContext,
-    MethodSpec,
 )
 from seshat.statistical.methods.regression import run_regress  # noqa: E402
-from seshat.statistical.policy import PolicyContext  # noqa: E402
-from seshat.statistical.providers.base import (  # noqa: E402
-    ProviderProvenance,
-    RectangularData,
-)
+
+from ._support import SpecSettings, method_context  # noqa: E402
 
 pytestmark = pytest.mark.statistics
 
 
+@dataclass(frozen=True, slots=True)
+class _Options:
+    """The knobs a regression test varies on the governed specification."""
+
+    family: str = "ols"
+    covariance: str = "HC3"
+    question: str = "Are the approved measures associated?"
+    missing_policy: str = "complete_case"
+
+
 def _context(
-    response,
-    predictor,
-    *,
-    family="ols",
-    covariance="HC3",
-    question="Are the approved measures associated?",
-    missing_policy="complete_case",
+    response: list[object], predictor: list[object], **overrides: object
 ) -> MethodContext:
+    options = _Options(**overrides)  # type: ignore[arg-type]
+    columns = ("response", "predictor")
     rows = tuple(zip(response, predictor, strict=True))
-    spec = AnalysisSpec(
-        "1.0",
-        "regression_example",
-        1,
-        "sample",
-        question,
-        "weekly",
-        "Example Analyst",
-        PurePosixPath("mappings/sample/readiness-status.yaml"),
-        (PurePosixPath("mappings/sample/metrics/ApprovedMetric.yaml"),),
-        MappingProxyType({"kind": "local_csv", "dataset_id": "sample"}),
-        MappingProxyType({"grain": "one row", "inclusion": (), "exclusion": ()}),
-        MappingProxyType(
-            {
-                "response": ColumnBinding("response", "number"),
-                "predictor": ColumnBinding("predictor", "number"),
-            }
-        ),
-        MethodSpec(
-            "regress",
-            "1.0",
-            MappingProxyType(
-                {
-                    "family": family,
-                    "covariance": covariance,
-                    "confidence_level": "0.95",
-                }
-            ),
-        ),
-        missing_policy,
-        MappingProxyType({"observations": 3, "groups": 1, "seasonal_cycles": 0}),
-        1729,
-        MappingProxyType(
-            {
-                "classification": "none",
-                "approval_evidence": (),
-                "minimum_group_count": 1,
-            }
-        ),
-        MappingProxyType({}),
+    settings = SpecSettings(
+        analysis_id="regression_example",
+        question=options.question,
+        method_id="regress",
+        parameters={
+            "family": options.family,
+            "covariance": options.covariance,
+            "confidence_level": "0.95",
+        },
+        roles={
+            "response": ColumnBinding("response", "number"),
+            "predictor": ColumnBinding("predictor", "number"),
+        },
+        missing_policy=options.missing_policy,
+        minimum_data={"observations": 3, "groups": 1, "seasonal_cycles": 0},
+        privacy_floor=1,
     )
-    data = RectangularData(
-        ("response", "predictor"),
-        rows,
-        len(rows),
-        0,
-        (),
-        ProviderProvenance("local_csv", "local_csv:test", "a" * 64, None, None),
-    )
-    policy = PolicyContext(
-        "sample",
-        Path("readiness-status.yaml"),
-        "1",
-        (),
-        frozenset({"gold.sample"}),
-        MappingProxyType({"gold.sample": frozenset({"response", "predictor"})}),
-    )
-    return MethodContext(spec, policy, data)
+    return method_context(settings, columns, rows)
 
 
 def _estimate(result, name: str) -> float:
