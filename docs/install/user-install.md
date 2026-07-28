@@ -51,8 +51,27 @@ A normal install contains only the runtime dependency needed by the static gate.
 | `mysql` | MySQL profile/validate | `pipx install "seshat-bi[mysql]"` |
 | `snowflake` | Snowflake profile/validate | `pipx install "seshat-bi[snowflake]"` |
 | `files` | Excel file profiling | `pipx install "seshat-bi[files]"` |
+| `stats` | Governed descriptive, inferential, regression, anomaly, and forecast evidence | `pipx install "seshat-bi[stats]"` |
+| `stats-change` | Governed change-point detection (add after `stats`) | `pipx inject seshat-bi --force "ruptures==1.1.10"` |
 
 `dev` (pytest/ruff) and `livetest` (testcontainers) are contributor-only extras; users should not install them for a first run.
+
+The statistical environment is exact-pinned for reproducibility. For a first
+install use `pipx install "seshat-bi[stats]"`. To add it to an existing Seshat
+environment without replacing the installed application:
+
+```powershell
+pipx inject seshat-bi --force "numpy==2.5.1" "scipy==1.18.0" "statsmodels==0.14.6"
+```
+
+Change-point detection additionally needs:
+
+```powershell
+pipx inject seshat-bi --force "ruptures==1.1.10"
+```
+
+Use `seshat analyze validate` before `run`. A computed artifact is derived
+evidence pending named-human review; it is not a readiness or metric approval.
 
 ## Upgrade, remove, and recover
 

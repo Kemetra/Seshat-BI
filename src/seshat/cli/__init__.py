@@ -208,6 +208,7 @@ _DISPATCH: dict[str, Callable[[object], int]] = {
     "scaffold-source": _lazy(".commands.scaffold_source", "scaffold_source_main"),
     "scaffold-design": _lazy(".commands.scaffold_design", "scaffold_design_main"),
     "adopt-pbip": _lazy(".commands.adopt_pbip", "adopt_pbip_main"),
+    "analyze": _lazy(".commands.analyze", "analyze_main"),
     "dbt": _lazy(".commands.dbt", "dbt_main"),
     "kit-lint": _lazy(".commands.kit_lint", "run_kit_lint"),
     "status": _lazy(".commands.status", "status_main"),
@@ -347,6 +348,7 @@ def _db_extra_hint(engine: str = "postgres") -> str:
 _EXTRA_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "mcp": ("mcp>=1.28,<2",),
     "dbt": ("dbt-core==1.12.0", "dbt-postgres==1.10.2"),
+    "db": ("psycopg2-binary>=2.9",),
 }
 
 
@@ -527,7 +529,7 @@ def _ensure_driver() -> bool:
     return True
 
 
-def _make_runner(dsn: str) -> QueryRunner:
+def _make_runner(dsn: str, *, statement_timeout_ms: int | None = None) -> QueryRunner:
     """Build a real (lazy driver) QueryRunner for the current engine.
 
     Indirected through cli so tests can monkeypatch it with a fake -- no real
@@ -535,10 +537,17 @@ def _make_runner(dsn: str) -> QueryRunner:
     ``resolve_config`` produced for the active engine (a DSN string for
     Postgres/SQL-Server's ODBC string, a kwargs dict for MySQL/Snowflake); the
     name is kept for Postgres call-site/monkeypatch compatibility.
+
+    ``statement_timeout_ms`` is forwarded ONLY when a caller asks for it, so a
+    dialect that declares no timeout support keeps its existing single-argument
+    ``connect`` contract.
     """
     from ..dialect import get_dialect
 
-    return get_dialect(_current_engine()).connect(dsn)
+    dialect = get_dialect(_current_engine())
+    if statement_timeout_ms is None:
+        return dialect.connect(dsn)
+    return dialect.connect(dsn, statement_timeout_ms=statement_timeout_ms)
 
 
 def _load_targets(source_map: str) -> ValidationTargets:

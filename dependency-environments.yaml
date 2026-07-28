@@ -43,6 +43,16 @@ environments:
     extras: [db]
     local: true
     path: "."
+  - id: root-stats
+    pyproject: pyproject.toml
+    extras: [stats]
+    local: true
+    path: "."
+  - id: root-stats-change
+    pyproject: pyproject.toml
+    extras: [stats-change]
+    local: true
+    path: "."
   - id: root-mcp
     pyproject: pyproject.toml
     extras: [mcp]
@@ -61,6 +71,8 @@ cross_products:
   # together, so the ResolutionImpossible conflict sat unseen on main.
   - id: root-dbt-plus-orchestration
     combine: [root-dbt, orchestration]
+  - id: root-stats-plus-db
+    combine: [root-stats, root-db]
 
 governed_pins:
   - dist: dbt-core # spec 133 (root `dbt` extra)
@@ -69,3 +81,7 @@ governed_pins:
   - dist: dagster-dbt # spec 134; spec 135 (PR #307, MERGED) removed the pin -- entry goes inert on merge (unpinned dists are skipped) and can be dropped in a follow-up manifest edit
   - dist: psycopg2-binary # root `db` extra + orchestration
   - dist: mcp # root `mcp` extra (upper-bounded <2)
+  - dist: numpy # root `stats` extra
+  - dist: scipy # root `stats` extra
+  - dist: statsmodels # root `stats` extra
+  - dist: ruptures # root `stats-change` extra

@@ -28,6 +28,15 @@ explicitly identifies a public release event.
 ## [Unreleased]
 
 ### Added
+- Governed statistical evidence engine -- a locally executable Product Module
+  with eight closed methods (`describe`, group comparison, proportions,
+  correlation, associational regression, anomaly detection, change-point
+  detection, and forecast), strict schemas, immutable derived evidence,
+  categorical outcomes, deterministic pending-human review, a fail-closed local
+  CSV provider, and a PostgreSQL-only read-only Gold adapter. This capability
+  supersedes the former universal statistical/forecasting exclusion: knowledge
+  cards still do not compute models, autonomous ML/deployment and causal claims
+  remain excluded, and no result grants approval or changes readiness.
 - `seshat tmdl-doc-comment-lint` -- an offline, read-only lint for **one** TMDL
   rule: a `///` documentation block must be followed by a declaration, never a
   blank line and never EOF. An unattached block makes Power BI Desktop reject the
@@ -43,6 +52,14 @@ explicitly identifies a public release event.
   model loads in Desktop. ADR 0001's headless exclusion of the
   `TmdlSerializer`/TOM path is untouched (pure stdlib text reading), so issue
   #494's broader TMDL-validation gap remains open (partial fix for #494).
+
+### Fixed
+- Statistical evidence now records the exact installed versions of each
+  method's numerical libraries, missing change-point dependencies produce the
+  specified `unavailable` outcome, and recovery guidance names the actual
+  `stats` / `stats-change` extras. The optional PostgreSQL Gold-adapter test
+  also proves a read-only session and compiler-only `SELECT` statements; it
+  remains `[PENDING LIVE PROFILE]` when its live-test dependencies are absent.
 
 ## [0.7.1] -- 2026-07-24
 

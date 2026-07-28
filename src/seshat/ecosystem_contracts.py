@@ -80,19 +80,22 @@ def _validate_string(value: object, schema: Mapping[str, Any], path: str) -> lis
     return errors
 
 
-def _validate_integer(value: object, schema: Mapping[str, Any], path: str) -> list[str]:
-    if not isinstance(value, int) or isinstance(value, bool):
+def _validate_number(value: object, schema: Mapping[str, Any], path: str) -> list[str]:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
         return []
+    errors: list[str] = []
     if "minimum" in schema and value < schema["minimum"]:
-        return [f"{path}: value is below minimum"]
-    return []
+        errors.append(f"{path}: value is below minimum")
+    if "maximum" in schema and value > schema["maximum"]:
+        errors.append(f"{path}: value is above maximum")
+    return errors
 
 
 def _validate_scalar(value: object, schema: Mapping[str, Any], path: str) -> list[str]:
     return [
         *_validate_const_enum(value, schema, path),
         *_validate_string(value, schema, path),
-        *_validate_integer(value, schema, path),
+        *_validate_number(value, schema, path),
     ]
 
 
@@ -120,24 +123,32 @@ def _additional_errors(
 
 
 def _property_errors(
-    value: dict[str, Any], properties: Mapping[str, Any], path: str
+    value: dict[str, Any],
+    properties: Mapping[str, Any],
+    path: str,
+    root_schema: Mapping[str, Any],
 ) -> list[str]:
     errors: list[str] = []
     for name, child_schema in properties.items():
         if name in value and isinstance(child_schema, dict):
             errors.extend(
-                validate_json_contract(value[name], child_schema, f"{path}.{name}")
+                validate_json_contract(
+                    value[name], child_schema, f"{path}.{name}", root_schema
+                )
             )
     return errors
 
 
 def _validate_object(
-    value: dict[str, Any], schema: Mapping[str, Any], path: str
+    value: dict[str, Any],
+    schema: Mapping[str, Any],
+    path: str,
+    root_schema: Mapping[str, Any],
 ) -> list[str]:
     return [
         *_required_errors(value, schema, path),
         *_additional_errors(value, schema, path),
-        *_property_errors(value, schema.get("properties", {}), path),
+        *_property_errors(value, schema.get("properties", {}), path, root_schema),
     ]
 
 
@@ -150,38 +161,149 @@ def _unique_errors(value: list[Any], schema: Mapping[str, Any], path: str) -> li
     return []
 
 
-def _item_errors(value: list[Any], schema: Mapping[str, Any], path: str) -> list[str]:
+def _item_errors(
+    value: list[Any],
+    schema: Mapping[str, Any],
+    path: str,
+    root_schema: Mapping[str, Any],
+) -> list[str]:
     item_schema = schema.get("items")
     if not isinstance(item_schema, dict):
         return []
     return [
         error
         for index, item in enumerate(value)
-        for error in validate_json_contract(item, item_schema, f"{path}[{index}]")
+        for error in validate_json_contract(
+            item, item_schema, f"{path}[{index}]", root_schema
+        )
     ]
 
 
 def _validate_array(
-    value: list[Any], schema: Mapping[str, Any], path: str
+    value: list[Any],
+    schema: Mapping[str, Any],
+    path: str,
+    root_schema: Mapping[str, Any],
 ) -> list[str]:
     errors: list[str] = []
     if len(value) < int(schema.get("minItems", 0)):
         errors.append(f"{path}: array has too few items")
+    if "maxItems" in schema and len(value) > schema["maxItems"]:
+        errors.append(f"{path}: array has too many items")
     errors.extend(_unique_errors(value, schema, path))
-    errors.extend(_item_errors(value, schema, path))
+    errors.extend(_item_errors(value, schema, path, root_schema))
     return errors
 
 
+def _resolve_local_ref(
+    schema: Mapping[str, Any], root_schema: Mapping[str, Any]
+) -> Mapping[str, Any]:
+    reference = schema.get("$ref")
+    if reference is None:
+        return schema
+    if not isinstance(reference, str) or not reference.startswith("#/$defs/"):
+        return {"type": "__invalid_local_reference__"}
+    name = reference.removeprefix("#/$defs/")
+    if not name or "/" in name:
+        return {"type": "__invalid_local_reference__"}
+    definitions = root_schema.get("$defs")
+    definition = definitions.get(name) if isinstance(definitions, Mapping) else None
+    if not isinstance(definition, Mapping):
+        return {"type": "__invalid_local_reference__"}
+    return definition
+
+
+def _validate_one_of(
+    value: object,
+    schema: Mapping[str, Any],
+    path: str,
+    root_schema: Mapping[str, Any],
+) -> list[str]:
+    branches = schema.get("oneOf")
+    if branches is None:
+        return []
+    if not isinstance(branches, list):
+        return [f"{path}: oneOf must contain a list of schemas"]
+    branch_results = [
+        validate_json_contract(value, branch, path, root_schema)
+        for branch in branches
+        if isinstance(branch, Mapping)
+    ]
+    valid_count = sum(not errors for errors in branch_results)
+    if valid_count == 1 and len(branch_results) == len(branches):
+        return []
+    summary = f"{path}: value must validate against exactly one oneOf schema"
+    if valid_count == 0 and branch_results:
+        closest = min(branch_results, key=len)
+        return [summary, *closest]
+    return [summary]
+
+
+def _validate_all_of(
+    value: object,
+    schema: Mapping[str, Any],
+    path: str,
+    root_schema: Mapping[str, Any],
+) -> list[str]:
+    branches = schema.get("allOf")
+    if branches is None:
+        return []
+    if not isinstance(branches, list):
+        return [f"{path}: allOf must contain a list of schemas"]
+    errors: list[str] = []
+    for branch in branches:
+        if not isinstance(branch, Mapping):
+            errors.append(f"{path}: allOf entries must be schemas")
+            continue
+        errors.extend(validate_json_contract(value, branch, path, root_schema))
+    return errors
+
+
+def _validate_conditional(
+    value: object,
+    schema: Mapping[str, Any],
+    path: str,
+    root_schema: Mapping[str, Any],
+) -> list[str]:
+    """Apply ``then``/``else`` per the ``if`` subschema's own outcome.
+
+    The ``if`` subschema is a selector, so its own errors are never reported --
+    failing it selects ``else`` instead.
+    """
+
+    condition = schema.get("if")
+    if not isinstance(condition, Mapping):
+        return []
+    matched = not validate_json_contract(value, condition, path, root_schema)
+    applied = schema.get("then" if matched else "else")
+    if not isinstance(applied, Mapping):
+        return []
+    return validate_json_contract(value, applied, path, root_schema)
+
+
 def validate_json_contract(
-    value: object, schema: Mapping[str, Any], path: str = "$"
+    value: object,
+    schema: Mapping[str, Any],
+    path: str = "$",
+    root_schema: Mapping[str, Any] | None = None,
 ) -> list[str]:
     """Validate the JSON-Schema subset used by Seshat ecosystem contracts."""
-    errors = _validate_type(value, schema, path)
+    root = schema if root_schema is None else root_schema
+    resolved = _resolve_local_ref(schema, root)
+    branch_errors = _validate_one_of(value, resolved, path, root)
+    if branch_errors:
+        return branch_errors
+    errors = _validate_type(value, resolved, path)
     if errors:
         return errors
-    errors.extend(_validate_scalar(value, schema, path))
+    errors.extend(_validate_scalar(value, resolved, path))
     if isinstance(value, dict):
-        errors.extend(_validate_object(value, schema, path))
+        errors.extend(_validate_object(value, resolved, path, root))
     elif isinstance(value, list):
-        errors.extend(_validate_array(value, schema, path))
+        errors.extend(_validate_array(value, resolved, path, root))
+    # Applicator keywords stay ADDITIVE: their errors join this schema's own
+    # rather than short-circuiting them, so a oneOf branch is still ranked by its
+    # full error count when the validator picks the closest one to report.
+    errors.extend(_validate_all_of(value, resolved, path, root))
+    errors.extend(_validate_conditional(value, resolved, path, root))
     return errors

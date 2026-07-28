@@ -45,6 +45,24 @@ Bases. A fresh project does not need this development repository, `AGENTS.md`, o
 approval; the plugin provides skills and governance instructions, not the CLI
 itself.
 
+For governed statistical evidence, a first install may select the pinned core:
+
+```text
+pipx install "seshat-bi[stats]"
+```
+
+For an existing Seshat installation, preserve the installed application and
+inject the exact numerical environment:
+
+```text
+pipx inject seshat-bi --force "numpy==2.5.1" "scipy==1.18.0" "statsmodels==0.14.6"
+pipx inject seshat-bi --force "ruptures==1.1.10"
+```
+
+The agent routes through `statistical-evidence-workflow.md`, invokes
+`seshat analyze`, and stops at the generated pending review. It never accepts
+evidence or changes readiness for the named reviewer.
+
 ## Claude Code
 
 The canonical marketplace manifest is the repository-root

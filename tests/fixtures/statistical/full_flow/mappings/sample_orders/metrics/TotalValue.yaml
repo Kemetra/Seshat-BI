@@ -1,0 +1,18 @@
+name: TotalValue
+owner: metric_owner
+grain: one row per completed week
+unit: value_units
+time_additivity: additive
+binds_to:
+  gold_table: gold.sample_orders
+  columns: [metric_value]
+  pii_sensitive: false
+definition:
+  kind: base
+  aggregation: sum
+  column: metric_value
+  filter: []
+readiness:
+  status: pass
+  evidence: ["approved by Example Metric Owner on 2026-07-28"]
+  blocking_reasons: []

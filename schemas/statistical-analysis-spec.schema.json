@@ -1,0 +1,841 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seshat-bi.dev/schemas/statistical-analysis-spec.schema.json",
+  "title": "Seshat BI governed statistical analysis specification",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "analysis_id",
+    "revision",
+    "question",
+    "cadence",
+    "subject",
+    "owner",
+    "readiness_status",
+    "metric_contracts",
+    "provider",
+    "population",
+    "roles",
+    "method",
+    "missing_data",
+    "minimum_data",
+    "random_seed",
+    "pii",
+    "outputs"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "analysis_id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000000
+    },
+    "question": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cadence": {
+      "type": "string",
+      "minLength": 1
+    },
+    "subject": {
+      "$ref": "#/$defs/identifier"
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1
+    },
+    "readiness_status": {
+      "$ref": "#/$defs/repo_path"
+    },
+    "metric_contracts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/repo_path"
+      }
+    },
+    "provider": {
+      "$ref": "#/$defs/provider"
+    },
+    "population": {
+      "$ref": "#/$defs/population"
+    },
+    "roles": {
+      "$ref": "#/$defs/roles"
+    },
+    "method": {
+      "$ref": "#/$defs/method"
+    },
+    "missing_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy"
+      ],
+      "properties": {
+        "policy": {
+          "enum": [
+            "complete_case",
+            "available_case",
+            "explicit_status"
+          ]
+        }
+      }
+    },
+    "minimum_data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observations",
+        "groups",
+        "seasonal_cycles"
+      ],
+      "properties": {
+        "observations": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000000
+        },
+        "groups": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "seasonal_cycles": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        }
+      }
+    },
+    "random_seed": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2147483647
+    },
+    "pii": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classification",
+        "approval_evidence",
+        "minimum_group_count"
+      ],
+      "properties": {
+        "classification": {
+          "enum": [
+            "none",
+            "low",
+            "moderate",
+            "high",
+            "restricted"
+          ]
+        },
+        "approval_evidence": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/repo_path"
+          }
+        },
+        "minimum_group_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        }
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidence",
+        "review"
+      ],
+      "properties": {
+        "evidence": {
+          "$ref": "#/$defs/repo_path"
+        },
+        "review": {
+          "$ref": "#/$defs/repo_path"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "decimal": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+    },
+    "confidence_level": {
+      "type": "string",
+      "pattern": "^0\\.[0-9]+$"
+    },
+    "repo_path": {
+      "type": "string",
+      "pattern": "^(?![A-Za-z]:)(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._/-]+$"
+    },
+    "column_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "column",
+        "logical_type"
+      ],
+      "properties": {
+        "column": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "logical_type": {
+          "enum": [
+            "number",
+            "integer",
+            "boolean",
+            "category",
+            "date",
+            "datetime",
+            "identifier"
+          ]
+        }
+      }
+    },
+    "roles": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "response": {
+          "$ref": "#/$defs/column_binding"
+        },
+        "predictor": {
+          "$ref": "#/$defs/column_binding"
+        },
+        "group": {
+          "$ref": "#/$defs/column_binding"
+        },
+        "time": {
+          "$ref": "#/$defs/column_binding"
+        },
+        "numerator": {
+          "$ref": "#/$defs/column_binding"
+        },
+        "denominator": {
+          "$ref": "#/$defs/column_binding"
+        },
+        "weight": {
+          "$ref": "#/$defs/column_binding"
+        },
+        "identifier": {
+          "$ref": "#/$defs/column_binding"
+        }
+      }
+    },
+    "provider": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "dataset_id"
+          ],
+          "properties": {
+            "kind": {
+              "const": "local_csv"
+            },
+            "dataset_id": {
+              "$ref": "#/$defs/identifier"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "dataset_id"
+          ],
+          "properties": {
+            "kind": {
+              "const": "gold"
+            },
+            "dataset_id": {
+              "$ref": "#/$defs/identifier"
+            }
+          }
+        }
+      ]
+    },
+    "population": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "grain",
+        "inclusion",
+        "exclusion"
+      ],
+      "properties": {
+        "grain": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inclusion": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "exclusion": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "method": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "version",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "const": "describe"
+            },
+            "version": {
+              "$ref": "#/$defs/version"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "quantiles",
+                "outlier_rule"
+              ],
+              "properties": {
+                "quantiles": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 9,
+                  "uniqueItems": true,
+                  "items": {
+                    "$ref": "#/$defs/confidence_level"
+                  }
+                },
+                "outlier_rule": {
+                  "enum": [
+                    "none",
+                    "iqr",
+                    "mad"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "version",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "const": "compare_groups"
+            },
+            "version": {
+              "$ref": "#/$defs/version"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "test",
+                "alternative",
+                "confidence_level",
+                "correction"
+              ],
+              "properties": {
+                "test": {
+                  "enum": [
+                    "welch_t",
+                    "paired_t",
+                    "mann_whitney",
+                    "wilcoxon",
+                    "welch_anova",
+                    "kruskal_wallis"
+                  ]
+                },
+                "alternative": {
+                  "enum": [
+                    "two-sided",
+                    "less",
+                    "greater"
+                  ]
+                },
+                "confidence_level": {
+                  "$ref": "#/$defs/confidence_level"
+                },
+                "correction": {
+                  "enum": [
+                    "none",
+                    "holm",
+                    "benjamini-hochberg"
+                  ]
+                },
+                "group_order": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 64,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "post_hoc_pairs": {
+                  "type": "array",
+                  "maxItems": 64,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "version",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "const": "proportion"
+            },
+            "version": {
+              "$ref": "#/$defs/version"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "interval",
+                "alternative",
+                "confidence_level"
+              ],
+              "properties": {
+                "interval": {
+                  "enum": [
+                    "wilson",
+                    "exact_binomial"
+                  ]
+                },
+                "alternative": {
+                  "enum": [
+                    "two-sided",
+                    "less",
+                    "greater"
+                  ]
+                },
+                "confidence_level": {
+                  "$ref": "#/$defs/confidence_level"
+                },
+                "comparison": {
+                  "enum": [
+                    "none",
+                    "chi_square",
+                    "fisher_exact"
+                  ]
+                },
+                "zero_cell_correction": {
+                  "enum": [
+                    "none",
+                    "haldane-anscombe"
+                  ]
+                },
+                "minimum_denominator": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000000
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "version",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "const": "correlate"
+            },
+            "version": {
+              "$ref": "#/$defs/version"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "coefficient",
+                "confidence_level",
+                "correction"
+              ],
+              "properties": {
+                "coefficient": {
+                  "enum": [
+                    "pearson",
+                    "spearman"
+                  ]
+                },
+                "confidence_level": {
+                  "$ref": "#/$defs/confidence_level"
+                },
+                "correction": {
+                  "enum": [
+                    "none",
+                    "holm",
+                    "benjamini-hochberg"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "version",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "const": "regress"
+            },
+            "version": {
+              "$ref": "#/$defs/version"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "family",
+                "covariance",
+                "confidence_level"
+              ],
+              "properties": {
+                "family": {
+                  "enum": [
+                    "ols",
+                    "logistic",
+                    "poisson",
+                    "negative_binomial"
+                  ]
+                },
+                "covariance": {
+                  "enum": [
+                    "classical",
+                    "HC0",
+                    "HC1",
+                    "HC2",
+                    "HC3"
+                  ]
+                },
+                "confidence_level": {
+                  "$ref": "#/$defs/confidence_level"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "version",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "const": "detect_anomalies"
+            },
+            "version": {
+              "$ref": "#/$defs/version"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "model",
+                "period",
+                "threshold"
+              ],
+              "properties": {
+                "model": {
+                  "enum": [
+                    "trailing_mad",
+                    "seasonal_mad"
+                  ]
+                },
+                "period": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 366
+                },
+                "threshold": {
+                  "$ref": "#/$defs/decimal"
+                },
+                "direction": {
+                  "enum": [
+                    "two-sided",
+                    "upper",
+                    "lower"
+                  ]
+                },
+                "final_period": {
+                  "enum": [
+                    "complete",
+                    "partial"
+                  ]
+                },
+                "partial_period_policy": {
+                  "enum": [
+                    "exclude",
+                    "fail"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "version",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "const": "detect_change_points"
+            },
+            "version": {
+              "$ref": "#/$defs/version"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "model",
+                "min_segment"
+              ],
+              "allOf": [
+                {
+                  "if": {
+                    "required": [
+                      "algorithm"
+                    ],
+                    "properties": {
+                      "algorithm": {
+                        "const": "dynamic_programming"
+                      }
+                    }
+                  },
+                  "then": {
+                    "required": [
+                      "change_count"
+                    ]
+                  },
+                  "else": {
+                    "required": [
+                      "penalty"
+                    ]
+                  }
+                }
+              ],
+              "properties": {
+                "model": {
+                  "enum": [
+                    "l1",
+                    "l2",
+                    "rbf"
+                  ]
+                },
+                "penalty": {
+                  "$ref": "#/$defs/decimal"
+                },
+                "min_segment": {
+                  "type": "integer",
+                  "minimum": 2,
+                  "maximum": 100000
+                },
+                "algorithm": {
+                  "enum": [
+                    "pelt",
+                    "dynamic_programming"
+                  ]
+                },
+                "change_count": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "jump": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "version",
+            "parameters"
+          ],
+          "properties": {
+            "id": {
+              "const": "forecast"
+            },
+            "version": {
+              "$ref": "#/$defs/version"
+            },
+            "parameters": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "candidates",
+                "period",
+                "horizon",
+                "confidence_level",
+                "evaluation_metric",
+                "initial_window",
+                "step",
+                "max_folds",
+                "final_period",
+                "partial_period_policy"
+              ],
+              "properties": {
+                "candidates": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 6,
+                  "uniqueItems": true,
+                  "items": {
+                    "enum": [
+                      "naive",
+                      "seasonal_naive",
+                      "ets_add",
+                      "ets_add_trend",
+                      "ets_add_damped",
+                      "ets_add_seasonal"
+                    ]
+                  }
+                },
+                "period": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 366
+                },
+                "horizon": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 365
+                },
+                "confidence_level": {
+                  "$ref": "#/$defs/confidence_level"
+                },
+                "evaluation_metric": {
+                  "enum": [
+                    "mase",
+                    "smape"
+                  ]
+                },
+                "initial_window": {
+                  "type": "integer",
+                  "minimum": 2,
+                  "maximum": 1000000
+                },
+                "step": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 365
+                },
+                "max_folds": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000
+                },
+                "final_period": {
+                  "enum": [
+                    "complete",
+                    "partial"
+                  ]
+                },
+                "partial_period_policy": {
+                  "enum": [
+                    "exclude",
+                    "fail"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

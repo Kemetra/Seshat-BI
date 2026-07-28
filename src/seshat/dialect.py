@@ -66,8 +66,19 @@ class Dialect(Protocol):
     # classes accept a narrower/single param type than this Protocol's union,
     # which a strict checker would flag as its own (separate, pre-existing-
     # pattern) contravariance note rather than something this change resolves.
+    #
+    # ``statement_timeout_ms`` is OPTIONAL and only ever passed to a dialect that
+    # advertises ``supports_statement_timeout = True``. An engine that cannot cap
+    # a single query server-side declares nothing here, and a caller that needs
+    # an enforced ceiling (the governed statistical Gold provider) refuses that
+    # engine rather than running unbounded under an advertised limit.
     def resolve_config(self, env: dict[str, str]) -> str | dict[str, object] | None: ...
-    def connect(self, config: str | dict[str, object]) -> object: ...
+    def connect(
+        self,
+        config: str | dict[str, object],
+        *,
+        statement_timeout_ms: int | None = None,
+    ) -> object: ...
     def redact(self, message: object, config: str | dict[str, object]) -> str: ...
 
 
@@ -79,6 +90,9 @@ _PG_TEXT_TYPES = frozenset(
 
 class PostgresDialect:
     name = "postgres"
+    # psycopg2 can cap a single statement server-side (`-c statement_timeout`),
+    # so this engine can honor a caller's enforced query ceiling.
+    supports_statement_timeout = True
 
     def resolve_config(self, env: dict[str, str]) -> str | None:
         """Resolve a Postgres DSN from env. Delegates to the existing resolver
@@ -87,11 +101,17 @@ class PostgresDialect:
 
         return resolve_dsn(env)
 
-    def connect(self, config: str) -> object:
-        """Build a real (lazy psycopg2) QueryRunner over a DSN."""
+    def connect(
+        self, config: str, *, statement_timeout_ms: int | None = None
+    ) -> object:
+        """Build a real (lazy psycopg2) QueryRunner over a DSN.
+
+        ``statement_timeout_ms`` caps every statement on the session, so a caller
+        that advertises an enforceable query ceiling can actually hold it.
+        """
         from .validate import make_psycopg2_runner
 
-        return make_psycopg2_runner(config)
+        return make_psycopg2_runner(config, statement_timeout_ms=statement_timeout_ms)
 
     def redact(self, message: object, config: str) -> str:
         """Scrub the DSN and its components out of an error message."""

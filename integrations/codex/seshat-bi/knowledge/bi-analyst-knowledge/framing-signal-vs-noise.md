@@ -36,13 +36,15 @@ difference/spike/rate real enough to act on, or is it noise?"
    claim. State drivers as decomposition/association; never assert cause the
    data cannot establish.
 
-## What is explicitly OUT of scope (v1)
+## Governed statistical evidence boundary
 
-Regression, forecasting, significance/hypothesis testing, confidence
-intervals, and any method that computes NEW business meaning. Those would cross
-from framing-approved-numbers into inventing analysis. If a decision genuinely
-needs them, that is a [GAP] (missing analytical capability), routed for a named
-human, not silently applied.
+This card does not compute regression, forecasts, hypothesis tests, or
+confidence intervals. When a decision genuinely needs those methods, route to
+`statistical-evidence-workflow.md`. The `seshat analyze` Product Module may
+compute derived evidence only from approved metrics after its readiness and
+contract policy passes. A computed result remains pending named-human review;
+it cannot create business meaning, establish causality, or change readiness.
+Autonomous ML/deployment and causal claims remain out of scope.
 
 ## The invariant
 

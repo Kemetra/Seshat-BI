@@ -1,0 +1,42 @@
+table: gold.sample
+source_id: sample
+mapping_version: "7"
+current_stage: semantic_model_ready
+next_action: Review governed statistical evidence without changing readiness.
+stages:
+  source_ready:
+    status: pass
+    evidence: [source profile]
+    blocking_reasons: []
+  mapping_ready:
+    status: pass
+    evidence: [approved source map]
+    blocking_reasons: []
+  silver_ready:
+    status: pass
+    evidence: [silver migration]
+    blocking_reasons: []
+  gold_ready:
+    status: pass
+    evidence:
+      - "retail validate --source-map mappings/sample/source-map.yaml: PASS (exit 0)"
+    blocking_reasons: []
+  semantic_model_ready:
+    status: pass
+    evidence:
+      - mappings/sample/metrics/ApprovedMetric.yaml
+    blocking_reasons: []
+  dashboard_ready:
+    status: not_started
+    evidence: []
+    blocking_reasons: []
+  publish_ready:
+    status: not_started
+    evidence: []
+    blocking_reasons: []
+blocking_reasons: []
+approvals:
+  - stage: semantic_model_ready
+    owner: "Ada Lovelace (metric_owner)"
+    at: "2026-07-28"
+    note: "approved metric contracts: ApprovedMetric"

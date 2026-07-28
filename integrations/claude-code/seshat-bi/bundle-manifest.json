@@ -264,19 +264,19 @@
     {
       "classification": "public_knowledge",
       "destination": "knowledge/bi-analyst-knowledge/INDEX.md",
-      "output_sha256": "21c5fa7dbb1e925928a1abc8891de4e5817fe8344d9faf775f88fd868843d282",
+      "output_sha256": "81d010119a7e93f82e36fca74e5169e558679748e0e63e69cc9047b9fba2b281",
       "source": "skills/bi-analyst-knowledge/INDEX.md",
       "source_id": "kb-156",
-      "source_sha256": "21c5fa7dbb1e925928a1abc8891de4e5817fe8344d9faf775f88fd868843d282",
+      "source_sha256": "81d010119a7e93f82e36fca74e5169e558679748e0e63e69cc9047b9fba2b281",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/bi-analyst-knowledge/SKILL.md",
-      "output_sha256": "4e9abd4c610be3e75a457ce6ff09cfe62aa96f51d9742be70da92b7a07c697e5",
+      "output_sha256": "bb678ea68b7f5a841f912c7b6d46448df401e3cf3eaa8ad0d730a53070d59cf0",
       "source": "skills/bi-analyst-knowledge/SKILL.md",
       "source_id": "kb-157",
-      "source_sha256": "4e9abd4c610be3e75a457ce6ff09cfe62aa96f51d9742be70da92b7a07c697e5",
+      "source_sha256": "bb678ea68b7f5a841f912c7b6d46448df401e3cf3eaa8ad0d730a53070d59cf0",
       "transform": "copy-normalized-v1"
     },
     {
@@ -390,19 +390,19 @@
     {
       "classification": "public_knowledge",
       "destination": "knowledge/bi-analyst-knowledge/framing-signal-vs-noise.md",
-      "output_sha256": "b322ec154b139bb5eda6327ae3d12cebe96f171d558a48153f8f233d6311096b",
+      "output_sha256": "c09673a0fe0313c5e00491caf15a9d55bb9896259a0d5420685e431ca713eec1",
       "source": "skills/bi-analyst-knowledge/framing-signal-vs-noise.md",
       "source_id": "kb-167",
-      "source_sha256": "b322ec154b139bb5eda6327ae3d12cebe96f171d558a48153f8f233d6311096b",
+      "source_sha256": "c09673a0fe0313c5e00491caf15a9d55bb9896259a0d5420685e431ca713eec1",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/bi-analyst-knowledge/framing-trend-anomaly.md",
-      "output_sha256": "78bba080c7ddfc9d3a1feba4024cbbb6dbbe2af8363c3b3b357c6faa93831975",
+      "output_sha256": "7e3e1f8b863ec1769110e3daede6c315c1259d80449fd897a942288620a886b0",
       "source": "skills/bi-analyst-knowledge/framing-trend-anomaly.md",
       "source_id": "kb-168",
-      "source_sha256": "78bba080c7ddfc9d3a1feba4024cbbb6dbbe2af8363c3b3b357c6faa93831975",
+      "source_sha256": "7e3e1f8b863ec1769110e3daede6c315c1259d80449fd897a942288620a886b0",
       "transform": "copy-normalized-v1"
     },
     {
@@ -412,6 +412,15 @@
       "source": "skills/bi-analyst-knowledge/narrative-change-review.md",
       "source_id": "kb-174",
       "source_sha256": "6833cf50e9ee85a37c42627326c7e5596f4309a61be83d50c8557b7bebd91aa1",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
+      "destination": "knowledge/bi-analyst-knowledge/statistical-evidence-workflow.md",
+      "output_sha256": "e5d58013ffa59dd62d9d4d00ac1307b6c5b603783e1d1fc8e82e1ece8d20bac4",
+      "source": "skills/bi-analyst-knowledge/statistical-evidence-workflow.md",
+      "source_id": "kb-206",
+      "source_sha256": "e5d58013ffa59dd62d9d4d00ac1307b6c5b603783e1d1fc8e82e1ece8d20bac4",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2270,10 +2279,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "777f12a3cc6e3e6cda18b17696eca6f14edd0880c9949317369e573b5dde0f1a",
+  "manifest_digest": "caa429545a283ccf0e2e6fa4b1b9ed7d695cfdb0a2f437992c265a2863021ca2",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "bf4c90cb686b67e4d3ed61a4bb8e199186a6b1e7",
+  "source_revision": "a83e22c4efccc30f303e918593b3f07ddc4375c4",
   "target": "claude",
   "version": "0.7.1"
 }

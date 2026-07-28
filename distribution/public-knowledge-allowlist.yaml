@@ -1864,6 +1864,17 @@ entries:
     required: true
     generated_notice: manifest
     review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-206
+    source: skills/bi-analyst-knowledge/statistical-evidence-workflow.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/bi-analyst-knowledge/statistical-evidence-workflow.md
+      codex: knowledge/bi-analyst-knowledge/statistical-evidence-workflow.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Required governed statistical evidence route for public agent reasoning.
   - entry_id: kb-169
     source: skills/bi-analyst-knowledge/story-order.md
     classification: public_knowledge

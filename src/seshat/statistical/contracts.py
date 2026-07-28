@@ -1,0 +1,173 @@
+"""Immutable cross-component contracts for governed statistical analysis."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import StrEnum
+from pathlib import PurePosixPath
+from typing import TYPE_CHECKING, Literal, Mapping
+
+if TYPE_CHECKING:
+    from .policy import PolicyContext
+    from .providers.base import RectangularData
+
+
+class Outcome(StrEnum):
+    COMPUTED = "computed"
+    WITHHELD = "withheld"
+    REFUSED = "refused"
+    FAILED = "failed"
+    UNAVAILABLE = "unavailable"
+
+
+@dataclass(frozen=True, slots=True)
+class Blocker:
+    code: str
+    message: str
+    recovery: str
+
+
+@dataclass(frozen=True, slots=True)
+class ColumnBinding:
+    column: str
+    logical_type: Literal[
+        "number",
+        "integer",
+        "boolean",
+        "category",
+        "date",
+        "datetime",
+        "identifier",
+    ]
+
+
+@dataclass(frozen=True, slots=True)
+class MethodSpec:
+    method_id: str
+    version: str
+    parameters: Mapping[str, object]
+
+
+@dataclass(frozen=True, slots=True)
+class AnalysisSpec:
+    schema_version: str
+    analysis_id: str
+    revision: int
+    subject: str
+    question: str
+    cadence: str
+    owner: str
+    readiness_status: PurePosixPath
+    metric_contracts: tuple[PurePosixPath, ...]
+    provider: Mapping[str, object]
+    population: Mapping[str, object]
+    roles: Mapping[str, ColumnBinding]
+    method: MethodSpec
+    missing_policy: str
+    minimum_data: Mapping[str, int]
+    random_seed: int
+    pii: Mapping[str, object]
+    outputs: Mapping[str, PurePosixPath]
+    source_path: PurePosixPath | None = None
+    source_sha256: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class Estimate:
+    name: str
+    value: str | None
+    unit: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class Interval:
+    name: str
+    low: str | None
+    high: str | None
+    level: str
+    method: str
+
+
+@dataclass(frozen=True, slots=True)
+class TestStatistic:
+    name: str
+    statistic: str | None
+    p_value: str | None
+    adjusted_p_value: str | None
+    alternative: str | None
+    method: str
+
+
+@dataclass(frozen=True, slots=True)
+class Diagnostic:
+    code: str
+    status: Literal["holds", "warning", "violated", "not_applicable"]
+    observed: str | None
+    message: str
+
+
+@dataclass(frozen=True, slots=True)
+class AnalysisEvidence:
+    engine_version: str
+    invocation_id: str
+    started_at: str
+    completed_at: str
+    analysis: Mapping[str, object]
+    governance: Mapping[str, object]
+    input_provenance: Mapping[str, object]
+    method: Mapping[str, object]
+    outcome: Outcome
+    estimates: tuple[Estimate, ...] = ()
+    effect_sizes: tuple[Estimate, ...] = ()
+    intervals: tuple[Interval, ...] = ()
+    tests: tuple[TestStatistic, ...] = ()
+    diagnostics: tuple[Diagnostic, ...] = ()
+    warnings: tuple[str, ...] = ()
+    blockers: tuple[Blocker, ...] = ()
+    cautions: tuple[str, ...] = ()
+    schema_version: str = "1.0"
+    authority: str = "derived-evidence-only"
+    readiness_effect: str = "none; named-human approval required"
+    review_state: str = "pending"
+
+
+@dataclass(frozen=True, slots=True)
+class MethodContext:
+    spec: AnalysisSpec
+    policy: PolicyContext
+    data: RectangularData
+
+
+@dataclass(frozen=True, slots=True)
+class MethodResult:
+    estimates: tuple[Estimate, ...] = ()
+    effect_sizes: tuple[Estimate, ...] = ()
+    intervals: tuple[Interval, ...] = ()
+    tests: tuple[TestStatistic, ...] = ()
+    diagnostics: tuple[Diagnostic, ...] = ()
+    warnings: tuple[str, ...] = ()
+    interpretation_cautions: tuple[str, ...] = ()
+
+
+class AnalysisWithheld(RuntimeError):
+    def __init__(self, blockers: tuple[Blocker, ...]) -> None:
+        super().__init__("; ".join(item.message for item in blockers))
+        self.blockers = blockers
+
+
+def withheld(code: str, message: str, recovery: str) -> AnalysisWithheld:
+    """Build the one-blocker withholding every governed method raises."""
+
+    return AnalysisWithheld((Blocker(code, message, recovery),))
+
+
+def require(condition: object, code: str, message: str, recovery: str) -> None:
+    """Withhold unless a governed precondition holds.
+
+    The methods are fail-closed, so they are mostly a sequence of preconditions.
+    Expressing each as one call keeps that sequence readable -- and keeps the
+    guard's branch in exactly one place instead of once per precondition.
+    """
+
+    if not condition:
+        raise withheld(code, message, recovery)

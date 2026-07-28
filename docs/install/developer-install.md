@@ -14,6 +14,18 @@ On macOS/Linux, activate with `source .venv/bin/activate`. The editable install 
 
 Live checks are intentionally separate: install `.[db]`, `.[mssql]`, `.[mysql]`, `.[snowflake]`, or `.[files]` only when working on that boundary. `.[livetest]` is reserved for the optional container-backed suite. Keep credentials in `.env`.
 
+For the governed statistical core plus change-point support, use the exact
+pinned contributor environment:
+
+```powershell
+python -m pip install -e ".[dev,stats,stats-change]"
+seshat analyze --help
+pytest tests/unit/statistical
+```
+
+Add `db` only when exercising the PostgreSQL Gold adapter. Local CSV analysis
+requires no database, and all real connection settings remain in `.env`.
+
 For the governed dbt shadow adapter, install its exact tested pair separately:
 
 ```powershell

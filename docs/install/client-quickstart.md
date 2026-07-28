@@ -45,6 +45,12 @@ capability only when you need live validation:
 | `mysql` | MySQL profile/validate | `pipx install "seshat-bi[mysql]"` |
 | `snowflake` | Snowflake profile/validate | `pipx install "seshat-bi[snowflake]"` |
 | `files` | Excel file profiling | `pipx install "seshat-bi[files]"` |
+| `stats` | Governed statistical evidence | `pipx install "seshat-bi[stats]"` |
+| `stats-change` | Change-point method after `stats` | `pipx inject seshat-bi --force "ruptures==1.1.10"` |
+
+After metric contracts and Gold/Semantic Model readiness pass, use
+`seshat analyze validate`, then `seshat analyze run`. The result remains derived
+evidence pending a named-human review; it cannot advance readiness.
 
 ---
 

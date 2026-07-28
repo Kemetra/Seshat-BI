@@ -44,6 +44,35 @@ capabilities:
       skill: "retail-govern"
       verb: "retail-govern"
 
+  - id: governed-statistical-core
+    name: "governed statistical evidence core"
+    summary: "Runs eight closed numerical method families over approved metric inputs and emits immutable derived evidence plus a pending named-human review; never changes readiness or grants approval."
+    state: shipped
+    authority: agent-runnable
+    surface: product-module
+    requirements: [optional-dependency]
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "analyze"
+    documentation: "docs/architecture/statistical-evidence-engine.md"
+    references:
+      dispatch: "analyze"
+      status_claims: "governed-statistical-engine-built"
+
+  - id: governed-statistical-gold-adapter
+    name: "governed statistical Gold adapter"
+    summary: "PostgreSQL-only read-only adapter for compiler-produced, parameterized Gold SELECT acquisition after Gold and Semantic Model policy gates; creates no metric truth."
+    state: shipped
+    authority: agent-runnable
+    surface: execution-adapter
+    requirements: [database, optional-dependency]
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: null
+    documentation: "docs/architecture/statistical-evidence-engine.md"
+    references:
+      status_claims: "governed-statistical-engine-built"
+
   - id: decision-change-impact-map
     name: "decision change impact map"
     summary: "Read-only, offline projection of affected committed artifacts for one approved decision change."

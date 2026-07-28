@@ -165,6 +165,20 @@ jobs:
         # Read-only; reads no constitution. On an un-bootstrapped repo it exits 0.
         run: retail kit-lint --repo .
 
+  statistics:
+    # Numerical methods are optional at runtime but mandatory in their own
+    # credential-free CI environment. The base `check` job remains on .[dev].
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.13"
+      - name: Install statistics environment
+        run: pip install -e ".[dev,stats,stats-change]"
+      - name: Statistical tests
+        run: pytest -m statistics
+
   smoke:
     # Windows is the release gate for the first-success journey. The test builds both
     # package artifacts, installs the wheel with pipx in a throwaway location, then

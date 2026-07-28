@@ -1,0 +1,489 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seshat-bi.dev/schemas/statistical-analysis-evidence.schema.json",
+  "title": "Seshat BI governed statistical analysis evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "engine_version",
+    "authority",
+    "invocation_id",
+    "started_at",
+    "completed_at",
+    "analysis",
+    "governance",
+    "input",
+    "method",
+    "outcome",
+    "estimates",
+    "intervals",
+    "tests",
+    "diagnostics",
+    "warnings",
+    "blockers",
+    "cautions",
+    "readiness_effect",
+    "review_state"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "engine_version": {
+      "$ref": "#/$defs/version"
+    },
+    "authority": {
+      "const": "derived-evidence-only"
+    },
+    "invocation_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "started_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "completed_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "revision",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/repo_path"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "governance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "readiness",
+        "metric_contracts"
+      ],
+      "properties": {
+        "readiness": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/governance_reference"
+          }
+        },
+        "metric_contracts": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/governance_reference"
+          }
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_kind",
+        "source_digest",
+        "observation_grain",
+        "input_count",
+        "excluded_count",
+        "exclusion_reasons"
+      ],
+      "properties": {
+        "provider_kind": {
+          "enum": [
+            "local_csv",
+            "gold"
+          ]
+        },
+        "source_digest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "observation_grain": {
+          "type": "string",
+          "minLength": 1
+        },
+        "input_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "excluded_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "exclusion_reasons": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "method": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "libraries",
+        "parameters",
+        "random_seed"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "describe",
+            "compare_groups",
+            "proportion",
+            "correlate",
+            "regress",
+            "detect_anomalies",
+            "detect_change_points",
+            "forecast"
+          ]
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "libraries": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/library"
+          }
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "random_seed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      }
+    },
+    "outcome": {
+      "enum": [
+        "computed",
+        "withheld",
+        "refused",
+        "failed",
+        "unavailable"
+      ]
+    },
+    "estimates": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/estimate"
+      }
+    },
+    "effect_sizes": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/estimate"
+      }
+    },
+    "intervals": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/interval"
+      }
+    },
+    "tests": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/test_statistic"
+      }
+    },
+    "diagnostics": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/diagnostic"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "$ref": "#/$defs/blocker"
+      }
+    },
+    "cautions": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "readiness_effect": {
+      "const": "none; named-human approval required"
+    },
+    "review_state": {
+      "const": "pending"
+    }
+  },
+  "$defs": {
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "repo_path": {
+      "type": "string",
+      "pattern": "^(?![A-Za-z]:)(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._/-]+$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "decimal_or_null": {
+      "oneOf": [
+        {
+          "type": "string",
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "governance_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "revision",
+        "sha256",
+        "observed_state"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/repo_path"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "observed_state": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "library": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "estimate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "value",
+        "unit"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "value": {
+          "$ref": "#/$defs/decimal_or_null"
+        },
+        "unit": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "interval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "low",
+        "high",
+        "level",
+        "method"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "low": {
+          "$ref": "#/$defs/decimal_or_null"
+        },
+        "high": {
+          "$ref": "#/$defs/decimal_or_null"
+        },
+        "level": {
+          "type": "string",
+          "pattern": "^0\\.[0-9]+$"
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "test_statistic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "statistic",
+        "p_value",
+        "adjusted_p_value",
+        "alternative",
+        "method"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "statistic": {
+          "$ref": "#/$defs/decimal_or_null"
+        },
+        "p_value": {
+          "$ref": "#/$defs/decimal_or_null"
+        },
+        "adjusted_p_value": {
+          "$ref": "#/$defs/decimal_or_null"
+        },
+        "alternative": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "status",
+        "observed",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "status": {
+          "enum": [
+            "holds",
+            "warning",
+            "violated",
+            "not_applicable"
+          ]
+        },
+        "observed": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "recovery"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "recovery": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

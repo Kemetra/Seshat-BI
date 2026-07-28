@@ -1,0 +1,41 @@
+schema_version: "1.0"
+analysis_id: weekly_metric_signal
+revision: 1
+question: Is the approved metric changing beyond normal variation?
+cadence: weekly
+subject: sample
+owner: Example Analyst
+readiness_status: mappings/sample/readiness-status.yaml
+metric_contracts:
+  - mappings/sample/metrics/ApprovedMetric.yaml
+provider:
+  kind: local_csv
+  dataset_id: weekly_metric
+population:
+  grain: one row per completed week
+  inclusion: []
+  exclusion: []
+roles:
+  response:
+    column: metric_value
+    logical_type: number
+method:
+  id: describe
+  version: "1.0"
+  parameters:
+    quantiles: ["0.25", "0.5", "0.75"]
+    outlier_rule: mad
+missing_data:
+  policy: complete_case
+minimum_data:
+  observations: 12
+  groups: 1
+  seasonal_cycles: 0
+random_seed: 1729
+pii:
+  classification: none
+  approval_evidence: []
+  minimum_group_count: 5
+outputs:
+  evidence: mappings/sample/analyses/weekly_metric_signal.evidence.json
+  review: mappings/sample/analyses/weekly_metric_signal.review.md

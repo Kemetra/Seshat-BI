@@ -69,6 +69,16 @@ dev = [
 db = [
     "psycopg2-binary>=2.9",
 ]
+# Governed numerical execution environments. These remain outside the base
+# install and are imported only by the statistical method that needs them.
+stats = [
+    "numpy==2.5.1",
+    "scipy==1.18.0",
+    "statsmodels==0.14.6",
+]
+stats-change = [
+    "ruptures==1.1.10",
+]
 # `dbt` extra: the governed transformation adapter. Core + Postgres are pinned
 # together because Seshat validates their artifact schema and selector behavior
 # as one compatibility boundary. Imports remain lazy; base installs load no dbt.
@@ -136,6 +146,8 @@ packages = ["src/seshat", "src/retail"]
 # package so `packs.resolve_schema_path` finds them in an installed layout.
 "schemas/seshat-extension-pack.schema.json" = "seshat/packs/schemas/seshat-extension-pack.schema.json"
 "schemas/seshat-pack-registry.schema.json" = "seshat/packs/schemas/seshat-pack-registry.schema.json"
+"schemas/statistical-analysis-spec.schema.json" = "seshat/statistical/schemas/statistical-analysis-spec.schema.json"
+"schemas/statistical-analysis-evidence.schema.json" = "seshat/statistical/schemas/statistical-analysis-evidence.schema.json"
 # `seshat dbt init` / `seshat dagster init` (issue #325) materialize the
 # GENERIC governed projects from these bundled templates so any workspace is
 # self-sufficient without the development repository. Only table-neutral
@@ -195,6 +207,8 @@ include = [
     # force-include them into the package.
     "/schemas/seshat-extension-pack.schema.json",
     "/schemas/seshat-pack-registry.schema.json",
+    "/schemas/statistical-analysis-spec.schema.json",
+    "/schemas/statistical-analysis-evidence.schema.json",
     # Governed-project templates the init scaffolders bundle (issue #325);
     # the wheel is built from the sdist, so the sdist must carry them.
     "/dbt/dbt_project.yml",
@@ -247,6 +261,7 @@ markers = [
     "unit",
     "integration",
     "live_db",
+    "statistics",
     "seed: name the seed scenario .sql file for a live_db test (spec 082)",
 ]
 testpaths = ["tests"]
