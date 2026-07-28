@@ -16,6 +16,7 @@ import numpy as np  # noqa: E402
 
 from seshat.statistical.contracts import AnalysisWithheld, MethodSpec  # noqa: E402
 from seshat.statistical.methods.forecast import (  # noqa: E402
+    BacktestWindows,
     candidate_from_id,
     evaluate_candidate,
     fit_candidate,
@@ -103,10 +104,7 @@ def test_evaluation_never_passes_future_values_to_fit(monkeypatch) -> None:
     result = evaluate_candidate(
         values,
         candidate_from_id("seasonal_naive", 4),
-        horizon=2,
-        initial_window=10,
-        step=3,
-        max_folds=3,
+        BacktestWindows(horizon=2, initial_window=10, step=3, max_folds=3),
     )
     assert [len(item) for item in seen] == [fold.cutoff_index for fold in result.folds]
     assert all(item == tuple(values[: len(item)]) for item in seen)

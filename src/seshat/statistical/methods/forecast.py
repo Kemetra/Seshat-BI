@@ -9,12 +9,13 @@ from typing import Literal
 
 from ..contracts import (
     AnalysisWithheld,
-    Blocker,
     Diagnostic,
     Estimate,
     Interval,
     MethodContext,
     MethodResult,
+    require,
+    withheld,
 )
 from ..evidence import decimal_text
 from .common import unit_for_role
@@ -51,6 +52,16 @@ class ForecastEvaluation:
 
 
 @dataclass(frozen=True, slots=True)
+class BacktestWindows:
+    """The declared rolling-origin evaluation geometry."""
+
+    horizon: int
+    initial_window: int
+    step: int
+    max_folds: int
+
+
+@dataclass(frozen=True, slots=True)
 class ForecastOutput:
     point: object
     low: object
@@ -59,8 +70,11 @@ class ForecastOutput:
     interval_method: str
 
 
+_MAX_EVIDENCE_ITEMS = 9_500
+
+
 def _withheld(code: str, message: str, recovery: str) -> AnalysisWithheld:
-    return AnalysisWithheld((Blocker(code, message, recovery),))
+    return withheld(code, message, recovery)
 
 
 def naive(values, horizon: int):
@@ -199,25 +213,40 @@ def fit_candidate(
     )
 
 
-def _cutoffs(
-    length: int,
-    initial_window: int,
-    horizon: int,
-    step: int,
-    max_folds: int,
-) -> tuple[int, ...]:
-    cutoffs = tuple(range(initial_window, length - horizon + 1, step))
-    return cutoffs[-max_folds:]
+def _cutoffs(length: int, windows: BacktestWindows) -> tuple[int, ...]:
+    cutoffs = tuple(
+        range(windows.initial_window, length - windows.horizon + 1, windows.step)
+    )
+    return cutoffs[-windows.max_folds :]
+
+
+def _fold(
+    array, cutoff: int, candidate: ForecastCandidate, horizon: int
+) -> BacktestFold:
+    """Backtest one origin against strictly earlier training history."""
+
+    training = array[:cutoff]
+    actual = array[cutoff : cutoff + horizon]
+    output = fit_candidate(training, candidate, horizon)
+    fold_mase = mase(actual, output.point, training, candidate.period)
+    return BacktestFold(
+        cutoff,
+        horizon,
+        tuple(decimal_text(value) for value in actual),
+        tuple(decimal_text(value) for value in output.point),
+        None if fold_mase is None else decimal_text(fold_mase),
+        decimal_text(smape(actual, output.point)),
+    )
+
+
+def _mean_text(values: list[float]) -> str | None:
+    import numpy as np
+
+    return decimal_text(np.mean(values)) if values else None
 
 
 def evaluate_candidate(
-    values,
-    candidate: ForecastCandidate,
-    *,
-    horizon: int,
-    initial_window: int,
-    step: int,
-    max_folds: int,
+    values, candidate: ForecastCandidate, windows: BacktestWindows
 ) -> ForecastEvaluation:
     """Evaluate a candidate on deterministic prior-only rolling origins."""
 
@@ -225,50 +254,31 @@ def evaluate_candidate(
 
     array = np.asarray(values, dtype=float)
     folds: list[BacktestFold] = []
-    diagnostics: list[Diagnostic] = []
     try:
-        for cutoff in _cutoffs(len(array), initial_window, horizon, step, max_folds):
-            training = array[:cutoff]
-            actual = array[cutoff : cutoff + horizon]
-            output = fit_candidate(training, candidate, horizon)
-            fold_mase = mase(actual, output.point, training, candidate.period)
-            fold_smape = smape(actual, output.point)
-            folds.append(
-                BacktestFold(
-                    cutoff,
-                    horizon,
-                    tuple(decimal_text(value) for value in actual),
-                    tuple(decimal_text(value) for value in output.point),
-                    None if fold_mase is None else decimal_text(fold_mase),
-                    decimal_text(fold_smape),
-                )
-            )
+        for cutoff in _cutoffs(len(array), windows):
+            folds.append(_fold(array, cutoff, candidate, windows.horizon))
     except (ArithmeticError, RuntimeError, ValueError) as exc:
         return ForecastEvaluation(
-            candidate.candidate_id,
-            tuple(folds),
-            None,
-            None,
-            tuple(diagnostics),
-            str(exc),
+            candidate.candidate_id, tuple(folds), None, None, (), str(exc)
         )
     mase_values = [float(item.mase) for item in folds if item.mase is not None]
     smape_values = [float(item.smape) for item in folds if item.smape is not None]
+    diagnostics: tuple[Diagnostic, ...] = ()
     if len(mase_values) != len(folds):
-        diagnostics.append(
+        diagnostics = (
             Diagnostic(
                 "STAT_FORECAST_MASE_UNDEFINED",
                 "warning",
                 str(len(folds) - len(mase_values)),
                 "MASE is undefined where the training scale is zero.",
-            )
+            ),
         )
     return ForecastEvaluation(
         candidate.candidate_id,
         tuple(folds),
-        decimal_text(np.mean(mase_values)) if mase_values else None,
-        decimal_text(np.mean(smape_values)) if smape_values else None,
-        tuple(diagnostics),
+        _mean_text(mase_values),
+        _mean_text(smape_values),
+        diagnostics,
         None,
     )
 
@@ -290,58 +300,123 @@ def _residual_diagnostic(residuals, period: int) -> Diagnostic:
     )
 
 
-def run_forecast(context: MethodContext) -> MethodResult:
-    """Backtest declared candidates, select stably, then fit the full history."""
+@dataclass(frozen=True, slots=True)
+class _Plan:
+    """Everything the declared forecast parameters fix before any fitting."""
 
-    import numpy as np
+    period: int
+    level: float
+    metric: str
+    windows: BacktestWindows
+    candidate_ids: tuple[str, ...]
 
-    series = regular_series(context)
+    @property
+    def baseline(self) -> str:
+        return "seasonal_naive" if self.period > 1 else "naive"
+
+
+def _plan(context: MethodContext) -> _Plan:
     parameters = context.spec.method.parameters
-    period = int(parameters["period"])
-    horizon = int(parameters["horizon"])
-    level = float(parameters["confidence_level"])
-    metric = str(parameters["evaluation_metric"])
-    initial_window = int(parameters["initial_window"])
-    step = int(parameters["step"])
-    max_folds = int(parameters["max_folds"])
-    candidate_ids = tuple(str(item) for item in parameters["candidates"])
-    baseline = "seasonal_naive" if period > 1 else "naive"
-    if baseline not in candidate_ids:
-        raise _withheld(
-            "STAT_FORECAST_BASELINE",
-            f"The declared candidates omit the mandatory {baseline} baseline.",
-            "Add the governed baseline to the candidate list.",
-        )
-    cutoffs = _cutoffs(len(series.values), initial_window, horizon, step, max_folds)
-    if len(cutoffs) < 2:
-        raise _withheld(
-            "STAT_FORECAST_FOLDS",
-            "Fewer than two complete rolling-origin folds are available.",
-            "Provide more history or revise the approved evaluation windows.",
-        )
-    estimated_evidence_items = (
-        len(candidate_ids) * (2 + len(cutoffs) * (3 + 2 * horizon)) + horizon
+    return _Plan(
+        period=int(parameters["period"]),
+        level=float(parameters["confidence_level"]),
+        metric=str(parameters["evaluation_metric"]),
+        windows=BacktestWindows(
+            horizon=int(parameters["horizon"]),
+            initial_window=int(parameters["initial_window"]),
+            step=int(parameters["step"]),
+            max_folds=int(parameters["max_folds"]),
+        ),
+        candidate_ids=tuple(str(item) for item in parameters["candidates"]),
     )
-    if estimated_evidence_items > 9_500:
-        raise _withheld(
-            "STAT_FORECAST_EVIDENCE_LIMIT",
-            "The declared folds, horizon, and candidates exceed the evidence ceiling.",
-            "Reduce max_folds, horizon, or the candidate count.",
-        )
-    candidates = tuple(candidate_from_id(item, period) for item in candidate_ids)
-    evaluations = tuple(
-        evaluate_candidate(
-            series.values,
-            candidate,
-            horizon=horizon,
-            initial_window=initial_window,
-            step=step,
-            max_folds=max_folds,
-        )
-        for candidate in candidates
+
+
+def _assert_evaluable(plan: _Plan, cutoffs: tuple[int, ...]) -> None:
+    """Hold the baseline, fold-count, and evidence-size rules before fitting."""
+
+    require(
+        plan.baseline in plan.candidate_ids,
+        "STAT_FORECAST_BASELINE",
+        f"The declared candidates omit the mandatory {plan.baseline} baseline.",
+        "Add the governed baseline to the candidate list.",
     )
-    diagnostics: list[Diagnostic] = []
+    require(
+        len(cutoffs) >= 2,
+        "STAT_FORECAST_FOLDS",
+        "Fewer than two complete rolling-origin folds are available.",
+        "Provide more history or revise the approved evaluation windows.",
+    )
+    horizon = plan.windows.horizon
+    estimated_items = (
+        len(plan.candidate_ids) * (2 + len(cutoffs) * (3 + 2 * horizon)) + horizon
+    )
+    require(
+        estimated_items <= _MAX_EVIDENCE_ITEMS,
+        "STAT_FORECAST_EVIDENCE_LIMIT",
+        "The declared folds, horizon, and candidates exceed the evidence ceiling.",
+        "Reduce max_folds, horizon, or the candidate count.",
+    )
+
+
+def _metric_value(evaluation: ForecastEvaluation, metric: str) -> str | None:
+    return evaluation.mean_mase if metric == "mase" else evaluation.mean_smape
+
+
+def _fold_estimates(
+    candidate_id: str, folds: tuple[BacktestFold, ...], unit: str | None
+) -> list[Estimate]:
     estimates: list[Estimate] = []
+    for fold_index, fold in enumerate(folds, start=1):
+        prefix = f"{candidate_id}:{fold_index}"
+        estimates.extend(
+            (
+                Estimate(f"fold_cutoff:{prefix}", str(fold.cutoff_index), None),
+                Estimate(f"fold_mase:{prefix}", fold.mase, None),
+                Estimate(f"fold_smape:{prefix}", fold.smape, None),
+            )
+        )
+        pairs = zip(fold.actual, fold.predicted, strict=True)
+        for point_index, (actual, predicted) in enumerate(pairs, start=1):
+            estimates.extend(
+                (
+                    Estimate(f"fold_actual:{prefix}:{point_index}", actual, unit),
+                    Estimate(f"fold_predicted:{prefix}:{point_index}", predicted, unit),
+                )
+            )
+    return estimates
+
+
+def _backtest_estimates(evaluation: ForecastEvaluation, unit: str | None):
+    """Report one candidate's mean metrics and every fold it completed."""
+
+    estimates: list[Estimate] = []
+    if evaluation.mean_mase is not None:
+        estimates.append(
+            Estimate(
+                f"backtest_mean_mase:{evaluation.candidate_id}",
+                evaluation.mean_mase,
+                None,
+            )
+        )
+    if evaluation.mean_smape is not None:
+        estimates.append(
+            Estimate(
+                f"backtest_mean_smape:{evaluation.candidate_id}",
+                evaluation.mean_smape,
+                None,
+            )
+        )
+    estimates.extend(_fold_estimates(evaluation.candidate_id, evaluation.folds, unit))
+    return estimates
+
+
+def _backtest_evidence(
+    evaluations: tuple[ForecastEvaluation, ...], plan: _Plan, unit: str | None
+):
+    """Split the backtest into ranked candidates, estimates, and diagnostics."""
+
+    estimates: list[Estimate] = []
+    diagnostics: list[Diagnostic] = []
     ranked: list[tuple[float, int, ForecastEvaluation]] = []
     for order, evaluation in enumerate(evaluations):
         diagnostics.extend(evaluation.diagnostics)
@@ -355,142 +430,129 @@ def run_forecast(context: MethodContext) -> MethodResult:
                 )
             )
             continue
-        value = evaluation.mean_mase if metric == "mase" else evaluation.mean_smape
+        value = _metric_value(evaluation, plan.metric)
         if value is not None:
             ranked.append((float(value), order, evaluation))
-        if evaluation.mean_mase is not None:
-            estimates.append(
-                Estimate(
-                    f"backtest_mean_mase:{evaluation.candidate_id}",
-                    evaluation.mean_mase,
-                    None,
-                )
-            )
-        if evaluation.mean_smape is not None:
-            estimates.append(
-                Estimate(
-                    f"backtest_mean_smape:{evaluation.candidate_id}",
-                    evaluation.mean_smape,
-                    None,
-                )
-            )
-        for fold_index, fold in enumerate(evaluation.folds, start=1):
-            prefix = f"{evaluation.candidate_id}:{fold_index}"
-            estimates.extend(
-                (
-                    Estimate(
-                        f"fold_cutoff:{prefix}",
-                        str(fold.cutoff_index),
-                        None,
-                    ),
-                    Estimate(f"fold_mase:{prefix}", fold.mase, None),
-                    Estimate(f"fold_smape:{prefix}", fold.smape, None),
-                )
-            )
-            for point_index, (actual, predicted) in enumerate(
-                zip(fold.actual, fold.predicted, strict=True), start=1
-            ):
-                estimates.extend(
-                    (
-                        Estimate(
-                            f"fold_actual:{prefix}:{point_index}",
-                            actual,
-                            unit_for_role(context, "response"),
-                        ),
-                        Estimate(
-                            f"fold_predicted:{prefix}:{point_index}",
-                            predicted,
-                            unit_for_role(context, "response"),
-                        ),
-                    )
-                )
-    if not ranked:
-        raise _withheld(
-            "STAT_FORECAST_ALL_FAILED",
-            "No declared candidate produced the selected backtest metric.",
-            "Review candidate failures, history, and the evaluation metric.",
-        )
+        estimates.extend(_backtest_estimates(evaluation, unit))
+    require(
+        ranked,
+        "STAT_FORECAST_ALL_FAILED",
+        "No declared candidate produced the selected backtest metric.",
+        "Review candidate failures, history, and the evaluation metric.",
+    )
     ranked.sort(key=lambda item: (item[0], item[1]))
-    _, selected_order, selected_evaluation = ranked[0]
+    return ranked, estimates, diagnostics
+
+
+def _baseline_diagnostic(
+    evaluations: tuple[ForecastEvaluation, ...],
+    selected: ForecastEvaluation,
+    plan: _Plan,
+) -> tuple[Diagnostic, ...]:
+    """Warn unless a declared alternative actually beat the governed baseline."""
+
     baseline_evaluation = next(
-        item for item in evaluations if item.candidate_id == baseline
+        item for item in evaluations if item.candidate_id == plan.baseline
     )
-    baseline_value = (
-        baseline_evaluation.mean_mase
-        if metric == "mase"
-        else baseline_evaluation.mean_smape
+    baseline_value = _metric_value(baseline_evaluation, plan.metric)
+    require(
+        baseline_value is not None,
+        "STAT_FORECAST_BASELINE_FAILED",
+        "The mandatory baseline did not produce the selected metric.",
+        "Provide history with a non-degenerate baseline scale.",
     )
-    selected_value = (
-        selected_evaluation.mean_mase
-        if metric == "mase"
-        else selected_evaluation.mean_smape
+    selected_value = _metric_value(selected, plan.metric)
+    improved = float(str(selected_value)) < float(str(baseline_value))
+    if selected.candidate_id != plan.baseline and improved:
+        return ()
+    return (
+        Diagnostic(
+            "STAT_FORECAST_BASELINE_NOT_BEATEN",
+            "warning",
+            plan.baseline,
+            "No declared alternative beat the governed baseline; no model "
+            "endorsement is warranted.",
+        ),
     )
-    if baseline_value is None:
-        raise _withheld(
-            "STAT_FORECAST_BASELINE_FAILED",
-            "The mandatory baseline did not produce the selected metric.",
-            "Provide history with a non-degenerate baseline scale.",
-        )
-    if selected_evaluation.candidate_id == baseline or float(selected_value) >= float(
-        baseline_value
-    ):
-        diagnostics.append(
-            Diagnostic(
-                "STAT_FORECAST_BASELINE_NOT_BEATEN",
-                "warning",
-                baseline,
-                "No declared alternative beat the governed baseline; no model "
-                "endorsement is warranted.",
-            )
-        )
-    selected_candidate = candidates[selected_order]
+
+
+def _final_output(values, candidate: ForecastCandidate, plan: _Plan) -> ForecastOutput:
+    """Fit the selected candidate on the full permitted history."""
+
+    import numpy as np
+
     try:
-        output = fit_candidate(series.values, selected_candidate, horizon, level)
+        output = fit_candidate(values, candidate, plan.windows.horizon, plan.level)
     except (ArithmeticError, RuntimeError, ValueError) as exc:
         raise _withheld(
             "STAT_FORECAST_FINAL_FIT",
             "The selected candidate failed on the full permitted history.",
             "Review the candidate diagnostics and approved history.",
         ) from exc
-    if np.max(np.abs(output.high - output.low)) <= np.finfo(float).eps:
-        raise _withheld(
-            "STAT_FORECAST_INTERVAL_DEGENERATE",
-            "The selected forecast has zero residual uncertainty.",
-            "Provide more variable approved history for uncertainty estimation.",
-        )
-    diagnostics.extend(
-        (
-            Diagnostic(
-                "STAT_FORECAST_SELECTED",
-                "holds",
-                selected_candidate.candidate_id,
-                f"Selected by lowest declared mean {metric} with stable tie order.",
-            ),
-            _residual_diagnostic(output.residuals, period),
-        )
+    require(
+        np.max(np.abs(output.high - output.low)) > np.finfo(float).eps,
+        "STAT_FORECAST_INTERVAL_DEGENERATE",
+        "The selected forecast has zero residual uncertainty.",
+        "Provide more variable approved history for uncertainty estimation.",
     )
-    for index, (point, low, high) in enumerate(
-        zip(output.point, output.low, output.high, strict=True), start=1
-    ):
-        estimates.append(
-            Estimate(
-                f"forecast:{index}",
-                decimal_text(point),
-                unit_for_role(context, "response"),
-            )
-        )
+    return output
+
+
+def _forecast_evidence(output: ForecastOutput, plan: _Plan, unit: str | None):
+    estimates = [
+        Estimate(f"forecast:{index}", decimal_text(point), unit)
+        for index, point in enumerate(output.point, start=1)
+    ]
     intervals = tuple(
         Interval(
             f"forecast:{index}",
             decimal_text(low),
             decimal_text(high),
-            decimal_text(level),
+            decimal_text(plan.level),
             output.interval_method,
         )
         for index, (low, high) in enumerate(
             zip(output.low, output.high, strict=True), start=1
         )
     )
+    return estimates, intervals
+
+
+def run_forecast(context: MethodContext) -> MethodResult:
+    """Backtest declared candidates, select stably, then fit the full history."""
+
+    series = regular_series(context)
+    plan = _plan(context)
+    _assert_evaluable(plan, _cutoffs(len(series.values), plan.windows))
+    unit = unit_for_role(context, "response")
+    candidates = tuple(
+        candidate_from_id(item, plan.period) for item in plan.candidate_ids
+    )
+    evaluations = tuple(
+        evaluate_candidate(series.values, candidate, plan.windows)
+        for candidate in candidates
+    )
+    ranked, estimates, diagnostics = _backtest_evidence(evaluations, plan, unit)
+    _, selected_order, selected_evaluation = ranked[0]
+    diagnostics.extend(_baseline_diagnostic(evaluations, selected_evaluation, plan))
+    selected_candidate = candidates[selected_order]
+    output = _final_output(series.values, selected_candidate, plan)
+    diagnostics.extend(
+        (
+            Diagnostic(
+                "STAT_FORECAST_SELECTED",
+                "holds",
+                selected_candidate.candidate_id,
+                (
+                    f"Selected by lowest declared mean {plan.metric} with stable "
+                    "tie order."
+                ),
+            ),
+            _residual_diagnostic(output.residuals, plan.period),
+        )
+    )
+    forecast_estimates, intervals = _forecast_evidence(output, plan, unit)
+    estimates.extend(forecast_estimates)
     return MethodResult(
         estimates=tuple(estimates),
         intervals=intervals,

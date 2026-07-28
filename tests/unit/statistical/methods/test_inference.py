@@ -14,6 +14,7 @@ from scipy import stats  # noqa: E402
 
 from seshat.statistical.contracts import AnalysisWithheld  # noqa: E402
 from seshat.statistical.methods.inference import (  # noqa: E402
+    BootstrapRequest,
     adjust_pvalues,
     bootstrap_interval,
     epsilon_squared,
@@ -37,8 +38,9 @@ def test_bootstrap_interval_is_seeded_and_matches_scipy() -> None:
         rng=np.random.default_rng(1729),
     ).confidence_interval
 
-    actual = bootstrap_interval((sample,), np.mean, "0.95", 1729)
-    repeated = bootstrap_interval((sample,), np.mean, "0.95", 1729)
+    request = BootstrapRequest("0.95", 1729)
+    actual = bootstrap_interval((sample,), np.mean, request)
+    repeated = bootstrap_interval((sample,), np.mean, request)
 
     assert float(actual.low) == pytest.approx(expected.low)
     assert float(actual.high) == pytest.approx(expected.high)
@@ -53,7 +55,9 @@ def test_paired_bootstrap_preserves_alignment() -> None:
     def statistic(left, right):
         return np.mean(right - left)
 
-    interval = bootstrap_interval((first, second), statistic, "0.95", 1729, paired=True)
+    interval = bootstrap_interval(
+        (first, second), statistic, BootstrapRequest("0.95", 1729, paired=True)
+    )
 
     assert float(interval.low) <= 1.5 <= float(interval.high)
 
@@ -103,21 +107,21 @@ def test_effect_sizes_match_exact_small_sample_formulas() -> None:
     (
         (
             lambda: bootstrap_interval(
-                (np.array([1.0, 1.0, 1.0]),), np.mean, "0.95", 1
+                (np.array([1.0, 1.0, 1.0]),), np.mean, BootstrapRequest("0.95", 1)
             ),
             "STAT_BOOTSTRAP_DEGENERATE",
         ),
         (
-            lambda: bootstrap_interval((np.array([1.0, 2.0]),), np.mean, "0.95", 1),
+            lambda: bootstrap_interval(
+                (np.array([1.0, 2.0]),), np.mean, BootstrapRequest("0.95", 1)
+            ),
             "STAT_BOOTSTRAP_TOO_SMALL",
         ),
         (
             lambda: bootstrap_interval(
                 (np.array([1.0, 2.0, 3.0]),),
                 np.mean,
-                "0.95",
-                1,
-                n_resamples=100_000,
+                BootstrapRequest("0.95", 1, n_resamples=100_000),
             ),
             "STAT_RESAMPLE_LIMIT",
         ),
