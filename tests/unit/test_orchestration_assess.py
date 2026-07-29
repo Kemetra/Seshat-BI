@@ -230,3 +230,116 @@ def test_malformed_status_file_is_skipped_not_fatal(tmp_path: Path) -> None:
     result = build_orchestration_assessment(tmp_path)
     # The good table still counts; the bad one is skipped, not a crash.
     assert result["table_count"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Power BI MCP + core-only targets (D1'). The 3-value vocabulary is UNCHANGED:
+# there is deliberately no "recommended" tier (see the module's own comment), so
+# these targets are assessed with the same consider / not_recommended /
+# already_adopted signals the dbt and dagster paths use.
+# ---------------------------------------------------------------------------
+
+
+def _pbip_model(tmp_path: Path, name: str = "Retail") -> None:
+    """A committed PBIP semantic model: a `<name>.SemanticModel/` folder."""
+    model = tmp_path / "powerbi" / f"{name}.SemanticModel" / "definition"
+    model.mkdir(parents=True, exist_ok=True)
+    (model.parent / "definition.pbism").write_text("{}", encoding="utf-8")
+
+
+def test_pbi_mcp_not_recommended_without_a_committed_pbip_model(tmp_path: Path) -> None:
+    """With no PBIP model there is nothing for read-only diagnostics to inspect."""
+    _write_status(tmp_path, "orders", _gold_ready("orders"))
+
+    doc = build_orchestration_assessment(tmp_path)
+
+    assert doc["recommendation"]["pbi_mcp"] == "not_recommended"
+
+
+def test_pbi_mcp_consider_when_a_pbip_semantic_model_is_committed(
+    tmp_path: Path,
+) -> None:
+    """A committed PBIP model gives read-only diagnostics a real target."""
+    _write_status(tmp_path, "orders", _gold_ready("orders"))
+    _pbip_model(tmp_path)
+
+    doc = build_orchestration_assessment(tmp_path)
+
+    assert doc["recommendation"]["pbi_mcp"] == "consider"
+    assert doc["adapters"]["pbi_mcp"]["for"] != []
+
+
+def test_pbi_mcp_already_adopted_when_mcp_config_present(tmp_path: Path) -> None:
+    """An existing .mcp.json is the offline already-adopted signal."""
+    _write_status(tmp_path, "orders", _gold_ready("orders"))
+    _pbip_model(tmp_path)
+    (tmp_path / ".mcp.json").write_text("{}", encoding="utf-8")
+
+    doc = build_orchestration_assessment(tmp_path)
+
+    assert doc["recommendation"]["pbi_mcp"] == "already_adopted"
+    assert doc["adapters"]["pbi_mcp"]["already_present"] is True
+
+
+def test_pbi_mcp_opt_in_is_read_only_and_never_offers_mutation(
+    tmp_path: Path,
+) -> None:
+    """The opt-in path is the read-only doctor family, never a write mode.
+
+    ADR 0018 is Proposed and NOT ratified, so F016 mutations stay parked. An
+    assessment that advertised write mode would be advising a capability the
+    governing ADR has not authorized.
+    """
+    _write_status(tmp_path, "orders", _gold_ready("orders"))
+    _pbip_model(tmp_path)
+
+    block = build_orchestration_assessment(tmp_path)["adapters"]["pbi_mcp"]
+
+    assert "doctor" in block["opt_in_command"]
+    haystack = " ".join(
+        [block["opt_in_command"], *block["for"], *block["against"]]
+    ).lower()
+    for forbidden in ("write mode", "readwrite", "publish", "mutation"):
+        assert forbidden not in haystack
+
+
+def test_core_only_is_sufficient_when_no_adapter_is_advised(tmp_path: Path) -> None:
+    """One direct-built table needs no adapter -- core-only is the honest answer."""
+    _write_status(tmp_path, "orders", _gold_ready("orders"))
+
+    doc = build_orchestration_assessment(tmp_path)
+
+    assert doc["core_only_sufficient"] is True
+
+
+def test_core_only_is_not_sufficient_once_an_adapter_is_considered(
+    tmp_path: Path,
+) -> None:
+    """When any adapter is worth weighing, core-only is no longer the whole answer."""
+    _write_status(tmp_path, "orders", _gold_ready("orders"))
+    _pbip_model(tmp_path)
+
+    doc = build_orchestration_assessment(tmp_path)
+
+    assert doc["recommendation"]["pbi_mcp"] == "consider"
+    assert doc["core_only_sufficient"] is False
+
+
+def test_existing_dbt_and_dagster_keys_are_unchanged(tmp_path: Path) -> None:
+    """Backward compatibility: the pre-existing document keys keep their shape."""
+    _write_status(tmp_path, "orders", _gold_ready("orders"))
+
+    doc = build_orchestration_assessment(tmp_path)
+
+    assert set(doc["recommendation"]) == {"dbt", "dagster", "pbi_mcp"}
+    assert doc["decision_owner"] == "human"
+    assert doc["read_only_proof"] is True
+    for key in ("dbt", "dagster"):
+        assert set(doc["adapters"][key]) == {
+            "recommendation",
+            "for",
+            "against",
+            "open_questions",
+            "opt_in_command",
+            "already_present",
+        }
