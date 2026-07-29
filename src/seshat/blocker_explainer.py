@@ -11,6 +11,7 @@ from typing import Any
 # (category, explanation, next_surface); a regression-lock test asserts
 # byte-identical output.
 from .readiness_classify import classify as _classify
+from .readiness_classify import remediation_of as _remediation_of
 
 _STAGE_ORDER: tuple[str, ...] = (
     "source_ready",
@@ -76,7 +77,16 @@ def _has_valid_approval(data: dict[str, Any], stage: str) -> bool:
 
 
 def _item(table: str, source_path: str, stage: str, reason: str) -> dict[str, str]:
+    """One blocker's explained item.
+
+    ``remediation`` / ``doc`` / ``stop_condition`` come from the COMMITTED
+    allowlist in ``readiness_classify``, keyed by the same category ``_classify``
+    already returns -- never generated per blocker. Free-form remediation text is
+    exactly where an agent would start inventing steps the governance model does
+    not sanction. An unclassified category fails safe to ``human_only``.
+    """
     category, explanation, next_surface = _classify(reason)
+    remediation = _remediation_of(category)
     return {
         "table": table,
         "source_path": source_path,
@@ -85,6 +95,9 @@ def _item(table: str, source_path: str, stage: str, reason: str) -> dict[str, st
         "reason": reason,
         "explanation": explanation,
         "next_surface": next_surface,
+        "remediation": remediation.remediation,
+        "doc": remediation.doc,
+        "stop_condition": remediation.stop_condition,
     }
 
 

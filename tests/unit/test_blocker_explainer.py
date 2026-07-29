@@ -90,6 +90,14 @@ approvals: []
                 "the named grain/PK question before silver work."
             ),
             "next_surface": "approval request or source-mapping review",
+            # Remediation metadata (B1'): grain certainty is a Principle-V
+            # judgment call, so it can only be cleared by a named human.
+            "remediation": "human_only",
+            "doc": "docs/readiness/mapping-ready.md",
+            "stop_condition": (
+                "stop at the grain/PK question; propose options with evidence "
+                "and let the owner rule"
+            ),
         }
     ]
 
@@ -188,3 +196,122 @@ approvals: []
         assert banned not in dumped
     after = sorted(p.relative_to(tmp_path) for p in tmp_path.rglob("*") if p.is_file())
     assert before == after
+
+
+# ---------------------------------------------------------------------------
+# Remediation metadata on each blocker item (B1'). `blockers` already said WHAT
+# is blocked and WHICH surface is next; these pin the answer to "is this mine to
+# fix, or does it need a named human?" -- sourced from the committed allowlist in
+# readiness_classify, never generated per blocker.
+# ---------------------------------------------------------------------------
+
+
+def test_blocker_item_carries_remediation_metadata(tmp_path: Path) -> None:
+    """Each blocker names its remediation class, a doc route, and a stop condition."""
+    _write_status(
+        tmp_path,
+        "orders",
+        """\
+table: "bronze.orders"
+current_stage: "mapping_ready"
+stages:
+  mapping_ready:
+    status: "blocked"
+    blocking_reasons: ["named-human approval missing for mapping_ready"]
+""",
+    )
+
+    doc = build_blocker_explanations(tmp_path)
+    item = doc["items"][0]
+
+    assert item["category"] == "approval"
+    assert item["remediation"] == "human_only"
+    assert item["doc"] == "docs/readiness/readiness-model.md"
+    assert item["stop_condition"]
+
+
+def test_blocker_item_keeps_its_pre_existing_keys(tmp_path: Path) -> None:
+    """Backward compatibility: the additive change keeps the original keys."""
+    _write_status(
+        tmp_path,
+        "orders",
+        """\
+table: "bronze.orders"
+current_stage: "source_ready"
+stages:
+  source_ready:
+    status: "blocked"
+    blocking_reasons: ["mappings/orders/source-profile.md does not exist"]
+""",
+    )
+
+    item = build_blocker_explanations(tmp_path)["items"][0]
+
+    for key in (
+        "table",
+        "source_path",
+        "stage",
+        "category",
+        "reason",
+        "explanation",
+        "next_surface",
+    ):
+        assert key in item, key
+
+
+def test_mechanical_and_human_only_are_distinguished(tmp_path: Path) -> None:
+    """An artifact gap is mechanical; a missing approval is not -- same report."""
+    _write_status(
+        tmp_path,
+        "orders",
+        """\
+table: "bronze.orders"
+current_stage: "source_ready"
+stages:
+  source_ready:
+    status: "blocked"
+    blocking_reasons: ["mappings/orders/source-profile.md does not exist"]
+  mapping_ready:
+    status: "blocked"
+    blocking_reasons: ["named-human approval missing for mapping_ready"]
+""",
+    )
+
+    by_category = {
+        item["category"]: item["remediation"]
+        for item in build_blocker_explanations(tmp_path)["items"]
+    }
+
+    assert by_category["artifact"] == "mechanical"
+    assert by_category["approval"] == "human_only"
+
+
+def test_text_render_names_who_acts(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The human-facing render must show the remediation class, not only JSON.
+
+    A reader scanning `seshat blockers` needs to see at a glance which blockers
+    are theirs to rule on; metadata visible only in --format json would not
+    reach them.
+    """
+    _write_status(
+        tmp_path,
+        "orders",
+        """\
+table: "bronze.orders"
+current_stage: "mapping_ready"
+stages:
+  mapping_ready:
+    status: "blocked"
+    blocking_reasons: ["named-human approval missing for mapping_ready"]
+""",
+    )
+
+    rc = main(["blockers", "--repo", str(tmp_path)])
+
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "human_only" in out
+    assert "docs/readiness/readiness-model.md" in out
+    assert "stop" in out.lower()
