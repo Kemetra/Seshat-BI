@@ -2282,6 +2282,17 @@ entries:
     required: true
     generated_notice: manifest
     review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
+  - entry_id: kb-207
+    source: skills/retail-kpi-knowledge/references/enterprise-kpi-knowledge-layer.md
+    classification: public_knowledge
+    media_type: text/markdown
+    targets:
+      claude: knowledge/retail-kpi-knowledge/references/enterprise-kpi-knowledge-layer.md
+      codex: knowledge/retail-kpi-knowledge/references/enterprise-kpi-knowledge-layer.md
+    transform: copy-normalized-v1
+    required: true
+    generated_notice: manifest
+    review_reason: Governed enterprise KPI candidate knowledge for public agent reasoning; registry promotion remains separately reviewed.
   - entry_id: shared-kpi-sufficiency-template
     source: templates/kpi-sufficiency-card.md
     classification: public_knowledge

@@ -12,6 +12,12 @@ cited general retail-analytics references (industry KPI guides and Power BI mode
 best-practice articles). Those citations were used only to inform structure and are **not**
 quoted.
 
+The enterprise expansion in `enterprise-kpi-knowledge-layer.md` uses Bernard Marr's
+*Key Performance Indicators: The 75 Measures Every Manager Needs to Know* as a private
+research source, then modernizes the catalog with authoritative standards listed in that
+file. The book itself is not distributed. The reference is paraphrased and remains a
+candidate discovery layer; it creates no `KPI-MC-*` identity or approval.
+
 ## What was deliberately not carried over
 
 - Power BI / DAX implementation snippets from the catalog — out of scope; this layer hands

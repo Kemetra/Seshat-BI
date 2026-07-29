@@ -19,6 +19,7 @@ inventory; this router is a consumer view.
 | Decide if a KPI can be summed | `knowledge/kpi-additivity-and-grain.md` | metric-contract-review-checklist |
 | Resolve VAT / returns / cost ambiguity | `knowledge/kpi-ambiguities.md` | metric-ambiguity-checklist |
 | Write a brand-new KPI contract | `references/metric-contract-template.md` | metric-contract-review-checklist |
+| Explore enterprise KPI concepts beyond the seeded retail registry | `references/enterprise-kpi-knowledge-layer.md` | select one candidate and end on `checklists/kpi-extension-checklist.md`; never promote a catalog row automatically |
 | See which KPIs are base vs derived (and the base each derived KPI depends on) | `references/kpi-derivation-lineage.md` | the derivation graph (no readiness, no score) |
 | Prepare DAX handoff (measure) | relevant `contracts/*.md` + `references/metric-contract-template.md` | handoff note to DAX (formula, additivity, filters — not DAX code) |
 | Prepare SQL handoff (required fields, grain, transform, reconciliation) | relevant `contracts/*.md` + `references/source-field-requirements.md` | handoff note to SQL (fields, grain, exclusions, validation — not SQL code) |
@@ -101,6 +102,10 @@ Seeded contracts (14): gross-sales, net-sales, quantity-sold, transactions-count
 average-transaction-value, discount-amount, discount-rate, returns-rate-value,
 gross-margin, gross-margin-percent, net-sales-growth, ytd, discounted-transaction-rate,
 average-basket-size-units. Same-store-sales-growth remains planned pending owner policy.
+
+The enterprise KPI knowledge layer is a candidate discovery and reasoning reference. Its
+`KPI-REF-*` identifiers are not registry identities. Promote at most one candidate at a
+time through the generic KPI extension checklist and named-human review.
 
 ## 6. Stop rules
 
