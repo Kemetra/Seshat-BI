@@ -45,15 +45,25 @@ confirm the mechanical numbers came from a read-only profiling pass over the lan
 source, and confirm each semantic proposal is marked as a proposal awaiting sign-off,
 not stated as fact.
 
-- For a **DB source**, the numbers come from `profile.py` over a read-only connection.
+- For a **DB source**, the numbers come from `profile.py` over a read-only connection:
+  `seshat profile --table <schema.table> --pk <cols>`.
 - For a **file source (csv/excel)**, the numbers come from `file_profile.py` -- the
-  read-only file profiler. It computes the same mechanical set (row/col count,
-  `'' OR NULL` missingness, distinct cardinality, candidate-PK proof) from the file's
-  raw cells; CSV uses the stdlib (no extra), Excel uses the optional `files` extra
+  read-only file profiler -- via `seshat profile --file <path> --pk <cols>`
+  (add `--sheet <name>` for Excel). It computes the same mechanical set (row/col
+  count, `'' OR NULL` missingness, distinct cardinality, candidate-PK proof) from
+  the file's raw cells and emits the SAME `source-profile.md` blocks as the DB
+  surface, so a pasted file profile round-trips through `read_source_profile()`
+  exactly as a DB one does. CSV/TSV use the stdlib (no extra, no DSN, no `.env`);
+  Excel uses the optional `files` extra
   (`pipx inject seshat-bi openpyxl` or `pip install "seshat-bi[files]"`). The
   file-grain reasoning that guides the read
   (encoding, delimiter, header row, sheet selection) lives in
   `skills/bi-python-knowledge/` (route: profile a standalone file source).
+
+  The reader is chosen by extension (`.csv` comma, `.tsv` tab, `.xlsx`/`.xlsm`
+  sheet). `--sheet` is REQUIRED for Excel and refused elsewhere: sheet 0 is never
+  assumed (PY-CN-085), because guessing would silently profile whichever tab
+  happens to be first.
 
   **A file source reaches `pass` like a DB source does -- with one extra gate, and
   that gate is ENFORCED, not just prose.** The mechanical numbers self-evidence

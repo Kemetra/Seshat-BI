@@ -76,6 +76,16 @@ def _validate_args(args: argparse.Namespace) -> tuple[str, ...] | None:
             file=sys.stderr,
         )
         return None
+    # --sheet is a FILE-surface flag. Refuse it here -- before engine/DSN
+    # resolution -- so the caller gets the real mistake instead of a downstream
+    # "no database connection configured" that hides it.
+    if getattr(args, "sheet", None):
+        print(
+            "error: --sheet applies to an Excel --file only, not to --table "
+            "(a DB table has no sheets).",
+            file=sys.stderr,
+        )
+        return None
     parts = args.table.split(".")
     if len(parts) != 2 or not all(parts):
         print(
@@ -125,6 +135,142 @@ def _resolve_engine(args: argparse.Namespace, cli, prog: str):
     return engine, dialect, config
 
 
+# Landed-file readers, keyed by extension -> csv delimiter. Both run on the
+# stdlib alone (no optional extra), which is why the file surface needs neither
+# a driver nor a DSN.
+_CSV_DELIMITERS: dict[str, str] = {".csv": ",", ".tsv": "\t"}
+
+# Excel needs the optional `files` extra (openpyxl) AND an explicit --sheet.
+_EXCEL_SUFFIXES: frozenset[str] = frozenset({".xlsx", ".xlsm"})
+
+
+def _make_file_reader(path, sheet: str | None):
+    """Pick the reader for ``path``; return ``(reader, None)`` or ``(None, error)``.
+
+    Extension-driven so the caller never has to declare the format twice. Both
+    mismatch directions are named rather than ignored: an Excel file without
+    ``--sheet`` refuses (sheet 0 is never assumed -- PY-CN-085; guessing would
+    silently profile whichever tab happens to be first), and ``--sheet`` on a
+    CSV/TSV is a mistake worth surfacing, not silently dropping.
+    """
+    from seshat.file_profile import make_csv_reader, make_excel_reader
+
+    suffix = path.suffix.lower()
+
+    if suffix in _EXCEL_SUFFIXES:
+        if not sheet:
+            return None, (
+                f"error: --sheet is required for an Excel --file ({suffix}); the "
+                "in-scope sheet must be named explicitly -- sheet 0 is never "
+                "assumed."
+            )
+        try:
+            return make_excel_reader(str(path), sheet=sheet), None
+        except ImportError:
+            return None, (
+                "error: reading an Excel --file needs the optional 'files' extra "
+                "(pip install 'seshat-bi[files]'). CSV/TSV need no extra."
+            )
+
+    delimiter = _CSV_DELIMITERS.get(suffix)
+    if delimiter is None:
+        supported = ", ".join(sorted(_CSV_DELIMITERS) + sorted(_EXCEL_SUFFIXES))
+        return None, (
+            f"error: unsupported --file extension {path.suffix!r} "
+            f"(supported: {supported})."
+        )
+
+    if sheet:
+        return None, (
+            f"error: --sheet applies to an Excel --file only, not to {suffix} "
+            "(a CSV/TSV has exactly one table)."
+        )
+    return make_csv_reader(str(path), encoding="utf-8", delimiter=delimiter), None
+
+
+def _adapt_file_result(file_result: object) -> object:
+    """Re-shape a ``FileProfileResult`` onto the DB ``ProfileResult`` contract.
+
+    ``_render_markdown`` / ``_render_json`` emit the pasted source-profile.md
+    format that ``read_source_profile()`` parses back for drift baselines. The
+    file surface must therefore NOT fork them -- a second renderer would drift
+    that round-trip. Adapting instead keeps one contract and one format.
+
+    A file's cells arrive as RAW STRINGS (``file_profile``'s FrameReader
+    contract), so "Type as landed" is genuinely unknown for a file source ->
+    ``landed_type=None``, which the markdown renderer prints as ``TEXT``.
+    """
+    from seshat.profile import ColumnProfile, ProfileResult
+
+    return ProfileResult(
+        table=file_result.source,
+        row_count=file_result.row_count,
+        column_count=file_result.column_count,
+        columns=tuple(
+            ColumnProfile(
+                name=col.name,
+                missing_count=col.missing_count,
+                missing_pct=col.missing_pct,
+                distinct_cardinality=col.distinct_cardinality,
+                landed_type=None,
+            )
+            for col in file_result.columns
+        ),
+        pk=file_result.pk,
+    )
+
+
+def _run_file_profile(args: argparse.Namespace) -> int:
+    """Profile a landed FILE source; opens no database connection.
+
+    The DB sibling needs ``.env`` + a driver + a DSN; a file needs none of them,
+    so this path deliberately bypasses ``applied_dotenv`` entirely. Every
+    boundary failure (missing file, unsupported extension, a ``--pk`` naming a
+    column the header does not have) exits 1 with an actionable message -- never
+    a raw traceback, matching the DB surface's posture.
+    """
+    from pathlib import Path
+
+    from seshat.file_profile import profile_file
+
+    candidate_pk = _parse_pk(args.pk)
+    if not candidate_pk:
+        print(
+            "error: --pk must name at least one column (the candidate grain key; "
+            "comma-separate a composite, e.g. --pk invoice_id,line_no).",
+            file=sys.stderr,
+        )
+        return 1
+
+    path = Path(args.source_file)
+    if not path.is_file():
+        print(
+            f"error: --file is not a readable file: {args.source_file!r}.",
+            file=sys.stderr,
+        )
+        return 1
+
+    reader, reader_error = _make_file_reader(path, getattr(args, "sheet", None))
+    if reader_error is not None:
+        print(reader_error, file=sys.stderr)
+        return 1
+
+    try:
+        result = profile_file(
+            reader, source=str(path), candidate_pk=tuple(candidate_pk)
+        )
+    except (ValueError, OSError, UnicodeDecodeError, KeyError) as exc:
+        print(f"error: could not profile {args.source_file!r}: {exc}", file=sys.stderr)
+        return 1
+
+    adapted = _adapt_file_result(result)
+    if args.output_format == "json":
+        print(_render_json(adapted, candidate_pk))
+    else:
+        print(_render_markdown(adapted, candidate_pk))
+    return 0
+
+
 def run_profile(args: argparse.Namespace) -> int:
     """Run the mechanical profiler against a real DB, honoring the workspace `.env`.
 
@@ -132,8 +278,15 @@ def run_profile(args: argparse.Namespace) -> int:
     engine selection, driver choice, and config resolution all see the
     documented ``ANALYTICS_DB_*`` values, then delegate. A malformed ``.env``
     fails clean (exit 1, no traceback).
+
+    The FILE surface (``--file``) short-circuits BEFORE the ``.env`` context: a
+    landed file needs no connection settings, so reading ``.env`` there would
+    invent a dependency the surface does not have.
     """
     from pathlib import Path
+
+    if getattr(args, "source_file", None):
+        return _run_file_profile(args)
 
     from seshat.connection_env import ConnectionConfigError, applied_dotenv
     from seshat.dbt.redaction import EnvironmentConfigError
