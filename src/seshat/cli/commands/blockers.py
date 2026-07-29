@@ -19,6 +19,13 @@ def _render_text(result: dict, prog: str = "seshat") -> str:
         lines.append(f"  reason: {item['reason']}")
         lines.append(f"  explanation: {item['explanation']}")
         lines.append(f"  next_surface: {item['next_surface']}")
+        # Who acts, from the committed allowlist. Rendered in TEXT too, not only
+        # in --format json: a reader scanning this output needs to see at a glance
+        # which blockers are theirs to rule on.
+        if "remediation" in item:
+            lines.append(f"  remediation: {item['remediation']}")
+            lines.append(f"  doc: {item['doc']}")
+            lines.append(f"  stop_condition: {item['stop_condition']}")
         lines.append("")
     return "\n".join(lines).rstrip()
 

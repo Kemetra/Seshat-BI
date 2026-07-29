@@ -486,7 +486,7 @@ capabilities:
 
   - id: retail-blockers
     name: "retail blockers"
-    summary: "Explains committed readiness blockers across tables: category, plain-language explanation, and next surface to use."
+    summary: "Explains committed readiness blockers across tables: category, plain-language explanation, next surface, and -- from a committed allowlist -- whether remediation is mechanical or human_only, plus a doc route and a stop condition."
     state: shipped
     authority: agent-runnable
     surface: cli
