@@ -178,7 +178,7 @@ main package's static core stays stdlib-only:
 ```text
 orchestration/dagster/
   README.md                                  # how to run the adapter, the human seams, the gate-read posture
-  pyproject.toml                             # pins dagster==1.13.14; brings seshat-bi[dbt] (dagster-dbt dropped, spec 135 FR-011)
+  pyproject.toml                             # pins dagster==1.13.15; brings seshat-bi[dbt] (dagster-dbt dropped, spec 135 FR-011)
   src/tower_bi_orchestration/
     definitions.py                           # the Definitions object (assets/jobs/schedules/sensors)
     repo.py                                  # repo-root + mapped-table discovery (mappings/<table>/source-map.yaml)
