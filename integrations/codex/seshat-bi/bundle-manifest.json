@@ -1344,19 +1344,19 @@
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/INDEX.md",
-      "output_sha256": "8de680b46b5f3c350126615ae3bea0a7fdf091b23943963a92ac35ee6a765be9",
+      "output_sha256": "efc62ab62d6cdfcaea2d4ea6803782df23e9663cca20026ac8eaebd4f0433c24",
       "source": "skills/retail-kpi-knowledge/INDEX.md",
       "source_id": "kb-098",
-      "source_sha256": "8de680b46b5f3c350126615ae3bea0a7fdf091b23943963a92ac35ee6a765be9",
+      "source_sha256": "efc62ab62d6cdfcaea2d4ea6803782df23e9663cca20026ac8eaebd4f0433c24",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/README.md",
-      "output_sha256": "5d2f456a2cd4b55f93cf7ffddc8952d91cf6ad6db0a13bd9fb3e074aa706dc9a",
+      "output_sha256": "a528541292b0ae3b10ee3eec87fc90cbbfeed21fee0b1b194a987b646964db39",
       "source": "skills/retail-kpi-knowledge/README.md",
       "source_id": "kb-099",
-      "source_sha256": "5d2f456a2cd4b55f93cf7ffddc8952d91cf6ad6db0a13bd9fb3e074aa706dc9a",
+      "source_sha256": "a528541292b0ae3b10ee3eec87fc90cbbfeed21fee0b1b194a987b646964db39",
       "transform": "copy-normalized-v1"
     },
     {
@@ -1802,6 +1802,15 @@
     },
     {
       "classification": "public_knowledge",
+      "destination": "knowledge/retail-kpi-knowledge/references/enterprise-kpi-knowledge-layer.md",
+      "output_sha256": "c76656e035a179f74bf6348fd1319b3c13699f50338a30d25eb9368aa6d8094b",
+      "source": "skills/retail-kpi-knowledge/references/enterprise-kpi-knowledge-layer.md",
+      "source_id": "kb-207",
+      "source_sha256": "c76656e035a179f74bf6348fd1319b3c13699f50338a30d25eb9368aa6d8094b",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/references/id-conventions.md",
       "output_sha256": "f7dba1b54b779ca471cbec71032527421fcd55c3d4203e6fc79c875cdb8ebfc6",
       "source": "skills/retail-kpi-knowledge/references/id-conventions.md",
@@ -1857,10 +1866,10 @@
     {
       "classification": "public_knowledge",
       "destination": "knowledge/retail-kpi-knowledge/references/research-notes.md",
-      "output_sha256": "602046e968ed760c242d7f434dfa5852f411a4b37ae365162ce3f6f7e85573a5",
+      "output_sha256": "a8d861b1425770af13271fe07aa5bb4332cb8d80ae07d212a559f83bb7bc83ea",
       "source": "skills/retail-kpi-knowledge/references/research-notes.md",
       "source_id": "kb-152",
-      "source_sha256": "602046e968ed760c242d7f434dfa5852f411a4b37ae365162ce3f6f7e85573a5",
+      "source_sha256": "a8d861b1425770af13271fe07aa5bb4332cb8d80ae07d212a559f83bb7bc83ea",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2063,10 +2072,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "0ad58eb516661eadf7e49d53e3d8ee3d65d6e7fb255ae2747e6f7c6429aaa6b0",
+  "manifest_digest": "b50dd13251d75908f702b43069d6c78ff31c436150517d10e0cdd9ffe96f84c7",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "a83e22c4efccc30f303e918593b3f07ddc4375c4",
+  "source_revision": "5af35a36059496555a63b221aad4b6e3bff26539",
   "target": "codex",
   "version": "0.7.1"
 }

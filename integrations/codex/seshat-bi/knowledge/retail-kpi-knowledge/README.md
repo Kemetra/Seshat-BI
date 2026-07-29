@@ -58,13 +58,27 @@ Live (seeded) metric contracts:
 14. Average Basket Size (Units) - `contracts/average-basket-size-units.md`
 
 Also seeded: router/shell files, six knowledge files, twelve domain overviews, seven KPI packs,
-five review checklists, nine reference files (including the KPI coverage scorecard and
-implementation-handoff templates), and three pattern JSON files.
+five review checklists, ten reference files (including the enterprise candidate layer,
+KPI coverage scorecard, and implementation-handoff templates), and three pattern JSON
+files.
 
 KPI sufficiency uses categorical states only: `answerable`, `blocked_by_source`,
 `blocked_by_policy`, or `not_applicable`. A policy-blocked KPI ends on a neutral owner decision
 packet; an answerable KPI may end on the shared implementation handoff. Neither artifact grants
 approval or readiness.
+
+## Enterprise candidate reference
+
+`references/enterprise-kpi-knowledge-layer.md` expands discovery beyond the seeded
+retail registry with governed business questions, formula intent, grain, additivity,
+driver trees, statistical interpretation, and lifecycle guidance for 100 candidate
+concepts.
+
+It is a candidate reference, not a second registry. Its `KPI-REF-*` identifiers never
+replace `KPI-MC-*`. To promote a concept, select one candidate, complete
+`checklists/kpi-extension-checklist.md`, add one reviewed registry entry and contract,
+and obtain the required named-human review. The private research source is not
+distributed with Seshat BI.
 
 ## Planned / deferred coverage
 

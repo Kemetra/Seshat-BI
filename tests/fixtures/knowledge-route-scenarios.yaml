@@ -135,6 +135,12 @@ scenarios:
     terminal_contains: metric-contract-review-checklist
 
   - layer: retail-kpi-knowledge
+    task_contains: Explore enterprise KPI concepts beyond the seeded retail registry
+    expect_resources:
+      - references/enterprise-kpi-knowledge-layer.md
+    terminal_contains: kpi-extension-checklist
+
+  - layer: retail-kpi-knowledge
     task_contains: Prepare an owner policy decision packet
     expect_resources:
       - knowledge/kpi-sufficiency-and-policy-decisions.md

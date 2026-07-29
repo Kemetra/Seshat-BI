@@ -60,6 +60,7 @@ EXPECTED_EXPANDED_SOURCES = {
     "skills/bi-sql-knowledge/patterns/postgresql-plan-patterns.json",
     "skills/retail-kpi-knowledge/checklists/kpi-policy-decision-checklist.md",
     "skills/retail-kpi-knowledge/knowledge/kpi-sufficiency-and-policy-decisions.md",
+    "skills/retail-kpi-knowledge/references/enterprise-kpi-knowledge-layer.md",
     "skills/retail-kpi-knowledge/references/implementation-handoff-template.md",
 }
 
