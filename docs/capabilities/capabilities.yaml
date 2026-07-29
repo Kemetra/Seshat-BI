@@ -662,7 +662,7 @@ capabilities:
 
   - id: seshat-profile
     name: "seshat profile"
-    summary: "Mechanical Stage-1 profiler as a CLI verb: row/column count, per-column empty-or-null missingness, distinct cardinality, and the candidate-PK uniqueness proof to paste into source-profile.md."
+    summary: "Mechanical Stage-1 profiler as a CLI verb over a DB table (--table, needs a DSN) or a landed CSV/TSV/Excel file (--file, no DSN; CSV/TSV need no extra): row/column count, per-column empty-or-null missingness, distinct cardinality, and the candidate-PK uniqueness proof to paste into source-profile.md."
     state: shipped
     authority: agent-runnable
     surface: cli
