@@ -64,7 +64,8 @@ def _add_dashboard_parser(sub: argparse._SubParsersAction) -> None:
 
 def _add_orchestration_assess_parser(sub: argparse._SubParsersAction) -> None:
     """`orchestration-assess` (issue #401): read-only recommend-then-decide step
-    for adopting the dbt / dagster orchestration adapters. From committed state
+    for adopting the dbt / dagster orchestration adapters or the Power BI MCP
+    read-only diagnostics family. From committed state
     (table count, gold-ready state, adapter presence) it emits per-adapter
     signals, the open questions the human must answer, and each opt-in command --
     but NEVER installs, runs, or approves an adapter. No numeric score."""
@@ -72,7 +73,8 @@ def _add_orchestration_assess_parser(sub: argparse._SubParsersAction) -> None:
         "orchestration-assess",
         help=(
             "read-only recommend-then-decide assessment of whether this project "
-            "needs the dbt / dagster orchestration adapters; recommends only, "
+            "needs the dbt / dagster orchestration adapters or the Power BI "
+            "MCP read-only family (or core-only); recommends only, "
             "the human decides (never adopts on your behalf)"
         ),
     )

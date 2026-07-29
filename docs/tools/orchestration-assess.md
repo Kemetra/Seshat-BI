@@ -6,10 +6,10 @@
 
 ## What it does
 
-`seshat orchestration-assess` answers the prior question the two orchestration
-adapters (`seshat dbt`, `seshat dagster`) never surfaced on their own: **does
-this project actually need dbt and/or dagster, or is the direct medallion path
-enough?** It mirrors the readiness spine's own gate pattern -- surface a
+`seshat orchestration-assess` answers the prior question the adapters
+(`seshat dbt`, `seshat dagster`, `seshat pbi-mcp`) never surfaced on their own:
+**does this project actually need dbt, dagster, and/or the Power BI MCP read-only
+diagnostics family -- or is core-only (the direct medallion path) enough?** It mirrors the readiness spine's own gate pattern -- surface a
 recommendation plus the evidence, then let the human decide -- so a customer with
 one direct-built table isn't pushed into ceremony they don't need, and a customer
 who would benefit gets a signal.
@@ -30,7 +30,15 @@ Derivable offline, from committed state only:
 - how many tables are onboarded (`mappings/*/readiness-status.yaml`);
 - whether every onboarded table has already reached `gold_ready`;
 - whether a dbt project (`dbt/dbt_project.yml`) or a dagster project
-  (`orchestration/dagster/pyproject.toml`) is already present.
+  (`orchestration/dagster/pyproject.toml`) is already present;
+- whether a PBIP semantic model (`*.SemanticModel/`) is committed -- i.e. whether
+  the Power BI MCP read-only diagnostics would have anything to inspect;
+- whether a machine-local `.mcp.json` already exists (the offline
+  already-adopted signal; its deeper classification belongs to
+  `seshat pbi-mcp doctor`, which is the authority).
+
+`core_only_sufficient` is DERIVED from the three per-adapter blocks -- true when
+none of them is worth weighing -- so it can never disagree with them.
 
 NOT derivable -- these are intentions, surfaced as `open_questions` for the
 human, never as a fabricated verdict:
@@ -62,5 +70,10 @@ it never asserts that the customer must adopt.
   governed project), then `seshat dbt doctor`. Running `doctor` before `init`
   reports missing `dbt_project.yml` / `selectors.yml`.
 - dagster: `seshat dagster init` then `seshat dagster doctor`.
+- Power BI MCP: `seshat pbi-mcp doctor`, then `pbi-mcp generate-config` and
+  `pbi-mcp preflight`. **The read-only family only.** ADR 0018 is `Proposed` and
+  NOT ratified, so F016 execution stays parked -- this command never advertises a
+  state-changing mode, because that would advise a capability the governing ADR
+  has not authorized.
 
 The command prints these as guidance. It never runs them.

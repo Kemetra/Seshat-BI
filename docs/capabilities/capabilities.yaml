@@ -514,7 +514,7 @@ capabilities:
 
   - id: retail-orchestration-assess
     name: "retail / seshat orchestration-assess"
-    summary: "Read-only recommend-then-decide assessment of whether the project needs the dbt / dagster orchestration adapters, from committed state; recommends only, the human decides."
+    summary: "Read-only recommend-then-decide assessment of whether the project needs the dbt / dagster orchestration adapters or the Power BI MCP read-only diagnostics family, from committed state, plus whether core-only operation is sufficient; recommends only, the human decides."
     state: shipped
     authority: agent-runnable
     surface: cli
