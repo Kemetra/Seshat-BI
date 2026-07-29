@@ -77,3 +77,33 @@ def test_every_pip_block_emits_scope_free_subject():
         # and `include: scope` must not be set (that would re-add a scope).
         assert "(" not in prefix
         assert commit_message.get("include") != "scope"
+
+
+def test_every_ecosystem_emits_a_scope_free_subject():
+    """The A3 hole, closed. FR-014 was scoped to pip blocks, so the
+    github-actions block kept Dependabot's inferred default -- which on
+    2026-07-29 became `build(deps): bump actions/setup-python ...` and was
+    REJECTED by P2 for its parenthesized scope, stranding PR #531 behind a gate
+    no bot could clear. P2 applies to every commit in the range regardless of
+    which ecosystem produced it, so this guard covers EVERY update block, not
+    just the pip ones.
+    """
+    doc = _load_dependabot()
+    blocks = doc.get("updates", [])
+    assert blocks, "expected at least one update block"
+    for block in blocks:
+        label = f"{block.get('package-ecosystem')} {block.get('directory')}"
+        commit_message = block.get("commit-message")
+        assert isinstance(commit_message, dict), (
+            f"{label} has no commit-message config; Dependabot would infer a "
+            "scoped conventional-commit subject that P2 rejects"
+        )
+        prefix = commit_message.get("prefix")
+        assert isinstance(prefix, str) and prefix, f"{label} has no prefix"
+        assert SUBJECT_RE.match(f"{prefix}: bump some-dep from 1.0.0 to 1.1.0"), (
+            f"{label} prefix {prefix!r} does not yield a P2-passing subject"
+        )
+        assert "(" not in prefix, f"{label} prefix carries a scope"
+        assert commit_message.get("include") != "scope", (
+            f"{label} sets include: scope, which re-adds the rejected scope"
+        )
