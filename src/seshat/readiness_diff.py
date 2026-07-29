@@ -29,7 +29,7 @@ Hard invariants (mirroring ``status_surface`` / ``blocker_explainer``):
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # The seven-stage spine and the status vocabulary are owned by `run_next`; import
 # them rather than adding another copy (`agent_next` imports the same names). The
@@ -201,89 +201,145 @@ def _current_stage_of(document: object) -> str | None:
     return stage if isinstance(stage, str) else None
 
 
+def _current_move(
+    table: str, base_doc: object, head_doc: object
+) -> CurrentStageChange | None:
+    """The table's ``current_stage`` move, or ``None`` when it did not move."""
+    base_stage = _current_stage_of(base_doc)
+    head_stage = _current_stage_of(head_doc)
+    if base_stage == head_stage:
+        return None
+    before = _stage_index(base_stage)
+    after = _stage_index(head_stage)
+    return CurrentStageChange(
+        table=table,
+        base_stage=base_stage,
+        head_stage=head_stage,
+        is_regression=(before is not None and after is not None and after < before),
+    )
+
+
+def _stage_change(
+    table: str,
+    stage: str,
+    before_status: str | None,
+    after_status: str | None,
+) -> StageChange | None:
+    """One stage's status change, or ``None`` when the status is unchanged."""
+    if before_status == after_status:
+        return None
+    before_rank = _progress_of(before_status)
+    after_rank = _progress_of(after_status)
+    return StageChange(
+        table=table,
+        stage=stage,
+        base_status=before_status,
+        head_status=after_status,
+        is_regression=(
+            before_rank is not None
+            and after_rank is not None
+            and after_rank < before_rank
+        ),
+    )
+
+
+def _blocker_deltas(
+    table: str, stage: str, before_block: dict, after_block: dict
+) -> tuple[list[tuple[str, str, str]], list[tuple[str, str, str]]]:
+    """``(added, removed)`` blocking reasons for one stage, sorted."""
+    before = set(_blockers_of(before_block))
+    after = set(_blockers_of(after_block))
+    return (
+        [(table, stage, reason) for reason in sorted(after - before)],
+        [(table, stage, reason) for reason in sorted(before - after)],
+    )
+
+
+def _identity_sort_key(identity: tuple) -> tuple:
+    """Deterministic ordering for approval identities that may hold non-strings."""
+    return tuple(map(str, identity))
+
+
+def _approval_deltas(
+    table: str, base_doc: object, head_doc: object
+) -> tuple[list[ApprovalChange], list[ApprovalChange]]:
+    """``(added, removed)`` recorded approvals for one table, sorted."""
+    base_approvals = _approvals_of(base_doc)
+    head_approvals = _approvals_of(head_doc)
+    added = [
+        _approval_change(table, head_approvals[identity])
+        for identity in sorted(
+            set(head_approvals) - set(base_approvals), key=_identity_sort_key
+        )
+    ]
+    removed = [
+        _approval_change(table, base_approvals[identity])
+        for identity in sorted(
+            set(base_approvals) - set(head_approvals), key=_identity_sort_key
+        )
+    ]
+    return added, removed
+
+
+@dataclass
+class _Accumulator:
+    """Per-table findings collected across the walk, in encounter order."""
+
+    stage_changes: list[StageChange] = field(default_factory=list)
+    current_moves: list[CurrentStageChange] = field(default_factory=list)
+    blockers_added: list[tuple[str, str, str]] = field(default_factory=list)
+    blockers_removed: list[tuple[str, str, str]] = field(default_factory=list)
+    approvals_added: list[ApprovalChange] = field(default_factory=list)
+    approvals_removed: list[ApprovalChange] = field(default_factory=list)
+
+
+def _collect_table(
+    acc: _Accumulator, table: str, base_doc: object, head_doc: object
+) -> None:
+    """Fold one table's changes into ``acc``. Stages walked in sorted order."""
+    move = _current_move(table, base_doc, head_doc)
+    if move is not None:
+        acc.current_moves.append(move)
+
+    base_blocks = _stage_blocks(base_doc)
+    head_blocks = _stage_blocks(head_doc)
+    for stage in sorted(set(base_blocks) | set(head_blocks)):
+        before_block = base_blocks.get(stage, {})
+        after_block = head_blocks.get(stage, {})
+        change = _stage_change(
+            table,
+            stage,
+            _status_of(before_block) if stage in base_blocks else None,
+            _status_of(after_block) if stage in head_blocks else None,
+        )
+        if change is not None:
+            acc.stage_changes.append(change)
+        added, removed = _blocker_deltas(table, stage, before_block, after_block)
+        acc.blockers_added.extend(added)
+        acc.blockers_removed.extend(removed)
+
+    approvals_added, approvals_removed = _approval_deltas(table, base_doc, head_doc)
+    acc.approvals_added.extend(approvals_added)
+    acc.approvals_removed.extend(approvals_removed)
+
+
 def diff_readiness(base: dict[str, object], head: dict[str, object]) -> ReadinessDiff:
     """Compare two ``{table -> readiness document}`` maps.
 
     Every collection is walked in sorted order so the output is deterministic --
     a diff a reviewer cannot re-derive byte-for-byte is not evidence.
     """
-    stage_changes: list[StageChange] = []
-    current_moves: list[CurrentStageChange] = []
-    blockers_added: list[tuple[str, str, str]] = []
-    blockers_removed: list[tuple[str, str, str]] = []
-    approvals_added: list[ApprovalChange] = []
-    approvals_removed: list[ApprovalChange] = []
-
+    acc = _Accumulator()
     for table in sorted(set(base) | set(head)):
-        base_doc = base.get(table)
-        head_doc = head.get(table)
-
-        base_stage = _current_stage_of(base_doc)
-        head_stage = _current_stage_of(head_doc)
-        if base_stage != head_stage:
-            before = _stage_index(base_stage)
-            after = _stage_index(head_stage)
-            current_moves.append(
-                CurrentStageChange(
-                    table=table,
-                    base_stage=base_stage,
-                    head_stage=head_stage,
-                    is_regression=(
-                        before is not None and after is not None and after < before
-                    ),
-                )
-            )
-
-        base_blocks = _stage_blocks(base_doc)
-        head_blocks = _stage_blocks(head_doc)
-        for stage in sorted(set(base_blocks) | set(head_blocks)):
-            before_block = base_blocks.get(stage, {})
-            after_block = head_blocks.get(stage, {})
-
-            before_status = _status_of(before_block) if stage in base_blocks else None
-            after_status = _status_of(after_block) if stage in head_blocks else None
-            if before_status != after_status:
-                before_rank = _progress_of(before_status)
-                after_rank = _progress_of(after_status)
-                stage_changes.append(
-                    StageChange(
-                        table=table,
-                        stage=stage,
-                        base_status=before_status,
-                        head_status=after_status,
-                        is_regression=(
-                            before_rank is not None
-                            and after_rank is not None
-                            and after_rank < before_rank
-                        ),
-                    )
-                )
-
-            before_reasons = set(_blockers_of(before_block))
-            after_reasons = set(_blockers_of(after_block))
-            for reason in sorted(after_reasons - before_reasons):
-                blockers_added.append((table, stage, reason))
-            for reason in sorted(before_reasons - after_reasons):
-                blockers_removed.append((table, stage, reason))
-
-        base_approvals = _approvals_of(base_doc)
-        head_approvals = _approvals_of(head_doc)
-        for identity in sorted(
-            set(head_approvals) - set(base_approvals), key=lambda k: tuple(map(str, k))
-        ):
-            approvals_added.append(_approval_change(table, head_approvals[identity]))
-        for identity in sorted(
-            set(base_approvals) - set(head_approvals), key=lambda k: tuple(map(str, k))
-        ):
-            approvals_removed.append(_approval_change(table, base_approvals[identity]))
+        _collect_table(acc, table, base.get(table), head.get(table))
 
     return ReadinessDiff(
         tables_added=tuple(sorted(set(head) - set(base))),
         tables_removed=tuple(sorted(set(base) - set(head))),
-        stage_changes=tuple(stage_changes),
-        current_stage_changes=tuple(current_moves),
-        blockers_added=tuple(blockers_added),
-        blockers_removed=tuple(blockers_removed),
-        approvals_added=tuple(approvals_added),
-        approvals_removed=tuple(approvals_removed),
+        stage_changes=tuple(acc.stage_changes),
+        current_stage_changes=tuple(acc.current_moves),
+        blockers_added=tuple(acc.blockers_added),
+        blockers_removed=tuple(acc.blockers_removed),
+        approvals_added=tuple(acc.approvals_added),
+        approvals_removed=tuple(acc.approvals_removed),
     )

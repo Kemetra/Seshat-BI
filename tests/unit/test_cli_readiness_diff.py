@@ -75,6 +75,20 @@ def _make_repo(tmp_path, head_doc: str | None = None):
     return repo
 
 
+def _diff_json(repo, capsys, *extra: str) -> dict:
+    """Run readiness-diff as JSON over ``repo`` and return the parsed document.
+
+    Shared so the JSON-shape tests differ only in what they ASSERT, not in how
+    they invoke the command (CodeScene flagged the duplicated structure).
+    """
+    rc = main_under_test(
+        ["readiness-diff", "--repo", str(repo), "--format", "json", *extra]
+    )
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    return payload
+
+
 def test_readiness_diff_reports_regression_between_two_revisions(
     tmp_path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -112,22 +126,8 @@ def test_readiness_diff_reports_lost_approval(
     """The removed named-human approval is surfaced, not silently dropped."""
     repo = _make_repo(tmp_path, _HEAD_DOC_REGRESSED)
 
-    rc = main_under_test(
-        [
-            "readiness-diff",
-            "--repo",
-            str(repo),
-            "--base",
-            "HEAD~1",
-            "--head",
-            "HEAD",
-            "--format",
-            "json",
-        ]
-    )
+    payload = _diff_json(repo, capsys, "--base", "HEAD~1", "--head", "HEAD")
 
-    payload = json.loads(capsys.readouterr().out)
-    assert rc == 0
     assert len(payload["approvals_removed"]) == 1
     assert payload["approvals_removed"][0]["stage"] == "mapping_ready"
 
@@ -138,22 +138,8 @@ def test_readiness_diff_identical_revisions_is_empty(
     """Comparing a revision to itself reports no change and no regression."""
     repo = _make_repo(tmp_path)
 
-    rc = main_under_test(
-        [
-            "readiness-diff",
-            "--repo",
-            str(repo),
-            "--base",
-            "HEAD",
-            "--head",
-            "HEAD",
-            "--format",
-            "json",
-        ]
-    )
+    payload = _diff_json(repo, capsys, "--base", "HEAD", "--head", "HEAD")
 
-    payload = json.loads(capsys.readouterr().out)
-    assert rc == 0
     assert payload["has_regression"] is False
     assert payload["stage_changes"] == []
 
@@ -164,12 +150,8 @@ def test_readiness_diff_accepts_range_form(
     """`<base>..<head>` is accepted as a positional alternative to --base/--head."""
     repo = _make_repo(tmp_path, _HEAD_DOC_REGRESSED)
 
-    rc = main_under_test(
-        ["readiness-diff", "--repo", str(repo), "HEAD~1..HEAD", "--format", "json"]
-    )
+    payload = _diff_json(repo, capsys, "HEAD~1..HEAD")
 
-    payload = json.loads(capsys.readouterr().out)
-    assert rc == 0
     assert payload["has_regression"] is True
 
 

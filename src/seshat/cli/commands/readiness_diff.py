@@ -67,8 +67,6 @@ def _resolve_revisions(args: argparse.Namespace) -> tuple[str, str] | None:
     Exactly one form is accepted: silently preferring one over the other would
     make a caller who passed both believe something they did not ask for.
     """
-    from seshat.gitutil import validate_commit_range
-
     raw_range = getattr(args, "range", None)
     base = getattr(args, "base", None)
     head = getattr(args, "head", None)
@@ -80,25 +78,7 @@ def _resolve_revisions(args: argparse.Namespace) -> tuple[str, str] | None:
                 file=sys.stderr,
             )
             return None
-        try:
-            validate_commit_range(raw_range)
-        except ValueError as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            return None
-        if ".." not in raw_range:
-            print(
-                f"error: {raw_range!r} is not a range; expected BASE..HEAD.",
-                file=sys.stderr,
-            )
-            return None
-        left, _, right = raw_range.partition("..")
-        if not left or not right:
-            print(
-                f"error: {raw_range!r} is missing a side; expected BASE..HEAD.",
-                file=sys.stderr,
-            )
-            return None
-        return left, right
+        return _split_range(raw_range)
 
     if not base or not head:
         print(
@@ -107,6 +87,35 @@ def _resolve_revisions(args: argparse.Namespace) -> tuple[str, str] | None:
         )
         return None
     return base, head
+
+
+def _split_range(raw_range: str) -> tuple[str, str] | None:
+    """Validate and split ``BASE..HEAD``; ``None`` after printing the error.
+
+    ``validate_commit_range`` is the shipped safety check -- the expression is
+    refused here rather than handed to git.
+    """
+    from seshat.gitutil import validate_commit_range
+
+    try:
+        validate_commit_range(raw_range)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return None
+    if ".." not in raw_range:
+        print(
+            f"error: {raw_range!r} is not a range; expected BASE..HEAD.",
+            file=sys.stderr,
+        )
+        return None
+    left, _, right = raw_range.partition("..")
+    if not left or not right:
+        print(
+            f"error: {raw_range!r} is missing a side; expected BASE..HEAD.",
+            file=sys.stderr,
+        )
+        return None
+    return left, right
 
 
 def _render_json(result: object, base: str, head: str) -> str:
@@ -155,45 +164,74 @@ def _render_json(result: object, base: str, head: str) -> str:
     )
 
 
+def _tag(is_regression: bool) -> str:
+    return "regression" if is_regression else "change"
+
+
+def _table_lines(result: object, head: str) -> list[str]:
+    return [
+        f"[table-] {table} (no readiness file at {head})"
+        for table in result.tables_removed
+    ] + [
+        f"[table+] {table} (new readiness file at {head})"
+        for table in result.tables_added
+    ]
+
+
+def _stage_lines(result: object) -> list[str]:
+    moves = [
+        f"[{_tag(move.is_regression)}] {move.table} current_stage: "
+        f"{move.base_stage} -> {move.head_stage}"
+        for move in result.current_stage_changes
+    ]
+    statuses = [
+        f"[{_tag(change.is_regression)}] {change.table} {change.stage}: "
+        f"{change.base_status} -> {change.head_status}"
+        for change in result.stage_changes
+    ]
+    return moves + statuses
+
+
+def _blocker_lines(result: object) -> list[str]:
+    return [
+        f"[blocker+] {table} {stage}: {reason}"
+        for table, stage, reason in result.blockers_added
+    ] + [
+        f"[blocker-] {table} {stage}: {reason}"
+        for table, stage, reason in result.blockers_removed
+    ]
+
+
+def _approval_lines(result: object) -> list[str]:
+    """Added approvals, then REMOVED ones tagged as regressions.
+
+    A lost approval is called out as a regression: the evidence a stage rested on
+    is gone, and a reviewer must not merge that away unnoticed.
+    """
+    return [
+        f"[approval+] {a.table} {a.stage} ({a.owner}, {a.at})"
+        for a in result.approvals_added
+    ] + [
+        f"[regression] approval REMOVED: {a.table} {a.stage} ({a.owner}, {a.at})"
+        for a in result.approvals_removed
+    ]
+
+
+def _body_lines(result: object, head: str) -> list[str]:
+    """The change body, or the single no-change line."""
+    if result.is_empty:
+        return ["no readiness change between these revisions."]
+    return (
+        _table_lines(result, head)
+        + _stage_lines(result)
+        + _blocker_lines(result)
+        + _approval_lines(result)
+    )
+
+
 def _render_text(result: object, base: str, head: str) -> str:
     lines = [f"readiness-diff: {base}..{head}"]
-
-    if result.is_empty:
-        lines.append("no readiness change between these revisions.")
-    else:
-        for table in result.tables_removed:
-            lines.append(f"[table-] {table} (no readiness file at {head})")
-        for table in result.tables_added:
-            lines.append(f"[table+] {table} (new readiness file at {head})")
-        for move in result.current_stage_changes:
-            tag = "regression" if move.is_regression else "change"
-            lines.append(
-                f"[{tag}] {move.table} current_stage: "
-                f"{move.base_stage} -> {move.head_stage}"
-            )
-        for change in result.stage_changes:
-            tag = "regression" if change.is_regression else "change"
-            lines.append(
-                f"[{tag}] {change.table} {change.stage}: "
-                f"{change.base_status} -> {change.head_status}"
-            )
-        for table, stage, reason in result.blockers_added:
-            lines.append(f"[blocker+] {table} {stage}: {reason}")
-        for table, stage, reason in result.blockers_removed:
-            lines.append(f"[blocker-] {table} {stage}: {reason}")
-        for approval in result.approvals_added:
-            lines.append(
-                f"[approval+] {approval.table} {approval.stage} "
-                f"({approval.owner}, {approval.at})"
-            )
-        # A LOST approval is called out as a regression: the evidence a stage
-        # rested on is gone, and a reviewer must not merge that away unnoticed.
-        for approval in result.approvals_removed:
-            lines.append(
-                f"[regression] approval REMOVED: {approval.table} "
-                f"{approval.stage} ({approval.owner}, {approval.at})"
-            )
-
+    lines += _body_lines(result, head)
     lines.append("")
     if result.has_regression:
         lines.append(
