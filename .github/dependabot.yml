@@ -17,6 +17,22 @@ updates:
     commit-message:
       prefix: build
     labels: []
+    # `mcp>=1.28,<2` is a GOVERNED upper bound, not staleness. pyproject keeps
+    # the stable v1 line pinned below v2 so a normal install and the static
+    # governance core never acquire the protocol SDK's next major, and spec 136
+    # (`specs/136-dep-freshness-gate/spec.md`) names this exact specifier as the
+    # canonical "governed pin with an upper bound" the freshness gate is built to
+    # TOLERATE rather than flag. Dependabot cannot read that intent, so it
+    # proposed widening the ceiling to `<3` (PR #533, closed unmerged).
+    #
+    # Adopting MCP v2 is an owner decision with a four-file blast radius -- the
+    # literal extra table in `src/seshat/cli/__init__.py`, two install-lane
+    # assertions in `tests/unit/test_issue_regression_507_install_lane.py`, and
+    # `docs/install/agent-install.md` -- so it lands as a deliberate PR, never as
+    # a bot ceiling-widening. MINOR/PATCH mcp updates stay watched.
+    ignore:
+      - dependency-name: mcp
+        update-types: ["version-update:semver-major"]
 
   # Orchestration project (spec 136, FR-013): the /orchestration/dagster pip
   # environment was UNWATCHED before this change -- the exact coverage hole that
