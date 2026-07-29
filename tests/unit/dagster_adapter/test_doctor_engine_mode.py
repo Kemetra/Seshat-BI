@@ -28,7 +28,7 @@ UNRESOLVED = """- **Gate status:** `CLEARED`
 GOOD_PYPROJECT = """[project]
 name = "tower-bi-orchestration"
 dependencies = [
-    "dagster==1.13.14",
+    "dagster==1.13.15",
 ]
 """
 

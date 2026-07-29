@@ -22,7 +22,7 @@ In a Seshat *development checkout* (this project living inside the Seshat
 repository), install the local engine editably instead of from the package
 index: replace `"seshat-bi[dbt]"` with `-e "../..[dbt]"`.
 
-Installed runtime (spec 024 auto-update posture): `dagster==1.13.14`, plus
+Installed runtime (spec 024 auto-update posture): `dagster==1.13.15`, plus
 `seshat-bi[dbt]` (the governed dbt control layer: `dbt-core==1.12.0` +
 `dbt-postgres==1.10.2`, the spec-133 pinned pair). The `dagster-dbt` pin was
 DROPPED by spec 135 (FR-011 owner decision, 2026-07-17): no released dagster-dbt
