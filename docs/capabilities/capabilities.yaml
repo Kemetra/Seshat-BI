@@ -87,6 +87,20 @@ capabilities:
     references:
       dispatch: "impact-map"
 
+  - id: readiness-diff
+    name: "seshat readiness-diff"
+    summary: "Read-only comparison of committed readiness state between two git revisions: table, current_stage, per-stage status, blocker, and named-human approval changes, plus a boolean regression verdict. Reads the revisions (not the worktree), is not a gate, and grants no approval."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "readiness-diff"
+    documentation: "docs/readiness/readiness-diff.md"
+    references:
+      dispatch: "readiness-diff"
+
   - id: retail-semantic-check
     name: "retail semantic-check"
     summary: "Detects when a committed measure's denominator drifts from its metric contract (Stage 5 readiness verdict)."

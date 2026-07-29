@@ -139,6 +139,51 @@ def _add_readiness_report_parser(
     )
 
 
+def _add_readiness_diff_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "readiness-diff",
+        help=(
+            "read-only comparison of committed readiness state between two git "
+            "revisions (stage/blocker/approval changes, and whether anything "
+            "REGRESSED); grants no approval and writes nothing"
+        ),
+    )
+    p.add_argument("--repo", default=".", help="repo root to read from")
+    p.add_argument(
+        "range",
+        nargs="?",
+        default=None,
+        metavar="BASE..HEAD",
+        help=(
+            "revision range to compare, e.g. `main..HEAD`. Equivalent to the "
+            "--base/--head pair; give exactly one form, never both."
+        ),
+    )
+    p.add_argument(
+        "--base",
+        default=None,
+        metavar="REV",
+        help="base revision (the 'before' side), e.g. `main`.",
+    )
+    p.add_argument(
+        "--head",
+        default=None,
+        metavar="REV",
+        help="head revision (the 'after' side), e.g. `HEAD`.",
+    )
+    p.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("text", "json"),
+        default="text",
+        help=(
+            "'text' (default) is human-readable; 'json' emits the readiness-diff "
+            "document -- categorical changes and a boolean has_regression, never "
+            "a numeric score."
+        ),
+    )
+
+
 def _add_evidence_pack_parser(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "evidence-pack",
@@ -229,6 +274,7 @@ _FAMILIES: dict[str, Callable[[argparse._SubParsersAction], None]] = {
         ),
     ),
     "evidence_pack": _add_evidence_pack_parser,
+    "readiness_diff": _add_readiness_diff_parser,
     "reset": _add_reset_parser,
     "blockers": partial(
         _add_readiness_report_parser,
