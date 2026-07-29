@@ -60,6 +60,16 @@ def _render_text(result: dict, prog: str = "seshat") -> str:
     ]
     lines += _render_adapter("dbt", result["adapters"]["dbt"])
     lines += _render_adapter("dagster", result["adapters"]["dagster"])
+    # The Power BI block and the derived core-only answer must appear on the
+    # DEFAULT path too: a verdict visible only under --format json would never
+    # reach the reader who just types the command.
+    if "pbi_mcp" in result.get("adapters", {}):
+        lines += _render_adapter("pbi_mcp", result["adapters"]["pbi_mcp"])
+    if "core_only_sufficient" in result:
+        lines.append(
+            f"core-only sufficient: {str(result['core_only_sufficient']).lower()}"
+        )
+        lines.append("")
     lines.append("")
     lines.append(
         "The tool recommends; the human decides. It never installs, runs, or "

@@ -14,8 +14,9 @@ What this engine can and cannot know from committed state:
   - DERIVABLE (offline, no DB, no network): how many tables are onboarded
     (``mappings/*/readiness-status.yaml``), whether every onboarded table has
     already reached ``gold_ready``, whether a dbt / dagster project is already
-    present, whether a PBIP semantic model is committed, and whether a
-    ``.mcp.json`` already exists.
+    present, whether a PBIP semantic model is committed (bounded probe), and how
+    ``.mcp.json`` CLASSIFIES via ``pbi_mcp.detect.classify_mcp_config`` -- its mere
+    presence is not Power BI adoption.
   - NOT DERIVABLE: whether the customer needs *scheduled / unattended* runs,
     whether there are cross-table run dependencies, or whether the team already
     speaks dbt. Those are INTENTIONS. This engine surfaces them as
@@ -60,12 +61,17 @@ _PBI_MCP_OPT_IN = (
     "-- the read-only family)"
 )
 
-# A committed PBIP semantic model is a `<name>.SemanticModel/` folder; `.mcp.json`
-# is the machine-local adapter config (its deeper classification belongs to
-# `seshat pbi-mcp doctor`, which is the authority -- this projection only observes
-# presence, exactly as it does for the dbt / dagster project markers).
-_SEMANTIC_MODEL_GLOB = "*.SemanticModel"
+# `.mcp.json` presence says NOTHING about Power BI: the file may hold only an
+# unrelated MCP server, or be malformed. `pbi_mcp.detect` already owns both
+# questions -- `classify_mcp_config` returns `absent` when no Power BI-shaped
+# server exists, and `_pbip_project_present` is a BOUNDED probe (three levels,
+# never a full-tree walk). Reuse both rather than re-deriving them here.
 _MCP_CONFIG = ".mcp.json"
+
+# Config verdicts that do NOT evidence adoption of a Power BI server.
+_CONFIG_NOT_ADOPTED = ("absent", "unparseable")
+# Config verdicts that ARE adoption but request a state-changing mode.
+_CONFIG_STATE_CHANGING = ("write-mode", "forbidden-flag")
 
 # The categorical recommendation vocabulary. There is NO numeric axis, and there
 # is deliberately no "recommended" tier: an adapter's value driver (multi-model
@@ -87,7 +93,9 @@ class _WorkspaceSignals:
     dagster_present: bool
     # Defaulted so any pre-existing constructor call stays valid.
     pbip_present: bool = False
-    pbi_mcp_configured: bool = False
+    # The categorical `.mcp.json` verdict from pbi_mcp.detect, NOT a bool:
+    # `absent` / `unparseable` do not evidence Power BI adoption.
+    mcp_config: str = "absent"
 
     @property
     def all_tables_gold(self) -> bool:
@@ -191,21 +199,33 @@ def _read_signals(root: Path) -> _WorkspaceSignals:
         dbt_present=root.joinpath(*_DBT_PROJECT_MARKER).is_file(),
         dagster_present=root.joinpath(*_DAGSTER_PROJECT_MARKER).is_file(),
         pbip_present=_has_semantic_model(root),
-        pbi_mcp_configured=(root / _MCP_CONFIG).is_file(),
+        mcp_config=_mcp_config_verdict(root),
     )
 
 
 def _has_semantic_model(root: Path) -> bool:
-    """True when a committed PBIP semantic-model folder exists anywhere under ``root``.
+    """True when a committed PBIP project is present within three levels of ``root``.
 
-    Searched rather than pinned to one path because a workspace may keep its PBIP
-    project under ``powerbi/``, at the root, or nested per report -- all three are
-    shapes the kit already accepts.
+    Delegates to ``pbi_mcp.detect``'s BOUNDED probe (which accepts both a
+    ``*.pbip`` pointer and a ``*.SemanticModel`` directory) rather than walking
+    the whole tree.
     """
+    from .pbi_mcp.detect import _pbip_project_present
+
     try:
-        return any(root.rglob(_SEMANTIC_MODEL_GLOB))
+        return _pbip_project_present(root)
     except OSError:
         return False
+
+
+def _mcp_config_verdict(root: Path) -> str:
+    """Classify ``.mcp.json`` through the shipped authority, not by presence."""
+    from .pbi_mcp.detect import classify_mcp_config
+
+    try:
+        return classify_mcp_config(root / _MCP_CONFIG)
+    except OSError:
+        return "unparseable"
 
 
 # ---------------------------------------------------------------------------
@@ -319,11 +339,24 @@ def _assess_pbi_mcp(s: _WorkspaceSignals) -> _AdapterAssessment:
     analyst wants to inspect a LIVE model, and which model is the intended target,
     are INTENTIONS this projection cannot read from committed state.
     """
-    if s.pbi_mcp_configured:
+    if s.mcp_config not in _CONFIG_NOT_ADOPTED:
+        # Adopted. If the committed config requests a state-changing mode, say so:
+        # warning about the READER'S OWN config is the opposite of advertising it,
+        # and ADR 0018 (Proposed, not ratified) has authorized nothing.
+        caution: tuple[str, ...] = ()
+        if s.mcp_config in _CONFIG_STATE_CHANGING:
+            caution = (
+                f"{_MCP_CONFIG} classifies as '{s.mcp_config}': it does not pin the "
+                "read-only posture. ADR 0018 is Proposed and NOT ratified, so run "
+                "`seshat pbi-mcp doctor` and pin read-only before relying on it",
+            )
         return _AdapterAssessment(
             recommendation=_ALREADY_ADOPTED,
-            reasons_for=(f"{_MCP_CONFIG} is already present in this workspace",),
-            reasons_against=(),
+            reasons_for=(
+                f"{_MCP_CONFIG} already configures a Power BI MCP server "
+                f"(classified '{s.mcp_config}')",
+            ),
+            reasons_against=caution,
             open_questions=(),
             opt_in_command=_PBI_MCP_OPT_IN,
             already_present=True,
@@ -373,27 +406,30 @@ def _is_single_gold_no_adapter(s: _WorkspaceSignals) -> bool:
 
 
 def _recommended_action(
-    s: _WorkspaceSignals, dbt: _AdapterAssessment, dagster: _AdapterAssessment
+    s: _WorkspaceSignals,
+    dbt: _AdapterAssessment,
+    dagster: _AdapterAssessment,
+    pbi_mcp: _AdapterAssessment | None = None,
 ) -> str:
     """One plain-language headline. Strongly asserts the derivable
     "neither needed" case (the C086 case) with a concrete revisit trigger; stays
     a recommendation, never a decision, everywhere else."""
-    if s.table_count == 0:
+    pbi_advised = pbi_mcp is not None and pbi_mcp.recommendation == _CONSIDER
+    if s.table_count == 0 and not pbi_advised:
         return (
             "No tables onboarded yet -- orchestration is NOT required; revisit "
             "this after your first table reaches Gold and you add a second."
         )
-    if _is_single_gold_no_adapter(s):
+    if _is_single_gold_no_adapter(s) and not pbi_advised:
         return (
             "Single governed table, direct build already Gold-validated -> "
             "orchestration NOT required; revisit when you add a 2nd table or "
             "need scheduled runs."
         )
-    considered = [
-        name
-        for name, a in (("dbt", dbt), ("dagster", dagster))
-        if a.recommendation == _CONSIDER
-    ]
+    candidates = (("dbt", dbt), ("dagster", dagster))
+    if pbi_mcp is not None:
+        candidates = candidates + (("the Power BI MCP read-only family", pbi_mcp),)
+    considered = [name for name, a in candidates if a.recommendation == _CONSIDER]
     onboarded = f"{s.table_count} table{'' if s.table_count == 1 else 's'} onboarded"
     if considered:
         return (
@@ -436,7 +472,7 @@ def build_orchestration_assessment(repo_root: Path | str = ".") -> dict:
             "pbi_mcp": pbi_mcp.recommendation,
         },
         "core_only_sufficient": core_only_sufficient,
-        "recommended_action": _recommended_action(signals, dbt, dagster),
+        "recommended_action": _recommended_action(signals, dbt, dagster, pbi_mcp),
         "adapters": {
             "dbt": dbt.to_dict(),
             "dagster": dagster.to_dict(),

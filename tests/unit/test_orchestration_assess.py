@@ -270,10 +270,19 @@ def test_pbi_mcp_consider_when_a_pbip_semantic_model_is_committed(
 
 
 def test_pbi_mcp_already_adopted_when_mcp_config_present(tmp_path: Path) -> None:
-    """An existing .mcp.json is the offline already-adopted signal."""
+    """A .mcp.json configuring a POWER BI server is the already-adopted signal.
+
+    Originally this fixture was a bare `{}`, which asserted the defect PR #537's
+    review caught: an empty or unrelated config is not Power BI adoption. The
+    fixture is now a real Power BI server entry; the `absent` / `unparseable`
+    cases are covered separately below.
+    """
     _write_status(tmp_path, "orders", _gold_ready("orders"))
     _pbip_model(tmp_path)
-    (tmp_path / ".mcp.json").write_text("{}", encoding="utf-8")
+    (tmp_path / ".mcp.json").write_text(
+        '{"mcpServers": {"powerbi": {"command": "pbi", "args": ["--readonly"]}}}',
+        encoding="utf-8",
+    )
 
     doc = build_orchestration_assessment(tmp_path)
 
@@ -343,3 +352,106 @@ def test_existing_dbt_and_dagster_keys_are_unchanged(tmp_path: Path) -> None:
             "opt_in_command",
             "already_present",
         }
+
+
+# ---------------------------------------------------------------------------
+# Review fixes (PR #537, Codex P2 x3).
+# ---------------------------------------------------------------------------
+
+
+def _mcp_config(tmp_path: Path, payload: str) -> None:
+    (tmp_path / ".mcp.json").write_text(payload, encoding="utf-8")
+
+
+def test_unrelated_mcp_server_is_not_power_bi_adoption(tmp_path: Path) -> None:
+    """An .mcp.json holding only a NON-Power-BI server is not adoption.
+
+    Presence of any MCP client config said nothing about Power BI;
+    `pbi_mcp.detect.classify_mcp_config` is the authority and returns `absent`
+    when no Power BI-shaped server exists.
+    """
+    _write_status(tmp_path, "orders", _gold_ready("orders"))
+    _pbip_model(tmp_path)
+    _mcp_config(tmp_path, '{"mcpServers": {"docs": {"command": "docs-server"}}}')
+
+    doc = build_orchestration_assessment(tmp_path)
+
+    assert doc["recommendation"]["pbi_mcp"] == "consider"
+    assert doc["adapters"]["pbi_mcp"]["already_present"] is False
+
+
+def test_unparseable_mcp_config_is_not_adoption(tmp_path: Path) -> None:
+    """A malformed .mcp.json cannot evidence adoption."""
+    _write_status(tmp_path, "orders", _gold_ready("orders"))
+    _pbip_model(tmp_path)
+    _mcp_config(tmp_path, "{not json")
+
+    doc = build_orchestration_assessment(tmp_path)
+
+    assert doc["adapters"]["pbi_mcp"]["already_present"] is False
+
+
+def test_power_bi_mcp_server_is_adoption(tmp_path: Path) -> None:
+    """A real Power BI-shaped server entry IS the already-adopted signal."""
+    _write_status(tmp_path, "orders", _gold_ready("orders"))
+    _pbip_model(tmp_path)
+    _mcp_config(
+        tmp_path,
+        '{"mcpServers": {"powerbi": {"command": "pbi", "args": ["--readonly"]}}}',
+    )
+
+    doc = build_orchestration_assessment(tmp_path)
+
+    assert doc["recommendation"]["pbi_mcp"] == "already_adopted"
+    assert doc["adapters"]["pbi_mcp"]["already_present"] is True
+
+
+def test_state_changing_config_is_warned_about(tmp_path: Path) -> None:
+    """A config requesting a state-changing mode is adopted BUT flagged.
+
+    ADR 0018 is Proposed and NOT ratified, so a local stdio server without
+    `--readonly` is worth naming as a caution -- warning about the reader's own
+    config is the opposite of advertising the mode.
+    """
+    _write_status(tmp_path, "orders", _gold_ready("orders"))
+    _pbip_model(tmp_path)
+    _mcp_config(tmp_path, '{"mcpServers": {"powerbi": {"command": "pbi"}}}')
+
+    block = build_orchestration_assessment(tmp_path)["adapters"]["pbi_mcp"]
+
+    assert block["recommendation"] == "already_adopted"
+    assert block["against"] != []
+    assert "0018" in " ".join(block["against"])
+
+
+def test_recommended_action_cannot_contradict_core_only(tmp_path: Path) -> None:
+    """The headline must not say "nothing needed" while an adapter is advised.
+
+    With one Gold table and no dbt/dagster the headline used to report that
+    orchestration is not required, even when `core_only_sufficient` was false
+    because a PBIP model made pbi_mcp `consider`.
+    """
+    _write_status(tmp_path, "orders", _gold_ready("orders"))
+    _pbip_model(tmp_path)
+
+    doc = build_orchestration_assessment(tmp_path)
+
+    assert doc["core_only_sufficient"] is False
+    assert "power bi" in doc["recommended_action"].lower()
+
+
+def test_text_render_shows_the_power_bi_block_and_core_only(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The default (non-JSON) path must not hide the new verdict."""
+    from seshat.cli import main
+
+    _write_status(tmp_path, "orders", _gold_ready("orders"))
+    _pbip_model(tmp_path)
+
+    rc = main(["orchestration-assess", "--repo", str(tmp_path)])
+
+    out = capsys.readouterr().out.lower()
+    assert rc == 0
+    assert "pbi_mcp" in out or "power bi" in out
+    assert "core_only" in out or "core-only" in out
