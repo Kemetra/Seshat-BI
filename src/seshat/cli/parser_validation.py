@@ -82,17 +82,38 @@ def _add_validate_parser(sub: argparse._SubParsersAction) -> None:
 def _add_profile_parser(sub: argparse._SubParsersAction) -> None:
     profile = sub.add_parser(
         "profile",
-        help="profile a landed (bronze) table for the Source Ready source-profile.md "
-        "(needs a DSN + the 'db' extra)",
+        help="profile a landed source for the Source Ready source-profile.md: a "
+        "DB table (--table; needs a DSN + the 'db' extra) or a landed file "
+        "(--file; CSV/TSV need no extra, Excel needs --sheet + the 'files' extra)",
     )
-    profile.add_argument(
+    # Exactly ONE source surface per run. A DB table needs a driver + DSN; a
+    # landed file needs neither -- so they resolve through different seams and
+    # mixing them in one invocation has no meaning.
+    source = profile.add_mutually_exclusive_group(required=True)
+    source.add_argument(
         "--table",
-        required=True,
         metavar="schema.table",
         help="the landed table to profile, schema-qualified, e.g. "
         "`bronze.sales_c086_raw`. An unqualified name is rejected: column "
         "discovery and the row/PK queries would resolve to different schemas "
         "on non-Postgres engines.",
+    )
+    source.add_argument(
+        "--file",
+        dest="source_file",
+        metavar="PATH",
+        help="a landed standalone FILE to profile instead of a DB table. The "
+        "reader is chosen by extension: .csv (comma) or .tsv (tab) on the stdlib "
+        "alone; .xlsx/.xlsm need --sheet and the 'files' extra. Opens no "
+        "database connection and reads no .env.",
+    )
+    profile.add_argument(
+        "--sheet",
+        default=None,
+        metavar="NAME",
+        help="the in-scope Excel sheet to profile, named EXPLICITLY (required "
+        "with an .xlsx/.xlsm --file; sheet 0 is never assumed, PY-CN-085). "
+        "Rejected for a CSV/TSV --file and for --table.",
     )
     profile.add_argument(
         "--pk",
