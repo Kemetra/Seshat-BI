@@ -89,9 +89,12 @@ mistake them for regressions.
 
 Make the **test session** hermetic with respect to git configuration, rather than
 fixing each call site. A session-scoped autouse fixture in a new `tests/conftest.py`
-(the repo currently has no conftest at any level) points `GIT_CONFIG_GLOBAL` at a
-known-good throwaway config and `GIT_CONFIG_SYSTEM` at an empty file for the duration
-of the run, restoring both afterwards. Every `git` subprocess the suite spawns then
+points `GIT_CONFIG_GLOBAL` at a known-good throwaway config and `GIT_CONFIG_SYSTEM` at
+an empty file for the duration of the run, restoring both afterwards. It goes at
+`tests/` rather than `tests/unit/` so it also covers `tests/integration/`; the existing
+`tests/unit/conftest.py` (which only re-exports two stub fixtures) and
+`tests/live_db/conftest.py` compose with it, since pytest applies conftest files at
+every directory level. Every `git` subprocess the suite spawns then
 reads known configuration regardless of what the developer has set, and the
 developer's real config is never read or written.
 

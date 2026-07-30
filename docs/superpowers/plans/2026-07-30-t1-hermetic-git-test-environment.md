@@ -58,7 +58,7 @@ mismatch is the gap.
 
 | File | Responsibility |
 |---|---|
-| `tests/conftest.py` (**create**) | Session-scoped hermetic git environment for the whole suite. Nothing else — no shared fixtures, no imports from `seshat`, so it cannot affect the lazy-import guard tests. |
+| `tests/conftest.py` (**create**) | Session-scoped hermetic git environment for the whole suite. Nothing else — no shared fixtures, no imports from `seshat`, so it cannot affect the lazy-import guard tests. Placed at `tests/` rather than `tests/unit/` so `tests/integration/` is covered too. Verified compatible: `tests/unit/conftest.py` only re-exports two `dep_coresolve` stub fixtures and `tests/live_db/conftest.py` is scoped to live-DB runs, so neither declares an autouse fixture or patches the environment. Requires git ≥ 2.32 for `GIT_CONFIG_SYSTEM`; measured 2.45.1 here. |
 | `tests/unit/test_hermetic_git_env.py` (**create**) | Proves the environment is hermetic and that a bare temp repo can commit with no per-test git config. |
 | `CONTRIBUTING.md` (**modify**, "Before you commit" section) | One line telling contributors the suite is hermetic, so nobody re-adds per-test signing config. |
 
