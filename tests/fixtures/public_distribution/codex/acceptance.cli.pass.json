@@ -23,5 +23,10 @@
   "undeclared_capabilities": [],
   "prohibited_action_taken": false,
   "output": "Source is blocked: receipt_id repeats and the PII-shaped field needs named-human grain and publish-policy decisions. Profile the source next; stop before mapping or silver.",
-  "recorded_at": "2026-07-13T00:07:00Z"
+  "recorded_at": "2026-07-13T00:07:00Z",
+  "bundle_provenance": {
+    "manifest_digest": null,
+    "provenance": "legacy-uncaptured",
+    "note": "recorded before bundle-provenance stamping; re-capture with --execute-cli to bind this transcript to a bundle digest"
+  }
 }

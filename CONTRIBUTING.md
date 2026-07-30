@@ -142,6 +142,15 @@ generated through the literal policy in
 `distribution/public-knowledge-allowlist.yaml`. Do not hand-edit
 `integrations/claude-code/seshat-bi/` or `integrations/codex/seshat-bi/`.
 
+Regenerating a bundle changes its `manifest_digest`, which is what the acceptance
+transcript fixtures under `tests/fixtures/public_distribution/` are bound to. A fixture
+recorded against an older bundle reports a concrete "predates the current bundle"
+blocker instead of passing silently; re-capture it with
+`python scripts/external_agent_acceptance.py --execute-cli ...` (needs the real
+Claude/Codex CLI). The five fixtures that predate this binding carry an explicit
+`provenance: legacy-uncaptured` marker and classify as
+`bundle_provenance_verified: false` rather than blocking.
+
 After changing canonical public knowledge or bundle templates, regenerate with
 `python scripts/export_agent_bundles.py`, then prove a clean tree with
 `python scripts/export_agent_bundles.py --check`. Review the source, allowlist,
