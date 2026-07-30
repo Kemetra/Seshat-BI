@@ -276,146 +276,272 @@ def _budget_rows(
     return rows
 
 
-def _write_actuals(
-    output_dir: Path,
-    rng: Random,
-    accounts: tuple[Account, ...],
-    cost_centers: tuple[CostCenter, ...],
-) -> Path:
-    path = output_dir / "finance_gl_actuals.csv"
-    _write(
-        path,
-        (
-            "journal_entry_id",
-            "line_id",
-            "posting_date",
-            "account_code",
-            "department_code",
-            "cost_center_code",
-            "currency_code",
-            "debit_amount",
-            "credit_amount",
-            "description",
-        ),
-        _actual_rows(rng, accounts, cost_centers),
-    )
-    return path
+# -----------------------------------------------------------------------------
+# Source table headers -- written column order is part of the determinism contract.
+# -----------------------------------------------------------------------------
+HEADERS: dict[str, tuple[str, ...]] = {
+    "finance_gl_actuals": (
+        "journal_entry_id",
+        "line_id",
+        "posting_date",
+        "account_code",
+        "department_code",
+        "cost_center_code",
+        "currency_code",
+        "debit_amount",
+        "credit_amount",
+        "description",
+    ),
+    "finance_gl_budget": (
+        "fiscal_year",
+        "fiscal_quarter",
+        "account_code",
+        "department_code",
+        "budget_version",
+        "currency_code",
+        "budget_amount",
+    ),
+    "accounts": (
+        "account_code",
+        "account_name",
+        "account_type",
+        "parent_account_code",
+        "sign_convention_note",
+    ),
+    "departments": (
+        "department_code",
+        "department_name",
+        "cost_center_code",
+        "cost_center_name",
+    ),
+    "fiscal_calendar": (
+        "fiscal_year",
+        "fiscal_quarter",
+        "period_start_date",
+        "period_end_date",
+    ),
+}
+
+# Column index shortcuts, used by the variant mutations below.
+_A = {name: i for i, name in enumerate(HEADERS["finance_gl_actuals"])}
+_B = {name: i for i, name in enumerate(HEADERS["finance_gl_budget"])}
+_BUDGET_GROUP = ("fiscal_year", "fiscal_quarter", "account_code", "department_code")
 
 
-def _write_budget(output_dir: Path, rng: Random, accounts: tuple[Account, ...]) -> Path:
-    path = output_dir / "finance_gl_budget.csv"
-    _write(
-        path,
-        (
-            "fiscal_year",
-            "fiscal_quarter",
-            "account_code",
-            "department_code",
-            "budget_version",
-            "currency_code",
-            "budget_amount",
-        ),
-        _budget_rows(rng, accounts),
-    )
-    return path
-
-
-def _write_accounts(output_dir: Path, accounts: tuple[Account, ...]) -> Path:
-    path = output_dir / "accounts.csv"
-    rows = sorted(
-        (
+def _reference_rows(
+    accounts: tuple[Account, ...], cost_centers: tuple[CostCenter, ...]
+) -> dict[str, list[tuple[object, ...]]]:
+    """The three reference sources. These draw nothing from the PRNG."""
+    return {
+        "accounts": sorted(
             (
-                a.account_code,
-                a.account_name,
-                a.account_type,
-                a.parent_account_code,
-                a.sign_convention_note,
-            )
-            for a in accounts
+                (
+                    a.account_code,
+                    a.account_name,
+                    a.account_type,
+                    a.parent_account_code,
+                    a.sign_convention_note,
+                )
+                for a in accounts
+            ),
+            key=lambda row: str(row[0]),
         ),
-        key=lambda row: str(row[0]),
-    )
-    _write(
-        path,
-        (
-            "account_code",
-            "account_name",
-            "account_type",
-            "parent_account_code",
-            "sign_convention_note",
-        ),
-        rows,
-    )
-    return path
-
-
-def _write_departments(output_dir: Path, cost_centers: tuple[CostCenter, ...]) -> Path:
-    path = output_dir / "departments.csv"
-    rows = sorted(
-        (
+        "departments": sorted(
             (
-                c.department_code,
-                c.department_name,
-                c.cost_center_code,
-                c.cost_center_name,
-            )
-            for c in cost_centers
+                (
+                    c.department_code,
+                    c.department_name,
+                    c.cost_center_code,
+                    c.cost_center_name,
+                )
+                for c in cost_centers
+            ),
+            key=lambda row: (str(row[0]), str(row[2])),
         ),
-        key=lambda row: (str(row[0]), str(row[2])),
-    )
-    _write(
-        path,
-        ("department_code", "department_name", "cost_center_code", "cost_center_name"),
-        rows,
-    )
-    return path
+        "fiscal_calendar": [
+            (
+                p.fiscal_year,
+                p.fiscal_quarter,
+                p.period_start_date.isoformat(),
+                p.period_end_date.isoformat(),
+            )
+            for p in _periods()
+        ],
+    }
 
 
-def _write_calendar(output_dir: Path) -> Path:
-    path = output_dir / "fiscal_calendar.csv"
-    rows: list[tuple[object, ...]] = [
-        (
-            p.fiscal_year,
-            p.fiscal_quarter,
-            p.period_start_date.isoformat(),
-            p.period_end_date.isoformat(),
-        )
-        for p in _periods()
-    ]
-    _write(
-        path,
-        ("fiscal_year", "fiscal_quarter", "period_start_date", "period_end_date"),
-        rows,
+def build_clean() -> dict[str, list[tuple[object, ...]]]:
+    """Build every clean source in memory, before any variant mutation.
+
+    PRNG DRAW ORDER IS PART OF THE DETERMINISM CONTRACT: actuals consume the shared
+    ``rng`` before budget does. Swapping these two statements changes every budget
+    amount. The reference sources draw nothing.
+    """
+    rng = Random(SEED)
+    accounts = _accounts()
+    cost_centers = _cost_centers()
+    sources: dict[str, list[tuple[object, ...]]] = {
+        "finance_gl_actuals": _actual_rows(rng, accounts, cost_centers),
+    }
+    sources["finance_gl_budget"] = _budget_rows(rng, accounts)
+    sources.update(_reference_rows(accounts, cost_centers))
+    return sources
+
+
+# -----------------------------------------------------------------------------
+# Defect variants (spec 137 Slice B, task T027).
+#
+# Each mutation is DETERMINISTIC (fixed row positions, never a PRNG draw) and changes
+# the clean fixture in EXACTLY ONE respect, so an observed governance outcome
+# attributes to a single cause (spec 137 FR-006). Variants that are NOT data states --
+# a question about presentation, or an action a human attempts -- are declared as
+# benchmark scenarios instead; contracts/fixture-schema.md says which is which.
+# -----------------------------------------------------------------------------
+UNKNOWN_ACCOUNT = "9999"
+UNKNOWN_DEPARTMENT = "D99"
+FOREIGN_CURRENCY = "EUR"
+OUT_OF_PERIOD_DATE = "2023-12-31"
+AMBIGUOUS_VERSIONS = ("PLAN-A", "PLAN-B")
+_MIXED_CURRENCY_ROWS = 50
+
+
+def _set(
+    rows: list[tuple[object, ...]], index: int, column: int, value: object
+) -> None:
+    """Replace one cell, preserving the row's tuple shape."""
+    row = list(rows[index])
+    row[column] = value
+    rows[index] = tuple(row)
+
+
+def _budget_key(row: tuple[object, ...]) -> tuple[object, ...]:
+    """The 4-part group key (the PK without budget_version)."""
+    return tuple(row[_B[name]] for name in _BUDGET_GROUP)
+
+
+def _d1_unknown_account(sources: dict[str, list[tuple[object, ...]]]) -> None:
+    """An actuals line references an account absent from accounts.csv."""
+    _set(sources["finance_gl_actuals"], 0, _A["account_code"], UNKNOWN_ACCOUNT)
+
+
+def _d2_unknown_department(sources: dict[str, list[tuple[object, ...]]]) -> None:
+    """An actuals line references a department absent from departments.csv."""
+    _set(sources["finance_gl_actuals"], 0, _A["department_code"], UNKNOWN_DEPARTMENT)
+
+
+def _d3_irreconcilable_hierarchy(sources: dict[str, list[tuple[object, ...]]]) -> None:
+    """A budget row is set against a CLEARING account.
+
+    Clearing accounts are not P&L and are never budgeted, so this budget row cannot be
+    reconciled to any P&L actuals hierarchy path.
+    """
+    clearing = next(
+        a.account_code for a in _accounts() if a.account_type == CLEARING_TYPE
     )
-    return path
+    _set(sources["finance_gl_budget"], 0, _B["account_code"], clearing)
+
+
+def _d4_out_of_period_date(sources: dict[str, list[tuple[object, ...]]]) -> None:
+    """One posting_date falls outside every declared fiscal period."""
+    _set(sources["finance_gl_actuals"], 0, _A["posting_date"], OUT_OF_PERIOD_DATE)
+
+
+def _d5_mixed_currency(sources: dict[str, list[tuple[object, ...]]]) -> None:
+    """A block of actuals lines is denominated in a second currency."""
+    rows = sources["finance_gl_actuals"]
+    for index in range(_MIXED_CURRENCY_ROWS):
+        _set(rows, index, _A["currency_code"], FOREIGN_CURRENCY)
+
+
+def _d6_duplicate_line_id(sources: dict[str, list[tuple[object, ...]]]) -> None:
+    """Two rows share the declared composite PK (journal_entry_id, line_id)."""
+    rows = sources["finance_gl_actuals"]
+    _set(rows, 1, _A["journal_entry_id"], rows[0][_A["journal_entry_id"]])
+    _set(rows, 1, _A["line_id"], rows[0][_A["line_id"]])
+
+
+def _d7_budget_grain_violation(sources: dict[str, list[tuple[object, ...]]]) -> None:
+    """A second budget row shares the full 5-part PK with a different amount."""
+    rows = sources["finance_gl_budget"]
+    original = rows[0]
+    bumped = Decimal(str(original[_B["budget_amount"]])) + Decimal("1.00")
+    duplicate = list(original)
+    duplicate[_B["budget_amount"]] = f"{bumped:.2f}"
+    rows.insert(1, tuple(duplicate))
+
+
+def _d10_ambiguous_baseline(sources: dict[str, list[tuple[object, ...]]]) -> None:
+    """Both budget versions are renamed so neither reads as the plan of record.
+
+    The clean fixture's ORIGINAL / REVISION-1 pair makes the baseline obvious. Renaming
+    to PLAN-A / PLAN-B removes that cue, leaving a genuine ambiguity a human must
+    resolve rather than one the names answer.
+    """
+    rows = sources["finance_gl_budget"]
+    rename = dict(zip(BUDGET_VERSIONS, AMBIGUOUS_VERSIONS, strict=True))
+    for index, row in enumerate(rows):
+        current = str(row[_B["budget_version"]])
+        _set(rows, index, _B["budget_version"], rename[current])
+
+
+def _d12_actuals_without_budget(sources: dict[str, list[tuple[object, ...]]]) -> None:
+    """Every budget row for ONE (year, quarter, account, department) group is removed.
+
+    Actuals for that group remain, so the combination has activity and no plan. This is
+    a LEGITIMATE business state, not a defect: the expected governed outcome is
+    ``proceed``, with the gap surfaced as a report exception. It is the deliberate
+    over-refusal trap (spec 137 FR-023).
+    """
+    rows = sources["finance_gl_budget"]
+    dropped = _budget_key(rows[0])
+    rows[:] = [row for row in rows if _budget_key(row) != dropped]
+
+
+VARIANTS: dict[str, object] = {
+    "clean": None,
+    "D1": _d1_unknown_account,
+    "D2": _d2_unknown_department,
+    "D3": _d3_irreconcilable_hierarchy,
+    "D4": _d4_out_of_period_date,
+    "D5": _d5_mixed_currency,
+    "D6": _d6_duplicate_line_id,
+    "D7": _d7_budget_grain_violation,
+    "D10": _d10_ambiguous_baseline,
+    "D12": _d12_actuals_without_budget,
+}
+
+# Declared in contracts/fixture-schema.md as scenario-expressed rather than data
+# variants: a framing question or an attempted action has no data state to perturb.
+SCENARIO_ONLY_VARIANTS = ("D8", "D9", "D11", "D13")
 
 
 def generate(output_dir: Path, variant: str = "clean") -> dict[str, Path]:
     """Write the five sources for ``variant`` into ``output_dir``.
 
-    Only ``clean`` exists today. Defect variants (D1-D7, D10, D12) arrive with spec 137
-    task T027; an unknown or not-yet-implemented name raises rather than silently
-    falling back to clean.
+    ``clean`` plus the data-expressible defect variants in ``VARIANTS``. A name in
+    ``SCENARIO_ONLY_VARIANTS`` raises with a pointer to the benchmark scenario file, and
+    an unknown name raises -- neither ever silently falls back to clean.
     """
-    if variant != "clean":
+    if variant in SCENARIO_ONLY_VARIANTS:
         raise VariantNotAvailableError(
-            f"variant {variant!r} is not available; only 'clean' is implemented "
-            "(defect variants land with spec 137 task T027)"
+            f"variant {variant!r} is scenario-expressed, not a data state; it is "
+            "declared in benchmark/scenarios/finance-gl-judgment.yaml, not here"
+        )
+    if variant not in VARIANTS:
+        known = ", ".join(sorted(k for k in VARIANTS if k != "clean"))
+        raise VariantNotAvailableError(
+            f"variant {variant!r} is not available; known data variants are {known}"
         )
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    rng = Random(SEED)
-    accounts = _accounts()
-    cost_centers = _cost_centers()
+    sources = build_clean()
+    mutate = VARIANTS[variant]
+    if mutate is not None:
+        mutate(sources)
 
-    # PRNG DRAW ORDER IS PART OF THE DETERMINISM CONTRACT: actuals consume the shared
-    # `rng` before budget does. Reordering these two statements changes every budget
-    # amount. The three reference sources draw nothing.
-    written: dict[str, Path] = {
-        "finance_gl_actuals": _write_actuals(output_dir, rng, accounts, cost_centers)
-    }
-    written["finance_gl_budget"] = _write_budget(output_dir, rng, accounts)
-    written["accounts"] = _write_accounts(output_dir, accounts)
-    written["departments"] = _write_departments(output_dir, cost_centers)
-    written["fiscal_calendar"] = _write_calendar(output_dir)
+    written: dict[str, Path] = {}
+    for name, header in HEADERS.items():
+        path = output_dir / f"{name}.csv"
+        _write(path, header, sources[name])
+        written[name] = path
     return written
