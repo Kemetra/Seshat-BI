@@ -1,0 +1,96 @@
+# =============================================================================
+# readiness-status.yaml  --  finance_gl_actuals (spec 137)
+# =============================================================================
+# Filled instance of templates/readiness-status.yaml (canonical location, ADR 0004).
+# Statuses + evidence + blockers only. NO numeric score anywhere (hard rule #9).
+# `approvals[]` is EMPTY: no approval has been granted, and an agent may never
+# self-grant one (Principle V, never_self_grant_approval).
+# =============================================================================
+
+# --- identity ---------------------------------------------------------------
+table: "silver.finance_gl_actuals"
+source_id: "finance_gl_actuals"
+source_family: "finance_gl_synthetic"
+
+# --- where we are -----------------------------------------------------------
+current_stage: "source_ready"
+mapping_version: "1"
+
+# --- the seven stages -------------------------------------------------------
+stages:
+
+  source_ready:
+    status: "blocked"
+    # This is a standalone FILE source, so RS1 makes the encoding/delimiter/header a
+    # [PROPOSED] inference requiring a named owner's confirmation before this stage can
+    # read pass. Honoured as written, even though this particular source is emitted by a
+    # committed generator whose encoding is asserted by a test -- inventing an exemption
+    # for our own fixture is exactly the self-serving carve-out the gate exists to stop.
+    # Recorded as ledger row L2.
+    source_kind: "csv"
+    evidence:
+      - "mappings/finance_gl_actuals/source-profile.md"
+      - "tests/fixtures/finance_gl/generate.py"
+      - "tests/fixtures/finance_gl/excerpts/finance_gl_actuals.head.csv"
+      - "tests/unit/test_finance_gl_generator.py"
+    blocking_reasons:
+      - "RS1: csv source -- a named owner must confirm the encoding/delimiter/header before source_ready can pass. No approval has been recorded and the agent did not self-confirm."
+
+  mapping_ready:
+    status: "blocked"
+    evidence:
+      - "mappings/finance_gl_actuals/source-map.yaml"
+      - "mappings/finance_gl_actuals/assumptions.md"
+      - "mappings/finance_gl_actuals/unresolved-questions.md"
+    blocking_reasons:
+      - "OD-4: the mapping gate needs a named human approval of the declared grain (journal_entry_id + line_id) and the gold star shape. source-map.yaml carries reviewed_by/reviewed_on as [PENDING GATE APPROVAL]."
+      - "unresolved-questions.md Q2 is open: whether P&L reporting excludes clearing accounts (2,500 of 5,000 rows) and whether account_type <> 'CLEARING' is the right mechanism."
+      - "unresolved-questions.md Q3 is open: whether cost-center-level analysis is required, which decides whether dim_cost_center_fgl is built."
+      - "source_ready is not pass (see above), so this stage cannot be entered."
+
+  silver_ready:
+    status: "not_started"
+    evidence: []
+    blocking_reasons:
+      - "no silver.* SQL may be authored before the mapping gate is CLEARED (hard stop no_silver_before_mapping_cleared)."
+
+  gold_ready:
+    status: "not_started"
+    evidence: []
+    blocking_reasons: []
+
+  semantic_model_ready:
+    status: "not_started"
+    evidence: []
+    blocking_reasons: []
+
+  dashboard_ready:
+    status: "not_started"
+    evidence: []
+    blocking_reasons: []
+
+  publish_ready:
+    status: "not_started"
+    evidence: []
+    blocking_reasons:
+      - "out of scope for spec 137: Power BI Service publishing is excluded and ADR-0018 (the Power BI MCP execution adapter) is Proposed -- NOT ratified."
+
+# --- cross-cutting evidence + blockers --------------------------------------
+evidence:
+  - "docs/worked-examples/finance-gl-genericity-ledger.md"
+  - "specs/137-finance-gl-genericity-proof/spec.md"
+blocking_reasons:
+  - "two named-human actions are outstanding: the RS1 source confirmation (source_ready) and the mapping-gate approval (mapping_ready, OD-4)."
+
+# --- approvals (named human sign-offs; the agent cannot self-grant) ---------
+# EMPTY BY DESIGN. Two approvals are outstanding and both are requested in
+# approval-request-mapping-gate.md. Spec 137's ratification by the owner on 2026-07-30
+# approved THE SPEC; it granted neither of these stage approvals.
+approvals: []
+
+# --- the single next allowed action -----------------------------------------
+next_action: "a named owner answers approval-request-mapping-gate.md -- confirming the csv source (RS1), ruling Q2 (clearing-account exclusion) and Q3 (cost-center level), and approving the declared grain + star shape. Nothing downstream may start first."
+
+# --- audit ------------------------------------------------------------------
+last_checked_at: "2026-07-30"
+checked_by: "agent"

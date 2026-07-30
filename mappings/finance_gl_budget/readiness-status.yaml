@@ -1,0 +1,90 @@
+# =============================================================================
+# readiness-status.yaml  --  finance_gl_budget (spec 137)
+# =============================================================================
+# Filled instance of templates/readiness-status.yaml (canonical location, ADR 0004).
+# Statuses + evidence + blockers only; NO numeric score (hard rule #9).
+# `approvals[]` is EMPTY -- no approval granted, none self-granted (Principle V).
+#
+# This is a SEPARATE readiness record from finance_gl_actuals, because it is a
+# separate source at a separate grain. The two records are independent; neither
+# advances the other (spec 137 SC-004).
+# =============================================================================
+
+# --- identity ---------------------------------------------------------------
+table: "silver.finance_gl_budget"
+source_id: "finance_gl_budget"
+source_family: "finance_gl_synthetic"
+
+# --- where we are -----------------------------------------------------------
+current_stage: "source_ready"
+mapping_version: "1"
+
+# --- the seven stages -------------------------------------------------------
+stages:
+
+  source_ready:
+    status: "blocked"
+    # RS1: standalone FILE source -> owner confirmation required. See ledger row L2.
+    source_kind: "csv"
+    evidence:
+      - "mappings/finance_gl_budget/source-profile.md"
+      - "tests/fixtures/finance_gl/generate.py"
+      - "tests/fixtures/finance_gl/excerpts/finance_gl_budget.head.csv"
+      - "tests/unit/test_finance_gl_generator.py"
+    blocking_reasons:
+      - "RS1: csv source -- a named owner must confirm the encoding/delimiter/header before source_ready can pass. Not self-confirmed."
+
+  mapping_ready:
+    status: "blocked"
+    evidence:
+      - "mappings/finance_gl_budget/source-map.yaml"
+      - "mappings/finance_gl_budget/assumptions.md"
+      - "mappings/finance_gl_budget/unresolved-questions.md"
+    blocking_reasons:
+      - "OD-4: the mapping gate needs a named human approval of the declared 5-part grain (including budget_version as part of IDENTITY) and the second-fact star shape. reviewed_by/reviewed_on are [PENDING GATE APPROVAL]."
+      - "unresolved-questions.md Q3 is open: whether the 241 budgeted combos with no posted actuals are expected business states or indicate missing actuals. This decides whether a gate refusing them is correct or an over-refusal."
+      - "source_ready is not pass (see above), so this stage cannot be entered."
+
+  silver_ready:
+    status: "not_started"
+    evidence: []
+    blocking_reasons:
+      - "no silver.* SQL before the mapping gate is CLEARED (hard stop no_silver_before_mapping_cleared)."
+
+  gold_ready:
+    status: "not_started"
+    evidence: []
+    blocking_reasons: []
+
+  semantic_model_ready:
+    status: "not_started"
+    evidence: []
+    blocking_reasons: []
+
+  dashboard_ready:
+    status: "not_started"
+    evidence: []
+    blocking_reasons: []
+
+  publish_ready:
+    status: "not_started"
+    evidence: []
+    blocking_reasons:
+      - "out of scope for spec 137: Service publishing excluded; ADR-0018 is Proposed -- NOT ratified."
+
+# --- cross-cutting evidence + blockers --------------------------------------
+evidence:
+  - "docs/worked-examples/finance-gl-genericity-ledger.md"
+  - "specs/137-finance-gl-genericity-proof/spec.md"
+blocking_reasons:
+  - "two named-human actions outstanding: the RS1 source confirmation and the mapping-gate approval (OD-4)."
+
+# --- approvals (named human sign-offs; the agent cannot self-grant) ---------
+approvals: []
+
+# --- the single next allowed action -----------------------------------------
+next_action: "a named owner answers approval-request-mapping-gate.md -- confirming the csv source (RS1), ruling Q3 (budgeted-with-no-actuals semantics), and approving the declared 5-part grain including budget_version. Nothing downstream may start first."
+
+# --- audit ------------------------------------------------------------------
+last_checked_at: "2026-07-30"
+checked_by: "agent"
