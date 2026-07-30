@@ -6,11 +6,11 @@
 temp-repo tests that currently die on commit signing pass on any machine.
 
 **Architecture:** Add a session-scoped autouse fixture in a new `tests/conftest.py`
-that points `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` at throwaway config files for
-the duration of the test session. Every `git` subprocess the suite spawns then reads a
-known-empty system config and a known-good global config, regardless of what the
-developer has configured. This replaces the approach in the spec's T1 Design section
-(see *Deviation from the spec* below).
+that points `GIT_CONFIG_GLOBAL` at a throwaway config file for the duration of the test
+session. Every `git` subprocess the suite spawns then reads a known-good global config
+regardless of what the developer has configured. `GIT_CONFIG_SYSTEM` is left intact —
+see *Execution record* correction 1 for why blanking it is actively harmful. This
+replaces the approach in the spec's T1 Design section (see *Deviation from the spec*).
 
 **Tech Stack:** Python 3.13, pytest 8, `subprocess`, git.
 
@@ -89,7 +89,7 @@ mismatch is the gap.
 
 | File | Responsibility |
 |---|---|
-| `tests/conftest.py` (**create**) | Session-scoped hermetic git environment for the whole suite. Nothing else — no shared fixtures, no imports from `seshat`, so it cannot affect the lazy-import guard tests. Placed at `tests/` rather than `tests/unit/` so `tests/integration/` is covered too. Verified compatible: `tests/unit/conftest.py` only re-exports two `dep_coresolve` stub fixtures and `tests/live_db/conftest.py` is scoped to live-DB runs, so neither declares an autouse fixture or patches the environment. Requires git ≥ 2.32 for `GIT_CONFIG_SYSTEM`; measured 2.45.1 here. |
+| `tests/conftest.py` (**create**) | Session-scoped hermetic git environment for the whole suite. Nothing else — no shared fixtures, no imports from `seshat`, so it cannot affect the lazy-import guard tests. Placed at `tests/` rather than `tests/unit/` so `tests/integration/` is covered too. Verified compatible: `tests/unit/conftest.py` only re-exports two `dep_coresolve` stub fixtures and `tests/live_db/conftest.py` is scoped to live-DB runs, so neither declares an autouse fixture or patches the environment. Requires git ≥ 2.32 for `GIT_CONFIG_GLOBAL`; measured 2.45.1 here. |
 | `tests/unit/test_hermetic_git_env.py` (**create**) | Proves the environment is hermetic and that a bare temp repo can commit with no per-test git config. |
 | `CONTRIBUTING.md` (**modify**, "Before you commit" section) | One line telling contributors the suite is hermetic, so nobody re-adds per-test signing config. |
 
@@ -155,12 +155,23 @@ import pytest
 
 
 @pytest.mark.unit
-def test_git_config_env_vars_point_at_session_files() -> None:
-    """Both git config layers are redirected away from the developer's real files."""
-    for key in ("GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"):
-        value = os.environ.get(key)
-        assert value, f"{key} is not set; the suite is inheriting real git config"
-        assert Path(value).is_file(), f"{key} points at {value!r}, which is not a file"
+def test_global_git_config_points_at_a_session_file() -> None:
+    """The global layer is redirected away from the developer's real config."""
+    value = os.environ.get("GIT_CONFIG_GLOBAL")
+    assert value, "GIT_CONFIG_GLOBAL is not set; the suite inherits real git config"
+    assert Path(value).is_file(), f"GIT_CONFIG_GLOBAL points at {value!r}, not a file"
+
+
+@pytest.mark.unit
+def test_system_git_config_is_not_redirected() -> None:
+    """The system layer must be left intact.
+
+    On Windows it carries ``core.autocrlf = true`` from the Git-for-Windows installer.
+    Blanking it changes line-ending normalization on ``git add``, which changes the
+    committed blob SHAs and makes every revision-citation test report a stale contract.
+    Signing is neutralized through the global layer instead, which takes precedence.
+    """
+    assert "GIT_CONFIG_SYSTEM" not in os.environ
 
 
 @pytest.mark.unit
@@ -331,10 +342,12 @@ the real summary line as evidence; do not assert success without it.
 In `CONTRIBUTING.md`, in the "Before you commit" section after the command block, add:
 
 ```markdown
-The test suite is hermetic with respect to git: a session fixture in `tests/conftest.py`
-redirects `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` at throwaway files, so tests that
+The test suite is hermetic with respect to your global git config: a session fixture in
+`tests/conftest.py` redirects `GIT_CONFIG_GLOBAL` at a throwaway file, so tests that
 build a temp repo and commit into it do not need their own `commit.gpgsign=false` and
-will not fail on a machine that signs commits.
+will not fail on a machine that signs commits. `GIT_CONFIG_SYSTEM` is deliberately left
+alone — on Windows it carries `core.autocrlf`, and blanking it changes committed blob
+SHAs.
 ```
 
 - [ ] **Step 10: Lint and format**
