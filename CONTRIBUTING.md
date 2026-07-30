@@ -63,6 +63,13 @@ seshat check                    # static governance gate (see docs/glossary.md f
 retail semantic-check --repo .  # contract <-> DAX drift (L3)
 ```
 
+The test suite is hermetic with respect to your global git config: a session fixture in
+`tests/conftest.py` redirects `GIT_CONFIG_GLOBAL` at a throwaway file, so tests that
+build a temp repo and commit into it do not need their own `commit.gpgsign=false` and
+will not fail on a machine that signs commits. `GIT_CONFIG_SYSTEM` is deliberately left
+alone -- on Windows it carries `core.autocrlf`, and blanking it changes committed blob
+SHAs.
+
 A pre-commit hook runs `seshat check` automatically and blocks the commit on any
 ERROR-severity finding:
 
