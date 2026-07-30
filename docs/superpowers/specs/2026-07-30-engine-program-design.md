@@ -307,21 +307,53 @@ recording.
 
 Record provenance on capture and assert it on use, binding to **`manifest_digest`**.
 
-That question is now settled by reading the writer rather than left to planning.
+That question is settled by reading the writer.
 `scripts/export_agent_bundles.py:555` computes
 `payload["manifest_digest"] = _sha256(_canonical_json(payload))` — a digest over the
 *whole* manifest payload, which already contains `source_revision` **and** every entry's
-own sha256. `source_revision` alone is just git HEAD at build time
-(`_validated_source_revision`, `:177-186`), so binding fixtures to it would be strictly
-wrong in practice: HEAD moves on every commit, so every fixture would read as stale
-immediately and the check would be unusable. `manifest_digest` changes only when bundle
-content actually changes, which is the property the guard needs. (An earlier draft of
-this section recommended `source_revision` because 3 of 9 fixtures already carry it;
-that reasoning mistook prior art for authority.)
+own sha256. So `manifest_digest` is the strictly more informative field: one opaque value
+covering the revision AND every file's content.
+
+**Two earlier drafts of this section were wrong and are corrected here.** The first
+recommended `source_revision` merely because 3 of 9 fixtures already carried it, which
+mistook prior art for authority. The second rejected `source_revision` on the grounds
+that "HEAD moves on every commit, so every fixture would read as stale immediately" —
+that is false. `_validated_source_revision` (`:177-186`) records HEAD **at build time**,
+not continuously: the committed manifests read `source_revision: 5af35a3`, an older
+commit, because the bundle is only regenerated when its inputs change. And because
+`manifest_digest` is computed *over* `source_revision`, the two fields are in fact
+**equally sensitive** — anything that changes one changes the other. `manifest_digest`
+wins on coverage, not on noise.
+
+That correction matters, because the noise level is the design constraint: **every bundle
+regeneration invalidates every fixture**, whichever field is used. See *Design* below.
 
 Then have the consuming tests assert the stamp matches the current bundle, reporting
 "this fixture predates the current bundle; re-capture with `--execute-cli`" — a named,
 actionable blocker rather than a silent pass.
+
+**The guard must be asymmetric, or it blocks unrelated work.** Since any regeneration
+invalidates every fixture and re-capture needs the real Claude/Codex CLIs plus
+credentials that CI does not have, a uniform hard failure would red-light every
+knowledge-edit PR until someone re-recorded transcripts — friction that proves nothing
+about the change under review. Three outcomes instead:
+
+| Fixture state | Outcome |
+|---|---|
+| no provenance block at all | **blocker** — a new fixture cannot be added unbound |
+| declared digest ≠ committed digest | **blocker**, naming the re-capture command |
+| explicit `legacy-uncaptured` marker | **not** a blocker; reports `bundle_provenance_verified: false` |
+
+And the five existing fixtures must be marked **legacy**, never stamped with the current
+digest: they were not captured against it, and writing it in would fabricate exactly the
+provenance the guard exists to verify. That keeps the honest goal — staleness becomes
+visible and enumerable, rather than manual capture being pretended away.
+
+**Implemented** 2026-07-30 as PR #542: `committed_bundle_digest()` and
+`_append_provenance_blockers()` in `scripts/external_agent_acceptance.py`,
+`bundle_provenance_verified` on the classified record, the digest stamped into
+`--execute-cli` output so future captures self-bind, and 18 tests in
+`tests/integration/test_fixture_bundle_provenance.py`.
 
 ### Non-goals
 
