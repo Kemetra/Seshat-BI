@@ -89,12 +89,23 @@ mistake them for regressions.
 
 Make the **test session** hermetic with respect to git configuration, rather than
 fixing each call site. A session-scoped autouse fixture in a new `tests/conftest.py`
-points `GIT_CONFIG_GLOBAL` at a known-good throwaway config and `GIT_CONFIG_SYSTEM` at
-an empty file for the duration of the run, restoring both afterwards. It goes at
-`tests/` rather than `tests/unit/` so it also covers `tests/integration/`; the existing
-`tests/unit/conftest.py` (which only re-exports two stub fixtures) and
-`tests/live_db/conftest.py` compose with it, since pytest applies conftest files at
-every directory level. Every `git` subprocess the suite spawns then
+points `GIT_CONFIG_GLOBAL` at a known-good throwaway config for the duration of the run,
+restoring it afterwards. It goes at `tests/` rather than `tests/unit/` so it also covers
+`tests/integration/`; the existing `tests/unit/conftest.py` (which only re-exports two
+stub fixtures) and `tests/live_db/conftest.py` compose with it, since pytest applies
+conftest files at every directory level.
+
+**Redirect the global layer only — never `GIT_CONFIG_SYSTEM`.** An earlier version of
+this design also blanked the system layer "for hermeticity", and it broke five unrelated
+`test_narrative_check*` tests, which reported `stale_contract_revision`. On Windows the
+Git-for-Windows installer writes `core.autocrlf=true` into the system config
+(`git config --show-origin --get core.autocrlf` → `C:/Program Files/Git/etc/gitconfig`),
+and blanking that layer changes line-ending normalization on `git add`, which changes
+committed **blob SHAs** — so those tests were correct and the fixture was wrong. Nothing
+is lost by narrowing: config precedence is system < global < local, verified empirically,
+so the fixture's `gpgsign=false` wins even against a system-level `gpgsign=true`. A guard
+test asserts `"GIT_CONFIG_SYSTEM" not in os.environ` so the broader version cannot return
+as tidying. Every `git` subprocess the suite spawns then
 reads known configuration regardless of what the developer has set, and the
 developer's real config is never read or written.
 
@@ -159,6 +170,9 @@ stale pointers rather than wrong intent:
 | `src/retail/color.py` | `src/seshat/color.py` — `delta_e76` at L83 |
 | `theme_gen.py:569` (the OPEN checkbox) | `src/seshat/theme_gen.py:789-790` |
 | `theme_gen.py:470` | shifted to ~L676 |
+| `src/retail/cli/parser.py` (tasks.md T012) | `src/seshat/cli/parser.py` |
+| `Python 3.11+` (plan.md:42) | Python 3.13+ per `pyproject.toml` |
+| CT2 = `design_categorical_distinctness`, CT3 = `design_ramp_deltae` | **Swapped.** Source says `design_ramp_deltae.py:27 → RULE_ID = "CT2"` and `design_categorical_distinctness.py:35 → RULE_ID = "CT3"` |
 
 The spec's substantive decisions all survive the rename and are confirmed by the
 tree: `render_spec_md()` (`theme_gen.py:758-808`) hand-composes the checklist as a
@@ -291,14 +305,23 @@ recording.
 
 ### Design
 
-Record provenance on capture and assert it on use. Because 3 fixtures already carry
-`source_revision` — a field `export_agent_bundles.py` also writes into the bundle
-manifest — prefer extending that existing field to all 9 fixtures over introducing a
-second provenance key; confirm during planning which of `source_revision` or
-`manifest_digest` the bundle treats as authoritative, and bind to that one rather than
-stamping both. Then have the consuming tests assert the stamp matches the current
-bundle, reporting "this fixture predates the current bundle; re-capture with
-`--execute-cli`" — a named, actionable blocker rather than a silent pass.
+Record provenance on capture and assert it on use, binding to **`manifest_digest`**.
+
+That question is now settled by reading the writer rather than left to planning.
+`scripts/export_agent_bundles.py:555` computes
+`payload["manifest_digest"] = _sha256(_canonical_json(payload))` — a digest over the
+*whole* manifest payload, which already contains `source_revision` **and** every entry's
+own sha256. `source_revision` alone is just git HEAD at build time
+(`_validated_source_revision`, `:177-186`), so binding fixtures to it would be strictly
+wrong in practice: HEAD moves on every commit, so every fixture would read as stale
+immediately and the check would be unusable. `manifest_digest` changes only when bundle
+content actually changes, which is the property the guard needs. (An earlier draft of
+this section recommended `source_revision` because 3 of 9 fixtures already carry it;
+that reasoning mistook prior art for authority.)
+
+Then have the consuming tests assert the stamp matches the current bundle, reporting
+"this fixture predates the current bundle; re-capture with `--execute-cli`" — a named,
+actionable blocker rather than a silent pass.
 
 ### Non-goals
 

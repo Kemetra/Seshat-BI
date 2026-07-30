@@ -27,6 +27,37 @@ developer has configured. This replaces the approach in the spec's T1 Design sec
   authorized off for this session's commits via `git -c commit.gpgsign=false commit`;
   do not add `--no-verify`, and do not change any git config outside the test fixture.
 
+## Execution record — completed 2026-07-30
+
+Executed inline. Shipped on branch `test/hermetic-git-env` as
+**PR #539** (`https://github.com/Kemetra/Seshat-BI/pull/539`), 3 files, 141 insertions.
+
+| Verification | Result |
+|---|---|
+| `pytest -m unit` | **4310 passed, 27 skipped, 388 deselected**, 0 failed (276.66s) |
+| `pytest -m integration` | 117 passed, 6 skipped (69.64s) |
+| `ruff format --check` / `ruff check` | 742 files formatted / All checks passed |
+| `seshat check` / `semantic-check` | exit 0 (one pre-existing `RS1` warning, present on `main`) / no drift |
+
+Baseline was 17 failed, 4288 passed. Reconciliation: 4288 + 13 signing + 4 lazy-import
+(cleared by Step 1's reinstall) + 4 new guard tests + 1 skip→pass = 4310, skips 28 → 27.
+
+**Two corrections the plan did not anticipate**, both folded into the code below:
+
+1. **The fixture must redirect `GIT_CONFIG_GLOBAL` only.** The plan's version also
+   blanked `GIT_CONFIG_SYSTEM`, which broke five `test_narrative_check*` tests with
+   `stale_contract_revision`. Cause: Git-for-Windows writes `core.autocrlf=true` into the
+   system config, and blanking that layer changes line-ending normalization on `git add`,
+   hence committed blob SHAs. Caught by Step 8's full-suite run — the step existed
+   precisely to catch this, and did. Narrowing costs nothing: precedence is
+   system < global < local, so `gpgsign=false` in the global layer still wins.
+2. **`from collections.abc import Iterator`**, not `typing`. Ruff's `UP035` flags the
+   deprecated alias on Python 3.13.
+
+Two `E501` violations (89 > 88) also surfaced in docstrings and were reflowed. Step 3's
+RED run earned its place: it reproduced the real defect (`returncode=128`,
+`1Password: No SSH private key found`) rather than a synthetic one.
+
 ## Deviation from the spec
 
 `docs/superpowers/specs/2026-07-30-engine-program-design.md` T1 Design says to repoint
@@ -202,7 +233,7 @@ them and invalidate the assertion.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterator
+from collections.abc import Iterator
 
 import pytest
 
@@ -233,19 +264,24 @@ def hermetic_git_config(
     for reasons unrelated to the code under test. CI configures no signing and so never
     reproduces it.
 
-    Redirects both layers -- ``GIT_CONFIG_GLOBAL`` to a known-good config and
-    ``GIT_CONFIG_SYSTEM`` to an empty file -- and restores the previous values on
-    teardown. The developer's real config files are never read or written.
+    Redirects the GLOBAL layer only, and restores the previous value on teardown. The
+    developer's real config file is never read or written.
+
+    ``GIT_CONFIG_SYSTEM`` is deliberately left alone. On Windows the Git-for-Windows
+    installer writes ``core.autocrlf = true`` into the system config
+    (``C:/Program Files/Git/etc/gitconfig``), and blanking that layer changes how
+    ``git add`` normalizes line endings -- which changes committed blob SHAs and breaks
+    every test that compares a cited contract revision against the blob git actually
+    stores. Redirecting only the global layer still neutralizes signing: config
+    precedence is system < global < local, so the ``gpgsign = false`` below wins even
+    against a system-level ``gpgsign = true``.
     """
     root = tmp_path_factory.mktemp("gitconfig")
     global_config = root / "gitconfig"
     global_config.write_text(_HERMETIC_GITCONFIG, encoding="utf-8")
-    system_config = root / "system-gitconfig"
-    system_config.write_text("", encoding="utf-8")
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
-        patch.setenv("GIT_CONFIG_SYSTEM", str(system_config))
         yield global_config
 ```
 
