@@ -87,17 +87,33 @@ mistake them for regressions.
 
 ### Design
 
-Repoint the temp-repo construction in the five Group-B files at
-`_gitfix.make_git_repo`. No helper changes are needed: none of the callers requires a
-bare repo, a remote, a `file://` protocol allowance, or a non-`main` initial branch —
-the four capabilities `make_git_repo` already provides are exactly the four they need.
-Where a site currently inlines identity config, that config is deleted rather than
-kept, so the helper stays the single place signing policy is expressed.
+Make the **test session** hermetic with respect to git configuration, rather than
+fixing each call site. A session-scoped autouse fixture in a new `tests/conftest.py`
+(the repo currently has no conftest at any level) points `GIT_CONFIG_GLOBAL` at a
+known-good throwaway config and `GIT_CONFIG_SYSTEM` at an empty file for the duration
+of the run, restoring both afterwards. Every `git` subprocess the suite spawns then
+reads known configuration regardless of what the developer has set, and the
+developer's real config is never read or written.
 
-`tests/integration/test_watch_cli.py` is a candidate, not a commitment: confirm it
-actually fails under a signing global first. If it does, fold it into the same PR
-(same defect, same one-line fix); if it does not, leave it alone rather than churn a
-passing test.
+An earlier draft of this section proposed repointing the five files at
+`_gitfix.make_git_repo`. **That is not viable**: `make_git_repo` hardcodes
+`repo = tmp_path / "repo"` and calls `repo.mkdir()` (`tests/unit/_gitfix.py:11-12`),
+whereas all five sites initialize git *in place* at a caller-supplied root and pass
+that same root to the code under test — via three different local `_git` wrappers
+(`test_project.py:264`, `test_scaffold_conformed_orchestration.py:24`,
+`test_workspace_init.py:40`), plus `_init_repo_with_commit` at
+`test_portfolio_watch_invariants.py:128` and an inline block in
+`test_portfolio_watch_summary.py`. Adopting the helper would need a new in-place
+variant or a reshaping of what each test asserts on. The static sweep that reported
+"no helper gaps" was wrong; this mismatch is the gap.
+
+The hermetic fixture is also the smaller change — one new file rather than five edits —
+and it covers `tests/integration/test_watch_cli.py` (which commits at L77-78 without
+disabling signing, and which `-m unit` merely deselects) plus every future temp-repo
+test, instead of relying on each author remembering the rule. Confirm that integration
+test passes rather than assuming it.
+
+Detailed steps: `docs/superpowers/plans/2026-07-30-t1-hermetic-git-test-environment.md`.
 
 ### Non-goals
 
