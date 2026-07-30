@@ -81,6 +81,18 @@ business.
 
 ---
 
+## Sub-decision D -- the HR1 conformed-dimension ruling *(data-owner; BLOCKS CI)*
+
+Identical to sub-decision D in `mappings/finance_gl_actuals/approval-request-mapping-gate.md`
+-- one ruling covers both stars, so please answer it once there rather than twice.
+
+In short: `seshat check` fires 2 HR1 errors because `dim_account_fgl` and `dim_department_fgl`
+appear in both stars and are undeclared in `docs/quality/conformed-dimension-map.yaml`. The
+registry reserves that `conformed` / `distinct` ruling for a human and HR1 never decides it, so
+the agent has not written the entries. The declared intent in both maps is ONE shared dimension
+per name. HR1 had never fired in this repository before -- this is the first two-fact case to
+reach it.
+
 ## Already ruled (recorded, not re-asked)
 
 | Ref | Ruling (Ahmed Shaaban, 2026-07-30) |

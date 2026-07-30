@@ -37,7 +37,37 @@ counts-based threshold, no score of any kind (hard rule #9).
 
 ---
 
-## L1 -- the source-map template has no way to declare a conformed dimension shared across two maps
+## L1 -- CORRECTED -- the conformance mechanism EXISTS; the template that needs it does not mention it
+
+> **This row was rewritten on 2026-07-30 after the gate proved the original claim wrong.**
+> As first written it said the kit had no way to declare a conformed dimension shared across
+> maps, classified `semantic_leak`. That was **incorrect**. Running `seshat check` against the
+> COMMITTED artifacts fired two HR1 errors naming
+> `docs/quality/conformed-dimension-map.yaml` -- a registry that exists precisely for this,
+> enforced by `src/seshat/rules/conformed_dimension.py`. The original text is preserved below
+> the correction, because a ledger that quietly edits its own mistakes is not evidence.
+>
+> **Why the error happened, which is itself the finding:** an author declaring dimensions works
+> inside `templates/source-map.yaml`, and that template says nothing about the cross-star
+> registry. Its `gold_placement` contract discusses HR13 (same-file validation) in detail but
+> never mentions HR1 or the conformance map. The mechanism was undiscoverable from where the
+> work happens.
+>
+> **Reclassified: `documentation_leak`** (was `semantic_leak`). The logic is present and
+> correct; only its discoverability failed.
+>
+> **A second, positive finding worth stating separately:** HR1 had **never fired in this
+> repository's history**. The registry's own header records why -- "The current committed stars
+> (retail_store_sales, demo_sample_orders) use different dimension-naming conventions
+> (suffixed vs bare), so NO dimension name overlaps across them and no ruling is required yet."
+> A two-fact domain sharing conformed dimensions is the first case ever to trigger it, and it
+> behaved exactly as designed: fail-closed, naming both dimensions, and refusing to guess a
+> ruling it reserves for a human. **The kit's cross-star governance worked first time on a
+> domain it was never exercised against.**
+
+### Original text (preserved, superseded by the correction above)
+
+## L1 (as first written) -- the source-map template has no way to declare a conformed dimension shared across two maps
 
 - **location**: `templates/source-map.yaml` (`gold_star.dimensions[]`, and the
   `gold_placement` contract at lines ~69-77); observed at
@@ -178,33 +208,64 @@ counts-based threshold, no score of any kind (hard rule #9).
   fixture simplification is masking the full severity of this finding -- recorded so the
   conclusion cannot under-report it.
 
+## L6 -- RS1 reserves `blocking_reasons[]` for `blocked` stages, which the template does not say
+
+- **location**: `templates/readiness-status.yaml` (per-stage comments, lines ~46-48); rule RS1
+- **observed_problem**: the template says "Each stage: status (required) + evidence[]
+  (required for pass) + blocking_reasons[] (required for blocked)". It does not say
+  blocking_reasons are FORBIDDEN on a `not_started` stage. Reading it as a minimum rather than
+  an exclusive rule, the first draft recorded the genuine downstream constraints
+  ("no silver before the gate clears"; "publishing is out of scope") as `blocking_reasons` on
+  `silver_ready` and `publish_ready` -- and RS1 errored on all four.
+- **classification**: `documentation_leak`
+- **existing_rule_or_surface**: RS1
+- **minimal_resolution**: the constraints moved to YAML comments on those stages; the
+  authoritative blockers stay on the two genuinely `blocked` stages. Fixed in this feature's
+  own artifacts -- the rule is right and the template's wording is merely incomplete.
+- **core_change_required**: false
+- **evidence**: 4 RS1 errors on the first committed run, 0 after the fix; both
+  `readiness-status.yaml` files now carry the constraints as comments
+- **note**: this is an ordinary authoring mistake caught by the gate, recorded because the
+  ledger's value depends on including the unflattering rows. It is not domain-specific: any
+  author could read the template the same way.
+
 ---
 
 ## Interim reading (Slice C, stages 1-2 only -- NOT the conclusion)
 
-Five rows so far: one `nominal_leak`, one `documentation_leak`, three `semantic_leak`. **No
-row required a change to any kit module to complete the walk**
-(`core_change_required: false` on all five), and no rule, verb, template, or skill was edited.
+Six rows: one `nominal_leak` (L4), three `documentation_leak` (L1-corrected, L3, L6), two
+`semantic_leak` (L2, L5). **No row required a change to any kit module to complete the walk**
+(`core_change_required: false` on all six); no rule, verb, template, or skill was edited.
 
-The three `semantic_leak` rows are the interesting ones, and **none of them is about retail
-vocabulary**:
+**The correction matters more than the count.** L1 was first written as a `semantic_leak`
+claiming the kit could not express conformed dimensions across maps. The gate disproved it by
+firing HR1 and naming the registry built for exactly that purpose. Two lessons the conclusion
+must carry:
 
-- **L1** -- a *single-fact-per-map* assumption; structurally invisible to a one-fact domain.
-- **L2** -- a *found-file provenance* assumption; invisible where sources arrive as
-  downloaded files.
+1. **An untested claim about the kit is worth no more than an untested claim about the
+   domain.** The original L1 was authored from reading a template; it survived until something
+   executable checked it. That is the same failure mode this whole feature exists to correct
+   for Principle VII -- and the ledger fell into it on its first row.
+2. **A gate finding is evidence, not an obstacle.** HR1 turned a wrong ledger row into a right
+   one, and did it on a rule that had **never fired before in this repository**.
+
+What is left after the correction:
+
+- **L2** -- a *found-file provenance* assumption; invisible where sources arrive as downloaded
+  files.
 - **L5** -- a *Gregorian-only calendar* contract; invisible where the reporting calendar and
-  the Gregorian calendar are the same thing.
+  the Gregorian calendar coincide -- and independently corroborated by the retail example
+  having hit the same wall and settled it by choosing the calendar year.
 
-That is a sharper result than "the kit is retail-shaped". On the evidence so far, the kit's
-ANALYTICAL core travelled to finance unchanged -- what strained were three assumptions about
-the SHAPE OF A PROJECT (one fact per source, sources that were found rather than generated, a
-reporting calendar that is Gregorian). Retail naming was encountered exactly once (L4) and
-cost nothing.
+Neither is about retail vocabulary. Retail naming was met exactly once (L4) and cost nothing.
+On the evidence so far the kit's ANALYTICAL core travelled to a non-retail domain unchanged;
+what strained were assumptions about the SHAPE OF A PROJECT (found sources, a Gregorian
+reporting calendar) plus discoverability of a mechanism that already existed.
 
-Note also what did NOT appear: no rule fired a false positive, no template needed a new
-field to be filled honestly, and the two hard stops that matter
-(`no_silver_before_mapping_cleared`, `never_self_grant_approval`) held -- Stage 1 and Stage 2
-are both sitting blocked on a human, which is the correct outcome, not a failure.
+Also worth recording: **the hard stops held.** `no_silver_before_mapping_cleared` and
+`never_self_grant_approval` both bound -- Stage 1 and Stage 2 sit blocked on named humans, and
+three separate approvals are outstanding (RS1 source confirmation, the mapping gate, and now
+the HR1 conformance ruling). That is the correct outcome, not a failure of the walk.
 
-The conclusion is deliberately not written yet -- Slices B, D, E and F have not run, and
-stages 3-7 have not been walked. Task T050 writes it, from the complete row set.
+The conclusion is deliberately not written yet -- Slices B, D, E and F have not run and stages
+3-7 have not been walked. Task T050 writes it from the complete row set.

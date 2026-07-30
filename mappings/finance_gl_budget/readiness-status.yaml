@@ -46,10 +46,12 @@ stages:
       - "source_ready is not pass (see above), so this stage cannot be entered."
 
   silver_ready:
+    # Not entered. RS1: blocking_reasons[] belong on `blocked` stages only, so the
+    # constraint is stated here rather than as a blocker --
+    # no silver.* SQL before the mapping gate is CLEARED (hard stop no_silver_before_mapping_cleared).
     status: "not_started"
     evidence: []
-    blocking_reasons:
-      - "no silver.* SQL before the mapping gate is CLEARED (hard stop no_silver_before_mapping_cleared)."
+    blocking_reasons: []
 
   gold_ready:
     status: "not_started"
@@ -67,10 +69,12 @@ stages:
     blocking_reasons: []
 
   publish_ready:
+    # Out of scope for spec 137 -- Service publishing is excluded and ADR-0018 (the
+    # Power BI MCP execution adapter) is Proposed, NOT ratified. Stated as a comment
+    # because RS1 reserves blocking_reasons[] for `blocked` stages.
     status: "not_started"
     evidence: []
-    blocking_reasons:
-      - "out of scope for spec 137: Service publishing excluded; ADR-0018 is Proposed -- NOT ratified."
+    blocking_reasons: []
 
 # --- cross-cutting evidence + blockers --------------------------------------
 evidence:

@@ -109,6 +109,43 @@ recorded, `reviewed_by` / `reviewed_on` stay `[PENDING GATE APPROVAL -- OD-4]` a
 
 ---
 
+## Sub-decision D -- the HR1 conformed-dimension ruling *(data-owner; BLOCKS CI)*
+
+### Evidence
+
+- `seshat check` on the committed artifacts fires **2 HR1 errors**: `dim_account_fgl` and
+  `dim_department_fgl` each appear in more than one star and are not declared in
+  `docs/quality/conformed-dimension-map.yaml`.
+- That registry exists for exactly this and says the ruling is yours, not the agent's: "when
+  MORE THAN ONE gold star exists, a dimension NAME that appears in 2+ stars must be ruled -- is
+  it ONE shared business dimension (`conformed`), or are the same-named dims deliberately
+  separate (`distinct`)? That ruling is a Principle-V human modelling judgment; HR1 never
+  decides it."
+- **HR1 has never fired in this repository before.** The registry's header records why: the two
+  existing stars use different dimension-naming conventions, "so NO dimension name overlaps
+  across them and no ruling is required yet". This finance example is the first two-fact case
+  to reach it.
+- The intent in both maps IS one shared dimension: `dim_account_fgl` and `dim_department_fgl`
+  are declared identically in `mappings/finance_gl_actuals/source-map.yaml` and
+  `mappings/finance_gl_budget/source-map.yaml` (same surrogate key, same attributes, same
+  silver types), because actuals and budget must be comparable at those levels.
+
+### Options
+
+- **A.** `conformed` for both, covering stars `finance_gl_actuals` and `finance_gl_budget`.
+  *(matches the declared intent; HR1 will then additionally verify surrogate key and shared
+  attribute types agree across both stars, which they are authored to do)*
+- **B.** `distinct` for either or both. *(would mean actuals and budget deliberately use
+  separate account/department dimensions -- which would make variance-by-department
+  unanswerable; stated only for completeness)*
+
+### Why this is left red rather than fixed
+
+Adding the two entries is a two-line edit I am explicitly not making. The registry reserves the
+ruling for a human, so writing it would be a self-granted modelling judgment -- the precise
+thing spec 137 exists to test the kit against. **CI on the Slice C pull request is therefore
+red on these two errors by design**, and the PR should not be merged until this is ruled.
+
 ## How to answer
 
 Record your decision in `mappings/finance_gl_actuals/approval-decision-mapping-gate.md`,
