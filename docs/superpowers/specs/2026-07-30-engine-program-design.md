@@ -176,15 +176,20 @@ OPEN, so a future change cannot silently convert evidence into a verdict.
 | `docs/rules/rules-manifest.json` | **79** rule ids | `tests/unit/test_rules_manifest_snapshot.py` (spec 043) locks it to the live registry |
 | `docs/glossary.md` rule table | — | `tests/unit/test_glossary_rule_table.py` |
 | prose "N rules" claims | — | rule `SC2` (`src/seshat/rules/rule_count_claims.py`, spec 065) |
-| `.claude/skills/retail-govern/SKILL.md` fix table | **45** rows | **none** |
+| `.claude/skills/retail-govern/SKILL.md` fix table | **47** rows | **none** |
 
-`grep -rl "retail-govern/SKILL.md"` across `src/` and `tests/` returns nothing. `AP1`
-(spec 085, implemented at `src/seshat/rules/rule_ap1.py`, present in the manifest) is
-absent from the table. No rule id, test, or doc declares the gap intentional.
+Set-differenced both ways programmatically, not by hand: **32** manifest ids are
+missing from the table — `AP1, CB1, CT1, CT2, CT3, DL3, DL4, DL5, DL6, DL7, DL8, DL9,
+DR1, DS1, DS2, DS3, DS4, DS5, HR1, HR4, HR5, HR6, HR7, HR8, HR9, HR11, HR12, HR13,
+KP1, KR1, R2, SF1` — and **zero** table rows name an id absent from the manifest. So
+the drift is one-directional: the table is a clean stale subset, with no phantom rows
+to retire. `grep -rl "retail-govern/SKILL.md"` across `src/` and `tests/` returns
+nothing, and no rule id, test, or doc declares the gap intentional.
 
-The consequence is specific: when `seshat check` emits one of the ~34 unlisted ids,
-the skill an agent is told to consult for the fix has no row for it. The engine's
-own contributing guide points at that table (`CONTRIBUTING.md:73`).
+The consequence is specific: when `seshat check` emits one of those 32 ids, the skill
+an agent is told to consult for the fix has no row for it. The engine's own
+contributing guide points at that table (`CONTRIBUTING.md:73`). Whole families are
+absent — every design-layer id (`CT*`, `DL*`, `DS*`) and every `HR*` id.
 
 ### Design
 
@@ -207,6 +212,21 @@ nowhere in `distribution/public-knowledge-allowlist.yaml`, so
 `integrations/**` and editing it does not require a bundle regeneration. The coverage
 test then guards the generated output, matching how `docs/rules/rules-manifest.json`
 is both generated and snapshot-locked.
+
+### Cost warning — price this before sequencing it
+
+Generation is not a mechanical codegen job, and the plan must say so. `registry.py`
+stores `id`, `title`, `tier` and **no fix field**, so generating the table means
+*authoring* fix guidance as data: 32 new entries written from scratch, plus migrating
+the 47 existing prose rows into the same structure. Each entry requires knowing what
+the fix for that rule actually is — content work gated on rule knowledge, not
+templating.
+
+That plausibly makes T3 larger than T2 and would reorder the sequencing table below.
+Two shapes to weigh in the plan: one PR that lands the field, the generator, the guard
+and all 79 entries together; or a split where the mechanism lands first with the 47
+known rows migrated, and the 32 new entries follow — noting that a guard test cannot
+land red, so the guard must arrive with, not before, full coverage.
 
 ### Non-goals
 
@@ -241,17 +261,23 @@ The gap: CI's agent-behaviour evidence comes from **pre-recorded** transcripts u
 `scripts/external_agent_acceptance.py --transcript` against
 `distribution/synthetic-retail/expected-outcomes.yaml`. The live-agent path
 (`--execute-cli`) exists but is credential-dependent and deliberately not CI-wired.
-The fixture JSONs carry `recorded_at` timestamps and **no** `manifest_digest` or bundle
-version, and nothing asserts a fixture was captured against the current bundle. So a
-change that alters real agent behaviour passes CI on a stale recording.
+Measured across the 9 fixture JSONs under `tests/fixtures/public_distribution/`: **no**
+fixture carries `manifest_digest`; 7 carry `recorded_at`; **3 carry
+`source_revision`**. So partial provenance already exists — it is simply not universal
+and not asserted. Nothing ties a captured transcript to the bundle it was captured
+from, and a change that alters real agent behaviour therefore passes CI on a stale
+recording.
 
 ### Design
 
-Record provenance on capture and assert it on use: stamp the bundle's
-`manifest_digest` into each fixture when it is captured, and have the consuming tests
-assert that stamp matches the current bundle. A mismatch should report "this fixture
-predates the current bundle; re-capture with `--execute-cli`" — a named, actionable
-blocker rather than a silent pass.
+Record provenance on capture and assert it on use. Because 3 fixtures already carry
+`source_revision` — a field `export_agent_bundles.py` also writes into the bundle
+manifest — prefer extending that existing field to all 9 fixtures over introducing a
+second provenance key; confirm during planning which of `source_revision` or
+`manifest_digest` the bundle treats as authoritative, and bind to that one rather than
+stamping both. Then have the consuming tests assert the stamp matches the current
+bundle, reporting "this fixture predates the current bundle; re-capture with
+`--execute-cli`" — a named, actionable blocker rather than a silent pass.
 
 ### Non-goals
 
@@ -276,6 +302,10 @@ stamped, for the same reason as T3.
 T1 and T2 are independent of each other and could run in parallel worktrees; T3 and
 T4 are independent of everything. The order above optimises for review confidence
 rather than wall-clock.
+
+**T3's position is provisional.** Its cost warning above may make it the largest track
+rather than the third-smallest; if pricing confirms that, it moves after T4 or splits
+in two. Settle that in T3's own plan, not here.
 
 ## Governance constraints applying to all tracks
 
