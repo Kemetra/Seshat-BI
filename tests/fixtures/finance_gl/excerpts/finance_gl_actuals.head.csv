@@ -1,0 +1,21 @@
+journal_entry_id,line_id,posting_date,account_code,department_code,cost_center_code,currency_code,debit_amount,credit_amount,description
+JE-2024-00001,1,2024-12-24,6070,D20,D20-C1,USD,22489.06,0.00,Opex detail 7 activity
+JE-2024-00001,2,2024-12-24,1910,D20,D20-C1,USD,0.00,22489.06,Offsetting clearing line
+JE-2024-00002,1,2024-03-27,4010,D50,D50-C1,USD,0.00,7325.27,Revenue detail 1 activity
+JE-2024-00002,2,2024-03-27,1900,D50,D50-C1,USD,7325.27,0.00,Offsetting clearing line
+JE-2024-00003,1,2024-10-03,5040,D60,D60-C1,USD,3082.63,0.00,Cogs detail 4 activity
+JE-2024-00003,2,2024-10-03,1910,D60,D60-C1,USD,0.00,3082.63,Offsetting clearing line
+JE-2024-00004,1,2024-09-22,5010,D30,D30-C2,USD,8348.56,0.00,Cogs detail 1 activity
+JE-2024-00004,2,2024-09-22,1910,D30,D30-C2,USD,0.00,8348.56,Offsetting clearing line
+JE-2024-00005,1,2024-04-25,6000,D30,D30-C2,USD,2990.26,0.00,Opex -- total activity
+JE-2024-00005,2,2024-04-25,1900,D30,D30-C2,USD,0.00,2990.26,Offsetting clearing line
+JE-2024-00006,1,2024-12-21,4020,D60,D60-C1,USD,0.00,16584.63,Revenue detail 2 activity
+JE-2024-00006,2,2024-12-21,1910,D60,D60-C1,USD,16584.63,0.00,Offsetting clearing line
+JE-2024-00007,1,2024-04-27,6010,D50,D50-C1,USD,22578.86,0.00,Opex detail 1 activity
+JE-2024-00007,2,2024-04-27,1910,D50,D50-C1,USD,0.00,22578.86,Offsetting clearing line
+JE-2024-00008,1,2024-12-03,6020,D10,D10-C1,USD,4223.71,0.00,Opex detail 2 activity
+JE-2024-00008,2,2024-12-03,1910,D10,D10-C1,USD,0.00,4223.71,Offsetting clearing line
+JE-2024-00009,1,2024-12-24,4030,D20,D20-C1,USD,0.00,10344.12,Revenue detail 3 activity
+JE-2024-00009,2,2024-12-24,1910,D20,D20-C1,USD,10344.12,0.00,Offsetting clearing line
+JE-2024-00010,1,2024-05-12,5050,D60,D60-C1,USD,7856.07,0.00,Cogs detail 5 activity
+JE-2024-00010,2,2024-05-12,1900,D60,D60-C1,USD,0.00,7856.07,Offsetting clearing line

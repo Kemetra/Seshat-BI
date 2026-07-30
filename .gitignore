@@ -126,3 +126,8 @@ reports/dashboard/
 # whole .superpowers/ tree, which would also swallow the committed top-level
 # .superpowers/sdd/*.md reports that pre-date this ignore rule.
 .superpowers/sdd/*/
+
+# Spec 137: full generated Finance GL fixtures. The GENERATOR and the tiny
+# excerpts/ samples are committed; the ~5,000-line output is not (the largest
+# committed data fixture in this repo is 1,801 bytes -- see spec 137 research R3).
+tests/fixtures/finance_gl/generated/

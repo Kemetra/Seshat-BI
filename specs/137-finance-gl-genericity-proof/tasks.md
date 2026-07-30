@@ -24,21 +24,21 @@ Slice letters (A-F) from the feature brief are noted per phase.
 
 ## Phase 1: Setup (Slice A start)
 
-- [ ] T001 Create the fixture package directory `tests/fixtures/finance_gl/` with an empty `excerpts/` subdirectory -- `mechanical`
-- [ ] T002 Add the generated-output path to `.gitignore` so full generated CSVs are never committed, per the measured storage decision in `plan.md` -- `mechanical`
-- [ ] T003 [P] Record the pre-flight baseline in `specs/137-finance-gl-genericity-proof/ledger-baseline.md`: current branch, `git log -1 --oneline`, `git status --short`, and the byte sizes of the three existing committed fixtures cited in `research.md` R3 -- `mechanical`
+- [x] T001 Create the fixture package directory `tests/fixtures/finance_gl/` with an empty `excerpts/` subdirectory -- `mechanical`
+- [x] T002 Add the generated-output path to `.gitignore` so full generated CSVs are never committed, per the measured storage decision in `plan.md` -- `mechanical`
+- [x] T003 [P] Record the pre-flight baseline in `specs/137-finance-gl-genericity-proof/ledger-baseline.md`: current branch, `git log -1 --oneline`, `git status --short`, and the byte sizes of the three existing committed fixtures cited in `research.md` R3 -- `mechanical`
 
 ## Phase 2: Foundational -- the generator (Slice A; BLOCKS every later phase)
 
 **No downstream artifact may be authored from a non-reproducible fixture.**
 
-- [ ] T004 Implement the clean-variant generator in `tests/fixtures/finance_gl/generate.py` honoring every determinism obligation in `contracts/generator-contract.md` (single `random.Random(20260730)`, no clock, no uuid4, `Decimal` amounts, declared sort order, explicit `\n`) -- `mechanical`
-- [ ] T005 Emit the five clean sources per `contracts/fixture-schema.md` column order: `finance_gl_actuals.csv`, `finance_gl_budget.csv`, `accounts.csv`, `departments.csv`, `fiscal_calendar.csv` -- `mechanical`
-- [ ] T006 Enforce the generator's content invariants in code: one of debit/credit non-zero per line, every journal entry balances, unique (`journal_entry_id`, `line_id`), every `posting_date` inside a declared fiscal period, P&L accounts only -- `mechanical`
-- [ ] T007 Write the determinism unit test in `tests/unit/test_finance_gl_generator.py`: generate twice into two temp dirs, compare bytes AND per-file SHA-256, assert equality -- `mechanical`
-- [ ] T008 [P] Write the schema/grain unit test asserting declared PK uniqueness for both sources and the FK closure of `account_code` / `department_code` / `cost_center_code` against the reference files -- `mechanical`
-- [ ] T009 [P] Commit the tiny excerpts `tests/fixtures/finance_gl/excerpts/finance_gl_actuals.head.csv` and `finance_gl_budget.head.csv` (tens of rows) for documentation citation -- `mechanical`
-- [ ] T010 Verify no new dependency was introduced: confirm `pyproject.toml` is byte-unchanged -- `mechanical`
+- [x] T004 Implement the clean-variant generator in `tests/fixtures/finance_gl/generate.py` honoring every determinism obligation in `contracts/generator-contract.md` (single `random.Random(20260730)`, no clock, no uuid4, `Decimal` amounts, declared sort order, explicit `\n`) -- `mechanical`
+- [x] T005 Emit the five clean sources per `contracts/fixture-schema.md` column order: `finance_gl_actuals.csv`, `finance_gl_budget.csv`, `accounts.csv`, `departments.csv`, `fiscal_calendar.csv` -- `mechanical`
+- [x] T006 Enforce the generator's content invariants in code: one of debit/credit non-zero per line, every journal entry balances, unique (`journal_entry_id`, `line_id`), every `posting_date` inside a declared fiscal period, P&L accounts only -- `mechanical`
+- [x] T007 Write the determinism unit test in `tests/unit/test_finance_gl_generator.py`: generate twice into two temp dirs, compare bytes AND per-file SHA-256, assert equality -- `mechanical`
+- [x] T008 [P] Write the schema/grain unit test asserting declared PK uniqueness for both sources and the FK closure of `account_code` / `department_code` / `cost_center_code` against the reference files -- `mechanical`
+- [x] T009 [P] Commit the tiny excerpts `tests/fixtures/finance_gl/excerpts/finance_gl_actuals.head.csv` and `finance_gl_budget.head.csv` (tens of rows) for documentation citation -- `mechanical`
+- [x] T010 Verify no new dependency was introduced: confirm `pyproject.toml` is byte-unchanged -- `mechanical`
 
 **Checkpoint**: fixtures regenerate byte-identically; no dependency added. Slice A done.
 
