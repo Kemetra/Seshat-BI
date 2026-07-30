@@ -78,10 +78,15 @@ own ratified data model, recorded here for transparency and raised to the owner:
 
 **Owner note**: this resolution was chosen by the agent because it satisfies both ratified
 rules without inventing scope, and because it produces a genuine exclusion decision for the
-mapping stage. If the owner prefers instead to relax data-model rule 2 (declaring the
-fixture a P&L *extract* that need not balance), say so and the generator drops the clearing
-pair. Either way the choice belongs in the record, which is why it is here rather than
-buried in a code comment.
+mapping stage. The alternative -- relax data-model rule 2, declaring the fixture a P&L
+*extract* that need not balance -- was stated alongside it.
+
+**ACCEPTED (Ahmed Shaaban, 2026-07-30).** The owner accepted the clearing-account resolution
+with the alternative on the table. Unlike OD-1/OD-2/OD-3, this item only needed CONSENT
+rather than CONTENT, because a concrete resolution was already implemented and its
+alternative named -- so "approved" is unambiguous here in a way it would not have been for a
+choice among options. The alternative remains available if the owner later prefers it; the
+generator would drop the clearing pair and data-model rule 2 would be relaxed.
 
 No retail-specific obstruction was encountered in Slice A -- expected, since Slice A only
 generates data and touches no kit template, rule, or skill. The genericity ledger proper

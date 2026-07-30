@@ -109,6 +109,22 @@ Every contract uses the existing `templates/metric-contract.yaml` field set with
 or renamed fields (FR-013), records its ambiguities in that template's ambiguity ledger,
 and carries blocking reasons until a named human rules.
 
+**Ruling update (2026-07-30).** OD-1, OD-2 and OD-3 were ruled by the owner and transcribed
+into `spec.md`. The "blocking ambiguity" column above is retained as the record of what each
+ambiguity WAS, not as a live blocker. Effect on this table:
+
+- **OD-1** -> both revenue and expenses present as positive magnitudes; polarity moves to
+  each contract's existing `direction_of_good` field. Variance sign alone therefore carries
+  no good/bad meaning and every variance contract must state direction explicitly.
+- **OD-2** -> every variance contract names `budget_version = ORIGINAL` as its baseline in
+  the stated intent. `REVISION-1` still exists to exercise FR-011 version identity and
+  variant D10, but never moves the headline measures.
+- **OD-3** -> no monthly disaggregation of budget. Budget and variance are quarter-grain
+  only; a monthly-budget request is refused (variant D11).
+
+Still blocking: nothing in this table. The remaining open items are OD-4 (per-table
+mapping-gate approval, which cannot be pre-granted) and OD-5 (the human authoring session).
+
 ## 4. Defect variant catalog
 
 Each variant is one deterministic perturbation of the clean fixture and declares ONE

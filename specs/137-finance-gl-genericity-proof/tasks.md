@@ -111,7 +111,7 @@ references an unapproved or non-existent measure.
 - [ ] T037 [P] [US3] Author the Actual YTD and Budget YTD contracts at the declared comparison grain -- `mechanical`
 - [ ] T038 [P] [US3] Author the Missing Budget Flag contract, making missing distinguishable from zero -- `mechanical`
 - [ ] T039 [US3] Populate each contract's ambiguity ledger and blocking reasons with OD-1/OD-2 where applicable; invent no RAG threshold, no sign policy, no preferred budget version -- `mechanical`
-- [ ] T040 [US3] **STOP**: obtain named-human rulings on OD-1 (sign/presentation) and OD-2 (baseline) -- `approval_gated` `human_only`
+- [x] T040 [US3] **STOP**: obtain named-human rulings on OD-1 (sign/presentation) and OD-2 (baseline) -- `approval_gated` `human_only` -- **SATISFIED 2026-07-30**: both ruled by Ahmed Shaaban and transcribed into `spec.md` "Open owner decisions" (OD-1 both-positive with `direction_of_good` carrying polarity; OD-2 baseline is `ORIGINAL`). OD-3 was ruled at the same time (no monthly derivation from quarterly budget).
 - [ ] T041 [US3] Finalize the affected contracts using the recorded rulings, citing approver and date -- `mechanical` (blocked by T040)
 - [ ] T042 [US3] Author the semantic model TMDL so every measure traces to exactly one approved contract; keep PBIP names short for the Windows path limit -- `mechanical`
 - [ ] T043 [US3] Author the page blueprint and the visual-to-contract binding map for all 8 visuals in `plan.md`'s classification table -- `mechanical`

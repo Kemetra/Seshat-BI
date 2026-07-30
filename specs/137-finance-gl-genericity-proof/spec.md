@@ -415,18 +415,39 @@ feature introduces is scoped to "an example exists" rather than "a capability ex
 
 ## Open owner decisions (approval-gated; NOT spec ambiguity)
 
-These are Principle V judgment calls that the feature is REQUIRED to leave open. They are
-listed here so review does not mistake them for gaps in this specification.
+These are Principle V judgment calls the feature is REQUIRED to leave open until a named
+human supplies their CONTENT. They are listed here so review does not mistake them for gaps
+in this specification.
 
-- **OD-1**: Revenue sign convention and debit/credit presentation for the report.
-- **OD-2**: Which baseline "budget" means for the variance metrics (Original, Revised, or
-  Latest Forecast).
-- **OD-3**: Whether any monthly view may be derived from quarterly budget, and if so under
-  what named allocation policy.
-- **OD-4**: The mapping-gate approval for each finance table (a named human; never the
-  authoring agent).
-- **OD-5**: Whether the owner performs the human report-authoring action that US3 depends
-  on, and when.
+Three were ruled on 2026-07-30. Each ruling below is TRANSCRIBED from the owner's explicit
+answer; the agent supplied the options and the recommendation, never the decision
+(Principle V, never_self_grant_approval).
+
+- **OD-1 -- RESOLVED (Ahmed Shaaban, 2026-07-30)**: revenue and expenses are both PRESENTED
+  as positive magnitudes. Whether higher is better is carried by each metric contract's
+  existing `direction_of_good` field, never by the arithmetic sign. The GL's own debit/credit
+  posting is unchanged in silver/gold; this ruling governs PRESENTATION only. Consequence:
+  the Variance % sign alone does not indicate good or bad -- every variance visual and
+  contract must state the direction explicitly.
+- **OD-2 -- RESOLVED (Ahmed Shaaban, 2026-07-30)**: the variance BASELINE is the `ORIGINAL`
+  budget version -- the plan of record. `REVISION-1` remains present in the fixture and is
+  exercised for version identity (FR-011) and for the baseline-ambiguity variant D10, but it
+  does NOT move the headline Variance Amount / Variance % measures. Consequence: every
+  variance contract names `budget_version = ORIGINAL` in its stated intent, so the baseline
+  cannot drift silently when a later version lands.
+- **OD-3 -- RESOLVED (Ahmed Shaaban, 2026-07-30)**: no monthly view may be derived from the
+  quarterly budget. Monthly ACTUALS may be displayed; budget and variance are reported at
+  quarter grain only. A monthly-budget request is REFUSED with the reason named, which is
+  exactly the outcome defect variant D11 declares. No allocation policy exists, and none may
+  be inferred.
+- **OD-4 -- STILL OPEN**: the mapping-gate approval for each finance table. This one CANNOT
+  be pre-granted: the maps do not exist yet (they are authored in Slice C), and the gate's
+  purpose is that a named human reviewed the declared grain and PK BEFORE any silver SQL is
+  authored. Approving an artifact that does not exist would be a blank cheque, not an
+  approval.
+- **OD-5 -- STILL OPEN (an action, not an approval)**: the human report-authoring session in
+  Power BI Desktop that US3 depends on. It cannot be delegated or approved away -- the PBIR
+  adapter creates and binds no visuals.
 
 ## Assumptions
 
