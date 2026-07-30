@@ -38,3 +38,7 @@ integrations/codex/seshat-bi/**        text eol=lf
 *.svg    text eol=lf
 docs/rules/rules-manifest.json text eol=lf
 docs/rules/severity-posture.json text eol=lf
+
+# Spec 137: the Finance GL generator writes LF, and its committed excerpts must
+# byte-match that output on every platform (FR-002 byte-identical regeneration).
+tests/fixtures/finance_gl/**/*.csv text eol=lf

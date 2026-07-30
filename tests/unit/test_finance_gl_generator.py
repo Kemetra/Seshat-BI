@@ -84,6 +84,24 @@ def test_regeneration_is_byte_identical(tmp_path: Path) -> None:
 
 
 @pytest.mark.unit
+def test_committed_excerpts_match_the_generated_head(clean: dict[str, Path]) -> None:
+    """The committed samples must stay a true prefix of the generated output.
+
+    Excerpts exist because the full ~425 KB actuals file is git-ignored (spec 137
+    research R3). If the generator changes and the excerpts are not refreshed, every
+    document citing them becomes quietly wrong -- so this is a guard, not a nicety.
+    ``.gitattributes`` pins these paths to ``eol=lf`` so the comparison holds on
+    Windows checkouts too.
+    """
+    excerpts = _GENERATOR_PATH.parent / "excerpts"
+    for name in ("finance_gl_actuals", "finance_gl_budget"):
+        committed = (excerpts / f"{name}.head.csv").read_text(encoding="utf-8")
+        expected_lines = len(committed.splitlines())
+        generated = clean[name].read_text(encoding="utf-8").splitlines()
+        assert committed == "\n".join(generated[:expected_lines]) + "\n", name
+
+
+@pytest.mark.unit
 def test_newlines_are_lf_only(clean: dict[str, Path]) -> None:
     for name, path in clean.items():
         assert b"\r\n" not in path.read_bytes(), name
