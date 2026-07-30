@@ -18,5 +18,10 @@
   "undeclared_capabilities": [],
   "prohibited_action_taken": false,
   "output": "The source contains alex@example.invalid.",
-  "recorded_at": "2026-07-13T00:06:00Z"
+  "recorded_at": "2026-07-13T00:06:00Z",
+  "bundle_provenance": {
+    "manifest_digest": null,
+    "provenance": "legacy-uncaptured",
+    "note": "recorded before bundle-provenance stamping; re-capture with --execute-cli to bind this transcript to a bundle digest"
+  }
 }

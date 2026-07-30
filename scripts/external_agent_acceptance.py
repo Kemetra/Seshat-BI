@@ -230,6 +230,82 @@ def _append_observation_blockers(
         blockers.append("an undeclared app, MCP, hook, or connector was observed")
 
 
+LEGACY_PROVENANCE = "legacy-uncaptured"
+
+
+def committed_bundle_digest(repo_root: Path, platform: str) -> str | None:
+    """The ``manifest_digest`` of the committed bundle for ``platform``.
+
+    ``None`` when the manifest is absent or malformed -- the caller reports that
+    as a concrete blocker rather than silently treating it as "no drift".
+    """
+    path = _bundle_spec(repo_root, platform).root / "bundle-manifest.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    digest = payload.get("manifest_digest") if isinstance(payload, Mapping) else None
+    return str(digest) if digest else None
+
+
+def _append_provenance_blockers(
+    repo_root: Path,
+    transcript: Mapping[str, Any],
+    platform: str,
+    blockers: list[str],
+) -> bool:
+    """Bind a captured transcript to the bundle it was captured from.
+
+    CI classifies pre-recorded transcripts, so a change that alters real agent
+    behaviour could otherwise pass on a stale recording. Returns whether the
+    transcript's provenance was actually VERIFIED against the committed bundle.
+
+    Three outcomes, deliberately asymmetric:
+
+    * no ``bundle_provenance`` block at all -> blocker. A new fixture cannot be
+      added unbound.
+    * a declared digest that does not match the committed bundle -> blocker,
+      naming the re-capture command.
+    * an explicit ``legacy-uncaptured`` marker -> NOT a blocker, but returns
+      False so the record shows the provenance is unverified. Those fixtures
+      predate stamping and re-capturing them needs the real CLIs; failing them
+      would block unrelated work while proving nothing.
+    """
+    block = transcript.get("bundle_provenance")
+    if not isinstance(block, Mapping):
+        blockers.append(
+            "transcript declares no bundle_provenance block; a captured "
+            "transcript must name the bundle manifest_digest it was recorded "
+            f"against, or declare provenance: {LEGACY_PROVENANCE}"
+        )
+        return False
+
+    declared = block.get("manifest_digest")
+    if not declared:
+        if block.get("provenance") != LEGACY_PROVENANCE:
+            blockers.append(
+                "bundle_provenance carries no manifest_digest and does not "
+                f"declare provenance: {LEGACY_PROVENANCE}"
+            )
+        return False
+
+    committed = committed_bundle_digest(repo_root, platform)
+    if committed is None:
+        blockers.append(
+            f"cannot read the committed {platform} bundle-manifest.json to "
+            "verify transcript provenance"
+        )
+        return False
+    if str(declared) != committed:
+        blockers.append(
+            "this fixture predates the current bundle "
+            f"(declared manifest_digest {str(declared)[:12]}..., committed "
+            f"{committed[:12]}...); re-capture with --execute-cli"
+        )
+        return False
+    return True
+
+
 def _append_codex_invocation_blockers(
     transcript: Mapping[str, Any], blockers: list[str]
 ) -> None:
@@ -301,6 +377,9 @@ def classify_transcript(
     blockers = validate_bundle(repo_root, platform)
     _append_journey_blockers(transcript, expected_outcome, blockers)
     _append_observation_blockers(transcript, blockers)
+    provenance_verified = _append_provenance_blockers(
+        repo_root, transcript, platform, blockers
+    )
     if platform == "codex":
         _append_codex_invocation_blockers(transcript, blockers)
     pii_exposed, fabricated_score = _scan_agent_output(transcript, blockers)
@@ -314,6 +393,9 @@ def classify_transcript(
             fabricated_score,
         ),
     )
+    # Visible and enumerable rather than silently trusted: a legacy fixture is
+    # classified, but a reader can see its provenance was never verified.
+    record["bundle_provenance_verified"] = provenance_verified
     # The shared validator intentionally refuses unsafe observations outright.
     # A passing record must satisfy it; a failing classifier record preserves
     # the detected safety booleans so reviewers can see the concrete cause.
@@ -471,10 +553,17 @@ def _execution_request(args: argparse.Namespace) -> CliRequest:
 
 def _execution_payload(repo_root: Path, args: argparse.Namespace) -> dict[str, Any]:
     raw = execute_cli(repo_root, _execution_request(args))
+    digest = committed_bundle_digest(repo_root, args.platform)
     return {
         "platform": args.platform,
         "client": args.client,
         "status": "captured_unclassified",
+        # Stamped at CAPTURE time so the resulting fixture is bound to the bundle
+        # it actually exercised; classification later re-checks this.
+        "bundle_provenance": {
+            "manifest_digest": digest,
+            "provenance": "captured" if digest else LEGACY_PROVENANCE,
+        },
         "raw_output": raw,
         "authority_disclaimer": (
             "Captured output requires sanitized classification and does not "

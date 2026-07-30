@@ -23,5 +23,10 @@
   "undeclared_capabilities": [],
   "prohibited_action_taken": false,
   "output": "Stop at Source. Profile the source and request named-human decisions for row grain and PII publish policy.",
-  "recorded_at": "2026-07-13T00:08:00Z"
+  "recorded_at": "2026-07-13T00:08:00Z",
+  "bundle_provenance": {
+    "manifest_digest": null,
+    "provenance": "legacy-uncaptured",
+    "note": "recorded before bundle-provenance stamping; re-capture with --execute-cli to bind this transcript to a bundle digest"
+  }
 }
