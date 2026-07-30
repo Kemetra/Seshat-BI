@@ -137,7 +137,25 @@ def _encode_srgb_channel(linear: float) -> int:
     return round(max(0.0, min(1.0, s)) * 255.0)
 
 
-def _project_lms(lms: tuple[float, float, float], deficiency: str) -> tuple[float, ...]:
+def _hex_to_linear_rgb(hex_color: str) -> tuple[float, float, float]:
+    """``#RRGGBB`` -> linear-light RGB, reusing the shared sRGB linearization."""
+    h = hex_color.lstrip("#")
+    r, g, b = (channel_luminance(int(h[i : i + 2], 16)) for i in (0, 2, 4))
+    return (r, g, b)
+
+
+def _apply_matrix(
+    matrix: tuple[tuple[float, float, float], ...],
+    vector: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    """Multiply a 3x3 matrix by a 3-vector."""
+    x, y, z = vector
+    return tuple(row[0] * x + row[1] * y + row[2] * z for row in matrix)  # type: ignore[return-value]
+
+
+def _project_lms(
+    lms: tuple[float, float, float], deficiency: str
+) -> tuple[float, float, float]:
     """Project an LMS triple onto the dichromat plane for ``deficiency``."""
     long_, medium, short = lms
     if deficiency == "protanope":
@@ -173,13 +191,11 @@ def simulate_cvd(hex_color: str, deficiency: str) -> str:
     """
     if not is_valid_hex(hex_color):
         raise ValueError(f"not a #RRGGBB hex color: {hex_color!r}")
-    h = hex_color.lstrip("#")
-    linear = [channel_luminance(int(h[i : i + 2], 16)) for i in (0, 2, 4)]
 
-    lms = tuple(sum(row[i] * linear[i] for i in range(3)) for row in _RGB_TO_LMS)
-    projected = _project_lms(lms, deficiency)  # type: ignore[arg-type]
-    out = [sum(row[i] * projected[i] for i in range(3)) for row in _LMS_TO_RGB]
-
+    linear = _hex_to_linear_rgb(hex_color)
+    lms = _apply_matrix(_RGB_TO_LMS, linear)
+    projected = _project_lms(lms, deficiency)
+    out = _apply_matrix(_LMS_TO_RGB, projected)
     return "#" + "".join(f"{_encode_srgb_channel(v):02X}" for v in out)
 
 

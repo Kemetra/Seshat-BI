@@ -39,42 +39,53 @@ def _declared(theme: dict[str, Any], key: str) -> list[str]:
     return [v for v in (value or []) if is_valid_hex(v)]
 
 
+def _assert_swatches_recompute(
+    measured: dict[str, Any], deficiency: str, section_id: str
+) -> None:
+    """V1: every reported swatch is the declared colour put through the transform."""
+    for swatch in measured["swatches"]:
+        expected = simulate_cvd(swatch["declared"], deficiency)
+        assert swatch["simulated"] == expected, (
+            f"{deficiency}/{section_id}: {swatch['declared']} reported as "
+            f"{swatch['simulated']}, recomputes to {expected}"
+        )
+
+
+def _assert_pairs_recompute(measured: dict[str, Any], deficiency: str) -> None:
+    """V2: every reported distance recomputes from the two declared colours."""
+    for pair in measured["pairs"]:
+        a_sim = simulate_cvd(pair["a"], deficiency)
+        b_sim = simulate_cvd(pair["b"], deficiency)
+        assert pair["delta_e_simulated"] == round(delta_e76(a_sim, b_sim), 2)
+        assert pair["delta_e_declared"] == round(delta_e76(pair["a"], pair["b"]), 2)
+
+
+def _assert_no_forbidden_vocabulary(evidence: dict[str, Any]) -> None:
+    """V4: no rolled-up quantity, no verdict, no cross-theme ordering, anywhere."""
+    surfaces = (
+        ("markdown", render(evidence, "text")),
+        ("json", render(evidence, "json")),
+    )
+    for surface, text in surfaces:
+        lowered = text.lower()
+        present = [token for token in FORBIDDEN if token in lowered]
+        assert not present, f"forbidden token(s) {present!r} in {surface} output"
+
+
 def assert_evidence_is_faithful(
     evidence: dict[str, Any], theme: dict[str, Any]
 ) -> None:
     """Every reported number must be reproducible from the theme, independently."""
-    rendered = render(evidence, "text")
-    as_json = render(evidence, "json")
-
     # V3: all three simulations present whenever there is something to simulate.
     if evidence.get("sections"):
         assert set(evidence["simulations"]) == set(CVD_DEFICIENCIES)
 
     for deficiency, sections in evidence.get("simulations", {}).items():
         for section_id, measured in sections.items():
-            for swatch in measured["swatches"]:
-                # V1: recompute the swatch from the declared colour ourselves.
-                expected = simulate_cvd(swatch["declared"], deficiency)
-                assert swatch["simulated"] == expected, (
-                    f"{deficiency}/{section_id}: {swatch['declared']} reported as "
-                    f"{swatch['simulated']}, recomputes to {expected}"
-                )
-            for pair in measured["pairs"]:
-                # V2: recompute both distances from the declared colours.
-                a_sim = simulate_cvd(pair["a"], deficiency)
-                b_sim = simulate_cvd(pair["b"], deficiency)
-                assert pair["delta_e_simulated"] == round(delta_e76(a_sim, b_sim), 2)
-                assert pair["delta_e_declared"] == round(
-                    delta_e76(pair["a"], pair["b"]), 2
-                )
+            _assert_swatches_recompute(measured, deficiency, section_id)
+            _assert_pairs_recompute(measured, deficiency)
 
-    # V4: no rolled-up quantity, no verdict, no cross-theme ordering, anywhere.
-    for surface, text in (("markdown", rendered), ("json", as_json)):
-        lowered = text.lower()
-        for token in FORBIDDEN:
-            assert token not in lowered, (
-                f"forbidden token {token!r} in {surface} output"
-            )
+    _assert_no_forbidden_vocabulary(evidence)
 
     # V5: the reviewer slot is present and BLANK.
     assert evidence["reviewer"] == {"name": "", "decision": "", "date": ""}

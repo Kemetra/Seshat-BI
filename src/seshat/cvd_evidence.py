@@ -72,6 +72,55 @@ def _partition_colors(values: Any) -> tuple[list[str], list[str]]:
     return (usable, skipped)
 
 
+_BAD_TOKEN = "not a #RRGGBB colour token"
+
+
+def _skipped_entries(section_id: str, values: list[str]) -> list[dict[str, str]]:
+    return [{"section": section_id, "value": v, "reason": _BAD_TOKEN} for v in values]
+
+
+def _list_sections(
+    theme: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """The groups declared as a list of colours: the palette and any ramp."""
+    sections: list[dict[str, Any]] = []
+    skipped: list[dict[str, str]] = []
+    for section_id, key, label in (_CATEGORICAL, _RAMP):
+        usable, bad = _partition_colors(theme.get(key))
+        skipped += _skipped_entries(section_id, bad)
+        if usable:
+            sections.append(
+                {"id": section_id, "source_key": key, "label": label, "colors": usable}
+            )
+    return (sections, skipped)
+
+
+def _status_section(
+    theme: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    """The declared good/neutral/bad trio, kept apart from the palette.
+
+    Worth its own group because it is green-and-red in practice -- the pair
+    deuteranopia collapses hardest -- so conflating it with the categorical
+    series would bury the finding a reviewer most needs.
+    """
+    declared = [(k, theme[k]) for k in _STATUS_KEYS if k in theme]
+    usable = [(k, v) for k, v in declared if is_valid_hex(v)]
+    skipped = _skipped_entries(
+        "status", [str(v) for _, v in declared if not is_valid_hex(v)]
+    )
+    if not usable:
+        return ([], skipped)
+    section = {
+        "id": "status",
+        "source_key": "/".join(k for k, _ in usable),
+        "label": "declared status colours (good/neutral/bad)",
+        "colors": [v for _, v in usable],
+        "names": [k for k, _ in usable],
+    }
+    return ([section], skipped)
+
+
 def _collect_sections(
     theme: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
@@ -80,38 +129,9 @@ def _collect_sections(
     Reported groups stay SEPARATE and are never conflated: a ramp stop is not a
     categorical series, and the status trio is not either.
     """
-    sections: list[dict[str, Any]] = []
-    skipped: list[dict[str, str]] = []
-
-    for section_id, key, label in (_CATEGORICAL, _RAMP):
-        usable, bad = _partition_colors(theme.get(key))
-        skipped += [
-            {"section": section_id, "value": v, "reason": "not a #RRGGBB colour token"}
-            for v in bad
-        ]
-        if usable:
-            sections.append(
-                {"id": section_id, "source_key": key, "label": label, "colors": usable}
-            )
-
-    status = [(k, theme[k]) for k in _STATUS_KEYS if k in theme]
-    status_usable = [(k, v) for k, v in status if is_valid_hex(v)]
-    skipped += [
-        {"section": "status", "value": str(v), "reason": "not a #RRGGBB colour token"}
-        for k, v in status
-        if not is_valid_hex(v)
-    ]
-    if status_usable:
-        sections.append(
-            {
-                "id": "status",
-                "source_key": "/".join(k for k, _ in status_usable),
-                "label": "declared status colours (good/neutral/bad)",
-                "colors": [v for _, v in status_usable],
-                "names": [k for k, _ in status_usable],
-            }
-        )
-    return (sections, skipped)
+    list_sections, list_skipped = _list_sections(theme)
+    status_sections, status_skipped = _status_section(theme)
+    return (list_sections + status_sections, list_skipped + status_skipped)
 
 
 def _measure_section(colors: list[str], deficiency: str) -> dict[str, Any]:
@@ -230,6 +250,63 @@ def _render_section(section: dict[str, Any], measured: dict[str, Any]) -> list[s
     return lines
 
 
+def _render_header(evidence: dict[str, Any]) -> list[str]:
+    """Title, provenance of what was read, and the scope preamble."""
+    name = evidence.get("theme_name", Path(evidence["theme_path"]).stem)
+    return [
+        f"# CVD simulation evidence -- {name}",
+        "",
+        f"Theme: `{evidence['theme_path']}`",
+        f"Measurement: {evidence['measurement']}",
+        f"Supports the open review box: `{evidence['supports_checkbox']}`",
+        "",
+        _PREAMBLE,
+    ]
+
+
+def _render_measurements(evidence: dict[str, Any]) -> list[str]:
+    """One section per deficiency, or a named reason nothing was measured."""
+    if evidence.get("unreadable"):
+        return ["## Nothing measured", "", str(evidence["unreadable"]), ""]
+    if not evidence.get("sections"):
+        return ["## Nothing measured", "", evidence.get("note", ""), ""]
+
+    by_id = {s["id"]: s for s in evidence["sections"]}
+    lines: list[str] = []
+    for deficiency in CVD_DEFICIENCIES:
+        lines += [f"## {_DEFICIENCY_LABELS[deficiency]}", ""]
+        for section_id, measured in evidence["simulations"][deficiency].items():
+            lines += _render_section(by_id[section_id], measured)
+    return lines
+
+
+def _render_skipped(evidence: dict[str, Any]) -> list[str]:
+    """Tokens that could not be read, named rather than guessed at."""
+    if not evidence.get("skipped"):
+        return []
+    lines = ["## Skipped tokens", "", "Named, never guessed at:", ""]
+    lines += [
+        f"- `{item['value']}` in {item['section']} -- {item['reason']}"
+        for item in evidence["skipped"]
+    ]
+    lines.append("")
+    return lines
+
+
+def _render_reviewer_slot() -> list[str]:
+    """The blank slot a named human fills. Never pre-filled by this tool."""
+    return [
+        "## Reviewer decision",
+        "",
+        "To be completed by a named human. Left blank by this tool.",
+        "",
+        "- Reviewer (named human):",
+        "- Decision:",
+        "- Date:",
+        "",
+    ]
+
+
 def render(evidence: dict[str, Any], fmt: str = "text") -> str:
     """Render composed evidence as markdown (``text``) or ``json``.
 
@@ -240,44 +317,9 @@ def render(evidence: dict[str, Any], fmt: str = "text") -> str:
     if fmt != "text":
         raise ValueError(f"unknown format: {fmt!r}")
 
-    name = evidence.get("theme_name", Path(evidence["theme_path"]).stem)
-    lines = [
-        f"# CVD simulation evidence -- {name}",
-        "",
-        f"Theme: `{evidence['theme_path']}`",
-        f"Measurement: {evidence['measurement']}",
-        f"Supports the open review box: `{evidence['supports_checkbox']}`",
-        "",
-        _PREAMBLE,
-    ]
-
-    if evidence.get("unreadable"):
-        lines += ["## Nothing measured", "", str(evidence["unreadable"]), ""]
-    elif not evidence.get("sections"):
-        lines += ["## Nothing measured", "", evidence.get("note", ""), ""]
-    else:
-        by_id = {s["id"]: s for s in evidence["sections"]}
-        for deficiency in CVD_DEFICIENCIES:
-            lines += [f"## {_DEFICIENCY_LABELS[deficiency]}", ""]
-            for section_id, measured in evidence["simulations"][deficiency].items():
-                lines += _render_section(by_id[section_id], measured)
-
-    if evidence.get("skipped"):
-        lines += ["## Skipped tokens", "", "Named, never guessed at:", ""]
-        lines += [
-            f"- `{item['value']}` in {item['section']} -- {item['reason']}"
-            for item in evidence["skipped"]
-        ]
-        lines.append("")
-
-    lines += [
-        "## Reviewer decision",
-        "",
-        "To be completed by a named human. Left blank by this tool.",
-        "",
-        "- Reviewer (named human):",
-        "- Decision:",
-        "- Date:",
-        "",
-    ]
-    return "\n".join(lines)
+    return "\n".join(
+        _render_header(evidence)
+        + _render_measurements(evidence)
+        + _render_skipped(evidence)
+        + _render_reviewer_slot()
+    )
