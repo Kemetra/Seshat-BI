@@ -29,6 +29,7 @@ import csv
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
+from itertools import product
 from pathlib import Path
 from random import Random
 
@@ -241,24 +242,28 @@ def _actual_rows(
 def _budget_rows(
     rng: Random, accounts: tuple[Account, ...]
 ) -> list[tuple[object, ...]]:
-    """One row per quarter x P&L account x department x budget version."""
+    """One row per quarter x P&L account x department x budget version.
+
+    ``product`` iterates its rightmost factor fastest, which is the same order as the
+    equivalent nested loops -- so the sequence of PRNG draws, and therefore every
+    amount, is unchanged by expressing it this way.
+    """
     departments = sorted({center.department_code for center in _cost_centers()})
-    rows: list[tuple[object, ...]] = []
-    for period in _periods():
-        for account in _pl_accounts(accounts):
-            for department in departments:
-                for version in BUDGET_VERSIONS:
-                    rows.append(
-                        (
-                            period.fiscal_year,
-                            period.fiscal_quarter,
-                            account.account_code,
-                            department,
-                            version,
-                            CURRENCY,
-                            f"{_money(rng, 1_000, 200_000):.2f}",
-                        )
-                    )
+    combinations = product(
+        _periods(), _pl_accounts(accounts), departments, BUDGET_VERSIONS
+    )
+    rows: list[tuple[object, ...]] = [
+        (
+            period.fiscal_year,
+            period.fiscal_quarter,
+            account.account_code,
+            department,
+            version,
+            CURRENCY,
+            f"{_money(rng, 1_000, 200_000):.2f}",
+        )
+        for period, account, department, version in combinations
+    ]
     rows.sort(
         key=lambda row: (
             int(row[0]),
@@ -269,6 +274,120 @@ def _budget_rows(
         )
     )
     return rows
+
+
+def _write_actuals(
+    output_dir: Path,
+    rng: Random,
+    accounts: tuple[Account, ...],
+    cost_centers: tuple[CostCenter, ...],
+) -> Path:
+    path = output_dir / "finance_gl_actuals.csv"
+    _write(
+        path,
+        (
+            "journal_entry_id",
+            "line_id",
+            "posting_date",
+            "account_code",
+            "department_code",
+            "cost_center_code",
+            "currency_code",
+            "debit_amount",
+            "credit_amount",
+            "description",
+        ),
+        _actual_rows(rng, accounts, cost_centers),
+    )
+    return path
+
+
+def _write_budget(output_dir: Path, rng: Random, accounts: tuple[Account, ...]) -> Path:
+    path = output_dir / "finance_gl_budget.csv"
+    _write(
+        path,
+        (
+            "fiscal_year",
+            "fiscal_quarter",
+            "account_code",
+            "department_code",
+            "budget_version",
+            "currency_code",
+            "budget_amount",
+        ),
+        _budget_rows(rng, accounts),
+    )
+    return path
+
+
+def _write_accounts(output_dir: Path, accounts: tuple[Account, ...]) -> Path:
+    path = output_dir / "accounts.csv"
+    rows = sorted(
+        (
+            (
+                a.account_code,
+                a.account_name,
+                a.account_type,
+                a.parent_account_code,
+                a.sign_convention_note,
+            )
+            for a in accounts
+        ),
+        key=lambda row: str(row[0]),
+    )
+    _write(
+        path,
+        (
+            "account_code",
+            "account_name",
+            "account_type",
+            "parent_account_code",
+            "sign_convention_note",
+        ),
+        rows,
+    )
+    return path
+
+
+def _write_departments(output_dir: Path, cost_centers: tuple[CostCenter, ...]) -> Path:
+    path = output_dir / "departments.csv"
+    rows = sorted(
+        (
+            (
+                c.department_code,
+                c.department_name,
+                c.cost_center_code,
+                c.cost_center_name,
+            )
+            for c in cost_centers
+        ),
+        key=lambda row: (str(row[0]), str(row[2])),
+    )
+    _write(
+        path,
+        ("department_code", "department_name", "cost_center_code", "cost_center_name"),
+        rows,
+    )
+    return path
+
+
+def _write_calendar(output_dir: Path) -> Path:
+    path = output_dir / "fiscal_calendar.csv"
+    rows: list[tuple[object, ...]] = [
+        (
+            p.fiscal_year,
+            p.fiscal_quarter,
+            p.period_start_date.isoformat(),
+            p.period_end_date.isoformat(),
+        )
+        for p in _periods()
+    ]
+    _write(
+        path,
+        ("fiscal_year", "fiscal_quarter", "period_start_date", "period_end_date"),
+        rows,
+    )
+    return path
 
 
 def generate(output_dir: Path, variant: str = "clean") -> dict[str, Path]:
@@ -288,104 +407,15 @@ def generate(output_dir: Path, variant: str = "clean") -> dict[str, Path]:
     rng = Random(SEED)
     accounts = _accounts()
     cost_centers = _cost_centers()
-    periods = _periods()
 
-    written: dict[str, Path] = {}
-
-    actuals = output_dir / "finance_gl_actuals.csv"
-    _write(
-        actuals,
-        (
-            "journal_entry_id",
-            "line_id",
-            "posting_date",
-            "account_code",
-            "department_code",
-            "cost_center_code",
-            "currency_code",
-            "debit_amount",
-            "credit_amount",
-            "description",
-        ),
-        _actual_rows(rng, accounts, cost_centers),
-    )
-    written["finance_gl_actuals"] = actuals
-
-    budget = output_dir / "finance_gl_budget.csv"
-    _write(
-        budget,
-        (
-            "fiscal_year",
-            "fiscal_quarter",
-            "account_code",
-            "department_code",
-            "budget_version",
-            "currency_code",
-            "budget_amount",
-        ),
-        _budget_rows(rng, accounts),
-    )
-    written["finance_gl_budget"] = budget
-
-    accounts_path = output_dir / "accounts.csv"
-    _write(
-        accounts_path,
-        (
-            "account_code",
-            "account_name",
-            "account_type",
-            "parent_account_code",
-            "sign_convention_note",
-        ),
-        sorted(
-            (
-                (
-                    a.account_code,
-                    a.account_name,
-                    a.account_type,
-                    a.parent_account_code,
-                    a.sign_convention_note,
-                )
-                for a in accounts
-            ),
-            key=lambda row: str(row[0]),
-        ),
-    )
-    written["accounts"] = accounts_path
-
-    departments_path = output_dir / "departments.csv"
-    _write(
-        departments_path,
-        ("department_code", "department_name", "cost_center_code", "cost_center_name"),
-        sorted(
-            (
-                (
-                    c.department_code,
-                    c.department_name,
-                    c.cost_center_code,
-                    c.cost_center_name,
-                )
-                for c in cost_centers
-            ),
-            key=lambda row: (str(row[0]), str(row[2])),
-        ),
-    )
-    written["departments"] = departments_path
-
-    calendar_path = output_dir / "fiscal_calendar.csv"
-    _write(
-        calendar_path,
-        ("fiscal_year", "fiscal_quarter", "period_start_date", "period_end_date"),
-        [
-            (
-                p.fiscal_year,
-                p.fiscal_quarter,
-                p.period_start_date.isoformat(),
-                p.period_end_date.isoformat(),
-            )
-            for p in periods
-        ],
-    )
-    written["fiscal_calendar"] = calendar_path
-
+    # PRNG DRAW ORDER IS PART OF THE DETERMINISM CONTRACT: actuals consume the shared
+    # `rng` before budget does. Reordering these two statements changes every budget
+    # amount. The three reference sources draw nothing.
+    written: dict[str, Path] = {
+        "finance_gl_actuals": _write_actuals(output_dir, rng, accounts, cost_centers)
+    }
+    written["finance_gl_budget"] = _write_budget(output_dir, rng, accounts)
+    written["accounts"] = _write_accounts(output_dir, accounts)
+    written["departments"] = _write_departments(output_dir, cost_centers)
+    written["fiscal_calendar"] = _write_calendar(output_dir)
     return written
