@@ -1,4 +1,4 @@
-# Engine Program Design — four tracks to harden and extend the Seshat kit engine
+# Engine Program Design — five tracks to harden and extend the Seshat kit engine
 
 **Created**: 2026-07-30
 **Status**: Draft — awaiting owner review
@@ -7,12 +7,14 @@ not any customer warehouse.
 
 ## Why this document exists
 
-The request was "make our tool engine incredible". That is four independent
-subsystems, not one project, so this document decomposes it into four tracks, each
-of which gets its own PR. Every track below is anchored to evidence verified in the
-committed tree on 2026-07-30 — not to `docs/roadmap/idea-backlog.md`, whose entries
-are a generated triage opinion, and not to spec `**Status**:` lines, which this
-investigation found to be unreliable (see *Discovered issue*).
+The request was "make our tool engine incredible". That is several independent
+subsystems, not one project, so this document decomposes it into five tracks, each of
+which gets its own PR. Four were scoped from the request; T5 was discovered during the
+investigation and accepted separately (see *Provenance of T5*). Every track below is
+anchored to evidence verified in the committed tree on 2026-07-30 — not to
+`docs/roadmap/idea-backlog.md`, whose entries are a generated triage opinion, and not to
+spec `**Status**:` lines, which this investigation found to be unreliable and which T5
+now addresses.
 
 Two tracks changed shape once the tree was checked:
 
@@ -290,6 +292,84 @@ already made that call deliberately. The honest improvement is making staleness
 The provenance assertion must fail against today's un-stamped fixtures before they are
 stamped, for the same reason as T3.
 
+## Track T5 — Make a spec's status a checkable claim
+
+### Problem
+
+`specs/` holds 127 directories whose `**Status**:` lines do not track reality, in both
+directions. `specs/131-portfolio-watch` reads "Ratified" while shipping `src/seshat/`
+code and tests; `specs/118-cvd-simulation-evidence` reads "Draft" and is genuinely
+unbuilt; `specs/104-rename-impact-refactor-guard` reads "Draft" while
+`src/seshat/rules/rename_impact_guard.py` is on `main` — a spec about stale references
+that is itself stale.
+
+Three facts establish this is unguarded rather than intentionally loose:
+
+- **Nothing reads `specs/` at all.** Greps across `src/seshat/rules/`, `tests/`, and
+  `scripts/` return only docstring provenance comments and one test asserting a doc
+  does *not* mention `specs/`. No code opens a `specs/**/spec.md` at runtime.
+- **No closed vocabulary.** `.specify/templates/spec-template.md` seeds
+  `**Status**: Draft` with no enum. Values in the wild include `Draft`, `Approved for
+  planning`, `Ratified (…)`, `Implemented (commit …)`, `BUILT (docs-only) …`,
+  `Shipped (…)`, `Planned (spec only…)`, and `Finalized -- …`.
+- **No structured implementing-artifact field.** Commit shas appear inline inside the
+  free-text status value, never as data. Nothing defines what `Ratified` vs
+  `Implemented` vs `BUILT` are supposed to mean — not even
+  `.specify/memory/constitution.md`.
+
+The cost is concrete and was paid during this very investigation: establishing whether
+any track was already built required a tree-verification pass per track, because the
+status lines could not be trusted.
+
+### Design
+
+Reuse the shipped mechanism rather than inventing one. Rule **`SC1`**
+(`src/seshat/rules/status_claims.py`, spec 050) already reconciles a human-curated
+manifest — `docs/quality/status-claims.yaml`, whose entries name a claiming doc, an
+anchor sentence, a `claimed-artifact`, and a `claimed-status` — against
+`ctx.tracked_files`. A spec claiming completion is exactly that shape: the spec is the
+claiming doc, its status line is the anchor, and its implementing module or test is the
+claimed artifact. **No new rule is required**, which matters because the
+governance/lint lane is saturated and a new rule must be no-finding on `main` before it
+can land.
+
+Two parts:
+
+1. **A closed status vocabulary**, documented, with each value's meaning and what
+   evidence it requires. This is a governance convention, so it is an owner decision,
+   not an agent one — request the ruling early (see Sequencing) so it does not block.
+2. **Register completion-claiming specs as `SC1` status claims**, so a spec asserting
+   `Implemented`/`Shipped`/`BUILT` must name an artifact that exists, and fails the
+   gate when it does not.
+
+The asymmetry is deliberate and must be preserved: an **over-claim** ("Implemented",
+artifact absent) is mechanically detectable and is the dangerous direction, because it
+causes work to be skipped as already-done. An **under-claim** ("Ratified" for something
+that shipped) is *not* mechanically detectable without inferring implementation status,
+which would be fabrication. Under-claims are prevented going forward — a spec gains its
+artifact pointer when it is implemented — and corrected historically only by a human
+reading, one spec at a time.
+
+### Non-goals
+
+Not auto-deriving or auto-flipping any spec's status from tree evidence: that is an
+inferred verdict about human intent, and `SC1`'s human-curated manifest exists
+precisely to avoid it. Not back-filling all 127 specs in one pass — the plan picks a
+bounded first batch, the roughly two dozen specs already claiming
+`Implemented`/`Shipped`/`BUILT`, where the claim is explicit and the artifact check is
+unambiguous. Not adding a new `seshat check` rule. Not rewriting
+`.specify/templates/spec-template.md`'s workflow, only its status field's allowed
+values once the vocabulary is ratified.
+
+### Testing
+
+`SC1` already has coverage, so the deliverable is evidence that the new manifest
+entries are live: a deliberately-wrong claim (a spec naming a non-existent artifact)
+must produce an `SC1` finding, and the real entries must be no-finding on `main`. That
+second half is a hard gate — per repo convention a newly-wired check must be
+no-finding on `main` before it lands, so any spec whose claim is genuinely false has to
+be corrected in the same PR or left out of the first batch.
+
 ## Sequencing
 
 | Order | Track | Rationale | Deliverable |
@@ -298,6 +378,7 @@ stamped, for the same reason as T3.
 | 2 | T2 | Design already done and owner-clarified; highest visible value per unit of work | 1 PR |
 | 3 | T3 | Independent of T1/T2, but its guard test is easiest to trust once the suite is honestly green | 1 PR |
 | 4 | T4 | Packages behaviour the earlier tracks may change; doing it first risks re-stamping twice | 1 PR |
+| 5 | T5 | Needs an owner ruling on the status vocabulary, so its *decision* is requested first and its *build* lands last — the ruling has lead time that code work should not wait on | 1 decision + 1 PR |
 
 T1 and T2 are independent of each other and could run in parallel worktrees; T3 and
 T4 are independent of everything. The order above optimises for review confidence
@@ -318,16 +399,15 @@ Any edit under `skills/**` requires `python scripts/export_agent_bundles.py` fol
 by `--check`, and `integrations/**` is never hand-edited. Commit subjects are
 `<type>: <description>`, scope-free per rule `P2`.
 
-## Discovered issue — not scoped here
+## Provenance of T5
 
-`specs/` holds 127 directories whose `**Status**:` lines do not track reality:
-`131-portfolio-watch` reads "Ratified" but ships `src/seshat/` code plus tests, while
-`118-cvd-simulation-evidence` reads "Draft" and is genuinely unbuilt. Establishing
-whether a spec is implemented currently requires reading the tree, which is why this
-investigation needed a verification pass before it could plan anything.
+T5 was not in the original request. It surfaced during this investigation, when
+establishing what was already built required a tree-verification pass per track because
+the spec status lines could not be trusted. It was recorded as an unscoped candidate,
+put to the owner as its own decision, and **accepted on 2026-07-30** — at which point it
+was designed above rather than left as a note.
 
-This is the same drift class the repo already guards elsewhere — `SC2` for prose rule
-counts, `A3` for route-table bijection, `test_glossary_rule_table.py` for the glossary
-table — applied to spec status. It is recorded here as a candidate, deliberately
-unscoped, because it was discovered during planning rather than requested. It should
-be accepted or dropped as its own decision.
+It belongs to the same drift class the repo already guards three other ways: `SC2` for
+prose rule counts, `A3` for route-table bijection, and
+`tests/unit/test_glossary_rule_table.py` for the glossary table. T5 applies the `SC1`
+variant of that pattern to spec status.
