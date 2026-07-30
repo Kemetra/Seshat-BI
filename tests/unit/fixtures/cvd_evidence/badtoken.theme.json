@@ -1,0 +1,6 @@
+{
+  "name": "cvd-fixture-badtoken",
+  "dataColors": ["#1F77B4", "not-a-colour", "#D62728"],
+  "foreground": "#1A1A1A",
+  "background": "#FFFFFF"
+}

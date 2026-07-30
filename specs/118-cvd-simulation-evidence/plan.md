@@ -10,23 +10,23 @@ Given ONE committed Power BI theme JSON, apply three deterministic
 colour-vision-deficiency simulation transforms (protanope / deuteranope /
 tritanope) to the theme's declared `dataColors` categorical palette (and any
 declared sequential/diverging ramp stops), then reuse the shipped `delta_e76`
-perceptual-distance function (`src/retail/color.py:83`) to MEASURE the pairwise
+perceptual-distance function (`src/seshat/color.py:83`) to MEASURE the pairwise
 distance between every colour pair AFTER each simulation. Write ONE durable
 companion evidence file (theme-adjacent by default, or at a reviewer-supplied
 `--out` path) containing the simulated swatches, the under-simulation pairwise
 deltaE, and a BLANK named-reviewer/decision slot, so a human reviewer can fill the
 literal
-`- [ ] **CVD distinguishability** -- OPEN` checkbox that `theme_gen.py:569`
+`- [ ] **CVD distinguishability** -- OPEN` checkbox that `theme_gen.py:789`
 leaves open. The aid emits EVIDENCE for a human: it computes NO rolled-up score
 and NO safe/unsafe verdict (hard rule #9), ticks NO checkbox and moves NO stage
 (Principle V), edits NO theme, adds NO `retail check` rule, and opens NO
 connection.
 
 **Technical approach**: three net-new deterministic CVD simulation transforms
-added to `src/retail/color.py` BESIDE the shipped `delta_e76` (standard published
+added to `src/seshat/color.py` BESIDE the shipped `delta_e76` (standard published
 closed-form colour-space projections -- a fixed matrix per deficiency type, no
 model, no randomness), plus a small read-only runtime module
-(`src/retail/cvd_evidence.py`) and a CLI verb that reads a committed theme,
+(`src/seshat/cvd_evidence.py`) and a CLI verb that reads a committed theme,
 simulates the palette, measures under-simulation pairwise `delta_e76`, and writes
 the durable blank-slot evidence file. The module mirrors the shipped read-only
 surfaces' driver-free import path and the DL4 design-review-evidence
@@ -39,10 +39,10 @@ not an opinion.
 
 ## Technical Context
 
-**Language/Version**: Python 3.11+ (matches `src/retail/`; stdlib-only core)
+**Language/Version**: Python 3.13+ (matches `src/seshat/`; stdlib-only core)
 
 **Primary Dependencies**: stdlib only. Colour parsing and perceptual distance reuse
-the in-repo `src/retail/color.py` (`delta_e76` and its hex/RGB helpers); theme JSON
+the in-repo `src/seshat/color.py` (`delta_e76` and its hex/RGB helpers); theme JSON
 is read with stdlib `json`. No new dependency is added.
 
 **Storage**: reads ONE committed theme JSON at a caller-supplied path (the
@@ -69,7 +69,7 @@ helper reused across fixtures.
 **Target Platform**: CLI on Windows/Linux (same as the rest of `retail`); ASCII
 output, UTF-8 no BOM.
 
-**Project Type**: single-project CLI/library (extends the existing `src/retail`).
+**Project Type**: single-project CLI/library (extends the existing `src/seshat`).
 
 **Performance Goals**: N/A -- one theme's small palette per invocation; O(n^2) pairs
 over a handful of colours; not perf-sensitive.
@@ -146,7 +146,7 @@ and does not block this spec-only slice.
 ### Source Code (repository root)
 
 ```text
-src/retail/
+src/seshat/
   color.py                      # EDIT: add three deterministic CVD simulation
                                 #       transforms (protanope/deuteranope/tritanope)
                                 #       BESIDE the shipped delta_e76 -- pure closed-form
@@ -177,7 +177,7 @@ tests/unit/
                                 #      transforms (fixed inputs -> published expected outputs)
 ```
 
-**Structure Decision**: Extend the existing single-project `src/retail` runtime.
+**Structure Decision**: Extend the existing single-project `src/seshat` runtime.
 The three CVD transforms live in `color.py` beside `delta_e76` (the panel's stated
 first step; colocated with the perceptual-distance maths they feed). The evidence
 composer is a runtime module (`cvd_evidence.py`) with a CLI verb under
@@ -187,7 +187,7 @@ This feature DIFFERS from spec 116 in one deliberate way: it WRITES a durable
 companion evidence file (Clarification Q4), so -- unlike the print-only 116 -- it
 DOES add a `templates/cvd-simulation-evidence.md` companion, mirroring the shipped
 DL4 design-review-evidence artifact (`templates/design-review-evidence.md` +
-`src/retail/rules/design_review_evidence.py`), which is the durable-disclosure
+`src/seshat/rules/design_review_evidence.py`), which is the durable-disclosure
 precedent. The zero-write guarantee is therefore SCOPED: structurally, the ONLY
 write call is the single evidence file; the theme JSON, `readiness-status.yaml`, and
 the OPEN checkbox are never written (verifier-asserted, SC-003). The evidence path

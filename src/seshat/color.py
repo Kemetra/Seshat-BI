@@ -117,6 +117,106 @@ def composite_over(fg: str, bg: str, transparency_pct: float) -> str:
     return "#" + "".join(f"{v:02X}" for v in out_channels)
 
 
+_RGB_TO_LMS = (
+    (17.8824, 43.5161, 4.11935),
+    (3.45565, 27.1554, 3.86714),
+    (0.0299566, 0.184309, 1.46709),
+)
+
+_LMS_TO_RGB = (
+    (0.0809444479, -0.130504409, 0.116721066),
+    (-0.0102485335, 0.0540193266, -0.113614708),
+    (-0.000365296938, -0.00412161469, 0.693511405),
+)
+
+
+def _encode_srgb_channel(linear: float) -> int:
+    """Inverse of ``channel_luminance``: linear light -> a 0-255 sRGB channel."""
+    c = 0.0 if linear < 0.0 else (1.0 if linear > 1.0 else linear)
+    s = 12.92 * c if c <= 0.0031308 else 1.055 * c ** (1.0 / 2.4) - 0.055
+    return round(max(0.0, min(1.0, s)) * 255.0)
+
+
+def _hex_to_linear_rgb(hex_color: str) -> tuple[float, float, float]:
+    """``#RRGGBB`` -> linear-light RGB, reusing the shared sRGB linearization."""
+    h = hex_color.lstrip("#")
+    r, g, b = (channel_luminance(int(h[i : i + 2], 16)) for i in (0, 2, 4))
+    return (r, g, b)
+
+
+def _apply_matrix(
+    matrix: tuple[tuple[float, float, float], ...],
+    vector: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    """Multiply a 3x3 matrix by a 3-vector."""
+    x, y, z = vector
+    return tuple(row[0] * x + row[1] * y + row[2] * z for row in matrix)  # type: ignore[return-value]
+
+
+def _project_lms(
+    lms: tuple[float, float, float], deficiency: str
+) -> tuple[float, float, float]:
+    """Project an LMS triple onto the dichromat plane for ``deficiency``."""
+    long_, medium, short = lms
+    if deficiency == "protanope":
+        return (2.02344 * medium - 2.52581 * short, medium, short)
+    if deficiency == "deuteranope":
+        return (long_, 0.494207 * long_ + 1.24827 * short, short)
+    if deficiency == "tritanope":
+        return (long_, medium, -0.395913 * long_ + 0.801109 * medium)
+    raise ValueError(f"unknown deficiency: {deficiency!r}")
+
+
+def simulate_cvd(hex_color: str, deficiency: str) -> str:
+    """``#RRGGBB`` as it appears under one colour-vision deficiency.
+
+    Deterministic, closed-form, stdlib-only: linearize sRGB (reusing
+    ``channel_luminance``), convert to LMS cone space, project onto the
+    dichromat plane for ``deficiency``, convert back, and re-encode. Same input
+    always yields byte-identical output -- no randomness, no data, no model.
+
+    The LMS matrices and the three plane projections are the Vienot, Brettel &
+    Mollon (1999) set, applied to LINEAR-light RGB (some published
+    implementations apply them to gamma-encoded values instead; this module
+    commits to the linear convention and is internally consistent).
+
+    Being a projection, it is idempotent to within rounding: simulating an
+    already-simulated colour returns essentially the same colour. The unit
+    tests pin that property, which is what makes the matrix pair verifiable
+    without trusting a transcribed reference table.
+
+    This is a MEASUREMENT aid only. It produces no verdict, no score, and no
+    statement that a palette is or is not colorblind-safe -- those stay a named
+    reviewer's call (hard rule #9, Principle V).
+    """
+    if not is_valid_hex(hex_color):
+        raise ValueError(f"not a #RRGGBB hex color: {hex_color!r}")
+
+    linear = _hex_to_linear_rgb(hex_color)
+    lms = _apply_matrix(_RGB_TO_LMS, linear)
+    projected = _project_lms(lms, deficiency)
+    out = _apply_matrix(_LMS_TO_RGB, projected)
+    return "#" + "".join(f"{_encode_srgb_channel(v):02X}" for v in out)
+
+
+def simulate_protanope(hex_color: str) -> str:
+    """``#RRGGBB`` under protanopia (absent long-wave/red cones)."""
+    return simulate_cvd(hex_color, "protanope")
+
+
+def simulate_deuteranope(hex_color: str) -> str:
+    """``#RRGGBB`` under deuteranopia (absent medium-wave/green cones)."""
+    return simulate_cvd(hex_color, "deuteranope")
+
+
+def simulate_tritanope(hex_color: str) -> str:
+    """``#RRGGBB`` under tritanopia (absent short-wave/blue cones)."""
+    return simulate_cvd(hex_color, "tritanope")
+
+
+CVD_DEFICIENCIES: tuple[str, ...] = ("protanope", "deuteranope", "tritanope")
+
+
 def format_pt(value: float) -> float | int:
     """Render a point size as ``int`` when integral, else keep the float.
 

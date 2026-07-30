@@ -598,6 +598,20 @@ capabilities:
     references:
       dispatch: "pii-notice"
 
+  - id: retail-cvd-evidence
+    name: "retail cvd-evidence"
+    summary: "Composes read-only colour-vision-deficiency simulation evidence for one committed theme."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "cvd-evidence"
+    documentation: "docs/tools/cvd-evidence.md"
+    references:
+      dispatch: "cvd-evidence"
+
   - id: retail-approver-view
     name: "retail approver-view"
     summary: "Re-sequences one table's committed readiness evidence into a refutation-first reading view for the human signer."

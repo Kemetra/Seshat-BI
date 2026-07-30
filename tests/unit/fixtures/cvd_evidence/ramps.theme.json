@@ -1,0 +1,7 @@
+{
+  "name": "cvd-fixture-ramps",
+  "dataColors": ["#1F77B4", "#D62728"],
+  "ramp": ["#F7FBFF", "#C6DBEF", "#6BAED6", "#2171B5", "#08306B"],
+  "foreground": "#1A1A1A",
+  "background": "#FFFFFF"
+}
