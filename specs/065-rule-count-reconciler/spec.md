@@ -4,7 +4,9 @@
 
 **Created**: 2026-07-02
 
-**Status**: Ratified (Ahmed Shaaban, 2026-07-02)
+**Status**: implemented -- artifact `src/seshat/rules/rule_count_claims.py`
+
+**Status history**: Ratified (Ahmed Shaaban, 2026-07-02)
 
 > Ratified under the recorded ADOPT-batch autonomous authority dated 2026-07-02
 > (owner directive: build+ratify+merge the entire ADOPT bucket; the advisor

@@ -6,7 +6,9 @@
 
 **Created**: 2026-06-29
 
-**Status**: Ratified (Ahmed Shaaban, 2026-06-29)
+**Status**: implemented -- artifact `tests/unit/test_rules_manifest_snapshot.py`
+
+**Status history**: Ratified (Ahmed Shaaban, 2026-06-29)
 
 **Input**: User description: "Rule Registry Snapshot Manifest (golden-file rule inventory)"
 

@@ -4,12 +4,9 @@
 
 **Created**: 2026-07-10
 
-**Status**: Implemented on branch `feat/118-cvd-simulation-evidence`, 2026-07-30 --
-artifacts: `src/seshat/color.py` (`simulate_cvd` + three named wrappers),
-`src/seshat/cvd_evidence.py`, `src/seshat/cli/commands/cvd_evidence.py`,
-`tests/unit/test_color_cvd.py`, `tests/unit/test_cvd_evidence.py`,
-`docs/tools/cvd-evidence.md`. See *Implementation notes* at the foot of this file for
-two deviations from the task list.
+**Status**: implemented -- artifact `src/seshat/cvd_evidence.py`
+
+**Status history**: Implemented on branch `feat/118-cvd-simulation-evidence`, 2026-07-30 -- artifacts: `src/seshat/color.py` (`simulate_cvd` + three named wrappers), `src/seshat/cvd_evidence.py`, `src/seshat/cli/commands/cvd_evidence.py`, `tests/unit/test_color_cvd.py`, `tests/unit/test_cvd_evidence.py`, `docs/tools/cvd-evidence.md`. See *Implementation notes* at the foot of this file for two deviations from the task list.
 
 **Input**: User description: "CVD (Colorblind) Simulation Evidence Aid -- a read-only design-review evidence aid that, given a committed Power BI theme (its categorical dataColors palette + any sequential/diverging ramps), applies deterministic protanope/deuteranope/tritanope colour-vision-deficiency simulation transforms (beside the shipped delta_e76 in src/seshat/color.py) and emits a read-only evidence markdown: the simulated swatches plus the under-simulation pairwise deltaE for each colour pair, so a NAMED human reviewer can fill the literal `- [ ] **CVD distinguishability** -- OPEN` checkbox that the shipped theme_gen.py renderer (theme_gen.py:789) itself leaves open. It emits EVIDENCE for a human, never a pass and never a score."
 
