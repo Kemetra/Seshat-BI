@@ -1,0 +1,201 @@
+# =============================================================================
+# source-map.yaml  --  finance_gl_budget (spec 137 finance worked example)
+# =============================================================================
+# Filled instance of templates/source-map.yaml for the finance GL BUDGET source --
+# the SECOND fact, at a COARSER grain than the actuals fact. Authored from the
+# committed source-profile.md; no silver.* SQL until a named human approves (OD-4).
+# ASCII only.
+#
+# WHY A SEPARATE MAP. The budget arrives at fiscal-quarter x account x department x
+# budget-version grain, which is not the actuals grain. Kimball's answer to a
+# grain mismatch is two facts at their NATIVE grains joined through conformed
+# dimensions -- never one merged fact and never a disaggregated plan. Actuals may be
+# aggregated UP to this grain; this budget is never spread DOWN (OD-3, ruled
+# 2026-07-30).
+#
+# CONFORMED DIMENSIONS -- READ WITH THE SIBLING MAP.
+#   dim_account_fgl and dim_department_fgl below are declared IDENTICALLY in
+#   mappings/finance_gl_actuals/source-map.yaml. The template cannot express
+#   "conformed with another map", so the duplication is conventional and undetected
+#   by any check -- ledger row L1.
+#   This source has NO cost-center concept, so it does not reference
+#   dim_cost_center_fgl at all: the two facts meet at DEPARTMENT level.
+#   It also does not use the daily dim_date_fgl -- its time grain is the fiscal
+#   quarter, so it references dim_fiscal_period_fgl (ledger row L5 records why the
+#   RC15 calendar cannot carry the fiscal period itself).
+# =============================================================================
+
+meta:
+  table_id: "finance_gl_budget"
+  source_system: "finance_gl_synthetic"
+  profiled_from: "mappings/finance_gl_budget/source-profile.md"
+  # GRAIN (RC1): one row = one budgeted amount for one account, in one department,
+  # for one fiscal quarter, under one budget version.
+  grain: "one row = one budgeted amount per account per department per fiscal quarter per budget version"
+  # PRIMARY KEY (RC2): the 5-part key is unique on the landed data (2,688 = 2,688).
+  # Dropping budget_version collides at exactly 2:1 (1,344 of 2,688) -- measured, which
+  # is the data-side proof that a version is part of IDENTITY (FR-011), not an attribute.
+  primary_key:
+    - "fiscal_year"
+    - "fiscal_quarter"
+    - "account_code"
+    - "department_code"
+    - "budget_version"
+  reviewed_by: "Ahmed Shaaban (data_owner)"   # gate CLEARED 2026-07-30; see readiness-status.yaml approvals[]
+  reviewed_on: "2026-07-30"
+
+defaults:
+  adopted:
+    - "RC1"   # lowest grain the source provides (quarter x account x dept x version)
+    - "RC2"   # verify PK on transformed data
+    - "RC3"   # drop no-signal columns (none -- 0 blank cells)
+    - "RC5"   # '' -> NULL baseline (no blanks exist)
+    - "RC7"   # money -> exact NUMERIC; codes stay TEXT; quarter ordinal -> smallint
+    - "RC9"   # keep the landed measure independent
+    - "RC13"  # silver as an idempotent numbered migration
+    - "RC14"  # gold Kimball star (_sk, -1 unknown member, FK COALESCE, degenerate dims)
+    - "RC16"  # reconcile totals + 0 orphan FKs (live leg PENDING LIVE PROFILE)
+  deviations:
+    - id: "RC8"
+      reason: "no returns or reversals exist in a budget source -- a plan has no transaction type. is_return is N/A."
+      detail_in: "mappings/finance_gl_budget/assumptions.md"
+    - id: "RC15"
+      reason: "this fact does NOT reference the contiguous daily calendar. Its time grain is the fiscal quarter, and the RC15 calendar contract is a closed Gregorian set that cannot carry a fiscal period (ledger L5). It references a quarter-grain dim_fiscal_period_fgl instead; the daily RC15 calendar remains built and used by the ACTUALS fact."
+      detail_in: "mappings/finance_gl_budget/assumptions.md"
+
+# -----------------------------------------------------------------------------
+# columns -- one entry per SOURCE column (all 7).
+# -----------------------------------------------------------------------------
+columns:
+
+  - source_name: "fiscal_year"
+    decision: "keep"
+    reason: "part of the grain key; the fiscal year the plan covers (2024, 2025)"
+    rename_to: "fiscal_year"
+    silver_type: "smallint"                # RC7: year ordinal -> smallint
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_fiscal_period_fgl.fiscal_year"
+
+  - source_name: "fiscal_quarter"
+    decision: "keep"
+    reason: "part of the grain key; quarter within the fiscal year (1..4)"
+    rename_to: "fiscal_quarter"
+    silver_type: "smallint"                # RC7: ordinal -> smallint
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_fiscal_period_fgl.fiscal_quarter"
+
+  - source_name: "account_code"
+    decision: "keep"
+    reason: "chart-of-accounts key (28 distinct -- P&L accounts only, no CLEARING; 0 orphans) -> CONFORMED account dimension shared with the actuals fact"
+    rename_to: "account_code"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_account_fgl.account_code"
+
+  - source_name: "department_code"
+    decision: "keep"
+    reason: "the department the plan is set for (6 distinct, 0 orphans) -> CONFORMED department dimension; this is the level at which budget and actuals meet"
+    rename_to: "department_code"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_department_fgl.department_code"
+
+  - source_name: "budget_version"
+    decision: "keep"
+    reason: "PART OF IDENTITY, not an attribute: without it the 4-part key collides 2:1 (measured). A new version ADDS rows and must never overwrite a prior version (FR-011). Kept as a degenerate dim ON the fact so every query can -- and must -- pin its version."
+    rename_to: "budget_version"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "degenerate_dim"
+
+  - source_name: "currency_code"
+    decision: "keep"
+    reason: "single value (USD) in the clean source; kept explicitly so a future multi-currency plan cannot silently mix units (HR11 reads the declared currency)"
+    rename_to: "currency_code"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "degenerate_dim"
+
+  - source_name: "budget_amount"
+    decision: "keep"
+    reason: "the planned money amount; exact NUMERIC (RC7). ZERO is a legitimate value meaning 'nothing was planned' and is NOT the same as an ABSENT row (FR-015) -- absence is what the Missing Budget Flag metric detects."
+    rename_to: "budget_amount"
+    silver_type: "numeric(18,2)"
+    missing_policy: "null"                 # a NULL would mean unknown; the clean source has none
+    pii: false
+    gold_placement: "fact_measure"
+    currency: "USD"
+
+# -----------------------------------------------------------------------------
+# gold_star -- the SECOND fact, at fiscal-quarter grain, sharing two conformed dims
+# with the actuals star. Two facts, two grains, never merged (SC-004).
+# -----------------------------------------------------------------------------
+gold_star:
+
+  fact:
+    name: "gold.fct_gl_budget_fgl"
+    grain: "one row = one budgeted amount per account per department per fiscal quarter per budget version"
+    business_key:                          # composite grain -> ORDERED list
+      - "fiscal_year"
+      - "fiscal_quarter"
+      - "account_code"
+      - "department_code"
+      - "budget_version"
+    measures:
+      - "budget_amount"
+    additive_money_measures:
+      - "budget_amount"                    # additive AT and ABOVE its own grain only;
+                                           #   never disaggregated below quarter (OD-3)
+
+  dimensions:
+    # --- CONFORMED with mappings/finance_gl_actuals/source-map.yaml -------------
+    # Declared identically there. See ledger L1: the template has no conformance key,
+    # so keeping these two blocks in step is a convention, not a checked invariant.
+    - name: "gold.dim_account_fgl"
+      surrogate_key: "account_sk"
+      has_unknown_member: true             # RC14 (variant D1 exercises it)
+      attributes:
+        - "account_code"
+        - "account_name"
+        - "account_type"                   # REVENUE | COGS | OPEX | CLEARING
+        - "parent_account_code"            # flat denorm hierarchy level (RC12)
+
+    - name: "gold.dim_department_fgl"
+      surrogate_key: "department_sk"
+      has_unknown_member: true             # RC14 (variant D2 exercises it)
+      attributes:
+        - "department_code"
+        - "department_name"
+
+    # --- the quarter-grain period dimension this fact keys on -------------------
+    # NOT the RC15 daily calendar. Sourced from the fiscal_calendar reference file
+    # (8 rows: 2 years x 4 quarters, contiguous and non-overlapping).
+    - name: "gold.dim_fiscal_period_fgl"
+      surrogate_key: "fiscal_period_sk"    # YYYYQ integer, e.g. 20241
+      has_unknown_member: true             # RC14 (variant D4 exercises an out-of-period date)
+      attributes:
+        - "fiscal_year"
+        - "fiscal_quarter"
+        - "period_start_date"
+        - "period_end_date"
+
+  degenerate_dimensions:
+    - "budget_version"                     # part of identity; every query must pin it
+    - "currency_code"                      # single-valued today; explicit, not assumed
+
+  # NO date_dimension key: this fact does not reference the daily calendar (RC15
+  # deviation recorded above). The daily gold.dim_date_fgl is built by the ACTUALS
+  # map and is untouched here.
+
+# -----------------------------------------------------------------------------
+# derived_columns -- none. A plan carries no is_return (RC8 N/A), and no allocation,
+# spreading, or interpolation of budget_amount is permitted (OD-3, ruled 2026-07-30):
+# deriving a monthly or line-level budget would invent numbers the source never had.
+# -----------------------------------------------------------------------------
+derived_columns: []

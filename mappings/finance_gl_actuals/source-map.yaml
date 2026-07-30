@@ -1,0 +1,251 @@
+# =============================================================================
+# source-map.yaml  --  finance_gl_actuals (spec 137 finance worked example)
+# =============================================================================
+# Filled instance of templates/source-map.yaml. The machine-readable spine of the
+# source-mapping gate for the finance GL ACTUALS source. Authored from the committed
+# source-profile.md; NO silver.* SQL is written until this map is reviewed and
+# approved by a named human (OD-4). Grain decided FIRST (RC1). ASCII only.
+#
+# RC ids = ADR-0002 cleaning defaults (RC1-RC16). One deviation on this table: RC8
+# (no returns/reversals exist in a P&L journal extract). See assumptions.md.
+#
+# CONFORMED DIMENSIONS -- READ WITH THE SIBLING MAP.
+#   dim_account_fgl and dim_department_fgl are CONFORMED and are declared IDENTICALLY
+#   in mappings/finance_gl_budget/source-map.yaml. The template has no field to
+#   express "this dimension is shared with another map", so the declaration is
+#   duplicated by convention and nothing mechanically detects the copies drifting.
+#   That gap is ledger row L1 in docs/worked-examples/finance-gl-genericity-ledger.md.
+#   dim_cost_center_fgl is NOT conformed -- it exists only here, because the budget
+#   source has no cost-center concept (the two facts meet at DEPARTMENT level).
+# =============================================================================
+
+meta:
+  table_id: "finance_gl_actuals"
+  source_system: "finance_gl_synthetic"
+  profiled_from: "mappings/finance_gl_actuals/source-profile.md"
+  # GRAIN (RC1): one row = one journal LINE within one journal entry. This is the
+  # lowest grain the source provides.
+  grain: "one row = one journal line within one journal entry"
+  # PRIMARY KEY (RC2): composite, verified unique on the landed data
+  # (5,000 rows = 5,000 distinct; journal_entry_id ALONE is only 2,500 distinct).
+  # Re-verify on the transformed silver output.
+  primary_key:
+    - "journal_entry_id"
+    - "line_id"
+  reviewed_by: "Ahmed Shaaban (data_owner)"   # gate CLEARED 2026-07-30; see readiness-status.yaml approvals[]
+  reviewed_on: "2026-07-30"
+
+defaults:
+  adopted:
+    - "RC1"   # lowest grain (journal line)
+    - "RC2"   # verify PK on transformed data
+    - "RC3"   # drop no-signal columns (none here -- 0 blank cells, no single-value column)
+    - "RC5"   # '' -> NULL baseline (no blanks exist in the clean source)
+    - "RC7"   # money -> exact NUMERIC; date -> DATE; codes stay TEXT; ordinal -> smallint
+    - "RC9"   # keep independent money measures (debit_amount, credit_amount)
+    - "RC12"  # flat denormalized dim attributes (account parent, department name)
+    - "RC13"  # silver as an idempotent numbered migration
+    - "RC14"  # gold Kimball star (_sk, -1 unknown member, FK COALESCE, degenerate dims)
+    - "RC15"  # contiguous generate_series date dim
+    - "RC16"  # reconcile totals + 0 orphan FKs (live leg PENDING LIVE PROFILE)
+  deviations:
+    - id: "RC8"
+      reason: "no returns or reversals exist in this source -- a P&L journal extract carries no transaction-type or reversal column, and every line is a posting, not a return. is_return is N/A here; it is NOT derived from the amount sign (which would be exactly the RC8 anti-pattern)."
+      detail_in: "mappings/finance_gl_actuals/assumptions.md"
+
+# -----------------------------------------------------------------------------
+# columns -- one entry per SOURCE column (all 10).
+# -----------------------------------------------------------------------------
+columns:
+
+  - source_name: "journal_entry_id"
+    decision: "keep"
+    reason: "part of the composite grain key (RC2); an entry identifier with no attributes of its own -> degenerate dim (RC14)"
+    rename_to: "journal_entry_id"
+    silver_type: "text"                    # RC7: code-shaped id stays TEXT
+    missing_policy: "null"
+    pii: false
+    gold_placement: "degenerate_dim"
+
+  - source_name: "line_id"
+    decision: "keep"
+    reason: "the second half of the composite grain key; line ordinal within the entry (values 1..2 in this source)"
+    rename_to: "line_id"
+    silver_type: "smallint"                # RC7: ordinal -> smallint
+    missing_policy: "null"
+    pii: false
+    gold_placement: "degenerate_dim"
+
+  - source_name: "posting_date"
+    decision: "keep"
+    reason: "the date the line was posted; spans 2024-01-01..2025-12-31 (705 distinct) -> dim_date FK (RC15 contiguous calendar)"
+    rename_to: "posting_date"
+    silver_type: "date"                    # RC7: date -> DATE
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_date_fgl.full_date"
+
+  - source_name: "account_code"
+    decision: "keep"
+    reason: "chart-of-accounts key (30 distinct, 0 orphans against accounts) -> conformed account dimension"
+    rename_to: "account_code"
+    silver_type: "text"                    # RC7: leading-zero-capable code stays TEXT
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_account_fgl.account_code"
+
+  - source_name: "department_code"
+    decision: "keep"
+    reason: "owning department (6 distinct, 0 orphans) -> conformed department dimension; this is the level at which actuals and budget MEET"
+    rename_to: "department_code"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_department_fgl.department_code"
+
+  - source_name: "cost_center_code"
+    decision: "keep"
+    reason: "cost center within the department (8 distinct, 0 orphan department/cost-center pairs). FINER than the budget source's grain, so it belongs to an actuals-only dimension, NOT to the conformed department dim."
+    rename_to: "cost_center_code"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "dim:dim_cost_center_fgl.cost_center_code"
+
+  - source_name: "currency_code"
+    decision: "keep"
+    reason: "single value (USD) in the clean source; kept explicitly so a future multi-currency source cannot silently mix units. HR11 reads the declared currency on the money measures."
+    rename_to: "currency_code"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "degenerate_dim"
+
+  - source_name: "debit_amount"
+    decision: "keep"
+    reason: "landed money measure; exactly one of debit/credit is non-zero per line. Kept as an independent landed measure (RC9), never reconstructed from the other side."
+    rename_to: "debit_amount"
+    silver_type: "numeric(18,2)"           # RC7: money -> exact NUMERIC, never float
+    missing_policy: "null"
+    pii: false
+    gold_placement: "fact_measure"
+    currency: "USD"
+
+  - source_name: "credit_amount"
+    decision: "keep"
+    reason: "the opposite side of the same line; independent landed measure (RC9). Total debits = total credits = 31,135,795.20 on the landed data."
+    rename_to: "credit_amount"
+    silver_type: "numeric(18,2)"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "fact_measure"
+    currency: "USD"
+
+  - source_name: "description"
+    decision: "keep"
+    reason: "free-text line narrative (29 distinct, synthetic, non-personal); kept as a degenerate attribute for drill-to-detail. Verified to carry no personal data."
+    rename_to: "description"
+    silver_type: "text"
+    missing_policy: "null"
+    pii: false
+    gold_placement: "degenerate_dim"
+
+# -----------------------------------------------------------------------------
+# gold_star -- one fact at journal-line grain + conformed dims (RC14).
+# The SISTER map (finance_gl_budget) declares a SECOND fact at quarter grain that
+# shares dim_account_fgl and dim_department_fgl. Two facts, two grains, never merged
+# (spec 137 SC-004).
+# -----------------------------------------------------------------------------
+gold_star:
+
+  fact:
+    # gold-qualified + _fgl suffix: the gold schema is shared with the retail star
+    # (fct_sales_rss) and C086's fct_sales, so this fact is fct_gl_actuals_fgl.
+    # retail validate reads these names VERBATIM.
+    name: "gold.fct_gl_actuals_fgl"
+    grain: "one row = one journal line within one journal entry"   # = meta.grain (RC1)
+    business_key:                          # composite grain -> ORDERED list
+      - "journal_entry_id"
+      - "line_id"
+    measures:                              # RC9: independent landed measures
+      - "debit_amount"
+      - "credit_amount"
+      - "amount"                           # derived magnitude; see derived_columns
+    additive_money_measures:               # each reconciled by SUM in dbt parity (#331)
+      - "debit_amount"
+      - "credit_amount"
+      - "amount"
+
+  dimensions:
+    # --- CONFORMED with mappings/finance_gl_budget/source-map.yaml -------------
+    - name: "gold.dim_account_fgl"
+      surrogate_key: "account_sk"
+      has_unknown_member: true             # RC14: -1 unknown member (variant D1 exercises it)
+      attributes:
+        - "account_code"                   # natural key
+        - "account_name"
+        - "account_type"                   # REVENUE | COGS | OPEX | CLEARING -- the column
+                                           #   P&L reporting filters on (see Q3)
+        - "parent_account_code"            # flat denorm hierarchy level (RC12)
+
+    - name: "gold.dim_department_fgl"
+      surrogate_key: "department_sk"
+      has_unknown_member: true             # RC14 (variant D2 exercises it)
+      attributes:
+        - "department_code"
+        - "department_name"
+
+    # --- ACTUALS-ONLY (the budget source has no cost-center concept) -----------
+    - name: "gold.dim_cost_center_fgl"
+      surrogate_key: "cost_center_sk"
+      has_unknown_member: true
+      attributes:
+        - "cost_center_code"
+        - "cost_center_name"
+        - "department_code"                # flat denorm rollup to the conformed level (RC12)
+
+  degenerate_dimensions:
+    - "journal_entry_id"                   # grain key, no attributes of its own
+    - "line_id"                            # grain key
+    - "currency_code"                      # single-valued today; explicit, not assumed
+    - "description"                        # drill-to-detail narrative
+
+  date_dimension:
+    name: "gold.dim_date_fgl"
+    surrogate_key: "date_sk"               # YYYYMMDD integer
+    method: "generate_series"              # RC15: contiguous, one row per calendar day
+    contiguous: true
+    has_unknown_member: false              # S8: a marked date table carries no -1/NULL member
+    span:
+      from: "2024-01-01"                   # earliest posting_date
+      to: "2025-12-31"                     # latest posting_date
+    # NOTE (ledger row L5): the RC15 calendar contract is a CLOSED Gregorian set
+    # (full_date, year, quarter, month, month_name, day, day_name, iso_week,
+    # is_weekend) and an off-contract attribute is REJECTED, so this calendar cannot
+    # carry a fiscal_year / fiscal_quarter column. Actuals are rolled to the budget's
+    # comparison grain using `year` + `quarter`, which coincide with the fiscal period
+    # ONLY BECAUSE this fixture's calendar is calendar-aligned (a recorded fixture
+    # simplification -- see assumptions.md). A non-calendar-aligned fiscal year could
+    # not be expressed here at all. `attributes` is deliberately OMITTED, so the full
+    # governed RC15 calendar is built.
+
+# -----------------------------------------------------------------------------
+# derived_columns -- computed in silver (Phase 2.7).
+# is_return is N/A (RC8 deviation: no returns exist in a P&L journal extract).
+# -----------------------------------------------------------------------------
+derived_columns:
+
+  # The reporting magnitude. Exactly one of debit/credit is non-zero on every line
+  # (verified: 0 rows with both zero or both non-zero), so their SUM is the line's
+  # magnitude with no sign arithmetic.
+  #
+  # OD-1 (ruled by Ahmed Shaaban, 2026-07-30): revenue and expenses are both PRESENTED
+  # as positive magnitudes; whether higher is better is carried by each metric
+  # contract's `direction_of_good` field, NEVER by the arithmetic sign. This derived
+  # column implements that ruling. The landed debit_amount / credit_amount columns are
+  # kept unchanged so the double-entry posting is never lost.
+  - name: "amount"
+    type: "numeric(18,2)"
+    derived_from: "debit_amount + credit_amount"
+    rule: "the line's magnitude; exactly one side is non-zero per line, so the sum is that side"
+    note: "OD-1 ruling: positive magnitudes + direction_of_good, not signed presentation. Debit/credit direction remains readable from the landed columns and from dim_account_fgl.account_type."

@@ -53,17 +53,17 @@ only existing templates -- with every obstruction recorded as it is hit.
 templates produces the five mapping artifacts per table without inventing a template and
 without editing kit code; every place it wanted to edit kit code is a ledger row.
 
-- [ ] T011 [US1] Create `docs/worked-examples/finance-gl-genericity-ledger.md` with the row schema from `data-model.md` Section 5 and an explicitly empty row set -- open it FIRST so obstructions are recorded as encountered, not reconstructed later -- `mechanical`
-- [ ] T012 [P] [US1] Author `mappings/finance_gl_actuals/source-profile.md` from the generated clean fixture (column types, cardinalities, grain candidates); mark every live-DB leg `[PENDING LIVE PROFILE]` -- `mechanical`
-- [ ] T013 [P] [US1] Author `mappings/finance_gl_budget/source-profile.md` the same way, at ITS own grain -- `mechanical`
-- [ ] T014 [US1] Author `mappings/finance_gl_actuals/source-map.yaml` declaring grain (journal entry x line) and PK, using the existing template with zero new fields -- `mechanical`
-- [ ] T015 [US1] Author `mappings/finance_gl_budget/source-map.yaml` declaring grain (fiscal quarter x account x dept x version) and PK -- distinct from actuals; no merged grain anywhere -- `mechanical`
-- [ ] T016 [P] [US1] Author `assumptions.md` for both tables, including the calendar-aligned fiscal-year fixture simplification and the single-currency clean-fixture assumption, each with its triggering data fact -- `mechanical`
-- [ ] T017 [P] [US1] Author `unresolved-questions.md` for both tables carrying OD-1 (sign convention), OD-2 (baseline), OD-3 (allocation) as open, named, blocking questions -- `mechanical`
-- [ ] T018 [US1] Record every deviation from the ratified cleaning defaults (`docs/decisions/0002-retail-cleaning-defaults.md`) with the data fact that triggered it -- `mechanical`
-- [ ] T019 [US1] Author `mappings/finance_gl_actuals/readiness-status.yaml` and `mappings/finance_gl_budget/readiness-status.yaml` following the shape observed in `mappings/retail_store_sales/readiness-status.yaml`; Stage 2 stays blocked pending approval -- `mechanical`
-- [ ] T020 [US1] Raise the mapping-gate approval request per table (existing approval-request template); do NOT record any approval -- `mechanical`
-- [ ] T021 [US1] **STOP**: obtain the named-human mapping-gate approval for each finance table -- `approval_gated` `human_only` (OD-4)
+- [x] T011 [US1] Create `docs/worked-examples/finance-gl-genericity-ledger.md` with the row schema from `data-model.md` Section 5 and an explicitly empty row set -- open it FIRST so obstructions are recorded as encountered, not reconstructed later -- `mechanical`
+- [x] T012 [P] [US1] Author `mappings/finance_gl_actuals/source-profile.md` from the generated clean fixture (column types, cardinalities, grain candidates); mark every live-DB leg `[PENDING LIVE PROFILE]` -- `mechanical`
+- [x] T013 [P] [US1] Author `mappings/finance_gl_budget/source-profile.md` the same way, at ITS own grain -- `mechanical`
+- [x] T014 [US1] Author `mappings/finance_gl_actuals/source-map.yaml` declaring grain (journal entry x line) and PK, using the existing template with zero new fields -- `mechanical`
+- [x] T015 [US1] Author `mappings/finance_gl_budget/source-map.yaml` declaring grain (fiscal quarter x account x dept x version) and PK -- distinct from actuals; no merged grain anywhere -- `mechanical`
+- [x] T016 [P] [US1] Author `assumptions.md` for both tables, including the calendar-aligned fiscal-year fixture simplification and the single-currency clean-fixture assumption, each with its triggering data fact -- `mechanical`
+- [x] T017 [P] [US1] Author `unresolved-questions.md` for both tables carrying OD-1 (sign convention), OD-2 (baseline), OD-3 (allocation) as open, named, blocking questions -- `mechanical`
+- [x] T018 [US1] Record every deviation from the ratified cleaning defaults (`docs/decisions/0002-retail-cleaning-defaults.md`) with the data fact that triggered it -- `mechanical`
+- [x] T019 [US1] Author `mappings/finance_gl_actuals/readiness-status.yaml` and `mappings/finance_gl_budget/readiness-status.yaml` following the shape observed in `mappings/retail_store_sales/readiness-status.yaml`; Stage 2 stays blocked pending approval -- `mechanical`
+- [x] T020 [US1] Raise the mapping-gate approval request per table (existing approval-request template); do NOT record any approval -- `mechanical`
+- [x] T021 [US1] **STOP**: obtain the named-human mapping-gate approval for each finance table -- `approval_gated` `human_only` (OD-4) -- **CLEARED 2026-07-30**: Ahmed Shaaban ruled all five sub-decisions individually (A source provenance, B grain+star, C1 clearing exclusion, C2 cost-centre dimension, D HR1 conformed). Transcribed in `mappings/*/approval-decision-mapping-gate.md` and `docs/quality/conformed-dimension-map.yaml`. An earlier attempt to infer these from a blanket authorization was reverted before commit -- see ledger row L9.
 - [ ] T022 [US1] Author `warehouse/migrations/0006_create_silver_finance_gl_actuals.sql` -- authoring only, never executed -- `mechanical` (blocked by T021)
 - [ ] T023 [US1] Author `warehouse/migrations/0007_create_silver_finance_gl_budget.sql` -- `mechanical` (blocked by T021)
 - [ ] T024 [US1] Author `warehouse/migrations/0008_create_gold_finance_gl_star.sql`: two facts (`fact_gl_actuals`, `fact_gl_budget`) + conformed `dim_date`/`dim_account`/`dim_department` with the existing surrogate-key and unknown-member conventions -- `mechanical`
@@ -85,14 +85,14 @@ outcome, including the deliberate over-refusal trap.
 expected behaviour from the existing categorical set, and mismatches -- including
 over-refusals -- are reported rather than tuned away.
 
-- [ ] T027 [US2] Extend `tests/fixtures/finance_gl/generate.py` with named data variants D1-D7, D10, D12 per `contracts/fixture-schema.md`; each differs from clean in exactly one respect; unknown variant raises -- `mechanical`
-- [ ] T028 [P] [US2] Unit-test that each data variant differs from clean in exactly the intended way and remains deterministic -- `mechanical`
-- [ ] T029 [US2] Author `benchmark/scenarios/finance-gl-judgment.yaml` in the EXISTING scenario format for D8-D13, each declaring one behaviour from `("proceed", "refuse", "block_for_evidence", "request_human_decision")` plus its observable evidence -- `mechanical`
-- [ ] T030 [US2] Run each structural variant D1-D7 through the existing static gate and mapping checks; record declared vs observed outcome verbatim -- `mechanical`
-- [ ] T031 [US2] Run the judgment scenarios D8-D13 and record declared vs observed outcome verbatim -- `mechanical`
-- [ ] T032 [US2] Verify D12 (actuals with no budget row) yields `proceed`; if the gate refuses it, record `over_refusal` as a FINDING and do not adjust the scenario to make it pass -- `mechanical`
-- [ ] T033 [US2] For any variant that fires nothing at all, record a ledger row (the gate is silent where a general analytical gate arguably should speak) rather than deleting the variant -- `mechanical`
-- [ ] T034 [US2] Confirm no rule was added or modified anywhere in this phase: `src/seshat/rules/` byte-unchanged -- `mechanical`
+- [x] T027 [US2] Extend `tests/fixtures/finance_gl/generate.py` with named data variants D1-D7, D10, D12 per `contracts/fixture-schema.md`; each differs from clean in exactly one respect; unknown variant raises -- `mechanical`
+- [x] T028 [P] [US2] Unit-test that each data variant differs from clean in exactly the intended way and remains deterministic -- `mechanical`
+- [x] T029 [US2] Author `benchmark/scenarios/finance-gl-judgment.yaml` in the EXISTING scenario format for D8-D13, each declaring one behaviour from `("proceed", "refuse", "block_for_evidence", "request_human_decision")` plus its observable evidence -- `mechanical`
+- [ ] T030 [US2] Run each structural variant D1-D7 through the existing static gate and mapping checks; record declared vs observed outcome verbatim -- `mechanical` -- **DECLARED, OBSERVATION `[PENDING LIVE PROFILE]`**: verified in the tree that NO static rule reads source data (`grep -rn "\.csv" src/seshat/rules/*.py` is empty) and that the four data checks in `src/seshat/validate.py` all need a live Postgres connection. 5 of 7 variants map to an existing check (orphan FK / PK uniqueness / date coverage); D3 and D5 map to none. Matrix + findings M1/M2 in `docs/worked-examples/finance-gl-defect-matrix.md`.
+- [ ] T031 [US2] Run the judgment scenarios D8-D13 and record declared vs observed outcome verbatim -- `mechanical` -- **DECLARED, OBSERVATION `[PENDING PARTICIPANT RUN]`**: the 6 scenarios load and validate through the shipped `load_scenarios`, but observing behaviour needs a real participant. A scripted participant would replay canned answers and measure the script, not the governance, so no observed outcome was recorded.
+- [ ] T032 [US2] Verify D12 (actuals with no budget row) yields `proceed`; if the gate refuses it, record `over_refusal` as a FINDING and do not adjust the scenario to make it pass -- `mechanical` -- **PARTIAL**: D12 is asserted to be the ONLY `proceed` scenario by `test_judgment_scenarios_include_the_over_refusal_trap`, so the trap cannot be silently removed. Confirming the gate actually proceeds on it still needs the participant run (see T031).
+- [x] T033 [US2] For any variant that fires nothing at all, record a ledger row (the gate is silent where a general analytical gate arguably should speak) rather than deleting the variant -- `mechanical`
+- [x] T034 [US2] Confirm no rule was added or modified anywhere in this phase: `src/seshat/rules/` byte-unchanged -- `mechanical`
 
 **Checkpoint**: refusal behaviour on a non-retail domain is observable and repeatable.
 

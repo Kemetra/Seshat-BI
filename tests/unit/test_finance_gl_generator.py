@@ -109,10 +109,15 @@ def test_newlines_are_lf_only(clean: dict[str, Path]) -> None:
 
 @pytest.mark.unit
 def test_unknown_variant_raises_rather_than_falling_back(tmp_path: Path) -> None:
+    """An unrecognised name must never silently fall back to clean.
+
+    `D1` was also unavailable when Slice A shipped; Slice B implements it, so the
+    named-variant assertions now live in tests/unit/test_finance_gl_variants.py.
+    """
     with pytest.raises(generator.VariantNotAvailableError):
         generator.generate(tmp_path / "bogus", variant="not-a-variant")
     with pytest.raises(generator.VariantNotAvailableError):
-        generator.generate(tmp_path / "d1", variant="D1")
+        generator.generate(tmp_path / "empty", variant="")
 
 
 @pytest.mark.unit
