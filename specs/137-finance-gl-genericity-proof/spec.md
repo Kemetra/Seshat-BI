@@ -4,7 +4,15 @@
 
 **Created**: 2026-07-30
 
-**Status**: draft
+**Status**: Ratified (Ahmed Shaaban, 2026-07-30)
+
+**Status history**: draft
+
+<!-- Ratification note: the owner ratified the complete planning package (spec + plan +
+     tasks) on 2026-07-30 as an explicit human action; the agent transcribed that decision
+     and did not self-ratify (Principle V, never_self_grant_approval). Ratification of THIS
+     SPEC does not resolve any of OD-1..OD-5, which remain open and blocking, and does not
+     grant any readiness stage. -->
 
 <!-- One of: draft | ratified | implemented | superseded (ADR 0019).
      draft       -- authored, not yet ratified by a named human

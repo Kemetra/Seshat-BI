@@ -3,8 +3,10 @@
 **Feature**: `137-finance-gl-genericity-proof` | **Date**: 2026-07-30
 **Input**: `spec.md`, `plan.md`, `research.md`, `data-model.md`, `contracts/`, `quickstart.md`
 
-**IMPLEMENTATION IS NOT STARTED.** No task below may begin until the owner ratifies the
-planning package (spec + plan + tasks). Slice A starts only after that ratification.
+**RATIFIED** by Ahmed Shaaban (repo owner) on 2026-07-30 -- Slice A (Phases 1-2) is
+unblocked. The two `approval_gated` tasks (T021 mapping gate, T040 OD-1/OD-2 rulings) and
+the `human_only` authoring task (T044) still require their own separate, named human
+actions: ratifying this package did NOT grant them, and no agent may record them.
 
 ## Task labels used here
 
