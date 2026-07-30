@@ -4,7 +4,9 @@
 
 **Created**: 2026-07-14
 
-**Status**: Ratified (Ahmed Shaaban, 2026-07-14) -- title retained; output stays local-only (no public catalog submission); roadmap F-number assigned at implementation scheduling
+**Status**: implemented -- artifact `src/seshat/agent_verify/checks.py`
+
+**Status history**: Ratified (Ahmed Shaaban, 2026-07-14) -- title retained; output stays local-only (no public catalog submission); roadmap F-number assigned at implementation scheduling
 
 **Input**: User description: "Agent Compatibility Certification (`seshat agent verify --target claude|codex`). Produce CATEGORICAL EVIDENCE that an agent integration installs correctly and obeys Seshat governance. An evidence-producing extension of the existing benchmark + release-verification foundations, NOT a scoring system."
 

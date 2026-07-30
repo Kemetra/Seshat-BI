@@ -4,7 +4,9 @@
 
 **Created**: 2026-06-30
 
-**Status**: Ratified (advisor-for-Ahmed-Shaaban, 2026-06-30)
+**Status**: implemented -- artifact `src/seshat/rules/routes_coverage.py`
+
+**Status history**: Ratified (advisor-for-Ahmed-Shaaban, 2026-06-30)
 
 **Ratification note**: Ratified by the advisor agent acting under an explicit,
 recorded per-spec delegated override granted by the repo owner

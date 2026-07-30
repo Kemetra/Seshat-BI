@@ -4,7 +4,9 @@
 
 **Created**: 2026-07-14
 
-**Status**: Ratified (Ahmed Shaaban, 2026-07-14)
+**Status**: implemented -- artifact `src/seshat/portfolio_watch.py`
+
+**Status history**: Ratified (Ahmed Shaaban, 2026-07-14)
 
 **Input**: User description: "Portfolio Watch (seshat watch build). Produce a RECURRING, READ-ONLY portfolio summary for teams WITHOUT creating another governance engine. Aggregation/summary layer over existing evidence + drift surfaces, covering source drift; contract and semantic drift; stale or missing approvals; changed readiness; dashboard-intent divergence; tables requiring human attention; new, resolved, and unchanged blockers; ONE prioritized next action per governed scope."
 

@@ -4,7 +4,9 @@
 
 **Created**: 2026-07-04
 
-**Status**: Draft
+**Status**: implemented -- artifact `src/seshat/rules/rename_impact_guard.py`
+
+**Status history**: Draft
 
 **Input**: User description: "Gap #15. Rename/impact refactor-safety static rule -- a static
 rule that renaming a gold column or a measure leaves no dangling reference across metric
