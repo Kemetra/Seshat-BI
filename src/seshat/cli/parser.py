@@ -127,6 +127,47 @@ def _add_pii_notice_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_cvd_evidence_parser(sub: argparse._SubParsersAction) -> None:
+    """`cvd-evidence` (spec 118): read-only colour-vision-deficiency simulation
+    evidence for ONE committed theme. Applies the three deterministic
+    protanope/deuteranope/tritanope transforms to the colours the theme declares
+    and reports the pairwise delta_e76 measured AFTER simulation, so a named human
+    can fill the `- [ ] **CVD distinguishability** -- OPEN` box theme_gen leaves
+    open. Emits no score, no pass/fail, no cross-theme ordering, and no
+    colorblind-safe claim; ticks no checkbox and touches no readiness stage."""
+    p = sub.add_parser(
+        "cvd-evidence",
+        help=(
+            "read-only CVD simulation evidence for one theme; measured per-pair "
+            "distances under three deficiencies for a named human reviewer"
+        ),
+    )
+    p.add_argument("--repo", default=".", help="repo root to read from")
+    p.add_argument(
+        "--theme",
+        required=True,
+        help="path to the committed theme JSON (e.g. themes/tower-retail.theme.json)",
+    )
+    p.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("text", "json"),
+        default="text",
+        help=(
+            "'text' (default) writes the markdown companion file; 'json' prints "
+            "the machine shape without writing"
+        ),
+    )
+    p.add_argument(
+        "--out",
+        default=None,
+        help=(
+            "override the written path; default is theme-adjacent "
+            "themes/<theme-name>.cvd-simulation-evidence.md"
+        ),
+    )
+
+
 def _add_approver_view_parser(sub: argparse._SubParsersAction) -> None:
     """`approver-view` (spec 115): read-only refutation-first reading view for a
     human signer over one table's committed readiness-status.yaml +
@@ -901,6 +942,7 @@ def _build_parser(prog: str = "retail") -> argparse.ArgumentParser:
     add_core_parsers(sub, "readiness_diff")
     _add_orchestration_assess_parser(sub)
     _add_pii_notice_parser(sub)
+    _add_cvd_evidence_parser(sub)
     _add_approver_view_parser(sub)
     _add_mapping_mirror_parser(sub)
     _add_dashboard_planner_parser(sub)

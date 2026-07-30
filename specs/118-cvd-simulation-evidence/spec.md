@@ -4,9 +4,14 @@
 
 **Created**: 2026-07-10
 
-**Status**: Draft
+**Status**: Implemented on branch `feat/118-cvd-simulation-evidence`, 2026-07-30 --
+artifacts: `src/seshat/color.py` (`simulate_cvd` + three named wrappers),
+`src/seshat/cvd_evidence.py`, `src/seshat/cli/commands/cvd_evidence.py`,
+`tests/unit/test_color_cvd.py`, `tests/unit/test_cvd_evidence.py`,
+`docs/tools/cvd-evidence.md`. See *Implementation notes* at the foot of this file for
+two deviations from the task list.
 
-**Input**: User description: "CVD (Colorblind) Simulation Evidence Aid -- a read-only design-review evidence aid that, given a committed Power BI theme (its categorical dataColors palette + any sequential/diverging ramps), applies deterministic protanope/deuteranope/tritanope colour-vision-deficiency simulation transforms (beside the shipped delta_e76 in src/retail/color.py) and emits a read-only evidence markdown: the simulated swatches plus the under-simulation pairwise deltaE for each colour pair, so a NAMED human reviewer can fill the literal `- [ ] **CVD distinguishability** -- OPEN` checkbox that the shipped theme_gen.py renderer (theme_gen.py:569) itself leaves open. It emits EVIDENCE for a human, never a pass and never a score."
+**Input**: User description: "CVD (Colorblind) Simulation Evidence Aid -- a read-only design-review evidence aid that, given a committed Power BI theme (its categorical dataColors palette + any sequential/diverging ramps), applies deterministic protanope/deuteranope/tritanope colour-vision-deficiency simulation transforms (beside the shipped delta_e76 in src/seshat/color.py) and emits a read-only evidence markdown: the simulated swatches plus the under-simulation pairwise deltaE for each colour pair, so a NAMED human reviewer can fill the literal `- [ ] **CVD distinguishability** -- OPEN` checkbox that the shipped theme_gen.py renderer (theme_gen.py:789) itself leaves open. It emits EVIDENCE for a human, never a pass and never a score."
 
 ## Clarifications
 
@@ -28,7 +33,7 @@
   colour-space projection) that maps a normal-vision colour to how it appears
   under that deficiency. Same theme -> byte-identical evidence every run (no
   randomness, no data, no model). The transforms sit beside the shipped
-  `delta_e76` perceptual-distance function in `src/retail/color.py`, and the
+  `delta_e76` perceptual-distance function in `src/seshat/color.py`, and the
   evidence reuses `delta_e76` to measure pairwise distance AFTER simulation.
 - Q: What is the evidence, and how is hard rule #9 (no fabricated confidence
   score) honoured? -> A: For each simulation type the aid emits (a) the simulated
@@ -65,7 +70,7 @@
   it is never `readiness-status.yaml`, never the theme, and never the checkbox
   itself.
 - Q: Does the aid check the OPEN box or advance any stage? -> A: NO. The literal
-  `- [ ] **CVD distinguishability** -- OPEN` checkbox that `theme_gen.py:569`
+  `- [ ] **CVD distinguishability** -- OPEN` checkbox that `theme_gen.py:789`
   renders stays a BLANK human field. This aid produces the evidence a named
   reviewer needs to make that call; it never ticks the box, never sets
   `colorblind_considerate_categoricals: true`, never moves `dashboard_ready` or any
@@ -79,9 +84,9 @@ vision. Its three shipped colour rules all use normal-vision maths:
 (adjacent/categorical deltaE), and `CT3` = `design_ramp_deltae` (whole-set
 normal-vision deltaE) -- and `CT3`'s own docstring explicitly disclaims a
 colorblind-safe claim. There is a real, named hole: the shipped theme renderer
-`src/retail/theme_gen.py` emits, at line 569, a LITERAL unchecked review box
+`src/seshat/theme_gen.py` emits, at line 789, a LITERAL unchecked review box
 `- [ ] **CVD distinguishability** -- OPEN: ...`, and sets
-`colorblind_considerate_categoricals: false` (line 470), leaving colour-vision
+`colorblind_considerate_categoricals: false` (line 676), leaving colour-vision
 deficiency (CVD) as a checkbox no shipped surface can help a reviewer answer.
 
 Colour-vision deficiency affects roughly 8% of male readers -- it is the single
@@ -93,7 +98,7 @@ manual, drift-prone assembly the kit exists to remove.
 This feature is the missing evidence aid. Given a committed theme, it applies three
 deterministic CVD simulation transforms (protanope / deuteranope / tritanope) to
 the palette, then reuses the SHIPPED `delta_e76` perceptual-distance function
-(`src/retail/color.py:83`) to measure how far apart each colour PAIR sits AFTER
+(`src/seshat/color.py:83`) to measure how far apart each colour PAIR sits AFTER
 each simulation, and emits a read-only evidence markdown of simulated swatches +
 under-simulation pairwise deltaE. The named human reviewer reads that evidence and
 fills the OPEN checkbox. The aid ORIGINATES no verdict, computes no rolled-up
@@ -114,7 +119,7 @@ flag; this wall is load-bearing and stated up front so the spec cannot drift.
   ordered by the measured distance as a reading aid); it never emits a new computed
   rank or a rolled-up number.
 - **It does NOT tick the OPEN checkbox and moves NO readiness stage.** The
-  `- [ ] **CVD distinguishability** -- OPEN` box (`theme_gen.py:569`) stays a BLANK
+  `- [ ] **CVD distinguishability** -- OPEN` box (`theme_gen.py:789`) stays a BLANK
   human field; the aid never sets `colorblind_considerate_categoricals: true`,
   never touches `readiness-status.yaml`, and never moves `dashboard_ready` or any
   stage. `never_self_grant_approval` (Principle V) holds absolutely.
@@ -398,15 +403,15 @@ or deltaE, and never presents the absence as a distinguishability result.
 - The committed theme JSON (`themes/*.theme.json` shape) is produced UPSTREAM by the
   shipped theme-authoring path (`theme-gen` / `theme-compile`) and is already
   committed before the aid runs; this feature READS that theme as its input and
-  never authors, edits, or gates it. (Grounded: `src/retail/theme_gen.py:569`
+  never authors, edits, or gates it. (Grounded: `src/seshat/theme_gen.py:789`
   emits the literal `- [ ] **CVD distinguishability** -- OPEN` checkbox and line
-  470 sets `colorblind_considerate_categoricals: false`; `src/retail/color.py:83`
+  470 sets `colorblind_considerate_categoricals: false`; `src/seshat/color.py:83`
   ships `delta_e76`.)
 - The perceptual-distance MECHANISM is NOT invented here: the aid reuses the shipped
   `delta_e76` function (already used by CT2/CT3) applied to simulated colours. Only
   the three CVD simulation transforms are net-new colour maths, and they are
   standard documented closed-form transforms, not a model or a heuristic.
-- Verified net-new against `main`: no shipped `src/retail` surface, CLI verb, or
+- Verified net-new against `main`: no shipped `src/seshat` surface, CLI verb, or
   `retail check` rule performs CVD simulation. `CT1` (contrast),
   `CT2` = `design_categorical_distinctness`, and `CT3` = `design_ramp_deltae` all
   operate on normal-vision colour maths (CT3's docstring disclaims a colorblind-safe
@@ -427,3 +432,54 @@ or deltaE, and never presents the absence as a distinguishability result.
   projections; the specific published transform matrices are an implementation
   choice for the plan phase, constrained only by determinism (FR-002/FR-012) and by
   producing an auditable, reproducible result (FR-007).
+
+---
+
+## Implementation notes (2026-07-30)
+
+Two deviations from `tasks.md`, both deliberate and both narrowing rather than widening
+what the aid claims.
+
+### 1. T004 pins properties, not a transcribed reference table
+
+T004 asked for tests asserting "each transform maps a set of published reference colours
+to their published expected simulated values". That was not implemented as written: a
+reference table copied without the ability to verify it is unverifiable data, and one
+mistyped digit would silently bless a wrong matrix while looking authoritative.
+
+`tests/unit/test_color_cvd.py` instead pins properties that follow from what the
+transform IS, plus the physiology it models:
+
+* **idempotence** -- projecting an already-projected colour changes nothing. This only
+  holds if the RGB->LMS and LMS->RGB matrices are a consistent pair, so it is the
+  strongest available check on the matrix set. Measured exact.
+* **the achromatic axis is fixed** -- grey has no chromatic content to lose, so every
+  simulation must return it unchanged. Measured exact for five greys.
+* **determinism** and valid-hex output for every deficiency.
+* **the behavioural signature that separates the three deficiencies**: measured
+  `delta_e76` for a red/green pair goes 119.77 declared -> 39.26 protanope -> 8.20
+  deuteranope, while tritanope leaves red/green discriminable at 142.56. A matrix
+  mix-up between the three would break that ordering.
+
+Golden values are also recorded, explicitly labelled as regression anchors for this
+implementation rather than as an external authority.
+
+### 2. The declared status trio is reported as its own section
+
+Clarification Q1 scoped the input to `dataColors` plus declared ramp stops. The shipped
+themes in this repo carry no `ramp` key at all -- `themes/*.theme.json` declares
+`dataColors`, `good`, `neutral`, `bad`, `foreground`, `background`. The implementation
+therefore reads `dataColors`, an optional `ramp` when present (forward-compatible), and
+additionally the declared `good`/`neutral`/`bad` trio as a **separate, never-conflated**
+section.
+
+That last group was added because it is where the failure actually lives. Measured on
+the committed `themes/tower-retail.theme.json`: the declared `good` `#2E7D32` and `bad`
+`#B23A2E` sit at `delta_e76` 88.3 under normal vision and **8.9 under deuteranope**. A
+palette-only reading would have measured everything except the one pair most likely to
+mislead a reader. Text and background colours remain out of scope, as Q1 specified --
+that is CT1's normal-vision lane.
+
+This stays within "the colours the theme declares" and adds no new claim: the trio is
+measured with the same transforms and the same metric, and carries the same absence of
+any score, verdict, or safe/unsafe statement.

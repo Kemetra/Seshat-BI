@@ -223,6 +223,7 @@ _DISPATCH: dict[str, Callable[[object], int]] = {
         ".commands.orchestration_assess", "orchestration_assess_main"
     ),
     "pii-notice": _lazy(".commands.pii_notice", "pii_notice_main"),
+    "cvd-evidence": _lazy(".commands.cvd_evidence", "cvd_evidence_main"),
     "approver-view": _lazy(".commands.approver_view", "approver_view_main"),
     "mapping-mirror": _lazy(".commands.mapping_mirror", "mapping_mirror_main"),
     "dashboard-planner": _lazy(".commands.dashboard_planner", "dashboard_planner_main"),

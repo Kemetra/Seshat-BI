@@ -32,7 +32,7 @@
 ## Notes
 
 - All decisions were resolved into the Clarifications block (Session 2026-07-10, Q1-Q5)
-  using reasonable defaults grounded in verified repo facts (`theme_gen.py:569` OPEN
+  using reasonable defaults grounded in verified repo facts (`theme_gen.py:789` OPEN
   checkbox; `color.py:83` `delta_e76`; CT1/CT2/CT3 normal-vision lanes) and the shipped
   precedents (DL4 design-review-evidence durable-file posture; specs 114/115/116
   read-only optional-companion posture). No [NEEDS CLARIFICATION] markers were needed.
