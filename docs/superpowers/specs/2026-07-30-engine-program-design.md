@@ -38,44 +38,80 @@ latent rather than harmless: any CI change that introduces commit config turns t
 into red builds, and today they make every local `pytest -m unit` run untrustworthy —
 which in turn weakens the verification evidence for T2, T3, and T4.
 
-### Verified call sites that commit without disabling signing
+### Measured baseline
 
-| Site | Anchor |
+`pytest -m unit` on a clean checkout of `main` at commit `512ff40`, 2026-07-30:
+**17 failed, 4288 passed, 28 skipped, 388 deselected** in 691s. All 17 are
+environmental, in two distinct groups.
+
+**Group B — 13 failures, this track's scope.** Confirmed by re-running the five
+files with `GIT_CONFIG_GLOBAL` pointed at a scratch config carrying
+`commit.gpgsign=false`: **59 passed, 1 skipped in 11.97s**. The failing tests are:
+
+| File | Failing tests |
 |---|---|
-| `tests/unit/test_portfolio_watch_invariants.py::_init_repo_with_commit` | init/config L129-149, no gpgsign |
-| `tests/unit/test_portfolio_watch_summary.py::test_summary_assembly_writes_no_per_scope_artifact` | inline L127-148 |
-| `tests/unit/test_stage1_scaffold.py` (readiness-status consistency test) | ~L264-270, sets identity via `-c` but not gpgsign |
-| `tests/integration/test_watch_cli.py::test_watch_writes_only_the_local_snapshot` | init L62, config L64-75, commit L77-78 |
+| `tests/unit/dbt/test_scaffold_conformed_orchestration.py` | 6 |
+| `tests/unit/dbt/test_project.py` | 2 |
+| `tests/unit/test_portfolio_watch_invariants.py` | 2 |
+| `tests/unit/test_workspace_init.py` | 2 |
+| `tests/unit/test_portfolio_watch_summary.py` | 1 |
 
-Sites already safe and explicitly **out of scope**: `test_dagster_evidence.py`,
+A static sweep for call sites lacking `commit.gpgsign=false` was run first and proved
+**unreliable in both directions** — it missed the two `tests/unit/dbt/` files and
+`test_workspace_init.py`, and it flagged `tests/unit/test_stage1_scaffold.py`, which
+does not fail. The measured list above supersedes it; scope T1 from the run, and
+re-measure rather than re-reasoning if the set appears to change.
+
+`tests/integration/test_watch_cli.py::test_watch_writes_only_the_local_snapshot`
+builds a temp repo and commits at L77-78 without disabling signing, so it is the same
+latent defect, but `-m unit` deselects it and this baseline therefore does not prove
+it fails. Confirm it directly before including it.
+
+Sites verified already safe and explicitly **out of scope**: `test_dagster_evidence.py`,
 `tests/fixtures/portfolio_watch/builders.py::init_git_repo`, the three
 `test_pbip_adoption_*.py` files, and `test_fresh_workspace.py` all set
 `commit.gpgsign=false` inline. `test_cli.py::_init_repo`,
 `test_distribution_compat.py`, and `test_security_review_findings.py::_git_repo`
 only `git init` and never commit, so they have no exposure.
 
+**Group A — 4 failures, not this track.** `test_registry.py`,
+`test_cli_analyze.py`, `test_cli_dagster.py`, and `test_metric_drift.py` each spawn a
+clean subprocess (`<python> -c "import seshat.rules; …"`) to prove a lazy-import
+boundary holds (rules B1/B3) — the right design for that assertion. They fail with
+`ModuleNotFoundError: No module named 'seshat.rules'` because the editable install in
+the active interpreter predates the `retail` → `seshat` rename. The fix is
+`pip install -e .`; there is no code defect. Recorded here so a future run does not
+mistake them for regressions.
+
 ### Design
 
-Repoint each of the four sites at `_gitfix.make_git_repo`. No helper changes are
-needed: none of the callers requires a bare repo, a remote, a `file://` protocol
-allowance, or a non-`main` initial branch — the four capabilities
-`make_git_repo` already provides are exactly the four they need. Where a site
-currently inlines identity config, that config is deleted rather than kept, so the
-helper stays the single place signing policy is expressed.
+Repoint the temp-repo construction in the five Group-B files at
+`_gitfix.make_git_repo`. No helper changes are needed: none of the callers requires a
+bare repo, a remote, a `file://` protocol allowance, or a non-`main` initial branch —
+the four capabilities `make_git_repo` already provides are exactly the four they need.
+Where a site currently inlines identity config, that config is deleted rather than
+kept, so the helper stays the single place signing policy is expressed.
 
-`tests/integration/test_watch_cli.py` is included even though `-m unit` does not
-select it: it is the same defect with the same one-line fix, and splitting it across
-two PRs costs more review than it saves.
+`tests/integration/test_watch_cli.py` is a candidate, not a commitment: confirm it
+actually fails under a signing global first. If it does, fold it into the same PR
+(same defect, same one-line fix); if it does not, leave it alone rather than churn a
+passing test.
 
 ### Non-goals
 
 Not converting the already-safe inline sites for stylistic consistency (churn without
 defect). Not changing `_gitfix.py`'s API. Not touching
 `test_cli_identity_version.py::test_version_resolver_matches_pyproject_when_installed`
-— it fails only against a stale editable install (`_distribution_version()` in
+— it did not fail in the measured baseline. `_distribution_version()` in
 `seshat/cli/parser.py` reads installed metadata via `importlib.metadata` and compares
-it to `pyproject.toml`); the fix is `pip install -e .`, an environment action, not a
-code change.
+it to `pyproject.toml`, and the test skips when that metadata is absent, so a stale
+editable install shows up as a skip or a Group-A failure rather than here. Either way
+the remedy is `pip install -e .`, an environment action, not a code change.
+
+Not fixing Group A in this track. Making those four guards degrade to a skip with a
+"reinstall the editable package" reason would be a genuine ergonomic improvement, but
+it also weakens a governance assertion (B1/B3) by letting it pass silently — that
+trade is its own decision, not a rider on a test-portability fix.
 
 ### Testing
 
