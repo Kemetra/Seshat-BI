@@ -16,14 +16,14 @@ source_id: "finance_gl_budget"
 source_family: "finance_gl_synthetic"
 
 # --- where we are -----------------------------------------------------------
-current_stage: "source_ready"
+current_stage: "mapping_ready"
 mapping_version: "1"
 
 # --- the seven stages -------------------------------------------------------
 stages:
 
   source_ready:
-    status: "blocked"
+    status: "pass"
     # RS1: standalone FILE source -> owner confirmation required. See ledger row L2.
     source_kind: "csv"
     evidence:
@@ -31,19 +31,17 @@ stages:
       - "tests/fixtures/finance_gl/generate.py"
       - "tests/fixtures/finance_gl/excerpts/finance_gl_budget.head.csv"
       - "tests/unit/test_finance_gl_generator.py"
-    blocking_reasons:
-      - "RS1: csv source -- a named owner must confirm the encoding/delimiter/header before source_ready can pass. Not self-confirmed."
+    blocking_reasons: []
 
   mapping_ready:
-    status: "blocked"
+    status: "pass"
     evidence:
       - "mappings/finance_gl_budget/source-map.yaml"
       - "mappings/finance_gl_budget/assumptions.md"
       - "mappings/finance_gl_budget/unresolved-questions.md"
-    blocking_reasons:
-      - "OD-4: the mapping gate needs a named human approval of the declared 5-part grain (including budget_version as part of IDENTITY) and the second-fact star shape. reviewed_by/reviewed_on are [PENDING GATE APPROVAL]."
-      - "unresolved-questions.md Q3 is open: whether the 241 budgeted combos with no posted actuals are expected business states or indicate missing actuals. This decides whether a gate refusing them is correct or an over-refusal."
-      - "source_ready is not pass (see above), so this stage cannot be entered."
+      - "mappings/finance_gl_budget/approval-decision-mapping-gate.md"
+      - "docs/quality/conformed-dimension-map.yaml"
+    blocking_reasons: []
 
   silver_ready:
     # Not entered. RS1: blocking_reasons[] belong on `blocked` stages only, so the
@@ -80,14 +78,21 @@ stages:
 evidence:
   - "docs/worked-examples/finance-gl-genericity-ledger.md"
   - "specs/137-finance-gl-genericity-proof/spec.md"
-blocking_reasons:
-  - "two named-human actions outstanding: the RS1 source confirmation and the mapping-gate approval (OD-4)."
+blocking_reasons: []
 
 # --- approvals (named human sign-offs; the agent cannot self-grant) ---------
-approvals: []
+approvals:
+  - stage: "source_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-07-30"
+    note: "csv source confirmed -- committed generator + byte-identical regeneration test accepted as provenance; see approval-decision-mapping-gate.md sub-decision A"
+  - stage: "mapping_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-07-30"
+    note: "mapping gate CLEARED -- declared grain, PK and gold star approved; open questions ruled; HR1 conformance ruled conformed. See approval-decision-mapping-gate.md"
 
 # --- the single next allowed action -----------------------------------------
-next_action: "a named owner answers approval-request-mapping-gate.md -- confirming the csv source (RS1), ruling Q3 (budgeted-with-no-actuals semantics), and approving the declared 5-part grain including budget_version. Nothing downstream may start first."
+next_action: "author warehouse/migrations/0007_create_silver_finance_gl_budget.sql -- the mapping gate is CLEARED; authoring only, nothing executed."
 
 # --- audit ------------------------------------------------------------------
 last_checked_at: "2026-07-30"

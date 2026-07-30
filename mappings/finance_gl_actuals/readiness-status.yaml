@@ -13,14 +13,14 @@ source_id: "finance_gl_actuals"
 source_family: "finance_gl_synthetic"
 
 # --- where we are -----------------------------------------------------------
-current_stage: "source_ready"
+current_stage: "mapping_ready"
 mapping_version: "1"
 
 # --- the seven stages -------------------------------------------------------
 stages:
 
   source_ready:
-    status: "blocked"
+    status: "pass"
     # This is a standalone FILE source, so RS1 makes the encoding/delimiter/header a
     # [PROPOSED] inference requiring a named owner's confirmation before this stage can
     # read pass. Honoured as written, even though this particular source is emitted by a
@@ -33,20 +33,17 @@ stages:
       - "tests/fixtures/finance_gl/generate.py"
       - "tests/fixtures/finance_gl/excerpts/finance_gl_actuals.head.csv"
       - "tests/unit/test_finance_gl_generator.py"
-    blocking_reasons:
-      - "RS1: csv source -- a named owner must confirm the encoding/delimiter/header before source_ready can pass. No approval has been recorded and the agent did not self-confirm."
+    blocking_reasons: []
 
   mapping_ready:
-    status: "blocked"
+    status: "pass"
     evidence:
       - "mappings/finance_gl_actuals/source-map.yaml"
       - "mappings/finance_gl_actuals/assumptions.md"
       - "mappings/finance_gl_actuals/unresolved-questions.md"
-    blocking_reasons:
-      - "OD-4: the mapping gate needs a named human approval of the declared grain (journal_entry_id + line_id) and the gold star shape. source-map.yaml carries reviewed_by/reviewed_on as [PENDING GATE APPROVAL]."
-      - "unresolved-questions.md Q2 is open: whether P&L reporting excludes clearing accounts (2,500 of 5,000 rows) and whether account_type <> 'CLEARING' is the right mechanism."
-      - "unresolved-questions.md Q3 is open: whether cost-center-level analysis is required, which decides whether dim_cost_center_fgl is built."
-      - "source_ready is not pass (see above), so this stage cannot be entered."
+      - "mappings/finance_gl_actuals/approval-decision-mapping-gate.md"
+      - "docs/quality/conformed-dimension-map.yaml"
+    blocking_reasons: []
 
   silver_ready:
     # Not entered. RS1: blocking_reasons[] belong on `blocked` stages only, so the
@@ -83,17 +80,24 @@ stages:
 evidence:
   - "docs/worked-examples/finance-gl-genericity-ledger.md"
   - "specs/137-finance-gl-genericity-proof/spec.md"
-blocking_reasons:
-  - "two named-human actions are outstanding: the RS1 source confirmation (source_ready) and the mapping-gate approval (mapping_ready, OD-4)."
+blocking_reasons: []
 
 # --- approvals (named human sign-offs; the agent cannot self-grant) ---------
 # EMPTY BY DESIGN. Two approvals are outstanding and both are requested in
 # approval-request-mapping-gate.md. Spec 137's ratification by the owner on 2026-07-30
 # approved THE SPEC; it granted neither of these stage approvals.
-approvals: []
+approvals:
+  - stage: "source_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-07-30"
+    note: "csv source confirmed -- committed generator + byte-identical regeneration test accepted as provenance; see approval-decision-mapping-gate.md sub-decision A"
+  - stage: "mapping_ready"
+    owner: "Ahmed Shaaban (data_owner)"
+    at: "2026-07-30"
+    note: "mapping gate CLEARED -- declared grain, PK and gold star approved; open questions ruled; HR1 conformance ruled conformed. See approval-decision-mapping-gate.md"
 
 # --- the single next allowed action -----------------------------------------
-next_action: "a named owner answers approval-request-mapping-gate.md -- confirming the csv source (RS1), ruling Q2 (clearing-account exclusion) and Q3 (cost-center level), and approving the declared grain + star shape. Nothing downstream may start first."
+next_action: "author warehouse/migrations/0006_create_silver_finance_gl_actuals.sql -- the mapping gate is CLEARED, so silver authoring is the next allowed step (authoring only; nothing is executed)."
 
 # --- audit ------------------------------------------------------------------
 last_checked_at: "2026-07-30"

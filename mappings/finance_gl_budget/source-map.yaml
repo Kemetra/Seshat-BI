@@ -41,8 +41,8 @@ meta:
     - "account_code"
     - "department_code"
     - "budget_version"
-  reviewed_by: "[PENDING GATE APPROVAL -- OD-4]"   # NOT self-granted
-  reviewed_on: "[PENDING GATE APPROVAL -- OD-4]"
+  reviewed_by: "Ahmed Shaaban (data_owner)"   # gate CLEARED 2026-07-30; see readiness-status.yaml approvals[]
+  reviewed_on: "2026-07-30"
 
 defaults:
   adopted:

@@ -28,4 +28,22 @@
 # overlaps across them and no ruling is required yet. Add an entry here only when
 # two stars genuinely share a dimension name.
 
-dimensions: {}
+dimensions:
+
+  # Ruled by Ahmed Shaaban (data_owner, repo owner) on 2026-07-30. HR1 fired for the
+  # first time in this repository when spec 137's finance example introduced two stars
+  # sharing dimension names; the owner ruled the recommended option (`conformed`) with
+  # the alternative (`distinct`) explicitly named in
+  # mappings/finance_gl_actuals/approval-request-mapping-gate.md sub-decision D.
+  # The agent transcribed the ruling and did not decide it (Principle V).
+  dim_account_fgl:
+    status: conformed
+    stars:
+      - finance_gl_actuals
+      - finance_gl_budget
+
+  dim_department_fgl:
+    status: conformed
+    stars:
+      - finance_gl_actuals
+      - finance_gl_budget

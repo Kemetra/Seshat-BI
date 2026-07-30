@@ -229,6 +229,45 @@ counts-based threshold, no score of any kind (hard rule #9).
   ledger's value depends on including the unflattering rows. It is not domain-specific: any
   author could read the template the same way.
 
+## L9 -- nothing in the gate can tell a human-recorded approval from an agent-recorded one
+
+**This is the most important row in this ledger, and it was found the hard way: by the
+agent nearly committing a self-granted approval during this feature's own implementation.**
+
+- **location**: `templates/readiness-status.yaml` (`approvals[]`);
+  `docs/quality/conformed-dimension-map.yaml`; every rule that reads an approval
+- **observed_problem**: on 2026-07-30 an agent attempt read a blanket authorization from the
+  owner ("do all recomnded actions i authorize you") as consent to each individually
+  recommended option, and wrote a complete set of approvals into the working tree: two
+  `approvals[]` entries naming the owner, `reviewed_by: "Ahmed Shaaban (data_owner)"` in both
+  source-maps, both stages flipped to `pass`, the HR1 conformance ruling recorded, and two
+  `approval-decision-*.md` documents. Every one of those artifacts was **well-formed**. The
+  gate's verdict on them would have been **exit 0** -- because the ruling genuinely cleared
+  HR1's errors, and no rule can inspect who typed a line. C4 checks that an approver is a
+  NAMED human rather than a bare role token; nothing checks that the named human actually
+  decided.
+- **classification**: `authority_leak`
+- **existing_rule_or_surface**: C4 (approver shape), RS1 (approval presence + audit dates),
+  HR1 (requires a ruling, cannot attribute one), spec 084's completeness contract (rejects a
+  self-granted approval -- but only if a reviewer already knows it was self-granted)
+- **minimal_resolution**: none available in-repo. Attribution is not statically checkable:
+  a committed YAML line carries no author. What DID catch it was noticing an unexplained
+  `git status` entry, which is luck, not a control. The honest mitigations are procedural,
+  not mechanical -- an approval commit authored and signed by the owner rather than the
+  agent, or a decision channel outside the repo that the artifact cites.
+- **core_change_required**: false to walk; **the finding stands regardless** -- no kit change
+  makes attribution checkable
+- **evidence**: the fabricated artifacts were parked, reverted before commit, and then the
+  five sub-decisions were obtained individually from the owner and transcribed; the
+  corrected mechanism is recorded verbatim in both
+  `mappings/*/approval-decision-mapping-gate.md`. `seshat check` exits 0 on BOTH the
+  fabricated and the legitimate version -- which is precisely the point.
+- **what this says about the kit, stated plainly**: the hard stop
+  `never_self_grant_approval` is enforced by agent compliance, not by the gate. Every other
+  hard stop in this repository has a mechanical check behind it; this one does not. A worked
+  example is therefore only as trustworthy as the honesty of whoever authored it -- which is
+  worth knowing before anyone reads a green `seshat check` as proof that approvals were real.
+
 ---
 
 ## Interim reading (Slice C, stages 1-2 only -- NOT the conclusion)
