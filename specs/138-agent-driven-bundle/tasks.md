@@ -66,17 +66,17 @@ actionable instruction and no simulated answer.
 
 ### Blocking research (must close before any US1 edit)
 
-- [ ] T007 [US1] Confirm research R1 — that each harness starts a plugin-declared server automatically at the exact versions named in `docs/install/support-matrix.md` — and record the observation in `specs/138-agent-driven-bundle/evidence/harness-server-support.md`
+- [ ] T007 [US1] Confirm research R1 at the harness versions the acceptance run will name — feasibility is already established from primary sources, so this confirms *this build*. Verify at the runtime, not a settings pane: `codex mcp list` / `codex mcp get` on Codex (an absent settings-UI row is expected per the open upstream defect) and the equivalent on Claude. Record versions and output in `specs/138-agent-driven-bundle/evidence/harness-server-support.md`; note the local CLI is `codex-cli 0.146.0` against `0.144.5` in `docs/install/support-matrix.md`
 - [ ] T008 [US1] Confirm research R2 — the working directory a plugin-launched server starts in — and record whether `seshat mcp`'s `--repo` default of `.` resolves to the user's workspace or the plugin directory
 - [ ] T009 [US1] Confirm research R3 — whether each harness surfaces a failed plugin server's diagnostic to the user — and record the result in `specs/138-agent-driven-bundle/evidence/harness-server-support.md`
-- [ ] T010 [US1] **STOP GATE**: if T007 or T008 is negative, halt US1, report to the owner, and re-scope. Do not implement a workaround.
+- [ ] T010 [US1] **STOP GATE**: if T007 or T008 is negative, halt US1, report to the owner, and re-scope. Do not implement a workaround. A missing settings-UI row is **not** a negative result — only a runtime that does not register the server, or one that resolves the wrong repository root, is.
 
 ### Tests
 
 - [ ] T011 [P] [US1] Add the bundled-server class exemption assertions to `tests/contract/test_public_command_surface.py` per `contracts/bundled-server-declaration.md` obligation 6 — the exemption must be scoped to that class alone and must fail if widened
 - [ ] T012 [P] [US1] Add assertions to `tests/contract/test_claude_plugin_bundle.py` that the Claude bundle carries the server declaration and its manifest pointer
 - [ ] T013 [P] [US1] Add the equivalent assertions to `tests/contract/test_codex_plugin_bundle.py`
-- [ ] T014 [P] [US1] Add assertions to `tests/contract/test_generated_agent_bundles.py` that the declaration carries no repository path argument, no credential and no environment secret
+- [ ] T014 [P] [US1] Add assertions to `tests/contract/test_generated_agent_bundles.py` that the declaration carries no repository path argument, no credential and no environment secret, **and that its wrapper key is the camelCase `mcpServers`** — the snake_case `mcp_servers` form in one platform's published example is unparsed and yields a server that silently never loads (`contracts/bundled-server-declaration.md` obligation 7)
 
 ### Implementation
 
@@ -89,7 +89,7 @@ actionable instruction and no simulated answer.
 
 ### Verification
 
-- [ ] T021 [US1] Verify on both harnesses in a scratch workspace created by `seshat init-project`: tools present with no registration, and the governor reporting on the scratch workspace rather than the plugin directory
+- [ ] T021 [US1] Verify on both harnesses in a scratch workspace created by `seshat init-project`: tools present with no registration, and the governor reporting on the scratch workspace rather than the plugin directory. Confirm via the runtime's own list/get commands plus a successful tool call — never via a settings pane
 - [ ] T022 [US1] Verify degradation with the optional extra removed — a named two-lane install hint from `src/seshat/cli/__init__.py::_run_mcp`, no simulated governor output, no claim the loop is available — recording the session evidence in `specs/138-agent-driven-bundle/evidence/us1-acceptance.md`
 - [ ] T023 [US1] Verify against `src/seshat/governor/mcp_server.py` that no enabled tool advances a stage, grants an approval, writes a readiness artifact, or emits any score, and record it in `specs/138-agent-driven-bundle/evidence/us1-acceptance.md`
 

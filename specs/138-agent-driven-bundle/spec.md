@@ -497,16 +497,20 @@ reproducible from that evidence.
 
 ## Assumptions
 
-- **Both harnesses support bundled servers.** Read from each platform's current
-  published reference: one accepts a root configuration file or an inline
-  declaration and starts such servers automatically when the plugin is enabled;
-  the other accepts the same root configuration file referenced from its
-  manifest. This is the one assumption in this specification resting on an
-  external source rather than on repository evidence, and it is load-bearing for
-  User Story 1. The planning phase MUST re-confirm it against the exact harness
-  versions named in the support matrix before implementation, and MUST treat a
-  negative result as grounds to re-scope User Story 1 rather than to work around
-  it.
+- **Both harnesses support bundled servers.** Confirmed from primary sources: one
+  platform's official plugins reference states that servers may be declared in a
+  root configuration file or inline in the manifest and start automatically when
+  the plugin is enabled; on the other, an upstream issue records a plugin's server
+  registering automatically in the runtime, observable through that runtime's own
+  list and get commands, with the entrypoint returning a valid initialize
+  response. Two constraints follow and are carried into the contract: the
+  declaration's wrapper key MUST be the camelCase form (the snake_case form in one
+  published example is unparsed and yields a server that silently never loads),
+  and acceptance MUST be verified at the runtime rather than in a settings pane
+  (a known open defect hides the server from one platform's settings UI while it
+  works). A live, version-specific confirmation is still required before
+  implementation; a negative result there re-scopes User Story 1 rather than
+  prompting a workaround.
 - **Codex has no prompt or slash-command surface, and this is a platform
   property, not a gap.** Grounded in this repository's own evidence: the v0.3.1
   public acceptance record describes installing "the skills-only plugin" on

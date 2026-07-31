@@ -36,6 +36,13 @@ distribution/bundle-templates/shared/<server-declaration>
    class, and its symmetry reconciliation MUST exempt that class explicitly, on
    the stated ground that such a component has no wrapper template and no
    knowledge-allowlist entry.
+7. The declaration file MUST use the **camelCase** `mcpServers` wrapper key (or a
+   bare top-level server map). The snake_case `mcp_servers` form shown in one
+   platform's published example is **not** recognised by its parser — the struct
+   carries a camelCase rename, so a snake_case wrapper produces a server that
+   silently never loads. A contract test MUST assert the camelCase key, because
+   this failure is invisible at export time and only shows up as an absent tool
+   in a live session.
 
 ## Prohibitions
 
@@ -64,7 +71,14 @@ available, when the tools are absent.
 
 ## Acceptance evidence
 
-Verified on each harness at the versions the support matrix names: tools present
-after install with no registration step; the governor reporting on the user's
-workspace rather than the plugin directory; and, with the extra removed, a named
-actionable instruction rather than silence.
+Verified on each harness at the versions the acceptance record names: tools
+present after install with no registration step; the governor reporting on the
+user's workspace rather than the plugin directory; and, with the extra removed, a
+named actionable instruction rather than silence.
+
+**Verify at the runtime, not in a settings pane.** On one harness a known open
+defect means a plugin-installed server does not appear in the MCP settings UI and
+the plugin page wrongly implies manual setup is still required, while the runtime
+has it registered and working. An absent UI row is therefore **expected** and is
+not evidence of failure; the authoritative checks are the runtime's own
+list/get commands and a successful tool call.

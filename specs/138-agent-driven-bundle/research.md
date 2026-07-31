@@ -14,12 +14,43 @@ is therefore the only one that can block User Story 1.
 single shared source file projected into each bundle root, with the harness
 manifest pointing at it.
 
-**Rationale**: Each platform's current published reference describes the same
-shape — a server configuration file at the plugin root, referenced from the
-plugin manifest, with servers started when the plugin is enabled. One platform
-additionally permits an inline declaration in the manifest; the file form is
-chosen because it is the intersection of both, keeping one canonical source
-rather than two divergent manifest bodies.
+**Rationale**: Both platforms describe the same shape — a server configuration
+file at the plugin root, referenced from the plugin manifest, with servers
+started when the plugin is enabled. One platform additionally permits an inline
+declaration in the manifest; the file form is chosen because it is the
+intersection of both, keeping one canonical source rather than two divergent
+manifest bodies.
+
+**Evidence (upgraded 2026-07-31 to primary sources)**:
+
+- *Claude*: the official plugins reference states servers may be declared in a
+  root configuration file or inline in the manifest, and that plugin servers
+  "start automatically when the plugin is enabled".
+- *Codex*: `openai/codex` issue **#17360** confirms plugin-installed servers
+  register automatically in the runtime — the reporter observed
+  `codex mcp list` showing the plugin's server as enabled, `codex mcp get`
+  returning the expected stdio config, and the entrypoint returning a valid MCP
+  initialize response. The reported defect is UI-only: the settings pane does not
+  list the server and the plugin page wrongly implies manual setup. **Open at
+  time of writing.**
+- Local `codex-cli 0.146.0` exposes `codex mcp list` / `get`, so the runtime check
+  is available on this machine. Note this is newer than the `0.144.5` recorded in
+  the support matrix; the acceptance run must state which version it used.
+- The cached remote plugin catalog references `.mcp.json`, so catalogue plugins
+  do ship bundled servers in practice.
+
+**Two constraints this evidence imposes:**
+
+1. **The wrapper key must be `mcpServers` (camelCase).** `openai/codex` issue
+   **#22105** records that the published example uses `mcp_servers`, which the
+   parser does not recognise: the Rust `PluginMcpServersFile` struct carries
+   `#[serde(rename_all = "camelCase")]`, so the field maps to `mcpServers`. A
+   bare top-level server map also works. Implementing from the documented example
+   would produce a server that silently never loads — the exact failure this
+   feature exists to remove.
+2. **Acceptance must verify at the runtime, not in the UI.** Because #17360 is
+   open, a Codex settings pane that does not list the server is *expected* and is
+   not evidence of failure. The check is `codex mcp list` / `codex mcp get`.
 
 **Alternatives considered**:
 - *Inline in each manifest*: supported on one harness only; would fork the
@@ -31,12 +62,13 @@ rather than two divergent manifest bodies.
   re-centralises on the CLI that Option B ratified away from and forfeits the
   agent's own skill-index routing. Recorded in the spec's Assumptions.
 
-**OPEN — must be closed before US1 implementation**: this is the one conclusion
-drawn from external platform documentation rather than repository evidence. The
-spec requires it be re-confirmed against the exact harness versions named in the
-support matrix, and a negative result re-scopes User Story 1 rather than
-prompting a workaround. Confirmation is the first task of US1, not a parallel
-activity.
+**CLOSED for feasibility; one residual check remains.** The question "can a
+plugin declare a server that starts without manual wiring" is answered **yes on
+both harnesses**, from primary sources rather than third-party summaries. What
+still requires a live run is version-specific confirmation at the exact harness
+versions the acceptance record will name, plus the observation for R2. That is
+narrower than the original blocker: US1 is now known to be *buildable*, and the
+first task confirms *this build* works rather than whether the approach exists.
 
 ---
 
@@ -158,7 +190,7 @@ Nothing may derive a confidence, health, maturity or completeness value from it
 
 | Id | Unknown | State |
 |---|---|---|
-| R1 | Both harnesses start plugin-declared servers | Decided; **external-sourced, re-confirm before US1** |
+| R1 | Both harnesses start plugin-declared servers | **Confirmed from primary sources**; live version-specific run still required. Two constraints found: camelCase `mcpServers`, and verify at the runtime not the UI |
 | R2 | Workspace resolution for a plugin-launched governor | Decided; verify resolved root alongside R1 |
 | R3 | Visibility of the absent-extra diagnostic | Decided; existing path reused, visibility verified |
 | R4 | Definition of a dev-only reference | Decided; per-reference by intent |
