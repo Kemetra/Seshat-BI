@@ -34,8 +34,10 @@ No live DB provisioning, no automated ingestion code, no orchestrator integratio
 unless explicitly requested. Add the seam, not the implementation.
 
 <!-- SPECKIT START -->
-Active Spec Kit implementation plan: `specs/137-finance-gl-genericity-proof/plan.md`
+Active Spec Kit implementation plan: `specs/138-agent-driven-bundle/plan.md`
 (status: planning package authored, awaiting owner ratification -- no implementation started).
+Also awaiting ratification: `specs/137-finance-gl-genericity-proof/plan.md`. At most ONE of
+the two may be in implementation at a time (spec 138 FR-026).
 <!-- SPECKIT END -->
 <!-- SESHAT-KIT START -->
 **Seshat BI kit router** (v0.2.0) -- generated from `.seshat/kit-source.yaml`; do not edit here.
