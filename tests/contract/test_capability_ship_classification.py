@@ -244,6 +244,17 @@ def _bundled_skill_dirs() -> dict[str, set[str]]:
     }
 
 
+def _absent_from_bundles(
+    entry: dict[str, Any], bundled: dict[str, set[str]]
+) -> dict[str, list[str]]:
+    """Per harness, the directories this entry owns that the bundle lacks."""
+    return {
+        harness: missing
+        for harness, present in bundled.items()
+        if (missing := [d for d in _referenced_dirs(entry) if d not in present])
+    }
+
+
 def test_committed_bundle_carries_every_shipping_entry(
     capabilities: list[dict[str, Any]],
 ) -> None:
@@ -261,14 +272,11 @@ def test_committed_bundle_carries_every_shipping_entry(
     wrong" -- do not silence it by narrowing the assertion.
     """
     bundled = _bundled_skill_dirs()
-    offenders: dict[str, dict[str, list[str]]] = {}
-    for entry in capabilities:
-        if not entry.get("ships"):
-            continue
-        for harness, present in bundled.items():
-            missing = [d for d in _referenced_dirs(entry) if d not in present]
-            if missing:
-                offenders.setdefault(entry["id"], {})[harness] = missing
+    offenders = {
+        entry["id"]: absent
+        for entry in capabilities
+        if entry.get("ships") and (absent := _absent_from_bundles(entry, bundled))
+    }
     assert not offenders, (
         f"{len(offenders)} entries are marked `ships: true` but produce no bundle "
         f"file, so the inventory and the artifact disagree: {offenders}"
