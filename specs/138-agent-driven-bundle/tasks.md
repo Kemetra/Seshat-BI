@@ -8,10 +8,11 @@ description: "Task list for spec 138 — agent-driven bundle completion"
 
 **Prerequisites**: plan.md, spec.md, research.md, data-model.md, contracts/, quickstart.md
 
-> **NO TASK BELOW MAY BE STARTED.** Spec FR-026 blocks implementation until a
-> named human ratifies the specification, and caps concurrent implementation at
-> one story across specs 137 and 138. This file is the ratification package, not
-> a work queue.
+> **RATIFIED** by Ahmed Shaaban (owner) 2026-07-31 — implementation permitted.
+> FR-026 still caps concurrent implementation at **one story at a time** across
+> specs 137 and 138. Two owner decisions are outstanding and block payload work:
+> **T006** (the routing-cost ceiling) and the **scaffold-scope question** raised
+> by the three REVIEW findings in `evidence/portability-findings.md`.
 
 **Tests**: REQUIRED. The specification makes contract tests the acceptance
 evidence (FR-008 names `test_committed_bundles_match_clean_regeneration`), and
