@@ -86,7 +86,7 @@ of the A-vs-B fork.
 | Codex slash commands | 0 — the Codex plugin format has no prompt/command surface; skills, MCP servers and app integrations are its only component types |
 | `surface: skill` entries in `docs/capabilities/capabilities.yaml` | 29 of 93 capabilities |
 | Knowledge roots present in that inventory | **0 of 6** |
-| `surface: skill` ids with no matching directory | **4** (`retail-govern-skill`, `run-next-readiness-skill`, `pbir-authoring-adapter-skill`, `speckit-workflow-skills`) |
+| `surface: skill` ids with no matching directory | 4 by id — but **all four already resolve** via the existing `references.skill` (measured: 50/50 directories covered, 0 dangling). Not a defect; FR-002 withdrawn |
 | Export transforms allowed | 2 (`copy-normalized-v1`, `template-substitute-version-v1`) |
 | Dev-only path references inside the 10 compass verb skills | **33** distinct (skill, path) pairs — enumerated at T003; the 23 cited while authoring counted path *classes*, not references |
 
@@ -328,12 +328,21 @@ reproducible from that evidence.
 
 #### Truthful inventory (User Story 2)
 
-- **FR-001**: The capability inventory MUST contain an entry for every reviewed
-  knowledge skill currently carried by the bundles; today six such skills ship
-  and none is listed.
-- **FR-002**: Every capability entry whose surface is a skill MUST resolve to an
-  existing skill directory; where the entry id and the directory name differ, the
-  entry MUST record the directory explicitly rather than relying on the id.
+- **FR-001**: The capability inventory's declared coverage scope MUST widen from
+  skills under `.claude/skills/` to any committed SKILL.md the kit authors,
+  wherever it lives, and MUST then contain an entry for every reviewed knowledge
+  skill carried by the bundles; today six such skills ship and none is listed.
+  The scope statement in the file's own header MUST be updated in the same
+  change, so the file never contradicts its stated contract.
+  *(Reframed 2026-07-31: the six are absent by declared scope, not by oversight —
+  see `evidence/us2-design-corrections.md`.)*
+- **FR-002**: ~~Every capability entry whose surface is a skill MUST record its
+  directory explicitly via a new field.~~ **WITHDRAWN 2026-07-31** — the existing
+  `references.skill` already resolves every entry to its directory, in both
+  scalar and list form, with measured coverage of 50/50 directories and 0
+  dangling references. A new field would duplicate a mechanism the file already
+  has. The derivation MUST resolve directories through `references.skill`,
+  accepting both forms.
 - **FR-003**: Every capability entry whose surface is a skill MUST record whether
   it ships in the public bundles, and MUST record which authority classified it
   (a compass verb, a reviewed knowledge root, or a consumer capability).

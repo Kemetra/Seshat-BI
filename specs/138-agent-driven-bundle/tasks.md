@@ -10,9 +10,10 @@ description: "Task list for spec 138 — agent-driven bundle completion"
 
 > **RATIFIED** by Ahmed Shaaban (owner) 2026-07-31 — implementation permitted.
 > FR-026 still caps concurrent implementation at **one story at a time** across
-> specs 137 and 138. Two owner decisions are outstanding and block payload work:
-> **T006** (the routing-cost ceiling) and the **scaffold-scope question** raised
-> by the three REVIEW findings in `evidence/portability-findings.md`.
+> specs 137 and 138. Both blocking owner decisions are now RULED (2026-07-31):
+> the routing-cost ceiling is **6,000 `tokens_approx` per bundle** (T006), and
+> shipped skills **name the scaffold verb** rather than instructing a read of
+> `templates/`. Payload work is unblocked.
 
 **Tests**: REQUIRED. The specification makes contract tests the acceptance
 evidence (FR-008 names `test_committed_bundles_match_clean_regeneration`), and
@@ -110,7 +111,7 @@ byte-identical output.
 
 ### Tests
 
-- [ ] T024 [P] [US2] Create `tests/contract/test_capability_inventory.py` asserting every skill-surface entry resolves to an existing directory via `id` or `skill_dir`
+- [ ] T024 [P] [US2] Create `tests/contract/test_capability_inventory.py` asserting every skill-surface entry resolves to an existing directory via `references.skill` (scalar or list) — this already holds today, so it lands as a regression guard
 - [ ] T025 [P] [US2] Assert in the same file that every skill directory in the repository is covered by exactly one inventory entry
 - [ ] T026 [P] [US2] Assert `ships` has no default — an entry lacking it is an error, so a new skill cannot slip in unclassified (`contracts/ship-classification.md` obligation 2)
 - [ ] T027 [P] [US2] Assert the classification invariants: `development-only` implies `ships: false`; `compass-verb` implies `ships: true` and appears in `.seshat/kit-source.yaml`
@@ -119,8 +120,8 @@ byte-identical output.
 
 ### Inventory repair
 
-- [ ] T030 [US2] Add the six missing knowledge-root entries to `docs/capabilities/capabilities.yaml` (`bi-sql-`, `bi-dax-`, `bi-python-`, `bi-bigdata-`, `retail-kpi-`, `bi-analyst-knowledge`) with `ship_classification: knowledge-root` and `ships: true`
-- [ ] T031 [US2] Add `skill_dir` to the four entries whose id matches no directory: `retail-govern-skill`, `run-next-readiness-skill`, `pbir-authoring-adapter-skill`, `speckit-workflow-skills`
+- [ ] T030 [US2] Widen the O2 coverage-scope statement in the header of `docs/capabilities/capabilities.yaml` from `.claude/skills/*/SKILL.md` to any committed kit-authored SKILL.md, then add the six knowledge-root entries to `docs/capabilities/capabilities.yaml` (`bi-sql-`, `bi-dax-`, `bi-python-`, `bi-bigdata-`, `retail-kpi-`, `bi-analyst-knowledge`) with `ship_classification: knowledge-root` and `ships: true`
+- [x] T031 [US2] ~~Add `skill_dir` to the four entries whose id matches no directory~~ **DROPPED 2026-07-31** -- the existing `references.skill` already resolves all four (scalar and list form); measured 50/50 coverage, 0 dangling. See `evidence/us2-design-corrections.md`
 - [ ] T032 [US2] Add `ships` and `ship_classification` to every skill-surface entry, with `ships: true` for the six knowledge roots only and `ships: false` for everything else at this story
 - [ ] T033 [US2] Classify the four development-only skills as `development-only`: `friendly-pr-reviewer`, `pr-readiness-reviewer`, `release-notes-generator`, `showcase-build`
 - [ ] T034 [US2] Classify the fourteen specification-workflow skill directories as `development-only`
