@@ -7,5 +7,6 @@
   "repository": "https://github.com/Kemetra/Seshat-BI",
   "license": "Apache-2.0",
   "skills": "./skills/",
-  "commands": "./commands/"
+  "commands": "./commands/",
+  "mcpServers": "./mcp-servers.json"
 }

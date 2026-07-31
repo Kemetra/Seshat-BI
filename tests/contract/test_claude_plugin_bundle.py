@@ -47,7 +47,13 @@ def test_claude_manifest_and_components_follow_current_schema() -> None:
     assert plugin["version"] == _version()
     assert plugin["skills"] == "./skills/"
     assert plugin["commands"] == "./commands/"
-    assert not set(plugin).intersection({"hooks", "mcpServers", "apps"})
+    # `mcpServers` is now EXPECTED (spec 138 US1): the plugin declares the six
+    # read-only governor tools so no manual registration step is needed. It is
+    # pinned to the projected declaration rather than merely permitted -- an
+    # arbitrary value here would ship an unreviewed server. `hooks` and `apps`
+    # remain forbidden: those are execution surfaces this bundle does not ship.
+    assert plugin["mcpServers"] == "./mcp-servers.json"
+    assert not set(plugin).intersection({"hooks", "apps"})
     assert validate_bundle(ROOT, "claude-code") == []
 
     for command in sorted((PLUGIN_ROOT / "commands").glob("*.md")):

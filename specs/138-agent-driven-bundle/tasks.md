@@ -75,19 +75,19 @@ actionable instruction and no simulated answer.
 
 ### Tests
 
-- [ ] T011 [P] [US1] Add the bundled-server class exemption assertions to `tests/contract/test_public_command_surface.py` per `contracts/bundled-server-declaration.md` obligation 6 — the exemption must be scoped to that class alone and must fail if widened
-- [ ] T012 [P] [US1] Add assertions to `tests/contract/test_claude_plugin_bundle.py` that the Claude bundle carries the server declaration and its manifest pointer
-- [ ] T013 [P] [US1] Add the equivalent assertions to `tests/contract/test_codex_plugin_bundle.py`
-- [ ] T014 [P] [US1] Add assertions to `tests/contract/test_generated_agent_bundles.py` that the declaration carries no repository path argument, no credential and no environment secret, **and that its wrapper key is the camelCase `mcpServers`** — the snake_case `mcp_servers` form in one platform's published example is unparsed and yields a server that silently never loads (`contracts/bundled-server-declaration.md` obligation 7)
+- [x] T011 [P] [US1] (in `tests/contract/test_bundled_server_declaration.py`; the exemption is enumerated in `reconciliation_exemptions` so WIDENING it fails) Add the bundled-server class exemption assertions to `tests/contract/test_public_command_surface.py` per `contracts/bundled-server-declaration.md` obligation 6 — the exemption must be scoped to that class alone and must fail if widened
+- [x] T012 [P] [US1] Add assertions to `tests/contract/test_claude_plugin_bundle.py` that the Claude bundle carries the server declaration and its manifest pointer
+- [x] T013 [P] [US1] Add the equivalent assertions to `tests/contract/test_codex_plugin_bundle.py`
+- [x] T014 [P] [US1] (camelCase `mcpServers` asserted; snake_case explicitly rejected) Add assertions to `tests/contract/test_generated_agent_bundles.py` that the declaration carries no repository path argument, no credential and no environment secret, **and that its wrapper key is the camelCase `mcpServers`** — the snake_case `mcp_servers` form in one platform's published example is unparsed and yields a server that silently never loads (`contracts/bundled-server-declaration.md` obligation 7)
 
 ### Implementation
 
-- [ ] T015 [US1] Author the single shared server declaration in `distribution/bundle-templates/shared/` naming only the six existing read-only tools' server
-- [ ] T016 [US1] Add the manifest pointer to `distribution/bundle-templates/claude/.claude-plugin/plugin.json`
-- [ ] T017 [US1] Add the manifest pointer to `distribution/bundle-templates/codex/.codex-plugin/plugin.json`
-- [ ] T018 [US1] Add the bundled-server artifact class to `distribution/public-command-surface.yaml`, with the reconciliation exemption documented inline as required by FR-013
-- [ ] T019 [US1] Project the declaration into both bundles by running `python scripts/export_agent_bundles.py --repo .`; never hand-edit `integrations/`
-- [ ] T020 [US1] Update `docs/install/agent-install.md` so automatic wiring is the primary path and the manual `claude mcp add` form is retained only for non-plugin use (FR-014) — do not delete it
+- [x] T015 [US1] `distribution/bundle-templates/shared/mcp-servers.json`: Author the single shared server declaration in `distribution/bundle-templates/shared/` naming only the six existing read-only tools' server
+- [x] T016 [US1] Add the manifest pointer to `distribution/bundle-templates/claude/.claude-plugin/plugin.json`
+- [x] T017 [US1] Add the manifest pointer to `distribution/bundle-templates/codex/.codex-plugin/plugin.json`
+- [x] T018 [US1] Add the bundled-server artifact class to `distribution/public-command-surface.yaml`, with the reconciliation exemption documented inline as required by FR-013
+- [x] T019 [US1] Project the declaration into both bundles by running `python scripts/export_agent_bundles.py --repo .`; never hand-edit `integrations/`
+- [x] T020 [US1] Update `docs/install/agent-install.md` so automatic wiring is the primary path and the manual `claude mcp add` form is retained only for non-plugin use (FR-014) — do not delete it
 
 ### Verification
 

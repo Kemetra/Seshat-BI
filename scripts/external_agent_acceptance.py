@@ -155,11 +155,22 @@ def _validate_plugin(
             f"bundled skills {sorted(actual)} do not match the declared "
             f"public surface {sorted(declared)}"
         )
-    prohibited = set(plugin).intersection({"hooks", "mcpServers", "apps"})
+    # `hooks` and `apps` stay prohibited: they are execution surfaces this bundle
+    # deliberately does not ship. `mcpServers` was prohibited alongside them until
+    # spec 138 US1 declared the six read-only governor tools, so it is now checked
+    # for its VALUE rather than its absence -- an arbitrary pointer would ship an
+    # unreviewed server, which is the risk the blanket prohibition stood in for.
+    prohibited = set(plugin).intersection({"hooks", "apps"})
     if prohibited:
         blockers.append(
             "skills-only bundle declares prohibited capabilities: "
             + ", ".join(sorted(prohibited))
+        )
+    server_pointer = plugin.get("mcpServers")
+    if server_pointer is not None and server_pointer != "./mcp-servers.json":
+        blockers.append(
+            "plugin manifest points at an unreviewed MCP server declaration: "
+            f"{server_pointer!r}"
         )
 
 

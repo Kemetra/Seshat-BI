@@ -54,9 +54,12 @@ def test_codex_manifest_is_skills_only_and_current_schema() -> None:
         "Skills",
         "Read-only guidance",
     ]
-    assert not set(manifest).intersection(
-        {"commands", "agents", "hooks", "mcpServers", "apps"}
-    )
+    # `mcpServers` is now EXPECTED (spec 138 US1) and pinned to the projected
+    # declaration, so an arbitrary value cannot ship an unreviewed server. The
+    # bundle stays command-less and agent-less: those remain forbidden, as do the
+    # `hooks` and `apps` execution surfaces.
+    assert manifest["mcpServers"] == "./mcp-servers.json"
+    assert not set(manifest).intersection({"commands", "agents", "hooks", "apps"})
     assert validate_bundle(ROOT, "codex") == []
 
 

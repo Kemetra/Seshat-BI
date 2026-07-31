@@ -425,3 +425,30 @@ skills:
     bundle_destination: skills/bi-analyst-knowledge/SKILL.md
     documentation: docs/install/agent-install.md
     status: shipped
+
+# --------------------------------------------------------------------------
+# Bundled servers (spec 138 US1, contracts/bundled-server-declaration.md).
+#
+# A FOURTH artifact class, and the only one exempt from the wrapper+knowledge
+# reconciliation the commands and skills classes obey. The stated ground for the
+# exemption (obligation 6): a bundled server has no reviewed wrapper template and
+# no public-knowledge allowlist entry, because it is a manifest declaration rather
+# than agent-readable content. It reaches the bundles as a generated template
+# projection, not as knowledge.
+#
+# The exemption is SCOPED TO THIS CLASS ALONE and is enumerated in
+# `reconciliation_exemptions` below so that widening it is a test failure, not a
+# quiet edit. Loosening the reconciliation for commands or skills would discard the
+# invariant that makes the surface trustworthy -- that a shipped command has a
+# reviewed wrapper and an allowlist entry.
+reconciliation_exemptions:
+  - bundled_servers
+
+bundled_servers:
+  - name: seshat-governor
+    platforms: [claude, codex]
+    intent: Expose the six read-only governor tools with no manual registration step.
+    declaration: distribution/bundle-templates/shared/mcp-servers.json
+    bundle_destination: mcp-servers.json
+    documentation: docs/install/agent-install.md
+    status: shipped

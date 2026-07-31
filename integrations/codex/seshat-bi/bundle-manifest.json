@@ -3,10 +3,10 @@
     {
       "classification": "generated_wrapper",
       "destination": ".codex-plugin/plugin.json",
-      "output_sha256": "077103472773d28577640049c87e67b1cb22f272f2cb934aa9c4dced577da2ec",
+      "output_sha256": "65ad7275d79de3143d1bd7792646163a4b7c20c30b6a158f53d0a51d5a4e732b",
       "source": "distribution/bundle-templates/codex/.codex-plugin/plugin.json",
       "source_id": "codex-manifest",
-      "source_sha256": "4b059202375df299347932c42c9027564370a793a40dfbcd38b2e7faab9b4bdc",
+      "source_sha256": "81332a68d523b3fa4c312f46950e67614219e5724e7b708624f4882a9f73fad4",
       "transform": "template-substitute-version-v1"
     },
     {
@@ -1901,6 +1901,15 @@
     },
     {
       "classification": "generated_wrapper",
+      "destination": "mcp-servers.json",
+      "output_sha256": "51711638d1325c32c058ba8d392411f0f1e80ebdea6d75a6f889a09f5407dbcd",
+      "source": "distribution/bundle-templates/shared/mcp-servers.json",
+      "source_id": "governor-server",
+      "source_sha256": "51711638d1325c32c058ba8d392411f0f1e80ebdea6d75a6f889a09f5407dbcd",
+      "transform": "copy-normalized-v1"
+    },
+    {
+      "classification": "generated_wrapper",
       "destination": "portable-operating-contract.md",
       "output_sha256": "4ceee84006e378a21317aed6d12d767c3df5b4f599dd880172acc3ed7174043d",
       "source": "distribution/bundle-templates/shared/portable-operating-contract.md",
@@ -2171,10 +2180,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "375b056d014381968d24e60942876525367e5c2f1c32fe486374107d1c1e3f4d",
+  "manifest_digest": "e23ad1bc0425fca885abcfc6b20da2181e0dbe328d73258665eb5eafe47ea2b5",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "3e96af95be1ac97789f9688faa21f880de5e94b3",
+  "source_revision": "32f1f901061808a1a792af975a2d53580b8ac5d3",
   "target": "codex",
   "version": "0.7.1"
 }

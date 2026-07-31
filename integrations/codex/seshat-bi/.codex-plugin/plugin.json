@@ -16,6 +16,7 @@
     "readiness"
   ],
   "skills": "./skills/",
+  "mcpServers": "./mcp-servers.json",
   "interface": {
     "displayName": "Seshat BI",
     "shortDescription": "Governed BI readiness guidance and public knowledge.",

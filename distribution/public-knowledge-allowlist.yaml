@@ -2519,6 +2519,17 @@ entries:
   generated_notice: manifest
   review_reason: Required Stage-6 design template materialized by `seshat scaffold-design` (issues
 template_entries:
+- template_id: governor-server
+  source: distribution/bundle-templates/shared/mcp-servers.json
+  classification: generated_wrapper
+  media_type: application/json
+  targets:
+    claude: mcp-servers.json
+    codex: mcp-servers.json
+  transform: copy-normalized-v1
+  required: true
+  generated_notice: manifest
+  review_reason: Required platform wrapper or manifest for the generated public bundle.
 - template_id: portable-contract
   source: distribution/bundle-templates/shared/portable-operating-contract.md
   classification: generated_wrapper
