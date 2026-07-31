@@ -31,6 +31,22 @@ For subject reasoning, load only the relevant bundled skill:
 - read-only Power BI MCP doctor, surface recommendation, and preflight:
   `pbi-mcp-doctor`
 
+The ten readiness verbs, in flow order. Each owns one stage transition and stops
+at its own gate; none of them self-grants an approval:
+
+- orient a new table on one card: `first-hour-compass`
+- sequence a table end to end and self-heal against the gate:
+  `retail-orchestrate`
+- discover a database metadata-only and propose governed scope:
+  `retail-discover-portfolio`
+- take a raw table from Source Ready to Mapping Ready: `retail-onboard-table`
+- interview the owner into the Decision Store: `business-knowledge-interview`
+- drive a raw table through the mapping gate: `source-mapping`
+- author an owner-ready metric contract: `kpi-contract-builder`
+- author the silver and gold migration SQL, then stop: `retail-build-warehouse`
+- run the static governance checker and read its findings: `retail-govern`
+- run the live data checks on materialized rows: `retail-validate`
+
 End with one next action or one blocked stop. Cite evidence and named blockers;
 never invent a pass or score.
 
@@ -113,10 +129,11 @@ unavailable.
 them to the owner rather than deleting blindly:**
 
 1. **Shared conformed dimension.** If this table OWNS a conformed dimension that
-   another star reuses, its `dbt/models/marts/<table>/` holds the sole dbt model
+   another star reuses, the marts directory the dbt adapter generates for it holds
+   the sole dbt model
    the reuser resolves via `ref()` (the kit emits no duplicate model for
    non-owners). Deleting the marts folder would break the other star's build.
-   Check `docs/quality/conformed-dimension-map.yaml`: if this table is the OWNER
+   Check the conformed-dimension map, creating the file if absent: if this table is the OWNER
    of any dimension listed with other-star reusers, **do not run this manual
    reset** -- ownership transfer / dependent regeneration is an owner decision.
 2. **Downstream Power BI artifacts.** If this table reached Semantic Model or

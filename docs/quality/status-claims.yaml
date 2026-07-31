@@ -39,7 +39,10 @@ claims:
   # below remains the single locked worked-example reference.
   - id: "first-hour-compass-worked-example-store-sales"
     doc: ".claude/skills/first-hour-compass/SKILL.md"
-    anchor: "| `docs/worked-examples/retail-store-sales.md` | The **full seven-stage spine** to Dashboard Ready -- metric contracts, governed model, dashboard design, handoff (on the public Kaggle retail-store-sales dataset) |"
+    # Anchor re-pointed 2026-07-31 (spec 138 US3): the skill row now names the
+    # worked example rather than its repo path, so the instruction resolves in a
+    # consumer workspace. The claim itself is unchanged and still locked.
+    anchor: "| `retail-store-sales` | The **full seven-stage spine** to Dashboard Ready -- metric contracts, governed model, dashboard design, handoff (on the public Kaggle retail-store-sales dataset) |"
     claimed-artifact: "docs/worked-examples/retail-store-sales.md"
     claimed-status: "built"
   # The usage/boundary doc also names both examples in its first-arrival section;
@@ -128,4 +131,17 @@ claims:
     doc: "specs/131-portfolio-watch/spec.md"
     anchor: "**Status**: implemented -- artifact `src/seshat/portfolio_watch.py`"
     claimed-artifact: "src/seshat/portfolio_watch.py"
+    claimed-status: "built"
+  # Spec 138 shipped US2 and US3 only. The claim deliberately says "partially
+  # implemented" rather than the usual "implemented": US1, US4 and the external
+  # half of US5 are outstanding, so the stronger wording would be a false claim.
+  - id: "spec-138-partially-implemented"
+    doc: "specs/138-agent-driven-bundle/spec.md"
+    anchor: "**Status**: partially implemented -- US2 and US3 delivered, artifact `src/seshat/allowlist_derivation.py`"
+    claimed-artifact: "src/seshat/allowlist_derivation.py"
+    claimed-status: "built"
+  - id: "spec-138-portability-gate"
+    doc: "specs/138-agent-driven-bundle/spec.md"
+    anchor: "the ten compass verbs ship\nbehind `portability-audit-v1`"
+    claimed-artifact: "src/seshat/portability_audit.py"
     claimed-status: "built"

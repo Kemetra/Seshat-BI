@@ -77,7 +77,19 @@ marketplace. Use Claude Code's GitHub repository marketplace flow:
 Start a new Claude Code session after install. The plugin provides the
 `seshat-bi` router skill, the governed `dbt-workflows` transformation skill,
 the guarded `powerbi-workflows` routing skill, reviewed knowledge skills, and
-namespaced slash commands. Claude Code
+namespaced slash commands.
+
+It also provides the **ten readiness verbs the router routes to**, so the
+governed loop the router describes is now loadable in a consumer workspace rather
+than only in this repository: `first-hour-compass`, `retail-orchestrate`,
+`retail-discover-portfolio`, `retail-onboard-table`,
+`business-knowledge-interview`, `source-mapping`, `kpi-contract-builder`,
+`retail-build-warehouse`, `retail-govern` and `retail-validate`. Each keeps its
+hard stops verbatim -- none of them self-grants an approval, and each stops at its
+own gate. Skill bodies load on demand; only each skill's name and description is
+resident.
+
+Claude Code
 namespaces plugin-provided commands by plugin name, so invoke them as
 `/seshat-bi:<name>`; do not expect the unnamespaced forms (`/seshat-check`,
 etc.) to resolve.

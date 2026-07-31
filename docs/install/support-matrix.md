@@ -7,6 +7,23 @@ Where a row cites v0.2.0 evidence
 ([record](../releases/v0.2.0-public-acceptance.md)), that surface was not
 re-exercised at v0.3.1 and keeps its earlier boundary.
 
+> **Bundle contents changed after the recorded acceptance passes (spec 138 US3).**
+> Both plugin bundles now carry **21** skills rather than 11: the ten readiness
+> verbs `.seshat/kit-source.yaml` names were added. Every acceptance claim in the
+> table below was collected against the earlier 11-skill contents, so **no row's
+> behavior-validation claim covers the ten newly bundled verbs** -- those claims are
+> not carried forward onto the new contents.
+>
+> What *was* exercised against the new contents, locally, on Windows + Python 3.13:
+> `seshat agent verify` for both targets reports every governed hard-stop scenario
+> PASS (`no_silver_before_mapping`, `no_invented_metric_meaning`), plus
+> `update_integrity` (241 generated files match their recorded `output_sha256`
+> provenance) and `uninstall_integrity`. `version_compatibility` is BLOCKED for a
+> pre-existing tooling reason unrelated to bundle contents -- the audit surface
+> imports `scripts.check_release_versions` and `scripts/` is not an importable
+> package. External harness acceptance for the new contents is **pending** and is
+> the remaining US5 step.
+
 This table is the single place to check what is actually available, on what
 runtime, and how far its validation goes. It distinguishes **installation and
 discovery** (the plugin/package resolves and its components are visible) from

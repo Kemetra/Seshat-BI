@@ -361,10 +361,17 @@ def _add_mcp_parser(sub: argparse._SubParsersAction) -> None:
         "mcp",
         help="run the optional read-only Seshat agent governor over local stdio",
     )
+    # No `.` default (spec 138 US1, research R2, owner ruling 2026-07-31): a
+    # plugin-launched server does not choose its working directory, so a `.` default
+    # let the governor report readiness for whatever folder the harness started it
+    # in. Absent this flag the root is DISCOVERED, and discovery fails by name.
     p.add_argument(
         "--repo",
-        default=".",
-        help="single local repository root exposed to governor reads",
+        default=None,
+        help=(
+            "single local repository root exposed to governor reads; omit to "
+            "discover the workspace from the working directory upwards"
+        ),
     )
 
 

@@ -1,21 +1,7 @@
 ---
 name: capabilities
 description: >-
-  Show the read-only "what can this kit do" capability inventory for the
-  Seshat BI repo -- every capability classified by lifecycle state (shipped /
-  spec-only / deferred), authority (agent-runnable / advisory / human-gated),
-  requirements (database / optional dependency), and provenance
-  (locally-verified / publicly-released / unrecorded), grouped by a fixed
-  precedence (Available now; Requires database or optional dependency; Agent /
-  companion; Human-gated; Deferred / not shipped). Use when someone asks "what
-  can this kit do", "what works without a database", "list the capabilities",
-  "show me the capability inventory", or an agent needs a machine-readable
-  routing table of every shipped command/skill/adapter. Invoke-and-present
-  only: this skill RUNS the read-only builder module and prints its output; it
-  writes no files, opens no database, runs no Power BI, computes no readiness,
-  and emits no numeric maturity/confidence/completeness/health score. It is
-  NOT a `retail`/`seshat` CLI verb (ratified Option-B decision) -- it exists
-  only as this skill wrapping a `python -m` module entry point.
+  Show the read-only capability inventory for this kit -- each capability by lifecycle state, authority, requirements and provenance. Use when someone asks what the kit can do or what works without a database. Writes nothing and emits no score.
 ---
 
 # capabilities

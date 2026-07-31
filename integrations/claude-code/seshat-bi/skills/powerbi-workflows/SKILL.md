@@ -23,8 +23,8 @@ against the committed dashboard set (`--proposal`/`--tuple`), and
 `seshat dashboard-gaps` inventories design-blocking gaps before any layout
 work. The `dashboard-gaps` `--page-intent` file is a YAML mapping with a
 `questions:` list (each question naming its required metrics and dimensions);
-start from `templates/page-intent.example.yaml` and see
-`docs/tools/dashboard-gap-detector.md` for the shape. A missing, unreadable,
+start from the page-intent example the kit ships and see the
+dashboard-gap-detector guide for the shape. A missing, unreadable,
 or wrong-format page-intent is refused with a named error and exit 2 -- it is
 never an empty "no gaps" read.
 

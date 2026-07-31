@@ -1,22 +1,7 @@
 ---
 name: consumer-data-dictionary
 description: >-
-  Compose ONE plain-language consumer data dictionary for ONE table in the
-  Seshat BI repo, so an analyst who has access to a published table/report can
-  find "what does this column/measure mean" in one place. Use when someone
-  asks to "generate the data dictionary for <table>", "explain what these gold
-  columns mean", or "give me a plain-language reference for this table's
-  metrics". This is a Product Module, artifact-writing: it READS committed
-  artifacts only (the table's committed gold migration SQL, its
-  source-map.yaml mapping rationale, and its metric-contract YAML files),
-  composes one ordered document listing every deployed gold column and every
-  metric contract with its meaning cited to a committed source, then STOPS. A
-  column or metric with no committed consumer-legible meaning gets an explicit
-  GAP marker -- it NEVER invents, infers, or paraphrases a plausible business
-  definition. It writes NO upstream artifact, defines NO metric, resolves NO
-  mapping question, moves NO readiness stage, opens NO DB/PBIP connection, and
-  emits NO numeric score and NO completeness count. Generic across all mapped,
-  gold-built tables via a table parameter (no C086 specifics).
+  Generate a consumer-facing data dictionary from committed gold-layer artifacts and approved metric contracts. Use when someone asks for a data dictionary or column glossary for report users. Authors documentation only and invents no business meaning.
 ---
 
 # consumer-data-dictionary
