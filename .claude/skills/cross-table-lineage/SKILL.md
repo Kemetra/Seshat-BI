@@ -1,22 +1,7 @@
 ---
 name: cross-table-lineage
 description: >-
-  Generate ONE column-level or metric-level lineage/impact artifact from
-  already-committed artifacts in the Seshat BI repo: source-map entry ->
-  silver/gold migration SQL -> metric contract -> TMDL measure -> dashboard
-  visual binding. Use when someone asks to "trace this column's downstream
-  reach", "show what depends on this column/KPI", "generate the lineage/
-  impact artifact for <schema.table.column>", or "turn the Net-Sales trace
-  into a generated artifact for <Metric>". This is a Product Module,
-  artifact-writing: it READS committed source-map/migration-SQL/metric-
-  contract/TMDL/binding-map text only, cites every hop it asserts to its exact
-  committed path, tiers each hop `proven` / `unresolved` / `gap`, and writes
-  ONE derived lineage file -- then STOPS. It NEVER connects to a database,
-  executes SQL, runs DAX, opens a live Power BI/PBIP surface, invents a
-  lineage edge no committed artifact records, moves a readiness stage, grants
-  an approval, or emits a blast-radius score, completeness count, or
-  confidence/health/maturity value. Generic across any table/column/metric
-  (no C086/retail_store_sales specifics baked in).
+  Trace column- and table-level lineage across bronze/silver/gold in the Seshat BI repo and report the downstream impact of a change. Read-only: it reads committed SQL and mappings, opens no database, and edits nothing.
 ---
 
 # cross-table-lineage

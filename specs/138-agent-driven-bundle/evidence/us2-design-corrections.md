@@ -1,4 +1,4 @@
-# US2 — two corrections to the ratified specification
+# US2 — corrections to the ratified specification
 
 **Found**: 2026-07-31, inspecting `docs/capabilities/capabilities.yaml` before
 writing code | **HEAD**: `aa7a3e5`
@@ -113,6 +113,125 @@ five directories acquired two owners each (`retail-govern` was owned by both
 `retail-check` and `retail-govern-skill`). Collapsed to exactly one owner per
 directory, preferring the `surface: skill` entry; 20 redundant field lines
 removed. The contract test now fails on any directory with more than one owner.
+
+---
+
+## Correction 4 — `ships: true` currently describes an intention, not the artifact
+
+**Found**: 2026-07-31, writing the T028–T029 tests | **HEAD**: `3e96af9`
+**Status**: OPEN — needs an owner ruling. The agent does not pick.
+
+**What T032 and the contract say**: T032 lands `ships: true` for *"the six
+knowledge roots only and `ships: false` for everything else at this story"*, and
+the contract's acceptance evidence agrees verbatim: *"The introducing change lands
+with `ships: true` on **only** the six knowledge roots."*
+
+**What is actually committed** (measured, not estimated):
+
+```text
+inventory entries with `ships: true`        38
+  ship_classification: knowledge-root       6   <- the only six US2 authorises
+  ship_classification: compass-verb        10   <- T057, User Story 3
+  ship_classification: consumer-capability 22   <- T061, User Story 4
+skill directories the committed bundle carries  11
+entries marked `ships: true` that produce no bundle file  32
+```
+
+The last figure is the output of the new
+`test_every_shipping_entry_produces_a_bundle_file`, not a hand count.
+
+**Why it happened, and why it is not carelessness**: obligation 5 *forces*
+`compass-verb ⇒ ships: true`, and T027 now tests that invariant. Once T032
+assigned the `compass-verb` classification to the ten verbs, `ships: true`
+followed **by contract**. T032's own end-state and obligation 5 are jointly
+unsatisfiable once those classifications exist — both can hold only if the
+classification assignment is deferred to US3/US4 along with the shipping.
+
+The twenty-two `consumer-capability` flips have no such excuse: no obligation and
+no test forces `consumer-capability ⇒ ships: true`. That is T061 landing early.
+
+**Why it blocks T036 rather than merely annoying it**: obligation 11 is the rule
+that `ships: true` must describe the artifact. It is RED against `main` with 32
+offenders. T040 then requires `git diff --stat integrations/` to be **empty**
+after the derivation lands — so a derivation keyed on `ships: true` would grow the
+bundle from 11 skills to 40-odd and fail its own story's acceptance. The fork is
+therefore not stylistic; it decides what the derivation keys on.
+
+**The fork**:
+
+1. **Defer the classifications** — revert the 32 premature flips, keeping US2 the
+   zero-payload refactor its independent test describes ("regenerate both bundles
+   and get byte-identical output"). The ten `compass-verb` and twenty-two
+   `consumer-capability` classifications land with T057 and T061, behind the
+   portability audit (T047–T056) and the routing-cost ceiling (T059/T064).
+
+   **This means reverting the `ship_classification`, not only the `ships` boolean.**
+   Obligation 5 forces `compass-verb ⇒ ships: true`, and the already-green
+   `test_classification_invariants_hold` enforces it — so setting the ten verbs to
+   `ships: false` while they retain `ship_classification: compass-verb` produces an
+   immediately failing tree. The ten must return to unclassified (no `ships`, no
+   `ship_classification`), which is what T032's stated end-state implies for
+   "everything else at this story".
+
+2. **Collapse US2+US3+US4** — ship all 38 now. This bypasses the portability audit
+   (T047–T056), discards T040's empty-diff safety rail, and — measured, not
+   asserted — **breaches the ceiling the owner ruled on the same day**:
+
+   | | tokens_approx | vs ceiling 6,000 |
+   |---|---:|---|
+   | today, 11 skills | 579 | — |
+   | all 43 shipped, untrimmed | **7,253** | **over by 1,253** |
+   | all 43, seven descriptions trimmed to the bundle norm | 5,629 | meets, ~370 headroom |
+
+   Source: `evidence/routing-cost.md`, T006 **RULED** 2026-07-31 (Ahmed Shaaban),
+   ceiling **6,000 `tokens_approx`**, option A+. So option 2 does not merely skip a
+   checkpoint — it commits a state that T064 must fail, unless the seven
+   description trims land in the same change.
+
+**Recommended**: option 1. Option 2 makes the gate wider and the evidence weaker
+in the same change, which is the combination the feature exists to prevent — and
+it would land 1,253 tokens over a ceiling ruled hours earlier.
+
+### RULED — option 2, collapse US2+US3+US4
+
+- **ruled_by**: Ahmed Shaaban (owner)
+- **ruled_on**: 2026-07-31
+- **recorded_by**: the agent transcribed an owner-directed ruling after presenting
+  both options with the measured consequences of each; it did not self-grant
+  (Principle V). The agent's recommendation was option 1 and was not adopted.
+
+**Ruled**: the 32 flips stand. The derivation keys on `ships: true`, and the
+payload of US3 and US4 lands inside US2.
+
+**What the ruling waives**: T040's empty-diff acceptance, and with it the
+"byte-identical regeneration" independent test of US2. The `integrations/` diff
+will be large and must be reviewed as a payload change, not compared to zero.
+
+**What the ruling does NOT waive** — neither was put to the owner, so both stand:
+
+1. **The 6,000 `tokens_approx` ceiling** (T006, CLOSED). Option 2 lands at 7,253
+   untrimmed, so the seven description trims are now in scope *inside this change*.
+   T064 remains authoritative and remains a hard fail.
+2. **The portability audit** (T047–T056). The 32 skills carry read-instructions to
+   `templates/`, `docs/worked-examples`, `specs/`, `.claude/skills/` and other
+   development-repository paths. Shipping them before the audit ships instructions
+   that cannot resolve in a `seshat init-project` workspace — the defect FR-017
+   exists to prevent. **No bundle regeneration may be committed until the audit
+   passes.**
+
+**Resulting order of work** (dependency, not preference):
+
+```text
+derivation (T036-T038)            code only, no regeneration
+   -> portability audit (T047-T049) + canonical rewrites (T050-T056)
+      -> the seven description trims
+         -> regenerate + measure (T039, T058, T063, T059/T064)
+```
+
+`test_committed_bundle_carries_every_shipping_entry` stays RED for the whole
+middle of that sequence by design: the inventory is correct and the bundle is not
+yet regenerated. It goes green at the final step, and it is the check that proves
+the regeneration actually happened.
 
 ---
 

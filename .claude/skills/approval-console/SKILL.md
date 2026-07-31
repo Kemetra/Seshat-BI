@@ -1,19 +1,7 @@
 ---
 name: approval-console
 description: >-
-  Package a raised judgment call into a reviewable DECISION PACKAGE (a request),
-  then RECORD the named human's answer back into the committed artifacts (a
-  decision) for the Seshat BI repo. Use when someone asks to "package this open
-  question for sign-off", "record the analyst's decision", "write the approval
-  into the readiness file", or "close this blocker now that the owner answered".
-  Product Module / artifact-writing: it WRITES the recorded human decision into
-  unresolved-questions.md (Resolution + answered status) and readiness-status.yaml
-  (an approvals[] entry) -- but it only TRANSCRIBES a decision a named human
-  supplied. It NEVER picks the option, supplies/forges the owner, invents the
-  rationale, auto-accepts a recommended default, or moves a stage to `pass` without
-  the stage's required evidence AND a named human approval. It emits NO numeric
-  confidence/health score (hard rule #9), runs NO validator, opens NO DB connection,
-  and adds NO `seshat check` rule. F027 is the first concrete Product Module under F024.
+  Package a raised judgment call into a reviewable decision package, then record a named human's answer into the committed readiness artifacts. Use for sign-off packaging or recording a decision. It only transcribes a decision a human supplied.
 ---
 
 # approval-console

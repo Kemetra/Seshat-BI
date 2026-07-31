@@ -77,7 +77,19 @@ marketplace. Use Claude Code's GitHub repository marketplace flow:
 Start a new Claude Code session after install. The plugin provides the
 `seshat-bi` router skill, the governed `dbt-workflows` transformation skill,
 the guarded `powerbi-workflows` routing skill, reviewed knowledge skills, and
-namespaced slash commands. Claude Code
+namespaced slash commands.
+
+It also provides the **ten readiness verbs the router routes to**, so the
+governed loop the router describes is now loadable in a consumer workspace rather
+than only in this repository: `first-hour-compass`, `retail-orchestrate`,
+`retail-discover-portfolio`, `retail-onboard-table`,
+`business-knowledge-interview`, `source-mapping`, `kpi-contract-builder`,
+`retail-build-warehouse`, `retail-govern` and `retail-validate`. Each keeps its
+hard stops verbatim -- none of them self-grants an approval, and each stops at its
+own gate. Skill bodies load on demand; only each skill's name and description is
+resident.
+
+Claude Code
 namespaces plugin-provided commands by plugin name, so invoke them as
 `/seshat-bi:<name>`; do not expect the unnamespaced forms (`/seshat-check`,
 etc.) to resolve.
@@ -163,19 +175,49 @@ An example guarded Power BI session:
 
 ## Agent-driven automation (MCP governor)
 
-The plugins are deliberately skills-only, but the Python package ships an
-optional **read-only MCP governor** so an agent can drive the readiness flow
-programmatically with no memorized command names:
+The Python package ships an optional **read-only MCP governor** so an agent can
+drive the readiness flow programmatically with no memorized command names. Six
+tools, all read-only: none advances a stage, grants an approval, writes a readiness
+artifact, or emits any score.
+
+### Automatic (the plugin path)
+
+Both plugins now declare the governor, so **enabling the plugin is the whole
+registration step** — there is nothing to add by hand. Install the optional extra
+and restart the client:
 
 ```text
 pipx install "seshat-bi[mcp]"
-claude mcp add seshat-governor -- seshat mcp --repo <workspace>
 ```
 
 If Seshat is already installed, enable the extra without reinstalling it:
 
 ```text
 pipx inject seshat-bi --force "mcp>=1.28,<2"
+```
+
+The declaration passes **no workspace path**. The governor discovers the workspace
+by searching upward from where it is started, and if it cannot find one it refuses
+by name rather than reporting readiness for the wrong directory — so a server
+launched from the plugin's own folder fails loudly instead of answering confidently
+about the wrong tree.
+
+Confirm registration at the **runtime**, not in a settings pane: `claude mcp list`
+or `codex mcp list`, then call a tool. On one harness a known open defect hides a
+plugin-installed server from the MCP settings UI while the runtime has it
+registered and working, so an absent UI row is expected and is not a failure.
+
+If the extra is absent, `seshat mcp` prints a named two-lane install hint and exits
+non-zero. It does not simulate a governor response, and the loop must not be
+reported as available when the tools are absent.
+
+### Manual (the non-plugin path)
+
+Still supported for anyone not installing the plugin — for example a bare package
+install, or a client whose plugin surface you are not using:
+
+```text
+claude mcp add seshat-governor -- seshat mcp --repo <workspace>
 ```
 
 (For Codex, register the same `seshat mcp --repo <workspace>` stdio command as

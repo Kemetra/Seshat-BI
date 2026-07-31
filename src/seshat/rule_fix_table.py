@@ -87,7 +87,7 @@ def render_table(repo_root: Path) -> str:
     ids = sorted(registered_ids(repo_root), key=sort_key)
     lines = [
         f"This table covers all **{len(ids)}** registered rules. It is GENERATED from",
-        "`docs/rules/rule-fixes.yaml` -- edit that file and run",
+        "`rule-fixes.yaml` -- edit that file and run",
         "`python scripts/export_rule_fix_table.py`, never this table.",
         "",
         "| Rule | Means | Where to fix |",

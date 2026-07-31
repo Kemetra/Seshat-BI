@@ -120,7 +120,7 @@ capabilities:
     state: shipped
     authority: agent-runnable
     surface: cli
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -280,7 +280,7 @@ capabilities:
     state: shipped
     authority: agent-runnable
     surface: cli
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -297,7 +297,7 @@ capabilities:
     state: shipped
     authority: agent-runnable
     surface: cli
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -579,7 +579,7 @@ capabilities:
     state: shipped
     authority: agent-runnable
     surface: cli
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -667,7 +667,7 @@ capabilities:
     state: shipped
     authority: agent-runnable
     surface: skill
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -991,7 +991,7 @@ capabilities:
     state: deferred
     authority: agent-runnable
     surface: execution-adapter
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: [database, optional-dependency]
     provenance: unrecorded
@@ -1017,7 +1017,7 @@ capabilities:
     state: shipped
     authority: agent-runnable
     surface: execution-adapter
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: [optional-dependency]
     provenance: locally-verified
@@ -1043,7 +1043,7 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -1092,7 +1092,7 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -1109,7 +1109,7 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -1125,7 +1125,7 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -1142,7 +1142,7 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -1159,7 +1159,7 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -1176,7 +1176,7 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -1192,7 +1192,7 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -1208,7 +1208,7 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -1225,7 +1225,7 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -1242,7 +1242,7 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -1259,7 +1259,7 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -1292,7 +1292,7 @@ capabilities:
     state: shipped
     authority: advisory
     surface: docs
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -1371,7 +1371,7 @@ capabilities:
     state: shipped
     authority: human-gated
     surface: skill
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
@@ -1388,7 +1388,7 @@ capabilities:
     state: shipped
     authority: human-gated
     surface: skill
-    ships: true
+    ships: false
     ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified

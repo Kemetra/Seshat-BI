@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "seshat-governor": {
+      "command": "seshat",
+      "args": ["mcp"]
+    }
+  }
+}

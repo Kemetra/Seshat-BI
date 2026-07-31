@@ -275,6 +275,79 @@ command_aliases:
     bundle_destination: commands/seshat-review.md
     status: shipped
 skills:
+  # The ten compass verbs `.seshat/kit-source.yaml` names. Their wrapper IS the
+  # canonical skill body -- vendored directly rather than via a bundle template,
+  # because FR-019 requires every hard stop to still stop in a consumer workspace.
+  - name: retail-orchestrate
+    platforms: [claude, codex]
+    intent: Sequence a table through the medallion flow and self-heal against the gate.
+    wrapper_template: .claude/skills/retail-orchestrate/SKILL.md
+    bundle_destination: skills/retail-orchestrate/SKILL.md
+    documentation: docs/install/agent-install.md
+    status: shipped
+  - name: first-hour-compass
+    platforms: [claude, codex]
+    intent: Orient a new table with a single stateful readiness card.
+    wrapper_template: .claude/skills/first-hour-compass/SKILL.md
+    bundle_destination: skills/first-hour-compass/SKILL.md
+    documentation: docs/install/agent-install.md
+    status: shipped
+  - name: retail-onboard-table
+    platforms: [claude, codex]
+    intent: Walk a new raw table from Source Ready to Mapping Ready.
+    wrapper_template: .claude/skills/retail-onboard-table/SKILL.md
+    bundle_destination: skills/retail-onboard-table/SKILL.md
+    documentation: docs/install/agent-install.md
+    status: shipped
+  - name: retail-discover-portfolio
+    platforms: [claude, codex]
+    intent: Discover a database's tables metadata-only and propose governed scope.
+    wrapper_template: .claude/skills/retail-discover-portfolio/SKILL.md
+    bundle_destination: skills/retail-discover-portfolio/SKILL.md
+    documentation: docs/install/agent-install.md
+    status: shipped
+  - name: business-knowledge-interview
+    platforms: [claude, codex]
+    intent: Interview the owner into the Decision Store after discovery.
+    wrapper_template: .claude/skills/business-knowledge-interview/SKILL.md
+    bundle_destination: skills/business-knowledge-interview/SKILL.md
+    documentation: docs/install/agent-install.md
+    status: shipped
+  - name: source-mapping
+    platforms: [claude, codex]
+    intent: Drive a raw table through the mapping gate before any silver SQL.
+    wrapper_template: .claude/skills/source-mapping/SKILL.md
+    bundle_destination: skills/source-mapping/SKILL.md
+    documentation: docs/install/agent-install.md
+    status: shipped
+  - name: kpi-contract-builder
+    platforms: [claude, codex]
+    intent: Drive the shipped kpi_contracts engine toward an owner-ready contract.
+    wrapper_template: .claude/skills/kpi-contract-builder/SKILL.md
+    bundle_destination: skills/kpi-contract-builder/SKILL.md
+    documentation: docs/install/agent-install.md
+    status: shipped
+  - name: retail-build-warehouse
+    platforms: [claude, codex]
+    intent: Author the silver and gold migration SQL, then stop before executing.
+    wrapper_template: .claude/skills/retail-build-warehouse/SKILL.md
+    bundle_destination: skills/retail-build-warehouse/SKILL.md
+    documentation: docs/install/agent-install.md
+    status: shipped
+  - name: retail-govern
+    platforms: [claude, codex]
+    intent: Run the static governance checker and interpret each finding.
+    wrapper_template: .claude/skills/retail-govern/SKILL.md
+    bundle_destination: skills/retail-govern/SKILL.md
+    documentation: docs/install/agent-install.md
+    status: shipped
+  - name: retail-validate
+    platforms: [claude, codex]
+    intent: Run the live data checks against a materialized table.
+    wrapper_template: .claude/skills/retail-validate/SKILL.md
+    bundle_destination: skills/retail-validate/SKILL.md
+    documentation: docs/install/agent-install.md
+    status: shipped
   - name: seshat-bi
     platforms: [claude, codex]
     intent: Route a BI project through the governed seven-stage readiness flow.
@@ -350,5 +423,32 @@ skills:
     intent: Public analyst-judgment knowledge for diagnostic questions, narrative change, action cadence, framing, and story order.
     wrapper_template: distribution/bundle-templates/shared/skills/bi-analyst-knowledge/SKILL.md
     bundle_destination: skills/bi-analyst-knowledge/SKILL.md
+    documentation: docs/install/agent-install.md
+    status: shipped
+
+# --------------------------------------------------------------------------
+# Bundled servers (spec 138 US1, contracts/bundled-server-declaration.md).
+#
+# A FOURTH artifact class, and the only one exempt from the wrapper+knowledge
+# reconciliation the commands and skills classes obey. The stated ground for the
+# exemption (obligation 6): a bundled server has no reviewed wrapper template and
+# no public-knowledge allowlist entry, because it is a manifest declaration rather
+# than agent-readable content. It reaches the bundles as a generated template
+# projection, not as knowledge.
+#
+# The exemption is SCOPED TO THIS CLASS ALONE and is enumerated in
+# `reconciliation_exemptions` below so that widening it is a test failure, not a
+# quiet edit. Loosening the reconciliation for commands or skills would discard the
+# invariant that makes the surface trustworthy -- that a shipped command has a
+# reviewed wrapper and an allowlist entry.
+reconciliation_exemptions:
+  - bundled_servers
+
+bundled_servers:
+  - name: seshat-governor
+    platforms: [claude, codex]
+    intent: Expose the six read-only governor tools with no manual registration step.
+    declaration: distribution/bundle-templates/shared/mcp-servers.json
+    bundle_destination: mcp-servers.json
     documentation: docs/install/agent-install.md
     status: shipped

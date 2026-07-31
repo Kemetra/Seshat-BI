@@ -54,9 +54,9 @@ exit code and the named human decide whether a stage passed.
 
    `seshat dagster evidence [--run-id <id>] [--json]`
 
-   The committed record is `orchestration/dagster/run-evidence/<run-id>.md`,
-   rendered deterministically from the raw records. Never edit raw records or
-   rendered evidence by hand.
+   The committed record is written by that verb as
+   `orchestration/dagster/run-evidence/<run-id>.md`, rendered deterministically
+   from the raw records. Never edit raw records or rendered evidence by hand.
 
 ## Hard boundaries
 

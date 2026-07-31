@@ -35,7 +35,7 @@ rules:
     fix: Reconcile the conflicting rulings across the contracts (`assumption_coherence.py`)
     means: Contracts on one gold table record contradictory decided ambiguity rulings
   AP1:
-    fix: align the divergent anti-pattern name or number in `docs/powerbi/visual-qa.md`
+    fix: align the divergent anti-pattern name or number in `visual-qa.md`
     means: visual-qa and dashboard-qa list the same anti-patterns with matching numbering and names
   AQ1:
     fix: Fix the route target or its planned marker (`answerability_reconciler.py`)
@@ -53,7 +53,7 @@ rules:
     fix: Remove it, gitignore `.env`, rotate; move real values to `.env` (`git_meta.py`)
     means: Committed secret / connection context (`.env`, DSN, DO cluster slug)
   CB1:
-    fix: add the baseline (e.g. SPLY) and date field to the contract under `skills/retail-kpi-knowledge/contracts/`
+    fix: add the baseline (e.g. SPLY) and date field to the contract in the `retail-kpi-knowledge` contracts set
     means: a growth/comparison metric contract declares a comparison baseline and a primary date field
   CT1:
     fix: adjust the `text.*` hex values or `accessibility.min_text_contrast_ratio` in `*-design-tokens.yaml`
@@ -127,7 +127,7 @@ rules:
     fix: correct the drifted theme sentiment value, or the `meta.sentiment_map` entry in the tokens YAML
     means: theme sentiment colours stay faithful to a human-declared `meta.sentiment_map`
   DL9:
-    fix: fill the missing field (audience, purpose, owner, evidence) in `design/report-intent.yaml`
+    fix: fill the missing field (audience, purpose, owner, evidence) in `report-intent.yaml`, creating the file if absent
     means: a filled Report Intent record carries every required field, non-placeholder
   DR1:
     fix: delete the file under the flagged prefix, or remove the phrase named in `design-stale-phrases.yaml`
@@ -167,7 +167,7 @@ rules:
     fix: Replace with a `<placeholder>`; real value comes from `.env` at refresh (`g6.py`)
     means: Real host/value in a committed PBIP parameter
   HR1:
-    fix: declare the dimension's status in `docs/quality/conformed-dimension-map.yaml`
+    fix: declare the dimension's status in `conformed-dimension-map.yaml`, creating the file if absent
     means: a dimension shared by two or more gold stars is declared conformed or distinct, and matches
   HR11:
     fix: align the mismatched `columns[].unit`/`currency` values in the table's `source-map.yaml`
@@ -190,7 +190,7 @@ rules:
       `dim_*` column
     means: each RLS role contract's filter binds to a real column on a committed gold dimension
   HR7:
-    fix: 'add `ON CONFLICT`, a `-- reload-strategy: <key>` header, or an entry in `warehouse/load-policy.md`'
+    fix: 'add `ON CONFLICT`, a `-- reload-strategy: <key>` header, or an entry in the warehouse load policy, creating the file if absent'
     means: a non-full-rebuild gold load (append/upsert/partial delete) declares its reload/dedup key
   HR8:
     fix: use `INTERVAL '1 day'` and correct the start/end order in the `dim_date` INSERT
@@ -202,7 +202,7 @@ rules:
     fix: fix `generic_kpi_ref`/`custom`/`decision_refs`/`source_evidence` in the metric contract
     means: a metric contract opting into provenance fields keeps them well-formed and resolvable
   KR1:
-    fix: fix the entry, or remove the leaked token, in `skills/retail-kpi-knowledge/registry.yaml`
+    fix: fix the entry, or remove the leaked token, in the `retail-kpi-knowledge` registry
     means: generic KPI registry entries are well-formed, unique, and free of client or physical-layer
       leakage
   P1:
@@ -259,7 +259,7 @@ rules:
     fix: Update the count + the `rule-count-claims.yaml` anchor together (`rule_count_claims.py`)
     means: A prose "N rules" count claim disagrees with the authoritative count
   SF1:
-    fix: declare or fix the basename's shared/distinct status in `docs/quality/shared-spine.yaml`
+    fix: declare or fix the basename's shared/distinct status in `shared-spine.yaml`, creating the file if absent
     means: same-basename checklists shared across skills are declared shared/distinct and shared copies
       match
   SL1:

@@ -16,6 +16,9 @@ from typing import Any, Iterable, Mapping
 
 import yaml
 
+from seshat.allowlist_derivation import INVENTORY_PATH, derive_allowlist
+from seshat.portability_audit import audit_skill_text
+
 try:
     from scripts.bundle_provenance import (
         ProvenanceError,
@@ -25,27 +28,26 @@ except ModuleNotFoundError:  # direct `python scripts/export_agent_bundles.py`
     from bundle_provenance import ProvenanceError, validate_manifest_provenance
 
 EXPORTER_VERSION = "1.0"
+INVENTORY_REL = Path(INVENTORY_PATH)
 TARGET_ROOTS = {
     "claude": Path("integrations/claude-code/seshat-bi"),
     "codex": Path("integrations/codex/seshat-bi"),
 }
-CANONICAL_ROOTS = frozenset(
-    {
-        "skills/bi-sql-knowledge/SKILL.md",
-        "skills/bi-dax-knowledge/SKILL.md",
-        "skills/bi-python-knowledge/SKILL.md",
-        "skills/bi-bigdata-knowledge/SKILL.md",
-        "skills/retail-kpi-knowledge/SKILL.md",
-        "skills/bi-analyst-knowledge/SKILL.md",
-    }
-)
+# The six-name `CANONICAL_ROOTS` constant that used to live here is DELETED, not
+# kept alongside the derivation: FR-006 requires replacement, and a surviving copy
+# is exactly the second source of truth spec 138 exists to remove. The roots now
+# come from `docs/capabilities/capabilities.yaml` via `derive_allowlist`.
 ALLOWED_MEDIA_TYPES = {
     "application/json",
     "application/yaml",
     "text/markdown",
     "text/plain",
 }
-ALLOWED_TRANSFORMS = {"copy-normalized-v1", "template-substitute-version-v1"}
+ALLOWED_TRANSFORMS = {
+    "copy-normalized-v1",
+    "template-substitute-version-v1",
+    "portability-audit-v1",
+}
 _REFERENCE_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 _SECRET_PATTERNS = {
     "private key": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
@@ -87,6 +89,9 @@ class _BundleContext:
     target: str
     output_root: Path
     version: str
+    # Every destination this bundle carries. The portability gate treats these as
+    # present, so a shipped skill may point at its neighbours in the bundle.
+    bundled_paths: frozenset[str] = frozenset()
 
 
 def _sha256(data: bytes) -> str:
@@ -238,20 +243,48 @@ def _validate_allowlist_identity(document: Mapping[str, Any]) -> None:
 def _canonical_root_values(document: Mapping[str, Any]) -> list[object]:
     roots = document.get("canonical_roots")
     if not isinstance(roots, list):
-        raise ExportError("allowlist must declare the six canonical entrypoints")
-    if len(roots) != 6:
-        raise ExportError("allowlist must declare the six canonical entrypoints")
+        raise ExportError("allowlist must declare its canonical entrypoints")
+    if not roots:
+        raise ExportError("allowlist must declare its canonical entrypoints")
     return roots
 
 
-def _validate_allowlist_header(document: Mapping[str, Any]) -> set[str]:
+def _validate_allowlist_header(
+    document: Mapping[str, Any], repo_root: Path
+) -> set[str]:
+    """Header check, now DERIVED from the inventory rather than hand-written.
+
+    FR-006 required replacement, not supplementation: the previous six-name
+    `CANONICAL_ROOTS` constant let the inventory claim a skill shipped while the
+    allowlist silently disagreed. The authored source of what ships is
+    `docs/capabilities/capabilities.yaml`; a mismatch here means the committed
+    allowlist was hand-edited (obligation 13).
+    """
     _validate_allowlist_identity(document)
     root_set = {
         _safe_relative_path(item, label="canonical root")
         for item in _canonical_root_values(document)
     }
-    if root_set != CANONICAL_ROOTS:
-        raise ExportError("allowlist canonical_roots must match the six Seshat skills")
+    # The reconciliation is a property of a REAL repository: it compares the
+    # committed allowlist against a fresh derivation from that repository's
+    # inventory. `validate_allowlist` is also called with synthetic roots -- the
+    # symlink and untracked-input fail-closed tests build a two-file tmp_path -- and
+    # those have no inventory to derive from. Demanding one there conflated two
+    # unrelated checks and broke a POSIX-only test (it skips on Windows, where
+    # symlink creation needs privileges, so local runs could not see it).
+    #
+    # Skipping when the inventory is absent does not weaken the gate where it
+    # matters: this repository always has one, and the derivation contract tests in
+    # `tests/contract/test_capability_ship_classification.py` fail loudly if it goes
+    # missing.
+    if (repo_root / INVENTORY_REL).is_file():
+        derived = set(derive_allowlist(repo_root)["canonical_roots"])
+        if root_set != derived:
+            raise ExportError(
+                "allowlist canonical_roots do not match a fresh derivation from the "
+                f"capability inventory: missing={sorted(derived - root_set)} "
+                f"unexpected={sorted(root_set - derived)}"
+            )
     return root_set
 
 
@@ -382,7 +415,7 @@ def validate_allowlist(
 ) -> list[Mapping[str, Any]]:
     """Validate and return the stable list of reviewed allowlist entries."""
 
-    root_set = _validate_allowlist_header(document)
+    root_set = _validate_allowlist_header(document, repo_root)
     tracked = tracked_paths if tracked_paths is not None else _git_paths(repo_root)
     entries = _all_entries(document)
     state = _AllowlistState(
@@ -409,12 +442,21 @@ def _scan_public_content(source: str, data: bytes) -> None:
 
 
 def _render_entry(
-    repo_root: Path, entry: Mapping[str, Any], *, version: str
+    context: _BundleContext, entry: Mapping[str, Any], destination: str
 ) -> tuple[bytes, str]:
+    """Render one allowlisted source into its bundle bytes.
+
+    Takes the bundle context rather than its fields: the portability gate needs
+    the bundle's own destination set, which arrived as two more loose parameters
+    the context already carries.
+    """
+    repo_root, version = context.repo_root, context.version
+    bundled_paths = context.bundled_paths
     source = str(entry["source"])
     raw = (repo_root / Path(source)).read_bytes()
     normalized_source = _normalize_text(raw)
     _scan_public_content(source, normalized_source)
+    _gate_portability(source, normalized_source, bundled_paths, destination)
     rendered = normalized_source
     transform = str(entry["transform"])
     if transform == "template-substitute-version-v1":
@@ -424,6 +466,48 @@ def _render_entry(
         if b"}}" in rendered:
             raise ExportError(f"unresolved template marker in {source}")
     return rendered, _sha256(normalized_source)
+
+
+def _bundled_destinations(entries: Iterable[Mapping[str, Any]]) -> frozenset[str]:
+    """Every path the bundle carries, which the portability gate treats as present."""
+    return frozenset(
+        str(destination)
+        for entry in entries
+        for destination in (entry.get("targets") or {}).values()
+    )
+
+
+def _gate_portability(
+    source: str,
+    content: bytes,
+    bundled: frozenset[str] = frozenset(),
+    destination: str = "",
+) -> None:
+    """`portability-audit-v1` -- permit shipping skill text, or fail the export.
+
+    Applied to every `SKILL.md` the export ships rather than only to entries that
+    declare the transform, because obligation 6 requires it to cover US4's
+    additions automatically. It is a gate: it never rewrites `content`, so a
+    generated skill cannot diverge from its canonical source (FR-018).
+    """
+    path = PurePosixPath(source)
+    if path.name != "SKILL.md":
+        return
+    skill = path.parent.name
+    findings = audit_skill_text(
+        skill,
+        content.decode("utf-8"),
+        bundled_paths=bundled,
+        destination=destination,
+    )
+    if findings:
+        detail = "; ".join(
+            f"{f.skill}:{f.line} {f.path} -- {f.reason}" for f in findings
+        )
+        raise ExportError(
+            f"portability-audit-v1 rejected {source}: {len(findings)} reference(s) a "
+            f"scaffolded workspace cannot resolve: {detail}"
+        )
 
 
 def _is_external_reference(reference: str) -> bool:
@@ -489,9 +573,7 @@ def _write_bundle_entry(
     if context.target not in targets:
         return None
     destination = str(targets[context.target])
-    data, source_digest = _render_entry(
-        context.repo_root, entry, version=context.version
-    )
+    data, source_digest = _render_entry(context, entry, destination)
     output = context.output_root / Path(destination)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_bytes(data)
@@ -540,7 +622,9 @@ def build_bundle(
         allow_untracked_inputs=resolved_options.allow_untracked_inputs,
     )
     _prepare_output_root(output_root)
-    context = _BundleContext(repo_root, target, output_root, version)
+    context = _BundleContext(
+        repo_root, target, output_root, version, _bundled_destinations(entries)
+    )
     manifest_entries = _manifest_entries(context, entries)
     _validate_links(output_root)
     payload: dict[str, Any] = {

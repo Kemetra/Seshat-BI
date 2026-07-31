@@ -1,22 +1,7 @@
 ---
 name: run-next-readiness
 description: >-
-  Compute the ONE next allowed action for a single table from its
-  readiness-status.yaml -- walk the seven readiness stages in fixed order, find
-  the earliest non-pass stage, and return exactly one outcome: a forward
-  next_action, a stop_blocked citing blocking_reasons verbatim, an
-  approval_required naming the human authority class, a terminal_pass, or an
-  input_defect -- plus any caveats (pass-without-evidence, stored/computed
-  next_action disagreement, warning carried forward, dual-blocked). Use when
-  someone asks "what's the next allowed action for this table", "is this table
-  blocked", "can I proceed to silver/gold yet", or "what is <table> waiting on".
-  READ-ONLY and compute-then-STOP: it never executes the action, never writes
-  readiness-status.yaml, never advances a stage, never grants or infers an
-  approval, opens NO DB connection, and emits NO numeric health / confidence /
-  percent-ready score (hard rule #9). It COMPUTES a fresh answer for ONE table
-  (unlike readiness-viewer, which RENDERS the stored field across many); it does
-  not execute (unlike retail-orchestrate); it APPLIES but does not re-implement
-  RS1's approval-shape rule.
+  Advance one table by one readiness stage in the Seshat BI repo: run the next required step, then stop. Use when someone asks what is next for a table and to do it. Never self-grants an approval and never marks a stage pass without its evidence.
 ---
 
 # run-next-readiness

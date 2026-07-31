@@ -1,21 +1,7 @@
 ---
 name: approval-evidence-pack
 description: >-
-  Compose one PRE-approval evidence pack for ONE stage gate of ONE table in the
-  Seshat BI repo, so a named human can decide a stage approval from a single
-  legible, fully-traceable document instead of hunting across scattered artifacts.
-  Use when someone asks to "assemble the approval evidence pack", "gather what I
-  need to sign the <stage> gate for <table>", or "show the pre-approval evidence
-  for this stage". This is a Product Module, artifact-writing: it READS committed
-  artifacts only (the per-stage readiness doc, the table's readiness-status.yaml,
-  the AL1 assumption signal from the metric contracts, the parked-on map, and the
-  pending-contract set), renders the ordered pack for the selected + prior stages,
-  surfaces the recorded four-status state / blockers / unresolved assumptions /
-  blocking parked-on edges, ends with an EMPTY approval slot the named human fills
-  -- then STOPS. A missing or unreadable source is a BLOCKER, never fabricated. It
-  writes NO approval, moves NO stage to `pass`, defines NO business meaning, edits
-  NO source artifact, runs NO live DB/PBIP read, and emits NO numeric score and NO
-  count. Generic across all seven stages via a stage parameter (no C086 specifics).
+  Assemble a reviewable evidence pack behind a readiness approval in the Seshat BI repo. Use when someone asks to package the evidence for a stage sign-off. Read-only: it collects committed evidence and never grants the approval.
 ---
 
 # approval-evidence-pack

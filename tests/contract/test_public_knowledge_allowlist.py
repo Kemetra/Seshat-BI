@@ -75,9 +75,17 @@ def test_repository_allowlist_has_literal_reviewed_entries() -> None:
 
 
 def test_canonical_roots_cannot_be_redefined_by_the_allowlist() -> None:
+    """The roots are DERIVED from the capability inventory (spec 138 FR-006).
+
+    Behaviour is unchanged -- a hand-edited allowlist still fails closed -- but the
+    authority moved: the export used to compare against a six-name constant it
+    carried itself, which let the inventory claim a skill shipped while the
+    allowlist silently disagreed. The constant is deleted, so the message now names
+    the derivation instead of "the six Seshat skills".
+    """
     document = copy.deepcopy(load_allowlist(ROOT))
     document["canonical_roots"][0] = "skills/other/SKILL.md"
-    with pytest.raises(ExportError, match="six Seshat skills"):
+    with pytest.raises(ExportError, match="fresh derivation from the capability"):
         validate_allowlist(ROOT, document, allow_untracked_inputs=True)
 
 

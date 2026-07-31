@@ -57,7 +57,7 @@ SQL and supplied plans; it never runs them.
 
 | The task is about... | Route to |
 |---|---|
-| Source mapping / retail pipeline readiness | `source-mapping` / `retail-onboard-table` (readiness spine: `docs/readiness/`) |
+| Source mapping / retail pipeline readiness | `source-mapping` / `retail-onboard-table` (the readiness spine) |
 | SQL reasoning / profiling / validation / reconciliation / transformation logic | **`bi-sql-knowledge`** (this skill) |
 | DAX generation / review / performance / model prerequisites | `bi-dax-knowledge` |
 | Dashboard / visual / page design | `powerbi-dashboard-design` |

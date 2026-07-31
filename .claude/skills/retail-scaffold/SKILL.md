@@ -1,20 +1,7 @@
 ---
 name: retail-scaffold
 description: >-
-  Author a NEW static governance rule's boilerplate, or verify an existing rule's
-  wiring for drift, in the Seshat BI repo -- an invoke-and-interpret wrapper over the
-  `retail scaffold` CLI verb. Use when someone asks to "add a new governance rule",
-  "scaffold a rule", "create a seshat check rule", "wire a new rule", "author a rule
-  stub", or "check rule-wiring drift / is rule X fully wired", or runs `retail
-  scaffold`. Author mode WRITES exactly three targets (a stub rule module, a failing
-  test stub, and the EXPECTED_RULE_IDS insertion) and PRINTS the remaining follow-ups
-  (golden-record regen commands, a glossary row, the import/__all__ edit) for a human
-  to apply -- it never edits prose or golden records and never self-grants a wiring
-  pass. Doctor mode is read-only: it reports, per rule id, which of the five wiring
-  places the id is present in or missing from. This skill does NOT invent rule intent
-  (the author supplies id + title + logic), does NOT run the golden regenerations, and
-  does NOT decide whether a rule passed -- the test suite + gate exit code remain the
-  authority.
+  Scaffold the per-table artifact skeletons a retail table needs in the Seshat BI repo. Use when someone asks to create the mapping or readiness files for a new table. It writes empty templates only and answers no judgment call.
 ---
 
 # retail-scaffold

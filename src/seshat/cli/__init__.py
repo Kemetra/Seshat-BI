@@ -140,10 +140,21 @@ def _run_mcp(args: object) -> int:
     # Only SERVER CONSTRUCTION is guarded, not the serve loop: `create_server` is
     # where the SDK import happens, and a running stdio server that later raises
     # ImportError from some other path must NOT be misreported as a missing extra.
+    # Resolve the workspace BEFORE constructing the server, and outside the
+    # ImportError guard below: a workspace that cannot be identified is a different
+    # failure from a missing optional extra, and must not be reported as one.
+    from ..workspace_root import WorkspaceRootError, resolve_workspace_root
+
+    try:
+        repo_root = resolve_workspace_root(args.repo)  # type: ignore[attr-defined]
+    except WorkspaceRootError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
     try:
         from ..governor.mcp_server import create_server
 
-        server = create_server(Path(args.repo))  # type: ignore[attr-defined]
+        server = create_server(repo_root)
     except ImportError:
         # Both install lanes, from the one shared source -- a bare `pip install`
         # is the WRONG mechanism in the documented pipx lane (#507), and enabling
