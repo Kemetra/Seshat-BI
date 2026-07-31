@@ -48,9 +48,9 @@ measurement US3 and US4 are both gated on. **Not** a prerequisite for US1.
 
 - [x] T004 Implement the routing-cost measurement per research R5 in `scripts/measure_bundle_routing_cost.py`, measuring only the shipped skill set's name and description metadata per bundle, never skill bodies
 - [x] T005 Record the current routing cost for both bundles into `specs/138-agent-driven-bundle/evidence/routing-cost.md` and propose the ceiling required by FR-021a as a reviewed number
-- [ ] T006 Obtain the owner's reviewed ceiling for FR-021a and record it in `specs/138-agent-driven-bundle/evidence/routing-cost.md` — the agent proposes, a named human sets it
+- [x] T006 Obtain the owner's reviewed ceiling for FR-021a and record it in `specs/138-agent-driven-bundle/evidence/routing-cost.md` — the agent proposes, a named human sets it
 
-**Checkpoint**: the ceiling exists as a reviewed number before any payload story.
+**Checkpoint**: PASSED -- ceiling ruled at 6,000 tokens_approx per bundle (Ahmed Shaaban, 2026-07-31); see evidence/routing-cost.md.
 
 ---
 

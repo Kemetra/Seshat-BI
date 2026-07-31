@@ -66,7 +66,26 @@ creates only `mappings`, `warehouse/migrations`, `powerbi`, `reports` and
 
 This is a scaffold-scope decision, not a wording choice, and it changes the
 resolution of three findings plus the shape of findings 5, 9, 14, 17 and 27.
-It is carried to the owner rather than decided here.
+
+### RULED — name the scaffold verb
+
+- **decision**: shipped skills say "run *&lt;scaffold verb&gt;*, which writes this
+  file" rather than "read `templates/x`". `workspace_init._EMPTY_DIRS` is **not**
+  extended, and the references become FR-017 scaffold-outputs, which pass.
+- **ruled_by**: Ahmed Shaaban (owner)
+- **ruled_on**: 2026-07-31
+- **recorded_by**: the agent transcribed an owner-directed ruling; it did not
+  self-grant (Principle V).
+
+**Rationale as ruled**: it resolves eight findings (8, 32, 33 plus 5, 9, 14, 17,
+27) with one rule, changes no shipped CLI behaviour, and keeps `init-project`'s
+surface exactly as specified — widening the scaffold would have been a change to
+a shipped verb beyond this feature's scope.
+
+**Consequence for findings 32 and 33**: `docs/quality/conformed-dimension-map.yaml`
+and `docs/quality/shared-spine.yaml` are files the **user authors**. The rewrite
+must therefore instruct creation ("declare it in …, creating the file if absent"),
+not reading — a scaffold verb that does not write them cannot be named.
 
 ## Notable
 

@@ -80,5 +80,45 @@ rewriting descriptions whose length is doing real disambiguation work. Option C
 stays available and now has the measurement FR-021a demanded, should the owner
 weigh the session cost more heavily.
 
-**Status: pending owner decision (T006).** No payload story may proceed past its
-measurement checkpoint until the ceiling is recorded here.
+## T006 — RULED
+
+**Ceiling: 6,000 `tokens_approx` per bundle.** Option **A+** — accept the
+43-skill set, and trim the seven descriptions exceeding 1,000 chars toward the
+bundle's existing norm.
+
+- **ruled_by**: Ahmed Shaaban (owner)
+- **ruled_on**: 2026-07-31
+- **recorded_by**: the agent transcribed an owner-directed ruling; it did not
+  self-grant (Principle V).
+
+**Rationale as ruled**: avoid a second distribution surface, and avoid rewriting
+descriptions whose length is doing real disambiguation work among 50
+development-repo skills. Trimming only the seven largest recovers most of the
+excess at the least risk to routing accuracy.
+
+**The seven in scope** (US4): `approval-evidence-pack` (1,218),
+`consumer-data-dictionary` (1,195), `run-next-readiness` (1,161),
+`cross-table-lineage` (1,148), `capabilities` (1,109), `retail-scaffold` (1,099),
+`approval-console` (1,042). Together **7,972** chars.
+
+**How far the trim must go, arithmetically:**
+
+| Trim target | Seven become | Recovered | Projected total | tokens_approx | Meets 6,000? |
+|---|---:|---:|---:|---:|---|
+| to the 845-char median | 5,915 | 2,057 | 26,957 | 6,739 | **no** |
+| to ~600 chars | 4,200 | 3,772 | 25,242 | 6,310 | **no** |
+| to the ~211-char bundle norm | 1,477 | 6,495 | 22,519 | **5,629** | **yes** |
+
+So trimming the seven to the **existing bundle norm** meets the ceiling with
+~370 tokens of headroom; trimming merely to the median does not. If the seven
+cannot be cut that far without losing disambiguation, the shortfall must be made
+up from the next tier rather than by raising the ceiling.
+
+The measurement at T064 is authoritative; the ceiling is the constraint, and this
+table is the plan for meeting it.
+
+**Option C remains available and now has its measurement**, should the ceiling
+prove unmeetable at T064. It is not authorised here.
+
+**Status: T006 CLOSED.** Payload stories may proceed to their measurement
+checkpoints against the 6,000 ceiling.
