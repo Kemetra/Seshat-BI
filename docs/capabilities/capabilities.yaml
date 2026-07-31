@@ -9,9 +9,14 @@
 # parked-on edges in docs/quality/parked-on.yaml; wired commands in
 # src/seshat/cli/__init__.py _DISPATCH).
 #
-# Scope of "covered skill" (O2): a REPO skill is a `.claude/skills/*/SKILL.md` file
-# tracked by git at the repo top level (verified via `git ls-files`), regardless of
-# family (retail-*, speckit-*, pbip-workflow, the companion-module skills, ...) --
+# Scope of "covered skill" (O2, WIDENED by spec 138): a REPO skill is ANY
+# kit-authored `SKILL.md` tracked by git at the repo top level (verified via
+# `git ls-files`) -- both `.claude/skills/*/SKILL.md` and the reviewed Knowledge
+# Bases under `skills/*/SKILL.md`. The earlier scope named only `.claude/skills/`,
+# which left the six Knowledge Bases the public bundles actually ship invisible to
+# this inventory; that made the inventory unusable as the single authored source of
+# WHAT SHIPS (spec 138 FR-001). Coverage is regardless of family (retail-*,
+# speckit-*, pbip-workflow, bi-*-knowledge, the companion-module skills, ...) --
 # this repo currently vendors no plugin skills under `.claude/plugins/`, so there is
 # nothing to exclude today; if a vendored plugin skill cache ever appears under
 # `.claude/plugins/...`, it is OUT of this scope (not a Seshat-authored capability).
@@ -19,6 +24,14 @@
 # Completeness is REFERENCE-COVERAGE, not entry-per-representation (data-model.md
 # validation rule 6): one capability with a command + a same-named skill + a
 # kit-source verb is ONE entry whose `references` covers all three.
+#
+# Ship decision (spec 138): every entry that OWNS a skill directory carries
+# `ships` (no default -- absence is an error, so a new skill cannot slip in
+# unclassified) and `ship_classification` (compass-verb | knowledge-root |
+# consumer-capability | development-only). Ownership is by `references.skill`,
+# whatever the entry's own surface -- this file groups by CAPABILITY, not by
+# representation, so a capability with a CLI verb AND a skill is one `surface: cli`
+# entry that still owns the ship decision. Exactly ONE entry owns each directory.
 #
 # UTF-8, no BOM, ASCII only.
 version: 1
@@ -107,6 +120,8 @@ capabilities:
     state: shipped
     authority: agent-runnable
     surface: cli
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: semantic_model_ready
@@ -265,6 +280,8 @@ capabilities:
     state: shipped
     authority: agent-runnable
     surface: cli
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -280,6 +297,8 @@ capabilities:
     state: shipped
     authority: agent-runnable
     surface: cli
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -560,6 +579,8 @@ capabilities:
     state: shipped
     authority: agent-runnable
     surface: cli
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: publish_ready
@@ -646,6 +667,8 @@ capabilities:
     state: shipped
     authority: agent-runnable
     surface: skill
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -664,6 +687,8 @@ capabilities:
     state: shipped
     authority: agent-runnable
     surface: cli
+    ships: true
+    ship_classification: compass-verb
     requirements: [database, optional-dependency]
     provenance: locally-verified
     readiness_stage: gold_ready
@@ -812,6 +837,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: compass-verb
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -827,6 +854,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: compass-verb
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -843,6 +872,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: compass-verb
     requirements: [database]
     provenance: locally-verified
     readiness_stage: mapping_ready
@@ -858,6 +889,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: compass-verb
     requirements: [database]
     provenance: locally-verified
     readiness_stage: source_ready
@@ -873,6 +906,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: compass-verb
     requirements: []
     provenance: locally-verified
     readiness_stage: mapping_ready
@@ -888,6 +923,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: compass-verb
     requirements: []
     provenance: locally-verified
     readiness_stage: mapping_ready
@@ -903,6 +940,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: compass-verb
     requirements: []
     provenance: locally-verified
     readiness_stage: semantic_model_ready
@@ -918,6 +957,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: compass-verb
     requirements: []
     provenance: locally-verified
     readiness_stage: silver_ready
@@ -933,6 +974,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: compass-verb
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -948,6 +991,8 @@ capabilities:
     state: deferred
     authority: agent-runnable
     surface: execution-adapter
+    ships: true
+    ship_classification: consumer-capability
     requirements: [database, optional-dependency]
     provenance: unrecorded
     readiness_stage: not-stage-scoped
@@ -972,6 +1017,8 @@ capabilities:
     state: shipped
     authority: agent-runnable
     surface: execution-adapter
+    ships: true
+    ship_classification: consumer-capability
     requirements: [optional-dependency]
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -996,6 +1043,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: dashboard_ready
@@ -1010,6 +1059,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: false
+    ship_classification: development-only
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -1025,6 +1076,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: false
+    ship_classification: development-only
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -1039,6 +1092,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -1054,6 +1109,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -1068,6 +1125,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: mapping_ready
@@ -1083,6 +1142,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -1098,6 +1159,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -1113,6 +1176,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: dashboard_ready
@@ -1127,6 +1192,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: dashboard_ready
@@ -1141,6 +1208,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: dashboard_ready
@@ -1156,6 +1225,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: dashboard_ready
@@ -1171,6 +1242,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -1186,6 +1259,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -1201,6 +1276,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: false
+    ship_classification: development-only
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -1215,6 +1292,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: docs
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -1244,6 +1323,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: false
+    ship_classification: development-only
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -1290,6 +1371,8 @@ capabilities:
     state: shipped
     authority: human-gated
     surface: skill
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -1305,6 +1388,8 @@ capabilities:
     state: shipped
     authority: human-gated
     surface: skill
+    ships: true
+    ship_classification: consumer-capability
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -1424,6 +1509,8 @@ capabilities:
     state: shipped
     authority: advisory
     surface: skill
+    ships: false
+    ship_classification: development-only
     requirements: []
     provenance: locally-verified
     readiness_stage: not-stage-scoped
@@ -1431,3 +1518,104 @@ capabilities:
     documentation: ".claude/skills/showcase-build/SKILL.md"
     references:
       skill: "showcase-build"
+
+  # ---------------------------------------------------------------------------
+  # Reviewed Knowledge Bases -- top-level skills/, shipped in both public bundles
+  # (spec 138 FR-001; brought in scope by the widened O2 statement above).
+  # ---------------------------------------------------------------------------
+
+  - id: bi-sql-knowledge
+    name: "BI SQL Knowledge Base"
+    summary: "SQL and source-grain reasoning for public agent use."
+    state: shipped
+    authority: advisory
+    surface: skill
+    ships: true
+    ship_classification: knowledge-root
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: null
+    documentation: skills/bi-sql-knowledge/SKILL.md
+    references:
+      skill: bi-sql-knowledge
+
+  - id: bi-dax-knowledge
+    name: "BI DAX Knowledge Base"
+    summary: "DAX and semantic-measure reasoning for public agent use."
+    state: shipped
+    authority: advisory
+    surface: skill
+    ships: true
+    ship_classification: knowledge-root
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: null
+    documentation: skills/bi-dax-knowledge/SKILL.md
+    references:
+      skill: bi-dax-knowledge
+
+  - id: bi-python-knowledge
+    name: "BI Python Knowledge Base"
+    summary: "Python/dataframe preparation reasoning for public agent use."
+    state: shipped
+    authority: advisory
+    surface: skill
+    ships: true
+    ship_classification: knowledge-root
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: null
+    documentation: skills/bi-python-knowledge/SKILL.md
+    references:
+      skill: bi-python-knowledge
+
+  - id: bi-bigdata-knowledge
+    name: "BI Big Data Knowledge Base"
+    summary: "Distributed-data reasoning for public agent use."
+    state: shipped
+    authority: advisory
+    surface: skill
+    ships: true
+    ship_classification: knowledge-root
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: null
+    documentation: skills/bi-bigdata-knowledge/SKILL.md
+    references:
+      skill: bi-bigdata-knowledge
+
+  - id: retail-kpi-knowledge
+    name: "Retail KPI Knowledge Base"
+    summary: "Retail KPI meaning and contract reasoning for public agent use."
+    state: shipped
+    authority: advisory
+    surface: skill
+    ships: true
+    ship_classification: knowledge-root
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: null
+    documentation: skills/retail-kpi-knowledge/SKILL.md
+    references:
+      skill: retail-kpi-knowledge
+
+  - id: bi-analyst-knowledge
+    name: "BI Analyst Knowledge Base"
+    summary: "Decision-question framing and story order from approved metrics."
+    state: shipped
+    authority: advisory
+    surface: skill
+    ships: true
+    ship_classification: knowledge-root
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: null
+    documentation: skills/bi-analyst-knowledge/SKILL.md
+    references:
+      skill: bi-analyst-knowledge

@@ -111,25 +111,25 @@ byte-identical output.
 
 ### Tests
 
-- [ ] T024 [P] [US2] Create `tests/contract/test_capability_inventory.py` asserting every skill-surface entry resolves to an existing directory via `references.skill` (scalar or list) — this already holds today, so it lands as a regression guard
-- [ ] T025 [P] [US2] Assert in the same file that every skill directory in the repository is covered by exactly one inventory entry
-- [ ] T026 [P] [US2] Assert `ships` has no default — an entry lacking it is an error, so a new skill cannot slip in unclassified (`contracts/ship-classification.md` obligation 2)
-- [ ] T027 [P] [US2] Assert the classification invariants: `development-only` implies `ships: false`; `compass-verb` implies `ships: true` and appears in `.seshat/kit-source.yaml`
+- [x] T024 [P] [US2] Create `tests/contract/test_capability_inventory.py` asserting every skill-surface entry resolves to an existing directory via `references.skill` (scalar or list) — this already holds today, so it lands as a regression guard
+- [x] T025 [P] [US2] Assert in the same file that every skill directory in the repository is covered by exactly one inventory entry
+- [x] T026 [P] [US2] Assert `ships` has no default — an entry lacking it is an error, so a new skill cannot slip in unclassified (`contracts/ship-classification.md` obligation 2)
+- [x] T027 [P] [US2] Assert the classification invariants: `development-only` implies `ships: false`; `compass-verb` implies `ships: true` and appears in `.seshat/kit-source.yaml`
 - [ ] T028 [P] [US2] Assert in `tests/contract/test_capability_inventory.py` that the committed `distribution/public-knowledge-allowlist.yaml` matches a fresh derivation, so a hand-edit fails rather than taking effect (obligation 13)
 - [ ] T029 [P] [US2] Assert in `tests/contract/test_capability_inventory.py` that the fail-closed export conditions (obligations 10–12) each fail with the offender named
 
 ### Inventory repair
 
-- [ ] T030 [US2] Widen the O2 coverage-scope statement in the header of `docs/capabilities/capabilities.yaml` from `.claude/skills/*/SKILL.md` to any committed kit-authored SKILL.md, then add the six knowledge-root entries to `docs/capabilities/capabilities.yaml` (`bi-sql-`, `bi-dax-`, `bi-python-`, `bi-bigdata-`, `retail-kpi-`, `bi-analyst-knowledge`) with `ship_classification: knowledge-root` and `ships: true`
+- [x] T030 [US2] Widen the O2 coverage-scope statement in the header of `docs/capabilities/capabilities.yaml` from `.claude/skills/*/SKILL.md` to any committed kit-authored SKILL.md, then add the six knowledge-root entries to `docs/capabilities/capabilities.yaml` (`bi-sql-`, `bi-dax-`, `bi-python-`, `bi-bigdata-`, `retail-kpi-`, `bi-analyst-knowledge`) with `ship_classification: knowledge-root` and `ships: true`
 - [x] T031 [US2] ~~Add `skill_dir` to the four entries whose id matches no directory~~ **DROPPED 2026-07-31** -- the existing `references.skill` already resolves all four (scalar and list form); measured 50/50 coverage, 0 dangling. See `evidence/us2-design-corrections.md`
-- [ ] T032 [US2] Add `ships` and `ship_classification` to every skill-surface entry, with `ships: true` for the six knowledge roots only and `ships: false` for everything else at this story
-- [ ] T033 [US2] Classify the four development-only skills as `development-only`: `friendly-pr-reviewer`, `pr-readiness-reviewer`, `release-notes-generator`, `showcase-build`
-- [ ] T034 [US2] Classify the fourteen specification-workflow skill directories as `development-only`
-- [ ] T035 [US2] Verify the repaired inventory renders by running `python -m seshat.capability_inventory --format json`
+- [x] T032 [US2] Add `ships` and `ship_classification` to every skill-surface entry, with `ships: true` for the six knowledge roots only and `ships: false` for everything else at this story
+- [x] T033 [US2] Classify the four development-only skills as `development-only`: `friendly-pr-reviewer`, `pr-readiness-reviewer`, `release-notes-generator`, `showcase-build`
+- [x] T034 [US2] Classify the fourteen specification-workflow skill directories as `development-only`
+- [x] T035 [US2] Verify the repaired inventory renders by running `python -m seshat.capability_inventory --format json`
 
 ### Derivation
 
-- [ ] T036 [US2] Implement the allowlist derivation from the inventory, producing deterministic ordering and stable `entry_id` assignment (`contracts/ship-classification.md` obligation 6)
+- [ ] T036 [US2] **NEXT** Implement the allowlist derivation from the inventory, producing deterministic ordering and stable `entry_id` assignment (`contracts/ship-classification.md` obligation 6)
 - [ ] T037 [US2] Replace the hand-written six-name assertion in `scripts/export_agent_bundles.py` with the derivation — replacement, not supplementation (FR-006)
 - [ ] T038 [US2] Preserve every existing allowlist entry field and `policy.absence_means_excluded: true` in the generated output (obligations 7–8)
 - [ ] T039 [US2] Regenerate `distribution/public-knowledge-allowlist.yaml` from the inventory and commit it as generated-but-reviewed
