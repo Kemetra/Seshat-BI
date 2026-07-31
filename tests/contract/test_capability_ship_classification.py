@@ -119,8 +119,7 @@ def test_ship_fields_are_complete_and_valid(
             assert not _referenced_dirs(entry) or "ship_classification" not in entry
             continue
         assert isinstance(entry["ships"], bool), (
-            f"{entry['id']}: ships must be an explicit boolean, not "
-            f"{entry['ships']!r}"
+            f"{entry['id']}: ships must be an explicit boolean, not {entry['ships']!r}"
         )
         assert entry.get("ship_classification") in _CLASSIFICATIONS, (
             f"{entry['id']}: ship_classification "

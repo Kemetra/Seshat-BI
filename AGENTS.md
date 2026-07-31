@@ -86,8 +86,9 @@ wiring -- the authoring sibling of `retail-govern`, which interprets rule findin
 <!-- SPECKIT START -->
 Active Spec Kit implementation plan: `specs/138-agent-driven-bundle/plan.md`
 (status: RATIFIED by Ahmed Shaaban 2026-07-31 -- implementation permitted).
-Still awaiting ratification: `specs/137-finance-gl-genericity-proof/plan.md`. At most ONE of
-the two may be in implementation at a time (spec 138 FR-026).
+Still awaiting ratification: the `specs/137-finance-gl-genericity-proof/` package. At most ONE
+of the two may be in implementation at a time (spec 138 FR-026). The fence carries exactly ONE
+plan path by contract (`test_active_spec_kit_markers_agree_and_resolve`); do not add a second.
 <!-- SPECKIT END -->
 <!-- SESHAT-KIT START -->
 **Seshat BI kit router** (v0.2.0) -- generated from `.seshat/kit-source.yaml`; do not edit here.

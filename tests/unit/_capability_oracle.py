@@ -124,19 +124,28 @@ def _frontmatter_name(raw_fence: str) -> str | None:
     return _name_from_fence_line(raw_fence)
 
 
+# O2 coverage scope, WIDENED by spec 138: a kit-authored skill is any committed
+# SKILL.md at the repo top level, not only those under `.claude/skills/`. The
+# reviewed Knowledge Bases live in top-level `skills/` and ARE shipped in both
+# public bundles, so the narrower scope left them invisible to this oracle --
+# which made the inventory unusable as the single authored source of what ships.
+_SKILL_ROOTS: tuple[tuple[str, ...], ...] = ((".claude", "skills"), ("skills",))
+
+
 def skill_frontmatter_names(repo_root: Path) -> set[str]:
-    skills_dir = repo_root / ".claude" / "skills"
-    if not skills_dir.is_dir():
-        return set()
     names = set()
-    for skill_md in skills_dir.glob("*/SKILL.md"):
-        text = skill_md.read_text(encoding="utf-8-sig")
-        raw_fence = _frontmatter_fence(text)
-        if raw_fence is None:
+    for parts in _SKILL_ROOTS:
+        skills_dir = repo_root.joinpath(*parts)
+        if not skills_dir.is_dir():
             continue
-        name = _frontmatter_name(raw_fence)
-        if name:
-            names.add(name)
+        for skill_md in skills_dir.glob("*/SKILL.md"):
+            text = skill_md.read_text(encoding="utf-8-sig")
+            raw_fence = _frontmatter_fence(text)
+            if raw_fence is None:
+                continue
+            name = _frontmatter_name(raw_fence)
+            if name:
+                names.add(name)
     return names
 
 
