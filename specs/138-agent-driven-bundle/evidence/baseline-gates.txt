@@ -1,0 +1,18 @@
+# T001 -- pre-change gate baseline
+# Captured: 2026-07-31 | branch: 138-agent-driven-bundle | HEAD: bf1285e
+
+## seshat check
+[warning] RS1 last_checked_at 2026-06-25 predates latest approval 2026-07-23; a named human must recompute the audit metadata (mappings/retail_store_sales/readiness-status.yaml)
+
+## seshat kit-lint
+[ok] yaml_projection
+[ok] prose_projection
+kit-lint: no projection drift.
+
+## seshat doctor
+seshat doctor: no drift found across the aggregated read-only checks.
+
+## Expected-and-unrelated
+The single RS1 warning concerns mappings/retail_store_sales/readiness-status.yaml,
+which spec 138 does not touch. It predates this branch and is NOT caused by this
+feature. Any OTHER finding appearing later IS caused by this feature.

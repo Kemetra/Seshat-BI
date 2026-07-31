@@ -10,8 +10,13 @@ init_commit_message: "[Spec Kit] Initial commit"
 # Auto-commit before/after core commands.
 # Set "default" to enable for all commands, then override per-command.
 # Each key can be true/false. Message is customizable per-command.
+#
+# Commit-as-you-go (owner-directed 2026-07-31): every `after_*` step commits;
+# `before_*` stays off so a step is committed once, on completion, rather than
+# twice. NOTE: `default` alone is not enough -- an explicit per-event `enabled`
+# always wins over it, so the per-event keys below are what actually take effect.
 auto_commit:
-  default: false
+  default: true
   before_clarify:
     enabled: false
     message: "[Spec Kit] Save progress before clarification"
@@ -34,29 +39,29 @@ auto_commit:
     enabled: false
     message: "[Spec Kit] Save progress before issue sync"
   after_constitution:
-    enabled: false
+    enabled: true
     message: "[Spec Kit] Add project constitution"
   after_specify:
-    enabled: false
+    enabled: true
     message: "[Spec Kit] Add specification"
   after_clarify:
-    enabled: false
+    enabled: true
     message: "[Spec Kit] Clarify specification"
   after_plan:
-    enabled: false
+    enabled: true
     message: "[Spec Kit] Add implementation plan"
   after_tasks:
-    enabled: false
+    enabled: true
     message: "[Spec Kit] Add tasks"
   after_implement:
-    enabled: false
+    enabled: true
     message: "[Spec Kit] Implementation progress"
   after_checklist:
-    enabled: false
+    enabled: true
     message: "[Spec Kit] Add checklist"
   after_analyze:
-    enabled: false
+    enabled: true
     message: "[Spec Kit] Add analysis report"
   after_taskstoissues:
-    enabled: false
+    enabled: true
     message: "[Spec Kit] Sync tasks to issues"
