@@ -1,0 +1,16 @@
+# T002 -- committed bundle digests (pre-change baseline)
+# Captured: 2026-07-31 | HEAD: bf1285e
+
+## claude
+manifest_digest: 438723009749e2b0b0ae79ee6b30d6d2a03b62603ce8662bce62167e454f4dbc
+version:         0.7.1
+file_count:      255
+skill_count:     11
+skills:          bi-analyst-knowledge, bi-bigdata-knowledge, bi-dax-knowledge, bi-python-knowledge, bi-sql-knowledge, dagster-workflows, dbt-workflows, pbi-mcp-doctor, powerbi-workflows, retail-kpi-knowledge, seshat-bi
+
+## codex
+manifest_digest: b50dd13251d75908f702b43069d6c78ff31c436150517d10e0cdd9ffe96f84c7
+version:         0.7.1
+file_count:      231
+skill_count:     11
+skills:          bi-analyst-knowledge, bi-bigdata-knowledge, bi-dax-knowledge, bi-python-knowledge, bi-sql-knowledge, dagster-workflows, dbt-workflows, pbi-mcp-doctor, powerbi-workflows, retail-kpi-knowledge, seshat-bi

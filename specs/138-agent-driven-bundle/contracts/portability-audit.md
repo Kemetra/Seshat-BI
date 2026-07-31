@@ -52,12 +52,18 @@ shipping skill text ──▶ portability-audit-v1 ──▶ permitted unchanged
 
 ## Known scope at authoring time
 
-23 distinct dev-only references across the ten compass verb skills, spanning
-`templates/`, `docs/worked-examples`, `specs/`, `.claude/skills/`,
-`docs/roadmap`, `docs/quality/`, `scripts/`, `src/seshat/` and `tests/`. Each is
-resolved by a reviewed rewrite of canonical text, verified in **both** contexts:
-unchanged behaviour in this repository, and every instructed path resolvable in a
-scaffolded workspace.
+**33** distinct (skill, path) pairs across the ten compass verb skills, enumerated
+at T003 into `evidence/portability-findings.md` — 1 already passing
+(dev-scoped), 3 pending a scaffold-scope decision, 17 read-instructions and 12
+provenance pointers. They span `templates/`, `docs/worked-examples`, `specs/`,
+`.claude/skills/`, `docs/roadmap`, `docs/quality/`, `scripts/`, `src/seshat/` and
+`tests/`. Each is resolved by a reviewed rewrite of canonical text, verified in
+**both** contexts: unchanged behaviour in this repository, and every instructed
+path resolvable in a scaffolded workspace.
+
+`source-mapping` line 35 is the working precedent — it already states that
+`templates/` "exists only in the Seshat development repo". Rewrites follow its
+wording rather than inventing a new form.
 
 ## Acceptance evidence
 

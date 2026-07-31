@@ -85,8 +85,8 @@ wiring -- the authoring sibling of `retail-govern`, which interprets rule findin
 - Repo rules (secrets, PBIP, Windows): `CLAUDE.md`.
 <!-- SPECKIT START -->
 Active Spec Kit implementation plan: `specs/138-agent-driven-bundle/plan.md`
-(status: planning package authored, awaiting owner ratification -- no implementation started).
-Also awaiting ratification: `specs/137-finance-gl-genericity-proof/plan.md`. At most ONE of
+(status: RATIFIED by Ahmed Shaaban 2026-07-31 -- implementation permitted).
+Still awaiting ratification: `specs/137-finance-gl-genericity-proof/plan.md`. At most ONE of
 the two may be in implementation at a time (spec 138 FR-026).
 <!-- SPECKIT END -->
 <!-- SESHAT-KIT START -->

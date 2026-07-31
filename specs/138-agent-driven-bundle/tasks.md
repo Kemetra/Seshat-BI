@@ -34,9 +34,9 @@ Existing repository layout. No new package, no new top-level directory
 **Purpose**: record the "before" state everything is measured against. No
 behaviour changes.
 
-- [ ] T001 Capture the pre-change gate baseline into `specs/138-agent-driven-bundle/evidence/baseline-gates.txt` by running `seshat check`, `seshat kit-lint` and `seshat doctor`, recording the pre-existing `RS1` warning on `mappings/retail_store_sales/readiness-status.yaml` as expected-and-unrelated
-- [ ] T002 [P] Record the committed bundle digests for both harnesses into `specs/138-agent-driven-bundle/evidence/baseline-bundles.txt` from `integrations/claude-code/seshat-bi/bundle-manifest.json` and `integrations/codex/seshat-bi/bundle-manifest.json`
-- [ ] T003 [P] Enumerate the 23 dev-only references into `specs/138-agent-driven-bundle/evidence/portability-findings.md`, one row per reference with skill, path, line and the FR-017 verdict (scaffold-output vs read-instruction)
+- [x] T001 Capture the pre-change gate baseline into `specs/138-agent-driven-bundle/evidence/baseline-gates.txt` by running `seshat check`, `seshat kit-lint` and `seshat doctor`, recording the pre-existing `RS1` warning on `mappings/retail_store_sales/readiness-status.yaml` as expected-and-unrelated — **done**
+- [x] T002 [P] Record the committed bundle digests for both harnesses into `specs/138-agent-driven-bundle/evidence/baseline-bundles.txt` from `integrations/claude-code/seshat-bi/bundle-manifest.json` and `integrations/codex/seshat-bi/bundle-manifest.json` — **done: 11 skills each, 255/231 files, zero compass verbs**
+- [x] T003 [P] Enumerate the dev-only references into `specs/138-agent-driven-bundle/evidence/portability-findings.md`, one row per reference with skill, path, line and the FR-017 verdict — **done: 33 pairs, not the 23 cited while authoring (that counted path classes); 1 PASS-dev-scoped, 3 REVIEW, 17 FAIL-read, 12 FAIL-provenance**
 
 ---
 

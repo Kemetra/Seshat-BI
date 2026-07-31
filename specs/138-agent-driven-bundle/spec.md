@@ -4,7 +4,16 @@
 
 **Created**: 2026-07-31
 
-**Status**: draft
+**Status**: ratified -- Ahmed Shaaban (owner), 2026-07-31
+
+**Status history**: draft
+
+<!-- Ratification recorded from an owner-directed ruling: the owner replied
+     "ratified" to the named request to ratify spec 138 (2026-07-31). The agent
+     TRANSCRIBED that ruling; it did not self-grant (Principle V, same pattern as
+     ADR 0015/0016 and docs/roadmap/decisions/cli-verbs-vs-skill-driven.md).
+     FR-026 now permits implementation, still capped at ONE story at a time
+     across specs 137 and 138. -->
 
 <!-- One of: draft | ratified | implemented | superseded (ADR 0019).
      draft       -- authored, not yet ratified by a named human
@@ -79,7 +88,7 @@ of the A-vs-B fork.
 | Knowledge roots present in that inventory | **0 of 6** |
 | `surface: skill` ids with no matching directory | **4** (`retail-govern-skill`, `run-next-readiness-skill`, `pbir-authoring-adapter-skill`, `speckit-workflow-skills`) |
 | Export transforms allowed | 2 (`copy-normalized-v1`, `template-substitute-version-v1`) |
-| Dev-only path references inside the 10 compass verb skills | 23 distinct |
+| Dev-only path references inside the 10 compass verb skills | **33** distinct (skill, path) pairs — enumerated at T003; the 23 cited while authoring counted path *classes*, not references |
 
 ---
 
@@ -388,10 +397,11 @@ reproducible from that evidence.
   names an output that a scaffold step produces, and MUST fail when it instructs
   the agent to read a development-repository file. Resolution is per reference,
   not per path prefix.
-- **FR-018**: Each of the 23 known dev-only references MUST be resolved by
-  rewriting the canonical skill source. Automatic removal of content at export
-  time is prohibited, because it would let a generated skill diverge silently
-  from its source.
+- **FR-018**: Each enumerated dev-only reference MUST be resolved by rewriting
+  the canonical skill source — 33 as enumerated at T003, of which 1 already
+  passes and 3 depend on a scaffold-scope decision. Automatic removal of content
+  at export time is prohibited, because it would let a generated skill diverge
+  silently from its source.
 - **FR-019**: Shipping a skill MUST NOT change its governed behaviour: every hard
   stop, human-approval gate and refusal it carries in this repository MUST be
   carried unchanged into the bundle.
