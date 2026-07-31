@@ -73,6 +73,49 @@ or the file will contradict its own stated scope.
 
 ---
 
+---
+
+## Correction 3 — ownership is by `references.skill`, not by `surface`
+
+**Found during implementation**, after corrections 1 and 2 were already recorded.
+
+**What the spec assumed** (FR-003): the ship decision attaches to "every capability
+entry whose surface is a skill".
+
+**What is actually true**: **eight** skill directories are owned by entries whose
+surface is something else — `cli`, `execution-adapter`, or `docs`:
+
+```text
+retail-validate               owned by  retail-validate            (surface: cli)
+evidence-pack-generator       owned by  retail-evidence-pack       (surface: cli)
+retail-init / retail-scaffold owned by  same-named entries         (surface: cli)
+retail-semantic-check         owned by  retail-semantic-check      (surface: cli)
+pbip-workflow                 owned by  pbip-workflow              (surface: docs)
+dbt-transformation-adapter    owned by  same-named entry   (surface: execution-adapter)
+dagster-orchestration-adapter owned by  same-named entry   (surface: execution-adapter)
+```
+
+`retail-validate` is a **compass verb**. Attaching the ship decision to
+`surface: skill` would have shipped nine of ten compass verbs while every test
+passed — the precise defect this feature exists to remove, reintroduced by the
+fix for it.
+
+The cause is the same reference-coverage design as correction 1: the inventory
+groups by **capability**, not by representation, so a capability with a CLI verb
+*and* a skill is one `surface: cli` entry that still owns a skill directory.
+
+**Resolution**: ownership is by `references.skill`, whatever the entry's own
+surface. Recorded in the file's header, enforced by
+`tests/contract/test_capability_inventory.py`.
+
+**Second-order consequence**: widening ownership created **duplicate authority** —
+five directories acquired two owners each (`retail-govern` was owned by both
+`retail-check` and `retail-govern-skill`). Collapsed to exactly one owner per
+directory, preferring the `surface: skill` entry; 20 redundant field lines
+removed. The contract test now fails on any directory with more than one owner.
+
+---
+
 ## Why this matters beyond the two edits
 
 The specification was ratified describing a defect ("four ids match no
