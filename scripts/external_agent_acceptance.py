@@ -133,6 +133,31 @@ def _declared_public_skills(repo_root: Path, target: str) -> set[str] | None:
     }
 
 
+def _validate_declared_capabilities(
+    plugin: Mapping[str, Any], blockers: list[str]
+) -> None:
+    """Which capability surfaces the bundle may declare.
+
+    `hooks` and `apps` stay prohibited: they are execution surfaces this bundle
+    deliberately does not ship. `mcpServers` was prohibited alongside them until
+    spec 138 US1 declared the six read-only governor tools, so it is checked for its
+    VALUE rather than its absence -- an arbitrary pointer would ship an unreviewed
+    server, which is the risk the blanket prohibition stood in for.
+    """
+    prohibited = set(plugin).intersection({"hooks", "apps"})
+    if prohibited:
+        blockers.append(
+            "skills-only bundle declares prohibited capabilities: "
+            + ", ".join(sorted(prohibited))
+        )
+    server_pointer = plugin.get("mcpServers")
+    if server_pointer is not None and server_pointer != "./mcp-servers.json":
+        blockers.append(
+            "plugin manifest points at an unreviewed MCP server declaration: "
+            f"{server_pointer!r}"
+        )
+
+
 def _validate_plugin(
     spec: _BundleSpec,
     plugin: Mapping[str, Any],
@@ -155,23 +180,7 @@ def _validate_plugin(
             f"bundled skills {sorted(actual)} do not match the declared "
             f"public surface {sorted(declared)}"
         )
-    # `hooks` and `apps` stay prohibited: they are execution surfaces this bundle
-    # deliberately does not ship. `mcpServers` was prohibited alongside them until
-    # spec 138 US1 declared the six read-only governor tools, so it is now checked
-    # for its VALUE rather than its absence -- an arbitrary pointer would ship an
-    # unreviewed server, which is the risk the blanket prohibition stood in for.
-    prohibited = set(plugin).intersection({"hooks", "apps"})
-    if prohibited:
-        blockers.append(
-            "skills-only bundle declares prohibited capabilities: "
-            + ", ".join(sorted(prohibited))
-        )
-    server_pointer = plugin.get("mcpServers")
-    if server_pointer is not None and server_pointer != "./mcp-servers.json":
-        blockers.append(
-            "plugin manifest points at an unreviewed MCP server declaration: "
-            f"{server_pointer!r}"
-        )
+    _validate_declared_capabilities(plugin, blockers)
 
 
 def validate_bundle(repo_root: Path, platform: str) -> list[str]:
