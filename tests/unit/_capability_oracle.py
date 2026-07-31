@@ -132,21 +132,26 @@ def _frontmatter_name(raw_fence: str) -> str | None:
 _SKILL_ROOTS: tuple[tuple[str, ...], ...] = ((".claude", "skills"), ("skills",))
 
 
-def skill_frontmatter_names(repo_root: Path) -> set[str]:
+def _frontmatter_names_under(skills_dir: Path) -> set[str]:
+    """Frontmatter `name`s of every SKILL.md directly under one skills root."""
+    if not skills_dir.is_dir():
+        return set()
     names = set()
-    for parts in _SKILL_ROOTS:
-        skills_dir = repo_root.joinpath(*parts)
-        if not skills_dir.is_dir():
-            continue
-        for skill_md in skills_dir.glob("*/SKILL.md"):
-            text = skill_md.read_text(encoding="utf-8-sig")
-            raw_fence = _frontmatter_fence(text)
-            if raw_fence is None:
-                continue
-            name = _frontmatter_name(raw_fence)
-            if name:
-                names.add(name)
+    for skill_md in skills_dir.glob("*/SKILL.md"):
+        raw_fence = _frontmatter_fence(skill_md.read_text(encoding="utf-8-sig"))
+        name = _frontmatter_name(raw_fence) if raw_fence is not None else None
+        if name:
+            names.add(name)
     return names
+
+
+def skill_frontmatter_names(repo_root: Path) -> set[str]:
+    return set().union(
+        *(
+            _frontmatter_names_under(repo_root.joinpath(*parts))
+            for parts in _SKILL_ROOTS
+        )
+    )
 
 
 def _id_set_from_yaml(
