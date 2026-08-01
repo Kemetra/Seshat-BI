@@ -28,6 +28,48 @@ explicitly identifies a public release event.
 ## [Unreleased]
 
 ### Added
+- **PBIP X-Ray -- `seshat xray` and `seshat model-diff`** (#549, #550, #551).
+  Two advisory, read-only CLI verbs over a committed PBIP project. `xray` builds
+  a model graph by resolving measure/column references across parsed TMDL, reads
+  PBIR visual bindings, and reports findings X0-X4; `model-diff` classifies TMDL
+  changes as semantic / cosmetic / additive / removed. Supporting work extended
+  the TMDL parser with relationship endpoints, cardinality, and measure/column
+  metadata. Ships with a `pbip-xray` skill front door, a capability-inventory
+  entry, and compass routing. Advisory only: neither verb grants an approval,
+  moves a readiness stage, or emits a confidence score.
+- **The ten compass verbs now ship in the Claude and Codex bundles** (spec 138
+  US2+US3, #547, #548). The packaged plugin bundles previously carried 11 skills
+  and none of the ten compass verbs the kit's own orientation text names; they
+  now carry 21, behind a portability gate, with the inventory as the authored
+  source of what ships. The plugin also declares the read-only governor (US1),
+  backed by the shipped `src/seshat/allowlist_derivation.py`. Spec 138 remains
+  **partially implemented** -- US2 and US3 delivered; it is not complete.
+- `seshat readiness-diff` -- compare committed readiness state across two git
+  revisions (#536).
+- `seshat cvd-evidence` -- read-only colour-vision-deficiency simulation
+  evidence for one theme (#541).
+- `seshat profile` accepts a landed CSV/TSV/Excel file, not only a DB table
+  (#535).
+- Readiness blockers now name **who acts** on each one, from a committed
+  allowlist (#538).
+- Machine-written, server-confirmed live-DB provenance on readiness evidence
+  (#512, spec 485 A2), replacing the interim "this carries no DB provenance"
+  disclosure.
+- `seshat next` surfaces the adapter checkpoint and the source-map shape (#506),
+  and open approval requests via the authoritative path (#522).
+- Shadow-vs-migrations column-shape drift is reported as an advisory (#501).
+- Power BI theme spec sections 5/6/7, with the blueprint preview styled from
+  tokens (#518).
+- The agent-facing rule fix table is generated, so it cannot drift from the
+  registered rules (#543); the spec status vocabulary is closed and implemented
+  claims are locked (#544); acceptance transcript fixtures are bound to the
+  bundle they exercised (#542).
+- Expanded knowledge layers -- analyst narrative reasoning, DAX semantic
+  diagnostics, PostgreSQL plan reasoning, Python validation and dataframe
+  reasoning routes, governed KPI decision packets, and Big Data operational
+  evidence, with standardized handoffs between layers (#496).
+- An assessment of the Power BI MCP read-only family and core-only sufficiency
+  (#537).
 - Governed statistical evidence engine -- a locally executable Product Module
   with eight closed methods (`describe`, group comparison, proportions,
   correlation, associational regression, anomaly detection, change-point
@@ -53,6 +95,31 @@ explicitly identifies a public release event.
   `TmdlSerializer`/TOM path is untouched (pure stdlib text reading), so issue
   #494's broader TMDL-validation gap remains open (partial fix for #494).
 
+### Changed
+- **HR1 `gold_placement` resolution now ERRORs on an unresolvable prefix**
+  (#499, #505). Every `columns[].gold_placement` in the reference map named a
+  LOGICAL dimension while `gold_star.dimensions[].name` is PHYSICAL and
+  schema-qualified, so the two never matched and `_attr_silver_types` silently
+  returned `{}` for every dimension. The fix resolves each placement prefix from
+  the PHYSICAL **bare** dimension name -- the declared `name:` with any
+  `<schema>.` prefix stripped -- and turns an unresolvable prefix into an ERROR.
+  **This can newly fail a consumer repo that was passing only because the
+  resolution was silently empty.** Per `docs/operations/versioning-policy.md`,
+  this is the bug-fix-restores-intended-behavior row; the owner classified its
+  blast radius as PATCH-class and kept this release MINOR rather than MAJOR.
+  A consumer hitting it should write the bare physical name, not a
+  schema-qualified one: for a dimension declared `gold.dim_product_rss`, the
+  placement is `dim:dim_product_rss.item`. A schema-qualified
+  `dim:gold.dim_product_rss.item` does NOT work -- the prefix is parsed up to
+  the first `.`, so only `gold` would be read and the placement is rejected.
+- HR1 now degrades like HR13 on an unreadable source-map instead of dropping it
+  (#508, #511), and an unreadable map is reported rather than silently skipped.
+- `seshat semantic-check` gained `--require-inputs`, which exits 1 when NO
+  semantic input is discovered instead of reporting `[not_started]` and exiting
+  0; it is wired into the CI step. The flag is on `semantic-check`, not on
+  `seshat check`. The default remains exit 0, so this is additive for existing
+  callers.
+
 ### Fixed
 - Statistical evidence now records the exact installed versions of each
   method's numerical libraries, missing change-point dependencies produce the
@@ -60,6 +127,54 @@ explicitly identifies a public release event.
   `stats` / `stats-change` extras. The optional PostgreSQL Gold-adapter test
   also proves a read-only session and compiler-only `SELECT` statements; it
   remains `[PENDING LIVE PROFILE]` when its live-test dependencies are absent.
+- Connection-string redaction now redacts by SPAN rather than by substring
+  fragment, redacts quoted values whole, and keeps punctuation inside bare libpq
+  conninfo values (#527, #528). Five further reviewed security findings closed --
+  fail-opens, git-hardening drift, and the DSN wrapper.
+- Installation guidance emits pipx commands that actually work in the documented
+  lane, including one that MODIFIES an existing install (#507, #510); enabling an
+  extra no longer replaces the installed Seshat build (#513); and `seshat mcp`
+  shows the install hint instead of a raw traceback.
+- A date dimension contributes its attributes, not just its table name (#491),
+  resolved through one shared resolver (#497, #502).
+- A verified live state now requires the committed run record (#493, #504).
+- Power BI theme token and preview fidelity -- page/chrome colours derived into
+  the dark seed, the non-text ground composited, the tokens degrade split
+  honoured, transparency validated at the gate, collisions no longer
+  misattributed, theme cards pruned per-property/per-entry, and malformed tokens
+  rejected (#520, #521, #523, #524, #525, #526).
+- Gate hardening: `narrative-check` validates the frozen v1 schema it claims to
+  enforce (#474), the `pbi-mcp` preflight binds to its declared target and
+  transport shape (#477), the PBIR binding validator names what it cannot
+  classify (#475), and measure sync compares measure names case-insensitively
+  (#476).
+- The KIT_SELF tier is scoped to the kit, and the approval gate states what it
+  requires (#490).
+- Malformed `.pbir` manifests are guarded, and hierarchies keep the declared
+  table spelling (#551).
+- The spec-136 A3 hole is closed so github-actions bot PRs can pass P2, and the
+  setup-python supply-chain assertion is repinned to the v7.0.0 digest (#531).
+
+### Docs
+- **Spec 137 -- the Finance GL genericity proof** (#545, #546). A deterministic
+  Finance GL fixture generator, 9 defect variants, 6 judgment scenarios, and a
+  full set of mapping artifacts stopped at the gate, plus the genericity ledger
+  and defect matrix. This is **evidence, not shipped runtime**: it landed under
+  `mappings/`, `docs/worked-examples/`, and `benchmark/scenarios/`, with no
+  change to `src/seshat/`. It exists to show the engine is not retail-specific.
+- The `retail_store_sales` worked example is completed through the three-way
+  gate, with a narrative brief template and the owner decision package (#514,
+  #516, #519).
+- The four-track engine program design (#540) and an enterprise KPI knowledge
+  reference (#530).
+- The v0.7.1 acceptance record, with the catalog runbook refreshed to 0.7.1
+  (#483).
+- The test suite is hermetic against global git config (#539).
+
+### Dependencies
+- `dagster` 1.13.14 -> 1.13.15 in `/orchestration/dagster`, with its pin mirrors
+  co-updated (#532); `actions/setup-python` 6.3.0 -> 7.0.0 (#531). Dependabot no
+  longer proposes MCP major ceiling widenings (#534).
 
 ## [0.7.1] -- 2026-07-24
 
