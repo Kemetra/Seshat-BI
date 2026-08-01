@@ -60,6 +60,36 @@ def _measure_referenced_columns(graph: ModelGraph) -> set[tuple[str, str]]:
     return refs
 
 
+def _hierarchy_level_columns(
+    graph: ModelGraph, bindings: ReportBindings
+) -> set[tuple[str, str]]:
+    """Resolve bound (entity, hierarchy, level) triples to their real columns.
+
+    Falls back to treating the level NAME as a column name when the hierarchy
+    is not declared in the parsed model: that can only ADD a reference, which
+    keeps unused-detection conservative rather than inventing a finding.
+    """
+    # Values carry the DECLARED table spelling too: X1 compares exact
+    # (table.name, column.name) tuples, so reusing PBIR's spelling of the
+    # entity left a case-mismatched binding still reported unused even though
+    # the casefolded lookup had succeeded (PR #551 review).
+    declared: dict[tuple[str, str, str], tuple[str, str]] = {}
+    for table in graph.tables:
+        for hierarchy in table.hierarchies:
+            for level_name, column in hierarchy.levels:
+                key = (
+                    table.name.casefold(),
+                    hierarchy.name.casefold(),
+                    level_name.casefold(),
+                )
+                declared[key] = (table.name, column)
+    refs: set[tuple[str, str]] = set()
+    for entity, hierarchy_name, level in bindings.bound_hierarchy_levels:
+        key = (entity.casefold(), hierarchy_name.casefold(), level.casefold())
+        refs.add(declared.get(key, (entity, level)))
+    return refs
+
+
 def _referenced_columns(
     graph: ModelGraph, bindings: ReportBindings
 ) -> frozenset[tuple[str, str]]:
@@ -68,6 +98,7 @@ def _referenced_columns(
     refs |= _measure_referenced_columns(graph)
     refs |= _relationship_endpoint_columns(graph)
     refs |= _sort_by_targets(graph)
+    refs |= _hierarchy_level_columns(graph, bindings)
     return frozenset(refs)
 
 
@@ -334,10 +365,19 @@ def _x3_depths(
 
 
 def _x3_depth_cycles(graph: ModelGraph) -> Iterable[XrayFinding]:
+    """X3 is measure-only.
+
+    ``measure_refs`` is also keyed by CALCULATED columns (``T[C]``) so their
+    edges count toward inbound-reference accounting, but a column is not a
+    measure: analyzing one produced a bogus ``?[T[C]]`` "measure reference
+    depth" finding, since the owner map holds only real measures (PR #551
+    review). The edges are retained; only the FINDINGS are restricted.
+    """
     owner = {m.name: t.name for t in graph.tables for m in t.measures}
     depths, cyclic = _measure_depths(graph.measure_refs)
-    yield from _x3_cycles(owner, cyclic)
-    yield from _x3_depths(owner, depths, cyclic)
+    measure_only = frozenset(depths) & set(owner)
+    yield from _x3_cycles(owner, cyclic & set(owner))
+    yield from _x3_depths(owner, {k: depths[k] for k in measure_only}, cyclic)
 
 
 def _measures_by_body(graph: ModelGraph) -> dict[str, list[tuple[str, str]]]:

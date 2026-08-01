@@ -14,9 +14,10 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from ..tmdl import (
+    TmdlColumn,
     TmdlRelationship,
     TmdlTable,
     normalize_measure_body,
@@ -26,6 +27,79 @@ from ..tmdl import (
 
 _REF = re.compile(r"(?:'(?:[^']|'')*'|[A-Za-z_][\w ]*?)\[[^\]]+\]")
 _ROLE_HEADER = re.compile(r"^role\s+('?)(?P<name>[^'\n]+?)\1\s*$")
+_LITERAL_SEP = "\x1f"
+
+
+def _read_literal(expression: str, start: int) -> int:
+    """Index just past the double-quoted literal starting at ``start``.
+
+    ``""`` escapes a quote inside a DAX literal.
+    """
+    i = start + 1
+    n = len(expression)
+    while i < n:
+        if expression[i] != '"':
+            i += 1
+        elif i + 1 < n and expression[i + 1] == '"':
+            i += 2
+        else:
+            return i + 1
+    return n  # unterminated: treat the remainder as the literal
+
+
+def _scan_token(expression: str, i: int) -> tuple[str | None, str | None, int]:
+    """One scanner step: ``(code chunk, literal, next index)``.
+
+    Exactly one of the first two is non-None, or both are None for a comment
+    (which is dropped).
+    """
+    if expression[i] == '"':
+        end = _read_literal(expression, i)
+        return None, expression[i:end], end
+    if expression.startswith("//", i):
+        newline = expression.find("\n", i)
+        return None, None, len(expression) if newline == -1 else newline
+    if expression.startswith("/*", i):
+        close = expression.find("*/", i)
+        return None, None, len(expression) if close == -1 else close + 2
+    return expression[i], None, i + 1
+
+
+def _split_code_and_literals(expression: str) -> tuple[str, list[str]]:
+    """Split DAX into (code with literals masked, literals in order).
+
+    A SINGLE pass, because literals and comments can contain each other's
+    delimiters: ``// "note"`` is a comment (its quotes are prose) while
+    ``"a // b"`` is a literal (its slashes are data). Regex-substituting
+    literals BEFORE stripping comments preserved comment prose into the
+    comparison key, so a comment-only edit reported as semantic (PR #551
+    review). Comments are dropped here; literals are kept verbatim.
+    """
+    code: list[str] = []
+    literals: list[str] = []
+    i = 0
+    while i < len(expression):
+        chunk, literal, i = _scan_token(expression, i)
+        if literal is not None:
+            literals.append(literal)
+            code.append(f" @@s{len(literals) - 1}@@ ")
+        elif chunk is not None:
+            code.append(chunk)
+    return "".join(code), literals
+
+
+def _semantic_body(expression: str) -> str:
+    """A comparison key that normalizes CODE but preserves STRING LITERALS.
+
+    ``normalize_measure_body`` lowercases and collapses whitespace across the
+    whole expression, so ``"OK"`` -> ``"ok"`` and a changed displayed label
+    produced NO diff entry (PR #550 review). Literal contents are behavior, not
+    formatting. Code is normalized with the shared canonicalizer (so D3 keeps
+    its exact semantics -- that function is untouched) and the literals are
+    appended verbatim, compared byte-exact.
+    """
+    code, literals = _split_code_and_literals(expression)
+    return normalize_measure_body(code) + _LITERAL_SEP + _LITERAL_SEP.join(literals)
 
 
 def _role_name(raw: str) -> str | None:
@@ -47,7 +121,7 @@ def _block_body(lines: list[str], start: int) -> str:
 
 
 def _parse_roles(text: str) -> dict[str, str]:
-    """Top-level ``role <name>`` blocks -> normalized body text.
+    """Top-level ``role <name>`` blocks -> comparison key per role.
 
     RLS lives in ``definition/roles/*.tmdl``, which is neither a table file nor
     a relationship block, so without this the diff stayed silent on a changed
@@ -58,7 +132,7 @@ def _parse_roles(text: str) -> dict[str, str]:
     """
     lines = text.splitlines()
     return {
-        name: normalize_measure_body(_block_body(lines, i))
+        name: _semantic_body(_block_body(lines, i))
         for i, raw in enumerate(lines)
         if (name := _role_name(raw)) is not None
     }
@@ -141,9 +215,7 @@ def _diff_measures(base: TmdlTable, head: TmdlTable) -> Iterable[ModelChange]:
             yield ModelChange(
                 "removed", "measure", subject, f"measure {name!r} removed"
             )
-        elif normalize_measure_body(old.expression) != normalize_measure_body(
-            new.expression
-        ):
+        elif _semantic_body(old.expression) != _semantic_body(new.expression):
             yield ModelChange(
                 "semantic",
                 "measure",
@@ -163,34 +235,64 @@ def _diff_measures(base: TmdlTable, head: TmdlTable) -> Iterable[ModelChange]:
             )
 
 
+def _calc_body_changed(old: TmdlColumn, new: TmdlColumn) -> bool:
+    """True when a CALCULATED column's DAX changed in meaning."""
+    return _semantic_body(old.expression or "") != _semantic_body(new.expression or "")
+
+
+def _presentation(column: TmdlColumn) -> tuple:
+    return (column.summarize_by, column.sort_by_column, column.is_hidden)
+
+
+def _changed_column(
+    name: str, subject: str, old: TmdlColumn, new: TmdlColumn
+) -> ModelChange | None:
+    """Classify a column present on BOTH sides, or None when unchanged."""
+    if old.data_type != new.data_type:
+        return ModelChange(
+            "semantic",
+            "column",
+            subject,
+            f"column {name!r} type changed: {old.data_type} -> {new.data_type}",
+        )
+    if _calc_body_changed(old, new):
+        return ModelChange(
+            "semantic", "column", subject, f"calculated column {name!r} logic changed"
+        )
+    if _presentation(old) != _presentation(new):
+        return ModelChange(
+            "cosmetic",
+            "column",
+            subject,
+            f"column {name!r} presentation changed (summarize/sort/hidden)",
+        )
+    return None
+
+
+def _column_change(
+    name: str, subject: str, old: TmdlColumn | None, new: TmdlColumn | None
+) -> ModelChange | None:
+    """Classify one column by name across both sides, or None when unchanged."""
+    if old is None:
+        return ModelChange("additive", "column", subject, f"new column {name!r}")
+    if new is None:
+        return ModelChange("removed", "column", subject, f"column {name!r} removed")
+    return _changed_column(name, subject, old, new)
+
+
 def _diff_columns(base: TmdlTable, head: TmdlTable) -> Iterable[ModelChange]:
     base_columns = {c.name: c for c in base.columns}
     head_columns = {c.name: c for c in head.columns}
-    for name in sorted(base_columns.keys() | head_columns.keys()):
-        subject = f"{head.name}[{name}]"
-        old, new = base_columns.get(name), head_columns.get(name)
-        if old is None:
-            yield ModelChange("additive", "column", subject, f"new column {name!r}")
-        elif new is None:
-            yield ModelChange("removed", "column", subject, f"column {name!r} removed")
-        elif old.data_type != new.data_type:
-            yield ModelChange(
-                "semantic",
-                "column",
-                subject,
-                f"column {name!r} type changed: {old.data_type} -> {new.data_type}",
-            )
-        elif (old.summarize_by, old.sort_by_column, old.is_hidden) != (
-            new.summarize_by,
-            new.sort_by_column,
-            new.is_hidden,
-        ):
-            yield ModelChange(
-                "cosmetic",
-                "column",
-                subject,
-                f"column {name!r} presentation changed (summarize/sort/hidden)",
-            )
+    candidates = (
+        _column_change(
+            name,
+            f"{head.name}[{name}]",
+            base_columns.get(name),
+            head_columns.get(name),
+        )
+        for name in sorted(base_columns.keys() | head_columns.keys())
+    )
+    return [change for change in candidates if change is not None]
 
 
 def _rel_semantics(rel: TmdlRelationship) -> tuple:
@@ -249,13 +351,52 @@ def diff_models(
     base_files: Iterable[tuple[str, str]],
     head_files: Iterable[tuple[str, str]],
 ) -> tuple[ModelChange, ...]:
-    """Classify every model change between the two sides, in stable order."""
-    base, head = _parse_side(base_files), _parse_side(head_files)
+    """Classify every model change between the two sides, in stable order.
+
+    Files are partitioned by ``*.SemanticModel`` directory first: a name-keyed
+    map shared across models let a later model overwrite an earlier one on both
+    sides, so a change in the overwritten model could yield an EMPTY diff
+    (PR #550 review). Subjects are model-qualified when more than one model is
+    present.
+    """
+    by_model = _group_by_model(base_files, head_files)
+    qualify = len(by_model) > 1
     changes: list[ModelChange] = []
-    changes.extend(_diff_tables(base.tables, head.tables))
-    for name in sorted(base.tables.keys() & head.tables.keys()):
-        changes.extend(_diff_measures(base.tables[name], head.tables[name]))
-        changes.extend(_diff_columns(base.tables[name], head.tables[name]))
-    changes.extend(_diff_relationships(base.relationships, head.relationships))
-    changes.extend(_diff_roles(base.roles, head.roles))
+    for model_dir, (base_side, head_side) in by_model.items():
+        prefix = f"{model_dir}: " if qualify else ""
+        changes.extend(_diff_one_model(base_side, head_side, prefix))
     return tuple(changes)
+
+
+def _model_dir(path: str) -> str:
+    return path.split("/definition/")[0]
+
+
+def _group_by_model(
+    base_files: Iterable[tuple[str, str]], head_files: Iterable[tuple[str, str]]
+) -> dict[str, tuple[list[tuple[str, str]], list[tuple[str, str]]]]:
+    """``model dir -> (base files, head files)``, sorted, both sides present."""
+    grouped: dict[str, tuple[list, list]] = {}
+    for index, files in ((0, base_files), (1, head_files)):
+        for path, text in files:
+            slot = grouped.setdefault(_model_dir(path), ([], []))
+            slot[index].append((path, text))
+    return {key: grouped[key] for key in sorted(grouped)}
+
+
+def _diff_one_model(
+    base_files: list[tuple[str, str]],
+    head_files: list[tuple[str, str]],
+    prefix: str,
+) -> Iterable[ModelChange]:
+    base, head = _parse_side(base_files), _parse_side(head_files)
+    raw: list[ModelChange] = []
+    raw.extend(_diff_tables(base.tables, head.tables))
+    for name in sorted(base.tables.keys() & head.tables.keys()):
+        raw.extend(_diff_measures(base.tables[name], head.tables[name]))
+        raw.extend(_diff_columns(base.tables[name], head.tables[name]))
+    raw.extend(_diff_relationships(base.relationships, head.relationships))
+    raw.extend(_diff_roles(base.roles, head.roles))
+    if not prefix:
+        return raw
+    return [replace(c, subject=f"{prefix}{c.subject}") for c in raw]

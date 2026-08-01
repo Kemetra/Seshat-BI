@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import posixpath
 from collections.abc import Mapping
 from dataclasses import replace
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from ...core import is_test_path, read_tracked_text
 from ...gitutil import git_output
@@ -59,14 +60,26 @@ def _model_files(root: Path) -> list[tuple[str, str]]:
     return list(iter_model_files(ctx, ".tmdl"))
 
 
+def _is_report_file(rel: str) -> bool:
+    """Report-side files X-Ray reads: PBIR definition JSON + the .pbir manifest.
+
+    ``definition.pbir`` sits BESIDE ``definition/`` (note: no trailing slash),
+    so a ``".Report/definition/"`` filter missed it -- and with it the
+    ``datasetReference`` that resolves report ownership.
+    """
+    if ".Report/" not in rel:
+        return False
+    return rel.endswith(".pbir") or (
+        ".Report/definition/" in rel and rel.endswith(".json")
+    )
+
+
 def _report_files(root: Path) -> list[tuple[str, str]]:
-    """(path, text) for every committed report-definition JSON file."""
+    """(path, text) for every committed report-definition file X-Ray reads."""
     ctx = build_context(root)
     out: list[tuple[str, str]] = []
     for rel in ctx.tracked_files:
-        if is_test_path(rel):
-            continue
-        if ".Report/definition/" not in rel or not rel.endswith(".json"):
+        if is_test_path(rel) or not _is_report_file(rel):
             continue
         text = read_tracked_text(root / Path(rel), encoding="utf-8-sig")
         if text is not None:
@@ -94,19 +107,82 @@ def _by_model(
     return {key: grouped[key] for key in sorted(grouped)}
 
 
+def _report_root(path: str) -> str:
+    """The ``<X>.Report`` directory a report file lives under."""
+    marker = ".Report/"
+    index = path.find(marker)
+    return path[: index + len(marker) - 1] if index != -1 else path
+
+
+def _by_path_target(text: str) -> str | None:
+    """``datasetReference.byPath.path`` out of a .pbir, or None if unusable.
+
+    EVERY level is shape-checked. A manifest that is valid JSON but not the
+    expected object (``[]``, or ``{"datasetReference": null}``) used to raise
+    AttributeError from the chained ``.get()`` and abort the whole verb, rather
+    than degrading to stem-based ownership (PR #551 review). An unreadable
+    manifest is missing evidence, never a crash.
+    """
+    try:
+        document = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(document, Mapping):
+        return None
+    reference = document.get("datasetReference")
+    if not isinstance(reference, Mapping):
+        return None
+    by_path = reference.get("byPath")
+    if not isinstance(by_path, Mapping):
+        return None
+    path = by_path.get("path")
+    return path if isinstance(path, str) else None
+
+
+def _declared_model(
+    report_root: str, report_files: list[tuple[str, str]]
+) -> str | None:
+    """The model directory a report's ``definition.pbir`` points at, or None.
+
+    PBIR associates a report with its model through
+    ``datasetReference.byPath.path`` (a path relative to the report folder), so
+    a report whose DIRECTORY STEM differs from the model's is still owned by it.
+    Pairing on stem alone discarded such a report's bindings entirely and then
+    reported its bound fields as unreferenced (PR #550 review).
+    """
+    for path, text in report_files:
+        if path != f"{report_root}/definition.pbir":
+            continue
+        declared = _by_path_target(text)
+        if declared is None:
+            return None
+        # Relative to the report folder; normalize away "../" segments.
+        return PurePosixPath(
+            posixpath.normpath(posixpath.join(report_root, declared))
+        ).as_posix()
+    return None
+
+
 def _paired_report(
     model_dir: str, report_files: list[tuple[str, str]]
 ) -> list[tuple[str, str]]:
-    """The report files belonging to ``model_dir``, by PBIP stem convention.
+    """The report files belonging to ``model_dir``.
 
-    Power BI Desktop writes ``<Stem>.SemanticModel`` beside ``<Stem>.Report``,
-    so bindings are paired by stem rather than shared globally -- another
-    model's report must never count as evidence that THIS model's column is
-    used.
+    Ownership comes from each report's ``definition.pbir`` when it declares one;
+    otherwise it falls back to the PBIP stem convention (Power BI Desktop writes
+    ``<Stem>.SemanticModel`` beside ``<Stem>.Report``). Bindings are never
+    shared globally -- another model's report must not count as evidence that
+    THIS model's column is used.
     """
-    stem = model_dir.removesuffix(".SemanticModel")
-    prefix = f"{stem}.Report/"
-    return [(path, text) for path, text in report_files if path.startswith(prefix)]
+    stem_prefix = f"{model_dir.removesuffix('.SemanticModel')}.Report/"
+
+    def owns(path: str) -> bool:
+        declared = _declared_model(_report_root(path), report_files)
+        if declared is not None:
+            return declared == model_dir  # an explicit declaration is authoritative
+        return path.startswith(stem_prefix)
+
+    return [(path, text) for path, text in report_files if owns(path)]
 
 
 def _no_model_payload() -> dict[str, object]:
@@ -136,7 +212,10 @@ def xray_main(args: argparse.Namespace) -> int:
     findings = []
     scanned: list[bool] = []
     for model_dir, files in grouped.items():
-        bindings = read_bindings(_paired_report(model_dir, report_files))
+        owned = _paired_report(model_dir, report_files)
+        # The .pbir is an ownership manifest, not binding evidence: excluding it
+        # keeps report_scanned meaning "actual report content was read".
+        bindings = read_bindings([(p, t) for p, t in owned if not p.endswith(".pbir")])
         scanned.append(bindings.report_scanned)
         findings.extend(
             _qualified(f, model_dir, qualify)

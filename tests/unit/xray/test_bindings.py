@@ -49,11 +49,18 @@ def test_all_malformed_means_not_scanned():
     assert b.report_scanned is False
 
 
-def test_hierarchy_level_counts_as_column_reference():
+def test_hierarchy_level_is_recorded_as_a_triple_not_a_column():
+    """A level name is not a column name, so the triple is recorded RAW.
+
+    The audit resolves it against the model's parsed hierarchy membership;
+    recording ``(entity, level)`` in ``bound_columns`` here used to leave the
+    real backing column falsely reported as unused.
+    """
     doc = """
     {"field": {"HierarchyLevel": {"Expression": {"Hierarchy": {"Expression":
       {"SourceRef": {"Entity": "Dates"}}, "Hierarchy": "Calendar"}},
       "Level": "Month"}}}
     """
     b = read_bindings([("r/X.Report/definition/pages/p/visuals/v/visual.json", doc)])
-    assert ("Dates", "Month") in b.bound_columns
+    assert ("Dates", "Calendar", "Month") in b.bound_hierarchy_levels
+    assert ("Dates", "Month") not in b.bound_columns
