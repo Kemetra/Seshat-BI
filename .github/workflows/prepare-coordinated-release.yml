@@ -40,8 +40,24 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install release preparation dependency
-        run: python -m pip install pyyaml
+      - name: Install release preparation dependencies
+        # Installs the PACKAGE, not just pyyaml. export_agent_bundles.py imports
+        # seshat.allowlist_derivation and seshat.portability_audit (spec 138,
+        # PRs #547/#548), so a bare `pip install pyyaml` makes the "Regenerate
+        # Claude and Codex bundles" step die on ModuleNotFoundError: No module
+        # named 'seshat'. That is exactly how the v0.8.0 dispatch first failed:
+        # spec 138 added the import, no release was cut between then and now, so
+        # nothing exercised this workflow against it. ci.yml never caught it
+        # because it runs the same exporter AFTER `pip install -e ".[dev]"`.
+        #
+        # -e mirrors ci.yml. Safe against the diff guards below: hatchling
+        # writes no in-tree egg-info, and dist/, build/ and *.egg-info/ are
+        # gitignored regardless. Safe against the version projection too: the
+        # exporter reads project.version from pyproject.toml directly
+        # (_project_version), never from installed metadata, so installing at
+        # the pre-projection version does not poison the bundle manifests.
+        # pyyaml stays satisfied as a core dependency of the package itself.
+        run: python -m pip install -e .
 
       - name: Validate owner-selected version and release branch
         shell: bash

@@ -38,7 +38,26 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install build validators
-        run: python -m pip install build twine pyyaml
+        # The PACKAGE is a build validator here, not just a runtime artifact:
+        # the "Verify synchronized version and generated bundles" step below
+        # runs export_agent_bundles.py, which imports seshat.allowlist_derivation
+        # and seshat.portability_audit (spec 138, PRs #547/#548). With only
+        # `build twine pyyaml` that step dies on ModuleNotFoundError.
+        #
+        # This one is the dangerous copy of the defect. prepare-coordinated-release
+        # hits the same missing import at DISPATCH, which costs a workflow run;
+        # this job runs against an already-pushed, immutable refs/tags/v* ref, so
+        # failing here burns the version permanently -- the same way v0.6.0 and
+        # v0.7.0 became unpublishable. Found while the v0.8.0 dispatch failed
+        # upstream, before any tag existed.
+        #
+        # Installed before "Verify source identity", which asserts
+        # `test -z "$(git status --porcelain)"`. Safe: hatchling writes no
+        # in-tree egg-info, and dist/, build/ and *.egg-info/ are gitignored,
+        # so the editable install leaves no untracked, un-ignored path behind.
+        run: |
+          python -m pip install build twine
+          python -m pip install -e .
       - name: Verify source identity
         shell: bash
         env:
