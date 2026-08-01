@@ -1268,6 +1268,9 @@ capabilities:
     documentation: ".claude/skills/pbip-xray/SKILL.md"
     references:
       skill: "pbip-xray"
+      dispatch:
+        - "xray"
+        - "model-diff"
 
   - id: consumer-data-dictionary
     name: "consumer data dictionary"
