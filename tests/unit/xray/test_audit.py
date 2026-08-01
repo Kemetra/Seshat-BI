@@ -28,7 +28,9 @@ def _visual(entity: str, prop: str, kind: str = "Column") -> str:
 
 def _bindings(*refs: tuple[str, str, str]) -> object:
     docs = ",".join(_visual(e, p, k) for e, p, k in refs)
-    return read_bindings([("r/X.Report/definition/pages/p/visuals/v/visual.json", f"[{docs}]")])
+    return read_bindings(
+        [("r/X.Report/definition/pages/p/visuals/v/visual.json", f"[{docs}]")]
+    )
 
 
 def _ids(findings, fid):
@@ -61,7 +63,10 @@ def test_x1_relationship_key_never_unused():
     files = [
         (f"{_M}/tables/T.tmdl", "table T\n\tcolumn k\n"),
         (f"{_M}/tables/D.tmdl", "table D\n\tcolumn k\n"),
-        (f"{_M}/relationships.tmdl", "relationship r\n\tfromColumn: T.k\n\ttoColumn: D.k\n"),
+        (
+            f"{_M}/relationships.tmdl",
+            "relationship r\n\tfromColumn: T.k\n\ttoColumn: D.k\n",
+        ),
     ]
     g = build_graph(files)
     assert not [f for f in _ids(run_audit(g, NO_REPORT), "X1") if "[k]" in f.locator]
@@ -76,72 +81,152 @@ def test_x1_orphan_measure():
     assert hits and hits[0].severity == "warning"
 
 
-def test_x2_many_to_many():
-    files = [
-        (f"{_M}/relationships.tmdl",
-         "relationship r\n\tfromCardinality: many\n\ttoCardinality: many\n"
-         "\tfromColumn: A.k\n\ttoColumn: B.k\n"),
-    ]
-    hits = _ids(run_audit(build_graph(files), NO_REPORT), "X2")
-    assert any("many-to-many" in f.message for f in hits)
+# One (case-id, files, family, message-needle, fires) row per X2/X4 scenario;
+# a single parametrized test replaces seven structurally identical functions.
+_FAMILY_CASES = [
+    (
+        "x2-many-to-many-fires",
+        [
+            (
+                f"{_M}/relationships.tmdl",
+                "relationship r\n\tfromCardinality: many\n\ttoCardinality: many\n"
+                "\tfromColumn: A.k\n\ttoColumn: B.k\n",
+            ),
+        ],
+        "X2",
+        "many-to-many",
+        True,
+    ),
+    (
+        "x2-inactive-without-userelationship-fires",
+        [
+            (f"{_M}/tables/T.tmdl", "table T\n\tmeasure M = SUM(T[c])\n\tcolumn c\n"),
+            (
+                f"{_M}/relationships.tmdl",
+                "relationship r\n\tisActive: false\n\tfromColumn: T.c\n"
+                "\ttoColumn: D.k\n",
+            ),
+        ],
+        "X2",
+        "USERELATIONSHIP",
+        True,
+    ),
+    (
+        "x2-inactive-with-userelationship-silent",
+        [
+            (
+                f"{_M}/tables/T.tmdl",
+                "table T\n\tmeasure M = CALCULATE(SUM(T[c]), "
+                "USERELATIONSHIP(T[c], D[k]))\n\tcolumn c\n",
+            ),
+            (
+                f"{_M}/relationships.tmdl",
+                "relationship r\n\tisActive: false\n\tfromColumn: T.c\n"
+                "\ttoColumn: D.k\n",
+            ),
+        ],
+        "X2",
+        "USERELATIONSHIP",
+        False,
+    ),
+    (
+        "x2-string-keys-fires",
+        [
+            (f"{_M}/tables/A.tmdl", "table A\n\tcolumn k\n\t\tdataType: string\n"),
+            (f"{_M}/tables/B.tmdl", "table B\n\tcolumn k\n\t\tdataType: string\n"),
+            (
+                f"{_M}/relationships.tmdl",
+                "relationship r\n\tfromColumn: A.k\n\ttoColumn: B.k\n",
+            ),
+        ],
+        "X2",
+        "string",
+        True,
+    ),
+    (
+        "x2-snowflake-three-hops-fires",
+        [
+            (
+                f"{_M}/relationships.tmdl",
+                "relationship r1\n\tfromColumn: F.a\n\ttoColumn: D1.a\n"
+                "relationship r2\n\tfromColumn: D1.b\n\ttoColumn: D2.b\n"
+                "relationship r3\n\tfromColumn: D2.c\n\ttoColumn: D3.c\n",
+            ),
+        ],
+        "X2",
+        "snowflake",
+        True,
+    ),
+    (
+        "x2-bidi-skipped-entirely",
+        [
+            (
+                f"{_M}/relationships.tmdl",
+                "relationship r\n\tcrossFilteringBehavior: bothDirections\n"
+                "\tfromCardinality: many\n\ttoCardinality: many\n"
+                "\tfromColumn: A.k\n\ttoColumn: B.k\n",
+            ),
+        ],
+        "X2",
+        "",  # empty needle: assert the whole family stays silent
+        False,
+    ),
+    (
+        "x4-unmarked-date-table-cites-d7",
+        [
+            (f"{_M}/tables/Dates.tmdl", "table Dates\n\tcolumn date_key\n"),
+            (f"{_M}/tables/F.tmdl", "table F\n\tcolumn date_key\n"),
+            (
+                f"{_M}/relationships.tmdl",
+                "relationship r\n\tfromColumn: F.date_key\n"
+                "\ttoColumn: Dates.date_key\n",
+            ),
+        ],
+        "X4",
+        "D7",
+        True,
+    ),
+    (
+        "x4-marked-date-table-silent",
+        [
+            (
+                f"{_M}/tables/Dates.tmdl",
+                "table Dates\n\tdataCategory: Time\n\tcolumn date_key\n\t\tisKey\n",
+            ),
+            (f"{_M}/tables/F.tmdl", "table F\n\tcolumn date_key\n"),
+            (
+                f"{_M}/relationships.tmdl",
+                "relationship r\n\tfromColumn: F.date_key\n"
+                "\ttoColumn: Dates.date_key\n",
+            ),
+        ],
+        "X4",
+        "D7",
+        False,
+    ),
+]
 
 
-def test_x2_inactive_without_userelationship():
-    files = [
-        (f"{_M}/tables/T.tmdl", "table T\n\tmeasure M = SUM(T[c])\n\tcolumn c\n"),
-        (f"{_M}/relationships.tmdl",
-         "relationship r\n\tisActive: false\n\tfromColumn: T.c\n\ttoColumn: D.k\n"),
-    ]
-    hits = _ids(run_audit(build_graph(files), NO_REPORT), "X2")
-    assert any("USERELATIONSHIP" in f.message for f in hits)
-
-
-def test_x2_inactive_with_userelationship_silent():
-    files = [
-        (f"{_M}/tables/T.tmdl",
-         "table T\n\tmeasure M = CALCULATE(SUM(T[c]), USERELATIONSHIP(T[c], D[k]))\n\tcolumn c\n"),
-        (f"{_M}/relationships.tmdl",
-         "relationship r\n\tisActive: false\n\tfromColumn: T.c\n\ttoColumn: D.k\n"),
-    ]
-    hits = _ids(run_audit(build_graph(files), NO_REPORT), "X2")
-    assert not any("USERELATIONSHIP" in f.message for f in hits)
-
-
-def test_x2_string_keys():
-    files = [
-        (f"{_M}/tables/A.tmdl", "table A\n\tcolumn k\n\t\tdataType: string\n"),
-        (f"{_M}/tables/B.tmdl", "table B\n\tcolumn k\n\t\tdataType: string\n"),
-        (f"{_M}/relationships.tmdl", "relationship r\n\tfromColumn: A.k\n\ttoColumn: B.k\n"),
-    ]
-    hits = _ids(run_audit(build_graph(files), NO_REPORT), "X2")
-    assert any("string" in f.message for f in hits)
-
-
-def test_x2_snowflake_three_hops():
-    rel = (
-        "relationship r1\n\tfromColumn: F.a\n\ttoColumn: D1.a\n"
-        "relationship r2\n\tfromColumn: D1.b\n\ttoColumn: D2.b\n"
-        "relationship r3\n\tfromColumn: D2.c\n\ttoColumn: D3.c\n"
-    )
-    hits = _ids(run_audit(build_graph([(f"{_M}/relationships.tmdl", rel)]), NO_REPORT), "X2")
-    assert any("snowflake" in f.message for f in hits)
-
-
-def test_x2_bidi_skipped_entirely():
-    files = [
-        (f"{_M}/relationships.tmdl",
-         "relationship r\n\tcrossFilteringBehavior: bothDirections\n"
-         "\tfromCardinality: many\n\ttoCardinality: many\n"
-         "\tfromColumn: A.k\n\ttoColumn: B.k\n"),
-    ]
-    assert not _ids(run_audit(build_graph(files), NO_REPORT), "X2")
+@pytest.mark.parametrize(
+    ("files", "family", "needle", "fires"),
+    [case[1:] for case in _FAMILY_CASES],
+    ids=[case[0] for case in _FAMILY_CASES],
+)
+def test_family_scenarios(files, family, needle, fires):
+    hits = _ids(run_audit(build_graph(files), NO_REPORT), family)
+    matched = [f for f in hits if needle in f.message]
+    assert bool(matched) is fires
 
 
 def test_x3_depth_and_cycle():
-    chain = "table T\n" + "".join(
-        f"\tmeasure M{i} = [M{i + 1}] + 1\n" for i in range(5)
-    ) + "\tmeasure M5 = 1\n"
-    hits = _ids(run_audit(build_graph([(f"{_M}/tables/T.tmdl", chain)]), NO_REPORT), "X3")
+    chain = (
+        "table T\n"
+        + "".join(f"\tmeasure M{i} = [M{i + 1}] + 1\n" for i in range(5))
+        + "\tmeasure M5 = 1\n"
+    )
+    hits = _ids(
+        run_audit(build_graph([(f"{_M}/tables/T.tmdl", chain)]), NO_REPORT), "X3"
+    )
     assert any("depth" in f.message for f in hits)
     cyc = "table C\n\tmeasure A = [B]\n\tmeasure B = [A]\n"
     hits = _ids(run_audit(build_graph([(f"{_M}/tables/C.tmdl", cyc)]), NO_REPORT), "X3")
@@ -157,29 +242,6 @@ def test_x3_duplicate_logic_cross_table_cites_d3():
     assert any("D3" in f.message for f in hits)
 
 
-def test_x4_unmarked_date_table_cites_d7():
-    files = [
-        (f"{_M}/tables/Dates.tmdl", "table Dates\n\tcolumn date_key\n"),
-        (f"{_M}/tables/F.tmdl", "table F\n\tcolumn date_key\n"),
-        (f"{_M}/relationships.tmdl",
-         "relationship r\n\tfromColumn: F.date_key\n\ttoColumn: Dates.date_key\n"),
-    ]
-    hits = _ids(run_audit(build_graph(files), NO_REPORT), "X4")
-    assert any("D7" in f.message for f in hits)
-
-
-def test_x4_marked_date_table_silent():
-    files = [
-        (f"{_M}/tables/Dates.tmdl",
-         "table Dates\n\tdataCategory: Time\n\tcolumn date_key\n\t\tisKey\n"),
-        (f"{_M}/tables/F.tmdl", "table F\n\tcolumn date_key\n"),
-        (f"{_M}/relationships.tmdl",
-         "relationship r\n\tfromColumn: F.date_key\n\ttoColumn: Dates.date_key\n"),
-    ]
-    hits = _ids(run_audit(build_graph(files), NO_REPORT), "X4")
-    assert not any("D7" in f.message for f in hits)
-
-
 def test_x4_summarized_feeding_nothing():
     g = build_graph(
         [(f"{_M}/tables/T.tmdl", "table T\n\tcolumn q\n\t\tsummarizeBy: sum\n")]
@@ -191,8 +253,6 @@ def test_x4_summarized_feeding_nothing():
 def test_no_finding_for_unresolved_refs():
     # [Ghost] resolves to nothing: conservative core says it must not create
     # unused-column findings for anything, nor crash.
-    g = build_graph(
-        [(f"{_M}/tables/T.tmdl", "table T\n\tmeasure M = [Ghost]\n")]
-    )
+    g = build_graph([(f"{_M}/tables/T.tmdl", "table T\n\tmeasure M = [Ghost]\n")])
     findings = run_audit(g, NO_REPORT)
     assert not any("Ghost" in f.locator for f in findings)

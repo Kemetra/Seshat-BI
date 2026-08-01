@@ -70,32 +70,41 @@ def _hierarchy_level(node: dict) -> tuple[str, str] | None:
     return None
 
 
+def _field_ref(node: dict, key: str) -> tuple[str, str] | None:
+    """The (entity, property/level) pair for one field-node kind, or None."""
+    child = node.get(key)
+    if not isinstance(child, dict):
+        return None
+    if key == "HierarchyLevel":
+        return _hierarchy_level(child)
+    return _entity_property(child)
+
+
 def _capture(node: dict, out: _Sink) -> None:
-    column = node.get("Column")
-    if isinstance(column, dict):
-        ref = _entity_property(column)
-        if ref is not None:
-            out.columns.add(ref)
-    measure = node.get("Measure")
-    if isinstance(measure, dict):
-        ref = _entity_property(measure)
-        if ref is not None:
-            out.measures.add(ref[1])
-    level = node.get("HierarchyLevel")
-    if isinstance(level, dict):
-        hit = _hierarchy_level(level)
-        if hit is not None:
-            out.columns.add(hit)
+    column = _field_ref(node, "Column")
+    if column is not None:
+        out.columns.add(column)
+    measure = _field_ref(node, "Measure")
+    if measure is not None:
+        out.measures.add(measure[1])
+    level = _field_ref(node, "HierarchyLevel")
+    if level is not None:
+        out.columns.add(level)
+
+
+def _children(node: object) -> Iterable[object]:
+    if isinstance(node, dict):
+        return node.values()
+    if isinstance(node, list):
+        return node
+    return ()
 
 
 def _walk(node: object, out: _Sink) -> None:
     if isinstance(node, dict):
         _capture(node, out)
-        for value in node.values():
-            _walk(value, out)
-    elif isinstance(node, list):
-        for item in node:
-            _walk(item, out)
+    for child in _children(node):
+        _walk(child, out)
 
 
 def read_bindings(report_files: Iterable[tuple[str, str]]) -> ReportBindings:
