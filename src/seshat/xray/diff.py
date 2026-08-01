@@ -27,9 +27,65 @@ from ..tmdl import (
 
 _REF = re.compile(r"(?:'(?:[^']|'')*'|[A-Za-z_][\w ]*?)\[[^\]]+\]")
 _ROLE_HEADER = re.compile(r"^role\s+('?)(?P<name>[^'\n]+?)\1\s*$")
-# Double-quoted DAX string literal ("" escapes a quote inside one).
-_STRING = re.compile(r'"(?:[^"]|"")*"')
 _LITERAL_SEP = "\x1f"
+
+
+def _read_literal(expression: str, start: int) -> int:
+    """Index just past the double-quoted literal starting at ``start``.
+
+    ``""`` escapes a quote inside a DAX literal.
+    """
+    i = start + 1
+    n = len(expression)
+    while i < n:
+        if expression[i] != '"':
+            i += 1
+        elif i + 1 < n and expression[i + 1] == '"':
+            i += 2
+        else:
+            return i + 1
+    return n  # unterminated: treat the remainder as the literal
+
+
+def _scan_token(expression: str, i: int) -> tuple[str | None, str | None, int]:
+    """One scanner step: ``(code chunk, literal, next index)``.
+
+    Exactly one of the first two is non-None, or both are None for a comment
+    (which is dropped).
+    """
+    if expression[i] == '"':
+        end = _read_literal(expression, i)
+        return None, expression[i:end], end
+    if expression.startswith("//", i):
+        newline = expression.find("\n", i)
+        return None, None, len(expression) if newline == -1 else newline
+    if expression.startswith("/*", i):
+        close = expression.find("*/", i)
+        return None, None, len(expression) if close == -1 else close + 2
+    return expression[i], None, i + 1
+
+
+def _split_code_and_literals(expression: str) -> tuple[str, list[str]]:
+    """Split DAX into (code with literals masked, literals in order).
+
+    A SINGLE pass, because literals and comments can contain each other's
+    delimiters: ``// "note"`` is a comment (its quotes are prose) while
+    ``"a // b"`` is a literal (its slashes are data). Regex-substituting
+    literals BEFORE stripping comments preserved comment prose into the
+    comparison key, so a comment-only edit reported as semantic (PR #551
+    review). Comments are dropped here; literals are kept verbatim.
+    """
+    code: list[str] = []
+    literals: list[str] = []
+    i = 0
+    while i < len(expression):
+        chunk, literal, i = _scan_token(expression, i)
+        if literal is not None:
+            literals.append(literal)
+            code.append(f" @@s{len(literals) - 1}@@ ")
+        elif chunk is not None:
+            code.append(chunk)
+    return "".join(code), literals
 
 
 def _semantic_body(expression: str) -> str:
@@ -38,19 +94,12 @@ def _semantic_body(expression: str) -> str:
     ``normalize_measure_body`` lowercases and collapses whitespace across the
     whole expression, so ``"OK"`` -> ``"ok"`` and a changed displayed label
     produced NO diff entry (PR #550 review). Literal contents are behavior, not
-    formatting. Literals are masked out, the remaining code is normalized with
-    the shared canonicalizer (so D3 keeps its exact semantics -- that function
-    is untouched), then the literals are appended verbatim and compared
-    byte-exact.
+    formatting. Code is normalized with the shared canonicalizer (so D3 keeps
+    its exact semantics -- that function is untouched) and the literals are
+    appended verbatim, compared byte-exact.
     """
-    literals: list[str] = []
-
-    def take(match: re.Match[str]) -> str:
-        literals.append(match.group(0))
-        return f" @@s{len(literals) - 1}@@ "
-
-    masked = _STRING.sub(take, expression)
-    return normalize_measure_body(masked) + _LITERAL_SEP + _LITERAL_SEP.join(literals)
+    code, literals = _split_code_and_literals(expression)
+    return normalize_measure_body(code) + _LITERAL_SEP + _LITERAL_SEP.join(literals)
 
 
 def _role_name(raw: str) -> str | None:

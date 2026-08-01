@@ -361,10 +361,19 @@ def _x3_depths(
 
 
 def _x3_depth_cycles(graph: ModelGraph) -> Iterable[XrayFinding]:
+    """X3 is measure-only.
+
+    ``measure_refs`` is also keyed by CALCULATED columns (``T[C]``) so their
+    edges count toward inbound-reference accounting, but a column is not a
+    measure: analyzing one produced a bogus ``?[T[C]]`` "measure reference
+    depth" finding, since the owner map holds only real measures (PR #551
+    review). The edges are retained; only the FINDINGS are restricted.
+    """
     owner = {m.name: t.name for t in graph.tables for m in t.measures}
     depths, cyclic = _measure_depths(graph.measure_refs)
-    yield from _x3_cycles(owner, cyclic)
-    yield from _x3_depths(owner, depths, cyclic)
+    measure_only = frozenset(depths) & set(owner)
+    yield from _x3_cycles(owner, cyclic & set(owner))
+    yield from _x3_depths(owner, {k: depths[k] for k in measure_only}, cyclic)
 
 
 def _measures_by_body(graph: ModelGraph) -> dict[str, list[tuple[str, str]]]:

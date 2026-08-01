@@ -350,7 +350,12 @@ def _parse_column_block(
     """
     ind = _indent(lines[i])
     name = match.group("name").strip().replace("''", "'")
-    calc_expr = (match.groupdict().get("expr") or "").strip() or None
+    # An assignment MARKER (``expr`` group present, even empty) is what makes
+    # this a calculated column: ``column Margin =`` puts its DAX on indented
+    # continuation lines, so an empty header expression must still collect them
+    # the way _parse_measure_block does (PR #551 review).
+    is_calculated = match.groupdict().get("expr") is not None
+    expr_parts = [(match.groupdict().get("expr") or "").strip()]
     props: dict[str, str] = {}
     is_key = False
     is_hidden = False
@@ -365,7 +370,10 @@ def _parse_column_block(
             is_key = True
         if child == "isHidden":
             is_hidden = True
+        elif is_calculated and _is_dax_continuation(child, pm):
+            expr_parts.append(child)  # continuation of a multi-line DAX body
         j += 1
+    calc_expr = "\n".join(p for p in expr_parts if p).strip() or None
     column = TmdlColumn(
         name=name,
         data_type=props.get("dataType"),
@@ -415,6 +423,17 @@ def _is_column_header(stripped: str) -> re.Match[str] | None:
     if quoted is not None:
         return quoted
     return re.match(r"column\s+(?P<name>[^'=\n]+?)\s*(?:=\s*(?P<expr>.*))?$", stripped)
+
+
+def _is_dax_continuation(child: str, matched_property: re.Match[str] | None) -> bool:
+    """True when a block line continues a multi-line DAX body.
+
+    A continuation is any non-blank line that is neither a recognized property
+    nor any other ``word: value`` property line.
+    """
+    if matched_property is not None or not child:
+        return False
+    return re.match(r"\w+:\s", child) is None
 
 
 def _is_hierarchy_header(stripped: str) -> re.Match[str] | None:
