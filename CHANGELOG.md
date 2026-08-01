@@ -27,6 +27,8 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+## [0.8.0] -- 2026-08-01
+
 ### Added
 - **PBIP X-Ray -- `seshat xray` and `seshat model-diff`** (#549, #550, #551).
   Two advisory, read-only CLI verbs over a committed PBIP project. `xray` builds
