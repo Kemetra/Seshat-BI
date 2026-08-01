@@ -110,6 +110,8 @@ class TmdlMeasure:
     Attributes:
         name: measure name (stripped of quotes).
         expression: RAW body text (comments + strings intact) for D4 lexing.
+            Multi-line bodies keep their line breaks as "\n" so that `//`
+            comment stripping terminates per line.
         display_folder: value of ``displayFolder:`` property, or None.
         line: 1-based line number of the ``measure`` header line.
     """
@@ -301,7 +303,13 @@ def _parse_measure_block(
         j += 1
     measure = TmdlMeasure(
         name=name,
-        expression=" ".join(expr_parts).strip(),
+        # Continuation lines are joined with "\n", NOT " ": a `//` line comment
+        # inside a multi-line body must terminate at its own line end. Joining
+        # with spaces made every `//[^\n]*` strip (D4, D3's normalizer, the
+        # X-Ray graph) swallow the whole remainder of the measure -- a body
+        # whose first line was a comment normalized to "" and contributed no
+        # column references at all (found by review on PR #550).
+        expression="\n".join(expr_parts).strip(),
         display_folder=props.get("displayFolder"),
         line=i + 1,
         format_string=props.get("formatString"),

@@ -15,7 +15,12 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
-from ..tmdl import TmdlTable, normalize_measure_body, strip_dax_comments_and_strings
+from ..tmdl import (
+    DATE_TABLE_MARKER,
+    TmdlTable,
+    normalize_measure_body,
+    strip_dax_comments_and_strings,
+)
 from .bindings import ReportBindings
 from .graph import ModelGraph
 
@@ -259,24 +264,37 @@ def _x2_snowflake(rels) -> Iterable[XrayFinding]:
 def _measure_depths(
     refs: Mapping[str, frozenset[str]],
 ) -> tuple[dict[str, int], frozenset[str]]:
-    """Longest reference-chain depth per measure + the cycle-member set."""
+    """Longest reference-chain depth per measure + EVERY cycle member.
+
+    The active path is tracked as a list, not just a set, so a back edge
+    records the whole cycle segment. Recording only the re-entered node left
+    every other member of an ``A -> B -> A`` cycle unreported (PR #550 review).
+    """
     memo: dict[str, int] = {}
-    on_stack: set[str] = set()
+    path: list[str] = []
+    on_path: set[str] = set()
     cyclic: set[str] = set()
 
     def walk(name: str) -> int:
+        if name in on_path:
+            # Back edge: everything from this node to the end of the active
+            # path is part of the cycle.
+            cyclic.update(path[path.index(name) :])
+            return 0
         if name in memo:
             return memo[name]
-        if name in on_stack:
-            cyclic.add(name)
-            return 0
-        on_stack.add(name)
+        path.append(name)
+        on_path.add(name)
         best = max((1 + walk(nxt) for nxt in refs.get(name, frozenset())), default=0)
-        on_stack.discard(name)
-        memo[name] = best
+        path.pop()
+        on_path.discard(name)
+        # A cycle member's depth is not a meaningful chain length, and
+        # memoizing it would hide the cycle from another entry point.
+        if name not in cyclic:
+            memo[name] = best
         return best
 
-    for name in refs:
+    for name in sorted(refs):
         walk(name)
     return memo, frozenset(cyclic)
 
@@ -348,6 +366,14 @@ def _x3_duplicates(graph: ModelGraph) -> Iterable[XrayFinding]:
 
 
 def _date_marked(table: TmdlTable) -> bool:
+    """True if the table carries EITHER accepted date-table marker.
+
+    Must stay in lockstep with ``rules/dax.py::_table_is_marked_date_table``:
+    X4 cites D7, so accepting fewer markers than D7 does would report a
+    finding against a model that D7 passes.
+    """
+    if any(ann.strip() == DATE_TABLE_MARKER for ann in table.annotations):
+        return True
     return table.data_category == "Time" and any(c.is_key for c in table.columns)
 
 

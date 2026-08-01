@@ -25,21 +25,66 @@ from ..tmdl import (
 )
 
 _REF = re.compile(r"(?:'(?:[^']|'')*'|[A-Za-z_][\w ]*?)\[[^\]]+\]")
+_ROLE_HEADER = re.compile(r"^role\s+('?)(?P<name>[^'\n]+?)\1\s*$")
+
+
+def _role_name(raw: str) -> str | None:
+    """The role name if ``raw`` is a top-level ``role <name>`` header, else None."""
+    if raw[:1].isspace():
+        return None
+    match = _ROLE_HEADER.match(raw.strip())
+    return match.group("name").strip() if match else None
+
+
+def _block_body(lines: list[str], start: int) -> str:
+    """The indented body following the top-level header at ``start``."""
+    body: list[str] = []
+    for follower in lines[start + 1 :]:
+        if follower.strip() and not follower[:1].isspace():
+            break  # next top-level block
+        body.append(follower.strip())
+    return "\n".join(body)
+
+
+def _parse_roles(text: str) -> dict[str, str]:
+    """Top-level ``role <name>`` blocks -> normalized body text.
+
+    RLS lives in ``definition/roles/*.tmdl``, which is neither a table file nor
+    a relationship block, so without this the diff stayed silent on a changed
+    security filter -- the one change class the design calls out as semantic
+    (PR #550 review). Bodies are normalized with the same comment-stripping
+    whitespace canonicalizer used for measures, so reformatting a filter is
+    not reported as a behavior change.
+    """
+    lines = text.splitlines()
+    return {
+        name: normalize_measure_body(_block_body(lines, i))
+        for i, raw in enumerate(lines)
+        if (name := _role_name(raw)) is not None
+    }
 
 
 @dataclass(frozen=True)
 class ModelChange:
     bucket: str  # "semantic" | "cosmetic" | "additive" | "removed"
-    kind: str  # "measure" | "column" | "relationship" | "table"
+    kind: str  # "measure" | "column" | "relationship" | "table" | "role"
     subject: str  # "Sales[Revenue]" style locator
     sentence: str  # one business-terms line, ASCII only
 
 
-def _parse_side(
-    files: Iterable[tuple[str, str]],
-) -> tuple[dict[str, TmdlTable], dict[tuple, TmdlRelationship]]:
+@dataclass(frozen=True)
+class _Side:
+    """One side of the diff: tables by name, relationships by endpoint, roles."""
+
+    tables: dict[str, TmdlTable]
+    relationships: dict[tuple, TmdlRelationship]
+    roles: dict[str, str]
+
+
+def _parse_side(files: Iterable[tuple[str, str]]) -> _Side:
     tables: dict[str, TmdlTable] = {}
     rels: dict[tuple, TmdlRelationship] = {}
+    roles: dict[str, str] = {}
     for path, text in files:
         if "/definition/tables/" in path and path.endswith(".tmdl"):
             parsed = parse_tmdl(text)
@@ -48,7 +93,30 @@ def _parse_side(
         for rel in parse_relationships(text):
             key = (rel.from_table, rel.from_column, rel.to_table, rel.to_column)
             rels[key] = rel
-    return tables, rels
+        roles.update(_parse_roles(text))
+    return _Side(tables=tables, relationships=rels, roles=roles)
+
+
+def _diff_roles(base: dict[str, str], head: dict[str, str]) -> Iterable[ModelChange]:
+    """Every RLS role change is semantic (or an outright add/remove)."""
+    for name in sorted(base.keys() | head.keys()):
+        old, new = base.get(name), head.get(name)
+        if old is None:
+            yield ModelChange(
+                "additive", "role", name, f"new security role {name!r} added"
+            )
+        elif new is None:
+            yield ModelChange(
+                "removed", "role", name, f"security role {name!r} removed"
+            )
+        elif old != new:
+            yield ModelChange(
+                "semantic",
+                "role",
+                name,
+                f"security role {name!r} filter changed -- row visibility "
+                "differs for its members",
+            )
 
 
 def _references(expression: str) -> str:
@@ -182,12 +250,12 @@ def diff_models(
     head_files: Iterable[tuple[str, str]],
 ) -> tuple[ModelChange, ...]:
     """Classify every model change between the two sides, in stable order."""
-    base_tables, base_rels = _parse_side(base_files)
-    head_tables, head_rels = _parse_side(head_files)
+    base, head = _parse_side(base_files), _parse_side(head_files)
     changes: list[ModelChange] = []
-    changes.extend(_diff_tables(base_tables, head_tables))
-    for name in sorted(base_tables.keys() & head_tables.keys()):
-        changes.extend(_diff_measures(base_tables[name], head_tables[name]))
-        changes.extend(_diff_columns(base_tables[name], head_tables[name]))
-    changes.extend(_diff_relationships(base_rels, head_rels))
+    changes.extend(_diff_tables(base.tables, head.tables))
+    for name in sorted(base.tables.keys() & head.tables.keys()):
+        changes.extend(_diff_measures(base.tables[name], head.tables[name]))
+        changes.extend(_diff_columns(base.tables[name], head.tables[name]))
+    changes.extend(_diff_relationships(base.relationships, head.relationships))
+    changes.extend(_diff_roles(base.roles, head.roles))
     return tuple(changes)
