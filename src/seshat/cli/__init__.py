@@ -229,6 +229,8 @@ _DISPATCH: dict[str, Callable[[object], int]] = {
     "evidence-pack": _lazy(".commands.evidence_pack", "evidence_pack_main"),
     "blockers": _lazy(".commands.blockers", "blockers_main"),
     "readiness-diff": _lazy(".commands.readiness_diff", "readiness_diff_main"),
+    "xray": _lazy(".commands.xray", "xray_main"),
+    "model-diff": _lazy(".commands.xray", "model_diff_main"),
     "reset": _lazy(".commands.reset", "reset_main"),
     "orchestration-assess": _lazy(
         ".commands.orchestration_assess", "orchestration_assess_main"

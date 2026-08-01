@@ -184,6 +184,57 @@ def _add_readiness_diff_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_xray_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "xray",
+        help=(
+            "read-only model-graph audit of a committed PBIP semantic model "
+            "(unused fields, relationship risks, measure-graph findings); "
+            "advisory only -- findings never change the exit code, and there "
+            "is no numeric score"
+        ),
+    )
+    p.add_argument("--repo", default=".", help="repo root to read from")
+    p.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("text", "json"),
+        default="text",
+        help=(
+            "'text' (default) is human-readable; 'json' emits the audit "
+            "document -- findings and per-family counts, never a score."
+        ),
+    )
+
+
+def _add_model_diff_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "model-diff",
+        help=(
+            "read-only semantic diff of the committed PBIP model against a "
+            "base git ref, classified semantic/cosmetic/additive/removed in "
+            "business terms; the base side is read with `git show` only"
+        ),
+    )
+    p.add_argument("--repo", default=".", help="repo root to read from")
+    p.add_argument(
+        "--base",
+        required=True,
+        metavar="REV",
+        help="base revision (the 'before' side), e.g. `origin/main`.",
+    )
+    p.add_argument(
+        "--format",
+        dest="output_format",
+        choices=("text", "json"),
+        default="text",
+        help=(
+            "'text' (default) is human-readable; 'json' emits the diff "
+            "document -- classified changes and bucket counts."
+        ),
+    )
+
+
 def _add_evidence_pack_parser(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "evidence-pack",
@@ -275,6 +326,8 @@ _FAMILIES: dict[str, Callable[[argparse._SubParsersAction], None]] = {
     ),
     "evidence_pack": _add_evidence_pack_parser,
     "readiness_diff": _add_readiness_diff_parser,
+    "xray": _add_xray_parser,
+    "model_diff": _add_model_diff_parser,
     "reset": _add_reset_parser,
     "blockers": partial(
         _add_readiness_report_parser,
