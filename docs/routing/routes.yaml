@@ -148,6 +148,12 @@ routes:
       - "docs/readiness/semantic-model-ready.md"
     status: built
 
+  - id: "13a"
+    task: "PBIP model audit / TMDL PR diff / unused-field question"
+    targets:
+      - ".claude/skills/pbip-xray/SKILL.md"
+    status: built
+
   # --- Python knowledge (single-node) ---------------------------------------
   - id: "14"
     task: "Python cleaning / standardization review"

@@ -49,6 +49,7 @@ Stages:
 | Big-data / distributed / larger-than-memory: engine selection, partitioning/shuffle, skew, distributed joins/aggregation, operational evidence, backfills | `skills/bi-bigdata-knowledge/SKILL.md` then `skills/bi-bigdata-knowledge/INDEX.md` | focused scale or operational-evidence checklist/verdict |
 | Analyst judgment / diagnostic questions / narrative-change review / action cadence (after approved contracts) | `skills/bi-analyst-knowledge/SKILL.md` then `skills/bi-analyst-knowledge/INDEX.md` | narrative brief, diagnostic tree, change verdict, [GAP], or action/cadence handoff |
 | Governed descriptive/inferential statistics, regression, anomaly, change-point, or forecast evidence | `skills/bi-analyst-knowledge/statistical-evidence-workflow.md` then `seshat analyze` | immutable derived evidence + pending named-human review; no readiness effect |
+| PBIP model audit / TMDL PR diff / unused-field question | `.claude/skills/pbip-xray/SKILL.md` | advisory findings report (no readiness effect) |
 | Dashboard / visual design / audience / layout | `.claude/skills/powerbi-dashboard-design/` (gated "design from contracts" verb: `.claude/skills/dashboard-design/`) | dashboard blueprint |
 | Power BI execution / publish | STOP unless `semantic_model_ready` and publish gates have passed | blocked verdict or BI handoff pack |
 | Unknown or ambiguous task | `docs/knowledge-map.md` | clarifying question or blocked verdict |

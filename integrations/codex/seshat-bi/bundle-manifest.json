@@ -2180,10 +2180,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "dc5cb560724427288de6724573ce4f91330010f9f2a3aa151b4f130bf5c0c480",
+  "manifest_digest": "1dfabae2d36e2f8dfdc338e595d9f1d1ab542e3b811d12c40040ee0a1bb647dc",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "8c5a9325c86fc16f613c906d6093a99db0d4be05",
+  "source_revision": "6308d1a7d1cefc792276306f70ca4d1a510deed8",
   "target": "codex",
   "version": "0.7.1"
 }

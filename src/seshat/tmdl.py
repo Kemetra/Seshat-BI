@@ -110,6 +110,8 @@ class TmdlMeasure:
     Attributes:
         name: measure name (stripped of quotes).
         expression: RAW body text (comments + strings intact) for D4 lexing.
+            Multi-line bodies keep their line breaks as "\n" so that `//`
+            comment stripping terminates per line.
         display_folder: value of ``displayFolder:`` property, or None.
         line: 1-based line number of the ``measure`` header line.
     """
@@ -118,6 +120,9 @@ class TmdlMeasure:
     expression: str
     display_folder: str | None
     line: int
+    # X-Ray extension (2026-08-01): cosmetic metadata for the semantic diff.
+    format_string: str | None = None
+    description: str | None = None
 
 
 @dataclass(frozen=True)
@@ -138,6 +143,9 @@ class TmdlColumn:
     # True if the column carries the bare ``isKey`` flag. Part of the real
     # "Mark as Date Table" marker (table ``dataCategory: Time`` + a key column).
     is_key: bool = False
+    # X-Ray extension (2026-08-01): sort-by target + hidden flag.
+    sort_by_column: str | None = None
+    is_hidden: bool = False
 
 
 @dataclass(frozen=True)
@@ -153,6 +161,15 @@ class TmdlRelationship:
     name: str
     cross_filtering_behavior: str | None
     line: int
+    # X-Ray extension (2026-08-01): endpoints, activity, and cardinality.
+    # Endpoint fields stay None when the block carries no fromColumn/toColumn.
+    from_table: str | None = None
+    from_column: str | None = None
+    to_table: str | None = None
+    to_column: str | None = None
+    is_active: bool = True
+    from_cardinality: str | None = None
+    to_cardinality: str | None = None
 
 
 @dataclass(frozen=True)
@@ -271,22 +288,32 @@ def _parse_measure_block(
     ind = _indent(lines[i])
     name = match.group("name").strip()
     expr_parts = [match.group("expr").rstrip()]
-    df: str | None = None
+    props: dict[str, str] = {}
     j = i + 1
     while _continues_block(lines, j, n, ind):
         child = lines[j].strip()
-        dfm = re.match(r"displayFolder:\s*(?P<v>.+)$", child)
-        if dfm:
-            df = dfm.group("v").strip()
+        pm = re.match(
+            r"(?P<k>displayFolder|formatString|description):\s*(?P<v>.+)$", child
+        )
+        if pm:
+            props[pm.group("k")] = pm.group("v").strip()
         elif child and not re.match(r"\w+:\s", child):
             # continuation of a multi-line expression
             expr_parts.append(child)
         j += 1
     measure = TmdlMeasure(
         name=name,
-        expression=" ".join(expr_parts).strip(),
-        display_folder=df,
+        # Continuation lines are joined with "\n", NOT " ": a `//` line comment
+        # inside a multi-line body must terminate at its own line end. Joining
+        # with spaces made every `//[^\n]*` strip (D4, D3's normalizer, the
+        # X-Ray graph) swallow the whole remainder of the measure -- a body
+        # whose first line was a comment normalized to "" and contributed no
+        # column references at all (found by review on PR #550).
+        expression="\n".join(expr_parts).strip(),
+        display_folder=props.get("displayFolder"),
         line=i + 1,
+        format_string=props.get("formatString"),
+        description=props.get("description"),
     )
     return measure, j
 
@@ -306,24 +333,29 @@ def _parse_column_block(
     """
     ind = _indent(lines[i])
     name = match.group("name").strip()
-    dt: str | None = None
-    sb: str | None = None
+    props: dict[str, str] = {}
     is_key = False
+    is_hidden = False
     j = i + 1
     while _continues_block(lines, j, n, ind):
         child = lines[j].strip()
-        d = re.match(r"dataType:\s*(?P<v>.+)$", child)
-        s = re.match(r"summarizeBy:\s*(?P<v>.+)$", child)
-        if d:
-            dt = d.group("v").strip()
-        if s:
-            sb = s.group("v").strip()
-        # ``isKey`` is a bare flag line (no value) in TMDL.
+        pm = re.match(r"(?P<k>dataType|summarizeBy|sortByColumn):\s*(?P<v>.+)$", child)
+        if pm:
+            props[pm.group("k")] = pm.group("v").strip()
+        # ``isKey`` / ``isHidden`` are bare flag lines (no value) in TMDL.
         if child == "isKey":
             is_key = True
+        if child == "isHidden":
+            is_hidden = True
         j += 1
     column = TmdlColumn(
-        name=name, data_type=dt, summarize_by=sb, line=i + 1, is_key=is_key
+        name=name,
+        data_type=props.get("dataType"),
+        summarize_by=props.get("summarizeBy"),
+        line=i + 1,
+        is_key=is_key,
+        sort_by_column=props.get("sortByColumn"),
+        is_hidden=is_hidden,
     )
     return column, j
 
@@ -497,6 +529,39 @@ def _is_relationship_header(raw: str) -> re.Match[str] | None:
     return re.match(r"relationship\s+('?)(?P<name>[^'\n]+?)\1\s*$", raw.strip())
 
 
+_REL_ENDPOINT = re.compile(
+    r"^(?P<side>from|to)Column:\s*(?:'(?P<qt>(?:[^']|'')*)'|(?P<bt>[^.']+))"
+    r"\.(?:'(?P<qc>(?:[^']|'')*)'|(?P<bc>\S+))\s*$"
+)
+
+
+def _endpoint(stripped: str) -> tuple[str, str, str] | None:
+    """Parse ``fromColumn:``/``toColumn:`` into (side, table, column), or None."""
+    m = _REL_ENDPOINT.match(stripped)
+    if m is None:
+        return None
+    table = (m.group("qt") or m.group("bt") or "").replace("''", "'").strip()
+    column = (m.group("qc") or m.group("bc") or "").replace("''", "'")
+    return m.group("side"), table, column
+
+
+def _capture_relationship_property(stripped: str, props: dict[str, str]) -> None:
+    """Fold one relationship block line into ``props`` (no-op for others)."""
+    ep = _endpoint(stripped)
+    if ep is not None:
+        side, table, column = ep
+        props[f"{side}_table"] = table
+        props[f"{side}_column"] = column
+        return
+    pm = re.match(
+        r"(?P<k>crossFilteringBehavior|isActive|fromCardinality|toCardinality):"
+        r"\s*(?P<v>.+)$",
+        stripped,
+    )
+    if pm:
+        props[pm.group("k")] = pm.group("v").strip()
+
+
 def _parse_relationship_block(
     lines: list[str], i: int, n: int, match: re.Match[str]
 ) -> tuple[TmdlRelationship, int]:
@@ -504,17 +569,27 @@ def _parse_relationship_block(
 
     ``match`` is the already-matched header regex. Returns the parsed
     :class:`TmdlRelationship` and the index of the first line past the block,
-    capturing the ``crossFilteringBehavior`` property (or ``None`` if absent).
+    capturing ``crossFilteringBehavior``, both endpoints, ``isActive`` and the
+    two cardinality properties (each ``None``/default when absent).
     """
     name = match.group("name").strip()
-    cfb: str | None = None
+    props: dict[str, str] = {}
     j = i + 1
     while _continues_block(lines, j, n, 0):
-        c = re.match(r"crossFilteringBehavior:\s*(?P<v>.+)$", lines[j].strip())
-        if c:
-            cfb = c.group("v").strip()
+        _capture_relationship_property(lines[j].strip(), props)
         j += 1
-    relationship = TmdlRelationship(name=name, cross_filtering_behavior=cfb, line=i + 1)
+    relationship = TmdlRelationship(
+        name=name,
+        cross_filtering_behavior=props.get("crossFilteringBehavior"),
+        line=i + 1,
+        from_table=props.get("from_table"),
+        from_column=props.get("from_column"),
+        to_table=props.get("to_table"),
+        to_column=props.get("to_column"),
+        is_active=props.get("isActive", "").lower() != "false",
+        from_cardinality=props.get("fromCardinality"),
+        to_cardinality=props.get("toCardinality"),
+    )
     return relationship, j
 
 
@@ -562,6 +637,25 @@ def iter_model_files(ctx: RuleContext, suffix: str) -> Iterable[tuple[str, str]]
         if text is None:
             continue  # tracked-but-deleted-on-disk (#430): nothing to read
         yield rel, text
+
+
+def strip_dax_comments_and_strings(expr: str) -> str:
+    """Strip ``/* */`` block comments, ``//`` line comments, and string literals.
+
+    Returns the cleaned expression text, safe to scan for a bare ``/`` that
+    would signal a division operator rather than a comment delimiter.
+    (Public since the X-Ray graph/audit layer; ``rules/dax.py`` aliases it
+    for D4.)
+    """
+    no_block = re.sub(r"/\*.*?\*/", " ", expr, flags=re.DOTALL)
+    no_line = re.sub(r"//[^\n]*", " ", no_block)
+    # Strip double-quoted DAX string literals (escaped quote is "")
+    no_double = re.sub(r'"(?:[^"]|"")*"', " ", no_line)
+    # Strip single-quoted DAX table/column name delimiters. DAX uses
+    # 'Table Name'[Column]; '' escapes a literal quote inside the name. A
+    # '/' inside such a name is never a division operator, so remove it before
+    # the bare-'/' scan to avoid a false-positive D4 (audit 2026-06-26 #4).
+    return re.sub(r"'(?:[^']|'')*'", " ", no_double)
 
 
 def normalize_measure_body(expression: str) -> str:
