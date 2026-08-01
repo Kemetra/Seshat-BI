@@ -69,7 +69,11 @@ def _hierarchy_level_columns(
     is not declared in the parsed model: that can only ADD a reference, which
     keeps unused-detection conservative rather than inventing a finding.
     """
-    declared: dict[tuple[str, str, str], str] = {}
+    # Values carry the DECLARED table spelling too: X1 compares exact
+    # (table.name, column.name) tuples, so reusing PBIR's spelling of the
+    # entity left a case-mismatched binding still reported unused even though
+    # the casefolded lookup had succeeded (PR #551 review).
+    declared: dict[tuple[str, str, str], tuple[str, str]] = {}
     for table in graph.tables:
         for hierarchy in table.hierarchies:
             for level_name, column in hierarchy.levels:
@@ -78,11 +82,11 @@ def _hierarchy_level_columns(
                     hierarchy.name.casefold(),
                     level_name.casefold(),
                 )
-                declared[key] = column
+                declared[key] = (table.name, column)
     refs: set[tuple[str, str]] = set()
     for entity, hierarchy_name, level in bindings.bound_hierarchy_levels:
         key = (entity.casefold(), hierarchy_name.casefold(), level.casefold())
-        refs.add((entity, declared.get(key, level)))
+        refs.add(declared.get(key, (entity, level)))
     return refs
 
 

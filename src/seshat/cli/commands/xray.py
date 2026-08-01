@@ -114,6 +114,31 @@ def _report_root(path: str) -> str:
     return path[: index + len(marker) - 1] if index != -1 else path
 
 
+def _by_path_target(text: str) -> str | None:
+    """``datasetReference.byPath.path`` out of a .pbir, or None if unusable.
+
+    EVERY level is shape-checked. A manifest that is valid JSON but not the
+    expected object (``[]``, or ``{"datasetReference": null}``) used to raise
+    AttributeError from the chained ``.get()`` and abort the whole verb, rather
+    than degrading to stem-based ownership (PR #551 review). An unreadable
+    manifest is missing evidence, never a crash.
+    """
+    try:
+        document = json.loads(text)
+    except ValueError:
+        return None
+    if not isinstance(document, Mapping):
+        return None
+    reference = document.get("datasetReference")
+    if not isinstance(reference, Mapping):
+        return None
+    by_path = reference.get("byPath")
+    if not isinstance(by_path, Mapping):
+        return None
+    path = by_path.get("path")
+    return path if isinstance(path, str) else None
+
+
 def _declared_model(
     report_root: str, report_files: list[tuple[str, str]]
 ) -> str | None:
@@ -128,13 +153,8 @@ def _declared_model(
     for path, text in report_files:
         if path != f"{report_root}/definition.pbir":
             continue
-        try:
-            reference = json.loads(text)
-        except ValueError:
-            return None
-        by_path = reference.get("datasetReference", {}).get("byPath", {})
-        declared = by_path.get("path") if isinstance(by_path, dict) else None
-        if not isinstance(declared, str):
+        declared = _by_path_target(text)
+        if declared is None:
             return None
         # Relative to the report folder; normalize away "../" segments.
         return PurePosixPath(
