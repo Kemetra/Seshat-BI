@@ -60,6 +60,32 @@ def _measure_referenced_columns(graph: ModelGraph) -> set[tuple[str, str]]:
     return refs
 
 
+def _hierarchy_level_columns(
+    graph: ModelGraph, bindings: ReportBindings
+) -> set[tuple[str, str]]:
+    """Resolve bound (entity, hierarchy, level) triples to their real columns.
+
+    Falls back to treating the level NAME as a column name when the hierarchy
+    is not declared in the parsed model: that can only ADD a reference, which
+    keeps unused-detection conservative rather than inventing a finding.
+    """
+    declared: dict[tuple[str, str, str], str] = {}
+    for table in graph.tables:
+        for hierarchy in table.hierarchies:
+            for level_name, column in hierarchy.levels:
+                key = (
+                    table.name.casefold(),
+                    hierarchy.name.casefold(),
+                    level_name.casefold(),
+                )
+                declared[key] = column
+    refs: set[tuple[str, str]] = set()
+    for entity, hierarchy_name, level in bindings.bound_hierarchy_levels:
+        key = (entity.casefold(), hierarchy_name.casefold(), level.casefold())
+        refs.add((entity, declared.get(key, level)))
+    return refs
+
+
 def _referenced_columns(
     graph: ModelGraph, bindings: ReportBindings
 ) -> frozenset[tuple[str, str]]:
@@ -68,6 +94,7 @@ def _referenced_columns(
     refs |= _measure_referenced_columns(graph)
     refs |= _relationship_endpoint_columns(graph)
     refs |= _sort_by_targets(graph)
+    refs |= _hierarchy_level_columns(graph, bindings)
     return frozenset(refs)
 
 

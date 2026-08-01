@@ -16,6 +16,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from itertools import chain
 
 from ..tmdl import (
     TmdlRelationship,
@@ -64,41 +65,74 @@ def _qualified_table(match: re.Match[str]) -> str:
     return (match.group("qt") or match.group("bt") or "").replace("''", "'").strip()
 
 
+@dataclass(frozen=True)
+class _Lookup:
+    """Case-INSENSITIVE name resolution that yields the DECLARED spelling.
+
+    DAX identifiers are case-insensitive, so ``SUM(sales[AMOUNT])`` must resolve
+    against a declared ``Sales[amount]``. Comparing exact tuples dropped the
+    edge and could emit a false X1 unused-column finding (PR #550 review).
+    Keys are casefolded; values keep the declared spelling so locators and
+    findings still read as the model author wrote them.
+    """
+
+    # casefolded measure name -> (declared measure name, casefolded owning table)
+    measures: Mapping[str, tuple[str, str]]
+    # (casefolded table, casefolded column) -> (declared table, declared column)
+    columns: Mapping[tuple[str, str], tuple[str, str]]
+
+    @classmethod
+    def build(cls, tables: Iterable[TmdlTable]) -> _Lookup:
+        materialized = list(tables)
+        return cls(
+            measures={
+                m.name.casefold(): (m.name, t.name.casefold())
+                for t in materialized
+                for m in t.measures
+            },
+            columns={
+                (t.name.casefold(), c.name.casefold()): (t.name, c.name)
+                for t in materialized
+                for c in t.columns
+            },
+        )
+
+
 class _Resolver:
     """Resolve one measure's DAX identifier references against the model.
 
-    Holds the lookup maps once so each resolve step needs only the token;
+    Holds the lookup once so each resolve step needs only the token;
     accumulates resolved measure/column references and unresolved tokens.
     """
 
-    def __init__(
-        self,
-        own_table: str,
-        measures: Mapping[str, str],
-        columns: frozenset[tuple[str, str]],
-    ) -> None:
-        self._own_table = own_table
-        self._measures = measures
-        self._columns = columns
+    def __init__(self, own_table: str, lookup: _Lookup) -> None:
+        self._own_table = own_table.casefold()
+        self._lookup = lookup
         self.measures: set[str] = set()
         self.columns: set[tuple[str, str]] = set()
         self.unresolved: set[str] = set()
 
     def resolve_qualified(self, table: str, column: str) -> None:
-        if (table, column) in self._columns:
-            self.columns.add((table, column))
-        elif self._measures.get(column) == table:
-            self.measures.add(column)
-        else:
-            self.unresolved.add(f"{table}[{column}]")
+        declared = self._lookup.columns.get((table.casefold(), column.casefold()))
+        if declared is not None:
+            self.columns.add(declared)
+            return
+        measure = self._lookup.measures.get(column.casefold())
+        if measure is not None and measure[1] == table.casefold():
+            self.measures.add(measure[0])
+            return
+        self.unresolved.add(f"{table}[{column}]")
 
     def resolve_bare(self, name: str) -> None:
-        if name in self._measures:
-            self.measures.add(name)
-        elif (self._own_table, name) in self._columns:
-            self.columns.add((self._own_table, name))
-        else:
-            self.unresolved.add(name)
+        measure = self._lookup.measures.get(name.casefold())
+        if measure is not None:
+            self.measures.add(measure[0])
+            return
+        declared = self._lookup.columns.get((self._own_table, name.casefold()))
+        if declared is not None:
+            self.columns.add(declared)
+            return
+        self.unresolved.add(name)
 
 
 def _mask(text: str, match: re.Match[str]) -> str:
@@ -106,15 +140,10 @@ def _mask(text: str, match: re.Match[str]) -> str:
     return text[: match.start()] + " " * span + text[match.end() :]
 
 
-def _extract_refs(
-    expression: str,
-    own_table: str,
-    measures: Mapping[str, str],
-    columns: frozenset[tuple[str, str]],
-) -> _Resolver:
+def _extract_refs(expression: str, own_table: str, lookup: _Lookup) -> _Resolver:
     """Resolve every DAX identifier reference in one measure expression."""
     cleaned = _strip_for_refs(expression)
-    out = _Resolver(own_table, measures, columns)
+    out = _Resolver(own_table, lookup)
     masked = cleaned
     for match in reversed(list(_QUALIFIED.finditer(cleaned))):
         out.resolve_qualified(_qualified_table(match), match.group("c").strip())
@@ -124,22 +153,25 @@ def _extract_refs(
     return out
 
 
-def _text_scan(
-    raw_texts: Iterable[str], columns: frozenset[tuple[str, str]]
-) -> frozenset[tuple[str, str]]:
+def _text_scan(raw_texts: Iterable[str], lookup: _Lookup) -> frozenset[tuple[str, str]]:
     """Conservative raw-text column references in non-table model files.
 
     Roles, calculation groups, and model.tmdl are scanned with the same
     qualified-reference regex; every hit that resolves to a known column
     counts as a reference (so RLS-only columns are never called unused).
+    Resolution is case-insensitive, like DAX itself.
     """
     hits: set[tuple[str, str]] = set()
     for text in raw_texts:
         cleaned = _strip_for_refs(text)
         for match in _QUALIFIED.finditer(cleaned):
-            ref = (_qualified_table(match), match.group("c").strip())
-            if ref in columns:
-                hits.add(ref)
+            key = (
+                _qualified_table(match).casefold(),
+                match.group("c").strip().casefold(),
+            )
+            declared = lookup.columns.get(key)
+            if declared is not None:
+                hits.add(declared)
     return frozenset(hits)
 
 
@@ -182,37 +214,61 @@ def _partition_files(model_files: Iterable[tuple[str, str]]) -> _Partition:
     )
 
 
-def _resolved_refs(
+def _measure_items(tables: tuple[TmdlTable, ...]) -> Iterable[tuple[str, str, str]]:
+    return (
+        (measure.name, table.name, measure.expression)
+        for table in tables
+        for measure in table.measures
+    )
+
+
+def _calc_column_items(tables: tuple[TmdlTable, ...]) -> Iterable[tuple[str, str, str]]:
+    """CALCULATED columns only -- a plain data column carries no DAX."""
+    return (
+        (f"{table.name}[{column.name}]", table.name, column.expression or "")
+        for table in tables
+        for column in table.columns
+        if column.expression
+    )
+
+
+def _dax_bearing_items(
     tables: tuple[TmdlTable, ...],
-    measures: Mapping[str, str],
-    columns: frozenset[tuple[str, str]],
+) -> Iterable[tuple[str, str, str]]:
+    """``(ref_key, owning table, DAX)`` for everything carrying DAX.
+
+    A CALCULATED column's expression references model fields exactly as a
+    measure does, so skipping it would call those fields unused.
+    """
+    return chain(_measure_items(tables), _calc_column_items(tables))
+
+
+def _resolved_refs(
+    tables: tuple[TmdlTable, ...], lookup: _Lookup
 ) -> tuple[dict, dict, dict]:
+    """Resolved measure/column references per DAX-bearing item."""
     measure_refs: dict[str, frozenset[str]] = {}
     column_refs: dict[str, frozenset[tuple[str, str]]] = {}
     unresolved: dict[str, frozenset[str]] = {}
-    for table in tables:
-        for measure in table.measures:
-            refs = _extract_refs(measure.expression, table.name, measures, columns)
-            measure_refs[measure.name] = frozenset(refs.measures)
-            column_refs[measure.name] = frozenset(refs.columns)
-            unresolved[measure.name] = frozenset(refs.unresolved)
+    for key, owner, expression in _dax_bearing_items(tables):
+        refs = _extract_refs(expression, owner, lookup)
+        measure_refs[key] = frozenset(refs.measures)
+        column_refs[key] = frozenset(refs.columns)
+        unresolved[key] = frozenset(refs.unresolved)
     return measure_refs, column_refs, unresolved
 
 
 def build_graph(model_files: Iterable[tuple[str, str]]) -> ModelGraph:
     """Build the graph from ``(repo_relative_path, text)`` model-file pairs."""
     part = _partition_files(model_files)
-    measures = {m.name: t.name for t in part.tables for m in t.measures}
-    columns = frozenset((t.name, c.name) for t in part.tables for c in t.columns)
-    measure_refs, column_refs, unresolved = _resolved_refs(
-        part.tables, measures, columns
-    )
+    lookup = _Lookup.build(part.tables)
+    measure_refs, column_refs, unresolved = _resolved_refs(part.tables, lookup)
     return ModelGraph(
         tables=part.tables,
         relationships=part.relationships,
         measure_refs=measure_refs,
         column_refs=column_refs,
         unresolved=unresolved,
-        text_referenced_columns=_text_scan(part.raw_others, columns),
+        text_referenced_columns=_text_scan(part.raw_others, lookup),
         parse_notices=part.notices,
     )

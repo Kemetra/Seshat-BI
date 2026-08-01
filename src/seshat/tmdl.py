@@ -146,6 +146,20 @@ class TmdlColumn:
     # X-Ray extension (2026-08-01): sort-by target + hidden flag.
     sort_by_column: str | None = None
     is_hidden: bool = False
+    # The DAX body of a CALCULATED column (``column X = <DAX>``), else None.
+    expression: str | None = None
+
+
+@dataclass(frozen=True)
+class TmdlHierarchy:
+    """A parsed ``hierarchy`` block: ordered (level name, source column) pairs.
+
+    A level name need not match its backing column, so this mapping is what
+    lets a PBIR hierarchy-level binding resolve to a physical column.
+    """
+
+    name: str
+    levels: tuple[tuple[str, str], ...]
 
 
 @dataclass(frozen=True)
@@ -194,6 +208,9 @@ class TmdlTable:
     partition_sources: tuple[str, ...]
     annotations: tuple[str, ...]
     line: int
+    # Parsed ``hierarchy`` blocks (level -> source column), for resolving PBIR
+    # hierarchy-level bindings to physical columns.
+    hierarchies: tuple[TmdlHierarchy, ...] = ()
     # Value of the table-level ``dataCategory:`` property, or None. ``"Time"`` is
     # half of the real "Mark as Date Table" marker (the other half is a key column).
     data_category: str | None = None
@@ -332,7 +349,8 @@ def _parse_column_block(
     (a regex tweak here would re-test all column parsing for a zero trigger).
     """
     ind = _indent(lines[i])
-    name = match.group("name").strip()
+    name = match.group("name").strip().replace("''", "'")
+    calc_expr = (match.groupdict().get("expr") or "").strip() or None
     props: dict[str, str] = {}
     is_key = False
     is_hidden = False
@@ -356,6 +374,7 @@ def _parse_column_block(
         is_key=is_key,
         sort_by_column=props.get("sortByColumn"),
         is_hidden=is_hidden,
+        expression=calc_expr,
     )
     return column, j
 
@@ -382,8 +401,51 @@ def _is_measure_header(stripped: str) -> re.Match[str] | None:
 
 
 def _is_column_header(stripped: str) -> re.Match[str] | None:
-    """Match a ``column <name>`` header line, or None."""
-    return re.match(r"column\s+('?)(?P<name>[^'\n]+?)\1\s*$", stripped)
+    """Match a ``column <name>`` or ``column <name> = <DAX>`` header line.
+
+    The calculated-column form is captured in group ``expr`` (None for a plain
+    data column). Closing the KNOWN GAP that folded ``= <DAX>`` into the NAME:
+    an unquoted calc column parsed as ``name='Margin = [Price] - [Cost]'``, so
+    editing only its logic read as a rename (remove + add) instead of a
+    semantic change, and its expression was never compared (PR #550 review).
+    """
+    quoted = re.match(
+        r"column\s+'(?P<name>(?:[^']|'')*)'\s*(?:=\s*(?P<expr>.*))?$", stripped
+    )
+    if quoted is not None:
+        return quoted
+    return re.match(r"column\s+(?P<name>[^'=\n]+?)\s*(?:=\s*(?P<expr>.*))?$", stripped)
+
+
+def _is_hierarchy_header(stripped: str) -> re.Match[str] | None:
+    """Match a ``hierarchy <name>`` header line, or None."""
+    return re.match(r"hierarchy\s+('?)(?P<name>[^'\n]+?)\1\s*$", stripped)
+
+
+def _parse_hierarchy_block(
+    lines: list[str], i: int, n: int, match: re.Match[str]
+) -> tuple[TmdlHierarchy, int]:
+    """Parse a ``hierarchy`` block into its ordered (level, column) pairs.
+
+    A level's NAME is often not its backing column's name (``level Year`` over
+    ``column: CalendarYear``), so the mapping is required to tell whether a
+    PBIR hierarchy-level binding uses a physical column.
+    """
+    ind = _indent(lines[i])
+    levels: list[tuple[str, str]] = []
+    pending: str | None = None
+    j = i + 1
+    while _continues_block(lines, j, n, ind):
+        child = lines[j].strip()
+        level = re.match(r"level\s+('?)(?P<name>[^'\n]+?)\1\s*$", child)
+        if level is not None:
+            pending = level.group("name").strip()
+        source = re.match(r"column:\s*(?P<v>.+)$", child)
+        if source is not None and pending is not None:
+            levels.append((pending, source.group("v").strip().strip("'")))
+            pending = None
+        j += 1
+    return TmdlHierarchy(name=match.group("name").strip(), levels=tuple(levels)), j
 
 
 def _is_source_header(stripped: str) -> bool:
@@ -443,6 +505,11 @@ def _parse_table_block(
         column, j = _parse_column_block(lines, i, n, column_header)
         return "column", column, j
 
+    hierarchy_header = _is_hierarchy_header(stripped)
+    if hierarchy_header and ind == 1:
+        hierarchy, j = _parse_hierarchy_block(lines, i, n, hierarchy_header)
+        return "hierarchy", hierarchy, j
+
     if _is_source_header(stripped):
         source_text, j = _parse_source_block(lines, i, n, stripped)
         return "source", source_text, j
@@ -472,6 +539,7 @@ def parse_tmdl(text: str) -> TmdlTable | None:
     columns: list[TmdlColumn] = []
     sources: list[str] = []
     annotations: list[str] = []
+    hierarchies: list[TmdlHierarchy] = []
     data_category: str | None = None
 
     # Maps each block kind reported by ``_parse_table_block`` to the list that
@@ -480,6 +548,7 @@ def parse_tmdl(text: str) -> TmdlTable | None:
         "measure": measures,
         "column": columns,
         "source": sources,
+        "hierarchy": hierarchies,
     }
 
     n = len(lines)
@@ -514,6 +583,7 @@ def parse_tmdl(text: str) -> TmdlTable | None:
         partition_sources=tuple(sources),
         annotations=tuple(annotations),
         line=table_line,
+        hierarchies=tuple(hierarchies),
         data_category=data_category,
     )
 
