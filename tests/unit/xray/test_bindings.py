@@ -55,7 +55,5 @@ def test_hierarchy_level_counts_as_column_reference():
       {"SourceRef": {"Entity": "Dates"}}, "Hierarchy": "Calendar"}},
       "Level": "Month"}}}
     """
-    b = read_bindings(
-        [("r/X.Report/definition/pages/p/visuals/v/visual.json", doc)]
-    )
+    b = read_bindings([("r/X.Report/definition/pages/p/visuals/v/visual.json", doc)])
     assert ("Dates", "Month") in b.bound_columns

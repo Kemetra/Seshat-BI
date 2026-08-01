@@ -31,7 +31,9 @@ def test_measure_body_change_is_semantic():
 
 def test_formatting_only_churn_is_cosmetic_or_silent():
     base = _files("table T\n\tmeasure M = SUM(T[a])\n\tcolumn a\n")
-    head = _files("table T\n\tmeasure M = sum ( T[a] )\n\t\tformatString: #,0\n\tcolumn a\n")
+    head = _files(
+        "table T\n\tmeasure M = sum ( T[a] )\n\t\tformatString: #,0\n\tcolumn a\n"
+    )
     changes = diff_models(base, head)
     assert not _by_bucket(changes, "semantic")
     assert any(c.subject == "T[M]" for c in _by_bucket(changes, "cosmetic"))
@@ -48,13 +50,21 @@ def test_column_type_change_semantic_sortby_cosmetic():
 
 
 def test_relationship_guid_churn_same_endpoints_not_reported():
-    base = _files("table T\n\tcolumn a\n", "relationship guid-1\n\tfromColumn: T.a\n\ttoColumn: D.k\n")
-    head = _files("table T\n\tcolumn a\n", "relationship guid-2\n\tfromColumn: T.a\n\ttoColumn: D.k\n")
+    base = _files(
+        "table T\n\tcolumn a\n",
+        "relationship guid-1\n\tfromColumn: T.a\n\ttoColumn: D.k\n",
+    )
+    head = _files(
+        "table T\n\tcolumn a\n",
+        "relationship guid-2\n\tfromColumn: T.a\n\ttoColumn: D.k\n",
+    )
     assert not [c for c in diff_models(base, head) if c.kind == "relationship"]
 
 
 def test_relationship_activity_flip_semantic():
-    base = _files("table T\n\tcolumn a\n", "relationship r\n\tfromColumn: T.a\n\ttoColumn: D.k\n")
+    base = _files(
+        "table T\n\tcolumn a\n", "relationship r\n\tfromColumn: T.a\n\ttoColumn: D.k\n"
+    )
     head = _files(
         "table T\n\tcolumn a\n",
         "relationship r\n\tisActive: false\n\tfromColumn: T.a\n\ttoColumn: D.k\n",

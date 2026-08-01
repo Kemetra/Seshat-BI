@@ -64,21 +64,33 @@ def _diff_measures(base: TmdlTable, head: TmdlTable) -> Iterable[ModelChange]:
         old, new = base_measures.get(name), head_measures.get(name)
         if old is None:
             yield ModelChange(
-                "additive", "measure", subject,
+                "additive",
+                "measure",
+                subject,
                 f"new measure {name!r} referencing {_references(new.expression)}",
             )
         elif new is None:
-            yield ModelChange("removed", "measure", subject, f"measure {name!r} removed")
-        elif normalize_measure_body(old.expression) != normalize_measure_body(new.expression):
             yield ModelChange(
-                "semantic", "measure", subject,
+                "removed", "measure", subject, f"measure {name!r} removed"
+            )
+        elif normalize_measure_body(old.expression) != normalize_measure_body(
+            new.expression
+        ):
+            yield ModelChange(
+                "semantic",
+                "measure",
+                subject,
                 f"measure {name!r} logic changed (normalized bodies differ)",
             )
         elif (old.format_string, old.description, old.display_folder) != (
-            new.format_string, new.description, new.display_folder
+            new.format_string,
+            new.description,
+            new.display_folder,
         ):
             yield ModelChange(
-                "cosmetic", "measure", subject,
+                "cosmetic",
+                "measure",
+                subject,
                 f"measure {name!r} presentation changed (format/description/folder)",
             )
 
@@ -95,21 +107,31 @@ def _diff_columns(base: TmdlTable, head: TmdlTable) -> Iterable[ModelChange]:
             yield ModelChange("removed", "column", subject, f"column {name!r} removed")
         elif old.data_type != new.data_type:
             yield ModelChange(
-                "semantic", "column", subject,
+                "semantic",
+                "column",
+                subject,
                 f"column {name!r} type changed: {old.data_type} -> {new.data_type}",
             )
         elif (old.summarize_by, old.sort_by_column, old.is_hidden) != (
-            new.summarize_by, new.sort_by_column, new.is_hidden
+            new.summarize_by,
+            new.sort_by_column,
+            new.is_hidden,
         ):
             yield ModelChange(
-                "cosmetic", "column", subject,
+                "cosmetic",
+                "column",
+                subject,
                 f"column {name!r} presentation changed (summarize/sort/hidden)",
             )
 
 
 def _rel_semantics(rel: TmdlRelationship) -> tuple:
-    return (rel.is_active, rel.from_cardinality, rel.to_cardinality,
-            rel.cross_filtering_behavior)
+    return (
+        rel.is_active,
+        rel.from_cardinality,
+        rel.to_cardinality,
+        rel.cross_filtering_behavior,
+    )
 
 
 def _rel_subject(key: tuple) -> str:
@@ -130,7 +152,9 @@ def _diff_relationships(base_rels: dict, head_rels: dict) -> Iterable[ModelChang
             )
         elif _rel_semantics(old) != _rel_semantics(new):
             yield ModelChange(
-                "semantic", "relationship", subject,
+                "semantic",
+                "relationship",
+                subject,
                 f"relationship {subject} behavior changed "
                 "(activity/cardinality/filter direction)",
             )
@@ -145,7 +169,9 @@ def _diff_tables(
         elif name not in base_tables:
             head = head_tables[name]
             yield ModelChange(
-                "additive", "table", name,
+                "additive",
+                "table",
+                name,
                 f"new table {name!r} ({len(head.columns)} columns, "
                 f"{len(head.measures)} measures)",
             )

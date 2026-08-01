@@ -290,7 +290,9 @@ def _parse_measure_block(
     j = i + 1
     while _continues_block(lines, j, n, ind):
         child = lines[j].strip()
-        pm = re.match(r"(?P<k>displayFolder|formatString|description):\s*(?P<v>.+)$", child)
+        pm = re.match(
+            r"(?P<k>displayFolder|formatString|description):\s*(?P<v>.+)$", child
+        )
         if pm:
             props[pm.group("k")] = pm.group("v").strip()
         elif child and not re.match(r"\w+:\s", child):

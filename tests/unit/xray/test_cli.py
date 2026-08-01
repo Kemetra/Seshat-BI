@@ -101,8 +101,6 @@ def test_diff_working_tree_change_visible_before_commit(tmp_path, capsys):
     (tables / "Sales.tmdl").write_text(
         "table Sales\n\tmeasure Revenue = 0\n\tcolumn amount\n", encoding="utf-8"
     )
-    subprocess.run(
-        ["git", "add", "-A"], cwd=repo, check=True, capture_output=True
-    )
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True, capture_output=True)
     assert model_diff_main(_args(repo, base="HEAD")) == 0
     assert '"semantic":1' in capsys.readouterr().out
