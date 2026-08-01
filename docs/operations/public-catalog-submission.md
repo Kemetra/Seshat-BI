@@ -9,25 +9,25 @@ Submission is a human action in each platform's portal under a verified identity
 there is no CLI, workflow, or API for it, and it is deliberately not automated.
 Both catalogs are **free**; the gate is identity verification, not payment.
 
-Everything below is prepared and verified against the live v0.7.1 release. Copy
+Everything below is prepared and verified against the live v0.8.0 release. Copy
 the listing fields into each portal form.
 
 ---
 
-## Pre-submission checklist (all ✅ as of v0.7.1, verified 2026-07-24)
+## Pre-submission checklist (all ✅ as of v0.8.0, verified 2026-08-01)
 
 - [x] Plugin published & installable from the repo marketplace (Claude + Codex).
-- [x] `plugin.json` version (`0.7.1`) matches `CHANGELOG.md` (`## [0.7.1]`) and
-      git tag `v0.7.1` — version mismatch is the #1 rejection reason, so re-verify
+- [x] `plugin.json` version (`0.8.0`) matches `CHANGELOG.md` (`## [0.8.0]`) and
+      git tag `v0.8.0` — version mismatch is the #1 rejection reason, so re-verify
       all three before every submission.
 - [x] Valid `.claude-plugin/plugin.json` (name, version, description, author,
       homepage, repository, license) and `.codex-plugin/plugin.json` present —
       all seven fields confirmed present in both.
 - [x] License present (Apache-2.0).
-- [x] PyPI package live (`seshat-bi==0.7.1`) for the CLI dependency — verified via
+- [x] PyPI package live (`seshat-bi==0.8.0`) for the CLI dependency — verified via
       the PyPI JSON API and `/simple/` index, plus a clean-venv
-      `pip install seshat-bi==0.7.1` that reports `seshat 0.7.1`.
-- [x] GitHub Release published at annotated tag `v0.7.1`, marked Latest.
+      `pip install seshat-bi==0.8.0` that reports `seshat 0.8.0`.
+- [x] GitHub Release published at annotated tag `v0.8.0`, marked Latest.
 - [ ] **Owner:** complete identity verification in each portal (individual or
       business) — required before the form will accept a submission.
 
@@ -47,7 +47,7 @@ listed. Do **not** open a PR against the mirror repo (auto-closed).
 |---|---|
 | Plugin name | `seshat-bi` |
 | Marketplace source | `Kemetra/Seshat-BI` (GitHub) |
-| Version | `0.7.1` |
+| Version | `0.8.0` |
 | Author | Ahmed Shaaban |
 | Homepage / Repository | `https://github.com/Kemetra/Seshat-BI` |
 | License | Apache-2.0 |
@@ -64,7 +64,7 @@ listed. Do **not** open a PR against the mirror repo (auto-closed).
 > over SQL/TMDL/PBIR/DAX, source mapping and metric contracts that stop work when
 > business meaning is unresolved, and a static HTML readiness dashboard. Readiness
 > is never a faked score — it is status + evidence + blocking reasons held by a
-> gate. Ships 9 skills/workflows; pairs with the `seshat-bi` PyPI CLI.
+> gate. Ships 21 skills/workflows; pairs with the `seshat-bi` PyPI CLI.
 
 ---
 
@@ -82,9 +82,11 @@ company name.
 - **MCP** — server + auth config. Seshat's plugin is **skills-only** (no MCP
   server required); declare none.
 - **Skills** — upload the final skill package: the `integrations/codex/seshat-bi`
-  bundle (11 skills as of v0.7.1, `.codex-plugin/plugin.json` v0.7.1). Count the
+  bundle (21 skills as of v0.8.0, `.codex-plugin/plugin.json` v0.8.0). Count the
   directories under `integrations/codex/seshat-bi/skills/` rather than trusting
-  this number — the 0.7 line added `bi-analyst-knowledge` and `pbi-mcp-doctor`.
+  this number — the 0.7 line added `bi-analyst-knowledge` and `pbi-mcp-doctor`,
+  and v0.8.0 nearly doubled the bundle by shipping the ten compass verbs
+  (spec 138 US2+US3), taking both bundles from 11 skills to 21.
 - **Prompts** — example starting prompts (see below).
 - **Testing** — test cases (see below).
 - **Global** — available countries/regions (owner's choice; default: all).
@@ -104,7 +106,7 @@ company name.
 ## After submission — record the outcome
 
 Update the **current release record** in
-[`release-acceptance-checklist.md`](release-acceptance-checklist.md) (the v0.7.1
+[`release-acceptance-checklist.md`](release-acceptance-checklist.md) (the v0.8.0
 record as of this revision): change "Claude public catalog: not submitted" /
 "OpenAI public plugin listing: not submitted" to the actual state (`submitted` /
 `under review` / `listed`) with the submission date and the public listing URL

@@ -163,6 +163,48 @@ at v0.7.1. The same is true of v0.6.0 -> v0.6.1.
 Full detail: [the v0.7.1 release note](../releases/v0.7.1.md), [the v0.7 release
 note](../releases/v0.7.md), and the [support matrix](../install/support-matrix.md).
 
+### v0.8.0 record
+
+- Python: **available** -- `seshat-bi==0.8.0` published on public PyPI (release
+  workflow run `30714596013`, GitHub OIDC Trusted Publishing with attestations);
+  listed in the `/simple/` index with wheel (1,248,035 B) and sdist
+  (1,009,741 B), both `yanked=false`, uploaded 2026-08-01T19:22:51Z /
+  19:22:53Z. Independently verified beyond the workflow's own report: PyPI JSON
+  API reports `latest = 0.8.0`, the version-specific endpoint and project page
+  both return HTTP 200, and a clean-venv `pip install seshat-bi==0.8.0`
+  produces a working CLI (`seshat --version` -> `seshat 0.8.0`) exposing the
+  0.8 verbs (`xray`, `model-diff`, `readiness-diff`, `cvd-evidence`, `analyze`,
+  `tmdl-doc-comment-lint`).
+- GitHub Release: published at annotated tag `v0.8.0` (merge commit `fc0015c`),
+  marked Latest, notes sourced from `docs/releases/v0.8.md`; no assets attached
+  (PyPI is the distribution channel).
+- Claude Code repository plugin: **available** at v0.8.0 --
+  `.claude-plugin/marketplace.json` (metadata + plugin entry) and the
+  `integrations/claude-code/seshat-bi/` bundle manifest are bumped to 0.8.0 on
+  `main` (21 skills, up from 11: spec 138 US2+US3 shipped the ten compass
+  verbs). A fresh external public-path acceptance run has not been re-performed
+  for this release (unverified for v0.8.0 specifically).
+- Codex repository plugin: **available** at v0.8.0 -- the
+  `integrations/codex/seshat-bi/` bundle manifest and `.codex-plugin/plugin.json`
+  are bumped to 0.8.0 on `main` (21 skills). External IDE/CLI acceptance not
+  re-performed for this release (unverified).
+- Claude public catalog: not submitted.
+- OpenAI public plugin listing: not submitted.
+
+**Two release-workflow defects were fixed en route, and one is worth recording.**
+Both `prepare-coordinated-release.yml` and `release.yml` ran
+`scripts/export_agent_bundles.py` without installing the package, so the
+`seshat.allowlist_derivation` import spec 138 added (PRs #547/#548) failed with
+`ModuleNotFoundError`. The first dispatch of v0.8.0 died on it. The copy in
+`release.yml` sits in `build-validate`, which runs against an already-pushed
+immutable tag -- the same position that made v0.6.0 and v0.7.0 permanently
+unpublishable. It was caught only because the dispatch-time inspector fails
+before a tag exists. Fixed in PR #553 (both workflows now `pip install -e .`);
+`ci.yml` had masked it by installing the package first.
+
+Full detail: [the v0.8 release note](../releases/v0.8.md) and the
+[support matrix](../install/support-matrix.md).
+
 ## Repository candidate evidence (2026-07-13)
 
 - [x] Full repository suite passes: 2,235 tests passed and 9 optional tests
