@@ -2,7 +2,10 @@
 
 > **Status:** the current public release is `seshat-bi==0.8.0` on public PyPI
 > (version single-sourced from `pyproject.toml` and the generated plugin
-> manifests), externally accepted per
+> manifests; this pin is projected at release-preparation time, so actual index
+> availability is confirmed per release in
+> [the release acceptance checklist](../operations/release-acceptance-checklist.md)
+> — v0.7.0 was tagged but never published), externally accepted per
 > [the v0.3.1 public acceptance record](../releases/v0.3.1-public-acceptance.md).
 > Against 0.3.1, the Claude Code repository plugin passed install, discovery,
 > governed-behavior, pressure/refusal, update, and uninstall acceptance

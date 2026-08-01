@@ -1,7 +1,10 @@
 # Support matrix: Seshat BI
 
 The current public release is `seshat-bi==0.8.0` (single-sourced from
-`pyproject.toml`), externally accepted per
+`pyproject.toml`; the pin is projected at release-preparation time, so actual
+index availability is confirmed per release in
+[the release acceptance checklist](../operations/release-acceptance-checklist.md)
+— v0.7.0 was tagged but never published), externally accepted per
 [the v0.3.1 public acceptance record](../releases/v0.3.1-public-acceptance.md).
 Where a row cites v0.2.0 evidence
 ([record](../releases/v0.2.0-public-acceptance.md)), that surface was not
