@@ -37,6 +37,7 @@ ONLY the file(s) that `INDEX.md` names — never the whole knowledge base.
 | 12c. Measure generation / semantic-model prerequisites for a *ready* business contract | DAX | `skills/bi-dax-knowledge/INDEX.md` | generated/reviewed measure + model prerequisites |
 | 12d. KPI sufficiency / owner policy decision packet | Retail KPI | `skills/retail-kpi-knowledge/SKILL.md` then `skills/retail-kpi-knowledge/INDEX.md` | categorical sufficiency verdict, owner packet, or implementation handoff |
 | 13. Semantic model readiness | DAX + Readiness | `skills/bi-dax-knowledge/INDEX.md` + `docs/readiness/semantic-model-ready.md` | model-review checklist / semantic model handoff |
+| 13a. PBIP model audit / TMDL PR diff / unused-field question | X-Ray | `.claude/skills/pbip-xray/SKILL.md` | advisory findings report (no readiness effect) |
 | 14. Python cleaning / standardization review | Python | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | cleaning review artifact / shipped cleaning route |
 | 15. Python aggregation / groupby grain review | Python | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | `skills/bi-python-knowledge/checklists/aggregation-grain-checklist.md` |
 | 16. Python / pandas dataframe pipeline review | Python | `skills/bi-python-knowledge/SKILL.md` then `skills/bi-python-knowledge/INDEX.md` | active-rule pipeline-review verdict |

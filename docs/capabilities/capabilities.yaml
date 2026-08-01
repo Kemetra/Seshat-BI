@@ -1253,6 +1253,22 @@ capabilities:
       roadmap: "F036"
       skill: "cross-table-lineage"
 
+  - id: pbip-xray
+    name: "PBIP X-Ray / semantic model diff"
+    summary: "Read-only model-graph audit of a committed PBIP semantic model (unused fields, relationship risks, measure-graph findings) via `seshat xray`, plus a PR-scoped semantic TMDL diff in business terms via `seshat model-diff`; advisory only, never blocks, no scores."
+    state: shipped
+    authority: advisory
+    surface: skill
+    ships: false
+    ship_classification: consumer-capability
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "xray"
+    documentation: ".claude/skills/pbip-xray/SKILL.md"
+    references:
+      skill: "pbip-xray"
+
   - id: consumer-data-dictionary
     name: "consumer data dictionary"
     summary: "Composes a per-table analyst-facing dictionary (gold columns + approved metric contracts -> plain meaning) from committed artifacts."
