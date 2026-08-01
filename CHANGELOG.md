@@ -100,19 +100,25 @@ explicitly identifies a public release event.
   (#499, #505). Every `columns[].gold_placement` in the reference map named a
   LOGICAL dimension while `gold_star.dimensions[].name` is PHYSICAL and
   schema-qualified, so the two never matched and `_attr_silver_types` silently
-  returned `{}` for every dimension. The fix makes placements resolve against
-  the physical name and turns an unresolvable prefix into an ERROR. **This can
-  newly fail a consumer repo that was passing only because the resolution was
-  silently empty.** Per `docs/operations/versioning-policy.md`, this is the
-  bug-fix-restores-intended-behavior row; the owner classified its blast radius
-  as PATCH-class and kept this release MINOR rather than MAJOR. A consumer
-  hitting it should check that each `gold_placement` prefix names the physical,
-  schema-qualified dimension.
+  returned `{}` for every dimension. The fix resolves each placement prefix from
+  the PHYSICAL **bare** dimension name -- the declared `name:` with any
+  `<schema>.` prefix stripped -- and turns an unresolvable prefix into an ERROR.
+  **This can newly fail a consumer repo that was passing only because the
+  resolution was silently empty.** Per `docs/operations/versioning-policy.md`,
+  this is the bug-fix-restores-intended-behavior row; the owner classified its
+  blast radius as PATCH-class and kept this release MINOR rather than MAJOR.
+  A consumer hitting it should write the bare physical name, not a
+  schema-qualified one: for a dimension declared `gold.dim_product_rss`, the
+  placement is `dim:dim_product_rss.item`. A schema-qualified
+  `dim:gold.dim_product_rss.item` does NOT work -- the prefix is parsed up to
+  the first `.`, so only `gold` would be read and the placement is rejected.
 - HR1 now degrades like HR13 on an unreadable source-map instead of dropping it
   (#508, #511), and an unreadable map is reported rather than silently skipped.
-- `seshat check`'s F0 zero-input gate gained `--require-inputs` (exit 1 on zero
-  discovery), wired into the CI step. The default remains exit 0, so this is
-  additive for existing callers.
+- `seshat semantic-check` gained `--require-inputs`, which exits 1 when NO
+  semantic input is discovered instead of reporting `[not_started]` and exiting
+  0; it is wired into the CI step. The flag is on `semantic-check`, not on
+  `seshat check`. The default remains exit 0, so this is additive for existing
+  callers.
 
 ### Fixed
 - Statistical evidence now records the exact installed versions of each
