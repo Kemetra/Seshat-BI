@@ -31,6 +31,7 @@ from ..tmdl import (
     normalize_measure_body,
     parse_relationships,
     parse_tmdl,
+    strip_dax_comments_and_strings,
 )
 
 # ---------------------------------------------------------------------------
@@ -150,21 +151,9 @@ def d3_no_duplicate_logic(ctx: RuleContext) -> Iterable[Finding]:
 # ---------------------------------------------------------------------------
 
 
-def _strip_dax_comments_and_strings(expr: str) -> str:
-    """Strip ``/* */`` block comments, ``//`` line comments, and string literals.
-
-    Returns the cleaned expression text, safe to scan for a bare ``/`` that
-    would signal a division operator rather than a comment delimiter.
-    """
-    no_block = re.sub(r"/\*.*?\*/", " ", expr, flags=re.DOTALL)
-    no_line = re.sub(r"//[^\n]*", " ", no_block)
-    # Strip double-quoted DAX string literals (escaped quote is "")
-    no_double = re.sub(r'"(?:[^"]|"")*"', " ", no_line)
-    # Strip single-quoted DAX table/column name delimiters. DAX uses
-    # 'Table Name'[Column]; '' escapes a literal quote inside the name. A
-    # '/' inside such a name is never a division operator, so remove it before
-    # the bare-'/' scan to avoid a false-positive D4 (audit 2026-06-26 #4).
-    return re.sub(r"'(?:[^']|'')*'", " ", no_double)
+# Body moved to seshat.tmdl.strip_dax_comments_and_strings (public since the
+# X-Ray layer, 2026-08-01); aliased here so D4's call sites stay untouched.
+_strip_dax_comments_and_strings = strip_dax_comments_and_strings
 
 
 @register("D4", "Use DIVIDE() not the / operator")

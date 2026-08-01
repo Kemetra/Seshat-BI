@@ -629,6 +629,25 @@ def iter_model_files(ctx: RuleContext, suffix: str) -> Iterable[tuple[str, str]]
         yield rel, text
 
 
+def strip_dax_comments_and_strings(expr: str) -> str:
+    """Strip ``/* */`` block comments, ``//`` line comments, and string literals.
+
+    Returns the cleaned expression text, safe to scan for a bare ``/`` that
+    would signal a division operator rather than a comment delimiter.
+    (Public since the X-Ray graph/audit layer; ``rules/dax.py`` aliases it
+    for D4.)
+    """
+    no_block = re.sub(r"/\*.*?\*/", " ", expr, flags=re.DOTALL)
+    no_line = re.sub(r"//[^\n]*", " ", no_block)
+    # Strip double-quoted DAX string literals (escaped quote is "")
+    no_double = re.sub(r'"(?:[^"]|"")*"', " ", no_line)
+    # Strip single-quoted DAX table/column name delimiters. DAX uses
+    # 'Table Name'[Column]; '' escapes a literal quote inside the name. A
+    # '/' inside such a name is never a division operator, so remove it before
+    # the bare-'/' scan to avoid a false-positive D4 (audit 2026-06-26 #4).
+    return re.sub(r"'(?:[^']|'')*'", " ", no_double)
+
+
 def normalize_measure_body(expression: str) -> str:
     """Normalize a measure expression for duplicate-detection (D3).
 
