@@ -35,15 +35,14 @@ def _conditionally_required(parameters: dict) -> set[str]:
     appears in the plain `required` array, so an oracle that reads only that
     array would let the catalog advertise both as freely omittable.
     """
-    conditional: set[str] = set()
-    for clause in parameters.get("allOf", []):
-        if not isinstance(clause, dict):
-            continue
-        for branch in ("then", "else"):
-            outcome = clause.get(branch)
-            if isinstance(outcome, dict):
-                conditional.update(outcome.get("required", []))
-    return conditional
+    clauses = [item for item in parameters.get("allOf", []) if isinstance(item, dict)]
+    outcomes = [clause.get(branch) for clause in clauses for branch in ("then", "else")]
+    return {
+        name
+        for outcome in outcomes
+        if isinstance(outcome, dict)
+        for name in outcome.get("required", [])
+    }
 
 
 def _method_branch(node: object) -> tuple[str, set[str], set[str], set[str]] | None:
