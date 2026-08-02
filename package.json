@@ -1,0 +1,49 @@
+{
+  "name": "@kemetra/seshat-bi",
+  "version": "0.8.1",
+  "description": "Seshat BI agent skills bundle for Claude Code — governed seven-stage BI readiness workflow and reviewed public knowledge. Content only; the CLI ships separately on PyPI.",
+  "keywords": [
+    "claude-code",
+    "claude",
+    "agent-skills",
+    "business-intelligence",
+    "data-governance",
+    "power-bi",
+    "readiness",
+    "seshat"
+  ],
+  "homepage": "https://github.com/Kemetra/Seshat-BI#readme",
+  "bugs": {
+    "url": "https://github.com/Kemetra/Seshat-BI/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kemetra/Seshat-BI.git",
+    "directory": "integrations/claude-code/seshat-bi"
+  },
+  "license": "Apache-2.0",
+  "author": "Ahmed Shaaban",
+  "type": "module",
+  "exports": {
+    ".": "./npm/index.js",
+    "./bundle": "./integrations/claude-code/seshat-bi/bundle-manifest.json",
+    "./package.json": "./package.json"
+  },
+  "main": "./npm/index.js",
+  "files": [
+    "npm/index.js",
+    "npm/README.md",
+    "integrations/claude-code/seshat-bi/",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node npm/test-package.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "sideEffects": false
+}
