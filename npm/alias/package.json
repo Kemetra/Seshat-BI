@@ -1,0 +1,40 @@
+{
+  "name": "seshat-bi",
+  "version": "0.8.1",
+  "description": "Alias for @kemetra/seshat-bi — the Seshat BI agent skills bundle for Claude Code. Re-exports the scoped package; prefer installing @kemetra/seshat-bi directly.",
+  "keywords": [
+    "claude-code",
+    "agent-skills",
+    "business-intelligence",
+    "data-governance",
+    "power-bi",
+    "seshat"
+  ],
+  "homepage": "https://github.com/Kemetra/Seshat-BI#readme",
+  "bugs": {
+    "url": "https://github.com/Kemetra/Seshat-BI/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kemetra/Seshat-BI.git"
+  },
+  "license": "Apache-2.0",
+  "author": "Ahmed Shaaban",
+  "type": "module",
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "README.md"
+  ],
+  "dependencies": {
+    "@kemetra/seshat-bi": "0.8.1"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "sideEffects": false
+}

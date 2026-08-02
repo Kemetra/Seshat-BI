@@ -123,6 +123,21 @@ jobs:
               raise SystemExit("could not update exactly one project.version line")
           pyproject_path.write_text(updated_pyproject, encoding="utf-8")
 
+          # The npm package MIRRORS the Python version by contract, and its own
+          # packaging test asserts parity against pyproject and the plugin
+          # manifest. Project it here or the release publishes a PyPI version
+          # whose npm counterpart still claims the previous one. json round-trip
+          # rather than a regex: `version` appears once at the top level, but a
+          # naive pattern would also match a dependency pin.
+          import json
+
+          npm_manifest_path = Path("package.json")
+          npm_manifest = json.loads(npm_manifest_path.read_text(encoding="utf-8"))
+          npm_manifest["version"] = version
+          npm_manifest_path.write_text(
+              json.dumps(npm_manifest, indent=2) + "\n", encoding="utf-8"
+          )
+
           # Glob the whole directory, matching the authority that enforces this:
           # test_install_docs_version_pins_match_the_packaged_version reconciles
           # EVERY docs/install/*.md pin against pyproject. A hardcoded subset here
@@ -202,6 +217,7 @@ jobs:
           expected = {
               ".claude-plugin/marketplace.json",
               "CHANGELOG.md",
+              "package.json",
               "pyproject.toml",
           } | install_docs
           changed = set(
@@ -234,6 +250,7 @@ jobs:
           # `git add docs/install` could sweep in a stray the guard never checked.
           git add -u -- \
             pyproject.toml \
+            package.json \
             CHANGELOG.md \
             docs/install \
             .claude-plugin/marketplace.json
