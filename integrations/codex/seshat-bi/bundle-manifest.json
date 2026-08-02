@@ -21,10 +21,10 @@
     {
       "classification": "generated_wrapper",
       "destination": "README.md",
-      "output_sha256": "d0628e950ba63acc6c0d87e96725564e53fde8a39b35fdc58ea646a6ca3f842b",
+      "output_sha256": "234ffaa854038a5004fbf26af9239951d10908f61ff8122e1658f802f78f76d7",
       "source": "distribution/bundle-templates/codex/README.md",
       "source_id": "codex-readme",
-      "source_sha256": "d0628e950ba63acc6c0d87e96725564e53fde8a39b35fdc58ea646a6ca3f842b",
+      "source_sha256": "234ffaa854038a5004fbf26af9239951d10908f61ff8122e1658f802f78f76d7",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2180,10 +2180,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "46e1ca5f720876ea00c7662a344ede2116719209284da7b8ac9f1873f59b3eb7",
+  "manifest_digest": "5018541868f3bebeb3d20b198aabb378c9976336035f94ad4d36040884362304",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "3d0634ab31ac6b65d416ea7630d9d2adb294d6e7",
+  "source_revision": "56d4c97ec265367a9f50b55fe2e29f028796fbc5",
   "target": "codex",
   "version": "0.8.0"
 }
