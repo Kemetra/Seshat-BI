@@ -52,6 +52,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .core import Finding, RegisteredRule, Rule, RuleContext, Severity
+from .gitutil import run_subprocess
 
 # repo-relative location of the committed golden record (sibling of the manifest).
 RECORD_REL_PATH = "docs/rules/severity-posture.json"
@@ -392,7 +393,7 @@ def _run(repo: Path, *args: str) -> None:
     # user- or attacker-supplied tree. So the untrusted-tree git hardening
     # (core.fsmonitor=false etc. applied in gitutil/portfolio_watch/etc.) is not
     # needed here: there is no externally-authored .git/config to execute.
-    subprocess.run(
+    run_subprocess(
         ["git", "-C", str(repo), *args],
         check=True,
         capture_output=True,

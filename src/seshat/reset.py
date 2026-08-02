@@ -44,13 +44,13 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
 
 from seshat.gitutil import GIT_HARDENING as _GIT_HARDENING
+from seshat.gitutil import run_subprocess
 from seshat.reset_shared import (
     _SELECTORS_REL,
     _SOURCES_REL,
@@ -477,7 +477,7 @@ def _stage_paths(
     ``-A``). A non-git workspace is a note, not a failure."""
     if not paths:
         return (), None
-    result = subprocess.run(
+    result = run_subprocess(
         ["git", *_GIT_HARDENING, "-C", str(root), "add", "-A", "--", *paths],
         capture_output=True,
         text=True,

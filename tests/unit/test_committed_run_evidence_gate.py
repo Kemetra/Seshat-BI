@@ -366,7 +366,7 @@ def test_evidence_git_reads_opt_into_safe_directory(tmp_path: Path) -> None:
 
     expected = f"safe.directory={tmp_path.as_posix()}"
     with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(pw.subprocess, "run", spy)
+        mp.setattr(pw, "run_subprocess", spy)
         assert _scope_doc(tmp_path)["live_validation_state"] == "verified"
 
     evidence_reads = [

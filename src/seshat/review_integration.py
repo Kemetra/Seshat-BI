@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-import subprocess
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 from seshat.gitutil import GIT_HARDENING as _GIT_HARDENING
+from seshat.gitutil import run_subprocess
 
 from .core import Finding, Severity
 
@@ -38,7 +38,7 @@ _STAGE_HINTS = {
 def _changed_files(repo_root: Path, commit_range: str | None) -> list[str]:
     if not commit_range:
         return []
-    result = subprocess.run(
+    result = run_subprocess(
         ["git", *_GIT_HARDENING, "diff", "--name-only", commit_range],
         cwd=repo_root,
         capture_output=True,

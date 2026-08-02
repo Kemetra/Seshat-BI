@@ -30,7 +30,7 @@ Hard boundaries (spec 131, FR-018..FR-025):
     them.
 
 Module scope stays stdlib-only at import time (``json``, ``pathlib``,
-``dataclasses``, ``subprocess`` only for ``git rev-parse HEAD``, mirroring
+``dataclasses``, ``gitutil.run_subprocess`` only for ``git rev-parse HEAD``, mirroring
 ``readiness_projection._source_revision``). It composes the following shipped
 READERS (never re-implemented): ``readiness_projection`` (readiness +
 next_action), ``readiness_classify`` (the fixed category rank),
@@ -72,13 +72,13 @@ already recorded, verbatim, citing the artifact path.
 from __future__ import annotations
 
 import json
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from .approval_inbox import build_approval_inbox
 from .disclosure import scan_disclosure
+from .gitutil import run_subprocess
 from .portfolio_watch_baseline import (
     CHANGE_LABELS,
     LABEL_NEW,
@@ -241,7 +241,7 @@ class GovernedScope:
 def _source_revision(root: Path) -> str | None:
     from .gitutil import GIT_HARDENING as _GIT_HARDENING
 
-    result = subprocess.run(
+    result = run_subprocess(
         [
             "git",
             *_GIT_HARDENING,
@@ -509,7 +509,7 @@ def _git_try(root: Path, *args: str) -> str | None:
     from .gitutil import _GIT_HARDENING
 
     try:
-        result = subprocess.run(
+        result = run_subprocess(
             [
                 "git",
                 *_GIT_HARDENING,

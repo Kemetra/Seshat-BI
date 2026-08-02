@@ -176,7 +176,7 @@ def test_git_ls_files_raises_on_non_128_failure(monkeypatch, tmp_path):
             args=args, returncode=1, stdout="", stderr="fatal: something broke"
         )
 
-    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    monkeypatch.setattr(runner, "run_subprocess", fake_run)
 
     with pytest.raises(RuntimeError) as exc_info:
         runner._git_ls_files(tmp_path)
@@ -193,12 +193,31 @@ def test_importing_runner_does_not_import_rules_package():
     import sys
 
     # Drop any cached rules modules, then import runner in isolation.
+    #
+    # RESTORE `seshat.runner` afterwards. Re-importing installs a NEW module
+    # object in sys.modules while every module that already did
+    # `from seshat.runner import ...` (notably the CLI) keeps a reference to the
+    # ORIGINAL. A later test that patches `seshat.runner.run_subprocess` would
+    # then patch the fresh copy while the code under test calls the old one --
+    # the patch silently misses, real git runs, and the test fails far from here
+    # with an unrelated-looking assertion.
+    #
+    # This leak predates the issue #557 fix but was INVISIBLE while these tests
+    # patched `seshat.runner.subprocess.run`: `subprocess` is one global module
+    # object shared by both copies of `runner`, so patching through it worked no
+    # matter which copy the caller held. Routing git through the module-local
+    # `run_subprocess` name removed that accidental indirection and exposed this.
     for name in list(sys.modules):
         if name == "seshat.rules" or name.startswith("seshat.rules."):
             del sys.modules[name]
-    sys.modules.pop("seshat.runner", None)
 
-    importlib.import_module("seshat.runner")
+    # `reload` re-executes the module IN PLACE, so the single `seshat.runner`
+    # object every other module already holds a reference to is preserved. The
+    # earlier form (`sys.modules.pop` + `import_module`) created a SECOND runner
+    # object: the CLI kept the original, so a later
+    # `monkeypatch.setattr("seshat.runner.run_subprocess", ...)` patched a copy
+    # nothing called, the patch silently missed, and real git ran.
+    importlib.reload(sys.modules["seshat.runner"])
 
     assert "seshat.rules" not in sys.modules
 
