@@ -60,6 +60,13 @@ for the full required/optional split per method.
 
 ## Run the workflow
 
+`--repo .` and the relative paths below resolve against the fixture root, so
+change into it first:
+
+```console
+cd tests/fixtures/statistical/forecast_flow
+```
+
 ```console
 seshat analyze run \
   --repo . \

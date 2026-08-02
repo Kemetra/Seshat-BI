@@ -169,13 +169,47 @@ def test_forecast_flow_selects_a_backtested_candidate_without_granting_authority
         "candidate selection must be recorded as evidence, never left implicit"
     )
 
+    # The values published in docs/worked-examples/statistical-forecast.md.
+    # Asserting the names alone would let a numerical change rewrite every
+    # documented number while this test still passed.
+    documented_mase = {
+        "naive": 0.851,
+        "seasonal_naive": 0.970,
+        "ets_add": 0.833,
+        "ets_add_trend": 0.221,
+    }
+    for candidate, published in documented_mase.items():
+        actual = float(estimates[f"backtest_mean_mase:{candidate}"])
+        assert actual == pytest.approx(published, abs=0.001), (
+            f"{candidate} scored {actual:.4f}; the worked example publishes {published}"
+        )
+    assert min(documented_mase, key=documented_mase.get) == "ets_add_trend", (
+        "the example states ets_add_trend wins selection"
+    )
+
     horizon = [name for name in estimates if name.startswith("forecast:")]
     assert len(horizon) == 4, "declared horizon of 4 must yield 4 forecast points"
+    documented_points = [138.367, 139.396, 140.425, 141.453]
+    for step, published in enumerate(documented_points, start=1):
+        actual = float(estimates[f"forecast:{step}"])
+        assert actual == pytest.approx(published, abs=0.001), (
+            f"forecast:{step} is {actual:.3f}; the worked example publishes {published}"
+        )
+
     intervals = {item["name"] for item in evidence["intervals"]}
     assert set(horizon) <= intervals, "every forecast point needs a declared interval"
+    documented_bounds = {
+        "forecast:1": (136.255, 140.479),
+        "forecast:2": (137.284, 141.508),
+        "forecast:3": (138.313, 142.537),
+        "forecast:4": (139.341, 143.566),
+    }
     for interval in evidence["intervals"]:
         assert interval["level"] == "0.95"
         assert float(interval["low"]) < float(interval["high"])
+        low, high = documented_bounds[interval["name"]]
+        assert float(interval["low"]) == pytest.approx(low, abs=0.001)
+        assert float(interval["high"]) == pytest.approx(high, abs=0.001)
 
     assert any("not guarantees" in caution for caution in evidence["cautions"]), (
         "forecast evidence must retain its scenario-not-guarantee caution"
@@ -183,19 +217,64 @@ def test_forecast_flow_selects_a_backtested_candidate_without_granting_authority
     assert readiness_path.read_bytes() == readiness_before
 
 
+# Each case carries the estimates docs/worked-examples/statistical-catalog.md
+# publishes, so a numerical change fails here instead of staling the page.
 _CATALOG_CASES = (
-    ("regional_comparison", "regional_weeks.csv", "compare_groups"),
-    ("conversion_rate", "regional_weeks.csv", "proportion"),
-    ("visits_correlation", "weekly_series.csv", "correlate"),
-    ("visits_regression", "weekly_series.csv", "regress"),
-    ("weekly_anomalies", "weekly_series.csv", "detect_anomalies"),
-    ("weekly_change_points", "weekly_series.csv", "detect_change_points"),
+    (
+        "regional_comparison",
+        "regional_weeks.csv",
+        "compare_groups",
+        {"group[north].count": 48.0, "group[south].count": 48.0},
+    ),
+    (
+        "conversion_rate",
+        "regional_weeks.csv",
+        "proportion",
+        {"successes": 4697.0, "trials": 45192.0, "proportion": 0.10393},
+    ),
+    (
+        "visits_correlation",
+        "weekly_series.csv",
+        "correlate",
+        {"correlation": 0.880, "paired_count": 48.0, "excluded_pair_count": 0.0},
+    ),
+    (
+        "visits_regression",
+        "weekly_series.csv",
+        "regress",
+        {"coefficient:predictor": 0.19290, "standard_error:predictor": 0.03105},
+    ),
+    (
+        "weekly_anomalies",
+        "weekly_series.csv",
+        "detect_anomalies",
+        {"observed:2025-09-01": 146.0, "baseline_center:2025-09-01": 112.0},
+    ),
+    (
+        "weekly_change_points",
+        "weekly_series.csv",
+        "detect_change_points",
+        {
+            "breakpoint_index:1": 12.0,
+            "breakpoint_index:2": 19.0,
+            "breakpoint_index:3": 29.0,
+            "breakpoint_index:4": 35.0,
+            "breakpoint_index:5": 41.0,
+        },
+    ),
 )
 
 
-@pytest.mark.parametrize(("analysis", "dataset", "method"), _CATALOG_CASES)
+@pytest.mark.parametrize(
+    ("analysis", "dataset", "method", "documented"), _CATALOG_CASES
+)
 def test_every_catalog_method_computes_without_granting_authority(
-    tmp_path: Path, capsys, analysis: str, dataset: str, method: str
+    tmp_path: Path,
+    capsys,
+    analysis: str,
+    dataset: str,
+    method: str,
+    documented: dict[str, float],
 ) -> None:
     """Each remaining catalog method runs end to end and stays derived evidence.
 
@@ -234,6 +313,38 @@ def test_every_catalog_method_computes_without_granting_authority(
     assert evidence["readiness_effect"] == "none; named-human approval required"
     assert evidence["estimates"], "a computed method must publish estimates"
     assert "rows" not in evidence, "evidence must never carry raw rows"
+
+    estimates = {item["name"]: item["value"] for item in evidence["estimates"]}
+    for name, published in documented.items():
+        assert name in estimates, (
+            f"{analysis} no longer emits `{name}`, which the worked example publishes"
+        )
+        actual = float(estimates[name])
+        assert actual == pytest.approx(published, rel=1e-3, abs=1e-4), (
+            f"{analysis} `{name}` is {actual}; the worked example publishes {published}"
+        )
+
+    if analysis == "regional_comparison":
+        test_result = next(t for t in evidence["tests"] if t["name"] == "welch_t")
+        assert float(test_result["statistic"]) == pytest.approx(9.6547, abs=0.001)
+        effect = next(e for e in evidence["effect_sizes"] if e["name"] == "hedges_g")
+        assert float(effect["value"]) == pytest.approx(1.9550, abs=0.001)
+
+    if analysis == "conversion_rate":
+        interval = evidence["intervals"][0]
+        assert float(interval["low"]) == pytest.approx(0.101154, abs=1e-5)
+        assert float(interval["high"]) == pytest.approx(0.106781, abs=1e-5)
+
+    if analysis == "visits_regression":
+        codes = {item["code"] for item in evidence["diagnostics"]}
+        assert {
+            "STAT_RESIDUAL_NORMALITY",
+            "STAT_HETEROSKEDASTICITY",
+            "STAT_INFLUENCE",
+            "STAT_REGRESSION_CONDITION",
+            "STAT_REGRESSION_VIF",
+        } <= codes, "the worked example lists all five regression diagnostics"
+
     assert readiness_path.read_bytes() == readiness_before
 
 

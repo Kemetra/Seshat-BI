@@ -16,6 +16,25 @@ The governed inputs are:
 - [RegionalValue contract](../../tests/fixtures/statistical/catalog_flow/mappings/sample_orders/metrics/RegionalValue.yaml) (region-week grain)
 - [48-week series](../../tests/fixtures/statistical/catalog_flow/data/weekly_series.csv) and [96 region-weeks](../../tests/fixtures/statistical/catalog_flow/data/regional_weeks.csv)
 
+## Run any of them
+
+`--repo .` and the relative paths resolve against the fixture root, so change
+into it first:
+
+```console
+cd tests/fixtures/statistical/catalog_flow
+seshat analyze run \
+  --repo . \
+  --spec mappings/sample_orders/analyses/visits_regression.analysis.yaml \
+  --provider local_csv \
+  --input data/weekly_series.csv \
+  --format text
+```
+
+Substitute any analysis id below. The two grouped analyses
+(`regional_comparison`, `conversion_rate`) read `data/regional_weeks.csv`; the
+other four read `data/weekly_series.csv`.
+
 ## Three refusals worth knowing before you author
 
 These are the governance boundaries an author meets first. Each is a refusal,

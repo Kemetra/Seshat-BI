@@ -181,3 +181,44 @@ def test_trailing_flags_survive_a_shift_in_series_magnitude() -> None:
     assert _value(high, key) == _value(low, key), (
         "shifting every value by a constant must not change the verdict"
     )
+
+
+def test_seasonal_deviation_stays_relative_to_the_residual_center() -> None:
+    """The seasonal rule thresholds its residual RELATIVE to the residual center.
+
+    `_seasonal_baseline` centers on the STL residuals, not on the raw values,
+    so `observed - expected` is not yet the deviation. When contamination drags
+    the residual median off zero, comparing the raw residual shifts both
+    two-sided and directional thresholds and flips verdicts near the limit.
+    """
+
+    import numpy as np
+
+    from seshat.statistical.methods.anomaly import _is_anomaly, _seasonal_baseline
+
+    # Seed 43 lands the point just outside its centered threshold and just
+    # inside the uncentered one, so the two comparisons disagree.
+    rng = np.random.default_rng(43)
+    values = np.array(
+        [
+            40
+            + 8 * math.sin(2 * math.pi * index / 12)
+            + rng.normal(0, 0.8)
+            + (rng.uniform(2, 6) if rng.random() < 0.6 else 0.0)
+            for index in range(60)
+        ]
+    )
+
+    baseline = _seasonal_baseline(values[:-1], float(values[-1]), 12)
+    assert baseline is not None
+    assert baseline.center != 0.0, "this fixture must displace the residual median"
+
+    limit = 3.5 * baseline.dispersion
+    assert baseline.deviation == pytest.approx(baseline.residual - baseline.center)
+    assert _is_anomaly(baseline.deviation, limit, "two-sided"), (
+        "the centered comparison must flag this point"
+    )
+    assert not _is_anomaly(baseline.residual, limit, "two-sided"), (
+        "the uncentered comparison is what this test exists to rule out; if it "
+        "stops disagreeing, the fixture no longer exercises the risk"
+    )

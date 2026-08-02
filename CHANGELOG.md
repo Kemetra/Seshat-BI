@@ -42,6 +42,14 @@ explicitly identifies a public release event.
   incidental number: a point at its own center is never anomalous, and adding a
   constant to every observation must not change any verdict.
 
+  The two baselines center on different quantities, so `_Baseline` now carries
+  an explicit `deviation` computed per baseline instead of reconstructed at the
+  call site: the trailing baseline's residual IS its deviation, while the
+  seasonal baseline's residual must still be taken relative to the residual
+  center. Thresholding the seasonal residual directly would shift both
+  two-sided and directional limits whenever the residual median is displaced
+  from zero, flipping verdicts near the limit.
+
 ### Documentation
 - **The closed method catalog marks required and optional parameters
   separately.** `forecast` requires all ten of its parameters, including

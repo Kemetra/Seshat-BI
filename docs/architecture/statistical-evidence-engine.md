@@ -46,7 +46,7 @@ parameters** column may be omitted.
 | `correlate` | `response`, `predictor` | `coefficient`: `pearson` or `spearman`; `confidence_level`; `correction` | (none) |
 | `regress` | `response`, `predictor` | `family`: `ols`, `logistic`, `poisson`, or `negative_binomial`; `covariance`: `classical`, `HC0`, `HC1`, `HC2`, or `HC3`; `confidence_level` | (none) |
 | `detect_anomalies` | `response`, `time` | `model`: `trailing_mad` or `seasonal_mad`; `period`; `threshold` | `direction`; `final_period`; `partial_period_policy` |
-| `detect_change_points` | `response`, `time` | `model`: `l1`, `l2`, or `rbf`; `min_segment` | `algorithm`: `pelt` with `penalty`, or `dynamic_programming` with `change_count`; `jump` |
+| `detect_change_points` | `response`, `time` | `model`: `l1`, `l2`, or `rbf`; `min_segment`; and one algorithm pair -- `penalty` is required unless `algorithm` is `dynamic_programming`, which requires `change_count` instead | `algorithm`: `pelt` (default) or `dynamic_programming`; `jump` |
 | `forecast` | `response`, `time` | closed `candidates`: `naive`, `seasonal_naive`, `ets_add`, `ets_add_trend`, `ets_add_damped`, `ets_add_seasonal`; `period`; `horizon`; `confidence_level`; `evaluation_metric`: `mase` or `smape`; `initial_window`; `step`; `max_folds`; `final_period`; `partial_period_policy` | (none) |
 
 `forecast` requires `final_period` and `partial_period_policy`; the same two
