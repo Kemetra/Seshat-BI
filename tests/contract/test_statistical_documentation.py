@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import json
+import re
 import tomllib
 from pathlib import Path
 
 import yaml
 
 ROOT = Path(__file__).parents[2]
+
+ARCHITECTURE_DOC = "docs/architecture/statistical-evidence-engine.md"
+SPEC_SCHEMA = "schemas/statistical-analysis-spec.schema.json"
 
 
 def _text(path: str) -> str:
@@ -16,6 +21,51 @@ def _text(path: str) -> str:
 
 def _yaml(path: str) -> dict:
     return yaml.safe_load(_text(path))
+
+
+def _json(path: str) -> dict:
+    return json.loads(_text(path))
+
+
+def _schema_method_parameters() -> dict[str, tuple[set[str], set[str]]]:
+    """Read required/optional method parameters from the spec schema itself.
+
+    Ground truth is the schema, never the prose table this oracle checks.
+    """
+    found: dict[str, tuple[set[str], set[str]]] = {}
+
+    def walk(node: object) -> None:
+        if isinstance(node, dict):
+            properties = node.get("properties")
+            if isinstance(properties, dict):
+                identifier = properties.get("id")
+                if isinstance(identifier, dict) and "const" in identifier:
+                    parameters = properties.get("parameters", {})
+                    required = set(parameters.get("required", []))
+                    declared = set(parameters.get("properties", {}))
+                    found[identifier["const"]] = (required, declared - required)
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for item in node:
+                walk(item)
+
+    walk(_json(SPEC_SCHEMA))
+    return found
+
+
+def _documented_method_row(method_id: str) -> tuple[str, str]:
+    """Return the (required, optional) parameter cells for one catalog row."""
+    for line in _text(ARCHITECTURE_DOC).splitlines():
+        if not line.startswith(f"| `{method_id}` |"):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        assert len(cells) == 4, (
+            f"catalog row for {method_id} must have 4 columns "
+            f"(method, roles, required, optional); found {len(cells)}"
+        )
+        return cells[2], cells[3]
+    raise AssertionError(f"no closed-method-catalog row documents `{method_id}`")
 
 
 def test_active_analyst_docs_route_governed_statistics() -> None:
@@ -56,6 +106,46 @@ def test_architecture_declares_authority_methods_and_live_boundary() -> None:
         "forecast",
     ):
         assert f"`{method_id}`" in architecture
+
+
+def test_catalog_documents_required_parameters_exactly_as_the_schema() -> None:
+    """The prose catalog must agree with the spec schema on every parameter.
+
+    A missing required parameter is refused outright by the schema, so a doc
+    that lists a required parameter as optional (or omits it) sends an author
+    into a STAT_SPEC_REFUSED they cannot diagnose from the documentation.
+    """
+    schema_methods = _schema_method_parameters()
+    assert schema_methods, "spec schema declared no closed methods"
+
+    for method_id, (required, optional) in sorted(schema_methods.items()):
+        required_cell, optional_cell = _documented_method_row(method_id)
+        documented_required = set(re.findall(r"`([a-z_]+)`", required_cell))
+        documented_optional = set(re.findall(r"`([a-z_]+)`", optional_cell))
+
+        missing = required - documented_required
+        assert not missing, (
+            f"`{method_id}` requires {sorted(missing)}, but the catalog's "
+            f"required column omits them"
+        )
+
+        demoted = required & documented_optional
+        assert not demoted, (
+            f"`{method_id}` requires {sorted(demoted)}, but the catalog lists "
+            f"them as optional; omitting one is refused by the schema"
+        )
+
+        promoted = optional & documented_required
+        assert not promoted, (
+            f"`{method_id}` treats {sorted(promoted)} as optional, but the "
+            f"catalog demands them; authors would supply needless parameters"
+        )
+
+        if not optional:
+            assert "(none)" in optional_cell, (
+                f"`{method_id}` accepts no optional parameters; its optional "
+                f"column must say (none)"
+            )
 
 
 def test_workflow_routes_to_named_human_review_without_self_approval() -> None:

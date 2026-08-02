@@ -113,3 +113,71 @@ def test_synthetic_full_flow_writes_valid_derived_evidence(
         "# Statistical analysis review"
     )
     assert readiness_path.read_bytes() == readiness_before
+
+
+_FORECAST_SPEC = "mappings/sample_orders/analyses/weekly_forecast.analysis.yaml"
+_FORECAST_EVIDENCE = "mappings/sample_orders/analyses/weekly_forecast.evidence.json"
+
+
+def test_forecast_flow_selects_a_backtested_candidate_without_granting_authority(
+    tmp_path: Path, capsys
+) -> None:
+    """The documented forecast example runs and stays derived evidence.
+
+    Guards docs/worked-examples/statistical-forecast.md: every published number
+    comes from this fixture, so a drifting engine breaks the test rather than
+    the documentation silently going stale.
+    """
+
+    root = _copy_fixture_repo(tmp_path, "forecast_flow")
+    readiness_path = root / "mappings/sample_orders/readiness-status.yaml"
+    readiness_before = readiness_path.read_bytes()
+
+    rc, response = _analyze(
+        root,
+        capsys,
+        "run",
+        "--spec",
+        _FORECAST_SPEC,
+        "--provider",
+        "local_csv",
+        "--input",
+        "data/weekly_metric.csv",
+    )
+    assert rc == 0
+    assert response["outcome"] == "computed"
+
+    evidence = json.loads((root / _FORECAST_EVIDENCE).read_text(encoding="utf-8"))
+    assert validate_json_contract(evidence, _EVIDENCE_SCHEMA) == []
+    assert evidence["authority"] == "derived-evidence-only"
+    assert evidence["review_state"] == "pending"
+    assert evidence["readiness_effect"] == "none; named-human approval required"
+    assert "rows" not in evidence
+
+    estimates = {item["name"]: item["value"] for item in evidence["estimates"]}
+    scored = {
+        name.split(":", 1)[1]
+        for name in estimates
+        if name.startswith("backtest_mean_mase:")
+    }
+    assert scored == {"naive", "seasonal_naive", "ets_add", "ets_add_trend"}, (
+        "every declared candidate must be backtested, not just the winner"
+    )
+
+    codes = {item["code"] for item in evidence["diagnostics"]}
+    assert "STAT_FORECAST_SELECTED" in codes, (
+        "candidate selection must be recorded as evidence, never left implicit"
+    )
+
+    horizon = [name for name in estimates if name.startswith("forecast:")]
+    assert len(horizon) == 4, "declared horizon of 4 must yield 4 forecast points"
+    intervals = {item["name"] for item in evidence["intervals"]}
+    assert set(horizon) <= intervals, "every forecast point needs a declared interval"
+    for interval in evidence["intervals"]:
+        assert interval["level"] == "0.95"
+        assert float(interval["low"]) < float(interval["high"])
+
+    assert any("not guarantees" in caution for caution in evidence["cautions"]), (
+        "forecast evidence must retain its scenario-not-guarantee caution"
+    )
+    assert readiness_path.read_bytes() == readiness_before
