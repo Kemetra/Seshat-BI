@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import json
+import re
 import tomllib
 from pathlib import Path
 
 import yaml
 
 ROOT = Path(__file__).parents[2]
+
+ARCHITECTURE_DOC = "docs/architecture/statistical-evidence-engine.md"
+SPEC_SCHEMA = "schemas/statistical-analysis-spec.schema.json"
 
 
 def _text(path: str) -> str:
@@ -16,6 +21,87 @@ def _text(path: str) -> str:
 
 def _yaml(path: str) -> dict:
     return yaml.safe_load(_text(path))
+
+
+def _json(path: str) -> dict:
+    return json.loads(_text(path))
+
+
+def _conditionally_required(parameters: dict) -> set[str]:
+    """Return parameters an `allOf`/`if`/`then`/`else` branch can demand.
+
+    `detect_change_points` requires `penalty` unless `algorithm` is
+    `dynamic_programming`, which requires `change_count` instead. Neither name
+    appears in the plain `required` array, so an oracle that reads only that
+    array would let the catalog advertise both as freely omittable.
+    """
+    clauses = [item for item in parameters.get("allOf", []) if isinstance(item, dict)]
+    outcomes = [clause.get(branch) for clause in clauses for branch in ("then", "else")]
+    return {
+        name
+        for outcome in outcomes
+        if isinstance(outcome, dict)
+        for name in outcome.get("required", [])
+    }
+
+
+def _method_branch(node: object) -> tuple[str, set[str], set[str], set[str]] | None:
+    """Return (id, required, conditional, optional) for a method branch."""
+    if not isinstance(node, dict):
+        return None
+    properties = node.get("properties")
+    if not isinstance(properties, dict):
+        return None
+    identifier = properties.get("id")
+    if not isinstance(identifier, dict) or "const" not in identifier:
+        return None
+    parameters = properties.get("parameters", {})
+    required = set(parameters.get("required", []))
+    conditional = _conditionally_required(parameters) - required
+    declared = set(parameters.get("properties", {}))
+    return identifier["const"], required, conditional, declared - required - conditional
+
+
+def _child_nodes(node: object) -> list[object]:
+    """Return the sub-nodes worth descending into."""
+    if isinstance(node, dict):
+        return list(node.values())
+    if isinstance(node, list):
+        return list(node)
+    return []
+
+
+def _schema_method_parameters() -> dict[str, tuple[set[str], set[str], set[str]]]:
+    """Read required/conditional/optional parameters from the spec schema itself.
+
+    Ground truth is the schema, never the prose table this oracle checks.
+    """
+    found: dict[str, tuple[set[str], set[str], set[str]]] = {}
+    pending: list[object] = [_json(SPEC_SCHEMA)]
+
+    while pending:
+        node = pending.pop()
+        branch = _method_branch(node)
+        if branch is not None:
+            method_id, required, conditional, optional = branch
+            found[method_id] = (required, conditional, optional)
+        pending.extend(_child_nodes(node))
+
+    return found
+
+
+def _documented_method_row(method_id: str) -> tuple[str, str]:
+    """Return the (required, optional) parameter cells for one catalog row."""
+    for line in _text(ARCHITECTURE_DOC).splitlines():
+        if not line.startswith(f"| `{method_id}` |"):
+            continue
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        assert len(cells) == 4, (
+            f"catalog row for {method_id} must have 4 columns "
+            f"(method, roles, required, optional); found {len(cells)}"
+        )
+        return cells[2], cells[3]
+    raise AssertionError(f"no closed-method-catalog row documents `{method_id}`")
 
 
 def test_active_analyst_docs_route_governed_statistics() -> None:
@@ -56,6 +142,74 @@ def test_architecture_declares_authority_methods_and_live_boundary() -> None:
         "forecast",
     ):
         assert f"`{method_id}`" in architecture
+
+
+def test_catalog_documents_required_parameters_exactly_as_the_schema() -> None:
+    """The prose catalog must agree with the spec schema on every parameter.
+
+    A missing required parameter is refused outright by the schema, so a doc
+    that lists a required parameter as optional (or omits it) sends an author
+    into a STAT_SPEC_REFUSED they cannot diagnose from the documentation.
+    """
+    schema_methods = _schema_method_parameters()
+    assert schema_methods, "spec schema declared no closed methods"
+
+    for method_id, (required, conditional, optional) in sorted(schema_methods.items()):
+        required_cell, optional_cell = _documented_method_row(method_id)
+        documented_required = set(re.findall(r"`([a-z_]+)`", required_cell))
+        documented_optional = set(re.findall(r"`([a-z_]+)`", optional_cell))
+        documented = documented_required | documented_optional
+
+        missing = required - documented_required
+        assert not missing, (
+            f"`{method_id}` requires {sorted(missing)}, but the catalog's "
+            f"required column omits them"
+        )
+
+        demoted = required & documented_optional
+        assert not demoted, (
+            f"`{method_id}` requires {sorted(demoted)}, but the catalog lists "
+            f"them as optional; omitting one is refused by the schema"
+        )
+
+        # A name may legitimately appear in the required cell as part of a
+        # stated condition (`... unless `algorithm` is `dynamic_programming``)
+        # while still being optional itself, so only a name the optional column
+        # never mentions counts as wrongly promoted.
+        promoted = optional & documented_required - documented_optional
+        assert not promoted, (
+            f"`{method_id}` treats {sorted(promoted)} as optional, but the "
+            f"catalog demands them; authors would supply needless parameters"
+        )
+
+        # A parameter the schema accepts but the catalog never names is
+        # invisible to an author reading the documentation.
+        undocumented = (optional | conditional) - documented
+        assert not undocumented, (
+            f"`{method_id}` accepts {sorted(undocumented)}, but the catalog "
+            f"names them in neither column"
+        )
+
+        # A conditionally required parameter is not freely omittable. It
+        # belongs in the required column with its condition stated, never in
+        # the optional column under the blanket "may be omitted" rule.
+        loosened = conditional & documented_optional
+        assert not loosened, (
+            f"`{method_id}` requires {sorted(loosened)} under a schema "
+            f"condition, but the catalog lists them as optional; an author "
+            f"omitting one gets STAT_SPEC_REFUSED"
+        )
+        for name in sorted(conditional):
+            assert re.search(r"\b(unless|when|if)\b", required_cell), (
+                f"`{method_id}` requires `{name}` conditionally; the catalog "
+                f"must state the condition that makes it required"
+            )
+
+        if not optional and not conditional:
+            assert "(none)" in optional_cell, (
+                f"`{method_id}` accepts no optional parameters; its optional "
+                f"column must say (none)"
+            )
 
 
 def test_workflow_routes_to_named_human_review_without_self_approval() -> None:

@@ -53,13 +53,28 @@ def _mad(values):
 
 @dataclass(frozen=True, slots=True)
 class _Baseline:
-    """One prior-only baseline and the residual of the point it evaluates."""
+    """One prior-only baseline and the residual of the point it evaluates.
+
+    The two baselines center on different quantities, so neither `center` nor
+    `residual` alone is the value to threshold:
+
+    - the trailing baseline centers on the RAW prior values, so its `residual`
+      (`observed - center`) is already the deviation;
+    - the seasonal baseline centers on the STL RESIDUALS, so its `residual`
+      (`observed - expected`) must still be taken relative to that residual
+      center.
+
+    `deviation` is therefore computed per baseline rather than reconstructed at
+    the call site, where subtracting `center` once too often or once too few
+    silently rescales every flag.
+    """
 
     center: float
     dispersion: float
     residual: float
     scale: float
     observed: float
+    deviation: float
 
 
 def _trailing_baseline(history, observed: float, period: int) -> _Baseline:
@@ -67,12 +82,15 @@ def _trailing_baseline(history, observed: float, period: int) -> _Baseline:
 
     baseline = history[-period:]
     center, dispersion = _mad(baseline)
+    residual = observed - center
     return _Baseline(
         center,
         dispersion,
-        observed - center,
+        residual,
         float(np.max(np.abs(baseline))),
         observed,
+        # Centered on the raw prior values, so the residual IS the deviation.
+        residual,
     )
 
 
@@ -87,12 +105,16 @@ def _seasonal_baseline(history, observed: float, period: int) -> _Baseline | Non
     center, dispersion = _mad(residuals)
     trend_step = float(trend[-1] - trend[-2])
     expected = float(trend[-1] + trend_step + seasonal[-period])
+    residual = observed - expected
     return _Baseline(
         center,
         dispersion,
-        observed - expected,
+        residual,
         float(np.max(np.abs(history))),
         observed,
+        # Centered on the STL residuals: a nonzero residual median would
+        # otherwise shift both two-sided and directional thresholds.
+        residual - center,
     )
 
 
@@ -178,7 +200,7 @@ def run_detect_anomalies(context: MethodContext) -> MethodResult:
             diagnostics.append(_degenerate(key))
             continue
         limit = multiplier * baseline.dispersion
-        flagged = _is_anomaly(baseline.residual - baseline.center, limit, direction)
+        flagged = _is_anomaly(baseline.deviation, limit, direction)
         estimates.append(Estimate(f"anomaly:{key}", "1" if flagged else "0", None))
         estimates.extend(_point_estimates(key, baseline, limit, origin))
         evaluated += 1

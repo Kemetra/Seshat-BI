@@ -143,3 +143,82 @@ def test_one_sided_rule_only_flags_the_declared_direction() -> None:
     lower = run_detect_anomalies(_anomaly_context(values, direction="lower"))
     assert _value(upper, "anomaly:2026-01-10") == "0"
     assert _value(lower, "anomaly:2026-01-10") == "1"
+
+
+def test_trailing_baseline_does_not_flag_a_point_at_its_own_center() -> None:
+    """A value sitting on its own baseline center is never an anomaly.
+
+    The trailing baseline centers on the RAW values, so its center carries the
+    series magnitude. Comparing anything other than `observed - center` against
+    the threshold makes the flag depend on how large the values happen to be,
+    and a level-100 series then reports every evaluated week as anomalous.
+    """
+
+    # Nine quiet weeks around 112, then a tenth point exactly at the center of
+    # its own trailing window. Deviation is 0; the threshold is far above it.
+    values = [110, 112, 111, 113, 112, 111, 113, 112, 111, 112]
+    result = run_detect_anomalies(_anomaly_context(values, period=6))
+
+    assert _value(result, "anomaly:2026-01-10") == "0"
+
+
+def test_trailing_flags_survive_a_shift_in_series_magnitude() -> None:
+    """The same shape flags the same way at level 10 and at level 1000.
+
+    An anomaly rule is scale-relative by construction: it compares a deviation
+    against a multiple of the baseline's own robust dispersion. Adding a
+    constant to every observation must therefore change nothing.
+    """
+
+    shape = [10, 12, 11, 13, 12, 11, 13, 12, 11, 40]
+    low = run_detect_anomalies(_anomaly_context(list(shape), period=6))
+    high = run_detect_anomalies(
+        _anomaly_context([value + 990 for value in shape], period=6)
+    )
+
+    key = "anomaly:2026-01-10"
+    assert _value(low, key) == "1", "the spike must flag at level 10"
+    assert _value(high, key) == _value(low, key), (
+        "shifting every value by a constant must not change the verdict"
+    )
+
+
+def test_seasonal_deviation_stays_relative_to_the_residual_center() -> None:
+    """The seasonal rule thresholds its residual RELATIVE to the residual center.
+
+    `_seasonal_baseline` centers on the STL residuals, not on the raw values,
+    so `observed - expected` is not yet the deviation. When contamination drags
+    the residual median off zero, comparing the raw residual shifts both
+    two-sided and directional thresholds and flips verdicts near the limit.
+    """
+
+    import numpy as np
+
+    from seshat.statistical.methods.anomaly import _is_anomaly, _seasonal_baseline
+
+    # Seed 43 lands the point just outside its centered threshold and just
+    # inside the uncentered one, so the two comparisons disagree.
+    rng = np.random.default_rng(43)
+    values = np.array(
+        [
+            40
+            + 8 * math.sin(2 * math.pi * index / 12)
+            + rng.normal(0, 0.8)
+            + (rng.uniform(2, 6) if rng.random() < 0.6 else 0.0)
+            for index in range(60)
+        ]
+    )
+
+    baseline = _seasonal_baseline(values[:-1], float(values[-1]), 12)
+    assert baseline is not None
+    assert baseline.center != 0.0, "this fixture must displace the residual median"
+
+    limit = 3.5 * baseline.dispersion
+    assert baseline.deviation == pytest.approx(baseline.residual - baseline.center)
+    assert _is_anomaly(baseline.deviation, limit, "two-sided"), (
+        "the centered comparison must flag this point"
+    )
+    assert not _is_anomaly(baseline.residual, limit, "two-sided"), (
+        "the uncentered comparison is what this test exists to rule out; if it "
+        "stops disagreeing, the fixture no longer exercises the risk"
+    )

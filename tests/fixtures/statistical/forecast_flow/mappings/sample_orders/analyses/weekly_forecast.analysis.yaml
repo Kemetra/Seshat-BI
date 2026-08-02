@@ -1,0 +1,52 @@
+schema_version: "1.0"
+analysis_id: weekly_forecast
+revision: 1
+question: What does a backtested baseline forecast project for the approved weekly metric?
+cadence: weekly
+subject: sample_orders
+owner: Example Analyst
+readiness_status: mappings/sample_orders/readiness-status.yaml
+metric_contracts:
+  - mappings/sample_orders/metrics/TotalValue.yaml
+provider:
+  kind: local_csv
+  dataset_id: synthetic_weekly_metric
+population:
+  grain: one row per completed week
+  inclusion: [completed weekly periods only]
+  exclusion: []
+roles:
+  response:
+    column: metric_value
+    logical_type: number
+  time:
+    column: week_start
+    logical_type: date
+method:
+  id: forecast
+  version: "1.0"
+  parameters:
+    candidates: ["naive", "seasonal_naive", "ets_add", "ets_add_trend"]
+    period: 4
+    horizon: 4
+    confidence_level: "0.95"
+    evaluation_metric: mase
+    initial_window: 20
+    step: 4
+    max_folds: 3
+    final_period: complete
+    partial_period_policy: exclude
+missing_data:
+  policy: complete_case
+minimum_data:
+  observations: 24
+  groups: 1
+  seasonal_cycles: 2
+random_seed: 1729
+pii:
+  classification: none
+  approval_evidence: []
+  minimum_group_count: 5
+outputs:
+  evidence: mappings/sample_orders/analyses/weekly_forecast.evidence.json
+  review: mappings/sample_orders/analyses/weekly_forecast.review.md

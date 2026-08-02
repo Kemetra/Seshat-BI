@@ -1,0 +1,46 @@
+schema_version: "1.0"
+analysis_id: regional_comparison
+revision: 1
+question: Does the approved weekly metric differ between the two regions?
+cadence: weekly
+subject: sample_orders
+owner: Example Analyst
+readiness_status: mappings/sample_orders/readiness-status.yaml
+metric_contracts:
+  - mappings/sample_orders/metrics/RegionalValue.yaml
+provider:
+  kind: local_csv
+  dataset_id: synthetic_regional_weeks
+population:
+  grain: one row per region and completed week
+  inclusion: [completed weekly periods only]
+  exclusion: []
+roles:
+  response:
+    column: metric_value
+    logical_type: number
+  group:
+    column: region
+    logical_type: category
+method:
+  id: compare_groups
+  version: "1.0"
+  parameters:
+    test: welch_t
+    alternative: two-sided
+    confidence_level: "0.95"
+    correction: holm
+missing_data:
+  policy: complete_case
+minimum_data:
+  observations: 24
+  groups: 2
+  seasonal_cycles: 0
+random_seed: 1729
+pii:
+  classification: none
+  approval_evidence: []
+  minimum_group_count: 5
+outputs:
+  evidence: mappings/sample_orders/analyses/regional_comparison.evidence.json
+  review: mappings/sample_orders/analyses/regional_comparison.review.md
