@@ -61,7 +61,13 @@ def test_publish_job_uses_protected_environment_oidc_and_exact_handoff() -> None
     assert 'test "$RUN_REF" = "$CANDIDATE_REF"' in reject_step["run"]
     assert "password:" not in rendered
     assert "PYPI_API_TOKEN" not in rendered
-    publish_text = rendered.split("  publish-pypi:", 1)[1]
+    # Slice the publish-pypi job ONLY -- not "everything after its heading".
+    # The guarantee below is that the PyPI job publishes exactly the artifact
+    # `build-validate` handed it and never a fresh checkout it could rebuild
+    # from. That is a property of THIS job; a later job (publish-npm) legitimately
+    # checks out the tag to build a different artifact, and an open-ended slice
+    # would read its steps as violations of a rule that was never about it.
+    publish_text = rendered.split("  publish-pypi:", 1)[1].split("\n  publish-npm:", 1)[0]
     assert "actions/checkout" not in publish_text
     assert "github.run_id" in publish_text
     assert "grep -Eq '^[0-9a-f]{40}$' SOURCE_REVISION" in publish_text
