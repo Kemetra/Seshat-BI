@@ -178,7 +178,7 @@ def run_detect_anomalies(context: MethodContext) -> MethodResult:
             diagnostics.append(_degenerate(key))
             continue
         limit = multiplier * baseline.dispersion
-        flagged = _is_anomaly(baseline.residual - baseline.center, limit, direction)
+        flagged = _is_anomaly(baseline.residual, limit, direction)
         estimates.append(Estimate(f"anomaly:{key}", "1" if flagged else "0", None))
         estimates.extend(_point_estimates(key, baseline, limit, origin))
         evaluated += 1

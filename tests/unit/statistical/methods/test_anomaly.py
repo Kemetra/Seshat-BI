@@ -143,3 +143,41 @@ def test_one_sided_rule_only_flags_the_declared_direction() -> None:
     lower = run_detect_anomalies(_anomaly_context(values, direction="lower"))
     assert _value(upper, "anomaly:2026-01-10") == "0"
     assert _value(lower, "anomaly:2026-01-10") == "1"
+
+
+def test_trailing_baseline_does_not_flag_a_point_at_its_own_center() -> None:
+    """A value sitting on its own baseline center is never an anomaly.
+
+    The trailing baseline centers on the RAW values, so its center carries the
+    series magnitude. Comparing anything other than `observed - center` against
+    the threshold makes the flag depend on how large the values happen to be,
+    and a level-100 series then reports every evaluated week as anomalous.
+    """
+
+    # Nine quiet weeks around 112, then a tenth point exactly at the center of
+    # its own trailing window. Deviation is 0; the threshold is far above it.
+    values = [110, 112, 111, 113, 112, 111, 113, 112, 111, 112]
+    result = run_detect_anomalies(_anomaly_context(values, period=6))
+
+    assert _value(result, "anomaly:2026-01-10") == "0"
+
+
+def test_trailing_flags_survive_a_shift_in_series_magnitude() -> None:
+    """The same shape flags the same way at level 10 and at level 1000.
+
+    An anomaly rule is scale-relative by construction: it compares a deviation
+    against a multiple of the baseline's own robust dispersion. Adding a
+    constant to every observation must therefore change nothing.
+    """
+
+    shape = [10, 12, 11, 13, 12, 11, 13, 12, 11, 40]
+    low = run_detect_anomalies(_anomaly_context(list(shape), period=6))
+    high = run_detect_anomalies(
+        _anomaly_context([value + 990 for value in shape], period=6)
+    )
+
+    key = "anomaly:2026-01-10"
+    assert _value(low, key) == "1", "the spike must flag at level 10"
+    assert _value(high, key) == _value(low, key), (
+        "shifting every value by a constant must not change the verdict"
+    )
