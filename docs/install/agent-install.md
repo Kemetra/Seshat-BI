@@ -274,7 +274,9 @@ not a full clean-profile acceptance.
 Codex uses a native `.codex-plugin/plugin.json` plus skills under
 `skills/<name>/SKILL.md`. It does not use the Claude manifest or Claude slash
 commands. This repository's catalog is `.agents/plugins/marketplace.json` and
-points at the generated skills-only plugin in `integrations/codex/seshat-bi`.
+points at the generated plugin in `integrations/codex/seshat-bi` (skills plus
+the read-only governor MCP server; no hooks, no apps — see the capability note
+at the end of this section).
 
 Configure the repository marketplace and install from it:
 
@@ -305,8 +307,19 @@ path.
 
 A workspace `AGENTS.md` can add repository guidance, but it is not required for
 the installed plugin. Contributor validation uses the current Codex validator
-against `integrations/codex/seshat-bi`; it must report a skills-only plugin with
-no app, MCP server, connector, or hook.
+against `integrations/codex/seshat-bi`; it must report a plugin with no app,
+connector, or hook.
+
+**`mcpServers` is no longer prohibited.** Spec 138 US1 added the read-only
+governor server, so `scripts/external_agent_acceptance.py`
+(`_validate_declared_capabilities`) now checks that key **by value** instead of
+requiring its absence: the manifest must point at exactly `./mcp-servers.json`,
+and any other pointer is a blocker because it would ship an unreviewed server.
+`hooks` and `apps` remain prohibited outright — they are execution surfaces this
+bundle deliberately does not ship. "Skills-only" in this repository therefore
+means *no hooks and no apps*; it does **not** mean the bundle declares no MCP
+server. See [the catalog runbook](../operations/public-catalog-submission.md)
+before answering an MCP question on a submission form.
 
 Codex uses the term **marketplace** for configured repository catalogs. That is
 not a claim of public OpenAI listing. The separate current public process is
