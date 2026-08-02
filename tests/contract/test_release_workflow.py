@@ -67,7 +67,8 @@ def test_publish_job_uses_protected_environment_oidc_and_exact_handoff() -> None
     # from. That is a property of THIS job; a later job (publish-npm) legitimately
     # checks out the tag to build a different artifact, and an open-ended slice
     # would read its steps as violations of a rule that was never about it.
-    publish_text = rendered.split("  publish-pypi:", 1)[1].split("\n  publish-npm:", 1)[0]
+    pypi_onward = rendered.split("  publish-pypi:", 1)[1]
+    publish_text = pypi_onward.split("\n  publish-npm:", 1)[0]
     assert "actions/checkout" not in publish_text
     assert "github.run_id" in publish_text
     assert "grep -Eq '^[0-9a-f]{40}$' SOURCE_REVISION" in publish_text
