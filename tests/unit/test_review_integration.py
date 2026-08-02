@@ -56,7 +56,7 @@ def test_review_changed_state_from_commit_range(
         stdout = "mappings/orders/readiness-status.yaml\nwarehouse/gold/orders.sql\n"
 
     monkeypatch.setattr(
-        "seshat.review_integration.subprocess.run", lambda *a, **k: Result()
+        "seshat.review_integration.run_subprocess", lambda *a, **k: Result()
     )
     result = build_review_result([], repo_root=tmp_path, commit_range="base..head")
     assert result["changed_readiness_state"] == [
@@ -73,7 +73,7 @@ def test_invalid_commit_range_fails_closed(
         stdout = ""
 
     monkeypatch.setattr(
-        "seshat.review_integration.subprocess.run", lambda *a, **k: Result()
+        "seshat.review_integration.run_subprocess", lambda *a, **k: Result()
     )
     with pytest.raises(ValueError, match="could not be inspected"):
         build_review_result([], repo_root=tmp_path, commit_range="bad")

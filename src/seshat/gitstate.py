@@ -15,7 +15,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from seshat.gitutil import GIT_HARDENING
+from seshat.gitutil import GIT_HARDENING, run_subprocess
 
 
 def run_git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -27,7 +27,7 @@ def run_git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
         f"safe.directory={repo_root.as_posix()}",
         *args,
     ]
-    return subprocess.run(
+    return run_subprocess(
         command,
         cwd=repo_root,
         capture_output=True,

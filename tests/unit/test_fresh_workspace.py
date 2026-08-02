@@ -325,7 +325,7 @@ def test_git_touching_verb_reports_clean_error_on_broken_git(
     # (RuntimeError) must yield a clean stderr error + nonzero exit, NOT a raw
     # traceback out of main().
     verb, fake_run = case
-    monkeypatch.setattr("seshat.runner.subprocess.run", fake_run)
+    monkeypatch.setattr("seshat.runner.run_subprocess", fake_run)
     code = cli.main([verb, "--repo", str(tmp_path)])  # must NOT raise
     assert code != 0
     err = capsys.readouterr().err
