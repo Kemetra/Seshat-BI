@@ -27,6 +27,8 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+## [0.8.1] -- 2026-08-02
+
 ### Fixed
 - **The bundled governor MCP server no longer deadlocks on inherited stdin**
   (#557, PR #558). `seshat_run_static_check` never returned when the plugin ran
