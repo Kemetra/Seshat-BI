@@ -27,30 +27,47 @@ def _json(path: str) -> dict:
     return json.loads(_text(path))
 
 
+def _method_branch(node: object) -> tuple[str, set[str], set[str]] | None:
+    """Return (method id, required, optional) when this node is a method branch."""
+    if not isinstance(node, dict):
+        return None
+    properties = node.get("properties")
+    if not isinstance(properties, dict):
+        return None
+    identifier = properties.get("id")
+    if not isinstance(identifier, dict) or "const" not in identifier:
+        return None
+    parameters = properties.get("parameters", {})
+    required = set(parameters.get("required", []))
+    declared = set(parameters.get("properties", {}))
+    return identifier["const"], required, declared - required
+
+
+def _child_nodes(node: object) -> list[object]:
+    """Return the sub-nodes worth descending into."""
+    if isinstance(node, dict):
+        return list(node.values())
+    if isinstance(node, list):
+        return list(node)
+    return []
+
+
 def _schema_method_parameters() -> dict[str, tuple[set[str], set[str]]]:
     """Read required/optional method parameters from the spec schema itself.
 
     Ground truth is the schema, never the prose table this oracle checks.
     """
     found: dict[str, tuple[set[str], set[str]]] = {}
+    pending: list[object] = [_json(SPEC_SCHEMA)]
 
-    def walk(node: object) -> None:
-        if isinstance(node, dict):
-            properties = node.get("properties")
-            if isinstance(properties, dict):
-                identifier = properties.get("id")
-                if isinstance(identifier, dict) and "const" in identifier:
-                    parameters = properties.get("parameters", {})
-                    required = set(parameters.get("required", []))
-                    declared = set(parameters.get("properties", {}))
-                    found[identifier["const"]] = (required, declared - required)
-            for value in node.values():
-                walk(value)
-        elif isinstance(node, list):
-            for item in node:
-                walk(item)
+    while pending:
+        node = pending.pop()
+        branch = _method_branch(node)
+        if branch is not None:
+            method_id, required, optional = branch
+            found[method_id] = (required, optional)
+        pending.extend(_child_nodes(node))
 
-    walk(_json(SPEC_SCHEMA))
     return found
 
 
