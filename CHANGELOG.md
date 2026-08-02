@@ -27,6 +27,36 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+### Fixed
+- **The bundled governor MCP server no longer deadlocks on inherited stdin**
+  (#557, PR #558). `seshat_run_static_check` never returned when the plugin ran
+  the governor over stdio -- over 11 minutes with no output, against a
+  12-second CLI baseline for identical logic. `subprocess.run(...)` without an
+  explicit `stdin` gives the child the parent's stdin, which for `seshat mcp` is
+  the live JSON-RPC pipe: `git` inherited it and blocked reading it, while the
+  parent blocked in `communicate()` waiting for `git`. Only that one tool hung,
+  because it is the only governor tool that shells out to git; the CLI was
+  unaffected because there stdin is a terminal. Fixed with a single
+  `gitutil.run_subprocess` helper (`stdin=DEVNULL` plus a default `timeout`, so
+  a residual stall fails loud instead of hanging), with 11 governance call sites
+  routed through it. The dbt/dagster execution runners are deliberately excluded
+  -- they invoke user builds that legitimately outlive the shared cap and are
+  not reachable from the read-only governor tools. Covered by a regression test
+  that drives the real server over a pipe, verified failing on the unpatched
+  code.
+
+### Changed
+- Corrected four stale facts in the public-catalog submission guidance (#556).
+  The runbook cited plugin manifest paths at the repository root that do not
+  resolve, instructed the owner to declare no MCP server when both bundles ship
+  `seshat-governor`, and gave a skill-count command that silently returned zero
+  for the Claude bundle. The shipped Codex bundle README carried the same false
+  "activates no ... MCP server" claim and was corrected at its template and
+  regenerated. `docs/install/agent-install.md` no longer states that the
+  validator requires the absence of `mcpServers`: spec 138 US1 changed that
+  check to a by-value one (the manifest must point at exactly
+  `./mcp-servers.json`), and only `hooks` and `apps` remain prohibited.
+
 ## [0.8.0] -- 2026-08-01
 
 ### Added
