@@ -27,6 +27,35 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+### Fixed
+- **Trailing anomaly detection no longer subtracts the baseline center twice.**
+  `_Baseline.residual` already holds `observed - center`, but the flag compared
+  `residual - center` against the threshold, so the deviation carried the
+  series magnitude (`observed - 2*center`). On a level-112 series a point
+  sitting exactly on its own baseline center produced a deviation of `-112`
+  against a threshold of `5.19` and was flagged. This was a fail-OPEN: it
+  reported anomalies that were not there, and on a synthetic 48-week series it
+  flagged 23 of 23 evaluated weeks instead of 1. The `seasonal_mad` path
+  masked it, because it centers on STL residuals where the center is near zero;
+  only `trailing_mad`, which centers on raw values, scaled the error with the
+  data. Two regression tests now sit on the property rather than on an
+  incidental number: a point at its own center is never anomalous, and adding a
+  constant to every observation must not change any verdict.
+
+### Documentation
+- **The closed method catalog marks required and optional parameters
+  separately.** `forecast` requires all ten of its parameters, including
+  `final_period` and `partial_period_policy` -- the same two that are optional
+  for `detect_anomalies`. A contract test now reads
+  `schemas/statistical-analysis-spec.schema.json` as ground truth and fails when
+  the prose disagrees in either direction.
+- **Every catalog method has an end-to-end worked example.** Coverage went from
+  one method (`describe`) to all eight, adding
+  `docs/worked-examples/statistical-forecast.md` and
+  `docs/worked-examples/statistical-catalog.md` with the `forecast_flow` and
+  `catalog_flow` fixtures. Both examples publish only numbers produced by the
+  committed fixtures, so engine drift breaks a test instead of staling the docs.
+
 ## [0.8.1] -- 2026-08-02
 
 ### Fixed

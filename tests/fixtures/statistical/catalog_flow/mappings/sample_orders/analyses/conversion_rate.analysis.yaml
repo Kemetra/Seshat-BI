@@ -1,0 +1,45 @@
+schema_version: "1.0"
+analysis_id: conversion_rate
+revision: 1
+question: What is the conversion rate on approved session counts?
+cadence: weekly
+subject: sample_orders
+owner: Example Analyst
+readiness_status: mappings/sample_orders/readiness-status.yaml
+metric_contracts:
+  - mappings/sample_orders/metrics/RegionalValue.yaml
+provider:
+  kind: local_csv
+  dataset_id: synthetic_regional_weeks
+population:
+  grain: one row per region and completed week
+  inclusion: [completed weekly periods only]
+  exclusion: []
+roles:
+  numerator:
+    column: conversions
+    logical_type: number
+  denominator:
+    column: sessions
+    logical_type: number
+method:
+  id: proportion
+  version: "1.0"
+  parameters:
+    interval: wilson
+    alternative: two-sided
+    confidence_level: "0.95"
+missing_data:
+  policy: complete_case
+minimum_data:
+  observations: 24
+  groups: 1
+  seasonal_cycles: 0
+random_seed: 1729
+pii:
+  classification: none
+  approval_evidence: []
+  minimum_group_count: 5
+outputs:
+  evidence: mappings/sample_orders/analyses/conversion_rate.evidence.json
+  review: mappings/sample_orders/analyses/conversion_rate.review.md

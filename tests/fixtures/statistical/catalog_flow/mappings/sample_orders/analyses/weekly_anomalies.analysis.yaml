@@ -1,0 +1,47 @@
+schema_version: "1.0"
+analysis_id: weekly_anomalies
+revision: 1
+question: Which completed weeks fall outside the approved metric baseline?
+cadence: weekly
+subject: sample_orders
+owner: Example Analyst
+readiness_status: mappings/sample_orders/readiness-status.yaml
+metric_contracts:
+  - mappings/sample_orders/metrics/TotalValue.yaml
+provider:
+  kind: local_csv
+  dataset_id: synthetic_weekly_series
+population:
+  grain: one row per completed week
+  inclusion: [completed weekly periods only]
+  exclusion: []
+roles:
+  response:
+    column: metric_value
+    logical_type: number
+  time:
+    column: week_start
+    logical_type: date
+method:
+  id: detect_anomalies
+  version: "1.0"
+  parameters:
+    model: trailing_mad
+    period: 4
+    threshold: "3.5"
+    final_period: complete
+    partial_period_policy: exclude
+missing_data:
+  policy: complete_case
+minimum_data:
+  observations: 24
+  groups: 1
+  seasonal_cycles: 2
+random_seed: 1729
+pii:
+  classification: none
+  approval_evidence: []
+  minimum_group_count: 5
+outputs:
+  evidence: mappings/sample_orders/analyses/weekly_anomalies.evidence.json
+  review: mappings/sample_orders/analyses/weekly_anomalies.review.md

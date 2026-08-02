@@ -1,0 +1,45 @@
+schema_version: "1.0"
+analysis_id: visits_correlation
+revision: 1
+question: How do approved visits and the weekly metric move together?
+cadence: weekly
+subject: sample_orders
+owner: Example Analyst
+readiness_status: mappings/sample_orders/readiness-status.yaml
+metric_contracts:
+  - mappings/sample_orders/metrics/TotalValue.yaml
+provider:
+  kind: local_csv
+  dataset_id: synthetic_weekly_series
+population:
+  grain: one row per completed week
+  inclusion: [completed weekly periods only]
+  exclusion: []
+roles:
+  response:
+    column: metric_value
+    logical_type: number
+  predictor:
+    column: visits
+    logical_type: number
+method:
+  id: correlate
+  version: "1.0"
+  parameters:
+    coefficient: pearson
+    confidence_level: "0.95"
+    correction: none
+missing_data:
+  policy: complete_case
+minimum_data:
+  observations: 24
+  groups: 1
+  seasonal_cycles: 0
+random_seed: 1729
+pii:
+  classification: none
+  approval_evidence: []
+  minimum_group_count: 5
+outputs:
+  evidence: mappings/sample_orders/analyses/visits_correlation.evidence.json
+  review: mappings/sample_orders/analyses/visits_correlation.review.md

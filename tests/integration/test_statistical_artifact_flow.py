@@ -181,3 +181,113 @@ def test_forecast_flow_selects_a_backtested_candidate_without_granting_authority
         "forecast evidence must retain its scenario-not-guarantee caution"
     )
     assert readiness_path.read_bytes() == readiness_before
+
+
+_CATALOG_CASES = (
+    ("regional_comparison", "regional_weeks.csv", "compare_groups"),
+    ("conversion_rate", "regional_weeks.csv", "proportion"),
+    ("visits_correlation", "weekly_series.csv", "correlate"),
+    ("visits_regression", "weekly_series.csv", "regress"),
+    ("weekly_anomalies", "weekly_series.csv", "detect_anomalies"),
+    ("weekly_change_points", "weekly_series.csv", "detect_change_points"),
+)
+
+
+@pytest.mark.parametrize(("analysis", "dataset", "method"), _CATALOG_CASES)
+def test_every_catalog_method_computes_without_granting_authority(
+    tmp_path: Path, capsys, analysis: str, dataset: str, method: str
+) -> None:
+    """Each remaining catalog method runs end to end and stays derived evidence.
+
+    Guards docs/worked-examples/statistical-catalog.md: the published numbers
+    come from this fixture, so an engine change breaks the test rather than
+    leaving the documentation quietly wrong.
+    """
+
+    root = _copy_fixture_repo(tmp_path, "catalog_flow")
+    readiness_path = root / "mappings/sample_orders/readiness-status.yaml"
+    readiness_before = readiness_path.read_bytes()
+
+    rc, response = _analyze(
+        root,
+        capsys,
+        "run",
+        "--spec",
+        f"mappings/sample_orders/analyses/{analysis}.analysis.yaml",
+        "--provider",
+        "local_csv",
+        "--input",
+        f"data/{dataset}",
+    )
+    assert rc == 0, f"{analysis} did not compute: {response}"
+    assert response["outcome"] == "computed"
+
+    evidence = json.loads(
+        (root / f"mappings/sample_orders/analyses/{analysis}.evidence.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert validate_json_contract(evidence, _EVIDENCE_SCHEMA) == []
+    assert evidence["method"]["id"] == method
+    assert evidence["authority"] == "derived-evidence-only"
+    assert evidence["review_state"] == "pending"
+    assert evidence["readiness_effect"] == "none; named-human approval required"
+    assert evidence["estimates"], "a computed method must publish estimates"
+    assert "rows" not in evidence, "evidence must never carry raw rows"
+    assert readiness_path.read_bytes() == readiness_before
+
+
+def test_trailing_anomaly_flags_only_the_injected_excursion(
+    tmp_path: Path, capsys
+) -> None:
+    """The documented anomaly run flags the spike, not the whole series.
+
+    Regression guard for the double-subtracted baseline center: that defect
+    flagged all 23 evaluated weeks on this fixture, which reads as a working
+    detector until the flags are compared against the observations.
+    """
+
+    root = _copy_fixture_repo(tmp_path, "catalog_flow")
+    rc, _ = _analyze(
+        root,
+        capsys,
+        "run",
+        "--spec",
+        "mappings/sample_orders/analyses/weekly_anomalies.analysis.yaml",
+        "--provider",
+        "local_csv",
+        "--input",
+        "data/weekly_series.csv",
+    )
+    assert rc == 0
+
+    evidence = json.loads(
+        (
+            root / "mappings/sample_orders/analyses/weekly_anomalies.evidence.json"
+        ).read_text(encoding="utf-8")
+    )
+    estimates = {item["name"]: item["value"] for item in evidence["estimates"]}
+    evaluated = [name for name in estimates if name.startswith("anomaly:")]
+    flagged = [name for name in evaluated if estimates[name] == "1"]
+
+    weeks_in_fixture = 48
+    assert 0 < len(evaluated) < weeks_in_fixture, (
+        "the prior-only rule must skip the early weeks that have no history, "
+        "and must still judge the rest"
+    )
+    assert len(flagged) < len(evaluated) / 2, (
+        f"{len(flagged)} of {len(evaluated)} weeks flagged; a detector that "
+        f"flags most of a quiet series is measuring the series level, not a "
+        f"deviation from it"
+    )
+    assert "anomaly:2025-09-01" in flagged, "the injected excursion must flag"
+
+    for name in flagged:
+        week = name.split(":", 1)[1]
+        deviation = abs(
+            float(estimates[f"observed:{week}"])
+            - float(estimates[f"baseline_center:{week}"])
+        )
+        assert deviation > float(estimates[f"threshold:{week}"]), (
+            f"{week} was flagged although it sits inside its own threshold"
+        )
