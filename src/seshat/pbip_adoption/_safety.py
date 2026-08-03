@@ -10,11 +10,11 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 from seshat.gitutil import GIT_HARDENING as GIT_UNTRUSTED_TREE_HARDENING
+from seshat.gitutil import run_subprocess
 
 SCHEMA_VERSION = "1.0"
 MANIFEST_PATH = ".seshat/adoption/pbip-adoption.yaml"
@@ -178,7 +178,7 @@ def _read_text(path: Path) -> str | None:
 
 
 def _git_state(root: Path) -> str:
-    revision = subprocess.run(
+    revision = run_subprocess(
         ["git", *GIT_UNTRUSTED_TREE_HARDENING, "rev-parse", "--is-inside-work-tree"],
         cwd=root,
         capture_output=True,
@@ -187,7 +187,7 @@ def _git_state(root: Path) -> str:
     )
     if revision.returncode != 0 or revision.stdout.strip() != "true":
         return "absent"
-    status = subprocess.run(
+    status = run_subprocess(
         [
             "git",
             *GIT_UNTRUSTED_TREE_HARDENING,

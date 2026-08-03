@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 from typing import Any
 
 from seshat.gitutil import GIT_HARDENING as _GIT_HARDENING
+from seshat.gitutil import run_subprocess
 
 from .agent_next import build_agent_next_document, build_table_next_document
 from .disclosure import scan_disclosure
@@ -33,7 +33,7 @@ _STAGE_ORDER = (
 
 
 def _source_revision(root: Path) -> str | None:
-    result = subprocess.run(
+    result = run_subprocess(
         [
             "git",
             *_GIT_HARDENING,

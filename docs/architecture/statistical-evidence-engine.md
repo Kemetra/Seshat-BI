@@ -33,16 +33,26 @@ row payload.
 All methods are version `1.0`. Any identifier, role, or parameter outside this
 table is refused by schema or runtime policy.
 
-| Method ID | Required roles | Supported parameters |
-|---|---|---|
-| `describe` | `response` | `quantiles`; `outlier_rule`: `none`, `iqr`, or `mad` |
-| `compare_groups` | `response`, `group` | `test`: `welch_t`, `paired_t`, `mann_whitney`, `wilcoxon`, `welch_anova`, or `kruskal_wallis`; `alternative`; `confidence_level`; `correction`: `none`, `holm`, or `benjamini-hochberg`; optional `group_order`, `post_hoc_pairs` |
-| `proportion` | `numerator`, `denominator` | `interval`: `wilson` or `exact_binomial`; `alternative`; `confidence_level`; optional `comparison`: `none`, `chi_square`, or `fisher_exact`; `zero_cell_correction`; `minimum_denominator` |
-| `correlate` | `response`, `predictor` | `coefficient`: `pearson` or `spearman`; `confidence_level`; `correction` |
-| `regress` | `response`, `predictor` | `family`: `ols`, `logistic`, `poisson`, or `negative_binomial`; `covariance`: `classical`, `HC0`, `HC1`, `HC2`, or `HC3`; `confidence_level` |
-| `detect_anomalies` | `response`, `time` | `model`: `trailing_mad` or `seasonal_mad`; `period`; `threshold`; optional `direction`; `final_period`; `partial_period_policy` |
-| `detect_change_points` | `response`, `time` | `model`: `l1`, `l2`, or `rbf`; `min_segment`; `algorithm`: `pelt` with `penalty`, or `dynamic_programming` with `change_count`; optional `jump` |
-| `forecast` | `response`, `time` | closed `candidates`: `naive`, `seasonal_naive`, `ets_add`, `ets_add_trend`, `ets_add_damped`, `ets_add_seasonal`; `period`; `horizon`; `confidence_level`; `evaluation_metric`: `mase` or `smape`; `initial_window`; `step`; `max_folds`; `final_period`; `partial_period_policy` |
+Every parameter in the **Required parameters** column must be present in the
+specification. The schema refuses the whole specification when one is missing
+(`STAT_SPEC_REFUSED`); there are no defaults. Parameters in the **Optional
+parameters** column may be omitted.
+
+| Method ID | Required roles | Required parameters | Optional parameters |
+|---|---|---|---|
+| `describe` | `response` | `quantiles`; `outlier_rule`: `none`, `iqr`, or `mad` | (none) |
+| `compare_groups` | `response`, `group` | `test`: `welch_t`, `paired_t`, `mann_whitney`, `wilcoxon`, `welch_anova`, or `kruskal_wallis`; `alternative`; `confidence_level`; `correction`: `none`, `holm`, or `benjamini-hochberg` | `group_order`; `post_hoc_pairs` |
+| `proportion` | `numerator`, `denominator` | `interval`: `wilson` or `exact_binomial`; `alternative`; `confidence_level` | `comparison`: `none`, `chi_square`, or `fisher_exact`; `zero_cell_correction`; `minimum_denominator` |
+| `correlate` | `response`, `predictor` | `coefficient`: `pearson` or `spearman`; `confidence_level`; `correction` | (none) |
+| `regress` | `response`, `predictor` | `family`: `ols`, `logistic`, `poisson`, or `negative_binomial`; `covariance`: `classical`, `HC0`, `HC1`, `HC2`, or `HC3`; `confidence_level` | (none) |
+| `detect_anomalies` | `response`, `time` | `model`: `trailing_mad` or `seasonal_mad`; `period`; `threshold` | `direction`; `final_period`; `partial_period_policy` |
+| `detect_change_points` | `response`, `time` | `model`: `l1`, `l2`, or `rbf`; `min_segment`; and one algorithm pair -- `penalty` is required unless `algorithm` is `dynamic_programming`, which requires `change_count` instead | `algorithm`: `pelt` (default) or `dynamic_programming`; `jump` |
+| `forecast` | `response`, `time` | closed `candidates`: `naive`, `seasonal_naive`, `ets_add`, `ets_add_trend`, `ets_add_damped`, `ets_add_seasonal`; `period`; `horizon`; `confidence_level`; `evaluation_metric`: `mase` or `smape`; `initial_window`; `step`; `max_folds`; `final_period`; `partial_period_policy` | (none) |
+
+`forecast` requires `final_period` and `partial_period_policy`; the same two
+parameters are optional for `detect_anomalies`. The two methods do not share a
+parameter set, so a `forecast` specification cannot be derived by copying a
+`detect_anomalies` one.
 
 `group` is optional for `describe` and `proportion` where the method supports a
 governed grouped projection. `pair` may be used by paired group comparison.

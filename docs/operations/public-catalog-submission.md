@@ -20,9 +20,17 @@ the listing fields into each portal form.
 - [x] `plugin.json` version (`0.8.0`) matches `CHANGELOG.md` (`## [0.8.0]`) and
       git tag `v0.8.0` — version mismatch is the #1 rejection reason, so re-verify
       all three before every submission.
-- [x] Valid `.claude-plugin/plugin.json` (name, version, description, author,
-      homepage, repository, license) and `.codex-plugin/plugin.json` present —
-      all seven fields confirmed present in both.
+- [x] Valid plugin manifests present, with all seven listing fields (name,
+      version, description, author, homepage, repository, license) confirmed in
+      both. The manifests live **inside each bundle**, not at the repository
+      root — copy these paths, not `.claude-plugin/plugin.json`:
+      - Claude: `integrations/claude-code/seshat-bi/.claude-plugin/plugin.json`
+      - Codex: `integrations/codex/seshat-bi/.codex-plugin/plugin.json`
+
+      The repository root holds `.claude-plugin/marketplace.json` (the
+      marketplace index, a different file) and
+      `distribution/bundle-templates/*/` holds the unfilled templates. Neither
+      is the artifact a catalog wants.
 - [x] License present (Apache-2.0).
 - [x] PyPI package live (`seshat-bi==0.8.0`) for the CLI dependency — verified via
       the PyPI JSON API and `/simple/` index, plus a clean-venv
@@ -79,14 +87,36 @@ company name.
 **Form sections OpenAI asks for (prepare each):**
 
 - **Info** — public listing details (use the name/description/category above).
-- **MCP** — server + auth config. Seshat's plugin is **skills-only** (no MCP
-  server required); declare none.
+- **MCP** — server + auth config. **The bundle declares one MCP server.** Both
+  `integrations/codex/seshat-bi/mcp-servers.json` and the Claude equivalent
+  register `seshat-governor` (`command: seshat`, `args: ["mcp"]`), backed by the
+  shipped `seshat mcp` CLI command. Declare it; do not report "skills-only".
+  - **Auth:** none. The server takes no credentials and no network config; its
+    only argument is `--repo`, a local repository root exposed for governor
+    **reads**.
+  - **Transport:** stdio, launched by the host from the `seshat` CLI, which the
+    user installs from PyPI (`seshat-bi`). It is not a remote/hosted server.
+  - **Optional extra:** the server needs the MCP SDK extra. Absent it,
+    `seshat mcp` fails closed with a named two-lane install hint rather than a
+    traceback or a simulated governor — see `src/seshat/cli/__init__.py::_run_mcp`.
+  - **Honest status:** the server ships and runs, but spec 138 **US1 is not
+    accepted** — external harness verification (T021–T023) is still outstanding.
+    If a form asks whether MCP behavior is externally verified, the answer is
+    **no**. Do not claim verified behavior to a catalog under a verified identity.
 - **Skills** — upload the final skill package: the `integrations/codex/seshat-bi`
   bundle (21 skills as of v0.8.0, `.codex-plugin/plugin.json` v0.8.0). Count the
-  directories under `integrations/codex/seshat-bi/skills/` rather than trusting
-  this number — the 0.7 line added `bi-analyst-knowledge` and `pbi-mcp-doctor`,
-  and v0.8.0 nearly doubled the bundle by shipping the ten compass verbs
-  (spec 138 US2+US3), taking both bundles from 11 skills to 21.
+  directories rather than trusting this number — the 0.7 line added
+  `bi-analyst-knowledge` and `pbi-mcp-doctor`, and v0.8.0 nearly doubled the
+  bundle by shipping the ten compass verbs (spec 138 US2+US3), taking both
+  bundles from 11 skills to 21. Both bundles verified at 21 on 2026-08-02:
+
+  ```sh
+  ls -d integrations/codex/seshat-bi/skills/*/ | wc -l        # Codex → 21
+  ls -d integrations/claude-code/seshat-bi/skills/*/ | wc -l  # Claude → 21
+  ```
+
+  Note the asymmetry: the Claude bundle lives under `claude-code/`, not
+  `claude/`. A count run against `integrations/claude/...` silently returns 0.
 - **Prompts** — example starting prompts (see below).
 - **Testing** — test cases (see below).
 - **Global** — available countries/regions (owner's choice; default: all).

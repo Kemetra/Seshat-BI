@@ -54,6 +54,47 @@ GIT_HARDENING = (
 # Back-compat alias for in-package callers that referenced the private name.
 _GIT_HARDENING = GIT_HARDENING
 
+# Default wall-clock cap for a subprocess. A governance helper that hangs is worse
+# than one that fails: the CLI prints nothing and an MCP client waits forever with
+# no way to tell "slow" from "dead". Generous enough for `git ls-files` on a large
+# repo, short enough that a deadlock surfaces as a LOUD error.
+SUBPROCESS_TIMEOUT = 120
+
+
+def run_subprocess(
+    args: list[str] | tuple[str, ...],
+    **kwargs: object,
+) -> subprocess.CompletedProcess:
+    """``subprocess.run`` with the two settings every call site here needs.
+
+    **``stdin=DEVNULL`` is load-bearing, not hygiene.** A child spawned without an
+    explicit ``stdin`` INHERITS the parent's. When the parent is the governor MCP
+    server (``seshat mcp``), that inherited handle is the live JSON-RPC pipe from
+    the client: the child blocks reading a pipe only the MCP client can feed, the
+    parent blocks in ``communicate()`` waiting for the child, and neither moves.
+
+    That is issue #557 -- `seshat_run_static_check` hung indefinitely (>11 min
+    observed) while the identical logic ran in 12s from the CLI, because a CLI's
+    stdin is a terminal and inheriting it is harmless. Reproduced and fixed A/B
+    over a real stdio pipe: unpatched hangs, ``stdin=DEVNULL`` returns in 0.0s.
+
+    ``timeout`` converts any residual stall into ``TimeoutExpired`` instead of an
+    unbounded wait, matching ``_git_ls_files``'s "fail LOUD rather than silently
+    green" contract.
+
+    **Deliberately NOT routed through here** -- the dbt/dagster execution runners
+    (``dbt/gate.py``, ``dbt/runner.py``, ``dbt/scaffold/orchestrator.py``,
+    ``dagster_adapter/runner.py``, ``cli/commands/dbt.py``). Those invoke
+    user-authored builds that legitimately run longer than ``SUBPROCESS_TIMEOUT``,
+    so a shared cap would abort real work. They are also not reachable from the
+    read-only governor tools, so they do not carry the #557 deadlock. If any of
+    them is ever exposed over stdio, give it ``stdin=DEVNULL`` and a timeout sized
+    to that workload -- do not adopt this helper's cap.
+    """
+    kwargs.setdefault("stdin", subprocess.DEVNULL)
+    kwargs.setdefault("timeout", SUBPROCESS_TIMEOUT)
+    return subprocess.run(args, **kwargs)  # type: ignore[call-overload]  # noqa: S603
+
 
 def validate_commit_range(range_expr: str) -> str:
     """Return ``range_expr`` if it is a safe git revision range, else ``ValueError``.
@@ -68,7 +109,7 @@ def validate_commit_range(range_expr: str) -> str:
 
 
 def git_output(repo_root: Path, *args: str) -> str:
-    result = subprocess.run(
+    result = run_subprocess(
         ["git", *_GIT_HARDENING, "-C", str(repo_root), *args],
         capture_output=True,
         text=True,
@@ -88,7 +129,7 @@ def git_output(repo_root: Path, *args: str) -> str:
 
 
 def git_check_ignore(repo_root: Path, path: str) -> bool:
-    result = subprocess.run(
+    result = run_subprocess(
         ["git", *_GIT_HARDENING, "-C", str(repo_root), "check-ignore", "-q", path],
         capture_output=True,
         text=True,

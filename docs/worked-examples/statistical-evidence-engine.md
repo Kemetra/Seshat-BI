@@ -15,8 +15,15 @@ No fixture value represents a client, production system, or real person.
 
 ## Run the workflow
 
-From the fixture root, validate the specification and its committed authority
-references without acquiring data:
+Every command below resolves `--repo .` and its relative paths against the
+fixture root, so change into it first:
+
+```console
+cd tests/fixtures/statistical/full_flow
+```
+
+Validate the specification and its committed authority references without
+acquiring data:
 
 ```console
 seshat analyze validate \

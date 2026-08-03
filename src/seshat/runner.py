@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 
 from seshat.gitutil import GIT_HARDENING as _GIT_HARDENING
+from seshat.gitutil import run_subprocess
 
 from .core import Finding, RegisteredRule, RuleContext, RuleTier, Severity
 
@@ -31,7 +31,7 @@ def _git_ls_files(repo_root: Path) -> tuple[str, ...]:
     * any other non-zero code -> ``RuntimeError`` so CI misconfiguration fails
       LOUD (red) rather than silently green.
     """
-    result = subprocess.run(
+    result = run_subprocess(
         ["git", *_GIT_HARDENING, "ls-files"],
         cwd=repo_root,
         capture_output=True,
@@ -50,7 +50,7 @@ def _git_ls_files(repo_root: Path) -> tuple[str, ...]:
     tracked = tuple(line for line in result.stdout.splitlines() if line)
     if tracked:
         return tracked
-    untracked = subprocess.run(
+    untracked = run_subprocess(
         ["git", *_GIT_HARDENING, "ls-files", "--others", "--exclude-standard"],
         cwd=repo_root,
         capture_output=True,
