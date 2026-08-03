@@ -84,6 +84,11 @@ managed `chatgpt` login, streamed public item/turn events, and server-initiated
 command/file approval requests. Foundation can remain entirely on the stable API;
 it must not opt into `experimentalApi`.
 
+A sanitized read-only process probe then completed the stable handshake and returned
+a non-null `chatgpt` account plus a rate-limit response through the already managed
+subscription login. The probe read or copied no credential and started no model
+turn. See `evidence/codex-protocol-probe.md`.
+
 **Residual acceptance**: record successful subscription login, protocol handshake,
 and a streamed fake-safe question on the release platform. Protocol compatibility is
 tested from sanitized, version-labelled fixtures before that run. The local schema
