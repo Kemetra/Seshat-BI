@@ -1,0 +1,56 @@
+# Synthetic observations standing in for Increment B's gold query. Invented
+# values; not client data. The five contract ids match the approved contracts
+# under mappings/retail_store_sales/metrics/.
+table: retail_store_sales
+generated_for: board
+contracts:
+  TotalSales: mappings/retail_store_sales/metrics/TotalSales.yaml
+  TotalQuantity: mappings/retail_store_sales/metrics/TotalQuantity.yaml
+  TransactionCount: mappings/retail_store_sales/metrics/TransactionCount.yaml
+  AvgTransactionValue: mappings/retail_store_sales/metrics/AvgTransactionValue.yaml
+  DiscountedTransactionRate: mappings/retail_store_sales/metrics/DiscountedTransactionRate.yaml
+layout:
+  version: 1
+  cover_title_code: cover.board_pack
+  sections:
+    - section_id: headline
+      order: 1
+      heading_code: section.headline
+      visual_ids: [kpi_total_sales, kpi_transactions, kpi_avg_value]
+      page_break_before: false
+    - section_id: mix
+      order: 2
+      heading_code: section.mix
+      visual_ids: [kpi_quantity, kpi_discount_rate]
+      page_break_before: true
+observations:
+  - visual_id: kpi_total_sales
+    contract_id: TotalSales
+    metric: TotalSales
+    unit_kind: currency
+    label: null
+    value: "1552071"
+  - visual_id: kpi_transactions
+    contract_id: TransactionCount
+    metric: TransactionCount
+    unit_kind: count
+    label: null
+    value: "12575"
+  - visual_id: kpi_avg_value
+    contract_id: AvgTransactionValue
+    metric: AvgTransactionValue
+    unit_kind: currency
+    label: null
+    value: "123.42"
+  - visual_id: kpi_quantity
+    contract_id: TotalQuantity
+    metric: TotalQuantity
+    unit_kind: count
+    label: null
+    value: "66276"
+  - visual_id: kpi_discount_rate
+    contract_id: DiscountedTransactionRate
+    metric: DiscountedTransactionRate
+    unit_kind: ratio
+    label: null
+    value: "0.5037"
