@@ -19,6 +19,13 @@ from pathlib import Path
 import yaml
 
 from seshat.report.model import GOVERNED_CHART_KINDS, ReportError
+from seshat.report.reading import (
+    required_int,
+    required_list,
+    required_mapping,
+    required_text,
+    required_text_list,
+)
 
 LAYOUT_TEMPLATE_NAME = "report-layout.yaml"
 
@@ -60,23 +67,17 @@ def _document(path: Path) -> dict:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError) as exc:
         raise ReportError(f"cannot read layout {path}: {exc}") from exc
-    if not isinstance(raw, dict):
-        raise ReportError(f"layout {path} is not a mapping")
-    return raw
+    return required_mapping(raw, refusal=f"layout {path} is not a mapping")
 
 
 def _cover_title_code(raw: dict, path: Path) -> str:
-    cover = raw.get("cover_title_code")
-    if not isinstance(cover, str) or not cover:
-        raise ReportError(f"layout {path} has no cover_title_code")
-    return cover
+    return required_text(
+        raw, "cover_title_code", refusal=f"layout {path} has no cover_title_code"
+    )
 
 
 def _raw_sections(raw: dict, path: Path) -> list:
-    sections = raw.get("sections")
-    if not isinstance(sections, list) or not sections:
-        raise ReportError(f"layout {path} declares no sections")
-    return sections
+    return required_list(raw, "sections", refusal=f"layout {path} declares no sections")
 
 
 def _assert_ordered(sections: tuple[LayoutSection, ...], path: Path) -> None:
@@ -102,43 +103,31 @@ def _reject_meaning(entry: dict, section_id: str) -> None:
 
 
 def _section(entry: object, path: Path) -> LayoutSection:
-    if not isinstance(entry, dict):
-        raise ReportError(f"layout {path} has a non-mapping section")
-    section_id = entry.get("section_id")
-    if not isinstance(section_id, str) or not section_id:
-        raise ReportError(f"layout {path} has a section with no section_id")
-    _reject_meaning(entry, section_id)
+    section = required_mapping(
+        entry, refusal=f"layout {path} has a non-mapping section"
+    )
+    section_id = required_text(
+        section, "section_id", refusal=f"layout {path} has a section with no section_id"
+    )
+    _reject_meaning(section, section_id)
     return LayoutSection(
         section_id=section_id,
-        order=_order(entry, section_id),
-        heading_code=_heading_code(entry, section_id),
-        visual_ids=_visual_ids(entry, section_id),
-        page_break_before=bool(entry.get("page_break_before", False)),
-        chart_kind=_chart_kind(entry, section_id),
+        order=required_int(
+            section, "order", refusal=f"section {section_id!r} needs an int order"
+        ),
+        heading_code=required_text(
+            section,
+            "heading_code",
+            refusal=f"section {section_id!r} needs a heading_code",
+        ),
+        visual_ids=required_text_list(
+            section,
+            "visual_ids",
+            refusal=f"section {section_id!r} needs a non-empty visual_ids of strings",
+        ),
+        page_break_before=bool(section.get("page_break_before", False)),
+        chart_kind=_chart_kind(section, section_id),
     )
-
-
-def _order(entry: dict, section_id: str) -> int:
-    order = entry.get("order")
-    if not isinstance(order, int):
-        raise ReportError(f"section {section_id!r} needs an int order")
-    return order
-
-
-def _heading_code(entry: dict, section_id: str) -> str:
-    heading = entry.get("heading_code")
-    if not isinstance(heading, str) or not heading:
-        raise ReportError(f"section {section_id!r} needs a heading_code")
-    return heading
-
-
-def _visual_ids(entry: dict, section_id: str) -> tuple[str, ...]:
-    visuals = entry.get("visual_ids")
-    if not isinstance(visuals, list) or not visuals:
-        raise ReportError(f"section {section_id!r} needs a non-empty visual_ids")
-    if not all(isinstance(visual, str) for visual in visuals):
-        raise ReportError(f"section {section_id!r} visual_ids must all be strings")
-    return tuple(visuals)
 
 
 def _chart_kind(entry: dict, section_id: str) -> str | None:

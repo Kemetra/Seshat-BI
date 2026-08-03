@@ -33,6 +33,7 @@ from pathlib import Path
 import yaml
 
 from seshat.report.model import ReportError
+from seshat.report.reading import required_list, required_mapping, required_text
 
 BINDING_MAP_SCHEMA = "seshat.binding-map/v1"
 BINDING_MAP_NAME = "visual-contract-binding-map.md"
@@ -129,9 +130,7 @@ def _parsed(block: str) -> dict:
 
 
 def _bindings(front: dict, path: Path) -> tuple[VisualBinding, ...]:
-    raw = front.get("visuals")
-    if not isinstance(raw, list) or not raw:
-        raise ReportError(f"{path} declares no visuals")
+    raw = required_list(front, "visuals", refusal=f"{path} declares no visuals")
     bindings: list[VisualBinding] = []
     seen: set[str] = set()
     for entry in raw:
@@ -148,21 +147,21 @@ def _bindings(front: dict, path: Path) -> tuple[VisualBinding, ...]:
 
 
 def _binding(entry: object, path: Path) -> VisualBinding:
-    if not isinstance(entry, dict):
-        raise ReportError(f"{path} has a non-mapping visual entry")
-    visual_id = entry.get("visual_id")
-    if not isinstance(visual_id, str) or not visual_id:
-        raise ReportError(f"{path} has a visual with no visual_id")
-    contract = entry.get("contract")
-    if not isinstance(contract, str) or not contract:
-        raise ReportError(
-            f"{path} visual {visual_id!r} has no contract; an unattributed visual "
-            "cannot be rendered"
-        )
-    page = entry.get("page")
+    visual = required_mapping(entry, refusal=f"{path} has a non-mapping visual entry")
+    visual_id = required_text(
+        visual, "visual_id", refusal=f"{path} has a visual with no visual_id"
+    )
+    page = visual.get("page")
     return VisualBinding(
         visual_id=visual_id,
-        contract=contract,
+        contract=required_text(
+            visual,
+            "contract",
+            refusal=(
+                f"{path} visual {visual_id!r} has no contract; an unattributed visual "
+                "cannot be rendered"
+            ),
+        ),
         page=page if isinstance(page, str) else None,
-        headline=entry.get("headline") is True,
+        headline=visual.get("headline") is True,
     )
