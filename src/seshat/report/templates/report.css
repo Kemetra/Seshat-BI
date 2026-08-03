@@ -1,0 +1,119 @@
+/* The web surface's stylesheet. The printed surface adds report.print.css on top
+   rather than replacing this file, so a change to shared appearance lands once. */
+
+.report {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: #0f172a;
+  max-width: 46rem;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+.report[dir="rtl"] {
+  text-align: right;
+}
+
+.cover h1 {
+  font-size: 1.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.cover .subject {
+  font-weight: 600;
+  margin: 0;
+}
+
+.cover .audience {
+  color: #52606d;
+  margin-top: 0;
+}
+
+.section {
+  margin-block: 2rem;
+}
+
+.section h2 {
+  font-size: 1.15rem;
+  border-bottom: 1px solid #cbd2d9;
+  padding-bottom: 0.25rem;
+}
+
+.figures {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.figures th,
+.figures td {
+  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid #e4e7eb;
+  text-align: start;
+}
+
+/* Figures are tabular data: a fixed advance keeps columns of digits aligned. */
+.figures td.figure {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.chart {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.chart rect {
+  fill: #b45309;
+}
+
+.chart polyline {
+  stroke: #b45309;
+  stroke-width: 2;
+}
+
+.chart text {
+  font-size: 11px;
+  fill: #52606d;
+  text-anchor: middle;
+}
+
+.provenance {
+  color: #52606d;
+  font-size: 0.85rem;
+  border-top: 1px solid #cbd2d9;
+  padding-top: 0.5rem;
+}
+
+.provenance .surface {
+  font-family: ui-monospace, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  .report {
+    color: #e4e7eb;
+  }
+
+  .cover .audience,
+  .chart text,
+  .provenance {
+    color: #9aa5b1;
+  }
+
+  .section h2,
+  .provenance {
+    border-color: #3e4c59;
+  }
+
+  .figures th,
+  .figures td {
+    border-color: #323f4b;
+  }
+
+  .chart rect {
+    fill: #f0b429;
+  }
+
+  .chart polyline {
+    stroke: #f0b429;
+  }
+}

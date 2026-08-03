@@ -18,7 +18,7 @@ from pathlib import Path
 
 import yaml
 
-from seshat.report.model import ReportError
+from seshat.report.model import GOVERNED_CHART_KINDS, ReportError
 
 LAYOUT_TEMPLATE_NAME = "report-layout.yaml"
 
@@ -35,6 +35,10 @@ class LayoutSection:
     heading_code: str
     visual_ids: tuple[str, ...]
     page_break_before: bool
+    # Which chart FORM this section is drawn as, or None for tables only. A form
+    # is presentation, so it belongs here; what the figures MEAN stays in the
+    # approved contracts.
+    chart_kind: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,4 +106,17 @@ def _section(entry: object, path: Path) -> LayoutSection:
         heading_code=heading,
         visual_ids=tuple(visuals),
         page_break_before=bool(entry.get("page_break_before", False)),
+        chart_kind=_chart_kind(entry, section_id),
     )
+
+
+def _chart_kind(entry: dict, section_id: str) -> str | None:
+    kind = entry.get("chart_kind")
+    if kind is None:
+        return None
+    if not isinstance(kind, str) or kind not in GOVERNED_CHART_KINDS:
+        raise ReportError(
+            f"section {section_id!r} chart_kind {kind!r} is outside the governed "
+            f"set {sorted(GOVERNED_CHART_KINDS)}"
+        )
+    return kind

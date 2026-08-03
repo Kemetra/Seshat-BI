@@ -1,0 +1,59 @@
+{# The web surface. The printed surface EXTENDS this file rather than forking it,
+   so anything shared cannot drift between the two.
+
+   There is deliberately no `|safe` and no `Markup` anywhere in this template or
+   its children. Every value here is reachable from the bundle, and one exemption
+   would make escaping a convention rather than a guarantee. The chart macro below
+   writes SVG *tags* from this template's own source -- which is trusted because
+   it is source -- while every label passes through the same autoescaping as a
+   table cell. That is what makes a product named `<script>` inert here. #}
+{% macro chart(view) %}
+  <svg class="chart" viewBox="0 0 {{ view.width }} {{ view.height }}"
+       role="img" aria-labelledby="{{ view.kind }}-title">
+    <title id="{{ view.kind }}-title">{{ view.title_code }}</title>
+    <desc>{{ view.description_code }}</desc>
+    {% for mark in view.marks %}
+    <rect x="{{ mark.x }}" y="{{ mark.y }}"
+          width="{{ mark.width }}" height="{{ mark.height }}" />
+    {% endfor %}
+    {% if view.polyline %}
+    <polyline points="{{ view.polyline }}" fill="none" />
+    {% endif %}
+    {% for label in view.labels %}
+    <text x="{{ label.x }}" y="{{ label.y }}"
+          data-localize="{{ 'true' if label.localize else 'false' }}"
+          >{{ label.value }}</text>
+    {% endfor %}
+  </svg>
+{% endmacro %}
+<article class="report" lang="{{ language }}" dir="{{ direction }}">
+  <header class="cover">
+    <h1 data-code="{{ cover_title_code }}">{{ cover_title_code }}</h1>
+    <p class="subject">{{ table }}</p>
+    <p class="audience">{{ generated_for }}</p>
+  </header>
+{% block body %}
+{% for section in sections %}
+  <section class="section" id="{{ section.section_id }}">
+    <h2 data-code="{{ section.heading_code }}">{{ section.heading_code }}</h2>
+    {% if section.chart %}
+    {{ chart(section.chart) }}
+    {% endif %}
+    <table class="figures">
+      <tbody>
+      {% for cell in section.cells %}
+        <tr>
+          <th scope="row">{{ cell.label if cell.label else cell.figure_id }}</th>
+          <td class="figure" data-contract="{{ cell.contract_id }}">{{ cell.text }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+{% endfor %}
+{% endblock %}
+  <footer class="provenance">
+    <p>Every figure above cites the approved metric contract it came from.</p>
+    <p class="surface">{{ surface_version }}</p>
+  </footer>
+</article>

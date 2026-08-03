@@ -87,3 +87,24 @@ def test_unreadable_layout_is_refused(tmp_path: Path) -> None:
 def test_shipped_template_loads() -> None:
     layout = load_layout(_REPO / "templates" / "report-layout.yaml")
     assert layout.sections
+
+
+def test_chart_kind_is_optional(tmp_path: Path) -> None:
+    layout = load_layout(_write(tmp_path, _VALID))
+    assert layout.sections[0].chart_kind is None
+
+
+def test_governed_chart_kind_is_accepted(tmp_path: Path) -> None:
+    text = _VALID.replace(
+        "    visual_ids: [v1, v2]\n", "    visual_ids: [v1, v2]\n    chart_kind: bar\n"
+    )
+    layout = load_layout(_write(tmp_path, text))
+    assert layout.sections[0].chart_kind == "bar"
+
+
+def test_ungoverned_chart_kind_is_refused(tmp_path: Path) -> None:
+    text = _VALID.replace(
+        "    visual_ids: [v1, v2]\n", "    visual_ids: [v1, v2]\n    chart_kind: pie\n"
+    )
+    with pytest.raises(ReportError, match="chart_kind"):
+        load_layout(_write(tmp_path, text))
