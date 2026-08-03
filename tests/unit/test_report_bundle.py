@@ -149,5 +149,10 @@ def test_shipped_fixture_builds(tmp_path: Path) -> None:
         observations=observations,
     )
     assert len(bundle.figures) == len(observations)
-    assert bundle.section_ids == ("headline", "mix")
+    assert bundle.section_ids == ("headline", "mix", "by_region")
     assert bundle.figures[4].renderings["en"] == "50.37%"
+    assert bundle.figures[5].renderings["en"] == "612,480.25"
+    # Every figure cites one of the five approved contracts.
+    assert {figure.contract_id for figure in bundle.figures} <= set(
+        payload["contracts"]
+    )

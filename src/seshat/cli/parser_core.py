@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable
 from functools import partial
+from pathlib import Path
 
 
 def _add_init_project_parser(sub: argparse._SubParsersAction) -> None:
@@ -307,10 +308,45 @@ def _add_reset_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_report_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "report",
+        help=(
+            "render an approved design as an HTML page, an Excel workbook or a "
+            "PDF; every figure cites the approved metric contract it came from. "
+            "Gated on dashboard_ready: pass. Needs the `report` extra "
+            "(`report-pdf` as well for PDF)"
+        ),
+    )
+    p.add_argument("--table", required=True, help="table id under mappings/")
+    p.add_argument("--format", required=True, choices=("html", "xlsx", "pdf"))
+    p.add_argument("--language", default="en")
+    p.add_argument(
+        "--output",
+        type=Path,
+        default=Path(".seshat-output") / "report",
+        help="output directory (default .seshat-output/report)",
+    )
+    p.add_argument(
+        "--layout",
+        type=Path,
+        default=None,
+        help="print overlay; default mappings/<table>/design/report-layout.yaml",
+    )
+    p.add_argument(
+        "--observations",
+        type=Path,
+        default=None,
+        help="figure observations file; reading gold directly is not built yet",
+    )
+    p.add_argument("--repo-root", type=Path, default=Path("."))
+
+
 _FAMILIES: dict[str, Callable[[argparse._SubParsersAction], None]] = {
     "first_arrival": _add_init_project_parser,
     "scaffold_source": _add_scaffold_source_parser,
     "scaffold_design": _add_scaffold_design_parser,
+    "report": _add_report_parser,
     "status": _add_status_parser,
     "next": _add_next_parser,
     "approvals": partial(

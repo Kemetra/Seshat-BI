@@ -23,6 +23,16 @@ layout:
       heading_code: section.mix
       visual_ids: [kpi_quantity, kpi_discount_rate]
       page_break_before: true
+    # A same-unit series, so this one CAN be charted. The two sections above
+    # deliberately mix currency with counts and ratios, which is normal for a KPI
+    # row and is exactly why charts.build_chart refuses to draw them: one axis
+    # states one dimension.
+    - section_id: by_region
+      order: 3
+      heading_code: section.by_region
+      visual_ids: [region_north, region_south, region_east]
+      page_break_before: false
+      chart_kind: bar
 observations:
   - visual_id: kpi_total_sales
     contract_id: TotalSales
@@ -54,3 +64,21 @@ observations:
     unit_kind: ratio
     label: null
     value: "0.5037"
+  - visual_id: region_north
+    contract_id: TotalSales
+    metric: TotalSales
+    unit_kind: currency
+    label: North
+    value: "612480.25"
+  - visual_id: region_south
+    contract_id: TotalSales
+    metric: TotalSales
+    unit_kind: currency
+    label: South
+    value: "534210.50"
+  - visual_id: region_east
+    contract_id: TotalSales
+    metric: TotalSales
+    unit_kind: currency
+    label: East
+    value: "405380.25"
