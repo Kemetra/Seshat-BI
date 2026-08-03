@@ -44,7 +44,23 @@ def build_report_parser() -> argparse.ArgumentParser:
         "--observations",
         type=Path,
         default=None,
-        help="figure observations (increment A); increment B reads gold instead",
+        help="figures WITH values, read offline; no database is contacted",
+    )
+    parser.add_argument(
+        "--from-gold",
+        action="store_true",
+        help="read every figure's value from the warehouse; needs --figure-plan",
+    )
+    parser.add_argument(
+        "--figure-plan",
+        type=Path,
+        default=None,
+        help="which figures to render and how to format them, carrying NO values",
+    )
+    parser.add_argument(
+        "--dsn",
+        default=None,
+        help="Postgres DSN for --from-gold; falls back to the workspace environment",
     )
     parser.add_argument("--repo-root", type=Path, default=Path("."))
     return parser
@@ -112,11 +128,149 @@ def _observation(entry: object, path: Path) -> dict[str, object]:
     return {**entry, "value": value}
 
 
+def _assert_one_figure_source(args: argparse.Namespace) -> None:
+    """Exactly one source of figures, chosen explicitly.
+
+    Preferring one silently when both are given is how a report ends up showing
+    warehouse numbers to someone who believes they rendered a file, or the reverse.
+    """
+    from seshat.report.model import ReportError
+
+    if args.from_gold and args.observations is not None:
+        raise ReportError(
+            "--from-gold and --observations both name a source of figures. Pass one: "
+            "--from-gold reads the warehouse, --observations reads the file."
+        )
+    if args.from_gold and args.figure_plan is None:
+        raise ReportError(
+            "--from-gold needs --figure-plan <file>: the warehouse supplies values, "
+            "but which figures to render and how to format them is not something a "
+            "table can say."
+        )
+    if not args.from_gold and args.figure_plan is not None:
+        raise ReportError(
+            "--figure-plan carries no values, so it renders nothing on its own. Add "
+            "--from-gold to fill it from the warehouse."
+        )
+    if not args.from_gold and args.observations is None:
+        raise ReportError(
+            "no figure source: pass --observations <file> to render from a file, or "
+            "--from-gold --figure-plan <file> to read the warehouse."
+        )
+
+
+def load_figure_plan(path: Path) -> list[dict[str, object]]:
+    """Which figures to render, and how to format them. Never their values.
+
+    A plan carrying a ``value`` is refused rather than having it quietly discarded:
+    an operator who reuses a stale observations file here would otherwise believe
+    those numbers were checked against the warehouse when they were thrown away.
+    """
+    from seshat.report.model import ReportError
+
+    try:
+        payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError) as exc:
+        raise ReportError(f"cannot read figure plan {path}: {exc}") from exc
+    entries = payload.get("figures")
+    if not isinstance(entries, list) or not entries:
+        raise ReportError(f"{path} declares no figures")
+    for entry in entries:
+        if isinstance(entry, dict) and entry.get("value") is not None:
+            raise ReportError(
+                f"{path} figure {entry.get('visual_id')!r} carries a value. A figure "
+                "plan states what to render; --from-gold supplies every value, so "
+                "this one would be discarded. Remove it, or drop --from-gold and use "
+                "--observations."
+            )
+    return [entry for entry in entries if isinstance(entry, dict)]
+
+
+def _live_observations(
+    args: argparse.Namespace, repo_root: Path
+) -> list[dict[str, object]]:
+    """Resolve the plan's figures against gold, through the governed bindings."""
+    from seshat import cli
+    from seshat.report.binding import binding_map_path, load_binding_map
+    from seshat.report.model import ReportError
+    from seshat.report.observe import observe
+
+    plan = load_figure_plan(args.figure_plan)
+    binding_map = load_binding_map(
+        binding_map_path(repo_root, args.table), expect_table=args.table
+    )
+    requests = [_request(entry, binding_map) for entry in plan]
+    contracts = _contract_payloads(repo_root, args.table)
+    if not cli._ensure_driver():
+        raise ReportError(
+            "--from-gold needs the optional DB driver. Install it with "
+            '`pip install "seshat-bi[db]"`. Rendering from --observations needs no '
+            "driver."
+        )
+    runner = cli._make_runner(_dsn(args))
+    return observe(runner, requests, contracts)
+
+
+def _request(entry: dict[str, object], binding_map) -> object:
+    """One plan entry as a figure request, with its citation taken from the map.
+
+    The plan does not get to say which contract a visual cites. That is the design
+    review's decision, so it is read from the signed binding map, and a plan that
+    disagrees is refused rather than overridden -- a silent override would leave the
+    operator believing the citation they wrote is the one on the page.
+    """
+    from seshat.report.model import ReportError
+    from seshat.report.observe import FigureRequest
+
+    visual_id = str(entry.get("visual_id") or "")
+    governed = binding_map.contract_for(visual_id)
+    declared = entry.get("contract_id")
+    if declared is not None and str(declared) != governed:
+        raise ReportError(
+            f"figure plan binds visual {visual_id!r} to {declared!r}, but the approved "
+            f"binding map binds it to {governed!r}. The design review decides the "
+            "citation; fix the plan or have the design re-reviewed."
+        )
+    return FigureRequest(
+        visual_id=visual_id,
+        contract_id=governed,
+        unit_kind=str(entry.get("unit_kind") or ""),
+        label=str(entry["label"]) if entry.get("label") is not None else None,
+    )
+
+
+def _contract_payloads(repo_root: Path, table: str) -> dict[str, dict]:
+    """Every approved contract for the table, parsed."""
+    from seshat.report.model import ReportError
+
+    payloads: dict[str, dict] = {}
+    directory = repo_root / "mappings" / table / "metrics"
+    for path in sorted(directory.glob("*.yaml")):
+        try:
+            loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError) as exc:
+            raise ReportError(f"cannot read contract {path}: {exc}") from exc
+        if isinstance(loaded, dict):
+            payloads[path.stem] = loaded
+    return payloads
+
+
+def _dsn(args: argparse.Namespace) -> object:
+    """The connection, resolved the same way `value-check` resolves it."""
+    import os
+
+    from seshat.validate import resolve_dsn
+
+    env = dict(os.environ)
+    if args.dsn:
+        env = {**env, "DATABASE_URL": args.dsn}
+    return resolve_dsn(env)
+
+
 def _render(args: argparse.Namespace) -> Path:
     from seshat.report.bundle import ApprovedDesign, build_bundle
     from seshat.report.gate import assert_renderable
     from seshat.report.layout import load_layout
-    from seshat.report.model import ReportError
 
     repo_root = args.repo_root.resolve()
     assert_renderable(repo_root, args.table)
@@ -127,12 +281,11 @@ def _render(args: argparse.Namespace) -> Path:
     )
     layout = load_layout(layout_path)
 
-    if args.observations is None:
-        raise ReportError(
-            "no figure source: pass --observations <file>. Reading gold directly is "
-            "increment B and is not built yet, so there is nothing to render from."
-        )
-    observations = load_observations(args.observations)
+    _assert_one_figure_source(args)
+    if args.from_gold:
+        observations = _live_observations(args, repo_root)
+    else:
+        observations = load_observations(args.observations)
     bundle = build_bundle(
         table=args.table,
         generated_for=args.language,

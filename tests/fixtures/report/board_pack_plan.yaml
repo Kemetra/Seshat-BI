@@ -1,0 +1,25 @@
+# A FIGURE PLAN: which figures to render and how to format them. It carries no
+# values -- `--from-gold` supplies every one from the warehouse. A value here is
+# refused rather than discarded (see load_figure_plan).
+#
+# visual_ids are the governed ones from
+# mappings/retail_store_sales/design/visual-contract-binding-map.md. contract_id is
+# omitted deliberately: the signed binding map decides the citation, and a plan
+# that disagrees with it is refused.
+#
+# Only whole-table figures appear. v05-v09 are breakdowns, and no approved
+# artifact declares their grouping column, so they cannot be resolved live.
+table: retail_store_sales
+figures:
+  - visual_id: v01
+    unit_kind: currency
+    label: null
+  - visual_id: v02
+    unit_kind: count
+    label: null
+  - visual_id: v03
+    unit_kind: currency
+    label: null
+  - visual_id: v04
+    unit_kind: ratio
+    label: null
