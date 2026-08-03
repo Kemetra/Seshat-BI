@@ -1,0 +1,112 @@
+"""Two baselines, split by portability.
+
+Findings are tracked -- portable and worth a git diff. Timings are
+machine-local: committing them would turn a different laptop, or CI, into a
+permanent false regression. This follows the .seshat/watch/ precedent (spec 131).
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Sequence
+from dataclasses import dataclass
+from pathlib import Path
+
+from scripts.adopter_sim.model import AdopterSimError
+from scripts.adopter_sim.quorum import QuorumVerdict
+
+# Only a confirmed verdict is baseline-worthy. Flaky, insufficient_data, and
+# advisory verdicts are reported but never recorded as accepted state.
+_BASELINE_STATUS = "confirmed"
+
+
+@dataclass(frozen=True)
+class DiffRow:
+    step: int
+    kind: str
+    state: str
+
+
+def findings_baseline_path(repo_root: Path, journey: str) -> Path:
+    return (
+        repo_root / "benchmark" / "journeys" / "baseline" / f"{journey}.findings.json"
+    )
+
+
+def timings_baseline_path(repo_root: Path, journey: str) -> Path:
+    return repo_root / ".seshat" / "adopter-sim" / f"{journey}.timings.json"
+
+
+def load_findings_baseline(path: Path) -> tuple[dict[str, str], ...]:
+    if not path.is_file():
+        return ()
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise AdopterSimError(f"cannot read baseline {path}: {exc}") from exc
+    entries = payload.get("findings") or []
+    return tuple(
+        {"step": int(entry["step"]), "kind": str(entry["kind"])} for entry in entries
+    )
+
+
+def diff_findings(
+    verdicts: Sequence[QuorumVerdict], baseline: Sequence[dict[str, str]]
+) -> tuple[DiffRow, ...]:
+    current = {(v.step, v.kind) for v in verdicts if v.status == _BASELINE_STATUS}
+    known = {(int(e["step"]), str(e["kind"])) for e in baseline}
+    rows = [DiffRow(step, kind, "new") for step, kind in sorted(current - known)]
+    rows += [
+        DiffRow(step, kind, "resolved") for step, kind in sorted(known - current)
+    ]
+    rows += [
+        DiffRow(step, kind, "unchanged") for step, kind in sorted(current & known)
+    ]
+    return tuple(rows)
+
+
+def update_findings_baseline(
+    path: Path,
+    verdicts: Sequence[QuorumVerdict],
+    *,
+    run_id: str,
+    kit_version: str,
+    invoked_by: str,
+    partial: bool,
+    single_run: bool,
+    aborted: bool,
+) -> None:
+    """Write the accepted findings plus provenance, or refuse.
+
+    Refusal conditions exist so a hand-wave cannot become accepted state.
+    """
+    if partial:
+        raise AdopterSimError("refusing baseline update: the run was partial")
+    if single_run:
+        raise AdopterSimError(
+            "refusing baseline update: --runs 1 findings are not reproduced"
+        )
+    if aborted:
+        raise AdopterSimError(
+            "refusing baseline update: the run aborted on an assertion or "
+            "fixture self-test"
+        )
+    if not invoked_by.strip():
+        raise AdopterSimError("refusing baseline update: no invoking human named")
+
+    payload = {
+        "version": 1,
+        "provenance": {
+            "run_id": run_id,
+            "kit_version": kit_version,
+            "invoked_by": invoked_by,
+        },
+        "findings": [
+            {"step": v.step, "kind": v.kind, "detail": v.detail}
+            for v in sorted(verdicts, key=lambda v: (v.step, v.kind))
+            if v.status == _BASELINE_STATUS
+        ],
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return None
