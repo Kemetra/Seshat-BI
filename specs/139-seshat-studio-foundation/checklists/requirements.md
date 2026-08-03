@@ -27,12 +27,12 @@
 - [x] Studio is classified downstream of Core Authority.
 - [x] Local hosting and Codex connectivity are explicit adapter surfaces.
 - [x] No API key or secret is stored or exposed.
-- [x] Spec 138 remains the sole active implementation while this spec is draft.
-- [ ] A named human has reviewed and ratified this exact specification.
+- [x] Spec 138 remains the sole active implementation while this ratified spec awaits activation.
+- [x] A named human has reviewed and ratified this exact specification — Ahmed Shaaban, 2026-08-03.
 - [ ] The repository's single active-plan fence points only to this spec.
 
 ## Notes
 
-The two open items are implementation gates, not missing specification content.
-They must remain open until the active spec 138 work is completed or formally
-parked and a named human ratifies this package.
+The remaining open item is an implementation gate, not missing specification
+content. It must remain open until active spec 138 is completed and both active
+plan markers move together to spec 139.

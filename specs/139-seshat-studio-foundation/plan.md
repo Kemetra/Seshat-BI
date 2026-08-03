@@ -5,8 +5,8 @@
 **Input**: Feature specification from
 `/specs/139-seshat-studio-foundation/spec.md`
 
-**Status**: planning package authored; implementation is blocked until a named
-human ratifies this exact package and it becomes the sole active Spec Kit plan.
+**Status**: ratified by Ahmed Shaaban (owner), 2026-08-03; implementation remains
+blocked until spec 138 closes and this becomes the sole active Spec Kit plan.
 
 ## Summary
 

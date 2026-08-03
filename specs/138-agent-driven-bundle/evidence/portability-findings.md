@@ -401,8 +401,22 @@ and one markdown link escaping the bundle
 audit does not see, since it only inspects backticked paths, but the exporter's own
 `_validate_links` does.
 
-**US4 remains open** with its measured cost: 301 rewrites across 21 consumer
-skills.
+**US4 was open at this checkpoint** with its measured cost: 301 rewrites across
+21 consumer skills.
+
+### OWNER AMENDMENT — defer US4 into a separate future specification
+
+- **ruled_by**: Ahmed Shaaban (owner)
+- **ruled_on**: 2026-08-03
+- **recorded_by**: the agent transcribed the owner's explicit authorization; it
+  did not self-grant the decision.
+
+T061–T064 and FR-020 are removed from spec 138's completion scope and remain
+unimplemented. Their measured portability and routing-cost evidence is preserved
+here as input to a separately designed and ratified future specification. The
+current inventory remains truthful (`ships: false` for those capabilities), and
+the committed bundles remain the identical 21-skill US3 artifacts. No future
+specification identifier is reserved by this amendment.
 
 ### Known gate coverage gaps (not defects, but recorded)
 

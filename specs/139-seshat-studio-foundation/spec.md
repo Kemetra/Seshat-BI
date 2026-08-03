@@ -4,7 +4,14 @@
 
 **Created**: 2026-08-03
 
-**Status**: draft
+**Status**: ratified -- Ahmed Shaaban (owner), 2026-08-03; activation pending the single-plan fence
+
+**Status history**: draft
+
+<!-- The owner explicitly ratified this exact specification, plan, contracts,
+     and task list on 2026-08-03. Ratification does not activate implementation:
+     FR-036 still requires spec 138 to close and the sole active Spec Kit fence
+     to point to this plan. -->
 
 **Input**: Build the first independently useful slice of Seshat Studio: a modern
 localhost analyst console that opens from the Seshat agent, reads one workspace

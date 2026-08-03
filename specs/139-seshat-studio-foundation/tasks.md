@@ -3,13 +3,14 @@
 **Input**: [spec.md](./spec.md), [plan.md](./plan.md), [research.md](./research.md),
 [data-model.md](./data-model.md), and [contracts](./contracts/).
 
-**Status**: planned, not authorized for implementation. T001 and T002 are hard
-preconditions; no later task may start while either is open.
+**Status**: ratified, not yet active for implementation. T002 remains a hard
+precondition; no later task may start while it is open.
 
 ## Phase 1 - Governance Preconditions
 
-- [ ] **T001** Record named-human ratification of this exact specification, plan,
-  contracts, and task list without agent self-ratification. [FR-036]
+- [x] **T001** Record named-human ratification of this exact specification, plan,
+  contracts, and task list without agent self-ratification — Ahmed Shaaban,
+  2026-08-03. [FR-036]
 - [ ] **T002** Complete or formally park spec 138 and update the one active Spec Kit
   marker to this plan; run the active-marker contract test. [FR-036]
 - [ ] **T003** Capture baseline results for static dashboard, B1 imports, bundle
