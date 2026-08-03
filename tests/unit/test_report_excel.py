@@ -25,7 +25,7 @@ sections:
 
 
 def _render(tmp_path: Path, label: str = "Region A"):
-    from seshat.report.bundle import build_bundle
+    from seshat.report.bundle import ApprovedDesign, build_bundle
     from seshat.report.excel import ExcelReportRenderer
     from seshat.report.layout import load_layout
 
@@ -35,8 +35,7 @@ def _render(tmp_path: Path, label: str = "Region A"):
     bundle = build_bundle(
         table="retail_store_sales",
         generated_for="board",
-        layout=layout,
-        contracts={"TotalSales": "x.yaml"},
+        design=ApprovedDesign(layout=layout, contracts={"TotalSales": "x.yaml"}),
         observations=[
             {
                 "visual_id": "v1",

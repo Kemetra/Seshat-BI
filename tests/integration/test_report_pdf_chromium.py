@@ -62,7 +62,7 @@ class _SpyPrinter:
 
 
 def _artifacts(tmp_path: Path):
-    from seshat.report.bundle import build_bundle
+    from seshat.report.bundle import ApprovedDesign, build_bundle
     from seshat.report.layout import load_layout
 
     payload = yaml.safe_load(_FIXTURE.read_text(encoding="utf-8"))
@@ -73,8 +73,9 @@ def _artifacts(tmp_path: Path):
     bundle = build_bundle(
         table=payload["table"],
         generated_for=payload["generated_for"],
-        layout=load_layout(layout_path),
-        contracts=payload["contracts"],
+        design=ApprovedDesign(
+            layout=load_layout(layout_path), contracts=payload["contracts"]
+        ),
         observations=[
             {**entry, "value": Decimal(str(entry["value"]))}
             for entry in payload["observations"]

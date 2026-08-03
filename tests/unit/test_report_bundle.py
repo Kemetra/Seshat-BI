@@ -6,7 +6,12 @@ from pathlib import Path
 import pytest
 import yaml
 
-from seshat.report.bundle import PENDING, build_bundle, render_value
+from seshat.report.bundle import (
+    PENDING,
+    ApprovedDesign,
+    build_bundle,
+    render_value,
+)
 from seshat.report.layout import ReportLayout, load_layout
 from seshat.report.model import ReportError
 
@@ -68,8 +73,12 @@ def test_bundle_carries_the_rendered_text(tmp_path: Path) -> None:
     bundle = build_bundle(
         table="retail_store_sales",
         generated_for="board",
-        layout=_layout(tmp_path),
-        contracts={"TotalSales": "mappings/retail_store_sales/metrics/TotalSales.yaml"},
+        design=ApprovedDesign(
+            layout=_layout(tmp_path),
+            contracts={
+                "TotalSales": "mappings/retail_store_sales/metrics/TotalSales.yaml"
+            },
+        ),
         observations=_OBS,
     )
     figure = bundle.figures[0]
@@ -85,8 +94,9 @@ def test_observation_without_an_approved_contract_is_refused(tmp_path: Path) -> 
         build_bundle(
             table="t",
             generated_for="board",
-            layout=_layout(tmp_path),
-            contracts={"TotalSales": "x.yaml"},
+            design=ApprovedDesign(
+                layout=_layout(tmp_path), contracts={"TotalSales": "x.yaml"}
+            ),
             observations=rogue,
         )
 
@@ -97,8 +107,9 @@ def test_observation_for_an_undeclared_visual_is_refused(tmp_path: Path) -> None
         build_bundle(
             table="t",
             generated_for="board",
-            layout=_layout(tmp_path),
-            contracts={"TotalSales": "x.yaml"},
+            design=ApprovedDesign(
+                layout=_layout(tmp_path), contracts={"TotalSales": "x.yaml"}
+            ),
             observations=rogue,
         )
 
@@ -109,8 +120,9 @@ def test_missing_value_renders_as_pending_not_a_number(tmp_path: Path) -> None:
     bundle = build_bundle(
         table="t",
         generated_for="board",
-        layout=_layout(tmp_path),
-        contracts={"TotalSales": "x.yaml"},
+        design=ApprovedDesign(
+            layout=_layout(tmp_path), contracts={"TotalSales": "x.yaml"}
+        ),
         observations=pending,
     )
     assert bundle.figures[0].renderings["en"] == PENDING
@@ -121,8 +133,9 @@ def test_sections_index_their_own_figures(tmp_path: Path) -> None:
     bundle = build_bundle(
         table="t",
         generated_for="board",
-        layout=_layout(tmp_path),
-        contracts={"TotalSales": "x.yaml"},
+        design=ApprovedDesign(
+            layout=_layout(tmp_path), contracts={"TotalSales": "x.yaml"}
+        ),
         observations=_OBS,
     )
     assert bundle.sections[0].figure_ids == ("v1",)
@@ -144,8 +157,9 @@ def test_shipped_fixture_builds(tmp_path: Path) -> None:
     bundle = build_bundle(
         table=payload["table"],
         generated_for=payload["generated_for"],
-        layout=load_layout(layout_path),
-        contracts=payload["contracts"],
+        design=ApprovedDesign(
+            layout=load_layout(layout_path), contracts=payload["contracts"]
+        ),
         observations=observations,
     )
     assert len(bundle.figures) == len(observations)

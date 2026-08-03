@@ -50,7 +50,7 @@ class FakePrinter:
 
 
 def _artifacts(tmp_path: Path):
-    from seshat.report.bundle import build_bundle
+    from seshat.report.bundle import ApprovedDesign, build_bundle
     from seshat.report.layout import load_layout
 
     path = tmp_path / "report-layout.yaml"
@@ -74,8 +74,7 @@ def _artifacts(tmp_path: Path):
     bundle = build_bundle(
         table="retail_store_sales",
         generated_for="board",
-        layout=layout,
-        contracts={"TotalSales": "x.yaml"},
+        design=ApprovedDesign(layout=layout, contracts={"TotalSales": "x.yaml"}),
         observations=observations,
     )
     return bundle, layout

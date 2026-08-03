@@ -12,6 +12,7 @@ not change when that happens, which is the point of putting the seam here.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
 from seshat.report.layout import ReportLayout
@@ -46,22 +47,37 @@ def render_value(value: Decimal, unit_kind: str) -> str:
     return f"{percent}%"
 
 
+@dataclass(frozen=True, slots=True)
+class ApprovedDesign:
+    """The two things an owner approved, travelling together.
+
+    They are one argument because they are one decision: the overlay says what
+    appears and in what order, the contracts say what a figure is allowed to cite,
+    and a bundle built from one without the other is not built from an approved
+    design at all.
+    """
+
+    layout: ReportLayout
+    contracts: Mapping[str, str]
+
+
 def build_bundle(
     *,
     table: str,
     generated_for: str,
-    layout: ReportLayout,
-    contracts: Mapping[str, str],
+    design: ApprovedDesign,
     observations: Sequence[Mapping[str, object]],
 ) -> ReportBundle:
     """Compute and format every figure once, then freeze it."""
+    layout = design.layout
     declared = {
         visual_id: section.section_id
         for section in layout.sections
         for visual_id in section.visual_ids
     }
     figures = tuple(
-        _figure(entry, declared=declared, contracts=contracts) for entry in observations
+        _figure(entry, declared=declared, contracts=design.contracts)
+        for entry in observations
     )
     sections = tuple(
         Section(

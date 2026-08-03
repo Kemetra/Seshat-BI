@@ -48,23 +48,42 @@ class ReportLayout:
 
 
 def load_layout(path: Path) -> ReportLayout:
+    raw = _document(path)
+    cover = _cover_title_code(raw, path)
+    sections = tuple(_section(entry, path) for entry in _raw_sections(raw, path))
+    _assert_ordered(sections, path)
+    return ReportLayout(cover_title_code=cover, sections=sections)
+
+
+def _document(path: Path) -> dict:
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError) as exc:
         raise ReportError(f"cannot read layout {path}: {exc}") from exc
     if not isinstance(raw, dict):
         raise ReportError(f"layout {path} is not a mapping")
+    return raw
+
+
+def _cover_title_code(raw: dict, path: Path) -> str:
     cover = raw.get("cover_title_code")
     if not isinstance(cover, str) or not cover:
         raise ReportError(f"layout {path} has no cover_title_code")
-    raw_sections = raw.get("sections")
-    if not isinstance(raw_sections, list) or not raw_sections:
+    return cover
+
+
+def _raw_sections(raw: dict, path: Path) -> list:
+    sections = raw.get("sections")
+    if not isinstance(sections, list) or not sections:
         raise ReportError(f"layout {path} declares no sections")
-    sections = tuple(_section(entry, path) for entry in raw_sections)
+    return sections
+
+
+def _assert_ordered(sections: tuple[LayoutSection, ...], path: Path) -> None:
+    """Sections are read in file order, so the declared order has to agree with it."""
     orders = [section.order for section in sections]
     if orders != sorted(orders):
         raise ReportError(f"layout {path} sections are out of order: {orders}")
-    return ReportLayout(cover_title_code=cover, sections=sections)
 
 
 def _reject_meaning(entry: dict, section_id: str) -> None:

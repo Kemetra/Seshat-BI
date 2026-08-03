@@ -113,7 +113,7 @@ def _observation(entry: object, path: Path) -> dict[str, object]:
 
 
 def _render(args: argparse.Namespace) -> Path:
-    from seshat.report.bundle import build_bundle
+    from seshat.report.bundle import ApprovedDesign, build_bundle
     from seshat.report.gate import assert_renderable
     from seshat.report.layout import load_layout
     from seshat.report.model import ReportError
@@ -136,8 +136,9 @@ def _render(args: argparse.Namespace) -> Path:
     bundle = build_bundle(
         table=args.table,
         generated_for=args.language,
-        layout=layout,
-        contracts=approved_contracts(repo_root, args.table),
+        design=ApprovedDesign(
+            layout=layout, contracts=approved_contracts(repo_root, args.table)
+        ),
         observations=observations,
     )
     return _write(args, bundle, layout)

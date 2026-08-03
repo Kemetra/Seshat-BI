@@ -49,7 +49,7 @@ class FakePrinter:
 
 
 def _artifacts(tmp_path: Path):
-    from seshat.report.bundle import build_bundle
+    from seshat.report.bundle import ApprovedDesign, build_bundle
     from seshat.report.layout import load_layout
 
     path = tmp_path / "report-layout.yaml"
@@ -58,8 +58,7 @@ def _artifacts(tmp_path: Path):
     bundle = build_bundle(
         table="retail_store_sales",
         generated_for="board",
-        layout=layout,
-        contracts={"TotalSales": "x.yaml"},
+        design=ApprovedDesign(layout=layout, contracts={"TotalSales": "x.yaml"}),
         observations=[
             {
                 "visual_id": "v1",
@@ -156,7 +155,7 @@ def test_a_hostile_label_is_inert_in_every_surface(tmp_path: Path) -> None:
 
 def test_a_pending_figure_says_so_in_every_surface(tmp_path: Path) -> None:
     """No data source must never become an invented number, on any surface."""
-    from seshat.report.bundle import PENDING, build_bundle
+    from seshat.report.bundle import PENDING, ApprovedDesign, build_bundle
     from seshat.report.layout import load_layout
 
     path = tmp_path / "report-layout.yaml"
@@ -165,8 +164,7 @@ def test_a_pending_figure_says_so_in_every_surface(tmp_path: Path) -> None:
     bundle = build_bundle(
         table="t",
         generated_for="board",
-        layout=layout,
-        contracts={"TotalSales": "x.yaml"},
+        design=ApprovedDesign(layout=layout, contracts={"TotalSales": "x.yaml"}),
         observations=[
             {
                 "visual_id": "v1",
