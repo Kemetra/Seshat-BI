@@ -28,9 +28,7 @@ def test_dsn_from_parent_is_not_inherited(tmp_path: Path) -> None:
 
 
 def test_arbitrary_parent_keys_are_not_inherited(tmp_path: Path) -> None:
-    env = _env(
-        tmp_path, {"SESHAT_SECRET": "x", "DATABASE_URL": "y", "PGPASSWORD": "z"}
-    )
+    env = _env(tmp_path, {"SESHAT_SECRET": "x", "DATABASE_URL": "y", "PGPASSWORD": "z"})
     assert set(env) & {"SESHAT_SECRET", "DATABASE_URL", "PGPASSWORD"} == set()
 
 
