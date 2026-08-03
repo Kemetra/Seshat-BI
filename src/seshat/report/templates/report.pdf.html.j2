@@ -1,0 +1,43 @@
+{# The printed surface. It EXTENDS the web template rather than replacing it, so the
+   cover, the sections, the tables and the chart macro live in exactly one place.
+
+   What this file owns is everything a *page* needs and a viewport does not: the
+   print stylesheet, and the page-break behaviour the overlay asked for. `extends`
+   must be the first tag in a child template, and content outside a block is
+   discarded -- so everything here is inside a block override. #}
+{% extends "report.html.j2" %}
+{% import "_chart.j2" as charts %}
+{% block styles %}
+  <style>{{ screen_stylesheet }}</style>
+  <style>{{ print_stylesheet }}</style>
+{% endblock %}
+{% block body %}
+{% for section in sections %}
+  <section class="section{% if section.page_break_before %} page-break{% endif %}"
+           id="{{ section.section_id }}">
+    <h2 data-code="{{ section.heading_code }}">{{ section.heading }}</h2>
+    {% if section.chart %}
+    {{ charts.chart(section.chart, section.section_id) }}
+    {% endif %}
+    <table class="figures">
+      <tbody>
+      {% for cell in section.cells %}
+        <tr>
+          <th scope="row">{{ cell.label if cell.label else cell.figure_id }}</th>
+          <td class="figure" data-contract="{{ cell.contract_id }}">{{ cell.text }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% if section.caveats %}
+    <aside class="caveats">
+      <ul>
+      {% for caveat in section.caveats %}
+        <li>{{ caveat }}</li>
+      {% endfor %}
+      </ul>
+    </aside>
+    {% endif %}
+  </section>
+{% endfor %}
+{% endblock %}

@@ -939,7 +939,9 @@ def _build_parser(prog: str = "retail") -> argparse.ArgumentParser:
     _add_severity_posture_parser(sub)
     _add_scaffold_parser(sub)
     _add_init_parser(sub)
-    add_core_parsers(sub, "first_arrival", "scaffold_source", "scaffold_design")
+    add_core_parsers(
+        sub, "first_arrival", "scaffold_source", "scaffold_design", "report"
+    )
     _add_adopt_pbip_parser(sub)
     add_analysis_parser(sub)
     _add_dbt_parser(sub)

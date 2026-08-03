@@ -107,6 +107,17 @@ snowflake = [
 files = [
     "openpyxl>=3.1",
 ]
+# Report surfaces. `report` covers HTML + Excel and needs NO browser, which is why
+# it is separate from `report-pdf`: an adopter who only wants a page or a workbook
+# should not install Chromium to get one. Neither is in the base install, so the
+# static core stays dependency-light (pyyaml only).
+report = [
+    "jinja2>=3.1,<4",
+    "xlsxwriter>=3.2,<4",
+]
+report-pdf = [
+    "playwright>=1.61,<2",
+]
 # `livetest` extra (spec 082): the optional Docker-orchestration library for the
 # LOCAL live-validation suite (tests/live_db/). It stands up an ephemeral Postgres
 # container so `retail validate` / `value-check`'s already-built live checks run
@@ -168,6 +179,10 @@ packages = ["src/seshat", "src/retail"]
 # the first Source-Ready artifact without the development repository. Only the
 # table-neutral blank templates ship (constitution VII).
 "templates/source-profile.md" = "seshat/stage1_templates/source-profile.md"
+# NOTE: src/seshat/report/templates needs NO force-include. `packages` already
+# carries every file under src/seshat, including the .j2 and .css the report
+# surfaces load through PackageLoader; adding it here collided on the same archive
+# path. The wheel content test below is what proves they ship.
 "templates/readiness-status.yaml" = "seshat/stage1_templates/readiness-status.yaml"
 "templates/source-map.yaml" = "seshat/stage1_templates/source-map.yaml"
 # The other two of the five sister artifacts source-map.yaml declares a reviewer

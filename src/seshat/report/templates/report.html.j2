@@ -1,0 +1,63 @@
+{# The web surface, and the BASE the printed surface extends. Anything shared lives
+   here exactly once, so it cannot drift between the page a reader opens and the
+   page a reader prints.
+
+   The stylesheet is inlined rather than linked, so the document is a single file an
+   adopter can email or open offline. There is deliberately no `|safe` and no
+   `Markup` anywhere in this template or its children: every value here is
+   reachable from the bundle, and one exemption would make escaping a convention
+   rather than a guarantee. #}
+{% import "_chart.j2" as charts %}
+<!doctype html>
+<html lang="{{ language }}" dir="{{ direction }}">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ cover_title }}</title>
+{% block styles %}
+  <style>{{ screen_stylesheet }}</style>
+{% endblock %}
+</head>
+<body>
+<article class="report">
+  <header class="cover">
+    <h1 data-code="{{ cover_title_code }}">{{ cover_title }}</h1>
+    <p class="subject">{{ table }}</p>
+    <p class="audience">{{ generated_for }}</p>
+  </header>
+{% block body %}
+{% for section in sections %}
+  <section class="section" id="{{ section.section_id }}">
+    <h2 data-code="{{ section.heading_code }}">{{ section.heading }}</h2>
+    {% if section.chart %}
+    {{ charts.chart(section.chart, section.section_id) }}
+    {% endif %}
+    <table class="figures">
+      <tbody>
+      {% for cell in section.cells %}
+        <tr>
+          <th scope="row">{{ cell.label if cell.label else cell.figure_id }}</th>
+          <td class="figure" data-contract="{{ cell.contract_id }}">{{ cell.text }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% if section.caveats %}
+    <aside class="caveats">
+      <ul>
+      {% for caveat in section.caveats %}
+        <li>{{ caveat }}</li>
+      {% endfor %}
+      </ul>
+    </aside>
+    {% endif %}
+  </section>
+{% endfor %}
+{% endblock %}
+  <footer class="provenance">
+    <p>Every figure above cites the approved metric contract it came from.</p>
+    <p class="surface">{{ surface_version }}</p>
+  </footer>
+</article>
+</body>
+</html>
