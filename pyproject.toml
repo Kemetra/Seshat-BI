@@ -179,9 +179,10 @@ packages = ["src/seshat", "src/retail"]
 # the first Source-Ready artifact without the development repository. Only the
 # table-neutral blank templates ship (constitution VII).
 "templates/source-profile.md" = "seshat/stage1_templates/source-profile.md"
-# The report surfaces load their Jinja templates and stylesheets through
-# PackageLoader, so a bare wheel without these renders nothing at all.
-"src/seshat/report/templates" = "seshat/report/templates"
+# NOTE: src/seshat/report/templates needs NO force-include. `packages` already
+# carries every file under src/seshat, including the .j2 and .css the report
+# surfaces load through PackageLoader; adding it here collided on the same archive
+# path. The wheel content test below is what proves they ship.
 "templates/readiness-status.yaml" = "seshat/stage1_templates/readiness-status.yaml"
 "templates/source-map.yaml" = "seshat/stage1_templates/source-map.yaml"
 # The other two of the five sister artifacts source-map.yaml declares a reviewer
