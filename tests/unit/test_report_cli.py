@@ -211,3 +211,171 @@ def test_a_bare_pass_token_carries_no_evidence(tmp_path: Path) -> None:
 def test_the_shipped_table_records_real_evidence() -> None:
     """The stricter gate holds for the table the kit actually ships."""
     assert len(stage_evidence(_REPO, "retail_store_sales")) >= 1
+
+
+# --- input validation (Codex review findings 1, 5, 6, 8, 9, 12, 16) ---------
+
+
+def test_an_unapproved_contract_file_is_not_an_approved_contract(
+    tmp_path: Path,
+) -> None:
+    """File presence is not approval.
+
+    A draft sitting in metrics/ was exposed by its stem alone, so an observation
+    could cite it and the report would advertise governed provenance for a metric
+    nobody signed off.
+    """
+    table, _ = _workspace(tmp_path)
+    draft = tmp_path / "mappings" / table / "metrics" / "DraftMetric.yaml"
+    draft.write_text(
+        yaml.safe_dump({"name": "DraftMetric", "readiness": {"status": "not_started"}}),
+        encoding="utf-8",
+    )
+    assert "DraftMetric" not in approved_contracts(tmp_path, table)
+    assert "TotalSales" in approved_contracts(tmp_path, table)
+
+
+def test_a_contract_with_no_readiness_block_is_not_approved(tmp_path: Path) -> None:
+    table, _ = _workspace(tmp_path, contracts=())
+    (tmp_path / "mappings" / table / "metrics" / "Bare.yaml").write_text(
+        "name: Bare\n", encoding="utf-8"
+    )
+    assert approved_contracts(tmp_path, table) == {}
+
+
+def test_the_shipped_contracts_are_all_approved() -> None:
+    """All five, read through the same check the report uses."""
+    assert len(approved_contracts(_REPO, "retail_store_sales")) == 5
+
+
+def test_a_yaml_float_observation_is_refused(tmp_path: Path) -> None:
+    """safe_load already converted it to binary before this check could run, so
+    wrapping it in Decimal preserves the rounded value, not the authored one."""
+    path = tmp_path / "obs.yaml"
+    path.write_text(
+        "table: demo_table\nobservations:\n  - visual_id: v1\n    value: 1552071.15\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ReportError, match="YAML float"):
+        load_observations(path)
+
+
+def test_a_quoted_decimal_is_accepted(tmp_path: Path) -> None:
+    path = tmp_path / "obs.yaml"
+    path.write_text(
+        'table: demo_table\nobservations:\n  - visual_id: v1\n    value: "1552071.15"\n',  # noqa: E501
+        encoding="utf-8",
+    )
+    assert load_observations(path)[0]["value"] == Decimal("1552071.15")
+
+
+@pytest.mark.parametrize("raw", ["NaN", "Infinity", "-Infinity", "sNaN"])
+def test_a_non_finite_observation_is_refused(tmp_path: Path, raw: str) -> None:
+    """NaN would publish as a governed number; infinity reaches quantize() and
+    raises where a refusal belongs."""
+    path = tmp_path / "obs.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {"table": "demo_table", "observations": [{"visual_id": "v1", "value": raw}]}
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ReportError, match="not a finite number|not an exact decimal"):
+        load_observations(path)
+
+
+@pytest.mark.parametrize("document", ["- a\n- b\n", "just a string\n", "true\n"])
+def test_an_observations_document_that_is_not_a_mapping_is_refused(
+    tmp_path: Path, document: str
+) -> None:
+    """Previously an uncaught AttributeError, so the CLI printed a traceback
+    instead of its documented refusal."""
+    path = tmp_path / "obs.yaml"
+    path.write_text(document, encoding="utf-8")
+    with pytest.raises(ReportError, match="not a mapping"):
+        load_observations(path)
+
+
+def test_observations_for_another_table_are_refused(tmp_path: Path) -> None:
+    """Two tables can share visual and contract ids, so the cover would name one
+    table while publishing the other's figures."""
+    path = tmp_path / "obs.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "table": "some_other_table",
+                "observations": [{"visual_id": "v1", "value": "1"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ReportError, match="produced for 'some_other_table'"):
+        load_observations(path, expect_table="demo_table")
+
+
+def test_observations_naming_no_table_are_refused(tmp_path: Path) -> None:
+    path = tmp_path / "obs.yaml"
+    path.write_text(
+        yaml.safe_dump({"observations": [{"visual_id": "v1", "value": "1"}]}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ReportError, match="names no `table:`"):
+        load_observations(path, expect_table="demo_table")
+
+
+def test_the_audience_is_separate_from_the_language() -> None:
+    """`generated_for` is printed on the cover; passing the locale stamped every
+    report as generated for "en"."""
+    args = build_report_parser().parse_args(["--table", "t", "--format", "html"])
+    assert args.audience == "board"
+    assert args.language == "en"
+
+
+def test_the_cover_carries_the_audience_not_the_locale(tmp_path: Path) -> None:
+    pytest.importorskip("jinja2", reason="requires the `report` extra")
+    table, observations = _workspace(tmp_path)
+    args = build_report_parser().parse_args(
+        [
+            "--table",
+            table,
+            "--format",
+            "html",
+            "--repo-root",
+            str(tmp_path),
+            "--observations",
+            str(observations),
+            "--output",
+            str(tmp_path / "out"),
+            "--audience",
+            "audit_committee",
+        ]
+    )
+    assert report_main(args) == EXIT_OK
+    document = (tmp_path / "out" / f"{table}.html").read_text(encoding="utf-8")
+    assert "audit_committee" in document
+
+
+def test_an_unrenderable_language_refuses_instead_of_tracebacking(
+    tmp_path: Path,
+) -> None:
+    """SurfaceRenderFailed subclasses RuntimeError, so it escaped the handler and a
+    documented option produced a traceback."""
+    pytest.importorskip("jinja2", reason="requires the `report` extra")
+    table, observations = _workspace(tmp_path)
+    args = build_report_parser().parse_args(
+        [
+            "--table",
+            table,
+            "--format",
+            "html",
+            "--repo-root",
+            str(tmp_path),
+            "--observations",
+            str(observations),
+            "--output",
+            str(tmp_path / "out"),
+            "--language",
+            "ar",
+        ]
+    )
+    assert report_main(args) == EXIT_REFUSED

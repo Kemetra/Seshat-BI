@@ -30,6 +30,9 @@ LAYOUT = {
 }
 
 _OBSERVATIONS = {
+    # The document states which table it was produced for. Without it the loader
+    # refuses, because two tables can share visual and contract ids.
+    "table": TABLE,
     "observations": [
         {
             "visual_id": "v1",

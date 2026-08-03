@@ -33,6 +33,11 @@ def build_report_parser() -> argparse.ArgumentParser:
     parser.add_argument("--table", required=True)
     parser.add_argument("--format", required=True, choices=_FORMATS)
     parser.add_argument("--language", default="en")
+    parser.add_argument(
+        "--audience",
+        default="board",
+        help="who the report is for; printed on the cover, not a locale",
+    )
     parser.add_argument("--output", type=Path, default=_DEFAULT_OUTPUT)
     parser.add_argument(
         "--layout",
@@ -67,11 +72,15 @@ def build_report_parser() -> argparse.ArgumentParser:
 
 
 def report_main(args: argparse.Namespace) -> int:
+    from seshat.report.html import SurfaceRenderFailed
     from seshat.report.model import ReportError
 
     try:
         written = _render(args)
-    except ReportError as exc:
+    except (ReportError, SurfaceRenderFailed) as exc:
+        # SurfaceRenderFailed subclasses RuntimeError rather than ReportError, so
+        # without it a documented option -- any --language the bundle has no
+        # rendering for -- produced a traceback instead of the promised refusal.
         print(f"[FAIL] {exc}", flush=True)
         return EXIT_REFUSED
     except OSError as exc:
@@ -82,31 +91,85 @@ def report_main(args: argparse.Namespace) -> int:
 
 
 def approved_contracts(repo_root: Path, table: str) -> dict[str, str]:
-    """Contract id -> path, read from the table's committed metric contracts.
+    """Contract id -> path, for the contracts that are actually APPROVED.
 
-    The id is the file stem, which is what a binding map cites. A table with no
-    approved contracts yields an empty mapping, and every observation then refuses.
+    File presence is not approval. A draft, blocked, or malformed contract sitting
+    in ``metrics/`` was previously exposed by its stem alone, so an observation
+    could cite it and the report would advertise governed provenance for a metric
+    nobody signed off. Each file's own ``readiness.status`` decides, and anything
+    other than ``pass`` is left out -- which makes every observation citing it
+    refuse.
     """
+    from seshat.report.model import ReportError
+
     directory = repo_root / "mappings" / table / "metrics"
     if not directory.is_dir():
         return {}
-    return {
-        path.stem: str(path.relative_to(repo_root))
-        for path in sorted(directory.glob("*.yaml"))
-    }
+    approved: dict[str, str] = {}
+    for path in sorted(directory.glob("*.yaml")):
+        try:
+            loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError) as exc:
+            raise ReportError(f"cannot read contract {path}: {exc}") from exc
+        if _contract_is_approved(loaded):
+            approved[path.stem] = str(path.relative_to(repo_root))
+    return approved
 
 
-def load_observations(path: Path) -> list[dict[str, object]]:
+def _contract_is_approved(loaded: object) -> bool:
+    if not isinstance(loaded, dict):
+        return False
+    readiness = loaded.get("readiness")
+    if not isinstance(readiness, dict):
+        return False
+    return readiness.get("status") == "pass"
+
+
+def load_observations(path: Path, *, expect_table: str | None = None) -> list[dict]:
+    """The figures and their values, with the document's identity checked.
+
+    ``expect_table`` closes a hole that document-level identity existed to close:
+    two tables can share visual and contract ids, so an observations file written
+    for one could be rendered under the other's name, and the cover would state the
+    requested table while publishing the other's figures with apparently valid
+    provenance.
+    """
     from seshat.report.model import ReportError
 
     try:
-        payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError) as exc:
         raise ReportError(f"cannot read observations {path}: {exc}") from exc
-    entries = payload.get("observations")
+    if not isinstance(loaded, dict):
+        raise ReportError(
+            f"observations {path} is not a mapping; it must be a document with an "
+            "`observations:` list and the `table:` it was produced for"
+        )
+    _assert_declares_table(loaded, path, expect_table)
+    entries = loaded.get("observations")
     if not isinstance(entries, list) or not entries:
         raise ReportError(f"{path} declares no observations")
     return [_observation(entry, path) for entry in entries]
+
+
+def _assert_declares_table(loaded: dict, path: Path, expect_table: str | None) -> None:
+    from seshat.report.model import ReportError
+
+    if expect_table is None:
+        return
+    declared = loaded.get("table")
+    if not declared:
+        raise ReportError(
+            f"observations {path} names no `table:`. It has to say which table it was "
+            f"produced for, so it cannot be rendered under another one -- add "
+            f"`table: {expect_table}` if that is what it holds."
+        )
+    if str(declared) != expect_table:
+        raise ReportError(
+            f"observations {path} was produced for {str(declared)!r}, not "
+            f"{expect_table!r}. Two tables can share visual and contract ids, so the "
+            "cover would name one table while publishing the other's figures."
+        )
 
 
 def _observation(entry: object, path: Path) -> dict[str, object]:
@@ -117,15 +180,41 @@ def _observation(entry: object, path: Path) -> dict[str, object]:
     raw = entry.get("value")
     if raw is None:
         return {**entry, "value": None}
+    return {**entry, "value": _exact_decimal(raw, entry.get("visual_id"), path)}
+
+
+def _exact_decimal(raw: object, visual_id: object, path: Path) -> Decimal:
+    """Parse a governed figure, refusing every form that is not exact.
+
+    A YAML float has ALREADY lost precision by the time it reaches here --
+    ``safe_load`` converted it to binary before this code ran, so wrapping it in
+    ``Decimal`` preserves the rounded value, not the authored one. The refusal has
+    to happen on the type.
+
+    ``NaN`` and ``Infinity`` are valid ``Decimal`` values and neither is a figure:
+    ``NaN`` would publish as a governed number, and infinity reaches ``quantize()``
+    and raises where a refusal belongs.
+    """
+    from seshat.report.model import ReportError
+
+    if isinstance(raw, float):
+        raise ReportError(
+            f"observation {visual_id!r} in {path} writes {raw!r} as a YAML float, "
+            "which lost precision before this check could run. Quote it "
+            f'(`value: "{raw!r}"`) so the authored decimal is preserved exactly.'
+        )
     try:
-        # str() first: a YAML float would already have lost precision.
         value = Decimal(str(raw))
     except (InvalidOperation, ValueError) as exc:
         raise ReportError(
-            f"observation {entry.get('visual_id')!r} value {raw!r} is not an exact "
-            f"decimal: {exc}"
+            f"observation {visual_id!r} value {raw!r} is not an exact decimal: {exc}"
         ) from exc
-    return {**entry, "value": value}
+    if not value.is_finite():
+        raise ReportError(
+            f"observation {visual_id!r} value {raw!r} is not a finite number. A "
+            "report states what was measured; NaN and infinity are not measurements."
+        )
+    return value
 
 
 # Every incoherent combination of the figure-source flags, and what to say about
@@ -248,10 +337,13 @@ def _render(args: argparse.Namespace) -> Path:
     if args.from_gold:
         observations = _live_observations(args, repo_root)
     else:
-        observations = load_observations(args.observations)
+        observations = load_observations(args.observations, expect_table=args.table)
     bundle = build_bundle(
         table=args.table,
-        generated_for=args.language,
+        # The AUDIENCE, not the locale. `generated_for` is printed on the cover and
+        # recorded in Excel provenance, so passing the language stamped every report
+        # as generated for "en".
+        generated_for=args.audience,
         design=ApprovedDesign(
             layout=layout, contracts=approved_contracts(repo_root, args.table)
         ),

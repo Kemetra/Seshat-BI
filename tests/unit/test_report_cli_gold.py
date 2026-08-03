@@ -49,6 +49,9 @@ _CONTRACT = {
     "name": "TotalSales",
     "binds_to": {"gold_table": "gold.fct_demo", "columns": ["total_spent"]},
     "definition": {"kind": "base", "aggregation": "sum", "filter": []},
+    # Without this the contract is present but not approved, and every observation
+    # citing it refuses -- which is the point of the readiness check.
+    "readiness": {"status": "pass", "evidence": ["approved by data_owner"]},
 }
 
 _EXPECTED_SQL = 'SELECT sum("total_spent") FROM "gold"."fct_demo"'
