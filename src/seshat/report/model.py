@@ -21,6 +21,26 @@ class ReportError(Exception):
     """Any report-surface failure. Never used to describe business meaning."""
 
 
+# Reading direction. Named rather than inferred, so a surface laying out a page
+# right-to-left has not done it by accident.
+DIRECTION_LTR = "ltr"
+DIRECTION_RTL = "rtl"
+
+# Three chart kinds, deliberately. A fourth adds a branch to every dispatching
+# function in `charts`, and each geometry function is kept at its own low
+# complexity by a lookup rather than an if-chain.
+CHART_BAR = "bar"
+CHART_GROUPED_BAR = "grouped_bar"
+CHART_LINE = "line"
+GOVERNED_CHART_KINDS = frozenset({CHART_BAR, CHART_GROUPED_BAR, CHART_LINE})
+
+# Figure labels that are governed vocabulary rather than customer text. A label in
+# this set is an internal identifier the surface must translate; anything else is
+# the customer's own category and is final. Treating a governed label as final put
+# an English identifier on an Arabic axis in Khepri.
+GOVERNED_FIGURE_LABELS = frozenset({"period_over_period", "prior_period", "budget"})
+
+
 @dataclass(frozen=True, slots=True)
 class BundleIdentity:
     table: str
@@ -61,6 +81,28 @@ class StatedCaveat:
     caveat_id: str
     section: str
     renderings: dict[str, str]
+
+
+@dataclass(frozen=True, slots=True)
+class ChartSpec:
+    """What a chart plots, named in figure identifiers and nothing else.
+
+    A spec carries no geometry and no values. It says which governed figures a
+    chart is drawn from, so the chart inherits the contract tracing those figures
+    already have instead of needing a parallel mechanism of its own.
+    """
+
+    kind: str
+    figure_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if self.kind not in GOVERNED_CHART_KINDS:
+            raise ReportError(
+                f"chart kind {self.kind!r} is outside the governed set "
+                f"{sorted(GOVERNED_CHART_KINDS)}"
+            )
+        if not self.figure_ids:
+            raise ReportError("a chart spec must name at least one figure")
 
 
 @dataclass(frozen=True, slots=True)
