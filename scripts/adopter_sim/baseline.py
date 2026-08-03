@@ -56,12 +56,8 @@ def diff_findings(
     current = {(v.step, v.kind) for v in verdicts if v.status == _BASELINE_STATUS}
     known = {(int(e["step"]), str(e["kind"])) for e in baseline}
     rows = [DiffRow(step, kind, "new") for step, kind in sorted(current - known)]
-    rows += [
-        DiffRow(step, kind, "resolved") for step, kind in sorted(known - current)
-    ]
-    rows += [
-        DiffRow(step, kind, "unchanged") for step, kind in sorted(current & known)
-    ]
+    rows += [DiffRow(step, kind, "resolved") for step, kind in sorted(known - current)]
+    rows += [DiffRow(step, kind, "unchanged") for step, kind in sorted(current & known)]
     return tuple(rows)
 
 

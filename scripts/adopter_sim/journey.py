@@ -75,9 +75,7 @@ def _validate_dependencies(steps: tuple[JourneyStep, ...], path: Path) -> None:
     for step in steps:
         for parent in step.depends_on:
             if parent == step.number:
-                raise AdopterSimError(
-                    f"step {step.number} depends_on itself (a cycle)"
-                )
+                raise AdopterSimError(f"step {step.number} depends_on itself (a cycle)")
             if parent not in known:
                 raise AdopterSimError(
                     f"step {step.number} depends_on {parent}, which is not an "

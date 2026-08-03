@@ -68,8 +68,33 @@ def root_candidates() -> tuple[Path, ...]:
 
 
 def resolve_root() -> Path:
-    """The first candidate root with a provably clean ancestor chain."""
-    return find_clean_root(root_candidates())
+    """The first candidate root that is both clean-chained and writable.
+
+    A drive-root `ssim/` is preferred but often needs administrator rights on
+    Windows, so writability is probed here rather than discovered as a raw
+    PermissionError mid-run. Candidates that cannot be created are skipped; if
+    that leaves nothing clean, find_clean_root raises with the
+    ADOPTER_SIM_ROOT instruction.
+    """
+    usable: list[Path] = []
+    unwritable: list[str] = []
+    for candidate in root_candidates():
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            unwritable.append(f"{candidate} ({exc.strerror or exc})")
+            continue
+        usable.append(candidate)
+    if not usable:
+        raise AdopterSimError(
+            "no candidate workspace root could be created: "
+            + "; ".join(unwritable)
+            + f". Set {ROOT_ENV_VAR} to a writable directory whose ancestors "
+            "hold no CLAUDE.md, AGENTS.md, or .git."
+        )
+    for line in unwritable:
+        print(f"[SKIP] workspace root not writable: {line}", flush=True)
+    return find_clean_root(usable)
 
 
 def workspace_root(parent: Path, run_id: str) -> Path:

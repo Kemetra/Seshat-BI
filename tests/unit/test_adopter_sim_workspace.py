@@ -103,3 +103,41 @@ def test_copy_bundle_fails_when_a_declared_skill_is_absent(tmp_path: Path) -> No
     config.mkdir()
     with pytest.raises(AdopterSimError, match="missing"):
         copy_bundle(bundle, config)
+
+
+def test_resolve_root_skips_an_uncreatable_candidate(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    """A drive-root candidate needing admin rights must not crash the run."""
+    from scripts.adopter_sim import workspace as workspace_mod
+
+    blocked = tmp_path / "blocked" / "ssim"
+    clean = tmp_path / "clean" / "ssim"
+    real_mkdir = Path.mkdir
+
+    def _mkdir(self, *args, **kwargs):
+        if self == blocked:
+            raise PermissionError(13, "Access is denied")
+        return real_mkdir(self, *args, **kwargs)
+
+    monkeypatch.setattr(workspace_mod, "root_candidates", lambda: (blocked, clean))
+    monkeypatch.setattr(Path, "mkdir", _mkdir)
+    monkeypatch.setattr(workspace_mod, "find_clean_root", lambda usable: usable[0])
+    assert workspace_mod.resolve_root() == clean
+    assert "not writable" in capsys.readouterr().out
+
+
+def test_resolve_root_fails_cleanly_when_nothing_is_creatable(
+    monkeypatch, tmp_path
+) -> None:
+    from scripts.adopter_sim import workspace as workspace_mod
+
+    blocked = tmp_path / "blocked" / "ssim"
+
+    def _mkdir(self, *args, **kwargs):
+        raise PermissionError(13, "Access is denied")
+
+    monkeypatch.setattr(workspace_mod, "root_candidates", lambda: (blocked,))
+    monkeypatch.setattr(Path, "mkdir", _mkdir)
+    with pytest.raises(AdopterSimError, match="ADOPTER_SIM_ROOT"):
+        workspace_mod.resolve_root()
