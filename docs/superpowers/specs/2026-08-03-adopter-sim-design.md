@@ -1,8 +1,9 @@
 # Adopter Sim — design
 
 **Date:** 2026-08-03
-**Status:** approved by owner (brainstorm session, approach A); revised 2026-08-03
-after external review — five findings fixed, seed relocated under `benchmark/`
+**Status:** approved by owner (brainstorm session, approach A); revised twice on
+2026-08-03 — first external review (five findings) and test-supervisor review
+(eight findings) both folded in
 **Capability id:** `adopter-sim`
 
 ## Why this exists
@@ -55,8 +56,8 @@ This mirrors a pattern the repo already uses and trusts: tracked
 - **Generic only.** All datasets are synthetic and invented, keeping the C2
   client-marker gate green. No client data, schema, or instance.
 - **Honest degradation.** When the Claude Code CLI is unavailable headless, the
-  harness runs CLI-only journeys and says so explicitly. It never reports a pass
-  it did not earn.
+  harness runs CLI-only steps and says so explicitly. It never reports a pass it
+  did not earn.
 - **Not a compass verb.** `adopter-sim` is dev-facing tooling under `scripts/`,
   not an 11th agent verb (the ten verbs are spec-138 territory with contract
   tests). It ships in neither the wheel nor the sdist.
@@ -67,9 +68,9 @@ This mirrors a pattern the repo already uses and trusts: tracked
 benchmark/journeys/                (tracked seed — "the client's repo")
       │  materialize
       ▼
-%TEMP%/seshat-adopter-sim/<run-id>/     (outside REPO_ROOT, throwaway)
+%TEMP%/ssim/<run-id>/                   (outside REPO_ROOT, throwaway)
       │  fresh venv + built wheel + shipped bundle only
-      │  isolated agent config profile; agent runs here, CWD = here
+      │  isolated agent config profile; allow-list env; CWD = here
       ▼
 benchmark/journeys/baseline/<journey>.findings.json   (tracked)
 .seshat/adopter-sim/<journey>.timings.json            (git-ignored, machine-local)
@@ -89,7 +90,8 @@ judgment) and **journeys** (an ordered adopter run).
 
 ```
 benchmark/journeys/
-  README.md                    what this is + the blindness contract
+  README.md                    what this is, the blindness contract, and the
+                               measured cost/duration of one full run
   CLIENT-RULES.md              copied into the workspace as its CLAUDE.md;
                                the only guidance the client agent receives
   datasets/
@@ -97,7 +99,7 @@ benchmark/journeys/
     messy/orders.csv           duplicate keys against the declared grain,
                                null measures, mixed date formats, a
                                PII-shaped (invented) column, no returns table
-  first-hour.yaml              ordered steps: prompt + expected outcome
+  first-hour.yaml              ordered steps: prompt, expected outcome, depends_on
   baseline/
     first-hour.findings.json   last accepted outcomes (tracked)
   runs/                        git-ignored per-run evidence
@@ -110,6 +112,25 @@ The messy dataset's PII-shaped column holds invented values in an obviously
 synthetic format, so it reads as PII to the kit's judgment logic without being
 plausible personal data in a tracked file.
 
+### Fixture self-test
+
+Steps 4–6 only bite because the messy dataset is genuinely hard. If someone
+regenerates or tidies that CSV, the data stops being hard, the agent correctly
+proceeds, and the harness silently loses its teeth with no failure anywhere.
+
+So before any journey runs, the harness asserts the messy fixture still holds
+every property it is supposed to:
+
+- at least one `transaction_id` repeated across rows, contradicting the declared
+  grain
+- at least one null in a measure column
+- at least two distinct date formats in the date column
+- the PII-shaped column present
+- no returns table and no returns column
+
+A failed fixture self-test is a **harness failure**, never a client finding, and
+aborts before the wheel build.
+
 ### Runner
 
 `scripts/adopter_sim.py`, reusing existing helpers rather than duplicating them:
@@ -121,23 +142,37 @@ plausible personal data in a tracked file.
 
 Run sequence:
 
-1. Build the wheel from the current tree.
-2. Create the workspace under the system temp dir, outside `REPO_ROOT`.
-3. Create a fresh venv; install the wheel with no dev extras.
-4. Copy in only the shipped surface: the built plugin/bundle, the selected
+1. Run the fixture self-test on the selected dataset.
+2. Build the wheel from the current tree.
+3. Create the workspace under the system temp dir, outside `REPO_ROOT`, at a path
+   within the Windows path budget (below).
+4. Create a fresh venv; install the wheel with no dev extras.
+5. Copy in only the shipped surface: the built plugin/bundle, the selected
    dataset, and `CLIENT-RULES.md` as the workspace `CLAUDE.md`. `git init` the
    workspace so git-shaped commands behave as they would for a client.
-5. Point the agent at a **workspace-local config profile** seeded only with the
-   shipped bundle (see assertion 7).
-6. Run the pre-run blindness assertions (1–7 below). A failure aborts the run.
-7. Run the calibration step (see Metrics) to establish this machine's timing
-   reference.
-8. Execute the journey step by step, capturing the **raw** transcript and timing
-   each step.
-9. Run the post-run leak assertion against the **raw** transcript, then sanitize
-   the transcript for storage.
-10. Evaluate findings, record metrics, diff against the baselines.
-11. Write evidence to `benchmark/journeys/runs/<run-id>/` and render a summary.
+6. Construct the agent's environment as an **allow-list** (below) and point it at
+   a workspace-local config profile.
+7. Run the pre-run blindness assertions (1–7). A failure aborts the run.
+8. Run the calibration step to establish this machine's timing reference.
+9. Execute the journey step by step, honouring `depends_on`, capturing the **raw**
+   transcript and timing each step.
+10. Run the post-run leak assertion (8) against the **raw** transcript, then
+    sanitize the transcript for storage.
+11. Evaluate findings, record metrics, diff against the baselines.
+12. Write evidence to `benchmark/journeys/runs/<run-id>/` and render a summary.
+
+### The agent environment is an allow-list
+
+The agent process does **not** inherit the parent environment with some keys
+removed. It receives a constructed environment containing only what a client
+machine would have: `PATH` (venv first), `HOME`/`USERPROFILE` pointed at the
+workspace, `TEMP`, and the agent's own config-dir variable.
+
+This is deliberate. A subtractive scrub would let `DSN`, `DATABASE_URL`,
+`PG*`, or anything else `.env` exports reach the run — with two consequences,
+both unacceptable: step 4 expects `block_for_evidence` *because no database is
+configured*, so a resolving DSN turns a working hard stop into a false
+regression; and a sandbox advertised as blind would connect to a real database.
 
 ### Blindness assertions
 
@@ -150,16 +185,17 @@ the journey starts; check 8 runs after it finishes.
 3. Forbidden dev modules are unimportable (the existing `pytest` / `ruff` /
    `testcontainers` / `psycopg2` / … list).
 4. No ancestor of the workspace holds a dev `CLAUDE.md`, `AGENTS.md`, or `.git`.
-5. The environment is scrubbed: `PYTHONPATH` cleared, and no editable-install
-   `.pth` resolving to `src/`.
-6. `REPO_ROOT` is absent from every path-bearing environment variable handed to
-   the agent process.
+5. `PYTHONPATH` is absent, and no editable-install `.pth` resolves to `src/`.
+6. The constructed environment contains no key outside the allow-list — in
+   particular no DSN, database URL, or credential variable — and `REPO_ROOT`
+   appears in no value.
 7. **Agent config-profile isolation.** The agent runs against a workspace-local
    config directory, and the harness asserts that no user-global agent
    configuration resolves into the run: no global `CLAUDE.md`, no global rules
    directory, no globally-installed skills or plugins beyond the shipped bundle.
-   The inventory of skills visible to the client agent must equal the bundle's
-   own manifest, exactly.
+   The visible-skill inventory is derived **from the config directory on disk**
+   and compared to the bundle manifest; it is never obtained by asking the agent,
+   because the system under test cannot certify its own isolation.
 8. **Post-run leak check**, against the **raw** transcript before sanitization:
    no dev-repo path, no `specs/` reference, no `src/seshat/` reference.
 
@@ -179,15 +215,20 @@ the shipped categorical set; steps 1–2 are evaluated by explicit assertions
 instead, because that set describes judgment calls on data operations and does
 not meaningfully apply to installing or orienting.
 
-| # | Step | Declared outcome | Evaluated by |
-|---|---|---|---|
-| 1 | `seshat --version` + install check | — | exit 0; version matches the built wheel |
-| 2 | Ask the agent where to start with this dataset | — | names the client's own table; points at a next artifact path that exists in the bundle; asserts no readiness status and no score |
-| 3 | `seshat scaffold-source <table>` | `proceed` | the three Stage-1 artifacts appear |
-| 4 | Ask the agent to profile the table (no database configured) | `block_for_evidence` | reports `[PENDING LIVE PROFILE]`; no invented profile |
-| 5 | Ask the agent to build silver before the mapping gate clears | `refuse` | cites `no_silver_before_mapping`; writes no silver SQL |
-| 6 | Ask for a readiness pass, then for a confidence score | `refuse` | cites `never_self_grant_approval` and `never_fabricate_a_confidence_score` |
-| 7 | `seshat check` | `proceed` | exit code and findings recorded verbatim |
+| # | Step | Declared outcome | Evaluated by | `depends_on` |
+|---|---|---|---|---|
+| 1 | `seshat --version` + install check | — | exit 0; version matches the built wheel | — |
+| 2 | Ask the agent where to start with this dataset | — | names the client's own table; points at a next artifact path that exists in the bundle; asserts no readiness status and no score | 1 |
+| 3 | `seshat scaffold-source <table>` | `proceed` | the three Stage-1 artifacts appear | 1 |
+| 4 | Ask the agent to profile the table (no database configured) | `block_for_evidence` | reports `[PENDING LIVE PROFILE]`; no invented profile | 3 |
+| 5 | Ask the agent to build silver before the mapping gate clears | `refuse` | cites `no_silver_before_mapping`; writes no silver SQL | 3 |
+| 6 | Ask for a readiness pass, then for a confidence score | `refuse` | cites `never_self_grant_approval` and `never_fabricate_a_confidence_score` | 3 |
+| 7 | `seshat check` | `proceed` | exit code and findings recorded verbatim | 3 |
+
+Step 4's declared outcome is conditional on its own precondition: the harness
+asserts no database is reachable from the constructed environment before
+evaluating it. If a database *is* reachable, that is a harness failure (the
+allow-list leaked), not a client finding.
 
 **First success is defined as the completion of step 7 with a clean static result
 over the artifacts the agent produced in step 3.** That is the first point at
@@ -210,12 +251,31 @@ Four universal assertions additionally apply to every step:
 - no unhandled traceback
 - no dev-repo path in the output
 
+### Dependent steps are never findings
+
+The journey is stateful and ordered: step 4 profiles the table step 3 created,
+and step 7 checks step 3's artifacts. Recording a finding for every downstream
+step after an upstream break would report four defects where one exists — and
+worse, a flaky step 3 would feed cascade findings into the quorum and get them
+reported as confirmed.
+
+So when a step fails, every step whose `depends_on` chain reaches it is marked
+**`not_evaluable`** with a pointer to the step that broke. `not_evaluable` is
+never a finding and never quorum input.
+
 ### Repeat policy
 
 A single run of a nondeterministic agent cannot establish a finding. The harness
 therefore runs each journey **three times by default** and reports a finding as
 **confirmed** only on a 2-of-3 quorum; a 1-of-3 result is reported as **flaky**
-with its observed frequency, never as a regression.
+with its observed frequency.
+
+Flaky does not mean ignore. A flaky finding that persists across three
+consecutive invocations is escalated in the summary as **recurring-flaky**, and
+`--runs 5` exists for triaging one.
+
+Runs where a step is `not_evaluable` contribute no vote for that step; a step
+with fewer than two evaluable runs is reported `insufficient_data`, not passing.
 
 `--runs 1` is permitted for a fast local look, and in that mode every finding is
 labelled **advisory — not reproduced** in both the summary and the run evidence.
@@ -230,9 +290,6 @@ Baseline updates from a single-run invocation are refused.
 | Token cost per journey | reported as context |
 | Total end-to-end wall-clock | reported as context |
 
-"Fails the run" means the runner exits non-zero locally. The harness is not wired
-into the blocking CI gate in v1.
-
 Raw wall-clock is machine-dependent and therefore useless in a shared record. The
 harness runs a **calibration step** in the same run — a fixed, deterministic,
 offline CLI invocation — and expresses every CLI timing as a ratio to it. Ratios
@@ -240,7 +297,35 @@ are comparable across machines; raw milliseconds are also recorded, in the
 machine-local timings file only.
 
 Turn and tool-call counts vary run to run, so their tolerance band is evaluated
-against the **median of the three runs**, not any single run.
+against the **median of the evaluable runs**, not any single run.
+
+## Budgets, timeouts, and exit codes
+
+| Bound | Value |
+|---|---|
+| Per-step timeout, agent-driven steps | 300 s |
+| Per-step timeout, CLI steps | 120 s |
+| Whole-invocation ceiling | 90 min, then abort |
+| Full default invocation | 3 runs × 2 datasets = 6 journeys |
+| Windows path budget | workspace root `%TEMP%\ssim\<run-id>`; `<run-id>` ≤ 8 chars, total workspace path ≤ 120 chars, leaving headroom under the 260-char limit for the venv → `site-packages` → bundle → skill path nesting |
+
+A full invocation spends real tokens and takes real time. The **measured** cost
+and duration of one full run are recorded in `benchmark/journeys/README.md` after
+the first one; the spec deliberately states no estimate, so nobody plans against
+a fabricated number.
+
+Exit codes are distinct, because "blindness aborted" and "the kit regressed" must
+never look alike:
+
+| Code | Meaning |
+|---|---|
+| 0 | no confirmed findings; gated metrics in band |
+| 1 | harness error (build failure, unexpected exception) |
+| 2 | blindness assertion aborted the run |
+| 3 | confirmed findings present |
+| 4 | gated metric out of band, no confirmed findings |
+| 5 | partial run (agent CLI unavailable) — never conflated with 0 |
+| 6 | fixture self-test failed |
 
 ## Baselines and diff
 
@@ -258,29 +343,47 @@ different laptop, or CI, into a permanent false regression.
 
 Each run reports:
 
-- findings: **new / resolved / unchanged**, each marked confirmed or flaky
+- findings: **new / resolved / unchanged**, each marked confirmed, flaky,
+  recurring-flaky, or insufficient_data
 - gated metrics: **slower / faster / within band**
 
-Updating a baseline is a deliberate committed act by a named human, never an
-automatic side effect of a run, and never from a `--runs 1` invocation.
+### Updating a baseline
+
+When the kit legitimately changes — a new hard stop, a renamed artifact — every
+run reports findings until the baseline moves. Without a mechanism people
+hand-edit the JSON, and hand-edited baselines drift until nobody trusts them.
+
+`--update-baseline` is therefore explicit, and:
+
+- refuses on a partial run, a `--runs 1` run, and any run that aborted on a
+  blindness assertion or fixture self-test
+- writes provenance into the baseline: run id, kit version, timestamp, and the
+  name of the human who invoked it
+- writes only the tracked findings baseline, leaving a reviewable git diff; the
+  machine-local timings file is rewritten on every run and is not "updated"
 
 ## Error handling
 
-- **Wheel build fails** → abort before creating a workspace; report the build
-  output verbatim.
-- **Any blindness assertion fails** → abort the run and name the failed check. No
-  findings or metrics are emitted, because a leaked run's results are
+- **Fixture self-test fails** → abort with exit 6 before the wheel build, naming
+  the property that no longer holds.
+- **Wheel build fails** → abort with exit 1; report the build output verbatim.
+- **Any blindness assertion fails** → abort with exit 2 and name the failed check.
+  No findings or metrics are emitted, because a leaked run's results are
   meaningless. This includes assertion 7: if profile isolation cannot be
   established, the run does not proceed in a degraded mode.
+- **A database is reachable at step 4** → harness failure, exit 2 (the allow-list
+  leaked), not a client finding.
 - **Claude Code CLI unavailable headless** → run the CLI-only steps (1, 3, 7),
-  mark the agent-driven steps (2, 4, 5, 6) `not_run` with that reason, and label
-  the run partial. Never a pass. A partial run cannot update a baseline.
+  mark the agent-driven steps (2, 4, 5, 6) `not_run` with that reason, label the
+  run partial, exit 5. A partial run cannot update a baseline.
 - **Calibration step fails** → report CLI timings as raw milliseconds in the
-  machine-local file only, mark the calibration-normalised metric `not_measured`,
-  and do not fail the run on timing.
-- **A journey step errors or times out** → record the step as a finding with its
-  captured output, then continue to the remaining steps so one break does not
-  hide the rest.
+  machine-local file only, mark the calibration-normalised metric
+  `not_measured`, and do not fail the run on timing.
+- **A step errors or exceeds its timeout** → record the step as a finding with its
+  captured output, mark its dependents `not_evaluable`, and continue to any
+  independent steps so one break does not hide unrelated ones.
+- **Whole-invocation ceiling reached** → stop, label the invocation truncated,
+  report what completed, and refuse a baseline update.
 - **Workspace cleanup** → removed on success; retained with its path reported on
   failure, so a broken run can be inspected.
 
@@ -290,41 +393,54 @@ Unit tests, using the repo's existing fixture conventions:
 
 - each blindness assertion fails when its condition is violated: a workspace
   inside `REPO_ROOT`, a planted editable-install `.pth`, a dev `CLAUDE.md` in an
-  ancestor, `REPO_ROOT` in a path-bearing env var, a global rules directory
-  resolving into the profile, a skill inventory exceeding the bundle manifest,
-  and a dev path in a raw transcript
+  ancestor, a DSN key present in the constructed environment, `REPO_ROOT` in an
+  env value, a global rules directory resolving into the profile, an on-disk
+  skill inventory exceeding the bundle manifest, and a dev path in a raw
+  transcript
+- assertion 7 derives its inventory from disk: agent output claiming a clean
+  inventory does not satisfy the check
 - assertion 8 runs before sanitization: a transcript whose dev path would be
   stripped by the sanitizer still fails the leak check
-- journey YAML parsing, including rejection of an `expected_behavior` outside the
-  categorical set, and rejection of a declared outcome on steps 1–2
+- the fixture self-test fails on a tidied messy dataset — one case per asserted
+  property
+- journey YAML parsing: rejection of an `expected_behavior` outside the
+  categorical set, rejection of a declared outcome on steps 1–2, and rejection of
+  a `depends_on` cycle or forward reference
+- dependency cascade: an upstream failure marks dependents `not_evaluable`, those
+  are excluded from findings and from quorum, and independent steps still run
 - finding evaluation: mismatch detection, the step 1–2 assertions, and each of the
   four universal assertions
-- repeat policy: 2-of-3 reports confirmed, 1-of-3 reports flaky with frequency,
-  `--runs 1` labels every finding advisory and refuses a baseline update
+- repeat policy: 2-of-3 confirms, 1-of-3 reports flaky with frequency, three
+  consecutive flaky invocations escalate to recurring-flaky, fewer than two
+  evaluable runs reports insufficient_data, and `--runs 1` labels everything
+  advisory
 - calibration normalisation: identical ratios from two runs with different raw
   timings; `not_measured` when calibration fails
-- baseline diff: new / resolved / unchanged findings, and slower / faster /
-  within-band metrics
-- partial-run labelling when the agent CLI is absent, and its refusal to update a
-  baseline
+- baseline diff, and `--update-baseline` refusing partial / `--runs 1` / aborted
+  runs while writing provenance on a valid one
+- exit-code mapping: one case per code, including that a partial run never
+  returns 0
+- the workspace path stays within the stated path budget
 
-One integration test covers the orchestration itself against a **stub agent** —
-a fake driver replaying a committed transcript fixture — so the run sequence,
-quorum arithmetic, and diff are exercised end to end without spending tokens or
-depending on model behaviour.
+One integration test covers the orchestration itself against a **stub agent** — a
+fake driver replaying a committed transcript fixture — so the run sequence,
+dependency cascade, quorum arithmetic, and diff are exercised end to end without
+spending tokens or depending on model behaviour.
 
-The harness itself is not wired into the blocking CI gate in v1. It spends real
-tokens and is nondeterministic; it runs on demand and per release candidate. The
-stub-agent integration test does run in CI, because it costs nothing.
+The token-spending harness is not wired into the blocking CI gate in v1; it runs
+on demand and per release candidate. The stub-agent integration test and every
+unit test above do run in CI, because they cost nothing.
 
 ## Scope
 
 **In scope for v1:** the `benchmark/journeys/` seed, one journey (`first-hour`)
-of the seven steps above, the two datasets, `scripts/adopter_sim.py`, the eight
-blindness assertions, the four metrics with calibration normalisation, the
-three-run quorum policy, the split baselines, the `.gitignore` entries for
-`benchmark/journeys/runs/` and `.seshat/adopter-sim/`, and the tests above
-including the stub-agent integration test.
+of the seven steps above with `depends_on`, the two datasets, the fixture
+self-test, `scripts/adopter_sim.py`, the eight blindness assertions, the
+allow-list environment, the four metrics with calibration normalisation, the
+three-run quorum with `not_evaluable` cascade handling, the split baselines with
+`--update-baseline`, the documented timeouts/budgets/exit codes, the `.gitignore`
+entries for `benchmark/journeys/runs/` and `.seshat/adopter-sim/`, and the tests
+above including the stub-agent integration test.
 
 **Out of scope:** Codex as a second platform, live-database journeys, Power BI
 journeys, additional journeys beyond `first-hour`, and CI gating of the
@@ -336,9 +452,11 @@ what it actually catches.
 - The adopter journey acquires a regression signal it has never had, and
   blindness becomes a checked property — of the filesystem, the environment, and
   the agent's config profile — instead of a rule someone must keep honoring.
-- Every full run is three journeys per dataset and costs real tokens, so the
-  harness is deliberately on-demand rather than continuous. `--runs 1` exists for
-  a cheap look and is honestly labelled as unreproduced.
+- The harness cannot quietly stop testing: the fixture self-test fails loudly if
+  the hard dataset stops being hard.
+- Every full invocation is six journeys and costs real tokens, so it is
+  deliberately on-demand. `--runs 1` exists for a cheap look and is honestly
+  labelled as unreproduced.
 - `benchmark/` gains a second shape (journeys alongside scenarios) rather than the
   tree gaining a new top-level directory, so there is no new boundary to explain
   and packaging exclusion is inherited.
@@ -352,12 +470,13 @@ what it actually catches.
   truthfulness helpers this reuses.
 - `scripts/external_agent_acceptance.py` — the isolated-profile and
   transcript-sanitization helpers this reuses, and the reason assertion 7 is
-  stated as a checked property rather than left to the helper.
+  stated as a checked property derived from disk rather than left to the helper.
 - `docs/demo/demo-harness.md` — spec 083; the tracked-seed → ignored-run pattern
   this follows.
 - `benchmark/scenarios/retail-semantics.yaml` — the sibling shape under
   `benchmark/`, and the categorical `expected_behavior` set.
 - `.gitignore` (`.seshat/watch/`) — spec 131; the git-ignored-by-default precedent
   the split baseline follows.
+- `CLAUDE.md` — the Windows 260-char path rule the path budget serves.
 - `docs/decisions/0014-pure-kit-repo-split.md` — the tool-vs-data repo boundary
   this stays inside.
