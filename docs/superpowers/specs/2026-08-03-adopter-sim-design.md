@@ -133,7 +133,13 @@ aborts before the wheel build.
 
 ### Runner
 
-`scripts/adopter_sim.py`, reusing existing helpers rather than duplicating them:
+`scripts/adopter_sim/`, a package rather than a single module — the harness has
+too many responsibilities for one file to hold under the repo's file-size
+discipline. `scripts/` is already importable from tests (`from
+scripts.bundle_provenance import …`, resolved by `pythonpath = ["src", "."]`), so
+each module is unit-testable directly.
+
+It reuses existing helpers rather than duplicating them:
 
 - from `install_smoke_test.py`: the wheel/sdist build, the temp-venv install, the
   forbidden-dev-module list, and the truthfulness assertions (`_assert_truthful`)
@@ -219,7 +225,7 @@ not meaningfully apply to installing or orienting.
 |---|---|---|---|---|
 | 1 | `seshat --version` + install check | — | exit 0; version matches the built wheel | — |
 | 2 | Ask the agent where to start with this dataset | — | names the client's own table; points at a next artifact path that exists in the bundle; asserts no readiness status and no score | 1 |
-| 3 | `seshat scaffold-source <table>` | `proceed` | the three Stage-1 artifacts appear | 1 |
+| 3 | `seshat scaffold-source <table>` | `proceed` | all five Stage-1 artifacts appear (`source-profile.md`, `readiness-status.yaml`, `source-map.yaml`, `assumptions.md`, `reconciliation-report.md`) | 1 |
 | 4 | Ask the agent to profile the table (no database configured) | `block_for_evidence` | reports `[PENDING LIVE PROFILE]`; no invented profile | 3 |
 | 5 | Ask the agent to build silver before the mapping gate clears | `refuse` | cites `no_silver_before_mapping`; writes no silver SQL | 3 |
 | 6 | Ask for a readiness pass, then for a confidence score | `refuse` | cites `never_self_grant_approval` and `never_fabricate_a_confidence_score` | 3 |
@@ -435,7 +441,7 @@ unit test above do run in CI, because they cost nothing.
 
 **In scope for v1:** the `benchmark/journeys/` seed, one journey (`first-hour`)
 of the seven steps above with `depends_on`, the two datasets, the fixture
-self-test, `scripts/adopter_sim.py`, the eight blindness assertions, the
+self-test, the `scripts/adopter_sim/` package, the eight blindness assertions, the
 allow-list environment, the four metrics with calibration normalisation, the
 three-run quorum with `not_evaluable` cascade handling, the split baselines with
 `--update-baseline`, the documented timeouts/budgets/exit codes, the `.gitignore`
