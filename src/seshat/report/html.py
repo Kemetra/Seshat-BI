@@ -25,6 +25,7 @@ would put untranslated text on a page while every number beside it looked correc
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib import resources
 
 from jinja2 import Environment, PackageLoader, StrictUndefined, TemplateError
 
@@ -154,6 +155,16 @@ def _chart_of(section, figures, direction: str) -> ChartView | None:
     return build_chart(spec, figures, direction=direction)
 
 
+def read_stylesheet(name: str) -> str:
+    """A stylesheet from this package's own template directory.
+
+    Inlined rather than linked so the document is a single file an adopter can
+    email or open offline. The source is package data, not bundle content.
+    """
+    directory = resources.files(TEMPLATE_PACKAGE).joinpath(TEMPLATE_DIRECTORY)
+    return directory.joinpath(name).read_text(encoding="utf-8")
+
+
 def build_context(
     bundle: ReportBundle, layout: ReportLayout, language: str
 ) -> dict[str, object]:
@@ -164,6 +175,7 @@ def build_context(
         "table": bundle.identity.table,
         "generated_for": bundle.identity.generated_for,
         "sections": build_sections(bundle, layout, language),
+        "screen_stylesheet": read_stylesheet(STYLESHEET_NAME),
         "surface_version": HTML_SURFACE_VERSION,
     }
 

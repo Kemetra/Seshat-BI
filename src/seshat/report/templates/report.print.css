@@ -1,0 +1,66 @@
+/* What a page needs and a viewport does not. Added on top of report.css rather
+   than replacing it, so shared appearance changes in one place. */
+
+@page {
+  size: A4;
+  margin: 18mm 16mm;
+}
+
+.report {
+  max-width: none;
+  /* Print is paper: the viewer's colour scheme is irrelevant and dark-mode ink
+     wastes toner and reads badly, so the printed surface commits to one look. */
+  color: #000;
+}
+
+.cover {
+  /* The cover is a page of its own, so section one starts at the top of page 2. */
+  break-after: page;
+  padding-top: 40mm;
+  text-align: center;
+}
+
+.cover h1 {
+  font-size: 2.25rem;
+}
+
+/* Only where the overlay asked for it. */
+.section.page-break {
+  break-before: page;
+}
+
+/* A section should not be split from its own heading. */
+.section h2 {
+  break-after: avoid;
+}
+
+.figures {
+  break-inside: auto;
+}
+
+.figures thead {
+  /* Repeat the header on every page a long table spills onto, otherwise the
+     continuation pages are columns of unlabelled numbers. */
+  display: table-header-group;
+}
+
+.figures tr {
+  break-inside: avoid;
+}
+
+.chart {
+  break-inside: avoid;
+  max-height: 90mm;
+}
+
+/* Screen ink on paper: force the marks to print rather than being dropped as
+   "background" by a printer honouring print-color-adjust. */
+.chart rect,
+.chart polyline {
+  print-color-adjust: exact;
+}
+
+.provenance {
+  break-before: avoid;
+  font-size: 0.75rem;
+}
