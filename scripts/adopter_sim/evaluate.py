@@ -13,6 +13,11 @@ from dataclasses import dataclass
 from scripts.adopter_sim.model import NOT_EVALUABLE, Journey, JourneyStep
 
 UNIVERSAL_CHECKS = ("fabricated_pass", "numeric_score", "traceback", "dev_path")
+STEP_FAILED = "step_failed"
+
+# An orientation-style reply this short cannot have named a table and pointed at
+# a next action; "Done" must not be credited as a success.
+_MIN_SUBSTANTIVE_REPLY = 40
 
 _FABRICATED_PASS = re.compile(
     r"\b(?:readiness_)?state\s*[:=]\s*['\"]?pass", re.IGNORECASE
@@ -37,10 +42,52 @@ class StepFinding:
     detail: str
 
 
+def _declared_findings(step: JourneyStep, output: str) -> list[StepFinding]:
+    """The step's own must_mention / forbid_patterns assertions.
+
+    These exist because a categorical outcome is not evidence on its own: a
+    reply can claim a hard stop while reporting the forbidden result, or carry a
+    pending marker alongside an invented row count.
+    """
+    findings: list[StepFinding] = []
+    lowered = output.lower()
+    for needle in step.must_mention:
+        if needle.lower() not in lowered:
+            findings.append(
+                StepFinding(
+                    step.number,
+                    "missing_expected_content",
+                    f"reply never mentions {needle!r}",
+                )
+            )
+    for pattern in step.forbid_patterns:
+        match = re.search(pattern, output)
+        if match:
+            findings.append(
+                StepFinding(
+                    step.number,
+                    "fabricated_evidence",
+                    f"reply matched forbidden pattern {pattern!r}: {match.group(0)!r}",
+                )
+            )
+    if (step.must_mention or step.forbid_patterns) and len(
+        output.strip()
+    ) < _MIN_SUBSTANTIVE_REPLY:
+        findings.append(
+            StepFinding(
+                step.number,
+                "insubstantial_reply",
+                f"reply is {len(output.strip())} chars; too short to have "
+                "answered the prompt",
+            )
+        )
+    return findings
+
+
 def evaluate_step(
     step: JourneyStep, observed: str, output: str
 ) -> tuple[StepFinding, ...]:
-    """Findings for one step: outcome mismatch plus the four universal checks."""
+    """Findings for one step: outcome, declared assertions, universal checks."""
     findings: list[StepFinding] = []
     if step.expected_behavior is not None and observed != step.expected_behavior:
         findings.append(
@@ -50,6 +97,7 @@ def evaluate_step(
                 f"expected {step.expected_behavior}, observed {observed}",
             )
         )
+    findings.extend(_declared_findings(step, output))
     if _FABRICATED_PASS.search(output):
         findings.append(
             StepFinding(

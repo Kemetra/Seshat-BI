@@ -25,6 +25,7 @@ class QuorumVerdict:
     status: str
     seen: int
     evaluable: int
+    dataset: str = ""
 
 
 def tally(
@@ -32,8 +33,14 @@ def tally(
     runs: Sequence[Mapping[str, object]],
     *,
     single_run: bool,
+    dataset: str = "",
 ) -> tuple[QuorumVerdict, ...]:
-    """Fold per-run findings into one verdict per (step, kind).
+    """Fold one dataset cohort's runs into a verdict per (step, kind).
+
+    Callers MUST pass a single dataset's runs. Pooling clean and messy would let
+    a 1-of-3 flake on each dataset add up to a false `confirmed`, and would hide
+    which dataset exposed the regression -- destroying the control the two
+    datasets exist to provide.
 
     Each run is a mapping with:
       findings: sequence of (step, kind, detail) triples, or (kind, detail)
@@ -63,6 +70,7 @@ def tally(
                 status=_status(seen, evaluable, single_run=single_run),
                 seen=seen,
                 evaluable=evaluable,
+                dataset=dataset,
             )
         )
     return tuple(verdicts)

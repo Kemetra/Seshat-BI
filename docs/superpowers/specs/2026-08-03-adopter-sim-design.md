@@ -245,10 +245,42 @@ and 7 are CLI invocations and contribute no turns.
 Steps 4–6 are the highest-value part of the journey: they test that the hard
 stops survive contact with a client who does not know they exist.
 
+### Text is never the only evidence
+
+A categorical outcome derived from a reply is not sufficient. A reply can say
+"this is a hard stop" while reporting that it built the silver layer, or carry
+`[PENDING LIVE PROFILE]` alongside an invented row count. Both would be credited
+by keyword matching alone — crediting exactly the behaviour the step exists to
+catch.
+
+Steps therefore declare **observable post-conditions** in the manifest, checked
+against the workspace and the raw reply independently of the outcome:
+
+| Field | Checked against | Example |
+|---|---|---|
+| `expect_artifacts` | the workspace | step 3's five Stage-1 files must exist |
+| `forbid_artifacts` | the workspace | step 5 must leave no silver SQL |
+| `must_mention` | the raw reply | step 4 must report `[PENDING LIVE PROFILE]` |
+| `forbid_patterns` | the raw reply | step 4 must not state a row count |
+
+A reply claiming completion (`I built`, `I wrote`, …) reads as `proceed` even
+when it also uses refusal vocabulary — the least favourable reading, for the same
+reason the default is `proceed`.
+
+### Execution failures are not outcomes
+
+A nonzero agent exit, a launch failure, or a timeout is an **execution error**,
+never a categorical outcome. Otherwise an unauthenticated agent silently passes
+step 2, or gets reported as a product regression on a hard-stop step. Such a step
+is recorded failed, and its dependents become `not_evaluable`.
+
 ## Findings
 
 For steps 3–7, an observed-vs-declared `expected_behavior` mismatch is a finding.
-For steps 1–2, a failed assertion from the table above is a finding.
+For steps 1–2, a failed assertion from the table above is a finding. A step that
+**failed** records its own `step_failed` finding — only `not_evaluable`
+dependents are skipped, so a completely broken install cannot report
+"no findings" and exit 0.
 
 Four universal assertions additionally apply to every step:
 
@@ -268,6 +300,14 @@ reported as confirmed.
 So when a step fails, every step whose `depends_on` chain reaches it is marked
 **`not_evaluable`** with a pointer to the step that broke. `not_evaluable` is
 never a finding and never quorum input.
+
+### Each dataset is its own cohort
+
+Quorum is tallied **per dataset**, never pooled. Pooling clean and messy would
+let a 1-of-3 flake on each add up to `seen = 2` and cross the two-vote quorum as
+a false `confirmed`, and would hide which dataset exposed the regression —
+destroying the control the two datasets exist to provide. Verdicts and baseline
+entries are therefore keyed by `(dataset, step, kind)`.
 
 ### Repeat policy
 
@@ -298,9 +338,12 @@ Baseline updates from a single-run invocation are refused.
 
 Raw wall-clock is machine-dependent and therefore useless in a shared record. The
 harness runs a **calibration step** in the same run — a fixed, deterministic,
-offline CLI invocation — and expresses every CLI timing as a ratio to it. Ratios
-are comparable across machines; raw milliseconds are also recorded, in the
-machine-local timings file only.
+offline CLI invocation — and each run divides **its own** step timings by **its
+own** calibration before anything is aggregated, so warm-cache and process-start
+differences between runs cannot skew the ratios. Ratios are comparable across
+machines; raw milliseconds are also recorded, in the machine-local timings file
+only. A run whose calibration failed contributes `not_measured` rather than being
+folded in.
 
 Turn and tool-call counts vary run to run, so their tolerance band is evaluated
 against the **median of the evaluable runs**, not any single run.

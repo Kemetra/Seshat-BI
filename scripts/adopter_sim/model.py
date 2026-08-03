@@ -26,6 +26,14 @@ class JourneyStep:
     command: tuple[str, ...] | None
     expected_behavior: str | None
     depends_on: tuple[int, ...]
+    # Declarative post-conditions. A categorical outcome alone is not enough:
+    # a reply can say "hard stop" while having built the thing, or report
+    # [PENDING LIVE PROFILE] while inventing a row count. These assert the
+    # observable facts the outcome claims.
+    expect_artifacts: tuple[str, ...] = ()
+    forbid_artifacts: tuple[str, ...] = ()
+    must_mention: tuple[str, ...] = ()
+    forbid_patterns: tuple[str, ...] = ()
 
     @property
     def agent_driven(self) -> bool:

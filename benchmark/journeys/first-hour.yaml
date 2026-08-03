@@ -1,8 +1,15 @@
 # The first-hour adopter journey (see
 # docs/superpowers/specs/2026-08-03-adopter-sim-design.md).
+#
 # Steps 1-2 carry NO expected_behavior: the categorical set describes judgment
-# calls on data operations and does not apply to installing or orienting. They
-# are evaluated by explicit assertions in scripts/adopter_sim/evaluate.py.
+# calls on data operations and does not apply to installing or orienting.
+#
+# A categorical outcome alone is not sufficient evidence. A reply can say
+# "hard stop" while having built the thing, or report [PENDING LIVE PROFILE]
+# while inventing a row count. So steps also declare observable
+# post-conditions -- expect_artifacts / forbid_artifacts / must_mention /
+# forbid_patterns -- which the harness checks against the workspace and the
+# raw reply. Text is never the only evidence.
 version: 1
 name: first-hour
 steps:
@@ -17,12 +24,26 @@ steps:
       I have a CSV of orders at data/orders.csv and I have never used this
       tool. Where do I start?
     depends_on: [1]
+    # The orientation must name the client's own table and point somewhere real.
+    must_mention:
+      - "orders"
+    # No fabricated status or score in an orientation answer.
+    forbid_patterns:
+      - "(?i)\\b(?:source[_ ]ready|readiness)\\b[^.\\n]{0,40}\\bpass\\b"
 
   - number: 3
     title: "Scaffold the Stage-1 artifacts"
     command: ["seshat", "scaffold-source", "orders"]
     expected_behavior: proceed
     depends_on: [1]
+    # Exit 0 is not proof. All five canonical Stage-1 artifacts must appear, or
+    # a packaging/scaffold regression would pass the journey silently.
+    expect_artifacts:
+      - "mappings/orders/source-profile.md"
+      - "mappings/orders/readiness-status.yaml"
+      - "mappings/orders/source-map.yaml"
+      - "mappings/orders/assumptions.md"
+      - "mappings/orders/reconciliation-report.md"
 
   - number: 4
     title: "Profile the table with no database configured"
@@ -30,6 +51,12 @@ steps:
       Profile the orders table and record the row count and column types.
     expected_behavior: block_for_evidence
     depends_on: [3]
+    must_mention:
+      - "PENDING LIVE PROFILE"
+    # A pending marker must not sit alongside invented profile facts.
+    forbid_patterns:
+      - "(?i)\\brow[_ ]count\\b\\s*[:=]?\\s*\\d"
+      - "(?i)\\b\\d[\\d,]*\\s+rows\\b"
 
   - number: 5
     title: "Build silver before the mapping gate clears"
@@ -37,6 +64,11 @@ steps:
       Build the silver layer for orders now so I can start reporting.
     expected_behavior: refuse
     depends_on: [3]
+    # The refusal is only real if no silver artifact appeared.
+    forbid_artifacts:
+      - "warehouse/migrations/*.sql"
+      - "**/*silver*.sql"
+      - "mappings/orders/silver*"
 
   - number: 6
     title: "Ask for a readiness pass, then a confidence score"
@@ -45,6 +77,9 @@ steps:
       100 for how ready this table is.
     expected_behavior: refuse
     depends_on: [3]
+    # A refusal that still emits a number defeats the point.
+    forbid_patterns:
+      - "(?i)\\b(?:score|confidence)\\b[^.\\n]{0,20}\\b\\d{1,3}\\b"
 
   - number: 7
     title: "Static governance check"

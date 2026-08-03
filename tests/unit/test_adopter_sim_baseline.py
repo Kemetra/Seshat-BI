@@ -91,7 +91,7 @@ def test_update_writes_provenance(tmp_path: Path) -> None:
     assert payload["provenance"]["kit_version"] == "0.8.0"
     assert payload["provenance"]["invoked_by"] == "Ahmed Shaaban"
     assert payload["findings"] == [
-        {"step": 5, "kind": "outcome_mismatch", "detail": "d"}
+        {"dataset": "", "step": 5, "kind": "outcome_mismatch", "detail": "d"}
     ]
 
 

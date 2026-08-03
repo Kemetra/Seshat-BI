@@ -12,6 +12,24 @@ STEP_TIMEOUT_CLI = 120
 INVOCATION_CEILING = 90 * 60
 
 
+def _positive_int(raw: str) -> int:
+    """Reject --runs 0 or negative.
+
+    Zero runs collects no evidence but is neither partial nor single-run, so with
+    --update-baseline it would overwrite the tracked baseline with an empty
+    accepted result.
+    """
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"{raw!r} is not an integer") from exc
+    if value < 1:
+        raise argparse.ArgumentTypeError(
+            f"must be at least 1 (got {value}); zero runs collects no evidence"
+        )
+    return value
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="adopter-sim",
@@ -23,9 +41,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--journey", default="first-hour")
     parser.add_argument(
         "--runs",
-        type=int,
+        type=_positive_int,
         default=3,
-        help="repeats per dataset; 1 labels every finding advisory",
+        help="repeats per dataset (minimum 1); 1 labels every finding advisory",
     )
     parser.add_argument(
         "--datasets",

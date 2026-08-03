@@ -23,12 +23,22 @@ from scripts.adopter_sim.baseline import (
 )
 from scripts.adopter_sim.blindness import assert_no_leak, run_pre_journey_assertions
 from scripts.adopter_sim.env import build_client_env
-from scripts.adopter_sim.evaluate import StepOutcome, cascade, evaluate_step
+from scripts.adopter_sim.evaluate import (
+    STEP_FAILED,
+    StepOutcome,
+    cascade,
+    evaluate_step,
+)
 from scripts.adopter_sim.exitcodes import Exit, RunOutcome, classify
 from scripts.adopter_sim.fixtures import assert_clean, assert_messy
 from scripts.adopter_sim.journey import load_journey
-from scripts.adopter_sim.metrics import TOLERANCE, median, normalise
-from scripts.adopter_sim.model import NOT_RUN, AdopterSimError, Journey
+from scripts.adopter_sim.metrics import TOLERANCE, median
+from scripts.adopter_sim.model import (
+    NOT_EVALUABLE,
+    NOT_RUN,
+    AdopterSimError,
+    Journey,
+)
 from scripts.adopter_sim.quorum import tally
 from scripts.adopter_sim.workspace import (
     WorkspaceRequest,
@@ -68,18 +78,22 @@ def _gather_runs(
     wheel: Path,
     driver: object | None,
     args: Namespace,
-    raw_timings: dict[int, list[float]],
     started: float,
-) -> tuple[list[dict[str, object]], bool]:
-    """Every (dataset, repeat) run, plus whether the ceiling truncated them."""
-    runs: list[dict[str, object]] = []
+) -> tuple[dict[str, list[dict[str, object]]], bool]:
+    """Runs grouped BY DATASET, plus whether the ceiling truncated them.
+
+    Grouping is load-bearing: pooling clean and messy would let a 1-of-3 flake on
+    each add up to a false `confirmed` under the two-vote quorum.
+    """
+    cohorts: dict[str, list[dict[str, object]]] = {}
     root = resolve_root()
     for dataset in args.datasets:
+        cohorts.setdefault(dataset, [])
         for index in range(args.runs):
             if time.monotonic() - started > args.ceiling:
                 print("[FAIL] invocation ceiling reached; run truncated", flush=True)
-                return runs, True
-            runs.append(
+                return cohorts, True
+            cohorts[dataset].append(
                 _one_run(
                     journey=journey,
                     dataset=dataset,
@@ -87,22 +101,25 @@ def _gather_runs(
                     wheel=wheel,
                     driver=driver,
                     args=args,
-                    raw_timings=raw_timings,
                     root=root,
                 )
             )
-    return runs, False
+    return cohorts, False
 
 
 def _report_verdicts(journey_name: str, verdicts) -> None:
     baseline = load_findings_baseline(findings_baseline_path(REPO_ROOT, journey_name))
     for row in diff_findings(verdicts, baseline):
-        print(f"[{row.state.upper()}] step {row.step}: {row.kind}", flush=True)
+        print(
+            f"[{row.state.upper()}] {row.dataset or 'unknown'} step {row.step}: "
+            f"{row.kind}",
+            flush=True,
+        )
     for verdict in verdicts:
         print(
-            f"[{verdict.status.upper()}] step {verdict.step} {verdict.kind} "
-            f"(seen {verdict.seen} of {verdict.evaluable} evaluable runs): "
-            f"{verdict.detail}",
+            f"[{verdict.status.upper()}] {verdict.dataset or 'unknown'} step "
+            f"{verdict.step} {verdict.kind} (seen {verdict.seen} of "
+            f"{verdict.evaluable} evaluable runs): {verdict.detail}",
             flush=True,
         )
     if not verdicts:
@@ -143,23 +160,25 @@ def run_invocation(args: Namespace, driver: object | None = None) -> Exit:
     except AdopterSimError as exc:
         return _fail(Exit.HARNESS_ERROR, exc)
 
-    raw_timings: dict[int, list[float]] = {}
     try:
-        runs, truncated = _gather_runs(
+        cohorts, truncated = _gather_runs(
             journey=journey,
             wheel=wheel,
             driver=active_driver,
             args=args,
-            raw_timings=raw_timings,
             started=started,
         )
     except AdopterSimError as exc:
         return _fail(Exit.BLINDNESS_ABORT, exc, prefix="blindness: ")
     partial = partial or truncated
 
-    verdicts = tally(journey, runs, single_run=args.runs == 1)
+    verdicts: list = []
+    for dataset, runs in sorted(cohorts.items()):
+        verdicts.extend(
+            tally(journey, runs, single_run=args.runs == 1, dataset=dataset)
+        )
     _report_verdicts(journey.name, verdicts)
-    metric_out_of_band = _report_timings(journey.name, raw_timings)
+    metric_out_of_band = _report_timings(journey.name, cohorts)
 
     if args.update_baseline:
         try:
@@ -215,7 +234,6 @@ def _one_run(
     wheel: Path,
     driver,
     args: Namespace,
-    raw_timings: dict[int, list[float]],
     root: Path,
 ) -> dict[str, object]:
     run_id = new_run_id(f"{journey.name}|{dataset}|{index}")
@@ -246,6 +264,7 @@ def _one_run(
         [str(paths.venv_bin / "seshat"), "--version"], paths, client_env, args
     )
 
+    raw_timings: dict[int, float] = {}
     outcomes, transcript = _execute_steps(
         journey=journey,
         paths=paths,
@@ -257,7 +276,38 @@ def _one_run(
     assert_no_leak("\n".join(transcript), REPO_ROOT)
 
     findings, evaluable = _collect_findings(journey, outcomes)
-    return {"findings": findings, "evaluable": evaluable, "calibration": calibration_ms}
+    # Normalise against THIS run's own calibration, so warm-cache and
+    # process-start differences between runs cannot skew the ratios.
+    return {
+        "findings": findings,
+        "evaluable": evaluable,
+        "calibration": calibration_ms,
+        "ratios": {
+            step: (elapsed / calibration_ms) if calibration_ms else None
+            for step, elapsed in raw_timings.items()
+        },
+        "raws": dict(raw_timings),
+    }
+
+
+def _artifact_violations(step, workspace: Path) -> list[str]:
+    """Missing expect_artifacts and present forbid_artifacts.
+
+    Exit code and reply text are not evidence on their own: a scaffold can exit
+    zero without writing its artifacts, and a refusal can be worded while the
+    forbidden file was written anyway.
+    """
+    problems = [
+        f"expected artifact missing: {relative}"
+        for relative in step.expect_artifacts
+        if not (workspace / relative).exists()
+    ]
+    problems += [
+        f"forbidden artifact present: {match.relative_to(workspace)}"
+        for pattern in step.forbid_artifacts
+        for match in workspace.glob(pattern)
+    ]
+    return problems
 
 
 def _agent_step(step, paths, client_env, driver, args) -> tuple[StepOutcome, str]:
@@ -267,6 +317,25 @@ def _agent_step(step, paths, client_env, driver, args) -> tuple[StepOutcome, str
         env=client_env,
         timeout=args.agent_timeout,
     )
+    if getattr(reply, "failed", False):
+        # An execution failure is not a categorical outcome.
+        return (
+            StepOutcome(step.number, "error", reply.text, False, reply.error),
+            reply.text,
+        )
+    problems = _artifact_violations(step, paths.root)
+    if problems:
+        detail = "; ".join(problems)
+        return (
+            StepOutcome(
+                step.number,
+                "proceed",
+                f"{reply.text}\n[POSTCONDITION] {detail}",
+                False,
+                detail,
+            ),
+            reply.text,
+        )
     return (
         StepOutcome(step.number, reply.observed, reply.text, True, ""),
         reply.text,
@@ -277,7 +346,20 @@ def _cli_step(step, paths, client_env, args, raw_timings) -> tuple[StepOutcome, 
     command = [str(paths.venv_bin / (step.command or ("seshat",))[0])]
     command += list((step.command or ())[1:])
     elapsed, output, ok = _time_cli(command, paths, client_env, args)
-    raw_timings.setdefault(step.number, []).append(elapsed)
+    raw_timings[step.number] = elapsed
+    problems = _artifact_violations(step, paths.root) if ok else []
+    if problems:
+        detail = "; ".join(problems)
+        return (
+            StepOutcome(
+                step.number,
+                "error",
+                f"{output}\n[POSTCONDITION] {detail}",
+                False,
+                detail,
+            ),
+            output,
+        )
     return (
         StepOutcome(step.number, "proceed" if ok else "error", output, ok, ""),
         output,
@@ -291,7 +373,7 @@ def _execute_steps(
     client_env: dict[str, str],
     driver,
     args: Namespace,
-    raw_timings: dict[int, list[float]],
+    raw_timings: dict[int, float],
 ) -> tuple[dict[int, StepOutcome], list[str]]:
     outcomes: dict[int, StepOutcome] = {}
     transcript: list[str] = []
@@ -313,15 +395,26 @@ def _execute_steps(
 def _collect_findings(
     journey: Journey, outcomes: dict[int, StepOutcome]
 ) -> tuple[list[tuple[int, str, str]], list[int]]:
-    """Findings and evaluable steps, skipping not_evaluable and not_run steps."""
+    """Findings and evaluable steps.
+
+    Only NOT_EVALUABLE dependents and NOT_RUN steps are skipped. A step that
+    FAILED is evaluable and records its own finding -- otherwise a completely
+    broken install would drop every step and report `[OK] no findings` with
+    exit 0.
+    """
     resolved = cascade(journey, outcomes)
     findings: list[tuple[int, str, str]] = []
     evaluable: list[int] = []
     for step in journey.steps:
         outcome = outcomes[step.number]
-        if resolved[step.number] != "ok" or outcome.observed == NOT_RUN:
+        state = resolved[step.number]
+        if state == NOT_EVALUABLE or outcome.observed == NOT_RUN:
             continue
         evaluable.append(step.number)
+        if state == "failed":
+            detail = outcome.reason or outcome.output.strip()[:300] or "step failed"
+            findings.append((step.number, STEP_FAILED, detail))
+            continue
         findings.extend(
             (finding.step, finding.kind, finding.detail)
             for finding in evaluate_step(step, outcome.observed, outcome.output)
@@ -350,29 +443,56 @@ def _time_cli(
     return (time.monotonic() - start) * 1000.0, output, ok
 
 
-def _report_timings(journey_name: str, raw_timings: dict[int, list[float]]) -> bool:
-    """Record and print timings.
+def _cohort_lines(dataset: str, runs: list[dict[str, object]]) -> list[str]:
+    """One line per step: median raw ms, and median of each run's OWN ratio.
+
+    Each run already divided its step timings by the calibration measured in
+    that same run, so aggregating here cannot mix calibrations. A run whose
+    calibration failed contributes ratio=None and is reported not_measured
+    rather than silently folded in.
+    """
+    raws: dict[int, list[float]] = {}
+    ratios: dict[int, list[float]] = {}
+    for run in runs:
+        for step, value in (run.get("raws") or {}).items():
+            raws.setdefault(step, []).append(value)
+        for step, ratio in (run.get("ratios") or {}).items():
+            if ratio is not None:
+                ratios.setdefault(step, []).append(ratio)
+    lines: list[str] = []
+    for step in sorted(raws):
+        ratio = median(ratios[step]) if ratios.get(step) else None
+        rendered = f"{ratio:.2f}" if ratio is not None else "not_measured"
+        lines.append(
+            f"{dataset} step {step}: {median(raws[step]):.0f} ms ratio={rendered}"
+        )
+    return lines
+
+
+def _report_timings(
+    journey_name: str, cohorts: dict[str, list[dict[str, object]]]
+) -> bool:
+    """Record and print timings, per dataset cohort.
 
     Returns False always: there is no accepted timing reference until a first
     full run is recorded, and gating against an absent baseline would fail every
-    first run. See the plan's Self-Review for the follow-up that enforces it.
+    first run. Tracked in issue #567.
     """
-    if not raw_timings:
+    lines = [
+        line
+        for dataset, runs in sorted(cohorts.items())
+        for line in _cohort_lines(dataset, runs)
+    ]
+    if not lines:
         return False
-    medians = {step: median(values) for step, values in raw_timings.items()}
-    timings = normalise(medians, medians.get(min(medians)))
     path = timings_baseline_path(REPO_ROOT, journey_name)
     path.parent.mkdir(parents=True, exist_ok=True)
-    lines = [
-        f"step {timing.step}: {timing.raw_ms:.0f} ms ratio={timing.ratio}"
-        for timing in timings
-    ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     for line in lines:
         print(f"[TIME] {line}", flush=True)
     print(
         f"[TIME] tolerance band +/-{TOLERANCE:.0%}; not gated until a baseline "
-        "is accepted",
+        "is accepted (issue #567)",
         flush=True,
     )
     return False

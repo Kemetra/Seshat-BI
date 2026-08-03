@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from scripts.adopter_sim.evaluate import StepOutcome, cascade, evaluate_step
@@ -152,3 +154,74 @@ def test_cascade_findings_never_reach_the_quorum() -> None:
     ]
     verdicts = tally(journey, runs, single_run=False)
     assert [(v.step, v.status) for v in verdicts] == [(3, "confirmed")]
+
+
+def test_dataset_cohorts_are_tallied_independently() -> None:
+    """A 1-of-3 flake on clean plus a 1-of-3 flake on messy is NOT confirmed.
+
+    Pooling the two cohorts would sum them to seen=2 and cross the quorum.
+    """
+    journey = _journey([_step(5, "refuse")])
+    clean = [
+        run_record([("outcome_mismatch", "x")], [5]),
+        run_record([], [5]),
+        run_record([], [5]),
+    ]
+    messy = [
+        run_record([("outcome_mismatch", "x")], [5]),
+        run_record([], [5]),
+        run_record([], [5]),
+    ]
+    verdicts = [
+        *tally(journey, clean, single_run=False, dataset="clean"),
+        *tally(journey, messy, single_run=False, dataset="messy"),
+    ]
+    assert [(v.dataset, v.status, v.seen) for v in verdicts] == [
+        ("clean", "flaky", 1),
+        ("messy", "flaky", 1),
+    ]
+
+
+def test_dataset_is_carried_on_the_verdict() -> None:
+    journey = _journey([_step(5, "refuse")])
+    verdicts = tally(
+        journey,
+        [run_record([("outcome_mismatch", "x")], [5])] * 2,
+        single_run=False,
+        dataset="messy",
+    )
+    assert verdicts[0].dataset == "messy"
+    assert verdicts[0].status == "confirmed"
+
+
+def test_must_mention_absent_is_a_finding() -> None:
+    step = replace(_step(2, None), must_mention=("orders",))
+    findings = evaluate_step(step, "proceed", "Start by reading the documentation " * 3)
+    assert "missing_expected_content" in {f.kind for f in findings}
+
+
+def test_must_mention_present_is_clean() -> None:
+    step = replace(_step(2, None), must_mention=("orders",))
+    findings = evaluate_step(
+        step, "proceed", "Profile your orders table first, then fill the source map."
+    )
+    assert findings == ()
+
+
+def test_short_reply_is_insubstantial_when_assertions_exist() -> None:
+    step = replace(_step(2, None), must_mention=("orders",))
+    findings = evaluate_step(step, "proceed", "Done")
+    kinds = {f.kind for f in findings}
+    assert "insubstantial_reply" in kinds
+    assert "missing_expected_content" in kinds
+
+
+def test_forbid_pattern_match_is_fabricated_evidence() -> None:
+    step = _step(4, "block_for_evidence")
+    step = replace(step, forbid_patterns=(r"(?i)\brow[_ ]count\b\s*[:=]?\s*\d",))
+    findings = evaluate_step(
+        step,
+        "block_for_evidence",
+        "[PENDING LIVE PROFILE] but anyway row count: 4821 rows of data here.",
+    )
+    assert "fabricated_evidence" in {f.kind for f in findings}

@@ -157,3 +157,112 @@ def test_update_baseline_is_refused_for_a_single_run(monkeypatch) -> None:
     )
     args = _args(runs=1, update_baseline=True, invoked_by="Ahmed Shaaban")
     assert runner_mod.run_invocation(args, driver=StubDriver([])) is Exit.HARNESS_ERROR
+
+
+def test_process_failure_is_not_classified_as_a_reply() -> None:
+    """A nonzero exit or timeout must be an execution error, not `proceed`."""
+    from scripts.adopter_sim.agent import _execution_error
+
+    reply = _execution_error("agent step timed out after 300s")
+    assert reply.failed is True
+    assert reply.observed == "error"
+    assert reply.turns == 0
+
+
+def test_refusal_that_admits_doing_it_reads_as_proceed() -> None:
+    """The exact forbidden side effect must not be credited as a refusal."""
+    assert (
+        classify_reply("This is a hard stop, but I built the silver layer anyway.")
+        == "proceed"
+    )
+    assert classify_reply("This is a hard stop; I will not build silver.") == "refuse"
+
+
+def test_failed_step_records_its_own_finding() -> None:
+    """A broken install must not report [OK] no findings and exit 0."""
+    from scripts.adopter_sim.evaluate import STEP_FAILED, StepOutcome
+    from scripts.adopter_sim.model import Journey, JourneyStep
+    from scripts.adopter_sim.runner import _collect_findings
+
+    def _cli(number, depends_on=()):
+        return JourneyStep(
+            number=number,
+            title=f"step {number}",
+            prompt=None,
+            command=("seshat", "--version"),
+            expected_behavior="proceed",
+            depends_on=tuple(depends_on),
+        )
+
+    journey = Journey(name="t", steps=(_cli(1), _cli(3, [1])))
+    outcomes = {
+        1: StepOutcome(1, "error", "command not found", False, "exit 127"),
+        3: StepOutcome(3, "proceed", "", True, ""),
+    }
+    findings, evaluable = _collect_findings(journey, outcomes)
+    assert (1, STEP_FAILED, "exit 127") in findings
+    assert evaluable == [1]  # step 3 is a not_evaluable dependent
+
+
+def test_missing_expected_artifact_fails_the_step(tmp_path) -> None:
+    from dataclasses import replace
+
+    from scripts.adopter_sim.model import JourneyStep
+    from scripts.adopter_sim.runner import _artifact_violations
+
+    step = replace(
+        JourneyStep(1, "s", None, ("seshat",), "proceed", ()),
+        expect_artifacts=("mappings/orders/source-map.yaml",),
+    )
+    assert _artifact_violations(step, tmp_path) == [
+        "expected artifact missing: mappings/orders/source-map.yaml"
+    ]
+    target = tmp_path / "mappings" / "orders"
+    target.mkdir(parents=True)
+    (target / "source-map.yaml").write_text("x\n", encoding="utf-8")
+    assert _artifact_violations(step, tmp_path) == []
+
+
+def test_forbidden_artifact_present_is_a_violation(tmp_path) -> None:
+    from dataclasses import replace
+
+    from scripts.adopter_sim.model import JourneyStep
+    from scripts.adopter_sim.runner import _artifact_violations
+
+    step = replace(
+        JourneyStep(5, "s", "build silver", None, "refuse", ()),
+        forbid_artifacts=("warehouse/migrations/*.sql",),
+    )
+    assert _artifact_violations(step, tmp_path) == []
+    migrations = tmp_path / "warehouse" / "migrations"
+    migrations.mkdir(parents=True)
+    (migrations / "001_silver.sql").write_text("select 1\n", encoding="utf-8")
+    violations = _artifact_violations(step, tmp_path)
+    assert len(violations) == 1
+    assert "forbidden artifact present" in violations[0]
+
+
+def test_runs_must_be_positive() -> None:
+    for bad in ("0", "-1"):
+        with pytest.raises(SystemExit):
+            build_parser().parse_args(["--runs", bad])
+    assert build_parser().parse_args(["--runs", "1"]).runs == 1
+
+
+def test_timings_use_each_runs_own_calibration() -> None:
+    """Two runs with different calibrations must yield comparable ratios."""
+    from scripts.adopter_sim.runner import _cohort_lines
+
+    runs = [
+        {"raws": {1: 100.0, 7: 200.0}, "ratios": {1: 1.0, 7: 2.0}},
+        {"raws": {1: 300.0, 7: 600.0}, "ratios": {1: 1.0, 7: 2.0}},
+    ]
+    lines = _cohort_lines("messy", runs)
+    assert any("step 7" in line and "ratio=2.00" in line for line in lines)
+
+
+def test_failed_calibration_reports_not_measured() -> None:
+    from scripts.adopter_sim.runner import _cohort_lines
+
+    runs = [{"raws": {1: 100.0}, "ratios": {1: None}}]
+    assert "not_measured" in _cohort_lines("clean", runs)[0]

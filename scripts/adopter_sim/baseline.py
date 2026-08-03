@@ -25,6 +25,7 @@ class DiffRow:
     step: int
     kind: str
     state: str
+    dataset: str = ""
 
 
 def findings_baseline_path(repo_root: Path, journey: str) -> Path:
@@ -46,19 +47,36 @@ def load_findings_baseline(path: Path) -> tuple[dict[str, str], ...]:
         raise AdopterSimError(f"cannot read baseline {path}: {exc}") from exc
     entries = payload.get("findings") or []
     return tuple(
-        {"step": int(entry["step"]), "kind": str(entry["kind"])} for entry in entries
+        {
+            "step": int(entry["step"]),
+            "kind": str(entry["kind"]),
+            # Entries predating per-dataset cohorts carry no dataset.
+            "dataset": str(entry.get("dataset") or ""),
+        }
+        for entry in entries
     )
 
 
 def diff_findings(
     verdicts: Sequence[QuorumVerdict], baseline: Sequence[dict[str, str]]
 ) -> tuple[DiffRow, ...]:
-    current = {(v.step, v.kind) for v in verdicts if v.status == _BASELINE_STATUS}
-    known = {(int(e["step"]), str(e["kind"])) for e in baseline}
-    rows = [DiffRow(step, kind, "new") for step, kind in sorted(current - known)]
-    rows += [DiffRow(step, kind, "resolved") for step, kind in sorted(known - current)]
-    rows += [DiffRow(step, kind, "unchanged") for step, kind in sorted(current & known)]
-    return tuple(rows)
+    """New / resolved / unchanged, keyed per DATASET as well as step and kind."""
+    current = {
+        (v.dataset, v.step, v.kind) for v in verdicts if v.status == _BASELINE_STATUS
+    }
+    known = {
+        (str(e.get("dataset") or ""), int(e["step"]), str(e["kind"])) for e in baseline
+    }
+    states = (
+        ("new", current - known),
+        ("resolved", known - current),
+        ("unchanged", current & known),
+    )
+    return tuple(
+        DiffRow(step, kind, state, dataset)
+        for state, keys in states
+        for dataset, step, kind in sorted(keys)
+    )
 
 
 def _assert_acceptable(
@@ -106,8 +124,13 @@ def update_findings_baseline(
             "invoked_by": invoked_by,
         },
         "findings": [
-            {"step": v.step, "kind": v.kind, "detail": v.detail}
-            for v in sorted(verdicts, key=lambda v: (v.step, v.kind))
+            {
+                "dataset": v.dataset,
+                "step": v.step,
+                "kind": v.kind,
+                "detail": v.detail,
+            }
+            for v in sorted(verdicts, key=lambda v: (v.dataset, v.step, v.kind))
             if v.status == _BASELINE_STATUS
         ],
     }

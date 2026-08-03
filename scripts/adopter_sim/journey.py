@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import yaml
@@ -84,6 +85,33 @@ def _depends_on(entry: dict, number: int) -> tuple[int, ...]:
     return tuple(depends_on)
 
 
+def _str_list(entry: dict, key: str, number: int) -> tuple[str, ...]:
+    values = entry.get(key, [])
+    if not isinstance(values, list) or not all(
+        isinstance(item, str) for item in values
+    ):
+        raise AdopterSimError(f"step {number} {key} must be a list of strings")
+    return tuple(values)
+
+
+def _postconditions(entry: dict, number: int) -> dict[str, tuple[str, ...]]:
+    conditions = {
+        key: _str_list(entry, key, number)
+        for key in ("expect_artifacts", "forbid_artifacts", "must_mention")
+    }
+    patterns = _str_list(entry, "forbid_patterns", number)
+    for pattern in patterns:
+        try:
+            re.compile(pattern)
+        except re.error as exc:
+            raise AdopterSimError(
+                f"step {number} forbid_patterns entry {pattern!r} is not a valid "
+                f"regex: {exc}"
+            ) from exc
+    conditions["forbid_patterns"] = patterns
+    return conditions
+
+
 def _step(entry: object, path: Path) -> JourneyStep:
     if not isinstance(entry, dict):
         raise AdopterSimError(f"journey {path} has a non-mapping step")
@@ -96,6 +124,7 @@ def _step(entry: object, path: Path) -> JourneyStep:
         command=command,
         expected_behavior=_behavior(entry, number),
         depends_on=_depends_on(entry, number),
+        **_postconditions(entry, number),
     )
 
 
