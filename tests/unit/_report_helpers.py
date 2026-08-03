@@ -46,6 +46,33 @@ _OBSERVATIONS = {
 }
 
 
+# Every governed code the report tests use, so a test that only cares about
+# figures does not have to author wording. Real reports load this from
+# `mappings/<table>/design/report-vocabulary.yaml`; a missing code refuses there
+# exactly as it does here.
+_TERMS = {
+    "cover.board_pack": "Board pack",
+    "cover.x": "Cover",
+    "section.a": "Section A",
+    "section.b": "Section B",
+    "section.by_region": "By region",
+    "section.detail": "Detail",
+    "section.first": "First",
+    "section.headline": "Headline",
+    "section.mix": "Mix",
+    "section.overview": "Overview",
+    "section.second": "Second",
+    "caveat.demo": "A stated caveat.",
+}
+
+
+def vocabulary(language: str = "en", **extra: str):
+    """A Vocabulary covering the codes these tests use."""
+    from seshat.report.vocabulary import Vocabulary
+
+    return Vocabulary(language=language, terms={**_TERMS, **extra})
+
+
 def workspace(
     tmp_path: Path,
     *,
@@ -82,6 +109,18 @@ def workspace(
     )
     (mappings / "design" / "report-layout.yaml").write_text(
         yaml.safe_dump(LAYOUT, sort_keys=False), encoding="utf-8"
+    )
+    # Headings are governed codes, so a table without a vocabulary cannot render.
+    (mappings / "design" / "report-vocabulary.yaml").write_text(
+        yaml.safe_dump(
+            {
+                "schema": "seshat.report-vocabulary/v1",
+                "table": TABLE,
+                "languages": {"en": dict(_TERMS)},
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
     )
     observations = tmp_path / "obs.yaml"
     observations.write_text(

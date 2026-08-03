@@ -38,6 +38,7 @@ import xlsxwriter
 from seshat.report.html import FigureCell, build_sections
 from seshat.report.layout import ReportLayout
 from seshat.report.model import ReportBundle
+from seshat.report.vocabulary import Vocabulary
 
 EXCEL_SURFACE_VERSION = "seshat.report.excel.v1"
 
@@ -55,6 +56,7 @@ _HEADER_FIGURE = "figure"
 _HEADER_LABEL = "label"
 _HEADER_VALUE = "value"
 _HEADER_CONTRACT = "approved_contract"
+_HEADER_CAVEAT = "caveat"
 _PROVENANCE_SHEET = "Provenance"
 _PROVENANCE_FIELD = "field"
 _PROVENANCE_VALUE = "value"
@@ -68,6 +70,7 @@ GOVERNED_LABELS = frozenset(
         _HEADER_LABEL,
         _HEADER_VALUE,
         _HEADER_CONTRACT,
+        _HEADER_CAVEAT,
         _PROVENANCE_SHEET,
         _PROVENANCE_FIELD,
         _PROVENANCE_VALUE,
@@ -134,19 +137,21 @@ class ExcelReportRenderer:
     """Writes the workbook. Holds no state between renders."""
 
     def render(
-        self, bundle: ReportBundle, layout: ReportLayout, language: str
+        self, bundle: ReportBundle, layout: ReportLayout, vocabulary: Vocabulary
     ) -> ExcelSurface:
         stream = io.BytesIO()
         workbook = xlsxwriter.Workbook(stream, dict(WORKBOOK_OPTIONS))
         try:
-            views = build_sections(bundle, layout, language)
+            views = build_sections(bundle, layout, vocabulary)
             names = unique_sheet_names([view.section_id for view in views])
             for view, name in zip(views, names, strict=True):
                 self._write_section(workbook, view, name)
             self._write_provenance(workbook, bundle)
         finally:
             workbook.close()
-        return ExcelSurface(workbook_bytes=stream.getvalue(), language=language)
+        return ExcelSurface(
+            workbook_bytes=stream.getvalue(), language=vocabulary.language
+        )
 
     def _write_section(self, workbook, section, name: str) -> None:
         sheet = workbook.add_worksheet(name)
@@ -154,6 +159,15 @@ class ExcelReportRenderer:
             sheet.write_string(0, column, header)
         for row, cell in enumerate(section.cells, start=1):
             self._write_cell(sheet, row, cell)
+        self._write_caveats(sheet, section, start=len(section.cells) + 2)
+
+    def _write_caveats(self, sheet, section, *, start: int) -> None:
+        """The approved caveats for this section, on the sheet that carries its
+        figures. A workbook is the surface most likely to be forwarded on its own,
+        so a caveat that reached only the page would be the one lost."""
+        for offset, caveat in enumerate(section.caveats):
+            sheet.write_string(start + offset, 0, _HEADER_CAVEAT)
+            sheet.write_string(start + offset, 1, caveat)
 
     def _write_cell(self, sheet, row: int, cell: FigureCell) -> None:
         # write_string never interprets. Nothing here inspects `value`.

@@ -40,6 +40,10 @@ layout:
       heading_code: section.mix
       visual_ids: [v07, v04]
       page_break_before: true
+      # REQUIRED by the signed binding map: the approved DiscountedTransactionRate
+      # is the known-status rate, and 50.37% without that note overstates what is
+      # known. A code, not prose, so the wording resolves per language.
+      caveat_codes: [caveat.v04_discount_known_status]
     # A same-unit series, so this one CAN be charted. The two sections above
     # deliberately mix currency with counts and ratios, which is normal for a KPI
     # row and is exactly why charts.build_chart refuses to draw them: one axis

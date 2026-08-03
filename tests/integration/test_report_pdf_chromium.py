@@ -94,11 +94,15 @@ def printed(tmp_path_factory) -> tuple[bytes, str]:
     """
     from seshat.report.model import ReportError
     from seshat.report.pdf import PdfReportRenderer
+    from seshat.report.vocabulary import load_vocabulary, vocabulary_path
 
     bundle, layout = _artifacts(tmp_path_factory.mktemp("chromium"))
+    # The SHIPPED vocabulary, because this renders the shipped fixture. A stand-in
+    # would not prove the committed wording resolves.
+    vocabulary = load_vocabulary(vocabulary_path(_REPO, "retail_store_sales"), "en")
     printer = _SpyPrinter()
     try:
-        surface = PdfReportRenderer(printer).render(bundle, layout, "en")
+        surface = PdfReportRenderer(printer).render(bundle, layout, vocabulary)
     except ReportError as exc:  # pragma: no cover - environment dependent
         if _NOT_INSTALLED in str(exc).lower():
             pytest.skip("chromium is absent; run `playwright install chromium`")
@@ -185,3 +189,20 @@ def test_the_chartable_section_was_drawn(printed) -> None:
     _, html = printed
     assert "<svg" in html
     assert html.count("<rect") == 3
+
+
+def test_the_required_caveat_reaches_the_printed_page(printed) -> None:
+    """The signed binding map requires v04 to footnote its known-status basis.
+
+    A caveat that reached the web page but not the PDF would be lost on exactly the
+    surface most likely to be printed and handed round a table.
+    """
+    _, html = printed
+    assert "33.39%" in html  # the unknown-status share
+    assert "33.55%" in html  # the floor the binding map names
+
+
+def test_the_printed_page_shows_wording_not_governed_codes(printed) -> None:
+    _, html = printed
+    assert ">Headline<" in html
+    assert ">section.headline<" not in html

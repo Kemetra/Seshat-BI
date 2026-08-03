@@ -48,6 +48,7 @@ from seshat.report.html import (
 )
 from seshat.report.layout import ReportLayout
 from seshat.report.model import ReportBundle, ReportError
+from seshat.report.vocabulary import Vocabulary
 
 PDF_SURFACE_VERSION = "seshat.report.pdf.v1"
 PRINT_TEMPLATE_NAME = "report.pdf.html.j2"
@@ -140,9 +141,9 @@ class PdfReportRenderer:
         self._environment = build_environment()
 
     def render(
-        self, bundle: ReportBundle, layout: ReportLayout, language: str
+        self, bundle: ReportBundle, layout: ReportLayout, vocabulary: Vocabulary
     ) -> PdfSurface:
-        context = build_context(bundle, layout, language)
+        context = build_context(bundle, layout, vocabulary)
         context["screen_stylesheet"] = _stylesheet(STYLESHEET_NAME)
         context["print_stylesheet"] = _stylesheet(PRINT_STYLESHEET_NAME)
         context["surface_version"] = PDF_SURFACE_VERSION
@@ -152,10 +153,14 @@ class PdfReportRenderer:
         except (TemplateError, ReportError) as exc:
             raise SurfaceRenderFailed(f"PDF surface failed: {exc}") from exc
         page = PrintablePage(
-            html=html, language=language, direction=str(context["direction"])
+            html=html,
+            language=vocabulary.language,
+            direction=str(context["direction"]),
         )
         pdf_bytes = self._printer.print_to_pdf(page)
         assert_publishable(pdf_bytes)
         return PdfSurface(
-            pdf_bytes=pdf_bytes, language=language, direction=page.direction
+            pdf_bytes=pdf_bytes,
+            language=vocabulary.language,
+            direction=page.direction,
         )

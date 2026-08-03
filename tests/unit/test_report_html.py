@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.unit._report_helpers import vocabulary as _vocab
+
 pytestmark = pytest.mark.unit
 
 pytest.importorskip("jinja2", reason="requires the `report` extra")
@@ -71,7 +73,7 @@ def test_document_reproduces_the_bundle_text(tmp_path: Path) -> None:
     from seshat.report.html import HtmlReportRenderer
 
     bundle, layout = _artifacts(tmp_path)
-    surface = HtmlReportRenderer().render(bundle, layout, "en")
+    surface = HtmlReportRenderer().render(bundle, layout, _vocab("en"))
     assert "1,552,071.00" in surface.document
     assert "840,000.00" in surface.document
 
@@ -80,7 +82,7 @@ def test_each_figure_cites_its_contract(tmp_path: Path) -> None:
     from seshat.report.html import HtmlReportRenderer
 
     bundle, layout = _artifacts(tmp_path)
-    document = HtmlReportRenderer().render(bundle, layout, "en").document
+    document = HtmlReportRenderer().render(bundle, layout, _vocab("en")).document
     assert document.count('data-contract="TotalSales"') == 2
 
 
@@ -88,7 +90,7 @@ def test_hostile_label_is_escaped(tmp_path: Path) -> None:
     from seshat.report.html import HtmlReportRenderer
 
     bundle, layout = _artifacts(tmp_path, label="<script>alert(1)</script>")
-    document = HtmlReportRenderer().render(bundle, layout, "en").document
+    document = HtmlReportRenderer().render(bundle, layout, _vocab("en")).document
     assert "<script>alert(1)</script>" not in document
     assert "&lt;script&gt;" in document
 
@@ -98,7 +100,7 @@ def test_hostile_chart_axis_label_is_escaped(tmp_path: Path) -> None:
     from seshat.report.html import HtmlReportRenderer
 
     bundle, layout = _artifacts(tmp_path, label="<script>x</script>")
-    document = HtmlReportRenderer().render(bundle, layout, "en").document
+    document = HtmlReportRenderer().render(bundle, layout, _vocab("en")).document
     assert "<svg" in document  # the macro did write elements
     assert "<script>x</script>" not in document
 
@@ -107,7 +109,7 @@ def test_the_chart_macro_writes_elements(tmp_path: Path) -> None:
     from seshat.report.html import HtmlReportRenderer
 
     bundle, layout = _artifacts(tmp_path)
-    document = HtmlReportRenderer().render(bundle, layout, "en").document
+    document = HtmlReportRenderer().render(bundle, layout, _vocab("en")).document
     assert "<rect" in document
     assert 'viewBox="0 0 640.0000 320.0000"' in document
 
@@ -144,7 +146,7 @@ def test_renderer_refuses_a_missing_language(tmp_path: Path) -> None:
 
     bundle, layout = _artifacts(tmp_path)
     with pytest.raises(SurfaceRenderFailed, match="rendering"):
-        HtmlReportRenderer().render(bundle, layout, "ar")
+        HtmlReportRenderer().render(bundle, layout, _vocab("ar"))
 
 
 def test_direction_follows_the_language() -> None:
@@ -163,7 +165,9 @@ def test_section_without_a_chart_kind_renders_tables_only(tmp_path: Path) -> Non
     plain.write_text(
         _LAYOUT_TEXT.replace("    chart_kind: bar\n", ""), encoding="utf-8"
     )
-    document = HtmlReportRenderer().render(bundle, load_layout(plain), "en").document
+    document = (
+        HtmlReportRenderer().render(bundle, load_layout(plain), _vocab()).document
+    )
     assert "<svg" not in document
     assert "1,552,071.00" in document
 
@@ -214,7 +218,7 @@ sections:
         design=ApprovedDesign(layout=layout, contracts={"TotalSales": "x.yaml"}),
         observations=observations,
     )
-    document = HtmlReportRenderer().render(bundle, layout, "en").document
+    document = HtmlReportRenderer().render(bundle, layout, _vocab("en")).document
     assert 'id="title-first"' in document
     assert 'id="title-second"' in document
     assert document.count('aria-labelledby="title-first"') == 1

@@ -13,7 +13,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{ cover_title_code }}</title>
+  <title>{{ cover_title }}</title>
 {% block styles %}
   <style>{{ screen_stylesheet }}</style>
 {% endblock %}
@@ -21,14 +21,14 @@
 <body>
 <article class="report">
   <header class="cover">
-    <h1 data-code="{{ cover_title_code }}">{{ cover_title_code }}</h1>
+    <h1 data-code="{{ cover_title_code }}">{{ cover_title }}</h1>
     <p class="subject">{{ table }}</p>
     <p class="audience">{{ generated_for }}</p>
   </header>
 {% block body %}
 {% for section in sections %}
   <section class="section" id="{{ section.section_id }}">
-    <h2 data-code="{{ section.heading_code }}">{{ section.heading_code }}</h2>
+    <h2 data-code="{{ section.heading_code }}">{{ section.heading }}</h2>
     {% if section.chart %}
     {{ charts.chart(section.chart, section.section_id) }}
     {% endif %}
@@ -42,6 +42,15 @@
       {% endfor %}
       </tbody>
     </table>
+    {% if section.caveats %}
+    <aside class="caveats">
+      <ul>
+      {% for caveat in section.caveats %}
+        <li>{{ caveat }}</li>
+      {% endfor %}
+      </ul>
+    </aside>
+    {% endif %}
   </section>
 {% endfor %}
 {% endblock %}

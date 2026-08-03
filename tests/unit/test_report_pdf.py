@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.unit._report_helpers import vocabulary as _vocab
+
 pytestmark = pytest.mark.unit
 
 pytest.importorskip("jinja2", reason="requires the `report` extra")
@@ -93,7 +95,7 @@ def test_render_uses_the_injected_printer(tmp_path: Path) -> None:
 
     bundle, layout = _artifacts(tmp_path)
     printer = FakePrinter()
-    surface = PdfReportRenderer(printer).render(bundle, layout, "en")
+    surface = PdfReportRenderer(printer).render(bundle, layout, _vocab("en"))
     assert surface.pdf_bytes == _GOOD
     assert len(printer.pages) == 1
 
@@ -103,7 +105,7 @@ def test_printed_html_carries_the_bundle_text(tmp_path: Path) -> None:
 
     bundle, layout = _artifacts(tmp_path)
     printer = FakePrinter()
-    PdfReportRenderer(printer).render(bundle, layout, "en")
+    PdfReportRenderer(printer).render(bundle, layout, _vocab("en"))
     html = str(printer.pages[0])
     assert "1,552,071.00" in html
     assert "840,000.00" in html
@@ -115,7 +117,7 @@ def test_printed_surface_extends_the_web_template(tmp_path: Path) -> None:
 
     bundle, layout = _artifacts(tmp_path)
     printer = FakePrinter()
-    PdfReportRenderer(printer).render(bundle, layout, "en")
+    PdfReportRenderer(printer).render(bundle, layout, _vocab("en"))
     html = str(printer.pages[0])
     assert 'class="cover"' in html
     assert 'class="provenance"' in html
@@ -127,7 +129,7 @@ def test_print_stylesheet_is_inlined(tmp_path: Path) -> None:
 
     bundle, layout = _artifacts(tmp_path)
     printer = FakePrinter()
-    PdfReportRenderer(printer).render(bundle, layout, "en")
+    PdfReportRenderer(printer).render(bundle, layout, _vocab("en"))
     html = str(printer.pages[0])
     assert "@page" in html  # the print sheet reached the page
     assert ".figures" in html  # and so did the shared one
@@ -138,7 +140,7 @@ def test_page_break_reaches_the_marked_section(tmp_path: Path) -> None:
 
     bundle, layout = _artifacts(tmp_path)
     printer = FakePrinter()
-    PdfReportRenderer(printer).render(bundle, layout, "en")
+    PdfReportRenderer(printer).render(bundle, layout, _vocab("en"))
     html = str(printer.pages[0])
     # The attribute wraps across lines in the template, so match each part.
     assert 'class="section page-break"' in html
@@ -155,7 +157,7 @@ def test_chart_macro_is_available_to_the_printed_surface(tmp_path: Path) -> None
 
     bundle, layout = _artifacts(tmp_path)
     printer = FakePrinter()
-    PdfReportRenderer(printer).render(bundle, layout, "en")
+    PdfReportRenderer(printer).render(bundle, layout, _vocab("en"))
     assert "<rect" in str(printer.pages[0])
 
 
@@ -165,7 +167,7 @@ def test_untagged_pdf_is_refused(tmp_path: Path) -> None:
 
     bundle, layout = _artifacts(tmp_path)
     with pytest.raises(ReportError, match="no structure tree"):
-        PdfReportRenderer(FakePrinter(_UNTAGGED)).render(bundle, layout, "en")
+        PdfReportRenderer(FakePrinter(_UNTAGGED)).render(bundle, layout, _vocab("en"))
 
 
 def test_pdf_without_an_embedded_font_is_refused(tmp_path: Path) -> None:
@@ -174,7 +176,7 @@ def test_pdf_without_an_embedded_font_is_refused(tmp_path: Path) -> None:
 
     bundle, layout = _artifacts(tmp_path)
     with pytest.raises(ReportError, match="font"):
-        PdfReportRenderer(FakePrinter(_NO_FONT)).render(bundle, layout, "en")
+        PdfReportRenderer(FakePrinter(_NO_FONT)).render(bundle, layout, _vocab("en"))
 
 
 def test_non_pdf_bytes_are_refused(tmp_path: Path) -> None:
@@ -183,7 +185,7 @@ def test_non_pdf_bytes_are_refused(tmp_path: Path) -> None:
 
     bundle, layout = _artifacts(tmp_path)
     with pytest.raises(ReportError, match="not a PDF"):
-        PdfReportRenderer(FakePrinter(_NOT_PDF)).render(bundle, layout, "en")
+        PdfReportRenderer(FakePrinter(_NOT_PDF)).render(bundle, layout, _vocab("en"))
 
 
 def test_missing_language_refuses_before_printing(tmp_path: Path) -> None:
@@ -193,7 +195,7 @@ def test_missing_language_refuses_before_printing(tmp_path: Path) -> None:
     bundle, layout = _artifacts(tmp_path)
     printer = FakePrinter()
     with pytest.raises(SurfaceRenderFailed):
-        PdfReportRenderer(printer).render(bundle, layout, "ar")
+        PdfReportRenderer(printer).render(bundle, layout, _vocab("ar"))
     assert printer.pages == []  # nothing was sent to the browser
 
 

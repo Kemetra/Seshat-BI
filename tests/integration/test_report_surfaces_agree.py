@@ -17,6 +17,9 @@ from pathlib import Path
 
 import pytest
 
+from seshat.report.html import SurfaceRenderFailed
+from tests.unit._report_helpers import vocabulary as _vocab
+
 pytestmark = pytest.mark.integration
 
 pytest.importorskip("jinja2", reason="requires the `report` extra")
@@ -96,11 +99,11 @@ def _render_all(bundle, layout, language: str = "en") -> tuple[str, str, str]:
     from seshat.report.pdf import PdfReportRenderer
 
     printer = FakePrinter()
-    html = HtmlReportRenderer().render(bundle, layout, language).document
+    html = HtmlReportRenderer().render(bundle, layout, _vocab(language)).document
     workbook = _workbook_xml(
-        ExcelReportRenderer().render(bundle, layout, language).workbook_bytes
+        ExcelReportRenderer().render(bundle, layout, _vocab(language)).workbook_bytes
     )
-    PdfReportRenderer(printer).render(bundle, layout, language)
+    PdfReportRenderer(printer).render(bundle, layout, _vocab(language))
     return html, workbook, printer.html
 
 
@@ -188,3 +191,78 @@ def test_a_pending_figure_says_so_in_every_surface(tmp_path: Path) -> None:
         assert PENDING in document
         # And no chart was drawn from values that do not exist.
         assert "<rect" not in document
+
+
+# --- governed wording and required caveats ----------------------------------
+
+_CAVEATED_LAYOUT = """\
+version: 1
+cover_title_code: cover.board_pack
+sections:
+  - section_id: headline
+    order: 1
+    heading_code: section.headline
+    visual_ids: [v1, v2]
+    page_break_before: false
+    caveat_codes: [caveat.demo]
+"""
+
+
+def _caveated(tmp_path: Path):
+    from seshat.report.bundle import ApprovedDesign, build_bundle
+    from seshat.report.layout import load_layout
+
+    path = tmp_path / "caveated.yaml"
+    path.write_text(_CAVEATED_LAYOUT, encoding="utf-8")
+    layout = load_layout(path)
+    bundle = build_bundle(
+        table="retail_store_sales",
+        generated_for="board",
+        design=ApprovedDesign(layout=layout, contracts={"TotalSales": "x.yaml"}),
+        observations=[
+            {
+                "visual_id": vid,
+                "contract_id": "TotalSales",
+                "metric": "TotalSales",
+                "unit_kind": "currency",
+                "label": vid,
+                "value": Decimal(amount),
+            }
+            for vid, amount in (("v1", "10"), ("v2", "20"))
+        ],
+    )
+    return bundle, layout
+
+
+def test_no_surface_displays_a_governed_code_as_visible_text(tmp_path: Path) -> None:
+    """`section.headline` in a heading was the defect. The code stays as metadata."""
+    bundle, layout = _caveated(tmp_path)
+    html, workbook, printed = _render_all(bundle, layout)
+    for page in (html, printed):
+        assert 'data-code="section.headline"' in page  # metadata, kept
+        assert ">section.headline<" not in page  # never the visible text
+        assert ">Headline<" in page  # the resolved wording
+
+
+def test_an_approved_caveat_reaches_every_surface(tmp_path: Path) -> None:
+    """The binding map REQUIRES v04's caveat. A bundle that could not carry one
+    published a materially misleading percentage."""
+    bundle, layout = _caveated(tmp_path)
+    for document in _render_all(bundle, layout):
+        assert "A stated caveat." in document
+
+
+def test_a_caveat_with_no_wording_refuses_rather_than_dropping_it(
+    tmp_path: Path,
+) -> None:
+    """A silently dropped caveat is exactly the failure this closes."""
+    from seshat.report.html import HtmlReportRenderer
+    from seshat.report.model import ReportError
+    from seshat.report.vocabulary import Vocabulary
+
+    bundle, layout = _caveated(tmp_path)
+    bare = Vocabulary(
+        language="en", terms={"section.headline": "H", "cover.board_pack": "C"}
+    )
+    with pytest.raises((ReportError, SurfaceRenderFailed)):
+        HtmlReportRenderer().render(bundle, layout, bare)

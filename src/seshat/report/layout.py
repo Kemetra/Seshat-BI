@@ -46,6 +46,10 @@ class LayoutSection:
     # is presentation, so it belongs here; what the figures MEAN stays in the
     # approved contracts.
     chart_kind: str | None = None
+    # Governed CODES for the caveats this section must carry -- not the caveat text.
+    # The wording resolves per language through the vocabulary, for the same reason
+    # heading_code does: prose here would put untranslated English on an Arabic page.
+    caveat_codes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,7 +154,21 @@ def _section(entry: object, path: Path) -> LayoutSection:
         ),
         page_break_before=bool(section.get("page_break_before", False)),
         chart_kind=_chart_kind(section, section_id),
+        caveat_codes=_caveat_codes(section, section_id),
     )
+
+
+def _caveat_codes(entry: dict, section_id: str) -> tuple[str, ...]:
+    raw = entry.get("caveat_codes")
+    if raw is None:
+        return ()
+    if not isinstance(raw, list) or not all(
+        isinstance(code, str) and code for code in raw
+    ):
+        raise ReportError(
+            f"section {section_id!r} caveat_codes must be a list of governed codes"
+        )
+    return tuple(raw)
 
 
 def _chart_kind(entry: dict, section_id: str) -> str | None:

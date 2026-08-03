@@ -39,6 +39,7 @@ from seshat.report.model import (
     ReportBundle,
     ReportError,
 )
+from seshat.report.vocabulary import Vocabulary
 
 HTML_SURFACE_VERSION = "seshat.report.html.v1"
 TEMPLATE_PACKAGE = "seshat.report"
@@ -69,9 +70,15 @@ class FigureCell:
 class SectionView:
     section_id: str
     heading_code: str
+    # The resolved wording a reader sees. The code stays alongside it as metadata,
+    # because a surface that displayed the code was the defect this closes.
+    heading: str
     page_break_before: bool
     cells: tuple[FigureCell, ...]
     chart: ChartView | None
+    # Approved caveats for this section, already resolved. A section whose caveat
+    # cannot reach the page publishes a materially misleading figure.
+    caveats: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,8 +126,14 @@ def build_cells(bundle: ReportBundle, language: str) -> tuple[FigureCell, ...]:
 
 
 def build_sections(
-    bundle: ReportBundle, layout: ReportLayout, language: str
+    bundle: ReportBundle, layout: ReportLayout, vocabulary: Vocabulary
 ) -> tuple[SectionView, ...]:
+    """The sections a surface renders, with every governed code already resolved.
+
+    ``vocabulary`` carries the language, so there is one place the answer to "which
+    language is this?" comes from rather than two that could disagree.
+    """
+    language = vocabulary.language
     by_id = {figure.figure_id: figure for figure in bundle.figures}
     direction = direction_for(language)
     views: list[SectionView] = []
@@ -132,9 +145,11 @@ def build_sections(
             SectionView(
                 section_id=section.section_id,
                 heading_code=section.heading_code,
+                heading=vocabulary.text(section.heading_code),
                 page_break_before=section.page_break_before,
                 cells=tuple(_cell(figure, language) for figure in figures),
                 chart=_chart_of(section, figures, direction),
+                caveats=tuple(vocabulary.text(code) for code in section.caveat_codes),
             )
         )
     return tuple(views)
@@ -166,15 +181,16 @@ def read_stylesheet(name: str) -> str:
 
 
 def build_context(
-    bundle: ReportBundle, layout: ReportLayout, language: str
+    bundle: ReportBundle, layout: ReportLayout, vocabulary: Vocabulary
 ) -> dict[str, object]:
     return {
-        "language": language,
-        "direction": direction_for(language),
+        "language": vocabulary.language,
+        "direction": direction_for(vocabulary.language),
         "cover_title_code": layout.cover_title_code,
+        "cover_title": vocabulary.text(layout.cover_title_code),
         "table": bundle.identity.table,
         "generated_for": bundle.identity.generated_for,
-        "sections": build_sections(bundle, layout, language),
+        "sections": build_sections(bundle, layout, vocabulary),
         "screen_stylesheet": read_stylesheet(STYLESHEET_NAME),
         "surface_version": HTML_SURFACE_VERSION,
     }
@@ -187,9 +203,9 @@ class HtmlReportRenderer:
         self._environment = environment or build_environment()
 
     def render(
-        self, bundle: ReportBundle, layout: ReportLayout, language: str
+        self, bundle: ReportBundle, layout: ReportLayout, vocabulary: Vocabulary
     ) -> HtmlSurface:
-        context = build_context(bundle, layout, language)
+        context = build_context(bundle, layout, vocabulary)
         try:
             template = self._environment.get_template(TEMPLATE_NAME)
             document = template.render(**context)
@@ -197,6 +213,6 @@ class HtmlReportRenderer:
             raise SurfaceRenderFailed(f"HTML surface failed: {exc}") from exc
         return HtmlSurface(
             document=document,
-            language=language,
+            language=vocabulary.language,
             direction=str(context["direction"]),
         )

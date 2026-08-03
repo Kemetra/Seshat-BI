@@ -316,6 +316,7 @@ def _render(args: argparse.Namespace) -> Path:
     from seshat.report.bundle import ApprovedDesign, build_bundle
     from seshat.report.gate import assert_renderable
     from seshat.report.layout import load_layout
+    from seshat.report.vocabulary import load_vocabulary, vocabulary_path
 
     repo_root = args.repo_root.resolve()
     assert_renderable(repo_root, args.table)
@@ -345,27 +346,28 @@ def _render(args: argparse.Namespace) -> Path:
         ),
         observations=observations,
     )
-    return _write(args, bundle, layout)
+    vocabulary = load_vocabulary(vocabulary_path(repo_root, args.table), args.language)
+    return _write(args, bundle, layout, vocabulary)
 
 
-def _write(args: argparse.Namespace, bundle, layout) -> Path:
+def _write(args: argparse.Namespace, bundle, layout, vocabulary) -> Path:
     destination = args.output / f"{args.table}{_SUFFIX[args.format]}"
     destination.parent.mkdir(parents=True, exist_ok=True)
     if args.format == "html":
         from seshat.report.html import HtmlReportRenderer
 
-        surface = HtmlReportRenderer().render(bundle, layout, args.language)
+        surface = HtmlReportRenderer().render(bundle, layout, vocabulary)
         destination.write_text(surface.document, encoding="utf-8")
         return destination
     if args.format == "xlsx":
         from seshat.report.excel import ExcelReportRenderer
 
-        surface = ExcelReportRenderer().render(bundle, layout, args.language)
+        surface = ExcelReportRenderer().render(bundle, layout, vocabulary)
         destination.write_bytes(surface.workbook_bytes)
         return destination
     from seshat.report.chromium import build_printer
     from seshat.report.pdf import PdfReportRenderer
 
-    surface = PdfReportRenderer(build_printer()).render(bundle, layout, args.language)
+    surface = PdfReportRenderer(build_printer()).render(bundle, layout, vocabulary)
     destination.write_bytes(surface.pdf_bytes)
     return destination

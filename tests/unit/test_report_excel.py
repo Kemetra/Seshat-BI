@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.unit._report_helpers import vocabulary as _vocab
+
 pytestmark = pytest.mark.unit
 
 pytest.importorskip("xlsxwriter", reason="requires the `report` extra")
@@ -47,7 +49,7 @@ def _render(tmp_path: Path, label: str = "Region A"):
             }
         ],
     )
-    return ExcelReportRenderer().render(bundle, layout, "en")
+    return ExcelReportRenderer().render(bundle, layout, _vocab("en"))
 
 
 def _sheet_xml(workbook_bytes: bytes) -> str:
