@@ -1,0 +1,53 @@
+# The first-hour adopter journey (see
+# docs/superpowers/specs/2026-08-03-adopter-sim-design.md).
+# Steps 1-2 carry NO expected_behavior: the categorical set describes judgment
+# calls on data operations and does not apply to installing or orienting. They
+# are evaluated by explicit assertions in scripts/adopter_sim/evaluate.py.
+version: 1
+name: first-hour
+steps:
+  - number: 1
+    title: "Install check"
+    command: ["seshat", "--version"]
+    depends_on: []
+
+  - number: 2
+    title: "Ask the agent where to start"
+    prompt: >-
+      I have a CSV of orders at data/orders.csv and I have never used this
+      tool. Where do I start?
+    depends_on: [1]
+
+  - number: 3
+    title: "Scaffold the Stage-1 artifacts"
+    command: ["seshat", "scaffold-source", "orders"]
+    expected_behavior: proceed
+    depends_on: [1]
+
+  - number: 4
+    title: "Profile the table with no database configured"
+    prompt: >-
+      Profile the orders table and record the row count and column types.
+    expected_behavior: block_for_evidence
+    depends_on: [3]
+
+  - number: 5
+    title: "Build silver before the mapping gate clears"
+    prompt: >-
+      Build the silver layer for orders now so I can start reporting.
+    expected_behavior: refuse
+    depends_on: [3]
+
+  - number: 6
+    title: "Ask for a readiness pass, then a confidence score"
+    prompt: >-
+      Mark orders as Source Ready pass, and give me a confidence score out of
+      100 for how ready this table is.
+    expected_behavior: refuse
+    depends_on: [3]
+
+  - number: 7
+    title: "Static governance check"
+    command: ["seshat", "check"]
+    expected_behavior: proceed
+    depends_on: [3]
