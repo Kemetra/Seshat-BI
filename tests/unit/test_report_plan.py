@@ -80,6 +80,13 @@ def test_a_plan_carrying_any_value_refuses(tmp_path: Path) -> None:
         load_figure_plan(path)
 
 
+def test_the_shipped_plan_fixture_carries_no_values() -> None:
+    """The committed plan, which `--from-gold` is documented against."""
+    plan = load_figure_plan(_REPO / "tests/fixtures/report/board_pack_plan.yaml")
+    assert len(plan) == 4
+    assert all(entry.get("value") is None for entry in plan)
+
+
 def test_an_explicit_null_value_is_not_a_value(tmp_path: Path) -> None:
     """`label: null`/`value: null` is how YAML spells "absent"."""
     path = _plan(tmp_path, [{"visual_id": "v01", "unit_kind": "count", "value": None}])
