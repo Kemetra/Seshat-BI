@@ -128,131 +128,94 @@ def _observation(entry: object, path: Path) -> dict[str, object]:
     return {**entry, "value": value}
 
 
+# Every incoherent combination of the figure-source flags, and what to say about
+# it. Kept as data so adding a source is one entry rather than another branch, and
+# so no combination can be left silently resolving to a default -- preferring one
+# source silently is how a report shows warehouse numbers to someone who believes
+# they rendered a file.
+_INCOHERENT: tuple[tuple[str, str], ...] = (
+    (
+        "from_gold and observations",
+        "--from-gold and --observations both name a source of figures. Pass one: "
+        "--from-gold reads the warehouse, --observations reads the file.",
+    ),
+    (
+        "from_gold and not plan",
+        "--from-gold needs --figure-plan <file>: the warehouse supplies values, but "
+        "which figures to render and how to format them is not something a table "
+        "can say.",
+    ),
+    (
+        "plan and not from_gold",
+        "--figure-plan carries no values, so it renders nothing on its own. Add "
+        "--from-gold to fill it from the warehouse.",
+    ),
+    (
+        "neither",
+        "no figure source: pass --observations <file> to render from a file, or "
+        "--from-gold --figure-plan <file> to read the warehouse.",
+    ),
+)
+
+
+def _figure_source_faults(args: argparse.Namespace) -> set[str]:
+    """Which of the named incoherent combinations this invocation matches."""
+    gold = bool(args.from_gold)
+    plan = args.figure_plan is not None
+    observations = args.observations is not None
+    return {
+        name
+        for name, present in (
+            ("from_gold and observations", gold and observations),
+            ("from_gold and not plan", gold and not plan),
+            ("plan and not from_gold", plan and not gold),
+            ("neither", not gold and not observations),
+        )
+        if present
+    }
+
+
 def _assert_one_figure_source(args: argparse.Namespace) -> None:
-    """Exactly one source of figures, chosen explicitly.
-
-    Preferring one silently when both are given is how a report ends up showing
-    warehouse numbers to someone who believes they rendered a file, or the reverse.
-    """
+    """Exactly one source of figures, chosen explicitly."""
     from seshat.report.model import ReportError
 
-    if args.from_gold and args.observations is not None:
-        raise ReportError(
-            "--from-gold and --observations both name a source of figures. Pass one: "
-            "--from-gold reads the warehouse, --observations reads the file."
-        )
-    if args.from_gold and args.figure_plan is None:
-        raise ReportError(
-            "--from-gold needs --figure-plan <file>: the warehouse supplies values, "
-            "but which figures to render and how to format them is not something a "
-            "table can say."
-        )
-    if not args.from_gold and args.figure_plan is not None:
-        raise ReportError(
-            "--figure-plan carries no values, so it renders nothing on its own. Add "
-            "--from-gold to fill it from the warehouse."
-        )
-    if not args.from_gold and args.observations is None:
-        raise ReportError(
-            "no figure source: pass --observations <file> to render from a file, or "
-            "--from-gold --figure-plan <file> to read the warehouse."
-        )
-
-
-def load_figure_plan(path: Path) -> list[dict[str, object]]:
-    """Which figures to render, and how to format them. Never their values.
-
-    A plan carrying a ``value`` is refused rather than having it quietly discarded:
-    an operator who reuses a stale observations file here would otherwise believe
-    those numbers were checked against the warehouse when they were thrown away.
-    """
-    from seshat.report.model import ReportError
-
-    try:
-        payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except (OSError, yaml.YAMLError) as exc:
-        raise ReportError(f"cannot read figure plan {path}: {exc}") from exc
-    entries = payload.get("figures")
-    if not isinstance(entries, list) or not entries:
-        raise ReportError(f"{path} declares no figures")
-    for entry in entries:
-        if isinstance(entry, dict) and entry.get("value") is not None:
-            raise ReportError(
-                f"{path} figure {entry.get('visual_id')!r} carries a value. A figure "
-                "plan states what to render; --from-gold supplies every value, so "
-                "this one would be discarded. Remove it, or drop --from-gold and use "
-                "--observations."
-            )
-    return [entry for entry in entries if isinstance(entry, dict)]
+    faults = _figure_source_faults(args)
+    for name, refusal in _INCOHERENT:
+        if name in faults:
+            raise ReportError(refusal)
 
 
 def _live_observations(
     args: argparse.Namespace, repo_root: Path
 ) -> list[dict[str, object]]:
-    """Resolve the plan's figures against gold, through the governed bindings."""
+    """Resolve the plan's figures against gold, through the governed bindings.
+
+    All that is left here is the driver: reading the plan, checking it against the
+    signed bindings, and loading the contracts are domain concerns and live in
+    :mod:`seshat.report.plan`.
+    """
     from seshat import cli
     from seshat.report.binding import binding_map_path, load_binding_map
     from seshat.report.model import ReportError
     from seshat.report.observe import observe
+    from seshat.report.plan import (
+        contract_payloads,
+        figure_requests,
+        load_figure_plan,
+    )
 
-    plan = load_figure_plan(args.figure_plan)
     binding_map = load_binding_map(
         binding_map_path(repo_root, args.table), expect_table=args.table
     )
-    requests = [_request(entry, binding_map) for entry in plan]
-    contracts = _contract_payloads(repo_root, args.table)
+    requests = figure_requests(load_figure_plan(args.figure_plan), binding_map)
+    contracts = contract_payloads(repo_root, args.table)
     if not cli._ensure_driver():
         raise ReportError(
             "--from-gold needs the optional DB driver. Install it with "
             '`pip install "seshat-bi[db]"`. Rendering from --observations needs no '
             "driver."
         )
-    runner = cli._make_runner(_dsn(args))
-    return observe(runner, requests, contracts)
-
-
-def _request(entry: dict[str, object], binding_map) -> object:
-    """One plan entry as a figure request, with its citation taken from the map.
-
-    The plan does not get to say which contract a visual cites. That is the design
-    review's decision, so it is read from the signed binding map, and a plan that
-    disagrees is refused rather than overridden -- a silent override would leave the
-    operator believing the citation they wrote is the one on the page.
-    """
-    from seshat.report.model import ReportError
-    from seshat.report.observe import FigureRequest
-
-    visual_id = str(entry.get("visual_id") or "")
-    governed = binding_map.contract_for(visual_id)
-    declared = entry.get("contract_id")
-    if declared is not None and str(declared) != governed:
-        raise ReportError(
-            f"figure plan binds visual {visual_id!r} to {declared!r}, but the approved "
-            f"binding map binds it to {governed!r}. The design review decides the "
-            "citation; fix the plan or have the design re-reviewed."
-        )
-    return FigureRequest(
-        visual_id=visual_id,
-        contract_id=governed,
-        unit_kind=str(entry.get("unit_kind") or ""),
-        label=str(entry["label"]) if entry.get("label") is not None else None,
-    )
-
-
-def _contract_payloads(repo_root: Path, table: str) -> dict[str, dict]:
-    """Every approved contract for the table, parsed."""
-    from seshat.report.model import ReportError
-
-    payloads: dict[str, dict] = {}
-    directory = repo_root / "mappings" / table / "metrics"
-    for path in sorted(directory.glob("*.yaml")):
-        try:
-            loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
-        except (OSError, yaml.YAMLError) as exc:
-            raise ReportError(f"cannot read contract {path}: {exc}") from exc
-        if isinstance(loaded, dict):
-            payloads[path.stem] = loaded
-    return payloads
+    return observe(cli._make_runner(_dsn(args)), requests, contracts)
 
 
 def _dsn(args: argparse.Namespace) -> object:

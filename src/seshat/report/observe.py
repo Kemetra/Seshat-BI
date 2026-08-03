@@ -343,9 +343,20 @@ def _ratio_value(row: Sequence[object]) -> Decimal | None:
         return None
     numerator = _decimal(row[0])
     denominator = _decimal(row[1])
-    if numerator is None or denominator is None or denominator == 0:
+    if not _divisible(numerator, denominator):
         return None
-    return numerator / denominator
+    return numerator / denominator  # type: ignore[operator]
+
+
+def _divisible(numerator: Decimal | None, denominator: Decimal | None) -> bool:
+    """Both sides had to arrive, and a zero denominator is pending rather than a crash.
+
+    A rate over no eligible rows is genuinely unknown -- not zero, which would state
+    that none of them qualified.
+    """
+    if numerator is None or denominator is None:
+        return False
+    return denominator != 0
 
 
 def _decimal(value: object) -> Decimal | None:
