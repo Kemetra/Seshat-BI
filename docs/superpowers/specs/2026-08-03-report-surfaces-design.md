@@ -23,7 +23,7 @@ exist to prevent.
 |---|---|---|
 | 1 | Numbers come from **one upstream bundle**; renderers only transcribe | Each format queries gold itself |
 | 2 | **Port** Khepri's `rra/rendering` into Seshat with provenance headers | Shared package across both repos; or reimplement |
-| 3 | Charts are **inline SVG** drawn from pre-computed bundle series | Native chart per surface; matplotlib/plotly images |
+| 3 | Charts are **dependency-free SVG** over pre-computed series — as a geometry view model rendered by a Jinja macro, never a markup string (see correction below) | Native chart per surface; matplotlib/plotly images |
 | 4 | Content comes from the **already-approved design** + a thin print overlay | A new per-surface report spec; or a raw contract dump |
 
 ## What Khepri gives us, and what it does not
@@ -46,8 +46,44 @@ reasons match this kit's principles almost word for word:
 - **One template, two surfaces** — the print template *extends* the web template
   rather than forking it, so shared concerns cannot drift between HTML and PDF.
 
-**What it does not give us: charts.** Khepri's report is tables and narrative.
-The SVG writer is net-new work here, and it is the largest new piece.
+### Correction: Khepri does have charts, and its approach supersedes mine
+
+An early read of the HTML template suggested Khepri's report was tables and
+narrative only, and this design initially called the chart writer net-new work.
+That was wrong. `rendering/charts.py` (409 lines) exists, and it documents having
+already tried — and rejected — the "return an SVG string" approach this design
+first proposed:
+
+> *"An earlier design had it return an SVG fragment as a `str`, and these
+> templates cannot render one. `build_environment()` sets `autoescape=True`
+> unconditionally and `html.py` states the rule outright: nothing reachable from
+> the bundle is ever marked safe, because a page with one `|safe` in it has an
+> escaping convention rather than an escaping guarantee."*
+
+So charts are ported too, and four of its rules are adopted verbatim:
+
+- **Geometry, not markup.** The module resolves geometry to strings; a Jinja macro
+  writes the elements. Tags come from trusted template source; axis labels — which
+  are customer values — pass through the same autoescaping as every table cell,
+  which is what makes a product named `<script>` inert. There is no `|safe` and no
+  `Markup` anywhere on a bundle-reachable path.
+- **Geometry is `Decimal` throughout**, becoming a string only when a mark is
+  built. A float coordinate would put binary floating point on the surface of a
+  governed figure.
+- **No prose in the chart module.** `title_code` / `description_code` are governed
+  codes resolved from per-language tables; composing a sentence there would put
+  untranslated English on an Arabic page. The `_code` suffix plus
+  `StrictUndefined` makes a template reaching for the wrong field raise rather
+  than print an identifier at a reader.
+- **The canvas travels with the view.** `width` / `height` live on the chart view,
+  because a `viewBox` written literally in a template keeps drawing to the old
+  canvas after the geometry changes and every mark silently overflows.
+
+`fonts.py` + `typefaces/` also port across, and they are what make the
+tagged-PDF-with-embedded-fonts rule satisfiable for Arabic.
+
+The revised assessment: **this is a port throughout, and the new work is the
+Seshat-side bundle and contract-tracing, not the rendering.**
 
 Porting rather than sharing keeps Seshat a standalone kit whose only runtime
 dependency is `pyyaml` — a documented product promise (spec 076 pure kit). Every
@@ -74,13 +110,16 @@ approved contracts + report-intent.yaml + visual-contract-binding-map.md + data
 src/seshat/report/
   bundle.py      computes once from approved contracts; emits a fact package
   view.py        bundle -> view model of strings
-  svg.py         charts: bar / line / sparkline. No dependencies.
-  html.py        Jinja2 render of the web surface
+  charts.py      chart GEOMETRY as an exact view model; no markup, no prose
+  html.py        Jinja2 render of the web surface; autoescape always on
   pdf.py         extends the HTML template + print CSS; PagePrinter port
   chromium.py    the ONE Playwright adapter; pdf.py never imports it
+  fonts.py       embedded font payloads (what makes tagged-PDF satisfiable)
   excel.py       xlsxwriter; write_string only; no numeric cells
   layout.py      the print overlay: cover, sections, page breaks
-  templates/     report.html.j2, report.pdf.html.j2, report.css, report.print.css
+  templates/     report.html.j2, report.pdf.html.j2, report.css,
+                 report.print.css, and the chart macro that writes SVG elements
+  typefaces/     the font files themselves
 ```
 
 ### Dependencies stay optional
@@ -134,15 +173,20 @@ Seshat-specific.
    refuses the render.
 6. **No fabricated status or score in any surface** (hard rule #9), asserted with
    the existing truthfulness checks.
+7. **No `|safe` and no `Markup` on any bundle-reachable path.** A test renders a
+   label named `<script>alert(1)</script>` as both a table cell and a chart axis
+   label and asserts it arrives escaped in both.
+8. **Chart geometry is `Decimal`, never `float`.** A test asserts the coordinate
+   type before stringification, so a refactor cannot quietly introduce a float.
 
 ## Increments
 
 **Increment A — the contract and all three surfaces, offline.** Bundle built from
 committed governed artifacts plus a synthetic fixture, so the whole pipeline is
-provable with no database and no browser: `svg.py`, `view.py`, `html.py`,
-`excel.py`, `layout.py`, `pdf.py` + `chromium.py` behind the port, the six
-invariants, the two extras, and `report-layout.yaml` + its template. Real PDF
-bytes require `[report-pdf]`; tests use the fake `PagePrinter`.
+provable with no database and no browser: `view.py`, `charts.py`, `html.py`,
+`excel.py`, `layout.py`, `fonts.py`, `pdf.py` + `chromium.py` behind the port, the
+eight invariants, the two extras, and `report-layout.yaml` + its template. Real
+PDF bytes require `[report-pdf]`; tests use the fake `PagePrinter`.
 
 **Increment B — live numbers.** `bundle.py` reads gold through the `db` extra and
 a DSN, replacing the fixture source. Everything above is unchanged, which is the
@@ -159,8 +203,12 @@ delivery, multi-table portfolio reports, and authoring new bilingual *content*
 
 ## Risks
 
-- **Charts are the largest new build** and have no Khepri precedent. Use the
-  `dataviz` skill for form and palette rather than inventing them.
+- **The port is larger than first assessed** — `charts.py`, `fonts.py`,
+  `html.py`, `typefaces/` and the templates all come across, not just `pdf.py` and
+  `excel.py`. The genuinely new work is the Seshat-side bundle, the
+  contract-tracing invariant, and the print overlay. Use the `dataviz` skill for
+  chart form and palette choices, which are presentation decisions the port does
+  not settle.
 - **Chromium is heavy in CI.** Unit tests use the fake printer and need no
   browser; real-Chromium verification is a separate optional job, and the wheel
   ships no browser.
