@@ -34,16 +34,24 @@ def stage_status(repo_root: Path, table: str) -> str:
     path = readiness_path(repo_root, table)
     if not path.is_file():
         return "not_started"
-    try:
-        payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except (OSError, yaml.YAMLError) as exc:
-        raise ReportError(f"cannot read {path}: {exc}") from exc
-    stages = payload.get("stages")
+    stages = _payload(path).get("stages")
     if not isinstance(stages, dict):
         return "not_started"
-    stage = stages.get(REQUIRED_STAGE)
+    return _recorded(stages.get(REQUIRED_STAGE))
+
+
+def _payload(path: Path) -> dict:
+    try:
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise ReportError(f"cannot read {path}: {exc}") from exc
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _recorded(stage: object) -> str:
+    """A stage is written either as a mapping carrying a status, or as a bare token."""
     if isinstance(stage, dict):
-        return str(stage.get("status") or "not_started")
+        stage = stage.get("status")
     return str(stage or "not_started")
 
 

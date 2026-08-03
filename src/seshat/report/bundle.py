@@ -91,8 +91,33 @@ def _figure(
     declared: Mapping[str, str],
     contracts: Mapping[str, str],
 ) -> CitedFigure:
-    visual_id = str(entry.get("visual_id") or "")
-    contract_id = str(entry.get("contract_id") or "")
+    visual_id = _text(entry, "visual_id")
+    contract_id = _text(entry, "contract_id")
+    _assert_attributable(visual_id, contract_id, declared=declared, contracts=contracts)
+    unit_kind = _text(entry, "unit_kind")
+    value = _exact_value(entry)
+    return CitedFigure(
+        figure_id=visual_id,
+        citation_id=f"{contract_id}#{visual_id}",
+        contract_id=contract_id,
+        metric=_text(entry, "metric") or contract_id,
+        unit_kind=unit_kind or "count",
+        kind="total",
+        section=declared[visual_id],
+        label=_label(entry),
+        value=value,
+        renderings={"en": _rendering(value, unit_kind)},
+    )
+
+
+def _assert_attributable(
+    visual_id: str,
+    contract_id: str,
+    *,
+    declared: Mapping[str, str],
+    contracts: Mapping[str, str],
+) -> None:
+    """A figure has to be both asked for and attributable, or it does not appear."""
     if visual_id not in declared:
         raise ReportError(
             f"observation for visual {visual_id!r} is not in the layout; the "
@@ -103,20 +128,27 @@ def _figure(
             f"visual {visual_id!r} cites {contract_id!r}, which is not an approved "
             "contract; an unattributed figure refuses the render"
         )
-    unit_kind = str(entry.get("unit_kind") or "")
+
+
+def _text(entry: Mapping[str, object], key: str) -> str:
+    return str(entry.get(key) or "")
+
+
+def _exact_value(entry: Mapping[str, object]) -> Decimal | None:
+    """Only an exact ``Decimal`` counts as data.
+
+    Anything else -- a float that already lost precision, a string, a missing key
+    -- reads as no observation, which renders as :data:`PENDING` rather than a
+    number nobody computed.
+    """
     raw = entry.get("value")
-    value = raw if isinstance(raw, Decimal) else None
-    text = PENDING if value is None else render_value(value, unit_kind)
+    return raw if isinstance(raw, Decimal) else None
+
+
+def _label(entry: Mapping[str, object]) -> str | None:
     label = entry.get("label")
-    return CitedFigure(
-        figure_id=visual_id,
-        citation_id=f"{contract_id}#{visual_id}",
-        contract_id=contract_id,
-        metric=str(entry.get("metric") or contract_id),
-        unit_kind=unit_kind or "count",
-        kind="total",
-        section=declared[visual_id],
-        label=str(label) if isinstance(label, str) else None,
-        value=value,
-        renderings={"en": text},
-    )
+    return label if isinstance(label, str) else None
+
+
+def _rendering(value: Decimal | None, unit_kind: str) -> str:
+    return PENDING if value is None else render_value(value, unit_kind)

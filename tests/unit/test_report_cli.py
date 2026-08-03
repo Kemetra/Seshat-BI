@@ -119,6 +119,26 @@ def test_missing_readiness_file_is_not_a_pass(tmp_path: Path) -> None:
         assert_renderable(tmp_path, "absent_table")
 
 
+def test_a_readiness_file_that_is_not_a_mapping_is_not_a_pass(tmp_path: Path) -> None:
+    """Malformed evidence is not evidence either."""
+    path = tmp_path / "mappings" / "odd_table"
+    path.mkdir(parents=True)
+    (path / "readiness-status.yaml").write_text("- just\n- a list\n", encoding="utf-8")
+    assert stage_status(tmp_path, "odd_table") == "not_started"
+    with pytest.raises(ReportError, match="not_started"):
+        assert_renderable(tmp_path, "odd_table")
+
+
+def test_an_unreadable_readiness_file_refuses_rather_than_defaulting(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "mappings" / "broken_table"
+    path.mkdir(parents=True)
+    (path / "readiness-status.yaml").write_text("stages: [oops\n", encoding="utf-8")
+    with pytest.raises(ReportError, match="cannot read"):
+        stage_status(tmp_path, "broken_table")
+
+
 def test_gate_reads_the_recorded_status(tmp_path: Path) -> None:
     table, _ = _workspace(tmp_path, status="warning")
     assert stage_status(tmp_path, table) == "warning"

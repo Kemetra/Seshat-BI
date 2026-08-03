@@ -58,6 +58,22 @@ _TAG_MARKERS = (b"/StructTreeRoot", b"/Marked")
 # Markers an embedded font program carries, in any of the accepted forms.
 _FONT_MARKERS = (b"/FontFile", b"/FontFile2", b"/FontFile3")
 
+# Each requirement is satisfied by ANY of its markers, and its refusal says what
+# the reader would have lost. Kept as data so adding a requirement is one entry
+# rather than another branch in the assertion.
+_REQUIREMENTS: tuple[tuple[tuple[bytes, ...], str], ...] = (
+    (
+        _TAG_MARKERS,
+        "PDF is not tagged: it carries no structure tree, so a screen reader "
+        "cannot read it. Refusing rather than shipping it.",
+    ),
+    (
+        _FONT_MARKERS,
+        "PDF embeds no font program: it would render in whatever the opening "
+        "machine happens to have, which for Arabic is frequently nothing.",
+    ),
+)
+
 
 @dataclass(frozen=True, slots=True)
 class PrintablePage:
@@ -99,16 +115,9 @@ def assert_publishable(pdf_bytes: bytes) -> None:
     """Refuse a PDF that a reader could not use, before it becomes a surface."""
     if not pdf_bytes.startswith(b"%PDF"):
         raise ReportError("printer returned bytes that are not a PDF")
-    if not any(marker in pdf_bytes for marker in _TAG_MARKERS):
-        raise ReportError(
-            "PDF is not tagged: it carries no structure tree, so a screen reader "
-            "cannot read it. Refusing rather than shipping it."
-        )
-    if not any(marker in pdf_bytes for marker in _FONT_MARKERS):
-        raise ReportError(
-            "PDF embeds no font program: it would render in whatever the opening "
-            "machine happens to have, which for Arabic is frequently nothing."
-        )
+    for markers, refusal in _REQUIREMENTS:
+        if not any(marker in pdf_bytes for marker in markers):
+            raise ReportError(refusal)
 
 
 class PdfReportRenderer:

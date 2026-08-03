@@ -89,25 +89,37 @@ def _section(entry: object, path: Path) -> LayoutSection:
     if not isinstance(section_id, str) or not section_id:
         raise ReportError(f"layout {path} has a section with no section_id")
     _reject_meaning(entry, section_id)
+    return LayoutSection(
+        section_id=section_id,
+        order=_order(entry, section_id),
+        heading_code=_heading_code(entry, section_id),
+        visual_ids=_visual_ids(entry, section_id),
+        page_break_before=bool(entry.get("page_break_before", False)),
+        chart_kind=_chart_kind(entry, section_id),
+    )
+
+
+def _order(entry: dict, section_id: str) -> int:
     order = entry.get("order")
     if not isinstance(order, int):
         raise ReportError(f"section {section_id!r} needs an int order")
+    return order
+
+
+def _heading_code(entry: dict, section_id: str) -> str:
     heading = entry.get("heading_code")
     if not isinstance(heading, str) or not heading:
         raise ReportError(f"section {section_id!r} needs a heading_code")
+    return heading
+
+
+def _visual_ids(entry: dict, section_id: str) -> tuple[str, ...]:
     visuals = entry.get("visual_ids")
     if not isinstance(visuals, list) or not visuals:
         raise ReportError(f"section {section_id!r} needs a non-empty visual_ids")
     if not all(isinstance(visual, str) for visual in visuals):
         raise ReportError(f"section {section_id!r} visual_ids must all be strings")
-    return LayoutSection(
-        section_id=section_id,
-        order=order,
-        heading_code=heading,
-        visual_ids=tuple(visuals),
-        page_break_before=bool(entry.get("page_break_before", False)),
-        chart_kind=_chart_kind(entry, section_id),
-    )
+    return tuple(visuals)
 
 
 def _chart_kind(entry: dict, section_id: str) -> str | None:
