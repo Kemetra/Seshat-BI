@@ -9,14 +9,17 @@
 **Status history**: ratified -- Ahmed Shaaban (owner), 2026-07-31
 
 **Not** `implemented`: T075 directs that value, but three stories are outstanding and
-the claim would not be true. Delivered: **US2** (the inventory is the enforced source
-of what ships; the six-name constant is gone) and **US3** (the ten compass verbs ship
-behind `portability-audit-v1`; both bundles carry 21 skills at 2,224 of the 6,000
-`tokens_approx` ceiling). Outstanding: **US1** (bundled MCP server -- blocked on
-operator harness runs at T007-T010), **US4** (22 consumer-capability skills, deferred
-by owner ruling 2026-07-31 with a measured cost of 301 portability rewrites across 21
-skills), and the external-acceptance half of **US5** (T070 `--execute-cli`, T060).
-See `evidence/portability-findings.md` and `evidence/us5-claims.md`.
+the claim would not be true. Delivered: the **US1 implementation** (both plugins
+declare the read-only governor; missing-extra degradation and tool authority are
+verified), **US2** (the inventory is the enforced source of what ships; the six-name
+constant is gone), and **US3** (the ten compass verbs ship behind
+`portability-audit-v1`; both bundles carry 21 skills at 2,224 of the 6,000
+`tokens_approx` ceiling). Outstanding: the **US1 live harness call** (T021), **US4**
+(22 consumer-capability skills, deferred by owner ruling 2026-07-31 with a measured
+cost of 301 portability rewrites across 21 skills), and the external-acceptance half
+of **US5** (T070 `--execute-cli`, T060). See
+`evidence/portability-findings.md`, `evidence/us1-acceptance.md`, and
+`evidence/us5-claims.md`.
 
 **Status history**: draft
 
