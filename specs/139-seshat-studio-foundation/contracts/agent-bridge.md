@@ -113,6 +113,16 @@ There is no "always allow" and no business-decision response in v1.
 ## Compatibility Contract
 
 - Startup negotiates or probes the installed protocol before declaring healthy.
+- The release records the minimum and maximum Codex CLI versions exercised. A CLI
+  outside that tested range remains `incompatible` until its generated schema and
+  handshake fixtures pass; semantic-version proximity alone is not compatibility
+  evidence.
+- The Codex adapter sends exactly one `initialize` request with Studio client
+  metadata, waits for its response, then sends `initialized` before any account,
+  thread, or turn request.
+- Foundation uses the stable v2 surface and does not set
+  `capabilities.experimentalApi`. A feature that requires that flag is unavailable
+  rather than silently enabled.
 - Unknown notification methods are ignored only when they carry no required state;
   their names are recorded in redacted diagnostics.
 - Unknown required request methods make the adapter `incompatible` and stop new
@@ -121,6 +131,40 @@ There is no "always allow" and no business-decision response in v1.
   focused sibling module; the `AgentBridge` protocol does not change for a provider
   release unless Studio semantics change.
 - Fixtures identify their source protocol version and are safe to commit.
+
+### Codex 0.146.0 provider mapping (verified 2026-08-03)
+
+The installed CLI's own `codex app-server generate-json-schema --experimental`
+output and the current official App Server manual confirm this mapping for the
+stable v2 methods present in that build. The app-server surface itself remains
+publicly labelled experimental; this table is tested compatibility evidence, not a
+stability promise. The generated schema is version-specific audit input and is not
+committed wholesale.
+
+| Studio operation | Stable Codex method or event | Adapter rule |
+|---|---|---|
+| initialize | `initialize`, then `initialized` | identify `seshat_studio`; do not opt into experimental API |
+| health | `account/read`, `account/rateLimits/read` | distinguish signed out and quota-limited without reading auth storage |
+| login | `account/login/start` with `type: chatgpt` | open returned `authUrl`; never send `apiKey` or `chatgptAuthTokens` variants |
+| start thread | `thread/start` | pin `cwd`; use `approvalPolicy: on-request` and `sandbox: read-only` initially |
+| start read-only turn | `turn/start` | send `sandboxPolicy: {type: readOnly, networkAccess: false}` |
+| interrupt | `turn/interrupt` | require both provider thread and active turn ids |
+| visible streaming | `turn/*`, `item/started`, `item/completed`, `item/agentMessage/delta`, `turn/plan/updated` | normalize only the public subset |
+| command approval | `item/commandExecution/requestApproval` | correlate by JSON-RPC request id; absolute `cwd` is relativized or rejected |
+| file approval | `item/fileChange/requestApproval` | correlate by JSON-RPC request id; `grantRoot` must remain under the pinned workspace |
+| approval resolved | `serverRequest/resolved` | close exactly one pending Studio approval |
+
+Studio maps `allow_once` to provider decision `accept` and `deny` to `decline`.
+Provider decisions `acceptForSession` and any exec-policy/network-policy amendment
+are not exposed in Foundation. `cancel` is reserved for interruption or shutdown.
+The adapter must not assume a provider `approvalId`: it is optional for command
+requests and absent from the stable file-change request; the JSON-RPC request id is
+the correlation authority.
+
+Reasoning delta/summary notifications, raw response items, absolute paths, and
+experimental `additionalPermissions` never reach the Studio event model. Because
+Foundation does not enable the experimental API, receiving an experimental required
+request is classified as incompatible rather than handled opportunistically.
 
 ## Failure Contract
 

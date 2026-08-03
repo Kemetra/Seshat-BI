@@ -492,10 +492,15 @@ git -c commit.gpgsign=false commit -m "feat: make Studio turns interactive"
 
 - [ ] **Step 1: Commit safe protocol fixtures and RED tests**
 
-Fixtures cover initialize/probe, thread start, turn start, public messages, plan,
-tool lifecycle, file proposal, approval request, completion, sign-out, quota,
-incompatible method, malformed JSON, out-of-order response, injected stderr secret,
-EOF, and cancellation. Remove all real paths/ids/tokens before commit.
+Record `codex --version`, generate the version-specific app-server JSON schema into
+a temporary directory, and derive only minimal sanitized fixtures from it; do not
+commit the full schema bundle. Fixtures cover the required `initialize` response
+followed by `initialized`, `account/read`, `account/rateLimits/read`, managed
+`chatgpt` login, thread start, read-only turn start, public messages, plan, tool
+lifecycle, file proposal, JSON-RPC-correlated command/file approval requests,
+completion, sign-out, quota, incompatible or experimental required method,
+malformed JSON, out-of-order response, injected stderr secret, EOF, and
+cancellation. Remove all real paths/ids/tokens before commit.
 
 - [ ] **Step 2: Run RED**
 
@@ -512,9 +517,24 @@ error.
 
 - [ ] **Step 4: Implement version adapter and health mapping**
 
-Probe before healthy, map provider ids internally, normalize only public events,
-delegate login through the official Codex flow, and map every failure category from
-the contract. Do not inspect auth files or API-key variables.
+Probe before healthy; send exactly one `initialize` and then `initialized`; remain
+on the stable API without `experimentalApi`; map provider ids internally; normalize
+only public events; delegate login with `account/login/start` type `chatgpt`; and map
+every failure category from the contract. Start read-only work with
+`approvalPolicy: on-request`, thread sandbox `read-only`, and turn sandbox policy
+`{type: readOnly, networkAccess: false}`. Do not inspect auth files or API-key
+variables.
+
+Treat the publicly experimental app-server boundary as a version-gated beta. Record
+the tested minimum and maximum Codex CLI versions in one adapter compatibility
+constant and in acceptance evidence. An untested version is `incompatible` until
+its generated schema and handshake fixtures pass; do not infer compatibility from
+nearby semantic versions.
+
+Correlate command and file approvals by JSON-RPC request id, not by a provider
+`approvalId`. Map Studio `allow_once` only to provider `accept` and `deny` only to
+`decline`; never expose `acceptForSession`, policy amendments, external-token login,
+or experimental additional permissions.
 
 - [ ] **Step 5: Run shared bridge contract and GREEN**
 

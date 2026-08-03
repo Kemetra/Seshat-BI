@@ -65,14 +65,20 @@ preconditions; no later task may start while either is open.
 
 ## Phase 5 - Codex Subscription Bridge (US2, US4)
 
-- [ ] **T019** Add recorded safe app-server fixtures covering handshake, thread,
-  turn, visible messages, tool events, approvals, quota, sign-out, incompatible
-  methods, malformed frames, stderr secrets, and EOF. [FR-011 - FR-015, FR-024]
+- [ ] **T019** Record the installed Codex version, generate its app-server JSON
+  schemas into a temporary directory, and derive minimal sanitized fixtures covering
+  `initialize`/`initialized`, account and rate-limit reads, managed ChatGPT login,
+  thread, turn, visible messages, tool events, JSON-RPC-correlated command/file
+  approvals, quota, sign-out, incompatible or experimental required methods,
+  malformed frames, stderr secrets, and EOF. Do not commit the full generated
+  schema bundle. [FR-011 - FR-015, FR-024]
 - [ ] **T020** Write failing JSON-RPC correlation and normalization tests, then
   implement the version-tolerant stdio client without shell interpolation. [FR-011,
   FR-014, FR-015]
 - [ ] **T021** Implement Codex process lifecycle, protocol probe, health classifier,
   official login delegation, cancellation, clean shutdown, and crash recovery.
+  Record and enforce the tested minimum/maximum Codex CLI range; a version outside
+  it is incompatible until its generated schema and handshake fixtures pass.
   [FR-011, FR-012, FR-013, FR-024]
 - [ ] **T022** Implement context construction for read-only and propose-change modes;
   include current allowed/forbidden scope and never include credentials. [FR-017,

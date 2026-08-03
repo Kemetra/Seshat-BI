@@ -319,7 +319,8 @@ an embedded subscription bridge in this slice.
   confirm every technical side effect and every named-human business decision at its
   existing boundary.
 - Python 3.13 or newer is required. Node 20 or newer is development-only.
-- The current development shell lacks both Python and a `codex` executable, so unit,
-  contract, fake-bridge integration, and frontend work can be planned here, while
-  live acceptance requires an environment that provides those prerequisites.
+- The current development shell provides Python 3.13.14 and `codex-cli 0.146.0`.
+  Its version-specific app-server schemas have been audited against the bridge
+  contract. Live signed-in acceptance still requires an interactive authenticated
+  client session and remains a separate evidence lane.
 - The existing active spec 138 fence remains unchanged while this package is draft.
