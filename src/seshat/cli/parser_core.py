@@ -308,19 +308,25 @@ def _add_reset_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
-def _add_report_parser(sub: argparse._SubParsersAction) -> None:
-    p = sub.add_parser(
-        "report",
-        help=(
-            "render an approved design as an HTML page, an Excel workbook or a "
-            "PDF; every figure cites the approved metric contract it came from. "
-            "Gated on dashboard_ready: pass. Needs the `report` extra "
-            "(`report-pdf` as well for PDF)"
-        ),
-    )
+def add_report_arguments(p: argparse.ArgumentParser) -> None:
+    """The `report` flags, defined ONCE.
+
+    Both the `seshat report` subcommand and the standalone parser in
+    ``commands/report.py`` call this. They were separate definitions and had already
+    drifted -- the subcommand knew nothing of --from-gold, --figure-plan, --dsn or
+    --audience, so documented options failed as unrecognized arguments.
+
+    It lives here rather than in the command module so building the parser still
+    imports no command code.
+    """
     p.add_argument("--table", required=True, help="table id under mappings/")
     p.add_argument("--format", required=True, choices=("html", "xlsx", "pdf"))
     p.add_argument("--language", default="en")
+    p.add_argument(
+        "--audience",
+        default="board",
+        help="who the report is for; printed on the cover, not a locale",
+    )
     p.add_argument(
         "--output",
         type=Path,
@@ -337,9 +343,38 @@ def _add_report_parser(sub: argparse._SubParsersAction) -> None:
         "--observations",
         type=Path,
         default=None,
-        help="figure observations file; reading gold directly is not built yet",
+        help="figures WITH values, read offline; no database is contacted",
+    )
+    p.add_argument(
+        "--from-gold",
+        action="store_true",
+        help="read every figure's value from the warehouse; needs --figure-plan",
+    )
+    p.add_argument(
+        "--figure-plan",
+        type=Path,
+        default=None,
+        help="which figures to render and how to format them, carrying NO values",
+    )
+    p.add_argument(
+        "--dsn",
+        default=None,
+        help="Postgres DSN for --from-gold; falls back to the workspace environment",
     )
     p.add_argument("--repo-root", type=Path, default=Path("."))
+
+
+def _add_report_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "report",
+        help=(
+            "render an approved design as an HTML page, an Excel workbook or a "
+            "PDF; every figure cites the approved metric contract it came from. "
+            "Gated on dashboard_ready: pass. Needs the `report` extra "
+            "(`report-pdf` as well for PDF)"
+        ),
+    )
+    add_report_arguments(p)
 
 
 _FAMILIES: dict[str, Callable[[argparse._SubParsersAction], None]] = {

@@ -50,6 +50,13 @@ _RATIO = {
             "aggregation": "count_rows",
             "filter": [{"column": "discount_applied", "op": "is_not_null"}],
         },
+        # The EXPLICIT rate declaration. Structural division is not enough: an
+        # average also divides and is not a percentage.
+        "expected_value": {
+            "value": "0.5037",
+            "tolerance_abs": "0.0001",
+            "aggregation": "ratio",
+        },
     },
 }
 
@@ -235,7 +242,7 @@ def test_a_request_for_a_contract_that_was_not_supplied_refuses() -> None:
 
 def test_a_ratio_contract_declared_as_currency_refuses() -> None:
     """The one unit fact that IS derivable, checked rather than trusted."""
-    with pytest.raises(ReportError, match="is a ratio"):
+    with pytest.raises(ReportError, match="declares itself a rate"):
         observe(
             FakeRunner(),
             [_request("DiscountedTransactionRate", unit_kind="currency")],
@@ -244,7 +251,7 @@ def test_a_ratio_contract_declared_as_currency_refuses() -> None:
 
 
 def test_a_base_contract_declared_as_ratio_refuses() -> None:
-    with pytest.raises(ReportError, match="not a ratio"):
+    with pytest.raises(ReportError, match="does not declare itself a rate"):
         observe(FakeRunner(), [_request(unit_kind="ratio")], {"TotalSales": _BASE})
 
 
@@ -343,3 +350,41 @@ def test_a_filtered_column_aggregate_excludes_rows_rather_than_zeroing_them() ->
     sql = compile_query(contract).sql
     assert 'avg(CASE WHEN "amount" IS NOT NULL THEN "amount" END)' in sql
     assert "ELSE 0" not in sql
+
+
+def test_an_average_divides_but_is_not_a_rate() -> None:
+    """The distinction that is easy to get backwards, pinned.
+
+    AvgTransactionValue's SQL divides a sum by a count, exactly as a rate's does.
+    It is money per transaction, so it renders as 123.42 and NOT as 1.23%. Keying
+    the unit check on "the query divides" instead of "the contract declares a rate"
+    would force it to a percentage.
+    """
+    contract = _committed("AvgTransactionValue")
+    query = compile_query(contract)
+    assert query.is_ratio is True  # the SQL shape
+    result = observe(
+        FakeRunner([(Decimal("1552071"), 12575)]),
+        [_request("AvgTransactionValue", unit_kind="currency")],
+        {"AvgTransactionValue": contract},
+    )
+    assert result[0]["value"] == Decimal("1552071") / Decimal(12575)
+
+
+def test_an_average_declared_as_a_rate_refuses() -> None:
+    """The inverse guard: it is not a rate, so it may not be shown as one."""
+    contract = _committed("AvgTransactionValue")
+    with pytest.raises(ReportError, match="does not declare itself a rate"):
+        observe(
+            FakeRunner([(Decimal("1"), 1)]),
+            [_request("AvgTransactionValue", unit_kind="ratio")],
+            {"AvgTransactionValue": contract},
+        )
+
+
+def test_the_shipped_rate_contract_declares_itself_one() -> None:
+    from seshat.report.model import declares_a_rate
+
+    assert declares_a_rate(_committed("DiscountedTransactionRate")) is True
+    assert declares_a_rate(_committed("AvgTransactionValue")) is False
+    assert declares_a_rate(_committed("TotalSales")) is False

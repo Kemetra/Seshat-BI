@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 from seshat.dialect import Dialect, get_dialect
-from seshat.report.model import ReportError
+from seshat.report.model import ReportError, declares_a_rate
 from seshat.validate import QueryRunner
 
 # The aggregate vocabulary, mirroring `value_proxy._AGG_SQL` so an aggregation
@@ -118,7 +118,7 @@ def _observation(
     contract = _required_contract(request, contracts)
     _assert_groupable(request)
     query = compile_query(contract, dialect=dialect)
-    _assert_unit_agrees(request, query)
+    _assert_unit_agrees(request, contract)
     return {
         "visual_id": request.visual_id,
         "contract_id": request.contract_id,
@@ -160,26 +160,30 @@ def _assert_groupable(request: FigureRequest) -> None:
     )
 
 
-def _assert_unit_agrees(request: FigureRequest, query: CompiledQuery) -> None:
-    """The one unit fact that is derivable, checked rather than trusted.
+def _assert_unit_agrees(request: FigureRequest, contract: Mapping[str, object]) -> None:
+    """The one unit fact the contract can settle, checked rather than trusted.
 
-    Whether a base aggregate renders as currency or as a count is NOT derivable --
-    it depends on the source-map's declared unit, and how to treat an undeclared
-    one is spec 103 FR-014, an open owner question. So only the ratio axis is
-    asserted here.
+    Keyed on whether the contract DECLARES a rate, not on whether its SQL divides.
+    ``AvgTransactionValue`` divides a sum by a count and is money per transaction,
+    not a percentage; keying on the division would render it as ``1.23%``.
+
+    Whether a non-rate is currency or a count is NOT derivable -- it depends on the
+    source-map's declared unit, and how to treat an undeclared one is spec 103
+    FR-014, an open owner question.
     """
-    if query.is_ratio and request.unit_kind != _RATIO_UNIT:
+    is_rate = declares_a_rate(contract)
+    if is_rate and request.unit_kind != _RATIO_UNIT:
         raise ReportError(
             f"visual {request.visual_id!r} declares unit_kind "
-            f"{request.unit_kind!r}, but {request.contract_id!r} is a ratio "
-            "contract; rendering a rate as a total would misstate it by orders of "
+            f"{request.unit_kind!r}, but {request.contract_id!r} declares itself a "
+            "rate; rendering a rate as a total would misstate it by orders of "
             "magnitude"
         )
-    if not query.is_ratio and request.unit_kind == _RATIO_UNIT:
+    if not is_rate and request.unit_kind == _RATIO_UNIT:
         raise ReportError(
             f"visual {request.visual_id!r} declares unit_kind 'ratio', but "
-            f"{request.contract_id!r} is not a ratio contract; its value would be "
-            "multiplied by 100 and shown as a percentage"
+            f"{request.contract_id!r} does not declare itself a rate; its value "
+            "would be multiplied by 100 and shown as a percentage"
         )
 
 

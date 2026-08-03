@@ -13,6 +13,7 @@ PDF?" cannot arise -- neither of them rounded anything.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from decimal import Decimal
 
@@ -150,3 +151,29 @@ class ReportBundle:
         orphans = sorted(known - indexed)
         if orphans:
             raise ReportError(f"figures with no declared section: {orphans}")
+
+
+def declares_a_rate(contract: Mapping[str, object]) -> bool:
+    """True when the contract states its aggregate IS a rate.
+
+    The signal is the contract's explicit ``definition.expected_value.aggregation:
+    ratio``, NOT the structural presence of a numerator and a denominator. The
+    distinction is load-bearing and easy to get backwards:
+
+    ``DiscountedTransactionRate`` divides one count by another and IS a rate, shown
+    as ``50.37%``. ``AvgTransactionValue`` also divides -- a sum by a count -- and is
+    NOT a rate: it is money per transaction, shown as ``123.42``. Reading "computed
+    by division" as "displayed as a percentage" would render the average as
+    ``1.23%``.
+
+    So a contract that does not declare a rate constrains nothing here, and its
+    unit_kind stays the authored one. Which unit a non-rate carries is spec 103
+    FR-014, an open owner question this predicate deliberately does not answer.
+    """
+    definition = contract.get("definition")
+    if not isinstance(definition, Mapping):
+        return False
+    expected = definition.get("expected_value")
+    if not isinstance(expected, Mapping):
+        return False
+    return expected.get("aggregation") == "ratio"

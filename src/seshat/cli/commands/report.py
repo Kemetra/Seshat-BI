@@ -23,6 +23,13 @@ EXIT_REFUSED = 2
 
 
 def build_report_parser() -> argparse.ArgumentParser:
+    """The standalone parser, sharing ONE flag definition with the subcommand.
+
+    The two used to be separate and had drifted: `seshat report --from-gold` failed
+    as an unrecognized argument while this parser accepted it.
+    """
+    from seshat.cli.parser_core import add_report_arguments
+
     parser = argparse.ArgumentParser(
         prog="seshat report",
         description=(
@@ -30,44 +37,7 @@ def build_report_parser() -> argparse.ArgumentParser:
             "the approved metric contract it came from."
         ),
     )
-    parser.add_argument("--table", required=True)
-    parser.add_argument("--format", required=True, choices=_FORMATS)
-    parser.add_argument("--language", default="en")
-    parser.add_argument(
-        "--audience",
-        default="board",
-        help="who the report is for; printed on the cover, not a locale",
-    )
-    parser.add_argument("--output", type=Path, default=_DEFAULT_OUTPUT)
-    parser.add_argument(
-        "--layout",
-        type=Path,
-        default=None,
-        help="print overlay; defaults to mappings/<table>/design/report-layout.yaml",
-    )
-    parser.add_argument(
-        "--observations",
-        type=Path,
-        default=None,
-        help="figures WITH values, read offline; no database is contacted",
-    )
-    parser.add_argument(
-        "--from-gold",
-        action="store_true",
-        help="read every figure's value from the warehouse; needs --figure-plan",
-    )
-    parser.add_argument(
-        "--figure-plan",
-        type=Path,
-        default=None,
-        help="which figures to render and how to format them, carrying NO values",
-    )
-    parser.add_argument(
-        "--dsn",
-        default=None,
-        help="Postgres DSN for --from-gold; falls back to the workspace environment",
-    )
-    parser.add_argument("--repo-root", type=Path, default=Path("."))
+    add_report_arguments(parser)
     return parser
 
 
@@ -319,6 +289,29 @@ def _dsn(args: argparse.Namespace) -> object:
     return resolve_dsn(env)
 
 
+def _governed_bindings(repo_root: Path, table: str) -> dict[str, str] | None:
+    """visual_id -> contract, from the signed binding map, or None if there is none.
+
+    ``None`` is not "no constraint by choice": it means the table has no committed
+    binding map at all, and the bundle then falls back to checking only that a cited
+    contract is approved. A table that HAS a map gets the exact pair checked.
+    """
+    from seshat.report.binding import binding_map_path, load_binding_map
+
+    path = binding_map_path(repo_root, table)
+    if not path.is_file():
+        return None
+    binding_map = load_binding_map(path, expect_table=table)
+    return {binding.visual_id: binding.contract for binding in binding_map.bindings}
+
+
+def _definitions(repo_root: Path, table: str) -> dict[str, dict]:
+    """The parsed contracts, for the facts an observation must not restate."""
+    from seshat.report.plan import contract_payloads
+
+    return contract_payloads(repo_root, table)
+
+
 def _render(args: argparse.Namespace) -> Path:
     from seshat.report.bundle import ApprovedDesign, build_bundle
     from seshat.report.gate import assert_renderable
@@ -345,7 +338,10 @@ def _render(args: argparse.Namespace) -> Path:
         # as generated for "en".
         generated_for=args.audience,
         design=ApprovedDesign(
-            layout=layout, contracts=approved_contracts(repo_root, args.table)
+            layout=layout,
+            contracts=approved_contracts(repo_root, args.table),
+            bindings=_governed_bindings(repo_root, args.table),
+            definitions=_definitions(repo_root, args.table),
         ),
         observations=observations,
     )

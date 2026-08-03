@@ -42,7 +42,7 @@ _OBSERVATIONS = {
             "label": "Region A",
             "value": "1552071",
         }
-    ]
+    ],
 }
 
 
