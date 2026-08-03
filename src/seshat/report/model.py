@@ -22,6 +22,18 @@ class ReportError(Exception):
     """Any report-surface failure. Never used to describe business meaning."""
 
 
+class SurfaceRenderFailed(RuntimeError):
+    """The surface could not be produced. No partial page is ever returned.
+
+    It lives here beside :class:`ReportError`, not in the HTML renderer that
+    raises it, because the CLI catches it to turn a failed render into a refusal.
+    Importing it from :mod:`seshat.report.html` pulled jinja2 into EVERY
+    ``seshat report`` invocation, so a refusal that renders nothing -- a blocked
+    gate, no figure source -- raised ``ModuleNotFoundError`` instead of printing
+    its guidance to an adopter who had installed no optional extra.
+    """
+
+
 # Reading direction. Named rather than inferred, so a surface laying out a page
 # right-to-left has not done it by accident.
 DIRECTION_LTR = "ltr"
@@ -65,6 +77,10 @@ class CitedFigure:
     def __post_init__(self) -> None:
         if not self.figure_id:
             raise ReportError("figure_id is required")
+        self._require_attribution()
+
+    def _require_attribution(self) -> None:
+        """Where the figure came from, and the text a surface may reproduce."""
         if not self.contract_id:
             raise ReportError(
                 f"figure {self.figure_id!r} has no approved contract id; an "
@@ -139,6 +155,12 @@ class ReportBundle:
 
     def _require_sections_index_the_figures(self) -> None:
         known = {figure.figure_id for figure in self.figures}
+        orphans = sorted(known - self._indexed_figure_ids(known))
+        if orphans:
+            raise ReportError(f"figures with no declared section: {orphans}")
+
+    def _indexed_figure_ids(self, known: set[str]) -> set[str]:
+        """Every figure the sections claim, refusing one that no figure answers to."""
         indexed: set[str] = set()
         for section in self.sections:
             for figure_id in section.figure_ids:
@@ -148,9 +170,7 @@ class ReportBundle:
                         f"{figure_id!r}"
                     )
                 indexed.add(figure_id)
-        orphans = sorted(known - indexed)
-        if orphans:
-            raise ReportError(f"figures with no declared section: {orphans}")
+        return indexed
 
 
 def declares_a_rate(contract: Mapping[str, object]) -> bool:

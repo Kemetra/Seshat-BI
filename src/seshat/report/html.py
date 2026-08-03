@@ -38,6 +38,7 @@ from seshat.report.model import (
     CitedFigure,
     ReportBundle,
     ReportError,
+    SurfaceRenderFailed,
 )
 from seshat.report.vocabulary import Vocabulary
 
@@ -52,8 +53,9 @@ STYLESHEET_NAME = "report.css"
 _RTL_LANGUAGES = frozenset({"ar", "he", "fa", "ur"})
 
 
-class SurfaceRenderFailed(RuntimeError):
-    """The surface could not be produced. No partial page is ever returned."""
+# `SurfaceRenderFailed` is raised below and stays importable from here for the
+# callers that always have (the PDF surface, the tests), but it is DEFINED in
+# `model` -- see its docstring: catching it must not cost an adopter jinja2.
 
 
 @dataclass(frozen=True, slots=True)

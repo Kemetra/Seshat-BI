@@ -72,6 +72,14 @@ def load_vocabulary(path: Path, language: str) -> Vocabulary:
     falling back would put untranslated text beside correctly localised numbers,
     which reads as a finished document.
     """
+    document = _document(path)
+    _assert_schema(document, path)
+    block = _language_block(document, path, language)
+    return Vocabulary(language=language, terms=_terms(block, path))
+
+
+def _document(path: Path) -> dict:
+    """The parsed file, with an unreadable or non-mapping one refused by name."""
     try:
         loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
     except OSError as exc:
@@ -81,7 +89,11 @@ def load_vocabulary(path: Path, language: str) -> Vocabulary:
         ) from exc
     except yaml.YAMLError as exc:
         raise ReportError(f"cannot read report vocabulary {path}: {exc}") from exc
-    document = required_mapping(loaded, refusal=f"vocabulary {path} is not a mapping")
+    return required_mapping(loaded, refusal=f"vocabulary {path} is not a mapping")
+
+
+def _assert_schema(document: Mapping[str, object], path: Path) -> None:
+    """The one schema this loader understands, checked before anything is read."""
     schema = required_text(
         document, "schema", refusal=f"vocabulary {path} declares no schema"
     )
@@ -89,6 +101,12 @@ def load_vocabulary(path: Path, language: str) -> Vocabulary:
         raise ReportError(
             f"vocabulary {path} declares schema {schema!r}, not {VOCABULARY_SCHEMA!r}"
         )
+
+
+def _language_block(
+    document: Mapping[str, object], path: Path, language: str
+) -> Mapping[str, object]:
+    """The requested language's block, and never a different one."""
     languages = required_mapping(
         document.get("languages"),
         refusal=f"vocabulary {path} declares no languages",
@@ -99,7 +117,7 @@ def load_vocabulary(path: Path, language: str) -> Vocabulary:
             f"vocabulary {path} carries no {language!r} block. Falling back to "
             "another language would put untranslated text beside correct numbers."
         )
-    return Vocabulary(language=language, terms=_terms(block, path))
+    return block
 
 
 def _terms(block: Mapping[str, object], path: Path) -> dict[str, str]:

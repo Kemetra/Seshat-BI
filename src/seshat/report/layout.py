@@ -159,16 +159,21 @@ def _section(entry: object, path: Path) -> LayoutSection:
 
 
 def _caveat_codes(entry: dict, section_id: str) -> tuple[str, ...]:
+    """The codes this section carries; absent and empty both mean no caveat."""
     raw = entry.get("caveat_codes")
     if raw is None:
         return ()
-    if not isinstance(raw, list) or not all(
-        isinstance(code, str) and code for code in raw
-    ):
-        raise ReportError(
-            f"section {section_id!r} caveat_codes must be a list of governed codes"
-        )
+    refusal = f"section {section_id!r} caveat_codes must be a list of governed codes"
+    if not isinstance(raw, list):
+        raise ReportError(refusal)
+    if not all(_is_governed_code(code) for code in raw):
+        raise ReportError(refusal)
     return tuple(raw)
+
+
+def _is_governed_code(value: object) -> bool:
+    """A code is a non-empty string. An empty one names no caveat to resolve."""
+    return isinstance(value, str) and value != ""
 
 
 def _chart_kind(entry: dict, section_id: str) -> str | None:

@@ -155,6 +155,76 @@ def test_missing_observations_flag_refuses_rather_than_inventing(
     assert report_main(args) == EXIT_REFUSED
 
 
+_NO_EXTRA_PROGRAM = """\
+import sys
+from importlib.abc import MetaPathFinder
+
+_BLOCKED = {"jinja2", "xlsxwriter", "playwright"}
+
+
+class _NoReportExtra(MetaPathFinder):
+    \"\"\"An interpreter with no report extra installed, whatever this venv has.\"\"\"
+
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split(".")[0] in _BLOCKED:
+            raise ModuleNotFoundError(f"No module named {fullname!r}")
+        return None
+
+
+sys.meta_path.insert(0, _NoReportExtra())
+for name in list(sys.modules):
+    if name.split(".")[0] in _BLOCKED:
+        del sys.modules[name]
+
+from seshat.cli.commands.report import build_report_parser, report_main
+
+args = build_report_parser().parse_args(sys.argv[1:])
+raise SystemExit(report_main(args))
+"""
+
+
+def test_a_refusal_states_itself_with_no_report_extra_installed(tmp_path: Path) -> None:
+    """The refusal paths render nothing, so they must not need a renderer.
+
+    Run in a subprocess whose import system refuses jinja2, xlsxwriter and
+    playwright, because THIS interpreter has them: importing SurfaceRenderFailed
+    from `seshat.report.html` made every `seshat report` invocation -- including
+    the ones that only print a refusal -- die with ModuleNotFoundError, and no test
+    in a dev environment could see it.
+    """
+    import os
+    import subprocess
+    import sys
+
+    import seshat
+
+    table, _ = _workspace(tmp_path)
+    program = tmp_path / "no_extra.py"
+    program.write_text(_NO_EXTRA_PROGRAM, encoding="utf-8")
+    # The child imports the SAME `seshat` this test does, not whatever copy is
+    # installed in site-packages.
+    source_root = str(Path(seshat.__file__).resolve().parents[1])
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(program),
+            "--table",
+            table,
+            "--format",
+            "html",
+            "--repo-root",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "PYTHONPATH": source_root},
+    )
+    assert completed.returncode == EXIT_REFUSED, completed.stderr
+    assert "no figure source" in completed.stdout
+    assert "ModuleNotFoundError" not in completed.stderr
+
+
 def test_html_render_writes_a_document(tmp_path: Path) -> None:
     pytest.importorskip("jinja2", reason="requires the `report` extra")
     table, observations = _workspace(tmp_path)

@@ -42,8 +42,11 @@ def build_report_parser() -> argparse.ArgumentParser:
 
 
 def report_main(args: argparse.Namespace) -> int:
-    from seshat.report.html import SurfaceRenderFailed
-    from seshat.report.model import ReportError
+    # Both from `model`, which imports no optional extra. Importing
+    # SurfaceRenderFailed from `seshat.report.html` made jinja2 mandatory for every
+    # invocation, so a refusal that renders nothing -- a blocked gate, no figure
+    # source -- died with ModuleNotFoundError instead of printing its guidance.
+    from seshat.report.model import ReportError, SurfaceRenderFailed
 
     try:
         written = _render(args)
@@ -104,6 +107,13 @@ def load_observations(path: Path, *, expect_table: str | None = None) -> list[di
     requested table while publishing the other's figures with apparently valid
     provenance.
     """
+    loaded = _document(path)
+    _assert_declares_table(loaded, path, expect_table)
+    return [_observation(entry, path) for entry in _entries(loaded, path)]
+
+
+def _document(path: Path) -> dict:
+    """The parsed file, refusing an unreadable one and anything but a document."""
     from seshat.report.model import ReportError
 
     try:
@@ -115,11 +125,17 @@ def load_observations(path: Path, *, expect_table: str | None = None) -> list[di
             f"observations {path} is not a mapping; it must be a document with an "
             "`observations:` list and the `table:` it was produced for"
         )
-    _assert_declares_table(loaded, path, expect_table)
+    return loaded
+
+
+def _entries(loaded: dict, path: Path) -> list:
+    """The observations list. An empty one renders nothing, so it refuses."""
+    from seshat.report.model import ReportError
+
     entries = loaded.get("observations")
     if not isinstance(entries, list) or not entries:
         raise ReportError(f"{path} declares no observations")
-    return [_observation(entry, path) for entry in entries]
+    return entries
 
 
 def _assert_declares_table(loaded: dict, path: Path, expect_table: str | None) -> None:
@@ -254,9 +270,9 @@ def _live_observations(
     :mod:`seshat.report.plan`.
     """
     from seshat import cli
+    from seshat.dialect import get_dialect
     from seshat.report.binding import binding_map_path, load_binding_map
     from seshat.report.model import ReportError
-    from seshat.report.observe import observe
     from seshat.report.plan import (
         contract_payloads,
         figure_requests,
@@ -274,19 +290,65 @@ def _live_observations(
             '`pip install "seshat-bi[db]"`. Rendering from --observations needs no '
             "driver."
         )
-    return observe(cli._make_runner(_dsn(args)), requests, contracts)
+    engine = cli._current_engine()
+    config = _connection_config(args, engine)
+    if config is None:
+        raise ReportError(
+            "--from-gold found no database connection configured. Pass --dsn (a "
+            "postgresql:// connection string), or set DATABASE_URL, or the "
+            "ANALYTICS_DB_* vars in your gitignored .env -- never a committed one. "
+            "Connecting on libpq's ambient defaults could read an unintended "
+            "database and publish its numbers under this table's name."
+        )
+    return _read_gold(requests, contracts, get_dialect(engine), config)
 
 
-def _dsn(args: argparse.Namespace) -> object:
-    """The connection, resolved the same way `value-check` resolves it."""
+def _connection_config(args: argparse.Namespace, engine: str) -> object:
+    """The connection, resolved the same way `value-check` resolves it.
+
+    Postgres: ``--dsn`` wins, else the environment. Every other engine resolves
+    from the environment through its own dialect (``--dsn`` is Postgres-only).
+    Returns None when nothing is configured, which the caller refuses on.
+    """
     import os
 
+    from seshat.dialect import get_dialect
     from seshat.validate import resolve_dsn
 
+    if engine != "postgres":
+        return get_dialect(engine).resolve_config(dict(os.environ))
     env = dict(os.environ)
     if args.dsn:
         env = {**env, "DATABASE_URL": args.dsn}
     return resolve_dsn(env)
+
+
+def _read_gold(
+    requests: list, contracts: dict, dialect: object, config: object
+) -> list[dict[str, object]]:
+    """Read the figures, turning every DB-boundary failure into a refusal.
+
+    A driver exception is not an ``OSError``, so without this it left the handler
+    as a traceback -- carrying the host, user and database the driver reformats
+    into its own message. The dialect's own redactor scrubs the config out of it,
+    and the caller reports it as a refusal with the deferred-mode guidance.
+    """
+    from seshat import cli
+    from seshat.report.model import ReportError
+    from seshat.report.observe import observe
+
+    try:
+        runner = cli._make_runner(config)
+        return observe(runner, requests, contracts, dialect=dialect)
+    except ReportError:
+        # A contract this module refuses to compile is not a boundary failure.
+        raise
+    except Exception as exc:
+        raise ReportError(
+            "--from-gold failed at the DB boundary "
+            f"({exc.__class__.__name__}): {dialect.redact(exc, config)}. Verify the "
+            "DSN, network access and the gold objects the contracts bind to."
+        ) from exc
 
 
 def _governed_bindings(repo_root: Path, table: str) -> dict[str, str] | None:

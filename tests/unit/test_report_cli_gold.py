@@ -183,13 +183,62 @@ def test_a_plan_that_disagrees_with_the_signed_bindings_is_refused(
 
 
 def test_from_gold_without_the_driver_refuses_with_the_extra_named(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, capsys
 ) -> None:
     from seshat import cli
 
     table, plan = _gold_workspace(tmp_path)
+    # A connection IS configured, so the driver is the only thing missing.
+    monkeypatch.setenv("DATABASE_URL", "postgresql://user:pw@host:5432/db")
     monkeypatch.setattr(cli, "_ensure_driver", lambda: False, raising=False)
     assert report_main(_live_args(tmp_path, table, plan)) == EXIT_REFUSED
+    assert "seshat-bi[db]" in capsys.readouterr().out
+
+
+def test_from_gold_without_a_connection_refuses_rather_than_connecting(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """libpq would fall back to ambient local defaults and answer from an
+    unintended database, publishing its numbers under this table's name."""
+    from seshat import cli
+
+    table, plan = _gold_workspace(tmp_path)
+    for name in ("DATABASE_URL", "ANALYTICS_DB_HOST", "ANALYTICS_DB_ENGINE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(cli, "_ensure_driver", lambda: True, raising=False)
+    monkeypatch.setattr(
+        cli,
+        "_make_runner",
+        lambda config: pytest.fail("connected with no configuration"),
+        raising=False,
+    )
+    assert report_main(_live_args(tmp_path, table, plan)) == EXIT_REFUSED
+    assert "no database connection configured" in capsys.readouterr().out
+
+
+def test_a_boundary_failure_refuses_without_leaking_the_dsn(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    """A driver exception is not an OSError, so it used to leave as a traceback --
+    carrying the host, user and database the driver reformats into its message."""
+    from seshat import cli
+
+    table, plan = _gold_workspace(tmp_path)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://admin:s3cret@db.internal:5432/an")
+    monkeypatch.setattr(cli, "_ensure_driver", lambda: True, raising=False)
+
+    def _explode(config):
+        raise RuntimeError(
+            'connection to server at "db.internal", port 5432 failed: FATAL: '
+            'password authentication failed for user "admin"'
+        )
+
+    monkeypatch.setattr(cli, "_make_runner", _explode, raising=False)
+    assert report_main(_live_args(tmp_path, table, plan)) == EXIT_REFUSED
+    out = capsys.readouterr().out
+    assert "failed at the DB boundary" in out
+    for secret in ("s3cret", "admin", "db.internal"):
+        assert secret not in out
 
 
 def test_the_gate_still_applies_to_a_live_render(tmp_path: Path, monkeypatch) -> None:

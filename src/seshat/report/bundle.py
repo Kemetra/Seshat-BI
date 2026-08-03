@@ -132,16 +132,7 @@ def _complete(
     number is not. Without bindings there is no approved contract to attribute such
     a figure to, so the omission refuses instead.
     """
-    seen: dict[str, Mapping[str, object]] = {}
-    for entry in observations:
-        visual_id = _text(entry, "visual_id")
-        if visual_id in seen:
-            raise ReportError(
-                f"visual {visual_id!r} is observed more than once. Every surface "
-                "indexes figures by id, so one of these would silently replace the "
-                "other and publish the wrong governed number."
-            )
-        seen[visual_id] = entry
+    seen = _one_entry_per_visual(observations)
     missing = [visual_id for visual_id in declared if visual_id not in seen]
     if not missing:
         return list(observations)
@@ -153,6 +144,23 @@ def _complete(
             "them, or remove them from the overlay."
         )
     return list(observations) + [_pending(visual_id, design) for visual_id in missing]
+
+
+def _one_entry_per_visual(
+    observations: Sequence[Mapping[str, object]],
+) -> dict[str, Mapping[str, object]]:
+    """The observations keyed by visual, refusing a repeat rather than keeping one."""
+    seen: dict[str, Mapping[str, object]] = {}
+    for entry in observations:
+        visual_id = _text(entry, "visual_id")
+        if visual_id in seen:
+            raise ReportError(
+                f"visual {visual_id!r} is observed more than once. Every surface "
+                "indexes figures by id, so one of these would silently replace the "
+                "other and publish the wrong governed number."
+            )
+        seen[visual_id] = entry
+    return seen
 
 
 def _pending(visual_id: str, design: ApprovedDesign) -> Mapping[str, object]:
@@ -220,18 +228,26 @@ def _assert_attributable(
             f"visual {visual_id!r} cites {contract_id!r}, which is not an approved "
             "contract; an unattributed figure refuses the render"
         )
-    if design.bindings is None:
+    _assert_the_signed_pair(visual_id, contract_id, design)
+
+
+def _assert_the_signed_pair(
+    visual_id: str, contract_id: str, design: ApprovedDesign
+) -> None:
+    """The exact visual-to-contract pair the design review signed off.
+
+    Membership alone let a TotalSales visual be populated and labelled as
+    TotalQuantity while still advertising governed provenance. A visual the map does
+    not bind (or no map at all) keeps the older, weaker membership guarantee.
+    """
+    governed = (design.bindings or {}).get(visual_id)
+    if governed is None or governed == contract_id:
         return
-    governed = design.bindings.get(visual_id)
-    if governed is not None and governed != contract_id:
-        # Membership alone let a TotalSales visual be populated and labelled as
-        # TotalQuantity while still advertising governed provenance. The pair is
-        # what the design review signed off, not the contract on its own.
-        raise ReportError(
-            f"visual {visual_id!r} cites {contract_id!r}, but the approved binding "
-            f"map binds it to {governed!r}. Citing SOME approved contract is not the "
-            "same as citing the one this visual was signed off against."
-        )
+    raise ReportError(
+        f"visual {visual_id!r} cites {contract_id!r}, but the approved binding "
+        f"map binds it to {governed!r}. Citing SOME approved contract is not the "
+        "same as citing the one this visual was signed off against."
+    )
 
 
 def _governed_metric(
@@ -265,8 +281,18 @@ def _governed_unit_kind(
     """
     declared = _text(entry, "unit_kind")
     contract = (design.definitions or {}).get(contract_id)
-    if not isinstance(contract, Mapping):
-        return declared
+    if isinstance(contract, Mapping):
+        _assert_the_ratio_axis_agrees(declared, entry, contract_id, contract)
+    return declared
+
+
+def _assert_the_ratio_axis_agrees(
+    declared: str,
+    entry: Mapping[str, object],
+    contract_id: str,
+    contract: Mapping[str, object],
+) -> None:
+    """Rate or not, checked against the contract's own declaration."""
     is_rate = declares_a_rate(contract)
     if is_rate and declared != "ratio":
         raise ReportError(
@@ -274,13 +300,12 @@ def _governed_unit_kind(
             f"but {contract_id!r} declares itself a rate; rendering a rate as a total "
             "misstates it by orders of magnitude"
         )
-    if not is_rate and declared == "ratio":
+    if declared == "ratio" and not is_rate:
         raise ReportError(
             f"visual {_text(entry, 'visual_id')!r} declares unit_kind 'ratio', but "
             f"{contract_id!r} does not declare itself a rate; its value would be "
             "multiplied by 100 and shown as a percentage"
         )
-    return declared
 
 
 def _text(entry: Mapping[str, object], key: str) -> str:

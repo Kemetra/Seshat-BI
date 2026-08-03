@@ -139,6 +139,41 @@ def test_an_unknown_filter_op_refuses_rather_than_dropping_it() -> None:
         compile_query(contract)
 
 
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        {"column": "total_spent", "op": "is_not_null"},  # a mapping, not a list of them
+        "total_spent IS NOT NULL",  # hand-written SQL
+        1,
+    ],
+    ids=["mapping", "string", "scalar"],
+)
+def test_a_filter_that_is_not_a_list_refuses_rather_than_dropping_it(
+    malformed: object,
+) -> None:
+    """The same silent drop as an unknown op, arriving through the container.
+
+    Only None and an empty list mean "no filter". A mapping read as no filter
+    compiles an unfiltered aggregate under a citation promising a filtered one, and
+    nothing upstream validates this shape.
+    """
+    contract = {
+        **_BASE,
+        "definition": {"kind": "base", "aggregation": "sum", "filter": malformed},
+    }
+    with pytest.raises(ReportError, match="not a list"):
+        compile_query(contract)
+
+
+def test_an_absent_or_empty_filter_still_means_no_filter() -> None:
+    for absent in (None, []):
+        contract = {
+            **_BASE,
+            "definition": {"kind": "base", "aggregation": "sum", "filter": absent},
+        }
+        assert "WHERE" not in compile_query(contract).sql
+
+
 def test_a_column_aggregate_without_a_column_refuses() -> None:
     contract = {
         "name": "X",
@@ -350,6 +385,108 @@ def test_a_filtered_column_aggregate_excludes_rows_rather_than_zeroing_them() ->
     sql = compile_query(contract).sql
     assert 'avg(CASE WHEN "amount" IS NOT NULL THEN "amount" END)' in sql
     assert "ELSE 0" not in sql
+
+
+# --- which column a side aggregates ----------------------------------------
+
+
+_TWO_COLUMN_RATIO = {
+    "name": "AvgOrderValue",
+    "binds_to": {"gold_table": "gold.fct_orders", "columns": ["amount", "order_id"]},
+    "definition": {
+        "numerator": {
+            "aggregation": "sum",
+            "source": {"table": "gold.fct_orders", "column": "amount"},
+        },
+        "denominator": {
+            "aggregation": "distinct_count",
+            "source": {"table": "gold.fct_orders", "column": "order_id"},
+        },
+    },
+}
+
+
+def test_each_ratio_side_aggregates_the_column_it_declares() -> None:
+    """Two column-aggregating sides, two different columns, as written.
+
+    Resolving both from binds_to.columns[0] would emit
+    `sum("amount") / count(DISTINCT "amount")` -- a different metric published
+    under this contract's citation.
+    """
+    sql = compile_query(_TWO_COLUMN_RATIO).sql
+    assert 'sum("amount")' in sql
+    assert 'count(DISTINCT "order_id")' in sql
+
+
+def test_a_base_aggregate_honors_its_declared_column() -> None:
+    contract = {
+        "name": "DistinctOrders",
+        "binds_to": {
+            "gold_table": "gold.fct_orders",
+            "columns": ["amount", "order_id"],
+        },
+        "definition": {
+            "kind": "base",
+            "aggregation": "distinct_count",
+            "source": {"table": "gold.fct_orders", "column": "order_id"},
+        },
+    }
+    assert 'count(DISTINCT "order_id")' in compile_query(contract).sql
+
+
+def test_two_column_sides_that_declare_no_column_refuse() -> None:
+    """Neither side says which column, and picking one would be inventing a metric."""
+    contract = {
+        **_TWO_COLUMN_RATIO,
+        "definition": {
+            "numerator": {"aggregation": "sum"},
+            "denominator": {"aggregation": "distinct_count"},
+        },
+    }
+    with pytest.raises(ReportError, match="both sides of the ratio aggregate a column"):
+        compile_query(contract)
+
+
+def test_a_column_outside_the_approved_binding_refuses() -> None:
+    """A contract does not get to widen its own binds_to on the way to a report."""
+    contract = {
+        **_TWO_COLUMN_RATIO,
+        "definition": {
+            "numerator": {
+                "aggregation": "sum",
+                "source": {"table": "gold.fct_orders", "column": "margin"},
+            },
+            "denominator": {"aggregation": "count_rows"},
+        },
+    }
+    with pytest.raises(ReportError, match="not in its binds_to.columns"):
+        compile_query(contract)
+
+
+def test_a_source_table_that_is_not_the_bound_table_refuses() -> None:
+    """One statement reads one table; a second table cannot be honored silently."""
+    contract = {
+        **_TWO_COLUMN_RATIO,
+        "definition": {
+            "numerator": {
+                "aggregation": "sum",
+                "source": {"table": "gold.fct_returns", "column": "amount"},
+            },
+            "denominator": {"aggregation": "count_rows"},
+        },
+    }
+    with pytest.raises(ReportError, match="binds_to.gold_table"):
+        compile_query(contract)
+
+
+def test_a_single_column_side_still_falls_back_to_the_binding() -> None:
+    """AvgTransactionValue's shape: SUM over count_rows, no source block anywhere.
+
+    Only one side needs a column, so the bound column is unambiguous and the
+    shipped contract keeps rendering.
+    """
+    query = compile_query(_committed("AvgTransactionValue"))
+    assert 'sum("total_spent")' in query.sql
 
 
 def test_an_average_divides_but_is_not_a_rate() -> None:

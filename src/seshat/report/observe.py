@@ -203,7 +203,7 @@ def _gold_table(contract: Mapping[str, object], dialect: Dialect) -> str:
     )
 
 
-def _bound_column(contract: Mapping[str, object], dialect: Dialect) -> str:
+def _bound_columns(contract: Mapping[str, object]) -> list[str]:
     binds_to = contract.get("binds_to")
     columns = binds_to.get("columns") if isinstance(binds_to, dict) else None
     if not isinstance(columns, list) or not columns:
@@ -211,7 +211,72 @@ def _bound_column(contract: Mapping[str, object], dialect: Dialect) -> str:
             f"contract {_name(contract)!r} needs a bound column in "
             "binds_to.columns to aggregate"
         )
-    return dialect.quote_ident(str(columns[0]), context="report gold column")
+    return [str(column) for column in columns]
+
+
+def _bound_column(contract: Mapping[str, object], dialect: Dialect) -> str:
+    return dialect.quote_ident(
+        _bound_columns(contract)[0], context="report gold column"
+    )
+
+
+def _declared_column(block: object, contract: Mapping[str, object]) -> str | None:
+    """The column an aggregation declares for ITSELF, or None when it declares none.
+
+    ``templates/metric-contract.yaml`` gives every aggregation -- a base one and
+    each side of a ratio -- an optional ``source: {table, column}``. Reading it is
+    what lets a ratio whose sides aggregate different columns compile as written;
+    checking it against ``binds_to`` is what stops a contract widening its own
+    approved binding on the way into a report.
+    """
+    if not isinstance(block, dict):
+        return None
+    source = block.get("source")
+    if source is None:
+        return None
+    if not isinstance(source, dict):
+        raise ReportError(
+            f"contract {_name(contract)!r} has a non-mapping `source`; a source that "
+            "cannot be read cannot be checked against binds_to"
+        )
+    _assert_declared_table(source, contract)
+    column = source.get("column")
+    if column is None:
+        return None
+    return _bound_name(str(column), contract)
+
+
+def _bound_name(column: str, contract: Mapping[str, object]) -> str:
+    """A declared column is only usable if the approved binding covers it."""
+    declared = _bound_columns(contract)
+    if column not in declared:
+        raise ReportError(
+            f"contract {_name(contract)!r} aggregates {column!r}, which is not in its "
+            f"binds_to.columns {declared}; the binding is what the citation approves"
+        )
+    return column
+
+
+def _assert_declared_table(
+    source: Mapping[str, object], contract: Mapping[str, object]
+) -> None:
+    """A source may restate the bound gold table; it may not name a different one.
+
+    Both sides of a ratio are read in ONE statement (see :func:`_ratio_query`), so
+    a second table is not something this module can honor -- and quietly reading
+    the bound table instead would publish a number the contract did not describe.
+    """
+    table = source.get("table")
+    if table is None:
+        return
+    binds_to = contract.get("binds_to")
+    bound = binds_to.get("gold_table") if isinstance(binds_to, dict) else None
+    if str(table) != str(bound):
+        raise ReportError(
+            f"contract {_name(contract)!r} declares source.table {str(table)!r} but "
+            f"binds_to.gold_table {str(bound)!r}; one statement reads one table, and "
+            "the binding is what the citation approves"
+        )
 
 
 def _aggregation_name(
@@ -233,14 +298,34 @@ def _aggregate(
     template = _AGG_SQL[aggregation]
     if aggregation not in _NEEDS_COLUMN:
         return template
-    return template.format(col=_bound_column(contract, dialect))
+    declared = _declared_column(definition, contract)
+    if declared is None:
+        return template.format(col=_bound_column(contract, dialect))
+    return template.format(
+        col=dialect.quote_ident(declared, context="report gold column")
+    )
 
 
 def _predicate(
     raw: object, contract: Mapping[str, object], dialect: Dialect
 ) -> str | None:
-    """One filter entry as a SQL predicate, or None when there is no filter list."""
-    if not isinstance(raw, list) or not raw:
+    """The filter list as one SQL predicate, or None when there is no filter.
+
+    ``None`` and an empty list are the only two shapes that mean "no filter". Any
+    OTHER non-list -- a mapping, a bare string -- REFUSES: reading it as no filter
+    would compile an unfiltered aggregate under a citation that promises a filtered
+    one, and the contract inventory does not validate this shape.
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, list):
+        raise ReportError(
+            f"contract {_name(contract)!r} writes `filter` as a "
+            f"{type(raw).__name__}, not a list of {{column, op}} entries; refusing "
+            "rather than reading it as no filter, because a dropped filter changes "
+            "the number without changing the citation"
+        )
+    if not raw:
         return None
     predicates = [_one_predicate(entry, contract, dialect) for entry in raw]
     return " AND ".join(predicates)
@@ -316,9 +401,50 @@ def _side(
     predicate = _predicate(side.get("filter"), contract, dialect)
     if aggregation == "count_rows":
         return "count(*)" if predicate is None else dialect.count_where(predicate)
-    return _AGG_SQL[aggregation].format(
-        col=_restricted(_bound_column(contract, dialect), predicate)
-    )
+    column = _side_column(definition, which, contract, dialect)
+    return _AGG_SQL[aggregation].format(col=_restricted(column, predicate))
+
+
+def _side_column(
+    definition: Mapping[str, object],
+    which: str,
+    contract: Mapping[str, object],
+    dialect: Dialect,
+) -> str:
+    """The column this side aggregates: what it declares, else the bound column.
+
+    Falling back to the first bound column is only unambiguous while the OTHER
+    side needs no column of its own -- the shipped ``AvgTransactionValue`` (a SUM
+    over a count_rows) is exactly that shape, and it keeps working. When BOTH sides
+    aggregate a column and neither says which, the first bound column would be used
+    twice: ``SUM(amount) / DISTINCTCOUNT(transaction_id)`` would compile as
+    ``SUM(amount) / DISTINCTCOUNT(amount)`` and publish under the same citation. So
+    that refuses instead.
+    """
+    declared = _declared_column(definition.get(which), contract)
+    if declared is not None:
+        return dialect.quote_ident(declared, context="report gold column")
+    other = "denominator" if which == "numerator" else "numerator"
+    if _aggregates_an_undeclared_column(definition.get(other), contract):
+        raise ReportError(
+            f"contract {_name(contract)!r} {which} declares no source.column, and "
+            "both sides of the ratio aggregate a column. Give each side its own "
+            "`source: {column: ...}`: inferring both from binds_to.columns would "
+            "compile them against the SAME column and publish a different number "
+            "under this contract's citation."
+        )
+    return _bound_column(contract, dialect)
+
+
+def _aggregates_an_undeclared_column(
+    side: object, contract: Mapping[str, object]
+) -> bool:
+    """True when this side needs a column and does not say which one."""
+    if not isinstance(side, dict):
+        return False
+    if str(side.get("aggregation")) not in _NEEDS_COLUMN:
+        return False
+    return _declared_column(side, contract) is None
 
 
 def _restricted(column: str, predicate: str | None) -> str:
