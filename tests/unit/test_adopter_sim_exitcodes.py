@@ -4,21 +4,13 @@ import pytest
 
 from scripts.adopter_sim.cli import build_parser
 from scripts.adopter_sim.exitcodes import Exit, classify
+from tests.unit._adopter_sim_helpers import make_outcome
 
 pytestmark = pytest.mark.unit
 
 
 def _classify(**overrides) -> Exit:
-    base = {
-        "aborted_blindness": False,
-        "fixture_failed": False,
-        "harness_error": False,
-        "partial": False,
-        "confirmed_findings": 0,
-        "metric_out_of_band": False,
-    }
-    base.update(overrides)
-    return classify(**base)
+    return classify(make_outcome(**overrides))
 
 
 def test_clean_run_is_zero() -> None:

@@ -3,25 +3,13 @@ from __future__ import annotations
 import pytest
 
 from scripts.adopter_sim.evaluate import StepOutcome, cascade, evaluate_step
-from scripts.adopter_sim.model import NOT_EVALUABLE, Journey, JourneyStep
+from scripts.adopter_sim.model import NOT_EVALUABLE
 from scripts.adopter_sim.quorum import tally
+from tests.unit._adopter_sim_helpers import make_journey as _journey
+from tests.unit._adopter_sim_helpers import make_step as _step
+from tests.unit._adopter_sim_helpers import run_record
 
 pytestmark = pytest.mark.unit
-
-
-def _step(number: int, behavior: str | None, depends_on=()) -> JourneyStep:
-    return JourneyStep(
-        number=number,
-        title=f"step {number}",
-        prompt="do it",
-        command=None,
-        expected_behavior=behavior,
-        depends_on=tuple(depends_on),
-    )
-
-
-def _journey(steps) -> Journey:
-    return Journey(name="t", steps=tuple(steps))
 
 
 def test_matching_behavior_yields_no_finding() -> None:
@@ -115,9 +103,9 @@ def test_cascade_is_transitive() -> None:
 def test_two_of_three_confirms() -> None:
     journey = _journey([_step(5, "refuse")])
     runs = [
-        {"findings": [("outcome_mismatch", "built silver")], "evaluable": [5]},
-        {"findings": [("outcome_mismatch", "built silver")], "evaluable": [5]},
-        {"findings": [], "evaluable": [5]},
+        run_record([("outcome_mismatch", "built silver")], [5]),
+        run_record([("outcome_mismatch", "built silver")], [5]),
+        run_record([], [5]),
     ]
     verdicts = tally(journey, runs, single_run=False)
     assert [(v.status, v.seen) for v in verdicts] == [("confirmed", 2)]
@@ -126,9 +114,9 @@ def test_two_of_three_confirms() -> None:
 def test_one_of_three_is_flaky() -> None:
     journey = _journey([_step(5, "refuse")])
     runs = [
-        {"findings": [("outcome_mismatch", "built silver")], "evaluable": [5]},
-        {"findings": [], "evaluable": [5]},
-        {"findings": [], "evaluable": [5]},
+        run_record([("outcome_mismatch", "built silver")], [5]),
+        run_record([], [5]),
+        run_record([], [5]),
     ]
     verdicts = tally(journey, runs, single_run=False)
     assert verdicts[0].status == "flaky"
@@ -138,9 +126,9 @@ def test_one_of_three_is_flaky() -> None:
 def test_fewer_than_two_evaluable_runs_is_insufficient_data() -> None:
     journey = _journey([_step(5, "refuse")])
     runs = [
-        {"findings": [("outcome_mismatch", "x")], "evaluable": [5]},
-        {"findings": [], "evaluable": []},
-        {"findings": [], "evaluable": []},
+        run_record([("outcome_mismatch", "x")], [5]),
+        run_record([], []),
+        run_record([], []),
     ]
     verdicts = tally(journey, runs, single_run=False)
     assert verdicts[0].status == "insufficient_data"
@@ -148,7 +136,7 @@ def test_fewer_than_two_evaluable_runs_is_insufficient_data() -> None:
 
 def test_single_run_mode_labels_everything_advisory() -> None:
     journey = _journey([_step(5, "refuse")])
-    runs = [{"findings": [("outcome_mismatch", "x")], "evaluable": [5]}]
+    runs = [run_record([("outcome_mismatch", "x")], [5])]
     verdicts = tally(journey, runs, single_run=True)
     assert verdicts[0].status == "advisory"
 
@@ -158,9 +146,9 @@ def test_cascade_findings_never_reach_the_quorum() -> None:
     cannot manufacture a confirmed downstream finding."""
     journey = _journey([_step(3, "proceed"), _step(4, "refuse", [3])])
     runs = [
-        {"findings": [(3, "outcome_mismatch", "x")], "evaluable": [3]},
-        {"findings": [(3, "outcome_mismatch", "x")], "evaluable": [3]},
-        {"findings": [], "evaluable": [3, 4]},
+        run_record([(3, "outcome_mismatch", "x")], [3]),
+        run_record([(3, "outcome_mismatch", "x")], [3]),
+        run_record([], [3, 4]),
     ]
     verdicts = tally(journey, runs, single_run=False)
     assert [(v.step, v.status) for v in verdicts] == [(3, "confirmed")]

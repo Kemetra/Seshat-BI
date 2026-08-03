@@ -24,13 +24,14 @@ from scripts.adopter_sim.baseline import (
 from scripts.adopter_sim.blindness import assert_no_leak, run_pre_journey_assertions
 from scripts.adopter_sim.env import build_client_env
 from scripts.adopter_sim.evaluate import StepOutcome, cascade, evaluate_step
-from scripts.adopter_sim.exitcodes import Exit, classify
+from scripts.adopter_sim.exitcodes import Exit, RunOutcome, classify
 from scripts.adopter_sim.fixtures import assert_clean, assert_messy
 from scripts.adopter_sim.journey import load_journey
 from scripts.adopter_sim.metrics import TOLERANCE, median, normalise
 from scripts.adopter_sim.model import NOT_RUN, AdopterSimError, Journey
 from scripts.adopter_sim.quorum import tally
 from scripts.adopter_sim.workspace import (
+    WorkspaceRequest,
     materialize,
     new_run_id,
     resolve_root,
@@ -42,65 +43,59 @@ SEED_DIR = REPO_ROOT / "benchmark" / "journeys"
 BUNDLE_ROOT = REPO_ROOT / "integrations" / "claude-code" / "seshat-bi"
 
 
-def run_invocation(args: Namespace, driver: object | None = None) -> Exit:
-    journey = load_journey(SEED_DIR / f"{args.journey}.yaml")
-    started = time.monotonic()
+def _fail(code: Exit, exc: AdopterSimError, prefix: str = "") -> Exit:
+    print(f"[FAIL] {prefix}{exc}", flush=True)
+    return code
 
-    try:
-        _check_fixtures(args.datasets)
-    except AdopterSimError as exc:
-        print(f"[FAIL] {exc}", flush=True)
-        return Exit.FIXTURE_FAILED
 
-    partial = driver is None and not agent_mod.available()
-    if partial:
-        print(
-            "[SKIP] Claude Code CLI not available headless; agent-driven steps "
-            "will be recorded not_run and the invocation labelled partial",
-            flush=True,
-        )
-    active_driver = driver or (None if partial else agent_mod.ClaudeCodeDriver())
+def _resolve_driver(driver: object | None) -> tuple[object | None, bool]:
+    """The driver to use, and whether the invocation is therefore partial."""
+    if driver is not None:
+        return driver, False
+    if agent_mod.available():
+        return agent_mod.ClaudeCodeDriver(), False
+    print(
+        "[SKIP] Claude Code CLI not available headless; agent-driven steps will "
+        "be recorded not_run and the invocation labelled partial",
+        flush=True,
+    )
+    return None, True
 
-    try:
-        wheel = _build_wheel()
-    except AdopterSimError as exc:
-        print(f"[FAIL] {exc}", flush=True)
-        return Exit.HARNESS_ERROR
 
+def _gather_runs(
+    *,
+    journey: Journey,
+    wheel: Path,
+    driver: object | None,
+    args: Namespace,
+    raw_timings: dict[int, list[float]],
+    started: float,
+) -> tuple[list[dict[str, object]], bool]:
+    """Every (dataset, repeat) run, plus whether the ceiling truncated them."""
     runs: list[dict[str, object]] = []
-    raw_timings: dict[int, list[float]] = {}
-    try:
-        root = resolve_root()
-        for dataset in args.datasets:
-            for index in range(args.runs):
-                if time.monotonic() - started > args.ceiling:
-                    print(
-                        "[FAIL] invocation ceiling reached; run truncated",
-                        flush=True,
-                    )
-                    partial = True
-                    break
-                runs.append(
-                    _one_run(
-                        journey=journey,
-                        dataset=dataset,
-                        index=index,
-                        wheel=wheel,
-                        driver=active_driver,
-                        args=args,
-                        raw_timings=raw_timings,
-                        root=root,
-                    )
+    root = resolve_root()
+    for dataset in args.datasets:
+        for index in range(args.runs):
+            if time.monotonic() - started > args.ceiling:
+                print("[FAIL] invocation ceiling reached; run truncated", flush=True)
+                return runs, True
+            runs.append(
+                _one_run(
+                    journey=journey,
+                    dataset=dataset,
+                    index=index,
+                    wheel=wheel,
+                    driver=driver,
+                    args=args,
+                    raw_timings=raw_timings,
+                    root=root,
                 )
-    except AdopterSimError as exc:
-        print(f"[FAIL] blindness: {exc}", flush=True)
-        return Exit.BLINDNESS_ABORT
+            )
+    return runs, False
 
-    single_run = args.runs == 1
-    verdicts = tally(journey, runs, single_run=single_run)
-    confirmed = [v for v in verdicts if v.status == "confirmed"]
 
-    baseline = load_findings_baseline(findings_baseline_path(REPO_ROOT, journey.name))
+def _report_verdicts(journey_name: str, verdicts) -> None:
+    baseline = load_findings_baseline(findings_baseline_path(REPO_ROOT, journey_name))
     for row in diff_findings(verdicts, baseline):
         print(f"[{row.state.upper()}] step {row.step}: {row.kind}", flush=True)
     for verdict in verdicts:
@@ -112,33 +107,72 @@ def run_invocation(args: Namespace, driver: object | None = None) -> Exit:
         )
     if not verdicts:
         print("[OK] no findings", flush=True)
+    return None
 
+
+def _accept_baseline(
+    journey_name: str, verdicts, args: Namespace, *, partial: bool
+) -> None:
+    update_findings_baseline(
+        findings_baseline_path(REPO_ROOT, journey_name),
+        verdicts,
+        run_id=new_run_id(f"{journey_name}|accept"),
+        kit_version=_kit_version(),
+        invoked_by=args.invoked_by,
+        partial=partial,
+        single_run=args.runs == 1,
+        aborted=False,
+    )
+    print("[OK] baseline updated", flush=True)
+    return None
+
+
+def run_invocation(args: Namespace, driver: object | None = None) -> Exit:
+    journey = load_journey(SEED_DIR / f"{args.journey}.yaml")
+    started = time.monotonic()
+
+    try:
+        _check_fixtures(args.datasets)
+    except AdopterSimError as exc:
+        return _fail(Exit.FIXTURE_FAILED, exc)
+
+    active_driver, partial = _resolve_driver(driver)
+
+    try:
+        wheel = _build_wheel()
+    except AdopterSimError as exc:
+        return _fail(Exit.HARNESS_ERROR, exc)
+
+    raw_timings: dict[int, list[float]] = {}
+    try:
+        runs, truncated = _gather_runs(
+            journey=journey,
+            wheel=wheel,
+            driver=active_driver,
+            args=args,
+            raw_timings=raw_timings,
+            started=started,
+        )
+    except AdopterSimError as exc:
+        return _fail(Exit.BLINDNESS_ABORT, exc, prefix="blindness: ")
+    partial = partial or truncated
+
+    verdicts = tally(journey, runs, single_run=args.runs == 1)
+    _report_verdicts(journey.name, verdicts)
     metric_out_of_band = _report_timings(journey.name, raw_timings)
 
     if args.update_baseline:
         try:
-            update_findings_baseline(
-                findings_baseline_path(REPO_ROOT, journey.name),
-                verdicts,
-                run_id=new_run_id(f"{journey.name}|accept"),
-                kit_version=_kit_version(),
-                invoked_by=args.invoked_by,
-                partial=partial,
-                single_run=single_run,
-                aborted=False,
-            )
-            print("[OK] baseline updated", flush=True)
+            _accept_baseline(journey.name, verdicts, args, partial=partial)
         except AdopterSimError as exc:
-            print(f"[FAIL] {exc}", flush=True)
-            return Exit.HARNESS_ERROR
+            return _fail(Exit.HARNESS_ERROR, exc)
 
     return classify(
-        aborted_blindness=False,
-        fixture_failed=False,
-        harness_error=False,
-        partial=partial,
-        confirmed_findings=len(confirmed),
-        metric_out_of_band=metric_out_of_band,
+        RunOutcome(
+            partial=partial,
+            confirmed_findings=sum(1 for v in verdicts if v.status == "confirmed"),
+            metric_out_of_band=metric_out_of_band,
+        )
     )
 
 
@@ -186,11 +220,13 @@ def _one_run(
 ) -> dict[str, object]:
     run_id = new_run_id(f"{journey.name}|{dataset}|{index}")
     paths = materialize(
-        workspace=workspace_root(root, run_id),
-        wheel=wheel,
-        seed_dir=SEED_DIR,
-        dataset=dataset,
-        bundle_root=BUNDLE_ROOT,
+        WorkspaceRequest(
+            workspace=workspace_root(root, run_id),
+            wheel=wheel,
+            seed_dir=SEED_DIR,
+            dataset=dataset,
+            bundle_root=BUNDLE_ROOT,
+        )
     )
     client_env = build_client_env(
         workspace=paths.root,
@@ -210,6 +246,53 @@ def _one_run(
         [str(paths.venv_bin / "seshat"), "--version"], paths, client_env, args
     )
 
+    outcomes, transcript = _execute_steps(
+        journey=journey,
+        paths=paths,
+        client_env=client_env,
+        driver=driver,
+        args=args,
+        raw_timings=raw_timings,
+    )
+    assert_no_leak("\n".join(transcript), REPO_ROOT)
+
+    findings, evaluable = _collect_findings(journey, outcomes)
+    return {"findings": findings, "evaluable": evaluable, "calibration": calibration_ms}
+
+
+def _agent_step(step, paths, client_env, driver, args) -> tuple[StepOutcome, str]:
+    reply = driver.run(
+        step.prompt or "",
+        cwd=paths.root,
+        env=client_env,
+        timeout=args.agent_timeout,
+    )
+    return (
+        StepOutcome(step.number, reply.observed, reply.text, True, ""),
+        reply.text,
+    )
+
+
+def _cli_step(step, paths, client_env, args, raw_timings) -> tuple[StepOutcome, str]:
+    command = [str(paths.venv_bin / (step.command or ("seshat",))[0])]
+    command += list((step.command or ())[1:])
+    elapsed, output, ok = _time_cli(command, paths, client_env, args)
+    raw_timings.setdefault(step.number, []).append(elapsed)
+    return (
+        StepOutcome(step.number, "proceed" if ok else "error", output, ok, ""),
+        output,
+    )
+
+
+def _execute_steps(
+    *,
+    journey: Journey,
+    paths,
+    client_env: dict[str, str],
+    driver,
+    args: Namespace,
+    raw_timings: dict[int, list[float]],
+) -> tuple[dict[int, StepOutcome], list[str]]:
     outcomes: dict[int, StepOutcome] = {}
     transcript: list[str] = []
     for step in journey.steps:
@@ -219,28 +302,18 @@ def _one_run(
             )
             continue
         if step.agent_driven:
-            reply = driver.run(
-                step.prompt or "",
-                cwd=paths.root,
-                env=client_env,
-                timeout=args.agent_timeout,
-            )
-            transcript.append(reply.text)
-            outcomes[step.number] = StepOutcome(
-                step.number, reply.observed, reply.text, True, ""
-            )
-            continue
-        command = [str(paths.venv_bin / (step.command or ("seshat",))[0])]
-        command += list((step.command or ())[1:])
-        elapsed, output, ok = _time_cli(command, paths, client_env, args)
-        transcript.append(output)
-        raw_timings.setdefault(step.number, []).append(elapsed)
-        outcomes[step.number] = StepOutcome(
-            step.number, "proceed" if ok else "error", output, ok, ""
-        )
+            outcome, text = _agent_step(step, paths, client_env, driver, args)
+        else:
+            outcome, text = _cli_step(step, paths, client_env, args, raw_timings)
+        outcomes[step.number] = outcome
+        transcript.append(text)
+    return outcomes, transcript
 
-    assert_no_leak("\n".join(transcript), REPO_ROOT)
 
+def _collect_findings(
+    journey: Journey, outcomes: dict[int, StepOutcome]
+) -> tuple[list[tuple[int, str, str]], list[int]]:
+    """Findings and evaluable steps, skipping not_evaluable and not_run steps."""
     resolved = cascade(journey, outcomes)
     findings: list[tuple[int, str, str]] = []
     evaluable: list[int] = []
@@ -249,9 +322,11 @@ def _one_run(
         if resolved[step.number] != "ok" or outcome.observed == NOT_RUN:
             continue
         evaluable.append(step.number)
-        for finding in evaluate_step(step, outcome.observed, outcome.output):
-            findings.append((finding.step, finding.kind, finding.detail))
-    return {"findings": findings, "evaluable": evaluable, "calibration": calibration_ms}
+        findings.extend(
+            (finding.step, finding.kind, finding.detail)
+            for finding in evaluate_step(step, outcome.observed, outcome.output)
+        )
+    return findings, evaluable
 
 
 def _time_cli(

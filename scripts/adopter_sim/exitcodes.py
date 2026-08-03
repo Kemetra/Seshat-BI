@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import IntEnum
 
 
@@ -15,26 +16,26 @@ class Exit(IntEnum):
     FIXTURE_FAILED = 6
 
 
-def classify(
-    *,
-    aborted_blindness: bool,
-    fixture_failed: bool,
-    harness_error: bool,
-    partial: bool,
-    confirmed_findings: int,
-    metric_out_of_band: bool,
-) -> Exit:
+@dataclass(frozen=True)
+class RunOutcome:
+    """Everything that decides an invocation's exit code."""
+
+    aborted_blindness: bool = False
+    fixture_failed: bool = False
+    harness_error: bool = False
+    partial: bool = False
+    confirmed_findings: int = 0
+    metric_out_of_band: bool = False
+
+
+def classify(outcome: RunOutcome) -> Exit:
     """Highest-precedence condition wins; a partial run is never OK."""
-    if fixture_failed:
-        return Exit.FIXTURE_FAILED
-    if aborted_blindness:
-        return Exit.BLINDNESS_ABORT
-    if harness_error:
-        return Exit.HARNESS_ERROR
-    if confirmed_findings > 0:
-        return Exit.FINDINGS
-    if partial:
-        return Exit.PARTIAL
-    if metric_out_of_band:
-        return Exit.METRIC_OUT_OF_BAND
-    return Exit.OK
+    ranked = (
+        (outcome.fixture_failed, Exit.FIXTURE_FAILED),
+        (outcome.aborted_blindness, Exit.BLINDNESS_ABORT),
+        (outcome.harness_error, Exit.HARNESS_ERROR),
+        (outcome.confirmed_findings > 0, Exit.FINDINGS),
+        (outcome.partial, Exit.PARTIAL),
+        (outcome.metric_out_of_band, Exit.METRIC_OUT_OF_BAND),
+    )
+    return next((code for triggered, code in ranked if triggered), Exit.OK)

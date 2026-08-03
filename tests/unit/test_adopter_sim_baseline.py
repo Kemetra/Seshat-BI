@@ -13,23 +13,16 @@ from scripts.adopter_sim.baseline import (
     update_findings_baseline,
 )
 from scripts.adopter_sim.model import AdopterSimError
-from scripts.adopter_sim.quorum import QuorumVerdict
+from tests.unit._adopter_sim_helpers import make_verdict as _verdict
+from tests.unit._adopter_sim_helpers import write_findings_baseline
 
 pytestmark = pytest.mark.unit
 
 _REPO = Path(__file__).parents[2]
 
 
-def _verdict(step: int, kind: str, status: str = "confirmed") -> QuorumVerdict:
-    return QuorumVerdict(
-        step=step, kind=kind, detail="d", status=status, seen=2, evaluable=3
-    )
-
-
 def _baseline(tmp_path: Path, entries: list[dict[str, object]]) -> Path:
-    path = tmp_path / "first-hour.findings.json"
-    path.write_text(json.dumps({"version": 1, "findings": entries}), encoding="utf-8")
-    return path
+    return write_findings_baseline(tmp_path / "first-hour.findings.json", entries)
 
 
 def test_findings_baseline_is_tracked_and_timings_are_not(tmp_path: Path) -> None:

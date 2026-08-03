@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 from scripts.adopter_sim.env import assert_no_credentials
@@ -76,22 +76,41 @@ def assert_no_dev_modules(venv_python: Path) -> None:
     return None
 
 
+def _at_or_above(ancestor: Path, boundary: Path | None) -> bool:
+    """True once the walk has reached the boundary or passed above it."""
+    if boundary is None:
+        return False
+    return ancestor == boundary or ancestor in boundary.parents
+
+
+def _ancestors_below(start: Path, boundary: Path | None) -> Iterator[Path]:
+    """Ancestors of `start`, stopping before `boundary`."""
+    for ancestor in start.resolve().parents:
+        if _at_or_above(ancestor, boundary):
+            return
+        yield ancestor
+
+
+def _marker_in(directory: Path) -> str | None:
+    """The first dev marker present in `directory`, else None."""
+    return next(
+        (marker for marker in DEV_ANCESTOR_MARKERS if (directory / marker).exists()),
+        None,
+    )
+
+
 def _dirty_ancestor(start: Path, stop_at: Path | None) -> tuple[Path, str] | None:
-    """First ancestor at or above `start` holding a dev marker, else None.
+    """First ancestor above `start` holding a dev marker, else None.
 
     Walks up to but EXCLUDING `stop_at`. A caller passing `stop_at` must have
     proved that boundary clean itself (see `find_clean_root`), otherwise the
     check is only as strong as the boundary.
     """
     boundary = stop_at.resolve() if stop_at is not None else None
-    for ancestor in start.resolve().parents:
-        if boundary is not None and (
-            ancestor == boundary or ancestor in boundary.parents
-        ):
-            break
-        for marker in DEV_ANCESTOR_MARKERS:
-            if (ancestor / marker).exists():
-                return ancestor, marker
+    for ancestor in _ancestors_below(start, boundary):
+        marker = _marker_in(ancestor)
+        if marker is not None:
+            return ancestor, marker
     return None
 
 
@@ -168,21 +187,24 @@ def declared_bundle_skills(bundle_manifest: Path) -> set[str]:
         raise AdopterSimError(
             f"cannot read bundle manifest {bundle_manifest}: {exc}"
         ) from exc
-    names: set[str] = set()
-    for entry in payload.get("entries") or ():
-        destination = str((entry or {}).get("destination") or "").replace("\\", "/")
-        parts = destination.split("/")
-        if len(parts) >= 2 and parts[0] == "skills" and parts[1]:
-            names.add(parts[1])
-    return names
+    return {
+        name
+        for entry in payload.get("entries") or ()
+        if (name := _skill_name(entry)) is not None
+    }
 
 
-def assert_profile_isolated(config_dir: Path, bundle_manifest: Path) -> None:
-    """Assertion 7: the on-disk profile equals the bundle, and nothing more.
+def _skill_name(entry: object) -> str | None:
+    """The skill a manifest entry belongs to, or None if it is not a skill file."""
+    destination = str((entry or {}).get("destination") or "").replace("\\", "/")  # type: ignore[union-attr]
+    parts = destination.split("/")
+    if len(parts) >= 2 and parts[0] == "skills" and parts[1]:
+        return parts[1]
+    return None
 
-    The inventory is read from disk. It is never obtained by asking the agent:
-    the system under test cannot certify its own isolation.
-    """
+
+def _assert_no_global_guidance(config_dir: Path) -> None:
+    """No user-global instruction file or rules tree inside the profile."""
     for marker in ("CLAUDE.md", "AGENTS.md"):
         if (config_dir / marker).is_file():
             raise AdopterSimError(
@@ -194,21 +216,38 @@ def assert_profile_isolated(config_dir: Path, bundle_manifest: Path) -> None:
             "agent config profile holds a rules directory; the client would "
             "inherit developer rules"
         )
-    expected = declared_bundle_skills(bundle_manifest)
+    return None
+
+
+def _on_disk_skills(config_dir: Path) -> set[str]:
+    """Skill names visible in the profile, read from the filesystem."""
     skills_dir = config_dir / "skills"
-    on_disk = (
-        {entry.name for entry in skills_dir.iterdir() if entry.is_dir()}
-        if skills_dir.is_dir()
-        else set()
-    )
+    if not skills_dir.is_dir():
+        return set()
+    return {entry.name for entry in skills_dir.iterdir() if entry.is_dir()}
+
+
+def _assert_inventory_matches(config_dir: Path, expected: set[str]) -> None:
+    on_disk = _on_disk_skills(config_dir)
     extra = sorted(on_disk - expected)
-    missing = sorted(expected - on_disk)
     if extra:
         raise AdopterSimError(
             f"agent profile exposes skills outside the bundle manifest: {extra}"
         )
+    missing = sorted(expected - on_disk)
     if missing:
         raise AdopterSimError(f"agent profile is missing bundle skills: {missing}")
+    return None
+
+
+def assert_profile_isolated(config_dir: Path, bundle_manifest: Path) -> None:
+    """Assertion 7: the on-disk profile equals the bundle, and nothing more.
+
+    The inventory is read from disk. It is never obtained by asking the agent:
+    the system under test cannot certify its own isolation.
+    """
+    _assert_no_global_guidance(config_dir)
+    _assert_inventory_matches(config_dir, declared_bundle_skills(bundle_manifest))
     return None
 
 

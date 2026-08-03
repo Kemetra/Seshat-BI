@@ -125,35 +125,52 @@ def _venv_paths(root: Path) -> tuple[Path, Path]:
     return venv_bin, venv_bin / python_name
 
 
-def materialize(
-    *,
-    workspace: Path,
-    wheel: Path,
-    seed_dir: Path,
-    dataset: str,
-    bundle_root: Path,
-) -> WorkspacePaths:
+@dataclass(frozen=True)
+class WorkspaceRequest:
+    """What one workspace needs to exist: where, from which wheel and seed."""
+
+    workspace: Path
+    wheel: Path
+    seed_dir: Path
+    dataset: str
+    bundle_root: Path
+
+
+def _install_venv(workspace: Path) -> tuple[Path, Path]:
+    venv_bin, venv_python = _venv_paths(workspace)
+    _run([sys.executable, "-m", "venv", str(workspace / ".venv")])
+    return venv_bin, venv_python
+
+
+def _copy_client_surface(request: WorkspaceRequest) -> Path:
+    """The dataset and the client's own CLAUDE.md -- nothing else."""
+    data_dir = request.workspace / "data"
+    data_dir.mkdir()
+    shutil.copy2(
+        request.seed_dir / "datasets" / request.dataset / "orders.csv",
+        data_dir / "orders.csv",
+    )
+    shutil.copy2(request.seed_dir / "CLIENT-RULES.md", request.workspace / "CLAUDE.md")
+    return data_dir
+
+
+def materialize(request: WorkspaceRequest) -> WorkspacePaths:
     """Create the workspace, install the wheel, copy only the shipped surface."""
+    workspace = request.workspace
     assert_path_budget(workspace)
     if workspace.exists():
         shutil.rmtree(workspace)
     workspace.mkdir(parents=True)
     (workspace / ".tmp").mkdir()
 
-    venv_bin, venv_python = _venv_paths(workspace)
-    _run([sys.executable, "-m", "venv", str(workspace / ".venv")])
-    _run([str(venv_python), "-m", "pip", "install", "--quiet", str(wheel)])
+    venv_bin, venv_python = _install_venv(workspace)
+    _run([str(venv_python), "-m", "pip", "install", "--quiet", str(request.wheel)])
 
-    data_dir = workspace / "data"
-    data_dir.mkdir()
-    shutil.copy2(
-        seed_dir / "datasets" / dataset / "orders.csv", data_dir / "orders.csv"
-    )
-    shutil.copy2(seed_dir / "CLIENT-RULES.md", workspace / "CLAUDE.md")
+    data_dir = _copy_client_surface(request)
 
     config_dir = workspace / ".agent"
     config_dir.mkdir()
-    copy_bundle(bundle_root, config_dir)
+    copy_bundle(request.bundle_root, config_dir)
 
     _run(["git", "init", "--quiet"], cwd=workspace)
     return WorkspacePaths(

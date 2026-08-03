@@ -61,6 +61,22 @@ def diff_findings(
     return tuple(rows)
 
 
+def _assert_acceptable(
+    *, partial: bool, single_run: bool, aborted: bool, invoked_by: str
+) -> None:
+    """Refusal conditions, so a hand-wave cannot become accepted state."""
+    refusals = (
+        (partial, "the run was partial"),
+        (single_run, "--runs 1 findings are not reproduced"),
+        (aborted, "the run aborted on an assertion or fixture self-test"),
+        (not invoked_by.strip(), "no invoking human named"),
+    )
+    for triggered, reason in refusals:
+        if triggered:
+            raise AdopterSimError(f"refusing baseline update: {reason}")
+    return None
+
+
 def update_findings_baseline(
     path: Path,
     verdicts: Sequence[QuorumVerdict],
@@ -76,20 +92,12 @@ def update_findings_baseline(
 
     Refusal conditions exist so a hand-wave cannot become accepted state.
     """
-    if partial:
-        raise AdopterSimError("refusing baseline update: the run was partial")
-    if single_run:
-        raise AdopterSimError(
-            "refusing baseline update: --runs 1 findings are not reproduced"
-        )
-    if aborted:
-        raise AdopterSimError(
-            "refusing baseline update: the run aborted on an assertion or "
-            "fixture self-test"
-        )
-    if not invoked_by.strip():
-        raise AdopterSimError("refusing baseline update: no invoking human named")
-
+    _assert_acceptable(
+        partial=partial,
+        single_run=single_run,
+        aborted=aborted,
+        invoked_by=invoked_by,
+    )
     payload = {
         "version": 1,
         "provenance": {

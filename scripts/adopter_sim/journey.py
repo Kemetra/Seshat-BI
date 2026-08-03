@@ -33,37 +33,56 @@ def load_journey(path: Path) -> Journey:
     return Journey(name=name, steps=steps)
 
 
-def _step(entry: object, path: Path) -> JourneyStep:
-    if not isinstance(entry, dict):
-        raise AdopterSimError(f"journey {path} has a non-mapping step")
+def _identity(entry: dict, path: Path) -> tuple[int, str]:
     number = entry.get("number")
     title = entry.get("title")
     if not isinstance(number, int) or not isinstance(title, str):
         raise AdopterSimError(f"journey {path} step needs int number and str title")
+    return number, title
+
+
+def _action(entry: dict, number: int) -> tuple[str | None, tuple[str, ...] | None]:
+    """Exactly one of prompt (agent-driven) or command (CLI)."""
     prompt = entry.get("prompt")
     command = entry.get("command")
     if prompt is None and command is None:
         raise AdopterSimError(f"step {number} needs a prompt or command")
     if prompt is not None and command is not None:
         raise AdopterSimError(f"step {number} has both a prompt and a command")
+    return prompt, tuple(command) if command is not None else None
+
+
+def _behavior(entry: dict, number: int) -> str | None:
     behavior = entry.get("expected_behavior")
     if behavior is not None and behavior not in EXPECTED_BEHAVIORS:
         raise AdopterSimError(
             f"step {number} expected_behavior {behavior!r} is outside the "
             f"categorical set {sorted(EXPECTED_BEHAVIORS)}"
         )
+    return behavior
+
+
+def _depends_on(entry: dict, number: int) -> tuple[int, ...]:
     depends_on = entry.get("depends_on", [])
     if not isinstance(depends_on, list) or not all(
         isinstance(item, int) for item in depends_on
     ):
         raise AdopterSimError(f"step {number} depends_on must be a list of ints")
+    return tuple(depends_on)
+
+
+def _step(entry: object, path: Path) -> JourneyStep:
+    if not isinstance(entry, dict):
+        raise AdopterSimError(f"journey {path} has a non-mapping step")
+    number, title = _identity(entry, path)
+    prompt, command = _action(entry, number)
     return JourneyStep(
         number=number,
         title=title,
         prompt=prompt,
-        command=tuple(command) if command is not None else None,
-        expected_behavior=behavior,
-        depends_on=tuple(depends_on),
+        command=command,
+        expected_behavior=_behavior(entry, number),
+        depends_on=_depends_on(entry, number),
     )
 
 
