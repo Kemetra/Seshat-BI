@@ -131,3 +131,10 @@ reports/dashboard/
 # excerpts/ samples are committed; the ~5,000-line output is not (the largest
 # committed data fixture in this repo is 1,801 bytes -- see spec 137 research R3).
 tests/fixtures/finance_gl/generated/
+
+# Adopter Sim (blind client sandbox): per-run evidence and machine-local
+# timings. The tracked record is benchmark/journeys/baseline/*.findings.json;
+# timings are machine-dependent and would make any other machine a permanent
+# false regression (same reasoning as .seshat/watch/ above).
+benchmark/journeys/runs/
+.seshat/adopter-sim/
