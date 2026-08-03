@@ -24,59 +24,11 @@ from seshat.cli.commands.report import (
 )
 from seshat.report.model import ReportError
 from seshat.report.plan import load_figure_plan
+from tests.unit._report_helpers import workspace as _workspace
 
 pytestmark = pytest.mark.unit
 
 _REPO = Path(__file__).parents[2]
-
-_LAYOUT = {
-    "version": 1,
-    "cover_title_code": "cover.board_pack",
-    "sections": [
-        {
-            "section_id": "headline",
-            "order": 1,
-            "heading_code": "section.headline",
-            "visual_ids": ["v1"],
-            "page_break_before": False,
-        }
-    ],
-}
-
-
-def _workspace(tmp_path: Path, *, status: str = "pass"):
-    """The minimum an approved table needs on disk."""
-    table = "demo_table"
-    mappings = tmp_path / "mappings" / table
-    (mappings / "design").mkdir(parents=True)
-    (mappings / "metrics").mkdir(parents=True)
-    (mappings / "readiness-status.yaml").write_text(
-        yaml.safe_dump(
-            {"table": table, "stages": {"dashboard_ready": {"status": status}}}
-        ),
-        encoding="utf-8",
-    )
-    (mappings / "design" / "report-layout.yaml").write_text(
-        yaml.safe_dump(_LAYOUT, sort_keys=False), encoding="utf-8"
-    )
-    observations = tmp_path / "obs.yaml"
-    observations.write_text(
-        yaml.safe_dump(
-            {
-                "observations": [
-                    {
-                        "visual_id": "v1",
-                        "contract_id": "TotalSales",
-                        "unit_kind": "currency",
-                        "value": "1",
-                    }
-                ]
-            }
-        ),
-        encoding="utf-8",
-    )
-    return table, observations
-
 
 # --- increment B: figures from gold -----------------------------------------
 

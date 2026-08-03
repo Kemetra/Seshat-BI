@@ -16,62 +16,11 @@ from seshat.cli.commands.report import (
 )
 from seshat.report.gate import assert_renderable, stage_status
 from seshat.report.model import ReportError
+from tests.unit._report_helpers import workspace as _workspace
 
 pytestmark = pytest.mark.unit
 
 _REPO = Path(__file__).parents[2]
-
-_LAYOUT = {
-    "version": 1,
-    "cover_title_code": "cover.board_pack",
-    "sections": [
-        {
-            "section_id": "headline",
-            "order": 1,
-            "heading_code": "section.headline",
-            "visual_ids": ["v1"],
-            "page_break_before": False,
-        }
-    ],
-}
-
-
-def _workspace(tmp_path: Path, *, status: str = "pass", contracts=("TotalSales",)):
-    table = "demo_table"
-    mappings = tmp_path / "mappings" / table
-    (mappings / "design").mkdir(parents=True)
-    (mappings / "metrics").mkdir(parents=True)
-    for name in contracts:
-        (mappings / "metrics" / f"{name}.yaml").write_text("id: x\n", encoding="utf-8")
-    (mappings / "readiness-status.yaml").write_text(
-        yaml.safe_dump(
-            {"table": table, "stages": {"dashboard_ready": {"status": status}}}
-        ),
-        encoding="utf-8",
-    )
-    (mappings / "design" / "report-layout.yaml").write_text(
-        yaml.safe_dump(_LAYOUT, sort_keys=False), encoding="utf-8"
-    )
-    observations = tmp_path / "obs.yaml"
-    observations.write_text(
-        yaml.safe_dump(
-            {
-                "observations": [
-                    {
-                        "visual_id": "v1",
-                        "contract_id": "TotalSales",
-                        "metric": "TotalSales",
-                        "unit_kind": "currency",
-                        "label": "Region A",
-                        "value": "1552071",
-                    }
-                ]
-            },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
-    )
-    return table, observations
 
 
 def _args(tmp_path: Path, table: str, observations: Path, fmt: str = "html"):
