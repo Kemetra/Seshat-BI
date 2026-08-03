@@ -61,6 +61,29 @@ def test_output_defaults_below_seshat_output() -> None:
     assert str(args.output).startswith(".seshat-output")
 
 
+def test_the_product_subcommand_carries_the_same_flags(tmp_path: Path) -> None:
+    """`seshat report` is what an adopter types, so it is what has to accept these.
+
+    The two parsers share ONE definition (`parser_core.add_report_arguments`), but
+    every other test here reaches the flags through `build_report_parser()`. A
+    field the subcommand did not create would leave `_figure_source_faults()`
+    raising AttributeError on the path nobody tested.
+    """
+    from seshat.cli import _build_parser
+
+    plan = tmp_path / "plan.yaml"
+    subcommand = _build_parser().parse_args(
+        ["report", "--table", "t", "--format", "html", "--from-gold"]
+        + ["--figure-plan", str(plan), "--dsn", "postgresql://h/d"]
+    )
+    standalone = build_report_parser().parse_args(
+        ["--table", "t", "--format", "html", "--from-gold"]
+        + ["--figure-plan", str(plan), "--dsn", "postgresql://h/d"]
+    )
+    for field in ("table", "format", "from_gold", "figure_plan", "dsn"):
+        assert getattr(subcommand, field) == getattr(standalone, field)
+
+
 def test_missing_readiness_file_is_not_a_pass(tmp_path: Path) -> None:
     """Absence of evidence is not evidence of approval."""
     assert stage_status(tmp_path, "absent_table") == "not_started"
