@@ -1,0 +1,6 @@
+transaction_id,order_date,line_amount,customer_contact
+T1001,2026-01-04,120.50,contact-0001
+T1002,2026-01-05,84.00,contact-0002
+T1003,2026-01-05,15.75,contact-0003
+T1004,2026-01-06,220.00,contact-0004
+T1005,2026-01-07,63.25,contact-0005
