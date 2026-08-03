@@ -53,8 +53,14 @@ PDF_SURFACE_VERSION = "seshat.report.pdf.v1"
 PRINT_TEMPLATE_NAME = "report.pdf.html.j2"
 PRINT_STYLESHEET_NAME = "report.print.css"
 
-# Markers a tagged PDF carries. Absent, a screen reader has no structure tree.
-_TAG_MARKERS = (b"/StructTreeRoot", b"/Marked")
+# The structure tree itself. A screen reader has nothing to navigate without it,
+# so this is required on its own rather than as one of a set of alternatives:
+# `/Marked` is a claim, `/StructTreeRoot` is the thing being claimed.
+_STRUCTURE_MARKERS = (b"/StructTreeRoot",)
+# The marked-content flag, which has to be TRUE. `/Marked false` is a printer
+# stating that it did NOT mark the content, and reading it as tagged would accept
+# an inaccessible document on the strength of the word appearing in the bytes.
+_MARKED_MARKERS = (b"/Marked true", b"/Marked  true", b"/Marked\ntrue")
 # Markers an embedded font program carries, in any of the accepted forms.
 _FONT_MARKERS = (b"/FontFile", b"/FontFile2", b"/FontFile3")
 
@@ -63,9 +69,15 @@ _FONT_MARKERS = (b"/FontFile", b"/FontFile2", b"/FontFile3")
 # rather than another branch in the assertion.
 _REQUIREMENTS: tuple[tuple[tuple[bytes, ...], str], ...] = (
     (
-        _TAG_MARKERS,
-        "PDF is not tagged: it carries no structure tree, so a screen reader "
-        "cannot read it. Refusing rather than shipping it.",
+        _STRUCTURE_MARKERS,
+        "PDF carries no structure tree (/StructTreeRoot): a screen reader has "
+        "nothing to navigate. Refusing rather than shipping it.",
+    ),
+    (
+        _MARKED_MARKERS,
+        "PDF does not declare its content marked (/Marked true): the structure "
+        "tree is present but the document does not claim to use it, which is how "
+        "a regressed printer produces an inaccessible PDF that looks tagged.",
     ),
     (
         _FONT_MARKERS,

@@ -55,6 +55,27 @@ def _recorded(stage: object) -> str:
     return str(stage or "not_started")
 
 
+def stage_evidence(repo_root: Path, table: str) -> tuple[str, ...]:
+    """The evidence recorded beside the gating stage's status.
+
+    A bare ``dashboard_ready: pass`` token records no evidence at all, and neither
+    does a mapping with an empty ``evidence`` list. Both come back empty here.
+    """
+    path = readiness_path(repo_root, table)
+    if not path.is_file():
+        return ()
+    stages = _payload(path).get("stages")
+    if not isinstance(stages, dict):
+        return ()
+    stage = stages.get(REQUIRED_STAGE)
+    if not isinstance(stage, dict):
+        return ()
+    evidence = stage.get("evidence")
+    if not isinstance(evidence, list):
+        return ()
+    return tuple(str(item) for item in evidence if item)
+
+
 def assert_renderable(repo_root: Path, table: str) -> None:
     status = stage_status(repo_root, table)
     if status != PASS:
@@ -62,4 +83,12 @@ def assert_renderable(repo_root: Path, table: str) -> None:
             f"{REQUIRED_STAGE} is {status!r} for {table!r}, not {PASS!r}. These "
             "surfaces render an APPROVED design, so the design must be approved "
             "first -- run the dashboard design and review flow, then retry."
+        )
+    if not stage_evidence(repo_root, table):
+        raise ReportError(
+            f"{REQUIRED_STAGE} is {PASS!r} for {table!r} but records no evidence. A "
+            "status with nothing behind it is not an approval under the readiness "
+            "contract -- a bare `pass` token, or an empty evidence list, is how an "
+            "unreviewed design ends up on a board's desk. Record the evidence that "
+            "the design review actually happened, then retry."
         )

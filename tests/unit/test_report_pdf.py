@@ -164,7 +164,7 @@ def test_untagged_pdf_is_refused(tmp_path: Path) -> None:
     from seshat.report.pdf import PdfReportRenderer
 
     bundle, layout = _artifacts(tmp_path)
-    with pytest.raises(ReportError, match="not tagged"):
+    with pytest.raises(ReportError, match="no structure tree"):
         PdfReportRenderer(FakePrinter(_UNTAGGED)).render(bundle, layout, "en")
 
 
@@ -205,3 +205,36 @@ def test_chromium_adapter_reports_a_missing_browser_clearly() -> None:
     # Content is SET on the page, never navigated to, so nothing is fetched. A
     # mention in a comment is inert; only a real call would defeat this.
     assert ".goto(" not in source
+
+
+def test_a_marked_false_pdf_is_refused(tmp_path: Path) -> None:
+    """`/Marked false` is a printer stating it did NOT mark the content.
+
+    Reading it as tagged accepts an inaccessible document on the strength of the
+    word appearing in the bytes.
+    """
+    from seshat.report.model import ReportError
+    from seshat.report.pdf import assert_publishable
+
+    lying = (
+        b"%PDF-1.7\n/StructTreeRoot 1 0 R\n/MarkInfo<</Marked false>>/FontFile2 2 0 R"
+    )
+    with pytest.raises(ReportError, match="does not declare its content marked"):
+        assert_publishable(lying)
+
+
+def test_a_structure_tree_alone_is_not_enough(tmp_path: Path) -> None:
+    from seshat.report.model import ReportError
+    from seshat.report.pdf import assert_publishable
+
+    with pytest.raises(ReportError, match="does not declare its content marked"):
+        assert_publishable(b"%PDF-1.7\n/StructTreeRoot 1 0 R\n/FontFile2 2 0 R")
+
+
+def test_a_marked_flag_alone_is_not_enough() -> None:
+    """The flag is a claim; the structure tree is the thing being claimed."""
+    from seshat.report.model import ReportError
+    from seshat.report.pdf import assert_publishable
+
+    with pytest.raises(ReportError, match="no structure tree"):
+        assert_publishable(b"%PDF-1.7\n/MarkInfo<</Marked true>>/FontFile2 2 0 R")

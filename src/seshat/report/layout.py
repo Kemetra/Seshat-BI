@@ -59,7 +59,30 @@ def load_layout(path: Path) -> ReportLayout:
     cover = _cover_title_code(raw, path)
     sections = tuple(_section(entry, path) for entry in _raw_sections(raw, path))
     _assert_ordered(sections, path)
+    _assert_visuals_unique(sections, path)
     return ReportLayout(cover_title_code=cover, sections=sections)
+
+
+def _assert_visuals_unique(sections: tuple[LayoutSection, ...], path: Path) -> None:
+    """A visual id appears exactly once in the whole overlay.
+
+    A repeat within one section renders the same governed figure twice. A repeat
+    ACROSS sections is worse: the bundle indexes visual to section in one mapping,
+    so the figure lands in the last section that claimed it and silently vanishes
+    from the earlier one. Either way a typo relocates or duplicates an approved
+    number, which is exactly the kind of quiet wrong an overlay must not be able to
+    introduce.
+    """
+    seen: set[str] = set()
+    for section in sections:
+        for visual_id in section.visual_ids:
+            if visual_id in seen:
+                raise ReportError(
+                    f"layout {path} declares visual {visual_id!r} more than once. A "
+                    "visual belongs to exactly one section, or the figure is either "
+                    "rendered twice or silently moved to the last section claiming it."
+                )
+            seen.add(visual_id)
 
 
 def _document(path: Path) -> dict:

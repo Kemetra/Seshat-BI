@@ -108,3 +108,49 @@ def test_ungoverned_chart_kind_is_refused(tmp_path: Path) -> None:
     )
     with pytest.raises(ReportError, match="chart_kind"):
         load_layout(_write(tmp_path, text))
+
+
+def test_a_visual_repeated_in_one_section_is_refused(tmp_path: Path) -> None:
+    """It would render the same governed figure twice."""
+    path = tmp_path / "layout.yaml"
+    path.write_text(
+        """\
+version: 1
+cover_title_code: cover.x
+sections:
+  - section_id: a
+    order: 1
+    heading_code: section.a
+    visual_ids: [v1, v1]
+    page_break_before: false
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ReportError, match="more than once"):
+        load_layout(path)
+
+
+def test_a_visual_repeated_across_sections_is_refused(tmp_path: Path) -> None:
+    """Worse than a duplicate: the bundle maps visual to section once, so the
+    figure lands in the last section claiming it and vanishes from the first."""
+    path = tmp_path / "layout.yaml"
+    path.write_text(
+        """\
+version: 1
+cover_title_code: cover.x
+sections:
+  - section_id: a
+    order: 1
+    heading_code: section.a
+    visual_ids: [v1]
+    page_break_before: false
+  - section_id: b
+    order: 2
+    heading_code: section.b
+    visual_ids: [v1]
+    page_break_before: false
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ReportError, match="more than once"):
+        load_layout(path)

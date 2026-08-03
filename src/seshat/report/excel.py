@@ -30,6 +30,7 @@ statement: ``500.0`` and ``500.00`` are the same number and a different claim.
 from __future__ import annotations
 
 import io
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import xlsxwriter
@@ -98,6 +99,37 @@ def sheet_name(section_id: str) -> str:
     return cleaned[:_SHEET_NAME_LIMIT] or "section"
 
 
+def unique_sheet_names(section_ids: Sequence[str]) -> list[str]:
+    """One distinct tab per section, in order.
+
+    Normalising is lossy in three ways that all collide: forbidden characters map
+    to the same underscore (``sales/east`` and ``sales:east``), Excel matches tab
+    names case-insensitively, and names are truncated to 31 characters so long ids
+    can share a prefix. A collision raises ``DuplicateWorksheetName`` from
+    xlsxwriter and produces NO workbook at all, so the whole report is lost to a
+    section-naming coincidence.
+
+    The reserved provenance tab is claimed up front: a section called
+    ``Provenance`` would otherwise take the tab that records where the figures came
+    from, and the provenance write would be the one that failed.
+    """
+    names: list[str] = []
+    claimed = {_PROVENANCE_SHEET.casefold()}
+    for section_id in section_ids:
+        base = sheet_name(section_id)
+        candidate = base
+        suffix = 2
+        while candidate.casefold() in claimed:
+            # Trim the base so the disambiguating suffix cannot push the name past
+            # Excel's limit and re-collide.
+            tail = f"_{suffix}"
+            candidate = base[: _SHEET_NAME_LIMIT - len(tail)] + tail
+            suffix += 1
+        claimed.add(candidate.casefold())
+        names.append(candidate)
+    return names
+
+
 class ExcelReportRenderer:
     """Writes the workbook. Holds no state between renders."""
 
@@ -107,15 +139,17 @@ class ExcelReportRenderer:
         stream = io.BytesIO()
         workbook = xlsxwriter.Workbook(stream, dict(WORKBOOK_OPTIONS))
         try:
-            for section in build_sections(bundle, layout, language):
-                self._write_section(workbook, section)
+            views = build_sections(bundle, layout, language)
+            names = unique_sheet_names([view.section_id for view in views])
+            for view, name in zip(views, names, strict=True):
+                self._write_section(workbook, view, name)
             self._write_provenance(workbook, bundle)
         finally:
             workbook.close()
         return ExcelSurface(workbook_bytes=stream.getvalue(), language=language)
 
-    def _write_section(self, workbook, section) -> None:
-        sheet = workbook.add_worksheet(sheet_name(section.section_id))
+    def _write_section(self, workbook, section, name: str) -> None:
+        sheet = workbook.add_worksheet(name)
         for column, header in enumerate(_HEADERS):
             sheet.write_string(0, column, header)
         for row, cell in enumerate(section.cells, start=1):

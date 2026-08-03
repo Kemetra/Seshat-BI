@@ -48,21 +48,32 @@ def workspace(
     *,
     status: str = "pass",
     contracts: tuple[str, ...] = ("TotalSales",),
+    evidence: tuple[str, ...] = ("design review APPROVED by data_owner on 2026-06-25",),
 ) -> tuple[str, Path]:
     """An approved table on disk, plus an observations file for it.
 
     ``status`` writes the recorded ``dashboard_ready`` status verbatim, so a test
-    can set up a table the gate must refuse. ``contracts`` names the metric files to
-    create; passing ``()`` builds a table with no approved contracts at all.
+    can set up a table the gate must refuse. ``evidence`` likewise: passing ``()``
+    builds the status-with-nothing-behind-it case the gate now refuses.
+    ``contracts`` names the metric files to create; passing ``()`` builds a table
+    with no approved contracts at all.
     """
     mappings = tmp_path / "mappings" / TABLE
     (mappings / "design").mkdir(parents=True)
     (mappings / "metrics").mkdir(parents=True)
     for name in contracts:
-        (mappings / "metrics" / f"{name}.yaml").write_text("id: x\n", encoding="utf-8")
+        (mappings / "metrics" / f"{name}.yaml").write_text(
+            yaml.safe_dump({"name": name, "readiness": {"status": "pass"}}),
+            encoding="utf-8",
+        )
     (mappings / "readiness-status.yaml").write_text(
         yaml.safe_dump(
-            {"table": TABLE, "stages": {"dashboard_ready": {"status": status}}}
+            {
+                "table": TABLE,
+                "stages": {
+                    "dashboard_ready": {"status": status, "evidence": list(evidence)}
+                },
+            }
         ),
         encoding="utf-8",
     )

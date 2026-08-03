@@ -132,3 +132,45 @@ def test_sheet_name_is_made_safe() -> None:
     assert sheet_name("a/b:c") == "a_b_c"
     assert len(sheet_name("x" * 60)) == 31
     assert sheet_name("") == "section"
+
+
+# --- worksheet naming -------------------------------------------------------
+
+
+def test_sections_normalising_to_one_name_get_distinct_tabs() -> None:
+    """`sales/east` and `sales:east` both normalise to `sales_east`.
+
+    A collision raises DuplicateWorksheetName from xlsxwriter and produces NO
+    workbook, so the whole report is lost to a section-naming coincidence.
+    """
+    from seshat.report.excel import unique_sheet_names
+
+    names = unique_sheet_names(["sales/east", "sales:east", "sales*east"])
+    assert names[0] == "sales_east"
+    assert len(set(names)) == 3
+
+
+def test_case_only_variants_get_distinct_tabs() -> None:
+    """Excel matches tab names case-insensitively."""
+    from seshat.report.excel import unique_sheet_names
+
+    names = unique_sheet_names(["Mix", "mix"])
+    assert len({name.casefold() for name in names}) == 2
+
+
+def test_a_section_cannot_take_the_provenance_tab() -> None:
+    """Otherwise the sheet recording where the figures came from is the one lost."""
+    from seshat.report.excel import unique_sheet_names
+
+    assert unique_sheet_names(["Provenance"])[0].casefold() != "provenance"
+
+
+def test_long_ids_sharing_a_prefix_get_distinct_tabs() -> None:
+    """Names are truncated to 31 characters, so a shared prefix collides."""
+    from seshat.report.excel import unique_sheet_names
+
+    long_a = "a_very_long_section_identifier_one"
+    long_b = "a_very_long_section_identifier_two"
+    names = unique_sheet_names([long_a, long_b])
+    assert len(set(names)) == 2
+    assert all(len(name) <= 31 for name in names)

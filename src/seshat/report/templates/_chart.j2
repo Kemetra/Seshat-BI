@@ -7,10 +7,13 @@
    bundle -- axis labels are customer values -- so it travels through the
    environment's unconditional autoescaping exactly as a table cell does. There is
    no `|safe` here, which is what makes a category named `<script>` inert. #}
-{% macro chart(view) %}
+{# `anchor` is the SECTION id, not the chart kind. Two bar charts on one page both
+   emitted `title-bar`, so every aria-labelledby resolved to the first chart's
+   title and a screen reader announced the wrong accessible name for the rest. #}
+{% macro chart(view, anchor) %}
   <svg class="chart" viewBox="0 0 {{ view.width }} {{ view.height }}"
-       role="img" aria-labelledby="title-{{ view.kind }}">
-    <title id="title-{{ view.kind }}">{{ view.title_code }}</title>
+       role="img" aria-labelledby="title-{{ anchor }}">
+    <title id="title-{{ anchor }}">{{ view.title_code }}</title>
     <desc>{{ view.description_code }}</desc>
     {% for mark in view.marks %}
     <rect x="{{ mark.x }}" y="{{ mark.y }}"

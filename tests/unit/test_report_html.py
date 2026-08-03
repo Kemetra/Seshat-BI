@@ -166,3 +166,56 @@ def test_section_without_a_chart_kind_renders_tables_only(tmp_path: Path) -> Non
     document = HtmlReportRenderer().render(bundle, load_layout(plain), "en").document
     assert "<svg" not in document
     assert "1,552,071.00" in document
+
+
+def test_two_charts_get_distinct_accessible_titles(tmp_path: Path) -> None:
+    """A shared `title-bar` id makes every aria-labelledby resolve to the first
+    chart, so a screen reader announces the wrong name for the rest."""
+    from seshat.report.bundle import ApprovedDesign, build_bundle
+    from seshat.report.html import HtmlReportRenderer
+    from seshat.report.layout import load_layout
+
+    path = tmp_path / "layout.yaml"
+    path.write_text(
+        """\
+version: 1
+cover_title_code: cover.x
+sections:
+  - section_id: first
+    order: 1
+    heading_code: section.first
+    visual_ids: [a1, a2]
+    page_break_before: false
+    chart_kind: bar
+  - section_id: second
+    order: 2
+    heading_code: section.second
+    visual_ids: [b1, b2]
+    page_break_before: false
+    chart_kind: bar
+""",
+        encoding="utf-8",
+    )
+    layout = load_layout(path)
+    observations = [
+        {
+            "visual_id": vid,
+            "contract_id": "TotalSales",
+            "metric": "TotalSales",
+            "unit_kind": "currency",
+            "label": vid,
+            "value": Decimal(amount),
+        }
+        for vid, amount in (("a1", "10"), ("a2", "20"), ("b1", "30"), ("b2", "40"))
+    ]
+    bundle = build_bundle(
+        table="t",
+        generated_for="board",
+        design=ApprovedDesign(layout=layout, contracts={"TotalSales": "x.yaml"}),
+        observations=observations,
+    )
+    document = HtmlReportRenderer().render(bundle, layout, "en").document
+    assert 'id="title-first"' in document
+    assert 'id="title-second"' in document
+    assert document.count('aria-labelledby="title-first"') == 1
+    assert "title-bar" not in document

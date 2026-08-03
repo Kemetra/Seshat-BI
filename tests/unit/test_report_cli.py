@@ -14,7 +14,7 @@ from seshat.cli.commands.report import (
     load_observations,
     report_main,
 )
-from seshat.report.gate import assert_renderable, stage_status
+from seshat.report.gate import assert_renderable, stage_evidence, stage_status
 from seshat.report.model import ReportError
 from tests.unit._report_helpers import workspace as _workspace
 
@@ -181,3 +181,33 @@ def test_an_unapproved_contract_refuses_the_render(tmp_path: Path) -> None:
     pytest.importorskip("jinja2", reason="requires the `report` extra")
     table, observations = _workspace(tmp_path, contracts=("SomethingElse",))
     assert report_main(_args(tmp_path, table, observations)) == EXIT_REFUSED
+
+
+def test_a_pass_with_no_evidence_is_refused(tmp_path: Path) -> None:
+    """A status with nothing behind it is not an approval.
+
+    A bare `dashboard_ready: pass`, or a mapping whose evidence list is empty, is
+    how an unreviewed design reaches a board's desk.
+    """
+    table, _ = _workspace(tmp_path, evidence=())
+    assert stage_status(tmp_path, table) == "pass"
+    assert stage_evidence(tmp_path, table) == ()
+    with pytest.raises(ReportError, match="records no evidence"):
+        assert_renderable(tmp_path, table)
+
+
+def test_a_bare_pass_token_carries_no_evidence(tmp_path: Path) -> None:
+    path = tmp_path / "mappings" / "bare_table"
+    path.mkdir(parents=True)
+    (path / "readiness-status.yaml").write_text(
+        yaml.safe_dump({"stages": {"dashboard_ready": "pass"}}), encoding="utf-8"
+    )
+    assert stage_status(tmp_path, "bare_table") == "pass"
+    assert stage_evidence(tmp_path, "bare_table") == ()
+    with pytest.raises(ReportError, match="records no evidence"):
+        assert_renderable(tmp_path, "bare_table")
+
+
+def test_the_shipped_table_records_real_evidence() -> None:
+    """The stricter gate holds for the table the kit actually ships."""
+    assert len(stage_evidence(_REPO, "retail_store_sales")) >= 1
