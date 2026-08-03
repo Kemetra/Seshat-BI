@@ -95,15 +95,38 @@ Codex CLI `0.146.0`:
 
 Claude Code `2.1.220`:
 
-- local marketplace install: pass;
-- plugin discovery: `seshat-bi@seshat-bi-marketplace`, version `0.8.1`, enabled;
-- MCP discovery: `plugin:seshat-bi:seshat-governor` present; and
-- health/tool call: blocked because the fresh profile is not logged in. Claude
-  reported `Not logged in · Please run /login`; the health surface therefore
-  reported a closed connection and is not claimed as a pass.
+- isolated local marketplace install and plugin discovery: pass;
+- session-only `--plugin-dir` load from the standalone generated bundle: pass;
+- runtime discovery: `plugin:seshat-bi:seshat-governor` present;
+- `claude mcp list`: `Connected`;
+- `claude mcp get plugin:seshat-bi:seshat-governor`: `Connected`; and
+- external model-mediated tool call: not run. The execution boundary correctly
+  required destination-specific authorization before sending workspace-derived
+  status to the Claude subscription service.
 
-T021 requires a successful runtime tool call on both harnesses. Discovery alone is
-insufficient, so the task remains unchecked. Completion needs either an interactive
-login in each isolated profile or explicit permission to install the standalone
-plugin temporarily into each already-authenticated default profile. No credential
-was copied and no default profile was changed during this run.
+The first Claude health attempt reported a closed connection. Systematic diagnosis
+proved this was not a bundle or server defect: the acceptance virtual environment
+had been moved after installation, and its Windows `seshat.exe` console wrapper
+still embedded the old interpreter path. In that environment the wrapper exited 1
+with no output while `python -m seshat.cli --version` passed. A clean MCP-enabled
+environment created directly at its final path produced:
+
+```text
+seshat 0.8.1
+wrapper_exit=0
+initialize=pass protocol=2025-06-18
+tools_list=6
+tool_call=pass
+probe=pass
+```
+
+The raw MCP probe ran from the generated scratch workspace and called
+`seshat_get_status` successfully. It proves the server and workspace binding, but
+is not substituted for the still-required harness-mediated call.
+
+T021 requires a successful harness-mediated tool call on both clients. Registration,
+health, and a direct MCP call are insufficient, so the task remains unchecked.
+Completion now needs explicit authorization to send the fictional scratch
+workspace's categorical status to each external subscription service during one
+read-only acceptance turn. No credential was copied and no default profile was
+changed during this run.
