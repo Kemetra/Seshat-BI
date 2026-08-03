@@ -155,6 +155,28 @@ def assert_no_editable_path(venv_python: Path, repo_root: Path) -> None:
     return None
 
 
+def declared_bundle_skills(bundle_manifest: Path) -> set[str]:
+    """Skill names the bundle manifest declares, read from its `entries` list.
+
+    The exported manifest records every artifact as an entry with a `destination`
+    relative to the bundle root; skills are the first path segment under
+    `skills/`.
+    """
+    try:
+        payload = json.loads(bundle_manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise AdopterSimError(
+            f"cannot read bundle manifest {bundle_manifest}: {exc}"
+        ) from exc
+    names: set[str] = set()
+    for entry in payload.get("entries") or ():
+        destination = str((entry or {}).get("destination") or "").replace("\\", "/")
+        parts = destination.split("/")
+        if len(parts) >= 2 and parts[0] == "skills" and parts[1]:
+            names.add(parts[1])
+    return names
+
+
 def assert_profile_isolated(config_dir: Path, bundle_manifest: Path) -> None:
     """Assertion 7: the on-disk profile equals the bundle, and nothing more.
 
@@ -172,13 +194,7 @@ def assert_profile_isolated(config_dir: Path, bundle_manifest: Path) -> None:
             "agent config profile holds a rules directory; the client would "
             "inherit developer rules"
         )
-    try:
-        declared = json.loads(bundle_manifest.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise AdopterSimError(
-            f"cannot read bundle manifest {bundle_manifest}: {exc}"
-        ) from exc
-    expected = set(declared.get("skills") or [])
+    expected = declared_bundle_skills(bundle_manifest)
     skills_dir = config_dir / "skills"
     on_disk = (
         {entry.name for entry in skills_dir.iterdir() if entry.is_dir()}

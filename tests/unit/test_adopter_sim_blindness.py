@@ -10,6 +10,7 @@ from scripts.adopter_sim.blindness import (
     assert_no_leak,
     assert_outside_repo,
     assert_profile_isolated,
+    declared_bundle_skills,
     find_clean_root,
 )
 from scripts.adopter_sim.model import AdopterSimError
@@ -112,9 +113,22 @@ def _profile(tmp_path: Path, skills: list[str]) -> Path:
 
 
 def _manifest(tmp_path: Path, skills: list[str]) -> Path:
+    """Write a manifest in the real exported shape: entries with destinations."""
     path = tmp_path / "bundle-manifest.json"
-    path.write_text(json.dumps({"skills": skills}), encoding="utf-8")
+    entries = [{"destination": f"skills/{name}/SKILL.md"} for name in skills]
+    entries.append({"destination": ".claude-plugin/plugin.json"})
+    path.write_text(json.dumps({"entries": entries}), encoding="utf-8")
     return path
+
+
+def test_shipped_bundle_manifest_declares_skills() -> None:
+    manifest = (
+        Path(__file__).parents[2]
+        / "integrations/claude-code/seshat-bi/bundle-manifest.json"
+    )
+    declared = declared_bundle_skills(manifest)
+    assert declared, "the shipped bundle manifest declared no skills"
+    assert all("/" not in name for name in declared)
 
 
 def test_profile_matching_the_manifest_is_accepted(tmp_path: Path) -> None:
