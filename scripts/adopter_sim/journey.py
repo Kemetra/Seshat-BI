@@ -14,21 +14,34 @@ from scripts.adopter_sim.model import (
 )
 
 
-def load_journey(path: Path) -> Journey:
+def _document(path: Path) -> dict:
     try:
         raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError) as exc:
         raise AdopterSimError(f"cannot read journey {path}: {exc}") from exc
     if not isinstance(raw, dict):
         raise AdopterSimError(f"journey {path} is not a mapping")
+    return raw
+
+
+def _name(raw: dict, path: Path) -> str:
     name = raw.get("name")
     if not isinstance(name, str) or not name:
         raise AdopterSimError(f"journey {path} has no name")
+    return name
+
+
+def _raw_steps(raw: dict, path: Path) -> list:
     raw_steps = raw.get("steps")
     if not isinstance(raw_steps, list) or not raw_steps:
         raise AdopterSimError(f"journey {path} has no steps")
+    return raw_steps
 
-    steps = tuple(_step(entry, path) for entry in raw_steps)
+
+def load_journey(path: Path) -> Journey:
+    raw = _document(path)
+    name = _name(raw, path)
+    steps = tuple(_step(entry, path) for entry in _raw_steps(raw, path))
     _validate_dependencies(steps, path)
     return Journey(name=name, steps=steps)
 
