@@ -17,7 +17,6 @@ from pathlib import Path
 
 import pytest
 
-from seshat.report.html import SurfaceRenderFailed
 from tests.unit._report_helpers import vocabulary as _vocab
 
 pytestmark = pytest.mark.integration
@@ -256,7 +255,7 @@ def test_a_caveat_with_no_wording_refuses_rather_than_dropping_it(
     tmp_path: Path,
 ) -> None:
     """A silently dropped caveat is exactly the failure this closes."""
-    from seshat.report.html import HtmlReportRenderer
+    from seshat.report.html import HtmlReportRenderer, SurfaceRenderFailed
     from seshat.report.model import ReportError
     from seshat.report.vocabulary import Vocabulary
 
