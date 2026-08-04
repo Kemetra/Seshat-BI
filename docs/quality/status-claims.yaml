@@ -142,6 +142,6 @@ claims:
     claimed-status: "built"
   - id: "spec-138-portability-gate"
     doc: "specs/138-agent-driven-bundle/spec.md"
-    anchor: "the ten compass verbs ship\nbehind `portability-audit-v1`"
+    anchor: "the ten compass verbs ship behind\n`portability-audit-v1`"
     claimed-artifact: "src/seshat/portability_audit.py"
     claimed-status: "built"
