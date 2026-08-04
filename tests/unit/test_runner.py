@@ -111,17 +111,18 @@ def test_run_json_warning_only_exit_0_with_findings_present(capsys):
     json_code = run_json(rules, _ctx())
     doc = json.loads(capsys.readouterr().out)
     assert text_code == json_code == 0  # WARNING only -> 0
-    assert doc == {
-        "findings": [
-            {
-                "rule_id": "W1",
-                "severity": "warning",
-                "message": "heads up",
-                "locator": "f.sql:2",
-            }
-        ],
-        "exit_code": 0,
-    }
+    # Key set asserted explicitly so an UNintended payload key is still caught;
+    # "coverage" is the rule-coverage census (additive, never affects exit_code).
+    assert set(doc) == {"findings", "coverage", "exit_code"}
+    assert doc["findings"] == [
+        {
+            "rule_id": "W1",
+            "severity": "warning",
+            "message": "heads up",
+            "locator": "f.sql:2",
+        }
+    ]
+    assert doc["exit_code"] == 0
 
 
 @pytest.mark.unit
@@ -134,7 +135,12 @@ def test_run_json_empty_findings(capsys):
     rules = (RegisteredRule(id="C0", rule=clean, title="clean"),)
     assert run_json(rules, _ctx()) == 0
     doc = json.loads(capsys.readouterr().out)
-    assert doc == {"findings": [], "exit_code": 0}
+    assert set(doc) == {"findings", "coverage", "exit_code"}
+    assert doc["findings"] == []
+    assert doc["exit_code"] == 0
+    # No findings AND no declaration: the census says so rather than implying
+    # "verified clean", which is the whole point of the coverage surface.
+    assert [record["state"] for record in doc["coverage"]] == ["undeclared"]
 
 
 @pytest.mark.unit

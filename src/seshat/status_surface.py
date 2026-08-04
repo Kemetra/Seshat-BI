@@ -115,7 +115,29 @@ def _load_yaml_mapping(path: Path) -> dict | None:
     return data
 
 
-def build_status_projection(repo_root: Path | str = ".") -> dict:
+def _coverage_projection(root: Path) -> list[dict]:
+    """The rule-coverage census, computed LIVE -- never read from a stored file.
+
+    Computed rather than persisted on purpose. A committed census would become a
+    second source of truth that goes stale the moment a source map changes, and
+    would need its own freshness/pinning semantics; recomputing has no staleness
+    to reason about. Rules are pure by contract (``core.Rule``), so evaluating the
+    registry keeps this projection read-only.
+    """
+    import seshat.rules  # noqa: F401  -- side-effecting: fires @register decorators
+
+    from .cli import build_context
+    from .registry import all_rules
+    from .runner import coverage_census
+
+    ctx = build_context(root)
+    census = coverage_census(all_rules(), ctx, bootstrapped=True)
+    return [record.to_dict() for record in census]
+
+
+def build_status_projection(
+    repo_root: Path | str = ".", *, include_coverage: bool = False
+) -> dict:
     """Build the agent-control status projection for ``repo_root``.
 
     Globs ``mappings/*/readiness-status.yaml`` under ``repo_root``, projects each
@@ -123,6 +145,16 @@ def build_status_projection(repo_root: Path | str = ".") -> dict:
     returns ``{"tables": [...]}`` sorted by source path. Read-only: no writes, no
     DB, no network. An empty/absent ``mappings/`` projects as ``{"tables": []}``,
     not an error.
+
+    ``include_coverage`` adds a ``"coverage"`` key reporting whether each rule
+    actually ran, so an agent cannot read a stage as verified when the rules that
+    would have verified it never executed. It is OPT-IN and defaults False for two
+    reasons: the default projection stays byte-identical (no stage verdict moves),
+    and the census evaluates the whole rule registry, which this glob-only
+    projection otherwise never does.
+
+    Coverage NEVER changes a stage status, evidence list, or blocking reason --
+    making an unevaluated rule block a stage is a separate, owner-ratified step.
     """
     root = Path(repo_root)
     mappings_dir = root / "mappings"
@@ -135,4 +167,7 @@ def build_status_projection(repo_root: Path | str = ".") -> dict:
             source_path = status_path.relative_to(root).as_posix()
             tables.append(_project_table(data, source_path))
     tables.sort(key=lambda t: t["source_path"])
-    return {"tables": tables}
+    projection: dict = {"tables": tables}
+    if include_coverage:
+        projection["coverage"] = _coverage_projection(root)
+    return projection
