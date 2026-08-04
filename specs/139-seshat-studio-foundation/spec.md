@@ -13,6 +13,38 @@
      FR-036 still requires spec 138 to close and the sole active Spec Kit fence
      to point to this plan. -->
 
+### Owner amendment -- 2026-08-04 -- provider authentication de-risked
+
+- **ruled_by**: Ahmed Shaaban (owner)
+- **ruled_on**: 2026-08-04
+
+A pre-implementation review found that this package analysed provider
+authentication compliance for the provider it EXCLUDED (Claude, FR-029) and assumed
+the answer for the provider it DEPENDS ON (Codex, FR-011). The evidence runs the
+other way: OpenAI's own Codex documentation directs programmatic use to API keys and
+access tokens rather than subscription sign-in, and an OpenAI maintainer asked this
+exact question in `openai/codex` discussion 8338 declined to clarify it. See the new
+"Provider authentication compliance -- OPEN QUESTION" section for the full record.
+
+The owner authorized two changes on that basis:
+
+1. The open question is RECORDED rather than resolved. No requirement asserts that
+   the subscription path is approved, and closing the question stays a named-human
+   action supported by the primary terms text.
+2. **FR-013 is relaxed.** It previously forbade the API-key path outright, which made
+   one unresolved vendor question able to void the entire three-spec program. It now
+   forbids only what the decision was actually protecting against -- a SILENT or
+   automatic switch to billed access -- and new FR-013a permits an explicitly
+   operator-configured API-key or access-token bridge as an alternate, clearly
+   labelled mode. Subscription sign-in remains the default and the only path SC-010
+   certifies.
+
+This amendment changes no architecture: `AgentBridge` (FR-014) was already
+provider-neutral with a deterministic fake, so the alternate mode is a drop-in at an
+existing seam. It does not activate implementation, does not move the single active
+plan fence, and does not self-grant an approval -- the agent TRANSCRIBED an owner
+ruling supplied in session (Principle V, the same pattern as spec 138's amendments).
+
 **Input**: Build the first independently useful slice of Seshat Studio: a modern
 localhost analyst console that opens from the Seshat agent, reads one workspace
 truthfully, and runs plain-language Codex turns through the user's existing CLI
@@ -220,8 +252,18 @@ an embedded subscription bridge in this slice.
   using the user's existing cached CLI authentication.
 - **FR-012**: Studio MUST NOT read, copy, serialize, display, or persist Codex
   authentication credentials.
-- **FR-013**: Studio MUST NOT request an OpenAI API key or fall back to API-key
-  billing when subscription authentication is absent, limited, or exhausted.
+- **FR-013**: Studio MUST NOT *silently* request an OpenAI API key, and MUST NOT
+  fall back to API-key billing on its own when subscription authentication is
+  absent, limited, or exhausted. An absent, signed-out, or quota-limited agent is a
+  reported health state with a recovery action, never an automatic switch to a
+  billed path. (Amended 2026-08-04; see the owner amendment above. The original
+  wording forbade the API-key path outright.)
+- **FR-013a**: An API key or ChatGPT access token MAY be used as an *alternate*
+  agent bridge, and ONLY when the operator configures it explicitly. When such a
+  mode is active Studio MUST name the active authentication mode in the interface
+  and in `GET /bootstrap`, so the analyst can always tell which path is in use.
+  Subscription sign-in remains the default and the certified path; no automatic,
+  inferred, or fallback selection of the alternate mode is permitted.
 - **FR-014**: The Codex integration MUST be hidden behind a version-tolerant
   `AgentBridge` protocol and a deterministic fake implementation for tests.
 - **FR-015**: Studio MUST normalize provider events into the stable Studio event
@@ -312,9 +354,10 @@ an embedded subscription bridge in this slice.
   Node executable or remote browser asset is required at runtime.
 - **SC-009**: Static governance, bundle reconciliation, package contracts, and the
   existing dashboard tests remain green after Studio is added.
-- **SC-010**: External Codex acceptance names the CLI version, authentication method
-  as subscription, app-server protocol result, and confirms no API credential was
-  supplied to Studio.
+- **SC-010**: External Codex acceptance of the DEFAULT subscription path names the
+  CLI version, authentication method as subscription, app-server protocol result,
+  and confirms no API credential was supplied to Studio. The FR-013a alternate mode,
+  if exercised, is evidenced separately and never satisfies this criterion.
 
 ## Assumptions
 
@@ -331,3 +374,56 @@ an embedded subscription bridge in this slice.
   contract. Live signed-in acceptance still requires an interactive authenticated
   client session and remains a separate evidence lane.
 - The existing active spec 138 fence remains unchanged while this package is draft.
+
+## Provider authentication compliance -- OPEN QUESTION
+
+This section exists because the original package analysed this question for the
+provider it EXCLUDED (Claude) and assumed the answer for the provider it DEPENDS ON
+(Codex). It records what is actually established, and what is not. It is deliberately
+symmetric with the Claude treatment in FR-029.
+
+**The question.** Is driving a ChatGPT/Codex consumer subscription through
+`codex app-server`, from a locally installed third-party product, permitted by
+OpenAI's terms? FR-011 and FR-012 make this the Foundation's core mechanism, so the
+answer is load-bearing for the whole program.
+
+**What is established.**
+
+- The Codex CLI sources are under a permissive Apache licence, and an OpenAI
+  maintainer has stated that forking and modifying the repository for one's own
+  needs is welcome (`openai/codex` discussion 8338).
+- Studio's shape is narrow: it spawns the user's OWN installed, already
+  authenticated `codex` binary as a child process, never reads or copies
+  credentials (FR-012), binds to loopback only, serves one local user, and pins one
+  workspace. No credential is bridged, stored, or resold.
+
+**What is NOT established, and must not be presented as settled.**
+
+- OpenAI's own Codex authentication documentation directs PROGRAMMATIC use to a
+  different credential: "Use API key authentication for programmatic Codex CLI
+  workflows, such as CI/CD jobs", with access tokens described as intended for
+  "trusted scripts, schedulers, and private CI runners". Subscription sign-in is
+  documented around interactive individual and workspace use.
+- In `openai/codex` discussion 8338 an OpenAI maintainer was asked directly whether
+  Codex CLI under "Sign in with ChatGPT" is consistent with the Terms of Use
+  restriction on automatic or programmatic use, and did not clarify it. Asked about
+  distributing a paid application on that model, the guidance was to consult a legal
+  expert. **There is therefore no vendor assurance to rely on.**
+- OpenAI's consumer Terms of Use reportedly restrict automatically or
+  programmatically extracting Output and frame the consumer services as personal,
+  non-commercial use. This has NOT been verified against the primary text here:
+  `openai.com` returned HTTP 403 to automated retrieval, so the clause is recorded
+  from secondary summaries. A named human must read the current primary terms before
+  this question is closed.
+- Third-party products do ship this pattern (for example Cline's "bring your ChatGPT
+  subscription" integration). Market precedent is recorded as context only; it is
+  not permission and MUST NOT be cited as compliance.
+
+**How this specification handles the open question.** It does not resolve it, and no
+requirement here asserts that the subscription path is approved. FR-013a exists so
+that a single unresolved vendor question cannot void the program: `AgentBridge`
+(FR-014) is already provider-neutral with a deterministic fake, so an API-key or
+access-token bridge is a drop-in at the same seam. Closing this question is a
+named-human action recorded as an amendment, not an implementation detail, and
+Foundation acceptance under SC-010 continues to certify only the default
+subscription path.
