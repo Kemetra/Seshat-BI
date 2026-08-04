@@ -141,7 +141,8 @@ agent calls; they are helpers, not the product experience.
 
 ## What is built today
 
-Seshat BI `v0.5.2` is an active beta on PyPI. The shipped system includes:
+Seshat BI is an active beta on PyPI -- the PyPI badge above carries the current
+release. The shipped system includes:
 
 - **Static and live governance gates** over SQL, TMDL/PBIR, DAX, configuration,
   documentation, keys, date coverage, orphan relationships, and reconciliation.
