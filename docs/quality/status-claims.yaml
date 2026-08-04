@@ -132,12 +132,16 @@ claims:
     anchor: "**Status**: implemented -- artifact `src/seshat/portfolio_watch.py`"
     claimed-artifact: "src/seshat/portfolio_watch.py"
     claimed-status: "built"
-  # Spec 138 shipped US2 and US3 only. The claim deliberately says "partially
-  # implemented" rather than the usual "implemented": US1, US4 and the external
-  # half of US5 are outstanding, so the stronger wording would be a false claim.
-  - id: "spec-138-partially-implemented"
+  # Claim renamed and re-pointed 2026-08-04 (owner ruling: live acceptance deferred,
+  # spec 138 closed). It previously read "partially implemented" because US1's live
+  # harness call, US3's operator run and US5's external acceptance were outstanding.
+  # The owner deferred all three out of completion scope (issue #573), so the Status
+  # line moved to the ADR-0019 `implemented` value and this claim follows it. The
+  # spec still states plainly that those three tasks were NEVER performed -- the
+  # claim locks the artifact, not a live harness result.
+  - id: "spec-138-implemented"
     doc: "specs/138-agent-driven-bundle/spec.md"
-    anchor: "**Status**: partially implemented -- US2 and US3 delivered, artifact `src/seshat/allowlist_derivation.py`"
+    anchor: "**Status**: implemented -- artifact `src/seshat/allowlist_derivation.py`"
     claimed-artifact: "src/seshat/allowlist_derivation.py"
     claimed-status: "built"
   - id: "spec-138-portability-gate"
