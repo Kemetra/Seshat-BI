@@ -7,14 +7,22 @@ observed frequency.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Collection, Mapping, Sequence
+from dataclasses import dataclass, replace
 
 from scripts.adopter_sim.model import Journey
 
-STATUSES = ("confirmed", "flaky", "insufficient_data", "advisory")
+STATUSES = (
+    "confirmed",
+    "flaky",
+    "recurring-flaky",
+    "insufficient_data",
+    "advisory",
+)
 _QUORUM = 2
 _MIN_EVALUABLE = 2
+# Three CONSECUTIVE flaky invocations escalate; this one plus _RECURRENCE - 1 prior.
+_RECURRENCE = 3
 
 
 @dataclass(frozen=True)
@@ -46,6 +54,9 @@ def tally(
       findings: sequence of (step, kind, detail) triples, or (kind, detail)
                 pairs for a single-step journey
       evaluable: the step numbers that produced a usable observation
+
+    This folds ONE invocation. Escalating a finding that keeps flaking across
+    invocations is `escalate`, which needs history this function does not see.
     """
     counts: dict[tuple[int, str], list[str]] = {}
     evaluable_runs: dict[int, int] = {step.number: 0 for step in journey.steps}
@@ -83,6 +94,34 @@ def _unpack(entry: object, journey: Journey) -> tuple[int, str, str]:
         # Single-step journeys omit the step number.
         return journey.steps[0].number, str(entry[0]), str(entry[1])
     raise ValueError(f"unrecognised finding entry: {entry!r}")
+
+
+def escalate(
+    verdicts: Sequence[QuorumVerdict],
+    previous_flaky: Sequence[Collection[tuple[int, str]]],
+) -> tuple[QuorumVerdict, ...]:
+    """Escalate flaky verdicts that complete a consecutive flaky streak.
+
+    Separate from `tally` because it works on a different time scale: `tally`
+    folds the runs of ONE invocation, this compares against the invocations
+    before it. `previous_flaky` carries THIS cohort's flaky keys, oldest first --
+    callers pass one dataset's history for the same reason they pass one
+    dataset's runs.
+
+    Only `flaky` escalates. A `confirmed` finding is already actionable and must
+    not be relabelled, and an `advisory` single-run verdict was never reproduced.
+    """
+    needed = _RECURRENCE - 1
+    recent = tuple(previous_flaky)[-needed:]
+    if len(recent) < needed:
+        return tuple(verdicts)
+    return tuple(
+        replace(verdict, status="recurring-flaky")
+        if verdict.status == "flaky"
+        and all((verdict.step, verdict.kind) in entry for entry in recent)
+        else verdict
+        for verdict in verdicts
+    )
 
 
 def _status(seen: int, evaluable: int, *, single_run: bool) -> str:

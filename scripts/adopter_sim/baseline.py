@@ -8,7 +8,7 @@ permanent false regression. This follows the .seshat/watch/ precedent (spec 131)
 from __future__ import annotations
 
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -36,6 +36,56 @@ def findings_baseline_path(repo_root: Path, journey: str) -> Path:
 
 def timings_baseline_path(repo_root: Path, journey: str) -> Path:
     return repo_root / ".seshat" / "adopter-sim" / f"{journey}.timings.json"
+
+
+def load_timings_reference(path: Path) -> dict[str, dict[int, float]]:
+    """The accepted per-dataset median ratios, or {} when nothing is accepted.
+
+    Unlike the findings baseline this file is machine-local and therefore not
+    truth: an absent OR unreadable one reads as empty, so a corrupt cache
+    re-records itself on the next run instead of aborting it.
+    """
+    if not path.is_file():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return {
+        str(dataset): {int(step): float(value) for step, value in (steps or {}).items()}
+        for dataset, steps in (payload.get("ratios") or {}).items()
+    }
+
+
+def write_timings_reference(
+    path: Path,
+    ratios: Mapping[str, Mapping[int, float]],
+    *,
+    raws: Mapping[str, Mapping[int, float]],
+) -> None:
+    """Record the accepted reference.
+
+    Raw milliseconds are kept as context for a human reading the file; only the
+    calibration-normalised ratios are ever compared against.
+    """
+    payload = {
+        "version": 1,
+        "ratios": _by_step(ratios),
+        "raw_ms": _by_step(raws),
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return None
+
+
+def _by_step(
+    values: Mapping[str, Mapping[int, float]],
+) -> dict[str, dict[str, float]]:
+    """JSON object keys are strings; keep them sorted so diffs stay readable."""
+    return {
+        dataset: {str(step): value for step, value in sorted(steps.items())}
+        for dataset, steps in sorted(values.items())
+    }
 
 
 def load_findings_baseline(path: Path) -> tuple[dict[str, str], ...]:

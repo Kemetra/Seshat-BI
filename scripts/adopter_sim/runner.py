@@ -18,8 +18,10 @@ from scripts.adopter_sim.baseline import (
     diff_findings,
     findings_baseline_path,
     load_findings_baseline,
+    load_timings_reference,
     timings_baseline_path,
     update_findings_baseline,
+    write_timings_reference,
 )
 from scripts.adopter_sim.blindness import assert_no_leak, run_pre_journey_assertions
 from scripts.adopter_sim.env import build_client_env
@@ -31,15 +33,22 @@ from scripts.adopter_sim.evaluate import (
 )
 from scripts.adopter_sim.exitcodes import Exit, RunOutcome, classify
 from scripts.adopter_sim.fixtures import assert_clean, assert_messy
+from scripts.adopter_sim.history import (
+    append_invocation,
+    dataset_history,
+    flaky_keys,
+    invocation_history_path,
+    load_invocation_history,
+)
 from scripts.adopter_sim.journey import load_journey
-from scripts.adopter_sim.metrics import TOLERANCE, median
+from scripts.adopter_sim.metrics import TOLERANCE, gate, median, out_of_band
 from scripts.adopter_sim.model import (
     NOT_EVALUABLE,
     NOT_RUN,
     AdopterSimError,
     Journey,
 )
-from scripts.adopter_sim.quorum import tally
+from scripts.adopter_sim.quorum import escalate, tally
 from scripts.adopter_sim.workspace import (
     WorkspaceRequest,
     materialize,
@@ -144,6 +153,27 @@ def _accept_baseline(
     return None
 
 
+def _tally_cohorts(
+    journey: Journey,
+    cohorts: dict[str, list[dict[str, object]]],
+    *,
+    single_run: bool,
+    repo_root: Path = REPO_ROOT,
+) -> list:
+    """Fold each dataset cohort into verdicts, carrying that cohort's history.
+
+    Each cohort is tallied against ITS OWN previous-invocation history, for the
+    same reason its runs are not pooled: a messy-only flake must never count
+    toward a clean recurrence.
+    """
+    history = load_invocation_history(invocation_history_path(repo_root, journey.name))
+    verdicts: list = []
+    for dataset, runs in sorted(cohorts.items()):
+        folded = tally(journey, runs, single_run=single_run, dataset=dataset)
+        verdicts.extend(escalate(folded, dataset_history(history, dataset)))
+    return verdicts
+
+
 def run_invocation(args: Namespace, driver: object | None = None) -> Exit:
     journey = load_journey(SEED_DIR / f"{args.journey}.yaml")
     started = time.monotonic()
@@ -172,13 +202,13 @@ def run_invocation(args: Namespace, driver: object | None = None) -> Exit:
         return _fail(Exit.BLINDNESS_ABORT, exc, prefix="blindness: ")
     partial = partial or truncated
 
-    verdicts: list = []
-    for dataset, runs in sorted(cohorts.items()):
-        verdicts.extend(
-            tally(journey, runs, single_run=args.runs == 1, dataset=dataset)
-        )
+    single_run = args.runs == 1
+    verdicts = _tally_cohorts(journey, cohorts, single_run=single_run)
     _report_verdicts(journey.name, verdicts)
-    metric_out_of_band = _report_timings(journey.name, cohorts)
+    _record_history(journey.name, verdicts, single_run=single_run)
+    metric_out_of_band = _report_timings(
+        journey.name, cohorts, accept=bool(args.update_baseline)
+    )
 
     if args.update_baseline:
         try:
@@ -443,56 +473,116 @@ def _time_cli(
     return (time.monotonic() - start) * 1000.0, output, ok
 
 
-def _cohort_lines(dataset: str, runs: list[dict[str, object]]) -> list[str]:
-    """One line per step: median raw ms, and median of each run's OWN ratio.
+def _median_by_step(runs: list[dict[str, object]], field: str) -> dict[int, float]:
+    """Median of one recorded field, per step, across a cohort's runs.
+
+    A missing measurement (ratio=None when calibration failed) is EXCLUDED from
+    its median rather than folded in as a value, so an unmeasured step reports
+    not_measured instead of a fabricated number.
+    """
+    values: dict[int, list[float]] = {}
+    for run in runs:
+        for step, value in (run.get(field) or {}).items():
+            if value is not None:
+                values.setdefault(step, []).append(value)
+    return {step: median(measured) for step, measured in values.items()}
+
+
+def _cohort_medians(
+    runs: list[dict[str, object]],
+) -> tuple[dict[int, float], dict[int, float]]:
+    """Median raw ms and median of each run's OWN ratio, per step.
 
     Each run already divided its step timings by the calibration measured in
-    that same run, so aggregating here cannot mix calibrations. A run whose
-    calibration failed contributes ratio=None and is reported not_measured
-    rather than silently folded in.
+    that same run, so aggregating here cannot mix calibrations.
     """
-    raws: dict[int, list[float]] = {}
-    ratios: dict[int, list[float]] = {}
-    for run in runs:
-        for step, value in (run.get("raws") or {}).items():
-            raws.setdefault(step, []).append(value)
-        for step, ratio in (run.get("ratios") or {}).items():
-            if ratio is not None:
-                ratios.setdefault(step, []).append(ratio)
+    return _median_by_step(runs, "raws"), _median_by_step(runs, "ratios")
+
+
+def _cohort_lines(
+    dataset: str, raw_medians: dict[int, float], ratio_medians: dict[int, float]
+) -> list[str]:
+    """One line per step. A step with no usable ratio reports not_measured."""
     lines: list[str] = []
-    for step in sorted(raws):
-        ratio = median(ratios[step]) if ratios.get(step) else None
+    for step in sorted(raw_medians):
+        ratio = ratio_medians.get(step)
         rendered = f"{ratio:.2f}" if ratio is not None else "not_measured"
         lines.append(
-            f"{dataset} step {step}: {median(raws[step]):.0f} ms ratio={rendered}"
+            f"{dataset} step {step}: {raw_medians[step]:.0f} ms ratio={rendered}"
         )
     return lines
 
 
 def _report_timings(
-    journey_name: str, cohorts: dict[str, list[dict[str, object]]]
+    journey_name: str,
+    cohorts: dict[str, list[dict[str, object]]],
+    *,
+    repo_root: Path = REPO_ROOT,
+    accept: bool = False,
 ) -> bool:
-    """Record and print timings, per dataset cohort.
+    """Record and print timings per cohort, and gate against the reference.
 
-    Returns False always: there is no accepted timing reference until a first
-    full run is recorded, and gating against an absent baseline would fail every
-    first run. Tracked in issue #567.
+    Returns True when a gated metric left the tolerance band, in either
+    direction (issue #567).
+
+    The run that finds no accepted reference RECORDS one instead of judging
+    against it: there is nothing to compare to yet, and gating against an absent
+    reference would fail every first run. A later run compares but does NOT
+    rewrite the reference -- refreshing it every run would make each run its own
+    baseline, so a 24%-per-run drift would never trip the 25% band. Moving an
+    accepted reference stays explicit, via --update-baseline.
     """
-    lines = [
-        line
-        for dataset, runs in sorted(cohorts.items())
-        for line in _cohort_lines(dataset, runs)
-    ]
+    ratios: dict[str, dict[int, float]] = {}
+    raws: dict[str, dict[int, float]] = {}
+    lines: list[str] = []
+    for dataset, runs in sorted(cohorts.items()):
+        raws[dataset], ratios[dataset] = _cohort_medians(runs)
+        lines.extend(_cohort_lines(dataset, raws[dataset], ratios[dataset]))
     if not lines:
         return False
-    path = timings_baseline_path(REPO_ROOT, journey_name)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     for line in lines:
         print(f"[TIME] {line}", flush=True)
-    print(
-        f"[TIME] tolerance band +/-{TOLERANCE:.0%}; not gated until a baseline "
-        "is accepted (issue #567)",
-        flush=True,
+
+    path = timings_baseline_path(repo_root, journey_name)
+    reference = load_timings_reference(path)
+    if accept or not reference:
+        write_timings_reference(path, ratios, raws=raws)
+        print(
+            f"[TIME] recorded the accepted reference in {path.name}; "
+            "not gated this run",
+            flush=True,
+        )
+        return False
+
+    rows = gate(ratios, reference, tolerance=TOLERANCE)
+    for row in rows:
+        print(
+            f"[TIME] {row.dataset} step {row.step}: {row.verdict} "
+            f"(ratio {row.current:.2f} vs accepted {row.reference:.2f})",
+            flush=True,
+        )
+    failed = out_of_band(rows)
+    state = "OUT OF BAND" if failed else "within band"
+    print(f"[TIME] tolerance band +/-{TOLERANCE:.0%}: {state}", flush=True)
+    return failed
+
+
+def _record_history(
+    journey_name: str,
+    verdicts: list,
+    *,
+    single_run: bool,
+    repo_root: Path = REPO_ROOT,
+) -> None:
+    """Persist this invocation's flaky keys for the next invocation to read.
+
+    A `--runs 1` invocation records nothing: it reproduces nothing, so it can
+    neither start nor continue a recurrence streak, and writing an empty entry
+    would silently BREAK an existing one.
+    """
+    if single_run:
+        return None
+    append_invocation(
+        invocation_history_path(repo_root, journey_name), flaky_keys(verdicts)
     )
-    return False
+    return None

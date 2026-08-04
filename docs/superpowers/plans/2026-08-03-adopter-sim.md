@@ -3251,6 +3251,12 @@ cascade, and exit-code mapping without spending tokens."
 
 Both are noted rather than silently dropped, per the spec's own no-silent-caps posture.
 
+> **Both deviations are now closed** (issue #567). `recurring-flaky` is in
+> `quorum.STATUSES` and escalates from a machine-local invocation history
+> (`scripts/adopter_sim/history.py`), and `_report_timings` enforces the band
+> against the accepted reference. The two findings above are kept as the
+> record of what shipped in this plan's PR, not as current state.
+
 **Placeholder scan.** No TBD/TODO. The one intentionally-unfilled value is the README's cost figure, which is unfilled *by design* and labelled as such.
 
 **Type consistency.** `AdopterSimError` is defined once (Task 1) and imported everywhere. `JourneyStep.command` is `tuple[str, ...] | None` in the model and constructed with `tuple(command)` in the loader. `QuorumVerdict` fields used by `baseline.py` (`step`, `kind`, `detail`, `status`) match Task 5's definition. `StepOutcome` is defined in `evaluate.py` and imported by `runner.py`, not redefined. `Exit` members referenced in Task 10's test all exist in Task 8's enum.
