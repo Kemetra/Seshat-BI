@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from scripts.adopter_sim.metrics import TOLERANCE, compare, median, normalise
+from scripts.adopter_sim.metrics import (
+    TOLERANCE,
+    compare,
+    gate,
+    median,
+    normalise,
+    out_of_band,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -62,3 +69,54 @@ def test_compare_faster() -> None:
 
 def test_compare_against_absent_baseline_is_within_band() -> None:
     assert compare(1.0, 0.0, tolerance=TOLERANCE) == "within_band"
+
+
+def test_gate_reports_within_band_for_an_unchanged_ratio() -> None:
+    rows = gate({"clean": {1: 2.05}}, {"clean": {1: 2.0}}, tolerance=TOLERANCE)
+    assert [(r.dataset, r.step, r.verdict) for r in rows] == [
+        ("clean", 1, "within_band")
+    ]
+    assert not out_of_band(rows)
+
+
+def test_gate_flags_a_slower_step_out_of_band() -> None:
+    rows = gate({"clean": {1: 3.0}}, {"clean": {1: 2.0}}, tolerance=TOLERANCE)
+    assert rows[0].verdict == "slower"
+    assert out_of_band(rows)
+
+
+def test_gate_flags_a_faster_step_out_of_band() -> None:
+    """The design gates 'slower / faster / within band' -- an unexplained
+    speed-up means the step stopped doing its work, so it is not a free pass."""
+    rows = gate({"clean": {1: 1.0}}, {"clean": {1: 2.0}}, tolerance=TOLERANCE)
+    assert rows[0].verdict == "faster"
+    assert out_of_band(rows)
+
+
+def test_gate_skips_steps_the_reference_does_not_carry() -> None:
+    """A newly added step has no accepted reference, so it cannot be judged."""
+    rows = gate({"clean": {1: 2.0, 9: 99.0}}, {"clean": {1: 2.0}}, tolerance=TOLERANCE)
+    assert [r.step for r in rows] == [1]
+
+
+def test_gate_skips_datasets_the_reference_does_not_carry() -> None:
+    rows = gate({"messy": {1: 9.0}}, {"clean": {1: 2.0}}, tolerance=TOLERANCE)
+    assert rows == ()
+    assert not out_of_band(rows)
+
+
+def test_gate_without_a_reference_yields_no_rows() -> None:
+    """First run: nothing accepted yet, so nothing may fail the run."""
+    assert gate({"clean": {1: 2.0}}, {}, tolerance=TOLERANCE) == ()
+
+
+def test_gate_keeps_datasets_independent() -> None:
+    rows = gate(
+        {"clean": {1: 2.0}, "messy": {1: 4.0}},
+        {"clean": {1: 2.0}, "messy": {1: 2.0}},
+        tolerance=TOLERANCE,
+    )
+    assert [(r.dataset, r.verdict) for r in rows] == [
+        ("clean", "within_band"),
+        ("messy", "slower"),
+    ]

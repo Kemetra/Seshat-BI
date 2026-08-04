@@ -6,7 +6,7 @@ import pytest
 
 from scripts.adopter_sim.evaluate import StepOutcome, cascade, evaluate_step
 from scripts.adopter_sim.model import NOT_EVALUABLE
-from scripts.adopter_sim.quorum import tally
+from scripts.adopter_sim.quorum import STATUSES, escalate, tally
 from tests.unit._adopter_sim_helpers import make_journey as _journey
 from tests.unit._adopter_sim_helpers import make_step as _step
 from tests.unit._adopter_sim_helpers import run_record
@@ -192,6 +192,99 @@ def test_dataset_is_carried_on_the_verdict() -> None:
     )
     assert verdicts[0].dataset == "messy"
     assert verdicts[0].status == "confirmed"
+
+
+def test_recurring_flaky_is_a_declared_status() -> None:
+    """STATUSES must carry every status tally can emit, or a consumer switching
+    on it silently drops the escalation."""
+    assert "recurring-flaky" in STATUSES
+
+
+def test_three_consecutive_flaky_invocations_escalate() -> None:
+    journey = _journey([_step(5, "refuse")])
+    runs = [
+        run_record([("outcome_mismatch", "built silver")], [5]),
+        run_record([], [5]),
+        run_record([], [5]),
+    ]
+    verdicts = escalate(
+        tally(journey, runs, single_run=False),
+        (
+            frozenset({(5, "outcome_mismatch")}),
+            frozenset({(5, "outcome_mismatch")}),
+        ),
+    )
+    assert verdicts[0].status == "recurring-flaky"
+
+
+def test_two_consecutive_flaky_invocations_stay_flaky() -> None:
+    journey = _journey([_step(5, "refuse")])
+    runs = [run_record([("outcome_mismatch", "x")], [5]), run_record([], [5])]
+    verdicts = escalate(
+        tally(journey, runs, single_run=False),
+        (frozenset({(5, "outcome_mismatch")}),),
+    )
+    assert verdicts[0].status == "flaky"
+
+
+def test_a_clean_invocation_resets_the_recurrence() -> None:
+    """Three flaky invocations must be CONSECUTIVE; a clean one in between
+    breaks the streak, so an occasional flake never escalates."""
+    journey = _journey([_step(5, "refuse")])
+    runs = [run_record([("outcome_mismatch", "x")], [5]), run_record([], [5])]
+    verdicts = escalate(
+        tally(journey, runs, single_run=False),
+        (frozenset({(5, "outcome_mismatch")}), frozenset()),
+    )
+    assert verdicts[0].status == "flaky"
+
+
+def test_history_does_not_escalate_a_confirmed_finding() -> None:
+    """Escalation applies to flaky only. A confirmed finding is already
+    actionable and must not be relabelled."""
+    journey = _journey([_step(5, "refuse")])
+    runs = [
+        run_record([("outcome_mismatch", "x")], [5]),
+        run_record([("outcome_mismatch", "x")], [5]),
+        run_record([], [5]),
+    ]
+    verdicts = escalate(
+        tally(journey, runs, single_run=False),
+        (
+            frozenset({(5, "outcome_mismatch")}),
+            frozenset({(5, "outcome_mismatch")}),
+        ),
+    )
+    assert verdicts[0].status == "confirmed"
+
+
+def test_history_does_not_escalate_a_single_run_advisory() -> None:
+    journey = _journey([_step(5, "refuse")])
+    verdicts = escalate(
+        tally(journey, [run_record([("outcome_mismatch", "x")], [5])], single_run=True),
+        (
+            frozenset({(5, "outcome_mismatch")}),
+            frozenset({(5, "outcome_mismatch")}),
+        ),
+    )
+    assert verdicts[0].status == "advisory"
+
+
+def test_recurrence_matches_on_step_and_kind_together() -> None:
+    """A different kind on the same step is a different finding."""
+    journey = _journey([_step(5, "refuse")])
+    runs = [run_record([("outcome_mismatch", "x")], [5]), run_record([], [5])]
+    verdicts = escalate(
+        tally(journey, runs, single_run=False),
+        (frozenset({(5, "traceback")}), frozenset({(5, "traceback")})),
+    )
+    assert verdicts[0].status == "flaky"
+
+
+def test_escalate_without_history_changes_nothing() -> None:
+    journey = _journey([_step(5, "refuse")])
+    runs = [run_record([("outcome_mismatch", "x")], [5]), run_record([], [5])]
+    assert escalate(tally(journey, runs, single_run=False), ())[0].status == "flaky"
 
 
 def test_must_mention_absent_is_a_finding() -> None:

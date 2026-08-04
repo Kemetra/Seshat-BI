@@ -251,18 +251,20 @@ def test_runs_must_be_positive() -> None:
 
 def test_timings_use_each_runs_own_calibration() -> None:
     """Two runs with different calibrations must yield comparable ratios."""
-    from scripts.adopter_sim.runner import _cohort_lines
+    from scripts.adopter_sim.runner import _cohort_lines, _cohort_medians
 
     runs = [
         {"raws": {1: 100.0, 7: 200.0}, "ratios": {1: 1.0, 7: 2.0}},
         {"raws": {1: 300.0, 7: 600.0}, "ratios": {1: 1.0, 7: 2.0}},
     ]
-    lines = _cohort_lines("messy", runs)
+    raw_medians, ratio_medians = _cohort_medians(runs)
+    lines = _cohort_lines("messy", raw_medians, ratio_medians)
     assert any("step 7" in line and "ratio=2.00" in line for line in lines)
 
 
 def test_failed_calibration_reports_not_measured() -> None:
-    from scripts.adopter_sim.runner import _cohort_lines
+    from scripts.adopter_sim.runner import _cohort_lines, _cohort_medians
 
     runs = [{"raws": {1: 100.0}, "ratios": {1: None}}]
-    assert "not_measured" in _cohort_lines("clean", runs)[0]
+    raw_medians, ratio_medians = _cohort_medians(runs)
+    assert "not_measured" in _cohort_lines("clean", raw_medians, ratio_medians)[0]

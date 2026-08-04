@@ -67,3 +67,51 @@ def compare(current: float, baseline: float, *, tolerance: float) -> str:
     if delta < -tolerance:
         return "faster"
     return "within_band"
+
+
+@dataclass(frozen=True)
+class GateRow:
+    dataset: str
+    step: int
+    current: float
+    reference: float
+    verdict: str
+
+
+def gate(
+    current: Mapping[str, Mapping[int, float]],
+    reference: Mapping[str, Mapping[int, float]],
+    *,
+    tolerance: float,
+) -> tuple[GateRow, ...]:
+    """Judge this run's median ratios against the accepted reference.
+
+    Only (dataset, step) pairs the reference already carries are judged. A newly
+    added step or dataset has nothing accepted to measure against, and inventing
+    a verdict for it would fail the very run that introduced it.
+    """
+    rows: list[GateRow] = []
+    for dataset in sorted(current):
+        accepted = reference.get(dataset) or {}
+        for step, ratio in sorted(current[dataset].items()):
+            if step not in accepted:
+                continue
+            rows.append(
+                GateRow(
+                    dataset=dataset,
+                    step=step,
+                    current=ratio,
+                    reference=accepted[step],
+                    verdict=compare(ratio, accepted[step], tolerance=tolerance),
+                )
+            )
+    return tuple(rows)
+
+
+def out_of_band(rows: Sequence[GateRow]) -> bool:
+    """True when any gated metric left the band, in EITHER direction.
+
+    An unexplained speed-up is also a regression signal: the usual cause is a
+    step that stopped doing its work, not a genuine optimisation.
+    """
+    return any(row.verdict != "within_band" for row in rows)
