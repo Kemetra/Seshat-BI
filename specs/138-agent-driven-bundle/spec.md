@@ -4,22 +4,27 @@
 
 **Created**: 2026-07-31
 
-**Status**: partially implemented -- US2 and US3 delivered, artifact `src/seshat/allowlist_derivation.py`
+**Status**: implemented -- artifact `src/seshat/allowlist_derivation.py`
+
+**Status history**: partially implemented -- US2 and US3 delivered, artifact `src/seshat/allowlist_derivation.py`
 
 **Status history**: ratified -- Ahmed Shaaban (owner), 2026-07-31
 
-**Not** `implemented`: T075 directs that value, but three stories are outstanding and
-the claim would not be true. Delivered: the **US1 implementation** (both plugins
-declare the read-only governor; missing-extra degradation and tool authority are
-verified), **US2** (the inventory is the enforced source of what ships; the six-name
-constant is gone), and **US3** (the ten compass verbs ship behind
+**What `implemented` claims here, and what it does not.** Delivered: the **US1
+implementation** (both plugins declare the read-only governor; missing-extra degradation
+and tool authority are verified), **US2** (the inventory is the enforced source of what
+ships; the six-name constant is gone), and **US3** (the ten compass verbs ship behind
 `portability-audit-v1`; both bundles carry 21 skills at 2,224 of the 6,000
-`tokens_approx` ceiling). Outstanding: the **US1 live harness call** (T021) and the
-external-acceptance half of **US5** (T070 `--execute-cli`, T060). **US4 is not
-implemented and is no longer part of this feature's completion scope** under the
-2026-08-03 owner amendment below. See
-`evidence/portability-findings.md`, `evidence/us1-acceptance.md`, and
-`evidence/us5-claims.md`.
+`tokens_approx` ceiling). **US4 is not implemented and is no longer part of this
+feature's completion scope** under the 2026-08-03 owner amendment below.
+
+The three **live-acceptance tasks were never performed** and are deferred out of
+completion scope under the 2026-08-04 owner ruling below: the US1 live harness call
+(T021), the US3 operator run (T060), and the US5 external acceptance (T070
+`--execute-cli`). This status therefore records that the SCOPE is complete as amended --
+it does **not** assert that either harness was exercised live. The deferred work is
+tracked as issue #573. See `evidence/portability-findings.md`,
+`evidence/us1-acceptance.md`, and `evidence/us5-claims.md`.
 
 **Status history**: draft
 
@@ -54,6 +59,33 @@ consumer capabilities ship, does not flip their inventory flags, and does not
 self-grant an approval. The owner also ratified the exact spec 139 package as the
 next plan. Spec 139 remains non-active until this feature's live acceptance closes
 and the single-plan fence is moved in both repository instruction files.
+
+### Owner ruling — 2026-08-04 — live acceptance deferred, feature closed
+
+- **ruled_by**: Ahmed Shaaban (owner)
+- **ruled_on**: 2026-08-04
+
+The owner ruled that this feature's outstanding live-acceptance work is deferred into a
+future specification, and that spec 138 is closed. The deferred tasks are **T021** (US1
+live harness call), **T060** (US3 operator run), and **T070** (US5 external acceptance,
+`--execute-cli`). They are recorded as deferred and **NOT performed**; this ruling
+asserts no live harness result and fills no acceptance evidence file with an unobserved
+outcome. The deferred work is tracked as issue #573 so it survives this closure.
+
+The `**Status**:` line moves to `implemented` on that basis: completion is judged against
+the amended scope, exactly as the 2026-08-03 amendment did for US4. The previous value is
+preserved verbatim in a `**Status history**:` line per ADR 0019.
+
+What this ruling does **not** do:
+
+- It does not claim either harness was exercised live, and does not change any evidence
+  file's recorded observations.
+- It does **not** move the single active-plan fence. Both repository instruction files
+  still point at this feature's plan, so **spec 139 remains non-active** until the owner
+  moves the fence explicitly and separately.
+- It does not self-grant an approval. The agent TRANSCRIBED an owner ruling supplied in
+  session and recorded it here; it did not author the decision (Principle V, the same
+  transcription pattern as the 2026-08-03 amendment and ADR 0015/0016).
 
 **Input**: User description: "Enhance the integration with AI agents (Claude Code and Codex) now that marketplaces and skills exist, and sharpen it toward the goal of an agent-driven tool. Deliver all identified gaps as a safe sequence, parallel where safe and sequential where required."
 

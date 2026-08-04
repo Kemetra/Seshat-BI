@@ -91,7 +91,7 @@ actionable instruction and no simulated answer.
 
 ### Verification
 
-- [ ] T021 [US1] Verify on both harnesses in a scratch workspace created by `seshat init-project`: tools present with no registration, and the governor reporting on the scratch workspace rather than the plugin directory. Confirm via the runtime's own list/get commands plus a successful tool call — never via a settings pane
+- [ ] T021 [US1] **DEFERRED, NOT PERFORMED -- owner ruling 2026-08-04 (issue #573).** Left unchecked deliberately: no live run happened. Verify on both harnesses in a scratch workspace created by `seshat init-project`: tools present with no registration, and the governor reporting on the scratch workspace rather than the plugin directory. Confirm via the runtime's own list/get commands plus a successful tool call — never via a settings pane
 - [x] T022 [US1] Verify degradation with the optional extra removed — a named two-lane install hint from `src/seshat/cli/__init__.py::_run_mcp`, no simulated governor output, no claim the loop is available — recording the session evidence in `specs/138-agent-driven-bundle/evidence/us1-acceptance.md`
 - [x] T023 [US1] Verify against `src/seshat/governor/mcp_server.py` that no enabled tool advances a stage, grants an approval, writes a readiness artifact, or emits any score, and record it in `specs/138-agent-driven-bundle/evidence/us1-acceptance.md`
 
@@ -182,7 +182,7 @@ load and every instructed path resolves.
 - [x] T057 [US3] Flip `ships: true` and `ship_classification: compass-verb` for the ten verbs in `docs/capabilities/capabilities.yaml`
 - [x] T058 [US3] Regenerate the allowlist and both bundles, and commit the generated output
 - [x] T059 [US3] Record the post-story routing cost in `specs/138-agent-driven-bundle/evidence/routing-cost.md` and confirm it is at or under the ceiling from T006
-- [ ] T060 [US3] **OPERATOR-RUN, still open** -- Verify in a workspace with no Seshat development checkout that all ten `.seshat/kit-source.yaml` verbs load and every hard stop still stops, recording the session evidence in `specs/138-agent-driven-bundle/evidence/us3-acceptance.md`
+- [ ] T060 [US3] **DEFERRED, NOT PERFORMED -- owner ruling 2026-08-04 (issue #573).** Left unchecked deliberately: no live run happened. Originally **OPERATOR-RUN, still open** -- Verify in a workspace with no Seshat development checkout that all ten `.seshat/kit-source.yaml` verbs load and every hard stop still stops, recording the session evidence in `specs/138-agent-driven-bundle/evidence/us3-acceptance.md`
 
 **Checkpoint**: the bundle no longer contradicts its own compass.
 
@@ -219,7 +219,7 @@ the bundles as shipped.
 
 - [x] T068 [US5] Run `seshat agent verify --target claude` against the regenerated bundle and capture the evidence
 - [x] T069 [US5] Run `seshat agent verify --target codex` against the regenerated bundle and capture the evidence
-- [ ] T070 [US5] Capture external acceptance evidence for both harnesses per `scripts/external_agent_acceptance.py`
+- [ ] T070 [US5] **DEFERRED, NOT PERFORMED -- owner ruling 2026-08-04 (issue #573).** Left unchecked deliberately: no live run happened. Capture external acceptance evidence for both harnesses per `scripts/external_agent_acceptance.py`
 - [x] T071 [US5] Update `docs/install/support-matrix.md` so every changed row states what was actually exercised against the new contents, carrying no earlier acceptance claim forward
 - [x] T072 [US5] Update `docs/install/agent-install.md` to list the skills the bundles now carry and the wiring that is now automatic
 - [x] T073 [US5] Confirm no version value was changed by any story (FR-024a) and that no tag, release or catalog submission was performed (FR-024, FR-024b)
