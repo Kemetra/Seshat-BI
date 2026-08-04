@@ -14,6 +14,7 @@ without skipping the human decisions that make analytics trustworthy.
 [![CI](https://img.shields.io/github/actions/workflow/status/Kemetra/Seshat-BI/ci.yml?branch=main&style=flat-square&label=CI&labelColor=001E35&color=0B9A9A)](https://github.com/Kemetra/Seshat-BI/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.13%2B-C69214?style=flat-square&logo=python&logoColor=F7F1E7&labelColor=001E35)](pyproject.toml)
 [![License](https://img.shields.io/badge/License-Apache--2.0-0B9A9A?style=flat-square&labelColor=001E35)](LICENSE)
+[![Seshat-BI MCP server](https://glama.ai/mcp/servers/Kemetra/Seshat-BI/badges/score.svg)](https://glama.ai/mcp/servers/Kemetra/Seshat-BI)
 [![Sponsor](https://img.shields.io/badge/Sponsor-Kemetra-EA4AAA?style=flat-square&logo=githubsponsors&logoColor=white&labelColor=001E35)](https://github.com/sponsors/Kemetra)
 [![PostgreSQL](https://img.shields.io/badge/Warehouse-PostgreSQL-0B9A9A?style=flat-square&logo=postgresql&logoColor=F7F1E7&labelColor=001E35)](#how-it-works)
 [![Power BI](https://img.shields.io/badge/BI-Power%20BI%20PBIP-C69214?style=flat-square&logo=powerbi&logoColor=001E35&labelColor=001E35)](#how-it-works)
@@ -140,7 +141,8 @@ agent calls; they are helpers, not the product experience.
 
 ## What is built today
 
-Seshat BI `v0.5.2` is an active beta on PyPI. The shipped system includes:
+Seshat BI is an active beta on PyPI -- the PyPI badge above carries the current
+release. The shipped system includes:
 
 - **Static and live governance gates** over SQL, TMDL/PBIR, DAX, configuration,
   documentation, keys, date coverage, orphan relationships, and reconciliation.
