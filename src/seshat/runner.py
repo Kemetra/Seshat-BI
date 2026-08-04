@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Callable
 
@@ -8,7 +9,7 @@ from seshat.gitutil import GIT_HARDENING as _GIT_HARDENING
 from seshat.gitutil import run_subprocess
 
 from .core import Finding, RegisteredRule, RuleContext, RuleTier, Severity
-from .rule_coverage import CoverageRecord, CoverageState, coverage_for
+from .rule_coverage import CoverageRecord, CoverageState, Requirement, coverage_for
 
 # The Spec A tier gate is itself the ratified ruling that authorizes a KIT_SELF
 # rule's absence in a foreign repo ("absence is not drift", kit_lint FR-006). It is
@@ -162,23 +163,41 @@ def _exit_code(findings: list[Finding]) -> int:
     return 1 if any(f.severity is Severity.ERROR for f in findings) else 0
 
 
-def _missing_in_repo(repo_root: Path) -> Callable[[str], bool]:
-    """Predicate: is this declared requirement absent OR unreadable?
+def _artifact_missing(repo_root: Path, path: str) -> bool:
+    """Is this one artifact absent, or present but unopenable?
 
-    Unreadable counts as missing on purpose. A permission denial or an
-    undecodable file means the rule could not do its job, and calling that a pass
-    would rebuild the exact silence the census exists to expose.
+    Unreadable counts as missing on purpose. A permission denial, or a directory
+    where a file was required, means the rule could not do its job, and calling
+    that a pass would rebuild the exact silence the census exists to expose.
     """
+    candidate = repo_root / path
+    if not candidate.exists():
+        return True
+    try:
+        with candidate.open("rb"):
+            return False
+    except OSError:
+        return True
 
-    def missing(path: str) -> bool:
-        candidate = repo_root / path
-        if not candidate.exists():
-            return True
-        try:
-            with candidate.open("rb"):
-                return False
-        except OSError:
-            return True
+
+def _corpus_empty(tracked_files: tuple[str, ...], pattern: str) -> bool:
+    """Does NO tracked file match this glob?
+
+    An empty corpus is the interesting case: a rule that iterates a file class and
+    finds none returns no findings while having verified nothing. Matched against
+    the tracked-file list rather than the working tree, because that list is what
+    the rules themselves iterate.
+    """
+    return not any(fnmatch(candidate, pattern) for candidate in tracked_files)
+
+
+def _missing_for(ctx: RuleContext) -> Callable[[Requirement], bool]:
+    """Resolve either requirement form against the real repo."""
+
+    def missing(requirement: Requirement) -> bool:
+        if requirement.pattern is not None:
+            return _corpus_empty(ctx.tracked_files, requirement.pattern)
+        return _artifact_missing(ctx.repo_root, requirement.path or "")
 
     return missing
 
@@ -195,7 +214,7 @@ def coverage_census(
     A KIT_SELF rule gated off by ``bootstrapped=False`` is ``not-applicable``, citing
     the Spec A tier gate as its basis rather than being silently dropped.
     """
-    missing = _missing_in_repo(ctx.repo_root)
+    missing = _missing_for(ctx)
     records: list[CoverageRecord] = []
     for registered in rules:
         if registered.tier is RuleTier.KIT_SELF and not bootstrapped:

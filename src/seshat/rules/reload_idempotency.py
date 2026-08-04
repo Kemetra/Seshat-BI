@@ -39,7 +39,7 @@ from collections.abc import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
-from ..sql import iter_sql_files, strip_sql_comments
+from ..sql import WAREHOUSE_SQL_CORPUS, iter_sql_files, strip_sql_comments
 
 RULE_ID = "HR7"
 
@@ -156,7 +156,11 @@ def _classify_and_check(ctx: RuleContext, rel: str, raw_text: str) -> list[Findi
     return findings
 
 
-@register(RULE_ID, "reload-strategy declaration for gold loads")
+@register(
+    RULE_ID,
+    "reload-strategy declaration for gold loads",
+    requires=(WAREHOUSE_SQL_CORPUS,),
+)
 def check_hr7(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
     for rel in iter_sql_files(ctx):

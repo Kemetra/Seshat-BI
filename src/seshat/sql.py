@@ -5,6 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from .core import RuleContext
+from .rule_coverage import Requirement
 
 _SCHEMA_TOKENS = ("raw", "marts", "bronze", "silver")
 
@@ -358,6 +359,25 @@ def iter_sql_files(ctx: RuleContext) -> list[str]:
         for p in ctx.tracked_files
         if p.startswith("warehouse/") and p.endswith(".sql")
     )
+
+
+# The coverage declaration for every rule that scans the corpus above. Kept HERE,
+# beside the iterator, so the glob and the iteration cannot drift apart: the
+# pattern is exactly `startswith("warehouse/") and endswith(".sql")` in fnmatch
+# form (fnmatch's `*` spans `/`, so nested migration files match).
+#
+# Declaring it makes a rule report `unevaluable` -- not a silent pass -- when the
+# repo tracks no warehouse SQL at all, which is precisely when these rules iterate
+# nothing and would otherwise look clean. `_live_sql_files` (S5/S6/S7/S8) filters
+# `tests/` out of this same corpus, which removes nothing from a `warehouse/`-
+# prefixed list, so those rules share this identical requirement.
+WAREHOUSE_SQL_CORPUS = Requirement(
+    pattern="warehouse/*.sql",
+    note=(
+        "no tracked warehouse/**.sql exists, so this rule examined no SQL and its "
+        "silence is not a verified pass"
+    ),
+)
 
 
 def _is_schema_qualifying_position(prev: str, prev2: str, nxt: str) -> bool:

@@ -47,7 +47,7 @@ def test_rule_without_a_declaration_is_undeclared() -> None:
     Not EVALUATED (which would silently bless the very silence being fixed) and
     not UNEVALUABLE (which would flood the report with false alarms).
     """
-    record = coverage_for(_registered("X1"), missing=lambda _p: False)
+    record = coverage_for(_registered("X1"), missing=lambda _r: False)
     assert record.state is CoverageState.UNDECLARED
     assert record.rule_id == "X1"
 
@@ -55,7 +55,7 @@ def test_rule_without_a_declaration_is_undeclared() -> None:
 def test_absent_declared_requirement_is_unevaluable_and_names_the_input() -> None:
     record = coverage_for(
         _registered("X2", (_needs("mappings/t/source-map.yaml"),)),
-        missing=lambda _p: True,
+        missing=lambda _r: True,
     )
     assert record.state is CoverageState.UNEVALUABLE
     assert record.requirement == "mappings/t/source-map.yaml"
@@ -65,7 +65,7 @@ def test_absent_declared_requirement_is_unevaluable_and_names_the_input() -> Non
 def test_present_requirements_yield_evaluated() -> None:
     record = coverage_for(
         _registered("X3", (_needs("warehouse/silver.sql"),)),
-        missing=lambda _p: False,
+        missing=lambda _r: False,
     )
     assert record.state is CoverageState.EVALUATED
 
@@ -78,7 +78,7 @@ def test_present_but_empty_input_is_evaluated_not_unevaluable() -> None:
     """
     record = coverage_for(
         _registered("S1", (_needs("warehouse/empty.sql"),)),
-        missing=lambda _p: False,
+        missing=lambda _r: False,
     )
     assert record.state is CoverageState.EVALUATED
 
@@ -102,7 +102,7 @@ def test_not_applicable_with_a_basis_is_accepted_and_carries_it() -> None:
         absence=AbsenceSemantics.NOT_APPLICABLE,
         basis="Principle V: floor key IS the opt-in",
     )
-    record = coverage_for(_registered("X4", (requirement,)), missing=lambda _p: True)
+    record = coverage_for(_registered("X4", (requirement,)), missing=lambda _r: True)
     assert record.state is CoverageState.NOT_APPLICABLE
     assert record.basis == "Principle V: floor key IS the opt-in"
 
@@ -110,7 +110,7 @@ def test_not_applicable_with_a_basis_is_accepted_and_carries_it() -> None:
 def test_unreadable_is_not_an_opt_in() -> None:
     """A requirement declared UNEVALUABLE never degrades to NOT_APPLICABLE."""
     record = coverage_for(
-        _registered("X5", (_needs("locked.yaml"),)), missing=lambda _p: True
+        _registered("X5", (_needs("locked.yaml"),)), missing=lambda _r: True
     )
     assert record.state is CoverageState.UNEVALUABLE
 
@@ -127,14 +127,14 @@ def test_census_covers_every_registered_rule_by_set_equality() -> None:
     """
     rules = all_rules()
     assert rules, "registry is empty -- import seshat.rules first, or this is vacuous"
-    records = census(rules, missing=lambda _p: False)
+    records = census(rules, missing=lambda _r: False)
     assert {r.rule_id for r in records} == {r.id for r in rules}
     assert len(records) == len(rules)
 
 
 def test_census_emits_exactly_one_record_per_rule() -> None:
     rules = (_registered("A"), _registered("B", (_needs("gone.yaml"),)))
-    records = census(rules, missing=lambda p: p == "gone.yaml")
+    records = census(rules, missing=lambda r: r.target == "gone.yaml")
     assert [r.rule_id for r in records] == ["A", "B"]
     assert records[0].state is CoverageState.UNDECLARED
     assert records[1].state is CoverageState.UNEVALUABLE
@@ -153,13 +153,13 @@ def test_uncovered_rule_ids_reports_undeclared_and_unevaluable_only() -> None:
         _registered("RAW"),
         _registered("OPT", (ratified,)),
     )
-    records = census(rules, missing=lambda p: p in {"gone.yaml", "opt.yaml"})
+    records = census(rules, missing=lambda r: r.target in {"gone.yaml", "opt.yaml"})
     assert uncovered_rule_ids(records) == ("GONE", "RAW")
 
 
 def test_coverage_record_is_immutable() -> None:
     """FrozenInstanceError -- a bare Exception would also pass on a typo'd attr."""
-    record = coverage_for(_registered("X6"), missing=lambda _p: False)
+    record = coverage_for(_registered("X6"), missing=lambda _r: False)
     with pytest.raises(FrozenInstanceError):
         record.state = CoverageState.EVALUATED  # type: ignore[misc]
 
@@ -167,7 +167,7 @@ def test_coverage_record_is_immutable() -> None:
 def test_record_to_dict_round_trips_state_as_its_string_value() -> None:
     """Matches Finding.to_dict: enums render as their string value for JSON."""
     record = coverage_for(
-        _registered("X7", (_needs("gone.yaml"),)), missing=lambda _p: True
+        _registered("X7", (_needs("gone.yaml"),)), missing=lambda _r: True
     )
     payload = record.to_dict()
     assert payload["rule_id"] == "X7"
@@ -191,10 +191,18 @@ def test_every_currently_registered_rule_still_constructs() -> None:
 
 
 def test_registered_rule_requires_defaults_to_empty() -> None:
-    """Existing @register(id, title) sites land in UNDECLARED, not EVALUATED."""
-    rules = all_rules()
-    assert rules
-    assert all(r.requires == () for r in rules)
+    """A rule registered WITHOUT `requires=` defaults to (), so it lands in
+    UNDECLARED rather than being silently credited as EVALUATED.
+
+    Asserts the DEFAULT, not the state of the live registry. An "all rules have
+    requires == ()" phrasing would fail as soon as any rule migrates, turning
+    progress into a red suite.
+    """
+    assert RegisteredRule(id="Z1", rule=_noop_rule, title="Z1").requires == ()
+    assert (
+        coverage_for(_registered("Z1"), missing=lambda _r: False).state
+        is CoverageState.UNDECLARED
+    )
 
 
 def test_no_rule_reads_as_evaluated_without_declaring_its_inputs() -> None:
@@ -206,7 +214,7 @@ def test_no_rule_reads_as_evaluated_without_declaring_its_inputs() -> None:
     and only breaks if a rule is credited as EVALUATED while declaring nothing.
     """
     rules = all_rules()
-    records = {r.rule_id: r for r in census(rules, missing=lambda _p: False)}
+    records = {r.rule_id: r for r in census(rules, missing=lambda _r: False)}
     assert records
     for rule in rules:
         if not rule.requires:
@@ -226,7 +234,7 @@ def test_a_note_explains_why_an_input_is_required_without_claiming_authority() -
         absence=AbsenceSemantics.UNEVALUABLE,
         note="absence means the gold build never ran",
     )
-    record = coverage_for(_registered("G1", (requirement,)), missing=lambda _p: True)
+    record = coverage_for(_registered("G1", (requirement,)), missing=lambda _r: True)
     assert record.state is CoverageState.UNEVALUABLE
     assert record.reason == "absence means the gold build never ran"
     assert record.basis is None
