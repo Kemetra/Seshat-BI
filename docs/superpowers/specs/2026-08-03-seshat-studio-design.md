@@ -44,6 +44,18 @@ Studio answers five questions at all times:
 | Human decisions | Studio may transcribe an explicit named-human decision through the governed agent workflow after evidence and the exact diff are reviewed |
 | Delivery shape | Three sequential specs, never concurrent implementation stories |
 
+> **Amended 2026-08-04 (owner).** Two rows above are superseded by the owner amendment
+> recorded in `specs/139-seshat-studio-foundation/spec.md`. "Separate API billing: not
+> required, never enabled as a hidden fallback" now forbids only a SILENT or automatic
+> switch to billed access; an explicitly operator-configured API-key or access-token
+> bridge is permitted as a clearly labelled alternate mode (FR-013 / FR-013a).
+> Subscription sign-in remains the default and the only certified path. The reason is
+> recorded in that spec's "Provider authentication compliance -- OPEN QUESTION" section:
+> the Codex subscription path is NOT established as compliant, OpenAI's own
+> documentation directs programmatic use to API keys, and OpenAI declined to clarify the
+> question when asked directly. This table is kept as the record of what was ratified on
+> 2026-08-03, not as current state.
+
 ## User experience
 
 ### Command Room

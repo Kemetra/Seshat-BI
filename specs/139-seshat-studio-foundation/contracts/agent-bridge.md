@@ -177,4 +177,12 @@ request is classified as incompatible rather than handled opportunistically.
 | unexpected EOF | `crashed` | fail active turn, redact, recompute snapshot, offer restart |
 | deliberately disabled | `disabled` | deterministic views only |
 
-No condition triggers API-key fallback.
+No condition triggers an AUTOMATIC API-key fallback. Every row above stays a reported
+health state with a recovery action; none of them may switch the bridge to a billed
+path on its own (FR-013).
+
+An API-key or access-token bridge is permitted only as an EXPLICITLY
+operator-configured alternate implementation of this same `AgentBridge` protocol
+(FR-013a, amended 2026-08-04). When active it MUST be named in the interface and in
+`GET /bootstrap`. It is never selected by inference, by degradation, or as a response
+to any condition in this table.
