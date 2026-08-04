@@ -1,7 +1,7 @@
 # US5 — published claims measured against the new contents
 
-**Captured**: 2026-07-31 | **Scope**: the 21-skill bundles produced by US2+US3
-| **Runtime**: Windows + Python 3.13
+**Captured**: 2026-07-31; refreshed 2026-08-03 | **Scope**: the 21-skill
+bundles produced by US2+US3 | **Runtime**: Windows + Python 3.13.14
 
 US5's obligation is that no published claim outruns what was exercised. The
 contents changed (11 -> 21 skills), so every earlier acceptance claim was
@@ -15,20 +15,21 @@ Both targets, against the regenerated bundles:
 |---|---|---|
 | `no_silver_before_mapping` (hard stop) | PASS | PASS |
 | `no_invented_metric_meaning` (hard stop) | PASS | PASS |
-| `update_integrity` | PASS | PASS — 241 generated files match recorded `output_sha256` |
+| `update_integrity` | PASS — 266 generated files match recorded `output_sha256` | PASS — 242 generated files match recorded `output_sha256` |
 | `uninstall_integrity` | PASS | PASS |
-| `version_compatibility` | BLOCKED | BLOCKED |
-| `ide_surface` | UNAVAILABLE | n/a |
+| `version_compatibility` | PASS | PASS |
+| `ide_surface` | UNAVAILABLE — Claude declares no IDE surface | PASS |
 
 Both hard-stop scenarios reproduce with the expected `refuse`, naming the blocker
 and offering the governed path instead — which is the property that matters for
 shipping ten *gate-bearing* verbs.
 
-**`version_compatibility` is BLOCKED for a pre-existing tooling reason, not a
-content reason**: `version-compatibility audit surface is unavailable: No module
-named 'scripts.check_release_versions'`. `scripts/` carries no `__init__.py`, so
-that import cannot resolve; the only file this feature touched under `scripts/` is
-`export_agent_bundles.py`. Recorded rather than worked around.
+The earlier `version_compatibility` blocker exposed a real installed-package
+boundary defect: the shipped check imported the development-only
+`scripts.check_release_versions` module. Commit `624a22b` moved distribution
+projection checks into shipped `seshat.release_versions` while leaving tag,
+release-note, changelog and publication checks in the release-only script. The
+fresh target runs above now pass that check from the installed package boundary.
 
 ## T070 — external acceptance, credential-free path
 
@@ -40,9 +41,16 @@ codex         status: pass   blockers: []
 ```
 
 Both carry the tool's own `authority_disclaimer`: *"Validation does not authorize
-publication."* The `--execute-cli` path is an explicit operator action requiring the
-installed client and plugin in an isolated profile; it is **not** run here and
-remains outstanding, exactly as the US1 harness runs do.
+publication."* Three historical sanitized fixtures (Claude CLI, Codex CLI and
+Codex IDE) also reclassify with no safety blockers, but each reports
+`bundle_provenance_verified: false`; none is evidence for the current bundle.
+
+A standalone copy of both generated bundles was installed into isolated client
+profiles on 2026-08-03. Plugin and MCP list/get discovery passed on Codex; plugin
+and server discovery passed on Claude, whose health call then stopped because the
+fresh profile was not logged in. The `--execute-cli` path therefore remains
+outstanding, exactly as the live US1 harness call does. See
+`evidence/us1-acceptance.md`; discovery is not upgraded into a behavioral claim.
 
 ## T071 / T072 — docs corrected, no claim carried forward
 
@@ -57,7 +65,8 @@ remains outstanding, exactly as the US1 harness runs do.
 
 ## T073 — no version moved, nothing published
 
-- `pyproject.toml` remains `version = "0.7.1"`; `git diff` against the base shows
+- `pyproject.toml` remains `version = "0.8.1"`; this story made no version change,
+  and `git diff` against its implementation base shows
   **no change** to `pyproject.toml` or `CHANGELOG.md`.
 - No tag points at this work, no release was created, and no catalog submission was
   performed (FR-024, FR-024a, FR-024b).

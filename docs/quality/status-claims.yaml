@@ -142,6 +142,10 @@ claims:
     claimed-status: "built"
   - id: "spec-138-portability-gate"
     doc: "specs/138-agent-driven-bundle/spec.md"
-    anchor: "the ten compass verbs ship\nbehind `portability-audit-v1`"
+    # Anchor re-pointed 2026-08-03 (spec 139 ratification): rewording the
+    # surrounding paragraph moved the line break one word later, so the previous
+    # two-line anchor no longer resolved. The claimed sentence -- and the claim --
+    # is unchanged and still locked; only its wrapping moved.
+    anchor: "the ten compass verbs ship behind\n`portability-audit-v1`"
     claimed-artifact: "src/seshat/portability_audit.py"
     claimed-status: "built"

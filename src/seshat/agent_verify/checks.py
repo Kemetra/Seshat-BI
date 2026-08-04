@@ -5,7 +5,7 @@ returning exactly one :class:`~seshat.agent_verify.model.PerCheckResult`.
 Nothing here launches a live agent, opens a database, or reaches the
 network (FR-006/FR-008); the only external process started is a local,
 offline ``git`` read via the already-shipped
-``scripts.check_release_versions`` version audit.
+``seshat.release_versions`` version audit.
 
 Six checks are ``per_target`` (install & discovery, version compatibility,
 update integrity, uninstall integrity, IDE surface, and the governance
@@ -18,7 +18,8 @@ baseline rather than implied per-target (FR-012 through FR-017).
 
 No check re-implements hashing, version parsing, or scenario execution: it
 reuses ``scripts.export_agent_bundles`` provenance shape, ``scripts.
-check_release_versions.audit_versions``, ``seshat.benchmark`` (loader +
+check_release_versions`` over the shared ``seshat.release_versions`` authority,
+``seshat.benchmark`` (loader +
 scripted reference), and ``seshat.governor.service.GovernorService``.
 """
 
@@ -231,7 +232,10 @@ def version_compatibility_check(
     root = Path(repo_root)
 
     try:
-        from scripts.check_release_versions import VersionAuditError, audit_versions
+        from seshat.release_versions import (
+            VersionAuditError,
+            audit_distribution_versions,
+        )
     except ImportError as exc:
         return _blocked(
             check_id,
@@ -240,7 +244,7 @@ def version_compatibility_check(
         )
 
     try:
-        report = audit_versions(root)
+        report = audit_distribution_versions(root)
     except (VersionAuditError, OSError) as exc:
         return _blocked(check_id, "per_target", [f"version audit failed: {exc}"])
 

@@ -92,8 +92,8 @@ actionable instruction and no simulated answer.
 ### Verification
 
 - [ ] T021 [US1] Verify on both harnesses in a scratch workspace created by `seshat init-project`: tools present with no registration, and the governor reporting on the scratch workspace rather than the plugin directory. Confirm via the runtime's own list/get commands plus a successful tool call — never via a settings pane
-- [ ] T022 [US1] Verify degradation with the optional extra removed — a named two-lane install hint from `src/seshat/cli/__init__.py::_run_mcp`, no simulated governor output, no claim the loop is available — recording the session evidence in `specs/138-agent-driven-bundle/evidence/us1-acceptance.md`
-- [ ] T023 [US1] Verify against `src/seshat/governor/mcp_server.py` that no enabled tool advances a stage, grants an approval, writes a readiness artifact, or emits any score, and record it in `specs/138-agent-driven-bundle/evidence/us1-acceptance.md`
+- [x] T022 [US1] Verify degradation with the optional extra removed — a named two-lane install hint from `src/seshat/cli/__init__.py::_run_mcp`, no simulated governor output, no claim the loop is available — recording the session evidence in `specs/138-agent-driven-bundle/evidence/us1-acceptance.md`
+- [x] T023 [US1] Verify against `src/seshat/governor/mcp_server.py` that no enabled tool advances a stage, grants an approval, writes a readiness artifact, or emits any score, and record it in `specs/138-agent-driven-bundle/evidence/us1-acceptance.md`
 
 **Checkpoint**: US1 is independently shippable.
 
@@ -136,7 +136,7 @@ byte-identical output.
 
 ### Verification
 
-- [ ] T040 [US2] ~~Run `python scripts/export_agent_bundles.py --repo .` then `git diff --stat integrations/` and confirm the diff is **empty**~~ **WAIVED 2026-07-31 by owner ruling** (correction 4, option 2): US2 now carries the US3+US4 payload, so the `integrations/` diff is large by design and must be reviewed as a payload change rather than compared to zero. The empty-diff acceptance no longer applies; the replacement check is T059/T064 against the 6,000 ceiling plus the portability audit. See `evidence/us2-design-corrections.md`
+- [x] T040 [US2] ~~Run `python scripts/export_agent_bundles.py --repo .` then `git diff --stat integrations/` and confirm the diff is **empty**~~ **WAIVED 2026-07-31 by owner ruling** (correction 4, option 2): US2 now carries the US3+US4 payload, so the `integrations/` diff is large by design and must be reviewed as a payload change rather than compared to zero. The empty-diff acceptance no longer applies; the replacement check is T059/T064 against the 6,000 ceiling plus the portability audit. See `evidence/us2-design-corrections.md`
 - [x] T041 [US2] Confirm `tests/contract/test_generated_agent_bundles.py::test_committed_bundles_match_clean_regeneration` passes unchanged
 
 **Checkpoint**: the gate is derived and fail-closed, with zero payload change.
@@ -198,10 +198,10 @@ exactly the consumer product.
 
 **Depends on US2; sequenced after US3.**
 
-- [ ] T061 [US4] Flip `ships: true` and `ship_classification: consumer-capability` for the remaining consumer skills in `docs/capabilities/capabilities.yaml`
-- [ ] T062 [US4] Run the export and resolve any portability findings the new skills raise, by canonical rewrite only
-- [ ] T063 [US4] Regenerate the allowlist and both bundles and commit the generated output
-- [ ] T064 [US4] Record the post-story routing cost; if it exceeds the ceiling, **fail** — do not pass with a note, and do not split the distribution without a recorded measurement justifying it (FR-021a)
+- [x] T061 [US4] **DEFERRED, NOT IMPLEMENTED — owner scope amendment 2026-08-03.** Do not flip the remaining consumer skills in this feature; move the work into a separately designed and ratified future specification.
+- [x] T062 [US4] **DEFERRED, NOT IMPLEMENTED — owner scope amendment 2026-08-03.** The measured 301 portability rewrites across 21 skills are future-spec input, not work completed here.
+- [x] T063 [US4] **DEFERRED, NOT IMPLEMENTED — owner scope amendment 2026-08-03.** No 43-skill bundle is generated or claimed by spec 138.
+- [x] T064 [US4] **DEFERRED, NOT IMPLEMENTED — owner scope amendment 2026-08-03.** The 6,000 `tokens_approx` ceiling remains binding on the future specification; the measured projection is evidence, not a pass.
 - [x] T065 [US4] Verify in a fresh workspace that no development-only or specification-workflow skill is present
 - [x] T066 [US4] Prove exclusion is caused by the recorded classification, not a name pattern: temporarily reclassify one development-only skill as consumer-facing, confirm it *would* ship, then revert
 - [x] T067 [US4] Confirm skill bodies still load on demand and no story made a body resident (FR-021b)

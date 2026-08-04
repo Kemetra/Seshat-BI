@@ -1,0 +1,633 @@
+openapi: 3.1.0
+info:
+  title: Seshat Studio Local API
+  version: 1.0.0
+  description: >-
+    Same-origin loopback API for one pinned Seshat workspace. All responses are
+    redacted projections. This contract does not authorize arbitrary workspace
+    paths, business approvals, or browser-side tool execution.
+servers:
+  - url: http://127.0.0.1:{port}/api/v1
+    variables:
+      port:
+        default: "0"
+        description: OS-assigned loopback port selected at process start.
+security:
+  - studioSession: []
+paths:
+  /bootstrap:
+    post:
+      summary: Exchange the one-time URL token for a session cookie.
+      security: []
+      parameters:
+        - in: query
+          name: token
+          required: true
+          schema:
+            type: string
+            minLength: 32
+      responses:
+        "204":
+          description: Session cookie set; client must remove token from history.
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: HttpOnly, SameSite=Strict, Path=/ session cookie.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /bootstrap/state:
+    get:
+      summary: Load initial deterministic workspace and agent state.
+      operationId: getBootstrapState
+      responses:
+        "200":
+          description: Current application bootstrap state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BootstrapState"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /workspace:
+    get:
+      summary: Recompute and return the current workspace snapshot.
+      operationId: getWorkspace
+      responses:
+        "200":
+          description: Current committed workspace projection.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceSnapshot"
+        "422":
+          $ref: "#/components/responses/InputDefect"
+  /tables/{table_id}:
+    get:
+      summary: Return one table's seven-stage journey.
+      operationId: getTableJourney
+      parameters:
+        - $ref: "#/components/parameters/TableId"
+      responses:
+        "200":
+          description: One current table journey.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TableJourney"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /decisions:
+    get:
+      summary: List read-only prepared or pending business-decision summaries.
+      operationId: listDecisionSummaries
+      responses:
+        "200":
+          description: Foundation cannot mutate these summaries.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PreparedDecisionSummary"
+  /agent/health:
+    get:
+      summary: Return current Codex bridge health without credentials.
+      operationId: getAgentHealth
+      responses:
+        "200":
+          description: Current adapter health.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentHealth"
+  /agent/connect:
+    post:
+      summary: Start or resume the official Codex login flow.
+      operationId: connectAgent
+      responses:
+        "202":
+          description: Login flow delegated to Codex; Studio receives no credential.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentHealth"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /agent/threads:
+    post:
+      summary: Start a workspace-scoped agent thread.
+      operationId: createAgentThread
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [snapshot_revision]
+              properties:
+                snapshot_revision:
+                  type: string
+                selected_table_id:
+                  type: [string, "null"]
+      responses:
+        "201":
+          description: Thread created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentThreadRef"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/AgentUnavailable"
+  /agent/threads/{thread_id}/turns:
+    post:
+      summary: Start one plain-language turn.
+      operationId: startAgentTurn
+      parameters:
+        - $ref: "#/components/parameters/ThreadId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartTurnRequest"
+      responses:
+        "202":
+          description: Turn accepted; updates stream from the events endpoint.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [turn_id]
+                properties:
+                  turn_id:
+                    type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/InvalidRequest"
+        "503":
+          $ref: "#/components/responses/AgentUnavailable"
+  /agent/threads/{thread_id}/events:
+    get:
+      summary: Stream ordered, normalized, redacted Studio events.
+      operationId: streamAgentEvents
+      parameters:
+        - $ref: "#/components/parameters/ThreadId"
+        - in: header
+          name: Last-Event-ID
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: >-
+            text/event-stream. Each event id is the per-thread sequence and each
+            data field is a serialized StudioEvent.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Requested replay sequence has expired from memory.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+  /agent/threads/{thread_id}/approvals/{approval_id}:
+    post:
+      summary: Relay one explicit technical allow or deny response.
+      operationId: respondToToolApproval
+      parameters:
+        - $ref: "#/components/parameters/ThreadId"
+        - in: path
+          name: approval_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [allow_once, deny]
+      responses:
+        "204":
+          description: Decision relayed once.
+        "403":
+          description: Allow refused because readiness forbids the proposed scope.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /agent/threads/{thread_id}/interrupt:
+    post:
+      summary: Interrupt the active turn.
+      operationId: interruptAgentTurn
+      parameters:
+        - $ref: "#/components/parameters/ThreadId"
+      responses:
+        "202":
+          description: Interruption requested.
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /health:
+    get:
+      summary: Return process health without workspace content.
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: Process is serving on loopback.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [status, api_version]
+                properties:
+                  status:
+                    const: ok
+                  api_version:
+                    const: v1
+components:
+  securitySchemes:
+    studioSession:
+      type: apiKey
+      in: cookie
+      name: seshat_studio_session
+      description: Ephemeral HttpOnly same-origin session cookie.
+  parameters:
+    TableId:
+      in: path
+      name: table_id
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 160
+    ThreadId:
+      in: path
+      name: thread_id
+      required: true
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 160
+  responses:
+    Unauthorized:
+      description: Missing, invalid, reused, or expired local session credential.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: Foreign origin, non-loopback context, or prohibited operation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: Stale revision, invalid state transition, or repeated action.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Opaque resource does not exist in this process.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    InputDefect:
+      description: Committed workspace input is malformed or unreadable.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    InvalidRequest:
+      description: Request is incomplete, too large, or fails validation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    AgentUnavailable:
+      description: Agent is not currently healthy; deterministic views remain usable.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, detail, recovery_action]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+        recovery_action:
+          type: string
+        source_ref:
+          type: [string, "null"]
+    BootstrapState:
+      type: object
+      additionalProperties: false
+      required: [workspace, navigation, capabilities]
+      properties:
+        workspace:
+          $ref: "#/components/schemas/WorkspaceSnapshot"
+        navigation:
+          type: array
+          items:
+            type: string
+            enum: [command_room]
+        capabilities:
+          type: object
+          additionalProperties: false
+          required: [agent_turns, technical_approvals, business_decision_recording]
+          properties:
+            agent_turns:
+              type: boolean
+            technical_approvals:
+              type: boolean
+            business_decision_recording:
+              const: false
+    WorkspaceSnapshot:
+      type: object
+      additionalProperties: false
+      required:
+        - identity
+        - generated_at
+        - tables
+        - pending_decision_count
+        - input_defects
+        - agent_health
+      properties:
+        identity:
+          $ref: "#/components/schemas/WorkspaceIdentity"
+        generated_at:
+          type: string
+          format: date-time
+        tables:
+          type: array
+          items:
+            $ref: "#/components/schemas/TableJourney"
+        next_action:
+          oneOf:
+            - $ref: "#/components/schemas/ActionSummary"
+            - type: "null"
+        pending_decision_count:
+          type: integer
+          minimum: 0
+        input_defects:
+          type: array
+          items:
+            $ref: "#/components/schemas/InputDefect"
+        agent_health:
+          $ref: "#/components/schemas/AgentHealth"
+    WorkspaceIdentity:
+      type: object
+      additionalProperties: false
+      required: [display_name, root_fingerprint, branch, revision]
+      properties:
+        display_name:
+          type: string
+        root_fingerprint:
+          type: string
+        branch:
+          type: [string, "null"]
+        revision:
+          type: string
+    TableJourney:
+      type: object
+      additionalProperties: false
+      required: [table_id, display_name, current_stage, stages, forbidden_scope]
+      properties:
+        table_id:
+          type: string
+        display_name:
+          type: string
+        current_stage:
+          $ref: "#/components/schemas/ReadinessStage"
+        stages:
+          type: array
+          minItems: 7
+          maxItems: 7
+          items:
+            $ref: "#/components/schemas/StageState"
+        next_action:
+          oneOf:
+            - $ref: "#/components/schemas/ActionSummary"
+            - type: "null"
+        forbidden_scope:
+          type: array
+          items:
+            type: string
+    StageState:
+      type: object
+      additionalProperties: false
+      required: [stage, status, evidence, blocking_reasons, required_authority]
+      properties:
+        stage:
+          $ref: "#/components/schemas/ReadinessStage"
+        status:
+          type: string
+          enum: [not_started, blocked, ready_for_review, pass]
+        evidence:
+          type: array
+          items:
+            $ref: "#/components/schemas/EvidenceRef"
+        blocking_reasons:
+          type: array
+          items:
+            $ref: "#/components/schemas/BlockingReason"
+        required_authority:
+          type: array
+          items:
+            type: string
+    EvidenceRef:
+      type: object
+      additionalProperties: false
+      required: [label, source_ref, kind, live_state]
+      properties:
+        label:
+          type: string
+        source_ref:
+          type: string
+        kind:
+          type: string
+        live_state:
+          type: string
+          enum: [verified, pending_live_profile, not_applicable]
+    BlockingReason:
+      type: object
+      additionalProperties: false
+      required: [code, message, source_ref]
+      properties:
+        code:
+          type: [string, "null"]
+        message:
+          type: string
+        source_ref:
+          type: [string, "null"]
+    ActionSummary:
+      type: object
+      additionalProperties: false
+      required: [id, label, explanation, requires_agent, requires_named_human]
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        explanation:
+          type: string
+        requires_agent:
+          type: boolean
+        requires_named_human:
+          type: boolean
+    InputDefect:
+      type: object
+      additionalProperties: false
+      required: [code, message, source_ref, recovery_action]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        source_ref:
+          type: [string, "null"]
+        recovery_action:
+          type: string
+    AgentHealth:
+      type: object
+      additionalProperties: false
+      required: [state, summary, recovery_action, provider, version]
+      properties:
+        state:
+          type: string
+          enum: [healthy, missing, signed_out, incompatible, quota_limited, crashed, disabled]
+        summary:
+          type: string
+        recovery_action:
+          type: string
+        provider:
+          type: string
+          enum: [codex, disabled]
+        version:
+          type: [string, "null"]
+    AgentThreadRef:
+      type: object
+      additionalProperties: false
+      required: [thread_id, state]
+      properties:
+        thread_id:
+          type: string
+        state:
+          type: string
+          enum: [starting, ready, running, awaiting_technical_approval, completed, failed, interrupted]
+    StartTurnRequest:
+      type: object
+      additionalProperties: false
+      required: [prompt, snapshot_revision, requested_mode]
+      properties:
+        prompt:
+          type: string
+          minLength: 1
+          maxLength: 20000
+        selected_table_id:
+          type: [string, "null"]
+        snapshot_revision:
+          type: string
+        requested_mode:
+          type: string
+          enum: [read_only, propose_changes]
+    StudioEvent:
+      type: object
+      additionalProperties: false
+      required: [thread_id, sequence, type, occurred_at, turn_id, payload, ignored_for_state]
+      properties:
+        thread_id:
+          type: string
+        sequence:
+          type: integer
+          minimum: 1
+        type:
+          type: string
+          enum:
+            - thread_started
+            - turn_started
+            - agent_message
+            - plan_updated
+            - tool_started
+            - tool_completed
+            - file_change_proposed
+            - approval_required
+            - turn_completed
+            - turn_failed
+            - connection_state
+        occurred_at:
+          type: string
+          format: date-time
+        turn_id:
+          type: [string, "null"]
+        payload:
+          type: object
+        ignored_for_state:
+          type: boolean
+    PreparedDecisionSummary:
+      type: object
+      additionalProperties: false
+      required: [decision_id, question, required_authority, affected_scope, status]
+      properties:
+        decision_id:
+          type: string
+        question:
+          type: string
+        required_authority:
+          type: string
+        affected_scope:
+          type: array
+          items:
+            type: string
+        status:
+          const: prepared
+    ReadinessStage:
+      type: string
+      enum: [source, mapping, silver, gold, semantic_model, dashboard, publish]

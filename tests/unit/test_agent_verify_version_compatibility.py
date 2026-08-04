@@ -6,6 +6,8 @@ each test module single-purpose (CodeScene Low Cohesion).
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -15,6 +17,8 @@ from tests.unit._agent_verify_fixtures import target_spec
 
 pytestmark = pytest.mark.unit
 
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+
 
 def _patch_audit_versions(
     monkeypatch: pytest.MonkeyPatch, projections: list[dict]
@@ -23,7 +27,7 @@ def _patch_audit_versions(
         return {"projections": projections}
 
     monkeypatch.setattr(
-        "scripts.check_release_versions.audit_versions", _fake_audit_versions
+        "seshat.release_versions.audit_distribution_versions", _fake_audit_versions
     )
 
 
@@ -96,3 +100,33 @@ def test_version_compatibility_never_passes_on_absent_declaration(
     )
     result = checks.version_compatibility_check(spec, tmp_path)
     assert result.verdict != "PASS"
+
+
+def test_version_compatibility_works_from_installed_package_boundary(
+    tmp_path: Path,
+) -> None:
+    """The check must not depend on the development-only ``scripts`` package."""
+
+    program = """
+import sys
+from pathlib import Path
+
+from seshat.agent_verify.checks import version_compatibility_check
+from seshat.agent_verify.targets import resolve_target
+
+result = version_compatibility_check(resolve_target("claude"), Path(sys.argv[1]))
+print(result.verdict)
+if result.blocking_reasons:
+    print(result.blocking_reasons[0])
+raise SystemExit(0 if result.verdict == "PASS" else 1)
+"""
+    completed = subprocess.run(
+        [sys.executable, "-I", "-c", program, str(_REPO_ROOT)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout.splitlines() == ["PASS"]

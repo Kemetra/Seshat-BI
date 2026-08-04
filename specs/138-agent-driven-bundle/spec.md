@@ -9,14 +9,17 @@
 **Status history**: ratified -- Ahmed Shaaban (owner), 2026-07-31
 
 **Not** `implemented`: T075 directs that value, but three stories are outstanding and
-the claim would not be true. Delivered: **US2** (the inventory is the enforced source
-of what ships; the six-name constant is gone) and **US3** (the ten compass verbs ship
-behind `portability-audit-v1`; both bundles carry 21 skills at 2,224 of the 6,000
-`tokens_approx` ceiling). Outstanding: **US1** (bundled MCP server -- blocked on
-operator harness runs at T007-T010), **US4** (22 consumer-capability skills, deferred
-by owner ruling 2026-07-31 with a measured cost of 301 portability rewrites across 21
-skills), and the external-acceptance half of **US5** (T070 `--execute-cli`, T060).
-See `evidence/portability-findings.md` and `evidence/us5-claims.md`.
+the claim would not be true. Delivered: the **US1 implementation** (both plugins
+declare the read-only governor; missing-extra degradation and tool authority are
+verified), **US2** (the inventory is the enforced source of what ships; the six-name
+constant is gone), and **US3** (the ten compass verbs ship behind
+`portability-audit-v1`; both bundles carry 21 skills at 2,224 of the 6,000
+`tokens_approx` ceiling). Outstanding: the **US1 live harness call** (T021) and the
+external-acceptance half of **US5** (T070 `--execute-cli`, T060). **US4 is not
+implemented and is no longer part of this feature's completion scope** under the
+2026-08-03 owner amendment below. See
+`evidence/portability-findings.md`, `evidence/us1-acceptance.md`, and
+`evidence/us5-claims.md`.
 
 **Status history**: draft
 
@@ -36,6 +39,21 @@ See `evidence/portability-findings.md` and `evidence/us5-claims.md`.
      superseded  -- replaced; name the superseding spec id
      When changing this value, move the previous text verbatim into a
      `**Status history**:` line rather than deleting it. -->
+
+### Owner scope amendment — 2026-08-03
+
+Ahmed Shaaban (owner) authorized the following amendment after reviewing the
+measured US4 cost: User Story 4 and FR-020 are deferred, unimplemented, into a
+separate future specification. No future specification number is allocated here;
+that package must be designed and ratified independently before implementation.
+FR-021 and FR-021b remain delivered exclusion/on-demand-loading constraints, and
+FR-021a remains the governing measurement constraint for any future attempt.
+
+This amendment narrows completion of spec 138; it does not claim that the 22
+consumer capabilities ship, does not flip their inventory flags, and does not
+self-grant an approval. The owner also ratified the exact spec 139 package as the
+next plan. Spec 139 remains non-active until this feature's live acceptance closes
+and the single-plan fence is moved in both repository instruction files.
 
 **Input**: User description: "Enhance the integration with AI agents (Claude Code and Codex) now that marketplaces and skills exist, and sharpen it toward the goal of an agent-driven tool. Deliver all identified gaps as a safe sequence, parallel where safe and sequential where required."
 
