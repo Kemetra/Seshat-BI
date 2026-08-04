@@ -1,0 +1,32 @@
+# Report wording for retail_store_sales, keyed by governed code.
+#
+# Headings and caveats travel through the kit as CODES so the wording resolves per
+# language instead of being composed where it is used -- composing there would put
+# untranslated English on an Arabic page. This file is where that wording lives, and
+# a code with no entry REFUSES the render rather than displaying the code itself.
+#
+# It carries wording only. A term whose key names a value, metric, measure, figure,
+# DAX or SQL is refused on load: a vocabulary that could state a number would be a
+# second place a report's numbers come from.
+schema: seshat.report-vocabulary/v1
+table: retail_store_sales
+
+languages:
+  en:
+    # Covers
+    cover.board_pack: "Retail store sales -- board pack"
+
+    # Section headings
+    section.headline: "Headline"
+    section.mix: "Mix and discounting"
+    section.by_region: "Revenue by driver"
+    section.overview: "Overview"
+
+    # Caveats. The v04 caveat is REQUIRED by the signed binding map (see
+    # visual-contract-binding-map.md, "Caveat carried to the page"): the approved
+    # DiscountedTransactionRate is the KNOWN-STATUS rate, and publishing 50.37%
+    # without saying so overstates how much is known.
+    caveat.v04_discount_known_status: >-
+      The discount rate covers transactions whose discount status is known. 33.39%
+      of transactions have an unknown discount status and are excluded; if those
+      were all treated as not discounted the rate would be 33.55%.

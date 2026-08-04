@@ -1,0 +1,18 @@
+# The PRINT OVERLAY for a governed report. Presentation only.
+#
+# This file adds what a dashboard layout cannot express -- a cover page, section
+# order, page breaks. It references visual ids from design/visual-list.md and
+# CANNOT introduce a figure: no `value`, no `metric`, no prose. Meaning stays
+# governed by the approved metric contracts and visual-contract-binding-map.md.
+#
+# Headings are governed CODES, not text, so a code resolves per language and no
+# untranslated English reaches an Arabic page.
+version: 1
+cover_title_code: cover.<fill_in>
+sections:
+  - section_id: overview
+    order: 1
+    heading_code: section.overview
+    # Replace with visual ids from this table's design/visual-list.md.
+    visual_ids: [replace-with-a-visual-id-from-visual-list]
+    page_break_before: false

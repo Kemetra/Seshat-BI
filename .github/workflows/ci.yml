@@ -179,6 +179,43 @@ jobs:
       - name: Statistical tests
         run: pytest -m statistics
 
+  report-surfaces:
+    # The report surfaces are optional at runtime but mandatory in their own
+    # environment, for the same reason `statistics` has one: the base `check` job
+    # stays on .[dev], which is what proves the surfaces are lazily imported and
+    # the static core stays pyyaml-only.
+    #
+    # This job is also the only place a REAL browser runs. Every other PDF test
+    # drives the PagePrinter port with a fake, so without this job the assertion
+    # that Chromium's actual output is tagged and embeds fonts would be green
+    # everywhere and verified nowhere.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Install report environment
+        run: pip install -e ".[dev,report,report-pdf]"
+      - name: Install chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Cross-surface invariants
+        # Marked `integration`, so `pytest -m unit` in the `check` job does not
+        # reach them. Named here explicitly rather than left to a marker sweep.
+        run: pytest tests/integration/test_report_surfaces_agree.py
+      - name: Real browser render
+        # The test self-skips where the browser is absent, which is correct for an
+        # adopter checkout and useless as a gate. A skip HERE means this job
+        # installed a browser and then failed to use it, so it is a failure.
+        run: |
+          set -euo pipefail
+          output=$(pytest tests/integration/test_report_pdf_chromium.py -q -rs --no-header)
+          echo "$output"
+          if echo "$output" | grep -qi "skipped"; then
+            echo "::error::the real-browser test skipped in the job that installs the browser"
+            exit 1
+          fi
+
   smoke:
     # Windows is the release gate for the first-success journey. The test builds both
     # package artifacts, installs the wheel with pipx in a throwaway location, then

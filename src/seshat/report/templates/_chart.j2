@@ -1,0 +1,31 @@
+{# The chart macro, in its own file so BOTH surfaces import the same one. A macro
+   defined in a base template is reachable from a child's block override, but only
+   by a rule a future edit could quietly break; an import states it.
+
+   This is where SVG tags come from, and the tags are trusted because they are
+   template source. Every value interpolated below reaches this file from the
+   bundle -- axis labels are customer values -- so it travels through the
+   environment's unconditional autoescaping exactly as a table cell does. There is
+   no `|safe` here, which is what makes a category named `<script>` inert. #}
+{# `anchor` is the SECTION id, not the chart kind. Two bar charts on one page both
+   emitted `title-bar`, so every aria-labelledby resolved to the first chart's
+   title and a screen reader announced the wrong accessible name for the rest. #}
+{% macro chart(view, anchor) %}
+  <svg class="chart" viewBox="0 0 {{ view.width }} {{ view.height }}"
+       role="img" aria-labelledby="title-{{ anchor }}">
+    <title id="title-{{ anchor }}">{{ view.title_code }}</title>
+    <desc>{{ view.description_code }}</desc>
+    {% for mark in view.marks %}
+    <rect x="{{ mark.x }}" y="{{ mark.y }}"
+          width="{{ mark.width }}" height="{{ mark.height }}" />
+    {% endfor %}
+    {% if view.polyline %}
+    <polyline points="{{ view.polyline }}" fill="none" />
+    {% endif %}
+    {% for label in view.labels %}
+    <text x="{{ label.x }}" y="{{ label.y }}"
+          data-localize="{{ 'true' if label.localize else 'false' }}"
+          >{{ label.value }}</text>
+    {% endfor %}
+  </svg>
+{% endmacro %}

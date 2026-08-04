@@ -1,0 +1,108 @@
+# Synthetic observations standing in for a live gold read. Invented values; not
+# client data.
+#
+# Every visual_id is a GOVERNED one from
+# mappings/retail_store_sales/design/visual-contract-binding-map.md, and every
+# contract_id is the one that map binds it to. A fixture using invented ids would
+# not exercise the binding check at all -- and the binding check is the thing
+# standing between "cites an approved contract" and "cites the RIGHT approved
+# contract".
+table: retail_store_sales
+generated_for: board
+contracts:
+  TotalSales: mappings/retail_store_sales/metrics/TotalSales.yaml
+  TotalQuantity: mappings/retail_store_sales/metrics/TotalQuantity.yaml
+  TransactionCount: mappings/retail_store_sales/metrics/TransactionCount.yaml
+  AvgTransactionValue: mappings/retail_store_sales/metrics/AvgTransactionValue.yaml
+  DiscountedTransactionRate: mappings/retail_store_sales/metrics/DiscountedTransactionRate.yaml
+# visual_id -> the one contract the design review bound it to (the front section of
+# the signed binding map, verbatim for the visuals used here).
+bindings:
+  v01: TotalSales
+  v02: TransactionCount
+  v03: AvgTransactionValue
+  v04: DiscountedTransactionRate
+  v05: TotalSales
+  v06: TotalSales
+  v07: TotalQuantity
+  v08: TotalSales
+layout:
+  version: 1
+  cover_title_code: cover.board_pack
+  sections:
+    - section_id: headline
+      order: 1
+      heading_code: section.headline
+      visual_ids: [v01, v02, v03]
+      page_break_before: false
+    - section_id: mix
+      order: 2
+      heading_code: section.mix
+      visual_ids: [v07, v04]
+      page_break_before: true
+      # REQUIRED by the signed binding map: the approved DiscountedTransactionRate
+      # is the known-status rate, and 50.37% without that note overstates what is
+      # known. A code, not prose, so the wording resolves per language.
+      caveat_codes: [caveat.v04_discount_known_status]
+    # A same-unit series, so this one CAN be charted. The two sections above
+    # deliberately mix currency with counts and ratios, which is normal for a KPI
+    # row and is exactly why charts.build_chart refuses to draw them: one axis
+    # states one dimension.
+    - section_id: by_region
+      order: 3
+      heading_code: section.by_region
+      visual_ids: [v06, v08, v05]
+      page_break_before: false
+      chart_kind: bar
+observations:
+  - visual_id: v01
+    contract_id: TotalSales
+    metric: TotalSales
+    unit_kind: currency
+    label: null
+    value: "1552071"
+  - visual_id: v02
+    contract_id: TransactionCount
+    metric: TransactionCount
+    unit_kind: count
+    label: null
+    value: "12575"
+  # A ratio by construction (sum / filtered count) and CURRENCY by meaning: money
+  # per transaction, not a percentage. The contract declares no `aggregation: ratio`,
+  # so nothing forces it to render as one.
+  - visual_id: v03
+    contract_id: AvgTransactionValue
+    metric: AvgTransactionValue
+    unit_kind: currency
+    label: null
+    value: "123.42"
+  - visual_id: v07
+    contract_id: TotalQuantity
+    metric: TotalQuantity
+    unit_kind: count
+    label: null
+    value: "66276"
+  - visual_id: v04
+    contract_id: DiscountedTransactionRate
+    metric: DiscountedTransactionRate
+    unit_kind: ratio
+    label: null
+    value: "0.5037"
+  - visual_id: v06
+    contract_id: TotalSales
+    metric: TotalSales
+    unit_kind: currency
+    label: North
+    value: "612480.25"
+  - visual_id: v08
+    contract_id: TotalSales
+    metric: TotalSales
+    unit_kind: currency
+    label: South
+    value: "534210.50"
+  - visual_id: v05
+    contract_id: TotalSales
+    metric: TotalSales
+    unit_kind: currency
+    label: East
+    value: "405380.25"

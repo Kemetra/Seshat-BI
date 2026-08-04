@@ -274,6 +274,23 @@ capabilities:
       dispatch: "scaffold-design"
       roadmap: "issues #440, #441"
 
+  - id: report
+    name: "seshat report"
+    summary: "Renders an approved design as an HTML page, an Excel workbook or a PDF. Every figure is computed and formatted once in the bundle and only transcribed by the surfaces, so a workbook and a PDF cannot round the same number differently, and every figure cites the approved metric contract it came from. Gated on dashboard_ready: pass; needs the `report` extra, and `report-pdf` as well for PDF."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements:
+      - "the `report` extra (jinja2 + xlsxwriter); `report-pdf` (playwright + chromium) for PDF"
+      - "dashboard_ready: pass recorded for the table"
+      - "figure observations (--observations); reading gold directly is not built yet"
+    provenance: locally-verified
+    readiness_stage: dashboard_ready
+    command: "report"
+    documentation: "docs/superpowers/specs/2026-08-03-report-surfaces-design.md"
+    references:
+      dispatch: "report"
+
   - id: retail-init
     name: "retail init"
     summary: "Bootstraps the Compass-driven kit substrate (compass router + fenced AGENTS.md/CLAUDE.md regions + manifests)."
