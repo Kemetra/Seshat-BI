@@ -112,18 +112,23 @@ def test_check_format_json_emits_structured_output(tmp_path, capsys):
     code = cli.main(["check", "--repo", str(tmp_path), "--format", "json"])
     assert code == 1
     doc = json.loads(capsys.readouterr().out)
-    # Exact match: the test registers exactly one rule with exactly one finding.
-    assert doc == {
-        "findings": [
-            {
-                "rule_id": "E9",
-                "severity": "error",
-                "message": "nope",
-                "locator": "a.sql:1",
-            }
-        ],
-        "exit_code": 1,
-    }
+    # Exact match on findings: the test registers exactly one rule that produces
+    # exactly one finding. The key set is asserted separately so an unintended
+    # payload key is still caught; "coverage" is the rule-coverage census.
+    assert set(doc) == {"findings", "coverage", "exit_code"}
+    assert doc["findings"] == [
+        {
+            "rule_id": "E9",
+            "severity": "error",
+            "message": "nope",
+            "locator": "a.sql:1",
+        }
+    ]
+    assert doc["exit_code"] == 1
+    # The census covers every rule in the live registry, not just the one that
+    # produced a finding -- that breadth is what makes "no findings" unambiguous.
+    assert {record["rule_id"] for record in doc["coverage"]} >= {"E9"}
+    assert len(doc["coverage"]) == len(registry.all_rules())
 
 
 @pytest.mark.unit

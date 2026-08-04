@@ -2,11 +2,22 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Callable
 
 from seshat.gitutil import GIT_HARDENING as _GIT_HARDENING
 from seshat.gitutil import run_subprocess
 
 from .core import Finding, RegisteredRule, RuleContext, RuleTier, Severity
+from .rule_coverage import CoverageRecord, CoverageState, coverage_for
+
+# The Spec A tier gate is itself the ratified ruling that authorizes a KIT_SELF
+# rule's absence in a foreign repo ("absence is not drift", kit_lint FR-006). It is
+# therefore a legitimate `basis` -- cited, not self-granted. Without a citation like
+# this, Requirement forbids not-applicable outright.
+_TIER_GATE_BASIS = (
+    "Spec A tier gate: KIT_SELF rule in a non-bootstrapped repo "
+    "(kit_lint FR-006, 'absence is not drift')"
+)
 
 # git's "not a git repository" sentinel exit code (the expected non-repo case).
 _GIT_NOT_A_REPO = 128
@@ -151,6 +162,56 @@ def _exit_code(findings: list[Finding]) -> int:
     return 1 if any(f.severity is Severity.ERROR for f in findings) else 0
 
 
+def _missing_in_repo(repo_root: Path) -> Callable[[str], bool]:
+    """Predicate: is this declared requirement absent OR unreadable?
+
+    Unreadable counts as missing on purpose. A permission denial or an
+    undecodable file means the rule could not do its job, and calling that a pass
+    would rebuild the exact silence the census exists to expose.
+    """
+
+    def missing(path: str) -> bool:
+        candidate = repo_root / path
+        if not candidate.exists():
+            return True
+        try:
+            with candidate.open("rb"):
+                return False
+        except OSError:
+            return True
+
+    return missing
+
+
+def coverage_census(
+    rules: tuple[RegisteredRule, ...], ctx: RuleContext, *, bootstrapped: bool = True
+) -> tuple[CoverageRecord, ...]:
+    """One coverage record per rule: did this rule actually run?
+
+    Answers a question findings alone cannot. An empty finding list is ambiguous --
+    it means "checked and clean" OR "input absent, never checked" -- and this census
+    separates the two. It performs no rule execution and cannot change a verdict.
+
+    A KIT_SELF rule gated off by ``bootstrapped=False`` is ``not-applicable``, citing
+    the Spec A tier gate as its basis rather than being silently dropped.
+    """
+    missing = _missing_in_repo(ctx.repo_root)
+    records: list[CoverageRecord] = []
+    for registered in rules:
+        if registered.tier is RuleTier.KIT_SELF and not bootstrapped:
+            records.append(
+                CoverageRecord(
+                    rule_id=registered.id,
+                    state=CoverageState.NOT_APPLICABLE,
+                    reason="skipped by the drop-in tier gate (kit-self rule)",
+                    basis=_TIER_GATE_BASIS,
+                )
+            )
+            continue
+        records.append(coverage_for(registered, missing=missing))
+    return tuple(records)
+
+
 def run(
     rules: tuple[RegisteredRule, ...], ctx: RuleContext, *, bootstrapped: bool = True
 ) -> int:
@@ -176,16 +237,30 @@ def run_json(
 ) -> int:
     """Opt-in structured output: one JSON document of all findings on stdout.
 
-    Prints a single object ``{"findings": [...], "exit_code": N}`` so a consumer
-    can parse the result without scraping the text lines. Returns the SAME exit
-    code as ``run`` (1 iff any ERROR finding). Rule behavior is unchanged — only
-    the rendering differs. ``bootstrapped`` gates the KIT_SELF tier skip (Spec A).
+    Prints a single object ``{"findings": [...], "coverage": [...], "exit_code": N}``
+    so a consumer can parse the result without scraping the text lines. Returns the
+    SAME exit code as ``run`` (1 iff any ERROR finding). Rule behavior is unchanged —
+    only the rendering differs. ``bootstrapped`` gates the KIT_SELF tier skip (Spec A).
+
+    ``coverage`` is ADDITIVE and advisory: it records whether each rule actually ran
+    (see ``coverage_census``) and never contributes to ``exit_code``. Making an
+    unevaluated rule fail the build is a separate, owner-ratified decision, because a
+    fail-closed rule must be finding-free on main before it can land.
+
+    The default text output (``run``) is deliberately NOT extended: its line shape is
+    a contract that CI diffs against, so the census surfaces here and in the review
+    pack instead.
     """
     findings = _collect(rules, ctx, bootstrapped=bootstrapped)
     exit_code = _exit_code(findings)
+    census = coverage_census(rules, ctx, bootstrapped=bootstrapped)
     print(
         json.dumps(
-            {"findings": [f.to_dict() for f in findings], "exit_code": exit_code},
+            {
+                "findings": [f.to_dict() for f in findings],
+                "coverage": [record.to_dict() for record in census],
+                "exit_code": exit_code,
+            },
             indent=2,
         )
     )

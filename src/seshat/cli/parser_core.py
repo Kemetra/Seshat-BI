@@ -86,6 +86,15 @@ def _add_status_parser(sub: argparse._SubParsersAction) -> None:
             "schemas/agent-status.schema.json -- never a numeric score."
         ),
     )
+    p.add_argument(
+        "--coverage",
+        action="store_true",
+        help=(
+            "also report rule coverage: whether each governance rule actually RAN, "
+            "so an absent input is not mistaken for a verified pass. Opt-in because "
+            "it evaluates the rule registry; without it the projection is unchanged."
+        ),
+    )
 
 
 def _add_next_parser(sub: argparse._SubParsersAction) -> None:

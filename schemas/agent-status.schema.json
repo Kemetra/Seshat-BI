@@ -4,33 +4,57 @@
   "title": "Seshat BI agent-control status surface",
   "description": "The stable JSON contract for `retail status --format json` (spec 109, roadmap M4, Option B). A READ-ONLY projection of the committed `mappings/*/readiness-status.yaml` state -- categorical status + named evidence/blockers only, never a numeric confidence/health/maturity score (Principle V).",
   "type": "object",
-  "required": ["tables"],
+  "required": [
+    "tables"
+  ],
   "additionalProperties": false,
   "properties": {
     "tables": {
       "type": "array",
       "description": "One entry per committed mappings/<table>/readiness-status.yaml. Empty when no readiness-status.yaml is committed (a fresh repo) -- NOT an error.",
-      "items": { "$ref": "#/$defs/tableStatus" }
+      "items": {
+        "$ref": "#/$defs/tableStatus"
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "description": "OPT-IN (`status --coverage`) rule-coverage census: one record per registered rule, computed live and never persisted. Advisory only -- it never alters a stage status, evidence entry or blocking reason, and is absent unless requested.",
+      "items": {
+        "$ref": "#/$defs/coverageRecord"
+      }
     }
   },
   "$defs": {
     "stageStatus": {
       "type": "object",
-      "required": ["status", "evidence", "blocking_reasons"],
+      "required": [
+        "status",
+        "evidence",
+        "blocking_reasons"
+      ],
       "additionalProperties": false,
       "properties": {
         "status": {
           "type": "string",
-          "enum": ["not_started", "blocked", "warning", "pass"],
+          "enum": [
+            "not_started",
+            "blocked",
+            "warning",
+            "pass"
+          ],
           "description": "Categorical status only -- never a numeric score (hard rule #9, Principle V)."
         },
         "evidence": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         },
         "blocking_reasons": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -55,22 +79,77 @@
           "description": "Repo-relative path of the readiness-status.yaml this entry projects (evidence of provenance, not new logic)."
         },
         "current_stage": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "The committed current_stage; null if the source file omits it."
         },
         "stages": {
           "type": "object",
           "description": "Per-stage projection, keyed by stage name (e.g. mapping_ready). Only stages present and well-formed in the source file are projected.",
-          "additionalProperties": { "$ref": "#/$defs/stageStatus" }
+          "additionalProperties": {
+            "$ref": "#/$defs/stageStatus"
+          }
         },
         "blocking_reasons": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "Top-level (cross-stage) blocking_reasons rollup from the committed file."
         },
         "next_action": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "The committed next_action; null if the source file omits it."
+        }
+      }
+    },
+    "coverageRecord": {
+      "type": "object",
+      "description": "Whether ONE governance rule actually ran. Categorical only -- never a numeric coverage score (Principle V). 'evaluated' means the rule ran on present input, so empty findings are a verified pass; 'unevaluable' means a required input was absent or unreadable, so the rule's silence is NOT a pass; 'undeclared' means the rule has not yet declared its required inputs; 'not-applicable' is a human-ratified opt-in and always carries the basis that authorized it.",
+      "required": [
+        "rule_id",
+        "state"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rule_id": {
+          "type": "string",
+          "description": "The registered rule id."
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "evaluated",
+            "unevaluable",
+            "undeclared",
+            "not-applicable"
+          ]
+        },
+        "requirement": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Repo-relative input whose absence decided the state."
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Plain-language explanation of the state."
+        },
+        "basis": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "For 'not-applicable' ONLY: the ratified ruling that authorized the opt-in. An agent may not self-grant one."
         }
       }
     }

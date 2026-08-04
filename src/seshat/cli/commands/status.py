@@ -83,7 +83,10 @@ def status_main(args: argparse.Namespace) -> int:
     well-formed empty projection is success, not an error -- FR-004)."""
     from seshat.status_surface import build_status_projection
 
-    projection = build_status_projection(getattr(args, "repo", "."))
+    projection = build_status_projection(
+        getattr(args, "repo", "."),
+        include_coverage=bool(getattr(args, "coverage", False)),
+    )
 
     if getattr(args, "output_format", "text") == "json":
         print(json.dumps(projection, indent=2))
