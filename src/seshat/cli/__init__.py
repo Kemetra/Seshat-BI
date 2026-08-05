@@ -253,6 +253,7 @@ _DISPATCH: dict[str, Callable[[object], int]] = {
     "watch": _lazy(".commands.watch", "watch_main"),
     "dagster": _lazy(".commands.dagster", "dagster_main"),
     "pbi-mcp": _lazy(".commands.pbi_mcp", "pbi_mcp_main"),
+    "integrations": _lazy(".commands.integrations", "integrations_main"),
     "mcp": _run_mcp,
 }
 
