@@ -534,6 +534,20 @@ capabilities:
       public_skill: "pbi-mcp-doctor"
       roadmap: "issue #450"
 
+  - id: analytics-integrations-setup
+    name: "seshat integrations setup"
+    summary: "Opt-in installer and validator for the optional third-party analytics integrations (the upstream Microsoft Fabric/Power BI skill bundle, the dbt-labs skill bundle, and the read-only Power BI modeling + dbt MCP registrations). The DEFAULT run is a network-free plan: it reports, per integration, whether the artifact is present, planned, or needs operator action, and writes nothing. Installation happens only behind explicit human approval (--apply, --yes, or an interactive yes) and is confined to the machine-local .seshat/integrations/ directory, which is git-ignored. It never modifies the active Python interpreter (a missing dbt is reported with the versions to install, not pip-installed over the operator's environment), never writes a credential, never touches readiness state, and grants no approval; the first-run offer resolves the workspace root by discovery and is suppressed by SESHAT_NO_AUTO_INTEGRATIONS=1 or any non-interactive client."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "integrations"
+    documentation: "docs/install/fabric-powerbi-integrations.md"
+    references:
+      dispatch: "integrations"
+
   - id: retail-blockers
     name: "retail blockers"
     summary: "Explains committed readiness blockers across tables: category, plain-language explanation, next surface, and -- from a committed allowlist -- whether remediation is mechanical or human_only, plus a doc route and a stop condition."

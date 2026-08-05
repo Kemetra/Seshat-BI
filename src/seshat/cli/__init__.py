@@ -451,7 +451,10 @@ def main(argv: list[str] | None = None, *, prog: str | None = None) -> int:
     args.prog = resolved_prog
 
     # Transparent first-run integration offer: interactive clients do not need to know
-    # Seshat's setup command; CI and non-interactive agents remain untouched.
+    # Seshat's setup command; CI and non-interactive agents remain untouched. The cwd
+    # is only a DISCOVERY START -- `offer_first_run` resolves the enclosing workspace
+    # root and declines to offer at all outside one, so a launch from a subdirectory
+    # cannot seed a second `.seshat/integrations/` where the client happened to run.
     if args.command != "integrations":
         from ..integrations_setup import offer_first_run
 
