@@ -57,6 +57,24 @@ def _by_name(results: list[IntegrationResult]) -> dict[str, IntegrationResult]:
     return {item.name: item for item in results}
 
 
+def _args(root: Path, **overrides: object) -> Namespace:
+    """A CLI namespace with every gate CLOSED by default.
+
+    Built here rather than per test so a NEW flag cannot default to "on" in one
+    forgotten test: adding a gate means adding it to this one helper.
+    """
+    values: dict[str, object] = {
+        "repo": str(root if (root / ".seshat").exists() else _workspace(root)),
+        "profile": "analytics-full",
+        "refresh": False,
+        "apply": False,
+        "yes": False,
+        "as_json": False,
+    }
+    values.update(overrides)
+    return Namespace(**values)
+
+
 def _nothing_on_path(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(integrations_setup.shutil, "which", lambda _: None)
 
@@ -248,17 +266,16 @@ def test_cli_refuses_a_directory_that_is_not_a_workspace(
 def test_cli_reports_operator_action_with_a_nonzero_exit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """A component needing a human exits 1, and `--json` stays parseable."""
     _nothing_on_path(monkeypatch)
     _no_subprocess(monkeypatch)
-    args = Namespace(
-        repo=str(_workspace(tmp_path)), apply=False, yes=False, as_json=True
-    )
+    args = _args(tmp_path, as_json=True)
 
     code = integrations_main(args)
 
     assert code == 1
     payload = json.loads(capsys.readouterr().out)
-    assert "dbt-runtime" in {item["name"] for item in payload}
+    assert "dbt-core" in {item["component"] for item in payload["components"]}
 
 
 def test_cli_default_run_installs_nothing(
@@ -266,51 +283,69 @@ def test_cli_default_run_installs_nothing(
 ) -> None:
     _no_subprocess(monkeypatch)
     root = _workspace(tmp_path)
-    args = Namespace(repo=str(root), apply=False, yes=False, as_json=False)
-
-    integrations_main(args)
+    integrations_main(_args(root))
 
     capsys.readouterr()
     assert not (root / FABRIC_SKILLS.directory).exists()
     assert not (root / MCP_CONFIG).exists()
 
 
-@pytest.mark.parametrize("flag", ["apply", "yes"])
-def test_an_explicit_flag_approves_without_any_prompt(
-    flag: str,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
+def test_apply_with_yes_does_not_prompt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """`--apply --yes` is an approved request, so no prompt is raised.
+
+    It still refuses to install, because `--refresh` is absent and installing
+    without resolved coordinates is what the gate exists to prevent.
+    """
     _nothing_on_path(monkeypatch)
     _no_subprocess(monkeypatch)
     monkeypatch.setattr(
         "seshat.cli.commands.integrations._prompted",
-        lambda _: pytest.fail(f"--{flag} still prompted"),
+        lambda _: pytest.fail("--yes still prompted"),
     )
-    args = Namespace(
-        repo=str(_workspace(tmp_path)), apply=False, yes=False, as_json=False
-    )
-    setattr(args, flag, True)
 
-    assert integrations_main(args) == 1
-    assert "git is not on PATH" in capsys.readouterr().out
+    assert integrations_main(_args(tmp_path, apply=True, yes=True)) == 2
+    assert "needs --refresh" in capsys.readouterr().err
+
+
+def test_yes_alone_does_not_enable_apply(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--yes` CONFIRMS an apply; it never requests one.
+
+    A `--yes` that silently implied `--apply` would install from a command an
+    operator believed was a dry run -- so the run stays a plan and writes
+    nothing.
+    """
+    _nothing_on_path(monkeypatch)
+    _no_subprocess(monkeypatch)
+    monkeypatch.setattr(
+        "seshat.cli.commands.integrations._prompted",
+        lambda _: pytest.fail("a plain --yes reached the prompt"),
+    )
+    root = _workspace(tmp_path)
+
+    assert integrations_main(_args(root, yes=True)) == 1
+
+    assert not (root / MCP_CONFIG).exists()
+    assert not (root / integrations_setup.LOCK_FILE).exists()
 
 
 def test_an_attended_client_is_asked_before_anything_installs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """An attended `--apply` without `--yes` asks, and a "no" installs nothing."""
     _nothing_on_path(monkeypatch)
     _no_subprocess(monkeypatch)
     monkeypatch.setattr("seshat.cli.commands.integrations._attended", lambda: True)
     monkeypatch.setattr(integrations_setup, "confirm", lambda _: False)
     root = _workspace(tmp_path)
-    args = Namespace(repo=str(root), apply=False, yes=False, as_json=False)
 
-    assert integrations_main(args) == 1
+    assert integrations_main(_args(root, apply=True)) == 1
 
-    assert "Dry run only" in capsys.readouterr().out
     assert not (root / MCP_CONFIG).exists()
+    assert not (root / integrations_setup.LOCK_FILE).exists()
 
 
 def test_needs_operator_action_only_counts_failed_and_unavailable() -> None:
@@ -441,18 +476,17 @@ def test_bundled_dagster_skill_is_detected(tmp_path: Path) -> None:
 def test_an_accepted_prompt_reaches_the_install_pass(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """A "yes" reaches the apply pass, and a missing prerequisite still reports."""
+    """An accepted prompt reaches the apply branch rather than returning a plan."""
     _nothing_on_path(monkeypatch)
     _no_subprocess(monkeypatch)
     monkeypatch.setattr("seshat.cli.commands.integrations._attended", lambda: True)
     monkeypatch.setattr(integrations_setup, "confirm", lambda _: True)
-    args = Namespace(
-        repo=str(_workspace(tmp_path)), apply=False, yes=False, as_json=False
-    )
 
-    assert integrations_main(args) == 1
-
-    assert "git is not on PATH" in capsys.readouterr().out
+    # `--apply` requested and confirmed, but no `--refresh`: the apply branch is
+    # reached and refuses for want of exact coordinates (exit 2), which is
+    # distinguishable from the plan path's exit 1.
+    assert integrations_main(_args(tmp_path, apply=True)) == 2
+    assert "needs --refresh" in capsys.readouterr().err
 
 
 # --------------------------------------------------------------------------- #
