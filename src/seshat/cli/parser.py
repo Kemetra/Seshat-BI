@@ -34,6 +34,7 @@ from .parser_ecosystem import (
     _add_passport_parser,
     _add_watch_parser,
 )
+from .parser_integrations import add_integrations_parser
 from .parser_pbi_mcp import add_pbi_mcp_parsers
 from .parser_validation import add_validation_parsers
 
@@ -968,6 +969,7 @@ def _build_parser(prog: str = "retail") -> argparse.ArgumentParser:
     _add_watch_parser(sub)
     add_dagster_parsers(sub)
     add_pbi_mcp_parsers(sub)
+    add_integrations_parser(sub)
     _add_mcp_parser(sub)
 
     return parser

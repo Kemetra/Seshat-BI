@@ -253,6 +253,7 @@ _DISPATCH: dict[str, Callable[[object], int]] = {
     "watch": _lazy(".commands.watch", "watch_main"),
     "dagster": _lazy(".commands.dagster", "dagster_main"),
     "pbi-mcp": _lazy(".commands.pbi_mcp", "pbi_mcp_main"),
+    "integrations": _lazy(".commands.integrations", "integrations_main"),
     "mcp": _run_mcp,
 }
 
@@ -448,6 +449,13 @@ def main(argv: list[str] | None = None, *, prog: str | None = None) -> int:
     # output prefix, instead of a hardcoded literal that drifts (#402). Threading it
     # via args keeps all handler signatures at their existing `handler(args)` shape.
     args.prog = resolved_prog
+
+    # Transparent first-run integration offer: interactive clients do not need to know
+    # Seshat's setup command; CI and non-interactive agents remain untouched.
+    if args.command != "integrations":
+        from ..integrations_setup import offer_first_run
+
+        offer_first_run(Path.cwd())
 
     handler = _DISPATCH.get(args.command)
     if handler is None:
