@@ -3,6 +3,10 @@
 The default run is a plan. Installation happens only when the operator says so:
 `--apply`, `--yes`, or a "yes" at an interactive prompt. A piped or CI run has no
 prompt to answer, so it reports the plan and changes nothing.
+
+`--repo` is validated rather than trusted, exactly as `seshat mcp` validates it:
+this verb writes into `.seshat/integrations/`, and a directory that is not a
+Seshat workspace is refused by name instead of being seeded with one.
 """
 
 from __future__ import annotations
@@ -39,6 +43,16 @@ def _approved(args: Namespace, planned: list[IntegrationResult]) -> bool:
     return _prompted(planned)
 
 
+def _workspace(repo: str) -> Path | None:
+    from seshat.workspace_root import WorkspaceRootError, resolve_workspace_root
+
+    try:
+        return resolve_workspace_root(repo)
+    except WorkspaceRootError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return None
+
+
 def integrations_main(args: Namespace) -> int:
     from seshat.integrations_setup import (
         needs_operator_action,
@@ -46,9 +60,12 @@ def integrations_main(args: Namespace) -> int:
         setup_integrations,
     )
 
-    root = Path(args.repo)
+    root = _workspace(args.repo)
+    if root is None:
+        return 2
     planned = setup_integrations(root, apply=False)
-    approved = _approved(args, planned)
-    results = setup_integrations(root, apply=True) if approved else planned
+    results = (
+        setup_integrations(root, apply=True) if _approved(args, planned) else planned
+    )
     print(render_results(results, as_json=args.as_json))
     return 1 if needs_operator_action(results) else 0

@@ -6,9 +6,9 @@ Three properties carry the governance weight and each has a test here:
    installed until a human approves.
 2. The installer **never mutates the ambient Python interpreter**. A missing dbt
    is reported, not silently pip-installed over the operator's environment.
-3. The first-run offer keys off the **resolved workspace root**, never the
-   working directory, so launching from a subdirectory cannot scatter
-   `.seshat/integrations/` around the tree (the `workspace_root` posture).
+3. It is reachable **only through its own verb**, and that verb **validates
+   `--repo`** rather than trusting it -- so no other command can trigger an
+   install, and no non-workspace directory gets seeded with one.
 """
 
 from __future__ import annotations
@@ -23,7 +23,6 @@ import pytest
 from seshat import gitutil, integrations_setup
 from seshat.cli.commands.integrations import integrations_main
 from seshat.integrations_setup import (
-    AUTO_MARKER,
     DBT_SKILLS,
     FABRIC_SKILLS,
     INTEGRATIONS_DIR,
@@ -31,7 +30,6 @@ from seshat.integrations_setup import (
     IntegrationResult,
     SkillBundle,
     needs_operator_action,
-    offer_first_run,
     render_results,
     setup_integrations,
 )
@@ -204,93 +202,29 @@ def test_powerbi_mcp_is_registered_read_only(
 
 
 # --------------------------------------------------------------------------- #
-# 4. The first-run offer resolves the workspace root
+# 4. Nothing is offered unprompted
 # --------------------------------------------------------------------------- #
 
 
-def test_first_run_offer_is_skipped_outside_a_workspace(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(integrations_setup, "_interactive", lambda: True)
-    monkeypatch.setattr(
-        integrations_setup,
-        "confirm",
-        lambda _: pytest.fail("prompted outside a Seshat workspace"),
+def test_no_other_command_can_trigger_the_installer() -> None:
+    """The installer is reachable only through its own verb.
+
+    A read-only governance verb must stay read-only: `seshat check` must not be
+    able to end in a third-party clone. Enforced structurally -- the CLI entry
+    point does not import this module at all -- because a guard inside the
+    installer would still leave the call site in place for the next edit to
+    widen. A first-arrival offer belongs to `first-hour-compass` instead.
+    """
+    entry_point = (_REPO_ROOT / "src" / "seshat" / "cli" / "__init__.py").read_text(
+        encoding="utf-8"
     )
-
-    assert offer_first_run(tmp_path) is False
-    assert not (tmp_path / ".seshat").exists()
-
-
-def test_first_run_offer_marks_the_workspace_root_not_the_launch_directory(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    root = _workspace(tmp_path)
-    launched_from = root / "warehouse" / "migrations"
-    launched_from.mkdir(parents=True)
-    monkeypatch.setattr(integrations_setup, "_interactive", lambda: True)
-    monkeypatch.setattr(integrations_setup, "confirm", lambda _: False)
-
-    assert offer_first_run(launched_from) is False
-
-    assert (root / AUTO_MARKER).is_file()
-    assert not (launched_from / ".seshat").exists()
+    assert "integrations_setup" not in entry_point
+    assert "offer_first_run" not in entry_point
 
 
-def test_a_declined_offer_installs_nothing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    root = _workspace(tmp_path)
-    monkeypatch.setattr(integrations_setup, "_interactive", lambda: True)
-    monkeypatch.setattr(integrations_setup, "confirm", lambda _: False)
-    _no_subprocess(monkeypatch)
-
-    assert offer_first_run(root) is False
-
-    assert not (root / FABRIC_SKILLS.directory).exists()
-    assert not (root / MCP_CONFIG).exists()
-
-
-def test_the_offer_is_made_once_per_workspace(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    root = _workspace(tmp_path)
-    marker = root / AUTO_MARKER
-    marker.parent.mkdir(parents=True)
-    marker.write_text("offered\n", encoding="utf-8")
-    monkeypatch.setattr(integrations_setup, "_interactive", lambda: True)
-    monkeypatch.setattr(
-        integrations_setup, "confirm", lambda _: pytest.fail("re-offered")
-    )
-
-    assert offer_first_run(root) is False
-
-
-def test_a_non_interactive_client_is_never_offered_anything(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    root = _workspace(tmp_path)
-    monkeypatch.setattr(integrations_setup, "_interactive", lambda: False)
-    monkeypatch.setattr(
-        integrations_setup, "confirm", lambda _: pytest.fail("prompted a pipe")
-    )
-
-    assert offer_first_run(root) is False
-    assert not (root / AUTO_MARKER).exists()
-
-
-def test_the_offer_can_be_switched_off_by_environment(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    root = _workspace(tmp_path)
-    monkeypatch.setenv("SESHAT_NO_AUTO_INTEGRATIONS", "1")
-    monkeypatch.setattr(integrations_setup, "_interactive", lambda: True)
-    monkeypatch.setattr(
-        integrations_setup, "confirm", lambda _: pytest.fail("prompted despite opt-out")
-    )
-
-    assert offer_first_run(root) is False
-    assert not (root / AUTO_MARKER).exists()
+def test_the_installer_exposes_no_ambient_entry_point() -> None:
+    """No module-level hook survives that another command could call."""
+    assert not hasattr(integrations_setup, "offer_first_run")
 
 
 # --------------------------------------------------------------------------- #
@@ -298,12 +232,27 @@ def test_the_offer_can_be_switched_off_by_environment(
 # --------------------------------------------------------------------------- #
 
 
+def test_cli_refuses_a_directory_that_is_not_a_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--repo` is validated, not trusted: no workspace, no `.seshat/` seeded."""
+    _no_subprocess(monkeypatch)
+    args = Namespace(repo=str(tmp_path), apply=True, yes=True, as_json=False)
+
+    assert integrations_main(args) == 2
+
+    assert "is not a Seshat workspace" in capsys.readouterr().err
+    assert not (tmp_path / ".seshat").exists()
+
+
 def test_cli_reports_operator_action_with_a_nonzero_exit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     _nothing_on_path(monkeypatch)
     _no_subprocess(monkeypatch)
-    args = Namespace(repo=str(tmp_path), apply=False, yes=False, as_json=True)
+    args = Namespace(
+        repo=str(_workspace(tmp_path)), apply=False, yes=False, as_json=True
+    )
 
     code = integrations_main(args)
 
@@ -316,12 +265,14 @@ def test_cli_default_run_installs_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     _no_subprocess(monkeypatch)
-    args = Namespace(repo=str(tmp_path), apply=False, yes=False, as_json=False)
+    root = _workspace(tmp_path)
+    args = Namespace(repo=str(root), apply=False, yes=False, as_json=False)
 
     integrations_main(args)
 
     capsys.readouterr()
-    assert not (tmp_path / INTEGRATIONS_DIR).exists()
+    assert not (root / FABRIC_SKILLS.directory).exists()
+    assert not (root / MCP_CONFIG).exists()
 
 
 @pytest.mark.parametrize("flag", ["apply", "yes"])
@@ -337,7 +288,9 @@ def test_an_explicit_flag_approves_without_any_prompt(
         "seshat.cli.commands.integrations._prompted",
         lambda _: pytest.fail(f"--{flag} still prompted"),
     )
-    args = Namespace(repo=str(tmp_path), apply=False, yes=False, as_json=False)
+    args = Namespace(
+        repo=str(_workspace(tmp_path)), apply=False, yes=False, as_json=False
+    )
     setattr(args, flag, True)
 
     assert integrations_main(args) == 1
@@ -351,12 +304,13 @@ def test_an_attended_client_is_asked_before_anything_installs(
     _no_subprocess(monkeypatch)
     monkeypatch.setattr("seshat.cli.commands.integrations._attended", lambda: True)
     monkeypatch.setattr(integrations_setup, "confirm", lambda _: False)
-    args = Namespace(repo=str(tmp_path), apply=False, yes=False, as_json=False)
+    root = _workspace(tmp_path)
+    args = Namespace(repo=str(root), apply=False, yes=False, as_json=False)
 
     assert integrations_main(args) == 1
 
     assert "Dry run only" in capsys.readouterr().out
-    assert not (tmp_path / INTEGRATIONS_DIR).exists()
+    assert not (root / MCP_CONFIG).exists()
 
 
 def test_needs_operator_action_only_counts_failed_and_unavailable() -> None:
@@ -384,7 +338,6 @@ def test_installer_output_is_git_ignored() -> None:
         f"{INTEGRATIONS_DIR.as_posix()}/mcp.json",
         f"{FABRIC_SKILLS.directory.as_posix()}/README.md",
         f"{DBT_SKILLS.directory.as_posix()}/README.md",
-        AUTO_MARKER.as_posix(),
     ):
         assert gitutil.git_check_ignore(_REPO_ROOT, path) is True, path
 
@@ -485,20 +438,21 @@ def test_bundled_dagster_skill_is_detected(tmp_path: Path) -> None:
     assert _by_name(setup_integrations(tmp_path))["dagster-skills"].status == "present"
 
 
-def test_an_accepted_offer_runs_the_install_pass(
+def test_an_accepted_prompt_reaches_the_install_pass(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Approval reaches the apply pass, and a missing prerequisite still reports."""
-    root = _workspace(tmp_path)
-    monkeypatch.setattr(integrations_setup, "_interactive", lambda: True)
-    monkeypatch.setattr(integrations_setup, "confirm", lambda _: True)
+    """A "yes" reaches the apply pass, and a missing prerequisite still reports."""
     _nothing_on_path(monkeypatch)
     _no_subprocess(monkeypatch)
+    monkeypatch.setattr("seshat.cli.commands.integrations._attended", lambda: True)
+    monkeypatch.setattr(integrations_setup, "confirm", lambda _: True)
+    args = Namespace(
+        repo=str(_workspace(tmp_path)), apply=False, yes=False, as_json=False
+    )
 
-    assert offer_first_run(root) is False
+    assert integrations_main(args) == 1
 
     assert "git is not on PATH" in capsys.readouterr().out
-    assert (root / AUTO_MARKER).is_file()
 
 
 # --------------------------------------------------------------------------- #

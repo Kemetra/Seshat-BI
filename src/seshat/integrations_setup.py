@@ -9,28 +9,24 @@ Two boundaries are deliberate:
 * **The ambient interpreter is never modified.** A missing `dbt` is reported with
   the versions to install; Seshat does not `pip install` over whatever
   environment the operator happened to activate.
-* **The workspace root is resolved, never assumed.** The first-run offer takes a
-  starting point and discovers the workspace upward from it, so a launch inside
-  `warehouse/migrations/` still writes the one true `.seshat/integrations/`
-  instead of seeding a second one where the client happened to start -- the same
-  fail-closed posture `workspace_root` gives `seshat mcp`.
+* **Nothing is offered unprompted.** This module is reached only through the
+  `seshat integrations setup` verb, never as a side effect of another command. A
+  read-only governance verb must stay read-only, so an unrelated `seshat check`
+  cannot end in a third-party clone. Wiring a first-arrival offer belongs to
+  `first-hour-compass`, whose contract is first arrival.
 """
 
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from seshat.workspace_root import WorkspaceRootError, resolve_workspace_root
-
 INTEGRATIONS_DIR = Path(".seshat/integrations")
 MCP_CONFIG = INTEGRATIONS_DIR / "mcp.json"
-AUTO_MARKER = INTEGRATIONS_DIR / ".auto-offered"
 DAGSTER_PROJECT = Path("orchestration/dagster")
 
 DBT_CORE_PIN = "dbt-core==1.12.0"
@@ -329,7 +325,7 @@ def render_results(results: list[IntegrationResult], *, as_json: bool = False) -
 
 
 # --------------------------------------------------------------------------- #
-# The first-run offer
+# The approval prompt
 # --------------------------------------------------------------------------- #
 
 
@@ -340,53 +336,3 @@ def confirm(question: str) -> bool:
     except (EOFError, KeyboardInterrupt):
         return False
     return answer in {"y", "yes"}
-
-
-def _interactive() -> bool:
-    return sys.stdin.isatty() and sys.stdout.isatty()
-
-
-def _offer_target(start: Path) -> Path | None:
-    """The workspace to offer for, or None when no offer should be made.
-
-    Discovery decides, not the working directory: a start outside any workspace
-    yields None rather than seeding `.seshat/integrations/` wherever the client
-    happened to be launched.
-    """
-    if os.environ.get("SESHAT_NO_AUTO_INTEGRATIONS") == "1":
-        return None
-    if not _interactive():
-        return None
-    try:
-        root = resolve_workspace_root(start=Path(start))
-    except WorkspaceRootError:
-        return None
-    if (root / AUTO_MARKER).exists():
-        return None
-    return root
-
-
-def _mark_offered(root: Path) -> None:
-    """Record that the offer was made, so it is made once and never nags."""
-    marker = root / AUTO_MARKER
-    marker.parent.mkdir(parents=True, exist_ok=True)
-    marker.write_text("offered\n", encoding="utf-8")
-
-
-def offer_first_run(start: Path) -> bool:
-    """Offer integration setup once, on a workspace's first interactive launch."""
-    root = _offer_target(start)
-    if root is None:
-        return False
-    planned = setup_integrations(root, apply=False)
-    if not any(item.status == "planned" for item in planned):
-        return False
-    print(render_results(planned))
-    approved = confirm("Set up Fabric/Power BI/dbt/Dagster integrations now? [y/N]: ")
-    _mark_offered(root)
-    if not approved:
-        print("Integration setup skipped; Seshat will continue normally.")
-        return False
-    results = setup_integrations(root, apply=True)
-    print(render_results(results))
-    return not needs_operator_action(results)

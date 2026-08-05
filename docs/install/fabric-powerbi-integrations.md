@@ -1,18 +1,17 @@
 # Fabric, Power BI, dbt, and Dagster integrations
 
-Seshat does not run network installers as a side effect of `pipx install` or
-`pip install`. On the first interactive Seshat launch in a workspace, it shows
-the integration plan once and asks for approval; the client does not need to
-know any command names. A `yes` clones the Microsoft Fabric and dbt Labs agent
-skill bundles and registers the read-only Power BI modeling and dbt MCP servers.
-Dagster workflow skills ship with Seshat and are validated, not downloaded.
-
-For operators who want an explicit flow:
+Seshat does not run network installers as a side effect of `pipx install`,
+`pip install`, or any other command. These integrations are opt-in and reached
+through one verb:
 
 ```powershell
-seshat integrations setup
-seshat integrations setup --apply
+seshat integrations setup            # plan only -- writes nothing
+seshat integrations setup --apply    # install, after you have decided
 ```
+
+A run with approval clones the Microsoft Fabric and dbt Labs agent skill bundles
+and registers the read-only Power BI modeling and dbt MCP servers. Dagster
+workflow skills ship with Seshat and are validated, not downloaded.
 
 The setup validates required skills and runtime prerequisites and returns
 categorical `planned`, `present`, `installed`, `unavailable`, or `failed`
@@ -22,6 +21,15 @@ stores credentials, changes readiness, or grants approval.
 
 ## What it will not do
 
+- **It never runs unprompted.** No other command reaches this installer: `seshat
+  check` is a read-only governance verb and stays one. The CLI entry point does
+  not import the installer at all, which is asserted by a test — a guard inside
+  the installer would leave the call site in place for a later edit to widen. If
+  a first-arrival offer is wanted, `first-hour-compass` is the verb whose
+  contract covers first arrival.
+- **It never writes outside a Seshat workspace.** `--repo` is validated the way
+  `seshat mcp` validates it: a directory that is not a workspace is refused by
+  name (exit 2) rather than seeded with a `.seshat/` tree.
 - **It never modifies the active Python interpreter.** A missing `dbt` is
   reported as `unavailable` with the versions to install (`dbt-core==1.12.0`,
   `dbt-postgres==1.10.2`) rather than `pip install`-ed into whatever environment
@@ -38,22 +46,14 @@ stores credentials, changes readiness, or grants approval.
 
 ## Where the output lives
 
-Everything the installer writes goes under `.seshat/integrations/` — the two
-shallow clones, the generated `mcp.json`, and the first-run offer marker. That
+Everything the installer writes goes under `.seshat/integrations/` in the
+resolved workspace — the two shallow clones and the generated `mcp.json`. That
 directory is git-ignored: it is machine-local installer output, not a committed
 artifact.
 
-The first-run offer resolves the workspace root by discovery, so launching from
-a subdirectory still writes the one true `.seshat/integrations/`. Outside a
-Seshat workspace no offer is made at all.
-
-To suppress the offer entirely:
-
-```powershell
-$env:SESHAT_NO_AUTO_INTEGRATIONS = "1"
-```
-
-Non-interactive clients (CI, piped output, agent harnesses) are never prompted.
+Non-interactive clients (CI, piped output, agent harnesses) have no prompt to
+answer, so they report the plan and change nothing unless `--apply` or `--yes`
+is passed explicitly.
 
 After a semantic-model readiness pass, run the existing read-only gate:
 
