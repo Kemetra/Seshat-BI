@@ -74,28 +74,56 @@ class Requirement:
     ``basis``: keeping ``basis`` narrow -- it cites human authority and nothing
     else -- is what stops it becoming a free-text field an agent can fill in to
     manufacture an opt-in. A note is documentation; a basis is a citation.
+
+    A requirement names EITHER one artifact (``path``) or a CLASS of tracked files
+    (``pattern``, an fnmatch glob), never both. The class form exists because most
+    rules scan a corpus rather than open a fixed file -- e.g. the SQL rules iterate
+    every tracked ``warehouse/**/*.sql``. For those, "the input is missing" means
+    the corpus is EMPTY, which is exactly the case where such a rule returns no
+    findings while having verified nothing.
     """
 
-    path: str
+    path: str | None = None
+    pattern: str | None = None
     absence: AbsenceSemantics = AbsenceSemantics.UNEVALUABLE
     basis: str | None = None
     note: str | None = None
 
+    @property
+    def target(self) -> str:
+        """The declared input, for display: the path or the glob."""
+        return self.path or self.pattern or ""
+
     def __post_init__(self) -> None:
+        self._validate_target()
         # Branches on the absence semantics rather than testing compound
         # conditions, so each rule about `basis` reads on its own line.
         if self.absence is AbsenceSemantics.NOT_APPLICABLE:
             if not (self.basis or "").strip():
                 raise ValueError(
-                    f"requirement {self.path!r}: absence=not-applicable claims a "
-                    "ratified opt-in and so requires a basis naming the ruling "
+                    f"requirement {self.target!r}: absence=not-applicable claims "
+                    "a ratified opt-in and so requires a basis naming the ruling "
                     "that authorized it (an agent may not self-grant one)"
                 )
         elif self.basis is not None:
             raise ValueError(
-                f"requirement {self.path!r}: basis cites the human ruling behind "
+                f"requirement {self.target!r}: basis cites the human ruling behind "
                 "absence=not-applicable and is meaningful only there; to explain "
                 "why this input is required, use note="
+            )
+
+    def _validate_target(self) -> None:
+        """Exactly one of path/pattern. Neither would silently match nothing."""
+        if self.path is None:
+            if self.pattern is None:
+                raise ValueError(
+                    "requirement declares no input: set path= for one artifact or "
+                    "pattern= for a class of tracked files"
+                )
+        elif self.pattern is not None:
+            raise ValueError(
+                f"requirement {self.path!r}: set path= OR pattern=, not both -- a "
+                "requirement names one artifact or one class of files"
             )
 
 
@@ -120,9 +148,11 @@ class CoverageRecord:
         }
 
 
-# A caller-supplied "is this input absent?" predicate. Keeping presence out of
-# this module is what makes every state reachable in a unit test with no tmpdir.
-MissingPredicate = Callable[[str], bool]
+# A caller-supplied "is this input absent?" predicate. It receives the whole
+# Requirement, not just a string, so a resolver can answer BOTH forms: does this
+# artifact exist, and does any tracked file match this glob. Keeping presence out
+# of this module is what makes every state reachable in a unit test with no tmpdir.
+MissingPredicate = Callable[[Requirement], bool]
 
 
 def _first_absent(
@@ -134,7 +164,7 @@ def _first_absent(
     one: if any input the rule genuinely needed is gone, the rule did not run,
     and a ratified opt-in elsewhere must not launder that into coverage.
     """
-    absent = [req for req in requires if missing(req.path)]
+    absent = [req for req in requires if missing(req)]
     if not absent:
         return None
     for req in absent:
@@ -166,19 +196,19 @@ def coverage_for(
         return CoverageRecord(
             rule_id=registered.id,
             state=CoverageState.NOT_APPLICABLE,
-            requirement=decisive.path,
+            requirement=decisive.target,
             reason="absent by a ratified opt-in",
             basis=decisive.basis,
         )
 
     default_reason = (
-        f"required input {decisive.path!r} is absent or unreadable, so this "
-        "rule did not run and its silence is not a pass"
+        f"required input {decisive.target!r} is absent, empty or unreadable, so "
+        "this rule did not run and its silence is not a pass"
     )
     return CoverageRecord(
         rule_id=registered.id,
         state=CoverageState.UNEVALUABLE,
-        requirement=decisive.path,
+        requirement=decisive.target,
         # An author-supplied note is more specific than the generic sentence, so
         # it wins -- this is the text a human reads in the coverage report.
         reason=(decisive.note or "").strip() or default_reason,
