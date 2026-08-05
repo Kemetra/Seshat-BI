@@ -425,6 +425,8 @@ _FLOAT_TYPES = frozenset({"float", "float4", "float8", "double", "real"})
 _INT_TYPES = frozenset({"int", "int4", "int8", "integer", "bigint"})
 # An identifier looks id-like (kept TEXT under RC7) if it ends in these suffixes.
 _ID_SUFFIXES = ("_id", "_no", "_code", "_ref")
+# Bare identifier / function-name token (case-insensitive: NULLIF, trim, a column).
+_S5_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _is_id_like(name: str) -> bool:
@@ -433,19 +435,70 @@ def _is_id_like(name: str) -> bool:
     return any(low.endswith(s) for s in _ID_SUFFIXES)
 
 
+def _s5_matching_open(toks: list[SqlToken], close_idx: int) -> int:
+    """Index of the `(` matching the `)` at `close_idx`, or -1 if unbalanced."""
+    depth = 0
+    for i in range(close_idx, -1, -1):
+        text = toks[i].text
+        if text == ")":
+            depth += 1
+            continue
+        if text != "(":
+            continue
+        depth -= 1
+        if depth == 0:
+            return i
+    return -1
+
+
+def _s5_first_wrapped_ident(toks: list[SqlToken], open_idx: int, close_idx: int) -> str:
+    """First identifier inside the call that is not itself a call name, or "".
+
+    `NULLIF(trim(x), '')` yields `x`: `trim` is skipped because a `(` follows it.
+    """
+    for i in range(open_idx + 1, close_idx):
+        nxt = toks[i + 1].text if i + 1 < len(toks) else ""
+        if _S5_IDENT.match(toks[i].text) and nxt != "(":
+            return toks[i].text
+    return ""
+
+
+def _s5_wrapped_cast_source(toks: list[SqlToken], close_idx: int) -> str:
+    """Identifier wrapped by the call whose `)` sits at `close_idx`, or "".
+
+    The silver build order mandates every cast be written
+    `NULLIF(trim(x), '')::type`, which puts the wrapper's closing paren directly
+    before the type token. A bare `)` is (correctly) never a cast source itself,
+    so resolve what the call wrapped instead of skipping the cast entirely.
+    Returns "" when nothing resolves, which keeps the token a non-cast position.
+    """
+    open_idx = _s5_matching_open(toks, close_idx)
+    if open_idx <= 0 or not _S5_IDENT.match(toks[open_idx - 1].text):
+        return ""
+    return _s5_first_wrapped_ident(toks, open_idx, close_idx)
+
+
+def _s5_bare_cast_source(toks: list[SqlToken], idx: int, prev: str) -> str:
+    """Cast source for an unwrapped cast: the token before the type, or the
+    token two back for the `CAST(x AS t)` spelling."""
+    if prev.upper() == "AS":
+        return toks[idx - 2].text if idx >= 2 else ""
+    return prev
+
+
 def _s5_cast_source(toks: list[SqlToken], idx: int) -> tuple[str, bool]:
     """Return (cast source identifier text, is_cast_position) for toks[idx].
 
-    The cast source is the identifier right before the type token, or (for
-    `CAST(x AS t)`) the token two back, after an AS.
+    A preceding `)` means the source is wrapped in a call (the mandated
+    `NULLIF(trim(x), '')::type` form) -- resolve it through the wrapper.
     """
     prev = toks[idx - 1].text if idx else ""
-    is_cast_position = bool(prev) and prev not in ("(", ",", ";", ")")
-    if prev.upper() == "AS":
-        src = toks[idx - 2].text if idx >= 2 else ""
-    else:
-        src = prev
-    return src, is_cast_position
+    if prev == ")":
+        src = _s5_wrapped_cast_source(toks, idx - 1)
+        return src, bool(src)
+    if not prev or prev in ("(", ",", ";"):
+        return prev, False
+    return _s5_bare_cast_source(toks, idx, prev), True
 
 
 def _s5_finding_for_cast(rel: str, tok: SqlToken, src: str) -> Finding | None:

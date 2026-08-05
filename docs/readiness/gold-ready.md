@@ -24,7 +24,7 @@ report must be a filled instance, not the blank template.
 
 | Gate | What it proves here |
 |------|---------------------|
-| `seshat check` (static) | S6 -> `-1` unknown member present; S7 -> date dim built via `generate_series` (contiguous) |
+| `seshat check` (static) | S6 -> `-1` unknown member present on every ENTITY dim; S7 -> date dim built via `generate_series` (contiguous); S8 -> the date dim carries NO `-1`/NULL member (it is a marked date table, so a sentinel member breaks Power BI refresh even though the SQL succeeds) |
 | `retail validate` (LIVE, read-only) | RC2 -> PK/grain uniqueness; RC15 -> date coverage; RC16 -> 0 orphan FKs AND penny-exact silver<->gold reconciliation |
 
 Live validate needs the `db` extra installed and a DSN. With neither, the stage

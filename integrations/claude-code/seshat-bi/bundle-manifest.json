@@ -2253,10 +2253,10 @@
     {
       "classification": "public_knowledge",
       "destination": "skills/retail-build-warehouse/SKILL.md",
-      "output_sha256": "7d5c69efd06f2984a7ff1a42414a7662c3ce36bb6a2918bf4bb2b36116cb1318",
+      "output_sha256": "8a4bd554f36f7fa60b157a53b16fbd3d2d9ee6edd7bcb3b72d83854dbee5f5bc",
       "source": ".claude/skills/retail-build-warehouse/SKILL.md",
       "source_id": "kb-149",
-      "source_sha256": "7d5c69efd06f2984a7ff1a42414a7662c3ce36bb6a2918bf4bb2b36116cb1318",
+      "source_sha256": "8a4bd554f36f7fa60b157a53b16fbd3d2d9ee6edd7bcb3b72d83854dbee5f5bc",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2396,10 +2396,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "cc2dd0ce39bf509b381b2adf204653082cee4ef4321e8014eee4f88c3653883d",
+  "manifest_digest": "0c3ea7e040dd4efaff380ed1469f820b90718f021d186c30141252145e0cdea1",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "842dcc7d054d586b4520ac6e1af6835bc57d4388",
+  "source_revision": "728de12687f56c0c89e642f0942b7a61937cd717",
   "target": "claude",
   "version": "0.8.1"
 }
