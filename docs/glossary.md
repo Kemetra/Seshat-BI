@@ -108,7 +108,7 @@ This catalog is the **single source of truth for `seshat check`'s rule count.**
 The **live registry in `src/seshat/rules/` is authoritative**; the table below
 mirrors it and the `retail-govern` skill maps each id to its fix.
 
-> **Currently 79 rules in 26 families** (S, D, C, R, RS, G, P, A, B, PP, SC, DF, SL, KR, KP, AL, AD, AQ, CB, DL, CT, DR, AP, SF, HR, DS).
+> **Currently 80 rules in 26 families** (S, D, C, R, RS, G, P, A, B, PP, SC, DF, SL, KR, KP, AL, AD, AQ, CB, DL, CT, DR, AP, SF, HR, DS).
 > When a rule is added or removed, update the table and this line **together** — and
 > elsewhere refer to "the static `seshat check` gate" by name rather than restating a
 > number. Restated counts are exactly what drifted before (see
@@ -117,7 +117,7 @@ mirrors it and the `retail-govern` skill maps each id to its fix.
 
 | Family | Layer it guards | Rules |
 |--------|-----------------|-------|
-| **S** | SQL / migrations | `S1` snake_case identifiers · `S2` medallion schema names · `S3` `vw_` prefix on views · `S4a` migration filename + numbering · `S4b` migration guard form (layer-aware) · `S5` type discipline (RC7) · `S6` gold dim `-1` unknown member (RC14) · `S7` contiguous date dim (RC15) · `S8` marked date table has no `-1`/NULL member |
+| **S** | SQL / migrations | `S1` snake_case identifiers · `S2` medallion schema names · `S3` `vw_` prefix on views · `S4a` migration filename + numbering · `S4b` migration guard form (layer-aware) · `S5` type discipline (RC7) · `S6` gold dim `-1` unknown member (RC14) · `S7` contiguous date dim (RC15) · `S8` marked date table has no `-1`/NULL member · `S9` junk-row filter runs before the `''`->NULL conversion |
 | **D** | DAX / TMDL semantic model | `D1` PascalCase measure names · `D2` displayFolder required · `D3` no duplicated measure logic · `D4` use `DIVIDE()` not `/` · `D5` prefer explicit measures (WARN) · `D6` no bidirectional relationships · `D7` time-intelligence needs a date-table marker · `D8` partitions source from `gold` only · `D9` no hardcoded date literals in measures · `D10` no `FILTER(ALL/ALLSELECTED/ALLEXCEPT(...))` full-table-scan anti-pattern · `D11` each measure needs a `///` doc comment |
 | **C** | connection / secrets | `C1` connection uses parameter identifiers, not string literals · `C2` no committed secrets |
 | **R** | PBIR report | `R1` PBIR model reference must be relative; `R2` report.json authoring-lint (valid/schema/refs/no forbidden key) |

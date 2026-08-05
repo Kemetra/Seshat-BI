@@ -2055,10 +2055,10 @@
     {
       "classification": "public_knowledge",
       "destination": "skills/retail-govern/SKILL.md",
-      "output_sha256": "46ca90c2bb981a786396adafc509f1d814e23c125ecd21a1b2ac610ffb971e26",
+      "output_sha256": "2243f13ba6790a561b8c386b22db10f2869bccaa82c8305e9ecb21d3f28054ab",
       "source": ".claude/skills/retail-govern/SKILL.md",
       "source_id": "kb-151",
-      "source_sha256": "46ca90c2bb981a786396adafc509f1d814e23c125ecd21a1b2ac610ffb971e26",
+      "source_sha256": "2243f13ba6790a561b8c386b22db10f2869bccaa82c8305e9ecb21d3f28054ab",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2180,7 +2180,7 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "917e975e4751ce5d4af2d1ae29b9c98b5449592ff02f36b20885143f24e1a30b",
+  "manifest_digest": "14d3f4c9d0ad1db45562adf2bd7aa7001dbdc177a52d27f06b65732d4e655088",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
   "source_revision": "728de12687f56c0c89e642f0942b7a61937cd717",

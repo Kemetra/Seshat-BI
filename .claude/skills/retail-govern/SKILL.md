@@ -53,7 +53,7 @@ locator; the rule id tells you which fix below applies.
 ## Rule id → meaning → where to fix
 
 <!-- SESHAT-RULE-FIX-TABLE START -->
-This table covers all **79** registered rules. It is GENERATED from
+This table covers all **80** registered rules. It is GENERATED from
 `rule-fixes.yaml` -- edit that file and run
 `python scripts/export_rule_fix_table.py`, never this table.
 
@@ -134,6 +134,7 @@ This table covers all **79** registered rules. It is GENERATED from
 | `S6` | Gold dim missing its `-1` unknown member (RC14) | Add the `-1` unknown member + FK COALESCE in the gold dim (`sql.py`) |
 | `S7` | Date dim not a contiguous `generate_series` calendar (RC15) | Build the date dim as a contiguous generated calendar (`sql.py`) |
 | `S8` | A marked date table carries a `-1`/NULL member | Remove the sentinel member from the date dim (`sql.py`) |
+| `S9` | A junk filter targeting `''` runs after nulling, so it is dead and the junk rows survive | Move the junk-row filter ahead of the `''`->NULL conversion (`sql.py`) |
 | `SC1` | A prose status claim (planned/built) contradicts tracked-file evidence | Correct the stale prose claim (`status_claims.py`) |
 | `SC2` | A prose "N rules" count claim disagrees with the authoritative count | Update the count + the `rule-count-claims.yaml` anchor together (`rule_count_claims.py`) |
 | `SF1` | same-basename checklists shared across skills are declared shared/distinct and shared copies match | declare or fix the basename's shared/distinct status in `shared-spine.yaml`, creating the file if absent |

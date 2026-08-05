@@ -252,6 +252,9 @@ rules:
   S8:
     fix: Remove the sentinel member from the date dim (`sql.py`)
     means: A marked date table carries a `-1`/NULL member
+  S9:
+    fix: Move the junk-row filter ahead of the `''`->NULL conversion (`sql.py`)
+    means: A junk filter targeting `''` runs after nulling, so it is dead and the junk rows survive
   SC1:
     fix: Correct the stale prose claim (`status_claims.py`)
     means: A prose status claim (planned/built) contradicts tracked-file evidence

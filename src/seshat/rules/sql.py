@@ -1,4 +1,4 @@
-"""SQL rules (S1–S8, plus D8 schema tokens). Added in M2; stub for M1.6 wiring."""
+"""SQL rules (S1–S9, plus D8 schema tokens). Added in M2; stub for M1.6 wiring."""
 
 from __future__ import annotations
 
@@ -751,6 +751,92 @@ def s8_date_dim_no_unknown_member(ctx: RuleContext) -> list[Finding]:
                     locator=f"{rel}:{_line_at(clean, m.start())}",
                 )
             )
+    return findings
+
+
+# ---------------------------------------------------------------------------
+# S9 -- the ONE Phase-5 order violation that is invisible to both the gate and
+# the database. Matched on strip_sql_comments text, which PRESERVES string
+# literals; _strip_sql_noise would collapse every literal to '' and make the
+# empty-element test below meaningless.
+# ---------------------------------------------------------------------------
+_S9_IDENT_SRC = r"[A-Za-z_][A-Za-z0-9_]*"
+# NULLIF(x, '') or NULLIF(trim(x), '') -- capture the innermost column.
+_S9_NULLIF_EMPTY = re.compile(
+    rf"NULLIF\s*\(\s*(?:{_S9_IDENT_SRC}\s*\(\s*)*({_S9_IDENT_SRC})\s*\)*\s*,\s*''\s*\)",
+    re.IGNORECASE,
+)
+_S9_NOT_IN = re.compile(rf"({_S9_IDENT_SRC})\s+NOT\s+IN\s*\(([^)]*)\)", re.IGNORECASE)
+# An EMPTY-STRING element of a value list: ('a', '') / ('', 'a') / ('').
+_S9_EMPTY_ELEMENT = re.compile(r"(?:^|,)\s*''\s*(?:,|$)")
+
+
+def _s9_first_nulled_offsets(clean: str) -> dict[str, int]:
+    """Earliest offset at which each column is passed through `NULLIF(x, '')`."""
+    first: dict[str, int] = {}
+    for m in _S9_NULLIF_EMPTY.finditer(clean):
+        first.setdefault(m.group(1).lower(), m.start())
+    return first
+
+
+def _s9_findings_for_file(rel: str, clean: str) -> list[Finding]:
+    """S9 findings for one file's comment-stripped text."""
+    nulled = _s9_first_nulled_offsets(clean)
+    findings: list[Finding] = []
+    for m in _S9_NOT_IN.finditer(clean):
+        col = m.group(1).lower()
+        nulled_at = nulled.get(col)
+        if not _S9_EMPTY_ELEMENT.search(m.group(2)):
+            continue
+        if nulled_at is None or nulled_at > m.start():
+            continue
+        findings.append(
+            Finding(
+                rule_id="S9",
+                severity=Severity.WARNING,
+                message=(
+                    f"{col} is filtered with NOT IN (..., '') here, but was already "
+                    f"converted to NULL by NULLIF({col}, '') on line "
+                    f"{_line_at(clean, nulled_at)}; this filter is DEAD -- "
+                    "NULL NOT IN (...) is NULL, never TRUE, so the junk rows survive "
+                    "into silver and no error is raised. Run junk-row filters BEFORE "
+                    "the ''->NULL conversion (silver build order steps 3 then 4)."
+                ),
+                locator=f"{rel}:{_line_at(clean, m.start())}",
+            )
+        )
+    return findings
+
+
+@register(
+    "S9",
+    "junk-row filter runs before the ''->NULL conversion",
+    requires=(WAREHOUSE_SQL_CORPUS,),
+)
+def s9_junk_filter_before_nulling(ctx: RuleContext) -> list[Finding]:
+    """Flag a junk-row filter targeting `''` that runs AFTER `''`->NULL.
+
+    The silver build order mandates junk-row filters run BEFORE the `''`->NULL
+    conversion. Inverted, the filter is DEAD: `''` is already NULL, and
+    `NULL NOT IN (...)` evaluates to NULL rather than TRUE, so every junk row
+    survives into silver. Postgres raises nothing -- the SQL is valid -- and no
+    other rule inspects construct ORDER, so before S9 an inverted migration passed
+    `seshat check` with the whole S family reporting coverage `evaluated`.
+
+    This is the only one of the eight build steps whose violation is invisible to
+    BOTH the static gate and the database. (A misplaced sentinel UPDATE, by
+    contrast, fails loudly at apply time with "relation does not exist", so it
+    needs no rule.)
+
+    WARNING, not ERROR: detection is a textual heuristic over a value list, and the
+    S-family reserves ERROR for a hard downstream breakage (S8). Known limitation
+    -- offsets are file-wide, so a file whose SECOND statement legitimately filters
+    a column that its FIRST statement nulled reads as inverted; surface it for
+    review rather than blocking a build on it.
+    """
+    findings: list[Finding] = []
+    for rel in _live_sql_files(ctx):
+        findings.extend(_s9_findings_for_file(rel, strip_sql_comments(_read(ctx, rel))))
     return findings
 
 
