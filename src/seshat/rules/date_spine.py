@@ -80,7 +80,13 @@ from collections.abc import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
-from ..sql import SqlToken, iter_sql_files, strip_sql_comments, tokenize_sql
+from ..sql import (
+    WAREHOUSE_SQL_CORPUS,
+    SqlToken,
+    iter_sql_files,
+    strip_sql_comments,
+    tokenize_sql,
+)
 
 RULE_ID = "HR8"
 
@@ -409,7 +415,9 @@ def _check_statement(
     return findings
 
 
-@register(RULE_ID, "gold date dim is contiguous/gap-free")
+@register(
+    RULE_ID, "gold date dim is contiguous/gap-free", requires=(WAREHOUSE_SQL_CORPUS,)
+)
 def check_hr8(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
     for rel in iter_sql_files(ctx):

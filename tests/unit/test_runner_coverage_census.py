@@ -181,3 +181,68 @@ def test_a_ratified_requirement_opt_in_survives_the_runner(tmp_path: Path) -> No
     (record,) = coverage_census(rules, _ctx(tmp_path))
     assert record.state is CoverageState.NOT_APPLICABLE
     assert record.basis == "Principle V: floor key IS the opt-in"
+
+
+# --- the pattern (file-class) requirement form --------------------------------
+
+
+def test_empty_corpus_is_unevaluable(tmp_path: Path) -> None:
+    """The gap this form exists for: a rule scans a class of files and finds none.
+
+    Such a rule returns no findings while having verified nothing, which is
+    indistinguishable from a clean pass in the findings list alone.
+    """
+    from seshat.sql import WAREHOUSE_SQL_CORPUS
+
+    rules = (_reg("S1", requires=(WAREHOUSE_SQL_CORPUS,)),)
+    ctx = RuleContext(repo_root=tmp_path, tracked_files=("docs/readme.md",))
+    (record,) = coverage_census(rules, ctx)
+    assert record.state is CoverageState.UNEVALUABLE
+    assert record.requirement == "warehouse/*.sql"
+
+
+def test_non_empty_corpus_is_evaluated(tmp_path: Path) -> None:
+    from seshat.sql import WAREHOUSE_SQL_CORPUS
+
+    rules = (_reg("S1", requires=(WAREHOUSE_SQL_CORPUS,)),)
+    ctx = RuleContext(
+        repo_root=tmp_path, tracked_files=("warehouse/migrations/001_silver.sql",)
+    )
+    (record,) = coverage_census(rules, ctx)
+    assert record.state is CoverageState.EVALUATED
+
+
+def test_corpus_glob_matches_the_rules_own_iterator_exactly(tmp_path: Path) -> None:
+    """Guards against the glob and iter_sql_files drifting apart.
+
+    A declaration that disagreed with the iterator would be WORSE than no
+    declaration: it would report `evaluated` for a rule that scanned nothing.
+    """
+    from seshat.core import RuleContext as Ctx
+    from seshat.sql import WAREHOUSE_SQL_CORPUS, iter_sql_files
+
+    candidates = (
+        "warehouse/silver.sql",
+        "warehouse/migrations/001_x.sql",
+        "docs/x.sql",
+        "warehouse/notes.md",
+        "tests/fixtures/q.sql",
+    )
+    for candidate in candidates:
+        ctx = Ctx(repo_root=tmp_path, tracked_files=(candidate,))
+        iterator_saw_it = bool(iter_sql_files(ctx))
+        (record,) = coverage_census(
+            (_reg("S1", requires=(WAREHOUSE_SQL_CORPUS,)),), ctx
+        )
+        declared_ran = record.state is CoverageState.EVALUATED
+        assert declared_ran == iterator_saw_it, candidate
+
+
+def test_requirement_rejects_declaring_both_forms() -> None:
+    with pytest.raises(ValueError, match="not both"):
+        Requirement(path="a.sql", pattern="warehouse/*.sql")
+
+
+def test_requirement_rejects_declaring_neither_form() -> None:
+    with pytest.raises(ValueError, match="declares no input"):
+        Requirement()

@@ -9,6 +9,7 @@ from pathlib import PurePosixPath
 from ..core import Finding, RuleContext, Severity, is_test_path, read_tracked_text
 from ..registry import register
 from ..sql import (
+    WAREHOUSE_SQL_CORPUS,
     SqlToken,
     _dollar_quote_end,
     iter_sql_files,
@@ -74,7 +75,7 @@ def _s1_findings_for_text(rel: str, text: str) -> list[Finding]:
     return findings
 
 
-@register("S1", "snake_case SQL identifiers")
+@register("S1", "snake_case SQL identifiers", requires=(WAREHOUSE_SQL_CORPUS,))
 def s1_snake_case_identifiers(ctx: RuleContext) -> list[Finding]:
     findings: list[Finding] = []
     for rel in iter_sql_files(ctx):
@@ -101,7 +102,7 @@ def _s2_findings_for_file(rel: str, text: str) -> list[Finding]:
     return findings
 
 
-@register("S2", "medallion schema names")
+@register("S2", "medallion schema names", requires=(WAREHOUSE_SQL_CORPUS,))
 def s2_medallion_schemas(ctx: RuleContext) -> list[Finding]:
     findings: list[Finding] = []
     for rel in iter_sql_files(ctx):
@@ -127,7 +128,7 @@ def _s3_view_name_token(toks: list[SqlToken], idx: int) -> SqlToken | None:
     return nxt
 
 
-@register("S3", "vw_ prefix on views")
+@register("S3", "vw_ prefix on views", requires=(WAREHOUSE_SQL_CORPUS,))
 def s3_vw_prefix(ctx: RuleContext) -> list[Finding]:
     findings: list[Finding] = []
     for rel in iter_sql_files(ctx):
@@ -153,7 +154,7 @@ def s3_vw_prefix(ctx: RuleContext) -> list[Finding]:
 _MIGRATION_NAME = re.compile(r"^\d{4}_.+\.sql$")
 
 
-@register("S4a", "migration filename + numbering")
+@register("S4a", "migration filename + numbering", requires=(WAREHOUSE_SQL_CORPUS,))
 def s4a_migration_numbering(ctx: RuleContext) -> list[Finding]:
     findings: list[Finding] = []
     migrations = [
@@ -389,7 +390,7 @@ def _s4b_findings_for_file(rel: str, toks: list[SqlToken]) -> list[Finding]:
     return findings
 
 
-@register("S4b", "migration guard form")
+@register("S4b", "migration guard form", requires=(WAREHOUSE_SQL_CORPUS,))
 def s4b_guard_form(ctx: RuleContext) -> list[Finding]:
     """Layer-aware guard-form check.
 
@@ -473,7 +474,7 @@ def _s5_finding_for_cast(rel: str, tok: SqlToken, src: str) -> Finding | None:
     return None
 
 
-@register("S5", "type discipline (enforces ADR RC7)")
+@register("S5", "type discipline (enforces ADR RC7)", requires=(WAREHOUSE_SQL_CORPUS,))
 def s5_type_discipline(ctx: RuleContext) -> list[Finding]:
     """Flag money/qty cast to a float type, or an id-like column cast to integer.
 
@@ -612,7 +613,11 @@ def _dims_with_minus1_member(clean: str) -> set[str]:
     return {m.group(1).lower() for m in _INSERT_GOLD_DIM_MINUS1.finditer(clean)}
 
 
-@register("S6", "gold dim -1 unknown member (enforces ADR RC14)")
+@register(
+    "S6",
+    "gold dim -1 unknown member (enforces ADR RC14)",
+    requires=(WAREHOUSE_SQL_CORPUS,),
+)
 def s6_gold_unknown_member(ctx: RuleContext) -> list[Finding]:
     """Each `gold.dim_*` should carry a `-1` unknown member (RC14).
 
@@ -649,7 +654,11 @@ def s6_gold_unknown_member(ctx: RuleContext) -> list[Finding]:
     return findings
 
 
-@register("S8", "date dim has no -1/NULL unknown member (marked date table)")
+@register(
+    "S8",
+    "date dim has no -1/NULL unknown member (marked date table)",
+    requires=(WAREHOUSE_SQL_CORPUS,),
+)
 def s8_date_dim_no_unknown_member(ctx: RuleContext) -> list[Finding]:
     """A `gold.dim_date*` must NOT carry a `-1`/NULL unknown member (inverse of S6).
 
@@ -716,7 +725,9 @@ def _s7_is_gappy_date_dim_insert(stmt: list[SqlToken]) -> bool:
     return has_distinct and not has_genseries
 
 
-@register("S7", "contiguous date dim (enforces ADR RC15)")
+@register(
+    "S7", "contiguous date dim (enforces ADR RC15)", requires=(WAREHOUSE_SQL_CORPUS,)
+)
 def s7_contiguous_date_dim(ctx: RuleContext) -> list[Finding]:
     """A `dim_date` must be a contiguous generated calendar, not SELECT DISTINCT (RC15).
 
