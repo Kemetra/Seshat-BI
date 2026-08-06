@@ -1,6 +1,6 @@
 # User installation: Seshat BI public beta
 
-> **Availability:** the current public release is `seshat-bi==0.8.1` on public
+> **Availability:** the current public release is `seshat-bi==0.8.2` on public
 > PyPI (the version is single-sourced from `pyproject.toml`; the pin is projected
 > at release-preparation time, so actual index availability is confirmed per
 > release in

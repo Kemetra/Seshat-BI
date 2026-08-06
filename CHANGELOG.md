@@ -27,6 +27,8 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+## [0.8.2] -- 2026-08-06
+
 ### Fixed
 - **Trailing anomaly detection no longer subtracts the baseline center twice.**
   `_Baseline.residual` already holds `observed - center`, but the flag compared
