@@ -47,28 +47,34 @@ def _strip_sql_noise(text: str) -> str:
     out: list[str] = []
     i, n = 0, len(text)
     while i < n:
-        if text.startswith("--", i):
-            emitted, i = _consume_line_comment(text, i)
-            out.append(emitted)
+        consumed = _consume_noise_at(text, i)
+        if consumed is None:
+            out.append(text[i])
+            i += 1
             continue
-        if text.startswith("/*", i):
-            emitted, i = _consume_block_comment(text, i)
-            out.append(emitted)
-            continue
-        if text[i] == "$":
-            consumed = _consume_dollar_quote(text, i)
-            if consumed is not None:
-                emitted, i = consumed
-                out.append(emitted)
-                continue
-            # not a dollar-quote opener (e.g. `$1`); copy the `$` through below.
-        if text[i] in ("'", '"'):
-            emitted, i = _consume_quoted_string(text, i)
-            out.append(emitted)
-            continue
-        out.append(text[i])
-        i += 1
+        emitted, i = consumed
+        out.append(emitted)
     return "".join(out)
+
+
+def _consume_noise_at(text: str, i: int) -> tuple[str, int] | None:
+    """The scrubbed replacement for the noise construct opening at `text[i]`, or
+    None if `text[i]` opens none and should be copied through verbatim.
+
+    Recognition order matters: a comment marker is checked before a quote, so
+    `-- it's` is a comment rather than an unterminated literal.
+    """
+    if text.startswith("--", i):
+        return _consume_line_comment(text, i)
+    if text.startswith("/*", i):
+        return _consume_block_comment(text, i)
+    if text[i] == "$":
+        # None when this is not a dollar-quote opener (e.g. `$1`), which the
+        # caller then copies through -- a `$` is never a quote character.
+        return _consume_dollar_quote(text, i)
+    if text[i] in ("'", '"'):
+        return _consume_quoted_string(text, i)
+    return None
 
 
 def _consume_line_comment(text: str, i: int) -> tuple[str, int]:
