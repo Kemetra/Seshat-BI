@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from seshat.dagster_adapter import doctor
+from seshat.dagster_adapter import PINNED_DAGSTER, doctor
 
 pytestmark = pytest.mark.unit
 
@@ -25,10 +25,12 @@ UNRESOLVED = """- **Gate status:** `CLEARED`
 | Q1 | q? | b. | analyst | d | `answered` | r |
 """
 
-GOOD_PYPROJECT = """[project]
+# Derived from the constant rather than restated: a dagster bump changes the pin
+# in one place, and this fixture follows it instead of failing the suite.
+GOOD_PYPROJECT = f"""[project]
 name = "tower-bi-orchestration"
 dependencies = [
-    "dagster==1.13.15",
+    "dagster=={PINNED_DAGSTER}",
 ]
 """
 
