@@ -1,7 +1,7 @@
 {
   "name": "@kemetra/seshat-bi",
-  "version": "0.8.1",
-  "description": "Seshat BI agent skills bundle for Claude Code — governed seven-stage BI readiness workflow and reviewed public knowledge. Content only; the CLI ships separately on PyPI.",
+  "version": "0.8.2",
+  "description": "Seshat BI agent skills bundle for Claude Code \u2014 governed seven-stage BI readiness workflow and reviewed public knowledge. Content only; the CLI ships separately on PyPI.",
   "keywords": [
     "claude-code",
     "claude",

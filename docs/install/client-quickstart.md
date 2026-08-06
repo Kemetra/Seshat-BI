@@ -1,6 +1,6 @@
 # Client quickstart: install Seshat BI
 
-The current public release is **`seshat-bi==0.8.1`** on public PyPI. (That pin is
+The current public release is **`seshat-bi==0.8.2`** on public PyPI. (That pin is
 projected at release-preparation time; actual index availability is confirmed per
 release in [the release acceptance checklist](../operations/release-acceptance-checklist.md)
 — v0.7.0 was tagged but never published.) Seshat BI

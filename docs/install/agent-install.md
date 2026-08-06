@@ -1,6 +1,6 @@
 # Install Seshat BI for Claude Code or Codex
 
-> **Status:** the current public release is `seshat-bi==0.8.1` on public PyPI
+> **Status:** the current public release is `seshat-bi==0.8.2` on public PyPI
 > (version single-sourced from `pyproject.toml` and the generated plugin
 > manifests; this pin is projected at release-preparation time, so actual index
 > availability is confirmed per release in
