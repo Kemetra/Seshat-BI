@@ -55,6 +55,7 @@ EXPECTED_RULE_IDS = frozenset(
         "S6",
         "S7",
         "S8",  # SQL family (S8: marked date table has no -1/NULL member)
+        "S9",  # SQL family (S9: junk-row filter runs before the ''->NULL conversion)
         "D1",
         "D2",
         "D3",

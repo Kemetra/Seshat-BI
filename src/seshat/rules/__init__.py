@@ -58,6 +58,7 @@ from . import (  # noqa: F401  (imported for side effects)
     source_data_contract,
     source_freshness,
     sql,
+    sql_gold_members,
     status_claims,
 )
 
@@ -108,5 +109,6 @@ __all__ = [
     "source_data_contract",
     "source_freshness",
     "sql",
+    "sql_gold_members",
     "status_claims",
 ]

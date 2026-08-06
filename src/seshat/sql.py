@@ -368,7 +368,7 @@ def iter_sql_files(ctx: RuleContext) -> list[str]:
 #
 # Declaring it makes a rule report `unevaluable` -- not a silent pass -- when the
 # repo tracks no warehouse SQL at all, which is precisely when these rules iterate
-# nothing and would otherwise look clean. `_live_sql_files` (S5/S6/S7/S8) filters
+# nothing and would otherwise look clean. `live_sql_files` (S5/S6/S7/S8) filters
 # `tests/` out of this same corpus, which removes nothing from a `warehouse/`-
 # prefixed list, so those rules share this identical requirement.
 WAREHOUSE_SQL_CORPUS = Requirement(
