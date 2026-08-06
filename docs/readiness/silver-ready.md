@@ -24,7 +24,7 @@ First filled instance: `warehouse/migrations/0003_create_silver_retail_store_sal
 
 | Gate | Scope |
 |------|-------|
-| `seshat check` (S1-S7) exit 0 on the migration | NECESSARY, not sufficient. The gate is order-blind and static: it cannot prove row-count/sentinel correctness -- that is proven later by live `retail validate` at Gold Ready. |
+| `seshat check` exit 0 on the migration (SQL family: S1, S2, S3, S4a, S4b, S5, S6, S7, S8 -- not a "S1-S7" range) | NECESSARY, not sufficient. The gate is order-blind and static: no rule compares the relative position of two transforms, so an inverted Phase-5 order passes. Of the 8 build steps only step 5 (casts) has a rule at all (S5, WARNING); steps 1, 2, 3, 4, 6, 7 and the silver sentinel UPDATE of step 8 have NO static coverage. Row-count/sentinel correctness is proven later by live `retail validate` at Gold Ready. |
 | Self-review diff vs Phase-5 order | Confirms the generated SQL did not reorder/skip load-bearing transforms. |
 
 ## Statuses
@@ -34,12 +34,12 @@ First filled instance: `warehouse/migrations/0003_create_silver_retail_store_sal
 | `not_started` | No silver migration authored; Stage 2 (mapping_ready) may not be `pass` yet. |
 | `blocked` | A blocking reason holds (no CLEARED map, `seshat check` ERROR, or Phase-5 order violated). STOP. |
 | `warning` | Migration authored and `seshat check` passes but a non-fatal WARN or an accepted deviation is recorded in evidence. Does not auto-promote. |
-| `pass` | Migration committed, `seshat check` (S1-S7) exit 0, self-review diff confirms Phase-5 order. Evidence lists the file + check run. |
+| `pass` | Migration committed, `seshat check` exit 0, self-review diff confirms Phase-5 order. Evidence lists the file + check run. |
 
 ## Blocking reasons
 
 - No CLEARED map -- Stage 2 (mapping_ready) is not `pass`.
-- `seshat check` returns an ERROR on the migration (S1-S7 failure).
+- `seshat check` returns an ERROR on the migration (an S-family failure).
 - Phase-5 order violated -- self-review diff shows reordered/missing load-bearing
   transforms vs the CLEARED map.
 - Migration not committed (file absent from `warehouse/migrations/`).

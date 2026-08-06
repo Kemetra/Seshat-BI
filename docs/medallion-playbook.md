@@ -93,8 +93,12 @@ step → apply → next (the walk both cleans the table and refines the pipeline
   individual/patient data is sensitive → drop default; staff names and B2B company names
   are legitimate non-sensitive attributes).
 - **B. Per-survivor (decide these TOGETHER, one kept column at a time):** 2.3 rename +
-  2.5 type + 2.4 missing-value + gold placement. Missing-value is per-column (NO global
-  `'' → NULL` baseline) and only for columns where profiled `missing_count > 0`. A
+  2.5 type + 2.4 missing-value + gold placement. Missing-value splits in two: the
+  `'' → NULL` baseline is GLOBAL on all columns (ADR RC5, and what the shipped
+  `0003` does — it wraps `NULLIF(x, '')` around every kept column unconditionally),
+  while the SENTINEL-vs-NULL choice is per-column and asked only where profiled
+  `missing_count > 0`. Never skip the baseline for a 0-blank column: a later cast
+  on a blank that appeared after profiling would crash or corrupt. A
   present-but-wrong value is a *value remap* in a derived column, not a sentinel.
 - **C. Global-tail (across all rows):** 2.6 row filters (reconcile source − dropped =
   silver, accounting for OVERLAP; a blank-targeting filter must run PRE-sentinel) →

@@ -130,8 +130,17 @@ defaults:
 #   silver_type   RC7: money/qty -> numeric(p,s); date -> date;
 #                 leading-zero id -> text; ordinal -> smallint
 #   missing_policy  null  (RC5 default)  |  "sentinel:'UNKNOWN'" (RC6, grouping dims ONLY)
+#                 REVIEWER-ENFORCED, NOT machine-checked: no rule reads this field.
+#                 A sentinel on a fact_measure column (which would corrupt sums) and
+#                 a malformed policy string both pass `seshat check` silently. The
+#                 human reviewer is the only gate -- read it, do not assume the
+#                 checker did.
 #   pii           true|false. If true -> decision MUST be drop (RC4, before BI layer)
 #                 UNLESS governance signs off to KEEP it (recorded as a deviation).
+#                 REVIEWER-ENFORCED, NOT machine-checked: `seshat check` has no rule
+#                 for this pairing. `seshat pii-notice` reports an undecided kept
+#                 pii:true column but ALWAYS exits 0 -- it is a disclosure surface,
+#                 not a gate.
 #   deviation_ref (optional) when a pii:true column is KEPT by a governance ruling,
 #                 name the deviation id that records that ruling (matches an id under
 #                 defaults.deviations[]). A read-only PII-disclosure notice joins the

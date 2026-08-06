@@ -300,6 +300,10 @@
     "title": "date dim has no -1/NULL unknown member (marked date table)"
   },
   {
+    "id": "S9",
+    "title": "junk-row filter runs before the ''->NULL conversion"
+  },
+  {
     "id": "SC1",
     "title": "Prose status claims reconcile with tracked-file evidence"
   },

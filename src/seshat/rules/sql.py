@@ -1,4 +1,4 @@
-"""SQL rules (S1–S8, plus D8 schema tokens). Added in M2; stub for M1.6 wiring."""
+"""SQL rules (S1–S9, plus D8 schema tokens). Added in M2; stub for M1.6 wiring."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from ..registry import register
 from ..sql import (
     WAREHOUSE_SQL_CORPUS,
     SqlToken,
-    _dollar_quote_end,
     iter_sql_files,
     schema_zone,
     stale_schema_tokens,
@@ -25,7 +24,7 @@ _QUOTED = re.compile(r'"([^"]*)"|\[([^\]]*)\]')
 EXEMPT_S2 = frozenset({"warehouse/README.md"})
 
 
-def _read(ctx: RuleContext, rel: str) -> str:
+def read_sql_text(ctx: RuleContext, rel: str) -> str:
     """Return the text of tracked SQL file `rel`, or "" if it is absent on disk.
 
     A tracked-but-deleted-on-disk file (#430, e.g. deleted-but-unstaged) has no
@@ -40,10 +39,10 @@ def _tokens(ctx: RuleContext, rel: str) -> list[SqlToken]:
     """Non-empty (comment/string-stripped) tokens for `rel`. Shared by the
     token-based rules (S3/S4b/S5/S7) so each stops re-deriving this filter.
     """
-    return [t for t in tokenize_sql(_read(ctx, rel)) if t.text]
+    return [t for t in tokenize_sql(read_sql_text(ctx, rel)) if t.text]
 
 
-def _live_sql_files(ctx: RuleContext) -> list[str]:
+def live_sql_files(ctx: RuleContext) -> list[str]:
     """Tracked warehouse SQL files, excluding committed test fixtures.
 
     Shared preamble for the "live scan" rules (S5/S6/S7/S8): each rule skips
@@ -51,6 +50,15 @@ def _live_sql_files(ctx: RuleContext) -> list[str]:
     has no `is_test_path` skip of its own -- so it keeps its own iteration.
     """
     return [rel for rel in iter_sql_files(ctx) if not is_test_path(rel)]
+
+
+def line_at(clean: str, offset: int) -> int:
+    """1-based line number of `offset` in scrubbed text `clean`.
+
+    Shared by every rule that locates a finding by regex offset rather than by
+    token (S9 here; S6/S8 in ``sql_gold_members``), so each stops re-deriving it.
+    """
+    return clean.count("\n", 0, offset) + 1
 
 
 def _s1_findings_for_text(rel: str, text: str) -> list[Finding]:
@@ -82,7 +90,9 @@ def s1_snake_case_identifiers(ctx: RuleContext) -> list[Finding]:
         # Strip comments first (preserving line numbers + quoted identifiers) so a
         # double-quoted phrase inside a -- or /* */ comment is not mistaken for a
         # non-snake_case identifier. Real "..."/[...] identifiers in code survive.
-        findings.extend(_s1_findings_for_text(rel, strip_sql_comments(_read(ctx, rel))))
+        findings.extend(
+            _s1_findings_for_text(rel, strip_sql_comments(read_sql_text(ctx, rel)))
+        )
     return findings
 
 
@@ -108,7 +118,7 @@ def s2_medallion_schemas(ctx: RuleContext) -> list[Finding]:
     for rel in iter_sql_files(ctx):
         if rel in EXEMPT_S2:
             continue
-        findings.extend(_s2_findings_for_file(rel, _read(ctx, rel)))
+        findings.extend(_s2_findings_for_file(rel, read_sql_text(ctx, rel)))
     return findings
 
 
@@ -425,6 +435,8 @@ _FLOAT_TYPES = frozenset({"float", "float4", "float8", "double", "real"})
 _INT_TYPES = frozenset({"int", "int4", "int8", "integer", "bigint"})
 # An identifier looks id-like (kept TEXT under RC7) if it ends in these suffixes.
 _ID_SUFFIXES = ("_id", "_no", "_code", "_ref")
+# Bare identifier / function-name token (case-insensitive: NULLIF, trim, a column).
+_S5_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 
 def _is_id_like(name: str) -> bool:
@@ -433,19 +445,70 @@ def _is_id_like(name: str) -> bool:
     return any(low.endswith(s) for s in _ID_SUFFIXES)
 
 
+def _s5_matching_open(toks: list[SqlToken], close_idx: int) -> int:
+    """Index of the `(` matching the `)` at `close_idx`, or -1 if unbalanced."""
+    depth = 0
+    for i in range(close_idx, -1, -1):
+        text = toks[i].text
+        if text == ")":
+            depth += 1
+            continue
+        if text != "(":
+            continue
+        depth -= 1
+        if depth == 0:
+            return i
+    return -1
+
+
+def _s5_first_wrapped_ident(toks: list[SqlToken], open_idx: int, close_idx: int) -> str:
+    """First identifier inside the call that is not itself a call name, or "".
+
+    `NULLIF(trim(x), '')` yields `x`: `trim` is skipped because a `(` follows it.
+    """
+    for i in range(open_idx + 1, close_idx):
+        nxt = toks[i + 1].text if i + 1 < len(toks) else ""
+        if _S5_IDENT.match(toks[i].text) and nxt != "(":
+            return toks[i].text
+    return ""
+
+
+def _s5_wrapped_cast_source(toks: list[SqlToken], close_idx: int) -> str:
+    """Identifier wrapped by the call whose `)` sits at `close_idx`, or "".
+
+    The silver build order mandates every cast be written
+    `NULLIF(trim(x), '')::type`, which puts the wrapper's closing paren directly
+    before the type token. A bare `)` is (correctly) never a cast source itself,
+    so resolve what the call wrapped instead of skipping the cast entirely.
+    Returns "" when nothing resolves, which keeps the token a non-cast position.
+    """
+    open_idx = _s5_matching_open(toks, close_idx)
+    if open_idx <= 0 or not _S5_IDENT.match(toks[open_idx - 1].text):
+        return ""
+    return _s5_first_wrapped_ident(toks, open_idx, close_idx)
+
+
+def _s5_bare_cast_source(toks: list[SqlToken], idx: int, prev: str) -> str:
+    """Cast source for an unwrapped cast: the token before the type, or the
+    token two back for the `CAST(x AS t)` spelling."""
+    if prev.upper() == "AS":
+        return toks[idx - 2].text if idx >= 2 else ""
+    return prev
+
+
 def _s5_cast_source(toks: list[SqlToken], idx: int) -> tuple[str, bool]:
     """Return (cast source identifier text, is_cast_position) for toks[idx].
 
-    The cast source is the identifier right before the type token, or (for
-    `CAST(x AS t)`) the token two back, after an AS.
+    A preceding `)` means the source is wrapped in a call (the mandated
+    `NULLIF(trim(x), '')::type` form) -- resolve it through the wrapper.
     """
     prev = toks[idx - 1].text if idx else ""
-    is_cast_position = bool(prev) and prev not in ("(", ",", ";", ")")
-    if prev.upper() == "AS":
-        src = toks[idx - 2].text if idx >= 2 else ""
-    else:
-        src = prev
-    return src, is_cast_position
+    if prev == ")":
+        src = _s5_wrapped_cast_source(toks, idx - 1)
+        return src, bool(src)
+    if not prev or prev in ("(", ",", ";"):
+        return prev, False
+    return _s5_bare_cast_source(toks, idx, prev), True
 
 
 def _s5_finding_for_cast(rel: str, tok: SqlToken, src: str) -> Finding | None:
@@ -485,7 +548,7 @@ def s5_type_discipline(ctx: RuleContext) -> list[Finding]:
     numbers cast to int are an accepted false-positive the warning prompts review of.
     """
     findings: list[Finding] = []
-    for rel in _live_sql_files(ctx):
+    for rel in live_sql_files(ctx):
         toks = _tokens(ctx, rel)
         for idx, tok in enumerate(toks):
             src, is_cast_position = _s5_cast_source(toks, idx)
@@ -497,207 +560,91 @@ def s5_type_discipline(ctx: RuleContext) -> list[Finding]:
     return findings
 
 
-def _strip_sql_noise(text: str) -> str:
-    """Remove -- and /* */ comments and collapse string literals to ''.
-
-    The token lexer drops numeric literals entirely, so RC14's `-1` member can
-    only be detected from (noise-stripped) raw text. This strips comments and
-    string contents so a `-1` or `dim_` inside them never produces a match,
-    while preserving structure (and newlines) for line accounting.
-
-    KNOWN GAP (audit 2026-06-26 #10, DEFERRED): this comment-first stripper differs
-    from ``seshat.sql.strip_sql_comments`` (quote-first), and its `''`-escape
-    handling mis-splits `'it''s'` into `'it'`+`'s'` cosmetically. Verified at the
-    rule level: the mis-split preserves span parity (the two pseudo-strings tile the
-    same region as the true literal), so NO S6/S8 verdict changes on well-formed
-    SQL -- a `-1` outside the string is never swallowed and one inside never leaks.
-    Unifying both strippers into one quote-first state machine (the audit's
-    suggested mechanism) is design-doc §A: it has S1/S6/S8 (two ERROR rules) blast
-    radius and is human-gated. Kept separate; the latent edge is regression-tested.
-    """
-    out: list[str] = []
-    i, n = 0, len(text)
-    while i < n:
-        if text.startswith("--", i):
-            emitted, i = _consume_line_comment(text, i)
-            out.append(emitted)
-            continue
-        if text.startswith("/*", i):
-            emitted, i = _consume_block_comment(text, i)
-            out.append(emitted)
-            continue
-        if text[i] == "$":
-            consumed = _consume_dollar_quote(text, i)
-            if consumed is not None:
-                emitted, i = consumed
-                out.append(emitted)
-                continue
-            # not a dollar-quote opener (e.g. `$1`); copy the `$` through below.
-        if text[i] in ("'", '"'):
-            emitted, i = _consume_quoted_string(text, i)
-            out.append(emitted)
-            continue
-        out.append(text[i])
-        i += 1
-    return "".join(out)
-
-
-def _consume_line_comment(text: str, i: int) -> tuple[str, int]:
-    """Consume a `--` line comment at `text[i]`. Emits nothing; advances to the
-    newline (kept, so line accounting is preserved) or to EOF.
-    """
-    j = text.find("\n", i)
-    return "", len(text) if j == -1 else j
-
-
-def _consume_block_comment(text: str, i: int) -> tuple[str, int]:
-    """Consume a `/* */` block comment at `text[i]`. Emits only the newlines it
-    spanned (line accounting) and advances past the closing `*/` (or to EOF).
-    """
-    n = len(text)
-    j = text.find("*/", i)
-    seg = text[i : (n if j == -1 else j + 2)]
-    return "\n" * seg.count("\n"), n if j == -1 else j + 2
-
-
-def _consume_dollar_quote(text: str, i: int) -> tuple[str, int] | None:
-    """Consume a dollar-quoted (`$$...$$`) body at `text[i]`, or None if `text[i]`
-    is not a dollar-quote opener (e.g. `$1`), in which case the caller falls
-    through to the quote/default handling.
-
-    Collapse a PL/pgSQL body to `''` so a `-1` or `dim_` inside it never reaches
-    the S6/S8 raw-text scan; keep newlines for line accounting.
-    """
-    end = _dollar_quote_end(text, i)
-    if end is None:
-        return None
-    seg = text[i:end]
-    return "''" + "\n" * seg.count("\n"), end
-
-
-def _consume_quoted_string(text: str, i: int) -> tuple[str, int]:
-    """Consume a `'...'` or `"..."` string literal at `text[i]`. Emits `''` for
-    the collapsed literal plus the newlines it spanned; advances past the closing
-    quote (or to EOF).
-    """
-    n = len(text)
-    q = text[i]
-    j = text.find(q, i + 1)
-    seg = text[i : (n if j == -1 else j + 1)]
-    return "''" + "\n" * seg.count("\n"), n if j == -1 else j + 1
-
-
-_CREATE_GOLD_DIM = re.compile(
-    r"\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?gold\.(dim_\w+)", re.IGNORECASE
+# ---------------------------------------------------------------------------
+# S9 -- the ONE Phase-5 order violation that is invisible to both the gate and
+# the database. Matched on strip_sql_comments text, which PRESERVES string
+# literals; sql_gold_members._strip_sql_noise would collapse every literal and make
+# empty-element test below meaningless.
+# ---------------------------------------------------------------------------
+_S9_IDENT_SRC = r"[A-Za-z_][A-Za-z0-9_]*"
+# NULLIF(x, '') or NULLIF(trim(x), '') -- capture the innermost column.
+_S9_NULLIF_EMPTY = re.compile(
+    rf"NULLIF\s*\(\s*(?:{_S9_IDENT_SRC}\s*\(\s*)*({_S9_IDENT_SRC})\s*\)*\s*,\s*''\s*\)",
+    re.IGNORECASE,
 )
-# An INSERT INTO gold.dim_x whose statement (up to ';') seeds a -1 member in the
-# VALUES KEY position -- i.e. `... VALUES (-1, ...)` (the surrogate key column).
-# Anchoring on the VALUES-position -1 (not -1 ANYWHERE) is shared by S6 (entity dims
-# must HAVE such a member) and S8 (date dims must NOT), and excludes arithmetic like
-# `extract(month FROM d) - 1` which is not an unknown-member insert (Codex review:
-# S8 is ERROR, so a loose `-1`-anywhere match would block a valid calendar). Both
-# `VALUES (-1, ...)` and `OVERRIDING SYSTEM VALUE VALUES (-1, ...)` match.
-_INSERT_GOLD_DIM_MINUS1 = re.compile(
-    r"\bINSERT\s+INTO\s+gold\.(dim_\w+)\b[^;]*?\bVALUES\s*\(\s*-\s*1\b",
-    re.IGNORECASE | re.DOTALL,
-)
+_S9_NOT_IN = re.compile(rf"({_S9_IDENT_SRC})\s+NOT\s+IN\s*\(([^)]*)\)", re.IGNORECASE)
+# An EMPTY-STRING element of a value list: ('a', '') / ('', 'a') / ('').
+_S9_EMPTY_ELEMENT = re.compile(r"(?:^|,)\s*''\s*(?:,|$)")
 
 
-def _line_at(clean: str, offset: int) -> int:
-    """1-based line number of `offset` in noise-stripped text `clean`."""
-    return clean.count("\n", 0, offset) + 1
+def _s9_first_nulled_offsets(clean: str) -> dict[str, int]:
+    """Earliest offset at which each column is passed through `NULLIF(x, '')`."""
+    first: dict[str, int] = {}
+    for m in _S9_NULLIF_EMPTY.finditer(clean):
+        first.setdefault(m.group(1).lower(), m.start())
+    return first
 
 
-def _dims_with_minus1_member(clean: str) -> set[str]:
-    """Lowercased `dim_*` names that receive a -1-member INSERT in `clean`."""
-    return {m.group(1).lower() for m in _INSERT_GOLD_DIM_MINUS1.finditer(clean)}
-
-
-@register(
-    "S6",
-    "gold dim -1 unknown member (enforces ADR RC14)",
-    requires=(WAREHOUSE_SQL_CORPUS,),
-)
-def s6_gold_unknown_member(ctx: RuleContext) -> list[Finding]:
-    """Each `gold.dim_*` should carry a `-1` unknown member (RC14).
-
-    Static and PARTIAL (per the compliance matrix): proves a `-1`-valued INSERT
-    exists for each created `gold.dim_*`, not full referential correctness (that
-    is the live `retail validate` surface). Operates on noise-stripped raw text
-    (comments/strings removed) because the token lexer drops numeric literals, so
-    `-1` is invisible in token space. WARNING (reviewable; never blocks).
-    """
+def _s9_findings_for_file(rel: str, clean: str) -> list[Finding]:
+    """S9 findings for one file's comment-stripped text."""
+    nulled = _s9_first_nulled_offsets(clean)
     findings: list[Finding] = []
-    for rel in _live_sql_files(ctx):
-        clean = _strip_sql_noise(_read(ctx, rel))
-        with_member = _dims_with_minus1_member(clean)
-        for m in _CREATE_GOLD_DIM.finditer(clean):
-            dim = m.group(1).lower()
-            # A date dim is the documented EXCEPTION (S8): it becomes a marked date
-            # table (dataCategory: Time), which rejects nulls, so it must NOT carry a
-            # -1 unknown member. Exempt it here so S6 and S8 are complementary.
-            if dim.startswith("dim_date"):
-                continue
-            if dim in with_member:
-                continue
-            findings.append(
-                Finding(
-                    rule_id="S6",
-                    severity=Severity.WARNING,
-                    message=(
-                        f"gold.{dim} has no -1 unknown-member INSERT; a Kimball dim "
-                        "should carry an unknown member at _sk = -1 (enforces RC14)"
-                    ),
-                    locator=f"{rel}:{_line_at(clean, m.start())}",
-                )
+    for m in _S9_NOT_IN.finditer(clean):
+        col = m.group(1).lower()
+        nulled_at = nulled.get(col)
+        if not _S9_EMPTY_ELEMENT.search(m.group(2)):
+            continue
+        if nulled_at is None or nulled_at > m.start():
+            continue
+        findings.append(
+            Finding(
+                rule_id="S9",
+                severity=Severity.WARNING,
+                message=(
+                    f"{col} is filtered with NOT IN (..., '') here, but was already "
+                    f"converted to NULL by NULLIF({col}, '') on line "
+                    f"{line_at(clean, nulled_at)}; this filter is DEAD -- "
+                    "NULL NOT IN (...) is NULL, never TRUE, so the junk rows survive "
+                    "into silver and no error is raised. Run junk-row filters BEFORE "
+                    "the ''->NULL conversion (silver build order steps 3 then 4)."
+                ),
+                locator=f"{rel}:{line_at(clean, m.start())}",
             )
+        )
     return findings
 
 
 @register(
-    "S8",
-    "date dim has no -1/NULL unknown member (marked date table)",
+    "S9",
+    "junk-row filter runs before the ''->NULL conversion",
     requires=(WAREHOUSE_SQL_CORPUS,),
 )
-def s8_date_dim_no_unknown_member(ctx: RuleContext) -> list[Finding]:
-    """A `gold.dim_date*` must NOT carry a `-1`/NULL unknown member (inverse of S6).
+def s9_junk_filter_before_nulling(ctx: RuleContext) -> list[Finding]:
+    """Flag a junk-row filter targeting `''` that runs AFTER `''`->NULL.
 
-    Codex PR review #1 (2026-06-25): a date dim destined to be a marked date table
-    (`dataCategory: Time`) is validated by Power BI as unique/contiguous/NO-nulls.
-    A `-1, NULL` unknown member lands a BLANK in the date key, so refresh or
-    time-intelligence can fail even though the SQL migration succeeds and
-    `retail validate` stays green (the -1 member is also a valid FK target, so date
-    coverage / orphan checks do not catch it). This is the inverse of S6 (which
-    REQUIRES the -1 member on every OTHER gold dim).
+    The silver build order mandates junk-row filters run BEFORE the `''`->NULL
+    conversion. Inverted, the filter is DEAD: `''` is already NULL, and
+    `NULL NOT IN (...)` evaluates to NULL rather than TRUE, so every junk row
+    survives into silver. Postgres raises nothing -- the SQL is valid -- and no
+    other rule inspects construct ORDER, so before S9 an inverted migration passed
+    `seshat check` with the whole S family reporting coverage `evaluated`.
 
-    ERROR severity (a hard correctness gate, not an "override-when" RC default like
-    S6/S7): the bug reaches Power BI silently, which is exactly what a static gate
-    must prevent. Operates on noise-stripped raw text (the lexer drops numeric
-    literals, so -1 is invisible in token space). Unmatched/NULL FACT dates must be
-    handled outside the marked calendar (fail-loud or a nullable FK + DAX), never by
-    polluting the date table -- see ADR 0006.
+    This is the only one of the eight build steps whose violation is invisible to
+    BOTH the static gate and the database. (A misplaced sentinel UPDATE, by
+    contrast, fails loudly at apply time with "relation does not exist", so it
+    needs no rule.)
+
+    WARNING, not ERROR: detection is a textual heuristic over a value list, and the
+    S-family reserves ERROR for a hard downstream breakage (S8). Known limitation
+    -- offsets are file-wide, so a file whose SECOND statement legitimately filters
+    a column that its FIRST statement nulled reads as inverted; surface it for
+    review rather than blocking a build on it.
     """
     findings: list[Finding] = []
-    for rel in _live_sql_files(ctx):
-        clean = _strip_sql_noise(_read(ctx, rel))
-        for m in _INSERT_GOLD_DIM_MINUS1.finditer(clean):
-            dim = m.group(1).lower()
-            if not dim.startswith("dim_date"):
-                continue
-            findings.append(
-                Finding(
-                    rule_id="S8",
-                    severity=Severity.ERROR,
-                    message=(
-                        f"gold.{dim} inserts a -1/NULL unknown member; a marked date "
-                        "table (dataCategory: Time) must have NO null/sentinel key "
-                        "member -- it breaks Power BI date-table validation / "
-                        "time-intelligence. Handle unmatched fact dates outside the "
-                        "calendar (fail-loud or nullable FK), not with a -1 member."
-                    ),
-                    locator=f"{rel}:{_line_at(clean, m.start())}",
-                )
-            )
+    for rel in live_sql_files(ctx):
+        findings.extend(
+            _s9_findings_for_file(rel, strip_sql_comments(read_sql_text(ctx, rel)))
+        )
     return findings
 
 
@@ -736,7 +683,7 @@ def s7_contiguous_date_dim(ctx: RuleContext) -> list[Finding]:
     SELECT DISTINCT populating some other dim does not trigger. WARNING.
     """
     findings: list[Finding] = []
-    for rel in _live_sql_files(ctx):
+    for rel in live_sql_files(ctx):
         toks = _tokens(ctx, rel)
         for idx, tok in enumerate(toks):
             if tok.text.upper() != "INSERT":

@@ -17,10 +17,9 @@ from pathlib import Path
 import pytest
 
 from seshat.core import RuleContext, Severity
-from seshat.rules.sql import (
-    s5_type_discipline,
+from seshat.rules.sql import s5_type_discipline, s7_contiguous_date_dim
+from seshat.rules.sql_gold_members import (
     s6_gold_unknown_member,
-    s7_contiguous_date_dim,
     s8_date_dim_no_unknown_member,
 )
 
@@ -126,6 +125,69 @@ def test_s5_exempts_test_fixtures(tmp_path: Path) -> None:
     )
     findings = list(s5_type_discipline(_ctx(tmp_path, rel)))
     assert findings == [], "tests/ fixtures are exempt from the live scan"
+
+
+# --- the MANDATED idiom: a cast whose source is wrapped in NULLIF(trim(x),'') ---
+# retail-build-warehouse SKILL.md step 5 instructs authors to write every silver
+# cast as `NULLIF(trim(x), '')::type`. That form puts a `)` immediately before the
+# type token, which _s5_cast_source used to treat as "not a cast position" -- so
+# S5 examined NONE of the casts in the shipped reference migration 0003 (4 of 4
+# are NULLIF-wrapped) while still reporting coverage state `evaluated`. RC7 must
+# hold for the wrapped form exactly as it does for a bare `col::type`.
+
+
+def test_s5_flags_nullif_wrapped_money_cast_to_float(tmp_path: Path) -> None:
+    rel = _write(
+        tmp_path,
+        "warehouse/migrations/0001_silver.sql",
+        "CREATE TABLE silver.s AS "
+        "SELECT NULLIF(trim(amount), '')::float8 AS amount FROM bronze.b;",
+    )
+    findings = list(s5_type_discipline(_ctx(tmp_path, rel)))
+    assert len(findings) == 1, (
+        "RC7 must flag a float cast written in the mandated "
+        f"NULLIF(trim(x),'') form, got: {findings}"
+    )
+    f = findings[0]
+    assert f.rule_id == "S5"
+    assert "RC7" in f.message
+    assert "amount" in f.message, (
+        f"the message must name the wrapped cast source, not the wrapper: {f.message}"
+    )
+
+
+def test_s5_flags_nullif_wrapped_id_cast_to_wide_int(tmp_path: Path) -> None:
+    rel = _write(
+        tmp_path,
+        "warehouse/migrations/0001_silver.sql",
+        "SELECT NULLIF(trim(customer_id), '')::bigint AS customer_id FROM bronze.b;",
+    )
+    findings = list(s5_type_discipline(_ctx(tmp_path, rel)))
+    assert len(findings) == 1, (
+        "an id-like column cast to bigint inside NULLIF(trim(...)) still risks "
+        f"losing leading zeros and must flag, got: {findings}"
+    )
+    assert findings[0].rule_id == "S5"
+    assert "customer_id" in findings[0].message
+
+
+def test_s5_clean_on_nullif_wrapped_exact_types(tmp_path: Path) -> None:
+    # Guard against over-firing: the CORRECT mandated form (exact numeric / date,
+    # id left as text) must stay clean once wrapped casts become visible to S5.
+    rel = _write(
+        tmp_path,
+        "warehouse/migrations/0001_silver.sql",
+        "SELECT NULLIF(trim(amount), '')::numeric(18,2) AS amount, "
+        "NULLIF(trim(qty), '')::numeric(18,4) AS qty, "
+        "NULLIF(trim(sale_date), '')::date AS sale_date, "
+        "NULLIF(trim(line_no), '')::smallint AS line_no, "
+        "NULLIF(trim(customer_id), '') AS customer_id "
+        "FROM bronze.b;",
+    )
+    findings = list(s5_type_discipline(_ctx(tmp_path, rel)))
+    assert findings == [], (
+        f"the mandated exact-type wrapped form must be clean, got: {findings}"
+    )
 
 
 # ===========================================================================
