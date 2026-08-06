@@ -40,14 +40,11 @@ BASELINE_PINS: dict[str, str] = {
 # The minimum Python the kit itself declares (`requires-python = ">=3.13"`).
 MINIMUM_PYTHON: tuple[int, ...] = (3, 13)
 
-# Components whose MAJOR.MINOR must agree, by compat group. dbt adapters track
-# their core release line, so a 1.12 core with a 1.10 adapter is a real
-# mismatch rather than a cosmetic one.
-_AGREE_ON_MINOR: dict[str, tuple[str, ...]] = {}
-
 # dbt's adapter versioning does NOT track core's minor (dbt-core 1.12 pairs with
-# dbt-postgres 1.10), so the pair is validated against the recorded baseline
-# rather than by comparing their numbers to each other.
+# dbt-postgres 1.10), so a paired group is validated against the recorded
+# baseline rather than by comparing the members' numbers to each other. A
+# MAJOR.MINOR-agreement rule was considered and rejected for that reason; the
+# baseline check in `_baseline_pass` is the mechanism that shipped.
 _PAIRED_GROUPS = ("dbt",)
 
 
@@ -173,25 +170,21 @@ def _paired_group_pass(
     return _Pass(reasons=tuple(reasons), rejected=rejected)
 
 
-def _minor_agreement_pass(
-    groups: dict[str, list[tuple[Component, Resolution]]],
-) -> _Pass:  # pragma: no cover - reserved; _AGREE_ON_MINOR is empty
-    """A group whose members must share a MAJOR.MINOR but do not."""
-    reasons: list[str] = []
-    rejected: dict[str, tuple[str, str]] = {}
-    for group, expected in _AGREE_ON_MINOR.items():
-        members = [pair for pair in groups.get(group, []) if pair[0].id in expected]
-        minors = {
-            (parse_version(res.version) or ())[:2]
-            for _item, res in members
-            if res.version
-        }
-        if len(minors) <= 1:
-            continue
-        reason = f"the {group} components resolved to disagreeing minor versions"
-        reasons.append(reason)
-        rejected = {**_reject_group(members, CONFLICT, reason), **rejected}
-    return _Pass(reasons=tuple(reasons), rejected=rejected)
+def _refused(resolved: Resolution, verdict: tuple[str, str]) -> Resolution:
+    """`resolved` rewritten as a refusal carrying the policy's status and reason."""
+    status, reason = verdict
+    return replace(resolved, ok=False, status=status, reason=reason)
+
+
+def _rewrite(
+    pairs: list[tuple[Component, Resolution]],
+    rejected: dict[str, tuple[str, str]],
+) -> tuple[Resolution, ...]:
+    """Every resolution, with the rejected ones rewritten. Nothing is mutated."""
+    return tuple(
+        _refused(resolved, rejected[item.id]) if item.id in rejected else resolved
+        for item, resolved in pairs
+    )
 
 
 def apply_policy(
@@ -209,34 +202,24 @@ def apply_policy(
     interpreter = _python_floor_pass(pairs, python_version)
     baseline = _baseline_pass(pairs)
     paired = _paired_group_pass(groups)
-    minor = _minor_agreement_pass(groups)
 
-    # Reasons read in policy order: the interpreter, then the baseline, then the
+    # Reasons read in POLICY order: the interpreter, then the baseline, then the
     # group rules.
     reasons = [
         reason
-        for policy_pass in (interpreter, baseline, paired, minor)
+        for policy_pass in (interpreter, baseline, paired)
         for reason in policy_pass.reasons
     ]
 
-    # Rejections resolve in PRECEDENCE order, which is not the same order. A
-    # baseline regression names one component and its exact versions, so it
-    # outranks the blanket interpreter rejection covering every component; the
-    # group rules only claim components nothing more specific already did.
-    rejected: dict[str, tuple[str, str]] = {}
-    for policy_pass in (baseline, interpreter, paired, minor):
-        for component_id, verdict in policy_pass.rejected.items():
-            rejected.setdefault(component_id, verdict)
+    # Rejections resolve in PRECEDENCE order, which is not the same order, and a
+    # later spread wins -- so these are spread in REVERSE precedence. A baseline
+    # regression names one component and both versions, so it outranks the
+    # blanket interpreter rejection covering every component; the group rules
+    # only claim components nothing more specific already did.
+    rejected = {**paired.rejected, **interpreter.rejected, **baseline.rejected}
 
-    final = tuple(
-        replace(
-            resolved,
-            ok=False,
-            status=rejected[item.id][0],
-            reason=rejected[item.id][1],
-        )
-        if item.id in rejected
-        else resolved
-        for item, resolved in pairs
+    return Verdict(
+        resolutions=_rewrite(pairs, rejected),
+        ok=not reasons,
+        reasons=tuple(reasons),
     )
-    return Verdict(resolutions=final, ok=not reasons, reasons=tuple(reasons))
