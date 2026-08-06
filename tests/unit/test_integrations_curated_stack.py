@@ -166,6 +166,20 @@ def _no_network(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(resolvers, "urlopen", _boom)
 
 
+def _tools_on_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Force `uv`/`uvx`/`git`/`npx` onto a fake PATH.
+
+    The installer probes `shutil.which` before it will build anything, and
+    returns `unavailable` without running a single command when the tool is
+    absent. A runner fake alone therefore does NOT make a test hermetic: on a
+    machine (or CI runner) without `uv`, the argv oracles below observe an empty
+    command list and pass or fail for a reason that has nothing to do with the
+    property under test. Whether a launcher happens to exist on the machine
+    running the suite is never what these tests are about.
+    """
+    monkeypatch.setattr(installer.shutil, "which", lambda name: f"/bin/{name}")
+
+
 # --------------------------------------------------------------------------- #
 # 1. The default performs no network calls and writes nothing.
 # --------------------------------------------------------------------------- #
@@ -256,9 +270,12 @@ def test_planning_never_changes_the_lock(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_apply_uses_exact_versions_tags_or_commits(tmp_path: Path) -> None:
+def test_apply_uses_exact_versions_tags_or_commits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Property 5: every install command carries an exact coordinate."""
     root = _workspace(tmp_path)
+    _tools_on_path(monkeypatch)
     commands: list[list[str]] = []
 
     def _runner(command: list[str], cwd: Path):
@@ -341,7 +358,7 @@ def _install_mcp(
     import subprocess
 
     if monkeypatch is not None:
-        monkeypatch.setattr(installer.shutil, "which", lambda name: f"/bin/{name}")
+        _tools_on_path(monkeypatch)
 
     def _runner(command: list[str], cwd: Path):
         return subprocess.CompletedProcess(command, 0, "", "")
@@ -942,7 +959,9 @@ def test_json_mode_never_prompts(
 # --------------------------------------------------------------------------- #
 
 
-def test_the_active_python_interpreter_is_never_modified(tmp_path: Path) -> None:
+def test_the_active_python_interpreter_is_never_modified(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Property 20: no subprocess targets `sys.executable`.
 
     Asserted on the actual argv the installer would run, not on a docstring: the
@@ -951,6 +970,7 @@ def test_the_active_python_interpreter_is_never_modified(tmp_path: Path) -> None
     import subprocess
     import sys as _sys
 
+    _tools_on_path(monkeypatch)
     commands: list[list[str]] = []
 
     def _runner(command: list[str], cwd: Path):
