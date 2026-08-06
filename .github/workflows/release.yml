@@ -141,7 +141,7 @@ jobs:
           grep -Eq '^[0-9a-f]{40}$' SOURCE_REVISION
           sha256sum --check SHA256SUMS
       - name: Trusted Publishing via GitHub OIDC
-        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
         with:
           packages-dir: release-staging/dist/
           attestations: true
@@ -185,7 +185,7 @@ jobs:
           ref: ${{ inputs.candidate_ref }}
           persist-credentials: false
 
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
