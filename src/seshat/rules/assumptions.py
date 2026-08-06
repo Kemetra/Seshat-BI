@@ -36,6 +36,23 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+from ..rule_coverage import TEST_FIXTURES, any_tracked_file
+
+# The project metric-contract corpus this rule scans: the glob equivalent of
+# _METRICS_RE below. An ANY-OF group because that regex accepts both YAML
+# spellings (`.ya?ml`) -- one arm alone would report a repo that uses the other as
+# unevaluable, and two separate requirements would be ANDed, so a repo with only
+# `.yaml` contracts would look unchecked. Fixtures are exempt, as in the scan
+# itself; the blank template lives outside mappings/ and cannot match.
+METRIC_CONTRACT_CORPUS = any_tracked_file(
+    "mappings/*/metrics/*.yaml",
+    "mappings/*/metrics/*.yml",
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no non-fixture mappings/*/metrics/*.y[a]ml contract is tracked, so this "
+        "rule read no metric contract and its silence is not a verified pass"
+    ),
+)
 
 _METRICS_RE = re.compile(r"^mappings/[^/]+/metrics/[^/]+\.ya?ml$")
 _TEMPLATE_PATH = "templates/metric-contract.yaml"
@@ -81,6 +98,7 @@ def _has_settled_binding(contract: dict) -> bool:
 @register(
     "AL1",
     "Metric contract with an unresolved assumption also carries a settled binding",
+    requires=(METRIC_CONTRACT_CORPUS,),
 )
 def check_unresolved_assumptions(ctx: RuleContext) -> Iterable[Finding]:
     import yaml  # lazy: keep the retail-check core stdlib-only at module scope (B1/B3)

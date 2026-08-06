@@ -28,6 +28,21 @@ from typing import Any, Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+from ..rule_coverage import TEST_FIXTURES, any_tracked_file
+
+# The grid files DL5 scans. An ANY-OF group because _iter_grid_files accepts a
+# path by EITHER of two independent signals -- the design/grids/ directory or a
+# `grid.yaml` basename anywhere -- so one arm alone would report a repo using the
+# other as unevaluable, and ANDing them would demand both.
+GRID_CORPUS = any_tracked_file(
+    "design/grids/*",
+    "*grid.yaml",
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no non-fixture grid file (design/grids/** or a *grid.yaml basename) is "
+        "tracked, so this rule checked no grid and its silence is not a pass"
+    ),
+)
 
 RULE_ID = "DL5"
 
@@ -153,6 +168,7 @@ def _check_profile(rel: str, pname: str, prof: Any) -> Iterable[Finding]:
 @register(
     RULE_ID,
     "A layout grid's column/row arithmetic closes against its canvas and margins",
+    requires=(GRID_CORPUS,),
 )
 def check_grid_closure(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []

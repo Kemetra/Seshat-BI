@@ -31,6 +31,7 @@ from seshat.core import Finding, RuleContext, Severity, is_test_path
 from seshat.decision_store import (
     APPROVAL_REQUIRED_FIELDS,
     CONFIDENCE_VALUES,
+    DECISION_STORE_CORPUS,
     STATUS_VALUES,
     Store,
     active_scope_conflicts,
@@ -277,7 +278,11 @@ def _check_unique_ids(decisions: tuple[dict, ...], rel: str) -> list[Finding]:
     ]
 
 
-@register("DS1", "decision store layout, status, id and scope validity")
+@register(
+    "DS1",
+    "decision store layout, status, id and scope validity",
+    requires=(DECISION_STORE_CORPUS,),
+)
 def check_ds1(ctx: RuleContext) -> Iterable[Finding]:
     return _ds1_over(_store_for(ctx))
 
@@ -364,7 +369,11 @@ def _check_evidence_identity(
     return []
 
 
-@register("DS2", "decision approval metadata is complete and eligible")
+@register(
+    "DS2",
+    "decision approval metadata is complete and eligible",
+    requires=(DECISION_STORE_CORPUS,),
+)
 def check_ds2(ctx: RuleContext) -> Iterable[Finding]:
     store = _store_for(ctx)
     authority = load_authority_map(ctx.repo_root)
@@ -380,7 +389,11 @@ def check_ds2(ctx: RuleContext) -> Iterable[Finding]:
 # ---------------------------------------------------------------------------
 
 
-@register("DS3", "decision batch integrity (no critical types; valid confirmation)")
+@register(
+    "DS3",
+    "decision batch integrity (no critical types; valid confirmation)",
+    requires=(DECISION_STORE_CORPUS,),
+)
 def check_ds3(ctx: RuleContext) -> Iterable[Finding]:
     store = _store_for(ctx)
     findings: list[Finding] = []
@@ -492,7 +505,11 @@ def _check_batch_excluded(
 # ---------------------------------------------------------------------------
 
 
-@register("DS4", "decision supersession integrity and no scope conflicts")
+@register(
+    "DS4",
+    "decision supersession integrity and no scope conflicts",
+    requires=(DECISION_STORE_CORPUS,),
+)
 def check_ds4(ctx: RuleContext) -> Iterable[Finding]:
     store = _store_for(ctx)
     findings: list[Finding] = []
@@ -554,7 +571,11 @@ def _check_scope_conflicts(decisions: tuple[dict, ...], rel: str) -> list[Findin
 # ---------------------------------------------------------------------------
 
 
-@register("DS5", "decision gate verdict consistency invariants")
+@register(
+    "DS5",
+    "decision gate verdict consistency invariants",
+    requires=(DECISION_STORE_CORPUS,),
+)
 def check_ds5(ctx: RuleContext) -> Iterable[Finding]:
     """Store-side invariant a verdict rests on: an ``approved`` critical decision
     must carry the full, valid approval DS2 requires (so a ``pass`` verdict can

@@ -36,6 +36,25 @@ criterion). Reconciles to **79** registered rules, all ids unique:
 The 39: `AD1 AL2 C2 CB1 DL3 DL4 DL5 DL7 DL8 DS1 DS2 DS3 DS4 DS5 G1 G2 G3 G4 G5 HR6
 HR7 HR8 HR9 HR12 HR13 KP1 P1 P2 PP1 RS1 S1 S2 S3 S4a S4b S5 S6 S7 S8`
 
+> **AMENDED 2026-08-06 (Phase 1's exit criterion, now measured).** The table above
+> came from the module-level early-return heuristic and the exact per-rule figure was
+> deferred to measurement. Measured — every rule run against an empty repository —
+> the numbers are different in both directions, so the classification above should be
+> read as the estimate it was:
+>
+> | Measured class | Count | Meaning |
+> |---|---:|---|
+> | Silent on absent input | **65** | The real gap: needs a `Requirement` |
+> | Reports its own absence | **15** | Never ambiguous: 10 `KIT_SELF` manifests + `C2 G1 G2 G4 P1` |
+>
+> Two corrections to the estimate. **Five of the listed 39 were never gaps** —
+> `C2 G1 G2 G4 P1` all speak on absent input (`G1` 3 ERRORs, `G4` 10, `P1` 3, `C2` 2,
+> `G2` one INFO "no PBIP project present"). And **the "no absent-input path detected"
+> class of 30 was mostly wrong**: nearly all of those rules scan a corpus and go
+> silent when it is empty, which is the gap. Both errors came from reading module
+> structure instead of running the rules — the same class of mistake as the `@register`
+> grep in the method note below, and the reason this amendment is a measurement.
+
 > **Method note.** An earlier grep over `@register(...)` reported 50 rules / 25 in
 > the gap. Its regex broke on nested parentheses in decorator arguments and
 > silently dropped 29 rules. The registry is authoritative; counts in this document
@@ -193,8 +212,51 @@ reads only the `<!-- SPECKIT START/END -->` blocks in `CLAUDE.md` / `AGENTS.md` 
 path they name; adding no `specs/NNN-*/plan.md` and not editing the fence leaves it green.
 `specs/138-agent-driven-bundle/plan.md` keeps the active slot.
 
+## Declaration vocabulary (added during migration, 2026-08-06)
+
+The original `Requirement` — one `path` or one fnmatch `pattern`, ANDed within the
+tuple — could express only 17 of the 80 rules. Three forms were added, each because a
+measured group of rules could not be declared truthfully without it. Ahmed Shaaban
+authorized the first two on 2026-08-06; the third is the answer to P2, which the same
+session recorded as separately blocked.
+
+| Form | Rules it unblocked | Why the existing forms could not express it |
+|---|---|---|
+| `any_of=` group (`any_tracked_file(...)`) | `G3 DS1-DS5 DL5 DL6 AL1 AL2 HR5 HR6 HR11 HR12 KP1 CT1-CT3 DL3 DL8 B1 B3` | Their corpus is an ALTERNATION (four TMDL/PBIR suffixes; three decision-store files; both YAML spellings). One arm alone reports a rule that ran as `unevaluable`; separate requirements are ANDed, which is worse |
+| `ReportsItsOwnAbsence` | `C2 G1 G2 G4 P1` + the 10 `KIT_SELF` manifests | There is no input whose absence stops them: they emit a finding naming what they could not read. Credited as `evaluated`, and the claim is MEASURED against an empty repo by `tests/unit/test_rule_coverage_declarations.py` — declaring it for a silent rule turns the suite red |
+| `context=ContextInput.…` | `P2` | Its input is the commit subject the invocation supplies (`--commit-msg-file` / `--commit-range` / HEAD fallback), not a file. Resolved through P2's own `load_commit_subjects`, so the census cannot disagree with the rule about whether there was anything to judge |
+
+`exclude=` was added alongside them for the same honesty reason: nearly every
+file-scanning rule exempts `tests/` fixtures and often a blank template, so a glob that
+counted those would report `evaluated` for a rule that skipped every match. It is
+rejected on any form where it would be inert.
+
+**Two declarations were wrong and are now fixed.** `DL4` claimed its blank template
+"has no leading directory" and so could not satisfy `*/design-review-evidence.md`; it
+does (`templates/design-review-evidence.md`), and with the tracked fixtures being the
+only other match, DL4 read *nothing* on this repo while being reported as `evaluated`.
+`DL7` omitted both exemptions its iterator applies. Both were caught by the live-tree
+agreement check, which compares each declaration against the rule's OWN selector over
+the real tracked-file list — the check that makes this migration verifiable rather than
+asserted.
+
+**Known residual (accepted).** Corpus globs are matched with `fnmatch`, whose `*` spans
+`/`. A rule whose own regex is depth-anchored (`^mappings/[^/]+/metrics/…`) can
+therefore be credited by a deeper path it would not itself select. The direction is
+narrow and the shapes that occur in practice are pinned by the agreement tests;
+segment-wise matching would require re-deriving all 80 declarations and is not done
+here.
+
 ## Out of scope
 
-Phase 3 fail-closed CI; the grandfathering ruling; the ratified opt-in allowlist; migrating
-the 39 `WORK_REPO` rules' declarations (each needs its module's logic read, which is
-judgment, not a mechanical pass).
+Phase 3 fail-closed CI; the grandfathering ruling; the ratified opt-in allowlist.
+
+> **Migration complete 2026-08-06.** All 80 registered rules declare their coverage
+> (`undeclared == 0`, pinned by
+> `test_every_registered_rule_declares_its_coverage`). Coverage remains ADVISORY: no
+> exit code, severity, or stage verdict changed, and `unevaluable` stays a legitimate
+> honest state — 10 rules report it on this repo because their input genuinely is not
+> committed here (no decision store, role contracts, background specs, visual specs,
+> coverage scorecards or source data contracts). Turning `unevaluable` into a build
+> failure is Phase 3 and still needs an owner ruling; the `undeclared == 0`
+> precondition it named is now met.

@@ -87,7 +87,21 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+from ..rule_coverage import TEST_FIXTURES, any_tracked_file
 from ..sql import iter_sql_files, strip_sql_comments
+
+# The role-contract corpus, the glob equivalent of _ROLE_CONTRACT_RE below (an
+# ANY-OF group because that regex accepts both YAML spellings), with the same
+# fixture exemption the scan applies.
+ROLE_CONTRACT_CORPUS = any_tracked_file(
+    "mappings/*/roles/*.yaml",
+    "mappings/*/roles/*.yml",
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no non-fixture mappings/*/roles/*.y[a]ml is tracked, so this rule checked "
+        "no role contract and its silence is not a verified pass"
+    ),
+)
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -429,7 +443,11 @@ def _duplicate_name_findings(names_seen: dict[str, list[str]]) -> list[Finding]:
     return findings
 
 
-@register(RULE_ID, "RLS role contract binds to a real dim column")
+@register(
+    RULE_ID,
+    "RLS role contract binds to a real dim column",
+    requires=(ROLE_CONTRACT_CORPUS,),
+)
 def check_rls_role_bindings(ctx: RuleContext) -> Iterable[Finding]:
     contract_files = _iter_role_contract_files(ctx)
     if not contract_files:

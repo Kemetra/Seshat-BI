@@ -68,6 +68,21 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+from ..rule_coverage import TEST_FIXTURES, any_tracked_file
+
+# The forward source data-contract corpus, the glob equivalent of _CONTRACT_RE
+# below (an ANY-OF group because that regex accepts both YAML spellings). The
+# artifact is OPT-IN per table (FR-010), so absence is common -- and still not a
+# verified pass: HR12 checked no contract's structure.
+SOURCE_DATA_CONTRACT_CORPUS = any_tracked_file(
+    "mappings/*/source-data-contract.yaml",
+    "mappings/*/source-data-contract.yml",
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no non-fixture mappings/*/source-data-contract.y[a]ml is tracked, so this "
+        "rule checked no source contract and its silence is not a verified pass"
+    ),
+)
 
 RULE_ID = "HR12"
 
@@ -175,7 +190,11 @@ def _check_contract(rel: str, contract: dict) -> list[Finding]:
     return findings
 
 
-@register(RULE_ID, "forward source data-contract presence")
+@register(
+    RULE_ID,
+    "forward source data-contract presence",
+    requires=(SOURCE_DATA_CONTRACT_CORPUS,),
+)
 def check_hr12(ctx: RuleContext) -> Iterable[Finding]:
     import yaml  # lazy: keep the retail-check core stdlib-only at module scope
 

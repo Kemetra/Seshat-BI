@@ -49,6 +49,7 @@ from itertools import chain
 from typing import NamedTuple
 
 from ..core import Finding, RuleContext, Severity, is_test_path
+from ..rule_coverage import TEST_FIXTURES, Requirement
 
 try:
     from ..registry import register
@@ -56,6 +57,20 @@ except ImportError:  # pragma: no cover
     raise
 
 RULE_ID = "HR9"
+
+# The committed TMDL model surface HR9 needs. This is the DECISIVE input, not one
+# of several: check_hr9 builds the model first and returns [] when it is empty
+# (FR-007), so every downstream check -- metric contracts, TMDL DAX, binding maps
+# -- is skipped without it. Declaring the metric-contract corpus alongside would
+# be wrong under AND semantics: HR9 still checks TMDL DAX with no contract present.
+TMDL_TABLE_CORPUS = Requirement(
+    pattern="powerbi/*.SemanticModel/definition/tables/*.tmdl",
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no non-fixture TMDL table file is tracked, so this rule built no model "
+        "surface, checked no reference, and its silence is not a verified pass"
+    ),
+)
 
 # committed TMDL table files for any semantic model
 _TMDL_RE = re.compile(r"^powerbi/[^/]+\.SemanticModel/definition/tables/.+\.tmdl$")
@@ -392,7 +407,11 @@ def _check_binding_maps(ctx: RuleContext, model: _Model) -> list[Finding]:
     return findings
 
 
-@register(RULE_ID, "rename-impact orphaned-reference guard")
+@register(
+    RULE_ID,
+    "rename-impact orphaned-reference guard",
+    requires=(TMDL_TABLE_CORPUS,),
+)
 def check_hr9(ctx: RuleContext) -> Iterable[Finding]:
     model = _build_model(ctx)
     # FR-007: engage only when a committed TMDL model surface exists

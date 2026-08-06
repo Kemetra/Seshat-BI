@@ -36,6 +36,21 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, RuleTier, Severity, read_tracked_text
 from ..registry import register
+from ..rule_coverage import ReportsItsOwnAbsence
+
+# Measured against an empty repository, this rule REPORTS the absence of its kit
+# manifest as an ERROR that names the file and says what it could not verify. Its
+# silence is therefore never ambiguous, and there is no input whose absence a
+# Requirement could usefully name (see rule_coverage.ReportsItsOwnAbsence; the
+# claim is re-measured by tests/unit/test_rule_coverage_declarations.py). In a
+# foreign repo the Spec A tier gate reports this rule as not-applicable instead,
+# citing kit_lint FR-006.
+SC2_REPORTS_ABSENCE = ReportsItsOwnAbsence(
+    note=(
+        "SC2 reports an absent rule-count-claims manifest as an ERROR naming "
+        "the claims it could not reconcile"
+    )
+)
 
 _MANIFEST = "docs/quality/rule-count-claims.yaml"
 _COUNT_SOURCE = "docs/rules/rules-manifest.json"
@@ -55,6 +70,7 @@ def _finding(message: str, locator: str) -> Finding:
     "SC2",
     "Prose rule-count claims reconcile with the authoritative count",
     tier=RuleTier.KIT_SELF,
+    requires=(SC2_REPORTS_ABSENCE,),
 )
 def check_rule_count_claims(ctx: RuleContext) -> Iterable[Finding]:
     # 1. The manifest must be a tracked file whose content is present on disk; if

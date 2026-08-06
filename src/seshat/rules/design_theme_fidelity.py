@@ -38,6 +38,23 @@ from typing import Any, Callable, Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+from ..rule_coverage import TEST_FIXTURES, any_tracked_file
+
+# The design-tokens corpus this rule scans. An ANY-OF group because
+# _iter_tokens_files below accepts a path by EITHER of two independent signals --
+# the `-design-tokens.yaml` suffix or a bare `tokens.yaml` basename at any depth --
+# so declaring one arm would report a repo using the other as unevaluable, and
+# ANDing the arms would demand both. Fixtures are exempt, as in that iterator.
+DESIGN_TOKENS_CORPUS = any_tracked_file(
+    "*-design-tokens.yaml",
+    "tokens.yaml",
+    "*/tokens.yaml",
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no non-fixture design-tokens file is tracked, so this rule read no token "
+        "and its silence is not a verified pass"
+    ),
+)
 
 RULE_ID = "DL3"
 
@@ -255,7 +272,9 @@ def _run_fidelity_check(
 
 
 @register(
-    RULE_ID, "Theme styling values are faithful to the design tokens they compile from"
+    RULE_ID,
+    "Theme styling values are faithful to the design tokens they compile from",
+    requires=(DESIGN_TOKENS_CORPUS,),
 )
 def check_theme_fidelity(ctx: RuleContext) -> Iterable[Finding]:
     return _run_fidelity_check(ctx, RULE_ID, "fidelity cannot be verified", _reconcile)
@@ -411,6 +430,7 @@ def _reconcile_sentiment(
 @register(
     SENTIMENT_RULE_ID,
     "Theme sentiment colors are faithful to a human-declared sentiment_map",
+    requires=(DESIGN_TOKENS_CORPUS,),
 )
 def check_sentiment_fidelity(ctx: RuleContext) -> Iterable[Finding]:
     return _run_fidelity_check(

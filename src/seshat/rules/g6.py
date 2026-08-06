@@ -19,6 +19,21 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path, read_tracked_text
 from ..registry import register
+from ..rule_coverage import TEST_FIXTURES, Requirement
+
+# The PBIP semantic-model EXPRESSION files G6 scans -- the M parameter surface,
+# not the whole TMDL corpus, so it declares this narrower glob than
+# tmdl.MODEL_TMDL_CORPUS. The exclusion mirrors _iter_param_files: fixture
+# expression files carry real-looking values on purpose, and counting them would
+# credit G6 with checking a parameter surface it deliberately skipped.
+EXPRESSIONS_TMDL_CORPUS = Requirement(
+    pattern="*.SemanticModel/definition/expressions.tmdl",
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no non-fixture semantic-model expressions.tmdl is tracked, so this rule "
+        "read no parameter surface and its silence is not a verified pass"
+    ),
+)
 
 # A PBIP M parameter line:
 #   expression <Name> = "<value>" meta [ ... IsParameterQuery=true ... ]
@@ -82,7 +97,11 @@ def _g6_findings_for_text(rel: str, text: str) -> list[Finding]:
     ]
 
 
-@register("G6", "No real host/value in committed PBIP parameters")
+@register(
+    "G6",
+    "No real host/value in committed PBIP parameters",
+    requires=(EXPRESSIONS_TMDL_CORPUS,),
+)
 def check_pbip_param_no_real_value(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
     for rel in _iter_param_files(ctx):

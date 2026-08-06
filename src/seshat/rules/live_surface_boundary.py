@@ -36,6 +36,7 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, Severity
 from ..registry import register
+from ..rule_coverage import any_tracked_file
 
 # Reuse B1's AST helper + forbidden sets UNCHANGED -- no parallel parser.
 from .never_execute import module_scope_violations
@@ -54,9 +55,23 @@ _LIVE_SURFACE: frozenset[str] = frozenset(
     }
 )
 
+# The rule-coverage declaration, built FROM the closed set above so the two cannot
+# drift. An ANY-OF group, not five requirements: B3 scans whichever members are
+# tracked, so ANDing them would report B3 unevaluable in a tree that legitimately
+# ships only some live surfaces, while one arm alone would ignore the rest.
+LIVE_SURFACE_CORPUS = any_tracked_file(
+    *sorted(_LIVE_SURFACE),
+    note=(
+        "no live-surface module is tracked, so this rule scanned no import surface "
+        "and its silence is not a verified pass"
+    ),
+)
+
 
 @register(
-    "B3", "No module-scope DB/network import in a live-surface module (keep it lazy)"
+    "B3",
+    "No module-scope DB/network import in a live-surface module (keep it lazy)",
+    requires=(LIVE_SURFACE_CORPUS,),
 )
 def check_live_surface_imports(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []

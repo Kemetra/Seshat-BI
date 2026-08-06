@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .rule_coverage import TEST_FIXTURES, any_tracked_file
+
 # The three canonical store files, relative to the project workspace root. The
 # DS rules, the gate, and the review generator all key on these exact paths so a
 # blank template under templates/ can never be mistaken for a live store.
@@ -29,6 +31,21 @@ STORE_PATHS: tuple[str, ...] = (
     ".seshat/semantic-decisions.yaml",
     ".seshat/kpi-contracts.yaml",
     ".seshat/cleaning-rules.yaml",
+)
+
+# The rule-coverage declaration for DS1-DS5, built FROM STORE_PATHS so the two can
+# never drift. An ANY-OF group, not three requirements: requirements are ANDed, and
+# a project legitimately keeps only some of the three files (semantic decisions
+# without cleaning rules), so ANDing them would report all five DS rules as
+# unevaluable on a perfectly checkable store. The fixture exclusion mirrors the
+# `is_test_path` filter the DS rules apply before calling `load_store`.
+DECISION_STORE_CORPUS = any_tracked_file(
+    *STORE_PATHS,
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no decision-store file is tracked, so this rule read no decision and its "
+        "silence is not a verified pass"
+    ),
 )
 
 # The nine-status decision lifecycle (FR-014).

@@ -8,6 +8,7 @@ untouched. See docs/superpowers/specs/2026-08-04-rule-coverage-honesty-design.md
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -19,9 +20,10 @@ from seshat.rule_coverage import (
     AbsenceSemantics,
     CoverageState,
     Requirement,
+    any_tracked_file,
     uncovered_rule_ids,
 )
-from seshat.runner import coverage_census, run, run_json
+from seshat.runner import build_context, coverage_census, run, run_json
 
 pytestmark = pytest.mark.unit
 
@@ -239,10 +241,93 @@ def test_corpus_glob_matches_the_rules_own_iterator_exactly(tmp_path: Path) -> N
 
 
 def test_requirement_rejects_declaring_both_forms() -> None:
-    with pytest.raises(ValueError, match="not both"):
+    with pytest.raises(ValueError, match="exactly ONE form"):
         Requirement(path="a.sql", pattern="warehouse/*.sql")
 
 
 def test_requirement_rejects_declaring_neither_form() -> None:
     with pytest.raises(ValueError, match="declares no input"):
         Requirement()
+
+
+# --- exclusions and the group form, resolved against a real tree --------------
+
+
+def test_a_corpus_whose_only_matches_are_excluded_is_unevaluable(
+    tmp_path: Path,
+) -> None:
+    """The fixture-only tree: matches exist, but the rule skips every one of them."""
+    requirement = Requirement(pattern="*.theme.json", exclude=("tests/*",))
+    rules = (_reg("DL1", requires=(requirement,)),)
+    ctx = RuleContext(
+        repo_root=tmp_path, tracked_files=("tests/fixtures/x.theme.json",)
+    )
+    (record,) = coverage_census(rules, ctx)
+    assert record.state is CoverageState.UNEVALUABLE
+
+
+def test_an_unexcluded_match_still_counts(tmp_path: Path) -> None:
+    requirement = Requirement(pattern="*.theme.json", exclude=("tests/*",))
+    rules = (_reg("DL1", requires=(requirement,)),)
+    ctx = RuleContext(
+        repo_root=tmp_path,
+        tracked_files=("tests/fixtures/x.theme.json", "design/live.theme.json"),
+    )
+    (record,) = coverage_census(rules, ctx)
+    assert record.state is CoverageState.EVALUATED
+
+
+def test_one_present_group_arm_is_enough_against_a_real_tree(tmp_path: Path) -> None:
+    rules = (_reg("G3", requires=(any_tracked_file("*.tmdl", "*.pbism"),)),)
+    ctx = RuleContext(
+        repo_root=tmp_path, tracked_files=("powerbi/m.SemanticModel/x.tmdl",)
+    )
+    (record,) = coverage_census(rules, ctx)
+    assert record.state is CoverageState.EVALUATED
+
+
+def test_an_empty_group_names_every_arm_it_looked_for(tmp_path: Path) -> None:
+    rules = (_reg("G3", requires=(any_tracked_file("*.tmdl", "*.pbism"),)),)
+    ctx = RuleContext(repo_root=tmp_path, tracked_files=("docs/readme.md",))
+    (record,) = coverage_census(rules, ctx)
+    assert record.state is CoverageState.UNEVALUABLE
+    assert record.requirement == "any of: *.tmdl, *.pbism"
+
+
+# --- P2's invocation-field input ---------------------------------------------
+
+
+def test_p2_is_unevaluable_when_no_commit_subject_was_supplied(tmp_path: Path) -> None:
+    """A bare check on a repo with no HEAD gives P2 nothing to judge.
+
+    P2 returns no findings there, which is indistinguishable in the findings list
+    from a repo whose commit subjects were all validated and conformed.
+    """
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    p2 = next(r for r in all_rules() if r.id == "P2")
+    ctx = build_context(tmp_path)
+    assert list(p2.rule(ctx)) == []  # silent, which is the ambiguity
+    (record,) = coverage_census((p2,), ctx)
+    assert record.state is CoverageState.UNEVALUABLE
+    assert "commit subjects" in (record.requirement or "")
+
+
+def test_p2_is_evaluated_when_the_hook_supplies_a_message(tmp_path: Path) -> None:
+    p2 = next(r for r in all_rules() if r.id == "P2")
+    ctx = RuleContext(
+        repo_root=tmp_path, tracked_files=(), commit_message="feat: add a thing"
+    )
+    (record,) = coverage_census((p2,), ctx)
+    assert record.state is CoverageState.EVALUATED
+
+
+def test_p2_is_evaluated_when_it_reports_a_malformed_range(tmp_path: Path) -> None:
+    """A rule that ERRORs on its input did run; only silence is the gap."""
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    p2 = next(r for r in all_rules() if r.id == "P2")
+    ctx = RuleContext(
+        repo_root=tmp_path, tracked_files=(), commit_range="--not-a-range"
+    )
+    assert list(p2.rule(ctx))  # P2 speaks: it reports the unusable range
+    (record,) = coverage_census((p2,), ctx)
+    assert record.state is CoverageState.EVALUATED

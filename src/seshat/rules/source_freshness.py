@@ -85,6 +85,7 @@ from collections.abc import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+from ..star_discovery import SOURCE_MAP_CORPUS
 
 RULE_ID = "HR4"
 
@@ -201,7 +202,7 @@ def _check_one_table(table: str, rel: str, freshness: object) -> list[Finding]:
     return findings
 
 
-@register(RULE_ID, "source freshness declaration")
+@register(RULE_ID, "source freshness declaration", requires=(SOURCE_MAP_CORPUS,))
 def check_hr4(ctx: RuleContext) -> Iterable[Finding]:
     import yaml  # lazy: keep the retail-check core stdlib-only at module scope
 

@@ -13,6 +13,23 @@ Design: docs/superpowers/specs/2026-08-04-rule-coverage-honesty-design.md
 Precedent: ``RuleTier.KIT_SELF`` (core.py) already established "absence is not
 drift" by emitting one INFO finding on skip; what it lacks is a machine-readable
 census, which is what this module adds.
+
+Four declaration forms exist because the 80 registered rules select their input
+four different ways, measured rule by rule:
+
+* one artifact (``path=``) -- e.g. a single manifest a rule opens;
+* a CLASS of tracked files (``pattern=``) -- most rules scan a corpus;
+* ANY of several classes (``any_of=``) -- a rule whose corpus is an alternation
+  (``.tmdl`` OR ``.pbir`` OR ``.json`` OR ``.pbism``; any of three decision-store
+  files). Declaring one arm alone reports a rule that ran as unevaluable; declaring
+  the arms as separate requirements is worse, because requirements are ANDed;
+* an invocation field (``context=``) -- P2 judges commit subjects handed to the
+  run, which are not a tracked file at all.
+
+:class:`ReportsItsOwnAbsence` is the fifth, non-``Requirement`` case: a rule with
+no silent-skip path, because it emits a finding when its input is missing. That
+claim is verified against an empty repository by
+``tests/unit/test_rule_coverage_declarations.py``, not taken on the author's word.
 """
 
 from __future__ import annotations
@@ -22,6 +39,13 @@ from enum import Enum
 from typing import Callable, Iterable, TypedDict
 
 from .core import RegisteredRule
+
+#: fnmatch pattern for the committed-test-fixture exemption ``core.is_test_path``
+#: applies. Almost every file-scanning rule skips ``tests/`` (fixtures carry
+#: deliberately non-conforming content), so a corpus declaration that counted them
+#: would report ``evaluated`` for a rule whose iterator skipped every match --
+#: strictly worse than no declaration.
+TEST_FIXTURES = "tests/*"
 
 
 class AbsenceSemantics(str, Enum):
@@ -37,6 +61,22 @@ class AbsenceSemantics(str, Enum):
 
     UNEVALUABLE = "unevaluable"
     NOT_APPLICABLE = "not-applicable"
+
+
+class ContextInput(str, Enum):
+    """An input that arrives on the INVOCATION, not as a file in the tree.
+
+    The rule-coverage question ("did this rule actually run?") is the same, but
+    the presence test is not a filesystem lookup: it asks what the caller passed.
+    Kept as a closed enum rather than free text so an unknown value fails loud in
+    the resolver instead of silently resolving to "present".
+
+    ``COMMIT_SUBJECTS`` is P2's input. A bare ``retail check`` on a repo with no
+    HEAD, and no ``--commit-msg-file`` / ``--commit-range``, gives P2 no subject
+    to judge -- it returns no findings while having validated nothing.
+    """
+
+    COMMIT_SUBJECTS = "commit subjects (--commit-msg-file / --commit-range / HEAD)"
 
 
 class CoverageState(str, Enum):
@@ -75,27 +115,36 @@ class Requirement:
     else -- is what stops it becoming a free-text field an agent can fill in to
     manufacture an opt-in. A note is documentation; a basis is a citation.
 
-    A requirement names EITHER one artifact (``path``) or a CLASS of tracked files
-    (``pattern``, an fnmatch glob), never both. The class form exists because most
-    rules scan a corpus rather than open a fixed file -- e.g. the SQL rules iterate
-    every tracked ``warehouse/**/*.sql``. For those, "the input is missing" means
-    the corpus is EMPTY, which is exactly the case where such a rule returns no
-    findings while having verified nothing.
+    A requirement names EXACTLY ONE form: ``path`` (one artifact), ``pattern``
+    (a class of tracked files, an fnmatch glob), ``any_of`` (a group of leaf
+    requirements, satisfied when ANY one of them is present) or ``context`` (an
+    invocation field). ``exclude`` narrows a ``pattern`` by the same fnmatch
+    matching, so a declaration can mirror the exemptions its rule's own iterator
+    applies (``tests/`` fixtures, a blank template) instead of over-crediting.
     """
 
     path: str | None = None
     pattern: str | None = None
+    any_of: tuple["Requirement", ...] = ()
+    context: ContextInput | None = None
+    exclude: tuple[str, ...] = ()
     absence: AbsenceSemantics = AbsenceSemantics.UNEVALUABLE
     basis: str | None = None
     note: str | None = None
 
     @property
     def target(self) -> str:
-        """The declared input, for display: the path or the glob."""
+        """The declared input, for display: the artifact, glob, group or field."""
+        if self.any_of:
+            return "any of: " + ", ".join(alt.target for alt in self.any_of)
+        if self.context is not None:
+            return self.context.value
         return self.path or self.pattern or ""
 
     def __post_init__(self) -> None:
-        self._validate_target()
+        self._validate_form()
+        self._validate_group()
+        self._validate_exclude()
         # Branches on the absence semantics rather than testing compound
         # conditions, so each rule about `basis` reads on its own line.
         if self.absence is AbsenceSemantics.NOT_APPLICABLE:
@@ -112,19 +161,154 @@ class Requirement:
                 "why this input is required, use note="
             )
 
-    def _validate_target(self) -> None:
-        """Exactly one of path/pattern. Neither would silently match nothing."""
-        if self.path is None:
-            if self.pattern is None:
-                raise ValueError(
-                    "requirement declares no input: set path= for one artifact or "
-                    "pattern= for a class of tracked files"
-                )
-        elif self.pattern is not None:
+    def _declared_forms(self) -> tuple[str, ...]:
+        return tuple(
+            name
+            for name in ("path", "pattern", "any_of", "context")
+            if getattr(self, name)
+        )
+
+    def _validate_form(self) -> None:
+        """Exactly one form. None would silently match nothing; two is ambiguous."""
+        forms = self._declared_forms()
+        if not forms:
             raise ValueError(
-                f"requirement {self.path!r}: set path= OR pattern=, not both -- a "
-                "requirement names one artifact or one class of files"
+                "requirement declares no input: set path= for one artifact, "
+                "pattern= for a class of tracked files, any_of= for an "
+                "alternation of those, or context= for an invocation field"
             )
+        if len(forms) > 1:
+            raise ValueError(
+                f"requirement declares {' + '.join(forms)}: set exactly ONE form "
+                "-- a requirement names one artifact, one class of files, one "
+                "alternation of those, or one invocation field"
+            )
+
+    def _validate_group(self) -> None:
+        """An any-of group holds >= 2 plain alternatives that carry no semantics.
+
+        A single-arm group is a plain requirement written the long way. A member
+        carrying its own ``absence`` / ``basis`` / ``note`` would be silently
+        ignored -- the GROUP decides the state -- and a silently ignored ``basis``
+        is exactly the false-authority failure the basis gate exists to prevent.
+        """
+        if not self.any_of:
+            return
+        if len(self.any_of) < 2:
+            raise ValueError(
+                "any_of declares a single alternative: use path= or pattern= "
+                "directly, or name the other alternatives"
+            )
+        for alt in self.any_of:
+            if alt.any_of or alt.context is not None:
+                raise ValueError(
+                    f"any_of alternative {alt.target!r} must be a plain path= or "
+                    "pattern= requirement (groups do not nest)"
+                )
+            if alt.basis is not None or alt.note is not None:
+                raise ValueError(
+                    f"any_of alternative {alt.target!r} carries basis/note, which "
+                    "the group would ignore: put them on the group itself"
+                )
+            if alt.absence is not AbsenceSemantics.UNEVALUABLE:
+                raise ValueError(
+                    f"any_of alternative {alt.target!r} sets absence, which the "
+                    "group would ignore: declare it on the group itself"
+                )
+
+    def _validate_exclude(self) -> None:
+        """``exclude`` narrows a glob; on any other form it would be inert.
+
+        Silently accepting it on a ``path=`` requirement would let a declaration
+        LOOK like it mirrors its rule's template/fixture exemption while doing
+        nothing -- so it is a construction error, and a group's alternatives carry
+        their own (see :func:`any_tracked_file`).
+        """
+        if self.exclude and self.pattern is None:
+            raise ValueError(
+                f"requirement {self.target!r}: exclude= narrows a pattern= glob "
+                "and is inert on any other form (a group's alternatives carry "
+                "their own exclude)"
+            )
+
+
+def any_tracked_file(
+    *patterns: str,
+    exclude: tuple[str, ...] = (),
+    note: str | None = None,
+    absence: AbsenceSemantics = AbsenceSemantics.UNEVALUABLE,
+    basis: str | None = None,
+) -> Requirement:
+    """A requirement satisfied by any tracked file matching ANY of ``patterns``.
+
+    The ergonomic form of the group: it applies one ``exclude`` to every
+    alternative, so a rule whose corpus is an alternation (four TMDL/PBIR
+    suffixes; three decision-store paths) declares the whole corpus in one
+    expression and cannot leave the fixture exemption off one arm.
+    """
+    return Requirement(
+        any_of=tuple(Requirement(pattern=p, exclude=exclude) for p in patterns),
+        note=note,
+        absence=absence,
+        basis=basis,
+    )
+
+
+@dataclass(frozen=True)
+class ReportsItsOwnAbsence:
+    """Declares that a rule has NO silent-skip path: it SAYS SO when input is gone.
+
+    Some rules never go quiet on absent input -- they report it. G1 emits one
+    ERROR per missing ``.gitignore`` entry, G2 emits ``no PBIP project present``,
+    and every ``KIT_SELF`` rule ERRORs on the kit manifest it cannot find. Their
+    silence is therefore already unambiguous, and they cannot be expressed as a
+    ``Requirement``: there is no input whose absence would stop them running.
+
+    This is the one declaration that credits a rule without naming an input, so it
+    is the one an author could abuse to manufacture coverage. What keeps it honest
+    is that the claim is machine-checkable and IS checked:
+    ``tests/unit/test_rule_coverage_declarations.py`` runs every rule declaring
+    this form against an empty repository and asserts it emits at least one
+    finding. Declaring it for a rule that goes quiet turns the suite red rather
+    than crediting the rule.
+
+    ``note`` is mandatory and records WHAT the rule says instead of going silent.
+    It is not a ``basis``: it claims no human authority, only observable behavior.
+    """
+
+    note: str
+
+    def __post_init__(self) -> None:
+        if not self.note.strip():
+            raise ValueError(
+                "ReportsItsOwnAbsence requires a note recording WHAT the rule "
+                "reports instead of going silent (it is the claim a test verifies)"
+            )
+
+
+#: What a rule may declare about its inputs. ``Requirement`` names an input;
+#: ``ReportsItsOwnAbsence`` states there is no input to name.
+Declaration = Requirement | ReportsItsOwnAbsence
+
+
+def validate_declarations(
+    rule_id: str, declarations: tuple[Declaration, ...]
+) -> tuple[Declaration, ...]:
+    """Reject a contradictory declaration set at ``@register`` time, not at census.
+
+    Mixing ``ReportsItsOwnAbsence`` with a ``Requirement`` asserts both "no input
+    can stop this rule running" and "this input can". One of the two is wrong, and
+    since the self-reporting form wins in :func:`coverage_for`, accepting the mix
+    would let a real requirement be silently discarded.
+    """
+    self_reporting = [d for d in declarations if isinstance(d, ReportsItsOwnAbsence)]
+    if self_reporting and len(declarations) > 1:
+        raise ValueError(
+            f"rule {rule_id}: ReportsItsOwnAbsence says no absent input can stop "
+            "this rule, so it must be the ONLY declaration -- drop it, or drop the "
+            "requirements it contradicts"
+        )
+    return declarations
 
 
 @dataclass(frozen=True)
@@ -148,11 +332,25 @@ class CoverageRecord:
         }
 
 
-# A caller-supplied "is this input absent?" predicate. It receives the whole
-# Requirement, not just a string, so a resolver can answer BOTH forms: does this
-# artifact exist, and does any tracked file match this glob. Keeping presence out
-# of this module is what makes every state reachable in a unit test with no tmpdir.
+# A caller-supplied "is this input absent?" predicate. It receives a LEAF
+# Requirement -- one path, one glob or one invocation field -- never a group: the
+# alternation semantics are resolved here (see `_requirement_absent`) so every
+# resolver agrees on them. Keeping presence out of this module is what makes every
+# state reachable in a unit test with no tmpdir.
 MissingPredicate = Callable[[Requirement], bool]
+
+
+def _requirement_absent(requirement: Requirement, missing: MissingPredicate) -> bool:
+    """Is the input this requirement names absent?
+
+    An any-of group is absent only when EVERY alternative is: the rule selects its
+    corpus by alternation, so one present arm means it ran. This is why the group
+    form exists at all -- requirements are ANDed, so declaring the arms separately
+    would report a rule that ran fine as unevaluable.
+    """
+    if requirement.any_of:
+        return all(missing(alt) for alt in requirement.any_of)
+    return missing(requirement)
 
 
 def _first_absent(
@@ -164,7 +362,7 @@ def _first_absent(
     one: if any input the rule genuinely needed is gone, the rule did not run,
     and a ratified opt-in elsewhere must not launder that into coverage.
     """
-    absent = [req for req in requires if missing(req)]
+    absent = [req for req in requires if _requirement_absent(req, missing)]
     if not absent:
         return None
     for req in absent:
@@ -188,7 +386,19 @@ def coverage_for(
             ),
         )
 
-    decisive = _first_absent(requires, missing)
+    for declaration in requires:
+        if isinstance(declaration, ReportsItsOwnAbsence):
+            # No input can silence this rule, so there is nothing to resolve --
+            # it ran, and the note records what it says when input is missing.
+            return CoverageRecord(
+                rule_id=registered.id,
+                state=CoverageState.EVALUATED,
+                reason=declaration.note,
+            )
+
+    decisive = _first_absent(
+        tuple(d for d in requires if isinstance(d, Requirement)), missing
+    )
     if decisive is None:
         return CoverageRecord(rule_id=registered.id, state=CoverageState.EVALUATED)
 

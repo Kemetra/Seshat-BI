@@ -36,6 +36,19 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+from ..rule_coverage import TEST_FIXTURES, Requirement
+
+# The filled report-intent instances DL9 checks: the glob equivalent of
+# _INSTANCE_SUFFIX below. The exempt template (templates/report-intent.yaml) has no
+# design/ segment and so cannot match this glob.
+REPORT_INTENT_CORPUS = Requirement(
+    pattern="*/design/report-intent.yaml",
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no filled */design/report-intent.yaml is tracked, so this rule checked no "
+        "report intent and its silence is not a verified pass"
+    ),
+)
 
 RULE_ID = "DL9"
 
@@ -178,7 +191,11 @@ def _readiness_findings(doc: dict, rel: str) -> list[Finding]:
     ]
 
 
-@register(RULE_ID, "A filled Report Intent record carries every required field")
+@register(
+    RULE_ID,
+    "A filled Report Intent record carries every required field",
+    requires=(REPORT_INTENT_CORPUS,),
+)
 def check_report_intent(ctx: RuleContext) -> Iterable[Finding]:
     import yaml  # lazy: keep the retail-check core stdlib-only at module scope (B1/B3)
 

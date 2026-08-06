@@ -33,6 +33,20 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+from ..rule_coverage import TEST_FIXTURES, Requirement
+
+# The filled handoff packs PP1 checks. The generic TEMPLATE at any shipped
+# location DOES match this glob, so it is excluded explicitly (one pattern covers
+# both the bare and the nested form _is_generic_template accepts) -- otherwise the
+# shipped template alone would credit PP1 with checking a pack it always skips.
+HANDOFF_PACK_CORPUS = Requirement(
+    pattern="*/handoff/bi-handoff-pack.md",
+    exclude=(TEST_FIXTURES, "*templates/handoff/bi-handoff-pack.md"),
+    note=(
+        "no filled */handoff/bi-handoff-pack.md is tracked, so this rule checked no "
+        "handoff pack and its silence is not a verified pass"
+    ),
+)
 
 # Only per-table handoff-pack instances (mappings/<table>/handoff/bi-handoff-pack.md)
 # are scanned. The generic template is full of <placeholder> tokens by design and is
@@ -118,7 +132,11 @@ def _index_section_lines(text: str) -> list[str]:
     return out
 
 
-@register("PP1", "Committed publish/handoff pack has every required section filled")
+@register(
+    "PP1",
+    "Committed publish/handoff pack has every required section filled",
+    requires=(HANDOFF_PACK_CORPUS,),
+)
 def check_publish_pack_complete(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
     for rel in sorted(_iter_packs(ctx)):

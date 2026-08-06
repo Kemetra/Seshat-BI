@@ -14,6 +14,21 @@ from typing import Any
 from ..core import Finding, RuleContext, RuleTier, Severity
 from ..decision_store import CRITICAL_DECISION_TYPES
 from ..registry import register
+from ..rule_coverage import ReportsItsOwnAbsence
+
+# Measured against an empty repository, this rule REPORTS the absence of its kit
+# manifest as an ERROR that names the file and says what it could not verify. Its
+# silence is therefore never ambiguous, and there is no input whose absence a
+# Requirement could usefully name (see rule_coverage.ReportsItsOwnAbsence; the
+# claim is re-measured by tests/unit/test_rule_coverage_declarations.py). In a
+# foreign repo the Spec A tier gate reports this rule as not-applicable instead,
+# citing kit_lint FR-006.
+KR1_REPORTS_ABSENCE = ReportsItsOwnAbsence(
+    note=(
+        "KR1 reports an absent generic KPI registry as an ERROR rather than "
+        "returning no findings"
+    )
+)
 
 REGISTRY_REL = "skills/retail-kpi-knowledge/registry.yaml"
 _ID_RE = re.compile(r"^KPI-MC-\d{2,}$")
@@ -336,6 +351,7 @@ def _validate_cross_entry(
     "KR1",
     "Generic KPI registry structure and client-free boundary",
     tier=RuleTier.KIT_SELF,
+    requires=(KR1_REPORTS_ABSENCE,),
 )
 def check_kr1(ctx: RuleContext) -> Iterable[Finding]:
     """Return structure/traceability errors for the one generic KPI registry."""

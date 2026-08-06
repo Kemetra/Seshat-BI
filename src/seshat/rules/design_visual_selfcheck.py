@@ -27,6 +27,31 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+from ..rule_coverage import TEST_FIXTURES, any_tracked_file
+
+# The filled visual-spec instances DL6 scans. An ANY-OF group because
+# _iter_instances accepts three independent shapes: the bare basename, a nested
+# visual-spec.yaml, or any YAML inside a visuals/ or visual-specs/ directory. The
+# blank template is a nested visual-spec.yaml and so IS matched by an arm; it is
+# excluded by its EXACT path, mirroring _iter_instances -- which exempts that one
+# path and therefore does scan a bundled copy of the template shipped elsewhere.
+VISUAL_SPEC_CORPUS = any_tracked_file(
+    "visual-spec.yaml",
+    "*/visual-spec.yaml",
+    "visuals/*.yaml",
+    "visuals/*.yml",
+    "*/visuals/*.yaml",
+    "*/visuals/*.yml",
+    "visual-specs/*.yaml",
+    "visual-specs/*.yml",
+    "*/visual-specs/*.yaml",
+    "*/visual-specs/*.yml",
+    exclude=(TEST_FIXTURES, "templates/visual-spec.yaml"),
+    note=(
+        "no filled visual-spec instance is tracked, so this rule checked no visual "
+        "self-attestation and its silence is not a verified pass"
+    ),
+)
 
 RULE_ID = "DL6"
 
@@ -80,6 +105,7 @@ def _is_real_reason(entry: object) -> bool:
 @register(
     RULE_ID,
     "A visual-spec that self-attests an anti-pattern records a blocking reason",
+    requires=(VISUAL_SPEC_CORPUS,),
 )
 def check_visual_spec_selfcheck(ctx: RuleContext) -> Iterable[Finding]:
     import yaml  # lazy: keep the retail-check core stdlib-only at module scope (B1/B3)

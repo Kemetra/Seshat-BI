@@ -31,6 +31,23 @@ from typing import Any, Iterable
 from ..color import delta_e76
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+from ..rule_coverage import TEST_FIXTURES, any_tracked_file
+
+# The design-tokens corpus this rule scans. An ANY-OF group because
+# _iter_tokens_files below accepts a path by EITHER of two independent signals --
+# the `-design-tokens.yaml` suffix or a bare `tokens.yaml` basename at any depth --
+# so declaring one arm would report a repo using the other as unevaluable, and
+# ANDing the arms would demand both. Fixtures are exempt, as in that iterator.
+DESIGN_TOKENS_CORPUS = any_tracked_file(
+    "*-design-tokens.yaml",
+    "tokens.yaml",
+    "*/tokens.yaml",
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no non-fixture design-tokens file is tracked, so this rule read no token "
+        "and its silence is not a verified pass"
+    ),
+)
 
 RULE_ID = "CT3"
 
@@ -116,6 +133,7 @@ def _check_tokens(rel: str, doc: Any) -> Iterable[Finding]:
     RULE_ID,
     "Categorical data_colors entries meet the declared whole-set deltaE76 "
     "distinctness floor",
+    requires=(DESIGN_TOKENS_CORPUS,),
 )
 def check_categorical_distinctness(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []

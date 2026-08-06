@@ -29,6 +29,18 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+from ..rule_coverage import TEST_FIXTURES, Requirement
+
+# The committed readiness-status instances RS1 checks: the glob equivalent of
+# _INSTANCE_RE below, with the fixture exemption _iter_status_files applies.
+READINESS_STATUS_CORPUS = Requirement(
+    pattern="mappings/*/readiness-status.yaml",
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no non-fixture mappings/*/readiness-status.yaml is tracked, so this rule "
+        "checked no readiness record and its silence is not a verified pass"
+    ),
+)
 
 _INSTANCE_RE = re.compile(r"^mappings/[^/]+/readiness-status\.yaml$")
 _STAGE_ORDER: tuple[str, ...] = (
@@ -568,7 +580,11 @@ def _check_one_status_file(ctx: RuleContext, rel: str) -> list[Finding]:
     return findings
 
 
-@register("RS1", "Readiness status files are internally consistent")
+@register(
+    "RS1",
+    "Readiness status files are internally consistent",
+    requires=(READINESS_STATUS_CORPUS,),
+)
 def check_readiness_status_consistency(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
     for rel in sorted(_iter_status_files(ctx)):
