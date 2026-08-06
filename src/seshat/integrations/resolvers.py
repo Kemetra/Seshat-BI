@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 from urllib.error import HTTPError, URLError
@@ -315,22 +316,15 @@ def resolve_npm(item: Component, registry: NpmRegistry) -> Resolution:
             f"{item.coordinate}@{version} is a prerelease; not installed for a "
             "stable component",
         )
-    versions = body.get("versions")
-    sha = None
-    if isinstance(versions, dict) and isinstance(versions.get(version), dict):
-        dist = versions[version].get("dist")
-        if isinstance(dist, dict):
-            integrity = dist.get("integrity") or ""
-            if isinstance(integrity, str) and integrity.startswith("sha512-"):
-                # npm publishes sha512 integrity, not sha256. Recorded as None
-                # rather than mislabelling a sha512 digest as sha256.
-                sha = None
+    # `sha256` stays None on purpose: npm publishes a sha512 `dist.integrity`,
+    # and recording that under a sha256 field would mislabel the digest. The lock
+    # carries null rather than a wrong algorithm.
     return Resolution(
         component_id=item.id,
         ok=True,
         channel=item.channel,
         version=version,
-        sha256=sha,
+        sha256=None,
         status="resolved",
     )
 
@@ -354,6 +348,26 @@ class Resolvers:
     python_version: tuple[int, ...] | None = None
 
 
+# Per source type: the `Resolvers` field holding its index, the label used when
+# that index was not injected, and how to call the matching resolver.
+_INDEXES: dict[
+    SourceType, tuple[str, str, Callable[[Component, Resolvers], Resolution]]
+]
+_INDEXES = {
+    SourceType.PYPI: (
+        "pypi",
+        "PyPI",
+        lambda item, rs: resolve_pypi(item, rs.pypi, python_version=rs.python_version),
+    ),
+    SourceType.GITHUB: (
+        "github",
+        "GitHub",
+        lambda item, rs: resolve_github(item, rs.github),
+    ),
+    SourceType.NPM: ("npm", "npm", lambda item, rs: resolve_npm(item, rs.npm)),
+}
+
+
 def resolve(item: Component, resolvers: Resolvers) -> Resolution:
     """Resolve one component through the matching injected index."""
     if item.source_type is SourceType.BUNDLED:
@@ -364,21 +378,13 @@ def resolve(item: Component, resolvers: Resolvers) -> Resolution:
             status="resolved",
             reason="ships with Seshat; validated locally, never downloaded",
         )
-    if item.source_type is SourceType.PYPI:
-        if resolvers.pypi is None:
-            return _refuse(item.id, UNAVAILABLE, "no PyPI resolver was provided")
-        return resolve_pypi(
-            item, resolvers.pypi, python_version=resolvers.python_version
-        )
-    if item.source_type is SourceType.GITHUB:
-        if resolvers.github is None:
-            return _refuse(item.id, UNAVAILABLE, "no GitHub resolver was provided")
-        return resolve_github(item, resolvers.github)
-    if item.source_type is SourceType.NPM:
-        if resolvers.npm is None:
-            return _refuse(item.id, UNAVAILABLE, "no npm resolver was provided")
-        return resolve_npm(item, resolvers.npm)
-    return _refuse(item.id, FAILED, f"unsupported source type: {item.source_type}")
+    index = _INDEXES.get(item.source_type)
+    if index is None:
+        return _refuse(item.id, FAILED, f"unsupported source type: {item.source_type}")
+    field_name, label, resolver = index
+    if getattr(resolvers, field_name) is None:
+        return _refuse(item.id, UNAVAILABLE, f"no {label} resolver was provided")
+    return resolver(item, resolvers)
 
 
 # --------------------------------------------------------------------------- #

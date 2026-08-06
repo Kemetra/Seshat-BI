@@ -20,6 +20,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -95,6 +96,32 @@ class SetupOutcome:
     @property
     def needs_action(self) -> bool:
         return any(row.needs_action for row in self.rows)
+
+
+@dataclass(frozen=True)
+class _Install:
+    """Everything one component's install needs: where, what, and how to run it.
+
+    Every handler took the same five positional arguments, so the shape was
+    already a record; naming it means a new handler cannot silently reorder
+    `profile` and `root` (both `str`-ish at a call site) and the runner seam
+    travels with the request rather than as a trailing bare callable.
+    """
+
+    root: Path
+    item: Component
+    resolved: Resolution
+    profile: str
+    runner: Callable[[list[str], Path], subprocess.CompletedProcess]
+
+    @property
+    def env(self) -> Path:
+        """The absolute profile environment this component installs into."""
+        return self.root / _profile_env(self.profile)
+
+    def run(self, command: list[str], cwd: Path | None = None):
+        """Run `command` through the injected seam, defaulting to the repo root."""
+        return self.runner(command, self.root if cwd is None else cwd)
 
 
 def _now() -> str:
@@ -173,20 +200,28 @@ def _is_installed(root: Path, item: Component, profile: str) -> bool:
     return _distribution_present(root / _profile_env(profile), item.coordinate)
 
 
+# Where a venv keeps installed distribution metadata, on Windows and on POSIX.
+_SITE_PACKAGES = ("Lib/site-packages", "lib/python*/site-packages")
+
+
+def _canonical_dist(name: str) -> str:
+    """PEP 503-style canonical form, so `dbt-core` matches `dbt_core.dist-info`."""
+    return name.replace("-", "_").lower()
+
+
 def _distribution_present(env: Path, dist: str) -> bool:
     """Whether `dist` has install metadata inside `env`.
 
     Reads `*.dist-info` directory names rather than importing anything: an
     import would execute third-party code just to answer a status question.
     """
-    canonical = dist.replace("-", "_").lower()
-    for pattern in ("Lib/site-packages", "lib/python*/site-packages"):
-        for site in env.glob(pattern):
-            for info in site.glob("*.dist-info"):
-                name = info.name.split("-", 1)[0].replace("-", "_").lower()
-                if name == canonical:
-                    return True
-    return False
+    canonical = _canonical_dist(dist)
+    return any(
+        _canonical_dist(info.name.split("-", 1)[0]) == canonical
+        for pattern in _SITE_PACKAGES
+        for site in env.glob(pattern)
+        for info in site.glob("*.dist-info")
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -236,9 +271,7 @@ def plan(
     outcome.notes.extend(verdict.reasons)
 
     for item, resolved in zip(components, verdict.resolutions):
-        outcome.rows.append(
-            _plan_row(root, item, resolved, profile, refreshed=bool(resolvers))
-        )
+        outcome.rows.append(_plan_row(root, item, resolved, profile))
     return outcome
 
 
@@ -281,57 +314,75 @@ def _resolve_all(
     return resolved
 
 
-def _plan_row(
-    root: Path,
+def _row(
     item: Component,
     resolved: Resolution,
-    profile: str,
     *,
-    refreshed: bool,
+    status: str,
+    detail: str,
+    pinned: str | None = None,
 ) -> ComponentPlan:
-    channel = (resolved.channel or item.channel).value
+    """One plan/result row. Only status, detail and the pin ever vary.
+
+    The identity fields (component, profile label, channel, source) are derived
+    the same way on every row, so a caller states the verdict and nothing else.
+    """
+    return ComponentPlan(
+        component=item.id,
+        profile=_profile_label(item),
+        channel=(resolved.channel or item.channel).value,
+        pinned=pinned if pinned is not None else "-",
+        source=item.source,
+        status=status,
+        detail=detail,
+    )
+
+
+def _settled_row(
+    root: Path, item: Component, resolved: Resolution, profile: str
+) -> ComponentPlan | None:
+    """The row for a component that needs no further work, or None to proceed.
+
+    Shared by the plan and the apply pass so the two can never disagree about
+    what counts as unresolvable, already present, or a missing bundled artifact.
+    """
     if not resolved.ok:
-        return ComponentPlan(
-            component=item.id,
-            profile=_profile_label(item),
-            channel=channel,
-            pinned="-",
-            source=item.source,
+        return _row(
+            item,
+            resolved,
             status=resolved.status or UNAVAILABLE,
             detail=resolved.reason or item.role,
         )
     if _is_installed(root, item, profile):
-        return ComponentPlan(
-            component=item.id,
-            profile=_profile_label(item),
-            channel=channel,
-            pinned=resolved.pinned or "-",
-            source=item.source,
+        return _row(
+            item,
+            resolved,
             status=PRESENT,
             detail=_present_detail(item, resolved),
+            pinned=resolved.pinned or "-",
         )
     if item.source_type is SourceType.BUNDLED:
         relative = _BUNDLED_SKILLS.get(item.id, "")
-        return ComponentPlan(
-            component=item.id,
-            profile=_profile_label(item),
-            channel=channel,
-            pinned="-",
-            source=item.source,
+        return _row(
+            item,
+            resolved,
             status=UNAVAILABLE,
             detail=f"bundled artifact is absent: {relative}",
         )
+    return None
+
+
+def _plan_row(
+    root: Path, item: Component, resolved: Resolution, profile: str
+) -> ComponentPlan:
+    settled = _settled_row(root, item, resolved, profile)
+    if settled is not None:
+        return settled
     detail = _planned_detail(item, resolved, profile)
     if resolved.reason:
         detail = f"{detail} ({resolved.reason})"
-    return ComponentPlan(
-        component=item.id,
-        profile=_profile_label(item),
-        channel=channel,
-        pinned=resolved.pinned or "-",
-        source=item.source,
-        status=PLANNED,
-        detail=detail,
+    return _row(
+        item, resolved, status=PLANNED, detail=detail, pinned=resolved.pinned or "-"
     )
 
 
@@ -410,7 +461,15 @@ def apply(
 
     installed: list[tuple[str, str, str, Resolution]] = []
     for item, resolved in zip(components, verdict.resolutions):
-        row, landed = _install_one(root, item, resolved, profile, runner)
+        row, landed = _install_one(
+            _Install(
+                root=root,
+                item=item,
+                resolved=resolved,
+                profile=profile,
+                runner=runner,
+            )
+        )
         outcome.rows.append(row)
         if landed is not None:
             installed.append((item.id, item.source_type.value, item.source, landed))
@@ -424,69 +483,41 @@ def apply(
     return outcome
 
 
-def _install_one(
-    root: Path,
-    item: Component,
-    resolved: Resolution,
-    profile: str,
-    runner,
-) -> tuple[ComponentPlan, Resolution | None]:
-    channel = (resolved.channel or item.channel).value
-    base = {
-        "component": item.id,
-        "profile": _profile_label(item),
-        "channel": channel,
-        "source": item.source,
-    }
-    if not resolved.ok:
-        return (
-            ComponentPlan(
-                **base,
-                pinned="-",
-                status=resolved.status or UNAVAILABLE,
-                detail=resolved.reason or item.role,
-            ),
-            None,
-        )
-    if _is_installed(root, item, profile):
-        return (
-            ComponentPlan(
-                **base,
-                pinned=resolved.pinned or "-",
-                status=PRESENT,
-                detail=_present_detail(item, resolved),
-            ),
-            resolved,
-        )
-    if item.source_type is SourceType.BUNDLED:
-        relative = _BUNDLED_SKILLS.get(item.id, "")
-        return (
-            ComponentPlan(
-                **base,
-                pinned="-",
-                status=UNAVAILABLE,
-                detail=f"bundled artifact is absent: {relative}",
-            ),
-            None,
-        )
+def _handler_for(item: Component):
+    """The install handler for one component.
 
-    # Registration wins over the source index: `dbt-mcp` resolves from PyPI but
-    # installs as an MCP entry, not into a virtual environment.
+    Registration wins over the source index: `dbt-mcp` resolves from PyPI but
+    installs as an MCP entry, not into a virtual environment.
+    """
     if item.mcp_server:
-        handler = _install_mcp_server
-    else:
-        handler = {
-            SourceType.PYPI: _install_pypi,
-            SourceType.GITHUB: _install_github,
-            SourceType.NPM: _install_npm,
-        }[item.source_type]
-    status, detail = handler(root, item, resolved, profile, runner)
-    return (
-        ComponentPlan(
-            **base, pinned=resolved.pinned or "-", status=status, detail=detail
-        ),
-        resolved if status == INSTALLED else None,
+        return _install_mcp_server
+    return {
+        SourceType.PYPI: _install_pypi,
+        SourceType.GITHUB: _install_github,
+        SourceType.NPM: _install_npm,
+    }[item.source_type]
+
+
+def _install_one(req: _Install) -> tuple[ComponentPlan, Resolution | None]:
+    """Install one component, returning its row and what to record in the lock.
+
+    The second element is the resolution the lock should remember, or None when
+    nothing landed. An already-PRESENT component still counts: it IS installed at
+    that coordinate, so dropping it would rewrite the lock without it.
+    """
+    settled = _settled_row(req.root, req.item, req.resolved, req.profile)
+    if settled is not None:
+        return settled, (req.resolved if settled.status == PRESENT else None)
+
+    status, detail = _handler_for(req.item)(req)
+    row = _row(
+        req.item,
+        req.resolved,
+        status=status,
+        detail=detail,
+        pinned=req.resolved.pinned or "-",
     )
+    return row, (req.resolved if status == INSTALLED else None)
 
 
 def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess:
@@ -499,9 +530,7 @@ def _detail(result: subprocess.CompletedProcess, fallback: str) -> str:
     return (result.stderr or result.stdout or "").strip() or fallback
 
 
-def _install_pypi(
-    root: Path, item: Component, resolved: Resolution, profile: str, runner
-) -> tuple[str, str]:
+def _install_pypi(req: _Install) -> tuple[str, str]:
     """Install one exact version into the profile's own virtual environment.
 
     `uv venv` + `uv pip install -p <env>` targets that environment explicitly.
@@ -510,21 +539,41 @@ def _install_pypi(
     """
     if shutil.which("uv") is None:
         return UNAVAILABLE, "uv is not on PATH; needed to build an isolated environment"
-    env = root / _profile_env(profile)
-    if not (root / _venv_python(_profile_env(profile))).is_file():
-        created = runner(["uv", "venv", str(env)], root)
+    if not (req.root / _venv_python(_profile_env(req.profile))).is_file():
+        created = req.run(["uv", "venv", str(req.env)])
         if created.returncode:
             return FAILED, _detail(created, "failed to create the profile environment")
-    spec = f"{item.coordinate}=={resolved.version}"
-    result = runner(["uv", "pip", "install", "-p", str(env), spec], root)
+    spec = f"{req.item.coordinate}=={req.resolved.version}"
+    result = req.run(["uv", "pip", "install", "-p", str(req.env), spec])
     if result.returncode:
         return FAILED, _detail(result, f"failed to install {spec}")
-    return INSTALLED, f"{spec} in {_profile_env(profile).as_posix()}"
+    return INSTALLED, f"{spec} in {_profile_env(req.profile).as_posix()}"
 
 
-def _install_github(
-    root: Path, item: Component, resolved: Resolution, profile: str, runner
-) -> tuple[str, str]:
+def _clone_at_ref(req: _Install, staging: Path, ref: str) -> str | None:
+    """Clone into `staging` pinned to `ref`. A failure detail, or None on success.
+
+    A tagless rolling pin cannot be `--branch`-cloned to a commit, so a failed
+    shallow clone falls back to a full clone plus an exact detached checkout.
+    Still exact, never a floating default branch.
+    """
+    url = f"https://github.com/{req.item.coordinate}.git"
+    shallow = req.run(
+        ["git", "clone", "--depth", "1", "--branch", ref, url, str(staging)]
+    )
+    if not shallow.returncode:
+        return None
+    shutil.rmtree(staging, ignore_errors=True)
+    full = req.run(["git", "clone", url, str(staging)])
+    if full.returncode:
+        return _detail(full, "git clone failed")
+    checkout = req.run(["git", "checkout", "--detach", ref], staging)
+    if checkout.returncode:
+        return _detail(checkout, f"could not check out {ref}")
+    return None
+
+
+def _install_github(req: _Install) -> tuple[str, str]:
     """Clone into staging at an exact ref, then activate by rename.
 
     Staging is what keeps a partial clone from ever being reported installed:
@@ -533,34 +582,21 @@ def _install_github(
     """
     if shutil.which("git") is None:
         return UNAVAILABLE, "git is not on PATH"
-    target = root / _skill_dir(item)
+    target = req.root / _skill_dir(req.item)
     if target.exists():
         return FAILED, f"incomplete existing directory: {target}"
-    ref = resolved.tag or resolved.commit
+    ref = req.resolved.tag or req.resolved.commit
     if not ref:
         return FAILED, "refusing to clone without an exact tag or commit"
 
-    staging = root / STAGING_DIR / item.id
+    staging = req.root / STAGING_DIR / req.item.id
     if staging.exists():
         shutil.rmtree(staging, ignore_errors=True)
     staging.parent.mkdir(parents=True, exist_ok=True)
-    url = f"https://github.com/{item.coordinate}.git"
-    cloned = runner(
-        ["git", "clone", "--depth", "1", "--branch", ref, url, str(staging)], root
-    )
-    if cloned.returncode:
-        # A tagless rolling pin cannot be `--branch`-cloned to a commit, so fall
-        # back to a full clone plus an exact checkout. Still exact, never a
-        # floating default branch.
+    failure = _clone_at_ref(req, staging, ref)
+    if failure is not None:
         shutil.rmtree(staging, ignore_errors=True)
-        full = runner(["git", "clone", url, str(staging)], root)
-        if full.returncode:
-            shutil.rmtree(staging, ignore_errors=True)
-            return FAILED, _detail(full, "git clone failed")
-        checkout = runner(["git", "checkout", "--detach", ref], staging)
-        if checkout.returncode:
-            shutil.rmtree(staging, ignore_errors=True)
-            return FAILED, _detail(checkout, f"could not check out {ref}")
+        return FAILED, failure
 
     target.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -569,14 +605,17 @@ def _install_github(
         shutil.rmtree(staging, ignore_errors=True)
         return FAILED, f"could not activate the staged clone: {exc}"
     (target / ".seshat-installed").write_text(f"{ref}\n", encoding="utf-8")
-    return INSTALLED, f"{item.coordinate} at {ref} in {_skill_dir(item).as_posix()}"
+    return (
+        INSTALLED,
+        f"{req.item.coordinate} at {ref} in {_skill_dir(req.item).as_posix()}",
+    )
 
 
 def _install_npm(
-    root: Path, item: Component, resolved: Resolution, profile: str, runner
+    req: _Install,
 ) -> tuple[str, str]:  # pragma: no cover - every npm component is an MCP server
     """An npm component that is not an MCP registration has no install path yet."""
-    return UNAVAILABLE, f"{item.coordinate} has no supported npm install path"
+    return UNAVAILABLE, f"{req.item.coordinate} has no supported npm install path"
 
 
 # The launcher each MCP server needs on PATH, and the entry builder for it.
@@ -591,27 +630,26 @@ _MCP_ENTRIES = {
 }
 
 
-def _install_mcp_server(
-    root: Path, item: Component, resolved: Resolution, profile: str, runner
-) -> tuple[str, str]:
+def _install_mcp_server(req: _Install) -> tuple[str, str]:
     """Register an MCP server at an exact version, refusing a name conflict.
 
     The launcher gate is per component: the Power BI server needs `npx`, the dbt
     server needs `uvx`. Gating both on `npx` would report the dbt server as
     installable on a machine that cannot launch it.
     """
+    item, version = req.item, req.resolved.version
     launcher, requirement = _MCP_LAUNCHERS[item.id]
     if shutil.which(launcher) is None:
         return UNAVAILABLE, requirement
-    entry = _MCP_ENTRIES[item.id](resolved.version or "")
-    path = root / MCP_CONFIG
+    entry = _MCP_ENTRIES[item.id](version or "")
+    path = req.root / MCP_CONFIG
     try:
         config = mcp_config.load_config(path)
     except mcp_config.McpConfigError as exc:
         return FAILED, str(exc)
     verdict = mcp_config.classify(config, item.id, entry)
     if verdict == mcp_config.PRESENT:
-        return PRESENT, f"already registered at {resolved.version}"
+        return PRESENT, f"already registered at {version}"
     if verdict == mcp_config.CONFLICT:
         return (
             CONFLICT,
@@ -622,11 +660,11 @@ def _install_mcp_server(
         mcp_config.write_config(path, mcp_config.merge(config, item.id, entry))
     except OSError as exc:
         return FAILED, str(exc)
-    marker = root / NODE_DIR / item.id / ".seshat-installed"
+    marker = req.root / NODE_DIR / item.id / ".seshat-installed"
     marker.parent.mkdir(parents=True, exist_ok=True)
-    marker.write_text(f"{resolved.version}\n", encoding="utf-8")
+    marker.write_text(f"{version}\n", encoding="utf-8")
     mode = f" ({item.mode})" if item.mode else ""
-    return INSTALLED, f"{item.coordinate}@{resolved.version}{mode}"
+    return INSTALLED, f"{item.coordinate}@{version}{mode}"
 
 
 # `DAGSTER_PROJECT` is re-exported for the docs and tests that name the governed

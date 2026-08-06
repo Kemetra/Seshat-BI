@@ -21,7 +21,7 @@ The posture, which the repo already ratified once:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 
 from seshat.integrations.catalog import Component
 from seshat.integrations.resolvers import CONFLICT, INCOMPATIBLE, Resolution
@@ -102,39 +102,58 @@ def _pair_reason(group: str, members: list[tuple[Component, Resolution]]) -> str
     return None
 
 
-def apply_policy(
-    pairs: list[tuple[Component, Resolution]],
-    *,
-    python_version: tuple[int, ...] | None = None,
-) -> Verdict:
-    """Validate resolved components against each other and the baseline.
+@dataclass(frozen=True)
+class _Pass:
+    """What one policy pass found: reasons to report, components to reject."""
 
-    Returns every resolution -- rewritten to `incompatible`/`conflict` where the
-    policy refuses -- plus the reasons. Nothing is mutated in place, so a caller
-    can render both what was resolved and why it was refused.
-    """
+    reasons: tuple[str, ...] = ()
+    rejected: dict[str, tuple[str, str]] = field(default_factory=dict)
+
+
+def _python_floor_pass(
+    pairs: list[tuple[Component, Resolution]],
+    python_version: tuple[int, ...] | None,
+) -> _Pass:
+    """An interpreter below the kit's floor rejects the whole set at once."""
+    if python_version is None or python_version >= MINIMUM_PYTHON:
+        return _Pass()
+    need = ".".join(str(part) for part in MINIMUM_PYTHON)
+    have = ".".join(str(part) for part in python_version)
+    reason = f"Seshat requires Python >= {need}; this interpreter is {have}"
+    return _Pass(
+        reasons=(reason,),
+        rejected={item.id: (INCOMPATIBLE, reason) for item, _res in pairs},
+    )
+
+
+def _baseline_pass(pairs: list[tuple[Component, Resolution]]) -> _Pass:
+    """Each component resolving below its recorded compatibility baseline."""
     reasons: list[str] = []
     rejected: dict[str, tuple[str, str]] = {}
-
-    if python_version is not None and python_version < MINIMUM_PYTHON:
-        need = ".".join(str(part) for part in MINIMUM_PYTHON)
-        have = ".".join(str(part) for part in python_version)
-        reason = f"Seshat requires Python >= {need}; this interpreter is {have}"
-        reasons.append(reason)
-        for item, _res in pairs:
-            rejected[item.id] = (INCOMPATIBLE, reason)
-
     for item, resolved in pairs:
         regression = _baseline_regression(item, resolved)
         if regression:
             reasons.append(regression)
             rejected[item.id] = (INCOMPATIBLE, regression)
+    return _Pass(reasons=tuple(reasons), rejected=rejected)
 
+
+def _compat_groups(
+    pairs: list[tuple[Component, Resolution]],
+) -> dict[str, list[tuple[Component, Resolution]]]:
     groups: dict[str, list[tuple[Component, Resolution]]] = {}
     for item, resolved in pairs:
         if item.compat_group:
             groups.setdefault(item.compat_group, []).append((item, resolved))
+    return groups
 
+
+def _paired_group_pass(
+    groups: dict[str, list[tuple[Component, Resolution]]],
+) -> _Pass:
+    """A group that must install as a set but only half resolved."""
+    reasons: list[str] = []
+    rejected: dict[str, tuple[str, str]] = {}
     for group in _PAIRED_GROUPS:
         members = groups.get(group)
         if not members:
@@ -144,8 +163,16 @@ def apply_policy(
             reasons.append(reason)
             for item, _res in members:
                 rejected.setdefault(item.id, (CONFLICT, reason))
+    return _Pass(reasons=tuple(reasons), rejected=rejected)
 
-    for group, expected in _AGREE_ON_MINOR.items():  # pragma: no cover - reserved
+
+def _minor_agreement_pass(
+    groups: dict[str, list[tuple[Component, Resolution]]],
+) -> _Pass:  # pragma: no cover - reserved; _AGREE_ON_MINOR is empty
+    """A group whose members must share a MAJOR.MINOR but do not."""
+    reasons: list[str] = []
+    rejected: dict[str, tuple[str, str]] = {}
+    for group, expected in _AGREE_ON_MINOR.items():
         members = [pair for pair in groups.get(group, []) if pair[0].id in expected]
         minors = {
             (parse_version(res.version) or ())[:2]
@@ -157,6 +184,42 @@ def apply_policy(
             reasons.append(reason)
             for item, _res in members:
                 rejected.setdefault(item.id, (CONFLICT, reason))
+    return _Pass(reasons=tuple(reasons), rejected=rejected)
+
+
+def apply_policy(
+    pairs: list[tuple[Component, Resolution]],
+    *,
+    python_version: tuple[int, ...] | None = None,
+) -> Verdict:
+    """Validate resolved components against each other and the baseline.
+
+    Returns every resolution -- rewritten to `incompatible`/`conflict` where the
+    policy refuses -- plus the reasons. Nothing is mutated in place, so a caller
+    can render both what was resolved and why it was refused.
+    """
+    groups = _compat_groups(pairs)
+    interpreter = _python_floor_pass(pairs, python_version)
+    baseline = _baseline_pass(pairs)
+    paired = _paired_group_pass(groups)
+    minor = _minor_agreement_pass(groups)
+
+    # Reasons read in policy order: the interpreter, then the baseline, then the
+    # group rules.
+    reasons = [
+        reason
+        for policy_pass in (interpreter, baseline, paired, minor)
+        for reason in policy_pass.reasons
+    ]
+
+    # Rejections resolve in PRECEDENCE order, which is not the same order. A
+    # baseline regression names one component and its exact versions, so it
+    # outranks the blanket interpreter rejection covering every component; the
+    # group rules only claim components nothing more specific already did.
+    rejected: dict[str, tuple[str, str]] = {}
+    for policy_pass in (baseline, interpreter, paired, minor):
+        for component_id, verdict in policy_pass.rejected.items():
+            rejected.setdefault(component_id, verdict)
 
     final = tuple(
         replace(

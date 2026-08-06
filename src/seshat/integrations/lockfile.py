@@ -68,6 +68,24 @@ def read_lock(root: Path) -> Lock | None:
     path = root / LOCK_FILE
     if not path.exists():
         return None
+    body = _load_lock_object(path)
+    components = body.get("components")
+    if not isinstance(components, dict):
+        raise LockError(f"lock file 'components' must be an object: {path}")
+    return Lock(
+        schema=SCHEMA,
+        profile=str(body.get("profile") or ""),
+        resolved_at=str(body.get("resolved_at") or ""),
+        components=components,
+    )
+
+
+def _load_lock_object(path: Path) -> dict:
+    """The lock's JSON object, or LockError naming exactly why it is untrustworthy.
+
+    Separated from the field reads above so each refusal -- unreadable, not JSON,
+    not an object, wrong schema -- is one line and none can be skipped.
+    """
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -84,15 +102,7 @@ def read_lock(root: Path) -> Lock | None:
             f"unsupported lock schema {schema!r} in {path}; this Seshat "
             f"understands {SCHEMA}"
         )
-    components = body.get("components")
-    if not isinstance(components, dict):
-        raise LockError(f"lock file 'components' must be an object: {path}")
-    return Lock(
-        schema=SCHEMA,
-        profile=str(body.get("profile") or ""),
-        resolved_at=str(body.get("resolved_at") or ""),
-        components=components,
-    )
+    return body
 
 
 def build_lock(

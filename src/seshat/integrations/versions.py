@@ -22,7 +22,9 @@ lexical -- "1.10" must sort above "1.9".
 
 from __future__ import annotations
 
+import operator
 import re
+from collections.abc import Iterator
 
 # A pre-release / dev / rc marker: any release whose version string carries one
 # of these is not a "stable" target.
@@ -91,25 +93,35 @@ def latest_compatible(
     return _highest(pypi_json, accept=_accept)
 
 
-def _highest(pypi_json: dict, *, accept) -> str | None:
-    """The highest stable release passing `accept`, over the PyPI releases map."""
-    releases = pypi_json.get("releases", {})
-    best: tuple[int, ...] | None = None
-    best_str: str | None = None
-    for version, files in releases.items():
+def _stable_releases(pypi_json: dict) -> Iterator[tuple[str, tuple[int, ...]]]:
+    """Each installable release and its parsed form, newest-ness aside.
+
+    Excluded: a release with no files (nothing to install), a fully yanked one,
+    and anything that is not a plain dotted-numeric version (pre-release, dev,
+    rc, or local segment).
+    """
+    for version, files in pypi_json.get("releases", {}).items():
         if not isinstance(files, list) or not files:
             continue
         if release_is_yanked(files):
             continue
         parsed = parse_version(str(version))
-        if parsed is None:
-            continue
-        if not accept(str(version), parsed):
-            continue
-        if best is None or parsed > best:
-            best = parsed
-            best_str = str(version)
-    return best_str
+        if parsed is not None:
+            yield str(version), parsed
+
+
+def _highest(pypi_json: dict, *, accept) -> str | None:
+    """The highest stable release passing `accept`, over the PyPI releases map."""
+    candidates = [
+        (version, parsed)
+        for version, parsed in _stable_releases(pypi_json)
+        if accept(version, parsed)
+    ]
+    if not candidates:
+        return None
+    # `max` keeps the FIRST maximal element, matching the strict `>` this
+    # replaced: two strings parsing to the same tuple resolve to the earlier one.
+    return max(candidates, key=lambda candidate: candidate[1])[0]
 
 
 def _requires_python(files: object) -> str:
@@ -138,17 +150,21 @@ def artifact_sha256(files: object, version_files: object = None) -> str | None:
     candidates = version_files if version_files is not None else files
     if not isinstance(candidates, list):
         return None
-    best: str | None = None
+    published = _published_digests(candidates)
+    wheel = next((digest for kind, digest in published if kind == "bdist_wheel"), None)
+    return wheel or (published[0][1] if published else None)
+
+
+def _published_digests(candidates: list) -> list[tuple[str, str]]:
+    """`(packagetype, sha256)` for each non-yanked file that publishes a digest."""
+    digests: list[tuple[str, str]] = []
     for entry in candidates:
         if not isinstance(entry, dict) or entry.get("yanked"):
             continue
         digest = (entry.get("digests") or {}).get("sha256")
-        if not digest:
-            continue
-        if str(entry.get("packagetype")) == "bdist_wheel":
-            return str(digest)
-        best = best or str(digest)
-    return best
+        if digest:
+            digests.append((str(entry.get("packagetype")), str(digest)))
+    return digests
 
 
 def python_supported(marker: str, python_version: tuple[int, ...]) -> bool:
@@ -175,13 +191,33 @@ _OPERATORS = ("~=", "===", "==", "!=", ">=", "<=", ">", "<")
 
 
 def _clause_admits(clause: str, python_version: tuple[int, ...]) -> bool:
-    for operator in _OPERATORS:
-        if clause.startswith(operator):
-            return _compare(operator, clause[len(operator) :].strip(), python_version)
+    for op in _OPERATORS:
+        if clause.startswith(op):
+            return _compare(op, clause[len(op) :].strip(), python_version)
     return True
 
 
-def _compare(operator: str, raw: str, actual: tuple[int, ...]) -> bool:
+def _compatible_release(left: tuple[int, ...], bound: tuple[int, ...]) -> bool:
+    """PEP 440 `~=`: at least `bound`, and equal on all but the last component."""
+    return left >= bound and left[:-1] == bound[:-1]
+
+
+# One comparison per PEP 440 operator, keyed by the operator itself. An operator
+# absent here is permissive, matching the module's "unreadable is not evidence of
+# incompatibility" posture.
+_COMPARISONS = {
+    "==": operator.eq,
+    "===": operator.eq,
+    "!=": operator.ne,
+    ">=": operator.ge,
+    "<=": operator.le,
+    ">": operator.gt,
+    "<": operator.lt,
+    "~=": _compatible_release,
+}
+
+
+def _compare(op: str, raw: str, actual: tuple[int, ...]) -> bool:
     bound = _loose_version(raw)
     if bound is None:
         return True
@@ -189,22 +225,8 @@ def _compare(operator: str, raw: str, actual: tuple[int, ...]) -> bool:
     # admits (3, 13, 2) -- PyPI markers are written at 2 components.
     width = len(bound)
     left = actual[:width] + (0,) * max(0, width - len(actual))
-    if operator in ("==", "==="):
-        return left == bound
-    if operator == "!=":
-        return left != bound
-    if operator == ">=":
-        return left >= bound
-    if operator == "<=":
-        return left <= bound
-    if operator == ">":
-        return left > bound
-    if operator == "<":
-        return left < bound
-    if operator == "~=":
-        # Compatible release: >= bound, and equal on all but the last component.
-        return left >= bound and left[:-1] == bound[:-1]
-    return True
+    comparison = _COMPARISONS.get(op)
+    return True if comparison is None else comparison(left, bound)
 
 
 def _loose_version(raw: str) -> tuple[int, ...] | None:
