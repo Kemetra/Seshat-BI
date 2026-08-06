@@ -40,12 +40,24 @@ The result is a draft PR titled `release: prepare v<version>`.
 
 Review the generated PR, require normal checks, and merge it only when the synchronized diff is correct.
 
+**Merge it with a merge commit. Do not squash and do not rebase.** The workflow builds two commits -- `chore: project v<version> version metadata` and `chore: generate v<version> agent bundles` -- and both generated bundle manifests record the first one by SHA:
+
+```json
+"source_revision": "<the version-projection commit>"
+```
+
+Squashing collapses the two into one new commit, so the recorded SHA is no longer an ancestor of `main` and `scripts/bundle_provenance.py` fails with `source_revision <sha> is not an ancestor of current HEAD`. `check_release_versions.py` then reports `status: blocked`. Because `release.yml` runs `check_release_versions.py --check` inside `build-validate`, the publish leg fails -- and if the tag was already pushed, it fails *after* an immutable tag exists with nothing published behind it.
+
+If a release PR is squashed by mistake, do not tag. Re-run `python scripts/export_agent_bundles.py` on `main` and merge the restamped manifests in a normal PR first; that repoints `source_revision` at a commit that is genuinely in history. Confirm `python scripts/check_release_versions.py --check` exits zero on `main` before tagging.
+
 After merge:
 
-1. create the immutable annotated tag `v<version>` at the merged release commit;
-2. run the existing **release-candidate** workflow from that tag with `publication_action=publish-pypi`;
-3. verify the GitHub Release and public PyPI install evidence;
-4. verify Claude and Codex repository-plugin update paths.
+1. confirm `python scripts/check_release_versions.py --check` exits zero on `main`;
+2. create the immutable annotated tag `v<version>` at the merged release commit;
+3. run the existing **release-candidate** workflow from that tag with `publication_action=publish-pypi`. Dispatch it *from the tag*, and pass the full ref -- `candidate_ref=refs/tags/v<version>` -- because the workflow asserts `github.ref == candidate_ref` and rejects anything that is not `refs/tags/v*`;
+4. create the GitHub Release. `release.yml` publishes to PyPI and npm but does not cut the Release; that is a separate `gh release create v<version>` step;
+5. verify all three packages independently -- `seshat-bi` on PyPI, `@kemetra/seshat-bi` on npm, and the unscoped `seshat-bi` alias. The three publishes are ordered but not atomic, so a green PyPI job is not evidence that npm succeeded;
+6. verify Claude and Codex repository-plugin update paths.
 
 Claude and Codex repository plugins do not require a separate package upload: their generated bundles and marketplace metadata live in this repository. Public Claude/OpenAI catalog submission remains a separate owner action.
 
@@ -58,3 +70,4 @@ Claude and Codex repository plugins do not require a separate package upload: th
 | Tag or release branch already exists | Choose a new version; never move or reuse an immutable release. |
 | Draft PR creation is denied | Enable repository Actions permission to create pull requests, then rerun. |
 | Bot-created PR checks await approval | Approve the displayed workflow runs before merging. |
+| `source_revision <sha> is not an ancestor of current HEAD` | The release PR was squashed or rebased. Restamp the bundle manifests onto `main` before tagging; see *Review and publish*. |
