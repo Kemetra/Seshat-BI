@@ -36,7 +36,9 @@ unless explicitly requested. Add the seam, not the implementation.
 <!-- SPECKIT START -->
 Active Spec Kit implementation plan: `specs/138-agent-driven-bundle/plan.md`
 (status: RATIFIED by Ahmed Shaaban 2026-07-31 -- implementation permitted).
-Still awaiting ratification: the `specs/137-finance-gl-genericity-proof/` package. At most ONE
+Ratified but NOT started: the `specs/137-finance-gl-genericity-proof/` package (ratified by
+Ahmed Shaaban 2026-07-30; OD-4 the per-table mapping-gate approval and OD-5 the Power BI
+Desktop authoring session remain open and blocking). At most ONE
 of the two may be in implementation at a time (spec 138 FR-026). The fence carries exactly ONE
 plan path by contract (`test_active_spec_kit_markers_agree_and_resolve`); do not add a second.
 <!-- SPECKIT END -->
