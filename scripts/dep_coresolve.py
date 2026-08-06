@@ -52,6 +52,17 @@ if str(_SRC) not in sys.path:
 
 import yaml  # noqa: E402  (after the path bootstrap; a CI-script dep, not core)
 
+# The stable-release semantics (pre-release exclusion, PER-FILE yanked rule,
+# numeric ordering) live in packaged code so the `seshat integrations setup`
+# resolver shares ONE definition with this gate. `scripts/` is not in the sdist,
+# so reuse must flow outward from `src/` -- never the reverse.
+from seshat.integrations.versions import (  # noqa: E402  (after path bootstrap)
+    latest_stable,
+)
+from seshat.integrations.versions import (  # noqa: E402  (after path bootstrap)
+    parse_version as _parse_version,
+)
+
 # --------------------------------------------------------------------------- #
 # Outcome model.
 # --------------------------------------------------------------------------- #
@@ -535,64 +546,11 @@ class Proposal:
     solve_detail: str
 
 
-# A pre-release / dev / rc / post local segment marker: any release whose
-# version string carries one of these is not a "stable" target (FR-007).
-_PRERELEASE_RE = re.compile(r"(a|b|rc|c|dev|alpha|beta|pre)\d*", re.IGNORECASE)
-
-
-def _parse_version(version: str) -> tuple[int, ...] | None:
-    """Parse a plain numeric release version into a comparable int tuple.
-
-    stdlib-only (``packaging`` is not a guaranteed dependency), so ordering is
-    NUMERIC, never lexical ("1.10" > "1.9"). Returns ``None`` for a version
-    that is not a plain dotted-numeric release (a pre-release/dev/rc/local),
-    which excludes it from the stable set (FR-007).
-    """
-    core = version.strip()
-    # Reject anything carrying a pre-release/dev marker or a local segment.
-    if "+" in core or _PRERELEASE_RE.search(core):
-        return None
-    parts: list[int] = []
-    for token in core.split("."):
-        if not token.isdigit():
-            return None
-        parts.append(int(token))
-    return tuple(parts) if parts else None
-
-
-def _release_is_yanked(files: object) -> bool:
-    """A release is yanked ONLY when it has files and ALL of them are yanked
-    (plan-review D5, PER-FILE). A release with no files is treated as not
-    installable rather than yanked -- excluded from the stable set separately.
-    """
-    if not isinstance(files, list) or not files:
-        return False
-    return all(isinstance(f, dict) and f.get("yanked") for f in files)
-
-
-def latest_stable(pypi_json: dict) -> str | None:
-    """The highest non-yanked, non-pre-release version on PyPI (FR-007).
-
-    ``pypi_json`` is the PyPI JSON API body (``releases`` maps version ->
-    per-file list). Pre-release/dev/rc versions and FULLY-yanked releases are
-    excluded. Ordering is numeric. Returns ``None`` when no stable release
-    exists.
-    """
-    releases = pypi_json.get("releases", {})
-    best: tuple[int, ...] | None = None
-    best_str: str | None = None
-    for version, files in releases.items():
-        if not isinstance(files, list) or not files:
-            continue
-        if _release_is_yanked(files):
-            continue
-        parsed = _parse_version(str(version))
-        if parsed is None:
-            continue
-        if best is None or parsed > best:
-            best = parsed
-            best_str = str(version)
-    return best_str
+# The stable-release primitives (`_parse_version`, `_release_is_yanked`,
+# `latest_stable`) are imported from `seshat.integrations.versions` at the top of
+# this file. They were defined here until the `seshat integrations setup`
+# resolver needed the same rules; two copies of the PER-FILE yanked rule would
+# drift, so the definitions moved into packaged code and this gate imports them.
 
 
 # --------------------------------------------------------------------------- #

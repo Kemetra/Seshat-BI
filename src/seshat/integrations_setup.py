@@ -1,8 +1,16 @@
-"""Opt-in installer and validator for Fabric, Power BI, dbt, and Dagster.
+"""Opt-in installer and validator for the curated analytics stack.
 
-Nothing here acts without explicit human approval: `setup_integrations` defaults
-to a **network-free plan**, and only `apply=True` -- reached via `--apply`,
-`--yes`, or an interactive "yes" -- clones, writes, or provisions anything.
+This module is the FACADE. The curated-stack implementation lives in
+`seshat.integrations` -- `catalog` (profiles and version channels), `versions`
+(stable-release semantics), `resolvers` (injectable PyPI/GitHub/npm lookups),
+`compat` (the cross-component policy), `lockfile`, `mcp_config`, `installer`,
+and `render`. The split keeps each file reviewable; this facade keeps the
+already-shipped import surface working.
+
+Nothing here acts without explicit human approval. The default is a
+**network-free, write-free plan**; remote resolution needs `--refresh`; and only
+an explicit `--apply` clones, writes, or provisions anything. `--yes` confirms an
+apply that was already requested -- it never turns one on.
 
 Two boundaries are deliberate:
 
@@ -25,9 +33,52 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-INTEGRATIONS_DIR = Path(".seshat/integrations")
-MCP_CONFIG = INTEGRATIONS_DIR / "mcp.json"
-DAGSTER_PROJECT = Path("orchestration/dagster")
+from seshat.integrations import mcp_config
+from seshat.integrations.catalog import (
+    DAGSTER_PROJECT,
+    DEFAULT_PROFILE,
+    INTEGRATIONS_DIR,
+    LOCK_FILE,
+    MCP_CONFIG,
+    PROFILE_NAMES,
+    Channel,
+    UnknownProfile,
+    profile_components,
+)
+from seshat.integrations.installer import apply as apply_profile
+from seshat.integrations.installer import plan as plan_profile
+from seshat.integrations.render import as_json as render_json
+from seshat.integrations.render import as_text as render_text
+from seshat.integrations.resolvers import Resolvers, live_resolvers
+
+__all__ = [
+    "DAGSTER_PROJECT",
+    "DBT_CORE_PIN",
+    "DBT_POSTGRES_PIN",
+    "DBT_SKILLS",
+    "DEFAULT_PROFILE",
+    "FABRIC_SKILLS",
+    "INTEGRATIONS_DIR",
+    "LOCK_FILE",
+    "MCP_CONFIG",
+    "PROFILE_NAMES",
+    "Channel",
+    "IntegrationResult",
+    "McpServer",
+    "Resolvers",
+    "SkillBundle",
+    "UnknownProfile",
+    "apply_profile",
+    "confirm",
+    "live_resolvers",
+    "needs_operator_action",
+    "plan_profile",
+    "profile_components",
+    "render_json",
+    "render_results",
+    "render_text",
+    "setup_integrations",
+]
 
 DBT_CORE_PIN = "dbt-core==1.12.0"
 DBT_POSTGRES_PIN = "dbt-postgres==1.10.2"
@@ -86,27 +137,31 @@ DBT_SKILLS = SkillBundle(
     ),
 )
 
+# The MCP entries carry an EXACT version, never `@latest` and never a bare
+# `uvx dbt-mcp`. A moving reference in an active configuration silently changes
+# meaning when upstream publishes, so the version-channel-aware path
+# (`seshat integrations setup --refresh`) resolves the pin and these
+# lock-recorded defaults are what a no-network run registers.
+#
+# `POWERBI_MCP_FALLBACK_VERSION` / `DBT_MCP_FALLBACK_VERSION` are the last
+# coordinates this repository verified. They are a floor for the legacy
+# no-profile path, not a claim about what is newest: `--refresh` is how a newer
+# compatible release is discovered and pinned.
+POWERBI_MCP_FALLBACK_VERSION = "1.3.4"
+DBT_MCP_FALLBACK_VERSION = "1.5.1"
+
 POWERBI_MCP = McpServer(
     name="powerbi-modeling-mcp",
     executable="npx",
     requirement="Node.js/npx is not on PATH",
-    entry={
-        "type": "stdio",
-        "command": "npx",
-        "args": [
-            "-y",
-            "@microsoft/powerbi-modeling-mcp@latest",
-            "--start",
-            "--readonly",
-        ],
-    },
+    entry=mcp_config.powerbi_entry(POWERBI_MCP_FALLBACK_VERSION),
 )
 
 DBT_MCP = McpServer(
     name="dbt-mcp",
     executable="uvx",
     requirement="uvx is not on PATH",
-    entry={"type": "stdio", "command": "uvx", "args": ["dbt-mcp"]},
+    entry=mcp_config.dbt_entry(DBT_MCP_FALLBACK_VERSION),
 )
 
 
