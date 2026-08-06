@@ -41,6 +41,19 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+from ..rule_coverage import Requirement
+
+# The define-layer prose corpus AD1 scans. Declared as the glob equivalent of
+# _CORPUS_RE below: the exempt TEMPLATE lives under references/, a different
+# directory, so no template-only tree can satisfy this glob while leaving the
+# real corpus empty.
+KPI_CONTRACT_CORPUS = Requirement(
+    pattern="skills/retail-kpi-knowledge/contracts/*.md",
+    note=(
+        "no tracked KPI contract prose exists, so this rule read no contract and "
+        "its silence is not a verified pass"
+    ),
+)
 
 RULE_ID = "AD1"
 
@@ -117,7 +130,9 @@ def _metric_name(text: str, rel: str) -> str:
 
 
 @register(
-    RULE_ID, "Metric additivity is not composed illegally with its lineage parents"
+    RULE_ID,
+    "Metric additivity is not composed illegally with its lineage parents",
+    requires=(KPI_CONTRACT_CORPUS,),
 )
 def check_additivity_consistency(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []

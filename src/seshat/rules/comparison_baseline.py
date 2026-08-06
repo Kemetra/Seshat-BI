@@ -39,6 +39,18 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+from ..rule_coverage import Requirement
+
+# Same define-layer prose corpus as AD1 (the _CORPUS_RE below is identical).
+# Declared per-module rather than shared, mirroring how the regex itself is
+# already duplicated across the two rules.
+KPI_CONTRACT_CORPUS = Requirement(
+    pattern="skills/retail-kpi-knowledge/contracts/*.md",
+    note=(
+        "no tracked KPI contract prose exists, so this rule read no contract and "
+        "its silence is not a verified pass"
+    ),
+)
 
 RULE_ID = "CB1"
 
@@ -135,6 +147,7 @@ def _has_date_field(required_block: str) -> bool:
 @register(
     RULE_ID,
     "Comparison/growth metric contract declares a baseline and a primary date field",
+    requires=(KPI_CONTRACT_CORPUS,),
 )
 def check_comparison_baseline(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []

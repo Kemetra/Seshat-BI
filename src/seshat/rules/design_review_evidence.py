@@ -29,6 +29,18 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+from ..rule_coverage import Requirement
+
+# The filled instances DL4 reads. The blank template is excluded by exact path
+# (_TEMPLATE_PATH, which has no leading directory) so it cannot satisfy this
+# glob: "*/design-review-evidence.md" requires at least one directory segment.
+DESIGN_REVIEW_INSTANCE_CORPUS = Requirement(
+    pattern="*/design-review-evidence.md",
+    note=(
+        "no filled design-review evidence record is tracked, so this rule checked "
+        "no record and its silence is not a verified pass"
+    ),
+)
 
 RULE_ID = "DL4"
 
@@ -121,7 +133,9 @@ def _section_has_filled_row(body: list[str]) -> bool:
 
 
 @register(
-    RULE_ID, "A filled design-review evidence record carries every required field"
+    RULE_ID,
+    "A filled design-review evidence record carries every required field",
+    requires=(DESIGN_REVIEW_INSTANCE_CORPUS,),
 )
 def check_design_review_evidence(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []

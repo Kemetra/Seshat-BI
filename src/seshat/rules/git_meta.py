@@ -9,6 +9,19 @@ from pathlib import Path
 from .. import gitutil
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+from ..rule_coverage import Requirement
+
+# G5 reads the tracked-file list itself, so "the input" is that list being
+# non-empty. An untracked working tree makes G5 scan nothing and report nothing,
+# which is silence rather than a verified pass -- measured, not assumed: G5
+# returns zero findings against an empty repo.
+TRACKED_FILE_CORPUS = Requirement(
+    pattern="*",
+    note=(
+        "no tracked file exists, so this rule scanned no path and its silence is "
+        "not a verified pass"
+    ),
+)
 
 
 def _absent_findings(
@@ -34,7 +47,7 @@ def _absent_findings(
 MAX_REL_PATH = 200
 
 
-@register("G5", "Windows MAX_PATH discipline")
+@register("G5", "Windows MAX_PATH discipline", requires=(TRACKED_FILE_CORPUS,))
 def rule_g5_path_length(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
     for path in ctx.tracked_files:

@@ -34,6 +34,18 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+from ..rule_coverage import Requirement
+
+# The formatting-plan ledgers DL7 reads. templates/ copies are excluded by the
+# rule itself; the glob stays broad enough to match any tracked ledger, so a
+# templates-only tree still reports the corpus as present rather than absent.
+FORMATTING_PLAN_CORPUS = Requirement(
+    pattern="*formatting-plan.md",
+    note=(
+        "no formatting-plan ledger is tracked, so this rule read no ledger and "
+        "its silence is not a verified pass"
+    ),
+)
 
 RULE_ID = "DL7"
 
@@ -273,6 +285,7 @@ def _ledger_findings(text: str, rel: str) -> list[Finding]:
 @register(
     RULE_ID,
     "Formatting-plan ledger is well-formed (citations resolve, allow-list, no score)",
+    requires=(FORMATTING_PLAN_CORPUS,),
 )
 def check_formatting_plan(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
