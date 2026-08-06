@@ -17,10 +17,9 @@ from pathlib import Path
 import pytest
 
 from seshat.core import RuleContext, Severity
-from seshat.rules.sql import (
-    s5_type_discipline,
+from seshat.rules.sql import s5_type_discipline, s7_contiguous_date_dim
+from seshat.rules.sql_gold_members import (
     s6_gold_unknown_member,
-    s7_contiguous_date_dim,
     s8_date_dim_no_unknown_member,
 )
 

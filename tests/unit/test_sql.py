@@ -102,7 +102,7 @@ def test_strip_sql_noise_comment_marker_inside_string_is_data() -> None:
     span parity is even, so no S6/S8 VERDICT changes -- see the §A deferral note in
     rules/sql.py. These cases lock in the behavior that is correct today.)
     """
-    from seshat.rules.sql import _strip_sql_noise
+    from seshat.rules.sql_gold_members import _strip_sql_noise
 
     # A `--` and `/* */` inside string literals must not eat the trailing `-1`.
     assert "-1" in _strip_sql_noise("SELECT '-- x', -1 AS y;")

@@ -244,13 +244,13 @@ rules:
     fix: Fix the cast/type in the silver SQL (`sql.py`)
     means: 'Type discipline (RC7): money/qty not exact NUMERIC, or leading-zero id not TEXT'
   S6:
-    fix: Add the `-1` unknown member + FK COALESCE in the gold dim (`sql.py`)
+    fix: Add the `-1` unknown member + FK COALESCE in the gold dim (`sql_gold_members.py`)
     means: Gold dim missing its `-1` unknown member (RC14)
   S7:
     fix: Build the date dim as a contiguous generated calendar (`sql.py`)
     means: Date dim not a contiguous `generate_series` calendar (RC15)
   S8:
-    fix: Remove the sentinel member from the date dim (`sql.py`)
+    fix: Remove the sentinel member from the date dim (`sql_gold_members.py`)
     means: A marked date table carries a `-1`/NULL member
   S9:
     fix: Move the junk-row filter ahead of the `''`->NULL conversion (`sql.py`)
