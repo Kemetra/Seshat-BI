@@ -148,6 +148,13 @@ def _compat_groups(
     return groups
 
 
+def _reject_group(
+    members: list[tuple[Component, Resolution]], status: str, reason: str
+) -> dict[str, tuple[str, str]]:
+    """The same verdict for every member: a group fault is not per-component."""
+    return {item.id: (status, reason) for item, _res in members}
+
+
 def _paired_group_pass(
     groups: dict[str, list[tuple[Component, Resolution]]],
 ) -> _Pass:
@@ -155,14 +162,14 @@ def _paired_group_pass(
     reasons: list[str] = []
     rejected: dict[str, tuple[str, str]] = {}
     for group in _PAIRED_GROUPS:
-        members = groups.get(group)
-        if not members:
+        members = groups.get(group) or []
+        reason = _pair_reason(group, members) if members else None
+        if not reason:
             continue
-        reason = _pair_reason(group, members)
-        if reason:
-            reasons.append(reason)
-            for item, _res in members:
-                rejected.setdefault(item.id, (CONFLICT, reason))
+        reasons.append(reason)
+        # Spread the existing dict LAST so an earlier group keeps its claim,
+        # matching the `setdefault` this replaced.
+        rejected = {**_reject_group(members, CONFLICT, reason), **rejected}
     return _Pass(reasons=tuple(reasons), rejected=rejected)
 
 
@@ -179,11 +186,11 @@ def _minor_agreement_pass(
             for _item, res in members
             if res.version
         }
-        if len(minors) > 1:
-            reason = f"the {group} components resolved to disagreeing minor versions"
-            reasons.append(reason)
-            for item, _res in members:
-                rejected.setdefault(item.id, (CONFLICT, reason))
+        if len(minors) <= 1:
+            continue
+        reason = f"the {group} components resolved to disagreeing minor versions"
+        reasons.append(reason)
+        rejected = {**_reject_group(members, CONFLICT, reason), **rejected}
     return _Pass(reasons=tuple(reasons), rejected=rejected)
 
 

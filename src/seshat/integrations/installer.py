@@ -21,7 +21,7 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -315,14 +315,9 @@ def _resolve_all(
 
 
 def _row(
-    item: Component,
-    resolved: Resolution,
-    *,
-    status: str,
-    detail: str,
-    pinned: str | None = None,
+    item: Component, resolved: Resolution, status: str, detail: str
 ) -> ComponentPlan:
-    """One plan/result row. Only status, detail and the pin ever vary.
+    """One row carrying the resolution's own coordinate.
 
     The identity fields (component, profile label, channel, source) are derived
     the same way on every row, so a caller states the verdict and nothing else.
@@ -331,11 +326,23 @@ def _row(
         component=item.id,
         profile=_profile_label(item),
         channel=(resolved.channel or item.channel).value,
-        pinned=pinned if pinned is not None else "-",
+        pinned=resolved.pinned or "-",
         source=item.source,
         status=status,
         detail=detail,
     )
+
+
+def _unpinned_row(
+    item: Component, resolved: Resolution, status: str, detail: str
+) -> ComponentPlan:
+    """One row that reports NO pin, whatever the resolution happens to carry.
+
+    Used where a coordinate would be misleading rather than absent: a refused
+    component was never pinned, and a bundled artifact that is missing from disk
+    must not advertise the version a stale lock remembers for it.
+    """
+    return replace(_row(item, resolved, status, detail), pinned="-")
 
 
 def _settled_row(
@@ -347,27 +354,15 @@ def _settled_row(
     what counts as unresolvable, already present, or a missing bundled artifact.
     """
     if not resolved.ok:
-        return _row(
-            item,
-            resolved,
-            status=resolved.status or UNAVAILABLE,
-            detail=resolved.reason or item.role,
+        return _unpinned_row(
+            item, resolved, resolved.status or UNAVAILABLE, resolved.reason or item.role
         )
     if _is_installed(root, item, profile):
-        return _row(
-            item,
-            resolved,
-            status=PRESENT,
-            detail=_present_detail(item, resolved),
-            pinned=resolved.pinned or "-",
-        )
+        return _row(item, resolved, PRESENT, _present_detail(item, resolved))
     if item.source_type is SourceType.BUNDLED:
         relative = _BUNDLED_SKILLS.get(item.id, "")
-        return _row(
-            item,
-            resolved,
-            status=UNAVAILABLE,
-            detail=f"bundled artifact is absent: {relative}",
+        return _unpinned_row(
+            item, resolved, UNAVAILABLE, f"bundled artifact is absent: {relative}"
         )
     return None
 
@@ -381,9 +376,7 @@ def _plan_row(
     detail = _planned_detail(item, resolved, profile)
     if resolved.reason:
         detail = f"{detail} ({resolved.reason})"
-    return _row(
-        item, resolved, status=PLANNED, detail=detail, pinned=resolved.pinned or "-"
-    )
+    return _row(item, resolved, PLANNED, detail)
 
 
 def _present_detail(item: Component, resolved: Resolution) -> str:
@@ -510,13 +503,7 @@ def _install_one(req: _Install) -> tuple[ComponentPlan, Resolution | None]:
         return settled, (req.resolved if settled.status == PRESENT else None)
 
     status, detail = _handler_for(req.item)(req)
-    row = _row(
-        req.item,
-        req.resolved,
-        status=status,
-        detail=detail,
-        pinned=req.resolved.pinned or "-",
-    )
+    row = _row(req.item, req.resolved, status, detail)
     return row, (req.resolved if status == INSTALLED else None)
 
 

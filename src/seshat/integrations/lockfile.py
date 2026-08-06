@@ -80,20 +80,29 @@ def read_lock(root: Path) -> Lock | None:
     )
 
 
-def _load_lock_object(path: Path) -> dict:
-    """The lock's JSON object, or LockError naming exactly why it is untrustworthy.
+def _parse_lock_json(path: Path) -> object:
+    """The lock's parsed JSON, or LockError distinguishing unreadable from invalid.
 
-    Separated from the field reads above so each refusal -- unreadable, not JSON,
-    not an object, wrong schema -- is one line and none can be skipped.
+    The two are different operator actions -- a permissions problem versus a
+    corrupt file -- so they never collapse into one message.
     """
     try:
         raw = path.read_text(encoding="utf-8")
     except OSError as exc:
         raise LockError(f"lock file is unreadable: {path} ({exc})") from exc
     try:
-        body = json.loads(raw)
+        return json.loads(raw)
     except ValueError as exc:
         raise LockError(f"lock file is not valid JSON: {path}") from exc
+
+
+def _load_lock_object(path: Path) -> dict:
+    """The lock's JSON object, or LockError naming why it is untrustworthy.
+
+    Separated from the field reads above so no refusal -- unreadable, not JSON,
+    not an object, wrong schema -- can be skipped.
+    """
+    body = _parse_lock_json(path)
     if not isinstance(body, dict):
         raise LockError(f"lock file must be a JSON object: {path}")
     schema = body.get("schema")
