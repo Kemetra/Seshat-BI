@@ -495,3 +495,117 @@ here. **FR-011 holds at the schema/statement level; the load-time append-only be
   the full `-m unit` run); `python -m pytest -m unit -q --no-cov` afterward: 1 failed (only
   the pre-existing, unrelated `test_cli_identity_version` stale-editable-metadata failure),
   5353 passed, 31 skipped, 502 deselected
+
+## Slice D progress -- metric contracts authored, second approval seam found (T035-T041)
+
+## L13 -- no_leak: the seven metric contracts authored cleanly against the existing template and pattern docs
+
+- **location**: `mappings/finance_gl_actuals/metrics/ActualAmount.yaml`, `ActualYTD.yaml`;
+  `mappings/finance_gl_budget/metrics/BudgetAmount.yaml`, `BudgetYTD.yaml`,
+  `VarianceAmount.yaml`, `VariancePercent.yaml`, `MissingBudgetFlag.yaml`
+- **observed_problem**: none. `templates/metric-contract.yaml`'s field set filled with zero
+  new/renamed fields for all seven (FR-013); the two variance contracts followed
+  `templates/metric-contract-shape.variance-vs-target.yaml`'s own documented precedent for a
+  metric that structurally reads two gold tables (naming the second table in
+  `formula_intent`, not forcing a second `binds_to` key -- an open TEMPLATE-CAPABILITY note,
+  not a Principle-V judgment, per that shape's own wording); `VariancePercent` cites
+  `docs/patterns/target-budget-fact.md` Section 3 verbatim and states the averaged-percentage
+  prohibition in its own `formula_intent` (FR-014). OD-1/OD-2/OD-3 transcribed as
+  `decision_status: decided` `ambiguities[]` entries, each citing the owner + date + spec.md
+  location as evidence -- no ambiguity was invented, no RAG threshold, sign policy, or budget
+  version preference was invented (`direction_of_good`/`thresholds`/`action_on_breach` remain
+  owner-supplied placeholders on all seven).
+- **classification**: `no_leak`
+- **existing_rule_or_surface**: `templates/metric-contract.yaml`;
+  `templates/metric-contract-shape.variance-vs-target.yaml`;
+  `docs/patterns/target-budget-fact.md`
+- **minimal_resolution**: none needed.
+- **core_change_required**: false
+- **evidence**: all seven files parse and load through `src/seshat/metric_contract_inventory.py`
+  with zero schema/parse errors (confirmed via `python -m seshat.cli semantic-check
+  --include-untracked`, which reaches every file and reports only the expected
+  not-owner-approved finding below, never a parse or shape error)
+
+## L14 -- authority_leak: a SECOND, previously-unnamed approval seam sits between the OD-1/OD-2/OD-3 content rulings and an approved metric contract
+
+**Found empirically, not assumed: running the gate is what surfaced this, exactly as L9
+predicted a future obstruction would be found -- by executing a check, not by reading a
+template.**
+
+- **location**: `templates/metric-contract.yaml` (`owner` field + `readiness.status`);
+  `src/seshat/cli/commands/semantic.py` (L3 / `semantic-check`);
+  `docs/readiness/semantic-model-ready.md` (cited by the template's own readiness comment)
+- **observed_problem**: T040 (OD-1/OD-2/OD-3, ruled by Ahmed Shaaban 2026-07-30) answers the
+  BUSINESS QUESTIONS a variance metric raises (sign convention, baseline, allocation policy).
+  It does NOT approve any of the seven CONTRACT ARTIFACTS this feature authored -- that is a
+  separate, per-contract `metric_owner` sign-off the template's own `readiness.status: pass`
+  requires ("REQUIRES an evidence[] entry (owner + date)"). No `metric_owner` has been named
+  for finance_gl anywhere in the spec, plan, or tasks. Running `python -m seshat.cli
+  semantic-check --include-untracked` (the `--include-untracked` flag was itself necessary --
+  the default git-tracked-only discovery silently found ZERO of these files and reported a
+  false-clean "no drift (0 findings)", which is a discovery gap distinct from this finding and
+  recorded as its own item, L15) returned `exit 1` with all seven contracts flagged: `"metric
+  contract is not owner-approved pass"`. This is the gate's own mechanical finding, not the
+  agent's inference. T042 ("author the semantic model TMDL so every measure traces to exactly
+  one APPROVED contract") and T044 (OD-5, human PBIR authoring) both sit BEHIND this seam --
+  the task briefing named OD-4 and OD-5 as the two approval stops, and this is a third that
+  the spec's task list does not separately number or name.
+- **classification**: `authority_leak` -- this is exactly the class of gap L9 already
+  generalized about: the kit correctly REQUIRES a named human approval here (the gate fires,
+  fail-closed), but nothing in the SPEC's OWN approval inventory (OD-1..OD-5) named this
+  specific seam in advance. A reader following only the spec's "Open owner decisions" section
+  would not know to look for it until the gate found it.
+- **existing_rule_or_surface**: the metric-contract template's `readiness.status` field and
+  the `metric_owner` approval convention it documents; `semantic-check` L3 (mechanically
+  enforces it); no rule was added or changed to discover this
+- **minimal_resolution**: none attempted -- naming a `metric_owner` is a human decision this
+  agent cannot make (Principle V, `never_self_grant_approval`); the contracts stay `blocked`.
+  A future refinement to spec-authoring practice (not this feature, and not a kit change)
+  could enumerate the "one approval per governance gate" set explicitly in a spec's Open Owner
+  Decisions section, the way OD-4 (mapping gate) and OD-5 (PBIR authoring) already are, so a
+  metric-contract-owner seam is visible before implementation reaches it rather than found by
+  running the gate.
+- **core_change_required**: false
+- **evidence**: `python -m seshat.cli semantic-check --include-untracked` exit 1, 7 findings,
+  one per contract, each reading `"metric contract is not owner-approved pass"`; the same
+  command WITHOUT `--include-untracked` returns exit 0 with `"no drift (0 findings)"` on the
+  identical tree (see L15) -- proving the zero-findings state was non-discovery, not
+  compliance
+
+## L15 -- documentation_leak / near-miss: `semantic-check`'s default tracked-files-only discovery silently reports a false-clean result on untracked contracts
+
+- **location**: `src/seshat/cli/commands/semantic.py` `_semantic_files` (git `ls-files`
+  default, `--include-untracked` opt-in)
+- **observed_problem**: the seven metric contracts in this feature were authored but not yet
+  `git add`ed when `python -m seshat.cli semantic-check` was first run. It printed `"seshat
+  semantic-check: no drift (0 findings)"` and exited 0 -- a CLEAN result -- because its
+  default discovery reads `git ls-files` (tracked files only) and every new contract was
+  untracked. The command's own code comment states the correct principle exactly ("zero
+  findings" and "zero inputs" are different states and collapsing them is a fail-open) and
+  implements it for the TOTAL-zero-input case (printing `[not_started]` to stderr) -- but that
+  safeguard does not fire when SOME inputs are tracked (the pre-existing TMDL/contracts) and
+  the NEW ones are merely untracked: the total input count is non-zero, so the zero-input
+  branch never triggers, and the untracked new files are silently absent from the count with
+  no distinct signal from "everything was checked and passed."
+- **classification**: `semantic_leak` (conservative choice per this ledger's own tie-breaking
+  rule -- arguably `documentation_leak` since the SAFEGUARD the code already has is sound and
+  well-commented, and `--include-untracked` is a genuine, working escape hatch; but the
+  DEFAULT behaviour silently under-covers a normal authoring-session state -- new files not
+  yet staged -- which is exactly the shape of gap this ledger is built to catch)
+- **existing_rule_or_surface**: `_semantic_files` in `src/seshat/cli/commands/semantic.py`;
+  the `--include-untracked` flag (already exists; this is a discoverability/default finding,
+  not a missing-capability one)
+- **minimal_resolution**: none attempted here (FR-031 forbids changing kit code in this
+  feature). The agent's own practice going forward in this session was to always pass
+  `--include-untracked` when the contracts are not yet committed, and to note in this ledger
+  that the plain `semantic-check` exit-0 seen earlier was NOT evidence of compliance. A future
+  refinement could print a stderr note whenever untracked candidate files exist under a
+  `metrics/` path but were excluded by the default discovery, similar to the existing
+  zero-input safeguard's spirit.
+- **core_change_required**: false to walk (the escape hatch already exists and was used once
+  discovered); a discoverability improvement would still be a genuine, separately-scoped fix
+- **evidence**: `python -m seshat.cli semantic-check` (no flag) on the tree with all seven
+  untracked contracts present: `exit 0`, `"no drift (0 findings)"`; `python -m seshat.cli
+  semantic-check --include-untracked` on the IDENTICAL tree: `exit 1`, 7 findings. Same
+  filesystem state, two different verdicts, distinguished only by a flag this feature's own
+  task briefing did not mention.

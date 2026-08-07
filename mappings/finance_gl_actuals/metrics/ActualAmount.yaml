@@ -1,0 +1,66 @@
+# Metric contract -- ActualAmount (filled instance for finance_gl_actuals, spec 137)
+# F009 define-layer. Uses templates/metric-contract.yaml's EXACT field set --
+# zero new fields, zero renamed fields, no forked template (spec 137 FR-013).
+# formula_intent is plain-language INTENT, NOT DAX. binds_to is gold-only.
+
+name: "ActualAmount"
+grain: "valid at fct_gl_actuals_fgl journal-line grain (one row = one journal line within one journal entry); additive across account, department, cost center, and over time"
+formula_intent: "The posted P&L amount for a journal line, as a positive magnitude regardless of whether it was debited or credited (OD-1, ruled by Ahmed Shaaban 2026-07-30: revenue and expenses both PRESENT as positive; direction_of_good below carries whether higher is better, never the arithmetic sign). Reads the derived amount column, which is debit_amount + credit_amount -- exactly one side is non-zero per line, so the sum is that side's magnitude with no sign arithmetic (mappings/finance_gl_actuals/source-map.yaml derived_columns.amount). CLEARING-account lines (account_type = 'CLEARING') are EXCLUDED from this metric by the mapping-gate C1 ruling (sub-decision C1, Option A): they exist only to keep the double-entry balance provable in the warehouse and carry no P&L meaning."
+owner: "[NEEDS metric_owner -- not yet named]"
+binds_to:
+  gold_table: "gold.fct_gl_actuals_fgl"
+  columns:
+    - "amount"
+  pii_sensitive: false
+
+# HR11 reads unit/currency from the SOURCE-MAP column declaration, not this
+# field (this field is documentary only -- HR11 never cross-checks the two,
+# per src/seshat/rules/currency_unit.py). debit_amount/credit_amount both
+# declare currency: "USD" in mappings/finance_gl_actuals/source-map.yaml.
+unit: "USD"
+
+# Machine-readable base-measure definition (L3 contract<->DAX drift check).
+# The account_type <> 'CLEARING' filter (sub-decision C1) is a dim_account_fgl
+# attribute, not a fact column -- expressible only once a semantic model exists
+# to carry the relationship; recorded here as a NOTE, not invented as DAX.
+definition:
+  kind: base
+  aggregation: sum
+  filter: []
+  # NOTE: the CLEARING exclusion (dim_account_fgl.account_type <> 'CLEARING')
+  # is a cross-table filter this `filter` shape (fact-column-only) cannot
+  # express. It is recorded as an open item below rather than silently
+  # omitted or forced into a shape the template does not support.
+
+readiness:
+  status: "blocked"
+  evidence: []
+  blocking_reasons:
+    - "no named metric_owner has approved this contract yet -- readiness/semantic-model-ready.md requires an owner name + approval date in evidence[] before status can read pass"
+    - "the CLEARING-account exclusion (sub-decision C1) is a dim_account_fgl attribute filter this template's definition.filter shape cannot express (fact-column-only); it must be applied in the DAX measure when the semantic model is authored (T042), and re-confirmed against this contract at that time"
+
+# No A1..A11 retail-KPI ambiguity applies (different domain; those ids are
+# retail-specific per skills/retail-kpi-knowledge/knowledge/kpi-ambiguities.md).
+# OD-1 is recorded below as a DECIDED ambiguities[] entry -- a transcription
+# of the owner's ruling (T039), not a new open item and not a self-grant: the
+# agent recommended options, the owner supplied the choice (spec.md "Open
+# owner decisions"), and this entry cites that record as evidence.
+ambiguities:
+  - id: "OD-1"
+    decision_status: "decided"
+    ruling: "revenue and expenses are both PRESENTED as positive magnitudes; whether higher is better is carried by direction_of_good, never by the arithmetic sign (spec.md OD-1)."
+    evidence:
+      - "ruled by Ahmed Shaaban on 2026-07-30 -- specs/137-finance-gl-genericity-proof/spec.md \"Open owner decisions\", OD-1"
+    number_moving: true
+
+direction_of_good: "<higher|lower|target_band -- owner-decided; not yet supplied>"
+
+thresholds:
+  target: "none"
+  good: "<owner-supplied>"
+  warn: "<owner-supplied>"
+  critical: "<owner-supplied>"
+
+action_on_breach:
+  warn: "<owner-supplied>"
+  critical: "<owner-supplied>"

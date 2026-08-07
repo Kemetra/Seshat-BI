@@ -1,0 +1,48 @@
+# Metric contract -- MissingBudgetFlag (filled instance, spec 137)
+# F009 define-layer. templates/metric-contract.yaml exact field set; zero
+# new/renamed fields (FR-013).
+
+name: "MissingBudgetFlag"
+grain: "valid at the comparison grain: fiscal quarter x account x department. One flag value per combination that has EITHER an actual line OR an ORIGINAL budget row (a full outer population of both facts at this grain) -- not additive; an existence indicator, never summed as a money amount."
+formula_intent: "Distinguishes a MISSING budget (no ORIGINAL row exists for this quarter x account x department) from a ZERO budget (a row exists with budget_amount = 0.00) -- these are NOT the same thing (FR-015). Flags TRUE when the combination has posted actuals (excluding CLEARING accounts, per sub-decision C1) but NO corresponding ORIGINAL budget row -- this is variant D12, the deliberate over-refusal trap: it is a LEGITIMATE BUSINESS EXCEPTION to surface on the report, never a data defect or a reason to refuse. Symmetrically, a budget row with no posted actuals in the period (241 such combinations in the clean synthetic fixture -- mappings/finance_gl_budget/assumptions.md \"Coverage facts\") is ALSO a legitimate business exception (a department budgeted but not yet spent), not a defect; whether this contract flags that direction too, or only the actuals-without-budget direction, is recorded as an open question below rather than assumed."
+owner: "[NEEDS metric_owner -- not yet named]"
+binds_to:
+  gold_table: "gold.fct_gl_budget_fgl"
+    # OPEN NOTE (template-capability): like VarianceAmount/VariancePercent, this
+    # flag structurally compares presence/absence across BOTH
+    # gold.fct_gl_actuals_fgl and gold.fct_gl_budget_fgl at a grain neither
+    # fact alone provides (it needs a FULL OUTER combination of the two
+    # facts' account x department x quarter populations). binds_to names the
+    # budget table per the variance-shape template's single-table precedent;
+    # the actuals side and the full-outer-population requirement are named in
+    # formula_intent, not forced into a second binds_to key.
+  columns:
+    - "budget_amount"
+  pii_sensitive: false
+
+readiness:
+  status: "blocked"
+  evidence: []
+  blocking_reasons:
+    - "no named metric_owner has approved this contract yet"
+    - "Q3 in mappings/finance_gl_budget/unresolved-questions.md is still OPEN: whether the 241 budgeted-but-no-actuals combinations are an expected business state (this contract's proposed reading) or indicate a data-quality problem is a data-owner decision, not yet ruled"
+    - "direction of the flag is not fully scoped: whether MissingBudgetFlag also covers budget-without-actuals (the symmetric case) or only actuals-without-budget (D12) is an open authoring question, not yet owner-decided"
+
+ambiguities:
+  - id: "<not an A1..A11 retail-KPI id -- Q3 in unresolved-questions.md>"
+    decision_status: "undecided"
+    ruling: ""
+    evidence: []
+    number_moving: true   # whether these combinations are flagged as exceptions or treated as defects changes what the report shows
+
+direction_of_good: "<not applicable -- this is an existence indicator, not a value with a favourable direction; recorded as N/A pending owner review>"
+
+thresholds:
+  target: "none"
+  good: "<owner-supplied, if any threshold applies to a flag count>"
+  warn: "<owner-supplied>"
+  critical: "<owner-supplied>"
+
+action_on_breach:
+  warn: "<owner-supplied>"
+  critical: "<owner-supplied>"

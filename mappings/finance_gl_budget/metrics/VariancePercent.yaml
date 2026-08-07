@@ -1,0 +1,60 @@
+# Metric contract -- VariancePercent (filled instance, spec 137).
+# Non-additive ratio metric. Filed per docs/patterns/target-budget-fact.md
+# Section 3 and templates/metric-contract-shape.variance-vs-target.yaml --
+# the template's EXACT field set, zero new/renamed fields (FR-013).
+
+name: "VariancePercent"
+grain: "valid ONLY at the comparison grain: fiscal quarter x account x department, budget_version = 'ORIGINAL'. This is a non-additive ratio (time_additivity: non, below) -- it CANNOT be summed, averaged, or rolled up across quarters, accounts, or departments once computed; each higher grain's VariancePercent must be RECOMPUTED from that grain's own separately-aggregated ActualAmount and BudgetAmount, never derived by averaging finer-grain percentages."
+formula_intent: "VarianceAmount divided by BudgetAmount (budget_version = 'ORIGINAL') at the comparison grain, expressed as a percentage. Computed AFTER separate aggregation exactly per docs/patterns/target-budget-fact.md Section 3 (\"aggregate actuals and targets SEPARATELY at the comparison grain, then recompute the percentage. Never average two already-computed percentages.\"): ActualAmount and BudgetAmount are each summed independently at the target grain, THEN divided -- at no point is a per-row or per-line percentage computed and then averaged upward. AVERAGING PRECOMPUTED VARIANCE PERCENTAGES IS PROHIBITED by this contract's stated intent (FR-014); a DAX/SQL implementation that uses AVERAGE or AVERAGEX over a percentage column is a defect against this contract, not an acceptable optimisation. direction_of_good below states favourable polarity per account_type; the sign of this ratio alone is not a good/bad signal (OD-1)."
+owner: "[NEEDS metric_owner -- not yet named]"
+binds_to:
+  gold_table: "gold.fct_gl_budget_fgl"
+    # OPEN NOTE (template-capability, same as VarianceAmount): this metric
+    # reads BOTH gold.fct_gl_actuals_fgl and gold.fct_gl_budget_fgl; the
+    # second table is named in formula_intent per the variance-shape
+    # template's documented precedent, not forced into a second binds_to key.
+  columns:
+    - "budget_amount"
+  pii_sensitive: false
+
+time_additivity: "non"   # HR5: a ratio is never additive over time; each period's value must be recomputed, never summed across periods
+
+readiness:
+  status: "blocked"
+  evidence: []
+  blocking_reasons:
+    - "no named metric_owner has approved this contract yet"
+    - "missing-budget case (shared with VarianceAmount): a (quarter, account, department) with actuals but no ORIGINAL budget row has an UNDEFINED percentage (division by an absent budget, not zero) -- this MUST be surfaced via the Missing Budget Flag contract as excluded from this ratio's denominator population, never silently coerced to a computed value; resolve the ambiguities[] entry below before this contract can leave blocked"
+    - "direction_of_good is not yet owner-supplied (same per-account-type polarity question as VarianceAmount)"
+    - "RAG thresholds not yet owner-supplied: thresholds block is unfilled"
+
+ambiguities:
+  - id: "OD-1"
+    decision_status: "decided"
+    ruling: "revenue and expenses are both PRESENTED as positive magnitudes; polarity via direction_of_good, never the arithmetic sign of this ratio (spec.md OD-1)."
+    evidence:
+      - "ruled by Ahmed Shaaban on 2026-07-30 -- specs/137-finance-gl-genericity-proof/spec.md \"Open owner decisions\", OD-1"
+    number_moving: true
+  - id: "OD-2"
+    decision_status: "decided"
+    ruling: "the baseline is budget_version = 'ORIGINAL' (spec.md OD-2)."
+    evidence:
+      - "ruled by Ahmed Shaaban on 2026-07-30 -- specs/137-finance-gl-genericity-proof/spec.md \"Open owner decisions\", OD-2"
+    number_moving: true
+  - id: "<not an A1..A11 retail-KPI id -- this domain's own missing-budget-denominator case>"
+    decision_status: "undecided"
+    ruling: ""
+    evidence: []
+    number_moving: true   # an unhandled missing-budget denominator produces an undefined or wrongly-defaulted percentage
+
+direction_of_good: "<higher|lower|target_band -- owner-decided per account_type; not yet supplied. See blocking_reasons.>"
+
+thresholds:
+  target: "none"
+  good: "<owner-supplied>"
+  warn: "<owner-supplied>"
+  critical: "<owner-supplied>"
+
+action_on_breach:
+  warn: "<owner-supplied>"
+  critical: "<owner-supplied>"

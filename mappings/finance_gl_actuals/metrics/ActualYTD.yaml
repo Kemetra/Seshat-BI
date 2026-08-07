@@ -1,0 +1,42 @@
+# Metric contract -- ActualYTD (filled instance for finance_gl_actuals, spec 137)
+# F009 define-layer. templates/metric-contract.yaml exact field set; zero
+# new/renamed fields (FR-013).
+
+name: "ActualYTD"
+grain: "valid at the comparison grain (fiscal quarter x account x department), period-to-date: the SUM of ActualAmount over all fiscal periods from the fiscal-year start (fiscal_year, fiscal_quarter=1) through the SELECTED period, within the same fiscal_year. Additive across account/department; additive over the period-to-date window, but the window boundary is stated by the fiscal calendar, never inferred."
+formula_intent: "The running total of ActualAmount from the start of the fiscal year through the selected fiscal quarter. Fiscal-year start is taken from the committed fiscal_calendar reference file (gold.dim_fiscal_period_fgl), which for this fixture is calendar-aligned to January-1 (a recorded FIXTURE SIMPLIFICATION -- see mappings/finance_gl_actuals/assumptions.md and ledger row L5; a real, non-calendar-aligned fiscal year would need its own start date from that same reference, never assumed to be January). Excludes CLEARING-account lines, same as ActualAmount (sub-decision C1)."
+owner: "[NEEDS metric_owner -- not yet named]"
+binds_to:
+  gold_table: "gold.fct_gl_actuals_fgl"
+  columns:
+    - "amount"
+  pii_sensitive: false
+
+unit: "USD"   # documentary only (HR11 reads the source-map declaration, not this field)
+
+readiness:
+  status: "blocked"
+  evidence: []
+  blocking_reasons:
+    - "no named metric_owner has approved this contract yet"
+    - "the period-to-date window (a running-sum-within-fiscal-year DAX pattern, typically TOTALYTD or an equivalent CALCULATE+FILTER over dim_fiscal_period_fgl) is IMPLEMENTATION, deferred to T042 (semantic model authoring); this contract records the INTENT only and cannot itself confirm the DAX is correct until that authoring happens"
+
+ambiguities:
+  - id: "OD-1"
+    decision_status: "decided"
+    ruling: "revenue and expenses are both PRESENTED as positive magnitudes; polarity via direction_of_good, never the arithmetic sign (spec.md OD-1). Inherited from ActualAmount, which this YTD metric sums."
+    evidence:
+      - "ruled by Ahmed Shaaban on 2026-07-30 -- specs/137-finance-gl-genericity-proof/spec.md \"Open owner decisions\", OD-1"
+    number_moving: true
+
+direction_of_good: "<higher|lower|target_band -- owner-decided; not yet supplied>"
+
+thresholds:
+  target: "none"
+  good: "<owner-supplied>"
+  warn: "<owner-supplied>"
+  critical: "<owner-supplied>"
+
+action_on_breach:
+  warn: "<owner-supplied>"
+  critical: "<owner-supplied>"
