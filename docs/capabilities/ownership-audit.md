@@ -101,9 +101,10 @@ registry** — just in code, and only for *installable* dependencies:
 | `dbt-agent-skills` | dbt Labs | `dbt-labs/dbt-agent-skills` | `catalog.py:168-175` |
 | `dbt-mcp` | dbt Labs | PyPI via `uvx` | `mcp_server=True`, `catalog.py:176-186` |
 | `dagster` | Dagster | PyPI | `catalog.py:191-198` |
+| `dagster-agent-skills` | Dagster | `dagster-io/skills` | official `dagster-expert` payload; activation/discovery remains Phase 6 |
 | `fabric-skills` | Microsoft | `microsoft/skills-for-fabric` | `catalog.py:217-223` |
 | `powerbi-modeling-mcp` | Microsoft | `@microsoft/powerbi-modeling-mcp` (npm) | **preview/pre-GA**, `mode="readonly"`, `catalog.py:224-235` |
-| `seshat-dagster-adapter`, `dagster-skills` | Seshat (bundled) | — | `catalog.py:199-212` |
+| `seshat-dagster-adapter`, `seshat-dagster-workflows` | Seshat (bundled) | — | governed runtime adapter and public router; legacy `dagster-skills` is lookup-only compatibility |
 
 `seshat integrations setup` is the official-first pattern already generalized
 beyond Power BI: network-free plan by default, install only behind explicit
@@ -157,7 +158,7 @@ surface rather than forking it — the gap is **declaration**, not behavior.
 | Skill | Upstream | Seshat delta |
 | --- | --- | --- |
 | `dbt-transformation-adapter` | dbt Labs (`dbt-core`, `dbt-agent-skills`, `dbt-mcp`) | Mapping-Ready and accepted-plan gating; fixed selector/shadow policy; run/test/parity recorded as derived evidence. Generic dbt competence routes upstream once discovery is proven (Spec 146). |
-| `dagster-orchestration-adapter` | Dagster | gate-aware asset graph; committed run evidence |
+| `dagster-orchestration-adapter` | Dagster (`dagster`, `dagster-io/skills`) | Readiness-aware sequencing, named-human stops, closed execution policy, fail-closed propagation, and derived run evidence. Generic Dagster competence routes upstream once discovery is proven (Spec 147). |
 | `pbi-mcp-doctor` | Microsoft `@microsoft/powerbi-modeling-mcp` | read-only preflight; refuses `--skipconfirmation`/write-mode; fails closed before `semantic_model_ready` |
 | `pbir-authoring-adapter` | PBIR format (Microsoft) | tight allow-list on committed JSON; no live publish |
 

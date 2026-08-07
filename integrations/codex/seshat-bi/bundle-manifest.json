@@ -1974,10 +1974,10 @@
     {
       "classification": "generated_wrapper",
       "destination": "skills/dagster-workflows/SKILL.md",
-      "output_sha256": "6ce0e273304496043be436649b1d8e83dd8d01c7cdf072350901206a4331799b",
+      "output_sha256": "9a367fbf8f474b8efa19577a6ff50620a12a0cac649c24b96db59f9a8f89f60d",
       "source": "distribution/bundle-templates/shared/skills/dagster-workflows/SKILL.md",
       "source_id": "dagster-workflows-skill",
-      "source_sha256": "6ce0e273304496043be436649b1d8e83dd8d01c7cdf072350901206a4331799b",
+      "source_sha256": "9a367fbf8f474b8efa19577a6ff50620a12a0cac649c24b96db59f9a8f89f60d",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2180,10 +2180,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "d472ad04e48316d2599061a89bd2be7588fb6b72e3c684dfbb2b2da289de2d6a",
+  "manifest_digest": "ff0929cc7e86ef4b5440ff52cc0110a9904e1b42cb612dabe773369df47e25ff",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "8e4c5a345a88019375689b78d4fb69c28fdd2a9b",
+  "source_revision": "5732a354a67711d817beee565967c1ef348c6657",
   "target": "codex",
   "version": "0.8.2"
 }

@@ -58,7 +58,7 @@ NEEDS_ACTION = frozenset({FAILED, UNAVAILABLE, CONFLICT, INCOMPATIBLE})
 
 # Bundled skill paths, validated locally rather than downloaded.
 _BUNDLED_SKILLS = {
-    "dagster-skills": (
+    "seshat-dagster-workflows": (
         "integrations/claude-code/seshat-bi/skills/dagster-workflows/SKILL.md"
     ),
     "seshat-dagster-adapter": "src/seshat/dagster_adapter/__init__.py",

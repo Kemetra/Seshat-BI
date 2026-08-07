@@ -62,6 +62,7 @@ ALLOWLISTED_SOURCES: dict[str, str] = {
     "pypi": "https://pypi.org",
     "github-microsoft-fabric": "https://github.com/microsoft/skills-for-fabric",
     "github-dbt-labs-skills": "https://github.com/dbt-labs/dbt-agent-skills",
+    "github-dagster-skills": "https://github.com/dagster-io/skills",
     "npm-microsoft": "https://registry.npmjs.org",
     "seshat-bundled": "seshat",
 }
@@ -228,11 +229,20 @@ _ORCHESTRATION = (
         role="Seshat's own read-only Dagster gate adapter",
     ),
     Component(
-        id="dagster-skills",
+        id="seshat-dagster-workflows",
         source_type=SourceType.BUNDLED,
         source="seshat-bundled",
         channel=Channel.BUNDLED,
-        role="bundled Dagster workflow skills, validated locally",
+        role="Seshat's bundled governed Dagster workflow router",
+    ),
+    Component(
+        id="dagster-agent-skills",
+        source_type=SourceType.GITHUB,
+        source="github-dagster-skills",
+        channel=Channel.STABLE,
+        role="upstream Dagster agent skill bundle",
+        coordinate="dagster-io/skills",
+        required_paths=("skills/dagster-expert/SKILL.md",),
     ),
 )
 
@@ -356,10 +366,16 @@ def profile_components(profile: str) -> tuple[Component, ...]:
         raise UnknownProfile(f"unknown profile {profile!r}; known: {known}") from exc
 
 
+LEGACY_COMPONENT_IDS: dict[str, str] = {
+    "dagster-skills": "seshat-dagster-workflows",
+}
+
+
 def component(component_id: str) -> Component:
     """One component by id, across every profile."""
+    resolved_id = LEGACY_COMPONENT_IDS.get(component_id, component_id)
     for candidate in PROFILES[ANALYTICS_FULL]:
-        if candidate.id == component_id:
+        if candidate.id == resolved_id:
             return candidate
     raise KeyError(component_id)
 

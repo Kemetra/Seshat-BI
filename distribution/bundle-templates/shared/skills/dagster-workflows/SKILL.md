@@ -1,18 +1,35 @@
 ---
 name: dagster-workflows
 description: >-
-  Use when a user asks to preflight, run, schedule, troubleshoot, or review
-  Seshat BI's governed Dagster orchestration of the medallion sequence and its
-  committed run evidence.
+  Route Dagster intent to Seshat's governed medallion workflow or the official
+  Dagster competence owner without bypassing readiness, approvals, or evidence.
 ---
 
 # Governed Dagster workflows
 
-Read `../../portable-operating-contract.md` before acting. Use only the
-installed `seshat dagster` helpers; never invoke `dagster` directly against
-the orchestration project and never bypass the gate readers, the closed-argv
-runner, or the redaction layer. Dagster RUNS already-approved steps; the gate
-exit code and the named human decide whether a stage passed.
+Read `../../portable-operating-contract.md` before acting. For a governed
+Seshat medallion run, use only the installed `seshat dagster` helpers; never
+invoke `dagster` directly against the orchestration project and never bypass
+the gate readers, the closed-argv runner, or the redaction layer. Dagster RUNS
+already-approved steps; the gate exit code and the named human decide whether
+a stage passed.
+
+## Intent ownership
+
+| User intent | Seshat pre-gate | Execution owner | Seshat afterward |
+|---|---|---|---|
+| Decide whether orchestration fits the BI workflow | Readiness state and orchestration assessment | Seshat selection policy | State one truthful next action |
+| Run the governed medallion graph | Per-asset readiness, evidence, and named-human approval gates | Dagster through `seshat dagster` | Record derived run evidence, blockers, and the earliest truthful next action |
+| Author assets, jobs, resources, components, or project structure | Prove the official skill is activated and discoverable | Official `dagster-expert` skill | If the project enters Seshat's governed flow, return through the Seshat gates above |
+| Design schedules, sensors, or declarative automation | Prove the official skill is activated and discoverable | Official `dagster-expert` skill | Keep Seshat automations stopped until a named human starts them |
+| Generic Dagster CLI guidance, validation, or troubleshooting | Prove the official skill is activated and discoverable | Official `dagster-expert` skill | Do not infer a readiness effect from native success |
+| Publish a Power BI result | `publish_ready: pass` and the separate publish adapter gate | Official Power BI executor when available | Dagster records the trigger result and never publishes itself |
+
+Phase 6 has not yet proven activation and discovery for the official `dagster-expert`
+skill. Until that proof exists, report the exact upstream-integration blocker for
+generic Dagster competence. Do not copy
+official guidance into this router, claim an installed payload is usable, or
+invoke native Dagster commands against the governed project as a fallback.
 
 ## Fixed workflow
 

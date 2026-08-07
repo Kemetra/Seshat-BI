@@ -371,7 +371,7 @@ skills:
     status: shipped
   - name: dagster-workflows
     platforms: [claude, codex]
-    intent: Route governed Dagster preflight, gated medallion runs, and run-evidence review.
+    intent: Route governed Seshat Dagster preflight, medallion execution, and evidence review while delegating generic Dagster authoring, automation, CLI, and troubleshooting competence to the official Dagster skill.
     wrapper_template: distribution/bundle-templates/shared/skills/dagster-workflows/SKILL.md
     bundle_destination: skills/dagster-workflows/SKILL.md
     documentation: docs/install/agent-install.md

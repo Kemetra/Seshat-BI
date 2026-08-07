@@ -1351,9 +1351,32 @@ capabilities:
         - "tests/contract/test_dbt_public_surface.py"
         - "tests/integration/test_dbt_artifact_flow.py"
 
+  - id: dagster-agent-skills
+    name: "Dagster agent skills"
+    summary: "Official first-party dagster-expert skill for generic Dagster assets, jobs, resources, components, project structure, schedules, sensors, automation, CLI use, validation, and troubleshooting. The payload is cataloged, but supported-harness activation/discovery remains unproven until Phase 6."
+    state: deferred
+    authority: advisory
+    surface: skill
+    ships: false
+    ship_classification: upstream-integration
+    requirements: [optional-dependency]
+    provenance: unrecorded
+    readiness_stage: not-stage-scoped
+    command: null
+    documentation: "docs/integrations/dagster-adapter.md"
+    ownership:
+      capability_owner: official-upstream
+      upstream_project: "Dagster"
+      upstream_surface: skill
+      upstream_reference: "dagster-io/skills"
+      overlap_note: "Official generic Dagster competence owner. Seshat routes governed BI orchestration back through its readiness, approval, execution-policy, and evidence seams; activation/discovery is Phase 6."
+      update_policy: "Consume through the cataloged upstream repository and re-verify supported-harness activation plus compatibility when its revision changes."
+    references:
+      integration_component: "dagster-agent-skills"
+
   - id: dagster-orchestration-adapter
     name: "Dagster orchestration adapter"
-    summary: "Runs the medallion sequence unattended/in CI as a real Dagster asset graph (spec 134 runtime: orchestration/dagster/ project + seshat dagster doctor/run/evidence), executing only already-approved steps behind every gate, fail-closed, recording derived run evidence and deciding no readiness stage. The Bronze source is pluggable via --source-mode: the default csv landing path, or non-destructive existing-bronze DB-first (verify a pre-loaded bronze.<table> read-only, zero writes) (#404/#405)."
+    summary: "Seshat governance and evidence adapter around the official Dagster runtime: runs the medallion sequence unattended/in CI as a real asset graph, executing only already-approved steps behind every gate, failing closed, recording derived run evidence, and deciding no readiness stage. The Bronze source remains pluggable via --source-mode: csv landing or non-destructive existing-bronze verification. Generic Dagster competence belongs to the official dagster-expert skill."
     state: shipped
     authority: agent-runnable
     surface: execution-adapter
@@ -1369,9 +1392,10 @@ capabilities:
       upstream_project: "Dagster"
       upstream_surface: library
       upstream_reference: "dagster"
-      seshat_delta: "Expresses the medallion sequence as a Dagster asset graph that executes only already-approved steps, fails closed behind every gate, records derived run evidence, and decides no readiness stage."
+      seshat_delta: "Provides readiness-aware BI sequencing, named-human approval stops, closed execution policy, redaction, cross-tool progression, and fail-closed propagation around the official Dagster runtime; records derived run evidence and decides no readiness stage."
       canonical_source: ".claude/skills/dagster-orchestration-adapter/SKILL.md"
-      update_policy: "Pinned via the optional dagster extra; the seshat-dagster-adapter and dagster-skills components are Seshat-bundled and carry no upstream coordinate."
+      update_policy: "The Dagster runtime is pinned via the orchestration project; Seshat's adapter/router remain bundled, while official generic competence comes from the separately cataloged dagster-io/skills repository."
+      overlap_note: "Thin Seshat governance/evidence seam around Dagster. Generic asset, automation, project, CLI, and troubleshooting competence belongs to dagster-agent-skills once Phase 6 proves activation/discovery."
     references:
       roadmap: "F030"
       skill: "dagster-orchestration-adapter"
