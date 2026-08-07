@@ -831,3 +831,34 @@ period bridge, or needs validator support. One ruling settles both.
   proven-refusing until this is ruled. They currently read `[PENDING LIVE PROFILE]`,
   so no false claim is committed -- but a live run would report a pass for the wrong
   reason, which is worse than a failure.
+
+## L22 -- BLOCKING, needs an owner ruling: independent dim lookups admit a contradictory pair
+
+- **location**: `warehouse/migrations/0008_create_gold_finance_gl_star.sql`, the
+  actuals fact insert (`LEFT JOIN gold.dim_department_fgl` and
+  `LEFT JOIN gold.dim_cost_center_fgl` resolved independently).
+- **found by**: PR #596 review (`chatgpt-codex-connector`, P1).
+- **observed_problem**: an actuals row can carry a VALID department code and a VALID
+  cost-center code that belongs to a DIFFERENT department. Both lookups succeed
+  independently, so the fact materializes a contradictory `department_sk` /
+  `cost_center_sk` pair. Both FKs are valid, so `check_orphan_fks` cannot see the
+  inconsistency -- a report grouped by `department_sk` will disagree with the
+  department rollup carried on `dim_cost_center_fgl`, with no gate firing.
+- **classification**: `genericity_obstruction`. This is a HIERARCHICAL dimension
+  relationship (cost centre belongs to department). The retail star's four dims --
+  customer, product, payment method, location -- are mutually independent, so no
+  committed example ever needed a cross-dimension consistency check, and neither the
+  gold-star convention nor the shipped validator has one.
+- **relationship to L21**: distinct but adjacent. L21 is a FAILED lookup silently
+  rewritten to a valid sentinel; L22 is TWO SUCCESSFUL lookups that contradict each
+  other. Both are invisible to `check_orphan_fks`, which only compares each FK
+  against its own dimension's PK.
+- **minimal_resolution**: **NOT ATTEMPTED.** The reviewer's suggestions -- join
+  `dim_cost_center_fgl` on both `cost_center_code` AND `department_code`, or reject
+  mismatched pairs before loading Gold -- are both reasonable, and both introduce a
+  cross-dimension integrity convention this kit does not currently have. Changing the
+  gold-star convention is a modelling decision, not an authoring fix, and the
+  alternative (a new validator check) edits a kit module, which T025 forbids.
+- **consequence**: the synthetic generator (seed 20260730) may or may not emit such a
+  pair -- the defect matrix declares no variant for it, which is itself the finding:
+  a whole failure class has no D-number because retail never had a hierarchy.
