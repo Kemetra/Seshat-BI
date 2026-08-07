@@ -39,19 +39,25 @@ observed column reads `[PENDING LIVE PROFILE]` rather than a behaviour.
 | D5 | a block of actuals lines is in a second currency, no conversion policy | `request_human_decision` | **none on the data** -- see M2 | `[NO CHECK EXISTS]` |
 | D6 | two rows share the composite PK (`journal_entry_id`, `line_id`) | `refuse` | `check_pk_uniqueness` (RC2) | `[PENDING LIVE PROFILE]` |
 | D7 | two budget rows share the full 5-part PK with different amounts | `refuse` | `check_pk_uniqueness` (RC2) | `[PENDING LIVE PROFILE]` |
-| D14 | actuals row pairs a valid `department_code` with a valid `cost_center_code` belonging to a DIFFERENT department | `refuse` | **none** -- see L22 | `[NO CHECK EXISTS]` |
 
-**D14 was ADDED 2026-08-07** (PR #596 review, ledger row L22). Its absence was itself the
-finding: the two lookups resolve independently, both FKs are valid, and
-`check_orphan_fks` only compares each FK against its own dimension's PK -- so a report
-grouped by `department_sk` can disagree with the `department_code` rollup denormalized
-onto `dim_cost_center_fgl` (line 98 of the gold migration), with nothing firing.
+**A 14th case was proposed and deliberately NOT added here** (PR #596 review, ledger row
+L22): an actuals row pairing a valid `department_code` with a valid `cost_center_code`
+belonging to a DIFFERENT department. Both lookups resolve independently, both FKs stay
+valid, and `check_orphan_fks` compares each FK only against its own dimension's PK -- so a
+report grouped by `department_sk` can disagree with the `department_code` rollup
+denormalized onto `dim_cost_center_fgl` (gold migration line 98), with nothing firing.
 
-This is a **hierarchical** dimension relationship: cost centre belongs to department. The
-retail star's four dimensions -- customer, product, payment method, location -- are
-mutually independent, so no committed example ever needed a cross-dimension consistency
-check and the matrix had no row for the failure class. A whole category was untested
-because retail never had a hierarchy.
+It is **not** a D-numbered variant because this matrix's contract is that every case has a
+deterministic generator mutation behind it (`tests/fixtures/finance_gl/generate.py`), and
+no such mutation exists. Adding a row with an observed outcome and no reproducible fixture
+would be exactly the unearned claim this document was built to avoid -- and would break the
+declared count of 13 cases and SC-003. It lives in **ledger L22** until a generator variant
+is authored under the owner ruling requested as sub-decision C.
+
+The gap is still the finding: this is a **hierarchical** dimension relationship (cost centre
+belongs to department), while the retail star's four dimensions -- customer, product,
+payment method, location -- are mutually independent. No committed example ever needed a
+cross-dimension consistency check, so the failure class was never tested.
 
 **3 of 7 map to a check that already exists** and is domain-neutral -- a non-unique PK
 (D6, D7) and an uncovered date (D4) are the same defects in finance as in retail, and only
@@ -148,9 +154,10 @@ would be exactly the kind of unearned "verified" this feature was built to avoid
 
 - **D1, D2** -- `COALESCE(..., -1)` rewrites a failed natural-key lookup into a valid
   dimension member before `check_orphan_fks` runs, so the orphan is invisible (ledger L21).
-- **D14** -- a valid department paired with a cost centre from a different department leaves
-  both FKs valid, and no shipped check compares two dimensions against each other
-  (ledger L22).
+- **the department/cost-centre pair** (ledger L22, deliberately not D-numbered -- no
+  generator variant exists yet) -- a valid department paired with a cost centre from a
+  different department leaves both FKs valid, and no shipped check compares two dimensions
+  against each other.
 
 These read `[NO CHECK EXISTS]`, not `[PENDING LIVE PROFILE]`: nothing is pending, because
 running the database would report a PASS for the wrong reason. That is a worse outcome than

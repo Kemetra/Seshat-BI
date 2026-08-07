@@ -65,6 +65,19 @@ SELECT
   -- neither reconstructed from the other side of the entry)
   NULLIF(debit_amount, '')::numeric(18,2)     AS debit_amount,
   NULLIF(credit_amount, '')::numeric(18,2)    AS credit_amount,
+  -- Phase 2.7 / build step 7: the DERIVED column declared in the cleared source map's
+  -- `derived_columns`. The template defines derived columns as computed in SILVER, so
+  -- it is materialized here rather than only in the gold insert -- otherwise the
+  -- committed migration would not implement its own cleared map, and any downstream
+  -- consumer of `derived_columns` would get a contract disagreeing with the silver
+  -- schema. Exactly one of debit/credit is non-zero on every line (verified: 0 rows
+  -- with both zero or both non-zero), so their SUM is the line's magnitude with no
+  -- sign arithmetic. Implements OD-1 (ruled by Ahmed Shaaban, 2026-07-30): revenue and
+  -- expenses are both PRESENTED as positive magnitudes; direction_of_good lives on the
+  -- metric contract, never on the arithmetic sign. The landed debit/credit columns
+  -- above are kept unchanged so the double-entry posting is never lost.
+  (NULLIF(debit_amount, '')::numeric(18,2)
+     + NULLIF(credit_amount, '')::numeric(18,2)) AS amount,
   NULLIF(description, '')                     AS description
 FROM src;
 

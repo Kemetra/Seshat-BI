@@ -772,7 +772,7 @@ L19 rather than opened as a third decision: whichever way the time-conformance
 question is ruled determines whether budget gains a date dimension, gets a shared
 period bridge, or needs validator support. One ruling settles both.
 
-## L20 -- FIXED: a derived measure was listed as a silver->gold reconciliation target
+## L20 -- FIXED (twice; the first fix was wrong): a derived column existed only in gold
 
 - **location**: `mappings/finance_gl_actuals/source-map.yaml`
   (`gold_star.fact.measures`, `additive_money_measures`).
@@ -791,8 +791,28 @@ period bridge, or needs validator support. One ruling settles both.
   `additive_money_measures`, with the reason stated inline. A derived column is not a
   silver->gold reconciliation target; its correctness is proven by the arithmetic, not
   by a sum comparison. The landed `debit_amount` / `credit_amount` remain reconciled.
-- **verification**: `load_targets()` on the actuals map now loads and no longer
-  targets `amount`.
+- **verification**: `load_targets()` on the actuals map loads cleanly.
+
+### L20b -- the first resolution was the wrong one, corrected 2026-08-07
+
+A later review pass (PR #596) showed the fix above treated the symptom. Removing
+`amount` from `measures` stopped the crash, but left the map declaring it under
+`derived_columns` -- which `templates/source-map.yaml:330-334` defines as
+**"columns NOT present in the source, computed in silver"**. So the committed silver
+migration did not implement its own cleared map, and the `silver_ready: pass` evidence
+asserting otherwise was inaccurate. Any downstream consumer of `derived_columns` would
+also have received a contract disagreeing with the materialized silver schema.
+
+The correct fix was the opposite direction: **materialize `amount` in silver** where its
+own declaration says it belongs. `0006` now computes it as build step 7, `0008` reads
+`s.amount` through unchanged rather than recomputing it (one declared column must not have
+two definitions that can silently diverge), and `amount` is restored to `measures` and
+`additive_money_measures` -- it now exists on BOTH sides, so it is a valid reconciliation
+target after all.
+
+Worth recording as a process finding, not just a code one: the first fix made the gate
+pass while leaving the artifact inconsistent with its own contract. Removing a target is
+always the cheaper way to silence a reconciliation error, and it was the wrong instinct.
 
 ## L21 -- BLOCKING, needs an owner ruling: the -1 unknown member hides the D1/D2 refusal
 

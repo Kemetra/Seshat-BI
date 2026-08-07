@@ -196,7 +196,10 @@ SELECT
                   -- yields NULL and is rejected by date_sk NOT NULL (fail loud,
                   -- mirrors gold.fct_sales_rss's dim_date_rss convention).
   s.debit_amount, s.credit_amount,
-  (s.debit_amount + s.credit_amount) AS amount
+  -- Read from silver, NOT recomputed: `amount` is a derived column materialized in
+  -- 0006 (build step 7) per the cleared map's `derived_columns`. Recomputing it here
+  -- would give one declared column two definitions that could silently diverge.
+  s.amount
 FROM silver.finance_gl_actuals s
 LEFT JOIN gold.dim_account_fgl      da ON da.account_code    = s.account_code
 LEFT JOIN gold.dim_department_fgl   dd ON dd.department_code = s.department_code
