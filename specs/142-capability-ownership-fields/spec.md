@@ -4,7 +4,9 @@
 
 **Created**: 2026-08-07
 
-**Status**: Ratified (Ahmed Shaaban, 2026-08-07) -- implementation permitted
+**Status**: implemented -- all 31 tasks complete, 102/102 manifest entries declared
+
+**Status history**: Ratified (Ahmed Shaaban, 2026-08-07) -- implementation permitted
 
 **Status history**: Draft -- 2026-08-07, revised the same day after two review
 passes (12 + 8 findings) and six owner rulings; ratified after both CRITICAL
