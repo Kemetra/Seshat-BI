@@ -170,11 +170,20 @@ gold_star:
     measures:                              # RC9: independent landed measures
       - "debit_amount"
       - "credit_amount"
-      - "amount"                           # derived magnitude; see derived_columns
+      # `amount` is DELIBERATELY absent. It is a DERIVED magnitude
+      # (debit_amount + credit_amount, computed in 0008's gold insert -- see
+      # derived_columns below) and exists in no silver table. Listing it here made
+      # validate_targets.load_targets() include it in the silver->gold
+      # reconciliation, which then executed sum(amount) against a silver table
+      # that has no such column -- an undefined-column error instead of a
+      # completed run. A derived column is not a silver->gold reconciliation
+      # target; its correctness is proven by the arithmetic, not by a sum
+      # comparison. Found in PR #596 review; ledger row L20.
     additive_money_measures:               # each reconciled by SUM in dbt parity (#331)
       - "debit_amount"
       - "credit_amount"
-      - "amount"
+      # `amount` omitted for the same reason as `measures` above: it is derived in
+      # gold and has no silver counterpart to reconcile against.
 
   dimensions:
     # --- CONFORMED with mappings/finance_gl_budget/source-map.yaml -------------

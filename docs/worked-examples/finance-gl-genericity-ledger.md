@@ -749,3 +749,85 @@ template.**
 - **consequence**: this blocks the T042 semantic model and the T044 dashboard page
   independently of the `metric_owner` seam (L14). Two distinct human decisions now
   gate Stage 5+, not one.
+
+### L19b -- the SAME root cause also blocks live validation of the budget table
+
+A second reviewer finding (PR #596, P1, `mappings/finance_gl_budget/readiness-status.yaml`)
+turns out to be this same obstruction seen from the validator side, not a separate issue:
+
+`validate_targets.load_targets()` unconditionally requires `gold_star.date_dimension`
+(`src/seshat/validate_targets.py:183`). The budget source-map deliberately omits it,
+because budget lives at fiscal-period grain and has no date dimension. Verified
+empirically -- loading the budget map raises
+`ValueError: source-map.yaml: missing required 'date_dimension' in gold_star`.
+
+So with the DB extra and a DSN configured, `retail validate` on `finance_gl_budget`
+exits before running a single check, and the table cannot advance through Gold Ready.
+
+The reviewer offered two remedies: record it as a concrete blocker, or add validator
+support for a declared fiscal-period target. **The second is out of bounds here** -- it
+edits `src/seshat/validate_targets.py`, a kit module, which T025 forbids outright and
+which this spec's scope does not cover. So it is recorded as a blocker, folded into
+L19 rather than opened as a third decision: whichever way the time-conformance
+question is ruled determines whether budget gains a date dimension, gets a shared
+period bridge, or needs validator support. One ruling settles both.
+
+## L20 -- FIXED: a derived measure was listed as a silver->gold reconciliation target
+
+- **location**: `mappings/finance_gl_actuals/source-map.yaml`
+  (`gold_star.fact.measures`, `additive_money_measures`).
+- **found by**: PR #596 review (`chatgpt-codex-connector`, P1). Verified empirically.
+- **observed_problem**: `amount` was listed in `gold_star.fact.measures`, so
+  `validate_targets.load_targets()` included it in the silver->gold reconciliation and
+  `check_reconciliation()` would execute `sum(amount)` against BOTH silver and gold.
+  But `amount` is derived -- `(s.debit_amount + s.credit_amount)`, computed only in
+  0008's gold insert -- and `0006_create_silver_finance_gl_actuals.sql` has no such
+  column. Live validation would have died with an undefined-column error instead of
+  completing.
+- **classification**: `authoring_defect` -- mine, not a genericity obstruction. The
+  retail example has no derived money measure, so the question never arose, but the
+  fix required no kit change.
+- **minimal_resolution**: removed `amount` from both `measures` and
+  `additive_money_measures`, with the reason stated inline. A derived column is not a
+  silver->gold reconciliation target; its correctness is proven by the arithmetic, not
+  by a sum comparison. The landed `debit_amount` / `credit_amount` remain reconciled.
+- **verification**: `load_targets()` on the actuals map now loads and no longer
+  targets `amount`.
+
+## L21 -- BLOCKING, needs an owner ruling: the -1 unknown member hides the D1/D2 refusal
+
+- **location**: `warehouse/migrations/0008_create_gold_finance_gl_star.sql` lines
+  192-194 and 243-245; `docs/worked-examples/finance-gl-defect-matrix.md` D1/D2.
+- **found by**: PR #596 review (`chatgpt-codex-connector`, P1). Verified against both
+  the migration and the retail precedent.
+- **observed_problem**: the defect matrix requires D1 (row references an absent
+  account) and D2 (unknown department) to **`refuse`**, detected by
+  `check_orphan_fks` (RC16). But `COALESCE(da.account_sk, -1)` rewrites a FAILED
+  natural-key lookup into the valid `-1` member the migration itself inserts. The
+  validator then compares gold surrogate FKs against dimension surrogate PKs and
+  finds **zero orphans**. The required refusal never fires: the defect matrix would
+  report a pass while the defect is undetected.
+- **why this is NOT simply my bug**: `COALESCE(..., -1)` is the kit-wide convention,
+  used identically in `0004_create_gold_retail_store_sales_star.sql` (lines 132-135)
+  and cited in this table's own RC14 rationale. It is declared, not improvised.
+- **classification**: `genericity_obstruction`. The convention conflates two
+  different failures. Retail's `-1` exists for a legitimately NULL source value (the
+  9.65% NULL item, Q4) where collapsing IS correct. Finance D1/D2 is an
+  unknown-but-PRESENT natural key -- a reference to an account that does not exist --
+  which must refuse. The convention cannot distinguish "no value" from "value that
+  resolves to nothing", and neither can the orphan check. Retail never had a case
+  where an unresolvable reference had to refuse, so the gap never surfaced.
+- **minimal_resolution**: **NOT ATTEMPTED.** Every available fix leaves this spec's
+  scope:
+  - **(a)** validate the natural-key lookup before coalescing (e.g. refuse when the
+    source key is non-null but unmatched) -- changes the kit-wide gold-star
+    convention, affecting the retail star too;
+  - **(b)** preserve evidence of the unresolved reference in a separate column or
+    reject-table so `check_orphan_fks` can see it -- a new convention;
+  - **(c)** extend the validator to distinguish sentinel-assigned FKs from genuine
+    matches -- edits a kit module, which T025 forbids.
+  All three are Principle-V/kit-convention decisions an agent must not make alone.
+- **consequence**: D1 and D2 in the defect matrix cannot be honestly marked as
+  proven-refusing until this is ruled. They currently read `[PENDING LIVE PROFILE]`,
+  so no false claim is committed -- but a live run would report a pass for the wrong
+  reason, which is worse than a failure.
