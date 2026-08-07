@@ -678,3 +678,32 @@ template.**
 - **consequence**: L14's `authority_leak` finding stands unchanged -- the `metric_owner`
   seam is a third approval gate that neither the spec's "Open owner decisions" section nor
   the implementation brief named, discovered only because a non-retail domain reached it.
+
+## L18 -- process_note: two reviewer findings on the split commit, both valid
+
+- **location**: PR #596 review (`chatgpt-codex-connector`);
+  `mappings/finance_gl_{actuals,budget}/readiness-status.yaml` and
+  `specs/137-finance-gl-genericity-proof/tasks.md`.
+- **observed_problem (P1)**: `next_action` on both tables named a `metric_owner`
+  approval -- Stage 5 work -- while `silver_ready` and `gold_ready` were both
+  `not_started`. It routed the next agent past two whole stages. It also cited
+  `metrics/*.yaml` paths the split had removed. Compounding this, each
+  `silver_ready` block still carried a comment asserting "no silver.* SQL before the
+  mapping gate is CLEARED" -- stale, since the gate IS cleared and the SQL is
+  authored.
+- **observed_problem (P2)**: un-checking T035-T041 was not sufficient. Their notes
+  still read `**DONE**: mappings/.../metrics/ActualAmount.yaml`, naming seven files
+  no longer in the tree. An unchecked box carrying a DONE claim for a missing
+  artifact is worse than either alone: a reviewer cannot reproduce the recorded
+  experiment.
+- **classification**: `process_note` -- neither is a genericity obstruction. P2 was a
+  defect introduced by the split itself, not by the finance domain.
+- **minimal_resolution**: `next_action` on both tables now advances the EARLIEST
+  incomplete stage (`silver_ready`) and states explicitly that metric-contract work
+  is Stage 5 and must not be treated as next while Stages 3-4 are incomplete; the
+  stale gate comments now say the hard stop is satisfied but that authoring is not
+  entering the stage. T035-T041 notes now state the artifacts were split out, name
+  the holding branch, and record that semantic-check finds zero finance contracts in
+  this commit.
+- **consequence**: a reader of either file can now reproduce exactly what this commit
+  does and does not contain. Nothing about L14's `metric_owner` seam changes.

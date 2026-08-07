@@ -44,9 +44,12 @@ stages:
     blocking_reasons: []
 
   silver_ready:
-    # Not entered. RS1: blocking_reasons[] belong on `blocked` stages only, so the
-    # constraint is stated here rather than as a blocker --
-    # no silver.* SQL before the mapping gate is CLEARED (hard stop no_silver_before_mapping_cleared).
+    # Not entered. The mapping gate IS cleared (see approvals[] below), so the
+    # no_silver_before_mapping_cleared hard stop is satisfied and the silver SQL is
+    # authored -- but authoring is not entering the stage. This stays not_started
+    # until 0007/0008 are EXECUTED and live-validated, which is a
+    # [PENDING LIVE PROFILE] step. RS1: blocking_reasons[] belong on `blocked`
+    # stages only, so the constraint is stated here rather than as a blocker.
     status: "not_started"
     evidence: []
     blocking_reasons: []
@@ -101,7 +104,7 @@ approvals:
 # (currently readiness.status: blocked on every one -- see
 # docs/worked-examples/finance-gl-genericity-ledger.md row L14); no agent may
 # grant that approval.
-next_action: "obtain a named metric_owner approval for the authored finance_gl_budget metric contracts (mappings/finance_gl_budget/metrics/*.yaml); execute + live-validate 0007/0008 remains a separate, later [PENDING LIVE PROFILE] step."
+next_action: "advance the EARLIEST incomplete stage: silver_ready. The silver/gold SQL is authored (0007_create_silver_finance_gl_budget.sql, 0008_create_gold_finance_gl_star.sql) but neither executed nor validated, so silver_ready and gold_ready both remain not_started -- executing and live-validating them is a [PENDING LIVE PROFILE] step. Metric-contract work is Stage 5 (semantic_model_ready) and must NOT be treated as the next action while Stages 3 and 4 are incomplete."
 
 # --- audit ------------------------------------------------------------------
 last_checked_at: "2026-07-30"
