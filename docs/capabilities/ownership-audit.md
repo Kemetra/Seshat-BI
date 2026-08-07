@@ -62,7 +62,7 @@ documenting why `distribution/bundle-templates/` is exempt.
 
 `ship_classification`: `consumer-capability` 23, `compass-verb` 10,
 `knowledge-root` 6, `development-only` 5, plus one aggregate entry covering all
-12 `speckit-*` skills.
+14 `speckit-*` skills.
 
 ### MCP surfaces
 
@@ -162,7 +162,7 @@ is currently **undocumented**. Needs a ruling.
 | `pr-readiness-reviewer` | GitHub checks | `merge_ready` verdict is Seshat-specific; likely KEEP |
 | `release-notes-generator` | GitHub Releases | evidence-backed maturity ladder is Seshat-specific; likely KEEP |
 | `showcase-build` | — | disclosure-safe offline proof bundle; likely KEEP |
-| 12 × `speckit-*` | upstream Spec Kit | **strongest REPLACE candidate**: if these are unmodified upstream Spec Kit, they are vendored upstream content, which the issue's §D flags. All are `development-only`, so no shipped surface is affected. |
+| 14 × `speckit-*` | upstream Spec Kit | **RESOLVED 2026-08-07 -- not a finding.** They *are* vendored upstream content, but sanctioned: written by upstream's own installer (`specify init --here --integration claude --script ps`, spec-kit `0.8.10`) in commit `1eb0c98`, which in the same commit amended the constitution to v1.1.0 to permit exactly this (`.specify/memory/constitution.md:556-563`). Hash-verified against `.specify/integrations/claude.manifest.json`, zero local drift, no Seshat vocabulary in any body. Principle II is scoped to the **Power BI execution adapter**, not to all tooling, so it does not bind here. Residual risk is narrower: no recorded re-vendor/upgrade path (no lockfile, no `specify upgrade` record), which is the "fork tax" the Principle II *rationale* warns about -- unpaid so far. All `development-only`; no shipped surface affected. |
 
 `pbip-workflow`, `pbip-xray`, `dashboard-design`, `powerbi-dashboard-design`,
 `powerbi-workflows` — Power BI layer. `powerbi-dashboard-design` and
@@ -192,8 +192,17 @@ inventory-phase Non-goal.
 4. **Partial registry already exists** at `catalog.py:61-67`, covering
    installable deps. §C should extend the existing axis rather than introduce a
    parallel authority.
-5. **`speckit-*` is the one genuine vendored-upstream question** surfaced by
-   this audit. Development-only, so nothing shipped is at risk.
+5. **`speckit-*` was the one vendored-upstream question surfaced by this audit.
+   It is now RESOLVED as not a finding** (2026-08-07, owner-directed
+   investigation). The 14 skills are vendored, but by upstream's own installer
+   and under an explicit constitution amendment (v1.1.0) made in the same commit
+   -- not a silent fork. Principle II binds the Power BI execution adapter, not
+   all tooling. What remains is a narrower, real gap: **no recorded re-vendor or
+   upgrade path** for the vendored spec-kit content -- no lockfile, no
+   `specify upgrade` record, no re-run instructions. That is the "fork tax" the
+   Principle II rationale warns about; it is unpaid today because the copy is
+   provably unmodified, but nothing keeps it that way. Worth its own decision,
+   separate from this axis.
 
 ## 6. Not done here
 

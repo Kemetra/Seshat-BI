@@ -91,7 +91,12 @@ actionable instruction and no simulated answer.
 
 ### Verification
 
-- [ ] T021 [US1] **DEFERRED, NOT PERFORMED -- owner ruling 2026-08-04 (issue #573).** Left unchecked deliberately: no live run happened. Verify on both harnesses in a scratch workspace created by `seshat init-project`: tools present with no registration, and the governor reporting on the scratch workspace rather than the plugin directory. Confirm via the runtime's own list/get commands plus a successful tool call — never via a settings pane
+> T021 [US1] was **removed from this spec's scope, NOT completed** (owner ruling
+> 2026-08-04, closed out 2026-08-07). No live harness run ever happened. The work
+> survives as issue #573 -- verify on both harnesses, in a scratch workspace from
+> `seshat init-project`, that tools are present with no registration and the
+> governor reports on the scratch workspace. It is deleted here rather than
+> checked so that nothing certifies an unperformed verification.
 - [x] T022 [US1] Verify degradation with the optional extra removed — a named two-lane install hint from `src/seshat/cli/__init__.py::_run_mcp`, no simulated governor output, no claim the loop is available — recording the session evidence in `specs/138-agent-driven-bundle/evidence/us1-acceptance.md`
 - [x] T023 [US1] Verify against `src/seshat/governor/mcp_server.py` that no enabled tool advances a stage, grants an approval, writes a readiness artifact, or emits any score, and record it in `specs/138-agent-driven-bundle/evidence/us1-acceptance.md`
 
@@ -182,7 +187,11 @@ load and every instructed path resolves.
 - [x] T057 [US3] Flip `ships: true` and `ship_classification: compass-verb` for the ten verbs in `docs/capabilities/capabilities.yaml`
 - [x] T058 [US3] Regenerate the allowlist and both bundles, and commit the generated output
 - [x] T059 [US3] Record the post-story routing cost in `specs/138-agent-driven-bundle/evidence/routing-cost.md` and confirm it is at or under the ceiling from T006
-- [ ] T060 [US3] **DEFERRED, NOT PERFORMED -- owner ruling 2026-08-04 (issue #573).** Left unchecked deliberately: no live run happened. Originally **OPERATOR-RUN, still open** -- Verify in a workspace with no Seshat development checkout that all ten `.seshat/kit-source.yaml` verbs load and every hard stop still stops, recording the session evidence in `specs/138-agent-driven-bundle/evidence/us3-acceptance.md`
+> T060 [US3] was **removed from this spec's scope, NOT completed** (owner ruling
+> 2026-08-04, closed out 2026-08-07). No operator run ever happened. The work
+> survives as issue #573 -- in a workspace with no Seshat development checkout,
+> verify all ten `.seshat/kit-source.yaml` verbs load and every hard stop still
+> stops. Deleted rather than checked so nothing certifies an unperformed run.
 
 **Checkpoint**: the bundle no longer contradicts its own compass.
 
@@ -219,7 +228,11 @@ the bundles as shipped.
 
 - [x] T068 [US5] Run `seshat agent verify --target claude` against the regenerated bundle and capture the evidence
 - [x] T069 [US5] Run `seshat agent verify --target codex` against the regenerated bundle and capture the evidence
-- [ ] T070 [US5] **DEFERRED, NOT PERFORMED -- owner ruling 2026-08-04 (issue #573).** Left unchecked deliberately: no live run happened. Capture external acceptance evidence for both harnesses per `scripts/external_agent_acceptance.py`
+> T070 [US5] was **removed from this spec's scope, NOT completed** (owner ruling
+> 2026-08-04, closed out 2026-08-07). No live run ever happened. The work
+> survives as issue #573 -- capture external acceptance evidence for both
+> harnesses per `scripts/external_agent_acceptance.py --execute-cli`. Deleted
+> rather than checked so nothing certifies unperformed acceptance evidence.
 - [x] T071 [US5] Update `docs/install/support-matrix.md` so every changed row states what was actually exercised against the new contents, carrying no earlier acceptance claim forward
 - [x] T072 [US5] Update `docs/install/agent-install.md` to list the skills the bundles now carry and the wiring that is now automatic
 - [x] T073 [US5] Confirm no version value was changed by any story (FR-024a) and that no tag, release or catalog submission was performed (FR-024, FR-024b)
@@ -230,7 +243,7 @@ the bundles as shipped.
 
 - [x] T074 [P] Add a `spec-138-implemented` claim to `docs/quality/status-claims.yaml` naming the delivered artifacts, per the spec status convention
 - [x] T075 [P] **DEVIATED (see spec.md):** Status set to `partially implemented`, not `implemented` -- US1, US4 and the external half of US5 are outstanding, so the stronger value would be a false claim. Original text: Update `specs/138-agent-driven-bundle/spec.md` Status to `implemented`, moving the previous text verbatim into a `**Status history**:` line
-- [ ] T076 [P] **DELIBERATELY NOT DONE -- the fence stays on spec 138, which is not finished.** Move the SPECKIT fence in **both** `CLAUDE.md` and `AGENTS.md` to the next active plan, keeping the two bodies identical
+- [x] T076 [P] Move the SPECKIT fence in **both** `CLAUDE.md` and `AGENTS.md` to the next active plan, keeping the two bodies identical — **done 2026-08-07 (owner ruling): fence moved to `specs/142-capability-ownership-fields/plan.md`, `.specify/feature.json` repointed, both bodies byte-identical. Spec 138 closed for fence purposes with T021/T060/T070 removed-not-completed (issue #573 carries that work).**
 - [x] T077 Run the whole-feature regression from `quickstart.md`: export, `git status --porcelain`, `seshat check`, `kit-lint`, `doctor`, `pytest tests/contract`
 - [x] T078 Run `analyze_change_set` before pushing — a required delta code-health check fails PRs on newly-introduced smells even when every GitHub job is green
 
