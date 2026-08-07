@@ -102,13 +102,12 @@ def test_official_skill_payload_requirements_live_in_the_catalog() -> None:
     from seshat.integrations.catalog import component
 
     assert component("fabric-skills").required_paths == (
-        "skills/semantic-model-consumption/SKILL.md",
         "skills/semantic-model-authoring/SKILL.md",
         "plugins/powerbi-authoring/skills/powerbi-report-authoring/SKILL.md",
     )
     assert component("dbt-agent-skills").required_paths == (
-        "skills/dbt/using-dbt-for-analytics-engineering/SKILL.md",
-        "skills/dbt/configuring-dbt-mcp-server/SKILL.md",
+        "skills/dbt/skills/using-dbt-for-analytics-engineering/SKILL.md",
+        "skills/dbt/skills/configuring-dbt-mcp-server/SKILL.md",
     )
 
 

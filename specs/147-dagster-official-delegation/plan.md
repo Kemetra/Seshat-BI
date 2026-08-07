@@ -24,7 +24,7 @@ catalog Dagster's official skills, and route generic Dagster competence upstream
 1. Rename current profile membership from ambiguous `dagster-skills` to
    `seshat-dagster-workflows`; keep a lookup-only legacy alias.
 2. Add `dagster-agent-skills` from `dagster-io/skills`, validating
-   `skills/dagster-expert/SKILL.md`.
+   `skills/dagster-expert/skills/dagster-expert/SKILL.md`.
 3. Keep `dagster-workflows` as the Seshat public router and `seshat dagster` as
    its governed execution seam.
 4. Delegate generic assets, schedules, sensors, project structure, CLI usage,

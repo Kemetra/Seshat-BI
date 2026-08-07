@@ -194,8 +194,8 @@ _TRANSFORMATION = (
         role="upstream dbt Labs agent skill bundle",
         coordinate="dbt-labs/dbt-agent-skills",
         required_paths=(
-            "skills/dbt/using-dbt-for-analytics-engineering/SKILL.md",
-            "skills/dbt/configuring-dbt-mcp-server/SKILL.md",
+            "skills/dbt/skills/using-dbt-for-analytics-engineering/SKILL.md",
+            "skills/dbt/skills/configuring-dbt-mcp-server/SKILL.md",
         ),
     ),
     Component(
@@ -242,7 +242,9 @@ _ORCHESTRATION = (
         channel=Channel.STABLE,
         role="upstream Dagster agent skill bundle",
         coordinate="dagster-io/skills",
-        required_paths=("skills/dagster-expert/SKILL.md",),
+        required_paths=(
+            "skills/dagster-expert/skills/dagster-expert/SKILL.md",
+        ),
     ),
 )
 
@@ -255,7 +257,6 @@ _POWERBI_FABRIC = (
         role="upstream Microsoft Fabric and Power BI skill bundle",
         coordinate="microsoft/skills-for-fabric",
         required_paths=(
-            "skills/semantic-model-consumption/SKILL.md",
             "skills/semantic-model-authoring/SKILL.md",
             "plugins/powerbi-authoring/skills/powerbi-report-authoring/SKILL.md",
         ),

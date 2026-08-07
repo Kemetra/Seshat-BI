@@ -16,6 +16,7 @@
 | post-review ownership contract | 0 | 7 passed in 4.23s | Scope-review gate |
 | final lifecycle and ownership closeout | 0 | 13 passed in 5.08s | Spec retirement gate |
 | `git diff --check` | 0 | PASS; Windows LF-to-CRLF advisory only | Diff integrity |
+| official upstream payload-path verification | 0 | Microsoft, dbt Labs, and Dagster required files resolved at their current official repository commits; three stale paths corrected | External ownership gate |
 
 The focused regression covered catalog composition/resolution/install/lock,
 the compatibility facade, integration setup, Dagster CLI/doctor/runner/gates/

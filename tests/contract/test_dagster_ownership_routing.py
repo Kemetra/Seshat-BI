@@ -28,7 +28,9 @@ def test_catalog_separates_seshat_router_from_official_skills() -> None:
     official = catalog.component("dagster-agent-skills")
     assert official.source == "github-dagster-skills"
     assert official.coordinate == "dagster-io/skills"
-    assert official.required_paths == ("skills/dagster-expert/SKILL.md",)
+    assert official.required_paths == (
+        "skills/dagster-expert/skills/dagster-expert/SKILL.md",
+    )
 
 
 def test_legacy_bundled_component_lookup_is_compatibility_only() -> None:
