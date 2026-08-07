@@ -18,7 +18,8 @@ from __future__ import annotations
 import ast
 import json
 import re
-from pathlib import Path
+import subprocess
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import yaml
 
@@ -355,6 +356,17 @@ def _signal_skill(refs: dict, repo_root: Path) -> bool:
     return any(s in names for s in refs_list)
 
 
+def _signal_public_skill(refs: dict, repo_root: Path) -> bool:
+    refs_list = as_list(refs.get("public_skill"))
+    if not refs_list:
+        return False
+    surface = repo_root / "distribution" / "public-command-surface.yaml"
+    if not surface.is_file():
+        return False
+    names = load_shipped_public_skills(repo_root)
+    return any(s in names for s in refs_list)
+
+
 def _signal_roadmap(refs: dict, repo_root: Path) -> bool:
     ref = refs.get("roadmap")
     return bool(ref) and roadmap_row_is_shipped(ref, repo_root)
@@ -372,6 +384,7 @@ def has_positive_ship_signal(entry: dict, repo_root: Path) -> bool:
         for signal in (
             _signal_dispatch,
             _signal_skill,
+            _signal_public_skill,
             _signal_roadmap,
             _signal_status_claims,
         )
@@ -558,6 +571,182 @@ def find_ownership_violations(repo_root: Path) -> list[str]:
     return problems
 
 
+# Spec 143 -- reconcile the public distribution surface with the capability
+# ownership graph. ``references.public_skill`` is the explicit edge used when a
+# portable wrapper has a different name from its canonical/internal skill. When
+# no explicit edge exists, a unique same-name ``surface: skill`` entry is the
+# owner. A CLI entry that merely references a skill is therefore never promoted
+# to ownership.
+_GENERATED_CANONICAL_PREFIXES = (
+    "integrations/claude-code/seshat-bi/",
+    "integrations/codex/seshat-bi/",
+)
+
+
+def load_shipped_public_skills(repo_root: Path) -> set[str]:
+    path = repo_root / "distribution" / "public-command-surface.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
+    skills = data.get("skills", []) if isinstance(data, dict) else []
+    return {
+        str(skill["name"])
+        for skill in skills
+        if isinstance(skill, dict)
+        and skill.get("status") == "shipped"
+        and isinstance(skill.get("name"), str)
+        and skill["name"].strip()
+    }
+
+
+def _reference_values(entry: dict, key: str) -> list[str]:
+    references = entry.get("references")
+    if not isinstance(references, dict):
+        return []
+    value = references.get(key)
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, str)]
+    return []
+
+
+def _git_tracked_files(repo_root: Path) -> set[str]:
+    result = subprocess.run(
+        ["git", "ls-files", "-z"],
+        cwd=repo_root,
+        capture_output=True,
+        check=True,
+    )
+    return {
+        item.decode("utf-8", errors="surrogateescape")
+        for item in result.stdout.split(b"\0")
+        if item
+    }
+
+
+def _canonical_source_violations(
+    repo_root: Path,
+    entry: dict,
+    tracked_files: set[str],
+) -> list[str]:
+    entry_id = str(entry.get("id", "<no id>"))
+    ownership = entry.get("ownership")
+    source = ownership.get("canonical_source") if isinstance(ownership, dict) else None
+
+    if not isinstance(source, str) or not source.strip():
+        return [f"{entry_id}: ownership.canonical_source is missing or blank"]
+
+    if "\\" in source:
+        return [
+            f"{entry_id}: canonical_source {source!r} must be a repository-relative POSIX path"
+        ]
+
+    posix_path = PurePosixPath(source)
+    windows_path = PureWindowsPath(source)
+    if (
+        posix_path.is_absolute()
+        or windows_path.is_absolute()
+        or windows_path.drive
+        or ".." in posix_path.parts
+    ):
+        return [
+            f"{entry_id}: canonical_source {source!r} must be a repository-relative path inside the repository"
+        ]
+
+    if source.startswith(_GENERATED_CANONICAL_PREFIXES):
+        return [
+            f"{entry_id}: canonical_source {source!r} is generated output, not an authored source"
+        ]
+
+    root = repo_root.resolve()
+    unresolved = root / Path(*posix_path.parts)
+    candidate = unresolved.resolve(strict=False)
+    if not candidate.is_relative_to(root):
+        return [
+            f"{entry_id}: canonical_source {source!r} must be a repository-relative path inside the repository"
+        ]
+    if unresolved.is_symlink() or not unresolved.is_file():
+        return [
+            f"{entry_id}: canonical_source {source!r} is not a regular file "
+            "(symlinks are not canonical)"
+        ]
+    if source not in tracked_files:
+        return [f"{entry_id}: canonical_source {source!r} is not tracked by Git"]
+    return []
+
+
+def public_capability_integrity_violations(
+    repo_root: Path,
+    *,
+    manifest: list[dict] | None = None,
+    public_skills: set[str] | None = None,
+    tracked_files: set[str] | None = None,
+) -> list[str]:
+    """Spec 143: public skill -> one owner -> real canonical source.
+
+    Optional inputs make every failure mode constructible in a unit test. The
+    aggregate call supplies none and therefore reads all three feeder truths
+    independently: public surface, capability manifest, and Git's tracked set.
+    """
+    entries = load_manifest(repo_root) if manifest is None else manifest
+    shipped = (
+        load_shipped_public_skills(repo_root)
+        if public_skills is None
+        else public_skills
+    )
+    tracked = _git_tracked_files(repo_root) if tracked_files is None else tracked_files
+    problems: list[str] = []
+
+    for entry in entries:
+        for public_name in _reference_values(entry, "public_skill"):
+            if public_name not in shipped:
+                problems.append(
+                    f"{entry.get('id', '<no id>')}: references.public_skill "
+                    f"{public_name!r} is not a shipped public skill"
+                )
+
+    for public_name in sorted(shipped):
+        explicit = [
+            entry
+            for entry in entries
+            if public_name in _reference_values(entry, "public_skill")
+        ]
+        fallback = [
+            entry
+            for entry in entries
+            if entry.get("surface") == "skill"
+            and public_name in _reference_values(entry, "skill")
+        ]
+        candidates = explicit if explicit else fallback
+        candidate_ids = sorted(str(entry.get("id", "<no id>")) for entry in candidates)
+
+        if not candidates:
+            problems.append(f"{public_name}: shipped public skill has no capability owner")
+            continue
+        if len(candidates) != 1:
+            relationship = "explicit" if explicit else "same-name skill fallback"
+            problems.append(
+                f"{public_name}: ambiguous {relationship} capability owners: "
+                + ", ".join(candidate_ids)
+            )
+            continue
+
+        owner = candidates[0]
+        problems += ownership_violations(owner)
+        ownership = owner.get("ownership")
+        if not isinstance(ownership, dict) or "canonical_source" not in ownership:
+            problems.append(
+                f"{owner.get('id', '<no id>')}: public skill {public_name!r} "
+                "requires ownership.canonical_source"
+            )
+
+    for entry in entries:
+        ownership = entry.get("ownership")
+        if isinstance(ownership, dict) and "canonical_source" in ownership:
+            problems += _canonical_source_violations(repo_root, entry, tracked)
+
+    return problems
+
+
 def find_invalid_stage(repo_root: Path) -> list[str]:
     """O8: readiness_stage neither not-stage-scoped nor a valid stages.* key."""
     manifest = load_manifest(repo_root)
@@ -587,4 +776,8 @@ def oracle_all_clear(repo_root: Path) -> dict[str, list[str]]:
         # aggregate enforces nothing, because this is what the real-manifest
         # test iterates.
         "ownership": find_ownership_violations(repo_root),
+        # Spec 143: public skill ownership and authored canonical sources.
+        "public_capability_integrity": public_capability_integrity_violations(
+            repo_root
+        ),
     }

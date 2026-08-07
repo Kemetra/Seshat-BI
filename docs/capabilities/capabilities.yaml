@@ -603,6 +603,43 @@ capabilities:
       dispatch: "narrative-check"
       roadmap: "issue #452"
 
+  - id: seshat-bi-public-router
+    name: "Seshat BI public router"
+    summary: "Portable public front door that selects the applicable Seshat readiness, domain-knowledge, or governed integration workflow and returns one truthful next action or blocker; it performs no upstream execution itself."
+    state: shipped
+    authority: advisory
+    surface: skill
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: null
+    documentation: "distribution/bundle-templates/shared/skills/seshat-bi/SKILL.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
+      seshat_delta: "Selects the appropriate Seshat readiness, knowledge, and governed integration route while preserving hard stops and one truthful next action."
+      canonical_source: "distribution/bundle-templates/shared/skills/seshat-bi/SKILL.md"
+    references:
+      public_skill: "seshat-bi"
+
+  - id: powerbi-workflows-public-router
+    name: "Power BI public workflow router"
+    summary: "Portable public router for the current Seshat Power BI design, review, theme, formatting, PBIP inspection, and bounded PBIR workflow surfaces; it selects a governed local helper and does not invoke Microsoft execution itself."
+    state: shipped
+    authority: advisory
+    surface: skill
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: null
+    documentation: "distribution/bundle-templates/shared/skills/powerbi-workflows/SKILL.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
+      seshat_delta: "Selects among Seshat-owned Power BI design, inspection, PBIR, and adoption helpers behind the applicable readiness and evidence boundaries; it does not execute Microsoft operations."
+      canonical_source: "distribution/bundle-templates/shared/skills/powerbi-workflows/SKILL.md"
+      overlap_note: "This records the current Seshat-only routing boundary. Official Microsoft delegation and any router consolidation belong to roadmap Phase 3, after intent-by-intent ownership is verified."
+    references:
+      public_skill: "powerbi-workflows"
+
   - id: pbi-mcp-doctor
     name: "seshat pbi-mcp"
     summary: "Read-only Power BI MCP doctor family (issue #450 slices 2-4, the F016 slot): detects the local environment (Node runtime, vendored modeling MCP, .mcp.json mode, PBIP on disk, semantic_model_ready state) and maps a declared task intent onto the governed surface recommendation; generates placeholder-only read-only .mcp.json templates and setup guidance behind a secret-scan refusal; runs a transport-mocked read-only preflight (capability discovery + target allowlist) that hard-refuses --skipconfirmation/write-mode configs and fails closed while semantic_model_ready has not passed. Grants no approval, emits no score; F016 stays parked -- no mutation path exists."
@@ -620,7 +657,7 @@ capabilities:
       upstream_surface: mcp
       upstream_reference: "@microsoft/powerbi-modeling-mcp"
       seshat_delta: "Read-only preflight around Microsoft's modeling MCP: hard-refuses --skipconfirmation and write-mode configs, fails closed while semantic_model_ready has not passed, and emits placeholder-only templates behind a secret-scan refusal. No mutation path exists."
-      canonical_source: ".claude/skills/pbi-mcp-doctor/SKILL.md"
+      canonical_source: "distribution/bundle-templates/shared/skills/pbi-mcp-doctor/SKILL.md"
       update_policy: "Upstream is PREVIEW / pre-GA and consumed in readonly mode only; re-verify the capability allowlist on any upstream version change."
     references:
       dispatch: "pbi-mcp"
@@ -845,10 +882,12 @@ capabilities:
     documentation: ".claude/skills/retail-validate/SKILL.md"
     ownership:
       capability_owner: "seshat-governance"
+      canonical_source: ".claude/skills/retail-validate/SKILL.md"
     references:
       dispatch: "validate"
       skill: "retail-validate"
       verb: "retail-validate"
+      public_skill: "retail-validate"
 
   - id: seshat-profile
     name: "seshat profile"
@@ -1015,6 +1054,7 @@ capabilities:
     documentation: ".claude/skills/retail-orchestrate/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
+      canonical_source: ".claude/skills/retail-orchestrate/SKILL.md"
     references:
       skill: "retail-orchestrate"
       verb: "retail-orchestrate"
@@ -1034,6 +1074,7 @@ capabilities:
     documentation: ".claude/skills/first-hour-compass/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
+      canonical_source: ".claude/skills/first-hour-compass/SKILL.md"
     references:
       skill: "first-hour-compass"
       verb: "first-hour-compass"
@@ -1054,6 +1095,7 @@ capabilities:
     documentation: ".claude/skills/retail-onboard-table/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
+      canonical_source: ".claude/skills/retail-onboard-table/SKILL.md"
     references:
       skill: "retail-onboard-table"
       verb: "retail-onboard-table"
@@ -1073,6 +1115,7 @@ capabilities:
     documentation: ".claude/skills/retail-discover-portfolio/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
+      canonical_source: ".claude/skills/retail-discover-portfolio/SKILL.md"
     references:
       skill: "retail-discover-portfolio"
       verb: "retail-discover-portfolio"
@@ -1092,6 +1135,7 @@ capabilities:
     documentation: ".claude/skills/business-knowledge-interview/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
+      canonical_source: ".claude/skills/business-knowledge-interview/SKILL.md"
     references:
       skill: "business-knowledge-interview"
       verb: "business-knowledge-interview"
@@ -1111,6 +1155,7 @@ capabilities:
     documentation: ".claude/skills/source-mapping/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
+      canonical_source: ".claude/skills/source-mapping/SKILL.md"
     references:
       skill: "source-mapping"
       verb: "source-mapping"
@@ -1130,6 +1175,7 @@ capabilities:
     documentation: ".claude/skills/kpi-contract-builder/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
+      canonical_source: ".claude/skills/kpi-contract-builder/SKILL.md"
     references:
       skill: "kpi-contract-builder"
       verb: "kpi-contract-builder"
@@ -1149,6 +1195,7 @@ capabilities:
     documentation: ".claude/skills/retail-build-warehouse/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
+      canonical_source: ".claude/skills/retail-build-warehouse/SKILL.md"
     references:
       skill: "retail-build-warehouse"
       verb: "retail-build-warehouse"
@@ -1168,6 +1215,7 @@ capabilities:
     documentation: ".claude/skills/retail-govern/SKILL.md"
     ownership:
       capability_owner: "seshat-governance"
+      canonical_source: ".claude/skills/retail-govern/SKILL.md"
     references:
       skill: "retail-govern"
       verb: "retail-govern"

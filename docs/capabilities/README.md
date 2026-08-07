@@ -102,6 +102,29 @@ a field name containing `score`/`maturity`/`confidence`/`completeness`/`health`
 -- the kit never fabricates a confidence score, and this axis is exactly where
 that temptation would appear.
 
+## Public skill ownership and canonical sources (spec 143)
+
+Every shipped skill in `distribution/public-command-surface.yaml` resolves to
+exactly one capability. An explicit `references.public_skill` edge wins. When
+there is no explicit edge, the oracle accepts only one same-named
+`surface: skill` capability whose `references.skill` contains that public name.
+This precedence prevents a CLI entry that merely calls a skill from becoming
+its accidental owner, and ambiguity fails closed.
+
+The public surface remains the distribution feeder; the capability manifest
+records ownership rather than copying the bundle definition. Every declared
+`ownership.canonical_source` must be a Git-tracked, regular, non-symlink file at
+a repository-relative path. A generated Claude or Codex bundle path cannot be
+canonical: deterministic bundle projections remain valid outputs, while their
+authored bundle template or repository skill remains the source of truth.
+
+`powerbi-workflows` currently owns only a Seshat routing decision over existing
+Seshat design, inspection, PBIR, and adoption helpers. It does not claim that
+Microsoft's official surfaces execute report-page authoring, and it does not
+invoke an official executor today. Phase 3 must verify each Power BI intent
+before changing that boundary; this graph-integrity phase does not pre-judge or
+reimplement official execution.
+
 ## How to read it
 
 Run the module (there is no CLI verb -- see `.claude/skills/capabilities/SKILL.md`):
