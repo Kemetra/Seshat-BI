@@ -17,6 +17,27 @@
 > parity test shows the dbt mart matches the existing gold tables on the four
 > numeric assertions below.
 
+## Official-first ownership routing
+
+`dbt-workflows` remains the broad Seshat entry point because it decides whether
+an intent needs Seshat readiness policy or generic upstream competence. It does
+not make Seshat the owner of dbt semantics.
+
+| Intent | Seshat pre-gate | Execution owner | Seshat post-validation |
+|---|---|---|---|
+| Decide whether dbt fits | Readiness and mapping context | Seshat routing policy | Earliest truthful next action |
+| Scaffold Seshat shadow models | Approved source map | Seshat scaffold | Citation and `meta.seshat` validation |
+| Governed compile/build/test/parity | Mapping Ready, accepted plan, fixed selector, shadow schemas | Official dbt Core through `seshat dbt` | Sanitized derived evidence, parity, blockers |
+| Generic authoring/test design/command help/docs/troubleshooting | Official-skill discovery proof | Official dbt Labs agent skills | Re-enter Seshat gates only for governed work |
+| Native MCP tools/configuration | Exact registration and discovery proof | Official dbt MCP | No automatic readiness effect |
+
+The integration catalog records `dbt-core`, `dbt-postgres`,
+`dbt-agent-skills`, and `dbt-mcp`. That establishes membership and install
+identity, not supported-harness activation. Phase 6 must prove activation and
+discovery before the official skills or MCP are treated as usable. Until then,
+generic upstream intent is an explicit integration gap; raw dbt execution is
+not a fallback for the governed Seshat project.
+
 ## Where dbt fits in the medallion flow
 
 The warehouse already builds silver and gold as numbered, idempotent SQL migrations under

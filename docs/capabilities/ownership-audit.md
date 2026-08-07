@@ -110,9 +110,10 @@ beyond Power BI: network-free plan by default, install only behind explicit
 human approval, confined to gitignored `.seshat/integrations/`, never
 pip-installing over the operator's interpreter, never writing a credential.
 
-**Gap:** this registry covers installable dependencies, not *skills*. Nothing
-records that (say) `dbt-workflows` is a Seshat adapter over dbt Labs' upstream
-surface. That is the real §C delta.
+**Resolved for dbt by Spec 146:** the capability manifest now distinguishes
+official `dbt-core`, `dbt-agent-skills`, and `dbt-mcp` ownership from the
+Seshat `dbt-transformation-adapter` delta. Catalog membership still does not
+prove skill/MCP activation or discovery; that remains a Phase 6 integration gap.
 
 ## 4. Workstream 2 — ownership classification
 
@@ -155,7 +156,7 @@ surface rather than forking it — the gap is **declaration**, not behavior.
 
 | Skill | Upstream | Seshat delta |
 | --- | --- | --- |
-| `dbt-transformation-adapter` | dbt Labs (`dbt-core`, `dbt-agent-skills`, `dbt-mcp`) | Mapping-Ready gating; run/test/parity recorded as derived evidence |
+| `dbt-transformation-adapter` | dbt Labs (`dbt-core`, `dbt-agent-skills`, `dbt-mcp`) | Mapping-Ready and accepted-plan gating; fixed selector/shadow policy; run/test/parity recorded as derived evidence. Generic dbt competence routes upstream once discovery is proven (Spec 146). |
 | `dagster-orchestration-adapter` | Dagster | gate-aware asset graph; committed run evidence |
 | `pbi-mcp-doctor` | Microsoft `@microsoft/powerbi-modeling-mcp` | read-only preflight; refuses `--skipconfirmation`/write-mode; fails closed before `semantic_model_ready` |
 | `pbir-authoring-adapter` | PBIR format (Microsoft) | tight allow-list on committed JSON; no live publish |

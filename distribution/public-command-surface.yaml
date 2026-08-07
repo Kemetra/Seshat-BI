@@ -364,7 +364,7 @@ skills:
     status: shipped
   - name: dbt-workflows
     platforms: [claude, codex]
-    intent: Route governed dbt prerequisite, plan, shadow execution, and evidence-review work.
+    intent: Route governed Seshat dbt prerequisites, scaffold, plan, shadow execution, and evidence review while delegating generic dbt competence and native execution semantics to official dbt Labs owners.
     wrapper_template: distribution/bundle-templates/shared/skills/dbt-workflows/SKILL.md
     bundle_destination: skills/dbt-workflows/SKILL.md
     documentation: docs/install/agent-install.md
