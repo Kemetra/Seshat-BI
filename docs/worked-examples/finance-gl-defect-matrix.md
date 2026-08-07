@@ -136,8 +136,27 @@ refusal cannot slip in.
 **Establishes:** 9 data variants exist, each deterministic and each differing from clean in
 exactly one source file (asserted by test); 6 judgment scenarios exist in the shipped format
 and pass the shipped validator; the over-refusal trap is present and is the only `proceed`
-case; 5 of 7 structural defects map to checks that already exist and are domain-neutral.
+case; **3 of 7** structural defects (D4, D6, D7) map to checks that already exist and are
+domain-neutral.
 
-**Does not establish:** that the gate actually catches any of them. That needs a live
-database (D1-D7) and a participant run (D8-D13). Claiming otherwise from this slice would
-be exactly the kind of unearned "verified" this feature was built to avoid.
+**Does not establish:** that the gate actually catches even those three. That needs a live
+database (D4, D6, D7) and a participant run (D8-D13). Claiming otherwise from this slice
+would be exactly the kind of unearned "verified" this feature was built to avoid.
+
+**Establishes a NEGATIVE, which is the more valuable result:** three structural defects have
+**no check at all**, and no live database would change that.
+
+- **D1, D2** -- `COALESCE(..., -1)` rewrites a failed natural-key lookup into a valid
+  dimension member before `check_orphan_fks` runs, so the orphan is invisible (ledger L21).
+- **D14** -- a valid department paired with a cost centre from a different department leaves
+  both FKs valid, and no shipped check compares two dimensions against each other
+  (ledger L22).
+
+These read `[NO CHECK EXISTS]`, not `[PENDING LIVE PROFILE]`: nothing is pending, because
+running the database would report a PASS for the wrong reason. That is a worse outcome than
+a missing check, and finding it is precisely what a genericity proof is for -- the retail
+example could not surface either, having no unresolvable-reference case and no hierarchical
+dimension.
+
+*(This section previously read "5 of 7" and attributed the gap solely to the absence of a
+database. Corrected 2026-08-07 from the PR #596 review.)*
