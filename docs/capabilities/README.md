@@ -59,6 +59,49 @@ here; this manifest is now the structured, testable authority for the same
 question. A future doc edit may point readers here instead of duplicating the
 list again.
 
+## The ownership axis (spec 142)
+
+Every entry carries an `ownership:` mapping answering **who owns this
+capability** -- an upstream project, or Seshat. `capability_owner` is
+**required**; an entry that has not been classified declares the
+`unclassified` sentinel rather than omitting the field.
+
+That requirement is the point. If absence were allowed, it would read three ways
+at once -- not yet classified, deliberately unclassified, or "no upstream owner,
+so this is Seshat's". The third reading is dangerous: mid-migration a wrapper
+around a third-party MCP would look like Seshat's own code.
+
+| `capability_owner` | Means |
+| --- | --- |
+| `official-upstream` | An upstream project is authoritative; Seshat references or configures it. |
+| `seshat-adapter` | Seshat gates or governs an upstream capability without reimplementing it. **Requires a non-empty `seshat_delta`.** |
+| `seshat-governance` | Readiness gates, approvals, evidence, drift/lint checks, registries. Judges or records; produces no artifact. |
+| `seshat-authoring` | Generates or scaffolds an artifact (DAX, theme JSON, blank templates, compiled output). Produces rather than judges. |
+| `seshat-domain-knowledge` | BI/SQL/DAX/Python/retail reasoning no upstream tool owns. |
+| `seshat-orchestrator` | Sequences Seshat's own verbs and stops at human seams. |
+| `seshat-product-module` | An executable Seshat engine -- runs code rather than encoding reasoning. |
+| `vendored-upstream` | Upstream content committed into this repo; `update_policy` carries the justification and re-vendor path. |
+| `human-deliverable` | An artifact a person produces outside any tool. |
+| `specified-not-built` | A ratified or drafted spec with no implementation yet. |
+| `unclassified` | Explicitly not yet classified; the reason belongs in `overlap_note`. |
+
+Optional sub-fields: `upstream_project`, `upstream_surface` (one of `plugin`,
+`mcp`, `skill`, `cli`, `library`, `format`), `upstream_reference`,
+`seshat_delta`, `canonical_source`, `overlap_note`, `update_policy`.
+
+Where `src/seshat/integrations/catalog.py` already declares an installable
+upstream component, `upstream_reference` matches the coordinate declared there --
+the catalog stays authoritative, and this axis points at it rather than restating
+it. Bundle destination paths are **not** restated here either; they belong to
+`distribution/public-knowledge-allowlist.yaml`.
+
+**Validation lives in the oracle, not in a gate.** `seshat check` grows no rule
+from this axis. `tests/unit/_capability_oracle.py` checks the token sets and the
+adapter-delta requirement, and no ownership value may be a bare number or carry
+a field name containing `score`/`maturity`/`confidence`/`completeness`/`health`
+-- the kit never fabricates a confidence score, and this axis is exactly where
+that temptation would appear.
+
 ## How to read it
 
 Run the module (there is no CLI verb -- see `.claude/skills/capabilities/SKILL.md`):

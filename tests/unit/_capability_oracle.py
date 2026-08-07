@@ -38,6 +38,7 @@ OWNERSHIP_OWNERS = {
     "official-upstream",
     "seshat-adapter",
     "seshat-governance",
+    "seshat-authoring",
     "seshat-domain-knowledge",
     "seshat-orchestrator",
     "vendored-upstream",
@@ -580,4 +581,10 @@ def oracle_all_clear(repo_root: Path) -> dict[str, list[str]]:
         "contradiction": find_contradictions(repo_root),
         "axis_violation": find_axis_violations(repo_root),
         "invalid_stage": find_invalid_stage(repo_root),
+        # O9 (spec 142). Wired in only once every entry was declared: FR-002a
+        # rejects an absent capability_owner, so including this earlier would
+        # have failed by design mid-migration. A detector absent from this
+        # aggregate enforces nothing, because this is what the real-manifest
+        # test iterates.
+        "ownership": find_ownership_violations(repo_root),
     }

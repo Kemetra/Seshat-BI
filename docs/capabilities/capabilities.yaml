@@ -52,6 +52,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "check"
     documentation: "docs/glossary.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "check"
       skill: "retail-govern"
@@ -68,6 +70,9 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "analyze"
     documentation: "docs/architecture/statistical-evidence-engine.md"
+    ownership:
+      capability_owner: "seshat-product-module"
+      seshat_delta: "Eight closed numerical method families over approved inputs, emitting immutable derived evidence plus a pending named-human review; never self-approves."
     references:
       dispatch: "analyze"
       status_claims: "governed-statistical-engine-built"
@@ -83,6 +88,12 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: "docs/architecture/statistical-evidence-engine.md"
+    ownership:
+      capability_owner: "seshat-adapter"
+      upstream_project: "PostgreSQL"
+      upstream_surface: "library"
+      upstream_reference: "postgresql"
+      seshat_delta: "Read-only parameterized Gold SELECT acquisition permitted only after the Gold and Semantic Model policy gates; creates nothing."
     references:
       status_claims: "governed-statistical-engine-built"
 
@@ -97,6 +108,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "impact-map"
     documentation: "specs/132-decision-change-impact-map/spec.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "impact-map"
 
@@ -111,6 +124,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "readiness-diff"
     documentation: "docs/readiness/readiness-diff.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "readiness-diff"
 
@@ -127,6 +142,8 @@ capabilities:
     readiness_stage: semantic_model_ready
     command: "semantic-check"
     documentation: "specs/011-semantic-model-readiness/spec.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "semantic-check"
       skill: "retail-semantic-check"
@@ -142,6 +159,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "value-check"
     documentation: "docs/roadmap/roadmap.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "value-check"
       roadmap: "L4 value proxy"
@@ -157,6 +176,8 @@ capabilities:
     readiness_stage: semantic_model_ready
     command: "generate"
     documentation: "docs/roadmap/roadmap.md"
+    ownership:
+      capability_owner: "seshat-authoring"
     references:
       dispatch: "generate"
 
@@ -171,6 +192,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "status"
     documentation: "specs/109-agent-control-status-surface/spec.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "status"
 
@@ -185,6 +208,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "dashboard"
     documentation: "docs/superpowers/specs/2026-07-19-localhost-status-dashboard-design.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "dashboard"
 
@@ -199,6 +224,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "next"
     documentation: "specs/080-run-next-readiness-state-machine/spec.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "next"
       skill: "run-next-readiness"
@@ -214,6 +241,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "doctor"
     documentation: "specs/072-kit-drift-linter/spec.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "doctor"
 
@@ -228,6 +257,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "init-project"
     documentation: "specs/107-user-workspace-init/spec.md"
+    ownership:
+      capability_owner: "seshat-authoring"
     references:
       dispatch: "init-project"
 
@@ -242,6 +273,8 @@ capabilities:
     readiness_stage: source_ready
     command: "scaffold-source"
     documentation: "docs/superpowers/specs/2026-07-19-stage1-template-self-sufficiency-design.md"
+    ownership:
+      capability_owner: "seshat-authoring"
     references:
       dispatch: "scaffold-source"
 
@@ -256,6 +289,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "reset"
     documentation: "docs/superpowers/specs/2026-07-23-seshat-reset-verb-design.md"
+    ownership:
+      capability_owner: "seshat-authoring"
     references:
       dispatch: "reset"
 
@@ -270,6 +305,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "scaffold-design"
     documentation: "docs/roadmap/roadmap.md"
+    ownership:
+      capability_owner: "seshat-authoring"
     references:
       dispatch: "scaffold-design"
       roadmap: "issues #440, #441"
@@ -288,6 +325,8 @@ capabilities:
     readiness_stage: dashboard_ready
     command: "report"
     documentation: "docs/superpowers/specs/2026-08-03-report-surfaces-design.md"
+    ownership:
+      capability_owner: "seshat-authoring"
     references:
       dispatch: "report"
 
@@ -304,6 +343,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "init"
     documentation: "specs/070-retail-init-bootstrap/spec.md"
+    ownership:
+      capability_owner: "seshat-authoring"
     references:
       dispatch: "init"
       skill: "retail-init"
@@ -321,6 +362,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "scaffold"
     documentation: "specs/062-scaffold-rule-generator/spec.md"
+    ownership:
+      capability_owner: "seshat-authoring"
     references:
       dispatch: "scaffold"
       skill: "retail-scaffold"
@@ -336,6 +379,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "kit-lint"
     documentation: "specs/072-kit-drift-linter/spec.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "kit-lint"
 
@@ -350,6 +395,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "manifest"
     documentation: "specs/043-rule-registry-snapshot-manifest-golden/spec.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "manifest"
 
@@ -364,6 +411,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "severity-posture"
     documentation: "specs/046-severity-posture-lock/spec.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "severity-posture"
 
@@ -378,6 +427,8 @@ capabilities:
     readiness_stage: dashboard_ready
     command: "theme-gen"
     documentation: "specs/017-powerbi-visual-foundation/spec.md"
+    ownership:
+      capability_owner: "seshat-authoring"
     references:
       dispatch: "theme-gen"
       roadmap: "F011A"
@@ -393,6 +444,8 @@ capabilities:
     readiness_stage: dashboard_ready
     command: "theme-compile"
     documentation: "specs/060-theme-json-purity-linter/spec.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "theme-compile"
 
@@ -407,6 +460,12 @@ capabilities:
     readiness_stage: dashboard_ready
     command: "pbir-apply-theme"
     documentation: "specs/106-pbir-authoring-adapter/spec.md"
+    ownership:
+      capability_owner: "seshat-adapter"
+      upstream_project: "Microsoft"
+      upstream_surface: "format"
+      upstream_reference: "PBIR"
+      seshat_delta: "Deterministic theme application to committed PBIR JSON; no live publish."
     references:
       dispatch: "pbir-apply-theme"
       skill: "pbir-authoring-adapter"
@@ -422,6 +481,12 @@ capabilities:
     readiness_stage: dashboard_ready
     command: "pbir-format-visual"
     documentation: "specs/106-pbir-authoring-adapter/spec.md"
+    ownership:
+      capability_owner: "seshat-adapter"
+      upstream_project: "Microsoft"
+      upstream_surface: "format"
+      upstream_reference: "PBIR"
+      seshat_delta: "Visual style/layout edits inside a tight allow-list on committed PBIR JSON; no live publish."
     references:
       dispatch: "pbir-format-visual"
       skill: "pbir-authoring-adapter"
@@ -437,6 +502,12 @@ capabilities:
     readiness_stage: dashboard_ready
     command: "pbir-set-page-background"
     documentation: "specs/106-pbir-authoring-adapter/spec.md"
+    ownership:
+      capability_owner: "seshat-adapter"
+      upstream_project: "Microsoft"
+      upstream_surface: "format"
+      upstream_reference: "PBIR"
+      seshat_delta: "Page background/canvas asset edits on committed PBIR JSON; no live publish."
     references:
       dispatch: "pbir-set-page-background"
       skill: "pbir-authoring-adapter"
@@ -452,6 +523,12 @@ capabilities:
     readiness_stage: dashboard_ready
     command: "pbir-set-geometry"
     documentation: "specs/106-pbir-authoring-adapter/spec.md"
+    ownership:
+      capability_owner: "seshat-adapter"
+      upstream_project: "Microsoft"
+      upstream_surface: "format"
+      upstream_reference: "PBIR"
+      seshat_delta: "Visual position/size edits on committed PBIR JSON; no live publish."
     references:
       dispatch: "pbir-set-geometry"
       skill: "pbir-authoring-adapter"
@@ -467,6 +544,8 @@ capabilities:
     readiness_stage: dashboard_ready
     command: "pbir-validate-blueprint"
     documentation: "specs/123-governed-dashboard-intelligence/spec.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "pbir-validate-blueprint"
       skill: "powerbi-dashboard-design"
@@ -482,6 +561,8 @@ capabilities:
     readiness_stage: dashboard_ready
     command: "pbir-validate-bindings"
     documentation: "docs/tools/pbir-binding-validator.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "pbir-validate-bindings"
       skill: "powerbi-dashboard-design"
@@ -498,6 +579,8 @@ capabilities:
     readiness_stage: semantic_model_ready
     command: "tmdl-doc-comment-lint"
     documentation: "docs/tools/tmdl-doc-comment-lint.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "tmdl-doc-comment-lint"
       skill: "powerbi-dashboard-design"
@@ -514,6 +597,8 @@ capabilities:
     readiness_stage: dashboard_ready
     command: "narrative-check"
     documentation: "specs/021-analyst-narrative-layer/phase-c-verification.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "narrative-check"
       roadmap: "issue #452"
@@ -553,6 +638,9 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "integrations"
     documentation: "docs/install/fabric-powerbi-integrations.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
+      seshat_delta: "Network-free plan by default over the upstream Microsoft Fabric and dbt-labs bundles plus read-only MCP registrations; installs only behind explicit human approval, into gitignored .seshat/integrations/, never over the operator's interpreter."
     references:
       dispatch: "integrations"
 
@@ -567,6 +655,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "blockers"
     documentation: "docs/tools/blocker-explainer.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "blockers"
 
@@ -581,6 +671,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "orchestration-assess"
     documentation: "docs/tools/orchestration-assess.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "orchestration-assess"
 
@@ -595,6 +687,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "dashboard-planner"
     documentation: "docs/tools/dashboard-planner.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "dashboard-planner"
 
@@ -609,6 +703,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "dashboard-gaps"
     documentation: "docs/tools/dashboard-gap-detector.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "dashboard-gaps"
 
@@ -625,6 +721,8 @@ capabilities:
     readiness_stage: publish_ready
     command: "evidence-pack"
     documentation: "docs/tools/evidence-pack-generator.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "evidence-pack"
       skill: "evidence-pack-generator"
@@ -641,6 +739,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "approvals"
     documentation: "docs/tools/approver-decision-surface.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "approvals"
 
@@ -655,6 +755,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "pii-notice"
     documentation: "docs/tools/pii-touch-notice.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "pii-notice"
 
@@ -669,6 +771,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "cvd-evidence"
     documentation: "docs/tools/cvd-evidence.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "cvd-evidence"
 
@@ -683,6 +787,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "approver-view"
     documentation: "docs/tools/approver-decision-surface.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "approver-view"
 
@@ -697,6 +803,8 @@ capabilities:
     readiness_stage: mapping_ready
     command: "mapping-mirror"
     documentation: ".claude/skills/source-mapping/SKILL.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "mapping-mirror"
 
@@ -713,6 +821,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: ".claude/skills/capabilities/SKILL.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       skill: "capabilities"
 
@@ -733,6 +843,8 @@ capabilities:
     readiness_stage: gold_ready
     command: "validate"
     documentation: ".claude/skills/retail-validate/SKILL.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "validate"
       skill: "retail-validate"
@@ -749,6 +861,8 @@ capabilities:
     readiness_stage: source_ready
     command: "profile"
     documentation: "docs/superpowers/specs/2026-07-19-stage1-template-self-sufficiency-design.md"
+    ownership:
+      capability_owner: "seshat-authoring"
     references:
       dispatch: "profile"
 
@@ -763,6 +877,8 @@ capabilities:
     readiness_stage: source_ready
     command: "drift"
     documentation: "specs/015-source-drift-detector/spec.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "drift"
       roadmap: "F014"
@@ -778,6 +894,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "demo"
     documentation: "specs/083-demo-harness/spec.md"
+    ownership:
+      capability_owner: "seshat-authoring"
     references:
       dispatch: "demo"
 
@@ -792,6 +910,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "mcp"
     documentation: "docs/ecosystem/agent-governor.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "mcp"
 
@@ -806,6 +926,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "passport"
     documentation: "docs/ecosystem/readiness-passport.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "passport"
 
@@ -820,6 +942,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "pack"
     documentation: "docs/ecosystem/extension-packs.md"
+    ownership:
+      capability_owner: "seshat-authoring"
     references:
       dispatch: "pack"
 
@@ -834,6 +958,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "benchmark"
     documentation: "docs/ecosystem/agent-safety-benchmark.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "benchmark"
 
@@ -848,6 +974,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "explorer"
     documentation: "docs/ecosystem/readiness-explorer.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "explorer"
 
@@ -862,6 +990,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "agent"
     documentation: "docs/ecosystem/agent-verify.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "agent"
 
@@ -883,6 +1013,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: ".claude/skills/retail-orchestrate/SKILL.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
     references:
       skill: "retail-orchestrate"
       verb: "retail-orchestrate"
@@ -900,6 +1032,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: ".claude/skills/first-hour-compass/SKILL.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
     references:
       skill: "first-hour-compass"
       verb: "first-hour-compass"
@@ -918,6 +1052,8 @@ capabilities:
     readiness_stage: mapping_ready
     command: null
     documentation: ".claude/skills/retail-onboard-table/SKILL.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
     references:
       skill: "retail-onboard-table"
       verb: "retail-onboard-table"
@@ -935,6 +1071,8 @@ capabilities:
     readiness_stage: source_ready
     command: null
     documentation: ".claude/skills/retail-discover-portfolio/SKILL.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
     references:
       skill: "retail-discover-portfolio"
       verb: "retail-discover-portfolio"
@@ -952,6 +1090,8 @@ capabilities:
     readiness_stage: mapping_ready
     command: null
     documentation: ".claude/skills/business-knowledge-interview/SKILL.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
     references:
       skill: "business-knowledge-interview"
       verb: "business-knowledge-interview"
@@ -969,6 +1109,8 @@ capabilities:
     readiness_stage: mapping_ready
     command: null
     documentation: ".claude/skills/source-mapping/SKILL.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
     references:
       skill: "source-mapping"
       verb: "source-mapping"
@@ -986,6 +1128,8 @@ capabilities:
     readiness_stage: semantic_model_ready
     command: null
     documentation: ".claude/skills/kpi-contract-builder/SKILL.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
     references:
       skill: "kpi-contract-builder"
       verb: "kpi-contract-builder"
@@ -1003,6 +1147,8 @@ capabilities:
     readiness_stage: silver_ready
     command: null
     documentation: ".claude/skills/retail-build-warehouse/SKILL.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
     references:
       skill: "retail-build-warehouse"
       verb: "retail-build-warehouse"
@@ -1020,6 +1166,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: ".claude/skills/retail-govern/SKILL.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       skill: "retail-govern"
       verb: "retail-govern"
@@ -1129,6 +1277,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: ".claude/skills/pr-readiness-reviewer/SKILL.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       roadmap: "F025"
       skill: "pr-readiness-reviewer"
@@ -1146,6 +1296,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: ".claude/skills/friendly-pr-reviewer/SKILL.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       skill: "friendly-pr-reviewer"
 
@@ -1162,6 +1314,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: ".claude/skills/readiness-viewer/SKILL.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       roadmap: "F026"
       skill: "readiness-viewer"
@@ -1179,6 +1333,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: ".claude/skills/run-next-readiness/SKILL.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       skill: "run-next-readiness"
 
@@ -1195,6 +1351,8 @@ capabilities:
     readiness_stage: mapping_ready
     command: null
     documentation: ".claude/skills/grain-confidence-reviewer/SKILL.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       roadmap: "F008"
       skill: "grain-confidence-reviewer"
@@ -1212,6 +1370,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: ".claude/skills/retail-control-room/SKILL.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
     references:
       roadmap: "F012"
       skill: "retail-control-room"
@@ -1229,6 +1389,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "watch"
     documentation: ".claude/skills/portfolio-watch/SKILL.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "watch"
       skill: "portfolio-watch"
@@ -1246,6 +1408,8 @@ capabilities:
     readiness_stage: dashboard_ready
     command: null
     documentation: ".claude/skills/report-intent-interview/SKILL.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
     references:
       skill: "report-intent-interview"
 
@@ -1262,6 +1426,8 @@ capabilities:
     readiness_stage: dashboard_ready
     command: null
     documentation: ".claude/skills/dashboard-intelligence/SKILL.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
     references:
       skill: "dashboard-intelligence"
 
@@ -1278,6 +1444,8 @@ capabilities:
     readiness_stage: dashboard_ready
     command: null
     documentation: ".claude/skills/dashboard-design/SKILL.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
     references:
       roadmap: "F011"
       skill: "dashboard-design"
@@ -1295,6 +1463,8 @@ capabilities:
     readiness_stage: dashboard_ready
     command: null
     documentation: ".claude/skills/powerbi-dashboard-design/SKILL.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
     references:
       roadmap: "F011A"
       skill: "powerbi-dashboard-design"
@@ -1312,6 +1482,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: ".claude/skills/cross-table-lineage/SKILL.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       roadmap: "F036"
       skill: "cross-table-lineage"
@@ -1329,6 +1501,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "xray"
     documentation: ".claude/skills/pbip-xray/SKILL.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       skill: "pbip-xray"
       dispatch:
@@ -1348,6 +1522,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: ".claude/skills/consumer-data-dictionary/SKILL.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       roadmap: "F037"
       skill: "consumer-data-dictionary"
@@ -1365,6 +1541,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: ".claude/skills/release-notes-generator/SKILL.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       skill: "release-notes-generator"
 
@@ -1381,6 +1559,11 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: ".claude/skills/pbip-workflow/SKILL.md"
+    ownership:
+      capability_owner: "seshat-domain-knowledge"
+      upstream_project: "Microsoft"
+      upstream_surface: "format"
+      seshat_delta: "Seshat-reviewed git workflow guidance for an upstream-owned file format: what to commit, TMDL/PBIR text editing, Windows path limits."
     references:
       skill: "pbip-workflow"
 
@@ -1395,6 +1578,8 @@ capabilities:
     readiness_stage: source_ready
     command: "adopt-pbip"
     documentation: "docs/tools/pbip-adoption.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       dispatch: "adopt-pbip"
       skill: "pbip-workflow"
@@ -1412,6 +1597,12 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: ".claude/skills/speckit-specify/SKILL.md"
+    ownership:
+      capability_owner: "vendored-upstream"
+      upstream_project: "github/spec-kit"
+      upstream_surface: "skill"
+      upstream_reference: "0.8.10"
+      update_policy: "Written by upstream's installer (specify init --here --integration claude --script ps) in commit 1eb0c98 under constitution amendment v1.1.0; hash-verified against .specify/integrations/claude.manifest.json, zero local drift. NO re-vendor path is recorded -- see specs/142-capability-ownership-fields/evidence/known-findings.md KF-2."
     references:
       skill:
         - "speckit-specify"
@@ -1440,6 +1631,12 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: "docs/install/agent-install.md"
+    ownership:
+      capability_owner: "official-upstream"
+      upstream_project: "Anthropic"
+      upstream_surface: "plugin"
+      upstream_reference: "claude-code plugin manifest"
+      seshat_delta: "Seshat authors the bundle contents; the plugin format, discovery and marketplace schema are upstream's."
     references:
       status_claims: "claude-code-plugin-bundle-built"
 
@@ -1460,6 +1657,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: ".claude/skills/approval-console/SKILL.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       roadmap: "F027"
       skill: "approval-console"
@@ -1477,6 +1676,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: ".claude/skills/approval-evidence-pack/SKILL.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       roadmap: "F035"
       skill: "approval-evidence-pack"
@@ -1496,6 +1697,9 @@ capabilities:
     readiness_stage: dashboard_ready
     command: null
     documentation: "docs/roadmap/roadmap.md"
+    ownership:
+      capability_owner: "human-deliverable"
+      seshat_delta: "A human Power BI Desktop action the gate permits; Seshat contributes the approved design and the conformity check, not the build."
     references:
       roadmap: "F034"
 
@@ -1510,6 +1714,12 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: "docs/roadmap/roadmap.md"
+    ownership:
+      capability_owner: "seshat-adapter"
+      upstream_project: "Microsoft"
+      upstream_surface: "mcp"
+      upstream_reference: "@microsoft/powerbi-modeling-mcp"
+      seshat_delta: "Execution-only materialize/publish of an already-approved model, gated on Semantic Model Ready. PARKED: no mutation path exists yet."
     references:
       roadmap: "F016"
 
@@ -1524,6 +1734,9 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: "specs/018-companion-tools-architecture/spec.md"
+    ownership:
+      capability_owner: "specified-not-built"
+      overlap_note: "The decision itself already ships as docs/decisions/0008; only the formalizing spec document is outstanding."
     references:
       roadmap: "F024"
 
@@ -1538,6 +1751,9 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: "specs/025-adapter-maintenance-policy/spec.md"
+    ownership:
+      capability_owner: "specified-not-built"
+      overlap_note: "Deferred for want of a runtime consumer."
     references:
       roadmap: "F031"
       parked_on: "f031-maintenance-policy-parked-on-f016"
@@ -1553,6 +1769,9 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: "specs/026-adapter-compatibility-matrix/spec.md"
+    ownership:
+      capability_owner: "specified-not-built"
+      overlap_note: "Deferred for want of a runtime consumer."
     references:
       roadmap: "F032"
       parked_on: "f032-compatibility-matrix-parked-on-f016"
@@ -1568,6 +1787,9 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: "specs/027-release-maturity-management/spec.md"
+    ownership:
+      capability_owner: "specified-not-built"
+      overlap_note: "Deferred for want of a runtime consumer."
     references:
       roadmap: "F033"
       parked_on: "f033-release-maturity-parked-on-f016"
@@ -1585,6 +1807,9 @@ capabilities:
     documentation: "specs/044-kpi-derivation-lineage/spec.md"
     references: {}
 
+    ownership:
+      capability_owner: "specified-not-built"
+      overlap_note: "Ratified spec with no roadmap F-number, no status-claims entry and no SKILL.md; fail-closed to spec-only."
   - id: showcase-build
     name: "showcase build (Shareable Seshat Proof)"
     summary: "Read-only composer over the shipped Explorer projection, Passport, and disclosure scanner: renders one offline, disclosure-scanned showcase bundle (per-table readiness detail, a truthful badge/card, a four-category disclosure manifest, and an optional before/after) -- no new CLI verb (ratified Option B)."
@@ -1598,6 +1823,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: ".claude/skills/showcase-build/SKILL.md"
+    ownership:
+      capability_owner: "seshat-governance"
     references:
       skill: "showcase-build"
 
@@ -1619,6 +1846,9 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: skills/bi-sql-knowledge/SKILL.md
+    ownership:
+      capability_owner: "seshat-domain-knowledge"
+      canonical_source: "skills/bi-sql-knowledge/SKILL.md"
     references:
       skill: bi-sql-knowledge
 
@@ -1635,6 +1865,9 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: skills/bi-dax-knowledge/SKILL.md
+    ownership:
+      capability_owner: "seshat-domain-knowledge"
+      canonical_source: "skills/bi-dax-knowledge/SKILL.md"
     references:
       skill: bi-dax-knowledge
 
@@ -1651,6 +1884,9 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: skills/bi-python-knowledge/SKILL.md
+    ownership:
+      capability_owner: "seshat-domain-knowledge"
+      canonical_source: "skills/bi-python-knowledge/SKILL.md"
     references:
       skill: bi-python-knowledge
 
@@ -1667,6 +1903,9 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: skills/bi-bigdata-knowledge/SKILL.md
+    ownership:
+      capability_owner: "seshat-domain-knowledge"
+      canonical_source: "skills/bi-bigdata-knowledge/SKILL.md"
     references:
       skill: bi-bigdata-knowledge
 
@@ -1683,6 +1922,9 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: skills/retail-kpi-knowledge/SKILL.md
+    ownership:
+      capability_owner: "seshat-domain-knowledge"
+      canonical_source: "skills/retail-kpi-knowledge/SKILL.md"
     references:
       skill: retail-kpi-knowledge
 
@@ -1699,5 +1941,8 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: null
     documentation: skills/bi-analyst-knowledge/SKILL.md
+    ownership:
+      capability_owner: "seshat-domain-knowledge"
+      canonical_source: "skills/bi-analyst-knowledge/SKILL.md"
     references:
       skill: bi-analyst-knowledge
