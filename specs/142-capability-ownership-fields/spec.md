@@ -4,7 +4,9 @@
 
 **Created**: 2026-08-07
 
-**Status**: Ratified (Ahmed Shaaban, 2026-08-07) -- implementation permitted
+**Status**: implemented -- all 31 tasks complete, 102/102 manifest entries declared
+
+**Status history**: Ratified (Ahmed Shaaban, 2026-08-07) -- implementation permitted
 
 **Status history**: Draft -- 2026-08-07, revised the same day after two review
 passes (12 + 8 findings) and six owner rulings; ratified after both CRITICAL
@@ -143,8 +145,17 @@ Exactly one of:
   or configures it and adds nothing of its own.
 - `seshat-adapter` -- Seshat coordinates, gates, or governs an upstream
   capability without reimplementing its core behavior. Requires `seshat_delta`.
-- `seshat-governance` -- readiness gates, approvals, evidence, policy. No
-  upstream equivalent.
+- `seshat-governance` -- readiness gates, approvals, evidence, policy, drift and
+  lint checks, status and rule registries. Judges or records; does not produce a
+  deliverable artifact.
+- `seshat-authoring` -- **added during implementation.** Generates or scaffolds a
+  Seshat artifact: DAX from an approved contract, a theme JSON from design
+  tokens, blank Stage-1 templates, compiled output. Distinguished from
+  `seshat-governance` because it *produces* rather than *judges*, and from
+  `seshat-domain-knowledge` because it executes rather than reasons. Added after
+  a surface-based fallback was shown unsound: it would have labelled
+  `retail-theme-gen` and `retail-generate` as governance, which is false -- they
+  gate nothing.
 - `seshat-orchestrator` -- Seshat sequences or coordinates other Seshat
   capabilities and stops at human seams. Distinguished from `seshat-adapter`:
   an orchestrator coordinates *Seshat's own* verbs, an adapter wraps an

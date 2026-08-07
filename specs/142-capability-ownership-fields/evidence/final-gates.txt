@@ -1,0 +1,47 @@
+# T054 final gate set -- ALL 102 entries carry the ownership axis
+# HEAD: 9c87def
+
+== seshat check ==
+[error] P2 commit subject must match '<type>: <desc>' (feat|fix|refactor|docs|chore|build|ci|perf|test|style|revert|brand); scopes are not allowed (use 'docs:' not 'docs(018):'); automated '[bot] ...' subjects are exempt (feat(142): Phase 2 -- pilot four wrappers, proving FR-004 on real data (T020-T024))
+[warning] RS1 last_checked_at 2026-06-25 predates latest approval 2026-07-23; a named human must recompute the audit metadata (mappings/retail_store_sales/readiness-status.yaml)
+exit=1
+
+== ruff ==
+890 files already formatted
+All checks passed!
+
+== bundle drift ==
+PASS: generated Claude and Codex bundles match reviewed inputs
+exit=0
+
+== kit-lint ==
+kit-lint: no projection drift.
+
+== semantic-check ==
+seshat semantic-check: no drift (0 findings).
+
+== T052 SC-007: O6 across the whole manifest ==
+  axis (O6) violations: NONE
+  ownership (O9) violations: NONE
+
+== full unit suite ==
+tests\unit\test_cli_identity_version.py:80: AssertionError
+=========================== short test summary info ===========================
+FAILED tests/unit/test_cli_identity_version.py::test_version_resolver_matches_pyproject_when_installed
+1 failed, 5353 passed, 31 skipped, 502 deselected in 238.77s (0:03:58)
+
+## Post-run corrections (recorded, not hidden)
+
+1. `seshat check` initially exited **1** on rule P2: my three phase commits used
+   scoped subjects (`feat(142): ...`), and P2 forbids scopes outright ("use
+   'docs:' not 'docs(018):'"). The T001 baseline showed exit 0 only because the
+   rule scans the BASE..HEAD commit range and those commits did not yet exist.
+   Subjects were reworded to `feat: spec 142 -- ...`; `seshat check` now exits 0
+   with only the pre-existing RS1 warning. This was a defect in MY commits, not
+   in the feature.
+
+2. `tests/unit/test_cli_identity_version.py::test_version_resolver_matches_pyproject_when_installed`
+   fails locally: installed editable metadata reads 0.8.1 while pyproject
+   declares 0.8.2. Editable metadata freezes at install time; CI runs
+   `pip install -e .` on a fresh runner, so it cannot fire there. Environmental,
+   pre-existing, unrelated to this feature.

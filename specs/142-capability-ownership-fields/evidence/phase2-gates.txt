@@ -1,0 +1,31 @@
+# T024 Phase 2 gate set -- FOUR entries now carry the ownership axis
+# This is the FR-004 / SC-004 proof on real data, at 4 entries not 102.
+
+== seshat check ==
+[error] P2 commit subject must match '<type>: <desc>' (feat|fix|refactor|docs|chore|build|ci|perf|test|style|revert|brand); scopes are not allowed (use 'docs:' not 'docs(018):'); automated '[bot] ...' subjects are exempt (feat(142): Phase 1 -- ownership vocabulary, validation and reader (T010-T016))
+[warning] RS1 last_checked_at 2026-06-25 predates latest approval 2026-07-23; a named human must recompute the audit metadata (mappings/retail_store_sales/readiness-status.yaml)
+exit=1
+
+== ruff ==
+890 files already formatted
+All checks passed!
+
+== bundle drift ==
+PASS: generated Claude and Codex bundles match reviewed inputs
+exit=0
+
+== 5 manifest/bundle test files ==
+........................................................................ [ 88%]
+.........                                                                [100%]
+81 passed in 18.89s
+
+== FR-004 PROOF: digests with 4 classified entries ==
+claude-code  8bf0dd0be482737ed328739200a97a2dd19e5f1cb4081fbda82922433510c86c
+codex        fdba0aa6b4b554b4fd25a7631eab45e7b01faeb60488d8ce3e0aa5abf493bc84
+=> byte-identical to evidence/baseline-bundles.txt. The axis is additive.
+
+== reader shows the axis (FR-011) ==
+  dagster-orchestration-adapter: seshat-adapter / Dagster
+  dbt-transformation-adapter: seshat-adapter / dbt Labs
+  pbi-mcp-doctor: seshat-adapter / Microsoft
+  pbir-authoring-adapter-skill: seshat-orchestrator / None

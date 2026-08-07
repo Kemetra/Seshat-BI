@@ -25,6 +25,31 @@ import yaml
 LIFECYCLE_STATES = {"shipped", "spec-only", "deferred"}
 NUMERIC_FIELD_HINTS = ("score", "maturity", "confidence", "completeness", "health")
 
+# Spec 142 FR-002 / FR-003 -- the ownership axis token sets. Independent
+# restatement of the SPEC's vocabulary, like DECLARED_RECORD_FIELDS below: not
+# imported from any shipped module, so the oracle checks the spec's list rather
+# than whatever the code happens to allow today.
+#
+# Every name below is deliberately free of a NUMERIC_FIELD_HINTS substring
+# (FR-008 clause 1) -- e.g. the field is ``capability_owner``, never
+# ``ownership_maturity``. That constraint is enforced behaviourally by
+# ``_axis_numeric_field_names``, not by convention.
+OWNERSHIP_OWNERS = {
+    "official-upstream",
+    "seshat-adapter",
+    "seshat-governance",
+    "seshat-authoring",
+    "seshat-domain-knowledge",
+    "seshat-orchestrator",
+    "vendored-upstream",
+    "seshat-product-module",
+    "human-deliverable",
+    "specified-not-built",
+    "unclassified",
+}
+
+OWNERSHIP_SURFACES = {"plugin", "mcp", "skill", "cli", "library", "format"}
+
 # Independent restatement of the closed field set (contracts/inventory-output.md
 # Form 2) -- deliberately NOT imported from capability_inventory, so the closed-
 # schema checks assert against the SPEC'S field list, not whatever the builder
@@ -42,6 +67,12 @@ DECLARED_RECORD_FIELDS = {
     "command",
     "documentation",
     "group",
+    # Spec 142 FR-011 -- the ownership axis's readable subset. Restated here
+    # independently (never imported) so both sides must be updated deliberately
+    # and the closed-schema assertion keeps its teeth.
+    "capability_owner",
+    "upstream_project",
+    "seshat_delta",
 }
 
 
@@ -468,6 +499,65 @@ def find_axis_violations(repo_root: Path) -> list[str]:
     return problems
 
 
+def ownership_violations(entry: dict) -> list[str]:
+    """O9 (spec 142): the ownership axis on ONE entry.
+
+    Checks, in order: ``capability_owner`` present (FR-002a), drawn from the
+    closed token set (FR-002); ``upstream_surface`` drawn from its own closed set
+    (FR-003); and a declared ``seshat-adapter`` carrying a non-empty
+    ``seshat_delta`` (FR-006).
+
+    Takes a single entry rather than a repo root so the rule can be exercised on
+    constructed input -- a detector only ever run against today's manifest is a
+    detector nobody has actually tested.
+    """
+    entry_id = entry.get("id", "<no id>")
+    ownership = entry.get("ownership")
+
+    if not isinstance(ownership, dict) or not ownership:
+        return [
+            f"{entry_id}: no ownership.capability_owner "
+            f"(FR-002a: declare 'unclassified' rather than omitting the field)"
+        ]
+
+    problems: list[str] = []
+
+    owner = ownership.get("capability_owner")
+    if owner is None or (isinstance(owner, str) and not owner.strip()):
+        problems.append(
+            f"{entry_id}: no ownership.capability_owner "
+            f"(FR-002a: declare 'unclassified' rather than omitting the field)"
+        )
+    elif owner not in OWNERSHIP_OWNERS:
+        problems.append(
+            f"{entry_id}: capability_owner {owner!r} is not an ownership token"
+        )
+
+    surface = ownership.get("upstream_surface")
+    if surface is not None and surface not in OWNERSHIP_SURFACES:
+        problems.append(
+            f"{entry_id}: upstream_surface {surface!r} is not an upstream-surface token"
+        )
+
+    if owner == "seshat-adapter":
+        delta = ownership.get("seshat_delta")
+        if not isinstance(delta, str) or not delta.strip():
+            problems.append(
+                f"{entry_id}: capability_owner 'seshat-adapter' requires a "
+                f"non-empty seshat_delta (FR-006)"
+            )
+
+    return problems
+
+
+def find_ownership_violations(repo_root: Path) -> list[str]:
+    """O9 across the whole manifest."""
+    problems: list[str] = []
+    for entry in load_manifest(repo_root):
+        problems += ownership_violations(entry)
+    return problems
+
+
 def find_invalid_stage(repo_root: Path) -> list[str]:
     """O8: readiness_stage neither not-stage-scoped nor a valid stages.* key."""
     manifest = load_manifest(repo_root)
@@ -491,4 +581,10 @@ def oracle_all_clear(repo_root: Path) -> dict[str, list[str]]:
         "contradiction": find_contradictions(repo_root),
         "axis_violation": find_axis_violations(repo_root),
         "invalid_stage": find_invalid_stage(repo_root),
+        # O9 (spec 142). Wired in only once every entry was declared: FR-002a
+        # rejects an absent capability_owner, so including this earlier would
+        # have failed by design mid-migration. A detector absent from this
+        # aggregate enforces nothing, because this is what the real-manifest
+        # test iterates.
+        "ownership": find_ownership_violations(repo_root),
     }

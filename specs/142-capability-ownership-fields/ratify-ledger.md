@@ -117,6 +117,49 @@ test_dbt_documentation.py         6 passed (includes the fence contract)
 tests/contract/                   201 passed, 1 skipped
 ```
 
+## Implementation -- COMPLETE (2026-08-07)
+
+All 31 tasks in `tasks.md` are checked, each against an inspected deliverable.
+Final state: **102/102 entries declared**, 0 undeclared, 0 needing the
+`unclassified` sentinel, 0 O9 violations, 0 O6 violations, 9 `seshat-adapter`
+entries all carrying a `seshat_delta`, and both bundle `manifest_digest` values
+byte-identical to the T002 baseline.
+
+Two deviations from the plan, both taken on evidence and recorded:
+
+- **A new `seshat-authoring` token** was added to FR-002. The planned
+  surface-based classification would have labelled 67 entries
+  `seshat-governance`, but `retail-theme-gen` generates a theme JSON and
+  `retail-generate` writes DAX -- they gate nothing. Every entry was instead
+  classified by reading its manifest summary.
+- **Two reclassifications** against the task text: `pbir-authoring-adapter-skill`
+  is `seshat-orchestrator` (it composes Seshat's own `pbir-*` verbs), and T020's
+  `upstream_reference` is `dbt-core` (the skill wraps dbt-core's execution; the
+  task text had said to avoid it).
+
+### Fence state after completion
+
+Completing the spec emptied `tasks.md` of open items, which the fence contract
+(`tests/contract/test_dbt_documentation.py`) forbids for the *active* spec -- it
+requires open work, precisely so a finished spec cannot stay fenced.
+
+By owner ruling the fence was set to its **null branch**:
+`.specify/feature.json` `feature_directory: null`, and both fence bodies read
+exactly `No active Spec Kit implementation plan.`
+
+Context the fence previously carried, preserved here since it is no longer
+recorded there:
+
+- `specs/137-finance-gl-genericity-proof/` remains **Ratified (Ahmed Shaaban,
+  2026-07-30) but NOT started**. Its OD-4 (per-table mapping-gate approval) and
+  OD-5 (Power BI Desktop authoring session) are **open and blocking**. It has 39
+  unchecked tasks and is the natural next fence target when someone chooses to
+  start it.
+- `specs/138-agent-driven-bundle/` is **closed** for fence purposes; its
+  T021/T060/T070 were *removed, not completed* (issue #573, closed).
+- Spec 138's FR-026 one-spec-at-a-time rule still binds whenever a fence target
+  is next chosen.
+
 ## Ratification -- granted
 
 **Ratified by Ahmed Shaaban on 2026-08-07.** `spec.md`'s `**Status**` line and the

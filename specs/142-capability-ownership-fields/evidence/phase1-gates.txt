@@ -1,0 +1,25 @@
+# T014 Phase 1 gate set -- vocabulary + validation + reader, NO manifest entry changed
+# HEAD: 8137d18
+
+== seshat check ==
+[error] P2 commit subject must match '<type>: <desc>' (feat|fix|refactor|docs|chore|build|ci|perf|test|style|revert|brand); scopes are not allowed (use 'docs:' not 'docs(018):'); automated '[bot] ...' subjects are exempt (feat(142): Phase 0 baseline evidence (T001-T005))
+[warning] RS1 last_checked_at 2026-06-25 predates latest approval 2026-07-23; a named human must recompute the audit metadata (mappings/retail_store_sales/readiness-status.yaml)
+exit=1
+
+== ruff ==
+890 files already formatted
+All checks passed!
+
+== bundle drift ==
+PASS: generated Claude and Codex bundles match reviewed inputs
+exit=0
+
+== 5 manifest/bundle test files ==
+........................................................................ [ 88%]
+.........                                                                [100%]
+81 passed in 18.72s
+
+== INERTNESS PROOF (FR-004): digests vs T002 baseline ==
+claude-code  8bf0dd0be482737ed328739200a97a2dd19e5f1cb4081fbda82922433510c86c
+codex        fdba0aa6b4b554b4fd25a7631eab45e7b01faeb60488d8ce3e0aa5abf493bc84
+=> IDENTICAL to evidence/baseline-bundles.txt -- Phase 1 is provably inert.

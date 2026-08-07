@@ -533,3 +533,97 @@ def test_readme_names_four_authorities() -> None:
     )
     for authority in ("seshat status", "seshat next", "seshat doctor", "seshat check"):
         assert authority in readme, f"README does not name {authority!r}"
+
+
+# ---------------------------------------------------------------------------
+# Spec 142 -- the ownership axis
+#
+# These exercise the DETECTORS on in-memory entries rather than on the real
+# manifest, so each asserts the rule itself rather than today's data. Building a
+# fixture that merely re-states the shape the code expects would pass while the
+# rule was broken (repo lesson ``circular-fixture-falsifies-verification``).
+# ---------------------------------------------------------------------------
+
+
+def test_ownership_rejects_unknown_capability_owner() -> None:
+    """FR-002: ``capability_owner`` is a closed token set."""
+    entry = {"id": "made-up", "ownership": {"capability_owner": "not-a-real-token"}}
+    problems = oracle.ownership_violations(entry)
+    assert problems, "an unknown capability_owner token was accepted"
+    assert any("not-a-real-token" in p for p in problems)
+    assert any("made-up" in p for p in problems), "the finding must name the entry"
+
+
+def test_ownership_accepts_every_declared_token() -> None:
+    """FR-002: each declared token is accepted -- the closed set is not empty
+    nor accidentally narrower than the spec."""
+    for token in sorted(oracle.OWNERSHIP_OWNERS):
+        entry = {"id": f"e-{token}", "ownership": {"capability_owner": token}}
+        if token == "seshat-adapter":
+            entry["ownership"]["seshat_delta"] = "gates the upstream call"
+        assert oracle.ownership_violations(entry) == [], f"{token} was rejected"
+
+
+def test_ownership_rejects_adapter_without_delta() -> None:
+    """FR-006: a declared adapter MUST state what Seshat adds."""
+    for delta in (None, "", "   "):
+        own: dict[str, object] = {"capability_owner": "seshat-adapter"}
+        if delta is not None:
+            own["seshat_delta"] = delta
+        problems = oracle.ownership_violations({"id": "wrapper", "ownership": own})
+        assert problems, f"adapter with seshat_delta={delta!r} was accepted"
+        assert any("seshat_delta" in p for p in problems)
+
+
+def test_ownership_rejects_missing_capability_owner() -> None:
+    """FR-002a: absence is never meaningful -- an unclassified entry declares
+    the ``unclassified`` sentinel rather than omitting the field."""
+    assert oracle.ownership_violations({"id": "bare"}), (
+        "an entry with no ownership mapping was accepted"
+    )
+    assert oracle.ownership_violations({"id": "bare2", "ownership": {}}), (
+        "an entry with an empty ownership mapping was accepted"
+    )
+    # The sentinel is the sanctioned way to say "not yet classified".
+    assert (
+        oracle.ownership_violations(
+            {"id": "ok", "ownership": {"capability_owner": "unclassified"}}
+        )
+        == []
+    )
+
+
+def test_ownership_rejects_unknown_upstream_surface() -> None:
+    """FR-003: ``upstream_surface`` is a closed token set."""
+    entry = {
+        "id": "surfaced",
+        "ownership": {
+            "capability_owner": "official-upstream",
+            "upstream_surface": "telepathy",
+        },
+    }
+    problems = oracle.ownership_violations(entry)
+    assert problems and any("telepathy" in p for p in problems)
+
+
+def test_o6_fires_on_an_ownership_shaped_numeric_field_name() -> None:
+    """FR-008 clause 1, BEHAVIORAL.
+
+    Proves the pre-existing depth-walking detector actually fires on a field an
+    author of this axis might plausibly add. A list-versus-list comparison of the
+    FR-001 vocabulary against ``NUMERIC_FIELD_HINTS`` could not fail unless
+    someone edited the test's own list, so it would restate the risk instead of
+    catching it.
+    """
+    entry = {"id": "tempting", "ownership": {"ownership_confidence": "high"}}
+    problems = oracle._axis_numeric_field_names(entry)
+    assert problems, "a field name containing 'confidence' was accepted"
+    assert any("ownership_confidence" in p for p in problems)
+
+
+def test_o6_fires_on_a_bare_numeric_ownership_value() -> None:
+    """FR-008 clause 2: a version or year MUST be a quoted string."""
+    bad = {"id": "unquoted", "ownership": {"upstream_reference": 2026}}
+    assert oracle._axis_numeric_scalars(bad), "a bare int was accepted"
+    good = {"id": "quoted", "ownership": {"upstream_reference": "2026"}}
+    assert oracle._axis_numeric_scalars(good) == []

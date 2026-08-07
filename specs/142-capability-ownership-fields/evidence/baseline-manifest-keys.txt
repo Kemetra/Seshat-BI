@@ -1,0 +1,45 @@
+# T003 baseline manifest key census -- spec 142, pre-change
+
+entry count: 102
+
+top-level keys across all entries (key: entries carrying it):
+  authority: 102
+  command: 102
+  documentation: 102
+  id: 102
+  name: 102
+  provenance: 102
+  readiness_stage: 102
+  references: 102
+  requirements: 102
+  state: 102
+  summary: 102
+  surface: 102
+  ship_classification: 44
+  ships: 44
+
+nested references.* keys:
+  references.dispatch: 58
+  references.skill: 54
+  references.roadmap: 27
+  references.verb: 11
+  references.status_claims: 4
+  references.parked_on: 3
+  references.public_skill: 3
+  references.runtime_project: 2
+  references.activation_status: 1
+  references.evidence_schema: 1
+  references.package_extra: 1
+  references.tests: 1
+  references.verified_by: 1
+
+'ownership' key present on any entry: False   <-- MUST be False pre-change
+
+surface distribution:
+  cli: 53
+  skill: 36
+  docs: 6
+  execution-adapter: 4
+  product-module: 1
+  plugin: 1
+  human-artifact: 1

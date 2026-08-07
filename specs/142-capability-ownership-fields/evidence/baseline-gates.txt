@@ -1,0 +1,28 @@
+# T001 baseline gate capture -- spec 142, pre-change
+# branch: 142-capability-ownership-fields  HEAD: ce66dc6
+# captured before any manifest or code edit for this feature
+
+== seshat check ==
+[warning] RS1 last_checked_at 2026-06-25 predates latest approval 2026-07-23; a named human must recompute the audit metadata (mappings/retail_store_sales/readiness-status.yaml)
+exit=0
+
+== ruff format --check src tests scripts ==
+890 files already formatted
+exit=0
+
+== ruff check src tests scripts ==
+All checks passed!
+exit=0
+
+== export_agent_bundles.py --check ==
+PASS: generated Claude and Codex bundles match reviewed inputs
+exit=0
+
+== pytest (5 manifest/bundle-reading test files) ==
+........................................................................ [ 97%]
+..                                                                       [100%]
+74 passed in 18.87s
+
+NOTE: the RS1 warning on mappings/retail_store_sales/readiness-status.yaml is
+PRE-EXISTING and unrelated to this feature. It requires a named human to
+recompute audit metadata and is non-blocking by design.
