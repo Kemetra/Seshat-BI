@@ -10,8 +10,10 @@
   real metric names) into this file. Worked values live only in the filled
   instance. ASCII, UTF-8 no BOM. No real connection host or secret.
 
-  This is AUTHORING ONLY -- it never publishes, never opens Power BI Desktop or a
-  DB connection, and never calls pbi-cli/PBIP (rule 6, F016 owns that).
+  This is DESIGN AUTHORING ONLY -- it never edits PBIR, publishes, opens Power BI
+  Desktop, or connects to a DB. Native report implementation routes to Microsoft's
+  official report-authoring skill after the gate; F016 owns only parked live
+  semantic-model connection/refresh/query/publish execution.
 -->
 
 ## Subject area

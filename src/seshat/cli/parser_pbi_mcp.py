@@ -15,6 +15,7 @@ import argparse
 _INTENT_CHOICES: tuple[str, ...] = (
     "model-edit",
     "published-query",
+    "report-authoring",
     "report-formatting",
     "desktop-verification",
     "db-connectivity",
@@ -32,6 +33,14 @@ def _add_doctor_parser(sub: argparse._SubParsersAction) -> None:
         ),
     )
     parser.add_argument("--repo", default=".", help="repo root to inspect")
+    parser.add_argument(
+        "--target",
+        default=None,
+        help=(
+            "exact governed table whose dashboard readiness applies; required "
+            "for report-authoring"
+        ),
+    )
     parser.add_argument(
         "--intent",
         required=True,

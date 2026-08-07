@@ -5,8 +5,9 @@ an agent to DISTINGUISH the artifacts of Power BI dashboard design -- design tok
 theme JSON, background assets, page blueprint, visual specs, and the Power BI
 implementation handoff -- and to route every request to exactly one of four
 surfaces and never blend them. It does not design any specific dashboard (that is
-the F011/012 `dashboard-design` verb's job) and it implements nothing in Power BI
-(that is F016's job).
+the F011/012 `dashboard-design` verb's job) and it implements nothing in Power BI.
+Native report mechanics belong to Microsoft's official report-authoring skill
+after the gate; F016 is only the parked live semantic execution adapter.
 
 ## The four surfaces (route to exactly one)
 
@@ -14,16 +15,16 @@ Power BI dashboard design is four separate surfaces. Route every request to exac
 
 | # | Surface | What it is | Authoring tool | The rule that keeps it clean |
 |---|---------|------------|----------------|------------------------------|
-| 1 | Report visuals | cards, charts, slicers, tables/matrices, tooltips, bookmarks, titles, interactions, mobile layout | Power BI Desktop (later; F016) | every visual binds to a metric contract + a semantic model field; nothing invented |
+| 1 | Report visuals | cards, charts, slicers, tables/matrices, tooltips, bookmarks, titles, interactions, mobile layout | Microsoft `powerbi-report-authoring` or Power BI Desktop after the gate | every visual binds to a metric contract + a semantic model field; nothing invented |
 | 2 | External background/canvas | PNG/SVG/JPG backgrounds, grids, safe zones, static layout containers, exported assets | Figma / Canva / PowerPoint / Illustrator (outside Power BI) | background is STATIC STRUCTURE, never data -- no KPI value, no dynamic title baked in |
 | 3 | Theme JSON | color palette, fonts, visual defaults, page/wallpaper defaults, filter-pane defaults, sentiment colors | a JSON file imported into Power BI | theme controls DEFAULTS, never business meaning -- no DAX, no metric, no relationship |
-| 4 | Implementation handoff | the bundle a human (later, an adapter) uses to build the report in Power BI Desktop | notes only in this slice | this slice STOPS at the handoff boundary -- no PBIP/PBIR edit, no pbi-cli automation |
+| 4 | Implementation handoff | the bundle an official executor or human uses to build the report | notes only in this slice | this slice STOPS at the handoff boundary -- no PBIP/PBIR edit |
 
 Blending these is the failure mode. Baking a KPI number into a background image
 mixes surface 1 into surface 2 (a number that never refreshes). Putting a metric
 definition in theme JSON mixes surface 1 into surface 3 (business logic hidden in
-a styling file). Editing a PBIP file here crosses into surface 4 (the deferred
-adapter's territory). The discipline that keeps the four apart is the value.
+a styling file). Editing a PBIP file here crosses into surface 4 (the execution
+owner's territory). The discipline that keeps the four apart is the value.
 
 ## Distinguish the artifacts (which file is which, which surface it serves)
 
@@ -38,7 +39,7 @@ below names exactly one home (its manifest path) and the surface it serves.
 | Background assets | static layout STRUCTURE exported from a design tool (PNG/SVG/JPG), imported as a page background; safe zones, grids, containers. NOT data -- no KPI value or dynamic title in the image. | `design/backgrounds/README.md` (spec: `templates/background-spec.yaml`; workflow: `docs/powerbi/background-assets.md`) | 2 |
 | Page blueprint | the per-page design INTENT: audience + the one business question + required contracts/model deps (as references) + sections + candidate visuals + QA rules. NOT inlined metric formulas or DAX. | `templates/dashboard-page-blueprint.yaml` (starters: `reports/blueprints/*.yaml`; how-to: `docs/powerbi/dashboard-blueprints.md`) | 1 |
 | Visual specs | the per-visual design intent: id/type/business question + the metric contract (by name) + the mapped semantic-model fields + position/formatting/interactions/tooltip/sorting/number-format + anti-pattern checks. NOT an invented metric. | `templates/visual-spec.yaml` | 1 |
-| Power BI implementation | the implementation NOTES a human (later, an adapter) uses to build the report; the slice STOPS here. NOT a PBIP/PBIR edit, DAX, SQL, or pbi-cli automation -- F016 owns execution. | `.claude/skills/powerbi-dashboard-design/workflows/powerbi-handoff.md` | 4 |
+| Power BI implementation | the implementation NOTES the official report-authoring skill or a human uses to build the report; the design slice STOPS here. NOT a PBIP/PBIR edit, DAX, or SQL. | `.claude/skills/powerbi-dashboard-design/workflows/powerbi-handoff.md` | 4 |
 
 ### Tokens vs theme JSON -- the distinction readers confuse
 
@@ -110,7 +111,8 @@ design note with a reason (Constitution Principle VI), never silently.
 - It does NOT reproduce the theme do/don't list -- that lives in
   `docs/powerbi/theme-json.md`.
 - It does NOT edit any PBIP/PBIR file, generate DAX, change SQL, edit any
-  semantic-model file, or add pbi-cli automation -- F016 owns execution.
+  semantic-model file, or execute an upstream tool. `powerbi-workflows` selects
+  the official report authoring owner or the parked F016 live semantic adapter.
 
 ## See also
 
@@ -124,4 +126,5 @@ design note with a reason (Constitution Principle VI), never silently.
   to inherit) + `docs/readiness/readiness-model.md` (the four statuses, no score).
 - The gated verb this foundation feeds: the F011/012 `dashboard-design` skill
   (spec-only today; see `specs/012-dashboard-design-skill/`).
-- The deferred execution owner: F016 (PBIP/PBIR authoring, pbi-cli, publish).
+- Native report execution owner: Microsoft `powerbi-report-authoring` when
+  discoverable. Live semantic connection/refresh/query/publish: parked F016.

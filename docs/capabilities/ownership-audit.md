@@ -9,6 +9,15 @@ Per the issue's own Non-goals: *"Do not delete skills in the inventory phase."*
 Every `REMOVE`/`MERGE` row below is a **candidate requiring explicit human
 review**, not a decision.
 
+> **Current Power BI resolution (Spec 145, 2026-08-07).** The snapshot's Power
+> BI MERGE candidate is resolved without deletion: `powerbi-workflows` is the
+> broad public front door, `powerbi-dashboard-design` is a nested design-only
+> router, and `pbi-mcp-doctor` is the machine-checkable execution-owner selector.
+> Native report mechanics delegate to Microsoft's official
+> `powerbi-report-authoring` skill after Seshat's dashboard gate; activation and
+> discovery proof remains Phase 6. F016 is only the separately parked live
+> semantic-model connection/refresh/query/publish adapter.
+
 ## 1. What the surfaces actually are
 
 The issue describes "four representation layers" that "can drift
@@ -165,9 +174,10 @@ is currently **undocumented**. Needs a ruling.
 | 14 × `speckit-*` | upstream Spec Kit | **RESOLVED 2026-08-07 -- not a finding.** They *are* vendored upstream content, but sanctioned: written by upstream's own installer (`specify init --here --integration claude --script ps`, spec-kit `0.8.10`) in commit `1eb0c98`, which in the same commit amended the constitution to v1.1.0 to permit exactly this (`.specify/memory/constitution.md:556-563`). Hash-verified against `.specify/integrations/claude.manifest.json`, zero local drift, no Seshat vocabulary in any body. Principle II is scoped to the **Power BI execution adapter**, not to all tooling, so it does not bind here. Residual risk is narrower: no recorded re-vendor/upgrade path (no lockfile, no `specify upgrade` record), which is the "fork tax" the Principle II *rationale* warns about -- unpaid so far. All `development-only`; no shipped surface affected. |
 
 `pbip-workflow`, `pbip-xray`, `dashboard-design`, `powerbi-dashboard-design`,
-`powerbi-workflows` — Power BI layer. `powerbi-dashboard-design` and
-`powerbi-workflows` are both routers over overlapping surfaces; **MERGE
-candidate**, pending review.
+`powerbi-workflows` — Power BI layer. At this audit snapshot,
+`powerbi-dashboard-design` and `powerbi-workflows` appeared to be overlapping
+routers. **Resolved by Spec 145** as the broad-router / nested-design-router
+hierarchy recorded above; no merge or deletion was justified.
 
 ### GENERATE — already correct
 

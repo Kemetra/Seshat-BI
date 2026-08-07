@@ -155,8 +155,10 @@ Copy the template into the gitignored `.mcp.json` (never commit it):
 
 ## After configuring
 
-1. `seshat pbi-mcp doctor --intent <task>` -- maps your task to the governed
-   surface and lists missing prerequisites.
+1. `seshat pbi-mcp doctor --intent <task> [--target <table>]` -- maps your task
+   to the governed surface and lists missing prerequisites. Native report
+   authoring requires an exact target and routes to Microsoft's official
+   `powerbi-report-authoring` skill; activation/discovery is verified separately.
 2. `seshat pbi-mcp preflight` -- read-only capability discovery + target
    allowlist validation; refuses write-mode or `--skipconfirmation` configs
    and fails closed while `semantic_model_ready` has not passed.

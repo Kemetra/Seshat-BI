@@ -15,7 +15,8 @@
 #   Surface 1 -- report visuals. This template does NOT carry background/canvas
 #   structure (surface 2 -> templates/background-spec.yaml), theme defaults
 #   (surface 3 -> templates/theme-json-spec.md), or any implementation/handoff
-#   step (surface 4 -> the powerbi-handoff workflow, F016 owns execution).
+#   step (surface 4 -> the powerbi-handoff workflow; official report-authoring
+#   owns native PBIR mechanics and F016 owns only parked live semantic execution).
 #
 # THE CONTRACT + MAPPED-FIELD REQUIREMENT  (the gate this template inherits)
 #   No data-bound dashboard design before the subject area semantic_model_ready is
@@ -111,7 +112,8 @@ semantic_model_fields:
 # -----------------------------------------------------------------------------
 # position -- where the visual sits on the page grid (design/grids/16x9-grid.yaml).
 # Layout coordinates only -- no data, no measure. Position is design intent the
-# implementer (F016) realizes; this template does not author the PBIR.
+# official report-authoring executor or human implementer realizes; this template
+# does not author the PBIR. F016 is the separate parked live semantic adapter.
 # -----------------------------------------------------------------------------
 position:
   section: "<page_section>"          # header | kpi_strip | main_insight |

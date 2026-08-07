@@ -16,7 +16,12 @@ description: >-
 Power BI's default `.pbix` is a binary zip — opaque to git, impossible to diff or
 merge, and it bloats history. The **Power BI Project (PBIP)** format saves the
 same work as folders of plain text, so your semantic model and report become
-reviewable code. This skill is how to work with PBIP under git correctly.
+reviewable code. This skill owns Seshat's PBIP version-control and adoption
+delta. It is not a native report or semantic-model authoring implementation:
+when execution is authorized and discoverable, route report mechanics to
+Microsoft's official `powerbi-report-authoring` skill and semantic-model
+mechanics to Microsoft's authoring/Modeling MCP surfaces through
+`powerbi-workflows`.
 
 > PBIP is a **preview feature** (per Microsoft docs as of 2025-12). It can change.
 > Verify specifics against the current docs:
@@ -129,11 +134,13 @@ These come straight from Microsoft's docs and quietly break teams:
 
 ## Editing the model as text
 
-You can edit TMDL in VS Code or Tabular Editor, not only in Power BI Desktop — that's
-the point of plain text. But Desktop owns some files it doesn't fully document during
-preview (e.g. `report.json`, `diagramLayout.json`); changing those by hand can prevent
-the project from opening. Edit measures and table definitions freely; leave the
-layout/diagram files to Desktop unless you know what you're changing.
+PBIP makes TMDL reviewable in VS Code and other text tools, but reviewability is
+not authority to bypass the execution gate. Route native semantic-model edits to
+the official Microsoft surface when F016 policy permits it, and route native
+PBIR report edits to the official report-authoring skill after dashboard
+readiness. Seshat's local PBIR helpers remain valid only for their explicit
+allow-listed, binding-preserving subset. Undocumented Desktop-owned files can
+still make a project unloadable when changed externally.
 
 ## Reviewing a PBIP change in a PR
 

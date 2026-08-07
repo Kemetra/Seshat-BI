@@ -3,7 +3,8 @@
 Everything here is a local, no-network probe: which runtimes are on disk /
 PATH, what mode the machine-local ``.mcp.json`` requests, whether a PBIP/TMDL
 project exists, and what the committed per-table readiness records say about
-``semantic_model_ready``. No MCP server is ever contacted; nothing is written.
+``semantic_model_ready`` and ``dashboard_ready``. No MCP server is ever
+contacted; nothing is written.
 
 The readiness read mirrors the ``seshat.dagster_adapter.gate`` reader style
 (read-only by contract, missing artifacts reported as ``missing``, never
@@ -60,8 +61,11 @@ class DetectedFacts:
     vendored_runtime: str  # present | absent
     mcp_config: str  # absent | read-only | write-mode | forbidden-flag | unparseable
     pbip_project: str  # present | absent
+    target: str | None  # exact governed table selected by the caller
     semantic_model_ready: str  # pass | not-pass | missing
     semantic_ready_tables: tuple[str, ...]  # tables whose stage records pass
+    dashboard_ready: str  # pass | not-pass | missing for the exact target
+    dashboard_ready_tables: tuple[str, ...]  # target when it records pass
     publish_ready_approval: str  # recorded | absent
 
 
@@ -239,6 +243,29 @@ def _fold_readiness_records(
     return tuple(ready), approval
 
 
+def read_stage_readiness(
+    repo_root: Path, stage: str
+) -> tuple[str, tuple[str, ...]]:
+    """Summarize one stage across committed per-table readiness records.
+
+    A pass is copied verbatim from a record. Missing or malformed records never
+    become a pass; no aggregate confidence or inferred state is produced.
+    """
+    mappings = Path(repo_root) / "mappings"
+    if not mappings.is_dir():
+        return READINESS_MISSING, ()
+    records = sorted(mappings.glob("*/readiness-status.yaml"))
+    if not records:
+        return READINESS_MISSING, ()
+    ready = tuple(
+        record.parent.name
+        for record in records
+        if (data := _load_readiness_record(record)) is not None
+        and _stage_status(data, stage) == READINESS_PASS
+    )
+    return (READINESS_PASS if ready else READINESS_NOT_PASS), ready
+
+
 def read_semantic_readiness(repo_root: Path) -> tuple[str, tuple[str, ...], str]:
     """Read every ``mappings/<table>/readiness-status.yaml`` and summarize.
 
@@ -268,13 +295,20 @@ def read_table_readiness(repo_root: Path, table: str) -> str:
     by some OTHER table's pass. Readiness is a property of a table, so a
     target-scoped question must be answered from the target's own record.
     """
+    return read_table_stage(repo_root, table, "semantic_model_ready")
+
+
+def read_table_stage(repo_root: Path, table: str, stage: str) -> str:
+    """Read one exact table/stage without traversal or fuzzy matching."""
+    if not table or table in {".", ".."} or Path(table).name != table:
+        return READINESS_NOT_PASS
     record = Path(repo_root) / "mappings" / table / "readiness-status.yaml"
     if not record.is_file():
         return READINESS_MISSING
     data = _load_readiness_record(record)
     if data is None:
         return READINESS_NOT_PASS
-    if _stage_status(data, "semantic_model_ready") == "pass":
+    if _stage_status(data, stage) == READINESS_PASS:
         return READINESS_PASS
     return READINESS_NOT_PASS
 
@@ -283,6 +317,7 @@ def detect_facts(
     repo_root: Path,
     *,
     which: Callable[[str], str | None] = shutil.which,
+    target: str | None = None,
 ) -> DetectedFacts:
     """Collect every categorical fact the recommendation matrix consumes.
 
@@ -290,6 +325,10 @@ def detect_facts(
     """
     root = Path(repo_root)
     semantic, ready_tables, approval = read_semantic_readiness(root)
+    dashboard, dashboard_tables = read_stage_readiness(root, "dashboard_ready")
+    if target is not None:
+        dashboard = read_table_stage(root, target, "dashboard_ready")
+        dashboard_tables = (target,) if dashboard == READINESS_PASS else ()
     return DetectedFacts(
         node_runtime=PRESENT if which("node") else ABSENT,
         vendored_runtime=(
@@ -297,7 +336,10 @@ def detect_facts(
         ),
         mcp_config=classify_mcp_config(root / ".mcp.json"),
         pbip_project=PRESENT if _pbip_project_present(root) else ABSENT,
+        target=target,
         semantic_model_ready=semantic,
         semantic_ready_tables=ready_tables,
+        dashboard_ready=dashboard,
+        dashboard_ready_tables=dashboard_tables,
         publish_ready_approval=approval,
     )

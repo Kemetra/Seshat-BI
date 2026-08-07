@@ -1,10 +1,10 @@
-"""The issue-#450 section-7 recommendation matrix as a pure decision function.
+"""The Power BI execution-owner matrix as a pure decision function.
 
 Input = a declared task INTENT (closed vocabulary) + the detected facts;
 output = one categorical :class:`Recommendation` naming the governed surface,
-why, the missing prerequisites, and the next HUMAN step. Every section-7 case
-maps to a DISTINCT surface token; the "semantic readiness not passed" case is
-a blocked recommendation that names the gate (fail-closed).
+why, the missing prerequisites, and the next HUMAN step. The original issue-450
+cases and Phase 3's official report-authoring route map to distinct surface
+tokens; missing readiness is always a named fail-closed result.
 
 The only write in slice 2 is :func:`write_advisory` -- an explicit, opt-in
 advisory record at ``.seshat/powerbi-mcp-recommendation.yaml`` that grants
@@ -29,13 +29,14 @@ from .detect import (
 )
 from .scan import refuse_if_secret_shaped
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 ADVISORY_RELPATH = ".seshat/powerbi-mcp-recommendation.yaml"
 
-# Closed intent vocabulary -- one per section-7 customer case (case 6, the
-# not-passed readiness gate, is the blocked branch of ``model-edit``).
+# Closed intent vocabulary. The original section-7 cases remain stable; Phase 3
+# adds report-authoring rather than overloading bounded report-formatting.
 INTENT_MODEL_EDIT = "model-edit"
 INTENT_PUBLISHED_QUERY = "published-query"
+INTENT_REPORT_AUTHORING = "report-authoring"
 INTENT_REPORT_FORMATTING = "report-formatting"
 INTENT_DESKTOP_VERIFICATION = "desktop-verification"
 INTENT_DB_CONNECTIVITY = "db-connectivity"
@@ -45,6 +46,7 @@ INTENT_SENSITIVE_PRODUCTION = "sensitive-production"
 INTENTS: tuple[str, ...] = (
     INTENT_MODEL_EDIT,
     INTENT_PUBLISHED_QUERY,
+    INTENT_REPORT_AUTHORING,
     INTENT_REPORT_FORMATTING,
     INTENT_DESKTOP_VERIFICATION,
     INTENT_DB_CONNECTIVITY,
@@ -52,9 +54,10 @@ INTENTS: tuple[str, ...] = (
     INTENT_SENSITIVE_PRODUCTION,
 )
 
-# Distinct surface tokens, one per section-7 case (1..8 in issue order).
+# Distinct surface tokens. Comments retain the original section-7 case numbers.
 SURFACE_LOCAL_MODELING_MCP = "local-modeling-mcp"  # case 1
 SURFACE_REMOTE_MCP = "remote-powerbi-mcp"  # case 2
+SURFACE_OFFICIAL_REPORT_AUTHORING = "official-powerbi-report-authoring"
 SURFACE_PBIR_ADAPTER = "pbir-authoring-adapter"  # case 3
 SURFACE_DESKTOP_BRIDGE = "desktop-bridge"  # case 4
 SURFACE_GATEWAY_SERVICE = "gateway-and-service"  # case 5
@@ -179,6 +182,51 @@ def _recommend_published_query(facts: DetectedFacts) -> Recommendation:
     )
 
 
+def _recommend_report_authoring(facts: DetectedFacts) -> Recommendation:
+    prereqs: list[str] = []
+    if facts.target is None:
+        prereqs.append(
+            "an exact governed table selected with --target <table>; another "
+            "table's readiness can never authorize this report"
+        )
+    elif facts.dashboard_ready != READINESS_PASS:
+        prereqs.append(
+            f"dashboard_ready = pass for mappings/{facts.target}/"
+            "readiness-status.yaml"
+        )
+    prereqs.append(
+        "the official Microsoft powerbi-report-authoring skill proven activated "
+        "and discoverable by this harness (Phase 6); installed alone is not enough"
+    )
+    gate = (
+        f"target '{facts.target}' records dashboard_ready = pass"
+        if facts.target is not None and facts.dashboard_ready == READINESS_PASS
+        else (
+            "no exact target was declared"
+            if facts.target is None
+            else f"target '{facts.target}' dashboard_ready is '{facts.dashboard_ready}'"
+        )
+    )
+    return Recommendation(
+        intent=INTENT_REPORT_AUTHORING,
+        surface=SURFACE_OFFICIAL_REPORT_AUTHORING,
+        why=(
+            f"{gate}; native PBIR page, visual, filter, slicer, binding, and "
+            "theme authoring belongs to Microsoft's official report-authoring "
+            "skill, while Seshat owns the design gate and validation"
+        ),
+        missing_prerequisites=tuple(prereqs),
+        next_human_step=(
+            "verify official-skill discovery through the supported harness, then "
+            "delegate native PBIR authoring and return the result to Seshat's "
+            "binding, blueprint, and static validators; do not emulate the skill"
+        ),
+        # Phase 6 owns activation/discovery proof. Until that proof is represented,
+        # this route is intentionally selected but not executable.
+        blocked=True,
+    )
+
+
 def _recommend_report_formatting(facts: DetectedFacts) -> Recommendation:
     del facts
     return Recommendation(
@@ -284,6 +332,7 @@ def _recommend_sensitive_production(facts: DetectedFacts) -> Recommendation:
 _HANDLERS = {
     INTENT_MODEL_EDIT: _recommend_model_edit,
     INTENT_PUBLISHED_QUERY: _recommend_published_query,
+    INTENT_REPORT_AUTHORING: _recommend_report_authoring,
     INTENT_REPORT_FORMATTING: _recommend_report_formatting,
     INTENT_DESKTOP_VERIFICATION: _recommend_desktop_verification,
     INTENT_DB_CONNECTIVITY: _recommend_db_connectivity,
@@ -331,6 +380,7 @@ def render_advisory(
         f"  vendored_runtime: {_yaml_str(facts.vendored_runtime)}",
         f"  mcp_config: {_yaml_str(facts.mcp_config)}",
         f"  pbip_project: {_yaml_str(facts.pbip_project)}",
+        f"  target: {_yaml_str(facts.target or 'none')}",
         f"  semantic_model_ready: {_yaml_str(facts.semantic_model_ready)}",
     ]
     if facts.semantic_ready_tables:
@@ -338,6 +388,12 @@ def render_advisory(
         lines.extend(_yaml_list(facts.semantic_ready_tables, "    "))
     else:
         lines.append("  semantic_ready_tables: []")
+    lines.append(f"  dashboard_ready: {_yaml_str(facts.dashboard_ready)}")
+    if facts.dashboard_ready_tables:
+        lines.append("  dashboard_ready_tables:")
+        lines.extend(_yaml_list(facts.dashboard_ready_tables, "    "))
+    else:
+        lines.append("  dashboard_ready_tables: []")
     lines.extend(
         [
             f"  publish_ready_approval: {_yaml_str(facts.publish_ready_approval)}",

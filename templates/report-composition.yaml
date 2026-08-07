@@ -16,11 +16,13 @@
 #   (that stays the blueprint's job, exactly as a blueprint references, never
 #   inlines, its visuals).
 #
-# INTENT, NOT EXECUTION (four-surface discipline; F016 owns rendering)
+# INTENT, NOT EXECUTION (four-surface discipline)
 #   This records the navigation INTENT (which page is the landing, which links go
 #   where, which filters carry across pages). The RENDERED navigation -- the actual
-#   buttons, page transitions, runtime filter transfer -- is authored/executed by
-#   F016 (PBIR), deferred. Nothing here authors a PBIP/PBIR, DAX, or SQL.
+#   buttons, page transitions, runtime filter transfer -- belongs to Microsoft's
+#   official report-authoring skill after the gate (or a human Desktop build).
+#   F016 is the separate parked live semantic adapter. Nothing here authors a
+#   PBIP/PBIR, DAX, or SQL.
 #
 # REFERENCE-BY-NAME (Principle VII)
 #   Every page is a blueprint PATH reference; every carried filter and link target

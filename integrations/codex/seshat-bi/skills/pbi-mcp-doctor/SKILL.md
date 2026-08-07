@@ -3,8 +3,9 @@ name: pbi-mcp-doctor
 description: >-
   Use when a user asks whether or how to wire Microsoft's official Power BI
   MCP servers into a Seshat BI workspace: run the read-only environment
-  doctor, map a task to the governed Power BI surface, generate a safe
-  read-only config template, or run the mocked read-only preflight.
+  doctor, map a task to the governed Power BI surface (including the official
+  report-authoring skill), generate a safe read-only config template, or run
+  the mocked read-only preflight.
 ---
 
 # Power BI MCP doctor (read-only)
@@ -19,16 +20,21 @@ adapter) is PARKED: no mutation path exists anywhere in this family.
 
 1. Map the user's task to the governed surface, read-only:
 
-   `seshat pbi-mcp doctor --intent <task> [--json] [--write-advisory]`
+   `seshat pbi-mcp doctor --intent <task> [--target <table>] [--json] [--write-advisory]`
 
    `--intent` is a closed vocabulary: `model-edit`, `published-query`,
-   `report-formatting`, `desktop-verification`, `db-connectivity`,
+   `report-authoring`, `report-formatting`, `desktop-verification`, `db-connectivity`,
    `ci-validation`, `sensitive-production`. Report the recommendation, its
    missing prerequisites, and the next HUMAN step verbatim. A blocked
    recommendation (exit 2) names the gate -- stop there; never route around
    it. `--write-advisory` records the result once at
    `.seshat/powerbi-mcp-recommendation.yaml` (write-once; it refuses to
    overwrite) and is never a side effect.
+
+   `report-authoring` additionally requires an exact `--target <table>`. It
+   selects Microsoft's official `powerbi-report-authoring` skill, but remains
+   blocked until that target records `dashboard_ready: pass` and Phase 6 proves
+   the skill discoverable. Installed is not the same as activated.
 
 2. Generate config only through the safe generator:
 
@@ -60,8 +66,13 @@ adapter) is PARKED: no mutation path exists anywhere in this family.
   MCP server, only once its tenant-side prerequisites are verified (tenant
   preview setting, Build permission, Copilot license for Generate Query);
   otherwise stop and name the missing prerequisite.
+- Create or modify native report pages, visuals, filters, slicers, bindings, or
+  themes beyond Seshat's bounded allow-list -> Microsoft's official
+  `powerbi-report-authoring` skill after `dashboard_ready: pass`; if discovery
+  is unverified, stop rather than emulate it.
 - Theme, page layout, geometry, or visual formatting -> the existing
-  PBIR-authoring adapter (`powerbi-workflows` skill), not MCP at all.
+  PBIR-authoring adapter only for its bounded allow-listed operations; broader
+  native report authoring routes to the official skill, not MCP.
 - Live Desktop verification or screenshots -> the Power BI Desktop Bridge, a
   separate optional integration; never in CI.
 - Database connectivity or scheduled refresh -> the Power BI Gateway +

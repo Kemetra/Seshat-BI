@@ -357,7 +357,7 @@ skills:
     status: shipped
   - name: powerbi-workflows
     platforms: [claude, codex]
-    intent: Route guarded Power BI design, review, theme, formatting, and adoption work.
+    intent: Route guarded Power BI design, native authoring, semantic-model, query, inspection, formatting, and adoption intent to Seshat or official Microsoft owners.
     wrapper_template: distribution/bundle-templates/shared/skills/powerbi-workflows/SKILL.md
     bundle_destination: skills/powerbi-workflows/SKILL.md
     documentation: docs/install/agent-install.md
@@ -378,7 +378,7 @@ skills:
     status: shipped
   - name: pbi-mcp-doctor
     platforms: [claude, codex]
-    intent: Route read-only Power BI MCP environment doctor, surface recommendation, safe config generation, and preflight work.
+    intent: Select the governed Power BI execution owner, including official report authoring and MCP surfaces, and run read-only MCP configuration/preflight checks.
     wrapper_template: distribution/bundle-templates/shared/skills/pbi-mcp-doctor/SKILL.md
     bundle_destination: skills/pbi-mcp-doctor/SKILL.md
     documentation: docs/integrations/pbi-mcp-adapter.md

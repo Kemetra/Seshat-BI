@@ -23,7 +23,8 @@ def _ready_repo(tmp_path: Path) -> Path:
     record = tmp_path / "mappings" / "orders" / "readiness-status.yaml"
     record.parent.mkdir(parents=True)
     record.write_text(
-        'stages:\n  semantic_model_ready:\n    status: "pass"\napprovals: []\n',
+        'stages:\n  semantic_model_ready:\n    status: "pass"\n'
+        '  dashboard_ready:\n    status: "pass"\napprovals: []\n',
         encoding="utf-8",
     )
     return tmp_path
@@ -52,6 +53,29 @@ def test_doctor_recommends_and_exits_zero(tmp_path: Path, capsys) -> None:
     assert code == 0
     assert "pbir-authoring-adapter" in out
     assert "grants no approval" in out
+
+
+def test_doctor_report_authoring_names_official_surface_and_discovery_gap(
+    tmp_path: Path, capsys
+) -> None:
+    root = _ready_repo(tmp_path)
+    code = main(
+        [
+            "pbi-mcp",
+            "doctor",
+            "--repo",
+            str(root),
+            "--intent",
+            "report-authoring",
+            "--target",
+            "orders",
+        ]
+    )
+    out = capsys.readouterr().out
+    assert code == 2
+    assert "official-powerbi-report-authoring" in out
+    assert "discoverable" in out
+    assert "dashboard_ready=pass" in out
 
 
 def test_doctor_blocked_gate_exits_two_and_names_the_gate(

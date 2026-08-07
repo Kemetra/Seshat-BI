@@ -26,8 +26,11 @@ def _doctor_payload(facts, rec) -> dict:
             "vendored_runtime": facts.vendored_runtime,
             "mcp_config": facts.mcp_config,
             "pbip_project": facts.pbip_project,
+            "target": facts.target,
             "semantic_model_ready": facts.semantic_model_ready,
             "semantic_ready_tables": list(facts.semantic_ready_tables),
+            "dashboard_ready": facts.dashboard_ready,
+            "dashboard_ready_tables": list(facts.dashboard_ready_tables),
             "publish_ready_approval": facts.publish_ready_approval,
         },
         "recommendation": {
@@ -52,7 +55,9 @@ def _print_doctor_text(prog: str, facts, rec) -> None:
         "  detected: "
         f"node={facts.node_runtime} vendored={facts.vendored_runtime} "
         f"config={facts.mcp_config} pbip={facts.pbip_project} "
+        f"target={facts.target or 'none'} "
         f"semantic_model_ready={facts.semantic_model_ready} "
+        f"dashboard_ready={facts.dashboard_ready} "
         f"publish_ready_approval={facts.publish_ready_approval}"
     )
     print(
@@ -65,7 +70,7 @@ def _run_doctor(args) -> int:
     from seshat.pbi_mcp.detect import detect_facts
     from seshat.pbi_mcp.recommend import AdvisoryWriteError, recommend, write_advisory
 
-    facts = detect_facts(Path(args.repo))
+    facts = detect_facts(Path(args.repo), target=args.target)
     rec = recommend(args.intent, facts)
     if args.as_json:
         print(json.dumps(_doctor_payload(facts, rec), indent=2, sort_keys=True))

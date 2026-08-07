@@ -623,7 +623,7 @@ capabilities:
 
   - id: powerbi-workflows-public-router
     name: "Power BI public workflow router"
-    summary: "Portable public router for the current Seshat Power BI design, review, theme, formatting, PBIP inspection, and bounded PBIR workflow surfaces; it selects a governed local helper and does not invoke Microsoft execution itself."
+    summary: "The broad public Power BI front door: classifies business, design, inspection, bounded formatting, native report-authoring, semantic-model, and published-query intents; applies Seshat pre/post gates and delegates native execution to the appropriate official Microsoft surface."
     state: shipped
     authority: advisory
     surface: skill
@@ -634,15 +634,41 @@ capabilities:
     documentation: "distribution/bundle-templates/shared/skills/powerbi-workflows/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
-      seshat_delta: "Selects among Seshat-owned Power BI design, inspection, PBIR, and adoption helpers behind the applicable readiness and evidence boundaries; it does not execute Microsoft operations."
+      upstream_project: "Microsoft"
+      upstream_surface: "skill"
+      upstream_reference: "microsoft/skills-for-fabric"
+      seshat_delta: "One broad intent router applying Seshat metric/readiness/evidence policy, selecting Seshat bounded helpers or official Microsoft executors, and returning results to Seshat validation without reproducing upstream execution."
       canonical_source: "distribution/bundle-templates/shared/skills/powerbi-workflows/SKILL.md"
-      overlap_note: "This records the current Seshat-only routing boundary. Official Microsoft delegation and any router consolidation belong to roadmap Phase 3, after intent-by-intent ownership is verified."
+      overlap_note: "Broad public front door. The internal powerbi-dashboard-design skill is a nested design-only router; pbi-mcp-doctor is the machine-checkable execution-owner selector, not a competing front door."
     references:
       public_skill: "powerbi-workflows"
 
+  - id: microsoft-powerbi-report-authoring
+    name: "Microsoft Power BI Report Authoring skill"
+    summary: "Official first-party skill for native PBIR report definition mechanics: pages, visuals, filters, slicers, bindings, formatting, themes, and validation. The integration payload is cataloged, but supported-harness activation/discovery remains unproven until Phase 6."
+    state: deferred
+    authority: advisory
+    surface: skill
+    ships: false
+    ship_classification: upstream-integration
+    requirements: [optional-dependency]
+    provenance: unrecorded
+    readiness_stage: dashboard_ready
+    command: null
+    documentation: "docs/integrations/pbi-mcp-adapter.md"
+    ownership:
+      capability_owner: "official-upstream"
+      upstream_project: "Microsoft"
+      upstream_surface: "skill"
+      upstream_reference: "microsoft/skills-for-fabric"
+      overlap_note: "Official native report execution owner. Seshat supplies the dashboard-ready pre-gate and binding/blueprint/static post-validation; activation/discovery is Phase 6."
+      update_policy: "Consume through the cataloged Microsoft bundle; verify upstream activation and compatibility before use and re-check on upstream revision changes."
+    references:
+      integration_component: "fabric-skills"
+
   - id: pbi-mcp-doctor
     name: "seshat pbi-mcp"
-    summary: "Read-only Power BI MCP doctor family (issue #450 slices 2-4, the F016 slot): detects the local environment (Node runtime, vendored modeling MCP, .mcp.json mode, PBIP on disk, semantic_model_ready state) and maps a declared task intent onto the governed surface recommendation; generates placeholder-only read-only .mcp.json templates and setup guidance behind a secret-scan refusal; runs a transport-mocked read-only preflight (capability discovery + target allowlist) that hard-refuses --skipconfirmation/write-mode configs and fails closed while semantic_model_ready has not passed. Grants no approval, emits no score; F016 stays parked -- no mutation path exists."
+    summary: "Read-only Power BI execution-owner selector and MCP preflight: detects local MCP facts plus semantic_model_ready/dashboard_ready state, maps closed intents to official Microsoft or bounded Seshat surfaces, and blocks native report authoring until an exact target passes dashboard readiness and official-skill discovery is proven. MCP config generation and preflight remain placeholder-only/read-only; F016 stays parked."
     state: shipped
     authority: agent-runnable
     surface: cli
@@ -656,9 +682,10 @@ capabilities:
       upstream_project: "Microsoft"
       upstream_surface: mcp
       upstream_reference: "@microsoft/powerbi-modeling-mcp"
-      seshat_delta: "Read-only preflight around Microsoft's modeling MCP: hard-refuses --skipconfirmation and write-mode configs, fails closed while semantic_model_ready has not passed, and emits placeholder-only templates behind a secret-scan refusal. No mutation path exists."
+      seshat_delta: "Machine-checkable intent selection plus read-only preflight: distinguishes official report skill, local/remote MCP, and bounded Seshat adapters; enforces target-scoped readiness, hard-refuses unsafe MCP modes, and never executes or grants approval."
       canonical_source: "distribution/bundle-templates/shared/skills/pbi-mcp-doctor/SKILL.md"
       update_policy: "Upstream is PREVIEW / pre-GA and consumed in readonly mode only; re-verify the capability allowlist on any upstream version change."
+      overlap_note: "Invoked by the broad powerbi-workflows router for execution-shaped intent; it is a selector/preflight, not a second public Power BI front door."
     references:
       dispatch: "pbi-mcp"
       public_skill: "pbi-mcp-doctor"
@@ -1500,7 +1527,7 @@ capabilities:
 
   - id: powerbi-dashboard-design
     name: "powerbi-dashboard-design (router)"
-    summary: "Routes a design request into exactly one of four Visual Foundation surfaces (report visuals, background/canvas, theme JSON, implementation handoff)."
+    summary: "Nested design-only router under powerbi-workflows: routes a governed design request into one of four Visual Foundation surfaces and stops at an implementation handoff; it never selects or performs native execution."
     state: shipped
     authority: advisory
     surface: skill
@@ -1513,6 +1540,8 @@ capabilities:
     documentation: ".claude/skills/powerbi-dashboard-design/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
+      seshat_delta: "Keeps Seshat's visual-design vocabulary and four-surface separation explicit after the broad router has selected design intent; it does not compete with official execution."
+      overlap_note: "Nested under powerbi-workflows for design intent only; Microsoft powerbi-report-authoring owns native report mechanics after the design gate."
     references:
       roadmap: "F011A"
       skill: "powerbi-dashboard-design"
@@ -1735,8 +1764,8 @@ capabilities:
   # ---------------------------------------------------------------------------
 
   - id: f034-built-dashboard-page
-    name: "F034 human-built Power BI dashboard page"
-    summary: "The approved dashboard design built into an actual PBIR report page -- a human Power BI Desktop action the gate already permits but that has not happened yet (the committed report page is still empty)."
+    name: "F034 implemented Power BI dashboard page"
+    summary: "The approved dashboard design realized in a PBIR page by Microsoft's official report-authoring skill when discoverable or by a human in Desktop, then reviewed against Seshat's binding map and readiness evidence."
     state: deferred
     authority: human-gated
     surface: human-artifact
@@ -1747,13 +1776,13 @@ capabilities:
     documentation: "docs/roadmap/roadmap.md"
     ownership:
       capability_owner: "human-deliverable"
-      seshat_delta: "A human Power BI Desktop action the gate permits; Seshat contributes the approved design and the conformity check, not the build."
+      seshat_delta: "The deliverable remains human-approved; Seshat contributes the approved design and conformity checks while native PBIR mechanics belong to Microsoft tooling or Desktop."
     references:
       roadmap: "F034"
 
   - id: f016-powerbi-execution-adapter
     name: "F016 Power BI execution adapter"
-    summary: "Materializes/publishes an approved model via the official Power BI MCP/connection; execution-only, gated on Semantic Model Ready."
+    summary: "Parked live semantic-model connection, refresh, query, or publish adapter via official Power BI surfaces; execution-only and gated. It does not own PBIR report-page authoring."
     state: deferred
     authority: agent-runnable
     surface: execution-adapter
@@ -1767,7 +1796,7 @@ capabilities:
       upstream_project: "Microsoft"
       upstream_surface: "mcp"
       upstream_reference: "@microsoft/powerbi-modeling-mcp"
-      seshat_delta: "Execution-only materialize/publish of an already-approved model, gated on Semantic Model Ready. PARKED: no mutation path exists yet."
+      seshat_delta: "Execution-only live semantic-model connection/refresh/query/publish of already-approved artifacts, gated on Semantic Model Ready and named approvals. PARKED: no mutation path exists yet; report-page authoring is separate."
     references:
       roadmap: "F016"
 
