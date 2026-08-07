@@ -185,8 +185,8 @@ does NOT publish Power BI, and does NOT move a readiness stage to `pass`. Three 
 
 This adapter is not the owner of generic Dagster competence. Asset, job, resource, component,
 schedule, sensor, automation, project-structure, CLI, and troubleshooting guidance belongs to
-the official `dagster-expert` skill. Its activation and discovery must be proven by Phase 6
-before routing to it. This skill owns only Seshat's readiness-aware sequencing, named-human
+the official `dagster-expert` skill. Its activation and discovery must be proven by the
+Spec 148 harness probe before routing to it. This skill owns only Seshat's readiness-aware sequencing, named-human
 stops, closed execution policy, fail-closed propagation, redaction, evidence normalization,
 and cross-tool BI progression around the official Dagster runtime; it must not reproduce
 upstream instructions.

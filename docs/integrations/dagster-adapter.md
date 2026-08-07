@@ -35,11 +35,12 @@ competence. It does not make Seshat the owner of native Dagster mechanics.
 
 The integration catalog now separates `seshat-dagster-workflows`, the bundled
 Seshat router, from `dagster-agent-skills`, the official `dagster-io/skills`
-payload. Catalog membership and installation do not prove supported-harness
-activation. Phase 6 must prove activation and discovery before the official
-skill is treated as usable. Until then, generic upstream intent is an explicit
-integration gap; native Dagster execution is not a fallback for the governed
-Seshat project.
+payload. Catalog membership and installation still do not imply activation.
+Spec 148 declares the native Claude plugin and provenance-preserving Codex
+projection, and `seshat integrations setup --profile orchestration --harness
+<claude-code|codex>` checks them read-only. Generic upstream intent remains
+blocked unless that exact result is `discoverable`; native Dagster execution is
+not a fallback for the governed Seshat project.
 
 ## Why it exists (and what it is not)
 

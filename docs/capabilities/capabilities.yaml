@@ -645,7 +645,7 @@ capabilities:
 
   - id: microsoft-powerbi-report-authoring
     name: "Microsoft Power BI Report Authoring skill"
-    summary: "Official first-party skill for native PBIR report definition mechanics: pages, visuals, filters, slicers, bindings, formatting, themes, and validation. The integration payload is cataloged, but supported-harness activation/discovery remains unproven until Phase 6."
+    summary: "Official first-party skill for native PBIR report definition mechanics: pages, visuals, filters, slicers, bindings, formatting, themes, and validation. The integration catalog declares Claude Code and Codex activation paths, and the read-only harness probe must report discoverable before use."
     state: deferred
     authority: advisory
     surface: skill
@@ -661,7 +661,7 @@ capabilities:
       upstream_project: "Microsoft"
       upstream_surface: "skill"
       upstream_reference: "microsoft/skills-for-fabric"
-      overlap_note: "Official native report execution owner. Seshat supplies the dashboard-ready pre-gate and binding/blueprint/static post-validation; activation/discovery is Phase 6."
+      overlap_note: "Official native report execution owner. Seshat supplies the dashboard-ready pre-gate and binding/blueprint/static post-validation; Spec 148 proves the declared harness path without treating installation as discovery."
       update_policy: "Consume through the cataloged Microsoft bundle; verify upstream activation and compatibility before use and re-check on upstream revision changes."
     references:
       integration_component: "fabric-skills"
@@ -1249,7 +1249,7 @@ capabilities:
 
   - id: dbt-core-execution
     name: "dbt Core native execution"
-    summary: "Official dbt CLI execution semantics for parse, compile, build, test, run, show, and native project behavior. Seshat invokes this executor through its governed wrapper when Seshat policy applies; supported-harness activation remains unproven until Phase 6."
+    summary: "Official dbt CLI execution semantics for parse, compile, build, test, run, show, and native project behavior. Seshat invokes this executor through its governed wrapper when Seshat policy applies; skill-harness discovery is checked separately from runtime installation."
     state: deferred
     authority: advisory
     surface: cli
@@ -1265,14 +1265,14 @@ capabilities:
       upstream_project: "dbt Labs"
       upstream_surface: cli
       upstream_reference: "dbt-core"
-      overlap_note: "Official native execution owner. Seshat supplies the Mapping Ready and accepted-plan pre-gates plus normalized evidence afterward; direct official-surface activation/discovery is Phase 6."
+      overlap_note: "Official native execution owner. Seshat supplies the Mapping Ready and accepted-plan pre-gates plus normalized evidence afterward; runtime installation and official skill discovery remain separate catalog facts."
       update_policy: "Consume the cataloged pinned dbt Core/dbt-postgres pair; version changes require the compatibility review recorded by the Seshat adapter policy."
     references:
       integration_component: "dbt-core"
 
   - id: dbt-agent-skills
     name: "dbt Labs agent skills"
-    summary: "Official first-party skills for generic dbt model authoring, test design, command guidance, documentation lookup, MCP setup, and troubleshooting. The payload is cataloged, but supported-harness activation/discovery remains unproven until Phase 6."
+    summary: "Official first-party skills for generic dbt model authoring, test design, command guidance, documentation lookup, MCP setup, and troubleshooting. The catalog declares native Claude Code and provenance-preserving Codex paths; the read-only probe must report discoverable before use."
     state: deferred
     authority: advisory
     surface: skill
@@ -1288,14 +1288,14 @@ capabilities:
       upstream_project: "dbt Labs"
       upstream_surface: skill
       upstream_reference: "dbt-labs/dbt-agent-skills"
-      overlap_note: "Official generic dbt competence owner. Seshat routes governed project work back through its pre-gates and evidence seam; activation/discovery is Phase 6."
+      overlap_note: "Official generic dbt competence owner. Seshat routes governed project work back through its pre-gates and evidence seam; Spec 148 checks installed, activated, and discoverable separately."
       update_policy: "Consume through the cataloged upstream repository and re-verify supported-harness activation plus compatibility when its revision changes."
     references:
       integration_component: "dbt-agent-skills"
 
   - id: dbt-mcp
     name: "dbt MCP"
-    summary: "Official dbt Labs MCP tool surface for native dbt CLI, metadata, discovery, documentation, and semantic-layer operations. Registration is cataloged, but usable discovery and activation remain unproven until Phase 6."
+    summary: "Official dbt Labs MCP tool surface for native dbt CLI, metadata, discovery, documentation, and semantic-layer operations. Exact-version registration is cataloged; official skill-harness discovery does not imply MCP liveness or governed routing."
     state: deferred
     authority: advisory
     surface: mcp
@@ -1311,7 +1311,7 @@ capabilities:
       upstream_project: "dbt Labs"
       upstream_surface: mcp
       upstream_reference: "dbt-mcp"
-      overlap_note: "Official MCP execution/tool owner. Seshat does not treat installed or registered as discoverable; activation/discovery and governed routing proof are Phase 6."
+      overlap_note: "Official MCP execution/tool owner. Seshat does not treat installed or registered as live/discoverable; Spec 148 covers official Agent Skills only, while MCP liveness remains a separate preflight fact."
       update_policy: "Consume through the cataloged exact-version uvx registration and re-run registration, discovery, and compatibility checks on version changes."
     references:
       integration_component: "dbt-mcp"
@@ -1337,7 +1337,7 @@ capabilities:
       seshat_delta: "Gates official dbt Core execution behind Mapping Ready and an accepted-plan digest; enforces fixed selectors, shadow-schema isolation, citations, redaction, and locks; then records run/test/parity as DERIVED evidence -- a green dbt test is evidence, never an approval."
       canonical_source: ".claude/skills/dbt-transformation-adapter/SKILL.md"
       update_policy: "Pinned via the dbt extra (dbt-core, dbt-postgres); a major -- and until compatibility tests exist, minor -- bump needs a named-owner compatibility attestation."
-      overlap_note: "Thin Seshat policy/evidence seam around dbt-core-execution. Generic authoring, command help, docs, and troubleshooting belong to dbt-agent-skills or dbt-mcp once Phase 6 proves activation/discovery."
+      overlap_note: "Thin Seshat policy/evidence seam around dbt-core-execution. Generic authoring, command help, docs, and troubleshooting belong to dbt-agent-skills when the Spec 148 harness probe passes, or to dbt-mcp when its separate preflight passes."
     references:
       roadmap: "F029"
       skill: "dbt-transformation-adapter"
@@ -1353,7 +1353,7 @@ capabilities:
 
   - id: dagster-agent-skills
     name: "Dagster agent skills"
-    summary: "Official first-party dagster-expert skill for generic Dagster assets, jobs, resources, components, project structure, schedules, sensors, automation, CLI use, validation, and troubleshooting. The payload is cataloged, but supported-harness activation/discovery remains unproven until Phase 6."
+    summary: "Official first-party dagster-expert skill for generic Dagster assets, jobs, resources, components, project structure, schedules, sensors, automation, CLI use, validation, and troubleshooting. The catalog declares native Claude Code and provenance-preserving Codex paths; the read-only probe must report discoverable before use."
     state: deferred
     authority: advisory
     surface: skill
@@ -1369,7 +1369,7 @@ capabilities:
       upstream_project: "Dagster"
       upstream_surface: skill
       upstream_reference: "dagster-io/skills"
-      overlap_note: "Official generic Dagster competence owner. Seshat routes governed BI orchestration back through its readiness, approval, execution-policy, and evidence seams; activation/discovery is Phase 6."
+      overlap_note: "Official generic Dagster competence owner. Seshat routes governed BI orchestration back through its readiness, approval, execution-policy, and evidence seams; Spec 148 checks installed, activated, and discoverable separately."
       update_policy: "Consume through the cataloged upstream repository and re-verify supported-harness activation plus compatibility when its revision changes."
     references:
       integration_component: "dagster-agent-skills"
@@ -1395,7 +1395,7 @@ capabilities:
       seshat_delta: "Provides readiness-aware BI sequencing, named-human approval stops, closed execution policy, redaction, cross-tool progression, and fail-closed propagation around the official Dagster runtime; records derived run evidence and decides no readiness stage."
       canonical_source: ".claude/skills/dagster-orchestration-adapter/SKILL.md"
       update_policy: "The Dagster runtime is pinned via the orchestration project; Seshat's adapter/router remain bundled, while official generic competence comes from the separately cataloged dagster-io/skills repository."
-      overlap_note: "Thin Seshat governance/evidence seam around Dagster. Generic asset, automation, project, CLI, and troubleshooting competence belongs to dagster-agent-skills once Phase 6 proves activation/discovery."
+      overlap_note: "Thin Seshat governance/evidence seam around Dagster. Generic asset, automation, project, CLI, and troubleshooting competence belongs to dagster-agent-skills whenever the Spec 148 harness probe passes."
     references:
       roadmap: "F030"
       skill: "dagster-orchestration-adapter"

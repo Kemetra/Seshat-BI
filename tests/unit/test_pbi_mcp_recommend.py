@@ -84,7 +84,7 @@ def test_native_report_authoring_routes_to_official_skill_but_fails_closed() -> 
     assert result.blocked
     joined = " ".join(result.missing_prerequisites)
     assert "discoverable" in joined
-    assert "Phase 6" in joined
+    assert "Spec 148" in joined
     assert "PBIR" in result.next_human_step
 
 

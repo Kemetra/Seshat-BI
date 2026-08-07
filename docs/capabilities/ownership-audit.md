@@ -14,8 +14,9 @@ review**, not a decision.
 > broad public front door, `powerbi-dashboard-design` is a nested design-only
 > router, and `pbi-mcp-doctor` is the machine-checkable execution-owner selector.
 > Native report mechanics delegate to Microsoft's official
-> `powerbi-report-authoring` skill after Seshat's dashboard gate; activation and
-> discovery proof remains Phase 6. F016 is only the separately parked live
+> `powerbi-report-authoring` skill after Seshat's dashboard gate. Spec 148 adds
+> catalog-backed, read-only Claude/Codex activation and discovery proof. F016 is
+> only the separately parked live
 > semantic-model connection/refresh/query/publish adapter.
 
 ## 1. What the surfaces actually are
@@ -70,8 +71,8 @@ documenting why `distribution/bundle-templates/` is exempt.
 | `human-artifact` | 1 |
 
 `ship_classification`: `consumer-capability` 23, `compass-verb` 10,
-`knowledge-root` 6, `development-only` 5, plus one aggregate entry covering all
-14 `speckit-*` skills.
+`knowledge-root` 6, `development-only` 5, `upstream-integration` 5, plus one
+aggregate entry covering all 14 `speckit-*` skills.
 
 ### MCP surfaces
 
@@ -101,7 +102,7 @@ registry** — just in code, and only for *installable* dependencies:
 | `dbt-agent-skills` | dbt Labs | `dbt-labs/dbt-agent-skills` | `catalog.py:168-175` |
 | `dbt-mcp` | dbt Labs | PyPI via `uvx` | `mcp_server=True`, `catalog.py:176-186` |
 | `dagster` | Dagster | PyPI | `catalog.py:191-198` |
-| `dagster-agent-skills` | Dagster | `dagster-io/skills` | official `dagster-expert` payload; activation/discovery remains Phase 6 |
+| `dagster-agent-skills` | Dagster | `dagster-io/skills` | official `dagster-expert` payload; Spec 148 verifies declared Claude/Codex discovery paths |
 | `fabric-skills` | Microsoft | `microsoft/skills-for-fabric` | `catalog.py:217-223` |
 | `powerbi-modeling-mcp` | Microsoft | `@microsoft/powerbi-modeling-mcp` (npm) | **preview/pre-GA**, `mode="readonly"`, `catalog.py:224-235` |
 | `seshat-dagster-adapter`, `seshat-dagster-workflows` | Seshat (bundled) | — | governed runtime adapter and public router; legacy `dagster-skills` is lookup-only compatibility |
@@ -113,8 +114,9 @@ pip-installing over the operator's interpreter, never writing a credential.
 
 **Resolved for dbt by Spec 146:** the capability manifest now distinguishes
 official `dbt-core`, `dbt-agent-skills`, and `dbt-mcp` ownership from the
-Seshat `dbt-transformation-adapter` delta. Catalog membership still does not
-prove skill/MCP activation or discovery; that remains a Phase 6 integration gap.
+Seshat `dbt-transformation-adapter` delta. Spec 148 keeps catalog membership
+separate from skill activation and discovery and exposes a read-only proof for
+supported Claude/Codex paths. MCP registration/liveness remains a separate fact.
 
 ## 4. Workstream 2 — ownership classification
 

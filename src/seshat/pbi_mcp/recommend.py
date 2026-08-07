@@ -195,7 +195,7 @@ def _recommend_report_authoring(facts: DetectedFacts) -> Recommendation:
         )
     prereqs.append(
         "the official Microsoft powerbi-report-authoring skill proven activated "
-        "and discoverable by this harness (Phase 6); installed alone is not enough"
+        "and discoverable by the Spec 148 harness probe; installed alone is not enough"
     )
     gate = (
         f"target '{facts.target}' records dashboard_ready = pass"
@@ -220,8 +220,8 @@ def _recommend_report_authoring(facts: DetectedFacts) -> Recommendation:
             "delegate native PBIR authoring and return the result to Seshat's "
             "binding, blueprint, and static validators; do not emulate the skill"
         ),
-        # Phase 6 owns activation/discovery proof. Until that proof is represented,
-        # this route is intentionally selected but not executable.
+        # The Spec 148 probe owns activation/discovery proof. Until that proof is
+        # represented here, this route is intentionally selected but not executable.
         blocked=True,
     )
 

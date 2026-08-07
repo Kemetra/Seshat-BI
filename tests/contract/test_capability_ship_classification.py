@@ -39,6 +39,7 @@ _CLASSIFICATIONS = {
     "knowledge-root",
     "consumer-capability",
     "development-only",
+    "upstream-integration",
 }
 
 
@@ -146,6 +147,11 @@ def test_classification_invariants_hold(
         if classification == "development-only":
             assert entry["ships"] is False, (
                 f"{entry['id']}: development-only capabilities must not ship"
+            )
+        if classification == "upstream-integration":
+            assert entry["ships"] is False, (
+                f"{entry['id']}: official upstream capabilities must not ship "
+                "as Seshat-authored content"
             )
         if classification == "compass-verb":
             assert entry["ships"] is True, (

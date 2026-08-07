@@ -25,12 +25,14 @@ def test_powerbi_public_router_is_the_broad_front_door() -> None:
     assert "pbi-mcp-doctor" in ownership["overlap_note"]
 
 
-def test_official_report_authoring_is_explicit_and_not_claimed_discoverable() -> None:
+def test_official_report_authoring_uses_the_spec_148_discovery_boundary() -> None:
     cap = _capabilities()["microsoft-powerbi-report-authoring"]
     assert cap["state"] == "deferred"
     assert cap["ownership"]["capability_owner"] == "official-upstream"
     assert cap["ownership"]["upstream_reference"] == "microsoft/skills-for-fabric"
-    assert "activation/discovery is Phase 6" in cap["ownership"]["overlap_note"]
+    note = cap["ownership"]["overlap_note"]
+    assert "Spec 148" in note
+    assert "without treating installation as discovery" in note
 
 
 def test_design_router_is_nested_and_f016_excludes_report_authoring() -> None:

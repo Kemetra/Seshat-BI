@@ -42,6 +42,7 @@ from seshat.integrations.catalog import (
     profiles_for,
 )
 from seshat.integrations.compat import apply_policy
+from seshat.integrations.discovery import SkillDiscovery, inspect_official_skills
 from seshat.integrations.lockfile import LockError, build_lock, read_lock, write_lock
 from seshat.integrations.resolvers import Resolution, Resolvers, resolve
 
@@ -92,10 +93,13 @@ class SetupOutcome:
     rows: list[ComponentPlan] = field(default_factory=list)
     lock_written: Path | None = None
     notes: list[str] = field(default_factory=list)
+    discovery: list[SkillDiscovery] = field(default_factory=list)
 
     @property
     def needs_action(self) -> bool:
-        return any(row.needs_action for row in self.rows)
+        return any(row.needs_action for row in self.rows) or any(
+            result.needs_action for result in self.discovery
+        )
 
 
 @dataclass(frozen=True)
@@ -244,6 +248,10 @@ def plan(
     *,
     profile: str = DEFAULT_PROFILE,
     resolvers: Resolvers | None = None,
+    harnesses: tuple[str, ...] = (),
+    discovery_runner=None,
+    harness_roots: dict[str, Path] | None = None,
+    discovery_tool_lookup=None,
 ) -> SetupOutcome:
     """The default: read-only, and network-free unless `resolvers` is supplied.
 
@@ -282,6 +290,19 @@ def plan(
 
     for item, resolved in zip(components, verdict.resolutions):
         outcome.rows.append(_plan_row(root, item, resolved, profile))
+    outcome.discovery.extend(
+        inspect_official_skills(
+            root,
+            components,
+            installed={
+                item.id: _is_installed(root, item, profile) for item in components
+            },
+            harnesses=harnesses,
+            runner=discovery_runner,
+            harness_roots=harness_roots,
+            tool_lookup=discovery_tool_lookup,
+        )
+    )
     return outcome
 
 
@@ -427,6 +448,10 @@ def apply(
     profile: str = DEFAULT_PROFILE,
     resolvers: Resolvers,
     runner=None,
+    harnesses: tuple[str, ...] = (),
+    discovery_runner=None,
+    harness_roots: dict[str, Path] | None = None,
+    discovery_tool_lookup=None,
 ) -> SetupOutcome:
     """Install the approved plan into isolation, validate, then write the lock.
 
@@ -483,6 +508,19 @@ def apply(
     if installed:
         document = build_lock(profile, _now(), installed)
         outcome.lock_written = write_lock(root, document)
+    outcome.discovery.extend(
+        inspect_official_skills(
+            root,
+            components,
+            installed={
+                item.id: _is_installed(root, item, profile) for item in components
+            },
+            harnesses=harnesses,
+            runner=discovery_runner,
+            harness_roots=harness_roots,
+            tool_lookup=discovery_tool_lookup,
+        )
+    )
     return outcome
 
 

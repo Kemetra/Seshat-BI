@@ -33,8 +33,9 @@ adapter) is PARKED: no mutation path exists anywhere in this family.
 
    `report-authoring` additionally requires an exact `--target <table>`. It
    selects Microsoft's official `powerbi-report-authoring` skill, but remains
-   blocked until that target records `dashboard_ready: pass` and Phase 6 proves
-   the skill discoverable. Installed is not the same as activated.
+   blocked until that target records `dashboard_ready: pass` and the Spec 148
+   harness probe reports the skill discoverable. Installed is not the same as
+   activated.
 
 2. Generate config only through the safe generator:
 

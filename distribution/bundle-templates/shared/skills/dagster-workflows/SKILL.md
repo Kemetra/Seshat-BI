@@ -25,11 +25,13 @@ a stage passed.
 | Generic Dagster CLI guidance, validation, or troubleshooting | Prove the official skill is activated and discoverable | Official `dagster-expert` skill | Do not infer a readiness effect from native success |
 | Publish a Power BI result | `publish_ready: pass` and the separate publish adapter gate | Official Power BI executor when available | Dagster records the trigger result and never publishes itself |
 
-Phase 6 has not yet proven activation and discovery for the official `dagster-expert`
-skill. Until that proof exists, report the exact upstream-integration blocker for
-generic Dagster competence. Do not copy
-official guidance into this router, claim an installed payload is usable, or
-invoke native Dagster commands against the governed project as a fallback.
+Spec 148 provides the read-only harness proof for the official `dagster-expert`
+skill. Before routing generic competence, run
+`seshat integrations setup --profile orchestration --harness <claude-code|codex>`
+and require the `dagster-agent-skills` result to be discoverable. Otherwise report
+the exact upstream-integration blocker. Do not copy official guidance into this
+router, claim an installed payload is usable, or invoke native Dagster commands
+against the governed project as a fallback.
 
 ## Fixed workflow
 

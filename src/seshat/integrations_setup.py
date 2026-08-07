@@ -117,9 +117,18 @@ DBT_POSTGRES_PIN = f"dbt-postgres=={BASELINE_PINS['dbt-postgres']}"
 
 
 def _project(outcome) -> list[IntegrationResult]:
-    return [
+    projected = [
         IntegrationResult(row.component, row.status, row.detail) for row in outcome.rows
     ]
+    projected.extend(
+        IntegrationResult(
+            f"{result.component}/{result.harness}",
+            result.status,
+            "; ".join(result.blockers) or result.next_action,
+        )
+        for result in outcome.discovery
+    )
+    return projected
 
 
 def setup_integrations(
@@ -129,6 +138,10 @@ def setup_integrations(
     resolvers: Resolvers | None = None,
     profile: str = DEFAULT_PROFILE,
     runner=None,
+    harnesses: tuple[str, ...] = (),
+    discovery_runner=None,
+    harness_roots: dict[str, Path] | None = None,
+    discovery_tool_lookup=None,
 ) -> list[IntegrationResult]:
     """Plan or apply through the canonical catalog-backed implementation.
 
@@ -147,14 +160,29 @@ def setup_integrations(
             )
         ]
     if apply:
-        outcome = apply_profile(
-            root,
-            profile=profile,
-            resolvers=resolvers,
-            runner=runner,
-        )
+        kwargs = {
+            "profile": profile,
+            "resolvers": resolvers,
+            "runner": runner,
+        }
+        if harnesses:
+            kwargs.update(
+                harnesses=harnesses,
+                discovery_runner=discovery_runner,
+                harness_roots=harness_roots,
+                discovery_tool_lookup=discovery_tool_lookup,
+            )
+        outcome = apply_profile(root, **kwargs)
     else:
-        outcome = plan_profile(root, profile=profile, resolvers=resolvers)
+        kwargs = {"profile": profile, "resolvers": resolvers}
+        if harnesses:
+            kwargs.update(
+                harnesses=harnesses,
+                discovery_runner=discovery_runner,
+                harness_roots=harness_roots,
+                discovery_tool_lookup=discovery_tool_lookup,
+            )
+        outcome = plan_profile(root, **kwargs)
     return _project(outcome)
 
 

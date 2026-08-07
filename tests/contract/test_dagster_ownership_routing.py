@@ -39,13 +39,15 @@ def test_legacy_bundled_component_lookup_is_compatibility_only() -> None:
     assert "dagster-skills" not in _BUNDLED_SKILLS
 
 
-def test_official_dagster_skill_is_explicit_and_not_claimed_discoverable() -> None:
+def test_official_dagster_skill_uses_the_spec_148_discovery_boundary() -> None:
     cap = _capabilities()["dagster-agent-skills"]
     assert cap["state"] == "deferred"
     assert cap["ownership"]["capability_owner"] == "official-upstream"
     assert cap["ownership"]["upstream_surface"] == "skill"
     assert cap["ownership"]["upstream_reference"] == "dagster-io/skills"
-    assert "Phase 6" in cap["ownership"]["overlap_note"]
+    note = cap["ownership"]["overlap_note"]
+    assert "Spec 148" in note
+    assert "installed, activated, and discoverable separately" in note
 
 
 def test_seshat_adapter_keeps_only_the_governed_delta() -> None:
@@ -71,8 +73,8 @@ def test_public_router_names_pre_gate_executor_and_post_validation() -> None:
         "Seshat afterward",
         "official `dagster-expert`",
         "Dagster through `seshat dagster`",
-        "activation and discovery",
-        "Phase 6",
+        "Spec 148",
+        "--harness",
     ):
         assert phrase in text
 

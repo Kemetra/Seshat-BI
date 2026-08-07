@@ -35,9 +35,11 @@ For native report authoring run:
 
 `seshat pbi-mcp doctor --intent report-authoring --target <table>`
 
-The current Phase 3 route fails closed until Phase 6 proves that the official
-skill is activated and discoverable by the active harness. Never treat a cloned
-bundle as an activated executor, and never copy its implementation into Seshat.
+Spec 148 provides the read-only harness proof. Before delegation, run
+`seshat integrations setup --profile powerbi-fabric --harness <claude-code|codex>`
+and require the `fabric-skills` harness result to be discoverable. Never treat a
+cloned bundle as an activated executor, and never copy its implementation into
+Seshat.
 
 ## Design (dashboards and pages)
 

@@ -23,11 +23,13 @@ checks with raw dbt commands.
 | Native dbt MCP configuration or tool use | Prove the exact MCP registration is activated and discoverable | Official dbt MCP and its official configuration skill | Do not infer a readiness effect; route governed execution back through `seshat dbt` |
 | Switch from migrations to dbt | Passing parity evidence plus a named-human approval | Named human | Retain migrations as parity oracle and rollback path |
 
-Phase 6 has not yet proven activation and discovery for the official dbt Labs
-agent skills or dbt MCP. Until that proof exists, report the exact
-upstream-integration blocker for generic competence or MCP intent. Do not copy
-official guidance into this router, claim an installed payload is usable, or
-execute raw dbt commands against the governed project as a fallback.
+Spec 148 provides the read-only harness proof for the official dbt Labs agent
+skills. Before routing generic competence, run
+`seshat integrations setup --profile analytics-full --harness <claude-code|codex>`
+and require the `dbt-agent-skills` result to be discoverable. MCP liveness remains
+a separate preflight fact. Report the exact blocker for either surface; do not
+copy official guidance into this router, claim an installed payload is usable,
+or execute raw dbt commands against the governed project as a fallback.
 
 ## Fixed workflow
 

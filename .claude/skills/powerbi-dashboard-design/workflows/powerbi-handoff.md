@@ -99,7 +99,7 @@ The note describes WHAT to build and in what order; an authorized official
 executor or human performs the build. This workflow never crosses into authoring
 or publishing.
 
-## Official-executor NOTES (discovery deferred to Phase 6)
+## Official-executor NOTES (discovery checked through Spec 148)
 
 Record, as PROSE for the official report-authoring owner, what the executor would
 consume from this handoff -- so the design captures intent without copying
@@ -115,8 +115,9 @@ upstream instructions or adding automation here:
   `semantic_model_ready` is `pass` and the design-review sign-off is recorded.
 
 These are NOTES describing a delegated capability. Do not copy upstream command
-sequences or automation here. If the official skill is not activated and
-discoverable, stop and report the Phase 6 integration gap.
+sequences or automation here. Use the read-only official-skill harness probe; if
+the official skill is not activated and discoverable, stop and report its exact
+integration blocker.
 
 ## Known limitations (record with the handoff)
 

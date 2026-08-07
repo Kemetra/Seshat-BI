@@ -54,8 +54,10 @@ Microsoft's first-party `powerbi-report-authoring` skill owns native PBIR report
 page, visual, filter, slicer, binding, formatting, and theme mechanics. It is not
 the local Modeling MCP and does not make the Modeling MCP a report-page tool.
 Seshat's integration catalog obtains it through `microsoft/skills-for-fabric`.
-Phase 3 can select that owner; Phase 6 must still prove activation and discovery
-for each supported harness before the route may execute.
+Spec 148 declares the supported Claude Code native plugins and Codex Agent
+Skills projection. `seshat integrations setup --profile powerbi-fabric
+--harness <claude-code|codex>` proves activation and discovery read-only; the
+route remains blocked unless that exact probe reports `discoverable`.
 
 ## Boundaries (what it never does)
 

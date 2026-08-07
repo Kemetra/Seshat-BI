@@ -43,6 +43,22 @@ def as_json(outcome: SetupOutcome) -> str:
                 }
                 for row in outcome.rows
             ],
+            "discovery": [
+                {
+                    "component": result.component,
+                    "harness": result.harness,
+                    "mechanism": result.mechanism,
+                    "checked": result.checked,
+                    "installed": result.installed,
+                    "activated": result.activated,
+                    "discoverable": result.discoverable,
+                    "status": result.status,
+                    "evidence": list(result.evidence),
+                    "blockers": list(result.blockers),
+                    "next_action": result.next_action,
+                }
+                for result in outcome.discovery
+            ],
         },
         indent=2,
         sort_keys=True,
@@ -60,12 +76,27 @@ def as_text(outcome: SetupOutcome) -> str:
             f"[{row.status.upper()}] {row.component} ({row.channel}"
             f"{'' if row.pinned == '-' else ' ' + row.pinned}){flag}: {row.detail}"
         )
+    for result in outcome.discovery:
+        activated = _fact(result.activated)
+        discoverable = _fact(result.discoverable)
+        detail = "; ".join(result.blockers) or result.next_action
+        lines.append(
+            f"[{result.status.upper()}] {result.component}/{result.harness} "
+            f"({result.mechanism}) installed={_fact(result.installed)} "
+            f"activated={activated} discoverable={discoverable}: {detail}"
+        )
     for note in outcome.notes:
         lines.append(f"note: {note}")
     if outcome.lock_written:
         lines.append(f"lock written: {outcome.lock_written.as_posix()}")
     lines.append(_summary(outcome))
     return "\n".join(lines)
+
+
+def _fact(value: bool | None) -> str:
+    if value is None:
+        return "not-checked"
+    return str(value).lower()
 
 
 def _summary(outcome: SetupOutcome) -> str:

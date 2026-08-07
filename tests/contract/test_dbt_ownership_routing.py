@@ -19,17 +19,29 @@ def _capabilities() -> dict[str, dict]:
 def test_dbt_execution_and_competence_have_explicit_upstream_owners() -> None:
     caps = _capabilities()
     expected = {
-        "dbt-core-execution": ("cli", "dbt-core"),
-        "dbt-agent-skills": ("skill", "dbt-labs/dbt-agent-skills"),
-        "dbt-mcp": ("mcp", "dbt-mcp"),
+        "dbt-core-execution": (
+            "cli",
+            "dbt-core",
+            "runtime installation and official skill discovery remain separate",
+        ),
+        "dbt-agent-skills": (
+            "skill",
+            "dbt-labs/dbt-agent-skills",
+            "Spec 148 checks installed, activated, and discoverable separately",
+        ),
+        "dbt-mcp": (
+            "mcp",
+            "dbt-mcp",
+            "MCP liveness remains a separate preflight fact",
+        ),
     }
-    for capability_id, (surface, reference) in expected.items():
+    for capability_id, (surface, reference, boundary) in expected.items():
         cap = caps[capability_id]
         assert cap["state"] == "deferred"
         assert cap["ownership"]["capability_owner"] == "official-upstream"
         assert cap["ownership"]["upstream_surface"] == surface
         assert cap["ownership"]["upstream_reference"] == reference
-        assert "Phase 6" in cap["ownership"]["overlap_note"]
+        assert boundary in cap["ownership"]["overlap_note"]
 
 
 def test_seshat_adapter_keeps_only_the_governed_delta() -> None:
@@ -57,8 +69,9 @@ def test_public_router_names_pre_gate_executor_and_post_validation() -> None:
         "Seshat afterward",
         "dbt Labs agent skills",
         "dbt Core through `seshat dbt`",
-        "activation and discovery",
-        "Phase 6",
+        "Spec 148",
+        "--harness",
+        "MCP liveness remains",
     ):
         assert phrase in text
 
@@ -69,7 +82,8 @@ def test_internal_adapter_disclaims_generic_dbt_competence() -> None:
     )
     assert "not the owner of generic dbt competence" in text
     assert "dbt Labs agent skills" in text
-    assert "activation and discovery" in text
+    assert "Spec 148 harness probe" in text
+    assert "MCP liveness remains a separate preflight fact" in text
 
 
 def test_public_surface_describes_broad_routing_boundary() -> None:

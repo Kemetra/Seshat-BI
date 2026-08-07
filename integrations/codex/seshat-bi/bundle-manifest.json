@@ -1974,19 +1974,19 @@
     {
       "classification": "generated_wrapper",
       "destination": "skills/dagster-workflows/SKILL.md",
-      "output_sha256": "9a367fbf8f474b8efa19577a6ff50620a12a0cac649c24b96db59f9a8f89f60d",
+      "output_sha256": "d96a16eefb092a58c581a78d1a53356d9a9cc587a124ebf1ddbd8458578a89fa",
       "source": "distribution/bundle-templates/shared/skills/dagster-workflows/SKILL.md",
       "source_id": "dagster-workflows-skill",
-      "source_sha256": "9a367fbf8f474b8efa19577a6ff50620a12a0cac649c24b96db59f9a8f89f60d",
+      "source_sha256": "d96a16eefb092a58c581a78d1a53356d9a9cc587a124ebf1ddbd8458578a89fa",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "generated_wrapper",
       "destination": "skills/dbt-workflows/SKILL.md",
-      "output_sha256": "b912c818dca83885be0f442d9418b651706e611a2bb65690278fde5313423ec8",
+      "output_sha256": "c21009b2c6ccd6700db3ad37f9ffc53e35f4e1705060d13a6a69d83d6d888ae5",
       "source": "distribution/bundle-templates/shared/skills/dbt-workflows/SKILL.md",
       "source_id": "dbt-workflows-skill",
-      "source_sha256": "b912c818dca83885be0f442d9418b651706e611a2bb65690278fde5313423ec8",
+      "source_sha256": "c21009b2c6ccd6700db3ad37f9ffc53e35f4e1705060d13a6a69d83d6d888ae5",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2019,19 +2019,19 @@
     {
       "classification": "generated_wrapper",
       "destination": "skills/pbi-mcp-doctor/SKILL.md",
-      "output_sha256": "325a5b8da6fd42f91ef1b2d2c0a15ec95efb021cbba6e87afc74184de2ca1cb8",
+      "output_sha256": "6721ccb41f2ebbe34646bffa6d2eabfb4c953c78ffb966d3dba8f74f0b3b7370",
       "source": "distribution/bundle-templates/shared/skills/pbi-mcp-doctor/SKILL.md",
       "source_id": "pbi-mcp-doctor-skill",
-      "source_sha256": "325a5b8da6fd42f91ef1b2d2c0a15ec95efb021cbba6e87afc74184de2ca1cb8",
+      "source_sha256": "6721ccb41f2ebbe34646bffa6d2eabfb4c953c78ffb966d3dba8f74f0b3b7370",
       "transform": "copy-normalized-v1"
     },
     {
       "classification": "generated_wrapper",
       "destination": "skills/powerbi-workflows/SKILL.md",
-      "output_sha256": "28d8670701424dbb93273313642d7d02b85a2d1f397d235cfceb6309bc596622",
+      "output_sha256": "043427b702f05606afbc3cdd6820ebcf1cf480f467b9f0aedc55621cf5ef8675",
       "source": "distribution/bundle-templates/shared/skills/powerbi-workflows/SKILL.md",
       "source_id": "powerbi-workflows-skill",
-      "source_sha256": "28d8670701424dbb93273313642d7d02b85a2d1f397d235cfceb6309bc596622",
+      "source_sha256": "043427b702f05606afbc3cdd6820ebcf1cf480f467b9f0aedc55621cf5ef8675",
       "transform": "copy-normalized-v1"
     },
     {
@@ -2180,10 +2180,10 @@
     }
   ],
   "exporter_version": "1.0",
-  "manifest_digest": "ff0929cc7e86ef4b5440ff52cc0110a9904e1b42cb612dabe773369df47e25ff",
+  "manifest_digest": "7ec49c96086afa13215d7b18cd9c17f5debf9af0e0d00440111840d7a975d15a",
   "plugin": "seshat-bi",
   "schema_version": "1.0",
-  "source_revision": "5732a354a67711d817beee565967c1ef348c6657",
+  "source_revision": "b0ab828a8afc5807d70cef02f99e3a8e8beae0cf",
   "target": "codex",
   "version": "0.8.2"
 }

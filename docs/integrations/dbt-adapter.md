@@ -33,10 +33,12 @@ not make Seshat the owner of dbt semantics.
 
 The integration catalog records `dbt-core`, `dbt-postgres`,
 `dbt-agent-skills`, and `dbt-mcp`. That establishes membership and install
-identity, not supported-harness activation. Phase 6 must prove activation and
-discovery before the official skills or MCP are treated as usable. Until then,
-generic upstream intent is an explicit integration gap; raw dbt execution is
-not a fallback for the governed Seshat project.
+identity. Spec 148 separately declares and checks official-skill activation for
+Claude Code and Codex. `seshat integrations setup --profile transformation
+--harness <claude-code|codex>` must report `discoverable` before generic skill
+intent routes upstream. MCP registration remains a separate exact-version
+control-plane fact; neither skill discovery nor MCP registration is a fallback
+for the governed Seshat project.
 
 ## Where dbt fits in the medallion flow
 
