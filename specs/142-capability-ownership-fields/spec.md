@@ -25,9 +25,12 @@ reviewer must be able to tell a legitimate governance wrapper from a fork of
 somebody else's tool. Today neither is recorded anywhere in the manifest.
 
 Partial data already exists in code but not in the manifest:
-`src/seshat/integrations/catalog.py:61-67` names dbt Labs, Microsoft, and
-Dagster with coordinates and channels -- for *installable dependencies* only. No
-record says that (for example) `dbt-workflows` is a Seshat adapter over dbt
+`src/seshat/integrations/catalog.py` declares the allowlisted upstream *sources*
+at `:61-67` (`ALLOWLISTED_SOURCES`, a name-to-URL map covering PyPI,
+`microsoft/skills-for-fabric`, `dbt-labs/dbt-agent-skills`, the npm registry,
+and `seshat-bundled`), and the per-component records carrying coordinates and
+release channels from `:149` onward. Both cover *installable dependencies* only.
+No record says that (for example) `dbt-workflows` is a Seshat adapter over dbt
 Labs' upstream surface.
 
 The nearest existing manifest axis, `provenance`, tracks release-verification
@@ -135,6 +138,11 @@ Exactly one of:
   capability without reimplementing its core behavior. Requires `seshat_delta`.
 - `seshat-governance` -- readiness gates, approvals, evidence, policy. No
   upstream equivalent.
+- `seshat-orchestrator` -- Seshat sequences or coordinates other Seshat
+  capabilities and stops at human seams. Distinguished from `seshat-adapter`:
+  an orchestrator coordinates *Seshat's own* verbs, an adapter wraps an
+  *upstream* surface. An orchestrator therefore has no `upstream_project` and
+  needs no `seshat_delta`.
 - `seshat-domain-knowledge` -- BI/SQL/DAX/Python/retail reasoning that no
   upstream tool owns.
 - `vendored-upstream` -- upstream content copied into this repo. A declaration
@@ -173,8 +181,10 @@ entry-by-entry.
 
 Where an entry ships into the generated bundles, `canonical_source` names the
 authored path and `generated_targets` names what is produced from it. These
-record the direction the existing generator already enforces
-(`scripts/export_agent_bundles.py:602`); they introduce no new enforcement.
+record the direction the existing generator already enforces -- `build_bundle`
+(`scripts/export_agent_bundles.py:602`) drives it, with the actual checks in
+`_validate_source` (`:319`), `_validate_entry_policy` (`:358`), and
+`_record_destinations` (`:397`). They introduce no new enforcement.
 
 ### FR-006 -- A declared adapter states its delta
 
@@ -190,6 +200,17 @@ Where `src/seshat/integrations/catalog.py` already declares an upstream
 component, `upstream_reference` MUST match the coordinate declared there rather
 than restating it in a divergent form. The manifest points at the catalog; the
 catalog stays authoritative for installable dependencies.
+
+Two limits on this rule, both verified in the catalog:
+
+- **Bundled components carry no coordinate.** `seshat-dagster-adapter` and
+  `dagster-skills` are Seshat-bundled, so there is nothing to match.
+  `upstream_reference` MUST be omitted for them, not invented.
+- **Where a project ships several coordinates**, `upstream_reference` names the
+  one the capability actually consumes, not the project's whole set. For the dbt
+  adapter that is the skill bundle and/or `dbt-mcp` it drives -- not
+  `dbt-core`/`dbt-postgres`, which are runtime dependencies of the operator's
+  environment rather than the wrapped surface.
 
 ### FR-008 -- The axis must not trip the numeric-axis oracle (O6)
 
@@ -245,13 +266,20 @@ migration.
 ## Success criteria
 
 - **SC-001**: Every one of the 102 entries either carries an `ownership` mapping
-  or is listed, with a reason, as deliberately unclassified.
+  or is listed, with an entry-specific reason, as deliberately unclassified.
+  **Floor**: at most the entries blocked on OD-1 and OD-2 may be left
+  unclassified. A boilerplate reason repeated across entries does not satisfy
+  this criterion -- the point is classification, not a well-formed list of
+  refusals.
 - **SC-002**: Every entry declaring `seshat-adapter` carries a non-empty
   `seshat_delta`.
-- **SC-003**: The four wrappers named in `ownership-audit.md`
-  (`dbt-transformation-adapter`, `dagster-orchestration-adapter`,
-  `pbi-mcp-doctor`, `pbir-authoring-adapter`) are classified `seshat-adapter`
-  with their upstream project named.
+- **SC-003**: The four wrappers named in `ownership-audit.md` are classified
+  `seshat-adapter` with their upstream project named. Note that audit prose uses
+  *skill names*, which are not always manifest `id`s -- e.g. the PBIR adapter's
+  manifest entry is `pbir-authoring-adapter-skill`, while
+  `pbir-authoring-adapter` appears in six other entries only as a
+  `references.skill` value. Each task MUST resolve the manifest `id` before
+  editing, never match on the skill name alone.
 - **SC-004**: `python scripts/export_agent_bundles.py --check` returns PASS and
   the bundle trees are byte-unchanged, proving FR-004 empirically rather than by
   assertion.
@@ -279,11 +307,13 @@ migration.
 - **Changing `provenance` semantics** or any existing field's meaning.
 - **Vendoring any official plugin or MCP implementation.**
 - **Enabling any write or publish behavior.**
-- **Promoting this spec into the `<!-- SPECKIT -->` fence.** The fence carries
-  exactly one plan path by contract
-  (`tests/contract/test_dbt_documentation.py:131`), and `.specify/feature.json`
-  currently points at `specs/138-agent-driven-bundle`. Promotion is a separate,
-  human decision.
+- **Granting this spec implementation permission.** The fence carries exactly one
+  plan path by contract (`tests/contract/test_dbt_documentation.py:131`). As of
+  2026-08-07 the fence and `.specify/feature.json` do point at this spec -- moved
+  by owner ruling when spec 138 was closed out -- but the fence text states
+  explicitly that implementation is **NOT permitted** while this spec is Draft.
+  Being the fence target is not ratification; a named human must ratify `spec.md`
+  before any task in `tasks.md` is started.
 
 ## Open decisions
 

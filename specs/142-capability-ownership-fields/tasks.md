@@ -49,6 +49,21 @@ bundle drift PASS; all tests green.
   across all entries of `docs/capabilities/capabilities.yaml` into
   `evidence/baseline-manifest-keys.txt`. Deliverable: the key list, proving no
   `ownership` key exists before this work.
+- [ ] T004 [P] Resolve every capability this spec names in prose to its actual
+  manifest `id`, into `evidence/id-resolution.md`. Deliverable: a
+  skill-name-to-`id` table. Required because audit prose uses skill names that
+  are not always `id`s -- e.g. the PBIR adapter's entry is
+  `pbir-authoring-adapter-skill` while `pbir-authoring-adapter` appears in six
+  other entries only as a `references.skill` value (SC-003). Every later task
+  MUST edit by resolved `id`, never by skill-name match.
+- [ ] T005 [P] Record the pre-existing fail-open at
+  `src/seshat/capability_inventory.py:35-43` into
+  `evidence/known-findings.md`: the five axis constants
+  (`_LIFECYCLE_STATES`, `_AUTHORITIES`, `_SURFACES`, `_REQUIREMENTS`,
+  `_PROVENANCES`) are referenced nowhere else in the module and enforce nothing,
+  demonstrated by the live `surface: product-module` value that is absent from
+  `_SURFACES` and causes no failure. Deliverable: the file. This discharges
+  FR-010's affirmative half -- record the finding, do not fix it (OD-3).
 
 ## Phase 1 -- Vocabulary and validation (RED first, no manifest data)
 
@@ -76,19 +91,28 @@ bundle drift PASS; all tests green.
 
 ## Phase 2 -- Pilot the four known wrappers (proves FR-004 on real data)
 
-- [ ] T020 Classify `dbt-transformation-adapter` as `seshat-adapter`, upstream
-  `dbt Labs`, with `upstream_reference` cross-checked against
-  `src/seshat/integrations/catalog.py:168-186` per FR-007. Deliverable: the
-  entry, with a non-empty `seshat_delta`.
-- [ ] T021 [P] Classify `dagster-orchestration-adapter`, cross-checked against
-  `catalog.py:191-212`. Deliverable: the entry.
+- [ ] T020 Classify the `dbt-transformation-adapter` entry (by `id` resolved in
+  T004) as `seshat-adapter`, upstream `dbt Labs`. Per FR-007,
+  `upstream_reference` names the surface actually wrapped -- the
+  `dbt-agent-skills` bundle (`catalog.py:168-175`) and/or `dbt-mcp`
+  (`:176-186`) -- **not** `dbt-core`/`dbt-postgres` (`:151-167`), which are
+  operator-environment runtime dependencies rather than the wrapped surface.
+  Deliverable: the entry, with a non-empty `seshat_delta`.
+- [ ] T021 [P] Classify the `dagster-orchestration-adapter` entry as
+  `seshat-adapter`, upstream `Dagster`, with `upstream_reference` matching the
+  `dagster` PyPI component (`catalog.py:191-198`). Per FR-007 do **not** invent a
+  coordinate for `seshat-dagster-adapter` (`:199-205`) or `dagster-skills`
+  (`:206-212`) -- both are Seshat-bundled and carry no coordinate. Deliverable:
+  the entry.
 - [ ] T022 [P] Classify `pbi-mcp-doctor`, upstream Microsoft, cross-checked
   against `catalog.py:224-235`. Deliverable: the entry, with the upstream's
   preview/pre-GA status reflected in `update_policy` as a quoted string
   (FR-008 clause 2).
-- [ ] T023 [P] Classify `pbir-authoring-adapter` with `upstream_surface: format`
-  (FR-003) — PBIR is an upstream-owned format with no executable surface.
-  Deliverable: the entry.
+- [ ] T023 [P] Classify the PBIR adapter entry — manifest `id`
+  `pbir-authoring-adapter-skill`, per T004, **not** the six entries that merely
+  carry `references.skill: pbir-authoring-adapter` — with
+  `upstream_surface: format` (FR-003), since PBIR is an upstream-owned format
+  with no executable surface. Deliverable: the entry.
 - [ ] T024 Run the gate set. Deliverable: bundle digests **identical** to T002
   with four entries now carrying the axis — the empirical proof of FR-004 and
   SC-004, at four entries rather than 102.
@@ -106,7 +130,9 @@ bundle drift PASS; all tests green.
 ## Phase 4 -- Remainder, in reviewable batches
 
 - [ ] T040 Classify the orchestrator/front-door set as `seshat-orchestrator`
-  per the audit's KEEP section. Deliverable: the entries; one commit.
+  (FR-002) per the audit's KEEP section. Deliverable: the entries; one commit.
+  These carry no `upstream_project` and need no `seshat_delta` -- they coordinate
+  Seshat's own verbs rather than wrapping an upstream surface.
 - [ ] T041 Classify the Power BI layer entries. Deliverable: the entries.
   `powerbi-dashboard-design` and `powerbi-workflows` receive an `overlap_note`
   naming each other (US3) — advisory only, merging nothing.
@@ -126,8 +152,11 @@ bundle drift PASS; all tests green.
   contains a `NUMERIC_FIELD_HINTS` substring, and no ownership value is a bare
   numeric scalar. Deliverable: O6 green plus the grep output.
 - [ ] T053 Update `docs/capabilities/README.md` to document the ownership axis
-  and its token sets. Deliverable: the README section. **Not** a value-by-value
-  contract table — the oracle owns validation (FR-009).
+  and its token sets (FR-001, FR-002, FR-003 — the human-readable counterpart of
+  the vocabulary those FRs define). Deliverable: the README section. **Not** a
+  value-by-value contract table the oracle would then have to agree with — the
+  oracle owns validation (FR-009), and a second normative list is exactly the
+  duplicate authority this spec exists to avoid.
 - [ ] T054 Run the full gate set plus `pytest -m unit`. Deliverable: the
   complete output recorded in `evidence/final-gates.txt`.
 

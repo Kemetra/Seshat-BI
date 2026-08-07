@@ -31,7 +31,7 @@ Verified against `main` at `edfab33`. These are measured facts, not assumptions
 | --- | --- | --- |
 | Projection reads a fixed key list via `.get()`, drops unknowns, "degrades rather than crashes" | `src/seshat/capability_inventory.py:172-186` | New keys need no renderer change. Renderer work is optional and deferred. |
 | Allowlist derivation reads only `ships`, `references.skill`, `ship_classification`, `id` | `src/seshat/allowlist_derivation.py` | Derived allowlist is byte-identical. No bundle churn. |
-| Bundle hashes cover skill-file bytes, not the manifest | `scripts/export_agent_bundles.py:455-456` | `manifest_digest` / `source_sha256` / `output_sha256` unchanged; the drift gate cannot fire on this change. |
+| Bundle hashes cover skill-file bytes, not the manifest | `scripts/export_agent_bundles.py`: `output_sha256` `:583`, `source_sha256` `:586`, `manifest_digest` `:639` | All three hash allowlist-sourced file bytes and the canonicalized payload, never `capabilities.yaml`; the drift gate cannot fire on this change. |
 | Ship-classification contract asserts named keys only, no key-set closure | `tests/contract/test_capability_ship_classification.py` | No lockstep bump. Entries may land in batches. |
 | Oracle walks **every** key and scalar at **every** depth | `tests/unit/_capability_oracle.py:441-456` | Hard naming and typing constraints -- the primary implementation risk. See Risk R1. |
 | Five axis constants are dead, enforcing nothing | `src/seshat/capability_inventory.py:35-43` | Must not be incidentally revived. See Risk R3 and FR-010. |
@@ -72,6 +72,11 @@ of this spec by construction, not by preference.
 ## Phase sequence
 
 Ordered so that the risky, cheap-to-reverse work lands before the bulk work.
+
+`tasks.md` prefixes these with a **Phase 0** (baseline capture and `id`
+resolution) that produces no design decision -- it exists so FR-004 can be
+proven by digest comparison rather than assertion, and so later tasks edit by
+resolved manifest `id`. Phases 1-5 below correspond one-to-one with `tasks.md`.
 
 ### Phase 1 -- Vocabulary and validation (no data yet)
 
