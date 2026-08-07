@@ -242,9 +242,7 @@ _ORCHESTRATION = (
         channel=Channel.STABLE,
         role="upstream Dagster agent skill bundle",
         coordinate="dagster-io/skills",
-        required_paths=(
-            "skills/dagster-expert/skills/dagster-expert/SKILL.md",
-        ),
+        required_paths=("skills/dagster-expert/skills/dagster-expert/SKILL.md",),
     ),
 )
 

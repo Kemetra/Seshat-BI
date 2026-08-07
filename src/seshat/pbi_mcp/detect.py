@@ -243,9 +243,7 @@ def _fold_readiness_records(
     return tuple(ready), approval
 
 
-def read_stage_readiness(
-    repo_root: Path, stage: str
-) -> tuple[str, tuple[str, ...]]:
+def read_stage_readiness(repo_root: Path, stage: str) -> tuple[str, tuple[str, ...]]:
     """Summarize one stage across committed per-table readiness records.
 
     A pass is copied verbatim from a record. Missing or malformed records never

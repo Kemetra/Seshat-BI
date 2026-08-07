@@ -191,8 +191,7 @@ def _recommend_report_authoring(facts: DetectedFacts) -> Recommendation:
         )
     elif facts.dashboard_ready != READINESS_PASS:
         prereqs.append(
-            f"dashboard_ready = pass for mappings/{facts.target}/"
-            "readiness-status.yaml"
+            f"dashboard_ready = pass for mappings/{facts.target}/readiness-status.yaml"
         )
     prereqs.append(
         "the official Microsoft powerbi-report-authoring skill proven activated "

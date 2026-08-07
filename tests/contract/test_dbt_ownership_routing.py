@@ -74,9 +74,7 @@ def test_internal_adapter_disclaims_generic_dbt_competence() -> None:
 
 def test_public_surface_describes_broad_routing_boundary() -> None:
     surface = yaml.safe_load(
-        (ROOT / "distribution/public-command-surface.yaml").read_text(
-            encoding="utf-8"
-        )
+        (ROOT / "distribution/public-command-surface.yaml").read_text(encoding="utf-8")
     )
     skill = next(item for item in surface["skills"] if item["name"] == "dbt-workflows")
     assert "official dbt Labs" in skill["intent"]

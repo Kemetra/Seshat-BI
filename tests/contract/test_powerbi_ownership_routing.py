@@ -45,8 +45,7 @@ def test_design_router_is_nested_and_f016_excludes_report_authoring() -> None:
 
 def test_public_router_names_pre_gate_executor_and_post_validation() -> None:
     text = (
-        ROOT
-        / "distribution/bundle-templates/shared/skills/powerbi-workflows/SKILL.md"
+        ROOT / "distribution/bundle-templates/shared/skills/powerbi-workflows/SKILL.md"
     ).read_text(encoding="utf-8")
     for phrase in (
         "Seshat pre-gate",

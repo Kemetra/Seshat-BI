@@ -637,7 +637,8 @@ def _canonical_source_violations(
 
     if "\\" in source:
         return [
-            f"{entry_id}: canonical_source {source!r} must be a repository-relative POSIX path"
+            f"{entry_id}: canonical_source {source!r} must be a "
+            "repository-relative POSIX path"
         ]
 
     posix_path = PurePosixPath(source)
@@ -649,12 +650,14 @@ def _canonical_source_violations(
         or ".." in posix_path.parts
     ):
         return [
-            f"{entry_id}: canonical_source {source!r} must be a repository-relative path inside the repository"
+            f"{entry_id}: canonical_source {source!r} must be a "
+            "repository-relative path inside the repository"
         ]
 
     if source.startswith(_GENERATED_CANONICAL_PREFIXES):
         return [
-            f"{entry_id}: canonical_source {source!r} is generated output, not an authored source"
+            f"{entry_id}: canonical_source {source!r} is generated output, "
+            "not an authored source"
         ]
 
     root = repo_root.resolve()
@@ -662,7 +665,8 @@ def _canonical_source_violations(
     candidate = unresolved.resolve(strict=False)
     if not candidate.is_relative_to(root):
         return [
-            f"{entry_id}: canonical_source {source!r} must be a repository-relative path inside the repository"
+            f"{entry_id}: canonical_source {source!r} must be a "
+            "repository-relative path inside the repository"
         ]
     if unresolved.is_symlink() or not unresolved.is_file():
         return [
@@ -720,7 +724,9 @@ def public_capability_integrity_violations(
         candidate_ids = sorted(str(entry.get("id", "<no id>")) for entry in candidates)
 
         if not candidates:
-            problems.append(f"{public_name}: shipped public skill has no capability owner")
+            problems.append(
+                f"{public_name}: shipped public skill has no capability owner"
+            )
             continue
         if len(candidates) != 1:
             relationship = "explicit" if explicit else "same-name skill fallback"

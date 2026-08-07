@@ -668,16 +668,16 @@ def _public_problems(
         manifest=manifest,
         public_skills={"demo"} if public_skills is None else public_skills,
         tracked_files=(
-            {"docs/capabilities/README.md"}
-            if tracked_files is None
-            else tracked_files
+            {"docs/capabilities/README.md"} if tracked_files is None else tracked_files
         ),
     )
 
 
 def test_public_integrity_rejects_a_skill_without_an_owner() -> None:
     problems = _public_problems([])
-    assert any("demo" in problem and "no capability owner" in problem for problem in problems)
+    assert any(
+        "demo" in problem and "no capability owner" in problem for problem in problems
+    )
 
 
 def test_public_integrity_rejects_duplicate_explicit_owners() -> None:
@@ -713,7 +713,9 @@ def test_explicit_public_owner_wins_over_internal_skill_references() -> None:
 def test_public_integrity_rejects_a_stale_explicit_public_link() -> None:
     manifest = [_public_capability("stale-owner", public_skill="not-shipped")]
     problems = _public_problems(manifest)
-    assert any("stale-owner" in problem and "not-shipped" in problem for problem in problems)
+    assert any(
+        "stale-owner" in problem and "not-shipped" in problem for problem in problems
+    )
 
 
 @pytest.mark.parametrize(
@@ -722,7 +724,11 @@ def test_public_integrity_rejects_a_stale_explicit_public_link() -> None:
         ("", set(), "canonical_source"),
         ("../outside.md", {"../outside.md"}, "repository-relative"),
         ("C:/outside.md", {"C:/outside.md"}, "repository-relative"),
-        ("docs/capabilities/not-present.md", {"docs/capabilities/not-present.md"}, "not a regular file"),
+        (
+            "docs/capabilities/not-present.md",
+            {"docs/capabilities/not-present.md"},
+            "not a regular file",
+        ),
         ("docs/capabilities/README.md", set(), "not tracked"),
         (
             "integrations/claude-code/seshat-bi/skills/demo/SKILL.md",
@@ -739,7 +745,9 @@ def test_public_integrity_rejects_a_stale_explicit_public_link() -> None:
 def test_public_integrity_rejects_invalid_canonical_sources(
     source: str, tracked: set[str], needle: str
 ) -> None:
-    manifest = [_public_capability("owner", public_skill="demo", canonical_source=source)]
+    manifest = [
+        _public_capability("owner", public_skill="demo", canonical_source=source)
+    ]
     problems = _public_problems(manifest, tracked_files=tracked)
     assert any("owner" in problem and needle in problem for problem in problems)
 
@@ -759,6 +767,12 @@ def test_internal_declared_canonical_source_is_also_validated() -> None:
     ]
     problems = _public_problems(
         manifest,
-        tracked_files={"docs/capabilities/README.md", "docs/capabilities/not-present.md"},
+        tracked_files={
+            "docs/capabilities/README.md",
+            "docs/capabilities/not-present.md",
+        },
     )
-    assert any("internal" in problem and "not a regular file" in problem for problem in problems)
+    assert any(
+        "internal" in problem and "not a regular file" in problem
+        for problem in problems
+    )

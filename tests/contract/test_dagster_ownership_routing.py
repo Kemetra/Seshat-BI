@@ -63,8 +63,7 @@ def test_seshat_adapter_keeps_only_the_governed_delta() -> None:
 
 def test_public_router_names_pre_gate_executor_and_post_validation() -> None:
     text = (
-        ROOT
-        / "distribution/bundle-templates/shared/skills/dagster-workflows/SKILL.md"
+        ROOT / "distribution/bundle-templates/shared/skills/dagster-workflows/SKILL.md"
     ).read_text(encoding="utf-8")
     for phrase in (
         "Seshat pre-gate",
@@ -79,9 +78,9 @@ def test_public_router_names_pre_gate_executor_and_post_validation() -> None:
 
 
 def test_internal_adapter_disclaims_generic_dagster_competence() -> None:
-    text = (
-        ROOT / ".claude/skills/dagster-orchestration-adapter/SKILL.md"
-    ).read_text(encoding="utf-8")
+    text = (ROOT / ".claude/skills/dagster-orchestration-adapter/SKILL.md").read_text(
+        encoding="utf-8"
+    )
     assert "not the owner of generic Dagster competence" in text
     assert "official `dagster-expert`" in text
     assert "activation and discovery" in text
@@ -89,9 +88,7 @@ def test_internal_adapter_disclaims_generic_dagster_competence() -> None:
 
 def test_public_surface_describes_broad_routing_boundary() -> None:
     surface = yaml.safe_load(
-        (ROOT / "distribution/public-command-surface.yaml").read_text(
-            encoding="utf-8"
-        )
+        (ROOT / "distribution/public-command-surface.yaml").read_text(encoding="utf-8")
     )
     skill = next(
         item for item in surface["skills"] if item["name"] == "dagster-workflows"
