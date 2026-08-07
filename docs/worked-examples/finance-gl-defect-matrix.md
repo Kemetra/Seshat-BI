@@ -32,17 +32,47 @@ observed column reads `[PENDING LIVE PROFILE]` rather than a behaviour.
 
 | ID | Defect | Declared | Existing check that would catch it | Observed |
 |---|---|---|---|---|
-| D1 | actuals row references an account absent from `accounts` | `refuse` | `check_orphan_fks` (RC16) | `[PENDING LIVE PROFILE]` |
-| D2 | actuals row references an unknown department | `refuse` | `check_orphan_fks` (RC16) | `[PENDING LIVE PROFILE]` |
+| D1 | actuals row references an account absent from `accounts` | `refuse` | **none as built** -- see L21 | `[NO CHECK EXISTS]` |
+| D2 | actuals row references an unknown department | `refuse` | **none as built** -- see L21 | `[NO CHECK EXISTS]` |
 | D3 | a budget row is set against a CLEARING (non-P&L) account | `block_for_evidence` | **none** -- see M1 | `[NO CHECK EXISTS]` |
 | D4 | a `posting_date` falls outside every declared fiscal period | `refuse` | `check_date_coverage` (RC15) | `[PENDING LIVE PROFILE]` |
 | D5 | a block of actuals lines is in a second currency, no conversion policy | `request_human_decision` | **none on the data** -- see M2 | `[NO CHECK EXISTS]` |
 | D6 | two rows share the composite PK (`journal_entry_id`, `line_id`) | `refuse` | `check_pk_uniqueness` (RC2) | `[PENDING LIVE PROFILE]` |
 | D7 | two budget rows share the full 5-part PK with different amounts | `refuse` | `check_pk_uniqueness` (RC2) | `[PENDING LIVE PROFILE]` |
+| D14 | actuals row pairs a valid `department_code` with a valid `cost_center_code` belonging to a DIFFERENT department | `refuse` | **none** -- see L22 | `[NO CHECK EXISTS]` |
 
-**5 of 7 map to a check that already exists** and is domain-neutral -- an orphan FK, a
-non-unique PK and an uncovered date are the same defects in finance as in retail. Nothing
-retail-shaped blocked them; only the absence of a database did.
+**D14 was ADDED 2026-08-07** (PR #596 review, ledger row L22). Its absence was itself the
+finding: the two lookups resolve independently, both FKs are valid, and
+`check_orphan_fks` only compares each FK against its own dimension's PK -- so a report
+grouped by `department_sk` can disagree with the `department_code` rollup denormalized
+onto `dim_cost_center_fgl` (line 98 of the gold migration), with nothing firing.
+
+This is a **hierarchical** dimension relationship: cost centre belongs to department. The
+retail star's four dimensions -- customer, product, payment method, location -- are
+mutually independent, so no committed example ever needed a cross-dimension consistency
+check and the matrix had no row for the failure class. A whole category was untested
+because retail never had a hierarchy.
+
+**3 of 7 map to a check that already exists** and is domain-neutral -- a non-unique PK
+(D6, D7) and an uncovered date (D4) are the same defects in finance as in retail, and only
+the absence of a database blocks proving them.
+
+**CORRECTED 2026-08-07** (PR #596 review, ledger row L21). This section previously read
+"5 of 7", counting D1 and D2 as covered by `check_orphan_fks`. **They are not.** The gold
+fact insert resolves each natural key with `COALESCE(da.account_sk, -1)`, so a FAILED
+lookup is rewritten into the valid `-1` unknown member that the migration itself inserts.
+`check_orphan_fks` is a plain `LEFT JOIN <dim> d ... WHERE d.<pk> IS NULL`
+(`src/seshat/validate.py:236-239`), and `-1` is a real dimension row, so the join always
+succeeds and the orphan is invisible. A live run would have reported PASS for D1/D2 --
+for entirely the wrong reason.
+
+That is a worse outcome than a missing check, which is why the Observed column now reads
+`[NO CHECK EXISTS]` rather than `[PENDING LIVE PROFILE]`: nothing is pending, because no
+check would catch it. The `-1` convention is kit-wide (identical in
+`0004_create_gold_retail_store_sales_star.sql`) and declared here via
+`has_unknown_member: true`, so this is a genericity finding about the convention, not a
+defect in this example's SQL. See ledger L21 for the three candidate resolutions, all of
+which need an owner ruling.
 
 ## Business-judgment cases (D8-D13)
 
