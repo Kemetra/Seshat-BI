@@ -16,7 +16,7 @@ source_id: "finance_gl_budget"
 source_family: "finance_gl_synthetic"
 
 # --- where we are -----------------------------------------------------------
-current_stage: "silver_ready"
+current_stage: "gold_ready"
 mapping_version: "1"
 
 # --- the seven stages -------------------------------------------------------
@@ -89,7 +89,8 @@ stages:
 evidence:
   - "docs/worked-examples/finance-gl-genericity-ledger.md"
   - "specs/137-finance-gl-genericity-proof/spec.md"
-blocking_reasons: []
+blocking_reasons:
+  - "gold_ready is blocked: retail validate cannot start on this table at all -- validate_targets.load_targets() requires gold_star.date_dimension, which this map omits by design because budget lives at fiscal-period grain (verified ValueError). Needs the sub-decision A time-conformance ruling (mappings/finance_gl_actuals/approval-request-model-integrity.md; ledger L19/L19b)."
 
 # --- approvals (named human sign-offs; the agent cannot self-grant) ---------
 approvals:
