@@ -6,10 +6,12 @@ name: "BudgetYTD"
 grain: "valid at the comparison grain (account x department), period-to-date at QUARTER resolution: the SUM of BudgetAmount (budget_version = 'ORIGINAL') over all fiscal quarters from the fiscal-year start through the selected quarter, within the same fiscal_year. Additive across quarters up to the selected one -- NEVER disaggregated below quarter grain (FR-010, OD-3), so there is no monthly BudgetYTD."
 formula_intent: "The running total of BudgetAmount (ORIGINAL version) from the first fiscal quarter of the fiscal year through the selected quarter. Fiscal-year start is taken from gold.dim_fiscal_period_fgl (sourced from the fiscal_calendar reference file), the SAME period dimension BudgetAmount itself keys on -- not the daily dim_date_fgl, which cannot carry a fiscal period (ledger row L5). A monthly BudgetYTD does not exist and MUST NOT be derived by interpolating between quarters (OD-3): variant D11 exercises exactly this refusal."
 owner: "[NEEDS metric_owner -- not yet named]"
+# AL1: blocked contracts carry a placeholder binding, never a settled one.
+# Intended (pending metric_owner approval): gold.fct_gl_budget_fgl.budget_amount.
 binds_to:
-  gold_table: "gold.fct_gl_budget_fgl"
+  gold_table: "gold.<fact_or_dim>"
   columns:
-    - "budget_amount"
+    - "<gold_column_a>"
   pii_sensitive: false
 
 unit: "USD"   # documentary only (HR11 reads the source-map declaration, not this field)
@@ -24,13 +26,13 @@ readiness:
 ambiguities:
   - id: "OD-2"
     decision_status: "decided"
-    ruling: "the baseline is budget_version = 'ORIGINAL' (the plan of record); REVISION-1 never moves this contract's default reading (spec.md OD-2)."
+    ruling: "the variance baseline is budget_version = 'ORIGINAL' (the plan of record); REVISION-1 exists for version identity and variant D10 but never moves the headline measures (spec.md OD-2)."
     evidence:
       - "ruled by Ahmed Shaaban on 2026-07-30 -- specs/137-finance-gl-genericity-proof/spec.md \"Open owner decisions\", OD-2"
     number_moving: true
   - id: "OD-3"
     decision_status: "decided"
-    ruling: "no monthly view may be derived from the quarterly budget; a monthly-budget request is refused (variant D11). No allocation policy exists and none may be inferred (spec.md OD-3)."
+    ruling: "no monthly view may be derived from the quarterly budget; a monthly-budget request is refused with the reason named (variant D11); no allocation policy exists and none may be inferred (spec.md OD-3)."
     evidence:
       - "ruled by Ahmed Shaaban on 2026-07-30 -- specs/137-finance-gl-genericity-proof/spec.md \"Open owner decisions\", OD-3"
     number_moving: true

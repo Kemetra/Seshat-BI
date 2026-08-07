@@ -7,10 +7,12 @@ name: "BudgetAmount"
 grain: "valid at fct_gl_budget_fgl grain (one row = one planned amount per account per department per fiscal quarter per budget_version); additive across account and department AT and ABOVE quarter grain only -- NEVER disaggregated to month or line grain (FR-010, OD-3)"
 formula_intent: "The planned P&L amount for one account, department, fiscal quarter, and budget_version. Presented as a positive magnitude (OD-1, ruled 2026-07-30), matching ActualAmount's presentation so the two are visually comparable; direction_of_good below carries whether higher is better. Every query against this metric MUST pin budget_version -- without it, summing across both ORIGINAL and REVISION-1 double-counts the plan (measured: 268.3M instead of 136.4M). The headline BudgetAmount reads budget_version = 'ORIGINAL' (OD-2, ruled 2026-07-30 -- the plan of record); REVISION-1 remains queryable for version-identity and variant-D10 purposes but never moves this contract's default reading."
 owner: "[NEEDS metric_owner -- not yet named]"
+# AL1: blocked contracts carry a placeholder binding, never a settled one.
+# Intended (pending metric_owner approval): gold.fct_gl_budget_fgl.budget_amount.
 binds_to:
-  gold_table: "gold.fct_gl_budget_fgl"
+  gold_table: "gold.<fact_or_dim>"
   columns:
-    - "budget_amount"
+    - "<gold_column_a>"
   pii_sensitive: false
 
 # HR11 reads unit/currency from the SOURCE-MAP column declaration (documentary
@@ -43,19 +45,19 @@ readiness:
 ambiguities:
   - id: "OD-1"
     decision_status: "decided"
-    ruling: "revenue and expenses are both PRESENTED as positive magnitudes; polarity via direction_of_good, never the arithmetic sign (spec.md OD-1)."
+    ruling: "revenue and expenses are both presented as positive magnitudes; whether higher is better is carried by direction_of_good, never by the arithmetic sign (spec.md OD-1)."
     evidence:
       - "ruled by Ahmed Shaaban on 2026-07-30 -- specs/137-finance-gl-genericity-proof/spec.md \"Open owner decisions\", OD-1"
     number_moving: true
   - id: "OD-2"
     decision_status: "decided"
-    ruling: "the variance/headline baseline is budget_version = 'ORIGINAL' (the plan of record). REVISION-1 exists for version identity (FR-011) and variant D10, and never moves this contract's default reading (spec.md OD-2)."
+    ruling: "the variance baseline is budget_version = 'ORIGINAL' (the plan of record); REVISION-1 exists for version identity and variant D10 but never moves the headline measures (spec.md OD-2)."
     evidence:
       - "ruled by Ahmed Shaaban on 2026-07-30 -- specs/137-finance-gl-genericity-proof/spec.md \"Open owner decisions\", OD-2"
     number_moving: true
   - id: "OD-3"
     decision_status: "decided"
-    ruling: "no monthly view may be derived from the quarterly budget; a monthly-budget request is refused with the reason named (variant D11). No allocation policy exists and none may be inferred (spec.md OD-3)."
+    ruling: "no monthly view may be derived from the quarterly budget; a monthly-budget request is refused with the reason named (variant D11); no allocation policy exists and none may be inferred (spec.md OD-3)."
     evidence:
       - "ruled by Ahmed Shaaban on 2026-07-30 -- specs/137-finance-gl-genericity-proof/spec.md \"Open owner decisions\", OD-3"
     number_moving: true

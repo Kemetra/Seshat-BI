@@ -541,12 +541,14 @@ template.**
   separate, per-contract `metric_owner` sign-off the template's own `readiness.status: pass`
   requires ("REQUIRES an evidence[] entry (owner + date)"). No `metric_owner` has been named
   for finance_gl anywhere in the spec, plan, or tasks. Running `python -m seshat.cli
-  semantic-check --include-untracked` (the `--include-untracked` flag was itself necessary --
-  the default git-tracked-only discovery silently found ZERO of these files and reported a
-  false-clean "no drift (0 findings)", which is a discovery gap distinct from this finding and
-  recorded as its own item, L15) returned `exit 1` with all seven contracts flagged: `"metric
-  contract is not owner-approved pass"`. This is the gate's own mechanical finding, not the
-  agent's inference. T042 ("author the semantic model TMDL so every measure traces to exactly
+  semantic-check --include-untracked` (the `--include-untracked` flag was necessary AT THE
+  TIME the contracts were still untracked -- the default git-tracked-only discovery silently
+  found ZERO of these files and reported a false-clean "no drift (0 findings)", a discovery
+  gap distinct from this finding and recorded as its own item, L16; the contracts are now
+  committed, so plain `semantic-check` with no flag reaches them) returned `exit 1` with all
+  seven contracts flagged: `"metric contract is not owner-approved pass"`. This is the gate's
+  own mechanical finding, not the agent's inference. T042 ("author the semantic model TMDL so
+  every measure traces to exactly
   one APPROVED contract") and T044 (OD-5, human PBIR authoring) both sit BEHIND this seam --
   the task briefing named OD-4 and OD-5 as the two approval stops, and this is a third that
   the spec's task list does not separately number or name.
@@ -566,13 +568,54 @@ template.**
   metric-contract-owner seam is visible before implementation reaches it rather than found by
   running the gate.
 - **core_change_required**: false
-- **evidence**: `python -m seshat.cli semantic-check --include-untracked` exit 1, 7 findings,
-  one per contract, each reading `"metric contract is not owner-approved pass"`; the same
-  command WITHOUT `--include-untracked` returns exit 0 with `"no drift (0 findings)"` on the
-  identical tree (see L15) -- proving the zero-findings state was non-discovery, not
-  compliance
+- **evidence**: with the contracts now committed, `python -m seshat.cli semantic-check` (no
+  flag needed) exit 1, 7 findings, one per contract, each reading `"metric contract is not
+  owner-approved pass"`; earlier, while the same files were untracked, the identical command
+  returned exit 0 with `"no drift (0 findings)"` (see L16) -- proving that earlier zero-findings
+  state was non-discovery, not compliance
 
-## L15 -- documentation_leak / near-miss: `semantic-check`'s default tracked-files-only discovery silently reports a false-clean result on untracked contracts
+## L15 -- no_leak (positive): AL1 and AL2 fired for the first time in this repository's history, on this feature's contracts, and both were correct
+
+- **location**: `src/seshat/rules/assumptions.py` (AL1); `src/seshat/rules/assumption_coherence.py`
+  (AL2); observed against `mappings/finance_gl_actuals/metrics/*.yaml` and
+  `mappings/finance_gl_budget/metrics/*.yaml`
+- **observed_problem**: once the seven metric contracts were committed (`git add`), `python -m
+  seshat.cli check` returned `exit 1` with 11 errors: AL2 fired four times (OD-1 on
+  `fct_gl_actuals_fgl`; OD-1, OD-2, OD-3 on `fct_gl_budget_fgl`) because this session had
+  worded the SAME decided ruling slightly differently across sibling contracts (e.g.
+  "PRESENTED" vs "presented", "polarity via direction_of_good" vs "whether higher is better is
+  carried by direction_of_good") -- a genuine authoring defect AL2 exists to catch, not a false
+  positive. AL1 fired seven times (once per contract) because every contract was
+  simultaneously `readiness.status: blocked` (correctly -- no metric_owner) AND carried a
+  SETTLED, real `binds_to.gold_table` (`gold.fct_gl_actuals_fgl` / `gold.fct_gl_budget_fgl`,
+  both genuinely built by `0008_create_gold_finance_gl_star.sql`) -- which AL1 correctly reads
+  as a contradiction: a binding that claims to be wired while the contract's own readiness
+  block says a human approval is still open.
+- **classification**: `no_leak` -- BOTH rules behaved exactly as designed, fail-closed, on
+  their FIRST-EVER exercise in this repository (`src/seshat/rules/assumption_coherence.py`'s
+  own docstring: "no committed contract carries a decided `ambiguities[]` entry today"; every
+  committed contract before this feature was `status: pass`, so AL1 had nothing to trigger on
+  either). This is the same category of finding as L1's correction and HR1 in L1: a
+  domain-neutral governance rule, never previously exercised because no prior worked example
+  produced the SHAPE of artifact that trips it, worked correctly the first time a non-retail
+  domain produced that shape.
+- **existing_rule_or_surface**: AL1, AL2 (both unmodified)
+- **minimal_resolution**: this feature's own authoring defect, not a kit gap -- fixed by (1)
+  canonicalizing the `ruling` text for OD-1/OD-2/OD-3 to one exact string per code, transcribed
+  from `spec.md`, byte-identical across every contract that cites it (per-contract commentary
+  moved to YAML comments, outside the `ruling` field AL2 compares); (2) replacing
+  `binds_to.gold_table`/`columns` with the template's own placeholder shape
+  (`gold.<fact_or_dim>` / `<gold_column_a>`) on every `blocked` contract, with a YAML comment
+  naming the REAL intended binding and the migration that builds it, per AL1's own named
+  remedy ("resolve the assumption or revert binding to a placeholder"). `blocking_reasons[]`
+  and `status: blocked` were NOT touched -- the metric_owner seam (L14) stays fully visible.
+- **core_change_required**: false
+- **evidence**: `python -m seshat.cli check` before the fix: exit 1, 11 errors (4 AL2 + 7 AL1);
+  after the fix: exit 0, only the pre-existing RS1 warning. `python -m seshat.cli
+  semantic-check` after the fix: exit 1, 7 findings, every one the EXPECTED
+  "not owner-approved pass" (L3) with zero AL1/AL2 contamination.
+
+## L16 -- documentation_leak / near-miss: `semantic-check`'s default tracked-files-only discovery silently reported a false-clean result on the untracked contracts, before they were committed
 
 - **location**: `src/seshat/cli/commands/semantic.py` `_semantic_files` (git `ls-files`
   default, `--include-untracked` opt-in)
@@ -604,8 +647,14 @@ template.**
   zero-input safeguard's spirit.
 - **core_change_required**: false to walk (the escape hatch already exists and was used once
   discovered); a discoverability improvement would still be a genuine, separately-scoped fix
-- **evidence**: `python -m seshat.cli semantic-check` (no flag) on the tree with all seven
-  untracked contracts present: `exit 0`, `"no drift (0 findings)"`; `python -m seshat.cli
-  semantic-check --include-untracked` on the IDENTICAL tree: `exit 1`, 7 findings. Same
-  filesystem state, two different verdicts, distinguished only by a flag this feature's own
-  task briefing did not mention.
+- **evidence**: `python -m seshat.cli semantic-check` (no flag) on the tree WHILE all seven
+  contracts were still untracked: `exit 0`, `"no drift (0 findings)"`; `python -m seshat.cli
+  semantic-check --include-untracked` on the IDENTICAL, still-untracked tree: `exit 1`, 7
+  findings. Same filesystem state, two different verdicts, distinguished only by a flag this
+  feature's own task briefing did not mention.
+- **status of this specific window**: CLOSED for this feature. The seven contracts are now
+  committed (tracked), so the default (no-flag) `semantic-check` reaches them correctly (see
+  L14's evidence) and the false-clean window described above no longer applies to THIS tree.
+  The underlying default-discovery behaviour itself is unchanged and would recur for any
+  future author's untracked, not-yet-staged contract files -- that generic exposure is the
+  finding this row records, not a currently-live defect on this branch.

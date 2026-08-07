@@ -7,14 +7,17 @@ name: "VariancePercent"
 grain: "valid ONLY at the comparison grain: fiscal quarter x account x department, budget_version = 'ORIGINAL'. This is a non-additive ratio (time_additivity: non, below) -- it CANNOT be summed, averaged, or rolled up across quarters, accounts, or departments once computed; each higher grain's VariancePercent must be RECOMPUTED from that grain's own separately-aggregated ActualAmount and BudgetAmount, never derived by averaging finer-grain percentages."
 formula_intent: "VarianceAmount divided by BudgetAmount (budget_version = 'ORIGINAL') at the comparison grain, expressed as a percentage. Computed AFTER separate aggregation exactly per docs/patterns/target-budget-fact.md Section 3 (\"aggregate actuals and targets SEPARATELY at the comparison grain, then recompute the percentage. Never average two already-computed percentages.\"): ActualAmount and BudgetAmount are each summed independently at the target grain, THEN divided -- at no point is a per-row or per-line percentage computed and then averaged upward. AVERAGING PRECOMPUTED VARIANCE PERCENTAGES IS PROHIBITED by this contract's stated intent (FR-014); a DAX/SQL implementation that uses AVERAGE or AVERAGEX over a percentage column is a defect against this contract, not an acceptable optimisation. direction_of_good below states favourable polarity per account_type; the sign of this ratio alone is not a good/bad signal (OD-1)."
 owner: "[NEEDS metric_owner -- not yet named]"
+# OPEN NOTE (template-capability, same as VarianceAmount): this metric
+# reads BOTH gold.fct_gl_actuals_fgl and gold.fct_gl_budget_fgl; the second
+# table is named in formula_intent per the variance-shape template's
+# documented precedent, not forced into a second binds_to key.
+#
+# AL1: blocked contracts carry a placeholder binding, never a settled one.
+# Intended (pending metric_owner approval): gold.fct_gl_budget_fgl.budget_amount.
 binds_to:
-  gold_table: "gold.fct_gl_budget_fgl"
-    # OPEN NOTE (template-capability, same as VarianceAmount): this metric
-    # reads BOTH gold.fct_gl_actuals_fgl and gold.fct_gl_budget_fgl; the
-    # second table is named in formula_intent per the variance-shape
-    # template's documented precedent, not forced into a second binds_to key.
+  gold_table: "gold.<fact_or_dim>"
   columns:
-    - "budget_amount"
+    - "<gold_column_a>"
   pii_sensitive: false
 
 time_additivity: "non"   # HR5: a ratio is never additive over time; each period's value must be recomputed, never summed across periods
@@ -31,13 +34,13 @@ readiness:
 ambiguities:
   - id: "OD-1"
     decision_status: "decided"
-    ruling: "revenue and expenses are both PRESENTED as positive magnitudes; polarity via direction_of_good, never the arithmetic sign of this ratio (spec.md OD-1)."
+    ruling: "revenue and expenses are both presented as positive magnitudes; whether higher is better is carried by direction_of_good, never by the arithmetic sign (spec.md OD-1)."
     evidence:
       - "ruled by Ahmed Shaaban on 2026-07-30 -- specs/137-finance-gl-genericity-proof/spec.md \"Open owner decisions\", OD-1"
     number_moving: true
   - id: "OD-2"
     decision_status: "decided"
-    ruling: "the baseline is budget_version = 'ORIGINAL' (spec.md OD-2)."
+    ruling: "the variance baseline is budget_version = 'ORIGINAL' (the plan of record); REVISION-1 exists for version identity and variant D10 but never moves the headline measures (spec.md OD-2)."
     evidence:
       - "ruled by Ahmed Shaaban on 2026-07-30 -- specs/137-finance-gl-genericity-proof/spec.md \"Open owner decisions\", OD-2"
     number_moving: true

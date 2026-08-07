@@ -7,10 +7,17 @@ name: "ActualAmount"
 grain: "valid at fct_gl_actuals_fgl journal-line grain (one row = one journal line within one journal entry); additive across account, department, cost center, and over time"
 formula_intent: "The posted P&L amount for a journal line, as a positive magnitude regardless of whether it was debited or credited (OD-1, ruled by Ahmed Shaaban 2026-07-30: revenue and expenses both PRESENT as positive; direction_of_good below carries whether higher is better, never the arithmetic sign). Reads the derived amount column, which is debit_amount + credit_amount -- exactly one side is non-zero per line, so the sum is that side's magnitude with no sign arithmetic (mappings/finance_gl_actuals/source-map.yaml derived_columns.amount). CLEARING-account lines (account_type = 'CLEARING') are EXCLUDED from this metric by the mapping-gate C1 ruling (sub-decision C1, Option A): they exist only to keep the double-entry balance provable in the warehouse and carry no P&L meaning."
 owner: "[NEEDS metric_owner -- not yet named]"
+# AL1: a contract that is `readiness.status: blocked` with open blocking_reasons
+# MUST carry a placeholder binding, never a settled one -- a settled binding atop
+# an open blocker would misrepresent this metric as wired when it is not
+# (src/seshat/rules/assumptions.py). The REAL, built binding is
+# gold.fct_gl_actuals_fgl.amount (warehouse/migrations/0008_create_gold_
+# finance_gl_star.sql) -- recorded here as a comment, not as the binding
+# itself, until a named metric_owner approves this contract.
 binds_to:
-  gold_table: "gold.fct_gl_actuals_fgl"
+  gold_table: "gold.<fact_or_dim>"   # placeholder pending metric_owner approval; intended: gold.fct_gl_actuals_fgl
   columns:
-    - "amount"
+    - "<gold_column_a>"              # placeholder pending metric_owner approval; intended: amount
   pii_sensitive: false
 
 # HR11 reads unit/currency from the SOURCE-MAP column declaration, not this
@@ -48,7 +55,7 @@ readiness:
 ambiguities:
   - id: "OD-1"
     decision_status: "decided"
-    ruling: "revenue and expenses are both PRESENTED as positive magnitudes; whether higher is better is carried by direction_of_good, never by the arithmetic sign (spec.md OD-1)."
+    ruling: "revenue and expenses are both presented as positive magnitudes; whether higher is better is carried by direction_of_good, never by the arithmetic sign (spec.md OD-1)."
     evidence:
       - "ruled by Ahmed Shaaban on 2026-07-30 -- specs/137-finance-gl-genericity-proof/spec.md \"Open owner decisions\", OD-1"
     number_moving: true

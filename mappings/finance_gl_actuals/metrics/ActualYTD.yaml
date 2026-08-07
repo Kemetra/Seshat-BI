@@ -6,10 +6,12 @@ name: "ActualYTD"
 grain: "valid at the comparison grain (fiscal quarter x account x department), period-to-date: the SUM of ActualAmount over all fiscal periods from the fiscal-year start (fiscal_year, fiscal_quarter=1) through the SELECTED period, within the same fiscal_year. Additive across account/department; additive over the period-to-date window, but the window boundary is stated by the fiscal calendar, never inferred."
 formula_intent: "The running total of ActualAmount from the start of the fiscal year through the selected fiscal quarter. Fiscal-year start is taken from the committed fiscal_calendar reference file (gold.dim_fiscal_period_fgl), which for this fixture is calendar-aligned to January-1 (a recorded FIXTURE SIMPLIFICATION -- see mappings/finance_gl_actuals/assumptions.md and ledger row L5; a real, non-calendar-aligned fiscal year would need its own start date from that same reference, never assumed to be January). Excludes CLEARING-account lines, same as ActualAmount (sub-decision C1)."
 owner: "[NEEDS metric_owner -- not yet named]"
+# AL1: blocked contracts carry a placeholder binding, never a settled one.
+# Intended (pending metric_owner approval): gold.fct_gl_actuals_fgl.amount.
 binds_to:
-  gold_table: "gold.fct_gl_actuals_fgl"
+  gold_table: "gold.<fact_or_dim>"
   columns:
-    - "amount"
+    - "<gold_column_a>"
   pii_sensitive: false
 
 unit: "USD"   # documentary only (HR11 reads the source-map declaration, not this field)
@@ -24,7 +26,10 @@ readiness:
 ambiguities:
   - id: "OD-1"
     decision_status: "decided"
-    ruling: "revenue and expenses are both PRESENTED as positive magnitudes; polarity via direction_of_good, never the arithmetic sign (spec.md OD-1). Inherited from ActualAmount, which this YTD metric sums."
+    ruling: "revenue and expenses are both presented as positive magnitudes; whether higher is better is carried by direction_of_good, never by the arithmetic sign (spec.md OD-1)."
+    # Inherited from ActualAmount, which this YTD metric sums (commentary, not
+    # part of the canonical ruling text -- AL2 compares `ruling` verbatim
+    # across every contract on the same gold table).
     evidence:
       - "ruled by Ahmed Shaaban on 2026-07-30 -- specs/137-finance-gl-genericity-proof/spec.md \"Open owner decisions\", OD-1"
     number_moving: true
