@@ -166,6 +166,15 @@ def _skill_dir(item: Component) -> Path:
     return SKILLS_DIR / item.id
 
 
+def _missing_required_payload(root: Path, item: Component) -> tuple[str, ...]:
+    """Catalog-declared payload files absent below ``root``."""
+    return tuple(
+        required
+        for required in item.required_paths
+        if not (root / Path(*required.split("/"))).is_file()
+    )
+
+
 def _venv_python(env: Path) -> Path:
     if sys.platform == "win32":
         return env / "Scripts/python.exe"
@@ -192,8 +201,9 @@ def _is_installed(root: Path, item: Component, profile: str) -> bool:
         # whatever index its version came from.
         return (root / NODE_DIR / item.id / ".seshat-installed").is_file()
     if item.source_type is SourceType.GITHUB:
-        marker = root / _skill_dir(item) / ".seshat-installed"
-        return marker.is_file()
+        target = root / _skill_dir(item)
+        marker = target / ".seshat-installed"
+        return marker.is_file() and not _missing_required_payload(target, item)
     interpreter = root / _venv_python(_profile_env(profile))
     if not interpreter.is_file():
         return False
@@ -584,6 +594,11 @@ def _install_github(req: _Install) -> tuple[str, str]:
     if failure is not None:
         shutil.rmtree(staging, ignore_errors=True)
         return FAILED, failure
+
+    missing = _missing_required_payload(staging, req.item)
+    if missing:
+        shutil.rmtree(staging, ignore_errors=True)
+        return FAILED, f"missing required payload: {', '.join(missing)}"
 
     target.parent.mkdir(parents=True, exist_ok=True)
     try:

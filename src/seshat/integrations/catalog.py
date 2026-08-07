@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 INTEGRATIONS_DIR = Path(".seshat/integrations")
 MCP_CONFIG = INTEGRATIONS_DIR / "mcp.json"
@@ -93,10 +93,30 @@ class Component:
     # type would silently skip writing its config -- and skip the conflict and
     # exact-version checks that go with it.
     mcp_server: bool = False
+    # Files that must exist inside an installed upstream payload. This belongs
+    # to the catalog because it is component identity/validation metadata, not
+    # installer behavior. Empty for components whose installed state is proven
+    # by package metadata, MCP registration, or a bundled repository path.
+    required_paths: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.source not in ALLOWLISTED_SOURCES:
             raise ValueError(f"{self.id}: source is not allowlisted: {self.source}")
+        for required in self.required_paths:
+            posix = PurePosixPath(required)
+            windows = PureWindowsPath(required)
+            if (
+                not required.strip()
+                or "\\" in required
+                or posix.is_absolute()
+                or windows.is_absolute()
+                or windows.drive
+                or ".." in posix.parts
+            ):
+                raise ValueError(
+                    f"{self.id}: required path must be a contained relative "
+                    f"POSIX path: {required!r}"
+                )
 
 
 # --------------------------------------------------------------------------- #
@@ -172,6 +192,10 @@ _TRANSFORMATION = (
         channel=Channel.STABLE,
         role="upstream dbt Labs agent skill bundle",
         coordinate="dbt-labs/dbt-agent-skills",
+        required_paths=(
+            "skills/dbt/using-dbt-for-analytics-engineering/SKILL.md",
+            "skills/dbt/configuring-dbt-mcp-server/SKILL.md",
+        ),
     ),
     Component(
         id="dbt-mcp",
@@ -220,6 +244,11 @@ _POWERBI_FABRIC = (
         channel=Channel.STABLE,
         role="upstream Microsoft Fabric and Power BI skill bundle",
         coordinate="microsoft/skills-for-fabric",
+        required_paths=(
+            "skills/semantic-model-consumption/SKILL.md",
+            "skills/semantic-model-authoring/SKILL.md",
+            "plugins/powerbi-authoring/skills/powerbi-report-authoring/SKILL.md",
+        ),
     ),
     Component(
         id="powerbi-modeling-mcp",

@@ -366,6 +366,66 @@ def test_a_partially_installed_component_is_never_reported_installed(
     assert fabric.status == "planned"
 
 
+def test_a_marked_skill_bundle_missing_required_payload_is_not_present(
+    tmp_path: Path,
+) -> None:
+    root = _workspace(tmp_path)
+    from seshat.integrations.catalog import SKILLS_DIR
+
+    target = root / SKILLS_DIR / "fabric-skills"
+    target.mkdir(parents=True)
+    (target / ".seshat-installed").write_text("v3.0.0\n", encoding="utf-8")
+
+    outcome = plan_profile(
+        root,
+        profile="powerbi-fabric",
+        resolvers=Resolvers(
+            github=FakeGitHub(
+                release={"tag_name": "v3.0.0"}, commits={"v3.0.0": {"sha": "9" * 40}}
+            ),
+            npm=FakeNpm(
+                {"@microsoft/powerbi-modeling-mcp": {"dist-tags": {"latest": "1.0.0"}}}
+            ),
+            python_version=(3, 13),
+        ),
+    )
+
+    fabric = next(row for row in outcome.rows if row.component == "fabric-skills")
+    assert fabric.status == "planned"
+
+
+def test_a_clone_missing_required_payload_is_not_activated(tmp_path: Path) -> None:
+    import subprocess
+
+    root = _workspace(tmp_path)
+    from seshat.integrations.catalog import SKILLS_DIR
+
+    def _incomplete_clone(command: list[str], cwd: Path):
+        if command[:2] == ["git", "clone"]:
+            target = Path(command[-1])
+            target.mkdir(parents=True)
+            (target / "README.md").write_text("incomplete\n", encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    outcome = apply_profile(
+        root,
+        profile="powerbi-fabric",
+        resolvers=Resolvers(
+            github=FakeGitHub(
+                release={"tag_name": "v3.0.0"}, commits={"v3.0.0": {"sha": "9" * 40}}
+            ),
+            npm=FakeNpm({"@microsoft/powerbi-modeling-mcp": {"dist-tags": {}}}),
+            python_version=(3, 13),
+        ),
+        runner=_incomplete_clone,
+    )
+
+    fabric = next(row for row in outcome.rows if row.component == "fabric-skills")
+    assert fabric.status == "failed"
+    assert "missing required payload" in fabric.detail
+    assert not (root / SKILLS_DIR / "fabric-skills").exists()
+
+
 def test_a_failed_clone_does_not_activate_the_staged_tree(tmp_path: Path) -> None:
     """A clone that fails leaves no half-installed component behind."""
     import subprocess
