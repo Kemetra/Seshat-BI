@@ -24,8 +24,15 @@ ruff format --check src tests scripts && ruff check src tests scripts
 python scripts/export_agent_bundles.py --check
 python -m pytest tests/unit/test_capability_inventory.py \
   tests/contract/test_capability_ship_classification.py \
+  tests/contract/test_dbt_documentation.py \
+  tests/contract/test_statistical_documentation.py \
   tests/contract/test_generated_agent_bundles.py -q --no-cov
 ```
+
+All three manifest-reading contract tests are listed deliberately.
+`test_dbt_documentation.py` asserts on `dbt-transformation-adapter` -- the entry
+T020 edits first -- so omitting it would mean the FR-004 proof never exercised the
+test guarding the pilot.
 
 Expected: `seshat check` exit 0 carrying only the pre-existing RS1 warning;
 bundle drift PASS; all tests green.
@@ -79,12 +86,29 @@ bundle drift PASS; all tests green.
   `tests/unit/_capability_oracle.py`, wired into the same
   `find_*_violations` pattern the existing axes use. Deliverable: T010 and T011
   now pass; every previously green oracle test still passes.
-- [ ] T013 Add an explicit test asserting **no ownership field name contains any
-  `NUMERIC_FIELD_HINTS` substring** (`score`, `maturity`, `confidence`,
-  `completeness`, `health`) — FR-008 clause 1. Deliverable: a test that would
-  fail if a future field were named e.g. `ownership_maturity`. This is the
-  guard on the spec's own primary risk, so it must assert against the FR-001
-  vocabulary list, not against whatever the manifest happens to contain.
+- [ ] T013 Add a **behavioral** test for FR-008 clause 1: construct an in-memory
+  entry carrying `ownership: {ownership_confidence: "high"}` and assert
+  `find_axis_violations` (or the O6 check directly) returns a problem naming that
+  key. Deliverable: a test that exercises the real detector.
+  **Not** a list-versus-list comparison of the FR-001 vocabulary against
+  `NUMERIC_FIELD_HINTS` — that form cannot fail unless someone edits the test's
+  own list, so it would restate the risk rather than catch it. The protection is
+  the pre-existing `_axis_numeric_field_names`
+  (`tests/unit/_capability_oracle.py:451-456`); this task proves it fires on an
+  ownership-shaped field.
+- [ ] T015 Add a FAILING-then-passing test for FR-002a: an entry with no
+  `ownership.capability_owner` must be rejected. Deliverable: the test plus the
+  oracle check. This is what makes absence non-meaningful and a half-landed
+  migration honest rather than misleading.
+- [ ] T016 Implement FR-011, the reader: add `capability_owner`,
+  `upstream_project`, and `seshat_delta` to `_RECORD_FIELDS` /
+  `InventoryRecord` / `_project_record` in
+  `src/seshat/capability_inventory.py`, and mirror them into
+  `DECLARED_RECORD_FIELDS` in `tests/unit/_capability_oracle.py`. Deliverable:
+  `python -m seshat.capability_inventory` renders the three fields, and the
+  closed-schema assertion at `tests/unit/test_capability_inventory.py:40` passes
+  with the widened set. **Leave the five dead constants at
+  `capability_inventory.py:35-43` untouched** (FR-010, OD-3).
 - [ ] T014 Run the gate set. Deliverable: all green, and the bundle digests from
   T002 **unchanged** — Phase 1 touches no manifest entry, so this is the
   inertness proof.
@@ -120,8 +144,11 @@ bundle drift PASS; all tests green.
 ## Phase 3 -- Knowledge roots and governance set (mechanical)
 
 - [ ] T030 Classify the six `skills/` roots as `seshat-domain-knowledge`, each
-  with `canonical_source` naming its authored path and `generated_targets`
-  naming its two bundle projections (FR-005). Deliverable: six entries.
+  with `canonical_source` naming its authored path (FR-005). Deliverable: six
+  entries. Do **not** add a `generated_targets` field — it was removed from the
+  spec because destinations are owned by
+  `distribution/public-knowledge-allowlist.yaml` and a hand-written copy would
+  drift silently.
 - [ ] T031 Classify the readiness/evidence/approval set as
   `seshat-governance`, per `docs/capabilities/ownership-audit.md` section 4.
   Deliverable: the entries, with no `upstream_project` (none exists).
@@ -136,16 +163,37 @@ bundle drift PASS; all tests green.
 - [ ] T041 Classify the Power BI layer entries. Deliverable: the entries.
   `powerbi-dashboard-design` and `powerbi-workflows` receive an `overlap_note`
   naming each other (US3) — advisory only, merging nothing.
-- [ ] T042 Classify the remaining `cli`-surface entries. Deliverable: the
-  entries; one commit per reviewable batch.
+- [ ] T042 Classify the remaining entries, **enumerated from the manifest rather
+  than from the audit**. The audit names only 41 of 102 `id`s, so 61 entries have
+  no audit-derived classification -- 47 `cli`, 5 `docs`, 4 `skill`, 2
+  `execution-adapter`, and one each of `product-module`, `plugin`,
+  `human-artifact`. Work the manifest in reviewable batches, one commit each.
+  Deliverable: every entry declared. Use the FR-002 tokens added for the
+  previously-uncovered surfaces:
+  - `surface: product-module` -> `seshat-product-module`
+  - `surface: human-artifact` -> `human-deliverable`
+  - spec-only `surface: docs` -> `specified-not-built`
+  - genuinely undecidable -> `unclassified` with an entry-specific reason
+- [ ] T042a Classify the `speckit-*` aggregate entry as `vendored-upstream` per
+  the resolved OD-1: `upstream_project` `github/spec-kit`, `upstream_reference`
+  the pinned `"0.8.10"` (quoted -- FR-008 clause 2), and `update_policy`
+  recording the `specify init` invocation. Deliverable: the entry, and a note in
+  `evidence/known-findings.md` that **no re-vendor/upgrade path is recorded**
+  (no lockfile, no `specify upgrade` record) -- the residual fork-tax gap.
+  Note the count is **14** skills, not 12.
+- [ ] T042b Classify the four dev-workflow skills as `seshat-governance` per the
+  resolved OD-2, each with the `seshat_delta` stated in the spec's OD-2 table.
+  Deliverable: four entries, each with a non-empty delta.
 - [ ] T043 Run the gate set. Deliverable: all green, digests unchanged.
 
 ## Phase 5 -- Closeout
 
-- [ ] T050 Write the deliberately-unclassified list into
-  `evidence/unclassified.md`: every entry with no `ownership` mapping and the
-  reason. Deliverable: the file (SC-001). Entries blocked on OD-1/OD-2 are
-  listed here, not guessed.
+- [ ] T050 Write the `unclassified`-token census into `evidence/unclassified.md`:
+  every entry whose `capability_owner` is `unclassified`, with its
+  entry-specific reason. Deliverable: the file (SC-001). Note this is now a
+  census of an explicit token, not a list of silent omissions — FR-002a means no
+  entry can be missing the field. OD-1 and OD-2 are resolved, so neither is a
+  valid reason for leaving an entry unclassified.
 - [ ] T051 Verify SC-002 mechanically: every `seshat-adapter` entry carries a
   non-empty `seshat_delta`. Deliverable: the oracle passing, plus the count.
 - [ ] T052 Verify SC-007 mechanically: no key name anywhere in the manifest
@@ -170,10 +218,15 @@ These are named so no one adds them mid-implementation:
 - **No reviving the five dead constants** at
   `src/seshat/capability_inventory.py:35-43` (FR-010, plan Risk R3). Recorded as
   OD-3 for a separate spec.
-- **No rendering the axis in inventory output.** Deferred; requires extending
-  the closed `DECLARED_RECORD_FIELDS` contract.
-- **No answering OD-1** (`speckit-*` vendored-upstream) **or OD-2** (INSPECT
-  dev-workflow skills). Owner rulings.
+- **No shipping `capabilities.yaml` inside the bundles.** FR-011 renders three
+  fields through the existing inventory surface; putting the manifest itself in
+  the bundles would change every bundle digest and force a drift-gate
+  re-baseline. Out of scope.
+- **No re-litigating OD-1, OD-2, or OD-3.** All three are resolved by owner
+  ruling 2026-08-07 and recorded in the spec's Decisions section. Implement the
+  rulings (T042a, T042b, T005); do not reopen them.
+- **No building the spec-kit re-vendor/upgrade path.** OD-1 surfaced that gap as
+  real but out of scope here; T042a only records it.
 - **No deleting, merging, or consolidating any capability.**
 - **No promoting this spec into the `<!-- SPECKIT -->` fence** as part of
   implementation. Fence movement is an owner action.

@@ -85,11 +85,21 @@ resolved manifest `id`. Phases 1-5 below correspond one-to-one with `tasks.md`.
    adapter-missing-delta.
 2. Write failing tests first (TDD): an unknown `capability_owner` must be
    rejected; a `seshat-adapter` without `seshat_delta` must be rejected.
-3. Confirm O6 stays green with the new *names* present in the oracle's own
-   constants -- `capability_owner`, `upstream_project`, `upstream_surface`,
-   `upstream_reference`, `seshat_delta`, `canonical_source`,
-   `generated_targets`, `overlap_note`, `update_policy`. None contains a
-   `NUMERIC_FIELD_HINTS` substring; this is asserted, not assumed.
+3. Confirm O6 stays green with the new *names* present -- `capability_owner`,
+   `upstream_project`, `upstream_surface`, `upstream_reference`, `seshat_delta`,
+   `canonical_source`, `overlap_note`, `update_policy` (eight; `generated_targets`
+   was removed, see FR-005). None contains a `NUMERIC_FIELD_HINTS` substring.
+   Asserted **behaviorally** -- T013 constructs an entry carrying
+   `ownership_confidence` and proves the detector fires, rather than comparing two
+   hardcoded lists, which could not fail.
+
+4. Implement FR-011, the reader: widen `_RECORD_FIELDS` / `InventoryRecord` /
+   `_project_record` in `src/seshat/capability_inventory.py` with
+   `capability_owner`, `upstream_project`, `seshat_delta`, mirrored into
+   `DECLARED_RECORD_FIELDS`. Without this the axis is write-only -- verified:
+   the record schema is closed against `ownership`, gating and bundle-shipping
+   are both out of scope, so nothing else would ever read it. Leave the five
+   dead constants untouched (FR-010).
 
 Phase 1 lands with **zero manifest entries changed**, so it is provably inert.
 
@@ -110,19 +120,32 @@ Mechanical, low-judgment: the six `skills/` roots are
 `seshat-domain-knowledge`; the readiness/evidence/approval set is
 `seshat-governance`. Taken from the audit's KEEP sections.
 
-### Phase 4 -- The remainder, in reviewable batches
+### Phase 4 -- The remainder, enumerated from the manifest
 
-Remaining entries in batches small enough to review, each batch a commit. Any
-entry whose class is genuinely unclear is left unclassified and listed with a
-reason (SC-001) rather than guessed.
+**Re-derived from the manifest, not the audit.** The audit names only 41 of 102
+manifest `id`s, so 61 entries have no audit-derived classification: 47 `cli`,
+5 `docs`, 4 `skill`, 2 `execution-adapter`, and one each of `product-module`,
+`plugin`, `human-artifact`. Working from the audit would have left them guessed
+or in breach of SC-001, which is why FR-002 gained tokens for the uncovered
+surfaces and a required `unclassified` sentinel.
 
-### Phase 5 -- Deliberately unclassified list and closeout
+Batches small enough to review, each a commit. An entry whose class is genuinely
+undecidable carries `unclassified` with an entry-specific reason -- an explicit
+declaration, not silence.
 
-Record the unclassified entries and their reasons. Re-run the full gate set.
+This phase also implements the two resolved rulings: the `speckit-*` aggregate as
+`vendored-upstream` (OD-1) and the four dev-workflow skills as
+`seshat-governance` with stated deltas (OD-2).
 
-**OD-1 and OD-2 block only their own entries.** The `speckit-*` aggregate and the
-INSPECT-flagged dev-workflow skills stay unclassified pending owner rulings;
-they do not block Phases 1-4.
+### Phase 5 -- Census and closeout
+
+Write the `unclassified`-token census with reasons, verify SC-002 and SC-007
+mechanically, document the axis in the capabilities README, and re-run the full
+gate set.
+
+**OD-1, OD-2, and OD-3 are all resolved** (owner ruling 2026-08-07) and recorded
+in the spec's Decisions section. Nothing in this plan is blocked on an open
+decision; the remaining human seam is ratification itself.
 
 ## Risks
 
@@ -171,7 +194,8 @@ definition.
 | Deferred item | Why deferring is correct |
 | --- | --- |
 | Section D overlap gate | No filled target exists until this spec produces values. Building the rule first would mean writing assertions against data that does not exist. |
-| Rendering ownership in `capability_inventory` output | The projection drops unknown keys harmlessly. Surfacing the axis is a separate, additive UX change with its own closed-schema contract (`DECLARED_RECORD_FIELDS`) to extend. |
+| Shipping `capabilities.yaml` in the bundles | Would change every bundle digest and force a drift-gate re-baseline. FR-011 instead renders three fields through the inventory surface that already exists. |
+| The spec-kit re-vendor/upgrade path | Surfaced by OD-1 as a real gap (no lockfile, no `specify upgrade` record). Recorded, not built -- it is a tooling decision, not a metadata axis. |
 | Making the five dead constants live | A behavior change to five unrelated axes. Belongs in its own spec (OD-3); would fail today on a live value. |
 | Automated `catalog.py` cross-check | Section-D shaped. Manual for four entries now. |
 

@@ -98,10 +98,12 @@ of the relationship. It is advisory and drives no automated action.
 
 ### US4 -- The vendored-upstream question stays visible (Priority: P2)
 
-`docs/capabilities/ownership-audit.md` found one genuine open question: whether
-the 12 `speckit-*` skills are unmodified upstream Spec Kit content. The axis
-must be able to record "this is vendored upstream content" as a durable,
-reviewable statement rather than a paragraph in an audit doc.
+`docs/capabilities/ownership-audit.md` raised one question: whether the
+`speckit-*` skills (**14** of them, not 12 as that doc first said) are
+unmodified upstream Spec Kit content. They are -- see OD-1, resolved. The axis
+must be able to record "this is vendored upstream content, sanctioned, with this
+update policy" as a durable, reviewable statement rather than a paragraph in an
+audit doc.
 
 **Acceptance**: `capability_owner: vendored-upstream` exists as a declarable
 value, and the `speckit-*` aggregate entry can carry it pending human ruling.
@@ -110,8 +112,10 @@ value, and the `speckit-*` aggregate entry can carry it pending human ruling.
 
 ### FR-001 -- The ownership fields
 
-Each manifest entry MAY carry an `ownership:` mapping. All sub-fields are
-OPTIONAL; an entry omitting the mapping entirely remains valid.
+Each manifest entry carries an `ownership:` mapping. `capability_owner` is
+REQUIRED on every entry (FR-002a) -- an unclassified entry declares the
+`unclassified` sentinel rather than omitting the field. The other eight
+sub-fields are OPTIONAL.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
@@ -121,7 +125,6 @@ OPTIONAL; an entry omitting the mapping entirely remains valid.
 | `upstream_reference` | string | a URL or coordinate, e.g. `dbt-labs/dbt-agent-skills` |
 | `seshat_delta` | string | what Seshat adds; required when `capability_owner` is `seshat-adapter` (FR-006) |
 | `canonical_source` | string | repo-relative path of the authored source |
-| `generated_targets` | list of strings | repo-relative paths generated from `canonical_source` |
 | `overlap_note` | string | advisory relationship to another capability |
 | `update_policy` | string | how the capability is kept current |
 
@@ -145,11 +148,40 @@ Exactly one of:
   needs no `seshat_delta`.
 - `seshat-domain-knowledge` -- BI/SQL/DAX/Python/retail reasoning that no
   upstream tool owns.
-- `vendored-upstream` -- upstream content copied into this repo. A declaration
-  that a human ruling is owed, not an endorsement.
+- `vendored-upstream` -- upstream content committed into this repo. Neutral on
+  whether that is acceptable: `seshat_delta` or `update_policy` carries the
+  justification and the re-vendor path.
+- `seshat-product-module` -- an executable Seshat engine that runs code rather
+  than encoding reasoning. Covers `surface: product-module` entries such as
+  `governed-statistical-core`, which fit neither `seshat-domain-knowledge` (it
+  executes) nor `seshat-governance` (it gates nothing).
+- `human-deliverable` -- an artifact a human produces outside any tool, e.g.
+  `surface: human-artifact` entries such as `f034-built-dashboard-page`. Owned by
+  a person, not by code.
+- `specified-not-built` -- a ratified or drafted specification with no
+  implementation, e.g. spec-only `surface: docs` entries such as
+  `kpi-derivation-lineage`. Ownership follows once it ships.
+- `unclassified` -- **required sentinel.** Explicitly not yet classified, with the
+  reason in `overlap_note`. See FR-002a.
 
 An unrecognized token is a spec violation, reportable by the oracle (FR-009),
 never silently accepted as meaningful.
+
+### FR-002a -- `capability_owner` is required, and absence is never meaningful
+
+Every entry MUST carry `ownership.capability_owner`. An entry not yet classified
+carries the `unclassified` sentinel with a reason -- it does not omit the field.
+
+Rationale: without this, absence is overloaded three ways -- not yet classified,
+deliberately unclassified, or "no upstream owner, so this is Seshat's". The third
+reading is the dangerous one. Mid-migration, `pbi-mcp-doctor` carrying no
+`ownership` would read as Seshat-owned when it in fact wraps a Microsoft preview
+MCP. A required sentinel makes that misreading structurally impossible instead of
+merely documented, and makes a half-landed migration honest rather than
+misleading.
+
+This supersedes FR-001's "an entry omitting the mapping entirely remains valid"
+for `capability_owner` specifically. The other eight sub-fields stay optional.
 
 ### FR-003 -- `upstream_surface` is a closed token set
 
@@ -171,20 +203,33 @@ behavior or output of any existing consumer. Verified pre-conditions on
   `source_sha256`, `output_sha256`, and `manifest_digest` is unchanged, so the
   `Generated agent bundle drift` gate (`.github/workflows/ci.yml:68-69`) is
   unaffected.
-- `tests/contract/test_capability_ship_classification.py` asserts named-key
-  invariants only; it contains no key-set closure assertion.
+- Three contract tests read the manifest, all asserting named keys only, none
+  with a key-set closure assertion: `test_capability_ship_classification.py`,
+  `test_dbt_documentation.py` (which asserts on `dbt-transformation-adapter` --
+  the very entry the pilot phase edits first), and
+  `test_statistical_documentation.py`. All three MUST be in the gate set so the
+  FR-004 proof actually exercises them.
 
 Consequence: **no lockstep schema bump is required.** The migration may land
 entry-by-entry.
 
-### FR-005 -- `canonical_source` and `generated_targets` state a direction
+### FR-005 -- `canonical_source` names the authored path; targets are NOT restated
 
 Where an entry ships into the generated bundles, `canonical_source` names the
-authored path and `generated_targets` names what is produced from it. These
-record the direction the existing generator already enforces -- `build_bundle`
+authored path it is generated *from*. It records the direction the existing
+generator already enforces -- `build_bundle`
 (`scripts/export_agent_bundles.py:602`) drives it, with the actual checks in
 `_validate_source` (`:319`), `_validate_entry_policy` (`:358`), and
-`_record_destinations` (`:397`). They introduce no new enforcement.
+`_record_destinations` (`:397`). It introduces no new enforcement.
+
+**A `generated_targets` field was specified and then removed.** Destination paths
+are already owned by `distribution/public-knowledge-allowlist.yaml` `targets`
+(itself derived from this manifest) and validated by `_record_destinations`. A
+hand-written third copy would be exactly the "second source of truth" the
+Non-goals forbid -- and unlike `upstream_reference`, which FR-007 binds to
+`catalog.py`, nothing would bind it. If a destination changed, those entries would
+lie silently while every gate stayed green. An entry's targets are derivable from
+the allowlist on demand; they are not restated here.
 
 ### FR-006 -- A declared adapter states its delta
 
@@ -249,6 +294,30 @@ target before it is worth building. That target does not exist until entries
 carry values -- which is what this spec produces. Gating is therefore downstream
 of this work, not part of it.
 
+### FR-011 -- The axis ships with a reader
+
+Three ownership fields -- `capability_owner`, `upstream_project`, and
+`seshat_delta` -- MUST be surfaced by the existing inventory renderer:
+
+- add them to `_RECORD_FIELDS` / `InventoryRecord` and `_project_record` in
+  `src/seshat/capability_inventory.py`;
+- mirror them into `DECLARED_RECORD_FIELDS` in `tests/unit/_capability_oracle.py`,
+  which is deliberately an independent restatement rather than an import, so both
+  sides must be updated and the closed-schema assertion at
+  `tests/unit/test_capability_inventory.py:40` keeps its teeth.
+
+Rationale: without a reader this axis is **write-only**. Verified: the closed
+record schema excludes `ownership`, `_project_record` drops unknown keys, FR-009
+defers gating, and `docs/capabilities/capabilities.yaml` ships in **neither**
+generated bundle. Absent this requirement, the only code reading these fields
+after the migration would be the oracle validating them against its own
+constants -- data with no consumer.
+
+The remaining six fields stay unrendered; they are provenance detail, not routing
+signal. Shipping the manifest itself inside the bundles is explicitly **not**
+required here -- that would change every bundle digest and force a re-baseline of
+the drift gate.
+
 ### FR-010 -- Existing dead constants are not silently promoted
 
 `src/seshat/capability_inventory.py:35-43` defines `_LIFECYCLE_STATES`,
@@ -265,12 +334,18 @@ migration.
 
 ## Success criteria
 
-- **SC-001**: Every one of the 102 entries either carries an `ownership` mapping
-  or is listed, with an entry-specific reason, as deliberately unclassified.
-  **Floor**: at most the entries blocked on OD-1 and OD-2 may be left
-  unclassified. A boilerplate reason repeated across entries does not satisfy
-  this criterion -- the point is classification, not a well-formed list of
-  refusals.
+- **SC-001**: Every entry carries `ownership.capability_owner` (FR-002a). No entry
+  omits it. Since `unclassified` is an explicit token, this is mechanically
+  checkable and cannot be satisfied by silence.
+  **Floor**: every entry whose token is `unclassified` carries an entry-specific
+  reason in `overlap_note`. A boilerplate reason repeated across entries does not
+  satisfy this criterion.
+  Note: the earlier floor -- "only OD-1/OD-2 entries may be unclassified" -- was
+  **withdrawn as unsatisfiable**. The source audit names only 41 of the 102
+  manifest `id`s, so 61 entries have no audit-derived classification; a floor of
+  ~5 was impossible by construction. Phase 4 is therefore re-derived from the
+  **manifest**, not the audit, and the honest measure is that every entry is
+  *declared* -- classified or explicitly `unclassified` with a reason.
 - **SC-002**: Every entry declaring `seshat-adapter` carries a non-empty
   `seshat_delta`.
 - **SC-003**: The four wrappers named in `ownership-audit.md` are classified
@@ -315,16 +390,61 @@ migration.
   Being the fence target is not ratification; a named human must ratify `spec.md`
   before any task in `tasks.md` is started.
 
-## Open decisions
+## Decisions (all resolved 2026-08-07 by owner ruling)
 
-- **OD-1**: Whether the `speckit-*` aggregate entry is classified
-  `vendored-upstream`. Requires comparing the shipped skills against upstream
-  Spec Kit. **Owner ruling required.**
-- **OD-2**: Whether `friendly-pr-reviewer` and the other generic dev-workflow
-  skills flagged INSPECT in the audit are `seshat-governance` or
-  `official-upstream`. **Owner ruling required.**
-- **OD-3**: Whether the five dead constants at `capability_inventory.py:35-43`
-  should be made live in a separate spec. Recorded by FR-010, not resolved here.
+### OD-1 -- `speckit-*` -- RESOLVED: `vendored-upstream`, not a violation
+
+Investigated on owner direction. **There are 14 such skills, not 12** as earlier
+documents stated. Findings:
+
+- All 14 were written by upstream's own installer
+  (`specify init --here --integration claude --script ps`, spec-kit `0.8.10`) in
+  a single commit `1eb0c98`, and none has been edited since.
+- Hash-verified: every file matches `.specify/integrations/claude.manifest.json`
+  byte-for-byte. The five `speckit-git-*` skills were additionally byte-diffed
+  against the local upstream source under `.specify/extensions/git/commands/`;
+  the only deltas are added frontmatter and one literalized placeholder.
+- No Seshat vocabulary (`seshat`, `retail`, `medallion`, `gold`) appears in any of
+  the 14 bodies.
+- **Constitution amendment v1.1.0, made in the same commit**
+  (`.specify/memory/constitution.md:556-563`), explicitly permits this exact
+  state. It was a versioned, documented decision -- not a silent fork.
+- **Principle II is scoped to the Power BI execution adapter**
+  (`constitution.md:271-275`), not to all tooling. It does not bind here.
+
+Classification: `capability_owner: vendored-upstream`, `upstream_project`
+`github/spec-kit`, `upstream_reference` the pinned `0.8.10`, `update_policy`
+recording the installer invocation.
+
+**Residual gap, narrower than first framed**: no re-vendor or upgrade path is
+recorded anywhere -- no lockfile, no `specify upgrade` record, no re-run
+instructions. That is the "fork tax" the Principle II *rationale* warns about. It
+is unpaid today because the copy is provably unmodified, but nothing preserves
+that. Recorded here; it belongs to its own decision, not this axis.
+
+### OD-2 -- dev-workflow skills -- RESOLVED: `seshat-governance` with stated deltas
+
+The four INSPECT-flagged skills are `seshat-governance`, each REQUIRED to state
+its delta. The deltas are real: each renders or adjudicates over *governance*
+output, which no GitHub/Claude/Codex surface can produce -- those review code, not
+readiness state.
+
+| Skill | Required `seshat_delta` |
+| --- | --- |
+| `friendly-pr-reviewer` | plain-language rendering of the governance review, not a code review |
+| `pr-readiness-reviewer` | `merge_ready` verdict from readiness evidence, not CI status |
+| `release-notes-generator` | evidence-backed maturity ladder tied to roadmap F-numbers |
+| `showcase-build` | disclosure-safe offline proof bundle from committed readiness truth |
+
+### OD-3 -- dead constants -- RESOLVED: record, do not fix
+
+The five constants at `capability_inventory.py:35-43` stay dead. The finding is
+recorded (FR-010, task T005); reviving them is a behavior change across five
+unrelated axes and would fail today on the live `surface: product-module` value.
+It gets its own spec if ever wanted. **Not** in scope here.
+
+Interaction with FR-011: that requirement edits `_RECORD_FIELDS` in the same
+module. Implementers MUST leave the five constants untouched while doing so.
 
 ## Assumptions
 

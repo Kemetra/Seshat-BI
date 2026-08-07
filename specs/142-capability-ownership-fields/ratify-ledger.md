@@ -2,123 +2,147 @@
 
 **Branch**: `spec/142-capability-ownership-fields`
 
-**Prepared**: 2026-08-07
+**Prepared**: 2026-08-07 (revised same day after owner rulings)
 
-**Status**: **NOT RATIFIED. NOT RECOMMENDED FOR RATIFICATION AS IT STANDS.**
+**Status**: **NOT RATIFIED -- awaiting the human ratification decision.**
 
 Ratification is a human edit this chain is structurally forbidden to make. This
-ledger records what was produced and what a ratifier would be deciding -- it
-grants nothing.
+ledger records what was produced and what a ratifier is deciding. It grants
+nothing.
 
 ---
 
 ## Recommendation
 
-**Do not ratify yet.** The adversarial review returned **DO-NOT-RATIFY** on two
-CRITICAL findings that I independently confirmed against the tree. Ratifying now
-would authorize an implementation whose Phase 4 cannot be executed as written.
+**Ready for a ratification decision.** All twenty findings from the two review
+passes are resolved, and the six decisions the chain could not make were ruled by
+the owner on 2026-08-07.
 
-This is not a formality. The package is internally consistent and factually
-grounded after two review passes -- but its classification vocabulary does not
-fit the population it must classify.
+This reverses the earlier verdict in this file. The first version said
+DO-NOT-RATIFY on two CRITICAL findings (A1, A2); both are now fixed at the design
+level rather than patched, and the reasons are recorded below.
 
-## What was produced
+## Chain
 
-| Artifact | Purpose |
+ground -> specify -> plan -> tasks -> analyze -> adversarial plan-review ->
+owner rulings -> revision -> this ledger. Hand-driven, no workflow engine.
+
+| Artifact | State |
 | --- | --- |
-| `spec.md` | The ownership axis: 9 fields, 6 tokens, 10 FRs, 7 SCs, Non-goals, 3 open decisions |
-| `plan.md` | Technical approach, constitution check, 5 phases, 4 risks, complexity tracking |
-| `tasks.md` | 28 dependency-ordered TDD-gated tasks across 6 phases, all boxes unchecked |
-| `analysis.md` | Read-only cross-artifact consistency check -- 12 findings, **all fixed** |
-| `plan-review.md` | Adversarial default-refuted review -- 8 findings, **not fixed** (see below) |
+| `spec.md` | 8 fields, **10 tokens**, FR-001..011 + FR-002a, SC-001..007, Non-goals, 3 resolved decisions |
+| `plan.md` | Constitution check, 5 phases (+Phase 0 in tasks), 4 risks, complexity tracking |
+| `tasks.md` | 34 dependency-ordered TDD-gated tasks, **every box unchecked** |
+| `analysis.md` | 12 findings -- all fixed |
+| `plan-review.md` | 8 findings -- all now addressed (see below) |
 
-Chain run: ground -> specify -> plan -> tasks -> analyze -> adversarial review ->
-this ledger. Hand-driven, one step at a time, no workflow engine.
+## The owner rulings applied
 
-## The two blocking findings
+| # | Decision | Ruling | Where it landed |
+| --- | --- | --- | --- |
+| 1 | The 61 unclassified entries (A1/A2) | Add tokens for uncovered surfaces **+ a required `unclassified` sentinel**; re-derive Phase 4 from the manifest | FR-002 (10 tokens), **FR-002a**, SC-001, T042 |
+| 2 | Write-only axis (A3/A7) | **Land one reader** -- render the axis through the existing inventory surface | **FR-011**, T016 |
+| 3 | OD-1 `speckit-*` | Investigate first, then rule | Resolved: `vendored-upstream`, **not** a Principle II violation |
+| 4 | OD-2 dev-workflow skills | `seshat-governance` with documented deltas | Resolved, with a delta table |
+| 5 | OD-3 dead constants | Record, do not fix | Resolved; T005 records, FR-010 forbids reviving |
+| 6 | Push and open a PR | Yes | pending at the end of this chain |
 
-Both independently verified, not taken on the reviewer's word.
+## How the two CRITICALs were resolved
 
-### A1 -- SC-001's floor is unsatisfiable
+### A1 -- SC-001's floor was unsatisfiable
 
-The source audit names **41** of 102 manifest `id`s. **61 entries are named by no
-audit section** (47 `cli`, 5 `docs`, 4 `skill`, 2 `execution-adapter`, and one
-each of `product-module`, `plugin`, `human-artifact`).
+Independently verified: the source audit names **41** of 102 manifest `id`s, so
+**61 entries** had no audit-derived classification (47 `cli`, 5 `docs`, 4 `skill`,
+2 `execution-adapter`, one each `product-module` / `plugin` / `human-artifact`),
+while SC-001 permitted about five unclassified.
 
-SC-001 permits unclassified entries only for those blocked on OD-1/OD-2 -- about
-five -- and forbids boilerplate reasons. Phase 4 covers those 61 entries in three
-one-line tasks that cite "the audit's KEEP section", which has no row for any of
-them. An implementer must breach the floor or invent classifications.
+**Fixed**: the impossible floor is **withdrawn and marked as withdrawn**. Phase 4
+is re-derived from the manifest. SC-001's measure is now that every entry is
+*declared* -- classified, or explicitly `unclassified` with an entry-specific
+reason.
 
-### A2 -- The six tokens fit none, or two, for real entries
+### A2 -- Six tokens fit none, or two
 
-Confirmed to exist with the stated surfaces: `governed-statistical-core`
-(`product-module`) and `f034-built-dashboard-page` (`human-artifact`) and
-`kpi-derivation-lineage` (spec-only `docs`) fit **no** token;
-`claude-code-plugin` and `pbir-apply-theme` fit **two**, with nothing to break
-the tie.
+**Fixed**: FR-002 gains `seshat-product-module`, `human-deliverable`,
+`specified-not-built` for the surfaces that fit nothing, plus the `unclassified`
+sentinel. Ten tokens total.
 
-### Why these were recorded, not patched
+### A4, as a bonus of the sentinel
 
-Fixing them means choosing new tokens and re-deriving a phase from the manifest
-rather than the audit. That changes what the spec commits to -- and an unratified
-spec is not mine to redesign on my own judgment. The prior `analysis.md` pass
-shows the failure mode: its C1 fix added the one missing token and declared the
-set closed again without testing the population. Patching under review pressure
-is how that happened.
+FR-002a makes `capability_owner` **required**, so absence is never meaningful.
+This was the sharpest finding: mid-migration, `pbi-mcp-doctor` carrying no
+`ownership` would have read as Seshat-owned when it wraps a Microsoft preview MCP.
+A half-landed migration is now honest instead of misleading -- structurally, not
+by documentation.
 
-## Also outstanding (cheap, independent of the above)
+### A5, A6, A8
 
-- **A3/A7** -- the axis is **write-only on landing**: `DECLARED_RECORD_FIELDS` is
-  closed against `ownership`, gating and rendering are both deferred, and
-  `capabilities.yaml` ships in neither bundle. Verified. Consider landing one
-  reader alongside the axis.
-- **A4** -- absence of `ownership` is overloaded three ways, so a half-migrated
-  manifest is *affirmatively misleading* (`pbi-mcp-doctor` would read as
-  Seshat-owned when it wraps a Microsoft preview MCP). An `unclassified` sentinel
-  token would make this structurally impossible.
-- **A5** -- `generated_targets` duplicates exporter-owned paths with no binding
-  rule; the Non-goals forbid exactly this.
-- **A6** -- T013 is a tautology; make it behavioral.
-- **A8** -- FR-004's survey missed two manifest-reading contract tests, one
-  guarding the pilot entry T020 edits.
+- **A5**: `generated_targets` is **removed**. Destinations are owned by
+  `distribution/public-knowledge-allowlist.yaml`; a hand-written copy was the
+  "second source of truth" the Non-goals forbid, with nothing binding it.
+- **A6**: T013 is now **behavioral** -- construct an entry carrying
+  `ownership_confidence` and prove the detector fires, instead of comparing two
+  hardcoded lists that could not fail.
+- **A8**: all three manifest-reading contract tests are in the gate set,
+  including `test_dbt_documentation.py`, which guards the entry T020 edits first.
 
-## Human decisions this ledger cannot make
+## OD-1 in full -- it overturned my own framing
 
-| Ref | Decision | Why it is yours |
-| --- | --- | --- |
-| **Ratification** | Whether spec 142 proceeds at all | Principle V human seam |
-| **A1/A2** | New tokens, or a counted exemption list | Changes what the spec commits to |
-| **A3** | Whether to land a consumer with the axis | Scope decision |
-| **OD-1** | Is `speckit-*` vendored upstream? | A possible **Principle II** ("Depend, Never Fork") finding, not mere bookkeeping |
-| **OD-2** | How to class the INSPECT dev-workflow skills | Judgment on what counts as a real Seshat delta |
-| **OD-3** | Whether the five dead constants get their own spec | Separate-spec decision |
+I had called `speckit-*` a possible **Principle II** ("Depend, Never Fork")
+finding. On investigation that was wrong, and the correction matters:
 
-## Verification performed
+- **Principle II is scoped to the Power BI execution adapter**
+  (`constitution.md:271-275`), not to all tooling.
+- The vendoring was **sanctioned by constitution amendment v1.1.0 in the same
+  commit that performed it** (`constitution.md:556-563`, commit `1eb0c98`) -- a
+  versioned, documented decision, not a silent fork.
+- Hash-verified against `.specify/integrations/claude.manifest.json`; zero local
+  drift; no Seshat vocabulary in any of the 14 bodies.
+- **There are 14 such skills, not 12.** That error had propagated into the merged
+  audit doc and this spec; both are corrected.
+
+**Residual gap, real but narrower**: no re-vendor or upgrade path is recorded
+anywhere -- no lockfile, no `specify upgrade` record, no re-run instructions. That
+is the fork tax the Principle II *rationale* warns about, unpaid today only
+because the copy is provably unmodified. T042a records it; fixing it is its own
+decision.
+
+## Verification
 
 ```
-seshat check                      exit 0 -- pre-existing RS1 warning only, no new finding
-test_dbt_documentation.py         6 passed (includes the fence contract)
+seshat check                      exit 0 -- pre-existing RS1 only, no new finding
 export_agent_bundles.py --check   PASS
 seshat kit-lint                   no projection drift
-tests/contract/                   201 passed, 1 skipped (at fence-move commit)
+test_dbt_documentation.py         6 passed (includes the fence contract)
+tests/contract/                   201 passed, 1 skipped
 ```
+
+## What remains a human decision
+
+**Ratification itself.** A named human edits `spec.md`'s `**Status**` line. No
+task in `tasks.md` may start before that -- every box is unchecked, and the fence
+states implementation is NOT permitted while the spec is Draft.
+
+Two unrelated items also need a human:
+
+- **RS1** -- `mappings/retail_store_sales/readiness-status.yaml` audit metadata
+  predates the 2026-07-23 approval. Non-blocking by design; a **named human** must
+  recompute it. Not something a ruling can delegate to an agent.
+- **The spec-kit re-vendor path** -- surfaced by OD-1, out of scope here.
 
 ## What this chain did NOT do
 
-- Did not ratify, and did not recommend ratification.
-- Did not merge or push to `main`.
-- Did not start any task in `tasks.md` -- every box is unchecked.
-- Did not answer OD-1, OD-2, or OD-3.
-- Did not patch the two CRITICAL findings.
-- Did not grant implementation permission. The fence points at this spec (moved
-  when 138 was closed out) but states explicitly that implementation is **NOT
-  permitted** while the spec is Draft. **Being the fence target is not
+- Did not ratify. Did not merge or push to `main`.
+- Did not start any task -- all boxes unchecked.
+- Did not grant implementation permission. **Being the fence target is not
   ratification.**
+- Did not revive the five dead constants (OD-3).
+- Did not ship `capabilities.yaml` inside the bundles (would force a drift-gate
+  re-baseline).
 
 ## Related
 
 - Issue **#592** -- the source; section C is this spec, section D is downstream.
 - Issue **#573** -- closed 2026-08-07; spec 138's T021/T060/T070 were
   *removed, not completed*.
-- `docs/capabilities/ownership-audit.md` -- the audit (PR #593, merged).
+- `docs/capabilities/ownership-audit.md` -- the audit (PR #593, merged; corrected
+  on this branch for the 12-vs-14 count and the resolved OD-1).
