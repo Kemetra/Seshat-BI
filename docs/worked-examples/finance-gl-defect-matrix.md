@@ -6,11 +6,11 @@ The 13 defect cases, each with its DECLARED expected governed outcome and its OB
 outcome. Declared outcomes use the shipped categorical set only
 (`proceed` | `refuse` | `block_for_evidence` | `request_human_decision`).
 
-> **Ledger note.** Two findings below (M1, M2) belong in
-> `docs/worked-examples/finance-gl-genericity-ledger.md` as rows **L7** and **L8**. That
-> file lives on the Slice C branch, which is not merged yet (it is blocked on the HR1
-> conformance ruling), so they are recorded here and must be folded into the ledger when
-> Slice C lands. They are not new obstructions discovered twice -- they are these.
+> **Ledger note.** Two findings below (M1, M2) are folded into
+> `docs/worked-examples/finance-gl-genericity-ledger.md` as rows **L7** and **L8** (done
+> after Slice C merged and the HR1 conformance ruling landed). They are not new obstructions
+> discovered twice -- they are these, recorded once here for the Slice B evidence trail and
+> once in the ledger for the categorical conclusion.
 
 ## Why "observed" is mostly PENDING, and why that is the finding
 

@@ -242,13 +242,15 @@ def test_non_gold_schema_alone_yields_no_comparison(tmp_path: Path) -> None:
     assert migration_column_sets(tmp_path) == {}
 
 
-def test_committed_migrations_still_yield_exactly_the_six_gold_tables() -> None:
+def test_committed_migrations_still_yield_exactly_the_known_gold_tables() -> None:
     """THE census guard (#501 review, finding B).
 
     The committed `0004_..._star.sql` is idempotent: all six `DROP TABLE IF EXISTS`
     statements (lines 22-27) precede ALL six `CREATE TABLE`s. Naive DROP handling
     would therefore remove the fact and every dimension from the comparison, and the
     advisory census would still read "0 advisories" -- for entirely the wrong reason.
+    `0008_create_gold_finance_gl_star.sql` (spec 137) repeats the same
+    every-DROP-before-every-CREATE shape for its own two facts + five dims.
 
     So this asserts the table COUNT and every per-table column count, not just the
     absence of findings. "0 advisories" alone is not evidence the check is running."""
@@ -256,7 +258,7 @@ def test_committed_migrations_still_yield_exactly_the_six_gold_tables() -> None:
     tables = migration_column_sets(root)
 
     assert set(tables) == set(REAL_MIGRATION_SHAPES), sorted(tables)
-    assert len(tables) == 6
+    assert len(tables) == len(REAL_MIGRATION_SHAPES)
     actual = {name: len(shape[0]) for name, shape in tables.items()}
     assert actual == REAL_MIGRATION_SHAPES
 

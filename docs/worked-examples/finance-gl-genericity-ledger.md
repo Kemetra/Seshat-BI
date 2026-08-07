@@ -229,6 +229,57 @@ counts-based threshold, no score of any kind (hard rule #9).
   ledger's value depends on including the unflattering rows. It is not domain-specific: any
   author could read the template the same way.
 
+## L7 -- no check reconciles a budget row to the actuals account hierarchy
+
+**Folded in from `docs/worked-examples/finance-gl-defect-matrix.md` M1 (recorded during Slice
+B, 2026-07-30), which was written before Slice C merged and said so explicitly. This IS that
+finding, not a new one -- the defect-matrix file's own note said it belonged here as L7.**
+
+- **location**: `src/seshat/validate.py` (four live checks, none hierarchical);
+  `src/seshat/rules/conformed_dimension.py` (HR1 compares dimension DECLARATIONS across stars,
+  not the ROWS a fact actually carries)
+- **observed_problem**: defect variant D3 posts a budget row against a CLEARING account -- a
+  plan for something that is not P&L and can never be reconciled to P&L actuals. Nothing in the
+  kit catches it. HR1 checks that two stars agree on a dimension's declared SHAPE (surrogate
+  key type, shared attribute types); it does not check that a fact's rows reference a hierarchy
+  path the other fact can reach. This is a live-data check that would need a database; it is
+  not visible to `seshat check`'s static surface at all.
+- **classification**: `semantic_leak`
+- **existing_rule_or_surface**: none exists for this specific class of check; `src/seshat/
+  validate.py`'s four checks (`check_pk_uniqueness`, `check_date_coverage`, `check_orphan_fks`,
+  `check_reconciliation`) are the closest live-data surface and none of them is hierarchical
+- **minimal_resolution**: none attempted -- spec 137 FR-031 forbids adding a rule in this
+  feature. Recorded so a future, separately-approved feature can decide whether cross-fact
+  hierarchy reconciliation belongs in the live-validation surface.
+- **core_change_required**: false to walk; true to catch this class of defect at all
+- **evidence**: D3 generated and inspected (`tests/fixtures/finance_gl/generate.py` variant
+  D3); `seshat check` exit 0 on the branch; no live check exists to run against it, so the
+  observed outcome is `[NO CHECK EXISTS]`, distinct from `[PENDING LIVE PROFILE]` (which means
+  a check exists but needs a database) -- recorded in `docs/worked-examples/
+  finance-gl-defect-matrix.md`
+
+## L8 -- nothing verifies that source data matches the currency the map declares
+
+**Folded in from `docs/worked-examples/finance-gl-defect-matrix.md` M2, for the same reason as
+L7.**
+
+- **location**: `src/seshat/rules/currency_unit.py` (HR11); `templates/source-map.yaml`
+  `columns[].currency`
+- **observed_problem**: HR11 flags a MEASURE that sums columns with clashing DECLARED units or
+  currencies -- a static check over the map's own declarations. Defect variant D5 leaves the
+  declaration correct (`currency: "USD"`) and puts a second currency in the DATA (50 rows of
+  `EUR`). The declaration and the actual rows disagree, and nothing notices: the static gate
+  cannot see rows, and no live check compares landed data against the unit/currency a map
+  declares for it.
+- **classification**: `semantic_leak`
+- **existing_rule_or_surface**: HR11 (declaration-level only); no live-data counterpart exists
+- **minimal_resolution**: none attempted (FR-031 forbids adding a rule here). A live "declared
+  unit vs observed distinct units in the landed column" check would close this gap; not built.
+- **core_change_required**: false to walk; true to catch it
+- **evidence**: D5 generated with 50 `EUR` rows against a map declaring `USD`; `seshat check`
+  exit 0; observed outcome recorded as `[NO CHECK EXISTS]` in
+  `docs/worked-examples/finance-gl-defect-matrix.md`
+
 ## L9 -- nothing in the gate can tell a human-recorded approval from an agent-recorded one
 
 **This is the most important row in this ledger, and it was found the hard way: by the
@@ -308,3 +359,139 @@ the HR1 conformance ruling). That is the correct outcome, not a failure of the w
 
 The conclusion is deliberately not written yet -- Slices B, D, E and F have not run and stages
 3-7 have not been walked. Task T050 writes it from the complete row set.
+
+---
+
+## Slice C completion -- silver/gold authoring (T022-T026)
+
+Recorded after authoring `warehouse/migrations/0006_create_silver_finance_gl_actuals.sql`,
+`0007_create_silver_finance_gl_budget.sql`, and `0008_create_gold_finance_gl_star.sql`, and
+running `python -m seshat.cli check` against them.
+
+## L10 -- no leak: silver/gold authoring against the existing conventions and gate
+
+- **location**: `warehouse/migrations/0006_create_silver_finance_gl_actuals.sql`,
+  `0007_create_silver_finance_gl_budget.sql`, `0008_create_gold_finance_gl_star.sql`
+- **observed_problem**: none. The existing bronze -> silver -> gold conventions observed in
+  `0003_create_silver_retail_store_sales.sql` / `0004_create_gold_retail_store_sales_star.sql`
+  / `0005_create_silver_demo_sample_orders.sql` (TRIM + NULLIF landing, RC7 typed casts,
+  `_sk` surrogate keys with `GENERATED ... IDENTITY`, `-1` unknown members via
+  `OVERRIDING SYSTEM VALUE`, FK `COALESCE` to the unknown member except on the marked date
+  dimension which fails loud instead, declared-grain `UNIQUE` constraints added after load)
+  transferred to a two-fact, multi-grain, cross-star-conformed domain with no modification.
+  The only new element -- a second, non-actuals period dimension (`dim_fiscal_period_fgl`)
+  keyed on `(fiscal_year, fiscal_quarter)` instead of a date -- needed no new convention,
+  only the SAME surrogate-key/unknown-member pattern applied to a different natural key.
+- **classification**: `no_leak`
+- **existing_rule_or_surface**: the bronze/silver/gold migration convention itself (not a
+  single rule); `python -m seshat.cli check`
+- **minimal_resolution**: none needed.
+- **core_change_required**: false
+- **evidence**: `python -m seshat.cli check` exit 0 with only the pre-existing RS1 warning on
+  `mappings/retail_store_sales/readiness-status.yaml` (unrelated to this feature, see
+  `ledger-baseline.md`); no new warning or error fired against any of the three new migration
+  files or the two finance `readiness-status.yaml` records.
+
+## L11 -- documentation_leak: three prose locations still assert the mapping gate is open after the machine-readable approval cleared it
+
+- **location**: `specs/137-finance-gl-genericity-proof/spec.md` "Open owner decisions" (OD-4
+  says "STILL OPEN"); `mappings/finance_gl_actuals/assumptions.md` and
+  `mappings/finance_gl_budget/assumptions.md` ("What is NOT assumed" -- both still say
+  `reviewed_by`/`reviewed_on` read `[PENDING GATE APPROVAL -- OD-4]`);
+  `mappings/finance_gl_budget/unresolved-questions.md` header ("Gate status: OPEN... No
+  silver.* SQL until a named human clears the gate")
+- **observed_problem**: the AUTHORITATIVE, machine-readable surfaces --
+  `mappings/finance_gl_actuals/readiness-status.yaml` and `.../finance_gl_budget/
+  readiness-status.yaml` `approvals[]` (both carry a `mapping_ready` entry naming
+  Ahmed Shaaban, dated 2026-07-30), and both `source-map.yaml` files' `reviewed_by:
+  "Ahmed Shaaban (data_owner)"` / `reviewed_on: "2026-07-30"` -- agree the mapping gate is
+  CLEARED, corroborated by `mappings/finance_gl_actuals/approval-decision-mapping-gate.md`
+  and `docs/quality/conformed-dimension-map.yaml`. Four prose locations committed in the same
+  historical window were not updated to match: they still narrate the gate as open. A reader
+  who trusted only the prose (rather than `approvals[]`, the actual gate-checked surface)
+  would wrongly conclude silver SQL could not yet be authored.
+- **classification**: `documentation_leak` -- the mechanism worked (the gate cleared exactly
+  once, on a real per-decision transcription, per ledger row L9); only some of its OWN prose
+  narration was not swept for consistency afterward. Not a `semantic_leak`: no logic read the
+  stale text and nothing downstream trusted it -- this feature's own authoring (T022-T024)
+  read `approvals[]` and `source-map.yaml.reviewed_by`, never the stale narration.
+- **existing_rule_or_surface**: none enforces prose-vs-approvals consistency; `seshat check`
+  validates the YAML shape of `approvals[]` but has no rule comparing a spec's "Open owner
+  decisions" prose against the mapping's own recorded approval.
+- **minimal_resolution**: for THIS feature, leave `spec.md` as the historical decision record
+  it is (Spec-Kit convention: a ratified spec's body is not silently rewritten after the fact
+  except via a dated addendum) and instead treat `approvals[]` as authoritative, which this
+  implementation session already did. A future refinement could add a lint that flags a
+  spec's `STILL OPEN` decision marker when a cited mapping's `approvals[]` already answers it,
+  so the drift is caught mechanically rather than by a reader cross-checking by hand.
+- **core_change_required**: false to walk (the authoritative surface was unambiguous and
+  sufficient); a mechanical drift-check would be a genuine, separately-scoped improvement
+- **evidence**: `mappings/finance_gl_actuals/readiness-status.yaml` lines ~89-97 (`approvals[]`);
+  `mappings/finance_gl_actuals/source-map.yaml` lines ~35-36 (`reviewed_by`/`reviewed_on`);
+  `specs/137-finance-gl-genericity-proof/spec.md` "OD-4 -- STILL OPEN"; both `assumptions.md`
+  files' final section; `mappings/finance_gl_budget/unresolved-questions.md` line ~9-10
+
+## Verification evidence for FR-010 and FR-011 (T024a, T024b)
+
+**FR-010** (no disaggregation of `budget_amount` below fiscal-quarter grain): every statement
+in `0008_create_gold_finance_gl_star.sql` referencing `budget_amount` is either a column
+declaration (`NUMERIC(18,2)`) or a straight passthrough (`SELECT ... s.budget_amount ...`
+into `gold.fct_gl_budget_fgl`, one row per silver row). No `/`, no multiplication by a
+day-count or month-count fraction, no `generate_series` expansion, no `UNNEST`, and no join
+that fans a budget row out to a finer grain than its own silver row. `grep -n
+"budget_amount" warehouse/migrations/0008_create_gold_finance_gl_star.sql` returns exactly
+the declaration and the passthrough select; nothing else touches the column. **FR-010 holds.**
+
+**FR-011** (`budget_version` is part of the key; no statement overwrites a prior version's
+rows): `gold.fct_gl_budget_fgl` carries `budget_version` in its `UNIQUE` grain constraint
+(`uq_fct_gl_budget_fgl_grain`, alongside `account_sk`/`department_sk`/`fiscal_period_sk`).
+`grep -n "UPDATE\|DELETE\|ON CONFLICT" warehouse/migrations/0008_create_gold_finance_gl_star.sql`
+matches only a code comment explaining why no UPSERT is used, not an actual statement --
+the migration is `DROP TABLE IF EXISTS` (whole-table rebuild from bronze) followed by one
+`INSERT`, never a targeted overwrite of one version's rows while others remain. The
+append-only guarantee for a NEW version landing in a future bronze reload is a property of
+how bronze is loaded (not exercised here -- no database was opened), so that specific claim
+stays `[PENDING LIVE PROFILE]`; the STRUCTURAL guarantee -- that version is physically part
+of the grain key so two versions can never collide into one row -- is verified by inspection
+here. **FR-011 holds at the schema/statement level; the load-time append-only behaviour is
+[PENDING LIVE PROFILE].**
+
+## L12 -- no_leak: a pre-existing test census pinned to the retail migration count needed updating for new committed migrations
+
+- **location**: `tests/unit/dbt/_column_drift_fixtures.py` (`REAL_MIGRATION_SHAPES`);
+  `tests/unit/dbt/test_column_drift_ddl.py`
+  (`test_committed_migrations_still_yield_exactly_the_six_gold_tables`)
+- **observed_problem**: `python -m pytest -m unit -q` failed once, on this test, after
+  `0008_create_gold_finance_gl_star.sql` was committed. The test is a "census guard" (#501
+  review finding B) that hardcodes the exact set of gold tables + per-table column counts the
+  committed migrations are expected to yield, specifically so a parser regression in
+  `src/seshat/dbt/column_drift.py` cannot hide behind a false "0 advisories" reading. It was
+  written when only `0004_create_gold_retail_store_sales_star.sql` existed and pinned the
+  literal count `6`. Adding a second idempotent gold migration with 7 new tables
+  (`fct_gl_actuals_fgl`, `fct_gl_budget_fgl`, `dim_account_fgl`, `dim_department_fgl`,
+  `dim_cost_center_fgl`, `dim_date_fgl`, `dim_fiscal_period_fgl`) legitimately changes that
+  count, and the fixture had no way to know about migrations that did not exist when it was
+  authored.
+- **classification**: `no_leak` -- this is not a retail-shaped assumption inside the KIT's
+  logic (`migration_column_sets` itself parsed all 13 tables correctly on the first run, with
+  correct per-table column counts, with zero code changes); it is a TEST FIXTURE that
+  enumerates committed state and must be kept current by whoever adds a migration, same as
+  any other census/golden-file test. It is recorded here rather than silently fixed, per this
+  ledger's own standard, so the sequence (new migration -> test fixture update -> green) is
+  visible and auditable rather than assumed.
+- **existing_rule_or_surface**: `src/seshat/dbt/column_drift.py` (the kit module; UNCHANGED --
+  this obstruction never touched it); `tests/unit/dbt/_column_drift_fixtures.py` (a test
+  fixture, not a kit module -- updating it is explicitly permitted by T025's "fix authored
+  SQL/docs only" boundary read together with the fact that this file is neither authored SQL
+  nor a kit module, but committed test data describing OTHER committed files)
+- **minimal_resolution**: added the seven new table-name -> column-count entries to
+  `REAL_MIGRATION_SHAPES` and generalized the test's docstring/name from "the six gold tables"
+  to "the known gold tables" (`test_committed_migrations_still_yield_exactly_the_known_gold_tables`),
+  asserting `len(tables) == len(REAL_MIGRATION_SHAPES)` instead of a hardcoded `6`. No change
+  to `src/seshat/dbt/column_drift.py`.
+- **core_change_required**: false
+- **evidence**: `python -m pytest tests/unit/dbt/test_column_drift_ddl.py -q --no-cov` --
+  51 passed after the fixture update (0 before, on the pre-fixture-update run: 1 failed via
+  the full `-m unit` run); `python -m pytest -m unit -q --no-cov` afterward: 1 failed (only
+  the pre-existing, unrelated `test_cli_identity_version` stale-editable-metadata failure),
+  5353 passed, 31 skipped, 502 deselected

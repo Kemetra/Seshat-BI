@@ -12,6 +12,11 @@ from pathlib import Path
 # The gold shapes the committed migrations define, asserted BY COUNT so a parser
 # regression that silently empties the comparison cannot hide behind "0 advisories"
 # (#501 review, finding B: every DROP in 0004 precedes every CREATE).
+#
+# Spec 137 (finance GL genericity proof) added 0008_create_gold_finance_gl_star.sql,
+# a second idempotent gold migration with the same every-DROP-before-every-CREATE
+# shape as 0004 (its own census guard: 0008's DROPs at lines ~59-65 precede all its
+# CREATEs). The seven `_fgl` entries below are that migration's tables.
 REAL_MIGRATION_SHAPES = {
     "dim_customer_rss": 2,
     "dim_date_rss": 10,
@@ -19,6 +24,13 @@ REAL_MIGRATION_SHAPES = {
     "dim_payment_method_rss": 2,
     "dim_product_rss": 3,
     "fct_sales_rss": 11,
+    "dim_account_fgl": 5,
+    "dim_cost_center_fgl": 4,
+    "dim_date_fgl": 10,
+    "dim_department_fgl": 3,
+    "dim_fiscal_period_fgl": 5,
+    "fct_gl_actuals_fgl": 12,
+    "fct_gl_budget_fgl": 7,
 }
 
 DATE_DDL = """
