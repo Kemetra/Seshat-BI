@@ -9,7 +9,13 @@ from pathlib import Path
 from .. import gitutil
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
-from ..rule_coverage import Requirement
+from ..rule_coverage import (
+    TEST_FIXTURES,
+    ContextInput,
+    ReportsItsOwnAbsence,
+    Requirement,
+    any_tracked_file,
+)
 
 # G5 reads the tracked-file list itself, so "the input" is that list being
 # non-empty. An untracked working tree makes G5 scan nothing and report nothing,
@@ -20,6 +26,75 @@ TRACKED_FILE_CORPUS = Requirement(
     note=(
         "no tracked file exists, so this rule scanned no path and its silence is "
         "not a verified pass"
+    ),
+)
+
+# P1, G1, G2, C2 and G4 all REPORT the absence of their input instead of going
+# quiet, each measured against an empty repository: P1 emits one ERROR per missing
+# required layout path (3), G1 one per missing required .gitignore entry (3), G4
+# one per required .gitattributes glob (10), C2 the missing .env.example plus the
+# un-gitignored .env (2), and G2 the INFO "no PBIP project present" (1). Their
+# silence is therefore never ambiguous, so there is no input whose absence a
+# Requirement could usefully name. The claim is re-verified by
+# tests/unit/test_rule_coverage_declarations.py, not trusted.
+P1_REPORTS_ABSENCE = ReportsItsOwnAbsence(
+    note=(
+        "P1 reports each missing required layout path as an ERROR, so an absent "
+        "layout is named rather than passed over in silence"
+    )
+)
+G1_REPORTS_ABSENCE = ReportsItsOwnAbsence(
+    note=(
+        "G1 reads .gitignore and reports each required entry it does not find as "
+        "an ERROR, so an absent .gitignore is named rather than silently clean"
+    )
+)
+G2_REPORTS_ABSENCE = ReportsItsOwnAbsence(
+    note=(
+        "G2 reports 'no PBIP project present' as an INFO finding when no non-"
+        "fixture PBIP artifact is tracked, so its empty case is visible"
+    )
+)
+C2_REPORTS_ABSENCE = ReportsItsOwnAbsence(
+    note=(
+        "C2 reports a missing .env.example and an un-gitignored .env as ERRORs, so "
+        "an unscannable repo is named rather than reading as secret-free"
+    )
+)
+G4_REPORTS_ABSENCE = ReportsItsOwnAbsence(
+    note=(
+        "G4 reports every required .gitattributes glob it does not find as an "
+        "ERROR, so an absent .gitattributes is named rather than silently clean"
+    )
+)
+
+# G3's corpus is an ALTERNATION of four suffixes, which is why the group form
+# exists: declaring one suffix would report a repo holding only the other three as
+# unevaluable, and declaring four separate requirements would AND them, so a repo
+# without (say) a .pbism would look unchecked. Committed fixtures are exempt, as
+# in G3's own scan. G3 lowercases before matching where fnmatch does not, so an
+# upper-case suffix resolves to unevaluable -- the safe direction (under-credit).
+G3_BOM_CORPUS = any_tracked_file(
+    "*.tmdl",
+    "*.pbir",
+    "*.json",
+    "*.pbism",
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no non-fixture TMDL/PBIR/JSON/PBISM file is tracked, so this rule read no "
+        "file's leading bytes and cannot have verified any encoding"
+    ),
+)
+
+# P2's input is not a file: it is the commit subject(s) the invocation supplies.
+# A bare `retail check` on a repo with no HEAD (and no --commit-msg-file /
+# --commit-range) gives P2 nothing to judge, and it returns no findings -- the
+# honesty gap in the one rule whose input Requirement's file forms cannot model.
+P2_COMMIT_SUBJECTS = Requirement(
+    context=ContextInput.COMMIT_SUBJECTS,
+    note=(
+        "this invocation supplied no commit subject (no --commit-msg-file, no "
+        "--commit-range, and no HEAD to fall back on), so no subject was validated"
     ),
 )
 
@@ -121,7 +196,7 @@ def _sql_placement_finding(path: str) -> Finding | None:
     return None
 
 
-@register("P1", "Approach-A layout")
+@register("P1", "Approach-A layout", requires=(P1_REPORTS_ABSENCE,))
 def rule_p1_layout(ctx: RuleContext) -> Iterable[Finding]:
     findings = _missing_required_layout(ctx.repo_root, set(ctx.tracked_files))
     for path in ctx.tracked_files:
@@ -184,7 +259,7 @@ def _ignored_definition_findings(ctx: RuleContext) -> list[Finding]:
     ]
 
 
-@register("G1", ".gitignore correctness")
+@register("G1", ".gitignore correctness", requires=(G1_REPORTS_ABSENCE,))
 def rule_g1_gitignore_correctness(ctx: RuleContext) -> Iterable[Finding]:
     gitignore = ctx.repo_root / ".gitignore"
     lines = (
@@ -202,7 +277,7 @@ def rule_g1_gitignore_correctness(ctx: RuleContext) -> Iterable[Finding]:
 FORBIDDEN_TRACKED = (".pbi/localSettings.json", ".pbi/cache.abf")
 
 
-@register("G2", "definition artifacts committed")
+@register("G2", "definition artifacts committed", requires=(G2_REPORTS_ABSENCE,))
 def rule_g2_definition_committed(ctx: RuleContext) -> Iterable[Finding]:
     # Exempt committed test fixtures: tests/fixtures/**.pbip / .Report / .tmdl
     # are NOT the live model. Without this filter G2 counts them as a real PBIP
@@ -333,7 +408,7 @@ def _repo_root_has_commit(repo_root: Path) -> bool:
     return True
 
 
-def _load_subjects(ctx: RuleContext) -> tuple[list[str], list[Finding]]:
+def load_commit_subjects(ctx: RuleContext) -> tuple[list[str], list[Finding]]:
     """Resolve the commit subjects to validate for the contract-v2 invocation.
 
     Returns ``(subjects, findings)``: on a malformed/unsafe/empty range the
@@ -407,10 +482,10 @@ def _invalid_subject_findings(subjects: list[str]) -> list[Finding]:
     ]
 
 
-@register("P2", "commit-message convention")
+@register("P2", "commit-message convention", requires=(P2_COMMIT_SUBJECTS,))
 def rule_p2_commit_subjects(ctx: RuleContext) -> Iterable[Finding]:
     # Source the subjects to validate from the contract-v2 invocation fields.
-    subjects, load_findings = _load_subjects(ctx)
+    subjects, load_findings = load_commit_subjects(ctx)
     return [*load_findings, *_invalid_subject_findings(subjects)]
 
 
@@ -700,7 +775,7 @@ def _scan_contents(ctx: RuleContext) -> list[Finding]:
     return findings
 
 
-@register("C2", "no committed secrets")
+@register("C2", "no committed secrets", requires=(C2_REPORTS_ABSENCE,))
 def rule_c2_no_committed_secrets(ctx: RuleContext) -> Iterable[Finding]:
     return [
         *_check_env_file(ctx),
@@ -728,17 +803,28 @@ def _read_leading_bytes(path: Path, count: int = 3) -> bytes:
         return fh.read(count)
 
 
-@register("G3", "UTF-8 without BOM")
+def _iter_bom_candidates(ctx: RuleContext) -> list[str]:
+    """The committed TMDL/PBIR/JSON/PBISM paths G3 reads.
+
+    Committed test fixtures are exempt (consistency with G2 and the file-scanning
+    rules): a tests/ BOM fixture, once added, is intentional and must not
+    false-positive. Latent today (no such fixture tracked yet).
+
+    Extracted from the rule body so G3_BOM_CORPUS can be checked against G3's OWN
+    selection rather than against a copy of it -- a declaration that disagreed with
+    the scan would report `evaluated` for a rule that read nothing.
+    """
+    return [
+        rel
+        for rel in ctx.tracked_files
+        if not is_test_path(rel) and rel.lower().endswith(_G3_SUFFIXES)
+    ]
+
+
+@register("G3", "UTF-8 without BOM", requires=(G3_BOM_CORPUS,))
 def rule_g3_no_bom(ctx: RuleContext) -> Iterable[Finding]:
     """Flag any committed TMDL/PBIR/JSON/PBISM file beginning with a UTF-8 BOM."""
-    for rel in ctx.tracked_files:
-        # Exempt committed test fixtures (consistency with G2 and the file-
-        # scanning rules): a tests/ BOM fixture, once added, is intentional and
-        # must not false-positive. Latent today (no such fixture tracked yet).
-        if is_test_path(rel):
-            continue
-        if not rel.lower().endswith(_G3_SUFFIXES):
-            continue
+    for rel in _iter_bom_candidates(ctx):
         try:
             leading = _read_leading_bytes(ctx.repo_root / rel)
         except FileNotFoundError:
@@ -824,7 +910,7 @@ def _g4_required_findings(declared: dict[str, tuple[int, set[str]]]) -> list[Fin
     return findings
 
 
-@register("G4", ".gitattributes EOL policy")
+@register("G4", ".gitattributes EOL policy", requires=(G4_REPORTS_ABSENCE,))
 def check_gitattributes_eol(ctx: RuleContext) -> Iterable[Finding]:
     """G4: each REQUIRED glob in .gitattributes must carry its eol/binary token.
 

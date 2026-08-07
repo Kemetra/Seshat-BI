@@ -34,6 +34,18 @@ from typing import Any, Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+from ..rule_coverage import TEST_FIXTURES, Requirement
+
+# The committed theme files DL1 scans: the glob equivalent of _THEME_SUFFIX
+# below, with the fixture exemption _iter_theme_files applies (FR-010).
+THEME_CORPUS = Requirement(
+    pattern="*.theme.json",
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no non-fixture *.theme.json is tracked, so this rule read no theme and "
+        "its silence is not a verified pass"
+    ),
+)
 
 RULE_ID = "DL1"
 
@@ -141,7 +153,11 @@ def _walk(node: Any, pointer: str, rel: str) -> Iterable[Finding]:
     # Scalars (str/int/float/bool/None) are VALUES, never scanned (FR-005).
 
 
-@register(RULE_ID, "Theme JSON carries styling defaults only, no business logic")
+@register(
+    RULE_ID,
+    "Theme JSON carries styling defaults only, no business logic",
+    requires=(THEME_CORPUS,),
+)
 def check_theme_purity(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
     for rel in _iter_theme_files(ctx):

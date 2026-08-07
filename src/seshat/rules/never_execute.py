@@ -28,6 +28,21 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, Severity, read_tracked_text
 from ..registry import register
+from ..rule_coverage import any_tracked_file
+
+# The static-core modules B1 governs: the glob equivalent of _GOVERNED_PREFIXES
+# below. An ANY-OF group because either governed tree alone is a real corpus --
+# ANDing them would report B1 unevaluable in a tree that ships the rules package
+# without the CLI package. No fixture exemption: B1 governs source, and
+# _is_governed applies none.
+GOVERNED_CORE_CORPUS = any_tracked_file(
+    "src/seshat/rules/*.py",
+    "src/seshat/cli/*.py",
+    note=(
+        "no governed static-core module is tracked, so this rule scanned no import "
+        "surface and its silence is not a verified pass"
+    ),
+)
 
 # Connection-capable import roots. A module-scope import of any of these in a core
 # module would make merely importing that module able to open a DB/network handle.
@@ -155,7 +170,11 @@ def _is_governed(path: str) -> bool:
     )
 
 
-@register("B1", "No module-scope DB/network import in the static core (never-execute)")
+@register(
+    "B1",
+    "No module-scope DB/network import in the static core (never-execute)",
+    requires=(GOVERNED_CORE_CORPUS,),
+)
 def check_no_module_scope_execution_imports(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
     for rel in sorted(p for p in ctx.tracked_files if _is_governed(p)):

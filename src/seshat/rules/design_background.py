@@ -39,6 +39,19 @@ from typing import Any, Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
+from ..rule_coverage import TEST_FIXTURES, Requirement
+
+# The filled background specs DL2 scans: the glob equivalent of
+# _BACKGROUND_SUFFIX below. The exempt blank template is
+# templates/background-spec.yaml, a different basename, so it cannot match.
+BACKGROUND_SPEC_CORPUS = Requirement(
+    pattern="*.background.yaml",
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no filled *.background.yaml spec is tracked, so this rule checked no "
+        "background spec and its silence is not a verified pass"
+    ),
+)
 
 RULE_ID = "DL2"
 
@@ -300,7 +313,11 @@ def _check_qa(block: Any, rel: str) -> Iterable[Finding]:
             yield finding
 
 
-@register(RULE_ID, "Background spec declares no baked-in dynamic content")
+@register(
+    RULE_ID,
+    "Background spec declares no baked-in dynamic content",
+    requires=(BACKGROUND_SPEC_CORPUS,),
+)
 def check_background_purity(ctx: RuleContext) -> Iterable[Finding]:
     # Lazy in-function import keeps the static check core stdlib-only (B1/B3,
     # FR-012): yaml is a non-stdlib dependency and must never be a module-scope

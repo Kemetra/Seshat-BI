@@ -335,7 +335,11 @@ def _star_maps(ctx: RuleContext) -> tuple[list[tuple[str, dict]], list[Finding]]
     return found, findings
 
 
-@register(RULE_ID, "every dim: gold_placement prefix resolves to a declared dimension")
+@register(
+    RULE_ID,
+    "every dim: gold_placement prefix resolves to a declared dimension",
+    requires=(_stars.SOURCE_MAP_CORPUS,),
+)
 def check_hr13(ctx: RuleContext) -> Iterable[Finding]:
     star_maps, findings = _star_maps(ctx)
     for rel, document in star_maps:

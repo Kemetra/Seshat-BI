@@ -21,8 +21,27 @@ import re
 from collections.abc import Callable, Iterable
 
 from seshat.core import is_test_path
+from seshat.rule_coverage import TEST_FIXTURES, Requirement
 
 _MAPPING_RE = re.compile(r"^mappings/([^/]+)/source-map\.yaml$")
+
+# The rule-coverage declaration for every rule whose input is the source-map
+# corpus, kept beside _MAPPING_RE for the same reason `source_map_table` lives
+# here: one definition of "this path is a source-map", so the gate's declaration
+# cannot drift from the discovery it describes. The exclusion mirrors the
+# `is_test_path` filter `discover_stars` applies.
+#
+# Declaring it makes such a rule report `unevaluable` -- not a silent pass -- when
+# no source map is committed, which is exactly when star discovery yields nothing
+# and the rule returns no findings while having verified nothing.
+SOURCE_MAP_CORPUS = Requirement(
+    pattern="mappings/*/source-map.yaml",
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no non-fixture mappings/*/source-map.yaml is tracked, so this rule "
+        "discovered no star and its silence is not a verified pass"
+    ),
+)
 
 
 def source_map_table(rel: str) -> str | None:

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Iterable, TypedDict
 
 if TYPE_CHECKING:  # annotation-only: avoids a core <-> rule_coverage import cycle
-    from .rule_coverage import Requirement
+    from .rule_coverage import Declaration
 
 
 class FindingDict(TypedDict):
@@ -109,8 +109,9 @@ class RegisteredRule:
     # Spec A: defaults to WORK_REPO so every already-registered rule is a
     # portable rule that always gates -- existing kit behavior is unchanged.
     tier: RuleTier = RuleTier.WORK_REPO
-    # Rule coverage: the inputs this rule needs in order to run. Defaults to ()
-    # so every existing @register(id, title) site is unchanged and lands in
-    # CoverageState.UNDECLARED -- never silently EVALUATED, which would bless the
-    # ambiguity the coverage census exists to remove. See rule_coverage.py.
-    requires: tuple["Requirement", ...] = ()
+    # Rule coverage: what this rule declares about the inputs it needs in order
+    # to run -- Requirement(s), or the single ReportsItsOwnAbsence claim. Defaults
+    # to () so a rule registered without it lands in CoverageState.UNDECLARED --
+    # never silently EVALUATED, which would bless the ambiguity the coverage
+    # census exists to remove. See rule_coverage.py.
+    requires: tuple["Declaration", ...] = ()

@@ -55,6 +55,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .core import RuleContext, is_test_path, read_tracked_text
+from .rule_coverage import TEST_FIXTURES, Requirement
 
 DATE_TABLE_MARKER = "annotation PBI_DateTable = true"
 # One of TWO accepted date-table markers (see D7 in rules/dax.py). The
@@ -699,6 +700,27 @@ def parse_relationships(text: str) -> tuple[TmdlRelationship, ...]:
         if (rm := _is_relationship_header(raw)) is not None
     ]
     return tuple(rels)
+
+
+# The rule-coverage declaration for every rule that reads TMDL through the two
+# iterators below. It lives HERE, beside them, so the glob and the iteration cannot
+# drift apart: the pattern is `".SemanticModel/definition/" in rel and
+# rel.endswith(".tmdl")` in fnmatch form (fnmatch's `*` spans `/`, so a nested
+# `definition/tables/*.tmdl` matches), and the exclusion mirrors the `is_test_path`
+# exemption both iterators apply -- without it, a repo whose only model files are
+# the golden fixtures would be credited for rules that skipped every one of them.
+#
+# Declaring it makes a rule report `unevaluable` -- not a silent pass -- when no
+# semantic model is committed at all, which is exactly when these rules parse
+# nothing and would otherwise look verified.
+MODEL_TMDL_CORPUS = Requirement(
+    pattern="*.SemanticModel/definition/*.tmdl",
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no non-fixture *.SemanticModel/definition/**.tmdl is tracked, so this rule "
+        "parsed no model file and its silence is not a verified pass"
+    ),
+)
 
 
 def iter_model_files(ctx: RuleContext, suffix: str) -> Iterable[tuple[str, str]]:

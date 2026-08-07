@@ -44,6 +44,19 @@ from ..core import Finding, RuleContext, Severity, is_test_path
 # identical, so this rule's output stays byte-identical (regression-locked).
 from ..coverage_status import _ENUM, _norm
 from ..registry import register
+from ..rule_coverage import TEST_FIXTURES, Requirement
+
+# The committed coverage scorecards SL1 checks: the glob equivalent of
+# _INSTANCE_RE below. The exempt template lives under skills/, which this glob
+# cannot match, so no template-only tree can satisfy it.
+COVERAGE_SCORECARD_CORPUS = Requirement(
+    pattern="mappings/*/*coverage-scorecard.md",
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no non-fixture mappings/*/**coverage-scorecard.md is tracked, so this rule "
+        "checked no scorecard and its silence is not a verified pass"
+    ),
+)
 
 # Per-table scorecard instances live under mappings/<table>/ and end with this suffix.
 # Restricting to mappings/ (not any tracked *coverage-scorecard.md) keeps a reference or
@@ -218,7 +231,11 @@ def _read_scorecard(ctx: RuleContext, rel: str) -> str:
     return (ctx.repo_root / rel).read_text(encoding="utf-8-sig")
 
 
-@register("SL1", "Committed KPI coverage scorecard is structurally well-formed")
+@register(
+    "SL1",
+    "Committed KPI coverage scorecard is structurally well-formed",
+    requires=(COVERAGE_SCORECARD_CORPUS,),
+)
 def check_coverage_scorecard(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
     tracked = set(ctx.tracked_files)

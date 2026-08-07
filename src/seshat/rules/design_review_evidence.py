@@ -29,23 +29,29 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
-from ..rule_coverage import Requirement
-
-# The filled instances DL4 reads. The blank template is excluded by exact path
-# (_TEMPLATE_PATH, which has no leading directory) so it cannot satisfy this
-# glob: "*/design-review-evidence.md" requires at least one directory segment.
-DESIGN_REVIEW_INSTANCE_CORPUS = Requirement(
-    pattern="*/design-review-evidence.md",
-    note=(
-        "no filled design-review evidence record is tracked, so this rule checked "
-        "no record and its silence is not a verified pass"
-    ),
-)
+from ..rule_coverage import TEST_FIXTURES, Requirement
 
 RULE_ID = "DL4"
 
 _INSTANCE_SUFFIX = "/design-review-evidence.md"
 _TEMPLATE_PATH = "templates/design-review-evidence.md"
+
+# The filled instances DL4 reads. Both of the rule's own exemptions are mirrored
+# here EXPLICITLY -- the blank template by its exact path and committed fixtures by
+# prefix. An earlier version of this declaration assumed the template could not
+# satisfy the glob because it "has no leading directory"; it does
+# (templates/design-review-evidence.md), and with the tracked fixtures being the
+# only other match, DL4 was reported as `evaluated` on a tree where it read
+# nothing. Caught by the live-tree agreement check in
+# tests/unit/test_rule_coverage_declarations.py.
+DESIGN_REVIEW_INSTANCE_CORPUS = Requirement(
+    pattern="*/design-review-evidence.md",
+    exclude=(TEST_FIXTURES, _TEMPLATE_PATH),
+    note=(
+        "no filled design-review evidence record is tracked, so this rule checked "
+        "no record and its silence is not a verified pass"
+    ),
+)
 
 # The required fields a filled record must carry. The two list-sections
 # (anti_patterns_checked, contrast_pairs) are checked for heading PRESENCE; the

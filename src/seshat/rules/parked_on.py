@@ -34,6 +34,21 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, RuleTier, Severity, read_tracked_text
 from ..registry import register
+from ..rule_coverage import ReportsItsOwnAbsence
+
+# Measured against an empty repository, this rule REPORTS the absence of its kit
+# manifest as an ERROR that names the file and says what it could not verify. Its
+# silence is therefore never ambiguous, and there is no input whose absence a
+# Requirement could usefully name (see rule_coverage.ReportsItsOwnAbsence; the
+# claim is re-measured by tests/unit/test_rule_coverage_declarations.py). In a
+# foreign repo the Spec A tier gate reports this rule as not-applicable instead,
+# citing kit_lint FR-006.
+DF1_REPORTS_ABSENCE = ReportsItsOwnAbsence(
+    note=(
+        "DF1 reports an absent parked-on manifest as an ERROR naming the file "
+        "it could not reconcile"
+    )
+)
 
 _MANIFEST = "docs/quality/parked-on.yaml"
 _REQUIRED_FIELDS = ("id", "blocked", "parked_on", "doc", "anchor", "evidence")
@@ -52,6 +67,7 @@ def _finding(message: str, locator: str) -> Finding:
     "DF1",
     "Parked-on dependency edges reconcile with tracked-file evidence",
     tier=RuleTier.KIT_SELF,
+    requires=(DF1_REPORTS_ABSENCE,),
 )
 def check_parked_on(ctx: RuleContext) -> Iterable[Finding]:
     # A presence-required governance manifest: absent (untracked) OR

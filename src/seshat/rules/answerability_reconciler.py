@@ -37,6 +37,21 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, RuleTier, Severity, is_test_path
 from ..registry import register
+from ..rule_coverage import ReportsItsOwnAbsence
+
+# Measured against an empty repository, this rule REPORTS the absence of its kit
+# manifest as an ERROR that names the file and says what it could not verify. Its
+# silence is therefore never ambiguous, and there is no input whose absence a
+# Requirement could usefully name (see rule_coverage.ReportsItsOwnAbsence; the
+# claim is re-measured by tests/unit/test_rule_coverage_declarations.py). In a
+# foreign repo the Spec A tier gate reports this rule as not-applicable instead,
+# citing kit_lint FR-006.
+AQ1_REPORTS_ABSENCE = ReportsItsOwnAbsence(
+    note=(
+        "AQ1 reports an absent KPI domain corpus as an ERROR ('cannot pass "
+        "vacuously') rather than returning no findings"
+    )
+)
 
 RULE_ID = "AQ1"
 
@@ -208,6 +223,7 @@ def _read_domain(ctx: RuleContext, rel: str) -> tuple[str | None, Finding | None
     RULE_ID,
     "Domain decision-question routes resolve or are honestly marked planned",
     tier=RuleTier.KIT_SELF,
+    requires=(AQ1_REPORTS_ABSENCE,),
 )
 def check_answerability(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []

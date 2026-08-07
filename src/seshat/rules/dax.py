@@ -22,6 +22,7 @@ from ..registry import register
 from ..sql import stale_schema_tokens
 from ..tmdl import (
     DATE_TABLE_MARKER,
+    MODEL_TMDL_CORPUS,
     TI_TRIGGER_FUNCTIONS,
     TmdlColumn,
     TmdlMeasure,
@@ -75,7 +76,7 @@ def _iter_columns(ctx: RuleContext) -> Iterable[tuple[str, TmdlColumn]]:
 _PASCAL = re.compile(r"^[A-Z][A-Za-z0-9]*$")
 
 
-@register("D1", "Measure names must be PascalCase")
+@register("D1", "Measure names must be PascalCase", requires=(MODEL_TMDL_CORPUS,))
 def d1_pascalcase_measures(ctx: RuleContext) -> Iterable[Finding]:
     """Flag any measure whose name does not match ``^[A-Z][A-Za-z0-9]*$``."""
     for rel, m in _iter_measures(ctx):
@@ -93,7 +94,7 @@ def d1_pascalcase_measures(ctx: RuleContext) -> Iterable[Finding]:
 # ---------------------------------------------------------------------------
 
 
-@register("D2", "Each measure must have a displayFolder")
+@register("D2", "Each measure must have a displayFolder", requires=(MODEL_TMDL_CORPUS,))
 def d2_display_folder(ctx: RuleContext) -> Iterable[Finding]:
     """Flag any measure that has NO ``displayFolder`` property line.
 
@@ -117,7 +118,7 @@ def d2_display_folder(ctx: RuleContext) -> Iterable[Finding]:
 # ---------------------------------------------------------------------------
 
 
-@register("D3", "No duplicated measure logic")
+@register("D3", "No duplicated measure logic", requires=(MODEL_TMDL_CORPUS,))
 def d3_no_duplicate_logic(ctx: RuleContext) -> Iterable[Finding]:
     """Flag any measure whose normalized body is identical to a previously seen one.
 
@@ -156,7 +157,7 @@ def d3_no_duplicate_logic(ctx: RuleContext) -> Iterable[Finding]:
 _strip_dax_comments_and_strings = strip_dax_comments_and_strings
 
 
-@register("D4", "Use DIVIDE() not the / operator")
+@register("D4", "Use DIVIDE() not the / operator", requires=(MODEL_TMDL_CORPUS,))
 def d4_divide_not_slash(ctx: RuleContext) -> Iterable[Finding]:
     """Flag any measure expression containing a bare ``/`` after stripping comments."""
     for rel, m in _iter_measures(ctx):
@@ -177,7 +178,11 @@ def d4_divide_not_slash(ctx: RuleContext) -> Iterable[Finding]:
 _NUMERIC_TYPES = frozenset({"int64", "decimal", "double", "int", "currency"})
 
 
-@register("D5", "Prefer explicit measures over implicit aggregation")
+@register(
+    "D5",
+    "Prefer explicit measures over implicit aggregation",
+    requires=(MODEL_TMDL_CORPUS,),
+)
 def d5_explicit_aggregation(ctx: RuleContext) -> Iterable[Finding]:
     """Warn when a numeric column has ``summarizeBy`` set to anything other than
     ``none``.
@@ -207,7 +212,7 @@ def d5_explicit_aggregation(ctx: RuleContext) -> Iterable[Finding]:
 # ---------------------------------------------------------------------------
 
 
-@register("D6", "No bidirectional relationships")
+@register("D6", "No bidirectional relationships", requires=(MODEL_TMDL_CORPUS,))
 def d6_no_bidir_relationships(ctx: RuleContext) -> Iterable[Finding]:
     """Flag any relationship with ``crossFilteringBehavior: bothDirections``.
 
@@ -266,7 +271,11 @@ def _measure_uses_ti(expression: str) -> bool:
     return bool(idents & TI_TRIGGER_FUNCTIONS)
 
 
-@register("D7", "Time-intelligence requires a date-table marker")
+@register(
+    "D7",
+    "Time-intelligence requires a date-table marker",
+    requires=(MODEL_TMDL_CORPUS,),
+)
 def d7_ti_needs_date_marker(ctx: RuleContext) -> Iterable[Finding]:
     """Flag if any measure uses a time-intelligence function but no table carries
     the date-table annotation marker.
@@ -412,7 +421,11 @@ def _scan_schema_option(text: str) -> Iterable[tuple[str, str]]:
             )
 
 
-@register("D8", "Partitions must source from gold schema only")
+@register(
+    "D8",
+    "Partitions must source from gold schema only",
+    requires=(MODEL_TMDL_CORPUS,),
+)
 def d8_gold_only_sourcing(ctx: RuleContext) -> Iterable[Finding]:
     """Flag any M partition source or shared expression that references a
     non-gold schema token (raw, marts, bronze, silver).
@@ -446,7 +459,7 @@ def d8_gold_only_sourcing(ctx: RuleContext) -> Iterable[Finding]:
 _DATE_LITERAL = re.compile(r"DATE\s*\(\s*\d{3,4}\s*,|\b\d{4}-\d{1,2}-\d{1,2}\b")
 
 
-@register("D9", "No hardcoded date literals in measures")
+@register("D9", "No hardcoded date literals in measures", requires=(MODEL_TMDL_CORPUS,))
 def d9_no_hardcoded_dates(ctx: RuleContext) -> Iterable[Finding]:
     """Warn when a measure embeds a hardcoded date (DATE(y,m,d) or "yyyy-mm-dd").
 
@@ -481,7 +494,9 @@ _FILTER_ALL = re.compile(
 
 
 @register(
-    "D10", "No FILTER(ALL/ALLSELECTED/ALLEXCEPT(...)) full-table-scan anti-pattern"
+    "D10",
+    "No FILTER(ALL/ALLSELECTED/ALLEXCEPT(...)) full-table-scan anti-pattern",
+    requires=(MODEL_TMDL_CORPUS,),
 )
 def d10_no_filter_all(ctx: RuleContext) -> Iterable[Finding]:
     """Warn on FILTER(ALL/ALLSELECTED/ALLEXCEPT(...)); prefer a CALCULATE column filter.
@@ -509,7 +524,11 @@ def d10_no_filter_all(ctx: RuleContext) -> Iterable[Finding]:
 # ---------------------------------------------------------------------------
 
 
-@register("D11", "Each measure must have a /// doc comment")
+@register(
+    "D11",
+    "Each measure must have a /// doc comment",
+    requires=(MODEL_TMDL_CORPUS,),
+)
 def d11_measures_documented(ctx: RuleContext) -> Iterable[Finding]:
     """Warn when a measure has no TMDL `///` doc comment on the line above it.
 
@@ -569,7 +588,11 @@ def _first_literal_arg(args_raw: str) -> str | None:
     return None
 
 
-@register("C1", "Connection must use parameter identifiers, not string literals")
+@register(
+    "C1",
+    "Connection must use parameter identifiers, not string literals",
+    requires=(MODEL_TMDL_CORPUS,),
+)
 def c1_parameterized_connection(ctx: RuleContext) -> Iterable[Finding]:
     """Flag any ``.Database(…)`` call whose first or second argument is a
     string literal rather than a parameter identifier.

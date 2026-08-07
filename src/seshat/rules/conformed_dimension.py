@@ -340,7 +340,11 @@ def _evaluate_dimension(
     ]
 
 
-@register(RULE_ID, "cross-star conformed-dimension conformance")
+@register(
+    RULE_ID,
+    "cross-star conformed-dimension conformance",
+    requires=(_stars.SOURCE_MAP_CORPUS,),
+)
 def check_hr1(ctx: RuleContext) -> Iterable[Finding]:
     # BEFORE the star-count threshold, deliberately: an unreadable map is DROPPED by
     # discovery, so a corrupted second map takes the count from 2 to 1 and the FR-007

@@ -26,6 +26,21 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, RuleTier, Severity, read_tracked_text
 from ..registry import register
+from ..rule_coverage import ReportsItsOwnAbsence
+
+# Measured against an empty repository, this rule REPORTS the absence of its kit
+# manifest as an ERROR that names the file and says what it could not verify. Its
+# silence is therefore never ambiguous, and there is no input whose absence a
+# Requirement could usefully name (see rule_coverage.ReportsItsOwnAbsence; the
+# claim is re-measured by tests/unit/test_rule_coverage_declarations.py). In a
+# foreign repo the Spec A tier gate reports this rule as not-applicable instead,
+# citing kit_lint FR-006.
+A3_REPORTS_ABSENCE = ReportsItsOwnAbsence(
+    note=(
+        "A3 reports an absent route-registry manifest as an ERROR naming the "
+        "bijection it could not verify"
+    )
+)
 
 _MANIFEST = "docs/routing/routes.yaml"
 _MAP = "docs/knowledge-map.md"
@@ -152,6 +167,7 @@ def _manifest_ids(ctx: RuleContext) -> set[str] | list[Finding]:
     "A3",
     "Knowledge-map route ids and the routing manifest ids are in bijection",
     tier=RuleTier.KIT_SELF,
+    requires=(A3_REPORTS_ABSENCE,),
 )
 def check_route_coverage(ctx: RuleContext) -> Iterable[Finding]:
     # Fail-loud branches FIRST -- no unreadable input may fall through to an

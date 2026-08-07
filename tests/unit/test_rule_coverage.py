@@ -16,11 +16,15 @@ from seshat.core import RegisteredRule
 from seshat.registry import all_rules
 from seshat.rule_coverage import (
     AbsenceSemantics,
+    ContextInput,
     CoverageState,
+    ReportsItsOwnAbsence,
     Requirement,
+    any_tracked_file,
     census,
     coverage_for,
     uncovered_rule_ids,
+    validate_declarations,
 )
 
 pytestmark = pytest.mark.unit
@@ -248,3 +252,144 @@ def test_basis_on_an_unevaluable_requirement_is_rejected() -> None:
             absence=AbsenceSemantics.UNEVALUABLE,
             basis="I decided this is fine",
         )
+
+
+# --- the any-of group form ---------------------------------------------------
+
+
+def test_a_group_is_present_when_any_one_alternative_is() -> None:
+    """The reason the group form exists: a corpus selected by ALTERNATION.
+
+    G3 accepts four suffixes and the decision store three files. Declaring the arms
+    as separate requirements would AND them, reporting a rule that ran fine as
+    unevaluable the moment any single arm was missing.
+    """
+    group = any_tracked_file("*.tmdl", "*.pbir", "*.pbism")
+    record = coverage_for(
+        _registered("G3", (group,)), missing=lambda r: r.pattern != "*.pbir"
+    )
+    assert record.state is CoverageState.EVALUATED
+
+
+def test_a_group_is_absent_only_when_every_alternative_is() -> None:
+    group = any_tracked_file("*.tmdl", "*.pbir", note="no model file is tracked")
+    record = coverage_for(_registered("G3", (group,)), missing=lambda _r: True)
+    assert record.state is CoverageState.UNEVALUABLE
+    assert record.requirement == "any of: *.tmdl, *.pbir"
+    assert record.reason == "no model file is tracked"
+
+
+def test_a_group_still_ands_with_a_sibling_requirement() -> None:
+    """Alternation is INSIDE the group; the requirement tuple keeps AND semantics."""
+    rules = _registered(
+        "X", (any_tracked_file("*.tmdl", "*.pbir"), _needs("docs/spine.yaml"))
+    )
+    record = coverage_for(rules, missing=lambda r: r.path == "docs/spine.yaml")
+    assert record.state is CoverageState.UNEVALUABLE
+    assert record.requirement == "docs/spine.yaml"
+
+
+def test_the_factory_applies_one_exclusion_to_every_alternative() -> None:
+    """A fixture exemption left off one arm is exactly how a declaration lies."""
+    group = any_tracked_file("*.tmdl", "*.pbir", exclude=("tests/*",))
+    assert [alt.exclude for alt in group.any_of] == [("tests/*",), ("tests/*",)]
+
+
+def test_a_single_alternative_group_is_rejected() -> None:
+    with pytest.raises(ValueError, match="single alternative"):
+        Requirement(any_of=(Requirement(pattern="*.tmdl"),))
+
+
+def test_a_group_alternative_may_not_carry_its_own_semantics() -> None:
+    """A basis the group would ignore is a silently discarded authority claim."""
+    with pytest.raises(ValueError, match="basis/note"):
+        Requirement(
+            any_of=(
+                Requirement(pattern="*.tmdl", note="mine"),
+                Requirement(pattern="*.pbir"),
+            )
+        )
+
+
+def test_groups_do_not_nest() -> None:
+    with pytest.raises(ValueError, match="groups do not nest"):
+        Requirement(
+            any_of=(
+                any_tracked_file("*.tmdl", "*.pbir"),
+                Requirement(pattern="*.json"),
+            )
+        )
+
+
+def test_declaring_two_forms_at_once_is_rejected() -> None:
+    with pytest.raises(ValueError, match="exactly ONE form"):
+        Requirement(pattern="*.tmdl", context=ContextInput.COMMIT_SUBJECTS)
+
+
+def test_exclude_is_rejected_where_it_would_be_inert() -> None:
+    """An exclusion that LOOKS like it mirrors a rule's exemption but does nothing."""
+    with pytest.raises(ValueError, match="exclude="):
+        Requirement(path="docs/spine.yaml", exclude=("tests/*",))
+
+
+# --- the invocation-field form -----------------------------------------------
+
+
+def test_a_context_requirement_names_the_invocation_field() -> None:
+    """P2's input is a commit subject, not a file -- and can still be missing."""
+    requirement = Requirement(
+        context=ContextInput.COMMIT_SUBJECTS, note="no subject was supplied"
+    )
+    assert requirement.target == ContextInput.COMMIT_SUBJECTS.value
+    record = coverage_for(_registered("P2", (requirement,)), missing=lambda _r: True)
+    assert record.state is CoverageState.UNEVALUABLE
+    assert record.reason == "no subject was supplied"
+
+
+def test_a_supplied_context_input_is_evaluated() -> None:
+    requirement = Requirement(context=ContextInput.COMMIT_SUBJECTS)
+    record = coverage_for(_registered("P2", (requirement,)), missing=lambda _r: False)
+    assert record.state is CoverageState.EVALUATED
+
+
+# --- the self-reporting form --------------------------------------------------
+
+
+def test_a_self_reporting_rule_is_evaluated_and_says_what_it_reports() -> None:
+    """A rule that ERRORs on absent input never went silent, so it ran."""
+    declaration = ReportsItsOwnAbsence(
+        note="G1 reports each missing .gitignore entry as an ERROR"
+    )
+    record = coverage_for(
+        _registered("G1", (declaration,)),
+        missing=lambda _r: True,  # nothing on disk; the claim is input-independent
+    )
+    assert record.state is CoverageState.EVALUATED
+    assert record.reason == "G1 reports each missing .gitignore entry as an ERROR"
+    assert record.basis is None
+
+
+def test_a_self_reporting_claim_without_a_note_is_rejected() -> None:
+    """The note IS the claim a test measures; an empty one asserts nothing."""
+    with pytest.raises(ValueError, match="note"):
+        ReportsItsOwnAbsence(note="   ")
+
+
+def test_a_self_reporting_claim_cannot_sit_beside_a_requirement() -> None:
+    """The two contradict, and the self-reporting form wins -- so it must be alone.
+
+    Accepting the mix would silently discard a real requirement, quietly crediting
+    a rule that a declared input can in fact silence.
+    """
+    with pytest.raises(ValueError, match="ONLY declaration"):
+        validate_declarations(
+            "G1", (ReportsItsOwnAbsence(note="reports absence"), _needs("x.yaml"))
+        )
+
+
+def test_validate_declarations_accepts_the_legitimate_shapes() -> None:
+    assert validate_declarations("A", ()) == ()
+    solo = (ReportsItsOwnAbsence(note="reports absence"),)
+    assert validate_declarations("B", solo) == solo
+    pair = (_needs("a.yaml"), _needs("b.yaml"))
+    assert validate_declarations("C", pair) == pair

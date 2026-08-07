@@ -8,6 +8,27 @@ from typing import Any, Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path, read_tracked_text
 from ..registry import register
+from ..rule_coverage import TEST_FIXTURES, Requirement
+
+# The two PBIR corpora, each the glob equivalent of the suffix its rule filters
+# ctx.tracked_files on, with the same fixture exemption (tests/ holds absolute and
+# byConnection .pbir fixtures planted to exercise R1).
+PBIR_DEFINITION_CORPUS = Requirement(
+    pattern="*.Report/definition.pbir",
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no non-fixture *.Report/definition.pbir is tracked, so this rule read no "
+        "model reference and its silence is not a verified pass"
+    ),
+)
+PBIR_REPORT_JSON_CORPUS = Requirement(
+    pattern="*.Report/definition/report.json",
+    exclude=(TEST_FIXTURES,),
+    note=(
+        "no non-fixture *.Report/definition/report.json is tracked, so this rule "
+        "read no report definition and its silence is not a verified pass"
+    ),
+)
 
 _ABSOLUTE = re.compile(r"^(?:[A-Za-z]:|\\|/)")
 
@@ -23,7 +44,11 @@ def _iter_pbir_files(ctx: RuleContext) -> list[str]:
     ]
 
 
-@register("R1", "PBIR model reference must be relative")
+@register(
+    "R1",
+    "PBIR model reference must be relative",
+    requires=(PBIR_DEFINITION_CORPUS,),
+)
 def check_pbir_relative_reference(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
     for rel in _iter_pbir_files(ctx):
@@ -194,7 +219,11 @@ def _check_one_report_json(ctx: RuleContext, rel: str) -> Iterable[Finding]:
     yield from _walk_forbidden(doc, "", rel)
 
 
-@register("R2", "PBIR report.json is valid, keeps its schema, and references exist")
+@register(
+    "R2",
+    "PBIR report.json is valid, keeps its schema, and references exist",
+    requires=(PBIR_REPORT_JSON_CORPUS,),
+)
 def check_pbir_report_authoring(ctx: RuleContext) -> Iterable[Finding]:
     findings: list[Finding] = []
     for rel in _iter_report_json(ctx):

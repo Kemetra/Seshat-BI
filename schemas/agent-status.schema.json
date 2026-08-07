@@ -135,7 +135,7 @@
             "string",
             "null"
           ],
-          "description": "Repo-relative input whose absence decided the state."
+          "description": "The input whose absence decided the state: a repo-relative path, a tracked-file glob, an 'any of: a, b' alternation when the rule's corpus is selected by alternation, or a named invocation field (P2's commit subjects) for a rule whose input is not a file. Absent (null) when no input decided the state."
         },
         "reason": {
           "type": [

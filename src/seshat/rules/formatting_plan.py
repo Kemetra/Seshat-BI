@@ -34,13 +34,16 @@ from typing import Iterable
 
 from ..core import Finding, RuleContext, Severity, is_test_path
 from ..registry import register
-from ..rule_coverage import Requirement
+from ..rule_coverage import TEST_FIXTURES, Requirement
 
-# The formatting-plan ledgers DL7 reads. templates/ copies are excluded by the
-# rule itself; the glob stays broad enough to match any tracked ledger, so a
-# templates-only tree still reports the corpus as present rather than absent.
+# The formatting-plan ledgers DL7 reads. Both exemptions _iter_ledgers applies are
+# mirrored here: committed fixtures and templates/ copies. An earlier version left
+# them off on the reasoning that the glob "stays broad enough" -- but a tree whose
+# only ledgers are fixtures or the template then reported DL7 as `evaluated` while
+# it read nothing, which is the false credit the census exists to prevent.
 FORMATTING_PLAN_CORPUS = Requirement(
     pattern="*formatting-plan.md",
+    exclude=(TEST_FIXTURES, "templates/*"),
     note=(
         "no formatting-plan ledger is tracked, so this rule read no ledger and "
         "its silence is not a verified pass"

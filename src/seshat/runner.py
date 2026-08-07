@@ -9,7 +9,13 @@ from seshat.gitutil import GIT_HARDENING as _GIT_HARDENING
 from seshat.gitutil import run_subprocess
 
 from .core import Finding, RegisteredRule, RuleContext, RuleTier, Severity
-from .rule_coverage import CoverageRecord, CoverageState, Requirement, coverage_for
+from .rule_coverage import (
+    ContextInput,
+    CoverageRecord,
+    CoverageState,
+    Requirement,
+    coverage_for,
+)
 
 # The Spec A tier gate is itself the ratified ruling that authorizes a KIT_SELF
 # rule's absence in a foreign repo ("absence is not drift", kit_lint FR-006). It is
@@ -180,23 +186,71 @@ def _artifact_missing(repo_root: Path, path: str) -> bool:
         return True
 
 
-def _corpus_empty(tracked_files: tuple[str, ...], pattern: str) -> bool:
-    """Does NO tracked file match this glob?
+def _corpus_empty(tracked_files: tuple[str, ...], requirement: Requirement) -> bool:
+    """Does NO tracked file match this glob (after the declared exclusions)?
 
     An empty corpus is the interesting case: a rule that iterates a file class and
     finds none returns no findings while having verified nothing. Matched against
     the tracked-file list rather than the working tree, because that list is what
     the rules themselves iterate.
+
+    ``exclude`` mirrors the exemptions the rule's own iterator applies (committed
+    ``tests/`` fixtures, a blank template). Without it a repo whose only matches
+    are fixtures would be credited as ``evaluated`` for a rule that skipped every
+    one of them -- a declaration that lies is worse than no declaration.
     """
-    return not any(fnmatch(candidate, pattern) for candidate in tracked_files)
+    pattern = requirement.pattern or ""
+    return not any(
+        fnmatch(candidate, pattern) and not _excluded(candidate, requirement.exclude)
+        for candidate in tracked_files
+    )
+
+
+def _excluded(candidate: str, exclude: tuple[str, ...]) -> bool:
+    return any(fnmatch(candidate, pattern) for pattern in exclude)
+
+
+def _commit_subject_missing(ctx: RuleContext) -> bool:
+    """Did this invocation hand P2 any commit subject to judge?
+
+    Delegates to P2's OWN subject resolution rather than re-deriving the three
+    modes (commit-msg hook / explicit range / local HEAD~1 fallback). Two
+    implementations of "is there a subject" would eventually disagree, and a
+    census that disagrees with its rule is exactly the false assurance being
+    removed. Imported lazily: the runner is generic infrastructure and must not
+    import a rule module at load time.
+
+    A malformed range is NOT missing input -- P2 reports it as an ERROR itself, so
+    the rule spoke.
+    """
+    from .rules.git_meta import load_commit_subjects
+
+    subjects, findings = load_commit_subjects(ctx)
+    return not subjects and not findings
+
+
+def _context_input_missing(ctx: RuleContext, which: ContextInput) -> bool:
+    """Resolve an invocation-field requirement. Unknown field = fail loud."""
+    if which is ContextInput.COMMIT_SUBJECTS:
+        return _commit_subject_missing(ctx)
+    raise RuntimeError(  # pragma: no cover -- closed enum; guards a future member
+        f"no coverage resolver for context input {which!r}; add one rather than "
+        "letting an unresolvable requirement read as present"
+    )
 
 
 def _missing_for(ctx: RuleContext) -> Callable[[Requirement], bool]:
-    """Resolve either requirement form against the real repo."""
+    """Resolve any LEAF requirement form against the real repo/invocation.
+
+    Groups never reach here: ``rule_coverage`` resolves the alternation and hands
+    this predicate one alternative at a time.
+    """
 
     def missing(requirement: Requirement) -> bool:
+        if requirement.context is not None:
+            return _context_input_missing(ctx, requirement.context)
         if requirement.pattern is not None:
-            return _corpus_empty(ctx.tracked_files, requirement.pattern)
+            return _corpus_empty(ctx.tracked_files, requirement)
         return _artifact_missing(ctx.repo_root, requirement.path or "")
 
     return missing
