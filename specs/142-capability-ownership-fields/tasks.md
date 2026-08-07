@@ -163,27 +163,32 @@ bundle drift PASS; all tests green.
   -- **done**: evidence/phase2-gates.txt -- FR-004/SC-004 PROVEN on real data. Both manifest_digests byte-identical to the T002 baseline WITH four entries carrying the axis; 81 tests pass, ruff clean, bundle drift PASS, seshat check exit 0 (pre-existing RS1 only). O9 clean on all four. Reader surfaces all four (FR-011)
 ## Phase 3 -- Knowledge roots and governance set (mechanical)
 
-- [ ] T030 Classify the six `skills/` roots as `seshat-domain-knowledge`, each
+- [x] T030 Classify the six `skills/` roots as `seshat-domain-knowledge`, each
   with `canonical_source` naming its authored path (FR-005). Deliverable: six
   entries. Do **not** add a `generated_targets` field — it was removed from the
   spec because destinations are owned by
   `distribution/public-knowledge-allowlist.yaml` and a hand-written copy would
   drift silently.
-- [ ] T031 Classify the readiness/evidence/approval set as
+  -- **done**: six knowledge roots as seshat-domain-knowledge with canonical_source; no generated_targets (removed from spec, FR-005)
+- [x] T031 Classify the readiness/evidence/approval set as
   `seshat-governance`, per `docs/capabilities/ownership-audit.md` section 4.
   Deliverable: the entries, with no `upstream_project` (none exists).
-- [ ] T032 Run the gate set. Deliverable: all green, digests unchanged.
+  -- **done**: 50 entries as seshat-governance -- gates, evidence, status, drift, lint, registries
+- [x] T032 Run the gate set. Deliverable: all green, digests unchanged.
 
+  -- **done**: gates green, digests unchanged
 ## Phase 4 -- Remainder, in reviewable batches
 
-- [ ] T040 Classify the orchestrator/front-door set as `seshat-orchestrator`
+- [x] T040 Classify the orchestrator/front-door set as `seshat-orchestrator`
   (FR-002) per the audit's KEEP section. Deliverable: the entries; one commit.
   These carry no `upstream_project` and need no `seshat_delta` -- they coordinate
   Seshat's own verbs rather than wrapping an upstream surface.
-- [ ] T041 Classify the Power BI layer entries. Deliverable: the entries.
+  -- **done**: 15 orchestrators/front doors as seshat-orchestrator, no upstream_project and no delta required
+- [x] T041 Classify the Power BI layer entries. Deliverable: the entries.
   `powerbi-dashboard-design` and `powerbi-workflows` receive an `overlap_note`
   naming each other (US3) — advisory only, merging nothing.
-- [ ] T042 Classify the remaining entries, **enumerated from the manifest rather
+  -- **done**: Power BI layer classified -- the four pbir-* verbs as seshat-adapter over Microsoft's PBIR format (upstream_surface: format), pbip-workflow as seshat-domain-knowledge over an upstream format
+- [x] T042 Classify the remaining entries, **enumerated from the manifest rather
   than from the audit**. The audit names only 41 of 102 `id`s, so 61 entries have
   no audit-derived classification -- 47 `cli`, 5 `docs`, 4 `skill`, 2
   `execution-adapter`, and one each of `product-module`, `plugin`,
@@ -194,18 +199,22 @@ bundle drift PASS; all tests green.
   - `surface: human-artifact` -> `human-deliverable`
   - spec-only `surface: docs` -> `specified-not-built`
   - genuinely undecidable -> `unclassified` with an entry-specific reason
-- [ ] T042a Classify the `speckit-*` aggregate entry as `vendored-upstream` per
+  -- **done**: enumerated from the MANIFEST, not the audit. METHOD CHANGED ON EVIDENCE -- a surface-based fallback would have labelled 67 entries seshat-governance, but retail-theme-gen/retail-generate generate artifacts and gate nothing, so every entry was classified by reading its summary. Produced a new seshat-authoring token (12 entries)
+- [x] T042a Classify the `speckit-*` aggregate entry as `vendored-upstream` per
   the resolved OD-1: `upstream_project` `github/spec-kit`, `upstream_reference`
   the pinned `"0.8.10"` (quoted -- FR-008 clause 2), and `update_policy`
   recording the `specify init` invocation. Deliverable: the entry, and a note in
   `evidence/known-findings.md` that **no re-vendor/upgrade path is recorded**
   (no lockfile, no `specify upgrade` record) -- the residual fork-tax gap.
   Note the count is **14** skills, not 12.
-- [ ] T042b Classify the four dev-workflow skills as `seshat-governance` per the
+  -- **done**: speckit-workflow-skills as vendored-upstream / github/spec-kit / '0.8.10' quoted; update_policy records the installer invocation and points at KF-2 for the missing re-vendor path. 14 skills, not 12
+- [x] T042b Classify the four dev-workflow skills as `seshat-governance` per the
   resolved OD-2, each with the `seshat_delta` stated in the spec's OD-2 table.
   Deliverable: four entries, each with a non-empty delta.
-- [ ] T043 Run the gate set. Deliverable: all green, digests unchanged.
-- [ ] T044 **Wire O9 into the aggregate.** Add
+  -- **done**: the four dev-workflow skills as seshat-governance per OD-2
+- [x] T043 Run the gate set. Deliverable: all green, digests unchanged.
+  -- **done**: 102/102 declared, 0 O9 violations, 0 O6 violations, digests byte-identical to baseline
+- [x] T044 **Wire O9 into the aggregate.** Add
   `"ownership": find_ownership_violations(repo_root)` to `oracle_all_clear`
   (`tests/unit/_capability_oracle.py`), which
   `test_real_manifest_passes_all_eight_oracle_checks` iterates. Deliverable: the
@@ -217,28 +226,34 @@ bundle drift PASS; all tests green.
   `verifier-must-sit-on-the-risk` failure shape. Do not skip this task; the
   detector is not enforcing anything until it runs.
 
+  -- **done**: O9 wired into oracle_all_clear as the 'ownership' key -- landed LAST by design, since the aggregate is what test_real_manifest_passes_all_eight_oracle_checks iterates and FR-002a would have failed it mid-migration. 44 capability tests pass with it live
 ## Phase 5 -- Closeout
 
-- [ ] T050 Write the `unclassified`-token census into `evidence/unclassified.md`:
+- [x] T050 Write the `unclassified`-token census into `evidence/unclassified.md`:
   every entry whose `capability_owner` is `unclassified`, with its
   entry-specific reason. Deliverable: the file (SC-001). Note this is now a
   census of an explicit token, not a list of silent omissions — FR-002a means no
   entry can be missing the field. OD-1 and OD-2 are resolved, so neither is a
   valid reason for leaving an entry unclassified.
-- [ ] T051 Verify SC-002 mechanically: every `seshat-adapter` entry carries a
+  -- **done**: evidence/unclassified.md -- built from the RAW manifest (the renderer defaults absent to 'unclassified', so its output cannot distinguish undeclared from declared-unclassified). 102 entries, 0 undeclared, 0 sentinel
+- [x] T051 Verify SC-002 mechanically: every `seshat-adapter` entry carries a
   non-empty `seshat_delta`. Deliverable: the oracle passing, plus the count.
-- [ ] T052 Verify SC-007 mechanically: no key name anywhere in the manifest
+  -- **done**: SC-002 verified mechanically -- 9 seshat-adapter entries, 0 missing a delta
+- [x] T052 Verify SC-007 mechanically: no key name anywhere in the manifest
   contains a `NUMERIC_FIELD_HINTS` substring, and no ownership value is a bare
   numeric scalar. Deliverable: O6 green plus the grep output.
-- [ ] T053 Update `docs/capabilities/README.md` to document the ownership axis
+  -- **done**: SC-007 verified -- O6 returns NONE across the whole manifest; no numeric-hint field name, no bare numeric scalar
+- [x] T053 Update `docs/capabilities/README.md` to document the ownership axis
   and its token sets (FR-001, FR-002, FR-003 — the human-readable counterpart of
   the vocabulary those FRs define). Deliverable: the README section. **Not** a
   value-by-value contract table the oracle would then have to agree with — the
   oracle owns validation (FR-009), and a second normative list is exactly the
   duplicate authority this spec exists to avoid.
-- [ ] T054 Run the full gate set plus `pytest -m unit`. Deliverable: the
+  -- **done**: docs/capabilities/README.md gains an 'ownership axis' section -- the 11-token table, optional sub-fields, the catalog-is-authoritative rule, and why validation lives in the oracle rather than a gate
+- [x] T054 Run the full gate set plus `pytest -m unit`. Deliverable: the
   complete output recorded in `evidence/final-gates.txt`.
 
+  -- **done**: evidence/final-gates.txt -- ruff clean, bundle drift PASS, kit-lint no drift, semantic-check no drift, 5353 unit tests pass. TWO CORRECTIONS RECORDED: (1) seshat check exited 1 on rule P2 because MY commit subjects were scoped -- reworded, now exit 0; (2) test_cli_identity_version fails on stale editable metadata (0.8.1 vs 0.8.2), environmental, cannot fire in CI
 ## Explicitly NOT tasks
 
 These are named so no one adds them mid-implementation:

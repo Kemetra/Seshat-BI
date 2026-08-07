@@ -29,3 +29,19 @@ tests\unit\test_cli_identity_version.py:80: AssertionError
 =========================== short test summary info ===========================
 FAILED tests/unit/test_cli_identity_version.py::test_version_resolver_matches_pyproject_when_installed
 1 failed, 5353 passed, 31 skipped, 502 deselected in 238.77s (0:03:58)
+
+## Post-run corrections (recorded, not hidden)
+
+1. `seshat check` initially exited **1** on rule P2: my three phase commits used
+   scoped subjects (`feat(142): ...`), and P2 forbids scopes outright ("use
+   'docs:' not 'docs(018):'"). The T001 baseline showed exit 0 only because the
+   rule scans the BASE..HEAD commit range and those commits did not yet exist.
+   Subjects were reworded to `feat: spec 142 -- ...`; `seshat check` now exits 0
+   with only the pre-existing RS1 warning. This was a defect in MY commits, not
+   in the feature.
+
+2. `tests/unit/test_cli_identity_version.py::test_version_resolver_matches_pyproject_when_installed`
+   fails locally: installed editable metadata reads 0.8.1 while pyproject
+   declares 0.8.2. Editable metadata freezes at install time; CI runs
+   `pip install -e .` on a fresh runner, so it cannot fire there. Environmental,
+   pre-existing, unrelated to this feature.
