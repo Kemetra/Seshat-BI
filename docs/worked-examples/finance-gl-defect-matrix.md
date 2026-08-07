@@ -6,11 +6,11 @@ The 13 defect cases, each with its DECLARED expected governed outcome and its OB
 outcome. Declared outcomes use the shipped categorical set only
 (`proceed` | `refuse` | `block_for_evidence` | `request_human_decision`).
 
-> **Ledger note.** Two findings below (M1, M2) belong in
-> `docs/worked-examples/finance-gl-genericity-ledger.md` as rows **L7** and **L8**. That
-> file lives on the Slice C branch, which is not merged yet (it is blocked on the HR1
-> conformance ruling), so they are recorded here and must be folded into the ledger when
-> Slice C lands. They are not new obstructions discovered twice -- they are these.
+> **Ledger note.** Two findings below (M1, M2) are folded into
+> `docs/worked-examples/finance-gl-genericity-ledger.md` as rows **L7** and **L8** (done
+> after Slice C merged and the HR1 conformance ruling landed). They are not new obstructions
+> discovered twice -- they are these, recorded once here for the Slice B evidence trail and
+> once in the ledger for the categorical conclusion.
 
 ## Why "observed" is mostly PENDING, and why that is the finding
 
@@ -32,17 +32,53 @@ observed column reads `[PENDING LIVE PROFILE]` rather than a behaviour.
 
 | ID | Defect | Declared | Existing check that would catch it | Observed |
 |---|---|---|---|---|
-| D1 | actuals row references an account absent from `accounts` | `refuse` | `check_orphan_fks` (RC16) | `[PENDING LIVE PROFILE]` |
-| D2 | actuals row references an unknown department | `refuse` | `check_orphan_fks` (RC16) | `[PENDING LIVE PROFILE]` |
+| D1 | actuals row references an account absent from `accounts` | `refuse` | **none as built** -- see L21 | `[NO CHECK EXISTS]` |
+| D2 | actuals row references an unknown department | `refuse` | **none as built** -- see L21 | `[NO CHECK EXISTS]` |
 | D3 | a budget row is set against a CLEARING (non-P&L) account | `block_for_evidence` | **none** -- see M1 | `[NO CHECK EXISTS]` |
 | D4 | a `posting_date` falls outside every declared fiscal period | `refuse` | `check_date_coverage` (RC15) | `[PENDING LIVE PROFILE]` |
 | D5 | a block of actuals lines is in a second currency, no conversion policy | `request_human_decision` | **none on the data** -- see M2 | `[NO CHECK EXISTS]` |
 | D6 | two rows share the composite PK (`journal_entry_id`, `line_id`) | `refuse` | `check_pk_uniqueness` (RC2) | `[PENDING LIVE PROFILE]` |
 | D7 | two budget rows share the full 5-part PK with different amounts | `refuse` | `check_pk_uniqueness` (RC2) | `[PENDING LIVE PROFILE]` |
 
-**5 of 7 map to a check that already exists** and is domain-neutral -- an orphan FK, a
-non-unique PK and an uncovered date are the same defects in finance as in retail. Nothing
-retail-shaped blocked them; only the absence of a database did.
+**A 14th case was proposed and deliberately NOT added here** (PR #596 review, ledger row
+L22): an actuals row pairing a valid `department_code` with a valid `cost_center_code`
+belonging to a DIFFERENT department. Both lookups resolve independently, both FKs stay
+valid, and `check_orphan_fks` compares each FK only against its own dimension's PK -- so a
+report grouped by `department_sk` can disagree with the `department_code` rollup
+denormalized onto `dim_cost_center_fgl` (gold migration line 98), with nothing firing.
+
+It is **not** a D-numbered variant because this matrix's contract is that every case has a
+deterministic generator mutation behind it (`tests/fixtures/finance_gl/generate.py`), and
+no such mutation exists. Adding a row with an observed outcome and no reproducible fixture
+would be exactly the unearned claim this document was built to avoid -- and would break the
+declared count of 13 cases and SC-003. It lives in **ledger L22** until a generator variant
+is authored under the owner ruling requested as sub-decision C.
+
+The gap is still the finding: this is a **hierarchical** dimension relationship (cost centre
+belongs to department), while the retail star's four dimensions -- customer, product,
+payment method, location -- are mutually independent. No committed example ever needed a
+cross-dimension consistency check, so the failure class was never tested.
+
+**3 of 7 map to a check that already exists** and is domain-neutral -- a non-unique PK
+(D6, D7) and an uncovered date (D4) are the same defects in finance as in retail, and only
+the absence of a database blocks proving them.
+
+**CORRECTED 2026-08-07** (PR #596 review, ledger row L21). This section previously read
+"5 of 7", counting D1 and D2 as covered by `check_orphan_fks`. **They are not.** The gold
+fact insert resolves each natural key with `COALESCE(da.account_sk, -1)`, so a FAILED
+lookup is rewritten into the valid `-1` unknown member that the migration itself inserts.
+`check_orphan_fks` is a plain `LEFT JOIN <dim> d ... WHERE d.<pk> IS NULL`
+(`src/seshat/validate.py:236-239`), and `-1` is a real dimension row, so the join always
+succeeds and the orphan is invisible. A live run would have reported PASS for D1/D2 --
+for entirely the wrong reason.
+
+That is a worse outcome than a missing check, which is why the Observed column now reads
+`[NO CHECK EXISTS]` rather than `[PENDING LIVE PROFILE]`: nothing is pending, because no
+check would catch it. The `-1` convention is kit-wide (identical in
+`0004_create_gold_retail_store_sales_star.sql`) and declared here via
+`has_unknown_member: true`, so this is a genericity finding about the convention, not a
+defect in this example's SQL. See ledger L21 for the three candidate resolutions, all of
+which need an owner ruling.
 
 ## Business-judgment cases (D8-D13)
 
@@ -106,8 +142,28 @@ refusal cannot slip in.
 **Establishes:** 9 data variants exist, each deterministic and each differing from clean in
 exactly one source file (asserted by test); 6 judgment scenarios exist in the shipped format
 and pass the shipped validator; the over-refusal trap is present and is the only `proceed`
-case; 5 of 7 structural defects map to checks that already exist and are domain-neutral.
+case; **3 of 7** structural defects (D4, D6, D7) map to checks that already exist and are
+domain-neutral.
 
-**Does not establish:** that the gate actually catches any of them. That needs a live
-database (D1-D7) and a participant run (D8-D13). Claiming otherwise from this slice would
-be exactly the kind of unearned "verified" this feature was built to avoid.
+**Does not establish:** that the gate actually catches even those three. That needs a live
+database (D4, D6, D7) and a participant run (D8-D13). Claiming otherwise from this slice
+would be exactly the kind of unearned "verified" this feature was built to avoid.
+
+**Establishes a NEGATIVE, which is the more valuable result:** three structural defects have
+**no check at all**, and no live database would change that.
+
+- **D1, D2** -- `COALESCE(..., -1)` rewrites a failed natural-key lookup into a valid
+  dimension member before `check_orphan_fks` runs, so the orphan is invisible (ledger L21).
+- **the department/cost-centre pair** (ledger L22, deliberately not D-numbered -- no
+  generator variant exists yet) -- a valid department paired with a cost centre from a
+  different department leaves both FKs valid, and no shipped check compares two dimensions
+  against each other.
+
+These read `[NO CHECK EXISTS]`, not `[PENDING LIVE PROFILE]`: nothing is pending, because
+running the database would report a PASS for the wrong reason. That is a worse outcome than
+a missing check, and finding it is precisely what a genericity proof is for -- the retail
+example could not surface either, having no unresolvable-reference case and no hierarchical
+dimension.
+
+*(This section previously read "5 of 7" and attributed the gap solely to the absence of a
+database. Corrected 2026-08-07 from the PR #596 review.)*
