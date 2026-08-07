@@ -529,6 +529,14 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "pbi-mcp"
     documentation: "docs/integrations/pbi-mcp-adapter.md"
+    ownership:
+      capability_owner: seshat-adapter
+      upstream_project: "Microsoft"
+      upstream_surface: mcp
+      upstream_reference: "@microsoft/powerbi-modeling-mcp"
+      seshat_delta: "Read-only preflight around Microsoft's modeling MCP: hard-refuses --skipconfirmation and write-mode configs, fails closed while semantic_model_ready has not passed, and emits placeholder-only templates behind a secret-scan refusal. No mutation path exists."
+      canonical_source: ".claude/skills/pbi-mcp-doctor/SKILL.md"
+      update_policy: "Upstream is PREVIEW / pre-GA and consumed in readonly mode only; re-verify the capability allowlist on any upstream version change."
     references:
       dispatch: "pbi-mcp"
       public_skill: "pbi-mcp-doctor"
@@ -1029,6 +1037,14 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: dbt
     documentation: ".claude/skills/dbt-transformation-adapter/SKILL.md"
+    ownership:
+      capability_owner: seshat-adapter
+      upstream_project: "dbt Labs"
+      upstream_surface: library
+      upstream_reference: "dbt-core"
+      seshat_delta: "Gates dbt execution behind Mapping Ready, recomputes the plan before DB access so drift refuses to run, and records run/test/parity as DERIVED evidence -- a green dbt test is evidence, never an approval."
+      canonical_source: ".claude/skills/dbt-transformation-adapter/SKILL.md"
+      update_policy: "Pinned via the dbt extra (dbt-core, dbt-postgres); a major -- and until compatibility tests exist, minor -- bump needs a named-owner compatibility attestation."
     references:
       roadmap: "F029"
       skill: "dbt-transformation-adapter"
@@ -1055,6 +1071,14 @@ capabilities:
     readiness_stage: not-stage-scoped
     command: "dagster"
     documentation: "orchestration/dagster/README.md"
+    ownership:
+      capability_owner: seshat-adapter
+      upstream_project: "Dagster"
+      upstream_surface: library
+      upstream_reference: "dagster"
+      seshat_delta: "Expresses the medallion sequence as a Dagster asset graph that executes only already-approved steps, fails closed behind every gate, records derived run evidence, and decides no readiness stage."
+      canonical_source: ".claude/skills/dagster-orchestration-adapter/SKILL.md"
+      update_policy: "Pinned via the optional dagster extra; the seshat-dagster-adapter and dagster-skills components are Seshat-bundled and carry no upstream coordinate."
     references:
       roadmap: "F030"
       skill: "dagster-orchestration-adapter"
@@ -1081,6 +1105,14 @@ capabilities:
     readiness_stage: dashboard_ready
     command: null
     documentation: ".claude/skills/pbir-authoring-adapter/SKILL.md"
+    ownership:
+      # NOT seshat-adapter: this skill composes Seshat's OWN pbir-* CLI verbs, it
+      # does not wrap an upstream surface. FR-002 draws that line explicitly --
+      # the upstream-format question belongs to the four pbir-* verbs that touch
+      # the PBIR JSON, not to the skill that sequences them.
+      capability_owner: seshat-orchestrator
+      seshat_delta: "Invoke-and-compose wrapper sequencing the pbir-* verbs (apply theme, format visual, set background, set geometry) behind dashboard_ready."
+      canonical_source: ".claude/skills/pbir-authoring-adapter/SKILL.md"
     references:
       skill: "pbir-authoring-adapter"
 

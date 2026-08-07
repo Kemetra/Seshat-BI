@@ -59,8 +59,9 @@ bundle drift PASS; all tests green.
   manifest `id`, into `evidence/id-resolution.md`. Deliverable: a
   skill-name-to-`id` table. Required because audit prose uses skill names that
   are not always `id`s -- e.g. the PBIR adapter's entry is
-  `pbir-authoring-adapter-skill` while `pbir-authoring-adapter` appears in six
-  other entries only as a `references.skill` value (SC-003). Every later task
+  `pbir-authoring-adapter-skill` while `pbir-authoring-adapter` is a
+  `references.skill` value on five entries, four of them unrelated `pbir-*` CLI
+  verbs, and is not an `id` at all (SC-003). Every later task
   MUST edit by resolved `id`, never by skill-name match. -- **done**: evidence/id-resolution.md -- 3 traps found, incl. pbir-authoring-adapter having NO exact id and powerbi-workflows not being a manifest entry at all
 - [x] T005 [P] Record the pre-existing fail-open at
   `src/seshat/capability_inventory.py:35-43` into
@@ -124,32 +125,42 @@ bundle drift PASS; all tests green.
   -- **done**: evidence/phase1-gates.txt -- seshat check exit 0 (pre-existing RS1 only), ruff clean, bundle drift PASS, 81 tests passed (74 baseline + 7 new). INERTNESS PROVEN: both manifest_digests byte-identical to T002
 ## Phase 2 -- Pilot the four known wrappers (proves FR-004 on real data)
 
-- [ ] T020 Classify the `dbt-transformation-adapter` entry (by `id` resolved in
+- [x] T020 Classify the `dbt-transformation-adapter` entry (by `id` resolved in
   T004) as `seshat-adapter`, upstream `dbt Labs`. Per FR-007,
-  `upstream_reference` names the surface actually wrapped -- the
-  `dbt-agent-skills` bundle (`catalog.py:168-175`) and/or `dbt-mcp`
-  (`:176-186`) -- **not** `dbt-core`/`dbt-postgres` (`:151-167`), which are
-  operator-environment runtime dependencies rather than the wrapped surface.
-  Deliverable: the entry, with a non-empty `seshat_delta`.
-- [ ] T021 [P] Classify the `dagster-orchestration-adapter` entry as
+  `upstream_reference` names the surface **actually wrapped**.
+  **Corrected during implementation**: this task originally said to use
+  `dbt-agent-skills` and/or `dbt-mcp` and to avoid `dbt-core`. Reading the skill
+  proved the opposite -- `.claude/skills/dbt-transformation-adapter/SKILL.md:27`
+  names the `dbt-core==1.12.0` + `dbt-postgres==1.10.2` extra, and its build/test
+  steps invoke `seshat dbt build` / `seshat dbt test`, i.e. a governed wrapper
+  around **dbt-core's own execution**. `dbt-core` (`catalog.py:151-157`) is
+  therefore the wrapped surface, not an incidental runtime dependency.
+  `dbt-mcp` is a separate, unused surface here. Deliverable: the entry, with a
+  non-empty `seshat_delta`.
+  -- **done**: seshat-adapter / dbt Labs / upstream_reference `dbt-core`. TASK TEXT CORRECTED FIRST -- it said to avoid dbt-core, but SKILL.md:27 names the dbt-core+dbt-postgres extra and the build steps invoke `seshat dbt build`, so dbt-core IS the wrapped engine. Following the original text would have recorded a false coordinate
+- [x] T021 [P] Classify the `dagster-orchestration-adapter` entry as
   `seshat-adapter`, upstream `Dagster`, with `upstream_reference` matching the
   `dagster` PyPI component (`catalog.py:191-198`). Per FR-007 do **not** invent a
   coordinate for `seshat-dagster-adapter` (`:199-205`) or `dagster-skills`
   (`:206-212`) -- both are Seshat-bundled and carry no coordinate. Deliverable:
   the entry.
-- [ ] T022 [P] Classify `pbi-mcp-doctor`, upstream Microsoft, cross-checked
+  -- **done**: seshat-adapter / Dagster / `dagster`; no coordinate invented for the two Seshat-bundled components, per FR-007
+- [x] T022 [P] Classify `pbi-mcp-doctor`, upstream Microsoft, cross-checked
   against `catalog.py:224-235`. Deliverable: the entry, with the upstream's
   preview/pre-GA status reflected in `update_policy` as a quoted string
   (FR-008 clause 2).
-- [ ] T023 [P] Classify the PBIR adapter entry — manifest `id`
+  -- **done**: seshat-adapter / Microsoft / `@microsoft/powerbi-modeling-mcp`, upstream_surface mcp; preview/pre-GA recorded in update_policy as a quoted string (FR-008 clause 2)
+- [x] T023 [P] Classify the PBIR adapter entry — manifest `id`
   `pbir-authoring-adapter-skill`, per T004, **not** the six entries that merely
   carry `references.skill: pbir-authoring-adapter` — with
   `upstream_surface: format` (FR-003), since PBIR is an upstream-owned format
   with no executable surface. Deliverable: the entry.
-- [ ] T024 Run the gate set. Deliverable: bundle digests **identical** to T002
+  -- **done** on the resolved id `pbir-authoring-adapter-skill` (NOT the four pbir-* verbs that merely reference the skill). RECLASSIFIED from seshat-adapter to **seshat-orchestrator**: its summary shows it composes Seshat's OWN pbir-* CLI verbs, so FR-002's adapter/orchestrator line puts it on the orchestrator side; the upstream-format question belongs to the verbs that touch PBIR JSON
+- [x] T024 Run the gate set. Deliverable: bundle digests **identical** to T002
   with four entries now carrying the axis — the empirical proof of FR-004 and
   SC-004, at four entries rather than 102.
 
+  -- **done**: evidence/phase2-gates.txt -- FR-004/SC-004 PROVEN on real data. Both manifest_digests byte-identical to the T002 baseline WITH four entries carrying the axis; 81 tests pass, ruff clean, bundle drift PASS, seshat check exit 0 (pre-existing RS1 only). O9 clean on all four. Reader surfaces all four (FR-011)
 ## Phase 3 -- Knowledge roots and governance set (mechanical)
 
 - [ ] T030 Classify the six `skills/` roots as `seshat-domain-knowledge`, each
@@ -194,6 +205,17 @@ bundle drift PASS; all tests green.
   resolved OD-2, each with the `seshat_delta` stated in the spec's OD-2 table.
   Deliverable: four entries, each with a non-empty delta.
 - [ ] T043 Run the gate set. Deliverable: all green, digests unchanged.
+- [ ] T044 **Wire O9 into the aggregate.** Add
+  `"ownership": find_ownership_violations(repo_root)` to `oracle_all_clear`
+  (`tests/unit/_capability_oracle.py`), which
+  `test_real_manifest_passes_all_eight_oracle_checks` iterates. Deliverable: the
+  aggregate carries the ownership key and the real-manifest test passes.
+  **Ordering is load-bearing and deliberate**: until every entry is declared,
+  FR-002a makes this check fail by design, so it lands at the END of Phase 4.
+  A detector that exists but is absent from the aggregate would let Phases 2-4
+  land malformed entries with every gate green -- the
+  `verifier-must-sit-on-the-risk` failure shape. Do not skip this task; the
+  detector is not enforcing anything until it runs.
 
 ## Phase 5 -- Closeout
 
