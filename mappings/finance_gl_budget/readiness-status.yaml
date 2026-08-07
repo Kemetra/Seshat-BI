@@ -95,15 +95,16 @@ approvals:
     note: "mapping gate CLEARED -- declared grain, PK and gold star approved; open questions ruled; HR1 conformance ruled conformed. See approval-decision-mapping-gate.md"
 
 # --- the single next allowed action -----------------------------------------
-# UPDATED: 0007 (silver) and 0008 (gold, shared with finance_gl_actuals) are
-# authored -- see warehouse/migrations/. Neither has been EXECUTED against a
-# database; silver_ready/gold_ready below correctly stay not_started until a
-# live run happens ([PENDING LIVE PROFILE]). The next allowed action is a
-# named metric_owner approving the seven authored metric contracts under
-# mappings/finance_gl_budget/metrics/ and mappings/finance_gl_actuals/metrics/
-# (currently readiness.status: blocked on every one -- see
-# docs/worked-examples/finance-gl-genericity-ledger.md row L14); no agent may
-# grant that approval.
+# 0007 (silver) and 0008 (gold, shared with finance_gl_actuals) are authored --
+# see warehouse/migrations/. Neither has been EXECUTED against a database, so
+# silver_ready/gold_ready below correctly stay not_started until a live run
+# happens ([PENDING LIVE PROFILE]). That live run IS the next allowed action.
+#
+# The metric_owner approval is Stage 5 (semantic_model_ready) and is NOT next:
+# it cannot be reached while Stages 3 and 4 are incomplete. The seven contracts
+# it would cover are not in this commit at all -- they were split out to branch
+# 137-metric-contracts-held (ledger rows L14, L17), so no metrics/ path under
+# this table exists here.
 next_action: "advance the EARLIEST incomplete stage: silver_ready. The silver/gold SQL is authored (0007_create_silver_finance_gl_budget.sql, 0008_create_gold_finance_gl_star.sql) but neither executed nor validated, so silver_ready and gold_ready both remain not_started -- executing and live-validating them is a [PENDING LIVE PROFILE] step. Metric-contract work is Stage 5 (semantic_model_ready) and must NOT be treated as the next action while Stages 3 and 4 are incomplete."
 
 # --- audit ------------------------------------------------------------------

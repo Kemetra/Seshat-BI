@@ -707,3 +707,45 @@ template.**
   this commit.
 - **consequence**: a reader of either file can now reproduce exactly what this commit
   does and does not contain. Nothing about L14's `metric_owner` seam changes.
+
+## L19 -- BLOCKING, needs an owner ruling: the two facts share no conformed TIME dimension
+
+- **location**: `warehouse/migrations/0008_create_gold_finance_gl_star.sql`;
+  `docs/quality/conformed-dimension-map.yaml`.
+- **found by**: PR #596 review (`chatgpt-codex-connector`, P1). Verified against the
+  committed SQL and the owner ruling before being recorded.
+- **observed_problem**: `fct_gl_actuals_fgl` is keyed to `dim_date_fgl` (daily
+  `date_sk`). `fct_gl_budget_fgl` is keyed to `dim_fiscal_period_fgl`
+  (`fiscal_period_sk`). **Neither time dimension filters both facts.** Slice the
+  required Actual-vs-Budget trend by quarter and one series repeats its unfiltered
+  total for every period -- the spec's central deliverable does not work.
+- **verification**: `docs/quality/conformed-dimension-map.yaml` carries an owner
+  ruling (Ahmed Shaaban, 2026-07-30) for exactly two names: `dim_account_fgl` and
+  `dim_department_fgl`. **No time dimension was ever ruled.** FR-009 names
+  `dim_date` among the dimensions that MUST be conformed, so this is a real gap, not
+  a reviewer misreading.
+- **classification**: `genericity_obstruction` -- and a substantive one. The retail
+  worked example has a single fact at a single daily grain, so the question "what
+  happens when two facts live at different time grains?" never arose. Finance is the
+  first domain where it does.
+- **minimal_resolution**: **NOT ATTEMPTED -- this is a Principle-V human modelling
+  judgment and an agent must not decide it.** `conformed-dimension-map.yaml` says so
+  in its own header: a cross-star dimension ruling "is a Principle-V human modelling
+  judgment; HR1 never decides it."
+  The options, stated without a recommendation being acted on:
+  - **(a)** add `fiscal_period_sk` to `fct_gl_actuals_fgl` alongside its daily
+    `date_sk`. FR-010 permits aggregating actuals UPWARD to the budget comparison
+    grain, so this direction is allowed.
+  - **(b)** introduce a shared period bridge between `dim_date_fgl` and
+    `dim_fiscal_period_fgl`.
+  - **(c)** rule the two time dimensions `distinct` and accept that no cross-fact time
+    slice exists -- which would contradict the spec's own required trend visual.
+  Option (a) is what the reviewer suggested. Whichever is chosen, it needs a
+  `conformed-dimension-map.yaml` entry naming a human and a date, and it may change
+  the authored gold SQL.
+  **What is NOT an option**: adding a daily `date_sk` to the budget fact. That is
+  downward disaggregation of budget, which FR-010 forbids without a named human
+  approval.
+- **consequence**: this blocks the T042 semantic model and the T044 dashboard page
+  independently of the `metric_owner` seam (L14). Two distinct human decisions now
+  gate Stage 5+, not one.
