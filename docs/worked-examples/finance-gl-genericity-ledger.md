@@ -658,3 +658,23 @@ template.**
   The underlying default-discovery behaviour itself is unchanged and would recur for any
   future author's untracked, not-yet-staged contract files -- that generic exposure is the
   finding this row records, not a currently-live defect on this branch.
+
+## L17 -- process_note: the seven metric contracts were SPLIT OUT of the landing PR
+
+- **location**: PR #596 (`137-finance-gl-genericity-proof`); the contracts are held on
+  branch `137-metric-contracts-held` at commit `b61ec38`.
+- **observed_problem**: the seven contracts authored in T035-T041 are correct, but every
+  one is `readiness.status: blocked` for want of a named `metric_owner` (L14). CI's
+  required `check` job runs `retail semantic-check --require-inputs` as a step, so those
+  seven L3 findings make the whole PR unmergeable -- not merely "red by design" as first
+  framed. The finding is CORRECT; the contracts genuinely are not owner-approved.
+- **classification**: `process_note` -- not a genericity obstruction. The kit behaved
+  exactly as designed: an unapproved contract must not pass a gate.
+- **minimal_resolution**: land the SQL, ledger and census-guard fixture (all of which pass
+  every gate today) and defer the contracts to a follow-up PR opened once a named
+  `metric_owner` exists. T035-T041 are un-checked on the landing branch because their
+  deliverables are not in it; the authored work is preserved on the held branch, not lost.
+  Nothing was silenced, no gate was weakened, and no approval was self-granted.
+- **consequence**: L14's `authority_leak` finding stands unchanged -- the `metric_owner`
+  seam is a third approval gate that neither the spec's "Open owner decisions" section nor
+  the implementation brief named, discovered only because a non-retail domain reached it.
