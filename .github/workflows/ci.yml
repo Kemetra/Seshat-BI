@@ -1,7 +1,15 @@
 name: ci
 
+# Triggers: `push` is restricted to main so a branch push does not fire this
+# workflow twice on one SHA (once for `push`, once for `pull_request`). The
+# duplicates competed for runners and were reaped as `cancelled` after ~2h;
+# because branch protection reads the MOST RECENT result per context name, a
+# reaped `check` masked a green `pull_request` run on the identical SHA (#591).
+# PR validation is owned by `pull_request`; `push` covers post-merge main.
+# Matches the filtered-push precedent in dagster-smoke.yml.
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -13,6 +21,13 @@ on:
         options:
           - classify-fixtures
           - validate-bundles
+
+# One in-flight run per ref: a rapid re-push supersedes its own predecessor
+# instead of queueing beside it and starving both for runners. Never cancels on
+# main -- post-merge runs are the release audit trail and must each complete.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   check:
