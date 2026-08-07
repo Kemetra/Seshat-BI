@@ -4,7 +4,11 @@
 
 **Created**: 2026-08-07
 
-**Status**: Draft
+**Status**: Ratified (Ahmed Shaaban, 2026-08-07) -- implementation permitted
+
+**Status history**: Draft -- 2026-08-07, revised the same day after two review
+passes (12 + 8 findings) and six owner rulings; ratified after both CRITICAL
+findings were resolved at the design level.
 
 **Source**: issue #592 section C, as re-scoped by `docs/capabilities/ownership-audit.md`
 

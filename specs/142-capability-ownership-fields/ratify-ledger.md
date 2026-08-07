@@ -4,17 +4,18 @@
 
 **Prepared**: 2026-08-07 (revised same day after owner rulings)
 
-**Status**: **NOT RATIFIED -- awaiting the human ratification decision.**
+**Status**: **RATIFIED by Ahmed Shaaban, 2026-08-07 -- implementation permitted,
+NOT started.**
 
-Ratification is a human edit this chain is structurally forbidden to make. This
-ledger records what was produced and what a ratifier is deciding. It grants
-nothing.
+Ratification was the owner's decision, recorded on their explicit instruction.
+The chain itself neither granted nor inferred it. All 31 tasks in `tasks.md`
+remain unchecked: permission to implement is not implementation.
 
 ---
 
 ## Recommendation
 
-**Ready for a ratification decision.** All twenty findings from the two review
+**Ratified 2026-08-07.** All twenty findings from the two review
 passes are resolved, and the six decisions the chain could not make were ruled by
 the owner on 2026-08-07.
 
@@ -116,13 +117,17 @@ test_dbt_documentation.py         6 passed (includes the fence contract)
 tests/contract/                   201 passed, 1 skipped
 ```
 
-## What remains a human decision
+## Ratification -- granted
 
-**Ratification itself.** A named human edits `spec.md`'s `**Status**` line. No
-task in `tasks.md` may start before that -- every box is unchecked, and the fence
-states implementation is NOT permitted while the spec is Draft.
+**Ratified by Ahmed Shaaban on 2026-08-07.** `spec.md`'s `**Status**` line and the
+`<!-- SPECKIT -->` fence in both `CLAUDE.md` and `AGENTS.md` record it; the fence
+now reads "implementation permitted".
 
-Two unrelated items also need a human:
+**Implementation has not started.** All 31 task boxes are unchecked. The next
+action is a separate, explicit instruction to begin -- ratification authorizes the
+work, it does not perform it.
+
+Two unrelated items still need a human:
 
 - **RS1** -- `mappings/retail_store_sales/readiness-status.yaml` audit metadata
   predates the 2026-07-23 approval. Non-blocking by design; a **named human** must
@@ -131,10 +136,10 @@ Two unrelated items also need a human:
 
 ## What this chain did NOT do
 
-- Did not ratify. Did not merge or push to `main`.
-- Did not start any task -- all boxes unchecked.
-- Did not grant implementation permission. **Being the fence target is not
-  ratification.**
+- Did not merge or push to `main`.
+- Did not start any task -- all 31 boxes unchecked.
+- Did not self-ratify. Ratification was recorded only on the owner's explicit
+  instruction, naming them; the chain cannot infer or grant it.
 - Did not revive the five dead constants (OD-3).
 - Did not ship `capabilities.yaml` inside the bundles (would force a drift-gate
   re-baseline).

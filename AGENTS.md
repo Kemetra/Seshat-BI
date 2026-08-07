@@ -85,8 +85,8 @@ wiring -- the authoring sibling of `retail-govern`, which interprets rule findin
 - Repo rules (secrets, PBIP, Windows): `CLAUDE.md`.
 <!-- SPECKIT START -->
 Active Spec Kit implementation plan: `specs/142-capability-ownership-fields/plan.md`
-(status: DRAFT -- NOT ratified, implementation NOT permitted. Issue #592 section C.
-A named human must ratify `spec.md` before any task is started.)
+(status: RATIFIED by Ahmed Shaaban 2026-08-07 -- implementation permitted. Issue
+#592 section C. Not started: all 31 tasks in `tasks.md` are unchecked.)
 Ratified but NOT started: the `specs/137-finance-gl-genericity-proof/` package (ratified by
 Ahmed Shaaban 2026-07-30; OD-4 the per-table mapping-gate approval and OD-5 the Power BI
 Desktop authoring session remain open and blocking). At most ONE
