@@ -76,19 +76,22 @@ bundle drift PASS; all tests green.
 
 ## Phase 1 -- Vocabulary and validation (RED first, no manifest data)
 
-- [ ] T010 Write a FAILING test in `tests/unit/test_capability_inventory.py`
+- [x] T010 Write a FAILING test in `tests/unit/test_capability_inventory.py`
   asserting the oracle rejects an entry whose `ownership.capability_owner` is
   not in the FR-002 token set. Deliverable: a test that fails with a clear
   message before T012 exists.
-- [ ] T011 [P] Write a FAILING test asserting the oracle rejects an entry with
+  -- **done**: test_ownership_rejects_unknown_capability_owner + test_ownership_accepts_every_declared_token; RED-verified (AttributeError on ownership_violations) before T012
+- [x] T011 [P] Write a FAILING test asserting the oracle rejects an entry with
   `capability_owner: seshat-adapter` and a missing or empty `seshat_delta`
   (FR-006). Deliverable: a second failing test.
-- [ ] T012 Add `OWNERSHIP_OWNERS` (FR-002) and `OWNERSHIP_SURFACES` (FR-003)
+  -- **done**: test_ownership_rejects_adapter_without_delta -- covers None, '' and whitespace-only; RED-verified
+- [x] T012 Add `OWNERSHIP_OWNERS` (FR-002) and `OWNERSHIP_SURFACES` (FR-003)
   token sets plus the two axis check functions to
   `tests/unit/_capability_oracle.py`, wired into the same
   `find_*_violations` pattern the existing axes use. Deliverable: T010 and T011
   now pass; every previously green oracle test still passes.
-- [ ] T013 Add a **behavioral** test for FR-008 clause 1: construct an in-memory
+  -- **done**: OWNERSHIP_OWNERS (10 tokens) + OWNERSHIP_SURFACES (6) + ownership_violations()/find_ownership_violations() in _capability_oracle.py; 44 capability tests pass
+- [x] T013 Add a **behavioral** test for FR-008 clause 1: construct an in-memory
   entry carrying `ownership: {ownership_confidence: "high"}` and assert
   `find_axis_violations` (or the O6 check directly) returns a problem naming that
   key. Deliverable: a test that exercises the real detector.
@@ -98,11 +101,13 @@ bundle drift PASS; all tests green.
   the pre-existing `_axis_numeric_field_names`
   (`tests/unit/_capability_oracle.py:451-456`); this task proves it fires on an
   ownership-shaped field.
-- [ ] T015 Add a FAILING-then-passing test for FR-002a: an entry with no
+  -- **done**: test_o6_fires_on_an_ownership_shaped_numeric_field_name + test_o6_fires_on_a_bare_numeric_ownership_value -- BEHAVIORAL, both passed on first run, proving the pre-existing depth-walking detector really does catch ownership_confidence and a bare int
+- [x] T015 Add a FAILING-then-passing test for FR-002a: an entry with no
   `ownership.capability_owner` must be rejected. Deliverable: the test plus the
   oracle check. This is what makes absence non-meaningful and a half-landed
   migration honest rather than misleading.
-- [ ] T016 Implement FR-011, the reader: add `capability_owner`,
+  -- **done**: test_ownership_rejects_missing_capability_owner -- absent mapping, empty mapping, and blank value all rejected; the 'unclassified' sentinel accepted
+- [x] T016 Implement FR-011, the reader: add `capability_owner`,
   `upstream_project`, and `seshat_delta` to `_RECORD_FIELDS` /
   `InventoryRecord` / `_project_record` in
   `src/seshat/capability_inventory.py`, and mirror them into
@@ -111,10 +116,12 @@ bundle drift PASS; all tests green.
   closed-schema assertion at `tests/unit/test_capability_inventory.py:40` passes
   with the widened set. **Leave the five dead constants at
   `capability_inventory.py:35-43` untouched** (FR-010, OD-3).
-- [ ] T014 Run the gate set. Deliverable: all green, and the bundle digests from
+  -- **done**: FR-011 reader -- _RECORD_FIELDS/InventoryRecord/to_dict/_project_record widened + _optional_str helper, mirrored into DECLARED_RECORD_FIELDS. Verified end-to-end: `python -m seshat.capability_inventory --format json` emits all three fields; every entry reads 'unclassified' pre-migration (never blank). Five dead constants at :35-43 untouched
+- [x] T014 Run the gate set. Deliverable: all green, and the bundle digests from
   T002 **unchanged** — Phase 1 touches no manifest entry, so this is the
   inertness proof.
 
+  -- **done**: evidence/phase1-gates.txt -- seshat check exit 0 (pre-existing RS1 only), ruff clean, bundle drift PASS, 81 tests passed (74 baseline + 7 new). INERTNESS PROVEN: both manifest_digests byte-identical to T002
 ## Phase 2 -- Pilot the four known wrappers (proves FR-004 on real data)
 
 - [ ] T020 Classify the `dbt-transformation-adapter` entry (by `id` resolved in

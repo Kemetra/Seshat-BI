@@ -84,6 +84,12 @@ _RECORD_FIELDS: tuple[str, ...] = (
     "command",
     "documentation",
     "group",
+    # Spec 142 FR-011 -- the ownership axis's readable subset. Without these the
+    # axis would be write-only: the closed schema excludes unknown keys, no gate
+    # reads it, and the manifest ships in neither generated bundle.
+    "capability_owner",
+    "upstream_project",
+    "seshat_delta",
 )
 
 
@@ -103,6 +109,9 @@ class InventoryRecord:
     command: str | None
     documentation: str
     group: str
+    capability_owner: str
+    upstream_project: str | None
+    seshat_delta: str | None
 
     def to_dict(self) -> dict:
         return {
@@ -118,6 +127,9 @@ class InventoryRecord:
             "command": self.command,
             "documentation": self.documentation,
             "group": self.group,
+            "capability_owner": self.capability_owner,
+            "upstream_project": self.upstream_project,
+            "seshat_delta": self.seshat_delta,
         }
 
 
@@ -142,6 +154,15 @@ def _as_str_list(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, str)]
+
+
+def _optional_str(value: object) -> str | None:
+    """A present, non-blank string, or None. Used for the ownership fields that
+    are genuinely optional (FR-001), so an absent field renders as null rather
+    than as an empty string a consumer could misread as a real value."""
+    if isinstance(value, str) and value.strip():
+        return value
+    return None
 
 
 def _primary_group(entry: dict) -> str:
@@ -170,6 +191,8 @@ def _project_record(entry: dict) -> InventoryRecord:
     the builder itself stays permissive/best-effort like the other read-only
     surfaces so a malformed entry degrades rather than crashes)."""
     requirements = tuple(_as_str_list(entry.get("requirements")))
+    ownership = entry.get("ownership")
+    ownership = ownership if isinstance(ownership, dict) else {}
     return InventoryRecord(
         id=str(entry.get("id", "")),
         name=str(entry.get("name", "")),
@@ -183,6 +206,12 @@ def _project_record(entry: dict) -> InventoryRecord:
         command=entry.get("command") if isinstance(entry.get("command"), str) else None,
         documentation=str(entry.get("documentation", "")),
         group=_primary_group(entry),
+        # FR-002a: an entry that declares nothing reads as "unclassified", never
+        # as an empty string that a consumer might mistake for "no upstream
+        # owner, so this is Seshat's".
+        capability_owner=str(ownership.get("capability_owner") or "unclassified"),
+        upstream_project=_optional_str(ownership.get("upstream_project")),
+        seshat_delta=_optional_str(ownership.get("seshat_delta")),
     )
 
 
