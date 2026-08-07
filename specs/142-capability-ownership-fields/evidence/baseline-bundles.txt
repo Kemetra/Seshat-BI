@@ -1,0 +1,6 @@
+# T002 baseline bundle digests -- spec 142, pre-change
+# HEAD: ce66dc6
+# FR-004 is proven by COMPARISON against these values, not by assertion.
+
+claude-code  manifest_digest = 8bf0dd0be482737ed328739200a97a2dd19e5f1cb4081fbda82922433510c86c
+codex        manifest_digest = fdba0aa6b4b554b4fd25a7631eab45e7b01faeb60488d8ce3e0aa5abf493bc84

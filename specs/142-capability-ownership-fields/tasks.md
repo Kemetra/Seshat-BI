@@ -4,8 +4,7 @@
 
 **Plan**: `specs/142-capability-ownership-fields/plan.md`
 
-**Status**: Draft -- NOT ratified. No task below may be started until a named
-human ratifies the spec.
+**Status**: Ratified (Ahmed Shaaban, 2026-08-07) -- implementation permitted.
 
 ---
 
@@ -41,29 +40,29 @@ bundle drift PASS; all tests green.
 
 ## Phase 0 -- Baseline
 
-- [ ] T001 Capture the pre-change gate baseline into
+- [x] T001 Capture the pre-change gate baseline into
   `specs/142-capability-ownership-fields/evidence/baseline-gates.txt` by running
   the full gate set, recording the pre-existing RS1 warning as
   expected-and-unrelated. Deliverable: the file, containing all four commands'
-  output.
-- [ ] T002 [P] Record the committed bundle digests for both harnesses into
+  output. -- **done**: evidence/baseline-gates.txt -- all gates green, 74 tests passed, pre-existing RS1 recorded as unrelated
+- [x] T002 [P] Record the committed bundle digests for both harnesses into
   `evidence/baseline-bundles.txt` from
   `integrations/claude-code/seshat-bi/bundle-manifest.json` and
   `integrations/codex/seshat-bi/bundle-manifest.json`. Deliverable: both
   `manifest_digest` values, so FR-004 can be proven by comparison rather than
-  by assertion.
-- [ ] T003 [P] Record the current entry count and the exhaustive key set present
+  by assertion. -- **done**: evidence/baseline-bundles.txt -- claude 8bf0dd0b..., codex fdba0aa6...
+- [x] T003 [P] Record the current entry count and the exhaustive key set present
   across all entries of `docs/capabilities/capabilities.yaml` into
   `evidence/baseline-manifest-keys.txt`. Deliverable: the key list, proving no
-  `ownership` key exists before this work.
-- [ ] T004 [P] Resolve every capability this spec names in prose to its actual
+  `ownership` key exists before this work. -- **done**: evidence/baseline-manifest-keys.txt -- 102 entries, `ownership` absent (verified False)
+- [x] T004 [P] Resolve every capability this spec names in prose to its actual
   manifest `id`, into `evidence/id-resolution.md`. Deliverable: a
   skill-name-to-`id` table. Required because audit prose uses skill names that
   are not always `id`s -- e.g. the PBIR adapter's entry is
   `pbir-authoring-adapter-skill` while `pbir-authoring-adapter` appears in six
   other entries only as a `references.skill` value (SC-003). Every later task
-  MUST edit by resolved `id`, never by skill-name match.
-- [ ] T005 [P] Record the pre-existing fail-open at
+  MUST edit by resolved `id`, never by skill-name match. -- **done**: evidence/id-resolution.md -- 3 traps found, incl. pbir-authoring-adapter having NO exact id and powerbi-workflows not being a manifest entry at all
+- [x] T005 [P] Record the pre-existing fail-open at
   `src/seshat/capability_inventory.py:35-43` into
   `evidence/known-findings.md`: the five axis constants
   (`_LIFECYCLE_STATES`, `_AUTHORITIES`, `_SURFACES`, `_REQUIREMENTS`,
@@ -71,6 +70,9 @@ bundle drift PASS; all tests green.
   demonstrated by the live `surface: product-module` value that is absent from
   `_SURFACES` and causes no failure. Deliverable: the file. This discharges
   FR-010's affirmative half -- record the finding, do not fix it (OD-3).
+  -- **done**: evidence/known-findings.md -- KF-1 five dead constants proven dead
+  (each appears once, at its own definition; live `product-module` violates
+  `_SURFACES` with no failure), KF-2 no spec-kit re-vendor path
 
 ## Phase 1 -- Vocabulary and validation (RED first, no manifest data)
 
