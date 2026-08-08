@@ -27,7 +27,9 @@ from seshat.capability_inventory import (
     render_human,
     render_json,
 )
+from tests.unit import _capability_feeder_readers as feeder_readers
 from tests.unit import _capability_oracle as oracle
+from tests.unit import _capability_public_ownership as public_ownership
 
 pytestmark = pytest.mark.unit
 
@@ -66,15 +68,46 @@ def _imported_module_targets(node: ast.AST) -> set[str]:
     return set()
 
 
-def test_oracle_does_not_import_code_under_test() -> None:
-    """The oracle's independence is structural: ``_capability_oracle`` must not
-    import ``capability_feeders`` or ``capability_inventory`` (else it would
-    learn ground truth from the code it checks -- circular)."""
-    tree = ast.parse(Path(oracle.__file__).read_text(encoding="utf-8"))
+@pytest.mark.parametrize(
+    "module",
+    [oracle, feeder_readers, public_ownership],
+    ids=lambda m: m.__name__.rsplit(".", 1)[-1],
+)
+def test_oracle_does_not_import_code_under_test(module: object) -> None:
+    """The oracle's independence is structural: NO module in the oracle stack
+    may import ``capability_feeders`` or ``capability_inventory`` (else it would
+    learn ground truth from the code it checks -- circular).
+
+    Parametrized over every oracle module, not just ``_capability_oracle``:
+    when the spec 142/143 detectors moved to a sibling they left a
+    single-file guard's scope, which would have let a future import of the
+    code under test land there unchecked -- a guard that no longer sits on the
+    risk it was written for.
+    """
+    tree = ast.parse(Path(module.__file__).read_text(encoding="utf-8"))
     imported: set[str] = set()
     for node in ast.walk(tree):
         imported |= _imported_module_targets(node)
     assert not (imported & _BANNED_UNDER_TEST), imported & _BANNED_UNDER_TEST
+
+
+def test_every_oracle_module_is_covered_by_the_independence_guard() -> None:
+    """The guard's module list must not drift behind the package.
+
+    Discovering the modules from disk rather than trusting the hand-written
+    parametrize list: a fourth oracle module added later must either be listed
+    or fail here, so the guard can never silently cover a subset.
+    """
+    on_disk = {
+        path.stem
+        for path in Path(oracle.__file__).parent.glob("_capability_*.py")
+        if path.stem != "_capability_oracle_fixtures"
+    }
+    guarded = {
+        Path(module.__file__).stem
+        for module in (oracle, feeder_readers, public_ownership)
+    }
+    assert on_disk == guarded, f"unguarded oracle modules: {on_disk - guarded}"
 
 
 # ---------------------------------------------------------------------------
