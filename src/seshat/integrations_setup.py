@@ -177,31 +177,20 @@ def setup_integrations(
                 "exact resolvers are required for apply; no changes were made",
             )
         ]
+    kwargs: dict[str, object] = {"profile": profile, "resolvers": resolvers}
     if apply:
-        kwargs = {
-            "profile": profile,
-            "resolvers": resolvers,
-            "runner": runner,
-        }
-        if harnesses:
-            kwargs.update(
-                harnesses=harnesses,
-                discovery_runner=discovery_runner,
-                harness_roots=harness_roots,
-                discovery_tool_lookup=discovery_tool_lookup,
-            )
-        outcome = apply_profile(root, **kwargs)
-    else:
-        kwargs = {"profile": profile, "resolvers": resolvers}
-        if harnesses:
-            kwargs.update(
-                harnesses=harnesses,
-                discovery_runner=discovery_runner,
-                harness_roots=harness_roots,
-                discovery_tool_lookup=discovery_tool_lookup,
-            )
-        outcome = plan_profile(root, **kwargs)
-    return _project(outcome)
+        kwargs["runner"] = runner
+    # Only forwarded when a harness was requested, so a caller that asked for
+    # no discovery keeps the canonical signatures' own defaults.
+    if harnesses:
+        kwargs.update(
+            harnesses=harnesses,
+            discovery_runner=discovery_runner,
+            harness_roots=harness_roots,
+            discovery_tool_lookup=discovery_tool_lookup,
+        )
+    delegate = apply_profile if apply else plan_profile
+    return _project(delegate(root, **kwargs))
 
 
 def needs_operator_action(results: list[IntegrationResult]) -> bool:
