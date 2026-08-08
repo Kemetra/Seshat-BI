@@ -400,8 +400,9 @@ const ledger = await agent(
   `(4) OPEN FOR YOU -- the Principle-V questions the workflow REFUSED to answer (the human must resolve ` +
   `these before ratifying), or \u0022(none)\u0022; (5) ANALYZE verdict; (6) PLAN REVIEW verdict + findings; ` +
   `(7) OUTCOME (${gateOutcome}). If READY_FOR_RATIFY, how_to_ratify lists the exact human steps: resolve ` +
-  `every OPEN FOR YOU item in spec.md, flip \u0022**Status**: Draft\u0022 to \u0022**Status**: Ratified (<name>, ` +
-  `<YYYY-MM-DD>)\u0022, commit \u0022docs: ratify spec (${plan && plan.feature ? plan.feature : S(78,78,78)})\u0022 on the ` +
+  `every OPEN FOR YOU item in spec.md, flip \u0022**Status**: draft\u0022 to the ADR-0019 canonical form ` +
+  `\u0022**Status**: ratified -- <name>, <YYYY-MM-DD>\u0022, preserving the previous value verbatim on a ` +
+  `\u0022**Status history**:\u0022 line, commit \u0022docs: ratify spec (${plan && plan.feature ? plan.feature : S(78,78,78)})\u0022 on the ` +
   `branch -- and note the implement workflow refuses the spec until that human Status edit lands. If ` +
   `BLOCKED, how_to_ratify instead states what must be fixed and that NO ratify path is offered yet. ` +
   `ASCII only.`,

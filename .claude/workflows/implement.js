@@ -21,9 +21,23 @@ const REPO = 'the repo root (resolve with `git rev-parse --show-toplevel`)'
 // FORBIDDEN to emit itself. These regexes are authored here byte-identically to that
 // contract -- two independent verifiers of one disk string, which is what makes the gate
 // fail-closed and upstream-bug-proof (not code duplication).
-const H3_RATIFIED_RE = /^\s*-?\s*\*\*Status:?\*\*:?\s*Ratified \(.+?,\s*\d{4}-\d{2}-\d{2}\)/m
-const H3_DRAFT_RE    = /^\s*-?\s*\*\*Status:?\*\*:?\s*Draft\b/mi
-const H3_BLOCKED_RE  = /^\s*-?\s*\*\*Status:?\*\*:?.*\bBLOCKED\b/mi
+// Spec 151 widened the ratified grammar ADDITIVELY: ADR 0019 mandates the
+// lowercase `ratified -- Name, YYYY-MM-DD` form, but ~40 committed specs carry
+// the legacy `Ratified (Name, YYYY-MM-DD)` form. Accepting only one would either
+// refuse every correctly-ratified new spec (the defect: this gate REFUSED the
+// merged specs/150-dbt-evidence-consumer) or invalidate the existing corpus.
+// Both alternatives still REQUIRE a name and a date -- the widening is of the
+// value grammar, never of the evidence requirement.
+//
+// The `\*\*Status\*\*` prefix stays STRICT on purpose. Loosening it to
+// `\*\*Status[^*]*\*\*` would make `**Status history**: draft` match H3_DRAFT_RE
+// and wrongly refuse a ratified spec carrying its ADR-mandated history line.
+// `seshat.spec_status_policy` is the authority; tests/unit/
+// test_spec_status_grammar_agreement.py reads these literals and fails if the
+// two verifiers drift apart.
+const H3_RATIFIED_RE = /^\s*-?\s*\*\*Status\*\*:?\s*(?:Ratified \(.+?,\s*\d{4}-\d{2}-\d{2}\)|ratified\s+--\s+.+?,\s*\d{4}-\d{2}-\d{2})/m
+const H3_DRAFT_RE    = /^\s*-?\s*\*\*Status\*\*:?\s*Draft\b/mi
+const H3_BLOCKED_RE  = /^\s*-?\s*\*\*Status\*\*:?.*\bBLOCKED\b/mi
 // H4: a mechanical, deletion-resistant scan for LITERAL open markers in the raw
 // ## Clarifications text. We do NOT invent an owner+date resolution grammar (the upstream
 // writes free-text), and resolution QUALITY is the human's job at ratification -- H4 only

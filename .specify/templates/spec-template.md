@@ -4,17 +4,7 @@
 
 **Created**: [DATE]
 
-**Status**: draft
-
-<!-- One of: draft | ratified | implemented | superseded (ADR 0019).
-     draft       -- authored, not yet ratified by a named human
-     ratified    -- a named human approved THE SPEC; record their name and the date
-     implemented -- the capability exists on `main`; MUST name its artifact, e.g.
-                    `**Status**: implemented -- artifact `src/seshat/foo.py``, and gets a
-                    `spec-<NNN>-implemented` claim in docs/quality/status-claims.yaml
-     superseded  -- replaced; name the superseding spec id
-     When changing this value, move the previous text verbatim into a
-     `**Status history**:` line rather than deleting it. -->
+**Status**: Draft
 
 **Input**: User description: "$ARGUMENTS"
 
