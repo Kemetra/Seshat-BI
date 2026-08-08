@@ -42,6 +42,7 @@ from seshat.cli.commands.dbt import (
     run_governed_build,
 )
 from seshat.dagster_adapter.redaction import redact_text
+from seshat.dbt import OUTCOME_TO_EXECUTION, UNKNOWN_EXECUTION
 
 # A governed refusal / unavailable / lock contention is a BLOCK with a named
 # owner; a completed-but-failed governed run (tests/parity/artifacts) is a
@@ -76,12 +77,8 @@ def profile_present(root: Path) -> bool:
 # The seshat.dbt CommandResult.outcome uses the readiness word "pass" for its
 # own exit-0 semantics. The dagster record MUST NEVER carry "pass" (hard rule
 # #9): translate it to an execution word the moment it crosses into dagster.
-_DBT_OUTCOME_TO_EXECUTION = {
-    "pass": "built",
-    "failed": "failed",
-    "blocked": "blocked",
-    "unavailable": "blocked",
-}
+# The mapping itself lives in seshat.dbt so this adapter and the evidence reader
+# share ONE definition (spec 150 FR-006).
 
 
 def _measured_from_result(result: CommandResult, table: str) -> dict:
@@ -95,7 +92,7 @@ def _measured_from_result(result: CommandResult, table: str) -> dict:
     # An outcome word this map does not know is treated as BLOCKED, never as a
     # success word: a future seshat.dbt outcome must fail closed here, not be
     # translated into "built" (evidence fidelity; Fable review).
-    dbt_result = _DBT_OUTCOME_TO_EXECUTION.get(result.outcome, "blocked")
+    dbt_result = OUTCOME_TO_EXECUTION.get(result.outcome, UNKNOWN_EXECUTION)
     measured: dict = {
         "engine": "dbt",
         "selector": f"seshat_table_{table}",

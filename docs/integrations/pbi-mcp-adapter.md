@@ -119,6 +119,21 @@ ceiling by construction.
   server has no such flag and classifies as `query-only`. `--skipconfirmation`
   is a hard refusal in every shape.
 - The generated setup guidance (placeholder-only): `docs/generated/powerbi-mcp-setup.md`.
+## No execution-result seam exists (and that is deliberate)
+
+Spec 150 wired dbt's execution evidence into a governance consumer. Power BI got
+NO equivalent, because there is no execution result to consume: F016 is
+`state: deferred`, the `McpTransport` Protocol has no call/execute member, and
+the shipped `MissingRuntimeTransport` always raises. Nothing here produces a
+machine-readable query, refresh, or publish result.
+
+This asymmetry is modelled honestly rather than papered over. Do NOT add a
+Power BI "execution result" normalizer to make the three adapters look uniform:
+that would mean inventing a result for a runtime that cannot produce one, and it
+would require enabling exactly the write/publish path this adapter is
+fail-closed against. When F016 is un-parked, the result seam gets designed with
+the runtime, not ahead of it.
+
 - The F016 adapter contract (this integration's specialization):
   `templates/pbi-mcp-adapter-contract.md`.
 - The generic Execution Adapter skeleton: `templates/adapter-contract.md`.

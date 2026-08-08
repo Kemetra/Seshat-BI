@@ -4,7 +4,9 @@
 
 **Created**: 2026-08-08
 
-**Status**: draft
+**Status**: ratified -- Ahmed Shaaban, 2026-08-08
+
+**Status history**: draft
 
 <!-- One of: draft | ratified | implemented | superseded (ADR 0019).
      draft       -- authored, not yet ratified by a named human

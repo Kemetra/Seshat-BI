@@ -2,7 +2,9 @@
 
 **Branch**: `150-dbt-evidence-consumer`
 
-**Status**: draft; NOT ratified. Implementation is not authorized.
+**Status**: ratified -- Ahmed Shaaban, 2026-08-08. Implementation authorized.
+
+**Status history**: draft; NOT ratified. Implementation is not authorized.
 
 ## Phase classification
 
