@@ -214,9 +214,23 @@ inventory-phase Non-goal.
    all tooling. What remains is a narrower, real gap: **no recorded re-vendor or
    upgrade path** for the vendored spec-kit content -- no lockfile, no
    `specify upgrade` record, no re-run instructions. That is the "fork tax" the
-   Principle II rationale warns about; it is unpaid today because the copy is
-   provably unmodified, but nothing keeps it that way. Worth its own decision,
-   separate from this axis.
+   Principle II rationale warns about. Worth its own decision, separate from
+   this axis.
+
+   **Correction, 2026-08-08 (spec 151).** This passage originally read that the
+   fork tax "is unpaid today because the copy is provably unmodified." That was
+   false at the time of writing: commit `f35612f` had already modified
+   `.specify/templates/spec-template.md`, adding an 11-line ADR-0019 vocabulary
+   block and changing the seeded status value. One tracked spec-kit file
+   therefore carried a real local modification; the other five apparent hash
+   drifts were CRLF checkout artifacts, not content changes. The claim in the
+   row at the top of this section -- zero drift against
+   `.specify/integrations/claude.manifest.json` -- was and remains true, as it
+   covers the nine skill files rather than the templates. The architecture
+   chosen is to REMOVE the modification rather than institutionalize it: Spec
+   Kit owns Spec Kit, Seshat owns Seshat governance, and the status policy now
+   lives in `src/seshat/spec_status_policy.py`. `specs/151-speckit-fork-removal`
+   tracks that migration. The historical audit above is otherwise unchanged.
 
 ## 6. Not done here
 

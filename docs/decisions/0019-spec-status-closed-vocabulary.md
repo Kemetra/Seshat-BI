@@ -69,6 +69,23 @@ migrated spec gets one `spec-<NNN>-implemented` claim.
 No new `seshat check` rule is added. The governance lane is saturated, and a newly wired
 rule must be no-finding on `main` before it can land -- which a 127-spec migration is not.
 
+**Where this policy executes (added by spec 151, 2026-08-08).** This decision is
+unchanged and is NOT superseded; only the executable home of its vocabulary moved. It
+originally lived as an 11-line comment inside `.specify/templates/spec-template.md` -- a
+file upstream Spec Kit owns and regenerates, so an ordinary re-init or upgrade silently
+reverted it -- plus a tuple inside the test that read that same template to learn what to
+check. The authority is now `src/seshat/spec_status_policy.py`: one importable module
+declaring the vocabulary, the canonical case, the line grammar, and each value's evidence
+requirement. It is a library, not a rule, so the "no new `seshat check` rule" decision
+above still holds. The upstream template carries no Seshat content.
+
+Spec 151 also reconciled two ratification grammars that had drifted apart: the H3 gate in
+`.claude/workflows/implement.js` required the legacy capital `Ratified (Name, date)` form
+and therefore REFUSED specs ratified in this ADR's own lowercase form. H3 now accepts both,
+still requiring a name and a date. Note the corpus is only partially migrated: 110 of 139
+specs carry values outside this vocabulary and are not yet rejected by anything. Making
+enforcement corpus-wide remains a separate, later decision.
+
 ### 4. Previous wording is preserved, never destroyed
 
 Migrating a spec moves its former Status text verbatim into a sibling field:

@@ -19,12 +19,17 @@ from pathlib import Path
 
 import pytest
 
+from seshat.spec_status_policy import VOCABULARY
+
 REPO = Path(__file__).resolve().parents[2]
 ADR = REPO / "docs/decisions/0019-spec-status-closed-vocabulary.md"
 TEMPLATE = REPO / ".specify/templates/spec-template.md"
 CLAIMS = REPO / "docs/quality/status-claims.yaml"
 
-VOCABULARY = ("draft", "ratified", "implemented", "superseded")
+# VOCABULARY is imported, never redeclared (spec 151 FR-002). Before spec 151
+# this module declared its own tuple AND read the template to learn the policy
+# it then checked -- the artifact under validation was also the source of the
+# expectation. The authority is now `seshat.spec_status_policy`.
 
 #: `**Status**: implemented -- artifact `path``
 _IMPLEMENTED = re.compile(
@@ -63,13 +68,47 @@ def test_the_adr_declares_exactly_the_four_values() -> None:
 
 
 @pytest.mark.unit
-def test_the_template_offers_only_vocabulary_values() -> None:
-    """A new spec must start inside the vocabulary, not invent an eighth variant."""
+def test_the_upstream_template_carries_no_seshat_policy() -> None:
+    """Spec Kit owns Spec Kit (spec 151 FR-013).
+
+    This assertion is the INVERSE of the one it replaces. Before spec 151 this
+    test asserted the template CONTAINED the vocabulary block -- which is what
+    made an upstream-managed file the home of a Seshat governance decision, and
+    what an ordinary `specify` upgrade silently reverted. The policy now lives
+    in `seshat.spec_status_policy`; the template must be clean.
+    """
     text = TEMPLATE.read_text(encoding="utf-8")
-    assert "draft | ratified | implemented | superseded" in text
-    status = next(line for line in text.splitlines() if line.startswith("**Status**:"))
-    value = status[len("**Status**:") :].strip()
-    assert value in VOCABULARY, f"template seeds {value!r}, not a vocabulary value"
+    assert "draft | ratified | implemented | superseded" not in text, (
+        "the Seshat vocabulary block is back in the upstream template; "
+        "the policy belongs in seshat.spec_status_policy (spec 151)"
+    )
+    assert "ADR 0019" not in text, "Seshat governance content is back in the template"
+
+
+@pytest.mark.unit
+def test_a_scaffolded_spec_normalizes_into_the_vocabulary() -> None:
+    """The seeded upstream value is normalized, not excused (FR-025).
+
+    Restoring the upstream template reintroduces `**Status**: Draft`, which is
+    OUTSIDE the closed vocabulary -- FR-006 carries no exception list. The
+    Seshat-owned post-scaffold step is what closes that gap.
+    """
+    from seshat.spec_status_policy import (
+        is_vocabulary_value,
+        normalize_status_line,
+        status_line_of,
+    )
+
+    text = TEMPLATE.read_text(encoding="utf-8")
+    seeded = status_line_of(text)
+    assert seeded is not None, "the upstream template seeds no **Status**: line"
+
+    normalized = normalize_status_line(seeded)
+    value = normalized[len("**Status**:") :].strip().split()[0]
+    assert is_vocabulary_value(value), (
+        f"normalizing the seeded line produced {value!r}, "
+        "which is outside the vocabulary"
+    )
 
 
 @pytest.mark.unit
