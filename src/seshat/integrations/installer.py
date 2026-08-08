@@ -42,7 +42,11 @@ from seshat.integrations.catalog import (
     profiles_for,
 )
 from seshat.integrations.compat import apply_policy
-from seshat.integrations.discovery import SkillDiscovery, inspect_official_skills
+from seshat.integrations.discovery import (
+    DiscoveryInputs,
+    SkillDiscovery,
+    inspect_official_skills,
+)
 from seshat.integrations.lockfile import LockError, build_lock, read_lock, write_lock
 from seshat.integrations.resolvers import Resolution, Resolvers, resolve
 
@@ -315,11 +319,13 @@ def plan(
             installed={
                 item.id: _is_installed(root, item, profile) for item in components
             },
-            harnesses=harnesses,
-            runner=discovery_runner,
-            harness_roots=harness_roots,
-            tool_lookup=discovery_tool_lookup,
-            resolved_refs=_resolved_refs(components, verdict.resolutions),
+            inputs=DiscoveryInputs(
+                harnesses=tuple(harnesses),
+                runner=discovery_runner,
+                harness_roots=harness_roots,
+                tool_lookup=discovery_tool_lookup,
+                resolved_refs=_resolved_refs(components, verdict.resolutions),
+            ),
         )
     )
     return outcome
@@ -534,11 +540,13 @@ def apply(
             installed={
                 item.id: _is_installed(root, item, profile) for item in components
             },
-            harnesses=harnesses,
-            runner=discovery_runner,
-            harness_roots=harness_roots,
-            tool_lookup=discovery_tool_lookup,
-            resolved_refs=_resolved_refs(components, verdict.resolutions),
+            inputs=DiscoveryInputs(
+                harnesses=tuple(harnesses),
+                runner=discovery_runner,
+                harness_roots=harness_roots,
+                tool_lookup=discovery_tool_lookup,
+                resolved_refs=_resolved_refs(components, verdict.resolutions),
+            ),
         )
     )
     return outcome

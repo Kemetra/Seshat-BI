@@ -127,52 +127,76 @@ class _Probe:
         return self.harness_roots.get(CODEX, _codex_skills_root())
 
 
+@dataclass(frozen=True)
+class DiscoveryInputs:
+    """What a caller may supply to one read-only discovery pass.
+
+    Every field is optional and injectable so a test never touches the real
+    PATH, a real harness directory, or a real subprocess. Bundled rather than
+    passed as loose keywords: the set grows with each supported harness, and a
+    caller that supplies none must still get the safe defaults.
+
+    ``resolved_refs`` maps a component id to the ref currently resolved for it.
+    When supplied, a payload whose install marker records a DIFFERENT ref is
+    reported ``stale`` rather than inspected, because presence at some ref is
+    not proof of discovery at the resolved one.
+    """
+
+    harnesses: tuple[str, ...] = ()
+    runner: Runner | None = None
+    harness_roots: Mapping[str, Path] | None = None
+    tool_lookup: ToolLookup | None = None
+    resolved_refs: Mapping[str, str] | None = None
+
+
 def inspect_official_skills(
     root: Path,
     components: Iterable[Component],
     *,
     installed: Mapping[str, bool],
-    harnesses: Iterable[str] = (),
-    runner: Runner | None = None,
-    harness_roots: Mapping[str, Path] | None = None,
-    tool_lookup: ToolLookup | None = None,
-    resolved_refs: Mapping[str, str] | None = None,
+    inputs: DiscoveryInputs | None = None,
 ) -> list[SkillDiscovery]:
     """Classify catalog-declared official skills for requested harnesses.
 
     An omitted harness produces an explicit ``not-checked`` record. Requesting
     Claude Code executes only ``claude plugin list --json``. Requesting Codex
     reads its skill directory. Neither path writes anything.
-
-    ``resolved_refs`` maps a component id to the ref currently resolved for it.
-    When supplied, a payload whose install marker records a different ref is
-    reported ``stale`` rather than inspected, because presence at some ref is
-    not proof of discovery at the resolved one.
     """
 
-    root = Path(root).resolve()
-    requested = frozenset(harnesses)
-    runner = runner or _run
-    tool_lookup = tool_lookup or shutil.which
-
-    claude_plugins: dict[str, dict] | None = None
-    claude_error: str | None = None
-    if CLAUDE_CODE in requested:
-        claude_plugins, claude_error = _claude_inventory(root, runner, tool_lookup)
-
-    probe = _Probe(
-        root=root,
-        requested=requested,
-        harness_roots=harness_roots or {},
-        resolved_refs=resolved_refs or {},
-        claude_plugins=claude_plugins or {},
-        claude_error=claude_error,
-    )
+    probe = _build_probe(root, inputs or DiscoveryInputs())
     return [
         _classify(item, activation, probe, bool(installed.get(item.id, False)))
         for item in components
         for activation in item.skill_activations
     ]
+
+
+def _build_probe(root: Path, inputs: DiscoveryInputs) -> _Probe:
+    """Resolve every caller-supplied seam to its default exactly once.
+
+    The Claude inventory is read here rather than per component, so requesting
+    that harness costs one ``claude plugin list`` call for the whole pass.
+    """
+    resolved_root = Path(root).resolve()
+    requested = frozenset(inputs.harnesses)
+
+    claude_plugins: dict[str, dict] | None = None
+    claude_error: str | None = None
+    if CLAUDE_CODE in requested:
+        claude_plugins, claude_error = _claude_inventory(
+            resolved_root,
+            inputs.runner or _run,
+            inputs.tool_lookup or shutil.which,
+        )
+
+    return _Probe(
+        root=resolved_root,
+        requested=requested,
+        harness_roots=inputs.harness_roots or {},
+        resolved_refs=inputs.resolved_refs or {},
+        claude_plugins=claude_plugins or {},
+        claude_error=claude_error,
+    )
 
 
 def _classify(
@@ -490,6 +514,7 @@ __all__ = [
     "CLAUDE_CODE",
     "CODEX",
     "CONFLICT",
+    "DiscoveryInputs",
     "DISCOVERABLE",
     "FAILED",
     "NOT_CHECKED",

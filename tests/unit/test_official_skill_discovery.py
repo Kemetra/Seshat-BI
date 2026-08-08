@@ -26,6 +26,7 @@ from seshat.integrations.discovery import (
     DISCOVERABLE,
     NOT_CHECKED,
     STALE,
+    DiscoveryInputs,
     inspect_official_skills,
 )
 from seshat.integrations.installer import SetupOutcome
@@ -130,9 +131,11 @@ def test_claude_native_plugin_inventory_proves_expected_skills(
         tmp_path,
         (item,),
         installed={item.id: True},
-        harnesses=(CLAUDE_CODE,),
-        runner=_runner_for(_claude_entries(tmp_path, item.id)),
-        tool_lookup=lambda name: name,
+        inputs=DiscoveryInputs(
+            harnesses=(CLAUDE_CODE,),
+            runner=_runner_for(_claude_entries(tmp_path, item.id)),
+            tool_lookup=lambda name: name,
+        ),
     )
     result = next(entry for entry in results if entry.harness == CLAUDE_CODE)
 
@@ -151,9 +154,11 @@ def test_disabled_claude_plugin_blocks_discovery(tmp_path: Path) -> None:
         tmp_path,
         (item,),
         installed={item.id: True},
-        harnesses=(CLAUDE_CODE,),
-        runner=_runner_for(entries),
-        tool_lookup=lambda name: name,
+        inputs=DiscoveryInputs(
+            harnesses=(CLAUDE_CODE,),
+            runner=_runner_for(entries),
+            tool_lookup=lambda name: name,
+        ),
     )
     result = next(entry for entry in results if entry.harness == CLAUDE_CODE)
 
@@ -181,10 +186,12 @@ def test_a_marker_ref_behind_the_resolved_ref_is_stale_not_discoverable(
         tmp_path,
         (item,),
         installed={item.id: True},
-        harnesses=(CLAUDE_CODE,),
-        runner=_runner_for(_claude_entries(tmp_path, item.id)),
-        tool_lookup=lambda name: name,
-        resolved_refs={item.id: "v2.0.0"},
+        inputs=DiscoveryInputs(
+            harnesses=(CLAUDE_CODE,),
+            runner=_runner_for(_claude_entries(tmp_path, item.id)),
+            tool_lookup=lambda name: name,
+            resolved_refs={item.id: "v2.0.0"},
+        ),
     )
     result = next(entry for entry in results if entry.harness == CLAUDE_CODE)
 
@@ -204,10 +211,12 @@ def test_a_matching_marker_ref_still_reaches_discovery(tmp_path: Path) -> None:
         tmp_path,
         (item,),
         installed={item.id: True},
-        harnesses=(CLAUDE_CODE,),
-        runner=_runner_for(_claude_entries(tmp_path, item.id)),
-        tool_lookup=lambda name: name,
-        resolved_refs={item.id: "v2.0.0"},
+        inputs=DiscoveryInputs(
+            harnesses=(CLAUDE_CODE,),
+            runner=_runner_for(_claude_entries(tmp_path, item.id)),
+            tool_lookup=lambda name: name,
+            resolved_refs={item.id: "v2.0.0"},
+        ),
     )
     result = next(entry for entry in results if entry.harness == CLAUDE_CODE)
 
@@ -226,9 +235,11 @@ def test_discovery_without_resolved_refs_keeps_prior_behaviour(
         tmp_path,
         (item,),
         installed={item.id: True},
-        harnesses=(CLAUDE_CODE,),
-        runner=_runner_for(_claude_entries(tmp_path, item.id)),
-        tool_lookup=lambda name: name,
+        inputs=DiscoveryInputs(
+            harnesses=(CLAUDE_CODE,),
+            runner=_runner_for(_claude_entries(tmp_path, item.id)),
+            tool_lookup=lambda name: name,
+        ),
     )
     result = next(entry for entry in results if entry.harness == CLAUDE_CODE)
 
@@ -258,8 +269,10 @@ def test_codex_projection_must_resolve_to_locked_upstream_payload(
         tmp_path,
         (item,),
         installed={item.id: True},
-        harnesses=(CODEX,),
-        harness_roots={CODEX: codex_root},
+        inputs=DiscoveryInputs(
+            harnesses=(CODEX,),
+            harness_roots={CODEX: codex_root},
+        ),
     )
     result = next(entry for entry in results if entry.harness == CODEX)
 
@@ -287,8 +300,10 @@ def test_copied_codex_skill_is_a_provenance_conflict(tmp_path: Path) -> None:
         tmp_path,
         (item,),
         installed={item.id: True},
-        harnesses=(CODEX,),
-        harness_roots={CODEX: codex_root},
+        inputs=DiscoveryInputs(
+            harnesses=(CODEX,),
+            harness_roots={CODEX: codex_root},
+        ),
     )
     result = next(entry for entry in results if entry.harness == CODEX)
 
