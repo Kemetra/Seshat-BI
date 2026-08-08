@@ -129,20 +129,11 @@ class Component:
         if self.source not in ALLOWLISTED_SOURCES:
             raise ValueError(f"{self.id}: source is not allowlisted: {self.source}")
         for required in self.required_paths:
-            posix = PurePosixPath(required)
-            windows = PureWindowsPath(required)
-            if (
-                not required.strip()
-                or "\\" in required
-                or posix.is_absolute()
-                or windows.is_absolute()
-                or windows.drive
-                or ".." in posix.parts
-            ):
-                raise ValueError(
-                    f"{self.id}: required path must be a contained relative "
-                    f"POSIX path: {required!r}"
-                )
+            _validate_relative_path(self.id, required, label="required path")
+        self._validate_skill_activations()
+
+    def _validate_skill_activations(self) -> None:
+        """Each declared harness appears once and names contained targets."""
         declared_harnesses: set[str] = set()
         for activation in self.skill_activations:
             if activation.harness not in SUPPORTED_HARNESSES:
@@ -154,16 +145,18 @@ class Component:
                     f"{self.id}: duplicate skill harness: {activation.harness!r}"
                 )
             declared_harnesses.add(activation.harness)
-            if not activation.targets:
-                raise ValueError(
-                    f"{self.id}: skill activation needs at least one target"
-                )
-            for target in activation.targets:
-                if not target.name.strip():
-                    raise ValueError(f"{self.id}: skill target name is blank")
-                _validate_relative_path(
-                    self.id, target.source_path, label="skill source path"
-                )
+            self._validate_activation_targets(activation)
+
+    def _validate_activation_targets(self, activation: SkillActivation) -> None:
+        """Every target names a non-blank skill at a contained relative path."""
+        if not activation.targets:
+            raise ValueError(f"{self.id}: skill activation needs at least one target")
+        for target in activation.targets:
+            if not target.name.strip():
+                raise ValueError(f"{self.id}: skill target name is blank")
+            _validate_relative_path(
+                self.id, target.source_path, label="skill source path"
+            )
 
 
 def _validate_relative_path(component_id: str, value: str, *, label: str) -> None:

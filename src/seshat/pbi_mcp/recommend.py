@@ -182,29 +182,65 @@ def _recommend_published_query(facts: DetectedFacts) -> Recommendation:
     )
 
 
-def _recommend_report_authoring(facts: DetectedFacts) -> Recommendation:
-    prereqs: list[str] = []
+def _target_semantic_passes(facts: DetectedFacts) -> bool:
+    """Whether the EXACT target records its own ``semantic_model_ready`` pass.
+
+    ``facts.semantic_model_ready`` is the repo-wide fold, so it reads ``pass``
+    whenever ANY table passes. Answering a target-scoped question with it would
+    let one table's semantic pass authorize another table's report. The
+    per-table membership set is the only target-scoped evidence available to
+    this pure function.
+    """
+    return facts.target is not None and facts.target in facts.semantic_ready_tables
+
+
+def _authoring_gate(facts: DetectedFacts) -> tuple[list[str], str]:
+    """The report-authoring readiness prerequisites and the gate sentence.
+
+    Readiness stages cannot be skipped: a ``dashboard_ready = pass`` recorded
+    without its preceding ``semantic_model_ready`` pass is an internally
+    inconsistent record, never an authorization (Codex P2, #597).
+    """
     if facts.target is None:
-        prereqs.append(
-            "an exact governed table selected with --target <table>; another "
-            "table's readiness can never authorize this report"
+        return (
+            [
+                "an exact governed table selected with --target <table>; another "
+                "table's readiness can never authorize this report"
+            ],
+            "no exact target was declared",
         )
-    elif facts.dashboard_ready != READINESS_PASS:
+    record = f"mappings/{facts.target}/readiness-status.yaml"
+    prereqs: list[str] = []
+    if not _target_semantic_passes(facts):
         prereqs.append(
-            f"dashboard_ready = pass for mappings/{facts.target}/readiness-status.yaml"
+            f"semantic_model_ready = pass for {record}; the preceding stage "
+            "must pass before dashboard_ready can authorize authoring"
         )
+    if facts.dashboard_ready != READINESS_PASS:
+        prereqs.append(f"dashboard_ready = pass for {record}")
+    if prereqs:
+        return prereqs, _authoring_denial(facts)
+    return prereqs, (
+        f"target '{facts.target}' records semantic_model_ready = pass and "
+        "dashboard_ready = pass"
+    )
+
+
+def _authoring_denial(facts: DetectedFacts) -> str:
+    """Name the exact stage that withheld authorization for a declared target."""
+    if facts.dashboard_ready != READINESS_PASS:
+        return f"target '{facts.target}' dashboard_ready is '{facts.dashboard_ready}'"
+    return (
+        f"target '{facts.target}' records dashboard_ready = pass without a "
+        "semantic_model_ready pass of its own; readiness stages cannot be skipped"
+    )
+
+
+def _recommend_report_authoring(facts: DetectedFacts) -> Recommendation:
+    prereqs, gate = _authoring_gate(facts)
     prereqs.append(
         "the official Microsoft powerbi-report-authoring skill proven activated "
         "and discoverable by the Spec 148 harness probe; installed alone is not enough"
-    )
-    gate = (
-        f"target '{facts.target}' records dashboard_ready = pass"
-        if facts.target is not None and facts.dashboard_ready == READINESS_PASS
-        else (
-            "no exact target was declared"
-            if facts.target is None
-            else f"target '{facts.target}' dashboard_ready is '{facts.dashboard_ready}'"
-        )
     )
     return Recommendation(
         intent=INTENT_REPORT_AUTHORING,

@@ -189,6 +189,24 @@ def _profile_env(profile: str) -> Path:
     return ENV_DIR / profile
 
 
+def _resolved_refs(
+    components: list[Component], resolutions: list[Resolution]
+) -> dict[str, str]:
+    """The exact ref now resolved for each cloned-payload component.
+
+    Only GitHub components record a ref in their install marker, so only they
+    can be compared against one. Anything else is omitted, which leaves the
+    discovery drift check inert for that component rather than guessing.
+    """
+    return {
+        item.id: resolved.tag or resolved.commit
+        for item, resolved in zip(components, resolutions)
+        if item.source_type is SourceType.GITHUB
+        and not item.mcp_server
+        and (resolved.tag or resolved.commit)
+    }
+
+
 def _is_installed(root: Path, item: Component, profile: str) -> bool:
     """Whether the component is fully installed -- never partially.
 
@@ -301,6 +319,7 @@ def plan(
             runner=discovery_runner,
             harness_roots=harness_roots,
             tool_lookup=discovery_tool_lookup,
+            resolved_refs=_resolved_refs(components, verdict.resolutions),
         )
     )
     return outcome
@@ -519,6 +538,7 @@ def apply(
             runner=discovery_runner,
             harness_roots=harness_roots,
             tool_lookup=discovery_tool_lookup,
+            resolved_refs=_resolved_refs(components, verdict.resolutions),
         )
     )
     return outcome

@@ -104,6 +104,47 @@ def test_report_authoring_fails_closed_on_target_dashboard_gate() -> None:
     assert "dashboard_ready" in result.why
 
 
+def test_report_authoring_refuses_a_dashboard_pass_without_its_semantic_stage() -> None:
+    """A later stage can never stand in for the one before it (Codex P2, #597).
+
+    The record is internally inconsistent: the target claims dashboard_ready =
+    pass while no semantic_model_ready pass names it. Routing authoring here
+    would skip a readiness stage on the strength of a hand-edited later stage.
+    """
+    result = recommend(
+        "report-authoring",
+        _facts(semantic_ready_tables=(), semantic_model_ready=READINESS_NOT_PASS),
+    )
+    assert result.blocked
+    joined = " ".join(result.missing_prerequisites)
+    assert "semantic_model_ready" in joined
+    assert "mappings/orders/readiness-status.yaml" in joined
+    assert "stages cannot be skipped" in result.why
+
+
+def test_report_authoring_refuses_another_tables_semantic_pass() -> None:
+    """The repo-wide semantic fold reads `pass` whenever ANY table passes, so a
+    target-scoped gate must check membership, not the folded status."""
+    result = recommend(
+        "report-authoring",
+        _facts(semantic_model_ready=READINESS_PASS, semantic_ready_tables=("returns",)),
+    )
+    assert result.blocked
+    assert "semantic_model_ready" in " ".join(result.missing_prerequisites)
+
+
+def test_report_authoring_gate_sentence_names_both_stages_when_consistent() -> None:
+    """A fully consistent target still reports both stages as the basis."""
+    result = recommend("report-authoring", _facts())
+    assert "semantic_model_ready = pass" in result.why
+    assert "dashboard_ready = pass" in result.why
+    # Still blocked: the Spec 148 discovery proof is a separate prerequisite.
+    assert result.blocked
+    assert not any(
+        "readiness-status.yaml" in item for item in result.missing_prerequisites
+    )
+
+
 def test_case4_desktop_verification_routes_to_desktop_bridge() -> None:
     result = recommend("desktop-verification", _facts())
     assert result.surface == "desktop-bridge"

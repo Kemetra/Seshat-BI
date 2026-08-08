@@ -32,6 +32,12 @@ from seshat.integrations.catalog import (
     profile_components,
 )
 from seshat.integrations.compat import BASELINE_PINS
+from seshat.integrations.discovery import (
+    ACTIVATION_REQUIRED,
+    CONFLICT,
+    FAILED,
+    NOT_INSTALLED,
+)
 from seshat.integrations.installer import (
     NEEDS_ACTION as CANONICAL_NEEDS_ACTION,
 )
@@ -69,6 +75,18 @@ __all__ = [
     "render_text",
     "setup_integrations",
 ]
+
+
+# The projection flattens component-plan rows and discovery rows into one list,
+# so the action set must span BOTH vocabularies. FAILED and CONFLICT are shared
+# tokens; the discovery-only additions are the not-installed/activation-required
+# pair. NOT_CHECKED stays out on purpose -- see needs_operator_action.
+_NEEDS_ACTION = frozenset(CANONICAL_NEEDS_ACTION) | {
+    NOT_INSTALLED,
+    ACTIVATION_REQUIRED,
+    CONFLICT,
+    FAILED,
+}
 
 
 @dataclass(frozen=True)
@@ -187,9 +205,16 @@ def setup_integrations(
 
 
 def needs_operator_action(results: list[IntegrationResult]) -> bool:
-    """Whether any projected canonical status requires human action."""
+    """Whether any projected row -- component OR discovery -- needs a human.
 
-    return any(item.status in CANONICAL_NEEDS_ACTION for item in results)
+    The projection flattens two different status vocabularies into one list, so
+    testing only the component-plan set would let a requested-but-undiscoverable
+    official skill render as "everything is present" (Codex P2, #597).
+    ``not-checked`` is deliberately excluded: not asking about a harness is not
+    an outstanding operator action.
+    """
+
+    return any(item.status in _NEEDS_ACTION for item in results)
 
 
 def _summary(results: list[IntegrationResult]) -> str:

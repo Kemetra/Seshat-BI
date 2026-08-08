@@ -186,6 +186,40 @@ def test_legacy_render_and_operator_action_contracts() -> None:
     assert json.loads(rendered) == [{"detail": "x", "name": "a", "status": "present"}]
 
 
+@pytest.mark.parametrize("status", ["not-installed", "activation-required"])
+def test_projected_discovery_blockers_are_operator_action(status: str) -> None:
+    """A requested official skill that is not discoverable needs a human.
+
+    The projection flattens discovery rows into the same list as component
+    plans, so a status set covering only component-plan tokens let an
+    undiscoverable skill render as "everything is present" (Codex P2, #597).
+    Asserted on the APPLY-path wording, because the plan path short-circuits on
+    "planned" and would hide the defect.
+    """
+    results = [
+        IntegrationResult("fabric-skills", "present", "installed"),
+        IntegrationResult(
+            f"fabric-skills/{status}-harness", status, "not discoverable"
+        ),
+    ]
+    assert needs_operator_action(results) is True
+    assert "operator action" in render_results(results)
+    assert "Integration runtimes and configuration are present." not in render_results(
+        results
+    )
+
+
+def test_an_unchecked_harness_is_not_an_outstanding_operator_action() -> None:
+    """Not asking about a harness is not the same as a blocked one: only an
+    explicitly requested-and-undiscoverable skill demands human action."""
+    results = [
+        IntegrationResult("fabric-skills", "present", "installed"),
+        IntegrationResult("fabric-skills/codex", "not-checked", "not requested"),
+    ]
+    assert needs_operator_action(results) is False
+    assert "present" in render_results(results)
+
+
 def test_confirm_accepts_only_an_explicit_yes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("builtins.input", lambda _: " Yes ")
     assert integrations_setup.confirm("?") is True

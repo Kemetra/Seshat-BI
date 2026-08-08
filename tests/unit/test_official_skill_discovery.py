@@ -25,6 +25,7 @@ from seshat.integrations.discovery import (
     CONFLICT,
     DISCOVERABLE,
     NOT_CHECKED,
+    STALE,
     inspect_official_skills,
 )
 from seshat.integrations.installer import SetupOutcome
@@ -159,6 +160,79 @@ def test_disabled_claude_plugin_blocks_discovery(tmp_path: Path) -> None:
     assert result.status == ACTIVATION_REQUIRED
     assert result.discoverable is False
     assert "disabled" in " ".join(result.blockers)
+
+
+def _install_marker(root: Path, item_id: str, ref: str) -> None:
+    _write(
+        root / ".seshat/integrations/skills" / item_id / ".seshat-installed", f"{ref}\n"
+    )
+
+
+def test_a_marker_ref_behind_the_resolved_ref_is_stale_not_discoverable(
+    tmp_path: Path,
+) -> None:
+    """An upgrade must not report the NEW coordinate as proven by an OLD
+    checkout (Codex P2, #597). Every activation-time fact is otherwise perfect:
+    the plugin is enabled and every SKILL.md is on disk. Only the ref differs.
+    """
+    item = component("dbt-agent-skills")
+    _install_marker(tmp_path, item.id, "v1.0.0")
+    results = inspect_official_skills(
+        tmp_path,
+        (item,),
+        installed={item.id: True},
+        harnesses=(CLAUDE_CODE,),
+        runner=_runner_for(_claude_entries(tmp_path, item.id)),
+        tool_lookup=lambda name: name,
+        resolved_refs={item.id: "v2.0.0"},
+    )
+    result = next(entry for entry in results if entry.harness == CLAUDE_CODE)
+
+    assert result.status == STALE
+    assert result.discoverable is False
+    assert result.activated is False
+    blockers = " ".join(result.blockers)
+    assert "v1.0.0" in blockers and "v2.0.0" in blockers
+    assert "--refresh" in result.next_action
+
+
+def test_a_matching_marker_ref_still_reaches_discovery(tmp_path: Path) -> None:
+    """The drift check must not swallow a legitimately current install."""
+    item = component("dbt-agent-skills")
+    _install_marker(tmp_path, item.id, "v2.0.0")
+    results = inspect_official_skills(
+        tmp_path,
+        (item,),
+        installed={item.id: True},
+        harnesses=(CLAUDE_CODE,),
+        runner=_runner_for(_claude_entries(tmp_path, item.id)),
+        tool_lookup=lambda name: name,
+        resolved_refs={item.id: "v2.0.0"},
+    )
+    result = next(entry for entry in results if entry.harness == CLAUDE_CODE)
+
+    assert result.status == DISCOVERABLE
+    assert result.discoverable is True
+
+
+def test_discovery_without_resolved_refs_keeps_prior_behaviour(
+    tmp_path: Path,
+) -> None:
+    """A caller that resolved nothing gets exactly the pre-existing verdict:
+    the drift check is inert rather than guessing at a coordinate."""
+    item = component("dbt-agent-skills")
+    _install_marker(tmp_path, item.id, "v1.0.0")
+    results = inspect_official_skills(
+        tmp_path,
+        (item,),
+        installed={item.id: True},
+        harnesses=(CLAUDE_CODE,),
+        runner=_runner_for(_claude_entries(tmp_path, item.id)),
+        tool_lookup=lambda name: name,
+    )
+    result = next(entry for entry in results if entry.harness == CLAUDE_CODE)
+
+    assert result.status == DISCOVERABLE
 
 
 def _codex_projection(root: Path, codex_root: Path, item_id: str) -> None:

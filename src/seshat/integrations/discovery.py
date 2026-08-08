@@ -29,10 +29,62 @@ NOT_INSTALLED = "not-installed"
 ACTIVATION_REQUIRED = "activation-required"
 DISCOVERABLE = "discoverable"
 CONFLICT = "conflict"
+STALE = "stale"
 FAILED = "failed"
+
+INSTALL_MARKER = ".seshat-installed"
 
 Runner = Callable[[list[str], Path], subprocess.CompletedProcess]
 ToolLookup = Callable[[str], str | None]
+
+
+def installed_ref(root: Path, component_id: str) -> str | None:
+    """The exact ref recorded by the installer for a cloned skill payload.
+
+    ``None`` when no marker exists or it cannot be read. Only GitHub components
+    record a ref; the marker for other source types carries a version instead,
+    so callers must scope the comparison themselves.
+    """
+    marker = Path(root) / SKILLS_DIR / component_id / INSTALL_MARKER
+    try:
+        return marker.read_text(encoding="utf-8").strip() or None
+    except OSError:
+        return None
+
+
+def _stale(
+    item: Component,
+    activation: SkillActivation,
+    marker_ref: str,
+    resolved_ref: str,
+) -> SkillDiscovery:
+    """A payload on disk whose ref is not the one now resolved.
+
+    Presence alone would report ``discoverable`` for a coordinate the checkout
+    does not actually contain, so an upgrade would silently keep serving the
+    old upstream instructions (Codex P2, #597). The mismatch is named rather
+    than collapsed into ``not-installed``: the operator needs to see which ref
+    is on disk to know what they are running.
+    """
+    return SkillDiscovery(
+        component=item.id,
+        harness=activation.harness,
+        mechanism=activation.mechanism,
+        checked=True,
+        installed=True,
+        activated=False,
+        discoverable=False,
+        status=STALE,
+        evidence=(f"marker_ref={marker_ref}", f"resolved_ref={resolved_ref}"),
+        blockers=(
+            f"the installed payload is at {marker_ref!r} but {resolved_ref!r} "
+            "is now resolved; discovery cannot prove the resolved coordinate",
+        ),
+        next_action=(
+            "approve seshat integrations setup --refresh --apply to reinstall "
+            "this package at the resolved ref"
+        ),
+    )
 
 
 @dataclass(frozen=True)
@@ -56,6 +108,25 @@ class SkillDiscovery:
         return self.checked and self.discoverable is not True
 
 
+@dataclass(frozen=True)
+class _Probe:
+    """The resolved seams one inspection pass runs against.
+
+    Bundled so the entry point keeps a small signature and every helper reads
+    the same already-defaulted seams instead of re-deriving them.
+    """
+
+    root: Path
+    requested: frozenset[str]
+    harness_roots: Mapping[str, Path]
+    resolved_refs: Mapping[str, str]
+    claude_plugins: Mapping[str, dict]
+    claude_error: str | None
+
+    def codex_root(self) -> Path:
+        return self.harness_roots.get(CODEX, _codex_skills_root())
+
+
 def inspect_official_skills(
     root: Path,
     components: Iterable[Component],
@@ -65,17 +136,22 @@ def inspect_official_skills(
     runner: Runner | None = None,
     harness_roots: Mapping[str, Path] | None = None,
     tool_lookup: ToolLookup | None = None,
+    resolved_refs: Mapping[str, str] | None = None,
 ) -> list[SkillDiscovery]:
     """Classify catalog-declared official skills for requested harnesses.
 
     An omitted harness produces an explicit ``not-checked`` record. Requesting
     Claude Code executes only ``claude plugin list --json``. Requesting Codex
     reads its skill directory. Neither path writes anything.
+
+    ``resolved_refs`` maps a component id to the ref currently resolved for it.
+    When supplied, a payload whose install marker records a different ref is
+    reported ``stale`` rather than inspected, because presence at some ref is
+    not proof of discovery at the resolved one.
     """
 
     root = Path(root).resolve()
     requested = frozenset(harnesses)
-    harness_roots = harness_roots or {}
     runner = runner or _run
     tool_lookup = tool_lookup or shutil.which
 
@@ -84,35 +160,56 @@ def inspect_official_skills(
     if CLAUDE_CODE in requested:
         claude_plugins, claude_error = _claude_inventory(root, runner, tool_lookup)
 
-    results: list[SkillDiscovery] = []
-    for item in components:
-        for activation in item.skill_activations:
-            is_installed = bool(installed.get(item.id, False))
-            if activation.harness not in requested:
-                results.append(_not_checked(item, activation, is_installed))
-                continue
-            if not is_installed:
-                results.append(_not_installed(item, activation))
-                continue
-            if activation.harness == CLAUDE_CODE:
-                results.append(
-                    _inspect_claude(
-                        item,
-                        activation,
-                        claude_plugins or {},
-                        claude_error,
-                    )
-                )
-                continue
-            results.append(
-                _inspect_codex(
-                    root,
-                    item,
-                    activation,
-                    harness_roots.get(CODEX, _codex_skills_root()),
-                )
-            )
-    return results
+    probe = _Probe(
+        root=root,
+        requested=requested,
+        harness_roots=harness_roots or {},
+        resolved_refs=resolved_refs or {},
+        claude_plugins=claude_plugins or {},
+        claude_error=claude_error,
+    )
+    return [
+        _classify(item, activation, probe, bool(installed.get(item.id, False)))
+        for item in components
+        for activation in item.skill_activations
+    ]
+
+
+def _classify(
+    item: Component,
+    activation: SkillActivation,
+    probe: _Probe,
+    is_installed: bool,
+) -> SkillDiscovery:
+    """One package/harness verdict, ordered cheapest observation first."""
+    if activation.harness not in probe.requested:
+        return _not_checked(item, activation, is_installed)
+    if not is_installed:
+        return _not_installed(item, activation)
+    drifted = _drifted_ref(probe, item)
+    if drifted is not None:
+        return _stale(item, activation, *drifted)
+    if activation.harness == CLAUDE_CODE:
+        return _inspect_claude(
+            item, activation, probe.claude_plugins, probe.claude_error
+        )
+    return _inspect_codex(probe.root, item, activation, probe.codex_root())
+
+
+def _drifted_ref(probe: _Probe, item: Component) -> tuple[str, str] | None:
+    """``(marker_ref, resolved_ref)`` when the checkout is not the resolved ref.
+
+    Scoped to components that record a ref at all: an absent expectation, an
+    unreadable marker, or a matching pair all mean "no drift to report", so a
+    caller that never resolved refs keeps the previous behaviour exactly.
+    """
+    expected = probe.resolved_refs.get(item.id)
+    if not expected:
+        return None
+    marker_ref = installed_ref(probe.root, item.id)
+    if marker_ref is None or marker_ref == expected:
+        return None
+    return marker_ref, expected
 
 
 def _not_checked(
@@ -168,43 +265,50 @@ def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess:
 def _claude_inventory(
     root: Path, runner: Runner, tool_lookup: ToolLookup
 ) -> tuple[dict[str, dict] | None, str | None]:
+    """The installed Claude plugins, or the reason they could not be read.
+
+    Every failure is a NAMED error rather than an empty inventory: an
+    unreadable inventory must not look like "no plugins installed", which
+    would report a present package as missing.
+    """
     if tool_lookup("claude") is None:
         return None, "Claude Code is not on PATH"
     result = runner(["claude", "plugin", "list", "--json"], root)
     if result.returncode:
         detail = (result.stderr or result.stdout or "").strip()
         return None, detail or "Claude Code plugin inventory failed"
+    return _parse_plugin_inventory(result.stdout or "")
+
+
+def _parse_plugin_inventory(
+    stdout: str,
+) -> tuple[dict[str, dict] | None, str | None]:
+    """Parse ``claude plugin list --json`` output into id-keyed entries."""
     try:
-        body = json.loads(result.stdout or "")
+        body = json.loads(stdout)
     except ValueError:
         return None, "Claude Code plugin inventory was not valid JSON"
     if not isinstance(body, list):
         return None, "Claude Code plugin inventory was not a list"
-    plugins = {
+    return {
         entry["id"]: entry
         for entry in body
         if isinstance(entry, dict) and isinstance(entry.get("id"), str)
-    }
-    return plugins, None
+    }, None
 
 
-def _inspect_claude(
-    item: Component,
-    activation: SkillActivation,
-    plugins: Mapping[str, dict],
-    inventory_error: str | None,
-) -> SkillDiscovery:
-    if inventory_error is not None:
-        return _blocked(
-            item,
-            activation,
-            status=FAILED,
-            blockers=(inventory_error,),
-        )
+def _plugin_activation(
+    activation: SkillActivation, plugins: Mapping[str, dict]
+) -> tuple[dict[str, dict], list[str], list[str]]:
+    """Activation state of every distinct plugin one activation names.
 
+    Returns the usable entries plus their evidence and blockers. A plugin that
+    is absent contributes no entry, so the payload pass below cannot mistake it
+    for one that merely lacks an install path.
+    """
+    entries: dict[str, dict] = {}
     evidence: list[str] = []
     blockers: list[str] = []
-    plugin_entries: dict[str, dict] = {}
     for plugin_id in dict.fromkeys(
         target.plugin_id for target in activation.targets if target.plugin_id
     ):
@@ -212,25 +316,31 @@ def _inspect_claude(
         if entry is None:
             blockers.append(f"Claude plugin {plugin_id!r} is not installed")
             continue
-        plugin_entries[plugin_id] = entry
-        if entry.get("enabled") is not True:
-            blockers.append(f"Claude plugin {plugin_id!r} is disabled")
-        errors = entry.get("errors")
-        if isinstance(errors, list) and errors:
-            blockers.append(f"Claude plugin {plugin_id!r} reports errors")
+        entries[plugin_id] = entry
+        blockers.extend(_plugin_faults(plugin_id, entry))
         evidence.append(f"plugin={plugin_id} version={entry.get('version', 'unknown')}")
+    return entries, evidence, blockers
 
-    if blockers:
-        return _blocked(
-            item,
-            activation,
-            status=ACTIVATION_REQUIRED,
-            evidence=tuple(evidence),
-            blockers=tuple(blockers),
-        )
 
+def _plugin_faults(plugin_id: str, entry: Mapping[str, object]) -> list[str]:
+    """Every reason an installed plugin is still not usable."""
+    faults: list[str] = []
+    if entry.get("enabled") is not True:
+        faults.append(f"Claude plugin {plugin_id!r} is disabled")
+    errors = entry.get("errors")
+    if isinstance(errors, list) and errors:
+        faults.append(f"Claude plugin {plugin_id!r} reports errors")
+    return faults
+
+
+def _claude_payload(
+    activation: SkillActivation, entries: Mapping[str, dict]
+) -> tuple[list[str], list[str]]:
+    """Whether each named skill file is actually on disk under its plugin."""
+    evidence: list[str] = []
+    blockers: list[str] = []
     for target in activation.targets:
-        entry = plugin_entries.get(target.plugin_id or "")
+        entry = entries.get(target.plugin_id or "")
         install_path = entry.get("installPath") if entry else None
         if not isinstance(install_path, str) or not install_path:
             blockers.append(f"Claude plugin {target.plugin_id!r} has no install path")
@@ -240,15 +350,33 @@ def _inspect_claude(
             blockers.append(f"Claude skill {target.name!r} is not discoverable")
             continue
         evidence.append(f"skill={target.name} path={skill}")
+    return evidence, blockers
 
+
+def _inspect_claude(
+    item: Component,
+    activation: SkillActivation,
+    plugins: Mapping[str, dict],
+    inventory_error: str | None,
+) -> SkillDiscovery:
+    if inventory_error is not None:
+        return _blocked(item, activation, _Block(FAILED, (inventory_error,)))
+
+    entries, evidence, blockers = _plugin_activation(activation, plugins)
     if blockers:
         return _blocked(
             item,
             activation,
-            status=FAILED,
-            evidence=tuple(evidence),
-            blockers=tuple(blockers),
-            activated=True,
+            _Block(ACTIVATION_REQUIRED, tuple(blockers), tuple(evidence)),
+        )
+
+    payload_evidence, payload_blockers = _claude_payload(activation, entries)
+    evidence.extend(payload_evidence)
+    if payload_blockers:
+        return _blocked(
+            item,
+            activation,
+            _Block(FAILED, tuple(payload_blockers), tuple(evidence), activated=True),
         )
     return _success(item, activation, tuple(evidence))
 
@@ -291,31 +419,39 @@ def _inspect_codex(
         return _blocked(
             item,
             activation,
-            status=CONFLICT,
-            evidence=tuple(evidence),
-            blockers=tuple(conflicts + missing),
-            activated=True,
+            _Block(
+                CONFLICT,
+                tuple(conflicts + missing),
+                tuple(evidence),
+                activated=True,
+            ),
         )
     if missing:
         return _blocked(
             item,
             activation,
-            status=ACTIVATION_REQUIRED,
-            evidence=tuple(evidence),
-            blockers=tuple(missing),
+            _Block(ACTIVATION_REQUIRED, tuple(missing), tuple(evidence)),
         )
     return _success(item, activation, tuple(evidence))
+
+
+@dataclass(frozen=True)
+class _Block:
+    """One non-discoverable verdict's payload, kept together as it travels."""
+
+    status: str
+    blockers: tuple[str, ...]
+    evidence: tuple[str, ...] = ()
+    activated: bool = False
 
 
 def _blocked(
     item: Component,
     activation: SkillActivation,
-    *,
-    status: str,
-    blockers: tuple[str, ...],
-    evidence: tuple[str, ...] = (),
-    activated: bool = False,
+    block: _Block,
 ) -> SkillDiscovery:
+    status, blockers = block.status, block.blockers
+    evidence, activated = block.evidence, block.activated
     return SkillDiscovery(
         component=item.id,
         harness=activation.harness,
@@ -358,6 +494,8 @@ __all__ = [
     "FAILED",
     "NOT_CHECKED",
     "NOT_INSTALLED",
+    "STALE",
     "SkillDiscovery",
     "inspect_official_skills",
+    "installed_ref",
 ]

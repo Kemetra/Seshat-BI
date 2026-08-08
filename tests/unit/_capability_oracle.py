@@ -699,57 +699,72 @@ def public_capability_integrity_violations(
     )
     tracked = _git_tracked_files(repo_root) if tracked_files is None else tracked_files
     problems: list[str] = []
-
-    for entry in entries:
-        for public_name in _reference_values(entry, "public_skill"):
-            if public_name not in shipped:
-                problems.append(
-                    f"{entry.get('id', '<no id>')}: references.public_skill "
-                    f"{public_name!r} is not a shipped public skill"
-                )
-
+    problems += _dangling_public_reference_violations(entries, shipped)
     for public_name in sorted(shipped):
-        explicit = [
-            entry
-            for entry in entries
-            if public_name in _reference_values(entry, "public_skill")
-        ]
-        fallback = [
-            entry
-            for entry in entries
-            if entry.get("surface") == "skill"
-            and public_name in _reference_values(entry, "skill")
-        ]
-        candidates = explicit if explicit else fallback
-        candidate_ids = sorted(str(entry.get("id", "<no id>")) for entry in candidates)
-
-        if not candidates:
-            problems.append(
-                f"{public_name}: shipped public skill has no capability owner"
-            )
-            continue
-        if len(candidates) != 1:
-            relationship = "explicit" if explicit else "same-name skill fallback"
-            problems.append(
-                f"{public_name}: ambiguous {relationship} capability owners: "
-                + ", ".join(candidate_ids)
-            )
-            continue
-
-        owner = candidates[0]
-        problems += ownership_violations(owner)
-        ownership = owner.get("ownership")
-        if not isinstance(ownership, dict) or "canonical_source" not in ownership:
-            problems.append(
-                f"{owner.get('id', '<no id>')}: public skill {public_name!r} "
-                "requires ownership.canonical_source"
-            )
-
+        problems += _public_skill_owner_violations(entries, public_name)
     for entry in entries:
         ownership = entry.get("ownership")
         if isinstance(ownership, dict) and "canonical_source" in ownership:
             problems += _canonical_source_violations(repo_root, entry, tracked)
+    return problems
 
+
+def _dangling_public_reference_violations(
+    entries: list[dict], shipped: set[str]
+) -> list[str]:
+    """A manifest entry pointing at a public skill that is not shipped."""
+    return [
+        f"{entry.get('id', '<no id>')}: references.public_skill "
+        f"{public_name!r} is not a shipped public skill"
+        for entry in entries
+        for public_name in _reference_values(entry, "public_skill")
+        if public_name not in shipped
+    ]
+
+
+def _owner_candidates(entries: list[dict], public_name: str) -> tuple[list[dict], str]:
+    """Entries claiming one shipped public skill, and how they claimed it.
+
+    An explicit ``references.public_skill`` wins outright; only when none exists
+    does a same-name ``skill`` reference stand in, so a precise claim is never
+    made ambiguous by an incidental name collision.
+    """
+    explicit = [
+        entry
+        for entry in entries
+        if public_name in _reference_values(entry, "public_skill")
+    ]
+    if explicit:
+        return explicit, "explicit"
+    fallback = [
+        entry
+        for entry in entries
+        if entry.get("surface") == "skill"
+        and public_name in _reference_values(entry, "skill")
+    ]
+    return fallback, "same-name skill fallback"
+
+
+def _public_skill_owner_violations(entries: list[dict], public_name: str) -> list[str]:
+    """Exactly one manifest entry owns each shipped public skill, with a source."""
+    candidates, relationship = _owner_candidates(entries, public_name)
+    if not candidates:
+        return [f"{public_name}: shipped public skill has no capability owner"]
+    if len(candidates) != 1:
+        candidate_ids = sorted(str(entry.get("id", "<no id>")) for entry in candidates)
+        return [
+            f"{public_name}: ambiguous {relationship} capability owners: "
+            + ", ".join(candidate_ids)
+        ]
+
+    owner = candidates[0]
+    problems = list(ownership_violations(owner))
+    ownership = owner.get("ownership")
+    if not isinstance(ownership, dict) or "canonical_source" not in ownership:
+        problems.append(
+            f"{owner.get('id', '<no id>')}: public skill {public_name!r} "
+            "requires ownership.canonical_source"
+        )
     return problems
 
 
