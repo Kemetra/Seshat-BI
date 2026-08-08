@@ -245,6 +245,27 @@ def _add_model_diff_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_spec_status_parser(sub: argparse._SubParsersAction) -> None:
+    p = sub.add_parser(
+        "spec-status",
+        help=(
+            "validate a spec's **Status**: line against the closed ADR-0019 "
+            "vocabulary, or --fix a freshly scaffolded spec's seeded value"
+        ),
+    )
+    p.add_argument("spec", help="path to the spec.md to inspect")
+    p.add_argument(
+        "--fix",
+        action="store_true",
+        help=(
+            "normalize the seeded status value in place (idempotent). Run this "
+            "after /speckit-specify: upstream's template seeds `**Status**: "
+            "Draft`, which is outside the vocabulary, and Seshat does not edit "
+            "upstream-managed files to change it"
+        ),
+    )
+
+
 def _add_evidence_pack_parser(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser(
         "evidence-pack",
@@ -405,6 +426,7 @@ _FAMILIES: dict[str, Callable[[argparse._SubParsersAction], None]] = {
         ),
     ),
     "evidence_pack": _add_evidence_pack_parser,
+    "spec_status": _add_spec_status_parser,
     "readiness_diff": _add_readiness_diff_parser,
     "xray": _add_xray_parser,
     "model_diff": _add_model_diff_parser,

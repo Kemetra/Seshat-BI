@@ -47,8 +47,13 @@ _STATUS_PREFIX = "**Status**:"
 _HISTORY_PREFIX = "**Status history**:"
 
 #: `ratified -- Name, YYYY-MM-DD`
+#:
+#: ``\S`` before the rest of the name is load-bearing: with a plain ``.+?`` the
+#: ``\s+`` after ``--`` backtracks, so ``ratified --  , 2026-08-08`` captured a
+#: single space as the ratifier and satisfied the "named human" requirement with
+#: no name at all (Codex P2 on PR #600).
 _RATIFIED = re.compile(
-    r"^ratified\s+--\s+(?P<who>.+?),\s*(?P<when>\d{4}-\d{2}-\d{2})\s*$"
+    r"^ratified\s+--\s+(?P<who>\S.*?),\s*(?P<when>\d{4}-\d{2}-\d{2})\s*$"
 )
 
 #: `implemented -- artifact `path``
@@ -202,3 +207,36 @@ def normalize_status_line(line: str) -> str:
         )
     normalized = f"{_STATUS_PREFIX} {lowered}"
     return f"{normalized} {tail.strip()}" if tail.strip() else normalized
+
+
+def normalize_spec_file(path: Path) -> bool:
+    """Normalize a scaffolded spec's status line ON DISK. Returns whether it changed.
+
+    This is the production seam for FR-025 and the reason
+    :func:`normalize_status_line` exists at all: ``create-new-feature.ps1``
+    copies the upstream template verbatim, so a freshly scaffolded spec carries
+    ``**Status**: Draft`` -- capital, and outside the closed vocabulary. Seshat
+    must not edit the upstream template to change what it seeds, so the fix acts
+    on the scaffolded OUTPUT instead.
+
+    Idempotent: normalizing an already-canonical file rewrites nothing and
+    returns ``False``. Fails closed: an unreadable file, a file with no status
+    line, or a value that is not a case variant of a vocabulary value raises
+    rather than leaving the spec in an unknown state (FR-025a).
+    """
+    target = Path(path)
+    try:
+        text = target.read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise StatusPolicyError(f"spec could not be read: {exc}") from exc
+
+    line = status_line_of(text)
+    if line is None:
+        raise StatusPolicyError(f"spec carries no `{_STATUS_PREFIX}` line: {target}")
+
+    normalized = normalize_status_line(line)
+    if normalized == line:
+        return False
+
+    target.write_text(text.replace(line, normalized, 1), encoding="utf-8")
+    return True

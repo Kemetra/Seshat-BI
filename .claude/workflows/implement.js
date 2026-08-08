@@ -35,7 +35,12 @@ const REPO = 'the repo root (resolve with `git rev-parse --show-toplevel`)'
 // `seshat.spec_status_policy` is the authority; tests/unit/
 // test_spec_status_grammar_agreement.py reads these literals and fails if the
 // two verifiers drift apart.
-const H3_RATIFIED_RE = /^\s*-?\s*\*\*Status\*\*:?\s*(?:Ratified \(.+?,\s*\d{4}-\d{2}-\d{2}\)|ratified\s+--\s+.+?,\s*\d{4}-\d{2}-\d{2})/m
+// Both alternatives are END-ANCHORED and require a NON-BLANK name: a prefix-only
+// match let `**Status**: ratified -- Name, 2026-08-08 trailing` pass H3 while the
+// authority rejected it, and `\s*` before the comma let ` , date` capture pure
+// whitespace as the ratifier. Both were real holes in the claimed grammar
+// agreement (Codex P2s on PR #600).
+const H3_RATIFIED_RE = /^\s*-?\s*\*\*Status\*\*:?\s*(?:Ratified \(\s*\S.*?,\s*\d{4}-\d{2}-\d{2}\s*\)|ratified\s+--\s+\S.*?,\s*\d{4}-\d{2}-\d{2})\s*$/m
 const H3_DRAFT_RE    = /^\s*-?\s*\*\*Status\*\*:?\s*Draft\b/mi
 const H3_BLOCKED_RE  = /^\s*-?\s*\*\*Status\*\*:?.*\bBLOCKED\b/mi
 // H4: a mechanical, deletion-resistant scan for LITERAL open markers in the raw
@@ -186,9 +191,14 @@ const facts = await agent(
   `spec_dir_on_branch (does ${INPUT.spec_dir}/spec.md exist on the checked-out branch?); ` +
   `origin_main_available (does origin/main resolve?); ahead/behind (git rev-list --count origin/main...HEAD; ` +
   `ahead=-1 if origin/main unavailable); detached (is HEAD detached?).\n` +
-  `- status_line_provenance: ratified_line_present (does spec.md contain a \u0022Status: Ratified (...)\u0022 line?); ` +
-  `last_author_of_status_line (git blame the Status line, return the author name verbatim, \u0022\u0022 if no Ratified ` +
-  `line); introduced_by_human (true UNLESS the commit that introduced the Ratified line was authored by a ` +
+  `- status_line_provenance: ratified_line_present (does spec.md contain EITHER accepted ratified form -- the ` +
+  `legacy \u0022**Status**: Ratified (<name>, <YYYY-MM-DD>)\u0022 OR the ADR-0019 canonical ` +
+  `\u0022**Status**: ratified -- <name>, <YYYY-MM-DD>\u0022? Spec 151 widened H3 to accept both, so provenance MUST ` +
+  `be blamed for WHICHEVER form is present -- a canonical line whose provenance was never blamed must never ` +
+  `be authorized. Ignore any \u0022**Status history**:\u0022 line: it records a PREVIOUS value, not the current one); ` +
+  `last_author_of_status_line (git blame THAT line -- whichever form matched -- and return the author name ` +
+  `verbatim, \u0022\u0022 if neither form is present); introduced_by_human (false if ratified_line_present is false; ` +
+  `otherwise true UNLESS the commit that introduced that line was authored by a ` +
   `workflow/bot identity such as one containing \u0022claude\u0022, \u0022bot\u0022, \u0022github-actions\u0022, or the workflow\u0027s own ` +
   `committer -- if bot-authored, false).\n\n` +
   `Fabricate nothing. A missing file is exists:false, not a guess. Return RAW text, not interpretation.`,

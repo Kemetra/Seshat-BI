@@ -140,14 +140,43 @@ def test_a_ratified_spec_with_history_passes_the_whole_h3_shape(
         "**Status**: ratified -- Ahmed Shaaban",
         "**Status**: ratified -- , 2026-08-08",
         "**Status**: draft",
+        # Codex P2 on PR #600: `\s+` backtracked, so a lone space satisfied the
+        # "named human" requirement in BOTH validators.
+        "**Status**: ratified --  , 2026-08-08",
+        "**Status**: Ratified ( , 2026-08-08)",
+        # Codex P2 on PR #600: the prefix-only match let trailing text through
+        # H3 while the authority rejected the same line -- the grammar
+        # "agreement" had a hole on exactly the input that authorizes a build.
+        "**Status**: ratified -- Name, 2026-08-08 trailing",
+        "**Status**: Ratified (Name, 2026-08-08) trailing",
     ),
 )
-def test_h3_refuses_an_unnamed_or_undated_ratification(
+def test_h3_refuses_an_unnamed_undated_or_trailing_ratification(
     implement_source: str, line: str
 ) -> None:
     """Reconciliation must not loosen the gate into accepting anything."""
     ratified = _js_regex("H3_RATIFIED_RE", implement_source)
     assert not ratified.search(line)
+
+
+@pytest.mark.parametrize(
+    "line",
+    (
+        "**Status**: ratified --  , 2026-08-08",
+        "**Status**: ratified -- Name, 2026-08-08 trailing",
+    ),
+)
+def test_the_two_validators_agree_on_the_codex_findings(
+    implement_source: str, line: str
+) -> None:
+    """The whole point of FR-011: both verifiers reach the SAME verdict.
+
+    Each of these lines was accepted by one validator and rejected by the other
+    before the PR #600 review.
+    """
+    ratified = _js_regex("H3_RATIFIED_RE", implement_source)
+    assert not ratified.search(line)
+    assert not validate_status_line(line).ok
 
 
 @pytest.mark.parametrize(

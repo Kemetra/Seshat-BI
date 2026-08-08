@@ -792,6 +792,25 @@ capabilities:
       skill: "evidence-pack-generator"
       roadmap: "F028"
 
+  - id: retail-spec-status
+    name: "retail spec-status"
+    summary: "Validate or normalize a spec's Status line against the closed ADR-0019 vocabulary."
+    state: shipped
+    authority: agent-runnable
+    surface: cli
+    ships: false
+    ship_classification: consumer-capability
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: "spec-status"
+    documentation: "docs/decisions/0019-spec-status-closed-vocabulary.md"
+    ownership:
+      capability_owner: "seshat-governance"
+    references:
+      dispatch: "spec-status"
+      roadmap: "spec-151"
+
   - id: retail-approvals
     name: "retail approvals"
     summary: "Read-only approval inbox: open approval issues across committed readiness statuses."

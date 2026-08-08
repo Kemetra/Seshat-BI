@@ -220,3 +220,84 @@ def test_normalization_leaves_a_history_line_alone() -> None:
     """`**Status history**:` is not the status line and must not be rewritten."""
     line = "**Status history**: draft"
     assert policy.normalize_status_line(line) == line
+
+
+# --------------------------------------------------------------------------
+# The PRODUCTION seam: normalize a scaffolded file ON DISK, not a string
+# --------------------------------------------------------------------------
+
+TEMPLATE = Path(__file__).resolve().parents[2] / ".specify/templates/spec-template.md"
+
+
+def _scaffold(tmp_path: Path) -> Path:
+    """Scaffold exactly as `create-new-feature.ps1` does: copy the template."""
+    spec = tmp_path / "spec.md"
+    spec.write_text(TEMPLATE.read_text(encoding="utf-8"), encoding="utf-8")
+    return spec
+
+
+def test_a_freshly_scaffolded_spec_is_invalid_until_normalized(tmp_path: Path) -> None:
+    """The gap FR-025 closes, proven against a real scaffolded FILE.
+
+    Testing `normalize_status_line` on an in-memory string proves the function
+    works, not that scaffolding uses it. This scaffolds from the real upstream
+    template and checks the file.
+    """
+    spec = _scaffold(tmp_path)
+    assert not policy.validate_spec_file(spec).ok, (
+        "the upstream template now seeds a canonical value; if upstream changed, "
+        "this test should be updated rather than the template edited"
+    )
+
+    assert policy.normalize_spec_file(spec) is True
+    assert policy.validate_spec_file(spec).ok
+
+
+def test_normalizing_a_spec_file_is_idempotent(tmp_path: Path) -> None:
+    spec = _scaffold(tmp_path)
+    policy.normalize_spec_file(spec)
+    before = spec.read_text(encoding="utf-8")
+    assert policy.normalize_spec_file(spec) is False
+    assert spec.read_text(encoding="utf-8") == before
+
+
+def test_normalizing_preserves_the_rest_of_the_scaffolded_file(tmp_path: Path) -> None:
+    """Only the status line changes -- the template body is untouched."""
+    spec = _scaffold(tmp_path)
+    original = spec.read_text(encoding="utf-8").splitlines()
+    policy.normalize_spec_file(spec)
+    updated = spec.read_text(encoding="utf-8").splitlines()
+    differing = [i for i, (a, b) in enumerate(zip(original, updated)) if a != b]
+    assert len(differing) == 1
+    assert updated[differing[0]].startswith("**Status**:")
+
+
+def test_normalizing_a_missing_file_fails_closed(tmp_path: Path) -> None:
+    with pytest.raises(policy.StatusPolicyError):
+        policy.normalize_spec_file(tmp_path / "nope.md")
+
+
+def test_normalizing_a_spec_without_a_status_line_fails_closed(
+    tmp_path: Path,
+) -> None:
+    spec = tmp_path / "spec.md"
+    spec.write_text("# Feature\n\nno status\n", encoding="utf-8")
+    with pytest.raises(policy.StatusPolicyError):
+        policy.normalize_spec_file(spec)
+
+
+def test_the_cli_seam_exists_and_normalizes(tmp_path: Path) -> None:
+    """The seam must be reachable from the shipped CLI, not only importable."""
+    from seshat.cli import main
+
+    spec = _scaffold(tmp_path)
+    assert main(["spec-status", str(spec), "--fix"]) == 0
+    assert policy.validate_spec_file(spec).ok
+    assert main(["spec-status", str(spec)]) == 0
+
+
+def test_the_cli_seam_reports_an_invalid_spec(tmp_path: Path) -> None:
+    from seshat.cli import main
+
+    spec = _scaffold(tmp_path)
+    assert main(["spec-status", str(spec)]) == 1
