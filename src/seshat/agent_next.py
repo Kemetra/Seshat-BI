@@ -659,6 +659,45 @@ def _live_validation_next_override(
     )
 
 
+def _dbt_execution_caveats(
+    root: Path, entry: dict[str, Any] | None
+) -> list[dict[str, str]]:
+    """Report the latest governed dbt build, WITHOUT touching the decision.
+
+    This is deliberately NOT an override (spec 150 FR-019). ``next_override``
+    REPLACES ``next_allowed_action`` and flips ``control_outcome`` to
+    ``next_action``, which feeds ``stop_point``; a dbt caveat joining that chain
+    would displace a blocked table's STOP sentence and skip its blocked-specific
+    stop point. The existing two overrides are safe only because both are gated
+    to ``terminal_pass or post_gold_stage`` and so cannot fire on a blocked
+    table -- the dbt signal has no such gate, because it never competes for the
+    action string at all. It rides in ``caveats`` and changes nothing else.
+
+    A clean build and a table that has never run dbt are both silent: evidence
+    of success is not news, and not having run dbt is not a defect.
+    """
+    if entry is None:
+        return []
+    from seshat.dbt_execution_state import read_dbt_execution_evidence
+
+    evidence = read_dbt_execution_evidence(root, _dir_name(entry["source_path"]))
+    if not evidence.warrants_caveat:
+        return []
+
+    detail = f"latest governed dbt build reported {evidence.state}"
+    if evidence.invocation_id:
+        detail += f"; invocation {evidence.invocation_id}"
+    if evidence.evidence_path:
+        detail += f"; evidence {evidence.evidence_path}"
+    if evidence.blocking_reasons:
+        detail += f"; reasons: {'; '.join(evidence.blocking_reasons)}"
+    # Verbatim from the record: the executor's own statement that it grants
+    # nothing. Reported, never interpreted.
+    if evidence.readiness_effect:
+        detail += f"; readiness effect: {evidence.readiness_effect}"
+    return [{"kind": "dbt_execution", "detail": detail}]
+
+
 def _control_stage(
     stage: str | None, contract_override: str | None, live_override: str | None
 ) -> str | None:
@@ -886,7 +925,12 @@ def _compose(
         "table": response["table"],
         "outcome": outcome,
         "required_authority": response.get("required_authority"),
-        "caveats": list(response.get("caveats", [])),
+        # Additive ONLY (spec 150 FR-019/FR-020): the dbt signal appends here and
+        # touches no other field, so it can never soften an existing stop.
+        "caveats": [
+            *response.get("caveats", []),
+            *_dbt_execution_caveats(root, entry),
+        ],
         "tables": list(context.summaries),
         "read_only_proof": True,
     }

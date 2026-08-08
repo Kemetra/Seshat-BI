@@ -210,6 +210,31 @@ compatibility tests exist. (Recorded in `templates/dbt-adapter-contract.md` and 
   publish-safety, business rollup) and never silently changes the declared grain.
 - does NOT write outside invocation-scoped shadow schemas or persist raw adapter output.
 
+## Where the evidence goes (the governance consumer)
+
+A governed build writes a sanitized, schema-validated record to
+`mappings/<table>/dbt-evidence/<invocation_id>.json`. That record is now READ by
+a governance surface (spec 150): `seshat.dbt_execution_state` classifies the
+latest record as `absent` / `built` / `failed` / `blocked` / `unreadable`, and
+`seshat next` reports the non-clean states as a `dbt_execution` caveat naming
+the outcome, the invocation, and the record path.
+
+The caveat is strictly ADDITIVE. It rides in the document's `caveats` list and
+changes no other field -- not `next_allowed_action`, not `stop_point`, not
+`outcome`, not `forbidden_scope`. Two consequences worth stating plainly:
+
+- A passing dbt build changes NOTHING. Execution success is evidence, not
+  readiness authority; the stage status and the named-human approval are exactly
+  what they were.
+- A failing dbt build cannot WEAKEN an existing stop either. A table already
+  blocked keeps its `STOP` action and its blocked-specific stop point verbatim;
+  the caveat is added alongside, never in place of them.
+
+`outcome` is translated through `seshat.dbt.OUTCOME_TO_EXECUTION` (`pass` ->
+`built`) before it is reported anywhere, so an execution result can never be
+misread as a readiness `pass`. An outcome the mapping does not recognize
+resolves to `blocked` -- unknown is never success.
+
 ## See also
 
 - The decision record: `docs/decisions/0009-dbt-is-transformation-adapter.md`.
