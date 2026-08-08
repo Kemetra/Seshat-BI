@@ -92,9 +92,21 @@ def _missing_owner_problem(entry_id: object) -> str:
     )
 
 
+def _is_absent(value: object) -> bool:
+    """Whether a declared field is effectively absent -- omitted or whitespace.
+
+    A blank string is not a declaration: FR-002a wants an explicit
+    ``unclassified``, so ``capability_owner: "   "`` must read as missing
+    rather than as an unknown token.
+    """
+    if value is None:
+        return True
+    return isinstance(value, str) and not value.strip()
+
+
 def _owner_token_problem(entry_id: object, owner: object) -> str | None:
     """FR-002a then FR-002: the field is present, and drawn from the token set."""
-    if owner is None or (isinstance(owner, str) and not owner.strip()):
+    if _is_absent(owner):
         return _missing_owner_problem(entry_id)
     if owner not in OWNERSHIP_OWNERS:
         return f"{entry_id}: capability_owner {owner!r} is not an ownership token"
@@ -148,20 +160,27 @@ def _escapes_the_repository(source: str) -> bool:
     )
 
 
+def _is_blank_source(source: object) -> bool:
+    """Whether the declared canonical_source is absent or whitespace-only."""
+    return not isinstance(source, str) or not source.strip()
+
+
 def _canonical_source_shape_violation(entry_id: str, source: object) -> str | None:
     """The declared path's own defects, judged without touching the disk."""
-    if not isinstance(source, str) or not source.strip():
+    if _is_blank_source(source):
         return f"{entry_id}: ownership.canonical_source is missing or blank"
+    assert isinstance(source, str)  # narrowed by the blank check above
+    relative = (
+        f"{entry_id}: canonical_source {source!r} must be a "
+        "repository-relative path inside the repository"
+    )
     if "\\" in source:
         return (
             f"{entry_id}: canonical_source {source!r} must be a "
             "repository-relative POSIX path"
         )
     if _escapes_the_repository(source):
-        return (
-            f"{entry_id}: canonical_source {source!r} must be a "
-            "repository-relative path inside the repository"
-        )
+        return relative
     if source.startswith(_GENERATED_CANONICAL_PREFIXES):
         return (
             f"{entry_id}: canonical_source {source!r} is generated output, "
@@ -241,15 +260,30 @@ def public_capability_integrity_violations(
         else public_skills
     )
     tracked = _git_tracked_files(repo_root) if tracked_files is None else tracked_files
-    problems: list[str] = []
-    problems += _dangling_public_reference_violations(entries, shipped)
+
+    problems = _dangling_public_reference_violations(entries, shipped)
     for public_name in sorted(shipped):
         problems += _public_skill_owner_violations(entries, public_name)
-    for entry in entries:
-        ownership = entry.get("ownership")
-        if isinstance(ownership, dict) and "canonical_source" in ownership:
-            problems += _canonical_source_violations(repo_root, entry, tracked)
+    problems += _declared_canonical_source_violations(repo_root, entries, tracked)
     return problems
+
+
+def _declared_canonical_source_violations(
+    repo_root: Path, entries: list[dict], tracked: set[str]
+) -> list[str]:
+    """Check canonical_source only where one is DECLARED.
+
+    An entry with no ``canonical_source`` key is not judged here -- requiring
+    the field is the public-skill owner rule's job, so checking it again would
+    double-report the same missing field.
+    """
+    return [
+        problem
+        for entry in entries
+        if isinstance(entry.get("ownership"), dict)
+        and "canonical_source" in entry["ownership"]
+        for problem in _canonical_source_violations(repo_root, entry, tracked)
+    ]
 
 
 def _dangling_public_reference_violations(
@@ -272,20 +306,27 @@ def _owner_candidates(entries: list[dict], public_name: str) -> tuple[list[dict]
     does a same-name ``skill`` reference stand in, so a precise claim is never
     made ambiguous by an incidental name collision.
     """
-    explicit = [
-        entry
-        for entry in entries
-        if public_name in _reference_values(entry, "public_skill")
-    ]
+    explicit = [e for e in entries if _claims_explicitly(e, public_name)]
     if explicit:
         return explicit, "explicit"
-    fallback = [
-        entry
-        for entry in entries
-        if entry.get("surface") == "skill"
-        and public_name in _reference_values(entry, "skill")
-    ]
+    fallback = [e for e in entries if _claims_by_same_name(e, public_name)]
     return fallback, "same-name skill fallback"
+
+
+def _claims_explicitly(entry: dict, public_name: str) -> bool:
+    """A deliberate ``references.public_skill`` edge to this public skill."""
+    return public_name in _reference_values(entry, "public_skill")
+
+
+def _claims_by_same_name(entry: dict, public_name: str) -> bool:
+    """A ``surface: skill`` entry referencing a skill of the same name.
+
+    Only a skill entry qualifies: a CLI entry that merely references a skill is
+    never promoted to ownership.
+    """
+    if entry.get("surface") != "skill":
+        return False
+    return public_name in _reference_values(entry, "skill")
 
 
 def _public_skill_owner_violations(entries: list[dict], public_name: str) -> list[str]:
@@ -299,8 +340,11 @@ def _public_skill_owner_violations(entries: list[dict], public_name: str) -> lis
             f"{public_name}: ambiguous {relationship} capability owners: "
             + ", ".join(candidate_ids)
         ]
+    return _sole_owner_violations(candidates[0], public_name)
 
-    owner = candidates[0]
+
+def _sole_owner_violations(owner: dict, public_name: str) -> list[str]:
+    """The lone owner's own ownership axis, plus its obligation to name a source."""
     problems = list(ownership_violations(owner))
     ownership = owner.get("ownership")
     if not isinstance(ownership, dict) or "canonical_source" not in ownership:
