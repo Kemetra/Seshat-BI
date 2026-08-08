@@ -170,11 +170,18 @@ gold_star:
     measures:                              # RC9: independent landed measures
       - "debit_amount"
       - "credit_amount"
-      - "amount"                           # derived magnitude; see derived_columns
+      # `amount` is a DERIVED column (see derived_columns below), materialized in
+      # silver by 0006 build step 7 and read through unchanged by 0008. Because it
+      # exists on BOTH sides it is a valid silver->gold reconciliation target, so it
+      # is listed. History: it was briefly removed here (ledger L20) when it existed
+      # only in gold and sum(amount) against silver would have raised an
+      # undefined-column error; the correct fix was to materialize it in silver where
+      # its own declaration says it belongs, not to drop the reconciliation.
+      - "amount"
     additive_money_measures:               # each reconciled by SUM in dbt parity (#331)
       - "debit_amount"
       - "credit_amount"
-      - "amount"
+      - "amount"                           # materialized in silver (0006 step 7)
 
   dimensions:
     # --- CONFORMED with mappings/finance_gl_budget/source-map.yaml -------------
