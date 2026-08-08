@@ -21,7 +21,9 @@
 #     - theme defaults (surface 3)               -> templates/theme-json-spec.md
 #       + themes/tower-retail.theme.json
 #     - implementation/handoff (surface 4)       -> the powerbi-handoff workflow;
-#       F016 owns execution. This template authors NO PBIP/PBIR, NO DAX, NO SQL.
+#       official powerbi-report-authoring owns native PBIR mechanics after the
+#       gate. F016 owns parked live semantic execution. This template authors
+#       NO PBIP/PBIR, NO DAX, NO SQL.
 #
 # THE GATE THIS PAGE INHERITS  (verbatim, not re-decided here)
 #   No data-bound dashboard design before the subject area semantic_model_ready is pass (roadmap

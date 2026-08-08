@@ -254,7 +254,8 @@ next call, not a loop this skill performs.
 When a table is driven end-to-end, the `retail-orchestrate` conductor parks at the
 Phase-7 model seam and invokes this verb to compute the Semantic Model Ready verdict
 BEFORE any Power BI authoring. A `pass` is the gate that lets the next phase
-(dashboard design, then the deferred F016 PBIP adapter) proceed; anything else STOPS
+(dashboard design, then official report authoring after its gate; live semantic
+execution remains parked F016) proceed; anything else STOPS
 the conductor with the blocking reasons. This skill stays single-purpose: it computes
 one verdict and STOPS. The self-heal loop (run gate -> classify -> auto-fix mechanical
 / HARD-STOP judgment calls -> re-run) lives ONLY in `retail-orchestrate`, never here;

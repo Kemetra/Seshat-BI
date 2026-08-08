@@ -27,9 +27,10 @@ It is NOT the same as:
   theme's wallpaper/page-fill DEFAULT only -- a flat default color, NOT the
   surface-2 image. Keep the two apart: a theme default fill is surface 3; an
   exported background asset is surface 2.
-- Surface 4 (implementation handoff) -- importing the theme into Power BI Desktop
-  and any pbi-cli/PBIP step is the `powerbi-handoff` workflow; F016 owns
-  execution. This spec edits no PBIP/PBIR file and adds no automation (rule 6).
+- Surface 4 (implementation handoff) -- importing/applying the theme to a report
+  is routed by `powerbi-handoff` to Microsoft's official report-authoring skill
+  when discoverable or to a human Desktop build. F016 owns only parked live
+  semantic-model execution. This spec edits no PBIP/PBIR file.
 
 ## Surface-3 purity rule (the one boundary this spec enforces)
 
@@ -228,8 +229,9 @@ Before relying on it:
   notes). This spec describes the intent; that JSON is what gets imported.
 
 This spec edits no PBIP/PBIR file, generates no DAX, changes no SQL, and adds no
-pbi-cli automation. Importing the validated theme is a surface-4 handoff step
-(F016 owns execution).
+execution automation. Applying the validated theme is a surface-4 handoff step
+for the official report-authoring owner or a human; F016 owns only parked live
+semantic execution.
 
 ## Must NOT control (the explicit exclusion list)
 

@@ -2,9 +2,9 @@
 
 Three unrelated things are all called "MCP" near this repo. This doc disambiguates
 them, then covers the two OFFICIAL Microsoft Power BI MCP servers that make up the
-parked F016 execution adapter, and where each governed task in this repo should
-actually go. Slice 1 of issue #450: documentation and contract only -- no runtime
-code, no new CLI verb, and no MCP call is authorized by this doc.
+parked F016 execution adapter. Microsoft's separate official report-authoring
+skill is also named because native PBIR authoring is not an MCP responsibility.
+No MCP call or report mutation is authorized by this document.
 
 ## Why it exists
 
@@ -48,6 +48,17 @@ flag/behavior drift until Microsoft ships a release.
 *(access date for the above: 2026-07-23; see Microsoft's own pages under See also for
 current details, since preview products move.)*
 
+## Official report authoring is a separate skill
+
+Microsoft's first-party `powerbi-report-authoring` skill owns native PBIR report
+page, visual, filter, slicer, binding, formatting, and theme mechanics. It is not
+the local Modeling MCP and does not make the Modeling MCP a report-page tool.
+Seshat's integration catalog obtains it through `microsoft/skills-for-fabric`.
+Spec 148 declares the supported Claude Code native plugins and Codex Agent
+Skills projection. `seshat integrations setup --profile powerbi-fabric
+--harness <claude-code|codex>` proves activation and discovery read-only; the
+route remains blocked unless that exact probe reports `discoverable`.
+
 ## Boundaries (what it never does)
 
 - **Never** defines metrics, mappings, semantic logic, or dashboard design -- both
@@ -67,9 +78,10 @@ current details, since preview products move.)*
 
 | Governed task | Route it to |
 |---|---|
+| Native PBIR page/visual/filter/slicer/binding authoring after an approved design | Microsoft's official `powerbi-report-authoring` skill; block until the exact target has `dashboard_ready: pass` and the skill is discoverable |
 | Modeling change (parameters, partitions, relationships, measures) on a local PBIP/TMDL project | The local Power BI Modeling MCP, gated (parked pending F016's ADR; read-only until then) |
 | Querying an already-published semantic model | The remote Power BI MCP server, only once its prerequisites are met (tenant setting, Build permission, Copilot license for Generate Query) |
-| Theme, per-visual formatting, page background, or visual geometry on a committed PBIR report | The existing PBIR-authoring adapter (`docs/integrations/pbir-adapter.md`, F034/ADR 0015/0016) -- not MCP at all |
+| Bounded theme, per-visual formatting, page background, or visual geometry on a committed PBIR report | The existing PBIR-authoring adapter (`docs/integrations/pbir-adapter.md`, F034/ADR 0015/0016) for its allow-listed deterministic subset; broader authoring routes to the official skill |
 | Live-Desktop verification (read the open report, apply/validate changes, screenshot) | The Power BI Desktop Bridge (`docs/powerbi-connection.md`) -- a separate, local, optional capability, not MCP |
 | Database connectivity or scheduled refresh | The Power BI Gateway + Service (`docs/powerbi-connection.md`) -- neither MCP server touches this |
 | Any of the above when the relevant readiness stage has not passed | Blocked -- the adapter fails closed and reports the missing stage/approval; it never runs ahead of the gate |
@@ -120,7 +132,10 @@ ceiling by construction.
   `docs/powerbi-connection.md`.
 - The sibling PBIR-authoring adapter (formatting/geometry, NOT MCP, NOT publish-capable):
   `docs/integrations/pbir-adapter.md`.
-- Microsoft's official sources (accessed 2026-07-23):
+- Microsoft's official sources (MCP facts accessed 2026-07-23; report skill
+  ownership verified 2026-08-07):
   - Overview: `https://learn.microsoft.com/en-us/power-bi/developer/mcp/mcp-servers-overview`
   - Local server source: `https://github.com/microsoft/powerbi-modeling-mcp`
   - Remote server getting-started: `https://learn.microsoft.com/en-us/power-bi/developer/mcp/remote-mcp-server-get-started`
+  - Report Authoring skill: `https://learn.microsoft.com/en-us/power-bi/developer/projects/projects-report-authoring-skill`
+  - Official skills bundle: `https://github.com/microsoft/skills-for-fabric`

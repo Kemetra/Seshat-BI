@@ -1,15 +1,35 @@
 ---
 name: dbt-workflows
 description: >-
-  Use when a user asks to check, validate, plan, build, test, troubleshoot, or
-  review Seshat BI's governed dbt shadow transformations and parity evidence.
+  Route dbt intent to Seshat's governed shadow workflow or the official dbt
+  Labs competence and execution owner, without bypassing readiness or evidence.
 ---
 
 # Governed dbt workflows
 
-Read `../../portable-operating-contract.md` before acting. Use only the
-installed `seshat dbt` helpers; never bypass their fixed selector, target,
-profile, lock, redaction, or artifact checks with raw dbt commands.
+Read `../../portable-operating-contract.md` before acting. For a governed
+Seshat shadow workflow, use only the installed `seshat dbt` helpers; never
+bypass their fixed selector, target, profile, lock, redaction, or artifact
+checks with raw dbt commands.
+
+## Intent ownership
+
+| User intent | Seshat pre-gate | Execution owner | Seshat afterward |
+|---|---|---|---|
+| Decide whether dbt fits the current BI stage | Readiness and approved-mapping context | Seshat selection policy | State one truthful next action |
+| Scaffold governed shadow models | Approved committed source map | Seshat source-map-derived scaffold | Validate citations and the `meta.seshat` contract |
+| Governed compile, build, test, or parity | Mapping Ready, exact selector, shadow target, and accepted immutable plan | dbt Core through `seshat dbt` | Normalize artifacts into derived evidence, blockers, and parity findings |
+| Generic dbt model authoring, test design, syntax, docs, or troubleshooting | Prove the official skill is activated and discoverable | Official dbt Labs agent skills | If the work enters Seshat's governed project, return through the Seshat gates above |
+| Native dbt MCP configuration or tool use | Prove the exact MCP registration is activated and discoverable | Official dbt MCP and its official configuration skill | Do not infer a readiness effect; route governed execution back through `seshat dbt` |
+| Switch from migrations to dbt | Passing parity evidence plus a named-human approval | Named human | Retain migrations as parity oracle and rollback path |
+
+Spec 148 provides the read-only harness proof for the official dbt Labs agent
+skills. Before routing generic competence, run
+`seshat integrations setup --profile analytics-full --harness <claude-code|codex>`
+and require the `dbt-agent-skills` result to be discoverable. MCP liveness remains
+a separate preflight fact. Report the exact blocker for either surface; do not
+copy official guidance into this router, claim an installed payload is usable,
+or execute raw dbt commands against the governed project as a fallback.
 
 ## Fixed workflow
 

@@ -183,6 +183,14 @@ Sequence-and-record only. This skill RUNS approved steps behind the gate and rec
 asset did as evidence; it does NOT define source mapping, metric contracts, or semantic logic,
 does NOT publish Power BI, and does NOT move a readiness stage to `pass`. Three non-negotiables:
 
+This adapter is not the owner of generic Dagster competence. Asset, job, resource, component,
+schedule, sensor, automation, project-structure, CLI, and troubleshooting guidance belongs to
+the official `dagster-expert` skill. Its activation and discovery must be proven by the
+Spec 148 harness probe before routing to it. This skill owns only Seshat's readiness-aware sequencing, named-human
+stops, closed execution policy, fail-closed propagation, redaction, evidence normalization,
+and cross-tool BI progression around the official Dagster runtime; it must not reproduce
+upstream instructions.
+
 - **The gate exit code is the SOLE pass authority** (Principle I -- agent proposes, gate
   disposes). A Dagster asset's success means "the command ran and returned this exit," NEVER
   "the stage is now `pass`." A green `seshat check` / `retail validate` asset records exit-0

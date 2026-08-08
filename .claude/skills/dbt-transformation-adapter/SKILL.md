@@ -34,6 +34,14 @@ Invoke-and-record only. This skill runs dbt behind the gate and records its find
 evidence; it does NOT define source mapping, metric contracts, or semantic logic, does NOT
 publish Power BI, and does NOT move a readiness stage to `pass`. Three non-negotiables:
 
+This adapter is not the owner of generic dbt competence. Model-authoring advice, generic
+test design, command syntax, documentation lookup, MCP configuration, and troubleshooting
+belong to the official dbt Labs agent skills and dbt MCP. Official-skill activation and
+discovery must be proven by the Spec 148 harness probe before routing to those skills;
+MCP liveness remains a separate preflight fact. This skill owns only Seshat's governed
+pre-gate, invocation policy, evidence normalization, parity interpretation, and human-stop
+seams around the official dbt Core executor; it must not reproduce upstream instructions.
+
 - **The entry gate is the FIRST refusal point** (Principle IV). The canonical gate
   signal is `mappings/<table>/readiness-status.yaml` -> `stages.mapping_ready.status ==
   pass` WITH a matching `approvals[]` entry (RS1); its human-readable mirror

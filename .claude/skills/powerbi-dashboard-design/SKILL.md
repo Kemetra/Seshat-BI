@@ -22,10 +22,12 @@ visual-design request into one of four separate surfaces and opens the right
 workflow, so the four-surface distinction is committed once here instead of being
 improvised per request.
 
-This skill ROUTES and INSTRUCTS; it does not itself design a specific dashboard
-and it implements nothing in Power BI. Designing a specific dashboard from
-approved contracts is the F011/012 `dashboard-design` verb's job; executing it in
-Power BI (PBIP/PBIR authoring, pbi-cli, workspace publish) is F016's job.
+This skill ROUTES and INSTRUCTS inside Seshat's design layer; it is a nested
+design router, not a second broad Power BI front door and not an execution-owner
+selector. Designing a specific dashboard from approved contracts is the F011/012
+`dashboard-design` verb's job. Native PBIR implementation belongs to Microsoft's
+official `powerbi-report-authoring` skill when discoverable; F016 is narrower and
+owns only parked live semantic-model connection/refresh/query/publish execution.
 
 ## The four surfaces (route to exactly one)
 
@@ -33,16 +35,16 @@ Power BI dashboard design is four separate surfaces. Route every request to exac
 
 | # | Surface | What it is | Authoring tool | The rule that keeps it clean |
 |---|---------|------------|----------------|------------------------------|
-| 1 | Report visuals | cards, charts, slicers, tables/matrices, tooltips, bookmarks, titles, interactions, mobile layout | Power BI Desktop (later; F016) | every visual binds to a metric contract + a semantic model field; nothing invented |
+| 1 | Report visuals | cards, charts, slicers, tables/matrices, tooltips, bookmarks, titles, interactions, mobile layout | Microsoft `powerbi-report-authoring` or Power BI Desktop after the Seshat gate | every visual binds to a metric contract + a semantic model field; nothing invented |
 | 2 | External background/canvas | PNG/SVG/JPG backgrounds, grids, safe zones, static layout containers, exported assets | Figma / Canva / PowerPoint / Illustrator (outside Power BI) | background is STATIC STRUCTURE, never data -- no KPI value, no dynamic title baked in |
 | 3 | Theme JSON | color palette, fonts, visual defaults, page/wallpaper defaults, filter-pane defaults, sentiment colors | a JSON file imported into Power BI | theme controls DEFAULTS, never business meaning -- no DAX, no metric, no relationship |
-| 4 | Implementation handoff | the bundle a human (later, an adapter) uses to build the report in Power BI Desktop | notes only in this slice | this slice STOPS at the handoff boundary -- no PBIP/PBIR edit, no pbi-cli automation |
+| 4 | Implementation handoff | the bundle an approved official executor or human uses to build the report | notes only in this skill | this skill STOPS at the handoff boundary -- no PBIP/PBIR edit |
 
 Blending these is the failure mode. Baking a KPI number into a background image
 mixes surface 1 into surface 2 (a number that never refreshes). Putting a metric
-definition in theme JSON mixes surface 1 into surface 3 (business logic hidden in
-a styling file). Editing a PBIP file here crosses into surface 4 (the deferred
-adapter's territory). The discipline that keeps the four apart is the value.
+  definition in theme JSON mixes surface 1 into surface 3 (business logic hidden in
+a styling file). Editing a PBIP file here crosses into surface 4 (the execution
+owner's territory). The discipline that keeps the four apart is the value.
 
 ## Router: request -> workflow
 
@@ -90,8 +92,10 @@ Routing rules:
   it MUST NOT control DAX, metric definitions, relationships, source mapping,
   storytelling, or validation. (A sentiment COLOR is the theme's; the sentiment
   THRESHOLD/RULE is a metric contract, F009.)
-- **PBIP/pbi-cli implementation is later (F016)** unless a request explicitly
-  scopes it -- and even then this slice produces NOTES only.
+- **PBIP/PBIR implementation routes outside this design skill.** Native report
+  authoring routes through `powerbi-workflows` to Microsoft's official skill;
+  bounded Seshat formatting routes to the PBIR adapter; live semantic execution
+  remains parked F016. This skill produces NOTES only.
 - **STOP before editing any PBIP/PBIR file.** This skill edits no PBIP/PBIR,
   generates no DAX, changes no SQL, and edits no semantic-model file.
 
@@ -122,7 +126,10 @@ gate or design the specific dashboard itself.
   to inherit) + `docs/readiness/readiness-model.md` (the four statuses, no score).
 - The gated verb this router hands off to: the F011/012 `dashboard-design` skill
   (`.claude/skills/dashboard-design/SKILL.md`; spec at `specs/012-dashboard-design-skill/`).
-- The deferred execution owner: F016 (PBIP/PBIR authoring, pbi-cli, publish).
+- The broad owner selector: public `powerbi-workflows` plus `seshat pbi-mcp doctor`.
+- Native report execution owner: Microsoft `powerbi-report-authoring` when
+  discoverable; F016 remains the parked live semantic connection/refresh/query/
+  publish adapter.
 - The design-foundation idea lane: `docs/roadmap/idea-backlog.md` `## Design Foundation`
   -- the categorical cohort where design-layer ideas (`strengthens_layer = design-system`)
   land in the idea bank (exploratory, not a roadmap).

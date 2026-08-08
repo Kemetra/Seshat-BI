@@ -2,17 +2,18 @@
 
 Surface 4 of the four-surface router (`../SKILL.md`). This workflow is the LAST
 step of a design: it gathers the artifacts the other three surfaces produced and
-turns them into implementation NOTES a human (later, an F016 adapter) uses to
-build the report in Power BI Desktop. It is the bundle, not the build -- the
+turns them into implementation NOTES Microsoft's official report-authoring skill
+or a human uses to build the report. It is the bundle, not the build -- the
 router opens it for "build / implement in Power BI".
 
 ## Scope (read first)
 
 This workflow ASSEMBLES and HANDS OFF; it does not author anything in Power BI.
 It produces notes only. It edits no PBIP/PBIR file, generates no DAX, changes no
-SQL, edits no semantic-model file, and runs no pbi-cli automation. Execution
-(PBIP/PBIR authoring, pbi-cli, workspace publish) is F016's job; this workflow
-stops at the handoff boundary and names F016 as that owner.
+SQL, edits no semantic-model file, and runs no authoring tool. Native PBIR
+execution belongs to Microsoft's official `powerbi-report-authoring` skill when
+discoverable, or to a human Desktop build. Live semantic-model connection,
+refresh, query, and publish remain the separate parked F016 responsibility.
 
 It defines no metric (that is F009) and designs no specific dashboard (that is the
 F011/012 `dashboard-design` verb). It only restates, in build-ready order, what
@@ -89,19 +90,20 @@ an existing approved contract in Desktop, not authoring a definition here.
 
 ## No-data-edit / handoff boundary
 
-This slice edits no PBIP/PBIR file, generates no DAX, changes no SQL, edits no semantic-model file,
-and adds no pbi-cli automation. The handoff stops at implementation NOTES and names F016 as the
-owner of any execution step (PBIP/PBIR authoring, pbi-cli, workspace publish).
+This slice edits no PBIP/PBIR file, generates no DAX, changes no SQL, and edits
+no semantic-model file. The handoff stops at implementation NOTES and names the
+official report-authoring skill as native PBIR owner and F016 only for parked
+live semantic execution.
 
-The note describes WHAT to build and in what order; a human (later, the F016
-adapter) performs the build. This workflow never crosses into authoring or
-publishing.
+The note describes WHAT to build and in what order; an authorized official
+executor or human performs the build. This workflow never crosses into authoring
+or publishing.
 
-## Future adapter NOTES (F016 -- deferred, described not built)
+## Official-executor NOTES (discovery checked through Spec 148)
 
-Record, as PROSE for the deferred owner, what a future F016 PBIP/pbi-cli adapter
-WOULD automate from this handoff -- so the design captures intent without adding
-any automation now:
+Record, as PROSE for the official report-authoring owner, what the executor would
+consume from this handoff -- so the design captures intent without copying
+upstream instructions or adding automation here:
 
 - An adapter would read the page blueprints + visual specs + theme + background
   specs and emit the PBIP/PBIR project a human assembles by hand today.
@@ -112,14 +114,15 @@ any automation now:
 - It would remain GATED on the same gate: no data-bound generation before
   `semantic_model_ready` is `pass` and the design-review sign-off is recorded.
 
-These are NOTES describing a deferred capability. Do not write a pbi-cli command
-sequence, a runnable script, or any automation here -- F016 owns that, and adding
-it now is a scope violation.
+These are NOTES describing a delegated capability. Do not copy upstream command
+sequences or automation here. Use the read-only official-skill harness probe; if
+the official skill is not activated and discoverable, stop and report its exact
+integration blocker.
 
 ## Known limitations (record with the handoff)
 
-- **Manual build until F016.** Every step above is performed by a human in Power
-  BI Desktop today; there is no automation in this slice.
+- **Manual build until official discovery.** A human performs the build while
+  the supported harness cannot discover the official report-authoring skill.
 - **Theme schema is treated as UNCERTAIN.** `../../../../themes/tower-retail.theme.json`
   is a conservative STARTER that MUST be validated in Power BI Desktop before use
   (see `../../../../themes/README.md`); some keys may need adjustment for the
@@ -138,8 +141,9 @@ STOP and surface to a human rather than self-answering when:
 
 - a required input (a contract, a mapped field, the governed model, a blueprint,
   a spec) is missing -- record the blocking reason and STOP, do not invent it;
-- a user asks to "just build it in Power BI" or to run pbi-cli -- produce the
-  implementation notes only and name F016 as the owner of any execution step;
+- a user asks to "just build it in Power BI" -- produce the implementation notes
+  and route execution through `powerbi-workflows`; do not emulate an unavailable
+  official skill;
 - the design-review sign-off has not been recorded -- the handoff may be assembled
   as a `warning`-class draft, but `dashboard_ready: pass` is the verb owner's call.
 
@@ -155,6 +159,7 @@ STOP and surface to a human rather than self-answering when:
   `templates/background-spec.yaml`.
 - The starter theme + its validate-in-Desktop note: `themes/tower-retail.theme.json`,
   `themes/README.md`.
-- The deferred execution owner: F016 (PBIP/PBIR authoring, pbi-cli, publish).
+- Native report execution owner: Microsoft `powerbi-report-authoring` when
+  discoverable. Live semantic connection/refresh/query/publish: parked F016.
 - The gate to inherit + the four statuses: `docs/readiness/dashboard-ready.md`,
   `docs/readiness/readiness-model.md`.

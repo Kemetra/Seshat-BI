@@ -1,11 +1,9 @@
 ---
 name: powerbi-workflows
 description: >-
-  Route guarded Power BI work -- dashboard/page design, screenshot and report
-  QA, theme and background assets, visual formatting and geometry, and existing
-  PBIP adoption -- to the correct governed surface. Use when a user asks to
-  design, review, restyle, format, or adopt a Power BI report under Seshat BI's
-  readiness gates.
+  Route guarded Power BI work -- design, native report authoring, semantic-model
+  operations, published queries, QA, bounded formatting, and PBIP adoption --
+  to the correct Seshat or official Microsoft surface under Seshat BI's gates.
 ---
 
 # Power BI workflows
@@ -14,6 +12,34 @@ Read `../../portable-operating-contract.md` before acting. These routes never
 replace readiness gates: no invented metric, measure, KPI, or DAX meaning; no
 numeric readiness/confidence score; no self-granted approval; no
 dashboard-ready claim without committed evidence.
+
+## One front door, explicit execution owners
+
+This skill is the broad Power BI front door. It owns intent classification and
+Seshat's pre/post gates; it does not reproduce Microsoft execution behavior.
+For execution-shaped requests, use `seshat pbi-mcp doctor` as the canonical
+machine-checkable selector even when the selected owner is an official skill
+rather than an MCP server.
+
+| User intent | Seshat pre-gate | Execution owner | Seshat after execution |
+|---|---|---|---|
+| Business/report intent and metric meaning | approved decisions and contracts | Seshat knowledge/governance | readiness and evidence |
+| Dashboard/page design | approved metrics, semantic evidence, narrative brief | Seshat design skills | human design review |
+| Native PBIR page/visual/filter/slicer/binding authoring | exact target with `dashboard_ready: pass`; official skill discoverable | Microsoft `powerbi-report-authoring` | binding, blueprint, and static validation |
+| Bounded theme/format/background/geometry edits | approved design and the command allow-list | Seshat PBIR adapter | binding-preservation and static validation |
+| Semantic-model edit | `semantic_model_ready: pass`; F016 policy | Microsoft semantic-model authoring + local Modeling MCP | readiness/evidence validation |
+| Published semantic-model query | governed target and tenant prerequisites | Microsoft remote Power BI MCP | evidence interpretation |
+| PBIP inspection/adoption | repository target | Seshat read-only tools | findings and next action |
+
+For native report authoring run:
+
+`seshat pbi-mcp doctor --intent report-authoring --target <table>`
+
+Spec 148 provides the read-only harness proof. Before delegation, run
+`seshat integrations setup --profile powerbi-fabric --harness <claude-code|codex>`
+and require the `fabric-skills` harness result to be discoverable. Never treat a
+cloned bundle as an activated executor, and never copy its implementation into
+Seshat.
 
 ## Design (dashboards and pages)
 
@@ -122,7 +148,8 @@ allow-listed installed helpers `seshat pbir-format-visual` and
 `seshat pbir-set-geometry`, which preserve every data binding byte-for-byte.
 Adding a slicer or changing what a visual or filter binds to is a BINDING
 change, not formatting -- route it back to the design gate. Anything outside
-the allow-list stays a plan for human review.
+the allow-list routes to official `powerbi-report-authoring` after the design
+gate; if that skill is not discoverable, stop and report the integration gap.
 
 ## Semantic measures (handoff)
 

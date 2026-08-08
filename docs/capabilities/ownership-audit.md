@@ -9,6 +9,16 @@ Per the issue's own Non-goals: *"Do not delete skills in the inventory phase."*
 Every `REMOVE`/`MERGE` row below is a **candidate requiring explicit human
 review**, not a decision.
 
+> **Current Power BI resolution (Spec 145, 2026-08-07).** The snapshot's Power
+> BI MERGE candidate is resolved without deletion: `powerbi-workflows` is the
+> broad public front door, `powerbi-dashboard-design` is a nested design-only
+> router, and `pbi-mcp-doctor` is the machine-checkable execution-owner selector.
+> Native report mechanics delegate to Microsoft's official
+> `powerbi-report-authoring` skill after Seshat's dashboard gate. Spec 148 adds
+> catalog-backed, read-only Claude/Codex activation and discovery proof. F016 is
+> only the separately parked live
+> semantic-model connection/refresh/query/publish adapter.
+
 ## 1. What the surfaces actually are
 
 The issue describes "four representation layers" that "can drift
@@ -61,8 +71,8 @@ documenting why `distribution/bundle-templates/` is exempt.
 | `human-artifact` | 1 |
 
 `ship_classification`: `consumer-capability` 23, `compass-verb` 10,
-`knowledge-root` 6, `development-only` 5, plus one aggregate entry covering all
-14 `speckit-*` skills.
+`knowledge-root` 6, `development-only` 5, `upstream-integration` 5, plus one
+aggregate entry covering all 14 `speckit-*` skills.
 
 ### MCP surfaces
 
@@ -92,18 +102,21 @@ registry** — just in code, and only for *installable* dependencies:
 | `dbt-agent-skills` | dbt Labs | `dbt-labs/dbt-agent-skills` | `catalog.py:168-175` |
 | `dbt-mcp` | dbt Labs | PyPI via `uvx` | `mcp_server=True`, `catalog.py:176-186` |
 | `dagster` | Dagster | PyPI | `catalog.py:191-198` |
+| `dagster-agent-skills` | Dagster | `dagster-io/skills` | official `dagster-expert` payload; Spec 148 verifies declared Claude/Codex discovery paths |
 | `fabric-skills` | Microsoft | `microsoft/skills-for-fabric` | `catalog.py:217-223` |
 | `powerbi-modeling-mcp` | Microsoft | `@microsoft/powerbi-modeling-mcp` (npm) | **preview/pre-GA**, `mode="readonly"`, `catalog.py:224-235` |
-| `seshat-dagster-adapter`, `dagster-skills` | Seshat (bundled) | — | `catalog.py:199-212` |
+| `seshat-dagster-adapter`, `seshat-dagster-workflows` | Seshat (bundled) | — | governed runtime adapter and public router; legacy `dagster-skills` is lookup-only compatibility |
 
 `seshat integrations setup` is the official-first pattern already generalized
 beyond Power BI: network-free plan by default, install only behind explicit
 human approval, confined to gitignored `.seshat/integrations/`, never
 pip-installing over the operator's interpreter, never writing a credential.
 
-**Gap:** this registry covers installable dependencies, not *skills*. Nothing
-records that (say) `dbt-workflows` is a Seshat adapter over dbt Labs' upstream
-surface. That is the real §C delta.
+**Resolved for dbt by Spec 146:** the capability manifest now distinguishes
+official `dbt-core`, `dbt-agent-skills`, and `dbt-mcp` ownership from the
+Seshat `dbt-transformation-adapter` delta. Spec 148 keeps catalog membership
+separate from skill activation and discovery and exposes a read-only proof for
+supported Claude/Codex paths. MCP registration/liveness remains a separate fact.
 
 ## 4. Workstream 2 — ownership classification
 
@@ -146,8 +159,8 @@ surface rather than forking it — the gap is **declaration**, not behavior.
 
 | Skill | Upstream | Seshat delta |
 | --- | --- | --- |
-| `dbt-transformation-adapter` | dbt Labs (`dbt-core`, `dbt-agent-skills`, `dbt-mcp`) | Mapping-Ready gating; run/test/parity recorded as derived evidence |
-| `dagster-orchestration-adapter` | Dagster | gate-aware asset graph; committed run evidence |
+| `dbt-transformation-adapter` | dbt Labs (`dbt-core`, `dbt-agent-skills`, `dbt-mcp`) | Mapping-Ready and accepted-plan gating; fixed selector/shadow policy; run/test/parity recorded as derived evidence. Generic dbt competence routes upstream once discovery is proven (Spec 146). |
+| `dagster-orchestration-adapter` | Dagster (`dagster`, `dagster-io/skills`) | Readiness-aware sequencing, named-human stops, closed execution policy, fail-closed propagation, and derived run evidence. Generic Dagster competence routes upstream once discovery is proven (Spec 147). |
 | `pbi-mcp-doctor` | Microsoft `@microsoft/powerbi-modeling-mcp` | read-only preflight; refuses `--skipconfirmation`/write-mode; fails closed before `semantic_model_ready` |
 | `pbir-authoring-adapter` | PBIR format (Microsoft) | tight allow-list on committed JSON; no live publish |
 
@@ -165,9 +178,10 @@ is currently **undocumented**. Needs a ruling.
 | 14 × `speckit-*` | upstream Spec Kit | **RESOLVED 2026-08-07 -- not a finding.** They *are* vendored upstream content, but sanctioned: written by upstream's own installer (`specify init --here --integration claude --script ps`, spec-kit `0.8.10`) in commit `1eb0c98`, which in the same commit amended the constitution to v1.1.0 to permit exactly this (`.specify/memory/constitution.md:556-563`). Hash-verified against `.specify/integrations/claude.manifest.json`, zero local drift, no Seshat vocabulary in any body. Principle II is scoped to the **Power BI execution adapter**, not to all tooling, so it does not bind here. Residual risk is narrower: no recorded re-vendor/upgrade path (no lockfile, no `specify upgrade` record), which is the "fork tax" the Principle II *rationale* warns about -- unpaid so far. All `development-only`; no shipped surface affected. |
 
 `pbip-workflow`, `pbip-xray`, `dashboard-design`, `powerbi-dashboard-design`,
-`powerbi-workflows` — Power BI layer. `powerbi-dashboard-design` and
-`powerbi-workflows` are both routers over overlapping surfaces; **MERGE
-candidate**, pending review.
+`powerbi-workflows` — Power BI layer. At this audit snapshot,
+`powerbi-dashboard-design` and `powerbi-workflows` appeared to be overlapping
+routers. **Resolved by Spec 145** as the broad-router / nested-design-router
+hierarchy recorded above; no merge or deletion was justified.
 
 ### GENERATE — already correct
 

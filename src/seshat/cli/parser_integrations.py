@@ -2,7 +2,11 @@
 
 import argparse
 
-from seshat.integrations.catalog import DEFAULT_PROFILE, PROFILE_NAMES
+from seshat.integrations.catalog import (
+    DEFAULT_PROFILE,
+    PROFILE_NAMES,
+    SUPPORTED_HARNESSES,
+)
 
 
 def add_integrations_parser(sub: argparse._SubParsersAction) -> None:
@@ -54,4 +58,14 @@ def add_integrations_parser(sub: argparse._SubParsersAction) -> None:
         dest="as_json",
         action="store_true",
         help="emit machine-readable results only",
+    )
+    setup.add_argument(
+        "--harness",
+        action="append",
+        choices=SUPPORTED_HARNESSES,
+        default=[],
+        help=(
+            "read-only discovery check for a supported agent harness; repeat to "
+            "check more than one (installation is never inferred as discovery)"
+        ),
     )

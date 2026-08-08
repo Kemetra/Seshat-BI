@@ -82,12 +82,16 @@ def integrations_main(args: Namespace) -> int:
 
     profile = getattr(args, "profile", None) or DEFAULT_PROFILE
     as_json = getattr(args, "as_json", False)
+    harnesses = tuple(dict.fromkeys(getattr(args, "harness", ()) or ()))
     # Live resolvers are constructed ONLY for --refresh. Without the flag the
     # plan cannot reach the network even by mistake: there is no index to call.
     resolvers = live_resolvers() if getattr(args, "refresh", False) else None
 
     try:
-        outcome = plan_profile(root, profile=profile, resolvers=resolvers)
+        plan_kwargs = {"profile": profile, "resolvers": resolvers}
+        if harnesses:
+            plan_kwargs["harnesses"] = harnesses
+        outcome = plan_profile(root, **plan_kwargs)
     except UnknownProfile as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -104,7 +108,10 @@ def integrations_main(args: Namespace) -> int:
             )
             return 2
         try:
-            outcome = apply_profile(root, profile=profile, resolvers=resolvers)
+            apply_kwargs = {"profile": profile, "resolvers": resolvers}
+            if harnesses:
+                apply_kwargs["harnesses"] = harnesses
+            outcome = apply_profile(root, **apply_kwargs)
         except UnknownProfile as exc:  # pragma: no cover - already validated above
             print(f"error: {exc}", file=sys.stderr)
             return 2

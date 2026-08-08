@@ -42,6 +42,11 @@ from seshat.integrations.catalog import (
     profiles_for,
 )
 from seshat.integrations.compat import apply_policy
+from seshat.integrations.discovery import (
+    DiscoveryInputs,
+    SkillDiscovery,
+    inspect_official_skills,
+)
 from seshat.integrations.lockfile import LockError, build_lock, read_lock, write_lock
 from seshat.integrations.resolvers import Resolution, Resolvers, resolve
 
@@ -58,7 +63,7 @@ NEEDS_ACTION = frozenset({FAILED, UNAVAILABLE, CONFLICT, INCOMPATIBLE})
 
 # Bundled skill paths, validated locally rather than downloaded.
 _BUNDLED_SKILLS = {
-    "dagster-skills": (
+    "seshat-dagster-workflows": (
         "integrations/claude-code/seshat-bi/skills/dagster-workflows/SKILL.md"
     ),
     "seshat-dagster-adapter": "src/seshat/dagster_adapter/__init__.py",
@@ -92,10 +97,13 @@ class SetupOutcome:
     rows: list[ComponentPlan] = field(default_factory=list)
     lock_written: Path | None = None
     notes: list[str] = field(default_factory=list)
+    discovery: list[SkillDiscovery] = field(default_factory=list)
 
     @property
     def needs_action(self) -> bool:
-        return any(row.needs_action for row in self.rows)
+        return any(row.needs_action for row in self.rows) or any(
+            result.needs_action for result in self.discovery
+        )
 
 
 @dataclass(frozen=True)
@@ -166,6 +174,15 @@ def _skill_dir(item: Component) -> Path:
     return SKILLS_DIR / item.id
 
 
+def _missing_required_payload(root: Path, item: Component) -> tuple[str, ...]:
+    """Catalog-declared payload files absent below ``root``."""
+    return tuple(
+        required
+        for required in item.required_paths
+        if not (root / Path(*required.split("/"))).is_file()
+    )
+
+
 def _venv_python(env: Path) -> Path:
     if sys.platform == "win32":
         return env / "Scripts/python.exe"
@@ -174,6 +191,24 @@ def _venv_python(env: Path) -> Path:
 
 def _profile_env(profile: str) -> Path:
     return ENV_DIR / profile
+
+
+def _resolved_refs(
+    components: list[Component], resolutions: list[Resolution]
+) -> dict[str, str]:
+    """The exact ref now resolved for each cloned-payload component.
+
+    Only GitHub components record a ref in their install marker, so only they
+    can be compared against one. Anything else is omitted, which leaves the
+    discovery drift check inert for that component rather than guessing.
+    """
+    return {
+        item.id: resolved.tag or resolved.commit
+        for item, resolved in zip(components, resolutions)
+        if item.source_type is SourceType.GITHUB
+        and not item.mcp_server
+        and (resolved.tag or resolved.commit)
+    }
 
 
 def _is_installed(root: Path, item: Component, profile: str) -> bool:
@@ -192,8 +227,9 @@ def _is_installed(root: Path, item: Component, profile: str) -> bool:
         # whatever index its version came from.
         return (root / NODE_DIR / item.id / ".seshat-installed").is_file()
     if item.source_type is SourceType.GITHUB:
-        marker = root / _skill_dir(item) / ".seshat-installed"
-        return marker.is_file()
+        target = root / _skill_dir(item)
+        marker = target / ".seshat-installed"
+        return marker.is_file() and not _missing_required_payload(target, item)
     interpreter = root / _venv_python(_profile_env(profile))
     if not interpreter.is_file():
         return False
@@ -234,6 +270,10 @@ def plan(
     *,
     profile: str = DEFAULT_PROFILE,
     resolvers: Resolvers | None = None,
+    harnesses: tuple[str, ...] = (),
+    discovery_runner=None,
+    harness_roots: dict[str, Path] | None = None,
+    discovery_tool_lookup=None,
 ) -> SetupOutcome:
     """The default: read-only, and network-free unless `resolvers` is supplied.
 
@@ -272,6 +312,22 @@ def plan(
 
     for item, resolved in zip(components, verdict.resolutions):
         outcome.rows.append(_plan_row(root, item, resolved, profile))
+    outcome.discovery.extend(
+        inspect_official_skills(
+            root,
+            components,
+            installed={
+                item.id: _is_installed(root, item, profile) for item in components
+            },
+            inputs=DiscoveryInputs(
+                harnesses=tuple(harnesses),
+                runner=discovery_runner,
+                harness_roots=harness_roots,
+                tool_lookup=discovery_tool_lookup,
+                resolved_refs=_resolved_refs(components, verdict.resolutions),
+            ),
+        )
+    )
     return outcome
 
 
@@ -417,6 +473,10 @@ def apply(
     profile: str = DEFAULT_PROFILE,
     resolvers: Resolvers,
     runner=None,
+    harnesses: tuple[str, ...] = (),
+    discovery_runner=None,
+    harness_roots: dict[str, Path] | None = None,
+    discovery_tool_lookup=None,
 ) -> SetupOutcome:
     """Install the approved plan into isolation, validate, then write the lock.
 
@@ -473,6 +533,22 @@ def apply(
     if installed:
         document = build_lock(profile, _now(), installed)
         outcome.lock_written = write_lock(root, document)
+    outcome.discovery.extend(
+        inspect_official_skills(
+            root,
+            components,
+            installed={
+                item.id: _is_installed(root, item, profile) for item in components
+            },
+            inputs=DiscoveryInputs(
+                harnesses=tuple(harnesses),
+                runner=discovery_runner,
+                harness_roots=harness_roots,
+                tool_lookup=discovery_tool_lookup,
+                resolved_refs=_resolved_refs(components, verdict.resolutions),
+            ),
+        )
+    )
     return outcome
 
 
@@ -584,6 +660,11 @@ def _install_github(req: _Install) -> tuple[str, str]:
     if failure is not None:
         shutil.rmtree(staging, ignore_errors=True)
         return FAILED, failure
+
+    missing = _missing_required_payload(staging, req.item)
+    if missing:
+        shutil.rmtree(staging, ignore_errors=True)
+        return FAILED, f"missing required payload: {', '.join(missing)}"
 
     target.parent.mkdir(parents=True, exist_ok=True)
     try:

@@ -603,9 +603,72 @@ capabilities:
       dispatch: "narrative-check"
       roadmap: "issue #452"
 
+  - id: seshat-bi-public-router
+    name: "Seshat BI public router"
+    summary: "Portable public front door that selects the applicable Seshat readiness, domain-knowledge, or governed integration workflow and returns one truthful next action or blocker; it performs no upstream execution itself."
+    state: shipped
+    authority: advisory
+    surface: skill
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: null
+    documentation: "distribution/bundle-templates/shared/skills/seshat-bi/SKILL.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
+      seshat_delta: "Selects the appropriate Seshat readiness, knowledge, and governed integration route while preserving hard stops and one truthful next action."
+      canonical_source: "distribution/bundle-templates/shared/skills/seshat-bi/SKILL.md"
+    references:
+      public_skill: "seshat-bi"
+
+  - id: powerbi-workflows-public-router
+    name: "Power BI public workflow router"
+    summary: "The broad public Power BI front door: classifies business, design, inspection, bounded formatting, native report-authoring, semantic-model, and published-query intents; applies Seshat pre/post gates and delegates native execution to the appropriate official Microsoft surface."
+    state: shipped
+    authority: advisory
+    surface: skill
+    requirements: []
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: null
+    documentation: "distribution/bundle-templates/shared/skills/powerbi-workflows/SKILL.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
+      upstream_project: "Microsoft"
+      upstream_surface: "skill"
+      upstream_reference: "microsoft/skills-for-fabric"
+      seshat_delta: "One broad intent router applying Seshat metric/readiness/evidence policy, selecting Seshat bounded helpers or official Microsoft executors, and returning results to Seshat validation without reproducing upstream execution."
+      canonical_source: "distribution/bundle-templates/shared/skills/powerbi-workflows/SKILL.md"
+      overlap_note: "Broad public front door. The internal powerbi-dashboard-design skill is a nested design-only router; pbi-mcp-doctor is the machine-checkable execution-owner selector, not a competing front door."
+    references:
+      public_skill: "powerbi-workflows"
+
+  - id: microsoft-powerbi-report-authoring
+    name: "Microsoft Power BI Report Authoring skill"
+    summary: "Official first-party skill for native PBIR report definition mechanics: pages, visuals, filters, slicers, bindings, formatting, themes, and validation. The integration catalog declares Claude Code and Codex activation paths, and the read-only harness probe must report discoverable before use."
+    state: deferred
+    authority: advisory
+    surface: skill
+    ships: false
+    ship_classification: upstream-integration
+    requirements: [optional-dependency]
+    provenance: unrecorded
+    readiness_stage: dashboard_ready
+    command: null
+    documentation: "docs/integrations/pbi-mcp-adapter.md"
+    ownership:
+      capability_owner: "official-upstream"
+      upstream_project: "Microsoft"
+      upstream_surface: "skill"
+      upstream_reference: "microsoft/skills-for-fabric"
+      overlap_note: "Official native report execution owner. Seshat supplies the dashboard-ready pre-gate and binding/blueprint/static post-validation; Spec 148 proves the declared harness path without treating installation as discovery."
+      update_policy: "Consume through the cataloged Microsoft bundle; verify upstream activation and compatibility before use and re-check on upstream revision changes."
+    references:
+      integration_component: "fabric-skills"
+
   - id: pbi-mcp-doctor
     name: "seshat pbi-mcp"
-    summary: "Read-only Power BI MCP doctor family (issue #450 slices 2-4, the F016 slot): detects the local environment (Node runtime, vendored modeling MCP, .mcp.json mode, PBIP on disk, semantic_model_ready state) and maps a declared task intent onto the governed surface recommendation; generates placeholder-only read-only .mcp.json templates and setup guidance behind a secret-scan refusal; runs a transport-mocked read-only preflight (capability discovery + target allowlist) that hard-refuses --skipconfirmation/write-mode configs and fails closed while semantic_model_ready has not passed. Grants no approval, emits no score; F016 stays parked -- no mutation path exists."
+    summary: "Read-only Power BI execution-owner selector and MCP preflight: detects local MCP facts plus semantic_model_ready/dashboard_ready state, maps closed intents to official Microsoft or bounded Seshat surfaces, and blocks native report authoring until an exact target passes dashboard readiness and official-skill discovery is proven. MCP config generation and preflight remain placeholder-only/read-only; F016 stays parked."
     state: shipped
     authority: agent-runnable
     surface: cli
@@ -619,9 +682,10 @@ capabilities:
       upstream_project: "Microsoft"
       upstream_surface: mcp
       upstream_reference: "@microsoft/powerbi-modeling-mcp"
-      seshat_delta: "Read-only preflight around Microsoft's modeling MCP: hard-refuses --skipconfirmation and write-mode configs, fails closed while semantic_model_ready has not passed, and emits placeholder-only templates behind a secret-scan refusal. No mutation path exists."
-      canonical_source: ".claude/skills/pbi-mcp-doctor/SKILL.md"
+      seshat_delta: "Machine-checkable intent selection plus read-only preflight: distinguishes official report skill, local/remote MCP, and bounded Seshat adapters; enforces target-scoped readiness, hard-refuses unsafe MCP modes, and never executes or grants approval."
+      canonical_source: "distribution/bundle-templates/shared/skills/pbi-mcp-doctor/SKILL.md"
       update_policy: "Upstream is PREVIEW / pre-GA and consumed in readonly mode only; re-verify the capability allowlist on any upstream version change."
+      overlap_note: "Invoked by the broad powerbi-workflows router for execution-shaped intent; it is a selector/preflight, not a second public Power BI front door."
     references:
       dispatch: "pbi-mcp"
       public_skill: "pbi-mcp-doctor"
@@ -845,10 +909,12 @@ capabilities:
     documentation: ".claude/skills/retail-validate/SKILL.md"
     ownership:
       capability_owner: "seshat-governance"
+      canonical_source: ".claude/skills/retail-validate/SKILL.md"
     references:
       dispatch: "validate"
       skill: "retail-validate"
       verb: "retail-validate"
+      public_skill: "retail-validate"
 
   - id: seshat-profile
     name: "seshat profile"
@@ -1015,6 +1081,7 @@ capabilities:
     documentation: ".claude/skills/retail-orchestrate/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
+      canonical_source: ".claude/skills/retail-orchestrate/SKILL.md"
     references:
       skill: "retail-orchestrate"
       verb: "retail-orchestrate"
@@ -1034,6 +1101,7 @@ capabilities:
     documentation: ".claude/skills/first-hour-compass/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
+      canonical_source: ".claude/skills/first-hour-compass/SKILL.md"
     references:
       skill: "first-hour-compass"
       verb: "first-hour-compass"
@@ -1054,6 +1122,7 @@ capabilities:
     documentation: ".claude/skills/retail-onboard-table/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
+      canonical_source: ".claude/skills/retail-onboard-table/SKILL.md"
     references:
       skill: "retail-onboard-table"
       verb: "retail-onboard-table"
@@ -1073,6 +1142,7 @@ capabilities:
     documentation: ".claude/skills/retail-discover-portfolio/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
+      canonical_source: ".claude/skills/retail-discover-portfolio/SKILL.md"
     references:
       skill: "retail-discover-portfolio"
       verb: "retail-discover-portfolio"
@@ -1092,6 +1162,7 @@ capabilities:
     documentation: ".claude/skills/business-knowledge-interview/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
+      canonical_source: ".claude/skills/business-knowledge-interview/SKILL.md"
     references:
       skill: "business-knowledge-interview"
       verb: "business-knowledge-interview"
@@ -1111,6 +1182,7 @@ capabilities:
     documentation: ".claude/skills/source-mapping/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
+      canonical_source: ".claude/skills/source-mapping/SKILL.md"
     references:
       skill: "source-mapping"
       verb: "source-mapping"
@@ -1130,6 +1202,7 @@ capabilities:
     documentation: ".claude/skills/kpi-contract-builder/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
+      canonical_source: ".claude/skills/kpi-contract-builder/SKILL.md"
     references:
       skill: "kpi-contract-builder"
       verb: "kpi-contract-builder"
@@ -1149,6 +1222,7 @@ capabilities:
     documentation: ".claude/skills/retail-build-warehouse/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
+      canonical_source: ".claude/skills/retail-build-warehouse/SKILL.md"
     references:
       skill: "retail-build-warehouse"
       verb: "retail-build-warehouse"
@@ -1168,13 +1242,83 @@ capabilities:
     documentation: ".claude/skills/retail-govern/SKILL.md"
     ownership:
       capability_owner: "seshat-governance"
+      canonical_source: ".claude/skills/retail-govern/SKILL.md"
     references:
       skill: "retail-govern"
       verb: "retail-govern"
 
+  - id: dbt-core-execution
+    name: "dbt Core native execution"
+    summary: "Official dbt CLI execution semantics for parse, compile, build, test, run, show, and native project behavior. Seshat invokes this executor through its governed wrapper when Seshat policy applies; skill-harness discovery is checked separately from runtime installation."
+    state: deferred
+    authority: advisory
+    surface: cli
+    ships: false
+    ship_classification: upstream-integration
+    requirements: [database, optional-dependency]
+    provenance: unrecorded
+    readiness_stage: not-stage-scoped
+    command: null
+    documentation: "docs/integrations/dbt-adapter.md"
+    ownership:
+      capability_owner: official-upstream
+      upstream_project: "dbt Labs"
+      upstream_surface: cli
+      upstream_reference: "dbt-core"
+      overlap_note: "Official native execution owner. Seshat supplies the Mapping Ready and accepted-plan pre-gates plus normalized evidence afterward; runtime installation and official skill discovery remain separate catalog facts."
+      update_policy: "Consume the cataloged pinned dbt Core/dbt-postgres pair; version changes require the compatibility review recorded by the Seshat adapter policy."
+    references:
+      integration_component: "dbt-core"
+
+  - id: dbt-agent-skills
+    name: "dbt Labs agent skills"
+    summary: "Official first-party skills for generic dbt model authoring, test design, command guidance, documentation lookup, MCP setup, and troubleshooting. The catalog declares native Claude Code and provenance-preserving Codex paths; the read-only probe must report discoverable before use."
+    state: deferred
+    authority: advisory
+    surface: skill
+    ships: false
+    ship_classification: upstream-integration
+    requirements: [optional-dependency]
+    provenance: unrecorded
+    readiness_stage: not-stage-scoped
+    command: null
+    documentation: "docs/integrations/dbt-adapter.md"
+    ownership:
+      capability_owner: official-upstream
+      upstream_project: "dbt Labs"
+      upstream_surface: skill
+      upstream_reference: "dbt-labs/dbt-agent-skills"
+      overlap_note: "Official generic dbt competence owner. Seshat routes governed project work back through its pre-gates and evidence seam; Spec 148 checks installed, activated, and discoverable separately."
+      update_policy: "Consume through the cataloged upstream repository and re-verify supported-harness activation plus compatibility when its revision changes."
+    references:
+      integration_component: "dbt-agent-skills"
+
+  - id: dbt-mcp
+    name: "dbt MCP"
+    summary: "Official dbt Labs MCP tool surface for native dbt CLI, metadata, discovery, documentation, and semantic-layer operations. Exact-version registration is cataloged; official skill-harness discovery does not imply MCP liveness or governed routing."
+    state: deferred
+    authority: advisory
+    surface: mcp
+    ships: false
+    ship_classification: upstream-integration
+    requirements: [optional-dependency]
+    provenance: unrecorded
+    readiness_stage: not-stage-scoped
+    command: null
+    documentation: "docs/integrations/dbt-adapter.md"
+    ownership:
+      capability_owner: official-upstream
+      upstream_project: "dbt Labs"
+      upstream_surface: mcp
+      upstream_reference: "dbt-mcp"
+      overlap_note: "Official MCP execution/tool owner. Seshat does not treat installed or registered as live/discoverable; Spec 148 covers official Agent Skills only, while MCP liveness remains a separate preflight fact."
+      update_policy: "Consume through the cataloged exact-version uvx registration and re-run registration, discovery, and compatibility checks on version changes."
+    references:
+      integration_component: "dbt-mcp"
+
   - id: dbt-transformation-adapter
     name: "dbt transformation adapter"
-    summary: "Implemented governed dbt candidate; runtime activation awaits mandatory compile/live proof and named-owner compatibility attestation."
+    summary: "Seshat governance adapter around official dbt Core execution: enforces Mapping Ready, accepted-plan identity, shadow schemas, citations, redaction, locking, parity, and derived evidence. Runtime activation still awaits mandatory compile/live proof and named-owner compatibility attestation."
     state: deferred
     authority: agent-runnable
     surface: execution-adapter
@@ -1188,11 +1332,12 @@ capabilities:
     ownership:
       capability_owner: seshat-adapter
       upstream_project: "dbt Labs"
-      upstream_surface: library
+      upstream_surface: cli
       upstream_reference: "dbt-core"
-      seshat_delta: "Gates dbt execution behind Mapping Ready, recomputes the plan before DB access so drift refuses to run, and records run/test/parity as DERIVED evidence -- a green dbt test is evidence, never an approval."
+      seshat_delta: "Gates official dbt Core execution behind Mapping Ready and an accepted-plan digest; enforces fixed selectors, shadow-schema isolation, citations, redaction, and locks; then records run/test/parity as DERIVED evidence -- a green dbt test is evidence, never an approval."
       canonical_source: ".claude/skills/dbt-transformation-adapter/SKILL.md"
       update_policy: "Pinned via the dbt extra (dbt-core, dbt-postgres); a major -- and until compatibility tests exist, minor -- bump needs a named-owner compatibility attestation."
+      overlap_note: "Thin Seshat policy/evidence seam around dbt-core-execution. Generic authoring, command help, docs, and troubleshooting belong to dbt-agent-skills when the Spec 148 harness probe passes, or to dbt-mcp when its separate preflight passes."
     references:
       roadmap: "F029"
       skill: "dbt-transformation-adapter"
@@ -1206,9 +1351,32 @@ capabilities:
         - "tests/contract/test_dbt_public_surface.py"
         - "tests/integration/test_dbt_artifact_flow.py"
 
+  - id: dagster-agent-skills
+    name: "Dagster agent skills"
+    summary: "Official first-party dagster-expert skill for generic Dagster assets, jobs, resources, components, project structure, schedules, sensors, automation, CLI use, validation, and troubleshooting. The catalog declares native Claude Code and provenance-preserving Codex paths; the read-only probe must report discoverable before use."
+    state: deferred
+    authority: advisory
+    surface: skill
+    ships: false
+    ship_classification: upstream-integration
+    requirements: [optional-dependency]
+    provenance: unrecorded
+    readiness_stage: not-stage-scoped
+    command: null
+    documentation: "docs/integrations/dagster-adapter.md"
+    ownership:
+      capability_owner: official-upstream
+      upstream_project: "Dagster"
+      upstream_surface: skill
+      upstream_reference: "dagster-io/skills"
+      overlap_note: "Official generic Dagster competence owner. Seshat routes governed BI orchestration back through its readiness, approval, execution-policy, and evidence seams; Spec 148 checks installed, activated, and discoverable separately."
+      update_policy: "Consume through the cataloged upstream repository and re-verify supported-harness activation plus compatibility when its revision changes."
+    references:
+      integration_component: "dagster-agent-skills"
+
   - id: dagster-orchestration-adapter
     name: "Dagster orchestration adapter"
-    summary: "Runs the medallion sequence unattended/in CI as a real Dagster asset graph (spec 134 runtime: orchestration/dagster/ project + seshat dagster doctor/run/evidence), executing only already-approved steps behind every gate, fail-closed, recording derived run evidence and deciding no readiness stage. The Bronze source is pluggable via --source-mode: the default csv landing path, or non-destructive existing-bronze DB-first (verify a pre-loaded bronze.<table> read-only, zero writes) (#404/#405)."
+    summary: "Seshat governance and evidence adapter around the official Dagster runtime: runs the medallion sequence unattended/in CI as a real asset graph, executing only already-approved steps behind every gate, failing closed, recording derived run evidence, and deciding no readiness stage. The Bronze source remains pluggable via --source-mode: csv landing or non-destructive existing-bronze verification. Generic Dagster competence belongs to the official dagster-expert skill."
     state: shipped
     authority: agent-runnable
     surface: execution-adapter
@@ -1224,9 +1392,10 @@ capabilities:
       upstream_project: "Dagster"
       upstream_surface: library
       upstream_reference: "dagster"
-      seshat_delta: "Expresses the medallion sequence as a Dagster asset graph that executes only already-approved steps, fails closed behind every gate, records derived run evidence, and decides no readiness stage."
+      seshat_delta: "Provides readiness-aware BI sequencing, named-human approval stops, closed execution policy, redaction, cross-tool progression, and fail-closed propagation around the official Dagster runtime; records derived run evidence and decides no readiness stage."
       canonical_source: ".claude/skills/dagster-orchestration-adapter/SKILL.md"
-      update_policy: "Pinned via the optional dagster extra; the seshat-dagster-adapter and dagster-skills components are Seshat-bundled and carry no upstream coordinate."
+      update_policy: "The Dagster runtime is pinned via the orchestration project; Seshat's adapter/router remain bundled, while official generic competence comes from the separately cataloged dagster-io/skills repository."
+      overlap_note: "Thin Seshat governance/evidence seam around Dagster. Generic asset, automation, project, CLI, and troubleshooting competence belongs to dagster-agent-skills whenever the Spec 148 harness probe passes."
     references:
       roadmap: "F030"
       skill: "dagster-orchestration-adapter"
@@ -1452,7 +1621,7 @@ capabilities:
 
   - id: powerbi-dashboard-design
     name: "powerbi-dashboard-design (router)"
-    summary: "Routes a design request into exactly one of four Visual Foundation surfaces (report visuals, background/canvas, theme JSON, implementation handoff)."
+    summary: "Nested design-only router under powerbi-workflows: routes a governed design request into one of four Visual Foundation surfaces and stops at an implementation handoff; it never selects or performs native execution."
     state: shipped
     authority: advisory
     surface: skill
@@ -1465,6 +1634,8 @@ capabilities:
     documentation: ".claude/skills/powerbi-dashboard-design/SKILL.md"
     ownership:
       capability_owner: "seshat-orchestrator"
+      seshat_delta: "Keeps Seshat's visual-design vocabulary and four-surface separation explicit after the broad router has selected design intent; it does not compete with official execution."
+      overlap_note: "Nested under powerbi-workflows for design intent only; Microsoft powerbi-report-authoring owns native report mechanics after the design gate."
     references:
       roadmap: "F011A"
       skill: "powerbi-dashboard-design"
@@ -1687,8 +1858,8 @@ capabilities:
   # ---------------------------------------------------------------------------
 
   - id: f034-built-dashboard-page
-    name: "F034 human-built Power BI dashboard page"
-    summary: "The approved dashboard design built into an actual PBIR report page -- a human Power BI Desktop action the gate already permits but that has not happened yet (the committed report page is still empty)."
+    name: "F034 implemented Power BI dashboard page"
+    summary: "The approved dashboard design realized in a PBIR page by Microsoft's official report-authoring skill when discoverable or by a human in Desktop, then reviewed against Seshat's binding map and readiness evidence."
     state: deferred
     authority: human-gated
     surface: human-artifact
@@ -1699,13 +1870,13 @@ capabilities:
     documentation: "docs/roadmap/roadmap.md"
     ownership:
       capability_owner: "human-deliverable"
-      seshat_delta: "A human Power BI Desktop action the gate permits; Seshat contributes the approved design and the conformity check, not the build."
+      seshat_delta: "The deliverable remains human-approved; Seshat contributes the approved design and conformity checks while native PBIR mechanics belong to Microsoft tooling or Desktop."
     references:
       roadmap: "F034"
 
   - id: f016-powerbi-execution-adapter
     name: "F016 Power BI execution adapter"
-    summary: "Materializes/publishes an approved model via the official Power BI MCP/connection; execution-only, gated on Semantic Model Ready."
+    summary: "Parked live semantic-model connection, refresh, query, or publish adapter via official Power BI surfaces; execution-only and gated. It does not own PBIR report-page authoring."
     state: deferred
     authority: agent-runnable
     surface: execution-adapter
@@ -1719,7 +1890,7 @@ capabilities:
       upstream_project: "Microsoft"
       upstream_surface: "mcp"
       upstream_reference: "@microsoft/powerbi-modeling-mcp"
-      seshat_delta: "Execution-only materialize/publish of an already-approved model, gated on Semantic Model Ready. PARKED: no mutation path exists yet."
+      seshat_delta: "Execution-only live semantic-model connection/refresh/query/publish of already-approved artifacts, gated on Semantic Model Ready and named approvals. PARKED: no mutation path exists yet; report-page authoring is separate."
     references:
       roadmap: "F016"
 

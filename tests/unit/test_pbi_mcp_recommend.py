@@ -39,8 +39,11 @@ def _facts(**overrides: object) -> DetectedFacts:
         "vendored_runtime": PRESENT,
         "mcp_config": CONFIG_READ_ONLY,
         "pbip_project": PRESENT,
+        "target": "orders",
         "semantic_model_ready": READINESS_PASS,
         "semantic_ready_tables": ("orders",),
+        "dashboard_ready": READINESS_PASS,
+        "dashboard_ready_tables": ("orders",),
         "publish_ready_approval": APPROVAL_ABSENT,
     }
     base.update(overrides)
@@ -75,6 +78,73 @@ def test_case3_formatting_stays_on_the_pbir_adapter() -> None:
     assert not result.blocked
 
 
+def test_native_report_authoring_routes_to_official_skill_but_fails_closed() -> None:
+    result = recommend("report-authoring", _facts())
+    assert result.surface == "official-powerbi-report-authoring"
+    assert result.blocked
+    joined = " ".join(result.missing_prerequisites)
+    assert "discoverable" in joined
+    assert "Spec 148" in joined
+    assert "PBIR" in result.next_human_step
+
+
+def test_report_authoring_requires_an_exact_target() -> None:
+    result = recommend("report-authoring", _facts(target=None))
+    assert result.blocked
+    assert "--target" in " ".join(result.missing_prerequisites)
+
+
+def test_report_authoring_fails_closed_on_target_dashboard_gate() -> None:
+    result = recommend(
+        "report-authoring",
+        _facts(dashboard_ready=READINESS_NOT_PASS, dashboard_ready_tables=()),
+    )
+    assert result.surface == "official-powerbi-report-authoring"
+    assert result.blocked
+    assert "dashboard_ready" in result.why
+
+
+def test_report_authoring_refuses_a_dashboard_pass_without_its_semantic_stage() -> None:
+    """A later stage can never stand in for the one before it (Codex P2, #597).
+
+    The record is internally inconsistent: the target claims dashboard_ready =
+    pass while no semantic_model_ready pass names it. Routing authoring here
+    would skip a readiness stage on the strength of a hand-edited later stage.
+    """
+    result = recommend(
+        "report-authoring",
+        _facts(semantic_ready_tables=(), semantic_model_ready=READINESS_NOT_PASS),
+    )
+    assert result.blocked
+    joined = " ".join(result.missing_prerequisites)
+    assert "semantic_model_ready" in joined
+    assert "mappings/orders/readiness-status.yaml" in joined
+    assert "stages cannot be skipped" in result.why
+
+
+def test_report_authoring_refuses_another_tables_semantic_pass() -> None:
+    """The repo-wide semantic fold reads `pass` whenever ANY table passes, so a
+    target-scoped gate must check membership, not the folded status."""
+    result = recommend(
+        "report-authoring",
+        _facts(semantic_model_ready=READINESS_PASS, semantic_ready_tables=("returns",)),
+    )
+    assert result.blocked
+    assert "semantic_model_ready" in " ".join(result.missing_prerequisites)
+
+
+def test_report_authoring_gate_sentence_names_both_stages_when_consistent() -> None:
+    """A fully consistent target still reports both stages as the basis."""
+    result = recommend("report-authoring", _facts())
+    assert "semantic_model_ready = pass" in result.why
+    assert "dashboard_ready = pass" in result.why
+    # Still blocked: the Spec 148 discovery proof is a separate prerequisite.
+    assert result.blocked
+    assert not any(
+        "readiness-status.yaml" in item for item in result.missing_prerequisites
+    )
+
+
 def test_case4_desktop_verification_routes_to_desktop_bridge() -> None:
     result = recommend("desktop-verification", _facts())
     assert result.surface == "desktop-bridge"
@@ -106,12 +176,12 @@ def test_case8_sensitive_production_routes_to_hardened_read_only() -> None:
     assert "Service Principal" in result.why or "Service-Principal" in result.why
 
 
-def test_all_eight_surfaces_are_distinct() -> None:
+def test_all_intent_surfaces_are_distinct_except_blocked_variants() -> None:
     surfaces = {recommend(intent, _facts()).surface for intent in INTENTS}
     surfaces.add(
         recommend("model-edit", _facts(semantic_model_ready="missing")).surface
     )
-    assert len(surfaces) == 8
+    assert len(surfaces) == 9
 
 
 # --------------------------------------------------------------------------- #
@@ -167,7 +237,7 @@ def test_advisory_written_once_then_refused(tmp_path: Path) -> None:
     )
     assert written == tmp_path / ADVISORY_RELPATH
     text = written.read_text(encoding="utf-8")
-    assert "schema_version: 1" in text
+    assert "schema_version: 2" in text
     assert "grants no approval" in text
     with pytest.raises(AdvisoryWriteError, match="write-once"):
         write_advisory(
@@ -187,6 +257,7 @@ def test_advisory_render_is_deterministic_ascii_yaml() -> None:
     assert parsed["schema_version"] == rec_mod.SCHEMA_VERSION
     assert parsed["recommendation"]["surface"] == "local-modeling-mcp"
     assert parsed["detected"]["semantic_model_ready"] == "pass"
+    assert parsed["detected"]["dashboard_ready"] == "pass"
     assert "score" not in first.lower()
 
 

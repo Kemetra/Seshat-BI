@@ -63,19 +63,19 @@ This skill reads the gate; it does NOT re-derive contract approval
 ([`readiness-pipeline.md`](../../../docs/readiness/readiness-pipeline.md): "pass"
 of the prior stage is the entry condition).
 
-## Author vs publish boundary (rule 6)
+## Design vs execution boundary (rule 6)
 
-| In scope (author) | Out of scope (F016 owns) |
+| In scope (design authoring) | Out of scope (execution owner) |
 |-------------------|--------------------------|
-| layout plan, visual list, visual->contract binding map | generating/publishing the PBIR report |
+| layout plan, visual list, visual->contract binding map | native PBIR authoring: official `powerbi-report-authoring` after the gate |
 | optional blank PBIR scaffold a human fills | opening Power BI Desktop or a DB connection |
 | running static `seshat check` on committed report text | calling the Power BI execution adapter (official Power BI MCP / connection) |
 | recording `dashboard_ready: warning` + evidence | publishing to a workspace / refreshing a model |
 
-The skill authors, checks, and STOPS. Name F016 (the Power BI execution adapter --
-official Power BI MCP / connection; `pbi-cli` no longer preferred; the last and gated,
-EXECUTION-ONLY feature) as the owner of any execution step. If the procedure ever needs
-to publish or author the PBIR via automation, STOP and hand off to F016.
+The skill authors, checks, and STOPS. Route native PBIR implementation through
+`powerbi-workflows` to Microsoft's official report-authoring skill when
+discoverable. Route live semantic-model connection/refresh/query/publish to the
+separately parked F016 adapter. Never collapse these owners.
 
 ## Preconditions (STOP unless ALL hold)
 

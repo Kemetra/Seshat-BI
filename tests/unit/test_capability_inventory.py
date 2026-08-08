@@ -627,3 +627,152 @@ def test_o6_fires_on_a_bare_numeric_ownership_value() -> None:
     assert oracle._axis_numeric_scalars(bad), "a bare int was accepted"
     good = {"id": "quoted", "ownership": {"upstream_reference": "2026"}}
     assert oracle._axis_numeric_scalars(good) == []
+
+
+# ---------------------------------------------------------------------------
+# Spec 143 -- public skill ownership and canonical-source integrity
+# ---------------------------------------------------------------------------
+
+
+def _public_capability(
+    entry_id: str,
+    *,
+    public_skill: str | None = None,
+    skill: str | None = None,
+    surface: str = "skill",
+    canonical_source: str = "docs/capabilities/README.md",
+) -> dict:
+    references: dict[str, str] = {}
+    if public_skill is not None:
+        references["public_skill"] = public_skill
+    if skill is not None:
+        references["skill"] = skill
+    return {
+        "id": entry_id,
+        "surface": surface,
+        "ownership": {
+            "capability_owner": "seshat-orchestrator",
+            "canonical_source": canonical_source,
+        },
+        "references": references,
+    }
+
+
+def _public_problems(
+    manifest: list[dict],
+    public_skills: set[str] | None = None,
+    tracked_files: set[str] | None = None,
+) -> list[str]:
+    return oracle.public_capability_integrity_violations(
+        _REPO_ROOT,
+        manifest=manifest,
+        public_skills={"demo"} if public_skills is None else public_skills,
+        tracked_files=(
+            {"docs/capabilities/README.md"} if tracked_files is None else tracked_files
+        ),
+    )
+
+
+def test_public_integrity_rejects_a_skill_without_an_owner() -> None:
+    problems = _public_problems([])
+    assert any(
+        "demo" in problem and "no capability owner" in problem for problem in problems
+    )
+
+
+def test_public_integrity_rejects_duplicate_explicit_owners() -> None:
+    manifest = [
+        _public_capability("first", public_skill="demo"),
+        _public_capability("second", public_skill="demo"),
+    ]
+    problems = _public_problems(manifest)
+    assert any(
+        "demo" in problem and "first" in problem and "second" in problem
+        for problem in problems
+    )
+
+
+def test_public_integrity_rejects_ambiguous_same_name_skill_fallback() -> None:
+    manifest = [
+        _public_capability("first", skill="demo"),
+        _public_capability("second", skill="demo"),
+    ]
+    problems = _public_problems(manifest)
+    assert any("demo" in problem and "ambiguous" in problem for problem in problems)
+
+
+def test_explicit_public_owner_wins_over_internal_skill_references() -> None:
+    manifest = [
+        _public_capability("owner", public_skill="demo"),
+        _public_capability("caller", skill="demo", surface="cli"),
+        _public_capability("legacy-skill", skill="demo"),
+    ]
+    assert _public_problems(manifest) == []
+
+
+def test_public_integrity_rejects_a_stale_explicit_public_link() -> None:
+    manifest = [_public_capability("stale-owner", public_skill="not-shipped")]
+    problems = _public_problems(manifest)
+    assert any(
+        "stale-owner" in problem and "not-shipped" in problem for problem in problems
+    )
+
+
+@pytest.mark.parametrize(
+    ("source", "tracked", "needle"),
+    [
+        ("", set(), "canonical_source"),
+        ("../outside.md", {"../outside.md"}, "repository-relative"),
+        ("C:/outside.md", {"C:/outside.md"}, "repository-relative"),
+        (
+            "docs/capabilities/not-present.md",
+            {"docs/capabilities/not-present.md"},
+            "not a regular file",
+        ),
+        ("docs/capabilities/README.md", set(), "not tracked"),
+        (
+            "integrations/claude-code/seshat-bi/skills/demo/SKILL.md",
+            {"integrations/claude-code/seshat-bi/skills/demo/SKILL.md"},
+            "generated",
+        ),
+        (
+            "integrations/codex/seshat-bi/skills/demo/SKILL.md",
+            {"integrations/codex/seshat-bi/skills/demo/SKILL.md"},
+            "generated",
+        ),
+    ],
+)
+def test_public_integrity_rejects_invalid_canonical_sources(
+    source: str, tracked: set[str], needle: str
+) -> None:
+    manifest = [
+        _public_capability("owner", public_skill="demo", canonical_source=source)
+    ]
+    problems = _public_problems(manifest, tracked_files=tracked)
+    assert any("owner" in problem and needle in problem for problem in problems)
+
+
+def test_internal_declared_canonical_source_is_also_validated() -> None:
+    manifest = [
+        {
+            "id": "internal",
+            "surface": "skill",
+            "ownership": {
+                "capability_owner": "seshat-governance",
+                "canonical_source": "docs/capabilities/not-present.md",
+            },
+            "references": {"skill": "internal-only"},
+        },
+        _public_capability("owner", public_skill="demo"),
+    ]
+    problems = _public_problems(
+        manifest,
+        tracked_files={
+            "docs/capabilities/README.md",
+            "docs/capabilities/not-present.md",
+        },
+    )
+    assert any(
+        "internal" in problem and "not a regular file" in problem
+        for problem in problems
+    )

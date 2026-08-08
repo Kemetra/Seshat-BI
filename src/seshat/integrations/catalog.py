@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 INTEGRATIONS_DIR = Path(".seshat/integrations")
 MCP_CONFIG = INTEGRATIONS_DIR / "mcp.json"
@@ -56,12 +56,37 @@ class SourceType(str, Enum):
     BUNDLED = "bundled"
 
 
+CLAUDE_CODE = "claude-code"
+CODEX = "codex"
+SUPPORTED_HARNESSES = (CLAUDE_CODE, CODEX)
+
+
+@dataclass(frozen=True)
+class SkillTarget:
+    """One upstream skill identity a supported harness must expose."""
+
+    name: str
+    source_path: str
+    plugin_id: str | None = None
+
+
+@dataclass(frozen=True)
+class SkillActivation:
+    """Catalog-owned discovery contract for one official package and harness."""
+
+    harness: str
+    mechanism: str
+    targets: tuple[SkillTarget, ...]
+    install_hint: str
+
+
 # Allowlisted official sources. A component may name only a source declared
 # here; an arbitrary URL is not installable by construction.
 ALLOWLISTED_SOURCES: dict[str, str] = {
     "pypi": "https://pypi.org",
     "github-microsoft-fabric": "https://github.com/microsoft/skills-for-fabric",
     "github-dbt-labs-skills": "https://github.com/dbt-labs/dbt-agent-skills",
+    "github-dagster-skills": "https://github.com/dagster-io/skills",
     "npm-microsoft": "https://registry.npmjs.org",
     "seshat-bundled": "seshat",
 }
@@ -93,10 +118,64 @@ class Component:
     # type would silently skip writing its config -- and skip the conflict and
     # exact-version checks that go with it.
     mcp_server: bool = False
+    # Files that must exist inside an installed upstream payload. This belongs
+    # to the catalog because it is component identity/validation metadata, not
+    # installer behavior. Empty for components whose installed state is proven
+    # by package metadata, MCP registration, or a bundled repository path.
+    required_paths: tuple[str, ...] = ()
+    skill_activations: tuple[SkillActivation, ...] = ()
 
     def __post_init__(self) -> None:
         if self.source not in ALLOWLISTED_SOURCES:
             raise ValueError(f"{self.id}: source is not allowlisted: {self.source}")
+        for required in self.required_paths:
+            _validate_relative_path(self.id, required, label="required path")
+        self._validate_skill_activations()
+
+    def _validate_skill_activations(self) -> None:
+        """Each declared harness appears once and names contained targets."""
+        declared_harnesses: set[str] = set()
+        for activation in self.skill_activations:
+            if activation.harness not in SUPPORTED_HARNESSES:
+                raise ValueError(
+                    f"{self.id}: unsupported skill harness: {activation.harness!r}"
+                )
+            if activation.harness in declared_harnesses:
+                raise ValueError(
+                    f"{self.id}: duplicate skill harness: {activation.harness!r}"
+                )
+            declared_harnesses.add(activation.harness)
+            self._validate_activation_targets(activation)
+
+    def _validate_activation_targets(self, activation: SkillActivation) -> None:
+        """Every target names a non-blank skill at a contained relative path."""
+        if not activation.targets:
+            raise ValueError(f"{self.id}: skill activation needs at least one target")
+        for target in activation.targets:
+            if not target.name.strip():
+                raise ValueError(f"{self.id}: skill target name is blank")
+            _validate_relative_path(
+                self.id, target.source_path, label="skill source path"
+            )
+
+
+def _validate_relative_path(component_id: str, value: str, *, label: str) -> None:
+    """Refuse paths that can escape an installed upstream payload."""
+
+    posix = PurePosixPath(value)
+    windows = PureWindowsPath(value)
+    if (
+        not value.strip()
+        or "\\" in value
+        or posix.is_absolute()
+        or windows.is_absolute()
+        or windows.drive
+        or ".." in posix.parts
+    ):
+        raise ValueError(
+            f"{component_id}: {label} must be a contained relative POSIX path: "
+            f"{value!r}"
+        )
 
 
 # --------------------------------------------------------------------------- #
@@ -172,6 +251,60 @@ _TRANSFORMATION = (
         channel=Channel.STABLE,
         role="upstream dbt Labs agent skill bundle",
         coordinate="dbt-labs/dbt-agent-skills",
+        required_paths=(
+            "skills/dbt/skills/using-dbt-for-analytics-engineering/SKILL.md",
+            "skills/dbt/skills/configuring-dbt-mcp-server/SKILL.md",
+        ),
+        skill_activations=(
+            SkillActivation(
+                harness=CLAUDE_CODE,
+                mechanism="native-plugin",
+                targets=(
+                    SkillTarget(
+                        name="using-dbt-for-analytics-engineering",
+                        source_path=(
+                            "skills/dbt/skills/"
+                            "using-dbt-for-analytics-engineering/SKILL.md"
+                        ),
+                        plugin_id="dbt@dbt-agent-marketplace",
+                    ),
+                    SkillTarget(
+                        name="configuring-dbt-mcp-server",
+                        source_path=(
+                            "skills/dbt/skills/configuring-dbt-mcp-server/SKILL.md"
+                        ),
+                        plugin_id="dbt@dbt-agent-marketplace",
+                    ),
+                ),
+                install_hint=(
+                    "/plugin marketplace add dbt-labs/dbt-agent-skills; "
+                    "/plugin install dbt@dbt-agent-marketplace"
+                ),
+            ),
+            SkillActivation(
+                harness=CODEX,
+                mechanism="agent-skills-projection",
+                targets=(
+                    SkillTarget(
+                        name="using-dbt-for-analytics-engineering",
+                        source_path=(
+                            "skills/dbt/skills/"
+                            "using-dbt-for-analytics-engineering/SKILL.md"
+                        ),
+                    ),
+                    SkillTarget(
+                        name="configuring-dbt-mcp-server",
+                        source_path=(
+                            "skills/dbt/skills/configuring-dbt-mcp-server/SKILL.md"
+                        ),
+                    ),
+                ),
+                install_hint=(
+                    "link the locked upstream skill directories into "
+                    "$CODEX_HOME/skills and start a new Codex session"
+                ),
+            ),
+        ),
     ),
     Component(
         id="dbt-mcp",
@@ -204,11 +337,55 @@ _ORCHESTRATION = (
         role="Seshat's own read-only Dagster gate adapter",
     ),
     Component(
-        id="dagster-skills",
+        id="seshat-dagster-workflows",
         source_type=SourceType.BUNDLED,
         source="seshat-bundled",
         channel=Channel.BUNDLED,
-        role="bundled Dagster workflow skills, validated locally",
+        role="Seshat's bundled governed Dagster workflow router",
+    ),
+    Component(
+        id="dagster-agent-skills",
+        source_type=SourceType.GITHUB,
+        source="github-dagster-skills",
+        channel=Channel.STABLE,
+        role="upstream Dagster agent skill bundle",
+        coordinate="dagster-io/skills",
+        required_paths=("skills/dagster-expert/skills/dagster-expert/SKILL.md",),
+        skill_activations=(
+            SkillActivation(
+                harness=CLAUDE_CODE,
+                mechanism="native-plugin",
+                targets=(
+                    SkillTarget(
+                        name="dagster-expert",
+                        source_path=(
+                            "skills/dagster-expert/skills/dagster-expert/SKILL.md"
+                        ),
+                        plugin_id="dagster-expert@dagster",
+                    ),
+                ),
+                install_hint=(
+                    "/plugin marketplace add dagster-io/skills; "
+                    "/plugin install dagster-expert@dagster"
+                ),
+            ),
+            SkillActivation(
+                harness=CODEX,
+                mechanism="agent-skills-projection",
+                targets=(
+                    SkillTarget(
+                        name="dagster-expert",
+                        source_path=(
+                            "skills/dagster-expert/skills/dagster-expert/SKILL.md"
+                        ),
+                    ),
+                ),
+                install_hint=(
+                    "link the locked upstream skill directory into "
+                    "$CODEX_HOME/skills and start a new Codex session"
+                ),
+            ),
+        ),
     ),
 )
 
@@ -220,6 +397,57 @@ _POWERBI_FABRIC = (
         channel=Channel.STABLE,
         role="upstream Microsoft Fabric and Power BI skill bundle",
         coordinate="microsoft/skills-for-fabric",
+        required_paths=(
+            "skills/semantic-model-authoring/SKILL.md",
+            "plugins/powerbi-authoring/skills/powerbi-report-authoring/SKILL.md",
+        ),
+        skill_activations=(
+            SkillActivation(
+                harness=CLAUDE_CODE,
+                mechanism="native-plugin",
+                targets=(
+                    SkillTarget(
+                        name="semantic-model-authoring",
+                        source_path="skills/semantic-model-authoring/SKILL.md",
+                        plugin_id="fabric-skills@fabric-collection",
+                    ),
+                    SkillTarget(
+                        name="powerbi-report-authoring",
+                        source_path=(
+                            "plugins/powerbi-authoring/skills/"
+                            "powerbi-report-authoring/SKILL.md"
+                        ),
+                        plugin_id="powerbi-authoring@fabric-collection",
+                    ),
+                ),
+                install_hint=(
+                    "/plugin marketplace add microsoft/skills-for-fabric; "
+                    "/plugin install fabric-skills@fabric-collection; "
+                    "/plugin install powerbi-authoring@fabric-collection"
+                ),
+            ),
+            SkillActivation(
+                harness=CODEX,
+                mechanism="agent-skills-projection",
+                targets=(
+                    SkillTarget(
+                        name="semantic-model-authoring",
+                        source_path="skills/semantic-model-authoring/SKILL.md",
+                    ),
+                    SkillTarget(
+                        name="powerbi-report-authoring",
+                        source_path=(
+                            "plugins/powerbi-authoring/skills/"
+                            "powerbi-report-authoring/SKILL.md"
+                        ),
+                    ),
+                ),
+                install_hint=(
+                    "link the locked upstream skill directories into "
+                    "$CODEX_HOME/skills and start a new Codex session"
+                ),
+            ),
+        ),
     ),
     Component(
         id="powerbi-modeling-mcp",
@@ -327,10 +555,16 @@ def profile_components(profile: str) -> tuple[Component, ...]:
         raise UnknownProfile(f"unknown profile {profile!r}; known: {known}") from exc
 
 
+LEGACY_COMPONENT_IDS: dict[str, str] = {
+    "dagster-skills": "seshat-dagster-workflows",
+}
+
+
 def component(component_id: str) -> Component:
     """One component by id, across every profile."""
+    resolved_id = LEGACY_COMPONENT_IDS.get(component_id, component_id)
     for candidate in PROFILES[ANALYTICS_FULL]:
-        if candidate.id == component_id:
+        if candidate.id == resolved_id:
             return candidate
     raise KeyError(component_id)
 

@@ -81,6 +81,36 @@ def test_an_off_allowlist_source_is_refused_at_construction() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "required_path",
+    ["", "/absolute/SKILL.md", "../outside/SKILL.md", "skills\\bad\\SKILL.md"],
+)
+def test_catalog_refuses_invalid_required_payload_paths(required_path: str) -> None:
+    with pytest.raises(ValueError, match="required path"):
+        Component(
+            id="invalid-payload",
+            source_type=SourceType.GITHUB,
+            source="github-microsoft-fabric",
+            channel=Channel.STABLE,
+            role="test",
+            coordinate="microsoft/skills-for-fabric",
+            required_paths=(required_path,),
+        )
+
+
+def test_official_skill_payload_requirements_live_in_the_catalog() -> None:
+    from seshat.integrations.catalog import component
+
+    assert component("fabric-skills").required_paths == (
+        "skills/semantic-model-authoring/SKILL.md",
+        "plugins/powerbi-authoring/skills/powerbi-report-authoring/SKILL.md",
+    )
+    assert component("dbt-agent-skills").required_paths == (
+        "skills/dbt/skills/using-dbt-for-analytics-engineering/SKILL.md",
+        "skills/dbt/skills/configuring-dbt-mcp-server/SKILL.md",
+    )
+
+
 # --------------------------------------------------------------------------- #
 # 8. JSON purity.
 # --------------------------------------------------------------------------- #

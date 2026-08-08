@@ -27,6 +27,7 @@ from seshat.pbi_mcp.detect import (
     classify_mcp_config,
     detect_facts,
     read_semantic_readiness,
+    read_stage_readiness,
 )
 
 pytestmark = pytest.mark.unit
@@ -54,7 +55,8 @@ def _write_readiness(root: Path, table: str, status: str, approve: bool) -> None
         else "\napprovals: []\n"
     )
     record.write_text(
-        f'stages:\n  semantic_model_ready:\n    status: "{status}"\n{approvals}',
+        f'stages:\n  semantic_model_ready:\n    status: "{status}"\n'
+        f'  dashboard_ready:\n    status: "{status}"\n{approvals}',
         encoding="utf-8",
     )
 
@@ -71,6 +73,32 @@ def test_no_node_no_vendored_no_config_no_pbip(tmp_path: Path) -> None:
     assert facts.mcp_config == CONFIG_ABSENT
     assert facts.pbip_project == ABSENT
     assert facts.semantic_model_ready == READINESS_MISSING
+    assert facts.dashboard_ready == READINESS_MISSING
+
+
+def test_target_scoped_dashboard_readiness_never_uses_another_table(
+    tmp_path: Path,
+) -> None:
+    _write_readiness(tmp_path, "orders", "pass", approve=False)
+    _write_readiness(tmp_path, "sales", "blocked", approve=False)
+    facts = detect_facts(tmp_path, which=_NO_NODE, target="sales")
+    assert facts.target == "sales"
+    assert facts.dashboard_ready == READINESS_NOT_PASS
+    assert facts.dashboard_ready_tables == ()
+
+
+def test_invalid_target_cannot_escape_the_mappings_directory(tmp_path: Path) -> None:
+    _write_readiness(tmp_path, "orders", "pass", approve=False)
+    facts = detect_facts(tmp_path, which=_NO_NODE, target="../orders")
+    assert facts.dashboard_ready == READINESS_NOT_PASS
+    assert facts.dashboard_ready_tables == ()
+
+
+def test_stage_reader_folds_dashboard_passes_categorically(tmp_path: Path) -> None:
+    _write_readiness(tmp_path, "orders", "pass", approve=False)
+    status, tables = read_stage_readiness(tmp_path, "dashboard_ready")
+    assert status == READINESS_PASS
+    assert tables == ("orders",)
 
 
 def test_node_and_vendored_and_pbip_detected(tmp_path: Path) -> None:

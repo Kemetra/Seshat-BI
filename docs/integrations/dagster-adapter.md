@@ -19,6 +19,29 @@
 > RECORDS what each asset did as derived run-evidence, deciding no readiness stage and
 > publishing nothing.
 
+## Official-first ownership routing
+
+`dagster-workflows` remains the broad Seshat entry point because it decides
+whether an intent needs Seshat's readiness policy or generic upstream Dagster
+competence. It does not make Seshat the owner of native Dagster mechanics.
+
+| Intent | Seshat pre-gate | Execution owner | Seshat post-validation |
+|---|---|---|---|
+| Decide whether orchestration fits | Readiness and orchestration assessment | Seshat routing policy | Earliest truthful next action |
+| Governed medallion run | Per-asset readiness and approval gates | Official Dagster runtime through `seshat dagster` | Derived run evidence and blockers |
+| Assets/jobs/resources/project authoring | Official-skill discovery proof | Official `dagster-expert` skill | Re-enter Seshat gates only for governed work |
+| Schedules/sensors/automation | Official-skill discovery proof | Official `dagster-expert` skill | Seshat automations remain stopped until named approval |
+| Generic CLI/debugging/validation | Official-skill discovery proof | Official `dagster-expert` skill | No automatic readiness effect |
+
+The integration catalog now separates `seshat-dagster-workflows`, the bundled
+Seshat router, from `dagster-agent-skills`, the official `dagster-io/skills`
+payload. Catalog membership and installation still do not imply activation.
+Spec 148 declares the native Claude plugin and provenance-preserving Codex
+projection, and `seshat integrations setup --profile orchestration --harness
+<claude-code|codex>` checks them read-only. Generic upstream intent remains
+blocked unless that exact result is `discoverable`; native Dagster execution is
+not a fallback for the governed Seshat project.
+
 ## Why it exists (and what it is not)
 
 The kit already sequences the medallion stages interactively: `retail-orchestrate` (F005), where
