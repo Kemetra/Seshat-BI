@@ -37,6 +37,14 @@ review**, not a decision.
 >    `ships` / `ship_classification` and never reads
 >    `ownership.capability_owner`. This discharges §5 finding 3 and **closes**
 >    §5 finding 2 (see its own correction note).
+>    *Gap found and fixed while recording this ruling (PR #601):* spec 142's
+>    T042b was checked `[x]` with the deliverable "four entries, each with a
+>    non-empty delta", but all four dev-workflow entries carried only
+>    `capability_owner` -- the `seshat_delta` half was never written. The four
+>    deltas are now populated verbatim from the OD-2 table, and T042b carries a
+>    correction note. Only 18 of 110 entries carry a `seshat_delta`, which is by
+>    design (the field is required for the dev-workflow and adapter classes, not
+>    universally) -- but for these four it was mandatory and missing.
 > 2. **No official replacement is registered for generic development
 >    competence.** `src/seshat/integrations/catalog.py` -- the repo's registry of
 >    proven upstream owners -- contains only data/BI tooling (duckdb, polars,
@@ -72,11 +80,19 @@ review**, not a decision.
 > `src/seshat/pr_summary.py`), and `pr-readiness-reviewer` names `gh` once in one
 > line and teaches no `gh` usage -- so the Section 12 fork tax is minimal in both.
 > Because all five are `ships: False` and the bundle allowlist is DERIVED from
-> this manifest, no public bundle surface is affected. Internal consumers do
-> exist and are unchanged: `retail-orchestrate` may invoke
-> `pr-readiness-reviewer` as a pre-merge read, and the opt-in, off-by-default
+> this manifest, no public bundle surface is affected. **One verified internal
+> consumer** exists and is unchanged: the opt-in, off-by-default
 > `.github/workflows/ci.yml` "Friendly PR summary" step
-> (`scripts/post_friendly_pr_summary.py`) is the one networked write in the set.
+> (`scripts/post_friendly_pr_summary.py`), which is also the one networked write
+> in the set. An earlier draft of this note also listed `retail-orchestrate` as a
+> caller of `pr-readiness-reviewer`; that was **wrong** and is withdrawn --
+> `.claude/skills/retail-orchestrate/SKILL.md` contains zero references to the
+> reviewer and its procedure has no pre-merge phase. The claim came from the
+> reviewer's own "Orchestration" section, which states the conductor *may* invoke
+> it; that is a one-way aspiration written into the callee, not wiring in the
+> caller. Neither the KEEP ruling nor its confidence depends on it: both rest on
+> the Seshat-specific evidence cross-check, which stands whether or not a
+> conductor ever calls it.
 >
 > **No Phase 10 cleanup work is approved by this ruling** -- not for want of
 > evidence, but because the rationalization was already performed incrementally
