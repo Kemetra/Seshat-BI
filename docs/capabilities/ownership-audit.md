@@ -30,9 +30,13 @@ review**, not a decision.
 >    `seshat-governance`, 17 `seshat-orchestrator`, 12 `seshat-authoring`, 9
 >    `seshat-adapter`, 7 `seshat-domain-knowledge`, 6 `official-upstream`, 5
 >    `specified-not-built`, 1 each `seshat-product-module` /
->    `vendored-upstream` / `human-deliverable`), gated by
->    `tests/contract/test_capability_ship_classification.py`. This discharges
->    §5 finding 3 and **closes** §5 finding 2 (see its own correction note).
+>    `vendored-upstream` / `human-deliverable`), gated by the ownership oracle in
+>    `tests/unit/test_capability_inventory.py`
+>    (`test_ownership_rejects_missing_capability_owner`) -- **not** by
+>    `tests/contract/test_capability_ship_classification.py`, which gates only
+>    `ships` / `ship_classification` and never reads
+>    `ownership.capability_owner`. This discharges §5 finding 3 and **closes**
+>    §5 finding 2 (see its own correction note).
 > 2. **No official replacement is registered for generic development
 >    competence.** `src/seshat/integrations/catalog.py` -- the repo's registry of
 >    proven upstream owners -- contains only data/BI tooling (duckdb, polars,
@@ -40,14 +44,23 @@ review**, not a decision.
 >    jinja2, xlsxwriter, playwright). There is **no GitHub / Claude Code / Codex
 >    generic-development integration**, so no `REPLACE` can meet the
 >    proven-replacement bar the dbt (Spec 146) and Dagster (Spec 147) rulings set.
-> 3. **The candidate set is closed and unrouted.** A sweep of all **114**
->    repo-authored `SKILL.md` files (the O2 scope) surfaces only the five
+> 3. **The candidate set is closed and unrouted.** A sweep of all **57**
+>    repo-authored `SKILL.md` files -- the O2 scope as `capabilities.yaml:12-16`
+>    declares it: `git ls-files` matches at the **repo top level**, i.e. the 51
+>    canonical `.claude/skills/*/SKILL.md` plus the 6 Knowledge Bases under
+>    `skills/*/SKILL.md` -- surfaces only the five
 >    `development-only` entries already listed here; the 60 entries without a
 >    `ship_classification` yield 21 keyword hits, all Seshat readiness/
 >    governance/PBIR capabilities. None of the five appears in
 >    `docs/routing/routes.yaml`, so no rerouting remedy applies either.
 >    `zambahola` and any `code-review` skill are **not** repo-authored (zero
->    git-tracked files) -- user/plugin-level, outside O2 scope.
+>    git-tracked files) -- user/plugin-level, outside O2 scope. The 57 excludes
+>    the 42 generated Claude/Codex bundle projections, the 11 authored
+>    `distribution/bundle-templates/` inputs, and 4 test fixtures; those are
+>    projections or fixtures of the same canonical skills, so counting them would
+>    sweep one skill up to three times and inflate the evidence without widening
+>    it (an earlier draft of this note said 114 for exactly that reason). The
+>    candidate set is identical under either count.
 >
 > Verdicts were taken from BEHAVIOR, not from each skill's self-declared
 > boundary: `friendly-pr-reviewer` reads no source and finds no defects (it
@@ -257,10 +270,15 @@ inventory-phase Non-goal.
 
    **CLOSED 2026-08-09 (Phase 9).** The ownership field now exists and is
    populated: `ownership.capability_owner` is authored on **110/110** entries of
-   `capabilities.yaml`, and `tests/contract/test_capability_ship_classification.py`
-   gates it (`ship_classification` absence is an error, so a new skill cannot
-   slip in unclassified). The fail-open this finding named is no longer open, and
-   no new `seshat check` rule was required to close it.
+   `capabilities.yaml`. Two distinct tests gate the two halves, and they must not
+   be conflated: `tests/unit/test_capability_inventory.py` is the ownership
+   oracle (`test_ownership_rejects_missing_capability_owner`, plus the
+   real-manifest check) and is what rejects a missing owner, while
+   `tests/contract/test_capability_ship_classification.py` gates only `ships` /
+   `ship_classification` and never reads `ownership.capability_owner` -- an entry
+   with valid shipping fields but no owner passes the shipping test and fails the
+   inventory one. The fail-open this finding named is no longer open, and no new
+   `seshat check` rule was required to close it.
 3. **§C is a build, not an audit.** Adding nine fields across 102 entries
    changes a manifest that `tests/contract/test_capability_ship_classification.py`
    reads. It warrants its own spec.

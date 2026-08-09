@@ -1792,7 +1792,7 @@ capabilities:
       upstream_project: "github/spec-kit"
       upstream_surface: "skill"
       upstream_reference: "0.8.10"
-      update_policy: "Written by upstream's installer (specify init --here --integration claude --script ps) in commit 1eb0c98 under constitution amendment v1.1.0; hash-verified against .specify/integrations/claude.manifest.json, zero local drift. NO re-vendor path is recorded -- see specs/142-capability-ownership-fields/evidence/known-findings.md KF-2."
+      update_policy: "Written by upstream's installer (specify init --here --integration claude --script ps) in commit 1eb0c98 under constitution amendment v1.1.0; hash-verified against .specify/integrations/claude.manifest.json. Re-vendor path RECORDED by spec 151 (KF-2 closed 2026-08-09): re-run the invocation pinned in .specify/init-options.json (speckit_version 0.8.10, integration claude, script ps, branch_numbering sequential), then verify against the ten hashes in .specify/integrations/speckit.manifest.json. Spec 151 also removed the one real local modification (a spec-template.md ADR-0019 block); status governance now lives in src/seshat/spec_status_policy.py."
     references:
       skill:
         - "speckit-specify"

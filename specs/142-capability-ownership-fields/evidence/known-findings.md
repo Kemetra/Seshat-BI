@@ -81,6 +81,26 @@ That is precisely the "fork tax" the Principle II *rationale* warns about --
 unpaid so far. It is out of scope for this spec, which only records it (T042a).
 It deserves its own decision.
 
+**CLOSED 2026-08-09 by spec 151.** The decision this finding asked for was taken,
+and the re-vendor path is now recorded on disk:
+
+- `.specify/init-options.json` pins the reproducible invocation
+  (`speckit_version` `0.8.10`, `integration` `claude`, `script` `ps`,
+  `branch_numbering` `sequential`), so a re-vendor is a re-run of a recorded
+  command rather than a reconstructed one.
+- `.specify/integrations/speckit.manifest.json` hash-pins all ten vendored
+  `.specify/scripts/` + `.specify/templates/` files with an `installed_at`
+  stamp, so drift after a re-vendor is detectable.
+
+The paragraph above also understated the drift at the time of writing: commit
+`f35612f` had already modified `.specify/templates/spec-template.md` (an 11-line
+ADR-0019 vocabulary block), so the copy was **not** provably unmodified. Spec 151
+resolved that by REMOVING the modification rather than institutionalizing it --
+Spec Kit owns Spec Kit, and Seshat status governance moved to
+`src/seshat/spec_status_policy.py`. The `capability_owner: vendored-upstream`
+entry's `update_policy` in `docs/capabilities/capabilities.yaml` now carries this
+same path; the two surfaces agree.
+
 ---
 
 ## Note on scope
