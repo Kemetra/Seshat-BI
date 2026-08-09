@@ -19,6 +19,92 @@ review**, not a decision.
 > only the separately parked live
 > semantic-model connection/refresh/query/publish adapter.
 
+> **Phase 9 -- generic development capability rationalization: ALREADY-SATISFIED
+> (2026-08-09, verified against `main` at `d202d30`).** The §4 `INSPECT` rows
+> below are now RULED, non-destructively: every one resolves to `KEEP` or
+> `GENERATED`, and **no `MERGE`, `REPLACE`, or `REMOVE` is justified**. Three
+> facts close the phase.
+>
+> 1. **The ownership axis is authored and complete.** `capabilities.yaml` carries
+>    `ownership.capability_owner` on **110/110 entries** (51
+>    `seshat-governance`, 17 `seshat-orchestrator`, 12 `seshat-authoring`, 9
+>    `seshat-adapter`, 7 `seshat-domain-knowledge`, 6 `official-upstream`, 5
+>    `specified-not-built`, 1 each `seshat-product-module` /
+>    `vendored-upstream` / `human-deliverable`), gated by the ownership oracle in
+>    `tests/unit/test_capability_inventory.py`
+>    (`test_ownership_rejects_missing_capability_owner`) -- **not** by
+>    `tests/contract/test_capability_ship_classification.py`, which gates only
+>    `ships` / `ship_classification` and never reads
+>    `ownership.capability_owner`. This discharges §5 finding 3 and **closes**
+>    §5 finding 2 (see its own correction note).
+>    *Gap found and fixed while recording this ruling (PR #601):* spec 142's
+>    T042b was checked `[x]` with the deliverable "four entries, each with a
+>    non-empty delta", but all four dev-workflow entries carried only
+>    `capability_owner` -- the `seshat_delta` half was never written. The four
+>    deltas are now populated verbatim from the OD-2 table, and T042b carries a
+>    correction note. **22** of 110 entries now carry a `seshat_delta` (18 before
+>    this change, plus these four) -- reproducible with
+>    `rg -c '^      seshat_delta:' docs/capabilities/capabilities.yaml`. A
+>    minority is by design: the field is required for the dev-workflow and
+>    adapter classes, not universally -- but for these four it was mandatory and
+>    missing.
+> 2. **No official replacement is registered for generic development
+>    competence.** `src/seshat/integrations/catalog.py` -- the repo's registry of
+>    proven upstream owners -- contains only data/BI tooling (duckdb, polars,
+>    pyarrow, pandera, connectorx, dbt x3, dagster x4, fabric/powerbi x2,
+>    jinja2, xlsxwriter, playwright). There is **no GitHub / Claude Code / Codex
+>    generic-development integration**, so no `REPLACE` can meet the
+>    proven-replacement bar the dbt (Spec 146) and Dagster (Spec 147) rulings set.
+> 3. **The candidate set is closed and unrouted.** A sweep of all **57**
+>    repo-authored `SKILL.md` files -- the O2 scope as `capabilities.yaml:12-16`
+>    declares it: `git ls-files` matches at the **repo top level**, i.e. the 51
+>    canonical `.claude/skills/*/SKILL.md` plus the 6 Knowledge Bases under
+>    `skills/*/SKILL.md` -- surfaces only the five
+>    `development-only` entries already listed here; the 60 entries without a
+>    `ship_classification` yield 21 keyword hits, all Seshat readiness/
+>    governance/PBIR capabilities. None of the five appears in
+>    `docs/routing/routes.yaml`, so no rerouting remedy applies either.
+>    `zambahola` and any `code-review` skill are **not** repo-authored (zero
+>    git-tracked files) -- user/plugin-level, outside O2 scope. The repository
+>    tracks **126** `SKILL.md` files in total; the 57 in scope are the balance
+>    after excluding **54** generated bundle projections (27 per harness -- 21
+>    under `integrations/<harness>/seshat-bi/skills/` plus 6 under
+>    `.../knowledge/`, for both `claude-code` and `codex`), **11** authored
+>    `distribution/bundle-templates/` inputs, and **4** test fixtures
+>    (57 + 54 + 11 + 4 = 126). Those excluded files are projections or fixtures
+>    of the same canonical skills, so counting them would sweep one skill up to
+>    three times -- inflating the evidence without widening it. Two earlier
+>    drafts of this note miscounted here (114, then a 42 that omitted the
+>    `knowledge/` subtree); the candidate set is identical under every count.
+>
+> Verdicts were taken from BEHAVIOR, not from each skill's self-declared
+> boundary: `friendly-pr-reviewer` reads no source and finds no defects (it
+> renders the `build_review_result` envelope via the 788-line
+> `src/seshat/pr_summary.py`), and `pr-readiness-reviewer` names `gh` once in one
+> line and teaches no `gh` usage -- so the Section 12 fork tax is minimal in both.
+> Because all five are `ships: False` and the bundle allowlist is DERIVED from
+> this manifest, no public bundle surface is affected. **One verified internal
+> consumer** exists and is unchanged: the opt-in, off-by-default
+> `.github/workflows/ci.yml` "Friendly PR summary" step
+> (`scripts/post_friendly_pr_summary.py`), which is also the one networked write
+> in the set. An earlier draft of this note also listed `retail-orchestrate` as a
+> caller of `pr-readiness-reviewer`; that was **wrong** and is withdrawn --
+> `.claude/skills/retail-orchestrate/SKILL.md` contains zero references to the
+> reviewer and its procedure has no pre-merge phase. The claim came from the
+> reviewer's own "Orchestration" section, which states the conductor *may* invoke
+> it; that is a one-way aspiration written into the callee, not wiring in the
+> caller. Neither the KEEP ruling nor its confidence depends on it: both rest on
+> the Seshat-specific evidence cross-check, which stands whether or not a
+> conductor ever calls it.
+>
+> **No Phase 10 cleanup work is approved by this ruling** -- not for want of
+> evidence, but because the rationalization was already performed incrementally
+> by Specs 142/145/146/148/151. A future official development-capability
+> integration entering the catalog would reopen the generic halves of
+> `pr-readiness-reviewer` and `release-notes-generator` as genuine `WRAP`
+> candidates, retaining the `merge_ready` derivation and the L0-L6 ladder above
+> it. Nothing was deleted, merged, renamed, or rerouted to record this.
+
 ## 1. What the surfaces actually are
 
 The issue describes "four representation layers" that "can drift
@@ -166,16 +252,20 @@ surface rather than forking it — the gap is **declaration**, not behavior.
 
 ### INSPECT — generic dev workflow, may overlap official surfaces
 
-Not removal candidates on this evidence; each has a plausible Seshat delta that
-is currently **undocumented**. Needs a ruling.
+Not removal candidates on this evidence; each had a plausible Seshat delta that
+was, at the snapshot, **undocumented**. **All rows RULED 2026-08-09 (Phase 9,
+`main` at `d202d30`) -- see the resolution note at the top of this file.** Each
+`capability_owner` below is the value authored in `capabilities.yaml`, and the
+"Ruling" column replaces the snapshot's open "Question" column. Every ruling is
+non-destructive; the Phase 9 audit approved no deletion, merge, or rename.
 
-| Skill | Overlaps | Question |
-| --- | --- | --- |
-| `friendly-pr-reviewer` | GitHub/Claude review surfaces | is plain-language rendering of *governance* output a real delta? |
-| `pr-readiness-reviewer` | GitHub checks | `merge_ready` verdict is Seshat-specific; likely KEEP |
-| `release-notes-generator` | GitHub Releases | evidence-backed maturity ladder is Seshat-specific; likely KEEP |
-| `showcase-build` | — | disclosure-safe offline proof bundle; likely KEEP |
-| 14 × `speckit-*` | upstream Spec Kit | **RESOLVED 2026-08-07 -- not a finding.** They *are* vendored upstream content, but sanctioned: written by upstream's own installer (`specify init --here --integration claude --script ps`, spec-kit `0.8.10`) in commit `1eb0c98`, which in the same commit amended the constitution to v1.1.0 to permit exactly this (`.specify/memory/constitution.md:556-563`). Hash-verified against `.specify/integrations/claude.manifest.json`, zero local drift, no Seshat vocabulary in any body. Principle II is scoped to the **Power BI execution adapter**, not to all tooling, so it does not bind here. Residual risk is narrower: no recorded re-vendor/upgrade path (no lockfile, no `specify upgrade` record), which is the "fork tax" the Principle II *rationale* warns about -- unpaid so far. All `development-only`; no shipped surface affected. |
+| Skill | Overlaps | `capability_owner` | Ruling (2026-08-09) |
+| --- | --- | --- | --- |
+| `friendly-pr-reviewer` | GitHub/Claude review surfaces | `seshat-governance` | **KEEP** (HIGH). The snapshot's question -- "is plain-language rendering of *governance* output a real delta?" -- is answered **yes**, and the overlap is a naming artifact rather than a behavioural one. It is **not a code reviewer**: it reads no source, finds no defects, and suggests no improvements. It renders the `build_review_result` envelope (`seshat check --format review`) plus SARIF `finding_fingerprint` NEW/RESOLVED diffing and the `readiness_classify` rank, via the 788-line deterministic `src/seshat/pr_summary.py` (30/30 tests pass). It emits no `merge_ready` boolean and declines verdict requests, so it is complementary to F025, not duplicative. |
+| `pr-readiness-reviewer` | GitHub checks | `seshat-governance` | **KEEP** (HIGH) -- the snapshot's "likely KEEP" is confirmed on behaviour. Fork tax is minimal: `gh pr view` / `gh pr checks` are named once, in one line of step 2, with no `gh` usage taught. The novel surface (step 4) cross-checks PR-body CLAIMS against committed Seshat evidence -- readiness-stage consistency, `approvals[]` named-owner presence, `source-map.yaml` CLEARED metadata, declared-vs-run tests -- which GitHub cannot perform, having no concept of a readiness stage. |
+| `release-notes-generator` | GitHub Releases | `seshat-governance` | **KEEP** (HIGH) -- "likely KEEP" confirmed. The capability splits as anticipated and the Seshat half is substantial: GitHub Releases owns generic note *authoring*, while the evidence-gated **L0-L6 binary maturity ladder** over the F028 evidence pack, the F032 compatibility matrix, and the roadmap ledger is Seshat-only. No upstream surface can assess kit maturity from governance evidence. |
+| `showcase-build` | — | `seshat-governance` | **KEEP** (HIGH) -- "likely KEEP" confirmed. Reads the Explorer projection (`build_explorer_projection`), the Passport, and the fail-closed disclosure scanner; no upstream equivalent exists, and no overlap was ever alleged. |
+| 14 × `speckit-*` | upstream Spec Kit | `vendored-upstream` | **RESOLVED 2026-08-07 -- not a finding.** They *are* vendored upstream content, but sanctioned: written by upstream's own installer (`specify init --here --integration claude --script ps`, spec-kit `0.8.10`) in commit `1eb0c98`, which in the same commit amended the constitution to v1.1.0 to permit exactly this (`.specify/memory/constitution.md:556-563`). Hash-verified against `.specify/integrations/claude.manifest.json`, zero local drift, no Seshat vocabulary in any body. Principle II is scoped to the **Power BI execution adapter**, not to all tooling, so it does not bind here. Residual risk is narrower: no recorded re-vendor/upgrade path (no lockfile, no `specify upgrade` record), which is the "fork tax" the Principle II *rationale* warns about -- unpaid so far. All `development-only`; no shipped surface affected. **Residual gap NARROWED by Spec 151, still OPEN for five skills (verified 2026-08-09).** Most of the re-vendor path is now recorded: `.specify/init-options.json` pins the reproducible invocation (`speckit_version: 0.8.10`, `integration: claude`, `script: ps`, `branch_numbering: sequential`), `.specify/integrations/speckit.manifest.json` hash-pins the ten `.specify/scripts/` + `.specify/templates/` files with an `installed_at` stamp, and `.specify/integrations/claude.manifest.json` hash-pins nine of the fourteen skills. **The five `speckit-git-*` skills (commit, feature, initialize, remote, validate) are pinned by NEITHER manifest** and are declared Out of Scope by `specs/151-speckit-fork-removal/spec.md`, so a re-vendor can verify 9 of 14 skills and drift in the other five stays undetectable. KF-2 therefore stays OPEN at that reduced scope. This does not disturb the ownership ruling -- pinning coverage is a provenance-verification gap, not a question of who owns the capability. Phase 9 ruling: **GENERATED** (`capability_owner: vendored-upstream`, `upstream_project: github/spec-kit`, `upstream_reference: 0.8.10`, with an authored `update_policy`) -- a deterministic vendored projection, not architectural duplication. |
 
 `pbip-workflow`, `pbip-xray`, `dashboard-design`, `powerbi-dashboard-design`,
 `powerbi-workflows` — Power BI layer. At this audit snapshot,
@@ -200,12 +290,37 @@ inventory-phase Non-goal.
 2. **§D is downstream of §C, not parallel.** The canonical/generated half is
    gated twice already. The ungated half — "a new skill ships without ownership
    classification" — cannot be gated until an ownership field exists.
+
+   **CLOSED 2026-08-09 (Phase 9).** The ownership field now exists and is
+   populated: `ownership.capability_owner` is authored on **110/110** entries of
+   `capabilities.yaml`. Two distinct tests gate the two halves, and they must not
+   be conflated: `tests/unit/test_capability_inventory.py` is the ownership
+   oracle (`test_ownership_rejects_missing_capability_owner`, plus the
+   real-manifest check) and is what rejects a missing owner, while
+   `tests/contract/test_capability_ship_classification.py` gates only `ships` /
+   `ship_classification` and never reads `ownership.capability_owner` -- an entry
+   with valid shipping fields but no owner passes the shipping test and fails the
+   inventory one. The fail-open this finding named is no longer open, and no new
+   `seshat check` rule was required to close it.
 3. **§C is a build, not an audit.** Adding nine fields across 102 entries
    changes a manifest that `tests/contract/test_capability_ship_classification.py`
    reads. It warrants its own spec.
+
+   **DISCHARGED 2026-08-09 (Phase 9).** That spec was written and shipped:
+   **Spec 142 / PR #595** built the ownership axis, and the manifest's own status
+   line records "all 31 tasks complete". The build this finding called for is
+   done, so Phase 9 required no successor spec (`.specify/feature.json` remains
+   `null`).
 4. **Partial registry already exists** at `catalog.py:61-67`, covering
    installable deps. §C should extend the existing axis rather than introduce a
    parallel authority.
+
+   **HONOURED 2026-08-09 (Phase 9).** Spec 142 extended the existing axis rather
+   than forking a parallel authority: `catalog.py` still owns *installable
+   upstream dependencies*, while `capabilities.yaml`'s `ownership:` map owns
+   *capability-level* ownership and references the catalog by
+   `upstream_project` / `upstream_surface` / `upstream_reference`. Phase 9 read
+   both surfaces and found no competing authority.
 5. **`speckit-*` was the one vendored-upstream question surfaced by this audit.
    It is now RESOLVED as not a finding** (2026-08-07, owner-directed
    investigation). The 14 skills are vendored, but by upstream's own installer
@@ -216,6 +331,20 @@ inventory-phase Non-goal.
    `specify upgrade` record, no re-run instructions. That is the "fork tax" the
    Principle II rationale warns about. Worth its own decision, separate from
    this axis.
+
+   **NARROWED 2026-08-09 (Phase 9) -- still OPEN for five skills.** Spec 151
+   recorded most of the re-vendor path: `.specify/init-options.json` pins the
+   reproducible invocation (`speckit_version: 0.8.10`),
+   `.specify/integrations/speckit.manifest.json` hash-pins the ten
+   scripts/templates with an `installed_at` stamp, and
+   `.specify/integrations/claude.manifest.json` hash-pins nine of the fourteen
+   skills. The decision this finding asked for was taken -- Spec 151 removed the
+   one real local modification (the `spec-template.md` ADR-0019 block) rather
+   than institutionalizing it. **But the fork tax is only mostly paid:** the five
+   `speckit-git-*` skills are pinned by neither manifest and are explicitly Out
+   of Scope for Spec 151, so a re-vendor cannot verify 5 of the 14 skills this
+   capability owns. The finding stays OPEN at that reduced scope until they are
+   pinned or a documented decision retires them. See the `speckit-*` row in §4.
 
    **Correction, 2026-08-08 (spec 151).** This passage originally read that the
    fork tax "is unpaid today because the copy is provably unmodified." That was

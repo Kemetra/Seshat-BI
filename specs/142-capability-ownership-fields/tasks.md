@@ -212,6 +212,12 @@ bundle drift PASS; all tests green.
   resolved OD-2, each with the `seshat_delta` stated in the spec's OD-2 table.
   Deliverable: four entries, each with a non-empty delta.
   -- **done**: the four dev-workflow skills as seshat-governance per OD-2
+  -- **CORRECTION 2026-08-09 (PR #601)**: this was marked done while only HALF
+  the deliverable existed. All four entries carried `capability_owner:
+  seshat-governance`, but NONE carried the `seshat_delta` the task text and the
+  OD-2 table require ("Deliverable: four entries, each with a non-empty delta").
+  The four deltas are now populated verbatim from the OD-2 table. The checkbox
+  certified undone work for the delta half; the owner half was genuinely done.
 - [x] T043 Run the gate set. Deliverable: all green, digests unchanged.
   -- **done**: 102/102 declared, 0 O9 violations, 0 O6 violations, digests byte-identical to baseline
 - [x] T044 **Wire O9 into the aggregate.** Add

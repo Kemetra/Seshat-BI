@@ -1467,6 +1467,7 @@ capabilities:
     documentation: ".claude/skills/pr-readiness-reviewer/SKILL.md"
     ownership:
       capability_owner: "seshat-governance"
+      seshat_delta: "merge_ready verdict from readiness evidence, not CI status"
     references:
       roadmap: "F025"
       skill: "pr-readiness-reviewer"
@@ -1486,6 +1487,7 @@ capabilities:
     documentation: ".claude/skills/friendly-pr-reviewer/SKILL.md"
     ownership:
       capability_owner: "seshat-governance"
+      seshat_delta: "plain-language rendering of the governance review, not a code review"
     references:
       skill: "friendly-pr-reviewer"
 
@@ -1733,6 +1735,7 @@ capabilities:
     documentation: ".claude/skills/release-notes-generator/SKILL.md"
     ownership:
       capability_owner: "seshat-governance"
+      seshat_delta: "evidence-backed maturity ladder tied to roadmap F-numbers"
     references:
       skill: "release-notes-generator"
 
@@ -1792,7 +1795,7 @@ capabilities:
       upstream_project: "github/spec-kit"
       upstream_surface: "skill"
       upstream_reference: "0.8.10"
-      update_policy: "Written by upstream's installer (specify init --here --integration claude --script ps) in commit 1eb0c98 under constitution amendment v1.1.0; hash-verified against .specify/integrations/claude.manifest.json, zero local drift. NO re-vendor path is recorded -- see specs/142-capability-ownership-fields/evidence/known-findings.md KF-2."
+      update_policy: "Written by upstream's installer (specify init --here --integration claude --script ps) in commit 1eb0c98 under constitution amendment v1.1.0. Re-vendor path PARTIALLY recorded by spec 151 (KF-2 narrowed, NOT closed, 2026-08-09): re-run the invocation pinned in .specify/init-options.json (speckit_version 0.8.10, integration claude, script ps, branch_numbering sequential), then verify against the ten script/template hashes in .specify/integrations/speckit.manifest.json and the nine skill hashes in .specify/integrations/claude.manifest.json. COVERAGE GAP: those nine skills are speckit-analyze/checklist/clarify/constitution/implement/plan/specify/tasks/taskstoissues; the five speckit-git-* skills (commit, feature, initialize, remote, validate) this entry also owns are pinned by NEITHER manifest, and spec 151 declares them out of scope (specs/151-speckit-fork-removal/spec.md Out of Scope). A re-vendor therefore cannot verify 5 of the 14 skills; drift in them is undetectable. Spec 151 did remove the one known local modification (a spec-template.md ADR-0019 block); status governance now lives in src/seshat/spec_status_policy.py."
     references:
       skill:
         - "speckit-specify"
@@ -2015,6 +2018,7 @@ capabilities:
     documentation: ".claude/skills/showcase-build/SKILL.md"
     ownership:
       capability_owner: "seshat-governance"
+      seshat_delta: "disclosure-safe offline proof bundle from committed readiness truth"
     references:
       skill: "showcase-build"
 
