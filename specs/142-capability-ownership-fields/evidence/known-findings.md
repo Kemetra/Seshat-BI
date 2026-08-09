@@ -81,8 +81,9 @@ That is precisely the "fork tax" the Principle II *rationale* warns about --
 unpaid so far. It is out of scope for this spec, which only records it (T042a).
 It deserves its own decision.
 
-**CLOSED 2026-08-09 by spec 151.** The decision this finding asked for was taken,
-and the re-vendor path is now recorded on disk:
+**NARROWED 2026-08-09 by spec 151 -- still OPEN for five skills.** The decision
+this finding asked for was taken and most of the re-vendor path is now recorded
+on disk:
 
 - `.specify/init-options.json` pins the reproducible invocation
   (`speckit_version` `0.8.10`, `integration` `claude`, `script` `ps`,
@@ -90,7 +91,17 @@ and the re-vendor path is now recorded on disk:
   command rather than a reconstructed one.
 - `.specify/integrations/speckit.manifest.json` hash-pins all ten vendored
   `.specify/scripts/` + `.specify/templates/` files with an `installed_at`
-  stamp, so drift after a re-vendor is detectable.
+  stamp; `.specify/integrations/claude.manifest.json` hash-pins nine of the
+  fourteen `speckit-*` skills.
+
+**The residual gap, restated precisely.** Five skills -- `speckit-git-commit`,
+`speckit-git-feature`, `speckit-git-initialize`, `speckit-git-remote`,
+`speckit-git-validate` -- are pinned by NEITHER manifest, and
+`specs/151-speckit-fork-removal/spec.md` lists them under Out of Scope. So a
+re-vendor following the recorded path can verify 9 of 14 skills plus the ten
+scripts/templates, and drift in the remaining five stays undetectable. The fork
+tax is mostly paid, not fully paid, and this finding stays OPEN at that reduced
+scope until the five are pinned or a documented decision retires them.
 
 The paragraph above also understated the drift at the time of writing: commit
 `f35612f` had already modified `.specify/templates/spec-template.md` (an 11-line

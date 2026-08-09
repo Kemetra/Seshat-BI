@@ -54,13 +54,17 @@ review**, not a decision.
 >    governance/PBIR capabilities. None of the five appears in
 >    `docs/routing/routes.yaml`, so no rerouting remedy applies either.
 >    `zambahola` and any `code-review` skill are **not** repo-authored (zero
->    git-tracked files) -- user/plugin-level, outside O2 scope. The 57 excludes
->    the 42 generated Claude/Codex bundle projections, the 11 authored
->    `distribution/bundle-templates/` inputs, and 4 test fixtures; those are
->    projections or fixtures of the same canonical skills, so counting them would
->    sweep one skill up to three times and inflate the evidence without widening
->    it (an earlier draft of this note said 114 for exactly that reason). The
->    candidate set is identical under either count.
+>    git-tracked files) -- user/plugin-level, outside O2 scope. The repository
+>    tracks **126** `SKILL.md` files in total; the 57 in scope are the balance
+>    after excluding **54** generated bundle projections (27 per harness -- 21
+>    under `integrations/<harness>/seshat-bi/skills/` plus 6 under
+>    `.../knowledge/`, for both `claude-code` and `codex`), **11** authored
+>    `distribution/bundle-templates/` inputs, and **4** test fixtures
+>    (57 + 54 + 11 + 4 = 126). Those excluded files are projections or fixtures
+>    of the same canonical skills, so counting them would sweep one skill up to
+>    three times -- inflating the evidence without widening it. Two earlier
+>    drafts of this note miscounted here (114, then a 42 that omitted the
+>    `knowledge/` subtree); the candidate set is identical under every count.
 >
 > Verdicts were taken from BEHAVIOR, not from each skill's self-declared
 > boundary: `friendly-pr-reviewer` reads no source and finds no defects (it
@@ -242,7 +246,7 @@ non-destructive; the Phase 9 audit approved no deletion, merge, or rename.
 | `pr-readiness-reviewer` | GitHub checks | `seshat-governance` | **KEEP** (HIGH) -- the snapshot's "likely KEEP" is confirmed on behaviour. Fork tax is minimal: `gh pr view` / `gh pr checks` are named once, in one line of step 2, with no `gh` usage taught. The novel surface (step 4) cross-checks PR-body CLAIMS against committed Seshat evidence -- readiness-stage consistency, `approvals[]` named-owner presence, `source-map.yaml` CLEARED metadata, declared-vs-run tests -- which GitHub cannot perform, having no concept of a readiness stage. |
 | `release-notes-generator` | GitHub Releases | `seshat-governance` | **KEEP** (HIGH) -- "likely KEEP" confirmed. The capability splits as anticipated and the Seshat half is substantial: GitHub Releases owns generic note *authoring*, while the evidence-gated **L0-L6 binary maturity ladder** over the F028 evidence pack, the F032 compatibility matrix, and the roadmap ledger is Seshat-only. No upstream surface can assess kit maturity from governance evidence. |
 | `showcase-build` | — | `seshat-governance` | **KEEP** (HIGH) -- "likely KEEP" confirmed. Reads the Explorer projection (`build_explorer_projection`), the Passport, and the fail-closed disclosure scanner; no upstream equivalent exists, and no overlap was ever alleged. |
-| 14 × `speckit-*` | upstream Spec Kit | `vendored-upstream` | **RESOLVED 2026-08-07 -- not a finding.** They *are* vendored upstream content, but sanctioned: written by upstream's own installer (`specify init --here --integration claude --script ps`, spec-kit `0.8.10`) in commit `1eb0c98`, which in the same commit amended the constitution to v1.1.0 to permit exactly this (`.specify/memory/constitution.md:556-563`). Hash-verified against `.specify/integrations/claude.manifest.json`, zero local drift, no Seshat vocabulary in any body. Principle II is scoped to the **Power BI execution adapter**, not to all tooling, so it does not bind here. Residual risk is narrower: no recorded re-vendor/upgrade path (no lockfile, no `specify upgrade` record), which is the "fork tax" the Principle II *rationale* warns about -- unpaid so far. All `development-only`; no shipped surface affected. **Residual gap CLOSED by Spec 151 (verified 2026-08-09).** The re-vendor path is now recorded: `.specify/init-options.json` pins the reproducible invocation (`speckit_version: 0.8.10`, `integration: claude`, `script: ps`, `branch_numbering: sequential`) and `.specify/integrations/speckit.manifest.json` hash-pins all ten vendored `.specify/scripts/` + `.specify/templates/` files with an `installed_at` stamp. Phase 9 ruling: **GENERATED** (`capability_owner: vendored-upstream`, `upstream_project: github/spec-kit`, `upstream_reference: 0.8.10`, with an authored `update_policy`) -- a deterministic vendored projection, not architectural duplication. |
+| 14 × `speckit-*` | upstream Spec Kit | `vendored-upstream` | **RESOLVED 2026-08-07 -- not a finding.** They *are* vendored upstream content, but sanctioned: written by upstream's own installer (`specify init --here --integration claude --script ps`, spec-kit `0.8.10`) in commit `1eb0c98`, which in the same commit amended the constitution to v1.1.0 to permit exactly this (`.specify/memory/constitution.md:556-563`). Hash-verified against `.specify/integrations/claude.manifest.json`, zero local drift, no Seshat vocabulary in any body. Principle II is scoped to the **Power BI execution adapter**, not to all tooling, so it does not bind here. Residual risk is narrower: no recorded re-vendor/upgrade path (no lockfile, no `specify upgrade` record), which is the "fork tax" the Principle II *rationale* warns about -- unpaid so far. All `development-only`; no shipped surface affected. **Residual gap NARROWED by Spec 151, still OPEN for five skills (verified 2026-08-09).** Most of the re-vendor path is now recorded: `.specify/init-options.json` pins the reproducible invocation (`speckit_version: 0.8.10`, `integration: claude`, `script: ps`, `branch_numbering: sequential`), `.specify/integrations/speckit.manifest.json` hash-pins the ten `.specify/scripts/` + `.specify/templates/` files with an `installed_at` stamp, and `.specify/integrations/claude.manifest.json` hash-pins nine of the fourteen skills. **The five `speckit-git-*` skills (commit, feature, initialize, remote, validate) are pinned by NEITHER manifest** and are declared Out of Scope by `specs/151-speckit-fork-removal/spec.md`, so a re-vendor can verify 9 of 14 skills and drift in the other five stays undetectable. KF-2 therefore stays OPEN at that reduced scope. This does not disturb the ownership ruling -- pinning coverage is a provenance-verification gap, not a question of who owns the capability. Phase 9 ruling: **GENERATED** (`capability_owner: vendored-upstream`, `upstream_project: github/spec-kit`, `upstream_reference: 0.8.10`, with an authored `update_policy`) -- a deterministic vendored projection, not architectural duplication. |
 
 `pbip-workflow`, `pbip-xray`, `dashboard-design`, `powerbi-dashboard-design`,
 `powerbi-workflows` — Power BI layer. At this audit snapshot,
@@ -309,13 +313,19 @@ inventory-phase Non-goal.
    Principle II rationale warns about. Worth its own decision, separate from
    this axis.
 
-   **CLOSED 2026-08-09 (Phase 9).** Spec 151 recorded the re-vendor path:
-   `.specify/init-options.json` pins the reproducible invocation
-   (`speckit_version: 0.8.10`) and `.specify/integrations/speckit.manifest.json`
-   hash-pins the ten vendored files with an `installed_at` stamp. The fork tax
-   this finding named is paid; the decision it asked for was taken by Spec 151,
-   which removed the one real local modification (the `spec-template.md` ADR-0019
-   block) rather than institutionalizing it. See the `speckit-*` row in §4.
+   **NARROWED 2026-08-09 (Phase 9) -- still OPEN for five skills.** Spec 151
+   recorded most of the re-vendor path: `.specify/init-options.json` pins the
+   reproducible invocation (`speckit_version: 0.8.10`),
+   `.specify/integrations/speckit.manifest.json` hash-pins the ten
+   scripts/templates with an `installed_at` stamp, and
+   `.specify/integrations/claude.manifest.json` hash-pins nine of the fourteen
+   skills. The decision this finding asked for was taken -- Spec 151 removed the
+   one real local modification (the `spec-template.md` ADR-0019 block) rather
+   than institutionalizing it. **But the fork tax is only mostly paid:** the five
+   `speckit-git-*` skills are pinned by neither manifest and are explicitly Out
+   of Scope for Spec 151, so a re-vendor cannot verify 5 of the 14 skills this
+   capability owns. The finding stays OPEN at that reduced scope until they are
+   pinned or a documented decision retires them. See the `speckit-*` row in §4.
 
    **Correction, 2026-08-08 (spec 151).** This passage originally read that the
    fork tax "is unpaid today because the copy is provably unmodified." That was
