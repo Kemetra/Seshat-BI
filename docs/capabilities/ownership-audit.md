@@ -42,9 +42,12 @@ review**, not a decision.
 >    non-empty delta", but all four dev-workflow entries carried only
 >    `capability_owner` -- the `seshat_delta` half was never written. The four
 >    deltas are now populated verbatim from the OD-2 table, and T042b carries a
->    correction note. Only 18 of 110 entries carry a `seshat_delta`, which is by
->    design (the field is required for the dev-workflow and adapter classes, not
->    universally) -- but for these four it was mandatory and missing.
+>    correction note. **22** of 110 entries now carry a `seshat_delta` (18 before
+>    this change, plus these four) -- reproducible with
+>    `rg -c '^      seshat_delta:' docs/capabilities/capabilities.yaml`. A
+>    minority is by design: the field is required for the dev-workflow and
+>    adapter classes, not universally -- but for these four it was mandatory and
+>    missing.
 > 2. **No official replacement is registered for generic development
 >    competence.** `src/seshat/integrations/catalog.py` -- the repo's registry of
 >    proven upstream owners -- contains only data/BI tooling (duckdb, polars,
