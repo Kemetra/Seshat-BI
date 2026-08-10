@@ -94,9 +94,19 @@ passed / the same 2 failures / 24 skipped** — 74 tests added, no new failure.
   omitted stage block is filled with `not_started` + an explicit unknown-state reason
   plus a defect, honouring the contract's seven-stage bound without letting the gap
   read as genuinely not-started.
-  **NOT delivered: containment-safe evidence refs.** Evidence values are projected as
-  opaque strings; routing them through `config.resolve_contained_path` moves to T011,
-  where a route actually dereferences one.
+  Evidence and blocking reasons are emitted as the contract's `EvidenceRef` /
+  `BlockingReason` OBJECTS, with `live_state` carrying the [PENDING LIVE PROFILE]
+  signal a plain string could not express. A non-canonical status is REFUSED with a
+  named defect rather than projected into the closed enum, and `next_action` plus
+  table-level blockers are preserved (FR-008 names both).
+  **NOT delivered:** (a) `EvidenceRef.source_ref` is the committed string as-is --
+  routing it through `config.resolve_contained_path` moves to T011, where a route
+  actually dereferences one; (b) `required_authority` and `forbidden_scope` are empty
+  because no committed source populates them yet; (c) `WorkspaceIdentity.branch` is
+  null pending a git read. Payload conformance is now pinned by
+  `test_studio_projection_conforms_to_contract.py`, which validates every fixture
+  state against `studio-api.yaml` -- the check whose absence let three contract
+  violations pass 25 green tests.
 - [ ] **T011** Implement typed bootstrap, workspace, table, decision-summary, and
   health endpoints matching `studio-api.yaml`. [FR-034]
   **Also carries the deferred half of Phase 2**, which has no testable surface until
