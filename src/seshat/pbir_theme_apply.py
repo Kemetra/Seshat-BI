@@ -148,6 +148,11 @@ def pbir_apply_main(args) -> int:
     """CLI entry: apply a theme to a report dir; exit 2 on a clean error."""
     import sys
 
+    from seshat.pbir_authoring_gate import enforce_pbir_authoring_gate
+
+    if not enforce_pbir_authoring_gate(args, "pbir-apply-theme"):
+        return 2
+
     try:
         written = apply_theme(Path(args.theme), Path(args.report), force=args.force)
     except PbirApplyError as exc:

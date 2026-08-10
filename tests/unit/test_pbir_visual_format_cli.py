@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from seshat.cli import main
+from tests.unit._pbir_gate_fixture import gate_args, pbir_gate_repo
 
 pytestmark = pytest.mark.unit
 
@@ -26,6 +27,7 @@ def _copy(tmp: Path) -> Path:
 
 
 def test_cli_formats_visual_exit_zero(tmp_path: Path) -> None:
+    repo = pbir_gate_repo(tmp_path)
     vj = _copy(tmp_path)
     rc = main(
         [
@@ -34,6 +36,7 @@ def test_cli_formats_visual_exit_zero(tmp_path: Path) -> None:
             str(vj),
             "--formatting",
             json.dumps({"objects": {"labels": {"show": True}}}),
+            *gate_args(repo),
         ]
     )
     assert rc == 0
@@ -42,12 +45,23 @@ def test_cli_formats_visual_exit_zero(tmp_path: Path) -> None:
 
 
 def test_cli_bad_formatting_json_exit_two(tmp_path: Path) -> None:
+    repo = pbir_gate_repo(tmp_path)
     vj = _copy(tmp_path)
-    rc = main(["pbir-format-visual", "--visual", str(vj), "--formatting", "{not json"])
+    rc = main(
+        [
+            "pbir-format-visual",
+            "--visual",
+            str(vj),
+            "--formatting",
+            "{not json",
+            *gate_args(repo),
+        ]
+    )
     assert rc == 2
 
 
 def test_cli_out_of_allowlist_exit_two(tmp_path: Path) -> None:
+    repo = pbir_gate_repo(tmp_path)
     vj = _copy(tmp_path)
     rc = main(
         [
@@ -56,6 +70,27 @@ def test_cli_out_of_allowlist_exit_two(tmp_path: Path) -> None:
             str(vj),
             "--formatting",
             json.dumps({"query": {"x": {}}}),
+            *gate_args(repo),
         ]
     )
     assert rc == 2
+
+
+def test_cli_gate_blocks_before_formatting_payload_read(tmp_path: Path) -> None:
+    repo = pbir_gate_repo(tmp_path, approved=False)
+    vj = _copy(tmp_path)
+    before = vj.read_bytes()
+
+    rc = main(
+        [
+            "pbir-format-visual",
+            "--visual",
+            str(vj),
+            "--formatting",
+            str(tmp_path / "missing-formatting.json"),
+            *gate_args(repo),
+        ]
+    )
+
+    assert rc == 2
+    assert vj.read_bytes() == before
