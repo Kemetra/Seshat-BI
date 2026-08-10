@@ -455,6 +455,67 @@ def _disabled_agent_health() -> AgentHealth:
     )
 
 
+def _with_table_blockers(
+    stages: tuple[StageState, ...], entry: dict, table_id: str
+) -> tuple[StageState, ...]:
+    """Attach the upstream TABLE-level blockers to the table's current stage.
+
+    FR-008 names blocking reasons among the fields that must be preserved, and the
+    upstream projection carries them at the table level as well as per stage. Dropping
+    them was a silent loss; attaching them to the current stage is where a reader
+    looks for "why is this table stuck".
+    """
+    table_blockers = tuple(
+        _blocking_reason(item, table_id)
+        for item in entry.get("blocking_reasons", ())
+        if isinstance(item, str)
+    )
+    if not table_blockers:
+        return stages
+
+    current = entry.get("current_stage")
+    return tuple(
+        (
+            StageState(
+                stage=stage.stage,
+                status=stage.status,
+                evidence=stage.evidence,
+                blocking_reasons=stage.blocking_reasons + table_blockers,
+                required_authority=stage.required_authority,
+            )
+            if stage.stage == current
+            else stage
+        )
+        for stage in stages
+    )
+
+
+def _journey_for(
+    entry: dict, table_id: str
+) -> tuple[TableJourney, tuple[InputDefect, ...]]:
+    """Build one table's journey plus whatever defects its source produced."""
+    stages, defects = _stage_states(entry.get("stages", {}), table_id)
+    return (
+        TableJourney(
+            table_id=table_id,
+            display_name=entry.get("table") or table_id,
+            current_stage=entry.get("current_stage"),
+            stages=_with_table_blockers(stages, entry, table_id),
+            next_action=_next_action(entry, table_id),
+        ),
+        defects,
+    )
+
+
+def _upstream_by_table(root: Path) -> dict[str, dict]:
+    """The upstream projection, keyed by table id rather than source path."""
+    upstream = build_status_projection(root)
+    return {
+        _table_name_from(root / entry["source_path"]): entry
+        for entry in upstream["tables"]
+    }
+
+
 def build_workspace_snapshot(
     root: Path | str, *, generated_at: str | None = None
 ) -> WorkspaceSnapshot:
@@ -465,12 +526,7 @@ def build_workspace_snapshot(
     time-varying.
     """
     workspace_root = Path(root)
-
-    upstream = build_status_projection(workspace_root)
-    projected_by_table = {
-        _table_name_from(workspace_root / entry["source_path"]): entry
-        for entry in upstream["tables"]
-    }
+    projected_by_table = _upstream_by_table(workspace_root)
 
     journeys: list[TableJourney] = []
     defects: list[InputDefect] = []
@@ -483,41 +539,9 @@ def build_workspace_snapshot(
             defects.append(_unreadable_defect(table_id))
             continue
 
-        stages, stage_defects = _stage_states(entry.get("stages", {}), table_id)
-        defects.extend(stage_defects)
-
-        # Table-level blockers are carried by the upstream projection and named by
-        # FR-008, so they attach to the table's current stage rather than vanishing.
-        table_blockers = tuple(
-            _blocking_reason(item, table_id)
-            for item in entry.get("blocking_reasons", ())
-            if isinstance(item, str)
-        )
-        if table_blockers:
-            stages = tuple(
-                (
-                    StageState(
-                        stage=stage.stage,
-                        status=stage.status,
-                        evidence=stage.evidence,
-                        blocking_reasons=stage.blocking_reasons + table_blockers,
-                        required_authority=stage.required_authority,
-                    )
-                    if stage.stage == entry.get("current_stage")
-                    else stage
-                )
-                for stage in stages
-            )
-
-        journeys.append(
-            TableJourney(
-                table_id=table_id,
-                display_name=entry.get("table") or table_id,
-                current_stage=entry.get("current_stage"),
-                stages=stages,
-                next_action=_next_action(entry, table_id),
-            )
-        )
+        journey, journey_defects = _journey_for(entry, table_id)
+        journeys.append(journey)
+        defects.extend(journey_defects)
 
     journeys.sort(key=lambda journey: journey.table_id)
     body = [journey.as_dict() for journey in journeys] + [

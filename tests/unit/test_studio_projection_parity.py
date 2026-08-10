@@ -266,20 +266,28 @@ def _numeric_leaks(node: object, path: str = "") -> list[str]:
     pytest tmp-dir name leaking into `display_name`. FR-009 forbids a numeric VALUE,
     so the assertion has to look at types.
     """
-    leaks: list[str] = []
     if isinstance(node, dict):
-        for key, value in node.items():
-            child = f"{path}.{key}" if path else str(key)
-            if isinstance(value, bool):
-                continue  # booleans are flags, not scores
-            if isinstance(value, (int, float)) and key not in _PERMITTED_NUMERIC_KEYS:
-                leaks.append(f"{child}={value!r}")
-                continue
-            leaks.extend(_numeric_leaks(value, child))
-    elif isinstance(node, (list, tuple)):
-        for index, value in enumerate(node):
-            leaks.extend(_numeric_leaks(value, f"{path}[{index}]"))
-    return leaks
+        return [
+            leak
+            for key, value in node.items()
+            for leak in _leaks_at(key, value, f"{path}.{key}" if path else str(key))
+        ]
+    if isinstance(node, (list, tuple)):
+        return [
+            leak
+            for index, value in enumerate(node)
+            for leak in _numeric_leaks(value, f"{path}[{index}]")
+        ]
+    return []
+
+
+def _leaks_at(key: object, value: object, path: str) -> list[str]:
+    """Whether one key/value pair is itself a numeric leak, else recurse into it."""
+    if isinstance(value, bool):
+        return []  # booleans are flags, not scores
+    if isinstance(value, (int, float)) and key not in _PERMITTED_NUMERIC_KEYS:
+        return [f"{path}={value!r}"]
+    return _numeric_leaks(value, path)
 
 
 def test_no_numeric_readiness_signal_appears_in_the_snapshot(tmp_path: Path) -> None:

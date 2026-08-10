@@ -10,6 +10,8 @@ T011's endpoint tests without being rebuilt.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from pathlib import Path
 
 _STAGES = (
@@ -45,67 +47,79 @@ def _stage_block(status: str, *, evidence: list[str], blockers: list[str]) -> st
     return "\n".join(lines)
 
 
-def _readiness_document(
-    table: str,
-    *,
-    current_stage: str | None,
-    statuses: dict[str, str],
-    evidence: dict[str, list[str]] | None = None,
-    blockers: dict[str, list[str]] | None = None,
-) -> str:
-    evidence = evidence or {}
-    blockers = blockers or {}
-    head = [f'table: "{table}"']
-    if current_stage is not None:
-        head.append(f'current_stage: "{current_stage}"')
+@dataclass(frozen=True)
+class ReadinessSpec:
+    """What one fixture's readiness document should contain.
+
+    A small value object rather than a five-parameter function: the per-stage maps
+    belong together, and callers read better naming one spec than threading four
+    keyword arguments through every builder.
+    """
+
+    table: str
+    current_stage: str | None
+    statuses: dict[str, str] = dataclass_field(default_factory=dict)
+    evidence: dict[str, list[str]] = dataclass_field(default_factory=dict)
+    blockers: dict[str, list[str]] = dataclass_field(default_factory=dict)
+
+
+def _readiness_document(spec: ReadinessSpec) -> str:
+    head = [f'table: "{spec.table}"']
+    if spec.current_stage is not None:
+        head.append(f'current_stage: "{spec.current_stage}"')
     head.append("stages:")
     body = []
     for stage in _STAGES:
         body.append(f"  {stage}:")
         body.append(
             _stage_block(
-                statuses.get(stage, "not_started"),
-                evidence=evidence.get(stage, []),
-                blockers=blockers.get(stage, []),
+                spec.statuses.get(stage, "not_started"),
+                evidence=spec.evidence.get(stage, []),
+                blockers=spec.blockers.get(stage, []),
             )
         )
     return "\n".join(head + body) + "\n"
 
 
+def _write(root: Path, spec: ReadinessSpec) -> Path:
+    """Write one fixture's readiness file and return its path."""
+    _workspace(root)
+    target = root / "mappings" / spec.table / "readiness-status.yaml"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(_readiness_document(spec), encoding="utf-8")
+    return target
+
+
 def write_ready_table(root: Path, table: str = "ready_sales") -> Path:
     """Every stage `pass` with evidence -- the fully-advanced case."""
-    _workspace(root)
-    document = _readiness_document(
-        table,
-        current_stage="publish_ready",
-        statuses=dict.fromkeys(_STAGES, "pass"),
-        evidence={stage: [f"evidence/{stage}.md"] for stage in _STAGES},
+    return _write(
+        root,
+        ReadinessSpec(
+            table=table,
+            current_stage="publish_ready",
+            statuses=dict.fromkeys(_STAGES, "pass"),
+            evidence={stage: [f"evidence/{stage}.md"] for stage in _STAGES},
+        ),
     )
-    target = root / "mappings" / table / "readiness-status.yaml"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(document, encoding="utf-8")
-    return target
 
 
 def write_blocked_table(root: Path, table: str = "blocked_sales") -> Path:
     """Blocked at mapping, so silver and later stay not_started."""
-    _workspace(root)
-    document = _readiness_document(
-        table,
-        current_stage="mapping_ready",
-        statuses={"source_ready": "pass", "mapping_ready": "blocked"},
-        evidence={"source_ready": ["evidence/source-profile.md"]},
-        blockers={
-            "mapping_ready": [
-                "source-map.yaml is missing a grain declaration",
-                "no named-human approval recorded",
-            ]
-        },
+    return _write(
+        root,
+        ReadinessSpec(
+            table=table,
+            current_stage="mapping_ready",
+            statuses={"source_ready": "pass", "mapping_ready": "blocked"},
+            evidence={"source_ready": ["evidence/source-profile.md"]},
+            blockers={
+                "mapping_ready": [
+                    "source-map.yaml is missing a grain declaration",
+                    "no named-human approval recorded",
+                ]
+            },
+        ),
     )
-    target = root / "mappings" / table / "readiness-status.yaml"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(document, encoding="utf-8")
-    return target
 
 
 def write_warning_table(root: Path, table: str = "warning_sales") -> Path:
@@ -114,18 +128,15 @@ def write_warning_table(root: Path, table: str = "warning_sales") -> Path:
     The status the contract originally had no slot for. Kept as a fixture so the
     projection is proven to carry it verbatim rather than renaming or dropping it.
     """
-    _workspace(root)
-    document = _readiness_document(
-        table,
-        current_stage="source_ready",
-        statuses={"source_ready": "warning"},
-        evidence={"source_ready": ["evidence/source-profile.md"]},
-        blockers={},
+    return _write(
+        root,
+        ReadinessSpec(
+            table=table,
+            current_stage="source_ready",
+            statuses={"source_ready": "warning"},
+            evidence={"source_ready": ["evidence/source-profile.md"]},
+        ),
     )
-    target = root / "mappings" / table / "readiness-status.yaml"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(document, encoding="utf-8")
-    return target
 
 
 def write_empty_workspace(root: Path) -> Path:
@@ -135,17 +146,15 @@ def write_empty_workspace(root: Path) -> Path:
 
 def write_pending_live_table(root: Path, table: str = "pending_live_sales") -> Path:
     """Source stage awaiting a live profile: blocked with a PENDING LIVE reason."""
-    _workspace(root)
-    document = _readiness_document(
-        table,
-        current_stage="source_ready",
-        statuses={"source_ready": "blocked"},
-        blockers={"source_ready": ["[PENDING LIVE PROFILE] no DSN configured"]},
+    return _write(
+        root,
+        ReadinessSpec(
+            table=table,
+            current_stage="source_ready",
+            statuses={"source_ready": "blocked"},
+            blockers={"source_ready": ["[PENDING LIVE PROFILE] no DSN configured"]},
+        ),
     )
-    target = root / "mappings" / table / "readiness-status.yaml"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(document, encoding="utf-8")
-    return target
 
 
 def write_malformed_table(root: Path, table: str = "malformed_sales") -> Path:
