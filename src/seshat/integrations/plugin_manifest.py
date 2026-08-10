@@ -120,11 +120,17 @@ def _hook_names(payload: object) -> frozenset[str]:
     if not isinstance(payload, dict):
         raise _InvalidHookManifest
     hooks = payload.get("hooks")
-    if not isinstance(hooks, dict) or not all(
-        isinstance(name, str) and name.strip() for name in hooks
-    ):
+    if not isinstance(hooks, dict):
         raise _InvalidHookManifest
-    return frozenset(hooks)
+    return frozenset(_hook_name(name) for name in hooks)
+
+
+def _hook_name(name: object) -> str:
+    if not isinstance(name, str):
+        raise _InvalidHookManifest
+    if not name.strip():
+        raise _InvalidHookManifest
+    return name
 
 
 def _observe_hooks(root: Path) -> frozenset[str] | None:
@@ -154,7 +160,11 @@ def _mcp_server_entries(payload: object) -> dict[object, object]:
 
 
 def _mcp_server_config(name: object, raw: object) -> tuple[str, dict[object, object]]:
-    if not isinstance(name, str) or not name.strip() or not isinstance(raw, dict):
+    if not isinstance(name, str):
+        raise _InvalidMcpManifest
+    if not name.strip():
+        raise _InvalidMcpManifest
+    if not isinstance(raw, dict):
         raise _InvalidMcpManifest
     return name, raw
 
