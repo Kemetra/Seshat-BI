@@ -89,6 +89,17 @@ Optional sub-fields: `upstream_project`, `upstream_surface` (one of `plugin`,
 `mcp`, `skill`, `cli`, `library`, `format`), `upstream_reference`,
 `seshat_delta`, `canonical_source`, `overlap_note`, `update_policy`.
 
+**`seshat_delta` is required of every upstream-backed `seshat-*` owner**, not
+only `seshat-adapter` (spec 152 FR-001). Declaring `upstream_project` on any
+`seshat-` token -- `seshat-governance`, `seshat-orchestrator`, `seshat-authoring`,
+and the rest -- obliges the entry to state what Seshat adds on top; a blank
+delta is absent, never a valid declaration. `official-upstream` and
+`vendored-upstream` are **exempt from the requirement, not forbidden** a delta --
+`claude-code-plugin` is `official-upstream` and usefully records that Seshat
+authors the bundle contents while the plugin format stays upstream's. An
+internal `seshat-*` entry with no `upstream_project` keeps its existing
+contract.
+
 Where `src/seshat/integrations/catalog.py` already declares an installable
 upstream component, `upstream_reference` matches the coordinate declared there --
 the catalog stays authoritative, and this axis points at it rather than restating

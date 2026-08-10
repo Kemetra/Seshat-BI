@@ -60,8 +60,8 @@ def ownership_violations(entry: dict) -> list[str]:
 
     Checks, in order: ``capability_owner`` present (FR-002a), drawn from the
     closed token set (FR-002); ``upstream_surface`` drawn from its own closed set
-    (FR-003); and a declared ``seshat-adapter`` carrying a non-empty
-    ``seshat_delta`` (FR-006).
+    (FR-003); and every upstream-backed Seshat owner carrying a non-empty
+    ``seshat_delta`` while preserving the adapter-only rule (FR-006 / spec 152).
 
     Takes a single entry rather than a repo root so the rule can be exercised on
     constructed input -- a detector only ever run against today's manifest is a
@@ -79,7 +79,12 @@ def ownership_violations(entry: dict) -> list[str]:
         for problem in (
             _owner_token_problem(entry_id, owner),
             _surface_token_problem(entry_id, ownership.get("upstream_surface")),
-            _adapter_delta_problem(entry_id, owner, ownership.get("seshat_delta")),
+            _seshat_delta_problem(
+                entry_id,
+                owner,
+                ownership.get("upstream_project"),
+                ownership.get("seshat_delta"),
+            ),
         )
         if problem is not None
     ]
@@ -122,16 +127,27 @@ def _surface_token_problem(entry_id: object, surface: object) -> str | None:
     return None
 
 
-def _adapter_delta_problem(
-    entry_id: object, owner: object, delta: object
+def _seshat_delta_problem(
+    entry_id: object,
+    owner: object,
+    upstream_project: object,
+    delta: object,
 ) -> str | None:
-    """FR-006: declaring an adapter obliges you to say what Seshat adds."""
-    if owner != "seshat-adapter":
+    """FR-006/spec 152: upstream-backed Seshat owners state their delta."""
+    is_seshat_owner = (
+        isinstance(owner, str)
+        and owner in OWNERSHIP_OWNERS
+        and owner.startswith("seshat-")
+    )
+    requires_delta = owner == "seshat-adapter" or (
+        is_seshat_owner and not _is_absent(upstream_project)
+    )
+    if not requires_delta:
         return None
     if not isinstance(delta, str) or not delta.strip():
         return (
-            f"{entry_id}: capability_owner 'seshat-adapter' requires a "
-            f"non-empty seshat_delta (FR-006)"
+            f"{entry_id}: capability_owner {owner!r} requires a non-empty "
+            "seshat_delta (FR-006 / spec 152 FR-001)"
         )
     return None
 

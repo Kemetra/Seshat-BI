@@ -361,6 +361,19 @@ inventory-phase Non-goal.
    lives in `src/seshat/spec_status_policy.py`. `specs/151-speckit-fork-removal`
    tracks that migration. The historical audit above is otherwise unchanged.
 
+   **CLOSED 2026-08-10 (Phase 11 / Spec 152).** KF-2 moved from `CLOSE-NOW` to
+   `ALREADY-CLOSED` after the existing Claude integration manifest was extended
+   from nine to all fourteen capability-referenced Spec Kit skills. The five
+   `speckit-git-*` bodies remain byte-for-byte upstream-managed; no reinstall or
+   upgrade is claimed. `tests/contract/test_speckit_provenance.py` now derives
+   the expected closure from `speckit-workflow-skills.references.skill`, rejects
+   unsafe or untracked targets, verifies LF-normalized SHA-256 content, and
+   requires the two manifests and init options to agree on version `0.8.10`.
+   Negative proof showed that one missing manifest entry and one changed skill
+   byte each fail the contract, followed by a clean pass after restoration. The
+   earlier `OPEN` and `NARROWED` paragraphs remain dated Phase 9 history rather
+   than current architecture claims.
+
 ## 6. Not done here
 
 - No field added to `capabilities.yaml` (that is §C, needs a spec).
