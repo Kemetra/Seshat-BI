@@ -231,33 +231,50 @@ def observe_plugin(
     )
 
 
+def _marketplace_plugins(manifest_path: Path) -> list[object]:
+    payload = _read_json(manifest_path)
+    plugins = payload.get("plugins") if isinstance(payload, dict) else None
+    if not isinstance(plugins, list):
+        raise ValueError(f"invalid plugin marketplace manifest: {manifest_path}")
+    return plugins
+
+
+def _named_marketplace_entry(
+    plugins: list[object], manifest_name: str
+) -> dict[object, object]:
+    matches = [
+        entry
+        for entry in plugins
+        if isinstance(entry, dict) and entry.get("name") == manifest_name
+    ]
+    if len(matches) != 1:
+        raise ValueError(
+            f"plugin manifest entry {manifest_name!r} must appear exactly once"
+        )
+    return matches[0]
+
+
+def _locked_plugin_source(
+    upstream_root: Path, entry: dict[object, object], plugin_id: str
+) -> Path:
+    raw_source = entry.get("source", ".")
+    if not isinstance(raw_source, str) or not raw_source.strip():
+        raise ValueError(f"{plugin_id}: plugin source is not a relative path")
+    source = (upstream_root / raw_source).resolve()
+    if not source.is_relative_to(upstream_root.resolve()):
+        raise ValueError(f"{plugin_id}: plugin source escapes checkout")
+    return source
+
+
 def locked_plugin_policy(
     upstream_root: Path, policy: NativePluginPolicy
 ) -> ObservedPlugin:
     """Resolve and observe one plugin from its locked marketplace checkout."""
 
     manifest_path = upstream_root / Path(*policy.manifest_path.split("/"))
-    payload = _read_json(manifest_path)
-    if not isinstance(payload, dict) or not isinstance(payload.get("plugins"), list):
-        raise ValueError(f"invalid plugin marketplace manifest: {manifest_path}")
-    matches = [
-        entry
-        for entry in payload["plugins"]
-        if isinstance(entry, dict) and entry.get("name") == policy.manifest_name
-    ]
-    if len(matches) != 1:
-        raise ValueError(
-            f"plugin manifest entry {policy.manifest_name!r} must appear exactly once"
-        )
-    entry = matches[0]
-    raw_source = entry.get("source", ".")
-    if not isinstance(raw_source, str) or not raw_source.strip():
-        raise ValueError(f"{policy.plugin_id}: plugin source is not a relative path")
-    source = (upstream_root / raw_source).resolve()
-    try:
-        source.relative_to(upstream_root.resolve())
-    except ValueError as exc:
-        raise ValueError(f"{policy.plugin_id}: plugin source escapes checkout") from exc
+    plugins = _marketplace_plugins(manifest_path)
+    entry = _named_marketplace_entry(plugins, policy.manifest_name)
+    source = _locked_plugin_source(upstream_root, entry, policy.plugin_id)
     inventory = dict(entry)
     inventory["id"] = policy.plugin_id
     return observe_plugin(source, inventory)
@@ -355,23 +372,34 @@ def _mcp_package_blockers(
 def _mcp_argument_blockers(
     prefix: str, policy: McpSurfacePolicy, observed: ObservedMcpServer
 ) -> list[ManifestBlocker]:
-    blockers: list[ManifestBlocker] = []
     lowered = {argument.lower() for argument in observed.args}
-    for required in policy.required_args:
-        if required.lower() not in lowered:
-            blockers.append(
-                ManifestBlocker(
-                    "mcp-required-arg", f"{prefix} is missing required {required}"
-                )
-            )
-    for forbidden in policy.forbidden_args:
-        if forbidden.lower() in lowered:
-            blockers.append(
-                ManifestBlocker(
-                    "mcp-forbidden-arg", f"{prefix} includes forbidden {forbidden}"
-                )
-            )
-    return blockers
+    missing = _select_mcp_args(policy.required_args, lowered, present=False)
+    forbidden = _select_mcp_args(policy.forbidden_args, lowered, present=True)
+    return [
+        *_render_mcp_arg_blockers(
+            prefix, missing, "mcp-required-arg", "is missing required"
+        ),
+        *_render_mcp_arg_blockers(
+            prefix, forbidden, "mcp-forbidden-arg", "includes forbidden"
+        ),
+    ]
+
+
+def _select_mcp_args(
+    candidates: tuple[str, ...], observed: set[str], *, present: bool
+) -> tuple[str, ...]:
+    return tuple(
+        argument for argument in candidates if (argument.lower() in observed) is present
+    )
+
+
+def _render_mcp_arg_blockers(
+    prefix: str, arguments: tuple[str, ...], kind: str, relation: str
+) -> list[ManifestBlocker]:
+    return [
+        ManifestBlocker(kind, f"{prefix} {relation} {argument}")
+        for argument in arguments
+    ]
 
 
 def _identity_blockers(
