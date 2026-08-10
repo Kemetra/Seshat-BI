@@ -209,28 +209,41 @@ def _normalize_mcp_servers(payload: object) -> tuple[ObservedMcpServer, ...] | N
         return None
 
 
-def _observe_mcp_servers(root: Path) -> tuple[ObservedMcpServer, ...] | None:
-    mcp_manifest = root / ".mcp.json"
-    if mcp_manifest.exists():
-        if not mcp_manifest.is_file():
-            return None
-        try:
-            return _normalize_mcp_servers(_read_json(mcp_manifest))
-        except (OSError, UnicodeError, json.JSONDecodeError):
-            return None
-
-    plugin_manifest = root / ".claude-plugin" / "plugin.json"
-    if not plugin_manifest.exists():
-        return ()
-    if not plugin_manifest.is_file():
-        return None
+def _read_mcp_manifest(manifest: Path) -> object:
+    if not manifest.is_file():
+        raise _InvalidMcpManifest
     try:
-        payload = _read_json(plugin_manifest)
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        return None
+        return _read_json(manifest)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise _InvalidMcpManifest from exc
+
+
+def _plugin_manifest_mcp_payload(payload: object) -> object | None:
     if not isinstance(payload, dict) or "mcpServers" not in payload:
+        return None
+    return {"mcpServers": payload["mcpServers"]}
+
+
+def _plugin_manifest_mcp_servers(
+    manifest: Path,
+) -> tuple[ObservedMcpServer, ...] | None:
+    if not manifest.exists():
         return ()
-    return _normalize_mcp_servers({"mcpServers": payload["mcpServers"]})
+    payload = _plugin_manifest_mcp_payload(_read_mcp_manifest(manifest))
+    if payload is None:
+        return ()
+    return _normalize_mcp_servers(payload)
+
+
+def _observe_mcp_servers(root: Path) -> tuple[ObservedMcpServer, ...] | None:
+    try:
+        standalone = root / ".mcp.json"
+        if standalone.exists():
+            return _normalize_mcp_servers(_read_mcp_manifest(standalone))
+        plugin_manifest = root / ".claude-plugin" / "plugin.json"
+        return _plugin_manifest_mcp_servers(plugin_manifest)
+    except _InvalidMcpManifest:
+        return None
 
 
 def observe_plugin(
