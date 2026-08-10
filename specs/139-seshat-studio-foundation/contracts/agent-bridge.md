@@ -184,5 +184,5 @@ path on its own (FR-013).
 An API-key or access-token bridge is permitted only as an EXPLICITLY
 operator-configured alternate implementation of this same `AgentBridge` protocol
 (FR-013a, amended 2026-08-04). When active it MUST be named in the interface and in
-`GET /bootstrap`. It is never selected by inference, by degradation, or as a response
-to any condition in this table.
+`GET /bootstrap/state`. It is never selected by inference, by degradation, or as a
+response to any condition in this table.

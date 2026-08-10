@@ -369,7 +369,7 @@ components:
     BootstrapState:
       type: object
       additionalProperties: false
-      required: [workspace, navigation, capabilities]
+      required: [workspace, navigation, capabilities, authentication_mode]
       properties:
         workspace:
           $ref: "#/components/schemas/WorkspaceSnapshot"
@@ -378,6 +378,17 @@ components:
           items:
             type: string
             enum: [command_room]
+        authentication_mode:
+          type: string
+          description: >-
+            Which agent authentication path is currently active (FR-013a).
+            `subscription` is the default and the only path SC-010 certifies.
+            `operator_configured_alternate` is set ONLY when the operator has
+            explicitly configured an API-key or access-token bridge; it is never
+            selected by inference, degradation, or fallback. Studio names the
+            active mode here and in the interface so the analyst can always tell
+            which path is in use.
+          enum: [subscription, operator_configured_alternate]
         capabilities:
           type: object
           additionalProperties: false
