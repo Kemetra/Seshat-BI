@@ -20,7 +20,7 @@ adapter) is PARKED: no mutation path exists anywhere in this family.
 
 1. Map the user's task to the governed surface, read-only:
 
-   `seshat pbi-mcp doctor --intent <task> [--target <table>] [--json] [--write-advisory]`
+   `seshat pbi-mcp doctor --repo . --intent <task> [--target <table>] [--harness <claude-code|codex>] [--json] [--write-advisory]`
 
    `--intent` is a closed vocabulary: `model-edit`, `published-query`,
    `report-authoring`, `report-formatting`, `desktop-verification`, `db-connectivity`,
@@ -33,9 +33,10 @@ adapter) is PARKED: no mutation path exists anywhere in this family.
 
    `report-authoring` additionally requires an exact `--target <table>`. It
    selects Microsoft's official `powerbi-report-authoring` skill, but remains
-   blocked until that target records `dashboard_ready: pass` and the Spec 148
-   harness probe reports the skill discoverable. Installed is not the same as
-   activated.
+   blocked until that target has a committed semantic-model pass, a complete
+   named-human `dashboard_ready` approval, and the Spec 148 harness probe reports
+   the skill discoverable. Approval does not itself claim `dashboard_ready:
+   pass`. Installed is not the same as activated.
 
 2. Generate config only through the safe generator:
 
@@ -60,19 +61,22 @@ adapter) is PARKED: no mutation path exists anywhere in this family.
 
 ## The recommendation matrix in plain language
 
-- Create or modify a PBIP/TMDL semantic model -> the official LOCAL Power BI
-  Modeling MCP, and only when `semantic_model_ready` has passed; read-only
-  until the owner-ratified ADR lifts the F016 park.
+- Create or modify a PBIP/TMDL semantic model -> BLOCKED while F016 remains
+  parked, even when `semantic_model_ready` has passed. The official local Power
+  BI Modeling MCP is a future execution-only adapter, never a source of metric
+  meaning or approval.
 - Query an already-published semantic model -> the official REMOTE Power BI
   MCP server, only once its tenant-side prerequisites are verified (tenant
   preview setting, Build permission, Copilot license for Generate Query);
   otherwise stop and name the missing prerequisite.
 - Create or modify native report pages, visuals, filters, slicers, bindings, or
   themes beyond Seshat's bounded allow-list -> Microsoft's official
-  `powerbi-report-authoring` skill after `dashboard_ready: pass`; if discovery
-  is unverified, stop rather than emulate it.
+  `powerbi-report-authoring` skill after the exact target semantic pass and a
+  named-human dashboard-design approval; if discovery is unverified, stop
+  rather than emulate it.
 - Theme, page layout, geometry, or visual formatting -> the existing
-  PBIR-authoring adapter only for its bounded allow-listed operations; broader
+  PBIR-authoring gap adapter only for its bounded allow-listed operations and
+  only with the same exact-target semantic and human-approval evidence; broader
   native report authoring routes to the official skill, not MCP.
 - Live Desktop verification or screenshots -> the Power BI Desktop Bridge, a
   separate optional integration; never in CI.

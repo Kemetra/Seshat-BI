@@ -1,0 +1,12 @@
+# Reviewed exceptions where Seshat temporarily retains a bounded local capability
+# beside an official upstream surface. These records authorize no execution and
+# grant no readiness approval; each must be revisited by its review date.
+gaps:
+  - id: powerbi-bounded-pbir-patching
+    seshat_capability: "pbir-apply-theme, pbir-format-visual, pbir-set-page-background, pbir-set-geometry"
+    upstream_checked: "microsoft/skills-for-fabric powerbi-report-design and powerbi-report-authoring"
+    checked_at: "2026-08-10"
+    gap: "Temporary local coverage for deterministic, binding-preserving PBIR patches that the reviewed official activation cannot yet expose under Seshat's closed-world firewall."
+    scope: "Allow-listed theme application, visual formatting, page background, and visual geometry only; exact-table committed semantic evidence and named-human dashboard design approval are required before mutation."
+    review_by: "2026-11-10"
+    retire_when: "Retire the local writers when an approved official Microsoft surface supplies the same constrained operations and passes the closed-world plugin firewall without incompatible capabilities."
