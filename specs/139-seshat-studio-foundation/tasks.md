@@ -85,7 +85,16 @@ precondition; no later task may start while it is open.
   include current allowed/forbidden scope and never include credentials. [FR-017,
   FR-018, FR-026]
 - [ ] **T023** Run the bridge contract suite against fake and production adapters;
-  accept every failure state without API-key fallback. [SC-003, SC-004]
+  accept every failure state without *automatic* API-key fallback. (Wording aligned
+  with FR-013 as amended 2026-08-04: the prohibition is on a silent or automatic
+  switch to a billed path, not on the explicitly operator-configured alternate mode
+  of T023a.) [SC-003, SC-004]
+- [ ] **T023a** Implement the alternate API-key/access-token `AgentBridge` as an
+  explicitly operator-configured mode at the existing provider-neutral seam. Assert
+  it is never selected by inference, by degradation, or as a response to any bridge
+  health state, and that the active authentication mode is named both in the
+  interface and in `GET /bootstrap/state`. Subscription sign-in remains the default;
+  SC-010 certifies only the subscription path. [FR-013a]
 
 ## Phase 6 - Technical Approval Boundary (US3)
 
@@ -106,8 +115,11 @@ precondition; no later task may start while it is open.
 - [ ] **T029** Author the canonical Studio skill with natural-language launch,
   workspace validation, single-instance reuse, two-lane missing-extra remedy, and
   technical troubleshooting detail. [FR-027, FR-028]
-- [ ] **T030** Register the capability in the canonical inventory and regenerate both
-  bundles; verify clean byte-identical regeneration. [FR-027]
+- [ ] **T030** Register the capability in the canonical inventory
+  (`docs/capabilities/capabilities.yaml`) **and** in the public command surface
+  authority (`distribution/public-command-surface.yaml`), then regenerate both
+  bundles; verify clean byte-identical regeneration. A capability registered in only
+  one of the two surfaces is a half-shipped verb. [FR-027]
 - [ ] **T031** Test Codex full launch and Claude deterministic launch/native handoff;
   assert no Claude credential bridge is present. [FR-029]
 
