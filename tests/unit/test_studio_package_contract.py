@@ -217,18 +217,16 @@ def test_the_launcher_carries_the_workspace_it_was_given(
     A launcher that accepts `--repo` and discards it would silently serve the wrong
     workspace once T007 lands, so the accepted value must be resolved and reported.
     """
-    import sys
-    import types
+    pytest.importorskip("fastapi")
 
     from seshat.studio import __main__ as launcher
     from seshat.studio import assets, config
 
     (tmp_path / ".seshat").mkdir()  # a RECOGNIZED workspace, not just a directory
 
-    # Stand in for the extra so the launcher reaches the workspace step. Real
-    # modules, not mocks of the launcher's own logic.
-    monkeypatch.setitem(sys.modules, "fastapi", types.ModuleType("fastapi"))
-    monkeypatch.setitem(sys.modules, "uvicorn", types.ModuleType("uvicorn"))
+    # The REAL web stack, not an empty stand-in: since T011 the launcher builds the
+    # actual app, so a bare ModuleType stub fails on `from fastapi import FastAPI`.
+    # Only the frontend assets are stubbed -- T012 produces them.
     monkeypatch.setattr(assets, "describe_missing_assets", lambda directory: None)
 
     recorded: list[config.LaunchConfiguration] = []
@@ -241,7 +239,9 @@ def test_the_launcher_carries_the_workspace_it_was_given(
 
     monkeypatch.setattr(config.LaunchConfiguration, "for_workspace", record)
 
-    exit_code = launcher.main(["--repo", str(tmp_path)])
+    # `--no-serve` stops before binding a port; without it this test would start a
+    # real server and hang.
+    exit_code = launcher.main(["--repo", str(tmp_path), "--no-serve"])
 
     assert exit_code == 0
     # The launcher must PIN the workspace it was given. It deliberately does not

@@ -246,6 +246,39 @@ def redact_credentials(text: str) -> str:
 _DSN_SHAPED = re.compile(r"\b[a-z][a-z0-9+.\-]*://[^\s\"'<>|]*@[^\s\"'<>|]*")
 
 
+def scrub_payload(
+    payload: object,
+    *,
+    secrets: Sequence[str | None] = (),
+    workspace_root: Path | None = None,
+) -> object:
+    """Apply :func:`redact_for_boundary` to every STRING inside a nested payload.
+
+    The response boundary hands out dicts and lists, not strings, so a string-only
+    redactor is never actually applied there -- the gap an adversarial review flagged
+    as "the module claims it is applied to browser responses; it is applied nowhere".
+
+    Keys are left alone: they are contract field names, fixed by `studio-api.yaml`, and
+    rewriting one would produce a payload that fails its own schema. Only VALUES can
+    carry a secret or a path.
+    """
+    if isinstance(payload, str):
+        return redact_for_boundary(
+            payload, secrets=secrets, workspace_root=workspace_root
+        )
+    if isinstance(payload, dict):
+        return {
+            key: scrub_payload(value, secrets=secrets, workspace_root=workspace_root)
+            for key, value in payload.items()
+        }
+    if isinstance(payload, (list, tuple)):
+        return [
+            scrub_payload(item, secrets=secrets, workspace_root=workspace_root)
+            for item in payload
+        ]
+    return payload
+
+
 def redact_for_boundary(
     text: str,
     *,

@@ -38,6 +38,14 @@ def _build_parser() -> argparse.ArgumentParser:
         default=".",
         help="Workspace to serve. Exactly one workspace per process (FR-001).",
     )
+    parser.add_argument(
+        "--no-serve",
+        action="store_true",
+        help=(
+            "Verify the full startup path -- workspace, extra, assets, app -- "
+            "then exit without binding a port."
+        ),
+    )
     return parser
 
 
@@ -152,15 +160,30 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return _EXIT_REFUSED
 
-    # The serving surface arrives with T011 (typed endpoints plus the deferred half
-    # of Phase 2: ASGI middleware, problem responses, security headers, cookie
-    # expiry, unauthenticated refusal). Phase 2 delivers the package, launcher, and
-    # security primitives, so a reachable launcher says so rather than pretending
-    # to serve.
+    # Serving is legal HERE and only here: B1's never-execute boundary governs
+    # `src/seshat/rules/` and `src/seshat/cli/`, and this module is outside both
+    # (asserted by test_the_launcher_is_outside_the_seshat_cli_dispatch_chain). FR-003
+    # requires Studio to bind loopback, which the static core must never do.
+    from . import app as app_module
+
+    application, token = app_module.create_app(launch.workspace_root)
     print(
-        "Studio launcher, workspace, and packaged assets are all present; the "
-        "loopback service arrives with T011. Nothing is served yet.",
+        f"Studio is ready. Open http://{application.state.expected_host}"
+        f"{app_module.API_PREFIX}/bootstrap?token={token} once, then discard the link.",
         file=sys.stderr,
+    )
+    if args.no_serve:
+        # A launch that verifies the whole startup path without occupying a port --
+        # what `--check` style callers and the acceptance harness need.
+        return _EXIT_OK
+
+    import uvicorn
+
+    uvicorn.run(
+        application,
+        host=launch.bind_host,
+        port=launch.port,
+        log_level="warning",
     )
     return _EXIT_OK
 
