@@ -4,13 +4,27 @@
 [data-model.md](./data-model.md), and [contracts](./contracts/).
 
 **Status**: ratified and ACTIVE for implementation as of 2026-08-10. Phase 1
-(governance preconditions) and Phase 2 (package and security skeleton) are closed;
-Phase 3 (T009, projection parity tests) is next.
+(governance preconditions) and Phase 2 (package and security skeleton) are closed, and
+Phase 3 is underway: T009/T010 (the deterministic projection) are done; **T011 (typed
+endpoints) is next** and carries the deferred half of Phase 2 plus three items from the
+Phase 3 review — see its entry.
+
+Four contract defects were found and fixed before T010 was written, because a truthful
+projection could not have validated against the shipped contract: `StageState.status`
+declared a status (`ready_for_review`) that exists nowhere in the repository,
+`ReadinessStage` dropped the `_ready` suffix from all seven identifiers, `current_stage`
+was non-nullable while the upstream authority emits null, and the seven-stage bound
+needed its rationale recorded. Both enums are now pinned to
+`schemas/agent-status.schema.json` and `status_surface._STAGE_ORDER` by
+`tests/unit/test_studio_contract_matches_authority.py`, and every fixture state is
+validated against `studio-api.yaml` by
+`tests/unit/test_studio_projection_conforms_to_contract.py`.
 
 Regression floor for every later phase, from
 [`evidence/t003-baselines.md`](./evidence/t003-baselines.md): 5822 passed / 2
-pre-existing environmental failures / 23 skipped at T003. After Phase 2: **5896
-passed / the same 2 failures / 24 skipped** — 74 tests added, no new failure.
+pre-existing environmental failures / 23 skipped at T003. After Phase 2: 5896 passed /
+the same 2 failures / 24 skipped. After T009-T010: **5979 passed / the same 2 failures /
+24 skipped**.
 
 ## Phase 1 - Governance Preconditions
 
