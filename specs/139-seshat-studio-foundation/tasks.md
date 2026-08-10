@@ -20,8 +20,14 @@ bundles, so later phases have a regression floor to measure against.
   `.specify/feature.json` now names `specs/139-seshat-studio-foundation`, both the
   `AGENTS.md` and `CLAUDE.md` SPECKIT fences render that plan, and
   `test_active_spec_kit_markers_agree_and_resolve` passes.
-- [ ] **T003** Capture baseline results for static dashboard, B1 imports, bundle
+- [x] **T003** Capture baseline results for static dashboard, B1 imports, bundle
   regeneration, package contents, unit tests, and accessibility tooling. [SC-009]
+  — recorded in [`evidence/t003-baselines.md`](./evidence/t003-baselines.md):
+  5822 passed / 2 pre-existing environmental failures / 23 skipped; dashboard
+  92 passed; B1 20 passed; bundles regenerate byte-identically; no `studio` extra and
+  no `seshat-studio` script yet. Accessibility tooling is NOT yet available (no
+  `studio-ui/`, `npx axe` unavailable) — that arrives with T012, so T032 is blocked
+  until then.
 
 ## Phase 2 - Package and Security Skeleton
 
