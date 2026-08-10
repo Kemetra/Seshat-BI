@@ -121,8 +121,20 @@ the same 2 failures / 24 skipped. After T009-T010: **5979 passed / the same 2 fa
   `test_studio_projection_conforms_to_contract.py`, which validates every fixture
   state against `studio-api.yaml` -- the check whose absence let three contract
   violations pass 25 green tests.
-- [ ] **T011** Implement typed bootstrap, workspace, table, decision-summary, and
+- [x] **T011** Implement typed bootstrap, workspace, table, decision-summary, and
   health endpoints matching `studio-api.yaml`. [FR-034]
+  — `seshat.studio.app`. All seven deterministic routes, with the security middleware
+  applying the contracted Host -> Origin -> session order; the six `/agent/threads/*`
+  routes are Phase 4. Delivered from the deferral list below: (a) middleware, (b)
+  problem responses, (c) security headers, (d) time-based cookie expiry (injectable
+  monotonic clock), (e) unauthenticated refusal, (f) `authentication_mode`, (g)
+  `scrub_payload` at the real response boundary, (i) `with_bound_port`. The launcher
+  now serves, with `--no-serve` to exercise startup without a port.
+  **STILL NOT DELIVERED: (h)** the security contract's "checks the expected file kind"
+  for optional reads. No route dereferences an evidence file yet, so there is nothing
+  to check the kind OF; it moves to whichever task first reads an evidence path.
+  `EvidenceRef.source_ref` likewise remains the committed string, uncontained, for the
+  same reason. Both are recorded here rather than absorbed.
   **Also carries the deferred half of Phase 2**, which has no testable surface until
   this app exists: (a) the ASGI security middleware applying the contracted
   enforcement ORDER, (b) redacted problem responses, (c) security headers, (d)

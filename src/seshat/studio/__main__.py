@@ -38,6 +38,14 @@ def _build_parser() -> argparse.ArgumentParser:
         default=".",
         help="Workspace to serve. Exactly one workspace per process (FR-001).",
     )
+    parser.add_argument(
+        "--no-serve",
+        action="store_true",
+        help=(
+            "Verify the full startup path -- workspace, extra, assets, app -- "
+            "then exit without binding a port."
+        ),
+    )
     return parser
 
 
@@ -103,6 +111,35 @@ def _report_web_stack_failure(absent: ModuleNotFoundError) -> None:
     )
 
 
+def _bind_loopback(host: str):  # type: ignore[no-untyped-def]
+    """Bind an OS-assigned loopback port and return the listening socket.
+
+    ``socket`` is imported HERE rather than at module scope. B1's never-execute rule
+    bans a module-scope socket import in the static core, and while this module is
+    outside `_GOVERNED_PREFIXES`, keeping the import local preserves the property that
+    importing the launcher opens nothing.
+    """
+    import socket
+
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind((host, 0))
+    listener.listen(128)
+    return listener
+
+
+def _serve(application, *, host: str, port: int, sock=None) -> None:  # type: ignore[no-untyped-def]
+    """Run the ASGI server. Extracted so a test can observe the served port."""
+    import uvicorn
+
+    config_kwargs = {"host": host, "port": port, "log_level": "warning"}
+    server = uvicorn.Server(uvicorn.Config(application, **config_kwargs))
+    if sock is not None:
+        server.run(sockets=[sock])
+    else:  # pragma: no cover - the launcher always binds first
+        server.run()
+
+
 def _web_stack_is_importable() -> ModuleNotFoundError | None:
     """Import the web stack lazily; return the failure instead of raising.
 
@@ -152,16 +189,33 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return _EXIT_REFUSED
 
-    # The serving surface arrives with T011 (typed endpoints plus the deferred half
-    # of Phase 2: ASGI middleware, problem responses, security headers, cookie
-    # expiry, unauthenticated refusal). Phase 2 delivers the package, launcher, and
-    # security primitives, so a reachable launcher says so rather than pretending
-    # to serve.
+    # Serving is legal HERE and only here: B1's never-execute boundary governs
+    # `src/seshat/rules/` and `src/seshat/cli/`, and this module is outside both
+    # (asserted by test_the_launcher_is_outside_the_seshat_cli_dispatch_chain). FR-003
+    # requires Studio to bind loopback, which the static core must never do.
+    from . import app as app_module
+
+    # BIND FIRST, then build. The app's Host guard compares against a concrete port, so
+    # the port has to be known before the app exists. Binding here and handing uvicorn
+    # the already-bound socket means the OS assigns the port exactly once -- no fixed
+    # port (FR-003), and no window in which another process could take it.
+    listener = _bind_loopback(launch.bind_host)
+    bound = launch.with_bound_port(listener.getsockname()[1])
+
+    application, token = app_module.create_app(bound.workspace_root, port=bound.port)
     print(
-        "Studio launcher, workspace, and packaged assets are all present; the "
-        "loopback service arrives with T011. Nothing is served yet.",
+        f"Studio is ready. Open http://{application.state.expected_host}"
+        f"{app_module.API_PREFIX}/bootstrap?token={token} once, then discard the link.",
         file=sys.stderr,
     )
+    if args.no_serve:
+        # A launch that verifies the whole startup path without occupying a port --
+        # what `--check` style callers and the acceptance harness need.
+        listener.close()
+        return _EXIT_OK
+
+    _serve(application, host=bound.bind_host, port=bound.port, sock=listener)
+    return _EXIT_OK
     return _EXIT_OK
 
 

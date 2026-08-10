@@ -16,7 +16,14 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
+import time
+from collections.abc import Callable
 from typing import Any
+
+#: How long an exchanged session stays valid. A local single-user console does not need
+#: a long-lived session, and the contract requires expiry to end access
+#: ("Session expiry, process restart, or explicit shutdown invalidates access").
+SESSION_TTL_SECONDS = 12 * 60 * 60
 
 #: 32 bytes = 256 bits, the contract's floor. `token_urlsafe` renders this as 43
 #: characters, so the length assertion in the tests tracks the entropy requirement.
@@ -60,11 +67,22 @@ class SessionStore:
     guess cannot deny the legitimate browser its one exchange.
     """
 
-    __slots__ = ("_token_digest", "_session_digest")
+    __slots__ = ("_token_digest", "_session_digest", "_expires_at", "_clock", "_ttl")
 
-    def __init__(self, bootstrap_token: str) -> None:
+    def __init__(
+        self,
+        bootstrap_token: str,
+        *,
+        ttl_seconds: float = SESSION_TTL_SECONDS,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         self._token_digest: str | None = _digest(bootstrap_token)
         self._session_digest: str | None = None
+        self._expires_at: float | None = None
+        self._ttl = ttl_seconds
+        # Injectable so a test can advance time instantly instead of sleeping, and
+        # MONOTONIC so a system clock adjustment cannot extend or shorten a session.
+        self._clock = clock
 
     def __repr__(self) -> str:  # pragma: no cover - exercised via the redaction test
         """Deliberately opaque: no token or cookie material, even in a traceback."""
@@ -87,18 +105,33 @@ class SessionStore:
         self._token_digest = None  # one exchange only
         cookie_value = secrets.token_urlsafe(_TOKEN_BYTES)
         self._session_digest = _digest(cookie_value)
+        self._expires_at = self._clock() + self._ttl
         return cookie_value
 
     def is_valid_session(self, presented_cookie: str) -> bool:
-        """Constant-time check of a presented session cookie."""
+        """Constant-time check of a presented session cookie, including expiry.
+
+        Expiry is checked BEFORE the digest comparison so an expired session is
+        rejected on the clock alone, and an expired store is cleared rather than left
+        holding a digest that can never match again.
+        """
         if self._session_digest is None:
             return False
+        if self._expires_at is not None and self._clock() >= self._expires_at:
+            self._session_digest = None
+            self._expires_at = None
+            return False
         return hmac.compare_digest(_digest(presented_cookie), self._session_digest)
+
+    def expire_now(self) -> None:
+        """Force the session past its deadline, for tests and explicit lockout."""
+        self._expires_at = self._clock()
 
     def shutdown(self) -> None:
         """Invalidate the token and the session; access ends immediately."""
         self._token_digest = None
         self._session_digest = None
+        self._expires_at = None
 
 
 def host_is_allowed(header: str, expected_host: str, expected_port: int) -> bool:

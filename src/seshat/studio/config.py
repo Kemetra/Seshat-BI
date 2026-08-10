@@ -20,7 +20,7 @@ Standard library only, by contract: this module must import cleanly without the
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 #: Requesting port 0 makes the OS assign a free port (FR-003). Studio never picks a
@@ -55,6 +55,26 @@ class LaunchConfiguration:
     workspace_root: Path
     bind_host: str = LOOPBACK_HOST
     port: int = OS_ASSIGNED_PORT
+
+    def with_bound_port(self, port: int) -> LaunchConfiguration:
+        """A copy carrying the port the OS actually assigned.
+
+        ``port`` starts at :data:`OS_ASSIGNED_PORT` (0), which is a REQUEST for any
+        free port rather than a real one. ``session.host_is_allowed`` compares the
+        request's ``Host`` against the configured port, so without this re-pin every
+        request would be compared against 0 -- failing closed, but always, which makes
+        the whole enforcement path untestable and the service unusable.
+
+        Returns a NEW configuration rather than mutating: the pinned root and bind host
+        must stay immutable for the process's lifetime, and only the port becomes known
+        later than construction.
+        """
+        if port <= 0:
+            raise ValueError(
+                f"a bound port must be a real port number, got {port!r}; "
+                "OS_ASSIGNED_PORT is a request, not a result"
+            )
+        return replace(self, port=port)
 
     @classmethod
     def for_workspace(
