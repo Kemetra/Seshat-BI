@@ -14,9 +14,18 @@ the ``pbi_mcp`` family's documented laziness.
 
 from __future__ import annotations
 
-#: Distributions the ``studio`` extra pulls in, named for diagnostics only. The
-#: authority is ``pyproject.toml``; ``seshat.cli._EXTRA_DEPENDENCIES`` mirrors it
-#: for the install-hint surface, and a unit test pins all three together.
-WEB_DEPENDENCIES: tuple[str, ...] = ("fastapi", "uvicorn")
+#: Top-level module names the ``studio`` extra provides.
+#:
+#: The launcher gates its missing-extra diagnostic on this set: a
+#: ``ModuleNotFoundError`` naming one of these means the extra really is absent,
+#: while one naming anything else means the extra is installed but a transitive
+#: dependency is broken. Without the gate, a broken dependency was reported as an
+#: absent extra and the reader was told to install what they already had.
+#:
+#: These are IMPORT names, deliberately not version specs: the authority on versions
+#: is ``pyproject.toml``, mirrored for the install-hint surface by
+#: ``seshat.cli._EXTRA_DEPENDENCIES`` and pinned to it by
+#: ``test_the_studio_dependency_table_matches_pyproject``.
+WEB_DEPENDENCIES: frozenset[str] = frozenset({"fastapi", "uvicorn"})
 
 __all__ = ["WEB_DEPENDENCIES"]

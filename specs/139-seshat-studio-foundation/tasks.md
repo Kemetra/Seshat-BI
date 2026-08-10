@@ -63,6 +63,20 @@ passed / the same 2 failures / 24 skipped** — 74 tests added, no new failure.
   does. Tracked so the remaining half is not mistaken for shipped.
 - [x] **T008** Add credential/path redaction unit and property tests before applying
   redaction to errors, diagnostics, logs, and browser responses. [FR-026]
+  — session material, DSNs (delegated to `seshat.redaction_core`), authorization
+  headers, credential-shaped assignments, and absolute paths, with over-redaction
+  guards proving innocent governed text survives. An external adversarial review
+  found the first revision implemented only session material and paths, leaving
+  FR-026's named DSN/password/token/authorization classes leaking; that gap is now
+  closed and pinned by `tests/unit/test_studio_review_findings.py`.
+  **Still outstanding for T011**: applying this at the real HTTP boundary. The
+  redactor is exercised by tests and by the launcher's own asset diagnostic, but no
+  agent event or browser response exists to redact until the app is built. Two
+  contract items are also not implemented: "checks the expected file kind" for
+  optional reads (Windows device names such as `NUL`/`CON` and NTFS alternate data
+  streams are contained but accepted), and a `LaunchConfiguration` re-pin of the
+  OS-assigned port after bind (`port` is still `0` when `host_is_allowed` runs, which
+  fails CLOSED, so it is a correctness gap rather than a hole).
 
 ## Phase 3 - Deterministic Workspace Foundation (US1, US4)
 
@@ -80,7 +94,11 @@ passed / the same 2 failures / 24 skipped** — 74 tests added, no new failure.
   time-based cookie expiry, (e) unauthenticated-access refusal, and (f) the
   `authentication_mode` field required on `BootstrapState` by FR-013a. Items (a)-(c)
   are T007's remainder, (d)-(e) are T006's, and the Phase 2 predicates in
-  `seshat.studio.session` are what (a) must wire in.
+  `seshat.studio.session` are what (a) must wire in. Also from the Phase 2 review:
+  (g) apply `seshat.studio.redaction.redact_for_boundary` at the real response and
+  event boundary, (h) add the file-kind check the security contract requires for
+  optional reads, and (i) re-pin `LaunchConfiguration.port` to the OS-assigned port
+  after bind, since `host_is_allowed` is otherwise compared against `0`.
 - [ ] **T012** Create the React/TypeScript shell, generated API types, local design
   tokens, and offline build pipeline; copy build output into the packaged static
   directory through one documented build command. [FR-005, FR-033]

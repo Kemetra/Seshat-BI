@@ -58,22 +58,35 @@ class LaunchConfiguration:
     @classmethod
     def for_workspace(
         cls,
-        workspace: Path,
+        workspace: str | Path,
         *,
         bind_host: str = LOOPBACK_HOST,
         port: int = OS_ASSIGNED_PORT,
     ) -> LaunchConfiguration:
-        """Resolve and pin ``workspace``, refusing anything unusable.
+        """Resolve, RECOGNIZE, and pin ``workspace``, refusing anything else.
 
-        The root is resolved BEFORE the web server is imported or started, so a bad
-        workspace is a launch-time refusal rather than a runtime surprise.
+        The contract says Studio "accepts only a recognized Seshat workspace", and
+        ``is_dir()`` is not recognition -- it admits any directory on the machine.
+        Recognition is delegated to the shipped ``resolve_workspace_root``, which
+        keys on real workspace markers and fails closed. Duplicating that judgement
+        here would be a second, weaker authority on what a workspace is.
+
+        The caller must invoke this BEFORE importing or starting the web server, so
+        an unrecognized workspace is refused on its own terms rather than surfacing
+        as whatever the next step happens to hit.
+
+        Raises ``ValueError`` for anything unusable, so one ``except`` at the
+        launcher covers every refusal reason.
         """
-        resolved = Path(workspace).resolve()
-        if not resolved.is_dir():
+        from seshat.workspace_root import WorkspaceRootError, resolve_workspace_root
+
+        try:
+            resolved = resolve_workspace_root(workspace)
+        except WorkspaceRootError as unrecognized:
             raise ValueError(
-                f"not a usable Seshat workspace: {resolved} is not an existing "
-                "directory"
-            )
+                f"not a usable Seshat workspace: {unrecognized}"
+            ) from unrecognized
+
         return cls(
             workspace_root=resolved,
             bind_host=resolve_bind_host(bind_host),

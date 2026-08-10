@@ -188,8 +188,10 @@ def test_a_missing_studio_extra_is_a_named_diagnostic_not_a_traceback(
     original = builtins.__import__
 
     def missing(name: str, *args: object, **kwargs: object) -> object:
-        if name.split(".")[0] in {"fastapi", "uvicorn", "starlette"}:
-            raise ModuleNotFoundError(f"No module named {name!r}")
+        root = name.split(".")[0]
+        if root in {"fastapi", "uvicorn", "starlette"}:
+            # `name=` mirrors the real import machinery, which always sets it.
+            raise ModuleNotFoundError(f"No module named {root!r}", name=root)
         return original(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", missing)
@@ -219,7 +221,9 @@ def test_the_launcher_carries_the_workspace_it_was_given(
     import types
 
     from seshat.studio import __main__ as launcher
-    from seshat.studio import assets
+    from seshat.studio import assets, config
+
+    (tmp_path / ".seshat").mkdir()  # a RECOGNIZED workspace, not just a directory
 
     # Stand in for the extra so the launcher reaches the workspace step. Real
     # modules, not mocks of the launcher's own logic.
@@ -227,10 +231,25 @@ def test_the_launcher_carries_the_workspace_it_was_given(
     monkeypatch.setitem(sys.modules, "uvicorn", types.ModuleType("uvicorn"))
     monkeypatch.setattr(assets, "describe_missing_assets", lambda directory: None)
 
+    recorded: list[config.LaunchConfiguration] = []
+    original_for_workspace = config.LaunchConfiguration.for_workspace
+
+    def record(workspace: object, **kwargs: object) -> config.LaunchConfiguration:
+        launch = original_for_workspace(workspace, **kwargs)  # type: ignore[arg-type]
+        recorded.append(launch)
+        return launch
+
+    monkeypatch.setattr(config.LaunchConfiguration, "for_workspace", record)
+
     exit_code = launcher.main(["--repo", str(tmp_path)])
 
     assert exit_code == 0
-    assert str(tmp_path.resolve()) in capsys.readouterr().err
+    # The launcher must PIN the workspace it was given. It deliberately does not
+    # print the absolute path -- FR-026 redacts operator layout from output -- so the
+    # pinned configuration is the honest assertion, not the message text.
+    assert recorded, "the launcher never built a LaunchConfiguration"
+    assert recorded[0].workspace_root == tmp_path.resolve()
+    assert str(tmp_path.resolve()) not in capsys.readouterr().err
 
 
 # --------------------------------------------------------------------------- #

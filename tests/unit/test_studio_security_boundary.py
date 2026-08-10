@@ -62,10 +62,20 @@ def test_the_port_is_os_assigned_by_default() -> None:
 # --------------------------------------------------------------------------- #
 
 
+def _recognized_workspace(root: Path) -> Path:
+    """A directory the shipped `looks_like_workspace` recognizer accepts.
+
+    A bare `tmp_path` is deliberately NOT enough: the contract requires a
+    *recognized* Seshat workspace, so the fixture must carry a real marker.
+    """
+    (root / ".seshat").mkdir(parents=True, exist_ok=True)
+    return root
+
+
 def test_launch_configuration_pins_an_absolute_workspace_root(tmp_path: Path) -> None:
     from seshat.studio import config
 
-    launch = config.LaunchConfiguration.for_workspace(tmp_path)
+    launch = config.LaunchConfiguration.for_workspace(_recognized_workspace(tmp_path))
 
     assert launch.workspace_root == tmp_path.resolve()
     assert launch.workspace_root.is_absolute()
@@ -75,7 +85,7 @@ def test_launch_configuration_is_immutable(tmp_path: Path) -> None:
     """ "pins that absolute root in immutable process configuration"."""
     from seshat.studio import config
 
-    launch = config.LaunchConfiguration.for_workspace(tmp_path)
+    launch = config.LaunchConfiguration.for_workspace(_recognized_workspace(tmp_path))
 
     with pytest.raises(Exception):  # dataclasses raises FrozenInstanceError
         launch.workspace_root = Path("/elsewhere")  # type: ignore[misc]
@@ -86,6 +96,21 @@ def test_a_nonexistent_workspace_is_refused(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="workspace"):
         config.LaunchConfiguration.for_workspace(tmp_path / "absent")
+
+
+def test_a_directory_without_workspace_markers_is_refused(tmp_path: Path) -> None:
+    """`is_dir()` is not recognition -- it would admit any directory on the machine.
+
+    Recognition is delegated to the shipped `resolve_workspace_root`, so this pins
+    that Studio does not accept an arbitrary folder.
+    """
+    from seshat.studio import config
+
+    plain = tmp_path / "just-a-folder"
+    plain.mkdir()
+
+    with pytest.raises(ValueError, match="workspace"):
+        config.LaunchConfiguration.for_workspace(plain)
 
 
 # --------------------------------------------------------------------------- #

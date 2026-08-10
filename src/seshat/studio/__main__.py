@@ -17,7 +17,8 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
-from pathlib import Path
+
+from . import WEB_DEPENDENCIES, config, redaction
 
 _EXIT_OK = 0
 _EXIT_USAGE = 1
@@ -67,14 +68,54 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
     try:
         args = parser.parse_args(list(argv) if argv is not None else None)
-    except SystemExit as exit_signal:  # argparse's own usage exit
-        return int(exit_signal.code or _EXIT_USAGE)
+    except SystemExit as exit_signal:
+        # argparse exits 0 for `--help` and 2 for a usage error. Mapping both
+        # through `code or _EXIT_USAGE` turned --help into a nonzero exit, and
+        # reported a usage error with 2, the code reserved here for refusal.
+        code = exit_signal.code
+        if code in (0, None):
+            return _EXIT_OK
+        return _EXIT_USAGE
+
+    # The workspace is resolved and RECOGNIZED first, before the web stack is
+    # imported (contract: "resolves the requested repository before importing or
+    # starting the web server"). An unrecognized workspace must be refused on its
+    # own terms rather than surfacing as whatever the next step happens to hit.
+    try:
+        launch = config.LaunchConfiguration.for_workspace(args.repo)
+    except ValueError as refusal:
+        print(str(refusal), file=sys.stderr)
+        return _EXIT_REFUSED
 
     try:
         import fastapi  # noqa: F401
         import uvicorn  # noqa: F401
     except ModuleNotFoundError as absent:
-        print(_missing_extra_diagnostic(absent.name or "fastapi"), file=sys.stderr)
+        # Only blame the extra when the ABSENT module is one the extra provides. A
+        # ModuleNotFoundError from deeper inside fastapi's own import tree means a
+        # broken transitive dependency, and telling the reader to install an extra
+        # they already have sends them down the wrong path.
+        #
+        # `name` is normally set by the import machinery, but an explicitly raised
+        # ModuleNotFoundError may leave it None, so fall back to the message rather
+        # than mis-classifying on missing metadata.
+        missing = (absent.name or "").split(".")[0]
+        blamed_module = missing or str(absent)
+        if missing in WEB_DEPENDENCIES or (
+            not missing and any(dep in str(absent) for dep in WEB_DEPENDENCIES)
+        ):
+            print(
+                _missing_extra_diagnostic(missing or "fastapi"),
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"Seshat Studio could not start: the `studio` extra appears "
+                f"installed, but importing its web stack failed on "
+                f"{blamed_module!r}. This is a broken or incomplete dependency in "
+                f"the active environment, not a missing extra.",
+                file=sys.stderr,
+            )
         return _EXIT_REFUSED
 
     from . import assets
@@ -82,19 +123,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     static_directory = assets.packaged_static_directory()
     problem = assets.describe_missing_assets(static_directory)
     if problem is not None:
-        print(problem, file=sys.stderr)
+        print(
+            redaction.redact_paths(problem, workspace_root=launch.workspace_root),
+            file=sys.stderr,
+        )
         return _EXIT_REFUSED
 
-    # The serving surface arrives with T007 (launch configuration, session store,
-    # security middleware). T005 delivers only the package and launcher seam, so a
-    # reachable launcher reports that plainly rather than pretending to serve.
-    # The workspace is resolved HERE and named in the message: FR-001 pins exactly
-    # one workspace per process, so the launcher must carry the value it accepted
-    # rather than discard it.
-    workspace = Path(args.repo).resolve()
+    # The serving surface arrives with T011 (typed endpoints plus the deferred half
+    # of Phase 2: ASGI middleware, problem responses, security headers, cookie
+    # expiry, unauthenticated refusal). Phase 2 delivers the package, launcher, and
+    # security primitives, so a reachable launcher says so rather than pretending
+    # to serve.
     print(
-        f"Studio launcher and packaged assets are present for {workspace}; the "
-        "loopback service arrives with T007. Nothing is served yet.",
+        "Studio launcher, workspace, and packaged assets are all present; the "
+        "loopback service arrives with T011. Nothing is served yet.",
         file=sys.stderr,
     )
     return _EXIT_OK
