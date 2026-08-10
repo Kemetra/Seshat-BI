@@ -3,16 +3,23 @@
 **Input**: [spec.md](./spec.md), [plan.md](./plan.md), [research.md](./research.md),
 [data-model.md](./data-model.md), and [contracts](./contracts/).
 
-**Status**: ratified, not yet active for implementation. T002 remains a hard
-precondition; no later task may start while it is open.
+**Status**: ratified and ACTIVE for implementation as of 2026-08-10. T002 (the hard
+governance precondition) is closed: spec 138 is `implemented`, and this plan is the
+sole active Spec Kit marker. T003 baselines are the next task; capture them before
+editing `src/`, `studio-ui/`, `pyproject.toml`, capability sources, or generated
+bundles, so later phases have a regression floor to measure against.
 
 ## Phase 1 - Governance Preconditions
 
 - [x] **T001** Record named-human ratification of this exact specification, plan,
   contracts, and task list without agent self-ratification — Ahmed Shaaban,
   2026-08-03. [FR-036]
-- [ ] **T002** Complete or formally park spec 138 and update the one active Spec Kit
-  marker to this plan; run the active-marker contract test. [FR-036]
+- [x] **T002** Complete or formally park spec 138 and update the one active Spec Kit
+  marker to this plan; run the active-marker contract test. [FR-036] — spec 138 is
+  `implemented` (75/75 tasks, US4 deferred by the 2026-08-03 owner amendment);
+  `.specify/feature.json` now names `specs/139-seshat-studio-foundation`, both the
+  `AGENTS.md` and `CLAUDE.md` SPECKIT fences render that plan, and
+  `test_active_spec_kit_markers_agree_and_resolve` passes.
 - [ ] **T003** Capture baseline results for static dashboard, B1 imports, bundle
   regeneration, package contents, unit tests, and accessibility tooling. [SC-009]
 
