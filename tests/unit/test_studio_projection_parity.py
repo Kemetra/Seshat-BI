@@ -64,10 +64,14 @@ def test_studio_preserves_every_upstream_status_verbatim(build, tmp_path: Path) 
             assert stage.status == expected["status"], (
                 f"{stage.stage} status diverged from the upstream projection"
             )
-            # `list(...)`: the projection's fields are tuples because the dataclasses
-            # are frozen, while the upstream projection emits lists. Same contents.
-            assert list(stage.evidence) == expected["evidence"]
-            assert list(stage.blocking_reasons) == expected["blocking_reasons"]
+            # Upstream emits plain strings; the contract requires EvidenceRef and
+            # BlockingReason OBJECTS, so parity is asserted on the carried text. The
+            # wrapper adds `live_state`/`source_ref`, which the string form could not
+            # express -- it never drops or rewrites the original value.
+            assert [item.label for item in stage.evidence] == expected["evidence"]
+            assert [item.message for item in stage.blocking_reasons] == expected[
+                "blocking_reasons"
+            ]
 
 
 @pytest.mark.parametrize(
@@ -130,6 +134,108 @@ def test_the_projection_is_deterministic(tmp_path: Path) -> None:
     assert [t.table_id for t in first.tables] == [t.table_id for t in second.tables]
 
 
+def test_the_revision_is_content_addressed_not_merely_stable(tmp_path: Path) -> None:
+    """Stability alone is satisfied by a CONSTANT, which would be useless.
+
+    A constant digest passed `test_the_projection_is_deterministic` perfectly, so this
+    pins the property that actually matters: the revision must MOVE when the projected
+    content moves.
+    """
+    from seshat.studio import projection
+
+    write_ready_table(tmp_path, "one")
+    before = projection.build_workspace_snapshot(tmp_path).revision
+
+    write_blocked_table(tmp_path, "two")
+    after = projection.build_workspace_snapshot(tmp_path).revision
+
+    assert before != after, "the revision did not change when a table was added"
+
+
+def test_the_revision_changes_when_a_single_status_changes(tmp_path: Path) -> None:
+    """The finest-grained content change the browser must be able to detect."""
+    from seshat.studio import projection
+
+    target = write_ready_table(tmp_path, "flip")
+    before = projection.build_workspace_snapshot(tmp_path).revision
+
+    target.write_text(
+        target.read_text(encoding="utf-8").replace(
+            'status: "pass"', 'status: "blocked"', 1
+        ),
+        encoding="utf-8",
+    )
+    after = projection.build_workspace_snapshot(tmp_path).revision
+
+    assert before != after, "flipping one stage status did not move the revision"
+
+
+def test_the_revision_is_path_independent(tmp_path: Path) -> None:
+    """Two identical workspaces in different directories must hash the same.
+
+    Claimed in a commit message but previously untested. If an absolute path leaked
+    into the digested body, the same committed state would produce different
+    revisions per checkout -- and FR-026 keeps operator layout out of payloads anyway.
+    """
+    from seshat.studio import projection
+
+    first_root = tmp_path / "alpha"
+    second_root = tmp_path / "beta"
+    write_ready_table(first_root, "same")
+    write_ready_table(second_root, "same")
+
+    assert (
+        projection.build_workspace_snapshot(first_root).revision
+        == projection.build_workspace_snapshot(second_root).revision
+    )
+
+
+def test_the_revision_ignores_the_generation_timestamp(tmp_path: Path) -> None:
+    """`generated_at` must not enter the digest, or every read looks like a change."""
+    from seshat.studio import projection
+
+    write_ready_table(tmp_path)
+
+    early = projection.build_workspace_snapshot(
+        tmp_path, generated_at="2020-01-01T00:00:00Z"
+    )
+    late = projection.build_workspace_snapshot(
+        tmp_path, generated_at="2099-12-31T23:59:59Z"
+    )
+
+    assert early.revision == late.revision
+    assert early.generated_at != late.generated_at
+
+
+def test_an_omitted_current_stage_is_not_fabricated(tmp_path: Path) -> None:
+    """Upstream never fabricates `current_stage`, and neither may Studio.
+
+    No fixture previously omitted the field, so `current_stage or "publish_ready"` --
+    a literal stage fabrication -- survived mutation testing undetected.
+    """
+    from seshat.studio import projection
+
+    (tmp_path / ".seshat").mkdir(parents=True)
+    table = tmp_path / "mappings" / "no_current"
+    table.mkdir(parents=True)
+    (table / "readiness-status.yaml").write_text(
+        'table: "no_current"\n'
+        "stages:\n"
+        "  source_ready:\n"
+        '    status: "not_started"\n'
+        "    evidence: []\n"
+        "    blocking_reasons: []\n",
+        encoding="utf-8",
+    )
+
+    journey = projection.build_workspace_snapshot(tmp_path).tables[0]
+
+    assert journey.current_stage is None, (
+        f"current_stage was fabricated as {journey.current_stage!r}, but the "
+        "committed source omits it"
+    )
+
+
 def test_tables_are_sorted_stably(tmp_path: Path) -> None:
     from seshat.studio import projection
 
@@ -146,21 +252,61 @@ def test_tables_are_sorted_stably(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_no_numeric_score_appears_anywhere_in_the_snapshot(tmp_path: Path) -> None:
-    """FR-009 forbids a readiness, health, confidence, or maturity number."""
+#: The ONLY numeric fields the contract declares. Anything else numeric in the payload
+#: is a candidate readiness/health/confidence signal, which FR-009 forbids.
+_PERMITTED_NUMERIC_KEYS = frozenset({"pending_decision_count", "sequence"})
+
+
+def _numeric_leaks(node: object, path: str = "") -> list[str]:
+    """Every numeric value in the payload that is not an allow-listed counter.
+
+    Type-based, deliberately. An earlier revision grepped `repr(payload)` for the
+    WORDS "score"/"confidence"/... which was wrong in both directions: it missed a
+    real `{"readiness": 0.87}` (the word never appears) and it false-positived on the
+    pytest tmp-dir name leaking into `display_name`. FR-009 forbids a numeric VALUE,
+    so the assertion has to look at types.
+    """
+    leaks: list[str] = []
+    if isinstance(node, dict):
+        for key, value in node.items():
+            child = f"{path}.{key}" if path else str(key)
+            if isinstance(value, bool):
+                continue  # booleans are flags, not scores
+            if isinstance(value, (int, float)) and key not in _PERMITTED_NUMERIC_KEYS:
+                leaks.append(f"{child}={value!r}")
+                continue
+            leaks.extend(_numeric_leaks(value, child))
+    elif isinstance(node, (list, tuple)):
+        for index, value in enumerate(node):
+            leaks.extend(_numeric_leaks(value, f"{path}[{index}]"))
+    return leaks
+
+
+def test_no_numeric_readiness_signal_appears_in_the_snapshot(tmp_path: Path) -> None:
+    """FR-009 forbids a readiness, health, confidence, or maturity NUMBER."""
     from seshat.studio import projection
 
     write_ready_table(tmp_path)
     write_blocked_table(tmp_path)
 
     payload = projection.build_workspace_snapshot(tmp_path).as_dict()
-    serialized = repr(payload).lower()
 
-    for forbidden in ("score", "confidence", "completeness", "maturity", "percent"):
-        assert forbidden not in serialized, (
-            f"{forbidden!r} leaked into the snapshot; FR-009 forbids a numeric "
-            "readiness signal"
-        )
+    leaks = _numeric_leaks(payload)
+
+    assert not leaks, (
+        "numeric values leaked into the snapshot; FR-009 forbids a numeric readiness "
+        "signal: " + ", ".join(leaks)
+    )
+
+
+def test_the_numeric_guard_would_catch_an_injected_score(tmp_path: Path) -> None:
+    """The guard must not be vacuous -- prove it fails on a real score.
+
+    The previous word-grep version passed with `{"readiness": 0.87}` injected.
+    """
+    payload = {"tables": [{"stages": [{"readiness": 0.87}]}]}
+
+    assert _numeric_leaks(payload) == ["tables[0].stages[0].readiness=0.87"]
 
 
 # --------------------------------------------------------------------------- #
@@ -256,6 +402,12 @@ def test_a_missing_stage_block_is_filled_and_reported(tmp_path: Path) -> None:
     filled = next(stage for stage in journey.stages if stage.stage == "publish_ready")
     assert filled.status == "not_started"
     assert filled.blocking_reasons, "a filled stage must say why it is unknown"
+    # The TEXT matters, not just presence: without it a filled block is
+    # indistinguishable from a stage that genuinely has not started.
+    assert "unknown" in filled.blocking_reasons[0].message.lower(), (
+        "the reason must say the state is UNKNOWN, not merely not started: "
+        f"{filled.blocking_reasons[0].message!r}"
+    )
     assert snapshot.input_defects, "a missing stage block is an input defect"
 
 
