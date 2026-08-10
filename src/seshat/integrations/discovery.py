@@ -654,28 +654,40 @@ def _extra_codex_projections(
 
     if not upstream.is_dir() or not skills_root.is_dir():
         return []
-    declared = {target.name for target in activation.targets}
+    paths = _codex_skill_paths(upstream, skills_root)
+    if paths is None:
+        return ["Codex skill surface cannot be completely enumerated"]
+    upstream_skills, projections = paths
+    declared = frozenset(target.name for target in activation.targets)
+    return [
+        f"Codex skill {projected.parent.name!r} is an undeclared "
+        "projection from the locked payload"
+        for projected in projections
+        if projected.parent.name not in declared
+        and _linked_to_any(projected, upstream_skills)
+    ]
+
+
+def _codex_skill_paths(
+    upstream: Path, skills_root: Path
+) -> tuple[tuple[Path, ...], tuple[Path, ...]] | None:
     try:
         upstream_skills = tuple(upstream.rglob("SKILL.md"))
         projections = tuple(skills_root.glob("*/SKILL.md"))
     except OSError:
-        return ["Codex skill surface cannot be completely enumerated"]
-    conflicts: list[str] = []
-    for projected in projections:
-        if projected.parent.name in declared:
-            continue
-        for source in upstream_skills:
-            try:
-                linked = projected.samefile(source)
-            except OSError:
-                linked = False
-            if linked:
-                conflicts.append(
-                    f"Codex skill {projected.parent.name!r} is an undeclared "
-                    "projection from the locked payload"
-                )
-                break
-    return conflicts
+        return None
+    return upstream_skills, projections
+
+
+def _linked_to_any(projected: Path, sources: tuple[Path, ...]) -> bool:
+    return any(_same_file(projected, source) for source in sources)
+
+
+def _same_file(left: Path, right: Path) -> bool:
+    try:
+        return left.samefile(right)
+    except OSError:
+        return False
 
 
 @dataclass(frozen=True)

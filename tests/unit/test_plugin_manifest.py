@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -27,26 +28,28 @@ def _write_json(path: Path, payload: object) -> Path:
     return _write(path, json.dumps(payload))
 
 
-def _plugin(
-    root: Path,
-    *,
-    version: str = "1.2.3",
-    skills: tuple[str, ...] = ("approved",),
-    agents: tuple[str, ...] = (),
-    hooks: tuple[str, ...] = (),
-    mcp_servers: dict[str, object] | None = None,
-):
-    for name in skills:
+@dataclass(frozen=True)
+class _PluginSpec:
+    version: str = "1.2.3"
+    skills: tuple[str, ...] = ("approved",)
+    agents: tuple[str, ...] = ()
+    hooks: tuple[str, ...] = ()
+    mcp_servers: dict[str, object] | None = None
+
+
+def _plugin(root: Path, spec: _PluginSpec = _PluginSpec()):
+    for name in spec.skills:
         _write(root / "skills" / name / "SKILL.md")
-    for name in agents:
+    for name in spec.agents:
         _write(root / "agents" / f"{name}.md")
-    if hooks:
+    if spec.hooks:
         _write_json(
-            root / "hooks" / "hooks.json", {"hooks": {name: [] for name in hooks}}
+            root / "hooks" / "hooks.json",
+            {"hooks": {name: [] for name in spec.hooks}},
         )
-    if mcp_servers is not None:
-        _write_json(root / ".mcp.json", {"mcpServers": mcp_servers})
-    return observe_plugin(root, {"id": "x@y", "version": version})
+    if spec.mcp_servers is not None:
+        _write_json(root / ".mcp.json", {"mcpServers": spec.mcp_servers})
+    return observe_plugin(root, {"id": "x@y", "version": spec.version})
 
 
 def _policy(**overrides: object) -> NativePluginPolicy:
@@ -72,7 +75,7 @@ def test_undeclared_plugin_capability_blocks(tmp_path: Path, extra_kind: str) ->
         kwargs["agents"] = ("rogue",)
     else:
         kwargs["hooks"] = ("PreToolUse",)
-    observed = _plugin(tmp_path / "observed", **kwargs)
+    observed = _plugin(tmp_path / "observed", _PluginSpec(**kwargs))
 
     blockers = compare_plugin(_policy(), locked, observed)
 
@@ -104,8 +107,8 @@ def test_powerbi_mcp_requires_fixed_readonly_coordinate(tmp_path: Path) -> None:
             "args": ["-y", "@microsoft/powerbi-modeling-mcp@latest", "--start"],
         }
     }
-    locked = _plugin(tmp_path / "locked", mcp_servers=safe_server)
-    observed = _plugin(tmp_path / "observed", mcp_servers=unsafe_server)
+    locked = _plugin(tmp_path / "locked", _PluginSpec(mcp_servers=safe_server))
+    observed = _plugin(tmp_path / "observed", _PluginSpec(mcp_servers=unsafe_server))
 
     details = " ".join(
         blocker.detail for blocker in compare_plugin(policy, locked, observed)
@@ -134,9 +137,13 @@ def test_forbidden_mcp_write_or_confirmation_flags_block(
         "args": ["-y", "@microsoft/powerbi-modeling-mcp@1.4.2", "--readonly"],
     }
     unsafe = {**safe, "args": [*safe["args"], unsafe_arg]}
-    locked = _plugin(tmp_path / "locked", mcp_servers={"powerbi-modeling-mcp": safe})
+    locked = _plugin(
+        tmp_path / "locked",
+        _PluginSpec(mcp_servers={"powerbi-modeling-mcp": safe}),
+    )
     observed = _plugin(
-        tmp_path / "observed", mcp_servers={"powerbi-modeling-mcp": unsafe}
+        tmp_path / "observed",
+        _PluginSpec(mcp_servers={"powerbi-modeling-mcp": unsafe}),
     )
 
     details = " ".join(
@@ -147,8 +154,8 @@ def test_forbidden_mcp_write_or_confirmation_flags_block(
 
 
 def test_active_plugin_version_must_equal_locked_version(tmp_path: Path) -> None:
-    locked = _plugin(tmp_path / "locked", version="1.2.3")
-    observed = _plugin(tmp_path / "observed", version="1.2.4")
+    locked = _plugin(tmp_path / "locked", _PluginSpec(version="1.2.3"))
+    observed = _plugin(tmp_path / "observed", _PluginSpec(version="1.2.4"))
 
     blockers = compare_plugin(_policy(), locked, observed)
 

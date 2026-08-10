@@ -71,50 +71,78 @@ def _print_doctor_text(prog: str, facts, rec) -> None:
     )
 
 
-def _run_doctor(args) -> int:
+def _official_discovery(root: Path, facts, harness: str | None):
     from seshat.integrations.catalog import component
     from seshat.integrations.discovery import inspect_locked_component
-    from seshat.pbi_mcp.detect import detect_facts
-    from seshat.pbi_mcp.recommend import AdvisoryWriteError, recommend, write_advisory
 
-    root = Path(args.repo)
+    if not harness:
+        return facts, ()
+    discovery = inspect_locked_component(root, "fabric-skills", harness)
+    if discovery.discoverable is not True:
+        return facts, tuple(discovery.blockers)
+    activation = next(
+        entry
+        for entry in component("fabric-skills").skill_activations
+        if entry.harness == harness
+    )
+    report_skills = tuple(
+        target.name
+        for target in activation.targets
+        if target.name.startswith("powerbi-report-")
+    )
+    return replace(facts, official_report_skills=report_skills), ()
+
+
+def _doctor_recommendation(args, root: Path):
+    from seshat.pbi_mcp.detect import detect_facts
+    from seshat.pbi_mcp.recommend import recommend
+
     facts = detect_facts(root, target=args.target)
-    discovery_blockers: tuple[str, ...] = ()
-    harness = getattr(args, "harness", None)
-    if harness:
-        discovery = inspect_locked_component(root, "fabric-skills", harness)
-        if discovery.discoverable is True:
-            item = component("fabric-skills")
-            activation = next(
-                entry for entry in item.skill_activations if entry.harness == harness
-            )
-            report_skills = tuple(
-                target.name
-                for target in activation.targets
-                if target.name.startswith("powerbi-report-")
-            )
-            facts = replace(facts, official_report_skills=report_skills)
-        else:
-            discovery_blockers = tuple(discovery.blockers)
+    facts, discovery_blockers = _official_discovery(
+        root, facts, getattr(args, "harness", None)
+    )
     rec = recommend(args.intent, facts)
-    if discovery_blockers:
-        rec = replace(
-            rec,
-            missing_prerequisites=rec.missing_prerequisites
-            + tuple(f"official discovery: {item}" for item in discovery_blockers),
-            blocked=True,
-        )
+    return facts, _with_discovery_blockers(rec, discovery_blockers)
+
+
+def _with_discovery_blockers(rec, blockers: tuple[str, ...]):
+    if not blockers:
+        return rec
+    prerequisites = tuple(f"official discovery: {item}" for item in blockers)
+    return replace(
+        rec,
+        missing_prerequisites=rec.missing_prerequisites + prerequisites,
+        blocked=True,
+    )
+
+
+def _render_doctor(args, facts, rec) -> None:
     if args.as_json:
         print(json.dumps(_doctor_payload(facts, rec), indent=2, sort_keys=True))
     else:
         _print_doctor_text(_prog(args), facts, rec)
-    if getattr(args, "write_advisory", False):
-        try:
-            written = write_advisory(root, facts, rec)
-        except AdvisoryWriteError as refusal:
-            print(f"{refusal}", file=sys.stderr)
-            return 2
-        print(f"advisory written: {written.as_posix()}")
+
+
+def _write_doctor_advisory(root: Path, facts, rec) -> bool:
+    from seshat.pbi_mcp.recommend import AdvisoryWriteError, write_advisory
+
+    try:
+        written = write_advisory(root, facts, rec)
+    except AdvisoryWriteError as refusal:
+        print(f"{refusal}", file=sys.stderr)
+        return False
+    print(f"advisory written: {written.as_posix()}")
+    return True
+
+
+def _run_doctor(args) -> int:
+    root = Path(args.repo)
+    facts, rec = _doctor_recommendation(args, root)
+    _render_doctor(args, facts, rec)
+    if getattr(args, "write_advisory", False) and not _write_doctor_advisory(
+        root, facts, rec
+    ):
+        return 2
     return 2 if rec.blocked or rec.missing_prerequisites else 0
 
 

@@ -50,17 +50,23 @@ def _read_json(path: Path) -> object:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _children(root: Path) -> tuple[Path, ...] | None:
+    if not root.is_dir():
+        return None
+    try:
+        return tuple(root.iterdir())
+    except OSError:
+        return None
+
+
 def _observe_skills(root: Path) -> frozenset[str] | None:
     skills_root = root / "skills"
     if not skills_root.exists():
         return frozenset()
-    if not skills_root.is_dir():
+    children = _children(skills_root)
+    if children is None:
         return None
     names: set[str] = set()
-    try:
-        children = tuple(skills_root.iterdir())
-    except OSError:
-        return None
     for child in children:
         if not child.is_dir() or not (child / "SKILL.md").is_file():
             return None
@@ -72,13 +78,10 @@ def _observe_agents(root: Path) -> frozenset[str] | None:
     agents_root = root / "agents"
     if not agents_root.exists():
         return frozenset()
-    if not agents_root.is_dir():
+    children = _children(agents_root)
+    if children is None:
         return None
     names: set[str] = set()
-    try:
-        children = tuple(agents_root.iterdir())
-    except OSError:
-        return None
     for child in children:
         if not child.is_file() or child.suffix.lower() != ".md":
             return None
@@ -279,31 +282,52 @@ def _compare_mcp(
     policy: McpSurfacePolicy,
     observed: ObservedMcpServer,
 ) -> list[ManifestBlocker]:
-    blockers: list[ManifestBlocker] = []
     prefix = f"{origin} MCP {policy.name}"
+    blockers = _mcp_transport_blockers(prefix, policy, observed)
+    blockers.extend(_mcp_package_blockers(prefix, policy, observed))
+    blockers.extend(_mcp_argument_blockers(prefix, policy, observed))
+    return blockers
+
+
+def _mcp_transport_blockers(
+    prefix: str, policy: McpSurfacePolicy, observed: ObservedMcpServer
+) -> list[ManifestBlocker]:
     if observed.transport != policy.transport:
-        blockers.append(
+        return [
             ManifestBlocker(
                 "mcp-transport",
                 f"{prefix} transport {observed.transport!r}; "
                 f"expected {policy.transport!r}",
             )
-        )
+        ]
+    return []
+
+
+def _mcp_package_blockers(
+    prefix: str, policy: McpSurfacePolicy, observed: ObservedMcpServer
+) -> list[ManifestBlocker]:
     if policy.package is not None and observed.package != policy.package:
         moving = "moving coordinate " if _is_moving_coordinate(observed.package) else ""
-        blockers.append(
+        return [
             ManifestBlocker(
                 "mcp-package",
                 f"{prefix} uses {moving}{observed.package!r}; "
                 f"expected {policy.package!r}",
             )
-        )
-    elif policy.forbid_moving_coordinate and _is_moving_coordinate(observed.package):
-        blockers.append(
+        ]
+    if policy.forbid_moving_coordinate and _is_moving_coordinate(observed.package):
+        return [
             ManifestBlocker(
                 "mcp-package", f"{prefix} uses moving coordinate {observed.package!r}"
             )
-        )
+        ]
+    return []
+
+
+def _mcp_argument_blockers(
+    prefix: str, policy: McpSurfacePolicy, observed: ObservedMcpServer
+) -> list[ManifestBlocker]:
+    blockers: list[ManifestBlocker] = []
     lowered = {argument.lower() for argument in observed.args}
     for required in policy.required_args:
         if required.lower() not in lowered:
@@ -322,6 +346,104 @@ def _compare_mcp(
     return blockers
 
 
+def _identity_blockers(
+    policy: NativePluginPolicy, locked: ObservedPlugin, observed: ObservedPlugin
+) -> list[ManifestBlocker]:
+    if locked.plugin_id == policy.plugin_id and observed.plugin_id == policy.plugin_id:
+        return []
+    return [
+        ManifestBlocker(
+            "plugin-identity",
+            f"expected {policy.plugin_id!r}; locked={locked.plugin_id!r}, "
+            f"active={observed.plugin_id!r}",
+        )
+    ]
+
+
+def _version_blockers(
+    locked: ObservedPlugin, observed: ObservedPlugin
+) -> list[ManifestBlocker]:
+    if locked.version is None or observed.version is None:
+        return [
+            ManifestBlocker(
+                "unknown-version", "locked or active plugin version is unknown"
+            )
+        ]
+    if locked.version == observed.version:
+        return []
+    return [
+        ManifestBlocker(
+            "version-mismatch",
+            f"locked version {locked.version!r} != active version {observed.version!r}",
+        )
+    ]
+
+
+def _surface_blockers(
+    origin: str,
+    kind: str,
+    actual: frozenset[str] | None,
+    allowed: frozenset[str],
+    incompatible: frozenset[str],
+) -> list[ManifestBlocker]:
+    if actual is None:
+        return [
+            ManifestBlocker(
+                f"unknown-{kind}",
+                f"{origin} {kind} capabilities cannot be enumerated",
+            )
+        ]
+    blockers = [
+        ManifestBlocker(
+            f"undeclared-{kind}",
+            f"{origin} plugin exposes undeclared {kind} {name!r}",
+        )
+        for name in sorted(actual - allowed)
+    ]
+    blockers.extend(
+        ManifestBlocker(
+            f"missing-{kind}",
+            f"{origin} plugin is missing allowed {kind} {name!r}",
+        )
+        for name in sorted(allowed - actual)
+    )
+    blockers.extend(
+        ManifestBlocker(
+            "incompatible-capability",
+            f"{origin} plugin exposes incompatible capability {name!r}",
+        )
+        for name in sorted(actual & incompatible)
+    )
+    return blockers
+
+
+def _plugin_surface_blockers(
+    origin: str, policy: NativePluginPolicy, plugin: ObservedPlugin
+) -> list[ManifestBlocker]:
+    allowed = _allowed_sets(policy)
+    incompatible = frozenset(policy.incompatible_capabilities)
+    blockers: list[ManifestBlocker] = []
+    for kind, actual in _surface_sets(plugin):
+        blockers.extend(
+            _surface_blockers(origin, kind, actual, allowed[kind], incompatible)
+        )
+    return blockers
+
+
+def _plugin_mcp_blockers(
+    origin: str, policy: NativePluginPolicy, plugin: ObservedPlugin
+) -> list[ManifestBlocker]:
+    if plugin.mcp_servers is None:
+        return []
+    observed_by_name = {server.name: server for server in plugin.mcp_servers}
+    blockers: list[ManifestBlocker] = []
+    for mcp_policy in policy.allowed_mcp_servers:
+        server = observed_by_name.get(mcp_policy.name)
+        if server is not None:
+            blockers.extend(_compare_mcp(origin, mcp_policy, server))
+    return blockers
+
+
 def compare_plugin(
     policy: NativePluginPolicy,
     locked: ObservedPlugin,
@@ -329,71 +451,10 @@ def compare_plugin(
 ) -> tuple[ManifestBlocker, ...]:
     """Compare locked and active plugin surfaces against one exact policy."""
 
-    blockers: list[ManifestBlocker] = []
-    if locked.plugin_id != policy.plugin_id or observed.plugin_id != policy.plugin_id:
-        blockers.append(
-            ManifestBlocker(
-                "plugin-identity",
-                f"expected {policy.plugin_id!r}; locked={locked.plugin_id!r}, "
-                f"active={observed.plugin_id!r}",
-            )
-        )
-    if locked.version is None or observed.version is None:
-        blockers.append(
-            ManifestBlocker(
-                "unknown-version", "locked or active plugin version is unknown"
-            )
-        )
-    elif locked.version != observed.version:
-        blockers.append(
-            ManifestBlocker(
-                "version-mismatch",
-                f"locked version {locked.version!r} != "
-                f"active version {observed.version!r}",
-            )
-        )
-
-    allowed = _allowed_sets(policy)
-    incompatible = set(policy.incompatible_capabilities)
+    blockers = _identity_blockers(policy, locked, observed)
+    blockers.extend(_version_blockers(locked, observed))
     for origin, plugin in (("locked", locked), ("active", observed)):
-        for kind, actual in _surface_sets(plugin):
-            if actual is None:
-                blockers.append(
-                    ManifestBlocker(
-                        f"unknown-{kind}",
-                        f"{origin} {kind} capabilities cannot be enumerated",
-                    )
-                )
-                continue
-            extras = actual - allowed[kind]
-            for name in sorted(extras):
-                blockers.append(
-                    ManifestBlocker(
-                        f"undeclared-{kind}",
-                        f"{origin} plugin exposes undeclared {kind} {name!r}",
-                    )
-                )
-            missing = allowed[kind] - actual
-            for name in sorted(missing):
-                blockers.append(
-                    ManifestBlocker(
-                        f"missing-{kind}",
-                        f"{origin} plugin is missing allowed {kind} {name!r}",
-                    )
-                )
-            for name in sorted(actual & incompatible):
-                blockers.append(
-                    ManifestBlocker(
-                        "incompatible-capability",
-                        f"{origin} plugin exposes incompatible capability {name!r}",
-                    )
-                )
-
-        if plugin.mcp_servers is not None:
-            observed_mcp = {server.name: server for server in plugin.mcp_servers}
-            for mcp_policy in policy.allowed_mcp_servers:
-                server = observed_mcp.get(mcp_policy.name)
-                if server is not None:
-                    blockers.extend(_compare_mcp(origin, mcp_policy, server))
+        blockers.extend(_plugin_surface_blockers(origin, policy, plugin))
+        blockers.extend(_plugin_mcp_blockers(origin, policy, plugin))
 
     return tuple(blockers)
