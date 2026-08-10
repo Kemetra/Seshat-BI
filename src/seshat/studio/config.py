@@ -19,6 +19,7 @@ Standard library only, by contract: this module must import cleanly without the
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -131,24 +132,37 @@ def _is_contained(resolved: Path, resolved_root: Path) -> bool:
     return resolved == resolved_root or resolved_root in resolved.parents
 
 
+#: The pre-resolution rejection rules, in order, as (predicate, reason) pairs.
+#:
+#: A TABLE rather than a chain of guard clauses: each rule is independently readable
+#: and the set is greppable as a whole, so adding one cannot quietly deepen the
+#: function that applies them. Order matters only for which message a caller sees --
+#: every rule is a refusal.
+_REJECTION_RULES: tuple[tuple[Callable[[str, Path], bool], str], ...] = (
+    (lambda reference, _candidate: not reference, "empty workspace reference"),
+    (_is_absolute_reference, "absolute references are not accepted"),
+    (
+        lambda _reference, candidate: ".." in candidate.parts,
+        "parent traversal is not accepted",
+    ),
+)
+
+
 def resolve_contained_path(root: Path, reference: str) -> Path:
     """Resolve an untrusted workspace-relative ``reference`` inside ``root``.
 
     Raises ``ValueError`` for absolute input, ``..`` traversal, and symlink or
     junction escapes, and ``TypeError`` for a non-string reference.
 
-    Each rule is a named predicate above, so the security decisions can be read and
-    tested one at a time rather than as one compound condition.
+    The pre-resolution rules live in :data:`_REJECTION_RULES`; containment is decided
+    after resolution, because a link escape is only visible once followed.
     """
     _reject_non_string_reference(reference)
-    if not reference:
-        raise ValueError("empty workspace reference")
 
     candidate = Path(reference)
-    if _is_absolute_reference(reference, candidate):
-        raise ValueError(f"absolute references are not accepted: {reference!r}")
-    if ".." in candidate.parts:
-        raise ValueError(f"parent traversal is not accepted: {reference!r}")
+    for rejects, reason in _REJECTION_RULES:
+        if rejects(reference, candidate):
+            raise ValueError(f"{reason}: {reference!r}")
 
     resolved_root = root.resolve()
     resolved = (resolved_root / candidate).resolve()
