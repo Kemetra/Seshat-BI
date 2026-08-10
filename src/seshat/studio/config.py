@@ -94,28 +94,58 @@ class LaunchConfiguration:
         )
 
 
-def resolve_contained_path(root: Path, reference: str) -> Path:
-    """Resolve an untrusted workspace-relative ``reference`` inside ``root``.
+def _reject_non_string_reference(reference: object) -> None:
+    """A caller-built ``Path`` is refused by TYPE, not by inspection.
 
-    Raises ``ValueError`` for absolute input, ``..`` traversal, and symlink or
-    junction escapes. Raises ``TypeError`` for a non-string reference: accepting a
-    caller-built ``Path`` is exactly the "browser input converted into an arbitrary
-    Path" the contract forbids, so the type itself is part of the boundary.
-
-    Resolution is done with ``resolve()`` on both sides and compared by
-    containment, so an escape via a link is caught after the link is followed --
-    checking the literal string alone would miss it.
+    Accepting one is exactly the "browser input converted into an arbitrary Path"
+    the contract forbids, so the signature itself is part of the boundary.
     """
     if not isinstance(reference, str):
         raise TypeError(
             "workspace references must be relative strings; a Path from an "
             "untrusted caller is not accepted"
         )
+
+
+def _is_absolute_reference(reference: str, candidate: Path) -> bool:
+    """True for anything that names a location outside the relative namespace.
+
+    Three separate forms, because no single check covers them on both platforms:
+    a POSIX/absolute path, a drive-qualified Windows path (including the
+    drive-RELATIVE ``C:foo``, which ``is_absolute()`` reports as False), and a
+    leading separator.
+    """
+    if candidate.is_absolute() or candidate.drive:
+        return True
+    return reference.startswith(("/", "\\"))
+
+
+def _is_contained(resolved: Path, resolved_root: Path) -> bool:
+    """Containment by resolved PARENTS, never by string prefix.
+
+    ``str(root_evil).startswith(str(root))`` is True for a sibling directory, so a
+    prefix test would call an escape contained. Comparing resolved parents is also
+    what catches a symlink or junction escape, since the link has been followed by
+    the time this runs.
+    """
+    return resolved == resolved_root or resolved_root in resolved.parents
+
+
+def resolve_contained_path(root: Path, reference: str) -> Path:
+    """Resolve an untrusted workspace-relative ``reference`` inside ``root``.
+
+    Raises ``ValueError`` for absolute input, ``..`` traversal, and symlink or
+    junction escapes, and ``TypeError`` for a non-string reference.
+
+    Each rule is a named predicate above, so the security decisions can be read and
+    tested one at a time rather than as one compound condition.
+    """
+    _reject_non_string_reference(reference)
     if not reference:
         raise ValueError("empty workspace reference")
 
     candidate = Path(reference)
-    if candidate.is_absolute() or candidate.drive or reference.startswith(("/", "\\")):
+    if _is_absolute_reference(reference, candidate):
         raise ValueError(f"absolute references are not accepted: {reference!r}")
     if ".." in candidate.parts:
         raise ValueError(f"parent traversal is not accepted: {reference!r}")
@@ -123,6 +153,6 @@ def resolve_contained_path(root: Path, reference: str) -> Path:
     resolved_root = root.resolve()
     resolved = (resolved_root / candidate).resolve()
 
-    if resolved != resolved_root and resolved_root not in resolved.parents:
+    if not _is_contained(resolved, resolved_root):
         raise ValueError(f"reference escapes the pinned workspace root: {reference!r}")
     return resolved
