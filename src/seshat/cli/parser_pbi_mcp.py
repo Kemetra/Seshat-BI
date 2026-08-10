@@ -48,6 +48,15 @@ def _add_doctor_parser(sub: argparse._SubParsersAction) -> None:
         help="the governed task you want routed (closed vocabulary)",
     )
     parser.add_argument(
+        "--harness",
+        choices=("claude-code", "codex"),
+        default=None,
+        help=(
+            "read-only official-skill discovery harness; omitted means official "
+            "authoring remains blocked"
+        ),
+    )
+    parser.add_argument(
         "--write-advisory",
         action="store_true",
         help=(

@@ -245,6 +245,11 @@ def pbir_format_main(args) -> int:
     """CLI entry: apply formatting (from a JSON string/file) to a visual."""
     import sys
 
+    from seshat.pbir_authoring_gate import enforce_pbir_authoring_gate
+
+    if not enforce_pbir_authoring_gate(args, "pbir-format-visual"):
+        return 2
+
     raw = args.formatting
     try:
         if raw and Path(raw).is_file():

@@ -34,7 +34,7 @@ split:
 
 ## Increment A -- how it works
 
-`retail pbir-apply-theme --theme <theme.json> --report <*.Report/>`:
+`retail pbir-apply-theme --repo <root> --table <table> --theme <theme.json> --report <*.Report/>`:
 
 1. Validate both paths stay in-repo; the theme is a `theme-gen` theme (object with a
    safe-slug `name`).
@@ -58,7 +58,7 @@ construction and policed by R2.
 
 ## Increment B -- per-visual formatting (how it works)
 
-`retail pbir-format-visual --visual <visual.json> --formatting <json-or-path>` sets
+`retail pbir-format-visual --repo <root> --table <table> --visual <visual.json> --formatting <json-or-path>` sets
 allow-listed formatting on an EXISTING, already-data-bound visual:
 
 - **Allow-list (increment B):** `objects` groups `{legend, labels, dataPoint,
@@ -79,7 +79,7 @@ allow-listed formatting on an EXISTING, already-data-bound visual:
 
 ## Increment D -- visual geometry (how it works)
 
-`retail pbir-set-geometry --visual <visual.json> --position <json-or-path>` sets the
+`retail pbir-set-geometry --repo <root> --table <table> --visual <visual.json> --position <json-or-path>` sets the
 layout rectangle of an EXISTING, already-bound visual (authorized by ADR 0016):
 
 - **Allow-list (increment D):** the `position` keys `{x, y, width, height, z,

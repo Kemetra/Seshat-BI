@@ -64,9 +64,12 @@ class DetectedFacts:
     target: str | None  # exact governed table selected by the caller
     semantic_model_ready: str  # pass | not-pass | missing
     semantic_ready_tables: tuple[str, ...]  # tables whose stage records pass
+    target_semantic_model_ready: str  # pass | not-pass | missing for exact target
     dashboard_ready: str  # pass | not-pass | missing for the exact target
     dashboard_ready_tables: tuple[str, ...]  # target when it records pass
+    dashboard_design_approval: str  # recorded | absent for exact target
     publish_ready_approval: str  # recorded | absent
+    official_report_skills: tuple[str, ...]  # compatible discovered target names
 
 
 def _is_powerbi_server(name: str, entry: dict) -> bool:
@@ -296,9 +299,13 @@ def read_table_readiness(repo_root: Path, table: str) -> str:
     return read_table_stage(repo_root, table, "semantic_model_ready")
 
 
+def _valid_table_name(table: str) -> bool:
+    return bool(table) and table not in {".", ".."} and Path(table).name == table
+
+
 def read_table_stage(repo_root: Path, table: str, stage: str) -> str:
     """Read one exact table/stage without traversal or fuzzy matching."""
-    if not table or table in {".", ".."} or Path(table).name != table:
+    if not _valid_table_name(table):
         return READINESS_NOT_PASS
     record = Path(repo_root) / "mappings" / table / "readiness-status.yaml"
     if not record.is_file():
@@ -309,6 +316,31 @@ def read_table_stage(repo_root: Path, table: str, stage: str) -> str:
     if _stage_status(data, stage) == READINESS_PASS:
         return READINESS_PASS
     return READINESS_NOT_PASS
+
+
+def read_table_approval(repo_root: Path, table: str, stage: str) -> str:
+    """Read one complete named-human approval from the exact table record."""
+
+    if not _valid_table_name(table):
+        return APPROVAL_ABSENT
+    record = Path(repo_root) / "mappings" / table / "readiness-status.yaml"
+    if not record.is_file():
+        return APPROVAL_ABSENT
+    data = _load_readiness_record(record)
+    if data is None:
+        return APPROVAL_ABSENT
+    approvals = data.get("approvals")
+    if not isinstance(approvals, list):
+        return APPROVAL_ABSENT
+    for entry in approvals:
+        if not isinstance(entry, dict) or entry.get("stage") != stage:
+            continue
+        if all(
+            isinstance(entry.get(field), str) and entry[field].strip()
+            for field in ("owner", "at", "note")
+        ):
+            return APPROVAL_RECORDED
+    return APPROVAL_ABSENT
 
 
 def detect_facts(
@@ -324,9 +356,13 @@ def detect_facts(
     root = Path(repo_root)
     semantic, ready_tables, approval = read_semantic_readiness(root)
     dashboard, dashboard_tables = read_stage_readiness(root, "dashboard_ready")
+    target_semantic = READINESS_MISSING
+    design_approval = APPROVAL_ABSENT
     if target is not None:
+        target_semantic = read_table_stage(root, target, "semantic_model_ready")
         dashboard = read_table_stage(root, target, "dashboard_ready")
         dashboard_tables = (target,) if dashboard == READINESS_PASS else ()
+        design_approval = read_table_approval(root, target, "dashboard_ready")
     return DetectedFacts(
         node_runtime=PRESENT if which("node") else ABSENT,
         vendored_runtime=(
@@ -337,7 +373,10 @@ def detect_facts(
         target=target,
         semantic_model_ready=semantic,
         semantic_ready_tables=ready_tables,
+        target_semantic_model_ready=target_semantic,
         dashboard_ready=dashboard,
         dashboard_ready_tables=dashboard_tables,
+        dashboard_design_approval=design_approval,
         publish_ready_approval=approval,
+        official_report_skills=(),
     )

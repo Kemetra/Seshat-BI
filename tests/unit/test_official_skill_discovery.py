@@ -15,6 +15,7 @@ from seshat.integrations.catalog import (
     CODEX,
     Channel,
     Component,
+    NativePluginPolicy,
     SkillActivation,
     SkillTarget,
     SourceType,
@@ -24,9 +25,11 @@ from seshat.integrations.discovery import (
     ACTIVATION_REQUIRED,
     CONFLICT,
     DISCOVERABLE,
+    FAILED,
     NOT_CHECKED,
     STALE,
     DiscoveryInputs,
+    inspect_locked_component,
     inspect_official_skills,
 )
 from seshat.integrations.installer import SetupOutcome
@@ -50,27 +53,46 @@ def _runner_for(entries: list[dict]):
     return _runner
 
 
-def _claude_entries(root: Path, item_id: str) -> list[dict]:
+def _claude_entries(
+    root: Path,
+    item_id: str,
+    *,
+    locked_version: str = "1.2.3",
+    active_version: str = "1.2.3",
+) -> list[dict]:
     item = component(item_id)
     activation = next(
         entry for entry in item.skill_activations if entry.harness == CLAUDE_CODE
     )
     entries: list[dict] = []
-    for plugin_id in dict.fromkeys(target.plugin_id for target in activation.targets):
-        plugin = root / plugin_id.replace("@", "-")
-        targets = [
-            target for target in activation.targets if target.plugin_id == plugin_id
-        ]
-        for target in targets:
-            _write(plugin / "skills" / target.name / "SKILL.md")
+    marketplace_entries: list[dict] = []
+    upstream = root / ".seshat/integrations/skills" / item.id
+    for policy in activation.native_plugins:
+        plugin_id = policy.plugin_id
+        plugin = root / "active-plugins" / plugin_id.replace("@", "-")
+        locked_plugin = upstream / "plugins" / policy.manifest_name
+        for skill_name in policy.allowed_skills:
+            _write(plugin / "skills" / skill_name / "SKILL.md")
+            _write(locked_plugin / "skills" / skill_name / "SKILL.md")
+        marketplace_entries.append(
+            {
+                "name": policy.manifest_name,
+                "version": locked_version,
+                "source": f"./plugins/{policy.manifest_name}",
+            }
+        )
         entries.append(
             {
                 "id": plugin_id,
                 "enabled": True,
-                "version": "1.2.3",
+                "version": active_version,
                 "installPath": str(plugin),
             }
         )
+    manifest_path = upstream / Path(
+        *activation.native_plugins[0].manifest_path.split("/")
+    )
+    _write(manifest_path, json.dumps({"plugins": marketplace_entries}))
     return entries
 
 
@@ -104,6 +126,35 @@ def test_catalog_refuses_an_escaping_activation_source() -> None:
                 ),
             ),
         )
+
+
+def test_native_plugin_policy_refuses_duplicate_skill_names() -> None:
+    with pytest.raises(ValueError, match="duplicate allowed skill"):
+        NativePluginPolicy(
+            plugin_id="x@y",
+            manifest_path=".claude-plugin/marketplace.json",
+            manifest_name="x",
+            allowed_skills=("same", "same"),
+        )
+
+
+def test_powerbi_catalog_declares_design_and_blocks_broad_plugin() -> None:
+    item = component("fabric-skills")
+    claude = next(
+        activation
+        for activation in item.skill_activations
+        if activation.harness == CLAUDE_CODE
+    )
+    names = {target.name for target in claude.targets}
+    assert "powerbi-report-design" in names
+
+    policy = next(
+        policy
+        for policy in claude.native_plugins
+        if policy.plugin_id == "powerbi-authoring@fabric-collection"
+    )
+    assert "powerbi-report-planning" in policy.incompatible_capabilities
+    assert "powerbi-report-management" in policy.incompatible_capabilities
 
 
 def test_omitted_harness_is_explicitly_not_checked_and_not_actionable(
@@ -143,7 +194,96 @@ def test_claude_native_plugin_inventory_proves_expected_skills(
     assert result.installed is True
     assert result.activated is True
     assert result.discoverable is True
-    assert len(result.evidence) == 3
+    assert len(result.evidence) >= 3
+
+
+def test_expected_files_do_not_hide_an_extra_claude_skill(tmp_path: Path) -> None:
+    item = component("dbt-agent-skills")
+    entries = _claude_entries(tmp_path, item.id)
+    _write(Path(entries[0]["installPath"]) / "skills/publish-everything/SKILL.md")
+
+    result = inspect_official_skills(
+        tmp_path,
+        (item,),
+        installed={item.id: True},
+        inputs=DiscoveryInputs(
+            harnesses=(CLAUDE_CODE,),
+            runner=_runner_for(entries),
+            tool_lookup=lambda name: name,
+        ),
+    )[0]
+
+    assert result.status == CONFLICT
+    assert result.discoverable is False
+    assert "publish-everything" in " ".join(result.blockers)
+
+
+def test_active_plugin_version_must_match_locked_manifest(tmp_path: Path) -> None:
+    item = component("dbt-agent-skills")
+    entries = _claude_entries(
+        tmp_path, item.id, locked_version="1.2.3", active_version="1.2.4"
+    )
+
+    result = inspect_official_skills(
+        tmp_path,
+        (item,),
+        installed={item.id: True},
+        inputs=DiscoveryInputs(
+            harnesses=(CLAUDE_CODE,),
+            runner=_runner_for(entries),
+            tool_lookup=lambda name: name,
+        ),
+    )[0]
+
+    assert result.status == STALE
+    assert result.discoverable is False
+
+
+def test_incompatible_powerbi_plugin_surface_blocks(tmp_path: Path) -> None:
+    item = component("fabric-skills")
+    entries = _claude_entries(tmp_path, item.id)
+    powerbi = next(
+        entry
+        for entry in entries
+        if entry["id"] == "powerbi-authoring@fabric-collection"
+    )
+    install_path = Path(powerbi["installPath"])
+    _write(install_path / "skills/powerbi-report-planning/SKILL.md")
+    _write(install_path / "skills/powerbi-report-management/SKILL.md")
+    _write(
+        install_path / ".mcp.json",
+        json.dumps(
+            {
+                "mcpServers": {
+                    "powerbi-modeling-mcp": {
+                        "command": "npx",
+                        "args": [
+                            "-y",
+                            "@microsoft/powerbi-modeling-mcp@latest",
+                            "--start",
+                        ],
+                    }
+                }
+            }
+        ),
+    )
+
+    result = inspect_official_skills(
+        tmp_path,
+        (item,),
+        installed={item.id: True},
+        inputs=DiscoveryInputs(
+            harnesses=(CLAUDE_CODE,),
+            runner=_runner_for(entries),
+            tool_lookup=lambda name: name,
+        ),
+    )[0]
+
+    assert result.status == CONFLICT
+    assert result.discoverable is False
+    blockers = " ".join(result.blockers)
+    assert "powerbi-report-planning" in blockers
+    assert "powerbi-modeling-mcp" in blockers
 
 
 def test_disabled_claude_plugin_blocks_discovery(tmp_path: Path) -> None:
@@ -311,6 +451,99 @@ def test_copied_codex_skill_is_a_provenance_conflict(tmp_path: Path) -> None:
     assert result.activated is True
     assert result.discoverable is False
     assert "not linked" in " ".join(result.blockers)
+
+
+def test_extra_codex_projection_from_locked_payload_is_a_conflict(
+    tmp_path: Path,
+) -> None:
+    item = component("dagster-agent-skills")
+    codex_root = tmp_path / "codex-skills"
+    _codex_projection(tmp_path, codex_root, item.id)
+    upstream = tmp_path / ".seshat/integrations/skills" / item.id
+    extra_source = _write(upstream / "skills/rogue/SKILL.md")
+    extra_projection = codex_root / "rogue" / "SKILL.md"
+    extra_projection.parent.mkdir(parents=True)
+    os.link(extra_source, extra_projection)
+
+    result = inspect_official_skills(
+        tmp_path,
+        (item,),
+        installed={item.id: True},
+        inputs=DiscoveryInputs(
+            harnesses=(CODEX,),
+            harness_roots={CODEX: codex_root},
+        ),
+    )[1]
+
+    assert result.status == CONFLICT
+    assert result.discoverable is False
+    assert "rogue" in " ".join(result.blockers)
+
+
+def test_unrelated_codex_user_skill_is_not_an_upstream_extra(tmp_path: Path) -> None:
+    item = component("dagster-agent-skills")
+    codex_root = tmp_path / "codex-skills"
+    _codex_projection(tmp_path, codex_root, item.id)
+    _write(codex_root / "my-private-skill/SKILL.md")
+
+    result = inspect_official_skills(
+        tmp_path,
+        (item,),
+        installed={item.id: True},
+        inputs=DiscoveryInputs(
+            harnesses=(CODEX,),
+            harness_roots={CODEX: codex_root},
+        ),
+    )[1]
+
+    assert result.status == DISCOVERABLE
+    assert result.discoverable is True
+
+
+def test_locked_component_inspection_requires_matching_lock_and_marker(
+    tmp_path: Path,
+) -> None:
+    item = component("dagster-agent-skills")
+    codex_root = tmp_path / "codex-skills"
+    _codex_projection(tmp_path, codex_root, item.id)
+    _install_marker(tmp_path, item.id, "v1.2.3")
+    _write(
+        tmp_path / ".seshat/integrations/lock.json",
+        json.dumps(
+            {
+                "schema": "seshat.integrations-lock/v1",
+                "profile": "orchestration",
+                "resolved_at": "2026-08-10T00:00:00Z",
+                "components": {
+                    item.id: {
+                        "source_type": "github",
+                        "tag": "v1.2.3",
+                        "commit": None,
+                    }
+                },
+            }
+        ),
+    )
+
+    result = inspect_locked_component(
+        tmp_path,
+        item.id,
+        CODEX,
+        inputs=DiscoveryInputs(harness_roots={CODEX: codex_root}),
+    )
+
+    assert result.status == DISCOVERABLE
+    assert result.discoverable is True
+
+
+def test_locked_component_inspection_fails_when_lock_is_absent(
+    tmp_path: Path,
+) -> None:
+    result = inspect_locked_component(tmp_path, "dagster-agent-skills", CODEX)
+
+    assert result.status == FAILED
+    assert result.discoverable is False
+    assert "lock is missing" in " ".join(result.blockers)
 
 
 def test_renderers_expose_three_separate_lifecycle_facts(tmp_path: Path) -> None:

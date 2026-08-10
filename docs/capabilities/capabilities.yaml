@@ -466,6 +466,7 @@ capabilities:
       upstream_surface: "format"
       upstream_reference: "PBIR"
       seshat_delta: "Deterministic theme application to committed PBIR JSON; no live publish."
+      gap_reference: "powerbi-bounded-pbir-patching"
     references:
       dispatch: "pbir-apply-theme"
       skill: "pbir-authoring-adapter"
@@ -487,6 +488,7 @@ capabilities:
       upstream_surface: "format"
       upstream_reference: "PBIR"
       seshat_delta: "Visual style/layout edits inside a tight allow-list on committed PBIR JSON; no live publish."
+      gap_reference: "powerbi-bounded-pbir-patching"
     references:
       dispatch: "pbir-format-visual"
       skill: "pbir-authoring-adapter"
@@ -508,6 +510,7 @@ capabilities:
       upstream_surface: "format"
       upstream_reference: "PBIR"
       seshat_delta: "Page background/canvas asset edits on committed PBIR JSON; no live publish."
+      gap_reference: "powerbi-bounded-pbir-patching"
     references:
       dispatch: "pbir-set-page-background"
       skill: "pbir-authoring-adapter"
@@ -529,6 +532,7 @@ capabilities:
       upstream_surface: "format"
       upstream_reference: "PBIR"
       seshat_delta: "Visual position/size edits on committed PBIR JSON; no live publish."
+      gap_reference: "powerbi-bounded-pbir-patching"
     references:
       dispatch: "pbir-set-geometry"
       skill: "pbir-authoring-adapter"
@@ -643,6 +647,26 @@ capabilities:
     references:
       public_skill: "powerbi-workflows"
 
+  - id: microsoft-powerbi-report-design
+    name: "Microsoft Power BI Report Design skill"
+    summary: "Official first-party skill for native Power BI report design guidance. Seshat owns business meaning, readiness, and approval evidence, then consumes the official design output."
+    state: deferred
+    authority: advisory
+    surface: skill
+    ships: false
+    ship_classification: upstream-integration
+    requirements: [optional-dependency]
+    provenance: unrecorded
+    readiness_stage: dashboard_ready
+    command: null
+    documentation: "docs/install/fabric-powerbi-integrations.md"
+    ownership:
+      capability_owner: "official-upstream"
+      upstream_project: "Microsoft"
+      upstream_surface: "skill"
+      upstream_reference: "microsoft/skills-for-fabric"
+      overlap_note: "Official report-design owner. Seshat supplies approved decisions, metric contracts, semantic evidence, and the narrative gate; the full Claude plugin remains incompatible until every activated capability passes the firewall."
+
   - id: microsoft-powerbi-report-authoring
     name: "Microsoft Power BI Report Authoring skill"
     summary: "Official first-party skill for native PBIR report definition mechanics: pages, visuals, filters, slicers, bindings, formatting, themes, and validation. The integration catalog declares Claude Code and Codex activation paths, and the read-only harness probe must report discoverable before use."
@@ -661,7 +685,47 @@ capabilities:
       upstream_project: "Microsoft"
       upstream_surface: "skill"
       upstream_reference: "microsoft/skills-for-fabric"
-      overlap_note: "Official native report execution owner. Seshat supplies the dashboard-ready pre-gate and binding/blueprint/static post-validation; Spec 148 proves the declared harness path without treating installation as discovery."
+      overlap_note: "Official native report execution owner. Seshat supplies the exact-table semantic and named-human design-approval pre-gates plus binding/blueprint/static post-validation; Spec 148 proves the declared harness path without treating installation as discovery."
+
+  - id: microsoft-powerbi-report-planning
+    name: "Microsoft Power BI Report Planning skill"
+    summary: "Official planning capability; deferred because it overlaps Seshat-owned business semantics and dashboard planning and is incompatible with the current closed-world activation contract."
+    state: deferred
+    authority: advisory
+    surface: skill
+    ships: false
+    ship_classification: upstream-integration
+    requirements: [optional-dependency]
+    provenance: unrecorded
+    readiness_stage: dashboard_ready
+    command: null
+    documentation: "docs/install/fabric-powerbi-integrations.md"
+    ownership:
+      capability_owner: "official-upstream"
+      upstream_project: "Microsoft"
+      upstream_surface: "skill"
+      upstream_reference: "microsoft/skills-for-fabric"
+      overlap_note: "Incompatible with Seshat activation: planning remains Seshat-owned until an explicit non-overlapping handoff is reviewed."
+
+  - id: microsoft-powerbi-report-management
+    name: "Microsoft Power BI Report Management skill"
+    summary: "Official report-management capability; deferred and incompatible because its broader lifecycle operations exceed the approved report-authoring boundary."
+    state: deferred
+    authority: advisory
+    surface: skill
+    ships: false
+    ship_classification: upstream-integration
+    requirements: [optional-dependency]
+    provenance: unrecorded
+    readiness_stage: dashboard_ready
+    command: null
+    documentation: "docs/install/fabric-powerbi-integrations.md"
+    ownership:
+      capability_owner: "official-upstream"
+      upstream_project: "Microsoft"
+      upstream_surface: "skill"
+      upstream_reference: "microsoft/skills-for-fabric"
+      overlap_note: "Incompatible with the current closed-world firewall; Seshat does not activate report-management operations."
       update_policy: "Consume through the cataloged Microsoft bundle; verify upstream activation and compatibility before use and re-check on upstream revision changes."
     references:
       integration_component: "fabric-skills"

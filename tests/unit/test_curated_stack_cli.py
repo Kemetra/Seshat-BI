@@ -103,6 +103,7 @@ def test_official_skill_payload_requirements_live_in_the_catalog() -> None:
 
     assert component("fabric-skills").required_paths == (
         "skills/semantic-model-authoring/SKILL.md",
+        "plugins/powerbi-authoring/skills/powerbi-report-design/SKILL.md",
         "plugins/powerbi-authoring/skills/powerbi-report-authoring/SKILL.md",
     )
     assert component("dbt-agent-skills").required_paths == (

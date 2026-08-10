@@ -129,12 +129,15 @@ a repository-relative path. A generated Claude or Codex bundle path cannot be
 canonical: deterministic bundle projections remain valid outputs, while their
 authored bundle template or repository skill remains the source of truth.
 
-`powerbi-workflows` currently owns only a Seshat routing decision over existing
-Seshat design, inspection, PBIR, and adoption helpers. It does not claim that
-Microsoft's official surfaces execute report-page authoring, and it does not
-invoke an official executor today. Phase 3 must verify each Power BI intent
-before changing that boundary; this graph-integrity phase does not pre-judge or
-reimplement official execution.
+`powerbi-workflows` owns the Seshat routing decision, readiness/business-semantic
+pre-gates, and post-execution validation. Microsoft's official
+`powerbi-report-design` and `powerbi-report-authoring` skills own their native
+design and report-authoring mechanics once the exact capability is proven
+discoverable through the closed-world firewall. The broader Power BI plugin is
+not activated as a unit: planning, management, semantic-authoring overlap, and
+its default-write moving MCP coordinate remain incompatible. Seshat's four
+bounded PBIR writers are a temporary reviewed gap recorded in
+`upstream-gaps.yaml`, not a competing general report-authoring implementation.
 
 ## How to read it
 

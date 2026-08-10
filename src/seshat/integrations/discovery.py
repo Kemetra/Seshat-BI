@@ -13,7 +13,7 @@ import os
 import shutil
 import subprocess
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from seshat.integrations.catalog import (
@@ -22,6 +22,14 @@ from seshat.integrations.catalog import (
     SKILLS_DIR,
     Component,
     SkillActivation,
+    component,
+)
+from seshat.integrations.lockfile import LockError, read_lock
+from seshat.integrations.plugin_manifest import (
+    ManifestBlocker,
+    compare_plugin,
+    locked_plugin_policy,
+    observe_plugin,
 )
 
 NOT_CHECKED = "not-checked"
@@ -171,6 +179,99 @@ def inspect_official_skills(
     ]
 
 
+def inspect_locked_component(
+    root: Path,
+    component_id: str,
+    harness: str,
+    *,
+    inputs: DiscoveryInputs | None = None,
+) -> SkillDiscovery:
+    """Inspect one component only when its exact locked checkout is present."""
+
+    try:
+        item = component(component_id)
+    except KeyError:
+        return _locked_failure(component_id, harness, "component is not in the catalog")
+    activation = next(
+        (entry for entry in item.skill_activations if entry.harness == harness), None
+    )
+    if activation is None:
+        return _locked_failure(
+            component_id, harness, "component has no activation for this harness"
+        )
+    try:
+        lock = read_lock(Path(root))
+    except LockError as exc:
+        return _locked_failure(component_id, harness, str(exc), activation)
+    if lock is None:
+        return _locked_failure(
+            component_id, harness, "integration lock is missing", activation
+        )
+    record = lock.components.get(component_id)
+    if not isinstance(record, dict):
+        return _locked_failure(
+            component_id,
+            harness,
+            "component is absent from the integration lock",
+            activation,
+        )
+    resolved_ref = record.get("tag") or record.get("commit")
+    if not isinstance(resolved_ref, str) or not resolved_ref:
+        return _locked_failure(
+            component_id,
+            harness,
+            "locked component has no exact tag or commit",
+            activation,
+        )
+    marker_ref = installed_ref(Path(root), component_id)
+    if marker_ref is None:
+        return _locked_failure(
+            component_id,
+            harness,
+            "installed checkout marker is missing or unreadable",
+            activation,
+        )
+
+    base = inputs or DiscoveryInputs()
+    resolved_refs = dict(base.resolved_refs or {})
+    resolved_refs[component_id] = resolved_ref
+    effective = replace(
+        base,
+        harnesses=(harness,),
+        resolved_refs=resolved_refs,
+    )
+    results = inspect_official_skills(
+        Path(root),
+        (item,),
+        installed={component_id: True},
+        inputs=effective,
+    )
+    return next(result for result in results if result.harness == harness)
+
+
+def _locked_failure(
+    component_id: str,
+    harness: str,
+    blocker: str,
+    activation: SkillActivation | None = None,
+) -> SkillDiscovery:
+    """A fail-closed single-component result when locked proof is unavailable."""
+
+    return SkillDiscovery(
+        component=component_id,
+        harness=harness,
+        mechanism=activation.mechanism if activation else "unknown",
+        checked=True,
+        installed=False,
+        activated=False,
+        discoverable=False,
+        status=FAILED,
+        evidence=(),
+        blockers=(blocker,),
+        next_action="install and lock the exact catalog component before discovery",
+    )
+
+
 def _build_probe(root: Path, inputs: DiscoveryInputs) -> _Probe:
     """Resolve every caller-supplied seam to its default exactly once.
 
@@ -215,7 +316,11 @@ def _classify(
         return _stale(item, activation, *drifted)
     if activation.harness == CLAUDE_CODE:
         return _inspect_claude(
-            item, activation, probe.claude_plugins, probe.claude_error
+            probe.root,
+            item,
+            activation,
+            probe.claude_plugins,
+            probe.claude_error,
         )
     return _inspect_codex(probe.root, item, activation, probe.codex_root())
 
@@ -378,6 +483,7 @@ def _claude_payload(
 
 
 def _inspect_claude(
+    root: Path,
     item: Component,
     activation: SkillActivation,
     plugins: Mapping[str, dict],
@@ -402,7 +508,85 @@ def _inspect_claude(
             activation,
             _Block(FAILED, tuple(payload_blockers), tuple(evidence), activated=True),
         )
+    firewall = _plugin_firewall(root, item, activation, entries)
+    evidence.extend(firewall.evidence)
+    if firewall.blockers:
+        return _blocked(
+            item,
+            activation,
+            _Block(
+                firewall.status,
+                firewall.blockers,
+                tuple(evidence),
+                activated=True,
+            ),
+        )
     return _success(item, activation, tuple(evidence))
+
+
+@dataclass(frozen=True)
+class _FirewallResult:
+    status: str
+    blockers: tuple[str, ...]
+    evidence: tuple[str, ...]
+
+
+def _firewall_status(blockers: list[ManifestBlocker]) -> str:
+    kinds = {blocker.kind for blocker in blockers}
+    if "version-mismatch" in kinds:
+        return STALE
+    if any(
+        kind.startswith("undeclared-")
+        or kind.startswith("mcp-")
+        or kind == "incompatible-capability"
+        for kind in kinds
+    ):
+        return CONFLICT
+    return FAILED
+
+
+def _plugin_firewall(
+    root: Path,
+    item: Component,
+    activation: SkillActivation,
+    entries: Mapping[str, dict],
+) -> _FirewallResult:
+    """Compare every active native plugin with its locked reviewed surface."""
+
+    blockers: list[ManifestBlocker] = []
+    evidence: list[str] = []
+    upstream = root / SKILLS_DIR / item.id
+    for policy in activation.native_plugins:
+        entry = entries.get(policy.plugin_id)
+        install_path = entry.get("installPath") if entry else None
+        if not isinstance(install_path, str) or not install_path:
+            blockers.append(
+                ManifestBlocker(
+                    "unknown-plugin",
+                    f"active plugin {policy.plugin_id!r} has no install path",
+                )
+            )
+            continue
+        try:
+            locked = locked_plugin_policy(upstream, policy)
+            observed = observe_plugin(Path(install_path), entry)
+            compared = compare_plugin(policy, locked, observed)
+        except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
+            blockers.append(
+                ManifestBlocker(
+                    "unknown-plugin",
+                    f"plugin {policy.plugin_id!r} cannot be enumerated: {exc}",
+                )
+            )
+            continue
+        blockers.extend(compared)
+        if not compared:
+            evidence.append(f"plugin-firewall={policy.plugin_id} exact")
+    return _FirewallResult(
+        status=_firewall_status(blockers) if blockers else DISCOVERABLE,
+        blockers=tuple(blocker.detail for blocker in blockers),
+        evidence=tuple(evidence),
+    )
 
 
 def _codex_skills_root() -> Path:
@@ -439,6 +623,8 @@ def _inspect_codex(
             continue
         evidence.append(f"skill={target.name} path={projected}")
 
+    conflicts.extend(_extra_codex_projections(upstream, activation, Path(skills_root)))
+
     if conflicts:
         return _blocked(
             item,
@@ -457,6 +643,51 @@ def _inspect_codex(
             _Block(ACTIVATION_REQUIRED, tuple(missing), tuple(evidence)),
         )
     return _success(item, activation, tuple(evidence))
+
+
+def _extra_codex_projections(
+    upstream: Path,
+    activation: SkillActivation,
+    skills_root: Path,
+) -> list[str]:
+    """Find undeclared projections hard-linked into this locked checkout."""
+
+    if not upstream.is_dir() or not skills_root.is_dir():
+        return []
+    paths = _codex_skill_paths(upstream, skills_root)
+    if paths is None:
+        return ["Codex skill surface cannot be completely enumerated"]
+    upstream_skills, projections = paths
+    declared = frozenset(target.name for target in activation.targets)
+    return [
+        f"Codex skill {projected.parent.name!r} is an undeclared "
+        "projection from the locked payload"
+        for projected in projections
+        if projected.parent.name not in declared
+        and _linked_to_any(projected, upstream_skills)
+    ]
+
+
+def _codex_skill_paths(
+    upstream: Path, skills_root: Path
+) -> tuple[tuple[Path, ...], tuple[Path, ...]] | None:
+    try:
+        upstream_skills = tuple(upstream.rglob("SKILL.md"))
+        projections = tuple(skills_root.glob("*/SKILL.md"))
+    except OSError:
+        return None
+    return upstream_skills, projections
+
+
+def _linked_to_any(projected: Path, sources: tuple[Path, ...]) -> bool:
+    return any(_same_file(projected, source) for source in sources)
+
+
+def _same_file(left: Path, right: Path) -> bool:
+    try:
+        return left.samefile(right)
+    except OSError:
+        return False
 
 
 @dataclass(frozen=True)
@@ -522,5 +753,6 @@ __all__ = [
     "STALE",
     "SkillDiscovery",
     "inspect_official_skills",
+    "inspect_locked_component",
     "installed_ref",
 ]

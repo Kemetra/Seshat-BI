@@ -24,22 +24,29 @@ rather than an MCP server.
 | User intent | Seshat pre-gate | Execution owner | Seshat after execution |
 |---|---|---|---|
 | Business/report intent and metric meaning | approved decisions and contracts | Seshat knowledge/governance | readiness and evidence |
-| Dashboard/page design | approved metrics, semantic evidence, narrative brief | Seshat design skills | human design review |
-| Native PBIR page/visual/filter/slicer/binding authoring | exact target with `dashboard_ready: pass`; official skill discoverable | Microsoft `powerbi-report-authoring` | binding, blueprint, and static validation |
-| Bounded theme/format/background/geometry edits | approved design and the command allow-list | Seshat PBIR adapter | binding-preservation and static validation |
-| Semantic-model edit | `semantic_model_ready: pass`; F016 policy | Microsoft semantic-model authoring + local Modeling MCP | readiness/evidence validation |
+| Dashboard/page design | approved metrics, semantic evidence, narrative brief | Microsoft `powerbi-report-design` | Seshat human-review and evidence gates |
+| Native PBIR page/visual/filter/slicer/binding authoring | exact target semantic pass, named-human `dashboard_ready` approval, official skill discoverable | Microsoft `powerbi-report-authoring` | binding, blueprint, and static validation |
+| Bounded theme/format/background/geometry edits | exact target semantic pass, named-human `dashboard_ready` approval, and command allow-list | temporary Seshat PBIR gap adapter | binding-preservation and static validation |
+| Semantic-model edit | exact target semantic pass; F016 policy | BLOCKED while F016 is parked | no execution |
 | Published semantic-model query | governed target and tenant prerequisites | Microsoft remote Power BI MCP | evidence interpretation |
 | PBIP inspection/adoption | repository target | Seshat read-only tools | findings and next action |
 
 For native report authoring run:
 
-`seshat pbi-mcp doctor --intent report-authoring --target <table>`
+`seshat pbi-mcp doctor --repo . --intent report-authoring --target <table> --harness <claude-code|codex>`
 
 Spec 148 provides the read-only harness proof. Before delegation, run
 `seshat integrations setup --profile powerbi-fabric --harness <claude-code|codex>`
 and require the `fabric-skills` harness result to be discoverable. Never treat a
 cloned bundle as an activated executor, and never copy its implementation into
-Seshat.
+Seshat. The current full Claude Power BI plugin is incompatible because it also
+activates planning, management, semantic-authoring, and an unsafe modeling-MCP
+surface; do not selectively ignore those extras. Compatible Codex projections
+remain exact-skill, provenance-checked activations.
+
+The named-human approval authorizes authoring but does not self-grant or require
+`dashboard_ready: pass`; that status can follow only after the resulting report
+passes the governed review and validation sequence.
 
 ## Design (dashboards and pages)
 
@@ -134,8 +141,9 @@ report:
 ## Theme and backgrounds
 
 Generate theme artifacts with `seshat theme-gen` and `seshat theme-compile`;
-apply them to a committed report with `seshat pbir-apply-theme` and
-`seshat pbir-set-page-background`. Themes cover palette, fonts, visual
+apply them to a committed report with
+`seshat pbir-apply-theme --repo . --table <table>` and
+`seshat pbir-set-page-background --repo . --table <table>`. Themes cover palette, fonts, visual
 defaults, page/wallpaper defaults, sentiment colors, and filter-pane/
 filter-card defaults -- the filter pane's LOOK, never what it filters. Theme
 and background files carry style and structure only -- never business data,
@@ -144,8 +152,11 @@ metric meaning, secrets, or PII.
 ## Formatting and geometry
 
 Author formatting plans freely, but mutate committed PBIR only through the
-allow-listed installed helpers `seshat pbir-format-visual` and
-`seshat pbir-set-geometry`, which preserve every data binding byte-for-byte.
+allow-listed installed helpers
+`seshat pbir-format-visual --repo . --table <table>` and
+`seshat pbir-set-geometry --repo . --table <table>`, which preserve every data
+binding byte-for-byte. These four helpers are the temporary reviewed
+`powerbi-bounded-pbir-patching` gap, not general report authoring.
 Adding a slicer or changing what a visual or filter binds to is a BINDING
 change, not formatting -- route it back to the design gate. Anything outside
 the allow-list routes to official `powerbi-report-authoring` after the design

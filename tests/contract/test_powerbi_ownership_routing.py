@@ -35,6 +35,36 @@ def test_official_report_authoring_uses_the_spec_148_discovery_boundary() -> Non
     assert "without treating installation as discovery" in note
 
 
+def test_official_report_design_and_authoring_are_declared_owners() -> None:
+    caps = _capabilities()
+    for capability_id, skill_name in (
+        ("microsoft-powerbi-report-design", "powerbi-report-design"),
+        ("microsoft-powerbi-report-authoring", "powerbi-report-authoring"),
+    ):
+        cap = caps[capability_id]
+        assert cap["ownership"]["capability_owner"] == "official-upstream"
+        assert cap["ownership"]["upstream_reference"] == "microsoft/skills-for-fabric"
+        assert skill_name in str(cap)
+
+
+def test_broad_official_powerbi_capabilities_remain_deferred_and_incompatible() -> None:
+    caps = _capabilities()
+    for capability_id in (
+        "microsoft-powerbi-report-planning",
+        "microsoft-powerbi-report-management",
+    ):
+        cap = caps[capability_id]
+        assert cap["state"] == "deferred"
+        assert "incompatible" in str(cap).lower()
+
+
+def test_capability_readme_names_current_official_execution() -> None:
+    text = (ROOT / "docs/capabilities/README.md").read_text(encoding="utf-8")
+    assert "does not invoke an official executor today" not in text
+    assert "powerbi-report-design" in text
+    assert "powerbi-report-authoring" in text
+
+
 def test_design_router_is_nested_and_f016_excludes_report_authoring() -> None:
     caps = _capabilities()
     design = caps["powerbi-dashboard-design"]
@@ -85,3 +115,23 @@ def test_active_design_surfaces_do_not_assign_native_report_authoring_to_f016() 
         assert "powerbi-report-authoring" in text or "official report-authoring" in text
         for phrase in forbidden:
             assert phrase not in text, f"{relpath} still contains {phrase!r}"
+
+
+def test_mutating_pbir_skill_examples_require_exact_repo_and_table() -> None:
+    paths = (
+        ".claude/skills/pbir-authoring-adapter/SKILL.md",
+        "docs/integrations/pbir-adapter.md",
+        "distribution/bundle-templates/shared/skills/powerbi-workflows/SKILL.md",
+        "distribution/bundle-templates/claude/commands/powerbi-theme.md",
+        "distribution/bundle-templates/claude/commands/powerbi-format.md",
+    )
+    commands = (
+        "pbir-apply-theme",
+        "pbir-format-visual",
+        "pbir-set-page-background",
+        "pbir-set-geometry",
+    )
+    combined = "\n".join((ROOT / path).read_text(encoding="utf-8") for path in paths)
+    for command in commands:
+        matching_lines = [line for line in combined.splitlines() if command in line]
+        assert any("--repo" in line and "--table" in line for line in matching_lines)

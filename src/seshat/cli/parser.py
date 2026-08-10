@@ -519,6 +519,23 @@ def _add_theme_compile_parser(sub: argparse._SubParsersAction) -> None:
     )
 
 
+def _add_pbir_authoring_gate_arguments(parser: argparse.ArgumentParser) -> None:
+    """Require exact-table committed evidence for every PBIR mutation."""
+
+    parser.add_argument(
+        "--repo",
+        required=True,
+        metavar="ROOT",
+        help="git repository containing committed readiness evidence",
+    )
+    parser.add_argument(
+        "--table",
+        required=True,
+        metavar="TABLE",
+        help="exact table whose approved design authorizes this mutation",
+    )
+
+
 def _add_pbir_apply_theme_parser(sub: argparse._SubParsersAction) -> None:
     """PBIR theme-application (adapter increment A). Applies a theme-gen theme to a
     committed PBIR report (BaseTheme resource + report.json themeCollection).
@@ -528,6 +545,7 @@ def _add_pbir_apply_theme_parser(sub: argparse._SubParsersAction) -> None:
         "pbir-apply-theme",
         help="apply a generated theme to a committed PBIR report (adapter)",
     )
+    _add_pbir_authoring_gate_arguments(pbirtheme)
     pbirtheme.add_argument(
         "--theme", required=True, metavar="PATH", help="the theme JSON to apply"
     )
@@ -553,6 +571,7 @@ def _add_pbir_format_visual_parser(sub: argparse._SubParsersAction) -> None:
         "pbir-format-visual",
         help="apply allow-listed formatting to an existing PBIR visual (adapter)",
     )
+    _add_pbir_authoring_gate_arguments(pbirfmt)
     pbirfmt.add_argument(
         "--visual", required=True, metavar="PATH", help="the visual.json to format"
     )
@@ -582,6 +601,7 @@ def _add_pbir_page_background_parser(sub: argparse._SubParsersAction) -> None:
         "pbir-set-page-background",
         help="set a PBIR page's canvas background to a surface-2 image asset (adapter)",
     )
+    _add_pbir_authoring_gate_arguments(pbirbg)
     pbirbg.add_argument(
         "--asset", required=True, metavar="PATH", help="the image asset to use"
     )
@@ -611,6 +631,7 @@ def _add_pbir_geometry_parser(sub: argparse._SubParsersAction) -> None:
         "pbir-set-geometry",
         help="set a PBIR visual's position rectangle (adapter increment D)",
     )
+    _add_pbir_authoring_gate_arguments(pbirgeom)
     pbirgeom.add_argument(
         "--visual", required=True, metavar="PATH", help="the visual.json to lay out"
     )

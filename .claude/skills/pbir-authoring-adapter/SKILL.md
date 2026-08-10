@@ -52,13 +52,13 @@ this bounded adapter only* -- the static core stays forbidden from writing PBIR.
 
 ## Increment A -- apply a generated theme (SHIPPED)
 
-`retail pbir-apply-theme --theme <theme.json> --report <*.Report/>` writes the theme
+`retail pbir-apply-theme --repo <root> --table <table> --theme <theme.json> --report <*.Report/>` writes the theme
 as a BaseTheme resource and repoints `report.json`'s `themeCollection` at it. Works
 on an empty report page (no visuals needed). This is the safe smallest slice.
 
 ## Increment B -- per-visual formatting (SHIPPED)
 
-`retail pbir-format-visual --visual <visual.json> --formatting <json>` sets
+`retail pbir-format-visual --repo <root> --table <table> --visual <visual.json> --formatting <json>` sets
 allow-listed formatting under a visual's `objects` (chart-content: legend, labels,
 dataPoint, axes) and `visualContainerObjects` (chrome: border, title, subTitle,
 background, dropShadow) subtrees. **The FR-003 guarantee:** the visual's data
@@ -69,7 +69,7 @@ Desktop; there is no live target to format yet.)
 
 ## Increment C -- page background (SHIPPED)
 
-`retail pbir-set-page-background --asset <img> --report <*.Report/> --page <name>
+`retail pbir-set-page-background --repo <root> --table <table> --asset <img> --report <*.Report/> --page <name>
 [--scaling Fit|Fill|Normal]` sets a page's canvas background to a committed surface-2
 image asset: it copies the asset into `StaticResources/RegisteredResources/`,
 registers it in `report.json` (the RegisteredResources package), and references it
@@ -83,7 +83,7 @@ existed).
 
 ## Increment D -- visual geometry / layout (SHIPPED)
 
-`retail pbir-set-geometry --visual <visual.json> --geometry <json>` writes ONLY a
+`retail pbir-set-geometry --repo <root> --table <table> --visual <visual.json> --position <json>` writes ONLY a
 visual's layout rectangle -- `x`, `y`, `width`, `height`, `z` (stack/tab order) -- for
 a visual that already exists and is already on the approved binding-map. It repositions
 existing truth; it NEVER changes `visualType`, creates/deletes a visual, or adds/removes
@@ -96,6 +96,9 @@ overwrite safety is the reviewable git diff + human ratification.
 ## Hard stops
 
 - STOP before writing anything outside the current increment's allow-list.
+- STOP unless the exact table's readiness record is committed and clean, with
+  `semantic_model_ready: pass` and a complete named-human `dashboard_ready`
+  approval. The command gate checks this before reading a mutation payload.
 - STOP if ADR 0015 is not the recorded authorization (never self-grant the lift).
 - STOP at the on-disk PBIR -- never open a live Power BI / workspace (that is F016).
 

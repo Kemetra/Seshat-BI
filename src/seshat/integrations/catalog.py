@@ -71,6 +71,81 @@ class SkillTarget:
 
 
 @dataclass(frozen=True)
+class McpSurfacePolicy:
+    """One MCP surface a native plugin is allowed to activate."""
+
+    name: str
+    transport: str
+    package: str | None = None
+    required_args: tuple[str, ...] = ()
+    forbidden_args: tuple[str, ...] = ()
+    forbid_moving_coordinate: bool = True
+
+    def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ValueError("MCP surface name is blank")
+        if self.transport not in {"stdio", "http", "sse"}:
+            raise ValueError(f"unsupported MCP transport: {self.transport!r}")
+        if self.package is not None and not self.package.strip():
+            raise ValueError(f"{self.name}: MCP package is blank")
+        _validate_unique_strings(self.name, "required MCP argument", self.required_args)
+        _validate_unique_strings(
+            self.name, "forbidden MCP argument", self.forbidden_args
+        )
+        overlap = set(self.required_args) & set(self.forbidden_args)
+        if overlap:
+            raise ValueError(
+                f"{self.name}: MCP arguments cannot be both required and forbidden: "
+                f"{sorted(overlap)!r}"
+            )
+
+
+@dataclass(frozen=True)
+class NativePluginPolicy:
+    """The complete reviewed capability surface of one native plugin."""
+
+    plugin_id: str
+    manifest_path: str
+    manifest_name: str
+    allowed_skills: tuple[str, ...]
+    allowed_mcp_servers: tuple[McpSurfacePolicy, ...] = ()
+    allowed_agents: tuple[str, ...] = ()
+    allowed_hooks: tuple[str, ...] = ()
+    incompatible_capabilities: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.plugin_id.strip():
+            raise ValueError("native plugin id is blank")
+        if not self.manifest_name.strip():
+            raise ValueError(f"{self.plugin_id}: manifest name is blank")
+        _validate_relative_path(
+            self.plugin_id, self.manifest_path, label="plugin manifest path"
+        )
+        _validate_unique_strings(self.plugin_id, "allowed skill", self.allowed_skills)
+        _validate_unique_strings(self.plugin_id, "allowed agent", self.allowed_agents)
+        _validate_unique_strings(self.plugin_id, "allowed hook", self.allowed_hooks)
+        _validate_unique_strings(
+            self.plugin_id,
+            "incompatible capability",
+            self.incompatible_capabilities,
+        )
+        mcp_names = tuple(server.name for server in self.allowed_mcp_servers)
+        _validate_unique_strings(self.plugin_id, "allowed MCP server", mcp_names)
+        allowed = (
+            set(self.allowed_skills)
+            | set(mcp_names)
+            | set(self.allowed_agents)
+            | set(self.allowed_hooks)
+        )
+        overlap = allowed & set(self.incompatible_capabilities)
+        if overlap:
+            raise ValueError(
+                f"{self.plugin_id}: capabilities cannot be both allowed and "
+                f"incompatible: {sorted(overlap)!r}"
+            )
+
+
+@dataclass(frozen=True)
 class SkillActivation:
     """Catalog-owned discovery contract for one official package and harness."""
 
@@ -78,6 +153,7 @@ class SkillActivation:
     mechanism: str
     targets: tuple[SkillTarget, ...]
     install_hint: str
+    native_plugins: tuple[NativePluginPolicy, ...] = ()
 
 
 # Allowlisted official sources. A component may name only a source declared
@@ -157,6 +233,16 @@ class Component:
             _validate_relative_path(
                 self.id, target.source_path, label="skill source path"
             )
+        plugin_ids = tuple(policy.plugin_id for policy in activation.native_plugins)
+        _validate_unique_strings(self.id, "native plugin policy", plugin_ids)
+        target_plugin_ids = {
+            target.plugin_id for target in activation.targets if target.plugin_id
+        }
+        undeclared = target_plugin_ids - set(plugin_ids)
+        if activation.mechanism == "native-plugin" and undeclared:
+            raise ValueError(
+                f"{self.id}: native plugin targets lack policy: {sorted(undeclared)!r}"
+            )
 
 
 def _validate_relative_path(component_id: str, value: str, *, label: str) -> None:
@@ -176,6 +262,18 @@ def _validate_relative_path(component_id: str, value: str, *, label: str) -> Non
             f"{component_id}: {label} must be a contained relative POSIX path: "
             f"{value!r}"
         )
+
+
+def _validate_unique_strings(owner: str, label: str, values: tuple[str, ...]) -> None:
+    """Require non-blank, duplicate-free tuple members."""
+
+    seen: set[str] = set()
+    for value in values:
+        if not value.strip():
+            raise ValueError(f"{owner}: {label} is blank")
+        if value in seen:
+            raise ValueError(f"{owner}: duplicate {label}: {value!r}")
+        seen.add(value)
 
 
 # --------------------------------------------------------------------------- #
@@ -276,6 +374,17 @@ _TRANSFORMATION = (
                         plugin_id="dbt@dbt-agent-marketplace",
                     ),
                 ),
+                native_plugins=(
+                    NativePluginPolicy(
+                        plugin_id="dbt@dbt-agent-marketplace",
+                        manifest_path=".claude-plugin/marketplace.json",
+                        manifest_name="dbt",
+                        allowed_skills=(
+                            "using-dbt-for-analytics-engineering",
+                            "configuring-dbt-mcp-server",
+                        ),
+                    ),
+                ),
                 install_hint=(
                     "/plugin marketplace add dbt-labs/dbt-agent-skills; "
                     "/plugin install dbt@dbt-agent-marketplace"
@@ -364,6 +473,14 @@ _ORCHESTRATION = (
                         plugin_id="dagster-expert@dagster",
                     ),
                 ),
+                native_plugins=(
+                    NativePluginPolicy(
+                        plugin_id="dagster-expert@dagster",
+                        manifest_path=".claude-plugin/marketplace.json",
+                        manifest_name="dagster-expert",
+                        allowed_skills=("dagster-expert",),
+                    ),
+                ),
                 install_hint=(
                     "/plugin marketplace add dagster-io/skills; "
                     "/plugin install dagster-expert@dagster"
@@ -399,6 +516,7 @@ _POWERBI_FABRIC = (
         coordinate="microsoft/skills-for-fabric",
         required_paths=(
             "skills/semantic-model-authoring/SKILL.md",
+            "plugins/powerbi-authoring/skills/powerbi-report-design/SKILL.md",
             "plugins/powerbi-authoring/skills/powerbi-report-authoring/SKILL.md",
         ),
         skill_activations=(
@@ -412,12 +530,43 @@ _POWERBI_FABRIC = (
                         plugin_id="fabric-skills@fabric-collection",
                     ),
                     SkillTarget(
+                        name="powerbi-report-design",
+                        source_path=(
+                            "plugins/powerbi-authoring/skills/"
+                            "powerbi-report-design/SKILL.md"
+                        ),
+                        plugin_id="powerbi-authoring@fabric-collection",
+                    ),
+                    SkillTarget(
                         name="powerbi-report-authoring",
                         source_path=(
                             "plugins/powerbi-authoring/skills/"
                             "powerbi-report-authoring/SKILL.md"
                         ),
                         plugin_id="powerbi-authoring@fabric-collection",
+                    ),
+                ),
+                native_plugins=(
+                    NativePluginPolicy(
+                        plugin_id="fabric-skills@fabric-collection",
+                        manifest_path=".claude-plugin/marketplace.json",
+                        manifest_name="fabric-skills",
+                        allowed_skills=("semantic-model-authoring",),
+                    ),
+                    NativePluginPolicy(
+                        plugin_id="powerbi-authoring@fabric-collection",
+                        manifest_path=".claude-plugin/marketplace.json",
+                        manifest_name="powerbi-authoring",
+                        allowed_skills=(
+                            "powerbi-report-design",
+                            "powerbi-report-authoring",
+                        ),
+                        incompatible_capabilities=(
+                            "powerbi-report-planning",
+                            "powerbi-report-management",
+                            "semantic-model-authoring",
+                            "powerbi-modeling-mcp",
+                        ),
                     ),
                 ),
                 install_hint=(
@@ -433,6 +582,13 @@ _POWERBI_FABRIC = (
                     SkillTarget(
                         name="semantic-model-authoring",
                         source_path="skills/semantic-model-authoring/SKILL.md",
+                    ),
+                    SkillTarget(
+                        name="powerbi-report-design",
+                        source_path=(
+                            "plugins/powerbi-authoring/skills/"
+                            "powerbi-report-design/SKILL.md"
+                        ),
                     ),
                     SkillTarget(
                         name="powerbi-report-authoring",

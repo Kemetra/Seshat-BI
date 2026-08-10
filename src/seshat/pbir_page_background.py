@@ -244,6 +244,11 @@ def pbir_page_bg_main(args) -> int:
     """CLI entry: set a page background; exit 2 on a clean error."""
     import sys
 
+    from seshat.pbir_authoring_gate import enforce_pbir_authoring_gate
+
+    if not enforce_pbir_authoring_gate(args, "pbir-set-page-background"):
+        return 2
+
     try:
         written = set_page_background(
             Path(args.asset),

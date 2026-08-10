@@ -216,6 +216,11 @@ def pbir_geometry_main(args) -> int:
     """CLI entry: set a visual's position rectangle from a JSON string/file."""
     import sys
 
+    from seshat.pbir_authoring_gate import enforce_pbir_authoring_gate
+
+    if not enforce_pbir_authoring_gate(args, "pbir-set-geometry"):
+        return 2
+
     raw = args.position
     try:
         if raw and Path(raw).is_file():

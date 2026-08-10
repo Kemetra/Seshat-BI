@@ -37,6 +37,7 @@ from seshat.integrations.discovery import (
     CONFLICT,
     FAILED,
     NOT_INSTALLED,
+    STALE,
 )
 from seshat.integrations.installer import (
     NEEDS_ACTION as CANONICAL_NEEDS_ACTION,
@@ -86,6 +87,7 @@ _NEEDS_ACTION = frozenset(CANONICAL_NEEDS_ACTION) | {
     ACTIVATION_REQUIRED,
     CONFLICT,
     FAILED,
+    STALE,
 }
 
 

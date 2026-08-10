@@ -12,8 +12,19 @@ seshat integrations setup --refresh --apply --yes  # pre-approved non-interactiv
 ```
 
 A run with approval clones the Microsoft Fabric and dbt Labs agent skill bundles
-and registers the read-only Power BI modeling and dbt MCP servers. Dagster
-workflow skills ship with Seshat and are validated, not downloaded.
+and registers only catalog-declared MCP surfaces. Dagster workflow skills ship
+with Seshat and are validated, not downloaded. Installation is not activation:
+the closed-world discovery check must prove the exact harness capability before
+any route may use it.
+
+For Power BI, Microsoft owns `powerbi-report-design` and
+`powerbi-report-authoring`; Seshat owns business semantics, readiness gates,
+named-human approvals, and post-authoring validation. The current full Claude
+`powerbi-authoring` plugin is incompatible because it also activates planning,
+management, semantic-model authoring, and a default-write moving Modeling MCP
+coordinate. The firewall blocks that whole plugin surface rather than ignoring
+extras. Exact Codex skill projections may be discoverable when their locked
+provenance passes. F016 remains parked, so no modeling MCP is run.
 
 The setup validates required skills and runtime prerequisites and returns
 categorical `planned`, `present`, `installed`, `unavailable`, or `failed`
@@ -63,8 +74,13 @@ answer, so an install requires the full explicit
 `--refresh --apply --yes` sequence. Otherwise they report a plan or fail closed
 without changing integration state.
 
-After a semantic-model readiness pass, run the existing read-only gate:
+To inspect a candidate native-report route without execution, run the read-only
+doctor with an exact table and harness:
 
 ```powershell
-seshat pbi-mcp preflight --repo .
+seshat pbi-mcp doctor --repo . --intent report-authoring --target <table> --harness <claude-code|codex>
 ```
+
+For Seshat's temporary bounded PBIR patch gap, each mutator additionally
+requires `--repo . --table <table>` and reads only committed, clean exact-table
+semantic and named-human design-approval evidence before touching a payload.

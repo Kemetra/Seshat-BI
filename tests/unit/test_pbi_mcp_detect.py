@@ -28,6 +28,7 @@ from seshat.pbi_mcp.detect import (
     detect_facts,
     read_semantic_readiness,
     read_stage_readiness,
+    read_table_approval,
 )
 
 pytestmark = pytest.mark.unit
@@ -57,6 +58,34 @@ def _write_readiness(root: Path, table: str, status: str, approve: bool) -> None
     record.write_text(
         f'stages:\n  semantic_model_ready:\n    status: "{status}"\n'
         f'  dashboard_ready:\n    status: "{status}"\n{approvals}',
+        encoding="utf-8",
+    )
+
+
+def _write_target_record(
+    root: Path,
+    table: str,
+    *,
+    semantic: str,
+    dashboard_approval: bool,
+) -> None:
+    record = root / "mappings" / table / "readiness-status.yaml"
+    record.parent.mkdir(parents=True, exist_ok=True)
+    approval = (
+        '\napprovals:\n  - stage: "dashboard_ready"\n'
+        '    owner: "A Person (owner)"\n'
+        '    at: "2026-08-10"\n'
+        '    note: "Approved report design"\n'
+        if dashboard_approval
+        else "\napprovals: []\n"
+    )
+    record.write_text(
+        "stages:\n"
+        "  semantic_model_ready:\n"
+        f'    status: "{semantic}"\n'
+        "  dashboard_ready:\n"
+        '    status: "not_started"\n'
+        f"{approval}",
         encoding="utf-8",
     )
 
@@ -92,6 +121,41 @@ def test_invalid_target_cannot_escape_the_mappings_directory(tmp_path: Path) -> 
     facts = detect_facts(tmp_path, which=_NO_NODE, target="../orders")
     assert facts.dashboard_ready == READINESS_NOT_PASS
     assert facts.dashboard_ready_tables == ()
+
+
+def test_target_facts_do_not_borrow_semantic_or_approval(tmp_path: Path) -> None:
+    _write_target_record(tmp_path, "table_a", semantic="pass", dashboard_approval=True)
+    _write_target_record(
+        tmp_path, "table_b", semantic="not_started", dashboard_approval=False
+    )
+
+    facts = detect_facts(tmp_path, which=_NO_NODE, target="table_b")
+
+    assert facts.target_semantic_model_ready == READINESS_NOT_PASS
+    assert facts.dashboard_design_approval == APPROVAL_ABSENT
+
+
+def test_exact_target_design_approval_is_recorded(tmp_path: Path) -> None:
+    _write_target_record(tmp_path, "orders", semantic="pass", dashboard_approval=True)
+
+    facts = detect_facts(tmp_path, which=_NO_NODE, target="orders")
+
+    assert facts.target_semantic_model_ready == READINESS_PASS
+    assert facts.dashboard_design_approval == APPROVAL_RECORDED
+
+
+def test_invalid_target_cannot_escape_approval_directory(tmp_path: Path) -> None:
+    _write_target_record(tmp_path, "orders", semantic="pass", dashboard_approval=True)
+
+    assert (
+        read_table_approval(tmp_path, "../orders", "dashboard_ready") == APPROVAL_ABSENT
+    )
+
+
+def test_incomplete_approval_is_not_authority(tmp_path: Path) -> None:
+    _write_readiness(tmp_path, "orders", "pass", approve=True)
+
+    assert read_table_approval(tmp_path, "orders", "publish_ready") == APPROVAL_ABSENT
 
 
 def test_stage_reader_folds_dashboard_passes_categorically(tmp_path: Path) -> None:
