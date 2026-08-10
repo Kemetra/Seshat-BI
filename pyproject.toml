@@ -67,6 +67,13 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.6",
+    # Instance-level validation of Studio payloads against
+    # `specs/139-seshat-studio-foundation/contracts/studio-api.yaml`. Test-only: the
+    # runtime never validates its own responses, so this stays out of the base
+    # install and out of the `studio` extra. Enum-parity tests alone proved the
+    # contract well-formed while the CODE violated it in three places; this is the
+    # check that closes that gap.
+    "jsonschema>=4.20",
 ]
 # `db` extra: the optional DB driver for `retail validate`'s LIVE run. NOT in
 # `dev` -- so CI installs no driver, which keeps the static core stdlib-only AND

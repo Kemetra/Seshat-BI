@@ -4,13 +4,27 @@
 [data-model.md](./data-model.md), and [contracts](./contracts/).
 
 **Status**: ratified and ACTIVE for implementation as of 2026-08-10. Phase 1
-(governance preconditions) and Phase 2 (package and security skeleton) are closed;
-Phase 3 (T009, projection parity tests) is next.
+(governance preconditions) and Phase 2 (package and security skeleton) are closed, and
+Phase 3 is underway: T009/T010 (the deterministic projection) are done; **T011 (typed
+endpoints) is next** and carries the deferred half of Phase 2 plus three items from the
+Phase 3 review — see its entry.
+
+Four contract defects were found and fixed before T010 was written, because a truthful
+projection could not have validated against the shipped contract: `StageState.status`
+declared a status (`ready_for_review`) that exists nowhere in the repository,
+`ReadinessStage` dropped the `_ready` suffix from all seven identifiers, `current_stage`
+was non-nullable while the upstream authority emits null, and the seven-stage bound
+needed its rationale recorded. Both enums are now pinned to
+`schemas/agent-status.schema.json` and `status_surface._STAGE_ORDER` by
+`tests/unit/test_studio_contract_matches_authority.py`, and every fixture state is
+validated against `studio-api.yaml` by
+`tests/unit/test_studio_projection_conforms_to_contract.py`.
 
 Regression floor for every later phase, from
 [`evidence/t003-baselines.md`](./evidence/t003-baselines.md): 5822 passed / 2
-pre-existing environmental failures / 23 skipped at T003. After Phase 2: **5896
-passed / the same 2 failures / 24 skipped** — 74 tests added, no new failure.
+pre-existing environmental failures / 23 skipped at T003. After Phase 2: 5896 passed /
+the same 2 failures / 24 skipped. After T009-T010: **5979 passed / the same 2 failures /
+24 skipped**.
 
 ## Phase 1 - Governance Preconditions
 
@@ -80,12 +94,33 @@ passed / the same 2 failures / 24 skipped** — 74 tests added, no new failure.
 
 ## Phase 3 - Deterministic Workspace Foundation (US1, US4)
 
-- [ ] **T009** Write projection parity tests against existing ready, blocked, empty,
+- [x] **T009** Write projection parity tests against existing ready, blocked, empty,
   pending-live, and malformed workspace fixtures. [FR-007, FR-008, FR-009, FR-010,
   SC-002]
-- [ ] **T010** Implement `WorkspaceProjectionService` as an adapter over existing
+- [x] **T010** Implement `WorkspaceProjectionService` as an adapter over existing
   Seshat Python services with a stable revision digest and containment-safe refs.
   [FR-007, FR-008, FR-010]
+  — `seshat.studio.projection`. Adapts `status_surface.build_status_projection`;
+  derives no readiness. The revision digest is content-addressed and verified
+  PATH-INDEPENDENT. **Deliberate divergence from upstream for FR-010**: upstream skips
+  an unparseable file by design ("failing loud is RS1's job"), so the projection
+  enumerates committed files independently and reports what upstream dropped. An
+  omitted stage block is filled with `not_started` + an explicit unknown-state reason
+  plus a defect, honouring the contract's seven-stage bound without letting the gap
+  read as genuinely not-started.
+  Evidence and blocking reasons are emitted as the contract's `EvidenceRef` /
+  `BlockingReason` OBJECTS, with `live_state` carrying the [PENDING LIVE PROFILE]
+  signal a plain string could not express. A non-canonical status is REFUSED with a
+  named defect rather than projected into the closed enum, and `next_action` plus
+  table-level blockers are preserved (FR-008 names both).
+  **NOT delivered:** (a) `EvidenceRef.source_ref` is the committed string as-is --
+  routing it through `config.resolve_contained_path` moves to T011, where a route
+  actually dereferences one; (b) `required_authority` and `forbidden_scope` are empty
+  because no committed source populates them yet; (c) `WorkspaceIdentity.branch` is
+  null pending a git read. Payload conformance is now pinned by
+  `test_studio_projection_conforms_to_contract.py`, which validates every fixture
+  state against `studio-api.yaml` -- the check whose absence let three contract
+  violations pass 25 green tests.
 - [ ] **T011** Implement typed bootstrap, workspace, table, decision-summary, and
   health endpoints matching `studio-api.yaml`. [FR-034]
   **Also carries the deferred half of Phase 2**, which has no testable surface until
