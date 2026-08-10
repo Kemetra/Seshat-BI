@@ -186,7 +186,7 @@ def test_legacy_render_and_operator_action_contracts() -> None:
     assert json.loads(rendered) == [{"detail": "x", "name": "a", "status": "present"}]
 
 
-@pytest.mark.parametrize("status", ["not-installed", "activation-required"])
+@pytest.mark.parametrize("status", ["not-installed", "activation-required", "stale"])
 def test_projected_discovery_blockers_are_operator_action(status: str) -> None:
     """A requested official skill that is not discoverable needs a human.
 
