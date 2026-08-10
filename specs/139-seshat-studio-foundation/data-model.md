@@ -10,14 +10,32 @@ second authority.
 
 ### ReadinessStatus
 
-`not_started | blocked | ready_for_review | pass`
+`not_started | blocked | warning | pass`
 
 Studio uses the repository's canonical categorical values and adapter validation.
 It does not add intermediate percentages or scores.
 
+`warning` means advanced-with-a-recorded-issue -- a static WARN or an accepted
+deviation (`templates/readiness-status.yaml`). It is NOT "ready for review", and
+Studio never renames it in transit: FR-008 requires the categorical status to be
+preserved, and renaming a governance status would be a silent upgrade.
+
+**Corrected 2026-08-10.** This section previously read
+`not_started | blocked | ready_for_review | pass` while claiming to use "the
+repository's canonical categorical values" -- a self-contradiction. `ready_for_review`
+exists nowhere in the shipped repository: the canonical vocabulary is fixed by
+`templates/readiness-status.yaml`, `schemas/agent-status.schema.json`, and
+`seshat.status_surface`.
+
 ### ReadinessStage
 
-`source | mapping | silver | gold | semantic_model | dashboard | publish`
+`source_ready | mapping_ready | silver_ready | gold_ready | semantic_model_ready |
+dashboard_ready | publish_ready`
+
+**Corrected 2026-08-10.** Previously listed without the `_ready` suffix, which does
+not match `seshat.status_surface._STAGE_ORDER`. Dropping the suffix would have forced
+Studio to rewrite every stage identifier in transit and left `current_stage` unable to
+round-trip against its own source file.
 
 The order is fixed and inherited from the readiness model.
 

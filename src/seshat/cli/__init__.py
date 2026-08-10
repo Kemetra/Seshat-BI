@@ -367,6 +367,7 @@ _EXTRA_DEPENDENCIES: dict[str, tuple[str, ...]] = {
     "mcp": ("mcp>=1.28,<2",),
     "dbt": ("dbt-core==1.12.0", "dbt-postgres==1.10.2"),
     "db": ("psycopg2-binary>=2.9",),
+    "studio": ("fastapi>=0.115", "uvicorn>=0.34"),
 }
 
 

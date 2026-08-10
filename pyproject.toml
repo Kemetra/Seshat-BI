@@ -56,12 +56,24 @@ Changelog = "https://github.com/Kemetra/Seshat-BI/blob/main/CHANGELOG.md"
 # reinstall; the test suite calls the module directly, so it is unaffected.
 seshat = "seshat.cli:main"
 retail = "seshat.cli:main"
+# `seshat-studio` is deliberately OUTSIDE the `seshat`/`retail` dispatch chain
+# (spec 139, FR-002). Routing it through `seshat.cli` would put a web import on the
+# static core's import path and trip the B1 never-execute boundary at
+# `src/seshat/cli/*.py`.
+seshat-studio = "seshat.studio.__main__:main"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "ruff>=0.6",
+    # Instance-level validation of Studio payloads against
+    # `specs/139-seshat-studio-foundation/contracts/studio-api.yaml`. Test-only: the
+    # runtime never validates its own responses, so this stays out of the base
+    # install and out of the `studio` extra. Enum-parity tests alone proved the
+    # contract well-formed while the CODE violated it in three places; this is the
+    # check that closes that gap.
+    "jsonschema>=4.20",
 ]
 # `db` extra: the optional DB driver for `retail validate`'s LIVE run. NOT in
 # `dev` -- so CI installs no driver, which keeps the static core stdlib-only AND
@@ -142,6 +154,16 @@ mcp = [
 browser = [
     "playwright>=1.50",
 ]
+# `studio` extra (spec 139, FR-006): the localhost analyst console's web stack.
+# Deliberately NOT a runtime dependency -- a base `pip install seshat-bi` must stay
+# free of FastAPI/Uvicorn, and `seshat-studio` reports the extra's absence as a
+# named diagnostic with both install lanes rather than an ImportError traceback.
+# Keep in sync with `seshat.cli._EXTRA_DEPENDENCIES["studio"]`; the drift is pinned
+# by tests/unit/test_studio_package_contract.py.
+studio = [
+    "fastapi>=0.115",
+    "uvicorn>=0.34",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/seshat", "src/retail"]
@@ -157,6 +179,16 @@ packages = ["src/seshat", "src/retail"]
 # package so `packs.resolve_schema_path` finds them in an installed layout.
 "schemas/seshat-extension-pack.schema.json" = "seshat/packs/schemas/seshat-extension-pack.schema.json"
 "schemas/seshat-pack-registry.schema.json" = "seshat/packs/schemas/seshat-pack-registry.schema.json"
+# Studio's PREBUILT frontend (spec 139, FR-005) is deliberately NOT force-included.
+# Hatchling raises `FileNotFoundError: Forced include not found` during metadata
+# generation when a force-include source is absent, so pointing at `studio-ui/dist`
+# before T012 creates it broke `pip install` for EVERY install, not just Studio's.
+# It is not needed either: the T012 build command writes its output into
+# `src/seshat/studio/static/`, which already ships via `packages = ["src/seshat"]`
+# above. A wheel built without that step is reported by
+# `seshat.studio.assets.describe_missing_assets` as a named diagnostic rather than
+# serving a blank page. Pinned by
+# `test_every_wheel_force_include_source_exists`.
 "schemas/statistical-analysis-spec.schema.json" = "seshat/statistical/schemas/statistical-analysis-spec.schema.json"
 "schemas/statistical-analysis-evidence.schema.json" = "seshat/statistical/schemas/statistical-analysis-evidence.schema.json"
 # `seshat dbt init` / `seshat dagster init` (issue #325) materialize the

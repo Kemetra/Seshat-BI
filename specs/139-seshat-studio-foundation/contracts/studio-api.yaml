@@ -369,7 +369,7 @@ components:
     BootstrapState:
       type: object
       additionalProperties: false
-      required: [workspace, navigation, capabilities]
+      required: [workspace, navigation, capabilities, authentication_mode]
       properties:
         workspace:
           $ref: "#/components/schemas/WorkspaceSnapshot"
@@ -378,6 +378,17 @@ components:
           items:
             type: string
             enum: [command_room]
+        authentication_mode:
+          type: string
+          description: >-
+            Which agent authentication path is currently active (FR-013a).
+            `subscription` is the default and the only path SC-010 certifies.
+            `operator_configured_alternate` is set ONLY when the operator has
+            explicitly configured an API-key or access-token bridge; it is never
+            selected by inference, degradation, or fallback. Studio names the
+            active mode here and in the interface so the analyst can always tell
+            which path is in use.
+          enum: [subscription, operator_configured_alternate]
         capabilities:
           type: object
           additionalProperties: false
@@ -445,8 +456,22 @@ components:
         display_name:
           type: string
         current_stage:
-          $ref: "#/components/schemas/ReadinessStage"
+          description: >-
+            NULLABLE, because the upstream projection sets it to null when the
+            committed source omits it and explicitly never fabricates a stage. A
+            non-nullable field would have forced Studio either to invent a stage or to
+            drop the table, and FR-010 requires the gap to be reported instead.
+          oneOf:
+            - $ref: "#/components/schemas/ReadinessStage"
+            - type: "null"
         stages:
+          description: >-
+            All seven stages, always. The upstream projection omits a stage block it
+            cannot read, so Studio fills the gap with a `not_started` StageState
+            carrying an explicit blocking reason and raises a matching `InputDefect` on
+            the snapshot -- never a short array, and never a silent omission (FR-010).
+            Fixing the length at seven is what makes a missing stage visible rather
+            than merely absent.
           type: array
           minItems: 7
           maxItems: 7
@@ -469,7 +494,15 @@ components:
           $ref: "#/components/schemas/ReadinessStage"
         status:
           type: string
-          enum: [not_started, blocked, ready_for_review, pass]
+          description: >-
+            Projected VERBATIM from the committed
+            `mappings/<table>/readiness-status.yaml`. FR-008 requires the categorical
+            status to be preserved, so this enum stays identical to the canonical
+            vocabulary in `templates/readiness-status.yaml` and
+            `schemas/agent-status.schema.json`. `warning` means
+            advanced-with-a-recorded-issue (a static WARN or an accepted deviation);
+            it is NOT "ready for review", and Studio never renames it in transit.
+          enum: [not_started, blocked, warning, pass]
         evidence:
           type: array
           items:
@@ -630,4 +663,19 @@ components:
           const: prepared
     ReadinessStage:
       type: string
-      enum: [source, mapping, silver, gold, semantic_model, dashboard, publish]
+      description: >-
+        Stage identifiers, projected VERBATIM from the committed
+        `mappings/<table>/readiness-status.yaml`. These match
+        `seshat.status_surface._STAGE_ORDER` exactly, including the `_ready` suffix:
+        an earlier revision dropped it, which would have forced Studio to rewrite
+        every stage identifier in transit and left `current_stage` unable to round-trip
+        against the source file. Preserving the source spelling keeps the projection
+        verifiable by string comparison against the upstream authority.
+      enum:
+        - source_ready
+        - mapping_ready
+        - silver_ready
+        - gold_ready
+        - semantic_model_ready
+        - dashboard_ready
+        - publish_ready

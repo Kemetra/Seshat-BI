@@ -261,7 +261,7 @@ an embedded subscription bridge in this slice.
 - **FR-013a**: An API key or ChatGPT access token MAY be used as an *alternate*
   agent bridge, and ONLY when the operator configures it explicitly. When such a
   mode is active Studio MUST name the active authentication mode in the interface
-  and in `GET /bootstrap`, so the analyst can always tell which path is in use.
+  and in `GET /bootstrap/state`, so the analyst can always tell which path is in use.
   Subscription sign-in remains the default and the certified path; no automatic,
   inferred, or fallback selection of the alternate mode is permitted.
 - **FR-014**: The Codex integration MUST be hidden behind a version-tolerant
