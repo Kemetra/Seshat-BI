@@ -539,11 +539,23 @@ def test_the_launcher_binds_first_then_enforces_that_port(
 
 
 def test_the_launcher_refuses_when_the_frontend_is_absent(
-    workspace: Path, capsys: pytest.CaptureFixture[str]
+    workspace: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The real state today: no `studio-ui/dist`, so the launcher must refuse."""
+    """A wheel built without the frontend must say so, not serve a blank page.
+
+    The absence is CREATED here rather than assumed: whether `studio-ui/dist` has been
+    built is ambient state (CI builds it, a fresh clone has not), so a test that relied
+    on it would pass or fail depending on who ran it.
+    """
     pytest.importorskip("fastapi")
     from seshat.studio import __main__ as launcher
+    from seshat.studio import assets
+
+    monkeypatch.setattr(
+        assets,
+        "packaged_static_directory",
+        lambda: workspace / "definitely-not-built",
+    )
 
     assert launcher.main(["--repo", str(workspace), "--no-serve"]) == 2
 

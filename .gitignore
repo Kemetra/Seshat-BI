@@ -147,3 +147,16 @@ tests/fixtures/finance_gl/generated/
 # false regression (same reasoning as .seshat/watch/ above).
 benchmark/journeys/runs/
 .seshat/adopter-sim/
+
+# Spec 139 (Studio frontend). The SOURCE in studio-ui/src is committed; the build
+# artifacts are not.
+#
+# `src/seshat/studio/static/` is where `python scripts/build_studio_frontend.py` stages
+# the bundle so hatchling ships it in the wheel. It is deliberately NOT tracked:
+# FR-005 promises that END USERS need no Node, and end users install a wheel, not a git
+# checkout. Committing a 199 kB generated bundle with content-hashed filenames would
+# put it in every diff and cause conflicts on names that change with every build.
+# Building the wheel is a release step that runs the build command first.
+studio-ui/dist/
+studio-ui/node_modules/
+src/seshat/studio/static/

@@ -1,0 +1,121 @@
+/**
+ * Local design tokens (T012).
+ *
+ * FR-033 forbids remote fonts, scripts, images, and analytics, so the type stack is
+ * system fonts only -- no `@import`, no webfont, no icon font. Status is communicated
+ * by an icon glyph and a text label as well as colour, because FR-031 requires
+ * non-colour status communication for WCAG 2.2 AA.
+ *
+ * Contrast: every `--status-*-fg` is chosen against `--surface` at 4.5:1 or better, and
+ * the palette is defined once here so a contrast audit has a single place to check.
+ * Light and dark are both explicit -- a token defined only inside a media query
+ * borrows whatever the host paints when the query does not match.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* System stack: available everywhere, downloads nothing. */
+  --font-sans:
+    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo,
+    monospace;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  --radius: 0.375rem;
+  --border-width: 1px;
+
+  /* Light palette. */
+  --surface: #ffffff;
+  --surface-raised: #f6f7f9;
+  --surface-sunken: #eceef1;
+  --border: #c9ced6;
+  --text: #14181f;
+  --text-muted: #4a5260;
+  --focus-ring: #0b5fd0;
+
+  --status-pass-fg: #1c5c2e;
+  --status-pass-bg: #e4f3e8;
+  --status-warning-fg: #7a4a00;
+  --status-warning-bg: #fdf0da;
+  --status-blocked-fg: #99201a;
+  --status-blocked-bg: #fbe6e4;
+  --status-not-started-fg: #3f4653;
+  --status-not-started-bg: #eceef1;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #12151a;
+    --surface-raised: #1a1f26;
+    --surface-sunken: #0c0e12;
+    --border: #39414d;
+    --text: #eef1f5;
+    --text-muted: #a8b1bf;
+    --focus-ring: #6ba8ff;
+
+    --status-pass-fg: #8fd6a3;
+    --status-pass-bg: #16301f;
+    --status-warning-fg: #f0c477;
+    --status-warning-bg: #33260f;
+    --status-blocked-fg: #f5a49c;
+    --status-blocked-bg: #3a1a17;
+    --status-not-started-fg: #b6bec9;
+    --status-not-started-bg: #1e232a;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  /* Explicit, not inherited: a transparent body borrows the host's colours. */
+  background: var(--surface);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+/* A visible focus ring is a WCAG 2.2 AA requirement, so it is never removed -- only
+   restyled. `:focus-visible` keeps it off pointer interactions. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* FR-031 reduced motion: honour the user's stated preference rather than animating
+   anyway at a lower duration. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Available to screen readers, invisible on screen. Used for the status word that
+   accompanies every colour, so status never depends on hue alone. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
