@@ -112,9 +112,69 @@ Spec Kit owns Spec Kit, and Seshat status governance moved to
 entry's `update_policy` in `docs/capabilities/capabilities.yaml` now carries this
 same path; the two surfaces agree.
 
+**CLOSED 2026-08-10 -- at skill scope; the five are pinned.** *Recorded by an
+agent under owner instruction. No ratification was re-signed and no approval was
+self-granted: this note asserts only that the finding's own stated condition is
+satisfied on the evidence below, leaving the 2026-08-07 ratification perimeter
+(`ratify-ledger.md`) untouched.* This finding admitted two resolutions: pin the
+five, or take a documented decision retiring them. The **pinning** branch was taken -- nothing was retired, deleted,
+reclassified, or rerouted. `.specify/integrations/claude.manifest.json` now
+hash-pins **14 of 14** `speckit-*` skills, meeting the condition this finding
+stated ("until the five are pinned"). Together with
+`speckit.manifest.json`'s ten scripts/templates, **24** vendored files are
+pinned.
+
+Two checks ran before the hashes were written:
+
+- **Provenance decided the remedy.** All five `speckit-git-*` skills were added
+  in `1eb0c98` -- the same upstream-installer commit as the nine already pinned
+  -- with **zero** commits touching them since, and the git blobs at `1eb0c98`
+  hash to exactly the pinned values (checked at blob level, so no checkout
+  artifact can contaminate the result). They are therefore genuine vendored
+  bytes, and pinning records upstream truth. Had they entered in a different
+  commit they would not have been vendored content at all, and the correct fix
+  would have been reclassification under a Seshat owner rather than
+  hash-pinning.
+- **The hash convention was fixed empirically -- and is per-manifest.** The nine
+  pre-existing hashes were confirmed to reproduce byte-for-byte against the
+  working tree *before* any entry was added, establishing sha256 over raw
+  checked-out bytes **for `claude.manifest.json`**, whose entries are all `.md`
+  pinned `eol=lf` by `.gitattributes`. This does **not** generalize:
+  `speckit.manifest.json`'s five `.ps1` entries verify only after normalizing
+  CRLF to LF (`specs/151-speckit-fork-removal/research.md`), so a reader
+  applying one convention across both manifests will see five spurious drift
+  reports. All 14 entries verify with zero drift under the correct convention.
+
+**What is NOT fixed -- the successor gap.** Pinning is complete for *skills*, not
+for the *capability*. `.specify/extensions/` (18 tracked files: the
+git-extension framework, whose `speckit.git.*.md` command files are upstream's
+**source** for the five skills just pinned, plus bash/PowerShell scripts),
+`.specify/extensions.yml`, `.specify/workflows/`, and `.specify/integration.json`
+are pinned by neither manifest. This finding's own founding text above names "the
+extensions framework" among the vendored content, so that surface -- executable,
+and therefore higher-risk than skill prose -- stays unverifiable on re-vendor. It
+is the natural successor to KF-2 and is deliberately **not** claimed closed:
+tracked as **issue #603**, which carries the full unpinned inventory and the
+per-file-type normalization caveat that any pinning there must resolve.
+
+The root cause is also upstream's: its installer emits the five `speckit-git-*`
+skills but does not record them in the manifest it writes. Since that installer
+owns the file and rewrites it wholesale, a re-vendor will drop both the five
+entries and the `seshat_added_entries` key that marks them as Seshat-authored.
+That key carries its own `on_revendor` procedure. Upstreaming the omission to
+GitHub Spec Kit was Out of Scope for Spec 151 and remains unattempted -- a
+standing, documented cost, not an open finding.
+
 ---
 
 ## Note on scope
 
-Both findings are **recorded, not fixed**. Spec 142's Non-goals forbid fixing
-either: KF-1 is OD-3, KF-2 is a tooling decision outside a metadata axis.
+Both findings were **recorded, not fixed, by spec 142**. Spec 142's Non-goals
+forbade fixing either: KF-1 is OD-3, KF-2 is a tooling decision outside a
+metadata axis. That remains an accurate statement about spec 142's own scope.
+
+Later work outside this spec has since acted on KF-2 -- spec 151 recorded most
+of the re-vendor path, and the 2026-08-10 change above pinned the last five
+skills, CLOSING it. **KF-1 remains open and untouched.** This file stays the
+canonical home for both findings' status; the spec whose non-goals are quoted
+above is not the spec that resolved them.

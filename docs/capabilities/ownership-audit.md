@@ -265,7 +265,7 @@ non-destructive; the Phase 9 audit approved no deletion, merge, or rename.
 | `pr-readiness-reviewer` | GitHub checks | `seshat-governance` | **KEEP** (HIGH) -- the snapshot's "likely KEEP" is confirmed on behaviour. Fork tax is minimal: `gh pr view` / `gh pr checks` are named once, in one line of step 2, with no `gh` usage taught. The novel surface (step 4) cross-checks PR-body CLAIMS against committed Seshat evidence -- readiness-stage consistency, `approvals[]` named-owner presence, `source-map.yaml` CLEARED metadata, declared-vs-run tests -- which GitHub cannot perform, having no concept of a readiness stage. |
 | `release-notes-generator` | GitHub Releases | `seshat-governance` | **KEEP** (HIGH) -- "likely KEEP" confirmed. The capability splits as anticipated and the Seshat half is substantial: GitHub Releases owns generic note *authoring*, while the evidence-gated **L0-L6 binary maturity ladder** over the F028 evidence pack, the F032 compatibility matrix, and the roadmap ledger is Seshat-only. No upstream surface can assess kit maturity from governance evidence. |
 | `showcase-build` | — | `seshat-governance` | **KEEP** (HIGH) -- "likely KEEP" confirmed. Reads the Explorer projection (`build_explorer_projection`), the Passport, and the fail-closed disclosure scanner; no upstream equivalent exists, and no overlap was ever alleged. |
-| 14 × `speckit-*` | upstream Spec Kit | `vendored-upstream` | **RESOLVED 2026-08-07 -- not a finding.** They *are* vendored upstream content, but sanctioned: written by upstream's own installer (`specify init --here --integration claude --script ps`, spec-kit `0.8.10`) in commit `1eb0c98`, which in the same commit amended the constitution to v1.1.0 to permit exactly this (`.specify/memory/constitution.md:556-563`). Hash-verified against `.specify/integrations/claude.manifest.json`, zero local drift, no Seshat vocabulary in any body. Principle II is scoped to the **Power BI execution adapter**, not to all tooling, so it does not bind here. Residual risk is narrower: no recorded re-vendor/upgrade path (no lockfile, no `specify upgrade` record), which is the "fork tax" the Principle II *rationale* warns about -- unpaid so far. All `development-only`; no shipped surface affected. **Residual gap NARROWED by Spec 151, still OPEN for five skills (verified 2026-08-09).** Most of the re-vendor path is now recorded: `.specify/init-options.json` pins the reproducible invocation (`speckit_version: 0.8.10`, `integration: claude`, `script: ps`, `branch_numbering: sequential`), `.specify/integrations/speckit.manifest.json` hash-pins the ten `.specify/scripts/` + `.specify/templates/` files with an `installed_at` stamp, and `.specify/integrations/claude.manifest.json` hash-pins nine of the fourteen skills. **The five `speckit-git-*` skills (commit, feature, initialize, remote, validate) are pinned by NEITHER manifest** and are declared Out of Scope by `specs/151-speckit-fork-removal/spec.md`, so a re-vendor can verify 9 of 14 skills and drift in the other five stays undetectable. KF-2 therefore stays OPEN at that reduced scope. This does not disturb the ownership ruling -- pinning coverage is a provenance-verification gap, not a question of who owns the capability. Phase 9 ruling: **GENERATED** (`capability_owner: vendored-upstream`, `upstream_project: github/spec-kit`, `upstream_reference: 0.8.10`, with an authored `update_policy`) -- a deterministic vendored projection, not architectural duplication. |
+| 14 × `speckit-*` | upstream Spec Kit | `vendored-upstream` | **RESOLVED 2026-08-07 -- not a finding.** They *are* vendored upstream content, but sanctioned: written by upstream's own installer (`specify init --here --integration claude --script ps`, spec-kit `0.8.10`) in commit `1eb0c98`, which in the same commit amended the constitution to v1.1.0 to permit exactly this (`.specify/memory/constitution.md:556-563`). Hash-verified against `.specify/integrations/claude.manifest.json`, zero local drift, no Seshat vocabulary in any body. Principle II is scoped to the **Power BI execution adapter**, not to all tooling, so it does not bind here. Residual risk is narrower: no recorded re-vendor/upgrade path (no lockfile, no `specify upgrade` record), which is the "fork tax" the Principle II *rationale* warns about -- unpaid so far. All `development-only`; no shipped surface affected. **Residual gap NARROWED by Spec 151, then CLOSED at skill scope 2026-08-10.** `.specify/integrations/claude.manifest.json` now hash-pins **all fourteen** skills. The five `speckit-git-*` skills (commit, feature, initialize, remote, validate) — pinned by neither manifest at the Phase 9 snapshot, and declared Out of Scope by `specs/151-speckit-fork-removal/spec.md` — were added on 2026-08-10 under the manifest's `seshat_added_entries` key. Provenance was checked before pinning: all five entered in `1eb0c98`, the same upstream-installer commit as the nine, with **zero commits touching them since**, and the git blobs at `1eb0c98` hash to exactly the pinned values, so the pinned bytes are upstream's own emitted bytes rather than a checkout rendering or local drift. **KF-2's stated condition — "until the five are pinned" — is met, so KF-2 is CLOSED.** Two limits are recorded rather than glossed. **(a) Pinning coverage is complete for skills, not for the capability.** `.specify/extensions/` (18 tracked files — the git-extension framework, including the `speckit.git.*.md` command files that are upstream's *source* for these five skills, plus bash/PowerShell scripts), together with `.specify/extensions.yml`, `.specify/workflows/`, and `.specify/integration.json`, is pinned by **neither** manifest. KF-2's founding text names the extensions framework explicitly, so the fork tax is paid at skill scope only; the higher-risk executable surface stays unpinned and is the natural successor gap. **(b) The two manifests do not share one hash convention.** `claude.manifest.json` verifies over raw checked-out bytes (all entries are `.md`, pinned `eol=lf`); `speckit.manifest.json`'s five `.ps1` entries verify only after normalizing CRLF to LF. Comparing the latter raw yields five false drift reports. One further caveat, recorded in the manifest itself: upstream's installer rewrites that file and will drop both the five entries and the `seshat_added_entries` key, so a re-vendor must re-add them (or delete the key if upstream begins pinning them itself). This does not disturb the ownership ruling -- pinning coverage is a provenance-verification gap, not a question of who owns the capability. Phase 9 ruling: **GENERATED** (`capability_owner: vendored-upstream`, `upstream_project: github/spec-kit`, `upstream_reference: 0.8.10`, with an authored `update_policy`) -- a deterministic vendored projection, not architectural duplication. |
 
 `pbip-workflow`, `pbip-xray`, `dashboard-design`, `powerbi-dashboard-design`,
 `powerbi-workflows` — Power BI layer. At this audit snapshot,
@@ -345,6 +345,59 @@ inventory-phase Non-goal.
    of Scope for Spec 151, so a re-vendor cannot verify 5 of the 14 skills this
    capability owns. The finding stays OPEN at that reduced scope until they are
    pinned or a documented decision retires them. See the `speckit-*` row in §4.
+
+   **CLOSED 2026-08-10 -- at skill scope.** *Recorded by an agent under owner
+   instruction; no ratification was re-signed and no approval was self-granted.
+   The closure asserts only that this finding's own stated condition is now
+   satisfied on the evidence below -- it does not re-open or re-rule the
+   2026-08-07 ratification perimeter.* This finding named two admissible
+   resolutions: pin the five, or take a documented decision retiring them. The
+   **pinning** branch was taken; nothing was retired, deleted, or reclassified.
+   `.specify/integrations/claude.manifest.json` now carries all **14** skill
+   hashes, so the condition this finding actually stated -- "until the five are
+   pinned" -- is met.
+
+   Two checks ran before the hashes were written, and both mattered:
+
+   - **Provenance.** All five `speckit-git-*` skills were added in `1eb0c98` --
+     the same upstream-installer commit as the pinned nine -- with **zero**
+     commits touching them since
+     (`git log --diff-filter=A` and `git log 1eb0c98..HEAD` per file), and the
+     git blobs at `1eb0c98` hash to exactly the pinned values. Had they
+     arrived in some *other* commit, they would not be vendored content at all
+     and the remedy would have been reclassification with a Seshat owner, not
+     hash-pinning. Provenance, not the file name, decided the fix.
+   - **Convention.** The nine pre-existing hashes were confirmed to reproduce
+     byte-for-byte against the working tree before any entry was added, fixing
+     the convention **for this file** as sha256 over raw checked-out bytes.
+     That is not a global rule: every `claude.manifest.json` entry is a `.md`
+     pinned `eol=lf` by `.gitattributes`, so raw and LF-normalized bytes
+     coincide. The sibling `speckit.manifest.json` differs -- its five `.ps1`
+     entries verify **only** after normalizing CRLF to LF (see
+     `specs/151-speckit-fork-removal/research.md`), so comparing them raw
+     produces five false drift reports. All 14 entries here verify with zero
+     drift under this file's convention.
+
+   **Two limits, recorded rather than glossed.**
+
+   1. **Skill scope, not capability scope.** `.specify/extensions/` -- 18
+      tracked files comprising the git-extension framework, including the
+      `speckit.git.*.md` command files that are upstream's *source* for the five
+      skills just pinned, plus bash and PowerShell scripts -- is pinned by
+      neither manifest, as are `.specify/extensions.yml`, `.specify/workflows/`,
+      and `.specify/integration.json`. KF-2's founding text names the extensions
+      framework explicitly. So the fork tax is paid at skill scope; the
+      executable surface, where drift carries more risk than in skill prose,
+      remains unverifiable. That is the natural successor gap and is **not**
+      claimed closed here -- tracked as **issue #603**, which carries the full
+      unpinned inventory and the per-file-type normalization caveat.
+   2. **Upstream owns the file.** Its installer rewrites
+      `claude.manifest.json` wholesale, so a re-vendor drops both the five
+      entries and the `seshat_added_entries` key that marks them as
+      Seshat-authored. That key carries its own `on_revendor` procedure. The
+      root cause -- upstream omitting these five from the manifest it writes --
+      is not fixed here; upstreaming to GitHub Spec Kit was Out of Scope for
+      Spec 151 and remains unattempted.
 
    **Correction, 2026-08-08 (spec 151).** This passage originally read that the
    fork tax "is unpaid today because the copy is provably unmodified." That was

@@ -2,11 +2,29 @@
   "integration": "claude",
   "version": "0.8.10",
   "installed_at": "2026-06-24T10:16:59.668779+00:00",
+  "seshat_added_entries": {
+    "reason": "Upstream's installer wrote the nine canonical speckit-* command skills but omitted the five speckit-git-* skills it emitted in the same commit (1eb0c98), leaving 5 of 14 vendored skills unverifiable on re-vendor. Closes KF-2 (docs/capabilities/ownership-audit.md section 5, finding 5), which spec 151 declared Out of Scope.",
+    "added_at": "2026-08-10",
+    "hash_convention": "sha256 over raw file bytes as checked out -- identical to the nine upstream-written entries here (verified reproducing before these were added). SCOPED TO THIS FILE: every entry is a .md pinned eol=lf by .gitattributes, so raw bytes and LF-normalized bytes coincide. The sibling speckit.manifest.json is NOT the same -- its five .ps1 entries verify only after normalizing CRLF to LF. Normalize before comparing there; see specs/151-speckit-fork-removal/research.md.",
+    "on_revendor": "Upstream will rewrite this file without these five entries and without this key. VERIFY (self-contained; run from the repo root, prints True per path): python -c \"import json,hashlib,pathlib; m=json.load(open('.specify/integrations/claude.manifest.json')); [print(p, hashlib.sha256(pathlib.Path(p).read_bytes()).hexdigest()==m['files'][p]) for p in m['seshat_added_entries']['paths']]\". All five must print True: these have not changed upstream since 0.8.10, and the git blobs at 1eb0c98 are LF and hash to exactly these values. A False means upstream genuinely changed that file -- adopt the new bytes and update the hash rather than forcing the old one. TO RE-ADD after a re-vendor wipes them: restore this key and the five entries in `files` from git history (they were added in the KF-2 closure commit), then run the command above. If upstream begins pinning these five itself, delete this key and keep upstream's entries.",
+    "paths": [
+      ".claude/skills/speckit-git-commit/SKILL.md",
+      ".claude/skills/speckit-git-feature/SKILL.md",
+      ".claude/skills/speckit-git-initialize/SKILL.md",
+      ".claude/skills/speckit-git-remote/SKILL.md",
+      ".claude/skills/speckit-git-validate/SKILL.md"
+    ]
+  },
   "files": {
     ".claude/skills/speckit-analyze/SKILL.md": "adb9c4baed1d0e27cebd08e506a7247c1357ee721b6ea340201553d5792e6c8a",
     ".claude/skills/speckit-checklist/SKILL.md": "812b2a102310470141b313670a51e7f33fe4f673a3b8c3d97ddff4abce2e5fbd",
     ".claude/skills/speckit-clarify/SKILL.md": "0ca2d6dd6eae86d0e02149b1c3df0b7770e5e5dcfc0482f2b7176b12f6f6457d",
     ".claude/skills/speckit-constitution/SKILL.md": "c1a044aba243ca6aff627fb5e4404feb6f1108d4f7dd174631bee3ae477d6c15",
+    ".claude/skills/speckit-git-commit/SKILL.md": "5c7bf976944f5ab6d6dbc143c160aa8742d2f303abdf1453688535d5ceffa1c4",
+    ".claude/skills/speckit-git-feature/SKILL.md": "50a413ca98b650a81c773769613afa1e9042851e6057f9a7e049aa801f6d0ed0",
+    ".claude/skills/speckit-git-initialize/SKILL.md": "2c3e80ca3f596720c064122b930eb224a87b4a9575f58db4a0c32de3bbc0be99",
+    ".claude/skills/speckit-git-remote/SKILL.md": "045d34977a70cae585b8bc0adbfd378374498f1a6c59c77615923e64f8d1b3f0",
+    ".claude/skills/speckit-git-validate/SKILL.md": "ab7656044903e878e73c8bd9d40d3d46cd6fecff6e054780ceb9e81ffa18c923",
     ".claude/skills/speckit-implement/SKILL.md": "efeb6dc763bcf6ee5fe6732ce4d4243fe7c9c37f1db10ac39d8b0780ff9eebe0",
     ".claude/skills/speckit-plan/SKILL.md": "5dbf517056a7df98de24835cb44c582b8d9b5c95950f917b129a740ca7f6448b",
     ".claude/skills/speckit-specify/SKILL.md": "caadc05119eca453709a0425ed88d253883f9c55da4c13a4898367653a859483",
