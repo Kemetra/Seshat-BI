@@ -50,6 +50,10 @@ class _InvalidMcpManifest(ValueError):
     """Raised internally when an MCP registration cannot be normalized."""
 
 
+class _InvalidHookManifest(ValueError):
+    """Raised internally when a hook manifest cannot be normalized."""
+
+
 def _read_json(path: Path) -> object:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -93,27 +97,44 @@ def _observe_agents(root: Path) -> frozenset[str] | None:
     return frozenset(names)
 
 
-def _observe_hooks(root: Path) -> frozenset[str] | None:
+def _hook_manifest_path(root: Path) -> Path | None:
     hooks_root = root / "hooks"
     if not hooks_root.exists():
-        return frozenset()
-    if not hooks_root.is_dir():
         return None
+    if not hooks_root.is_dir():
+        raise _InvalidHookManifest
     manifest = hooks_root / "hooks.json"
     if not manifest.is_file():
-        return None
+        raise _InvalidHookManifest
+    return manifest
+
+
+def _read_hook_manifest(manifest: Path) -> object:
     try:
-        payload = _read_json(manifest)
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        return None
+        return _read_json(manifest)
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise _InvalidHookManifest from exc
+
+
+def _hook_names(payload: object) -> frozenset[str]:
     if not isinstance(payload, dict):
-        return None
+        raise _InvalidHookManifest
     hooks = payload.get("hooks")
     if not isinstance(hooks, dict) or not all(
         isinstance(name, str) and name.strip() for name in hooks
     ):
-        return None
+        raise _InvalidHookManifest
     return frozenset(hooks)
+
+
+def _observe_hooks(root: Path) -> frozenset[str] | None:
+    try:
+        manifest = _hook_manifest_path(root)
+        if manifest is None:
+            return frozenset()
+        return _hook_names(_read_hook_manifest(manifest))
+    except _InvalidHookManifest:
+        return None
 
 
 def _package_from_args(args: tuple[str, ...]) -> str | None:
