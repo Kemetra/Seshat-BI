@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -24,7 +25,11 @@ def _ready_repo(tmp_path: Path) -> Path:
     record.parent.mkdir(parents=True)
     record.write_text(
         'stages:\n  semantic_model_ready:\n    status: "pass"\n'
-        '  dashboard_ready:\n    status: "pass"\napprovals: []\n',
+        '  dashboard_ready:\n    status: "not_started"\n'
+        'approvals:\n  - stage: "dashboard_ready"\n'
+        '    owner: "A Person (owner)"\n'
+        '    at: "2026-08-10"\n'
+        '    note: "Approved report design"\n',
         encoding="utf-8",
     )
     return tmp_path
@@ -47,7 +52,16 @@ def _write_mcp_json(root: Path, args: list[str]) -> None:
 def test_doctor_recommends_and_exits_zero(tmp_path: Path, capsys) -> None:
     root = _ready_repo(tmp_path)
     code = main(
-        ["pbi-mcp", "doctor", "--repo", str(root), "--intent", "report-formatting"]
+        [
+            "pbi-mcp",
+            "doctor",
+            "--repo",
+            str(root),
+            "--intent",
+            "report-formatting",
+            "--target",
+            "orders",
+        ]
     )
     out = capsys.readouterr().out
     assert code == 0
@@ -75,7 +89,38 @@ def test_doctor_report_authoring_names_official_surface_and_discovery_gap(
     assert code == 2
     assert "official-powerbi-report-authoring" in out
     assert "discoverable" in out
-    assert "dashboard_ready=pass" in out
+    assert "dashboard_design_approval=recorded" in out
+
+
+def test_doctor_report_authoring_uses_compatible_discovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    root = _ready_repo(tmp_path)
+    monkeypatch.setattr(
+        "seshat.integrations.discovery.inspect_locked_component",
+        lambda *args, **kwargs: SimpleNamespace(
+            discoverable=True,
+            blockers=(),
+        ),
+    )
+
+    code = main(
+        [
+            "pbi-mcp",
+            "doctor",
+            "--repo",
+            str(root),
+            "--intent",
+            "report-authoring",
+            "--target",
+            "orders",
+            "--harness",
+            "codex",
+        ]
+    )
+
+    assert code == 0
+    assert "official-powerbi-report-authoring" in capsys.readouterr().out
 
 
 def test_doctor_blocked_gate_exits_two_and_names_the_gate(
@@ -122,10 +167,30 @@ def test_doctor_json_output_is_parseable(tmp_path: Path, capsys) -> None:
             "--json",
         ]
     )
-    assert code == 0
+    assert code == 2
     payload = json.loads(capsys.readouterr().out)
     assert payload["recommendation"]["surface"] == "remote-powerbi-mcp"
     assert payload["detected"]["semantic_model_ready"] == "pass"
+
+
+@pytest.mark.parametrize(
+    "intent",
+    [
+        "published-query",
+        "desktop-verification",
+        "db-connectivity",
+        "sensitive-production",
+    ],
+)
+def test_doctor_exits_two_for_unresolved_prerequisites(
+    tmp_path: Path, capsys, intent: str
+) -> None:
+    root = _ready_repo(tmp_path)
+
+    code = main(["pbi-mcp", "doctor", "--repo", str(root), "--intent", intent])
+
+    assert code == 2
+    assert "missing prerequisite" in capsys.readouterr().out
 
 
 def test_doctor_unknown_intent_is_a_usage_error(tmp_path: Path) -> None:

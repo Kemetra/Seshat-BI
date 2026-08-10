@@ -48,7 +48,10 @@ def _facts(**overrides: object) -> DetectedFacts:
         "dashboard_ready_tables": ("orders",),
         "dashboard_design_approval": APPROVAL_RECORDED,
         "publish_ready_approval": APPROVAL_ABSENT,
-        "official_report_skills": (),
+        "official_report_skills": (
+            "powerbi-report-design",
+            "powerbi-report-authoring",
+        ),
     }
     base.update(overrides)
     return DetectedFacts(**base)  # type: ignore[arg-type]
@@ -59,11 +62,17 @@ def _facts(**overrides: object) -> DetectedFacts:
 # --------------------------------------------------------------------------- #
 
 
-def test_case1_model_edit_ready_routes_to_local_modeling_mcp() -> None:
+def test_case1_model_edit_ready_names_local_mcp_but_stays_parked() -> None:
     result = recommend("model-edit", _facts())
     assert result.surface == "local-modeling-mcp"
-    assert not result.blocked
-    assert result.missing_prerequisites == ()
+    assert result.blocked
+    assert "F016 remains parked" in " ".join(result.missing_prerequisites)
+
+
+def test_model_edit_requires_an_exact_target() -> None:
+    result = recommend("model-edit", _facts(target=None))
+    assert result.blocked
+    assert "--target" in " ".join(result.missing_prerequisites)
 
 
 def test_case2_published_query_routes_to_remote_server() -> None:
@@ -74,6 +83,7 @@ def test_case2_published_query_routes_to_remote_server() -> None:
     assert "Build permission" in joined
     assert "Copilot license" in joined
     assert "stop" in result.next_human_step
+    assert result.blocked
 
 
 def test_case3_formatting_stays_on_the_pbir_adapter() -> None:
@@ -82,14 +92,18 @@ def test_case3_formatting_stays_on_the_pbir_adapter() -> None:
     assert not result.blocked
 
 
-def test_native_report_authoring_routes_to_official_skill_but_fails_closed() -> None:
+def test_native_report_authoring_allows_compatible_discovered_skill() -> None:
     result = recommend("report-authoring", _facts())
     assert result.surface == "official-powerbi-report-authoring"
-    assert result.blocked
-    joined = " ".join(result.missing_prerequisites)
-    assert "discoverable" in joined
-    assert "Spec 148" in joined
+    assert result.blocked is False
+    assert result.missing_prerequisites == ()
     assert "PBIR" in result.next_human_step
+
+
+def test_report_authoring_blocks_without_compatible_discovery() -> None:
+    result = recommend("report-authoring", _facts(official_report_skills=()))
+    assert result.blocked
+    assert "discoverable" in " ".join(result.missing_prerequisites)
 
 
 def test_report_authoring_requires_an_exact_target() -> None:
@@ -98,14 +112,14 @@ def test_report_authoring_requires_an_exact_target() -> None:
     assert "--target" in " ".join(result.missing_prerequisites)
 
 
-def test_report_authoring_fails_closed_on_target_dashboard_gate() -> None:
+def test_report_authoring_fails_closed_without_design_approval() -> None:
     result = recommend(
         "report-authoring",
-        _facts(dashboard_ready=READINESS_NOT_PASS, dashboard_ready_tables=()),
+        _facts(dashboard_design_approval=APPROVAL_ABSENT),
     )
     assert result.surface == "official-powerbi-report-authoring"
     assert result.blocked
-    assert "dashboard_ready" in result.why
+    assert "dashboard_ready approval" in " ".join(result.missing_prerequisites)
 
 
 def test_report_authoring_refuses_a_dashboard_pass_without_its_semantic_stage() -> None:
@@ -117,7 +131,7 @@ def test_report_authoring_refuses_a_dashboard_pass_without_its_semantic_stage() 
     """
     result = recommend(
         "report-authoring",
-        _facts(semantic_ready_tables=(), semantic_model_ready=READINESS_NOT_PASS),
+        _facts(target_semantic_model_ready=READINESS_NOT_PASS),
     )
     assert result.blocked
     joined = " ".join(result.missing_prerequisites)
@@ -131,22 +145,35 @@ def test_report_authoring_refuses_another_tables_semantic_pass() -> None:
     target-scoped gate must check membership, not the folded status."""
     result = recommend(
         "report-authoring",
-        _facts(semantic_model_ready=READINESS_PASS, semantic_ready_tables=("returns",)),
+        _facts(
+            semantic_model_ready=READINESS_PASS,
+            semantic_ready_tables=("returns",),
+            target_semantic_model_ready=READINESS_NOT_PASS,
+        ),
     )
     assert result.blocked
     assert "semantic_model_ready" in " ".join(result.missing_prerequisites)
 
 
-def test_report_authoring_gate_sentence_names_both_stages_when_consistent() -> None:
-    """A fully consistent target still reports both stages as the basis."""
+def test_report_authoring_gate_sentence_names_semantic_and_approval() -> None:
     result = recommend("report-authoring", _facts())
     assert "semantic_model_ready = pass" in result.why
-    assert "dashboard_ready = pass" in result.why
-    # Still blocked: the Spec 148 discovery proof is a separate prerequisite.
-    assert result.blocked
-    assert not any(
-        "readiness-status.yaml" in item for item in result.missing_prerequisites
+    assert "dashboard_ready approval" in result.why
+    assert result.blocked is False
+
+
+def test_report_formatting_requires_target_semantic_and_design_approval() -> None:
+    result = recommend(
+        "report-formatting",
+        _facts(
+            target_semantic_model_ready=READINESS_NOT_PASS,
+            dashboard_design_approval=APPROVAL_ABSENT,
+        ),
     )
+    assert result.blocked
+    joined = " ".join(result.missing_prerequisites)
+    assert "semantic_model_ready" in joined
+    assert "dashboard_ready approval" in joined
 
 
 def test_case4_desktop_verification_routes_to_desktop_bridge() -> None:
@@ -161,7 +188,10 @@ def test_case5_db_connectivity_routes_to_gateway_and_service() -> None:
 
 
 def test_case6_readiness_not_passed_blocks_and_names_the_gate() -> None:
-    result = recommend("model-edit", _facts(semantic_model_ready=READINESS_NOT_PASS))
+    result = recommend(
+        "model-edit",
+        _facts(target_semantic_model_ready=READINESS_NOT_PASS),
+    )
     assert result.surface == "blocked-on-semantic-readiness"
     assert result.blocked
     assert "semantic_model_ready" in result.why
@@ -183,7 +213,7 @@ def test_case8_sensitive_production_routes_to_hardened_read_only() -> None:
 def test_all_intent_surfaces_are_distinct_except_blocked_variants() -> None:
     surfaces = {recommend(intent, _facts()).surface for intent in INTENTS}
     surfaces.add(
-        recommend("model-edit", _facts(semantic_model_ready="missing")).surface
+        recommend("model-edit", _facts(target_semantic_model_ready="missing")).surface
     )
     assert len(surfaces) == 9
 
@@ -201,7 +231,7 @@ def test_missing_runtime_and_config_become_prerequisites() -> None:
     joined = " ".join(result.missing_prerequisites)
     assert "Node.js 20+" in joined
     assert ".mcp.json.example" in joined
-    assert not result.blocked  # prerequisites, not a refusal
+    assert result.blocked
 
 
 def test_write_mode_config_is_a_prerequisite_naming_readonly() -> None:

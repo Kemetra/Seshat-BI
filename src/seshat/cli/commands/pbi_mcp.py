@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 
@@ -29,9 +30,12 @@ def _doctor_payload(facts, rec) -> dict:
             "target": facts.target,
             "semantic_model_ready": facts.semantic_model_ready,
             "semantic_ready_tables": list(facts.semantic_ready_tables),
+            "target_semantic_model_ready": facts.target_semantic_model_ready,
             "dashboard_ready": facts.dashboard_ready,
             "dashboard_ready_tables": list(facts.dashboard_ready_tables),
+            "dashboard_design_approval": facts.dashboard_design_approval,
             "publish_ready_approval": facts.publish_ready_approval,
+            "official_report_skills": list(facts.official_report_skills),
         },
         "recommendation": {
             "intent": rec.intent,
@@ -56,8 +60,9 @@ def _print_doctor_text(prog: str, facts, rec) -> None:
         f"node={facts.node_runtime} vendored={facts.vendored_runtime} "
         f"config={facts.mcp_config} pbip={facts.pbip_project} "
         f"target={facts.target or 'none'} "
-        f"semantic_model_ready={facts.semantic_model_ready} "
+        f"target_semantic_model_ready={facts.target_semantic_model_ready} "
         f"dashboard_ready={facts.dashboard_ready} "
+        f"dashboard_design_approval={facts.dashboard_design_approval} "
         f"publish_ready_approval={facts.publish_ready_approval}"
     )
     print(
@@ -67,23 +72,50 @@ def _print_doctor_text(prog: str, facts, rec) -> None:
 
 
 def _run_doctor(args) -> int:
+    from seshat.integrations.catalog import component
+    from seshat.integrations.discovery import inspect_locked_component
     from seshat.pbi_mcp.detect import detect_facts
     from seshat.pbi_mcp.recommend import AdvisoryWriteError, recommend, write_advisory
 
-    facts = detect_facts(Path(args.repo), target=args.target)
+    root = Path(args.repo)
+    facts = detect_facts(root, target=args.target)
+    discovery_blockers: tuple[str, ...] = ()
+    harness = getattr(args, "harness", None)
+    if harness:
+        discovery = inspect_locked_component(root, "fabric-skills", harness)
+        if discovery.discoverable is True:
+            item = component("fabric-skills")
+            activation = next(
+                entry for entry in item.skill_activations if entry.harness == harness
+            )
+            report_skills = tuple(
+                target.name
+                for target in activation.targets
+                if target.name.startswith("powerbi-report-")
+            )
+            facts = replace(facts, official_report_skills=report_skills)
+        else:
+            discovery_blockers = tuple(discovery.blockers)
     rec = recommend(args.intent, facts)
+    if discovery_blockers:
+        rec = replace(
+            rec,
+            missing_prerequisites=rec.missing_prerequisites
+            + tuple(f"official discovery: {item}" for item in discovery_blockers),
+            blocked=True,
+        )
     if args.as_json:
         print(json.dumps(_doctor_payload(facts, rec), indent=2, sort_keys=True))
     else:
         _print_doctor_text(_prog(args), facts, rec)
     if getattr(args, "write_advisory", False):
         try:
-            written = write_advisory(Path(args.repo), facts, rec)
+            written = write_advisory(root, facts, rec)
         except AdvisoryWriteError as refusal:
             print(f"{refusal}", file=sys.stderr)
             return 2
         print(f"advisory written: {written.as_posix()}")
-    return 2 if rec.blocked else 0
+    return 2 if rec.blocked or rec.missing_prerequisites else 0
 
 
 def _run_generate_config(args) -> int:

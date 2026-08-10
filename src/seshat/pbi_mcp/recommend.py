@@ -14,12 +14,13 @@ old record deliberately to re-issue).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 from .detect import (
     ABSENT,
+    APPROVAL_RECORDED,
     CONFIG_ABSENT,
     CONFIG_FORBIDDEN_FLAG,
     CONFIG_UNPARSEABLE,
@@ -115,45 +116,41 @@ def _runtime_prerequisites(facts: DetectedFacts) -> list[str]:
 
 
 def _recommend_model_edit(facts: DetectedFacts) -> Recommendation:
-    # Section-7 case 6: readiness not passed blocks ALL Power BI mutations
-    # and names the gate -- checked before any surface is even suggested.
-    if facts.semantic_model_ready != READINESS_PASS:
-        return Recommendation(
-            intent=INTENT_MODEL_EDIT,
-            surface=SURFACE_BLOCKED_ON_READINESS,
-            why=(
-                "the semantic_model_ready gate is "
-                f"'{facts.semantic_model_ready}' -- no table records a pass, "
-                "so every Power BI model mutation path is blocked fail-closed"
-            ),
-            missing_prerequisites=(
-                "a committed semantic_model_ready = pass in "
-                "mappings/<table>/readiness-status.yaml",
-            ),
-            next_human_step=(
-                "advance the readiness spine (seshat next) until a named "
-                "human records the semantic_model_ready pass; never route "
-                "around the gate"
-            ),
-            blocked=True,
-        )
     prereqs = _runtime_prerequisites(facts)
-    blocked = facts.mcp_config == CONFIG_FORBIDDEN_FLAG
+    if facts.target is None:
+        prereqs.insert(0, "an exact governed table selected with --target <table>")
+    elif facts.target_semantic_model_ready != READINESS_PASS:
+        prereqs.insert(
+            0,
+            "a committed semantic_model_ready = pass in "
+            f"mappings/{facts.target}/readiness-status.yaml",
+        )
+    prereqs.append(
+        "F016 remains parked until its owner-ratified ADR authorizes the "
+        "Power BI execution adapter"
+    )
+    semantic_blocked = (
+        facts.target is None or facts.target_semantic_model_ready != READINESS_PASS
+    )
     return Recommendation(
         intent=INTENT_MODEL_EDIT,
-        surface=SURFACE_LOCAL_MODELING_MCP,
+        surface=(
+            SURFACE_BLOCKED_ON_READINESS
+            if semantic_blocked
+            else SURFACE_LOCAL_MODELING_MCP
+        ),
         why=(
-            "creating/modifying a PBIP/TMDL semantic model routes to the "
-            "official local Power BI Modeling MCP -- read-only until the "
-            "owner-ratified ADR lifts the F016 park; a mutation additionally "
-            "needs a named-human publish_ready approval"
+            "model mutation is target-scoped on semantic_model_ready and the "
+            "official local Power BI Modeling MCP remains an execution-only "
+            "adapter; repository-wide readiness cannot authorize it and F016 "
+            "remains parked"
         ),
         missing_prerequisites=tuple(prereqs),
         next_human_step=(
-            "satisfy the listed prerequisites, then run the read-only "
-            "preflight (seshat pbi-mcp preflight); any write stays parked"
+            "keep the adapter read-only and parked; obtain the owner-ratified "
+            "ADR before any future execution work"
         ),
-        blocked=blocked,
+        blocked=True,
     )
 
 
@@ -185,22 +182,16 @@ def _recommend_published_query(facts: DetectedFacts) -> Recommendation:
 def _target_semantic_passes(facts: DetectedFacts) -> bool:
     """Whether the EXACT target records its own ``semantic_model_ready`` pass.
 
-    ``facts.semantic_model_ready`` is the repo-wide fold, so it reads ``pass``
-    whenever ANY table passes. Answering a target-scoped question with it would
-    let one table's semantic pass authorize another table's report. The
-    per-table membership set is the only target-scoped evidence available to
-    this pure function.
+    Repository-wide summary fields are display-only and never authorize a
+    target-scoped operation.
     """
-    return facts.target is not None and facts.target in facts.semantic_ready_tables
+    return (
+        facts.target is not None and facts.target_semantic_model_ready == READINESS_PASS
+    )
 
 
-def _authoring_gate(facts: DetectedFacts) -> tuple[list[str], str]:
-    """The report-authoring readiness prerequisites and the gate sentence.
-
-    Readiness stages cannot be skipped: a ``dashboard_ready = pass`` recorded
-    without its preceding ``semantic_model_ready`` pass is an internally
-    inconsistent record, never an authorization (Codex P2, #597).
-    """
+def _design_gate(facts: DetectedFacts) -> tuple[list[str], str]:
+    """Exact-table prerequisites shared by report authoring and formatting."""
     if facts.target is None:
         return (
             [
@@ -213,35 +204,37 @@ def _authoring_gate(facts: DetectedFacts) -> tuple[list[str], str]:
     prereqs: list[str] = []
     if not _target_semantic_passes(facts):
         prereqs.append(
-            f"semantic_model_ready = pass for {record}; the preceding stage "
-            "must pass before dashboard_ready can authorize authoring"
+            f"semantic_model_ready = pass for {record}; another table's pass "
+            "cannot authorize this target"
         )
-    if facts.dashboard_ready != READINESS_PASS:
-        prereqs.append(f"dashboard_ready = pass for {record}")
+    if facts.dashboard_design_approval != APPROVAL_RECORDED:
+        prereqs.append(f"a complete named-human dashboard_ready approval in {record}")
     if prereqs:
-        return prereqs, _authoring_denial(facts)
+        return prereqs, _design_denial(facts)
     return prereqs, (
         f"target '{facts.target}' records semantic_model_ready = pass and "
-        "dashboard_ready = pass"
+        "a complete named-human dashboard_ready approval"
     )
 
 
-def _authoring_denial(facts: DetectedFacts) -> str:
-    """Name the exact stage that withheld authorization for a declared target."""
-    if facts.dashboard_ready != READINESS_PASS:
-        return f"target '{facts.target}' dashboard_ready is '{facts.dashboard_ready}'"
-    return (
-        f"target '{facts.target}' records dashboard_ready = pass without a "
-        "semantic_model_ready pass of its own; readiness stages cannot be skipped"
-    )
+def _design_denial(facts: DetectedFacts) -> str:
+    """Name the exact fact that withheld target-scoped design authorization."""
+    if not _target_semantic_passes(facts):
+        return (
+            f"target '{facts.target}' semantic_model_ready is "
+            f"'{facts.target_semantic_model_ready}'; readiness stages cannot be skipped"
+        )
+    return f"target '{facts.target}' has no complete dashboard_ready approval"
 
 
 def _recommend_report_authoring(facts: DetectedFacts) -> Recommendation:
-    prereqs, gate = _authoring_gate(facts)
-    prereqs.append(
-        "the official Microsoft powerbi-report-authoring skill proven activated "
-        "and discoverable by the Spec 148 harness probe; installed alone is not enough"
-    )
+    prereqs, gate = _design_gate(facts)
+    if "powerbi-report-authoring" not in facts.official_report_skills:
+        prereqs.append(
+            "the official Microsoft powerbi-report-authoring skill proven "
+            "compatible and discoverable by the locked harness probe; "
+            "installed alone is not enough"
+        )
     return Recommendation(
         intent=INTENT_REPORT_AUTHORING,
         surface=SURFACE_OFFICIAL_REPORT_AUTHORING,
@@ -256,29 +249,27 @@ def _recommend_report_authoring(facts: DetectedFacts) -> Recommendation:
             "delegate native PBIR authoring and return the result to Seshat's "
             "binding, blueprint, and static validators; do not emulate the skill"
         ),
-        # The Spec 148 probe owns activation/discovery proof. Until that proof is
-        # represented here, this route is intentionally selected but not executable.
-        blocked=True,
+        blocked=bool(prereqs),
     )
 
 
 def _recommend_report_formatting(facts: DetectedFacts) -> Recommendation:
-    del facts
+    prereqs, gate = _design_gate(facts)
     return Recommendation(
         intent=INTENT_REPORT_FORMATTING,
         surface=SURFACE_PBIR_ADAPTER,
         why=(
-            "theme, page layout, geometry, and visual formatting stay on the "
+            f"{gate}; theme, page layout, geometry, and visual formatting stay on the "
             "existing PBIR-authoring adapter (F034) -- deterministic, "
             "local-file, no MCP runtime needed"
         ),
-        missing_prerequisites=(),
+        missing_prerequisites=tuple(prereqs),
         next_human_step=(
             "use the shipped PBIR verbs (theme-gen, pbir-apply-theme, "
             "pbir-format-visual, pbir-set-geometry, ...) via the "
             "powerbi-workflows skill"
         ),
-        blocked=False,
+        blocked=bool(prereqs),
     )
 
 
@@ -383,7 +374,10 @@ def recommend(intent: str, facts: DetectedFacts) -> Recommendation:
         raise ValueError(
             f"unknown intent {intent!r}; expected one of: {', '.join(INTENTS)}"
         )
-    return handler(facts)
+    result = handler(facts)
+    if result.missing_prerequisites and not result.blocked:
+        return replace(result, blocked=True)
+    return result
 
 
 class AdvisoryWriteError(ValueError):
@@ -417,6 +411,8 @@ def render_advisory(
         f"  pbip_project: {_yaml_str(facts.pbip_project)}",
         f"  target: {_yaml_str(facts.target or 'none')}",
         f"  semantic_model_ready: {_yaml_str(facts.semantic_model_ready)}",
+        "  target_semantic_model_ready: "
+        f"{_yaml_str(facts.target_semantic_model_ready)}",
     ]
     if facts.semantic_ready_tables:
         lines.append("  semantic_ready_tables:")
@@ -429,6 +425,14 @@ def render_advisory(
         lines.extend(_yaml_list(facts.dashboard_ready_tables, "    "))
     else:
         lines.append("  dashboard_ready_tables: []")
+    lines.append(
+        f"  dashboard_design_approval: {_yaml_str(facts.dashboard_design_approval)}"
+    )
+    if facts.official_report_skills:
+        lines.append("  official_report_skills:")
+        lines.extend(_yaml_list(facts.official_report_skills, "    "))
+    else:
+        lines.append("  official_report_skills: []")
     lines.extend(
         [
             f"  publish_ready_approval: {_yaml_str(facts.publish_ready_approval)}",
