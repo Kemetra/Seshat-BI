@@ -46,6 +46,10 @@ class ManifestBlocker:
     detail: str
 
 
+class _InvalidMcpManifest(ValueError):
+    """Raised internally when an MCP registration cannot be normalized."""
+
+
 def _read_json(path: Path) -> object:
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -119,45 +123,69 @@ def _package_from_args(args: tuple[str, ...]) -> str | None:
     return None
 
 
-def _normalize_mcp_servers(payload: object) -> tuple[ObservedMcpServer, ...] | None:
+def _mcp_server_entries(payload: object) -> dict[object, object]:
     if not isinstance(payload, dict):
-        return None
+        raise _InvalidMcpManifest
     raw_servers = payload.get("mcpServers", payload)
     if not isinstance(raw_servers, dict):
-        return None
-    servers: list[ObservedMcpServer] = []
-    for name, raw in raw_servers.items():
-        if not isinstance(name, str) or not name.strip() or not isinstance(raw, dict):
-            return None
-        command = raw.get("command")
-        if command is not None and not isinstance(command, str):
-            return None
-        raw_args = raw.get("args", [])
-        if not isinstance(raw_args, list) or not all(
-            isinstance(argument, str) for argument in raw_args
-        ):
-            return None
-        args = tuple(raw_args)
-        raw_transport = raw.get("transport") or raw.get("type")
-        if raw_transport is None:
-            transport = "stdio" if command else "http"
-        elif isinstance(raw_transport, str):
-            transport = raw_transport
-        else:
-            return None
-        package = raw.get("package")
-        if package is not None and not isinstance(package, str):
-            return None
-        servers.append(
-            ObservedMcpServer(
-                name=name,
-                transport=transport,
-                command=command,
-                args=args,
-                package=package or _package_from_args(args),
-            )
+        raise _InvalidMcpManifest
+    return raw_servers
+
+
+def _mcp_server_config(name: object, raw: object) -> tuple[str, dict[object, object]]:
+    if not isinstance(name, str) or not name.strip() or not isinstance(raw, dict):
+        raise _InvalidMcpManifest
+    return name, raw
+
+
+def _optional_mcp_string(raw: dict[object, object], field: str) -> str | None:
+    value = raw.get(field)
+    if value is not None and not isinstance(value, str):
+        raise _InvalidMcpManifest
+    return value
+
+
+def _mcp_args(raw: dict[object, object]) -> tuple[str, ...]:
+    value = raw.get("args", [])
+    if not isinstance(value, list) or not all(
+        isinstance(argument, str) for argument in value
+    ):
+        raise _InvalidMcpManifest
+    return tuple(value)
+
+
+def _mcp_transport(raw: dict[object, object], command: str | None) -> str:
+    value = raw.get("transport") or raw.get("type")
+    if value is None:
+        return "stdio" if command else "http"
+    if not isinstance(value, str):
+        raise _InvalidMcpManifest
+    return value
+
+
+def _normalize_mcp_server(name: object, raw: object) -> ObservedMcpServer:
+    server_name, config = _mcp_server_config(name, raw)
+    command = _optional_mcp_string(config, "command")
+    args = _mcp_args(config)
+    package = _optional_mcp_string(config, "package")
+    return ObservedMcpServer(
+        name=server_name,
+        transport=_mcp_transport(config, command),
+        command=command,
+        args=args,
+        package=package or _package_from_args(args),
+    )
+
+
+def _normalize_mcp_servers(payload: object) -> tuple[ObservedMcpServer, ...] | None:
+    try:
+        servers = (
+            _normalize_mcp_server(name, raw)
+            for name, raw in _mcp_server_entries(payload).items()
         )
-    return tuple(sorted(servers, key=lambda server: server.name))
+        return tuple(sorted(servers, key=lambda server: server.name))
+    except _InvalidMcpManifest:
+        return None
 
 
 def _observe_mcp_servers(root: Path) -> tuple[ObservedMcpServer, ...] | None:
