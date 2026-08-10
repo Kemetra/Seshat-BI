@@ -11,6 +11,7 @@ from seshat.pbi_mcp import recommend as rec_mod
 from seshat.pbi_mcp.detect import (
     ABSENT,
     APPROVAL_ABSENT,
+    APPROVAL_RECORDED,
     CONFIG_ABSENT,
     CONFIG_FORBIDDEN_FLAG,
     CONFIG_READ_ONLY,
@@ -42,9 +43,12 @@ def _facts(**overrides: object) -> DetectedFacts:
         "target": "orders",
         "semantic_model_ready": READINESS_PASS,
         "semantic_ready_tables": ("orders",),
+        "target_semantic_model_ready": READINESS_PASS,
         "dashboard_ready": READINESS_PASS,
         "dashboard_ready_tables": ("orders",),
+        "dashboard_design_approval": APPROVAL_RECORDED,
         "publish_ready_approval": APPROVAL_ABSENT,
+        "official_report_skills": (),
     }
     base.update(overrides)
     return DetectedFacts(**base)  # type: ignore[arg-type]
