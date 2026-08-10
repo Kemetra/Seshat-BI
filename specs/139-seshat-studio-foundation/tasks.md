@@ -3,11 +3,14 @@
 **Input**: [spec.md](./spec.md), [plan.md](./plan.md), [research.md](./research.md),
 [data-model.md](./data-model.md), and [contracts](./contracts/).
 
-**Status**: ratified and ACTIVE for implementation as of 2026-08-10. T002 (the hard
-governance precondition) is closed: spec 138 is `implemented`, and this plan is the
-sole active Spec Kit marker. T003 baselines are the next task; capture them before
-editing `src/`, `studio-ui/`, `pyproject.toml`, capability sources, or generated
-bundles, so later phases have a regression floor to measure against.
+**Status**: ratified and ACTIVE for implementation as of 2026-08-10. Phase 1
+(governance preconditions) and Phase 2 (package and security skeleton) are closed;
+Phase 3 (T009, projection parity tests) is next.
+
+Regression floor for every later phase, from
+[`evidence/t003-baselines.md`](./evidence/t003-baselines.md): 5822 passed / 2
+pre-existing environmental failures / 23 skipped at T003. After Phase 2: **5896
+passed / the same 2 failures / 24 skipped** — 74 tests added, no new failure.
 
 ## Phase 1 - Governance Preconditions
 
@@ -31,17 +34,34 @@ bundles, so later phases have a regression floor to measure against.
 
 ## Phase 2 - Package and Security Skeleton
 
-- [ ] **T004** Write failing package-contract tests for base-install isolation,
+- [x] **T004** Write failing package-contract tests for base-install isolation,
   `studio` extra, `seshat-studio` entry point, static asset inclusion, and missing
   extra/assets diagnostics. [FR-002, FR-005, FR-006]
-- [ ] **T005** Add the optional dependency and dedicated package/launcher skeleton;
+- [x] **T005** Add the optional dependency and dedicated package/launcher skeleton;
   keep all web imports lazy and outside `seshat.cli`/`seshat.rules`. [FR-002, FR-006]
-- [ ] **T006** Write failing tests for loopback-only OS-port binding, pinned workspace,
+- [x] **T006** Write failing tests for loopback-only OS-port binding, pinned workspace,
   unsupported workspace, Windows paths, bootstrap exchange, cookie expiry, Host,
   Origin, and unauthenticated access. [FR-001, FR-003, FR-004]
-- [ ] **T007** Implement immutable launch configuration, session store, security
+  — 43 assertions in `tests/unit/test_studio_security_boundary.py`, all failing
+  first. Covered: loopback-only binding, OS-assigned port, pinned/unsupported
+  workspace, Windows and UNC paths, traversal and symlink containment, bootstrap
+  exchange and single use, cookie attributes, shutdown invalidation, `Host`, and
+  `Origin`. **Two named items are NOT yet covered: time-based cookie EXPIRY and
+  UNAUTHENTICATED ACCESS.** Both are HTTP-pipeline behaviours with no surface to
+  test until T011 builds the app; `SessionStore` currently invalidates on exchange
+  and on explicit shutdown, not on a clock. T011 must add both.
+- [x] **T007** Implement immutable launch configuration, session store, security
   middleware, problem responses, and security headers. [FR-001, FR-003, FR-004]
-- [ ] **T008** Add credential/path redaction unit and property tests before applying
+  — **PARTIAL, and deliberately so.** Delivered: the immutable
+  `LaunchConfiguration` (one pinned absolute root per process), the digest-only
+  `SessionStore` (256-bit token, constant-time compare, one-time exchange), the
+  containment resolver, and the `Host`/`Origin` enforcement PREDICATES.
+  **NOT delivered: the ASGI middleware, problem responses, and security headers** —
+  those need the FastAPI app, which arrives with T011. The predicates are pure and
+  stdlib-only so they stay testable without the `studio` extra; T011 must wire them
+  into the request pipeline in the contracted order and is not complete until it
+  does. Tracked so the remaining half is not mistaken for shipped.
+- [x] **T008** Add credential/path redaction unit and property tests before applying
   redaction to errors, diagnostics, logs, and browser responses. [FR-026]
 
 ## Phase 3 - Deterministic Workspace Foundation (US1, US4)
@@ -54,6 +74,13 @@ bundles, so later phases have a regression floor to measure against.
   [FR-007, FR-008, FR-010]
 - [ ] **T011** Implement typed bootstrap, workspace, table, decision-summary, and
   health endpoints matching `studio-api.yaml`. [FR-034]
+  **Also carries the deferred half of Phase 2**, which has no testable surface until
+  this app exists: (a) the ASGI security middleware applying the contracted
+  enforcement ORDER, (b) redacted problem responses, (c) security headers, (d)
+  time-based cookie expiry, (e) unauthenticated-access refusal, and (f) the
+  `authentication_mode` field required on `BootstrapState` by FR-013a. Items (a)-(c)
+  are T007's remainder, (d)-(e) are T006's, and the Phase 2 predicates in
+  `seshat.studio.session` are what (a) must wire in.
 - [ ] **T012** Create the React/TypeScript shell, generated API types, local design
   tokens, and offline build pipeline; copy build output into the packaged static
   directory through one documented build command. [FR-005, FR-033]
