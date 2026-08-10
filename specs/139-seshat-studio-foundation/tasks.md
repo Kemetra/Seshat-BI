@@ -80,12 +80,23 @@ passed / the same 2 failures / 24 skipped** — 74 tests added, no new failure.
 
 ## Phase 3 - Deterministic Workspace Foundation (US1, US4)
 
-- [ ] **T009** Write projection parity tests against existing ready, blocked, empty,
+- [x] **T009** Write projection parity tests against existing ready, blocked, empty,
   pending-live, and malformed workspace fixtures. [FR-007, FR-008, FR-009, FR-010,
   SC-002]
-- [ ] **T010** Implement `WorkspaceProjectionService` as an adapter over existing
+- [x] **T010** Implement `WorkspaceProjectionService` as an adapter over existing
   Seshat Python services with a stable revision digest and containment-safe refs.
   [FR-007, FR-008, FR-010]
+  — `seshat.studio.projection`. Adapts `status_surface.build_status_projection`;
+  derives no readiness. The revision digest is content-addressed and verified
+  PATH-INDEPENDENT. **Deliberate divergence from upstream for FR-010**: upstream skips
+  an unparseable file by design ("failing loud is RS1's job"), so the projection
+  enumerates committed files independently and reports what upstream dropped. An
+  omitted stage block is filled with `not_started` + an explicit unknown-state reason
+  plus a defect, honouring the contract's seven-stage bound without letting the gap
+  read as genuinely not-started.
+  **NOT delivered: containment-safe evidence refs.** Evidence values are projected as
+  opaque strings; routing them through `config.resolve_contained_path` moves to T011,
+  where a route actually dereferences one.
 - [ ] **T011** Implement typed bootstrap, workspace, table, decision-summary, and
   health endpoints matching `studio-api.yaml`. [FR-034]
   **Also carries the deferred half of Phase 2**, which has no testable surface until
