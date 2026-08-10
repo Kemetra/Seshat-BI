@@ -111,6 +111,35 @@ def _report_web_stack_failure(absent: ModuleNotFoundError) -> None:
     )
 
 
+def _bind_loopback(host: str):  # type: ignore[no-untyped-def]
+    """Bind an OS-assigned loopback port and return the listening socket.
+
+    ``socket`` is imported HERE rather than at module scope. B1's never-execute rule
+    bans a module-scope socket import in the static core, and while this module is
+    outside `_GOVERNED_PREFIXES`, keeping the import local preserves the property that
+    importing the launcher opens nothing.
+    """
+    import socket
+
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind((host, 0))
+    listener.listen(128)
+    return listener
+
+
+def _serve(application, *, host: str, port: int, sock=None) -> None:  # type: ignore[no-untyped-def]
+    """Run the ASGI server. Extracted so a test can observe the served port."""
+    import uvicorn
+
+    config_kwargs = {"host": host, "port": port, "log_level": "warning"}
+    server = uvicorn.Server(uvicorn.Config(application, **config_kwargs))
+    if sock is not None:
+        server.run(sockets=[sock])
+    else:  # pragma: no cover - the launcher always binds first
+        server.run()
+
+
 def _web_stack_is_importable() -> ModuleNotFoundError | None:
     """Import the web stack lazily; return the failure instead of raising.
 
@@ -166,7 +195,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     # requires Studio to bind loopback, which the static core must never do.
     from . import app as app_module
 
-    application, token = app_module.create_app(launch.workspace_root)
+    # BIND FIRST, then build. The app's Host guard compares against a concrete port, so
+    # the port has to be known before the app exists. Binding here and handing uvicorn
+    # the already-bound socket means the OS assigns the port exactly once -- no fixed
+    # port (FR-003), and no window in which another process could take it.
+    listener = _bind_loopback(launch.bind_host)
+    bound = launch.with_bound_port(listener.getsockname()[1])
+
+    application, token = app_module.create_app(bound.workspace_root, port=bound.port)
     print(
         f"Studio is ready. Open http://{application.state.expected_host}"
         f"{app_module.API_PREFIX}/bootstrap?token={token} once, then discard the link.",
@@ -175,16 +211,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.no_serve:
         # A launch that verifies the whole startup path without occupying a port --
         # what `--check` style callers and the acceptance harness need.
+        listener.close()
         return _EXIT_OK
 
-    import uvicorn
-
-    uvicorn.run(
-        application,
-        host=launch.bind_host,
-        port=launch.port,
-        log_level="warning",
-    )
+    _serve(application, host=bound.bind_host, port=bound.port, sock=listener)
+    return _EXIT_OK
     return _EXIT_OK
 
 

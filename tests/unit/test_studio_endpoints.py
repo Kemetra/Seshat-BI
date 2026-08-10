@@ -52,13 +52,19 @@ def workspace(tmp_path: Path) -> Path:
     return tmp_path
 
 
+#: A concrete port for the in-process TestClient. `create_app` requires one and has no
+#: default on purpose: production resolves the OS-assigned port by binding first, and a
+#: default here is what previously let the app enforce a port nothing listened on.
+_TEST_PORT = 8931
+
+
 @pytest.fixture
 def app_and_token(workspace: Path):
     """The real ASGI app plus its one-time bootstrap token."""
     pytest.importorskip("fastapi")
     from seshat.studio import app as app_module
 
-    return app_module.create_app(workspace)
+    return app_module.create_app(workspace, port=_TEST_PORT)
 
 
 @pytest.fixture
@@ -233,6 +239,36 @@ def test_a_mutating_request_requires_an_exact_origin(client, app_and_token) -> N
     assert response.status_code == 403
 
 
+def test_a_mutating_request_with_no_origin_is_refused(authed_client) -> None:
+    """The contract: "Mutating requests with a missing origin are rejected."
+
+    An earlier revision only rejected a PRESENT but wrong origin, so any client that
+    simply omitted the header reached a mutating route. Absence is not proof of
+    same-origin. Asserted on a non-bootstrap mutation, since `/bootstrap` is the one
+    documented exemption.
+    """
+    response = authed_client.post("/api/v1/decisions", json={})
+
+    assert response.status_code == 403, (
+        "a mutating request with no Origin must be refused before routing, so it "
+        "never even reaches the 405 for an unsupported method"
+    )
+
+
+def test_bootstrap_is_exempt_from_the_origin_requirement(client, app_and_token) -> None:
+    """The "Origin, WHEN REQUIRED" seam.
+
+    `/bootstrap` establishes the session, so it can be a top-level navigation with no
+    Origin at all -- requiring one would break the documented one-time-link flow. Its
+    defence is the 256-bit single-use token plus exact Host enforcement.
+    """
+    _app, token = app_and_token
+
+    response = client.post("/api/v1/bootstrap", params={"token": token})
+
+    assert response.status_code == 204
+
+
 def test_no_cors_headers_are_ever_emitted(authed_client) -> None:
     response = authed_client.get("/api/v1/workspace")
 
@@ -336,9 +372,22 @@ def test_the_bootstrap_state_declares_business_decisions_unrecordable(
 # --------------------------------------------------------------------------- #
 
 
-def test_the_decisions_route_is_read_only(authed_client) -> None:
+def test_the_decisions_route_is_read_only(authed_client, app_and_token) -> None:
+    """FR-022 -- read-only, with no mutation route to reach.
+
+    The POST is sent WITH a valid Origin so it gets past the same-origin guard: the
+    point is that no mutating handler exists (405), not that the middleware stopped it.
+    Without the header the request is refused at step 2 and never reaches routing,
+    which would prove something weaker.
+    """
+    app, _token = app_and_token
+    origin = {"Origin": f"http://{app.state.expected_host}"}
+
     assert authed_client.get("/api/v1/decisions").status_code == 200
-    assert authed_client.post("/api/v1/decisions", json={}).status_code == 405
+    assert (
+        authed_client.post("/api/v1/decisions", json={}, headers=origin).status_code
+        == 405
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -357,6 +406,47 @@ def test_a_problem_response_never_leaks_an_absolute_path(
     response = client.get("/api/v1/workspace")
 
     assert str(workspace) not in response.text
+
+
+def test_the_response_boundary_actually_scrubs_the_payload(
+    authed_client, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """(g) must be WIRED, not merely present.
+
+    Deleting the `scrub_payload` call left all 194 tests green, because the projection
+    already emits workspace-relative references -- so nothing in the fixtures needed
+    scrubbing. Injecting a value that DOES need it proves the boundary call is on the
+    real path, which is what stops a future refactor from silently removing it.
+    """
+    from seshat.studio import projection
+
+    leaky = "/absolute/operator/layout/secret.yaml"
+    original = projection.build_workspace_snapshot
+
+    def with_a_leak(root, **kwargs):  # type: ignore[no-untyped-def]
+        snapshot = original(root, **kwargs)
+        defect = projection.InputDefect(
+            code="synthetic",
+            message=f"failed reading {leaky}",
+            source_ref=leaky,
+            recovery_action="none",
+        )
+        return projection.WorkspaceSnapshot(
+            identity=snapshot.identity,
+            generated_at=snapshot.generated_at,
+            agent_health=snapshot.agent_health,
+            tables=snapshot.tables,
+            input_defects=(defect,),
+        )
+
+    monkeypatch.setattr(projection, "build_workspace_snapshot", with_a_leak)
+
+    body = authed_client.get("/api/v1/workspace").text
+
+    assert leaky not in body, (
+        "an absolute path reached the browser; the boundary scrub is not applied"
+    )
+    assert "redacted" in body.lower()
 
 
 def test_an_error_response_is_a_problem_document(client) -> None:
@@ -386,6 +476,66 @@ def assets_present(monkeypatch: pytest.MonkeyPatch):
     from seshat.studio import assets
 
     monkeypatch.setattr(assets, "describe_missing_assets", lambda directory: None)
+
+
+# --------------------------------------------------------------------------- #
+# The bound port must be the port the app enforces (release blocker)          #
+# --------------------------------------------------------------------------- #
+
+
+def test_the_app_enforces_the_port_it_was_actually_given(workspace: Path) -> None:
+    """FR-003 requires an OS-ASSIGNED port, and the Host guard must match it.
+
+    A hardcoded port broke the serving path completely: the app demanded
+    `127.0.0.1:8931` while uvicorn bound port 0 (a random one), so every request --
+    including the public /health -- was refused by the Host guard.
+    """
+    pytest.importorskip("fastapi")
+    from seshat.studio import app as app_module
+
+    app, _token = app_module.create_app(workspace, port=54321)
+
+    assert app.state.launch.port == 54321
+    assert app.state.expected_host == "127.0.0.1:54321"
+
+
+def test_creating_the_app_never_invents_a_fixed_port(workspace: Path) -> None:
+    """A predictable port is a target, and FR-003 forbids choosing one."""
+    pytest.importorskip("fastapi")
+    from seshat.studio import app as app_module
+
+    app, _token = app_module.create_app(workspace, port=1)
+
+    assert app.state.launch.port == 1, (
+        "create_app must use the port it is GIVEN, never a literal of its own"
+    )
+
+
+def test_the_launcher_binds_first_then_enforces_that_port(
+    workspace: Path, assets_present, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The launcher must resolve a real port BEFORE building the app.
+
+    Otherwise the Host guard and the listening socket disagree and nothing works.
+    """
+    pytest.importorskip("fastapi")
+    from seshat.studio import __main__ as launcher
+
+    served: dict[str, object] = {}
+
+    def fake_run(application, **kwargs):  # type: ignore[no-untyped-def]
+        served["expected_host"] = application.state.expected_host
+        served["port"] = kwargs.get("port")
+        served["host"] = kwargs.get("host")
+
+    monkeypatch.setattr(launcher, "_serve", fake_run)
+
+    assert launcher.main(["--repo", str(workspace)]) == 0
+
+    assert served["port"] not in (None, 0), "uvicorn was handed the placeholder port"
+    assert served["expected_host"] == f"{served['host']}:{served['port']}", (
+        "the app enforces a different port than the one being served"
+    )
 
 
 def test_the_launcher_refuses_when_the_frontend_is_absent(
@@ -457,6 +607,22 @@ def test_the_launch_configuration_can_be_repinned_to_the_bound_port(
     assert bound.port == 54321
     assert bound.workspace_root == launch.workspace_root
     assert launch.port == config.OS_ASSIGNED_PORT, "the original must stay immutable"
+
+
+@pytest.mark.parametrize("bogus", [0, -1, -8931])
+def test_repinning_to_a_non_port_is_refused(workspace: Path, bogus: int) -> None:
+    """The guard was deletable with the whole suite green.
+
+    `OS_ASSIGNED_PORT` (0) is a REQUEST for any free port, not a result. Accepting it
+    as a bound port is what produced the shipped-broken serving path, so the refusal
+    needs its own test rather than only a docstring.
+    """
+    from seshat.studio import config
+
+    launch = config.LaunchConfiguration.for_workspace(workspace)
+
+    with pytest.raises(ValueError, match="real port"):
+        launch.with_bound_port(bogus)
 
 
 def test_a_repinned_port_is_what_host_enforcement_compares(workspace: Path) -> None:
