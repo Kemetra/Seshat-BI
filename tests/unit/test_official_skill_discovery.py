@@ -15,6 +15,7 @@ from seshat.integrations.catalog import (
     CODEX,
     Channel,
     Component,
+    NativePluginPolicy,
     SkillActivation,
     SkillTarget,
     SourceType,
@@ -104,6 +105,35 @@ def test_catalog_refuses_an_escaping_activation_source() -> None:
                 ),
             ),
         )
+
+
+def test_native_plugin_policy_refuses_duplicate_skill_names() -> None:
+    with pytest.raises(ValueError, match="duplicate allowed skill"):
+        NativePluginPolicy(
+            plugin_id="x@y",
+            manifest_path=".claude-plugin/marketplace.json",
+            manifest_name="x",
+            allowed_skills=("same", "same"),
+        )
+
+
+def test_powerbi_catalog_declares_design_and_blocks_broad_plugin() -> None:
+    item = component("fabric-skills")
+    claude = next(
+        activation
+        for activation in item.skill_activations
+        if activation.harness == CLAUDE_CODE
+    )
+    names = {target.name for target in claude.targets}
+    assert "powerbi-report-design" in names
+
+    policy = next(
+        policy
+        for policy in claude.native_plugins
+        if policy.plugin_id == "powerbi-authoring@fabric-collection"
+    )
+    assert "powerbi-report-planning" in policy.incompatible_capabilities
+    assert "powerbi-report-management" in policy.incompatible_capabilities
 
 
 def test_omitted_harness_is_explicitly_not_checked_and_not_actionable(
