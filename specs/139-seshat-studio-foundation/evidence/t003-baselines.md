@@ -44,8 +44,12 @@ same two node ids in the main worktree at `5b2c2f5`.
 
 Both belong to the known "editable install absent from the worktree" class rather than
 to Studio. Phase 8's T035 regression gate must be measured against **5822 passed /
-2 environmental failures**, not against a clean zero, unless an editable install is
-performed first — in which case both are expected to pass and the floor rises to 5824.
+2 environmental failures**, not against a clean zero.
+
+Whether an editable install (`pip install -e .`) makes both pass is **untested** — no
+run under an editable install was performed for this baseline, so no post-install pass
+count is recorded here. Do not assume a specific higher figure at T035; re-measure it
+if an editable install is introduced.
 
 ## Static dashboard (FR-030 requires it stay unchanged)
 
