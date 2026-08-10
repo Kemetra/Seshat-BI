@@ -46,6 +46,12 @@ class ManifestBlocker:
     detail: str
 
 
+@dataclass(frozen=True)
+class _SurfaceContext:
+    origin: str
+    kind: str
+
+
 class _InvalidMcpManifest(ValueError):
     """Raised internally when an MCP registration cannot be normalized."""
 
@@ -480,12 +486,13 @@ def _version_blockers(
 
 
 def _surface_blockers(
-    origin: str,
-    kind: str,
+    context: _SurfaceContext,
     actual: frozenset[str] | None,
     allowed: frozenset[str],
     incompatible: frozenset[str],
 ) -> list[ManifestBlocker]:
+    origin = context.origin
+    kind = context.kind
     if actual is None:
         return [
             ManifestBlocker(
@@ -525,7 +532,9 @@ def _plugin_surface_blockers(
     blockers: list[ManifestBlocker] = []
     for kind, actual in _surface_sets(plugin):
         blockers.extend(
-            _surface_blockers(origin, kind, actual, allowed[kind], incompatible)
+            _surface_blockers(
+                _SurfaceContext(origin, kind), actual, allowed[kind], incompatible
+            )
         )
     return blockers
 
