@@ -1,0 +1,270 @@
+/**
+ * T018 -- the chat surface, written before it exists.
+ *
+ * These tests target the failure modes this feature has already produced twice, rather
+ * than the happy path:
+ *
+ * * **FR-032 -- no tool vocabulary in the primary journey.** The bridge emits
+ *   `tool_started` with BOTH `name` (`read_workspace`) and `public_label` (`Reading the
+ *   workspace`). Rendering the wrong one puts internal vocabulary on the main screen.
+ *   This is the same defect class as `blockerSummary`, so it gets the same treatment: an
+ *   explicit assertion that the internal string is absent while the public one is shown.
+ * * **`ignored_for_state` must look different.** The server retains a late event and
+ *   flags it rather than dropping it, precisely so an anomaly stays visible. Rendering it
+ *   identically to a live event would defeat the reason the field exists.
+ * * **Draft preservation's real case is a FAILED SEND**, not a remount. A draft that
+ *   survives unmounting but is cleared on a 422 loses the user's text at the exact moment
+ *   they need it back.
+ * * **Reconnect must resume, not restart.** The endpoint is a finite replay, so the
+ *   browser reconnects constantly; a consumer that ignores `Last-Event-ID` would
+ *   re-render every event on every poll.
+ *
+ * Approval UI is deliberately NOT built here: `file_change_proposed` and
+ * `approval_required` belong to Phase 6 (T024-T027). They render as inert activity, and
+ * a test below pins that they carry no actionable control -- so the boundary cannot be
+ * crossed accidentally before the approval semantics exist.
+ */
+
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { StudioEvent } from "../api/types";
+import {
+  FakeEventSource,
+  installFakeEventSource,
+  type FakeEventSourceRegistry,
+} from "../api/fakeEventSource";
+import { Conversation } from "./Conversation";
+
+let registry: FakeEventSourceRegistry;
+let uninstall: () => void;
+
+beforeEach(() => {
+  ({ registry, uninstall } = installFakeEventSource());
+});
+
+afterEach(() => {
+  uninstall();
+  vi.restoreAllMocks();
+});
+
+function event(overrides: Partial<StudioEvent>): StudioEvent {
+  return {
+    thread_id: "t1",
+    sequence: 1,
+    type: "agent_message",
+    occurred_at: "2026-08-11T00:00:00Z",
+    turn_id: "turn1",
+    payload: {},
+    ignored_for_state: false,
+    ...overrides,
+  };
+}
+
+/** A `startTurn` that succeeds, and records what it was called with. */
+function acceptingTurn() {
+  return vi.fn().mockResolvedValue({ turn_id: "turn1" });
+}
+
+describe("Conversation", () => {
+  it("opens a stream for its thread", async () => {
+    render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
+
+    await waitFor(() => expect(registry.current).toBeDefined());
+    expect(registry.current?.url).toContain("t1");
+  });
+
+  it("renders an agent message", async () => {
+    render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    registry.current?.emit(
+      "agent_message",
+      event({ type: "agent_message", payload: { text: "Gold is blocked." } }),
+      "1",
+    );
+
+    expect(await screen.findByText(/Gold is blocked\./)).toBeInTheDocument();
+  });
+
+  // --------------------------------------------------------------------- //
+  // FR-032 -- the primary journey carries no tool vocabulary              //
+  // --------------------------------------------------------------------- //
+
+  it("shows a tool's public label and never its internal name", async () => {
+    render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    registry.current?.emit(
+      "tool_started",
+      event({
+        type: "tool_started",
+        payload: { name: "read_workspace", public_label: "Reading the workspace" },
+      }),
+      "1",
+    );
+
+    expect(await screen.findByText("Reading the workspace")).toBeInTheDocument();
+    expect(screen.queryByText(/read_workspace/)).not.toBeInTheDocument();
+  });
+
+  it("falls back to a neutral label when a tool has no public label", async () => {
+    // The internal name must NOT be the fallback: a provider that omits the label would
+    // otherwise leak its vocabulary through the gap.
+    render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    registry.current?.emit(
+      "tool_started",
+      event({ type: "tool_started", payload: { name: "grep_secrets" } }),
+      "1",
+    );
+
+    expect(await screen.findByText(/working/i)).toBeInTheDocument();
+    expect(screen.queryByText(/grep_secrets/)).not.toBeInTheDocument();
+  });
+
+  // --------------------------------------------------------------------- //
+  // Late events stay visible AND distinguishable                          //
+  // --------------------------------------------------------------------- //
+
+  it("marks an ignored_for_state event instead of hiding it", async () => {
+    render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    registry.current?.emit(
+      "agent_message",
+      event({
+        payload: { text: "arrived after the turn ended" },
+        ignored_for_state: true,
+      }),
+      "1",
+    );
+
+    const message = await screen.findByText(/arrived after the turn ended/);
+    // Present -- dropping it would hide a real anomaly -- but visibly not part of the
+    // live exchange.
+    expect(message).toBeInTheDocument();
+    expect(screen.getByText(/after this turn ended/i)).toBeInTheDocument();
+  });
+
+  // --------------------------------------------------------------------- //
+  // Reconnect resumes rather than restarting                              //
+  // --------------------------------------------------------------------- //
+
+  it("resumes from the last seen event after the stream closes", async () => {
+    render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    registry.current?.emit("agent_message", event({ sequence: 1 }), "1");
+    registry.current?.emit("agent_message", event({ sequence: 2 }), "2");
+    registry.current?.fail();
+
+    await waitFor(() => expect(registry.connections.length).toBe(2));
+    // A browser carries the id itself; asserting it here proves the component did not
+    // tear down the stream in a way that would lose the resume point.
+    const reconnected = registry.connections[1];
+    expect(reconnected).toBeDefined();
+    expect(reconnected?.lastEventId).toBe("2");
+  });
+
+  it("does not duplicate an event that arrives twice", async () => {
+    // A reconnect can legitimately redeliver the boundary event, so the consumer keys on
+    // sequence rather than trusting arrival order.
+    render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    const duplicate = event({ sequence: 7, payload: { text: "only once" } });
+    registry.current?.emit("agent_message", duplicate, "7");
+    registry.current?.emit("agent_message", duplicate, "7");
+
+    expect(await screen.findAllByText(/only once/)).toHaveLength(1);
+  });
+
+  // --------------------------------------------------------------------- //
+  // Composer and draft preservation                                       //
+  // --------------------------------------------------------------------- //
+
+  it("sends the composed prompt and clears the draft on success", async () => {
+    const startTurn = acceptingTurn();
+    render(<Conversation threadId="t1" startTurn={startTurn} />);
+
+    const box = screen.getByRole("textbox", { name: /ask/i });
+    fireEvent.change(box, { target: { value: "what is blocking gold?" } });
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+
+    await waitFor(() => expect(startTurn).toHaveBeenCalledTimes(1));
+    expect(startTurn).toHaveBeenCalledWith("t1", "what is blocking gold?");
+    await waitFor(() => expect((box as HTMLTextAreaElement).value).toBe(""));
+  });
+
+  it("keeps the draft when the send FAILS", async () => {
+    // The discriminating case. Clearing here loses the user's text at the exact moment
+    // they need it, and a remount-only test would never catch it.
+    const startTurn = vi.fn().mockRejectedValue(new Error("422"));
+    render(<Conversation threadId="t1" startTurn={startTurn} />);
+
+    const box = screen.getByRole("textbox", { name: /ask/i });
+    fireEvent.change(box, { target: { value: "keep me" } });
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+
+    await waitFor(() => expect(startTurn).toHaveBeenCalled());
+    expect((box as HTMLTextAreaElement).value).toBe("keep me");
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+  });
+
+  it("refuses to send an empty prompt", async () => {
+    const startTurn = acceptingTurn();
+    render(<Conversation threadId="t1" startTurn={startTurn} />);
+
+    fireEvent.change(screen.getByRole("textbox", { name: /ask/i }), {
+      target: { value: "   " },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /send/i }));
+
+    expect(startTurn).not.toHaveBeenCalled();
+  });
+
+  // --------------------------------------------------------------------- //
+  // The Phase 6 boundary                                                  //
+  // --------------------------------------------------------------------- //
+
+  it("renders an approval as inert activity, with no actionable control", async () => {
+    // Approval semantics are T024-T027. Until they exist, offering a button that appears
+    // to grant approval would let a user believe they had approved something.
+    render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    registry.current?.emit(
+      "approval_required",
+      event({
+        type: "approval_required",
+        payload: {
+          approval_id: "a1",
+          question: "Apply the proposed mapping change?",
+          required_authority: "named_human",
+        },
+      }),
+      "1",
+    );
+
+    expect(
+      await screen.findByText(/Apply the proposed mapping change\?/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /approve|apply|reject/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("closes its stream on unmount", async () => {
+    const { unmount } = render(
+      <Conversation threadId="t1" startTurn={acceptingTurn()} />,
+    );
+    await waitFor(() => expect(registry.current).toBeDefined());
+    const opened = registry.current as FakeEventSource;
+
+    unmount();
+
+    expect(opened.closed).toBe(true);
+  });
+});

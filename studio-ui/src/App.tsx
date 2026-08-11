@@ -14,9 +14,15 @@
 import type * as React from "react";
 import { useEffect, useState } from "react";
 
-import { StudioRequestError, fetchWorkspace } from "./api/client";
+import {
+  StudioRequestError,
+  createThread,
+  fetchWorkspace,
+  startTurn,
+} from "./api/client";
 import type { WorkspaceSnapshot } from "./api/types";
 import { AgentHealthNotice } from "./components/AgentHealth";
+import { Conversation } from "./components/Conversation";
 import { TableJourney } from "./components/TableJourney";
 
 type LoadState =
@@ -99,7 +105,57 @@ export function App(): React.JSX.Element {
       ) : (
         <TableList snapshot={snapshot} />
       )}
+      {/* LAST, and never gating: FR-024/025 require the deterministic views above to be
+          available in every agent state, so a thread that cannot be created must not
+          take the workspace down with it. */}
+      <AgentPanel snapshotRevision={snapshot.identity.revision} />
     </main>
+  );
+}
+
+/**
+ * The conversation, opened on demand.
+ *
+ * A thread is created only when the analyst asks for one, for two reasons: FR-032 keeps
+ * agent machinery out of the primary journey until it is wanted, and creating a thread on
+ * page load would mean every refresh of a read-only view started a conversation nobody
+ * asked for.
+ *
+ * A failure here renders as a notice and nothing more -- the deterministic views above
+ * must survive any agent state (FR-025).
+ */
+function AgentPanel({ snapshotRevision }: { snapshotRevision: string }) {
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  const open = async () => {
+    setFailure(null);
+    try {
+      const thread = await createThread(null);
+      setThreadId(thread.thread_id);
+    } catch (error) {
+      setFailure(describeFailure(error).message);
+    }
+  };
+
+  if (threadId === null) {
+    return (
+      <section className="agent-panel" aria-label="Ask the agent">
+        <button type="button" onClick={open}>
+          Ask about this workspace
+        </button>
+        {failure !== null && <p role="alert">{failure}</p>}
+      </section>
+    );
+  }
+
+  return (
+    <Conversation
+      threadId={threadId}
+      startTurn={(thread, prompt) =>
+        startTurn(thread, prompt, { snapshotRevision })
+      }
+    />
   );
 }
 
