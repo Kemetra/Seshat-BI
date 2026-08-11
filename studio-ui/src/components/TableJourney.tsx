@@ -55,25 +55,70 @@ function positionOf(stage: ReadinessStage, current: ReadinessStage | null): Posi
   return stageIndex < currentIndex ? "behind" : "ahead";
 }
 
+/** A status that lets the NEXT stage begin. */
+function permitsSuccessor(status: StageState["status"]): boolean {
+  // "`blocked` stops the next stage, `warning` does not"
+  // (`docs/readiness/readiness-model.md`), and `run_next` routes `warning` down the
+  // proceed path. `not_started` does not permit a successor either: work cannot begin
+  // downstream of a stage nobody has started.
+  return status === "pass" || status === "warning";
+}
+
 /**
- * True when a stage is gated by an earlier stage that has not cleared.
+ * The nearest earlier stage that has not cleared, or null when the way is open.
  *
- * ONLY `blocked` gates. The readiness model is explicit -- "`blocked` stops the next
- * stage, `warning` does not" (`docs/readiness/readiness-model.md`) -- and `run_next`
- * routes `warning` down the proceed path. An earlier revision locked on any non-`pass`
- * status, so a `warning` current stage, which is what a clean live run assigns and
- * therefore the commonest non-pass state, fabricated locks on every later stage. That is
- * exactly the invented obstacle this component must never show.
+ * Derived from EVERY prerequisite, not from the current stage alone. Two revisions got
+ * this wrong in opposite directions: locking on any non-`pass` current status fabricated
+ * obstacles on a `warning` stage, and then keying only on `blocked` reported Silver as
+ * open when Mapping had not started -- telling the analyst work was available when it was
+ * not. Both are misrepresentations of the same authority.
  */
-function isLocked(position: Position, currentStatus: StageState["status"] | null): boolean {
-  return position === "ahead" && currentStatus === "blocked";
+function blockingPrerequisite(
+  stage: ReadinessStage,
+  byStage: ReadonlyMap<ReadinessStage, StageState>,
+): ReadinessStage | null {
+  const index = STAGE_ORDER.indexOf(stage);
+  if (index <= 0) return null;
+  // Nearest first: the analyst needs the gate immediately in front of this stage, not
+  // the earliest problem in the table's history.
+  for (let earlier = index - 1; earlier >= 0; earlier -= 1) {
+    const candidate = STAGE_ORDER[earlier];
+    if (candidate === undefined) continue;
+    const state = byStage.get(candidate);
+    if (state !== undefined && !permitsSuccessor(state.status)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * True when committed text carries the tool's own vocabulary.
+ *
+ * The projection copies committed governance prose verbatim -- correct for a record, and
+ * exactly what FR-032 keeps off the analyst's first screen. Real evidence labels ARE file
+ * paths (`_evidence_ref` assigns the committed string to both `label` and `source_ref`),
+ * and real blockers name commands like `retail validate` and files like
+ * `src/seshat/validate.py:236-239`. So the primary journey summarises, and the verbatim
+ * text lives in the disclosure.
+ */
+function isTechnical(text: string): boolean {
+  return /(^|[\s(])(mappings|warehouse|tests|src|specs|docs)\//.test(text)
+    || /\.(md|ya?ml|sql|py|json|tmdl)\b/.test(text)
+    || /\b(seshat|retail)\s+[a-z-]+/.test(text)
+    || /\.py:\d/.test(text);
+}
+
+/** Count-only summary for evidence whose text cannot be shown up front. */
+function evidenceSummary(count: number): string {
+  return count === 1 ? "1 committed reference" : `${count} committed references`;
 }
 
 function StageEvidence({ stage }: { stage: StageState }): React.JSX.Element | null {
   if (stage.evidence.length === 0) return null;
+  const showable = stage.evidence.filter((item) => !isTechnical(item.label));
+  const hidden = stage.evidence.length - showable.length;
   return (
     <ul className="journey__evidence">
-      {stage.evidence.map((item) => (
+      {showable.map((item) => (
         <li key={item.source_ref}>
           {item.label}
           {/* The [PENDING LIVE PROFILE] distinction the contract's `live_state` carries:
@@ -83,6 +128,13 @@ function StageEvidence({ stage }: { stage: StageState }): React.JSX.Element | nu
           )}
         </li>
       ))}
+      {hidden > 0 && (
+        // Says that evidence EXISTS without printing the paths: silently showing fewer
+        // items would read as a stage with thinner evidence than it has.
+        <li className="journey__summary">
+          {evidenceSummary(hidden)} recorded; see technical detail.
+        </li>
+      )}
     </ul>
   );
 }
@@ -92,7 +144,11 @@ function StageBlockers({ stage }: { stage: StageState }): React.JSX.Element | nu
   return (
     <ul className="journey__blockers">
       {stage.blocking_reasons.map((reason, index) => (
-        <li key={`${reason.code ?? "reason"}:${index}`}>{reason.message}</li>
+        <li key={`${reason.code ?? "reason"}:${index}`}>
+          {isTechnical(reason.message)
+            ? "A recorded blocker needs attention; see technical detail."
+            : reason.message}
+        </li>
       ))}
     </ul>
   );
@@ -102,6 +158,9 @@ function StageBlockers({ stage }: { stage: StageState }): React.JSX.Element | nu
 function StageTechnicalDetail({ stage }: { stage: StageState }): React.JSX.Element | null {
   const references = [
     ...stage.evidence.map((item) => item.source_ref),
+    // The verbatim blocker PROSE, not just its source file: the primary journey shows a
+    // summary when the message is technical, so the real text has to live somewhere.
+    ...stage.blocking_reasons.map((reason) => reason.message),
     ...stage.blocking_reasons
       .map((reason) => reason.source_ref)
       .filter((ref): ref is string => ref !== null),
@@ -148,13 +207,11 @@ function ForbiddenScope({ scope }: { scope: readonly string[] }): React.JSX.Elem
 function StageItem({
   stage,
   position,
-  locked,
-  currentLabel,
+  waitingOn,
 }: {
   stage: StageState;
   position: Position;
-  locked: boolean;
-  currentLabel: string | null;
+  waitingOn: ReadinessStage | null;
 }): React.JSX.Element {
   const label = stageLabel(stage.stage);
   return (
@@ -163,12 +220,12 @@ function StageItem({
       // screen-reader user (and these tests) address one stage among seven.
       aria-label={label}
       aria-current={position === "current" ? "step" : undefined}
-      data-locked={String(locked)}
+      data-locked={String(waitingOn !== null)}
       className="journey__stage"
     >
       <StatusBadge status={stage.status} stage={stage.stage} />
-      {locked && currentLabel !== null && (
-        <p className="journey__locked">Waiting for {currentLabel} to clear.</p>
+      {waitingOn !== null && (
+        <p className="journey__locked">Waiting for {stageLabel(waitingOn)} to clear.</p>
       )}
       <StageEvidence stage={stage} />
       <StageBlockers stage={stage} />
@@ -183,7 +240,19 @@ function NextAction({ journey }: { journey: Journey }): React.JSX.Element | null
   return (
     <section className="journey__next" aria-labelledby={`${journey.table_id}-next`}>
       <h4 id={`${journey.table_id}-next`}>Next</h4>
-      <p>{action.label}</p>
+      {/* `_next_action` copies the committed instruction VERBATIM, and real ones name
+          approval files and commands. Summarised here; the exact wording is disclosed. */}
+      <p>
+        {isTechnical(action.label)
+          ? "A recorded next step is waiting; see technical detail for the exact instruction."
+          : action.label}
+      </p>
+      {isTechnical(action.label) && (
+        <details className="journey__detail">
+          <summary>Technical detail</summary>
+          <p>{action.label}</p>
+        </details>
+      )}
       {action.requires_named_human && (
         <p className="journey__authority">
           A named human must approve this step; Studio cannot.
@@ -196,6 +265,7 @@ function NextAction({ journey }: { journey: Journey }): React.JSX.Element | null
 export function TableJourney({ journey }: { journey: Journey }): React.JSX.Element {
   const current =
     journey.stages.find((stage) => stage.stage === journey.current_stage) ?? null;
+  const byStage = new Map(journey.stages.map((stage) => [stage.stage, stage]));
 
   return (
     <div className="journey">
@@ -210,18 +280,14 @@ export function TableJourney({ journey }: { journey: Journey }): React.JSX.Eleme
       {/* Named so a test -- and a screen-reader user -- can address the STAGE list
           specifically, rather than whichever list happens to be first in the DOM. */}
       <ol className="journey__stages" aria-label="Readiness stages">
-        {journey.stages.map((stage) => {
-          const position = positionOf(stage.stage, journey.current_stage);
-          return (
-            <StageItem
-              key={stage.stage}
-              stage={stage}
-              position={position}
-              locked={isLocked(position, current?.status ?? null)}
-              currentLabel={current === null ? null : stageLabel(current.stage)}
-            />
-          );
-        })}
+        {journey.stages.map((stage) => (
+          <StageItem
+            key={stage.stage}
+            stage={stage}
+            position={positionOf(stage.stage, journey.current_stage)}
+            waitingOn={blockingPrerequisite(stage.stage, byStage)}
+          />
+        ))}
       </ol>
       <ForbiddenScope scope={journey.forbidden_scope} />
       <NextAction journey={journey} />
