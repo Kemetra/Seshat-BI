@@ -23,7 +23,12 @@ def main() -> int:
     parser.add_argument("fixture")
     parser.add_argument("--crash-after", type=int, default=None)
     parser.add_argument("--hang", action="store_true")
+    parser.add_argument("--stderr", default=None)
     args = parser.parse_args()
+
+    if args.stderr is not None:
+        sys.stderr.write(args.stderr + "\n")
+        sys.stderr.flush()
 
     if args.hang:
         time.sleep(60)

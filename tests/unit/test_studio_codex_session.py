@@ -122,10 +122,54 @@ def test_closing_a_hung_child_does_not_block_forever(tmp_path: Path) -> None:
     assert returncode is not None
 
 
+#: A credential-shaped string the child writes verbatim to stderr, so the test
+#: drives the actual risk instead of asserting an absence that would pass even
+#: if nothing arrived at all.
+_STDERR_SECRET_LINE = "Incorrect API key provided: sk-live-ABCDEFGH12345678"
+
+
 def test_stderr_is_redacted_before_retention(tmp_path: Path) -> None:
     from seshat.studio.codex_bridge import CodexSession
 
-    session = CodexSession(_plan(tmp_path, "handshake"))
+    session = CodexSession(
+        _plan(tmp_path, "handshake", "--stderr", _STDERR_SECRET_LINE)
+    )
     session.start()
-    session.close()
-    assert "sk-" not in session.stderr_text()
+    try:
+        # Draining to stdout EOF is the synchronization point: it guarantees the
+        # child has run to completion (and therefore flushed its one stderr line)
+        # before close() tears the pipes down. Without this, close() can race the
+        # child's own scheduling and observe no stderr at all -- a different
+        # vacuous-pass shape than finding A, not a property of the guard.
+        list(session.frames())
+    finally:
+        session.close()
+
+    stderr_text = session.stderr_text()
+    assert "sk-live-ABCDEFGH12345678" not in stderr_text
+    assert "<redacted>" in stderr_text
+    assert "Incorrect API key provided" in stderr_text
+
+
+def test_disabling_the_redaction_guard_lets_the_raw_secret_through(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Proves the guard -- not luck -- is what redacts stderr.
+
+    If this test did not observe the raw secret with the guard disabled, the
+    positive test above would be passing for the wrong reason.
+    """
+    import seshat.studio.codex_bridge as codex_bridge
+
+    monkeypatch.setattr(codex_bridge, "redact_provider_stderr", lambda raw, **kw: raw)
+
+    session = codex_bridge.CodexSession(
+        _plan(tmp_path, "handshake", "--stderr", _STDERR_SECRET_LINE)
+    )
+    session.start()
+    try:
+        list(session.frames())
+    finally:
+        session.close()
+
+    assert "sk-live-ABCDEFGH12345678" in session.stderr_text()
