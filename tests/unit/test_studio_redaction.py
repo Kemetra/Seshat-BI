@@ -229,3 +229,41 @@ def test_the_boundary_redactor_applies_secrets_and_paths(tmp_path: Path) -> None
     assert token not in scrubbed
     assert str(tmp_path) not in scrubbed
     assert "gold/fct_sales.sql" in scrubbed
+
+
+@pytest.mark.parametrize(
+    "dsn",
+    [
+        # No component reaches the length filter: the span replace was already the
+        # only thing doing the work here, so this case always passed.
+        "postgresql://u:hunter2pass@db.int:5432/app",
+        # The regression: an 18-character HOST is replaced by the fragment pass,
+        # which mutates the string so the full-match fallback no longer matches --
+        # leaving the 11-character password in the clear.
+        "postgresql://u:hunter2pass@db.example.invalid:5432/app",
+        # Long password AND long host: both cleared even before the fix, which is
+        # why the defect stayed invisible.
+        "postgresql://u:sixteencharacterpw@db.example.invalid:5432/app",
+        # A long DATABASE NAME triggers the same mutation with a short password.
+        "postgresql://u:shortpw@db.example.invalid:5432/averylongdbname1",
+    ],
+)
+def test_a_dsn_is_redacted_whole_regardless_of_component_lengths(dsn: str) -> None:
+    """Regression: the DSN span must be replaced BEFORE any component fragment.
+
+    `_MINIMUM_SECRET_LENGTH` is the right guard for free-text search, where a short
+    fragment would corrupt innocent prose. It is the wrong guard for URI components,
+    whose POSITION already proves they are credentials. Replacing long components
+    first destroyed the span the full-match fallback needed, so every DSN with one
+    long component and a short password leaked that password.
+
+    Proven by reverting the order in `redact_credentials`: these cases go red.
+    """
+    from seshat.studio import redaction
+
+    scrubbed = redaction.redact_for_boundary(f"connect failed: {dsn}")
+
+    assert "hunter2pass" not in scrubbed
+    assert "shortpw" not in scrubbed
+    assert "@" not in scrubbed, "a surviving userinfo separator means a partial redact"
+    assert "connect failed:" in scrubbed, "redaction destroyed the diagnostic"

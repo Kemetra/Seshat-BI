@@ -1,0 +1,3 @@
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"seshat_studio","title":"Seshat Studio","version":"0.8.2"}}}
+{"jsonrpc":"2.0","id":1,"result":{"userAgent":{"name":"codex","version":"0.147.0"}}}
+{"jsonrpc":"2.0","method":"initialized"}

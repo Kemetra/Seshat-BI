@@ -1,0 +1,4 @@
+{"jsonrpc":"2.0","id":5,"method":"account/rateLimits/read","params":{}}
+{"jsonrpc":"2.0","id":5,"result":{"rateLimits":{"planType":"plus","rateLimitReachedType":"rate_limit_reached","primary":{"usedPercent":100,"windowDurationMins":300,"resetsAt":1786652200}}}}
+{"jsonrpc":"2.0","method":"account/rateLimits/updated","params":{"rateLimits":{"planType":"plus","rateLimitReachedType":"rate_limit_reached","primary":{"usedPercent":100,"windowDurationMins":300,"resetsAt":1786652200}}}}
+{"jsonrpc":"2.0","id":6,"error":{"code":429,"message":"You have hit your usage limit for this window."}}
