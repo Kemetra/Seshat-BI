@@ -42,3 +42,11 @@ docs/rules/severity-posture.json text eol=lf
 # Spec 137: the Finance GL generator writes LF, and its committed excerpts must
 # byte-match that output on every platform (FR-002 byte-identical regeneration).
 tests/fixtures/finance_gl/**/*.csv text eol=lf
+
+# Spec 139 T019: these fixtures stand in for the newline-delimited JSON byte stream
+# the Codex app-server writes to stdout, which is LF on every platform. Under the
+# global `* text=auto` they would check out CRLF on Windows and LF on Linux, so the
+# same fixture would carry a trailing \r inside its last JSON token on one platform
+# only -- a divergence that makes a frame-reader test pass on CI and fail locally.
+# Pin LF so the fixture is the same byte stream everywhere.
+tests/fixtures/codex_app_server/** text eol=lf
