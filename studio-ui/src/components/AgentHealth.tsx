@@ -68,9 +68,27 @@ const PRESENTATION: Record<State, { headline: string; detail: string; recovery: 
     },
   };
 
+/**
+ * What to show for a state the contract does not define, or an absent payload.
+ *
+ * FR-025 inverts the usual default here. Normally an unrecognised enum value should fail
+ * loudly, but this component must NEVER be the reason the deterministic views disappear:
+ * reading `.headline` off an undefined lookup threw, and with no error boundary the whole
+ * tree unmounted -- so server drift in the least important element on the page deleted
+ * the most important one. Degrading to an honest "cannot tell" is the correct failure
+ * direction, and it still names an action.
+ */
+const UNKNOWN: { headline: string; detail: string; recovery: string } = {
+  headline: "Seshat's status is unclear",
+  detail: "Studio could not interpret the agent's reported state.",
+  recovery: "Everything on this page still works; reopen Studio to retry the agent.",
+};
+
 /** Prefer the server's wording, but never render blank text because it sent blank. */
-function orFallback(fromServer: string, fallback: string): string {
-  return fromServer.trim().length > 0 ? fromServer : fallback;
+function orFallback(fromServer: string | undefined, fallback: string): string {
+  return fromServer !== undefined && fromServer.trim().length > 0
+    ? fromServer
+    : fallback;
 }
 
 export function AgentHealthNotice({
@@ -78,9 +96,29 @@ export function AgentHealthNotice({
 }: {
   health: AgentHealth;
 }): React.JSX.Element {
-  const local = PRESENTATION[health.state];
+  // `health` is typed non-optional, but a real server can omit it, and a type is not a
+  // runtime guarantee about a payload that crossed the network.
+  const state = health?.state;
+  const local = (state !== undefined && PRESENTATION[state]) || UNKNOWN;
+  if (health === undefined || local === UNKNOWN) {
+    return (
+      <div role="status" data-agent-state={state ?? "unknown"} className="agent-health">
+        <strong className="agent-health__headline">{UNKNOWN.headline}</strong>{" "}
+        <span className="agent-health__detail">
+          {orFallback(health?.summary, UNKNOWN.detail)}
+        </span>{" "}
+        <span className="agent-health__recovery" data-testid="agent-recovery">
+          {orFallback(health?.recovery_action, UNKNOWN.recovery)}
+        </span>
+      </div>
+    );
+  }
   return (
-    <p
+    // A `<div>`, not a `<p>`: `<p>` may contain only phrasing content, so the
+    // `<details>` below was hoisted out by the HTML parser -- landing OUTSIDE the
+    // `role="status"` live region and leaving a stray empty paragraph. React warned
+    // about it while the tests still passed.
+    <div
       role="status"
       data-agent-state={health.state}
       className="agent-health"
@@ -101,6 +139,6 @@ export function AgentHealthNotice({
           </span>
         </details>
       )}
-    </p>
+    </div>
   );
 }

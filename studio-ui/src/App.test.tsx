@@ -146,6 +146,32 @@ describe("the Studio shell", () => {
     },
   );
 
+  it("keeps the workspace visible when agent health is out-of-enum (FR-025)", async () => {
+    // The reviewer measured a BLANK page (body.textContent.length === 0) for this input:
+    // an unguarded lookup threw and, with no error boundary, unmounted the whole tree.
+    stubFetch({
+      ...snapshot({ tables: [journey("store_sales", "blocked")] }),
+      agent_health: { state: "reticulating" },
+    });
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { name: "store_sales" }),
+    ).toBeInTheDocument();
+    expect(document.body.textContent?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it("keeps the workspace visible when agent health is absent entirely (FR-025)", async () => {
+    const payload = snapshot({ tables: [journey("store_sales", "blocked")] });
+    delete (payload as { agent_health?: unknown }).agent_health;
+    stubFetch(payload);
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { name: "store_sales" }),
+    ).toBeInTheDocument();
+  });
+
   it("shows a first-arrival state for a workspace with no tables", async () => {
     stubFetch(snapshot());
     render(<App />);

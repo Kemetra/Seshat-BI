@@ -42,10 +42,26 @@ const PRESENTATION: Record<Status, { label: string; glyph: string; hint: string 
   },
 };
 
-/** Turn `mapping_ready` into `Mapping` -- a stage name, never a command name (FR-032). */
+/**
+ * The human name for each stage -- a CLOSED lookup, not a string transform (FR-032).
+ *
+ * An earlier version munged the identifier (`replace(/_ready$/, "")`), so an unrecognised
+ * id such as `reticulating_ready` rendered as "Reticulating" in both the visible text and
+ * the `aria-label`. FR-032 keeps the tool's own identifiers out of the analyst journey, so
+ * an unknown stage now says it cannot be named rather than echoing whatever arrived.
+ */
+const STAGE_LABELS: Record<string, string> = {
+  source_ready: "Source",
+  mapping_ready: "Mapping",
+  silver_ready: "Silver",
+  gold_ready: "Gold",
+  semantic_model_ready: "Semantic model",
+  dashboard_ready: "Dashboard",
+  publish_ready: "Publish",
+};
+
 export function stageLabel(stage: string): string {
-  const withoutSuffix = stage.replace(/_ready$/, "").replace(/_/g, " ");
-  return withoutSuffix.charAt(0).toUpperCase() + withoutSuffix.slice(1);
+  return STAGE_LABELS[stage] ?? "Unrecognised stage";
 }
 
 export function StatusBadge({

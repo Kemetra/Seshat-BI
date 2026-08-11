@@ -26,14 +26,31 @@ import "./TableJourney.css";
 /** Where a stage sits relative to the table's current position. */
 type Position = "behind" | "current" | "ahead";
 
-function positionOf(
-  stage: ReadinessStage,
-  stages: readonly StageState[],
-  current: ReadinessStage | null,
-): Position {
+/**
+ * The canonical stage order, matching `seshat.status_surface._STAGE_ORDER`.
+ *
+ * Position is derived from THIS, not from the order the stages happened to arrive in.
+ * The contract pins the array's length at seven but says nothing about its ordering, so
+ * a server that reordered would otherwise invert the gating signal entirely -- a passed
+ * prerequisite reporting locked, and ungated later work reporting open.
+ */
+const STAGE_ORDER: readonly ReadinessStage[] = [
+  "source_ready",
+  "mapping_ready",
+  "silver_ready",
+  "gold_ready",
+  "semantic_model_ready",
+  "dashboard_ready",
+  "publish_ready",
+];
+
+function positionOf(stage: ReadinessStage, current: ReadinessStage | null): Position {
   if (current === null) return "behind";
-  const stageIndex = stages.findIndex((candidate) => candidate.stage === stage);
-  const currentIndex = stages.findIndex((candidate) => candidate.stage === current);
+  const stageIndex = STAGE_ORDER.indexOf(stage);
+  const currentIndex = STAGE_ORDER.indexOf(current);
+  // An unrecognised current stage is server drift, not a position: treat nothing as
+  // gated rather than inventing an ordering from an unknown value.
+  if (currentIndex === -1 || stageIndex === -1) return "behind";
   if (stageIndex === currentIndex) return "current";
   return stageIndex < currentIndex ? "behind" : "ahead";
 }
@@ -41,12 +58,15 @@ function positionOf(
 /**
  * True when a stage is gated by an earlier stage that has not cleared.
  *
- * Only stages AHEAD of the current one can be locked, and only while the current stage
- * itself has not passed: once it passes, later work is genuinely just not started, and
- * calling it locked would be a fabricated obstacle.
+ * ONLY `blocked` gates. The readiness model is explicit -- "`blocked` stops the next
+ * stage, `warning` does not" (`docs/readiness/readiness-model.md`) -- and `run_next`
+ * routes `warning` down the proceed path. An earlier revision locked on any non-`pass`
+ * status, so a `warning` current stage, which is what a clean live run assigns and
+ * therefore the commonest non-pass state, fabricated locks on every later stage. That is
+ * exactly the invented obstacle this component must never show.
  */
 function isLocked(position: Position, currentStatus: StageState["status"] | null): boolean {
-  return position === "ahead" && currentStatus !== null && currentStatus !== "pass";
+  return position === "ahead" && currentStatus === "blocked";
 }
 
 function StageEvidence({ stage }: { stage: StageState }): React.JSX.Element | null {
@@ -86,20 +106,42 @@ function StageTechnicalDetail({ stage }: { stage: StageState }): React.JSX.Eleme
       .map((reason) => reason.source_ref)
       .filter((ref): ref is string => ref !== null),
   ];
-  if (references.length === 0) return null;
+  // The early return must consider the AUTHORITY too. Keyed on references alone, a stage
+  // carrying `required_authority` but nothing to cite dropped it silently -- and FR-008
+  // names required authority among the six fields that MUST be preserved.
+  if (references.length === 0 && stage.required_authority.length === 0) return null;
 
   return (
     <details className="journey__detail">
       <summary>Technical detail</summary>
-      <ul>
-        {references.map((reference) => (
-          <li key={reference}>{reference}</li>
-        ))}
-      </ul>
+      {references.length > 0 && (
+        <ul>
+          {references.map((reference) => (
+            <li key={reference}>{reference}</li>
+          ))}
+        </ul>
+      )}
       {stage.required_authority.length > 0 && (
         <p>Requires: {stage.required_authority.join(", ")}</p>
       )}
     </details>
+  );
+}
+
+/**
+ * What this table may not advance into yet (FR-008's `forbidden_scope`).
+ *
+ * The projection sends it and the UI previously dropped it, losing one of the six fields
+ * FR-008 requires to be preserved. Rendered as prose rather than as a locked-stage
+ * marker: forbidden scope is the authority's own statement about permitted work, not a
+ * position Studio derives.
+ */
+function ForbiddenScope({ scope }: { scope: readonly string[] }): React.JSX.Element | null {
+  if (scope.length === 0) return null;
+  return (
+    <p className="journey__forbidden">
+      Not permitted yet for this table: {scope.join(", ")}.
+    </p>
   );
 }
 
@@ -157,9 +199,11 @@ export function TableJourney({ journey }: { journey: Journey }): React.JSX.Eleme
 
   return (
     <div className="journey">
-      {journey.current_stage === null && (
-        <p>This table has not reported a current stage.</p>
-      )}
+      {/* `current === null` covers BOTH an absent `current_stage` and one naming a stage
+          the payload does not contain. Testing the raw field instead left server drift
+          silent: no current marker AND no explanation, which reads as a table that
+          simply has not started. */}
+      {current === null && <p>This table has not reported a current stage.</p>}
       {/* An ORDERED list: the sequence is part of the meaning, so it belongs in the
           markup rather than in visual position, where a screen-reader user cannot
           perceive it. */}
@@ -167,7 +211,7 @@ export function TableJourney({ journey }: { journey: Journey }): React.JSX.Eleme
           specifically, rather than whichever list happens to be first in the DOM. */}
       <ol className="journey__stages" aria-label="Readiness stages">
         {journey.stages.map((stage) => {
-          const position = positionOf(stage.stage, journey.stages, journey.current_stage);
+          const position = positionOf(stage.stage, journey.current_stage);
           return (
             <StageItem
               key={stage.stage}
@@ -179,6 +223,7 @@ export function TableJourney({ journey }: { journey: Journey }): React.JSX.Eleme
           );
         })}
       </ol>
+      <ForbiddenScope scope={journey.forbidden_scope} />
       <NextAction journey={journey} />
     </div>
   );

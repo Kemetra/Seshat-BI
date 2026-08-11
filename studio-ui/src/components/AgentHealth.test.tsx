@@ -118,6 +118,40 @@ describe("agent health", () => {
     );
   });
 
+  it("survives a state outside the contract enum without crashing (FR-025)", () => {
+    // Server drift must not take the page down. `PRESENTATION[state]` returned
+    // undefined for an unknown value, and reading `.headline` off it threw -- with no
+    // error boundary the whole tree unmounted, so the ONE component that must never gate
+    // the deterministic views could delete them.
+    const drifted = { ...health("healthy"), state: "reticulating" as Health["state"] };
+
+    expect(() => render(<AgentHealthNotice health={drifted} />)).not.toThrow();
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(screen.getByTestId("agent-recovery").textContent?.trim()).not.toBe("");
+  });
+
+  it("survives a missing health payload without crashing (FR-025)", () => {
+    // An older or partial server may omit the field entirely.
+    expect(() =>
+      render(<AgentHealthNotice health={undefined as unknown as Health} />),
+    ).not.toThrow();
+  });
+
+  it("gives every state a distinct RECOVERY action, not just a headline", () => {
+    // The headline-only check would pass with two states sharing one recovery, which is
+    // the half of FR-024 that actually tells the analyst what to DO.
+    const recoveries = STATES.map((state) => {
+      const { unmount } = render(
+        <AgentHealthNotice health={health(state, { recovery_action: "" })} />,
+      );
+      const text = screen.getByTestId("agent-recovery").textContent;
+      unmount();
+      return text;
+    });
+
+    expect(new Set(recoveries).size).toBe(STATES.length);
+  });
+
   it("renders no numeric health signal (FR-009)", () => {
     const { container } = render(<AgentHealthNotice health={health("quota_limited")} />);
 

@@ -152,6 +152,96 @@ describe("the table journey", () => {
     expect(silver).toHaveTextContent(/waiting for mapping/i);
   });
 
+  it("does NOT lock later stages when the current stage is a warning", () => {
+    // `docs/readiness/readiness-model.md`: "`blocked` stops the next stage, `warning`
+    // does not". A warning stage ADVANCED with a recorded issue, and `run_next` routes
+    // it down the proceed path -- so showing later work as gated invents an obstacle the
+    // authority does not record. `warning` is also what a clean live run assigns, i.e.
+    // the most common non-pass state.
+    const journey: Journey = {
+      ...blockedAtMapping(),
+      stages: [
+        stage("source_ready", "pass"),
+        stage("mapping_ready", "warning"),
+        ...STAGES.slice(2).map((name) => stage(name, "not_started")),
+      ],
+    };
+    render(<TableJourney journey={journey} />);
+
+    expect(screen.getByRole("listitem", { name: /^Silver$/ })).toHaveAttribute(
+      "data-locked",
+      "false",
+    );
+  });
+
+  it("locks later stages when the current stage is blocked", () => {
+    render(<TableJourney journey={blockedAtMapping()} />);
+
+    expect(screen.getByRole("listitem", { name: /^Silver$/ })).toHaveAttribute(
+      "data-locked",
+      "true",
+    );
+  });
+
+  it("derives position from the canonical order, not the array order", () => {
+    // The contract pins `stages` LENGTH but never its ordering, so a server that
+    // reorders must not invert the gating signal.
+    const forward = blockedAtMapping();
+    const reversed: Journey = { ...forward, stages: [...forward.stages].reverse() };
+    render(<TableJourney journey={reversed} />);
+
+    // Source PASSED and precedes Mapping: never locked, whatever order it arrived in.
+    expect(screen.getByRole("listitem", { name: /^Source$/ })).toHaveAttribute(
+      "data-locked",
+      "false",
+    );
+    expect(screen.getByRole("listitem", { name: /^Silver$/ })).toHaveAttribute(
+      "data-locked",
+      "true",
+    );
+  });
+
+  it("explains an unresolvable current stage instead of going quiet", () => {
+    // A `current_stage` naming a stage absent from the array is server drift. Rendering
+    // no current marker AND no explanation leaves the reader unable to tell a
+    // never-started table from a broken payload.
+    const journey = {
+      ...blockedAtMapping(),
+      current_stage: "nonexistent_ready" as Journey["current_stage"],
+    };
+    render(<TableJourney journey={journey} />);
+
+    expect(screen.getByText(/has not reported a current stage/i)).toBeInTheDocument();
+  });
+
+  it("shows a stage's required authority even with no evidence or blockers", () => {
+    // FR-008 names required authority among the six fields that MUST be preserved. An
+    // early return keyed on source references dropped it whenever a stage had an
+    // authority but nothing to cite.
+    const journey: Journey = {
+      ...blockedAtMapping(),
+      stages: [
+        stage("source_ready", "pass"),
+        stage("mapping_ready", "blocked", { required_authority: ["named_human"] }),
+        ...STAGES.slice(2).map((name) => stage(name, "not_started")),
+      ],
+    };
+    render(<TableJourney journey={journey} />);
+
+    expect(screen.getByText(/named_human/)).toBeInTheDocument();
+  });
+
+  it("renders the forbidden scope FR-008 names", () => {
+    render(<TableJourney journey={blockedAtMapping()} />);
+
+    // The projection sends `forbidden_scope`; dropping it silently loses one of the six
+    // fields FR-008 requires to be preserved. Asserted on the SENTENCE, because "silver"
+    // legitimately appears twice -- once as a stage label, once as forbidden scope.
+    expect(
+      screen.getByText(/not permitted yet for this table: silver, gold/i),
+    ).toBeInTheDocument();
+  });
+
   it("does not mark a stage before the current one as locked", () => {
     render(<TableJourney journey={blockedAtMapping()} />);
 
