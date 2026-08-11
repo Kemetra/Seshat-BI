@@ -3,12 +3,17 @@
 FR-014 requires the Codex integration hidden behind a version-tolerant protocol with a
 deterministic fake for tests. Two decisions in here carry most of that weight:
 
-**The mode boundary is enforced at the bridge.** A `read_only` turn cannot emit
-`file_change_proposed` -- not "the UI hides it", not "the API filters it". Filtering
-downstream would mean the agent already attempted the change and the refusal was
-cosmetic, so any future bridge that skipped the filter would silently regain write
-intent. Making it a property of what the agent may DO keeps the promise where it can be
-audited.
+**This fake declines to propose under `read_only`, but that is cooperation, not
+enforcement.** A `Protocol` cannot constrain what a generator yields, so a bridge is
+free to ignore the mode -- a bug, a provider quirk, or a prompt injection. The BINDING
+refusal therefore lives in `agent_routes._record_turn`, which every bridge's output
+passes through: write intent during a `read_only` turn raises `ReadOnlyViolation` and
+never reaches the buffer.
+
+An earlier revision of this docstring claimed the boundary was "enforced at the bridge",
+which was false in the way that matters: a three-line rogue bridge got
+`file_change_proposed` recorded under `read_only`, and Phase 5's provider would have
+inherited no protection at all.
 
 **Nothing hidden is constructed in the first place.** The event store strips reasoning
 and raw envelopes, so a leaky bridge would still be scrubbed. That is precisely why the

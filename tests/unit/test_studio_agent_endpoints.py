@@ -432,3 +432,173 @@ def test_interrupting_a_turn_on_an_unknown_thread_is_404(tmp_path: Path) -> None
     missing = client.post(f"{API}/agent/threads/nope/turns/whatever/interrupt")
 
     assert missing.status_code == 404
+
+
+# --------------------------------------------------------------------------- #
+# Findings from an adversarial review of the first Phase 4 pass               #
+# --------------------------------------------------------------------------- #
+
+
+def test_an_absolute_path_in_an_event_is_redacted_on_the_wire(tmp_path: Path) -> None:
+    """FR-026 PATH redaction, which was silently disabled for every event.
+
+    `redact_for_boundary` gates `redact_paths` on `workspace_root`, so a
+    `scrub_payload` call omitting it still scrubs credentials -- everything LOOKS
+    redacted -- while every filesystem path passes through verbatim. Both
+    directions matter: an in-root path must become workspace-relative, and an
+    out-of-root path must not reveal the operator's home directory layout.
+    """
+    client, app = _client(tmp_path)
+    thread_id = _thread(client)
+    in_root = tmp_path / "mappings" / "secret" / "source-map.yaml"
+
+    app.state.threads.thread(thread_id).append(
+        "agent_message",
+        {"text": f"read {in_root} and C:/Users/Operator/private/notes.txt"},
+    )
+
+    body = client.get(f"{API}/agent/threads/{thread_id}/events").text
+
+    assert str(tmp_path) not in body, "an absolute workspace path reached the browser"
+    assert "Operator" not in body, "an out-of-root path leaked the home layout"
+
+
+@pytest.mark.parametrize("bad", ["-1", "not-a-number", "+5", "1.5"])
+def test_a_bad_last_event_id_is_a_400_not_a_traceback(tmp_path: Path, bad: str) -> None:
+    """The contract declares this header `type: integer, minimum: 0`.
+
+    `-1` was the interesting one: `int("-1")` does not raise, so it reached the
+    store, whose own `ValueError` escaped as an uncaught 500 WITH a traceback --
+    while `app.py` promises "never a traceback, never a raw path" and this route
+    already had a 400 branch describing a case it could never reach.
+    """
+    client, _ = _client(tmp_path)
+    thread_id = _thread(client)
+
+    refused = client.get(
+        f"{API}/agent/threads/{thread_id}/events", headers={"Last-Event-ID": bad}
+    )
+
+    assert refused.status_code == 400, refused.text
+    assert "Traceback" not in refused.text
+
+
+def test_the_last_event_id_parser_rejects_non_ascii_digits() -> None:
+    """Tested at the PARSER, because HTTP cannot carry this case.
+
+    Headers are latin-1 by spec, so a client cannot transmit an Arabic-Indic digit
+    and the endpoint test above cannot reach this branch. But `str.isdigit()` is
+    True for it and `int()` accepts it, so a caller arriving another way (a future
+    non-HTTP transport, a direct call) would get a value the contract's
+    `type: integer` does not permit.
+    """
+    from seshat.studio.agent_routes import _parse_last_event_id
+
+    with pytest.raises(ValueError, match="non-negative integer"):
+        _parse_last_event_id("\u0663")
+
+
+def test_a_read_only_turn_refuses_write_intent_from_a_rogue_bridge(
+    tmp_path: Path,
+) -> None:
+    """The `read_only` boundary, enforced where a bridge cannot bypass it.
+
+    `FakeAgentBridge` declines to propose under `read_only`, but a bridge is
+    third-party code by design and a `Protocol` cannot constrain what a generator
+    yields. So the property must hold at the RECORDER: a provider ignoring the mode
+    -- bug, quirk, or prompt injection -- must not get write intent into the buffer.
+
+    502 rather than 422: the request was valid and the provider misbehaved.
+    """
+    from seshat.studio import events as events_module
+
+    class RogueBridge:
+        def describe(self) -> dict[str, object]:
+            return {"bridge": "rogue"}
+
+        def run_turn(self, *, prompt: str, turn_id: str, requested_mode: str):
+            def built(kind: str) -> events_module.StudioEvent:
+                return events_module.StudioEvent(
+                    thread_id="",
+                    sequence=1,
+                    type=kind,
+                    occurred_at="2026-08-11T00:00:00Z",
+                    turn_id=turn_id,
+                    payload={},
+                    ignored_for_state=False,
+                )
+
+            yield built("turn_started")
+            yield built("file_change_proposed")
+            yield built("turn_completed")
+
+    client, app = _client(tmp_path)
+    thread_id = _thread(client)
+    app.state.bridge = RogueBridge()
+
+    refused = client.post(
+        f"{API}/agent/threads/{thread_id}/turns",
+        json={
+            "prompt": "just have a look around",
+            "snapshot_revision": "r1",
+            "requested_mode": "read_only",
+        },
+    )
+
+    assert refused.status_code == 502, refused.text
+    body = client.get(f"{API}/agent/threads/{thread_id}/events").text
+    assert "file_change_proposed" not in body, "write intent reached the buffer"
+
+
+def test_a_concurrent_turn_is_409_not_422(tmp_path: Path) -> None:
+    """The contract gives 409 for a conflict and 422 for a malformed request.
+
+    Both refusals were funnelled through `ValueError`, so a live-turn conflict was
+    reported to the analyst as their own formatting mistake. Unreachable with the
+    synchronous fake; live the moment a streaming bridge lands.
+    """
+    client, app = _client(tmp_path)
+    thread_id = _thread(client)
+    # Force a live turn the way a streaming bridge would leave one.
+    app.state.threads.thread(thread_id).append(
+        "turn_started", {}, turn_id="already-running"
+    )
+
+    conflict = client.post(
+        f"{API}/agent/threads/{thread_id}/turns",
+        json={
+            "prompt": "and another thing",
+            "snapshot_revision": "r1",
+            "requested_mode": "read_only",
+        },
+    )
+
+    assert conflict.status_code == 409, conflict.text
+
+
+def test_the_reported_thread_state_is_in_the_contract_enum(tmp_path: Path) -> None:
+    """`THREAD_STATES` existed with zero callers -- an enum validating nothing."""
+    from seshat.studio.agent_routes import THREAD_STATES
+
+    client, _ = _client(tmp_path)
+
+    created = client.post(f"{API}/agent/threads", json={}).json()
+
+    assert created["state"] in THREAD_STATES
+
+
+def test_the_thread_store_is_bounded(tmp_path: Path) -> None:
+    """`ThreadEvents` bounds its events; `ThreadStore` must bound its threads.
+
+    The asymmetry was the defect: the bounded class stated its bound while the
+    unbounded one said nothing, so a reader reasonably assumed both were bounded.
+    """
+    from seshat.studio.events import ThreadStore
+
+    store = ThreadStore(max_threads=3)
+    for index in range(10):
+        store.thread(f"thread-{index}")
+
+    assert len(store.known_thread_ids()) == 3
+    assert not store.has_thread("thread-0"), "the oldest thread must be evicted"
+    assert store.has_thread("thread-9"), "the newest thread must be retained"

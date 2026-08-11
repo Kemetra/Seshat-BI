@@ -327,7 +327,14 @@ def create_app(workspace: Path | str, *, port: int) -> tuple[FastAPI, str]:
     app.state.authentication_mode = "subscription"
     #: In-memory only (FR-035). The bridge is the deterministic fake until Phase 5
     #: introduces the Codex one; FR-014 keeps the swap to a single assignment.
-    app.state.threads = events.ThreadStore()
+    #:
+    #: `workspace_root` is what enables FR-026 PATH redaction inside the event
+    #: buffer: `redact_for_boundary` gates `redact_paths` on it, so omitting it
+    #: silently disables half the redaction while credentials are still scrubbed and
+    #: everything LOOKS clean. An earlier revision omitted it and every event carried
+    #: absolute filesystem paths to the browser, including out-of-root paths that
+    #: expose the operator's home directory layout.
+    app.state.threads = events.ThreadStore(workspace_root=launch.workspace_root)
     app.state.bridge = bridge.FakeAgentBridge()
 
     _register_routes(app)

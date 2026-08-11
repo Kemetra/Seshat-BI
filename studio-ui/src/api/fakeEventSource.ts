@@ -100,9 +100,15 @@ export class FakeEventSource implements FakeConnection {
     }
   }
 
-  /** Simulate the server closing the response, which is Studio's normal path. */
+  /**
+   * Simulate the server closing the response, which is Studio's normal path.
+   *
+   * Does NOT set `closed`. A real `EventSource` fires `error` and then reconnects on its
+   * own; only an explicit `close()` -- by the page or by this fake -- ends it for good.
+   * Conflating the two would make a test unable to tell "the browser will retry" from
+   * "the page gave up", which is exactly the distinction the reconnect behaviour turns on.
+   */
   fail(): void {
-    this.closed = true;
     this.onerror?.(new Event("error"));
   }
 }

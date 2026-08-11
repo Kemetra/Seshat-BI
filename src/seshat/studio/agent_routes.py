@@ -37,9 +37,10 @@ from typing import Any
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from seshat.studio.events import ReplayExpired
+from seshat.studio.events import ReplayExpired, TurnAlreadyActive
 
-#: Contract's `AgentThreadRef.state` enum.
+#: Contract's `AgentThreadRef.state` enum. Used to VALIDATE the state this module
+#: reports, so a typo cannot ship a state no client knows how to render.
 THREAD_STATES: frozenset[str] = frozenset(
     {
         "starting",
@@ -51,6 +52,23 @@ THREAD_STATES: frozenset[str] = frozenset(
         "interrupted",
     }
 )
+
+#: Event types that express intent to CHANGE the workspace.
+#:
+#: Refused outright during a `read_only` turn. This list IS the enforcement point
+#: for that mode, so a new write-shaped event type in the contract belongs here too.
+WRITE_INTENT_TYPES: frozenset[str] = frozenset(
+    {"file_change_proposed", "approval_required"}
+)
+
+
+class ReadOnlyViolation(Exception):
+    """A bridge emitted write intent during a `read_only` turn.
+
+    Its own type rather than a bare `ValueError`, because the two mean different
+    things to the route: a `ValueError` is a malformed REQUEST (422, the caller's to
+    fix), while this is a misbehaving PROVIDER (502 -- nothing the analyst can fix).
+    """
 
 
 def _problem(
@@ -107,15 +125,27 @@ def _stream_preamble() -> str:
 
 
 def _parse_last_event_id(raw: str | None) -> int | None:
-    """`None` for absent, an int for valid, and `ValueError` for garbage.
+    """`None` if absent, a non-negative int if valid, else `ValueError`.
 
-    Absent and zero are NOT the same thing to the store, and neither may be conflated
-    with unparseable: treating garbage as 0 would replay the whole buffer to a client
-    that asked to resume, duplicating everything it had already rendered.
+    Absent and zero are NOT the same thing to the store, and neither may be
+    conflated with unparseable: treating garbage as 0 would replay the whole buffer
+    to a client that asked to resume, duplicating everything already rendered.
+
+    The contract declares this header `type: integer, minimum: 0`, so validation
+    belongs HERE rather than in the store. An earlier revision accepted `-1` because
+    `int("-1")` does not raise; the store's own `ValueError` then escaped as an
+    uncaught 500 WITH a traceback -- while this route already had a 400 branch whose
+    message described a case it could never reach.
+
+    `int` alone also accepts `"+5"`, `" 3 "`, and non-ASCII digits, none of which the
+    contract permits, so the accepted set is pinned to exactly the contracted one.
     """
     if raw is None or raw.strip() == "":
         return None
-    return int(raw.strip())  # ValueError propagates to the route
+    candidate = raw.strip()
+    if not candidate.isascii() or not candidate.isdigit():
+        raise ValueError(f"Last-Event-ID must be a non-negative integer, got {raw!r}")
+    return int(candidate)
 
 
 def _unknown_thread() -> JSONResponse:
@@ -128,6 +158,15 @@ def _unknown_thread() -> JSONResponse:
     )
 
 
+#: The state a freshly created thread reports, checked against the contract's enum
+#: at import time. This is what `THREAD_STATES` is FOR: declaring the enum and never
+#: consulting it looked like validation while validating nothing.
+_NEW_THREAD_STATE = "ready"
+assert _NEW_THREAD_STATE in THREAD_STATES, (
+    f"{_NEW_THREAD_STATE!r} is not in the contract's AgentThreadRef.state enum"
+)
+
+
 def _create_thread(app: FastAPI, body: dict[str, Any] | None) -> dict[str, Any]:
     """Create a thread and record its opening event."""
     thread_id = f"thread-{uuid.uuid4().hex[:12]}"
@@ -135,7 +174,7 @@ def _create_thread(app: FastAPI, body: dict[str, Any] | None) -> dict[str, Any]:
     app.state.threads.thread(thread_id).append(
         "thread_started", {"selected_table_id": selected}
     )
-    return {"thread_id": thread_id, "state": "ready"}
+    return {"thread_id": thread_id, "state": _NEW_THREAD_STATE}
 
 
 def _start_turn(app: FastAPI, thread_id: str, body: dict[str, Any]) -> Any:
@@ -159,6 +198,25 @@ def _start_turn(app: FastAPI, thread_id: str, body: dict[str, Any]) -> Any:
                 turn_id=turn_id,
                 requested_mode=str(body.get("requested_mode", "")),
             ),
+        )
+    except TurnAlreadyActive as conflict:
+        # BEFORE the ValueError clause: TurnAlreadyActive subclasses it, so the
+        # broad handler would otherwise swallow this and report a live-turn
+        # conflict as the analyst's own formatting mistake.
+        return _problem(
+            409,
+            "A turn is already running",
+            str(conflict),
+            "Wait for the current reply, or stop it first.",
+        )
+    except ReadOnlyViolation as violation:
+        # 502, not 422: the request was valid and the PROVIDER misbehaved, so there
+        # is nothing for the analyst to correct.
+        return _problem(
+            502,
+            "The agent attempted a change in a read-only turn",
+            str(violation),
+            "Nothing was changed. Retry, or ask in propose-changes mode.",
         )
     except ValueError as invalid:
         return _problem(
@@ -290,15 +348,34 @@ class TurnRequest:
 def _record_turn(thread: Any, bridge: Any, request: TurnRequest) -> list[Any]:
     """Drive the bridge and record each event into the thread.
 
-    Validation happens inside the bridge, so an invalid request raises before any event
-    is recorded -- a half-recorded turn would leave the stream describing something that
-    never ran.
+    Prompt and mode validation happen inside the bridge, so a malformed request
+    raises before any event is recorded. Note the LIMIT of that: a refusal only
+    detectable mid-stream -- a second `turn_started` while one is live -- leaves the
+    events already recorded in place. They keep their sequence and the caller reports
+    the failure; rewriting history to hide them would be worse.
+
+    The `read_only` refusal below is the actual enforcement of that mode.
+    `FakeAgentBridge` also declines to propose under `read_only`, but a bridge is
+    third-party code by design: a `Protocol` cannot constrain what a generator
+    yields, so trusting the producer would make the mode advisory. Enforcing at the
+    recorder means a provider that ignores it -- bug, quirk, or prompt injection --
+    cannot get write intent into the buffer, and every bridge inherits the refusal
+    without opting in.
     """
-    return [
-        thread.append(produced.type, produced.payload, turn_id=produced.turn_id)
-        for produced in bridge.run_turn(
-            prompt=request.prompt,
-            turn_id=request.turn_id,
-            requested_mode=request.requested_mode,
+    recorded = []
+    for produced in bridge.run_turn(
+        prompt=request.prompt,
+        turn_id=request.turn_id,
+        requested_mode=request.requested_mode,
+    ):
+        if (
+            request.requested_mode == "read_only"
+            and produced.type in WRITE_INTENT_TYPES
+        ):
+            raise ReadOnlyViolation(
+                f"the bridge emitted {produced.type!r} during a read_only turn"
+            )
+        recorded.append(
+            thread.append(produced.type, produced.payload, turn_id=produced.turn_id)
         )
-    ]
+    return recorded

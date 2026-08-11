@@ -248,6 +248,13 @@ projection, endpoints, frontend, journey, and health.
   resume path is exercised on every poll instead of only after a failure. The cost is
   stated rather than hidden — the retry interval IS the perceived reply latency. A
   held-open stream is the alternative and would change `agent_routes` only.
+
+  The client honours that interval by NOT intervening: it registers no `onerror`
+  reconnect, because native `EventSource` reconnect already waits the declared interval
+  and resends `Last-Event-ID`. A first pass hand-rolled the loop instead, calling
+  `close()` and reconnecting synchronously — a zero-delay busy loop that also discarded
+  `retry:` entirely, since `close()` permanently cancels native reconnect. The knob was
+  documented as the perceived latency while the client could not read it.
 - [x] **T017** Implement `FakeAgentBridge` from deterministic scenarios and contract
   tests shared by every bridge implementation. [FR-014]
   The shared suite is `BRIDGE_FACTORIES` in `test_studio_agent_bridge.py`: Phase 5's

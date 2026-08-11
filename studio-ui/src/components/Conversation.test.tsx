@@ -152,20 +152,30 @@ describe("Conversation", () => {
   // Reconnect resumes rather than restarting                              //
   // --------------------------------------------------------------------- //
 
-  it("resumes from the last seen event after the stream closes", async () => {
+  it("leaves reconnect to the browser instead of closing the stream on error", async () => {
+    // The endpoint closes after every replay, so `error` fires on each ordinary poll.
+    //
+    // A previous version handled it by calling `close()` and reconnecting immediately.
+    // That was two defects at once: a zero-delay busy loop, and -- because `close()`
+    // permanently cancels native reconnect -- the server's `retry:` interval was
+    // discarded, so `SSE_RETRY_MILLISECONDS` could not affect the client that documented
+    // it as "the perceived latency".
+    //
+    // Native `EventSource` reconnect already waits the declared interval and resends
+    // `Last-Event-ID`. So the correct behaviour is to NOT intervene, and that is what this
+    // asserts: after an error the component neither closes the stream nor opens a second
+    // one. (An earlier assertion here checked `lastEventId` on a second connection, which
+    // could not fail: that value is written by the test's own `emit`, never by the
+    // component.)
     render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
     await waitFor(() => expect(registry.current).toBeDefined());
+    const opened = registry.current as FakeEventSource;
 
-    registry.current?.emit("agent_message", event({ sequence: 1 }), "1");
-    registry.current?.emit("agent_message", event({ sequence: 2 }), "2");
-    registry.current?.fail();
+    opened.fail();
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
-    await waitFor(() => expect(registry.connections.length).toBe(2));
-    // A browser carries the id itself; asserting it here proves the component did not
-    // tear down the stream in a way that would lose the resume point.
-    const reconnected = registry.connections[1];
-    expect(reconnected).toBeDefined();
-    expect(reconnected?.lastEventId).toBe("2");
+    expect(registry.connections).toHaveLength(1);
+    expect(opened.closed).toBe(false);
   });
 
   it("does not duplicate an event that arrives twice", async () => {

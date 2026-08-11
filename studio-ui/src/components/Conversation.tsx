@@ -44,6 +44,22 @@ const ACTIVITY_TYPES = new Set([
 /** Types that end a turn. Mirrors the server's `TERMINAL_TYPES`. */
 const TERMINAL_TYPES = new Set(["turn_completed", "turn_failed"]);
 
+/**
+ * Every type the stream subscribes to.
+ *
+ * SSE dispatches by `event:` name, so a type absent from this list is delivered to no
+ * listener and silently vanishes. Built from the rendered sets plus the lifecycle types,
+ * which drive turn state without being rendered as prose.
+ */
+const STREAMED_TYPES = [
+  ...MESSAGE_TYPES,
+  ...ACTIVITY_TYPES,
+  "thread_started",
+  "turn_started",
+  "turn_completed",
+  "turn_failed",
+];
+
 export interface ConversationProps {
   threadId: string;
   /** Injected so a test can drive the failure path without a live server. */
@@ -99,9 +115,7 @@ export function Conversation({
   const [sendError, setSendError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [liveTurnId, setLiveTurnId] = useState<string | null>(null);
-  // A ref so reconnect does not re-run the effect and tear down the stream it just made.
-  const generationRef = useRef(0);
-  // Refs so the stream effect never re-subscribes when a callback identity changes: a
+  // A ref so the stream effect never re-subscribes when a callback identity changes: a
   // re-subscribe would close the stream and lose the resume point.
   const settledRef = useRef(onTurnSettled);
   settledRef.current = onTurnSettled;
@@ -138,25 +152,26 @@ export function Conversation({
       }
     };
 
-    const connect = () => {
-      if (cancelled) {
-        return;
-      }
-      source = new EventSource(`/api/v1/agent/threads/${threadId}/events`);
-      for (const type of [...MESSAGE_TYPES, ...ACTIVITY_TYPES, "turn_started", "turn_completed", "turn_failed", "thread_started"]) {
-        source.addEventListener(type, record as EventListener);
-      }
-      // The endpoint closes after replaying, so `error` is the ORDINARY end of a
-      // response here. Reconnecting is how the next batch arrives; the browser carries
-      // `Last-Event-ID` itself, so nothing has to be threaded through.
-      source.onerror = () => {
-        source?.close();
-        generationRef.current += 1;
-        connect();
-      };
-    };
+    if (cancelled) {
+      return;
+    }
+    source = new EventSource(`/api/v1/agent/threads/${threadId}/events`);
+    for (const type of STREAMED_TYPES) {
+      source.addEventListener(type, record as EventListener);
+    }
 
-    connect();
+    // NO `onerror` reconnect handler, deliberately.
+    //
+    // The endpoint closes after replaying, so `error` fires on every ordinary poll. An
+    // earlier revision responded by calling `close()` and re-invoking `connect()`
+    // synchronously -- which produced a zero-delay busy loop AND discarded the server's
+    // `retry:` directive, because `close()` permanently cancels the browser's own
+    // reconnect. `SSE_RETRY_MILLISECONDS` was documented as "the perceived latency" while
+    // the client that was supposed to honour it could not.
+    //
+    // Leaving `EventSource` alone is both simpler and correct: native reconnect already
+    // waits the interval the server declared and resends `Last-Event-ID` itself. The one
+    // thing the page must still do is close on unmount, below.
     return () => {
       cancelled = true;
       source?.close();
