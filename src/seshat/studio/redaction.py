@@ -214,11 +214,13 @@ def redact_credentials(text: str) -> str:
     # revision replaced long components first and used the full-match replace as a
     # fallback. That fallback silently no-opped: once a component had been swapped
     # for the marker, the original span no longer occurred in `scrubbed`, so any
-    # component the length filter had skipped survived in the clear. Concretely,
-    # `postgresql://u:hunter2pass@db.example.invalid:5432/app` kept its password
-    # because the 18-character host was replaced first and `hunter2pass` is 11 --
-    # below `_MINIMUM_SECRET_LENGTH`. Every DSN with one long component and a short
-    # password leaked that password to any boundary this redactor guards.
+    # component the length filter had skipped survived in the clear. Concretely, a
+    # URI whose host is 18 characters and whose password is 11 kept that password:
+    # the host was replaced first, and the password never entered the replacement
+    # list because it falls below `_MINIMUM_SECRET_LENGTH`. Every DSN with one long
+    # component and a shorter password leaked it to any boundary this guards. The
+    # reproducing cases live in `test_studio_redaction.py` rather than in this
+    # comment, so that rule C2 does not read an illustration as a committed secret.
     #
     # The length filter is right for FREE-TEXT search, where a short fragment would
     # corrupt innocent prose. It is wrong for URI components, whose POSITION already
