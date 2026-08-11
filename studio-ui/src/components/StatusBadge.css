@@ -1,0 +1,52 @@
+/**
+ * Status badge styling. Colours come from the tokens so the contrast audit has one
+ * place to check; the badge never relies on colour alone to convey status.
+ */
+
+.status-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-1) var(--space-3);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius);
+  background: var(--status-not-started-bg);
+  color: var(--status-not-started-fg);
+}
+
+.status-badge[data-status="pass"] {
+  background: var(--status-pass-bg);
+  color: var(--status-pass-fg);
+}
+
+.status-badge[data-status="warning"] {
+  background: var(--status-warning-bg);
+  color: var(--status-warning-fg);
+}
+
+.status-badge[data-status="blocked"] {
+  background: var(--status-blocked-bg);
+  color: var(--status-blocked-fg);
+}
+
+.status-badge__glyph {
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.status-badge__stage {
+  font-weight: 600;
+}
+
+.status-badge__label {
+  color: inherit;
+}
+
+/* In forced-colours mode the browser replaces the palette, so the border becomes the
+   only shape cue -- make it visible rather than transparent. */
+@media (forced-colors: active) {
+  .status-badge {
+    border-color: currentColor;
+  }
+}

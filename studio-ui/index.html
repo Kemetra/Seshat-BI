@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- FR-033: no remote fonts, scripts, images, or analytics. Nothing here reaches
+         off-origin, and the CSP the server sends (`default-src 'self'`) enforces it
+         even if a future edit tries. -->
+    <meta name="referrer" content="no-referrer" />
+    <title>Seshat Studio</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

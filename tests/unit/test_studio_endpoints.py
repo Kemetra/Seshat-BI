@@ -85,6 +85,121 @@ def authed_client(client, app_and_token):
 
 
 # --------------------------------------------------------------------------- #
+# The frontend must be REACHABLE (FR-005)                                     #
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def served_frontend(workspace: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A staged frontend bundle, so the static routes have something to serve."""
+    static = workspace / "staged-static"
+    (static / "assets").mkdir(parents=True)
+    (static / "index.html").write_text(
+        "<!doctype html><title>Seshat Studio</title><div id=root></div>",
+        encoding="utf-8",
+    )
+    (static / "assets" / "app-abc123.js").write_text("export {};", encoding="utf-8")
+
+    from seshat.studio import assets
+
+    monkeypatch.setattr(assets, "packaged_static_directory", lambda: static)
+    return static
+
+
+def test_the_document_root_serves_the_frontend(
+    served_frontend: Path, workspace: Path
+) -> None:
+    """A browser opening Studio lands on `/`, so `/` must return the app.
+
+    Without this the app exposed only `/api/v1/*`: `/` was a 404 and the built bundle
+    was unreachable, which made the whole frontend dead code.
+    """
+    testclient = pytest.importorskip("fastapi.testclient")
+    from seshat.studio import app as app_module
+
+    app, _token = app_module.create_app(workspace, port=_TEST_PORT)
+    client = testclient.TestClient(app, base_url=f"http://{app.state.expected_host}")
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Seshat Studio" in response.text
+
+
+def test_the_bundled_assets_are_served(served_frontend: Path, workspace: Path) -> None:
+    testclient = pytest.importorskip("fastapi.testclient")
+    from seshat.studio import app as app_module
+
+    app, _token = app_module.create_app(workspace, port=_TEST_PORT)
+    client = testclient.TestClient(app, base_url=f"http://{app.state.expected_host}")
+
+    assert client.get("/assets/app-abc123.js").status_code == 200
+
+
+def test_the_document_root_is_reachable_without_a_session(
+    served_frontend: Path, workspace: Path
+) -> None:
+    """The page must load BEFORE the exchange -- it is what performs the exchange.
+
+    Requiring a session to fetch `/` would be a deadlock: the browser cannot get a
+    session without running the JavaScript that `/` delivers.
+    """
+    testclient = pytest.importorskip("fastapi.testclient")
+    from seshat.studio import app as app_module
+
+    app, _token = app_module.create_app(workspace, port=_TEST_PORT)
+    client = testclient.TestClient(app, base_url=f"http://{app.state.expected_host}")
+
+    assert client.get("/").status_code == 200
+
+
+def test_serving_the_frontend_never_escapes_the_static_directory(
+    served_frontend: Path, workspace: Path
+) -> None:
+    """A traversal-shaped asset path must not read outside the bundle."""
+    testclient = pytest.importorskip("fastapi.testclient")
+    from seshat.studio import app as app_module
+
+    (workspace / "secret.txt").write_text("secret", encoding="utf-8")
+    app, _token = app_module.create_app(workspace, port=_TEST_PORT)
+    client = testclient.TestClient(app, base_url=f"http://{app.state.expected_host}")
+
+    for attempt in ("/assets/../../secret.txt", "/assets/..%2f..%2fsecret.txt"):
+        response = client.get(attempt)
+        # Any refusal is acceptable, and which one depends on WHERE the escape is
+        # caught: the client normalises `/assets/../../x` to `/x`, which is not a public
+        # path, so the session guard refuses it with 401 before routing ever runs. A
+        # path that survives normalisation is refused by StaticFiles with 404. Both are
+        # correct; asserting one specific code would encode which layer happened to
+        # win.
+        assert response.status_code in {400, 401, 403, 404}, (
+            f"{attempt} was not refused: {response.status_code}"
+        )
+        assert "secret" not in response.text, f"{attempt} leaked file content"
+
+
+def test_the_launcher_prints_a_url_a_browser_can_actually_open(
+    workspace: Path, assets_present, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The printed link must be a GET-able page, not the POST-only exchange route.
+
+    The launcher told the user to open `/api/v1/bootstrap?token=...`, which returns 405
+    on a browser navigation. The token belongs on the document root, where the app then
+    exchanges it.
+    """
+    pytest.importorskip("fastapi")
+    from seshat.studio import __main__ as launcher
+
+    launcher.main(["--repo", str(workspace), "--no-serve"])
+    err = capsys.readouterr().err
+
+    assert "/api/v1/bootstrap?token=" not in err, (
+        "the printed URL is the POST-only exchange route; a browser GET returns 405"
+    )
+    assert "?token=" in err, "the link must still carry the one-time token"
+
+
+# --------------------------------------------------------------------------- #
 # Contract conformance of the LIVE responses                                  #
 # --------------------------------------------------------------------------- #
 
@@ -539,11 +654,23 @@ def test_the_launcher_binds_first_then_enforces_that_port(
 
 
 def test_the_launcher_refuses_when_the_frontend_is_absent(
-    workspace: Path, capsys: pytest.CaptureFixture[str]
+    workspace: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The real state today: no `studio-ui/dist`, so the launcher must refuse."""
+    """A wheel built without the frontend must say so, not serve a blank page.
+
+    The absence is CREATED here rather than assumed: whether `studio-ui/dist` has been
+    built is ambient state (CI builds it, a fresh clone has not), so a test that relied
+    on it would pass or fail depending on who ran it.
+    """
     pytest.importorskip("fastapi")
     from seshat.studio import __main__ as launcher
+    from seshat.studio import assets
+
+    monkeypatch.setattr(
+        assets,
+        "packaged_static_directory",
+        lambda: workspace / "definitely-not-built",
+    )
 
     assert launcher.main(["--repo", str(workspace), "--no-serve"]) == 2
 
@@ -567,7 +694,9 @@ def test_the_launcher_builds_the_app_without_binding_a_port(
 
     assert exit_code == 0
     err = capsys.readouterr().err
-    assert "/api/v1/bootstrap?token=" in err
+    # The document root, not the POST-only exchange route -- see
+    # `test_the_launcher_prints_a_url_a_browser_can_actually_open`.
+    assert "/?token=" in err
     assert str(workspace) not in err, "the launch message must not leak the layout"
 
 

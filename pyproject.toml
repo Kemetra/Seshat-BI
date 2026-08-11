@@ -167,6 +167,11 @@ studio = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/seshat", "src/retail"]
+# The Studio frontend bundle is GENERATED and gitignored, and hatchling honours VCS
+# ignore rules when collecting `packages` -- so without this the wheel shipped no
+# frontend at all while every unit test stayed green. `artifacts` re-includes exactly
+# the generated paths that must ship anyway.
+artifacts = ["src/seshat/studio/static/**"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "mappings/demo_sample_orders" = "seshat/demo/resources/demo_sample_orders"

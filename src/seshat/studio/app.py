@@ -34,8 +34,18 @@ from . import config, projection, redaction, session
 #: Every route lives under this prefix, matching the contract's server URL.
 API_PREFIX = "/api/v1"
 
-#: The only route reachable without a session.
-_PUBLIC_PATHS = frozenset({f"{API_PREFIX}/health"})
+#: Reachable without a session.
+#:
+#: `/health` is the contract's one public API endpoint. The DOCUMENT ROOT and the
+#: bundled assets are also public, and must be: the page served at `/` is what PERFORMS
+#: the token exchange, so requiring a session to fetch it would deadlock -- the browser
+#: cannot obtain a session without first running the JavaScript that `/` delivers.
+#: Serving them reveals nothing: the bundle is the same in every install and carries no
+#: workspace content.
+_PUBLIC_PATHS = frozenset({f"{API_PREFIX}/health", "/", "/index.html"})
+
+#: Asset requests are public for the same reason as the document root.
+_PUBLIC_PREFIXES = ("/assets/",)
 
 #: Methods that mutate, and therefore must prove same-origin.
 _MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -142,8 +152,10 @@ def _check_origin(request: Request, app: FastAPI) -> JSONResponse | None:
 
 
 def _requires_session(path: str) -> bool:
-    """Everything but the public health route and the exchange that mints a session."""
-    return path not in _PUBLIC_PATHS and path != f"{API_PREFIX}/bootstrap"
+    """Everything but the public routes and the exchange that mints a session."""
+    if path in _PUBLIC_PATHS or path == f"{API_PREFIX}/bootstrap":
+        return False
+    return not path.startswith(_PUBLIC_PREFIXES)
 
 
 def _check_session(request: Request, app: FastAPI) -> JSONResponse | None:
@@ -262,6 +274,30 @@ def _register_routes(app: FastAPI) -> None:
         return _snapshot().agent_health.as_dict()
 
 
+def _register_frontend(app: FastAPI) -> None:
+    """Serve the prebuilt bundle (FR-005).
+
+    Registered AFTER the API routes so `/api/v1/*` always wins, and mounted rather than
+    hand-rolled: Starlette's `StaticFiles` already resolves and contains paths, so a
+    traversal-shaped asset request cannot escape the bundle. Hand-rolling that check
+    would be a second, weaker copy of the containment logic.
+
+    A missing bundle is not fatal here -- the launcher refuses before this point, and
+    the API stays usable for a caller that only wants the projection.
+    """
+    from fastapi.staticfiles import StaticFiles
+
+    from . import assets
+
+    static_directory = assets.packaged_static_directory()
+    if not static_directory.is_dir():
+        return
+
+    # `html=True` serves `index.html` for `/`, which is where a browser lands and
+    # therefore where the token exchange runs.
+    app.mount("/", StaticFiles(directory=static_directory, html=True), name="frontend")
+
+
 def create_app(workspace: Path | str, *, port: int) -> tuple[FastAPI, str]:
     """Build the app for one pinned workspace, returning it with its bootstrap token.
 
@@ -291,5 +327,8 @@ def create_app(workspace: Path | str, *, port: int) -> tuple[FastAPI, str]:
     app.state.authentication_mode = "subscription"
 
     _register_routes(app)
+    # After the API routes: the frontend mount claims `/`, so registering it first would
+    # shadow every `/api/v1/*` path.
+    _register_frontend(app)
     _install_security_middleware(app)
     return app, token

@@ -53,6 +53,19 @@ jobs:
       - name: Ruff lint
         run: ruff check src tests scripts
 
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: studio-ui/package-lock.json
+
+      - name: Build the Studio frontend
+        # Node is a BUILD-time dependency only -- FR-005 promises END USERS need none.
+        # Building here is what makes the FR-033 "no remote asset" tests and the
+        # wheel-content test actually RUN: they read the built output, so without this
+        # step all seven of them skip and enforce nothing.
+        run: python scripts/build_studio_frontend.py
+
       - name: Unit tests
         run: pytest -m unit
 

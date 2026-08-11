@@ -146,9 +146,29 @@ the same 2 failures / 24 skipped. After T009-T010: **5979 passed / the same 2 fa
   event boundary, (h) add the file-kind check the security contract requires for
   optional reads, and (i) re-pin `LaunchConfiguration.port` to the OS-assigned port
   after bind, since `host_is_allowed` is otherwise compared against `0`.
-- [ ] **T012** Create the React/TypeScript shell, generated API types, local design
+- [x] **T012** Create the React/TypeScript shell, generated API types, local design
   tokens, and offline build pipeline; copy build output into the packaged static
   directory through one documented build command. [FR-005, FR-033]
+  — `studio-ui/` (Vite + React 19 + TypeScript, strict). Types are GENERATED from
+  `studio-api.yaml` by `scripts/generate_studio_types.py` and drift-pinned, so the
+  browser cannot hold a different payload shape than the server serves. One command,
+  `python scripts/build_studio_frontend.py`, installs, tests, typechecks, bundles, and
+  stages `dist/` into `src/seshat/studio/static/`. The bundle is gitignored and
+  hatchling honours VCS ignore rules, so `artifacts` in `pyproject.toml` is what makes
+  the wheel actually carry it -- without that entry the wheel shipped ZERO frontend
+  files while every test stayed green, because they compared paths and read config
+  instead of opening a wheel. Now pinned by a test that builds a real wheel and looks
+  inside, and by CI's `Build the Studio frontend` step, without which all seven
+  FR-005/FR-033 tests skipped and enforced nothing.
+  FR-033 is enforced against the BUILT output by asserting on loading mechanisms
+  (`src`/`href`, CSS `@import`/`url()`), not by grepping for `https://` -- the bundle
+  legitimately carries inert URL strings that are never fetched. Build artifacts are
+  gitignored: end users install a wheel, not a checkout.
+  **NOT T012's scope, and not done:** the Command Room detail views. The shell renders a
+  workspace heading, a first-arrival state, an input-defect list, and a per-table status
+  badge, which is the FRAME. T013 owns the table journey, evidence/blocker details, next
+  action, and the full first-arrival and input-defect presentations, and T014 owns the
+  seven agent-health states.
 - [ ] **T013** Write failing component tests, then implement Command Room, table
   journey, evidence/blocker details, next action, first-arrival, and input-defect
   states without command names or scores. [US1, FR-009, FR-032]
