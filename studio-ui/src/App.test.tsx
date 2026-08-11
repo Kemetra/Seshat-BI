@@ -109,6 +109,43 @@ describe("the Studio shell", () => {
     expect(screen.getByText(/no decisions are waiting/i)).toBeInTheDocument();
   });
 
+  it.each([
+    "healthy",
+    "missing",
+    "signed_out",
+    "incompatible",
+    "quota_limited",
+    "crashed",
+    "disabled",
+  ] as const)(
+    "keeps the deterministic workspace views usable when the agent is %s (FR-025)",
+    async (state) => {
+      stubFetch(
+        snapshot({
+          tables: [journey("store_sales", "blocked")],
+          agent_health: {
+            state,
+            summary: `summary for ${state}`,
+            recovery_action: `recovery for ${state}`,
+            provider: state === "disabled" ? "disabled" : "codex",
+            version: null,
+          },
+        }),
+      );
+      render(<App />);
+
+      // FR-025: "deterministic workspace views MUST remain available in every agent
+      // health state". A banner that replaced the page on a crash would satisfy FR-024
+      // and break this, so the table journey must still be there in all seven.
+      expect(
+        await screen.findByRole("heading", { name: "store_sales" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("list", { name: /readiness stages/i }),
+      ).toBeInTheDocument();
+    },
+  );
+
   it("shows a first-arrival state for a workspace with no tables", async () => {
     stubFetch(snapshot());
     render(<App />);

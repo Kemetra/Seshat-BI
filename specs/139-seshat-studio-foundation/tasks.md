@@ -187,8 +187,24 @@ the same 2 failures / 24 skipped. After T009-T010: **5979 passed / the same 2 fa
   permits the number, but the wording says plainly what it counts.
   FR-032: stage identifiers render as human labels ("Mapping", never `mapping_ready`),
   and every raw source reference sits behind an explicit `<details>` disclosure.
-- [ ] **T014** Add the seven distinct agent health presentations while retaining all
+- [x] **T014** Add the seven distinct agent health presentations while retaining all
   deterministic workspace interactions. [US4, FR-024, FR-025]
+  — `studio-ui/src/components/AgentHealth.tsx`. All seven contract states
+  (`healthy`, `missing`, `signed_out`, `incompatible`, `quota_limited`, `crashed`,
+  `disabled`) get a DIFFERENT headline, explanation, and recovery action, pinned by a
+  test asserting seven distinct headlines -- "distinct" means an analyst can tell
+  signed-out from quota-limited, not that a banner changes colour. The server's wording
+  is preferred when it sends any, with local text as the fallback so an empty server
+  string never renders as blank.
+  FR-025 is enforced by a parametrised shell test over all seven states asserting the
+  table journey and stage list are STILL present: the notice is strictly additive and
+  never gates, wraps, or replaces the deterministic views. A banner that blanked the page
+  on a crash would satisfy FR-024 and break FR-025.
+  `role="status"` (implicitly polite) rather than `alert` -- agent health is context, not
+  an emergency. The agent version sits behind the FR-032 disclosure.
+
+Phase 3 is COMPLETE. The deterministic Command Room reads one workspace truthfully:
+projection, endpoints, frontend, journey, and health.
 
 ## Phase 4 - Stable Events and Fake Agent (US2)
 

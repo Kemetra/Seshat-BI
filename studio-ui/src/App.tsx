@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 
 import { StudioRequestError, fetchWorkspace } from "./api/client";
 import type { WorkspaceSnapshot } from "./api/types";
+import { AgentHealthNotice } from "./components/AgentHealth";
 import { TableJourney } from "./components/TableJourney";
 
 type LoadState =
@@ -89,6 +90,9 @@ export function App(): React.JSX.Element {
   return (
     <main>
       <h1>{snapshot.identity.display_name}</h1>
+      {/* Strictly additive: FR-025 requires the deterministic views below to stay
+          usable in EVERY agent state, so this notice never gates what follows. */}
+      <AgentHealthNotice health={snapshot.agent_health} />
       <PendingDecisions count={snapshot.pending_decision_count} />
       {snapshot.input_defects.length > 0 && <InputDefects snapshot={snapshot} />}
       {snapshot.tables.length === 0 ? (
