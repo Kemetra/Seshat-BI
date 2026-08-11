@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from seshat.agent_next import build_table_next_document
 from seshat.status_surface import _STAGE_ORDER, build_status_projection
 
 #: The canonical status for a stage whose committed block could not be read, or whose
@@ -516,8 +517,29 @@ def _with_table_blockers(
     )
 
 
+def _forbidden_scope_for(root: Path, entry: dict) -> tuple[str, ...]:
+    """The gates still closed for this table, from the readiness authority.
+
+    Deliberately delegated rather than re-derived. `agent_next` owns the gate rules
+    and the always-forbidden invariants, and `readiness_projection` already reads
+    this exact field from the same function -- a second derivation here would be a
+    copy that drifts silently, and forbidden scope is precisely where a drifted copy
+    goes unnoticed until an agent authors something a gate forbids.
+
+    Returns `()` when the source path is unreadable: a table whose directory cannot
+    be resolved has no readiness document to derive gates from, and the surrounding
+    defect reporting already names that condition.
+    """
+    source_path = entry.get("source_path")
+    if not source_path:
+        return ()
+    directory_name = str(source_path).rsplit("/", 2)[-2]
+    document = build_table_next_document(root, directory_name)
+    return tuple(document["forbidden_scope"])
+
+
 def _journey_for(
-    entry: dict, table_id: str
+    root: Path, entry: dict, table_id: str
 ) -> tuple[TableJourney, tuple[InputDefect, ...]]:
     """Build one table's journey plus whatever defects its source produced."""
     stages, defects = _stage_states(entry.get("stages", {}), table_id)
@@ -528,6 +550,7 @@ def _journey_for(
             current_stage=entry.get("current_stage"),
             stages=_with_table_blockers(stages, entry, table_id),
             next_action=_next_action(entry, table_id),
+            forbidden_scope=_forbidden_scope_for(root, entry),
         ),
         defects,
     )
@@ -565,7 +588,7 @@ def build_workspace_snapshot(
             defects.append(_unreadable_defect(table_id))
             continue
 
-        journey, journey_defects = _journey_for(entry, table_id)
+        journey, journey_defects = _journey_for(workspace_root, entry, table_id)
         journeys.append(journey)
         defects.extend(journey_defects)
 

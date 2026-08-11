@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Iterator, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +37,10 @@ from seshat.studio.redaction import scrub_payload
 __all__ = [
     "CodexFrameError",
     "CodexProtocolReader",
+    "NormalizationContext",
+    "InboundVerdict",
+    "SUPPORTED_SERVER_REQUESTS",
+    "classify_inbound",
     "PendingRequests",
     "UNMAPPED_METHODS",
     "normalize_notification",
@@ -49,13 +54,24 @@ class CodexFrameError(ValueError):
 #: JSON-RPC version every frame must declare.
 _JSONRPC_VERSION = "2.0"
 
+#: Ceiling on one unterminated frame. Provider output is untrusted: a crashed or
+#: misbehaving app-server that never emits a newline would otherwise grow this
+#: buffer until Studio runs out of memory, instead of producing a protocol failure.
+MAX_FRAME_BYTES = 1_000_000
+
 #: Item types Studio renders. Anything absent here is dropped, including `reasoning`.
 _RENDERED_ITEM_TYPES = frozenset(
     {"agentMessage", "plan", "commandExecution", "fileChange", "mcpToolCall"}
 )
 
 #: Item types that are TOOLS for rendering purposes -- they get tool_started/completed.
-_TOOL_ITEM_TYPES = frozenset({"commandExecution", "fileChange", "mcpToolCall"})
+#:
+#: `fileChange` is deliberately NOT here. It carries WRITE INTENT, and
+#: `agent_routes._record_turn` enforces the read-only refusal by checking
+#: `WRITE_INTENT_TYPES` (`file_change_proposed`, `approval_required`). Normalizing a
+#: provider file change to a tool event would sail straight past that guard during a
+#: `read_only` turn, and the browser would never receive the proposal it must review.
+_TOOL_ITEM_TYPES = frozenset({"commandExecution", "mcpToolCall"})
 
 #: Provider turn statuses that end a turn, mapped to Studio's two terminal events.
 _TERMINAL_STATUS = {
@@ -72,6 +88,53 @@ UNMAPPED_METHODS: set[str] = set()
 _Events = tuple[tuple[str, dict[str, Any]], ...]
 
 
+@dataclass(frozen=True, slots=True)
+class InboundVerdict:
+    """What an inbound frame is, and whether the adapter can honour it."""
+
+    is_request: bool
+    supported: bool
+    method: str
+
+    @property
+    def makes_adapter_incompatible(self) -> bool:
+        """An unsupported REQUEST is fatal; an unsupported notification is not.
+
+        A notification is fire-and-forget, so ignoring one costs nothing. A request
+        carries an `id` and Codex BLOCKS waiting for that response -- dropping it
+        strands the turn forever. The compatibility contract calls for
+        `incompatible` and no new turns, which is a visible failure rather than a
+        silent stall.
+        """
+        return self.is_request and not self.supported
+
+
+#: Server requests Studio knows how to answer. Anything else with an `id` is fatal.
+SUPPORTED_SERVER_REQUESTS: frozenset[str] = frozenset(
+    {
+        "item/commandExecution/requestApproval",
+        "item/fileChange/requestApproval",
+    }
+)
+
+
+def classify_inbound(frame: dict[str, Any]) -> InboundVerdict:
+    """Decide whether Studio can honour one inbound frame."""
+    method = str(frame.get("method", ""))
+    is_request = "id" in frame and "method" in frame
+    if is_request:
+        return InboundVerdict(
+            is_request=True,
+            supported=method in SUPPORTED_SERVER_REQUESTS,
+            method=method,
+        )
+    return InboundVerdict(
+        is_request=False,
+        supported=method in _NOTIFICATION_MAP,
+        method=method,
+    )
+
+
 class CodexProtocolReader:
     """Reassembles newline-delimited JSON frames from arbitrary chunk boundaries.
 
@@ -79,12 +142,19 @@ class CodexProtocolReader:
     as not. Holding a partial line until its newline arrives is the whole job.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, max_frame_bytes: int = MAX_FRAME_BYTES) -> None:
         self._buffer = ""
+        self._max_frame_bytes = max_frame_bytes
 
     def feed(self, chunk: str) -> Iterator[dict[str, Any]]:
         """Yield every complete frame in `chunk`, retaining any partial tail."""
         self._buffer += chunk
+        if len(self._buffer) > self._max_frame_bytes:
+            self._buffer = ""
+            raise CodexFrameError(
+                f"provider frame exceeded {self._max_frame_bytes} bytes without a "
+                "newline; refusing to buffer untrusted output without bound"
+            )
         while "\n" in self._buffer:
             line, self._buffer = self._buffer.split("\n", 1)
             line = line.strip()
@@ -191,11 +261,91 @@ class PendingRequests:
 # -- normalization ----------------------------------------------------------------- #
 
 
+class _DeltaBuffer:
+    """Redacts each item's message CUMULATIVELY, emitting only the new safe suffix.
+
+    Redaction rules key on a PREFIX -- a credential name, an auth scheme, a DSN
+    `scheme://` -- followed by the value. Scrubbing each delta in isolation therefore
+    misses any credential the provider split across two frames: the first chunk holds
+    a prefix with no value, the second a bare value matching no rule.
+
+    So nothing is scrubbed in isolation. Each item's raw text is accumulated, the
+    WHOLE accumulation is redacted every time, and only the part of that redacted
+    text not yet sent is emitted. The redactor always sees complete context, so the
+    splitting window does not exist -- rather than being narrowed by a heuristic.
+
+    Keyed per ITEM, never per stream: Codex interleaves items, and one shared slot
+    would splice item A's text onto item B -- corrupting the transcript and creating
+    a second leak path rather than closing the first.
+
+    Cost is O(n^2) in one message's length. Deliberate: chat-length answers make that
+    irrelevant, and a smarter incremental scheme would reintroduce the very
+    partial-match reasoning this design exists to avoid.
+    """
+
+    #: Deltas that arrive without an `itemId` share this slot. The provider always
+    #: sends one, so this is a malformed-input path -- but a per-arrival slot would
+    #: scrub each delta alone, which is exactly the defect being fixed.
+    _UNKEYED = ""
+
+    def __init__(self) -> None:
+        #: item key -> (raw accumulated text, redacted text already emitted)
+        self._items: dict[str, tuple[str, str]] = {}
+
+    def push(self, item_id: str, text: str, scrub: Callable[[str], str]) -> str:
+        """Accumulate `text`, returning only newly-safe redacted output.
+
+        Returns `""` when the fresh redaction is NOT an extension of what was already
+        emitted -- which happens when a redaction rewrites text already sent, as when
+        `Authorization: <redacted> ` becomes `Authorization: <redacted>` once the
+        token arrives. Emitting a "suffix" computed against a diverged string is
+        precisely how a raw-offset implementation leaks the credential, so this
+        emits nothing and lets the terminal flush reconcile the item.
+        """
+        key = item_id or self._UNKEYED
+        raw, sent = self._items.get(key, ("", ""))
+        raw += text
+        redacted = scrub(raw)
+        self._items[key] = (raw, redacted if redacted.startswith(sent) else sent)
+        if not redacted.startswith(sent):
+            return ""
+        return redacted[len(sent) :]
+
+    def flush(self, item_id: str, scrub: Callable[[str], str]) -> str:
+        """Release whatever redacted text this item has not yet emitted."""
+        key = item_id or self._UNKEYED
+        raw, sent = self._items.pop(key, ("", ""))
+        redacted = scrub(raw)
+        if redacted.startswith(sent):
+            return redacted[len(sent) :]
+        # The redaction diverged from what was already sent: the only safe whole
+        # value is the fully redacted text. A cosmetic repeat beats a leak.
+        return redacted
+
+    def flush_all(self, scrub: Callable[[str], str]) -> str:
+        """Release every outstanding item, for turn-level terminal events."""
+        return "".join(self.flush(key, scrub) for key in list(self._items))
+
+
+@dataclass(frozen=True, slots=True)
+class NormalizationContext:
+    """The per-turn seams normalization needs, bundled so the signature stays small.
+
+    `delta_buffer` carries state across frames, which is why a context OBJECT exists
+    at all: streamed redaction cannot be decided from one frame in isolation. Its
+    lifetime is one turn -- the caller builds a context per turn, so no held text can
+    survive into a turn that never produced it.
+    """
+
+    workspace_root: Path | None
+    secrets: Sequence[str | None] = ()
+    delta_buffer: _DeltaBuffer = field(default_factory=_DeltaBuffer)
+
+
 def normalize_notification(
     frame: dict[str, Any],
     *,
-    workspace_root: Path | None,
-    secrets: Sequence[str | None] = (),
+    context: NormalizationContext,
 ) -> Iterator[tuple[str, dict[str, Any]]]:
     """Translate one provider notification into zero or more Studio events.
 
@@ -212,8 +362,76 @@ def normalize_notification(
         # A notification whose params are absent or null carries no state to render.
         return
 
+    scrub = _text_scrubber(context)
+
+    # Streamed message text is redacted CUMULATIVELY by the buffer, which is the only
+    # way a credential split across frames is caught. It arrives here already clean,
+    # so it bypasses the per-payload scrub rather than being redacted twice.
+    for event_type, payload in _streamed_text(
+        method, params, context.delta_buffer, scrub
+    ):
+        yield event_type, payload
+
+    if method == "item/agentMessage/delta":
+        return
+
     for event_type, payload in _map_notification(method, params):
-        yield event_type, _scrubbed(payload, workspace_root, secrets)
+        yield event_type, _scrubbed(payload, context.workspace_root, context.secrets)
+
+
+def _text_scrubber(context: NormalizationContext) -> Callable[[str], str]:
+    """Redact a bare string with the same rules the payload scrub applies."""
+
+    def scrub(text: str) -> str:
+        cleaned = _scrubbed(
+            {"text": text}, context.workspace_root, context.secrets
+        ).get("text")
+        return cleaned if isinstance(cleaned, str) else ""
+
+    return scrub
+
+
+def _streamed_text(
+    method: str,
+    params: dict[str, Any],
+    buffer: _DeltaBuffer,
+    scrub: Callable[[str], str],
+) -> Iterator[tuple[str, dict[str, Any]]]:
+    """Cumulative-redaction output for a delta, or a terminal event's remainder."""
+    if method == "item/agentMessage/delta":
+        delta = params.get("delta")
+        if not isinstance(delta, str) or not delta:
+            return
+        safe = buffer.push(str(params.get("itemId", "")), delta, scrub)
+        if safe:
+            yield "agent_message", {"text": safe, "streaming": True}
+        return
+
+    # Terminal paths MUST release text the cumulative redaction has not yet emitted,
+    # or the analyst's answer is silently truncated. `item/completed` for an
+    # agentMessage is deliberately silent about the ASSEMBLED text (the deltas already
+    # streamed it), so this emits only the outstanding remainder -- never a duplicate.
+    yield from _terminal_flush(method, params, buffer, scrub)
+
+
+def _terminal_flush(
+    method: str,
+    params: dict[str, Any],
+    buffer: _DeltaBuffer,
+    scrub: Callable[[str], str],
+) -> _Events:
+    """The not-yet-emitted remainder, released by whichever terminal event arrived."""
+    if method == "item/completed":
+        item = params.get("item")
+        item_id = str(item.get("id", "")) if isinstance(item, dict) else ""
+        remainder = buffer.flush(item_id, scrub)
+    elif method in {"turn/completed", "error"}:
+        remainder = buffer.flush_all(scrub)
+    else:
+        return ()
+    if not remainder:
+        return ()
+    return (("agent_message", {"text": remainder, "streaming": True}),)
 
 
 def _scrubbed(
@@ -232,13 +450,18 @@ def _scrubbed(
 
 
 def _thread_started(params: dict[str, Any]) -> _Events:
-    thread = params.get("thread") or {}
-    return (("thread_started", {"provider_thread_id": thread.get("id", "")}),)
+    """The Studio thread id already rides the event envelope.
+
+    The bridge contract requires provider identifiers to stay internal, so the raw
+    Codex thread id is deliberately NOT copied into a browser-bound payload.
+    """
+    del params
+    return (("thread_started", {}),)
 
 
 def _turn_started(params: dict[str, Any]) -> _Events:
-    turn = params.get("turn") or {}
-    return (("turn_started", {"provider_turn_id": turn.get("id", "")}),)
+    del params
+    return (("turn_started", {}),)
 
 
 def _turn_completed(params: dict[str, Any]) -> _Events:
@@ -304,8 +527,24 @@ def _map_notification(
 
 
 def _terminal_for(params: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """A terminal notification with no readable status is a protocol defect.
+
+    Defaulting it to `completed` would turn a malformed frame into a successful
+    turn, so an interrupted or invalid response would render as a finished answer.
+    """
     turn = params.get("turn") or {}
-    status = turn.get("status", "completed")
+    status = turn.get("status")
+    if not isinstance(status, str) or status not in _TERMINAL_STATUS:
+        return (
+            "turn_failed",
+            {
+                "category": "protocol_error",
+                "detail": (
+                    "the provider ended the turn without a readable status; the "
+                    "result cannot be reported as successful"
+                ),
+            },
+        )
     event_type = _TERMINAL_STATUS.get(status, "turn_failed")
     if event_type == "turn_completed":
         return event_type, {"outcome": "answered"}
@@ -332,16 +571,45 @@ def _map_item(
         return
 
     if item_type == "agentMessage":
-        if method == "item/completed":
-            yield "agent_message", {"text": item.get("text", "")}
+        # Deliberately silent on `item/completed`. The deltas already streamed this
+        # text, and the browser renders every `agent_message` as its own row rather
+        # than coalescing on item id -- so emitting the assembled message here shows
+        # the analyst the fragments followed by a duplicate full answer.
         return
 
     if item_type == "plan":
         yield "plan_updated", {"steps": _plan_steps_from_text(item.get("text", ""))}
         return
 
+    if item_type == "fileChange":
+        # Emitted on `item/started` only: one proposal per item, not two. A second
+        # event on completion would ask the analyst to review the same change twice.
+        if method == "item/started":
+            yield _file_change_event(item)
+        return
+
     if item_type in _TOOL_ITEM_TYPES:
         yield _tool_event(method, item_type, item)
+
+
+def _file_change_event(item: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """Write intent, in the shape the read-only guard and the browser both expect."""
+    changes = item.get("changes") or ()
+    paths = [
+        str(change.get("path", ""))
+        for change in changes
+        if isinstance(change, dict) and change.get("path")
+    ]
+    return (
+        "file_change_proposed",
+        {
+            "paths": paths,
+            "summary": (
+                f"{len(paths)} file change{'s' if len(paths) != 1 else ''} proposed"
+            ),
+            "diff_available": bool(paths),
+        },
+    )
 
 
 def _tool_event(
