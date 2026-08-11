@@ -31,6 +31,7 @@ from seshat.studio.codex_process import (
     MAXIMUM_TESTED_CODEX,
     MINIMUM_TESTED_CODEX,
     CodexLaunchPlan,
+    ProbeObservations,
     classify_health,
     is_tested_version,
     redact_provider_stderr,
@@ -99,7 +100,9 @@ def test_versions_outside_the_tested_range_are_refused(version: str) -> None:
 
 
 def test_an_untested_version_classifies_incompatible_not_healthy() -> None:
-    health = classify_health(executable_found=True, version="0.148.0", signed_in=True)
+    health = classify_health(
+        ProbeObservations(executable_found=True, version="0.148.0", signed_in=True)
+    )
     assert health.state == "incompatible"
     assert "0.148.0" in health.summary
     assert MAXIMUM_TESTED_CODEX in health.summary
@@ -109,23 +112,29 @@ def test_an_untested_version_classifies_incompatible_not_healthy() -> None:
 
 
 def test_absent_executable_is_missing_and_keeps_deterministic_views() -> None:
-    health = classify_health(executable_found=False, version=None, signed_in=False)
+    health = classify_health(
+        ProbeObservations(executable_found=False, version=None, signed_in=False)
+    )
     assert health.state == "missing"
     assert health.recovery_action
 
 
 def test_signed_out_is_reported_without_reading_credentials() -> None:
-    health = classify_health(executable_found=True, version="0.147.0", signed_in=False)
+    health = classify_health(
+        ProbeObservations(executable_found=True, version="0.147.0", signed_in=False)
+    )
     assert health.state == "signed_out"
 
 
 def test_quota_exhaustion_preserves_the_reported_reset_detail() -> None:
     health = classify_health(
-        executable_found=True,
-        version="0.147.0",
-        signed_in=True,
-        rate_limit_reached=True,
-        resets_at=1786652200,
+        ProbeObservations(
+            executable_found=True,
+            version="0.147.0",
+            signed_in=True,
+            rate_limit_reached=True,
+            resets_at=1786652200,
+        )
     )
     assert health.state == "quota_limited"
     assert "1786652200" in health.summary or "reset" in health.summary.lower()
@@ -133,14 +142,18 @@ def test_quota_exhaustion_preserves_the_reported_reset_detail() -> None:
 
 def test_unexpected_eof_is_crashed_and_offers_restart() -> None:
     health = classify_health(
-        executable_found=True, version="0.147.0", signed_in=True, saw_eof=True
+        ProbeObservations(
+            executable_found=True, version="0.147.0", signed_in=True, saw_eof=True
+        )
     )
     assert health.state == "crashed"
     assert "restart" in health.recovery_action.lower()
 
 
 def test_a_healthy_bridge_names_codex_as_the_provider() -> None:
-    health = classify_health(executable_found=True, version="0.147.0", signed_in=True)
+    health = classify_health(
+        ProbeObservations(executable_found=True, version="0.147.0", signed_in=True)
+    )
     assert health.state == "healthy"
     assert health.provider == "codex"
     assert health.version == "0.147.0"
@@ -166,7 +179,7 @@ def test_no_condition_switches_the_provider_to_a_billed_path() -> None:
         },
     ]
     for condition in conditions:
-        health = classify_health(**condition)
+        health = classify_health(ProbeObservations(**condition))
         assert health.provider in {"codex", "disabled"}, (
             f"{condition} switched the provider to {health.provider!r}"
         )

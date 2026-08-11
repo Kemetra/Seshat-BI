@@ -27,7 +27,7 @@ fail-open dressed as resilience.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -67,6 +67,9 @@ _TERMINAL_STATUS = {
 #: Notification method names seen but deliberately not mapped. Module-level so a
 #: diagnostics view can report what the provider sent without widening the event set.
 UNMAPPED_METHODS: set[str] = set()
+
+#: What every notification handler returns: zero or more (event_type, payload) pairs.
+_Events = tuple[tuple[str, dict[str, Any]], ...]
 
 
 class CodexProtocolReader:
@@ -209,50 +212,76 @@ def _scrubbed(
     return scrubbed if isinstance(scrubbed, dict) else {}
 
 
-def _map_notification(
-    method: str, params: dict[str, Any]
-) -> Iterator[tuple[str, dict[str, Any]]]:
-    if method == "thread/started":
-        thread = params.get("thread") or {}
-        yield "thread_started", {"provider_thread_id": thread.get("id", "")}
-        return
+def _thread_started(params: dict[str, Any]) -> _Events:
+    thread = params.get("thread") or {}
+    return (("thread_started", {"provider_thread_id": thread.get("id", "")}),)
 
-    if method == "turn/started":
-        turn = params.get("turn") or {}
-        yield "turn_started", {"provider_turn_id": turn.get("id", "")}
-        return
 
-    if method == "turn/completed":
-        yield _terminal_for(params)
-        return
+def _turn_started(params: dict[str, Any]) -> _Events:
+    turn = params.get("turn") or {}
+    return (("turn_started", {"provider_turn_id": turn.get("id", "")}),)
 
-    if method == "item/agentMessage/delta":
-        delta = params.get("delta")
-        if isinstance(delta, str) and delta:
-            yield "agent_message", {"text": delta, "streaming": True}
-        return
 
-    if method in {"item/started", "item/completed"}:
-        yield from _map_item(method, params)
-        return
+def _turn_completed(params: dict[str, Any]) -> _Events:
+    return (_terminal_for(params),)
 
-    if method == "turn/plan/updated":
-        yield "plan_updated", {"steps": _public_plan_steps(params)}
-        return
 
-    if method == "error":
-        error = params.get("error") or {}
-        yield (
+def _agent_message_delta(params: dict[str, Any]) -> _Events:
+    delta = params.get("delta")
+    if isinstance(delta, str) and delta:
+        return (("agent_message", {"text": delta, "streaming": True}),)
+    return ()
+
+
+def _plan_updated(params: dict[str, Any]) -> _Events:
+    return (("plan_updated", {"steps": _public_plan_steps(params)}),)
+
+
+def _turn_error(params: dict[str, Any]) -> _Events:
+    error = params.get("error") or {}
+    return (
+        (
             "turn_failed",
             {
                 "category": "provider_error",
                 "detail": error.get("message", "the provider reported an error"),
                 "will_retry": bool(params.get("willRetry")),
             },
-        )
-        return
+        ),
+    )
 
-    UNMAPPED_METHODS.add(method)
+
+def _item_started(params: dict[str, Any]) -> _Events:
+    return tuple(_map_item("item/started", params))
+
+
+def _item_completed(params: dict[str, Any]) -> _Events:
+    return tuple(_map_item("item/completed", params))
+
+
+#: The allowlist, as data. A method absent from this table produces NOTHING -- which
+#: is why it is a dict rather than an if-chain ending in an else: there is no branch
+#: for "anything else", so a passthrough cannot be introduced by accident.
+_NOTIFICATION_MAP: dict[str, Callable[[dict[str, Any]], _Events]] = {
+    "thread/started": _thread_started,
+    "turn/started": _turn_started,
+    "turn/completed": _turn_completed,
+    "item/agentMessage/delta": _agent_message_delta,
+    "item/started": _item_started,
+    "item/completed": _item_completed,
+    "turn/plan/updated": _plan_updated,
+    "error": _turn_error,
+}
+
+
+def _map_notification(
+    method: str, params: dict[str, Any]
+) -> Iterator[tuple[str, dict[str, Any]]]:
+    handler = _NOTIFICATION_MAP.get(method)
+    if handler is None:
+        UNMAPPED_METHODS.add(method)
+        return
+    yield from handler(params)
 
 
 def _terminal_for(params: dict[str, Any]) -> tuple[str, dict[str, Any]]:

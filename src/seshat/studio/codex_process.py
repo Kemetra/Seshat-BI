@@ -39,6 +39,7 @@ __all__ = [
     "MAXIMUM_TESTED_CODEX",
     "MINIMUM_TESTED_CODEX",
     "CodexLaunchPlan",
+    "ProbeObservations",
     "classify_health",
     "find_codex_executable",
     "is_tested_version",
@@ -169,16 +170,27 @@ _QUOTA_RECOVERY = (
 )
 
 
-def classify_health(
-    *,
-    executable_found: bool,
-    version: str | None,
-    signed_in: bool,
-    rate_limit_reached: bool = False,
-    resets_at: int | None = None,
-    saw_eof: bool = False,
-    disabled: bool = False,
-) -> AgentHealth:
+@dataclass(frozen=True, slots=True)
+class ProbeObservations:
+    """What Studio observed about the Codex process, as one value.
+
+    These seven facts are read together at one moment and describe one probe, so
+    passing them as seven parameters made every call site restate a structure that
+    already exists. Bundling also means a future observation is added HERE, where
+    `classify_health` must decide what it means, rather than appended to a parameter
+    list where a caller can quietly ignore it.
+    """
+
+    executable_found: bool
+    version: str | None
+    signed_in: bool
+    rate_limit_reached: bool = False
+    resets_at: int | None = None
+    saw_eof: bool = False
+    disabled: bool = False
+
+
+def classify_health(observations: ProbeObservations) -> AgentHealth:
     """Map observations to one of the contract's seven states.
 
     Ordered most-fundamental first: a missing executable makes every later question
@@ -186,10 +198,13 @@ def classify_health(
     returns a provider other than `codex` or `disabled` -- FR-013 forbids any
     condition here from switching Studio to a billed path on its own.
     """
-    if disabled:
+    probe = observations
+    version = probe.version
+
+    if probe.disabled:
         return _DISABLED
 
-    if not executable_found:
+    if not probe.executable_found:
         return _health(
             "missing", "The Codex CLI was not found on PATH.", _MISSING_RECOVERY, None
         )
@@ -204,7 +219,7 @@ def classify_health(
             version,
         )
 
-    if saw_eof:
+    if probe.saw_eof:
         return _health(
             "crashed",
             "The Codex app-server exited unexpectedly.",
@@ -212,7 +227,7 @@ def classify_health(
             version,
         )
 
-    if not signed_in:
+    if not probe.signed_in:
         return _health(
             "signed_out",
             "Codex is installed but no ChatGPT subscription is signed in.",
@@ -220,8 +235,12 @@ def classify_health(
             version,
         )
 
-    if rate_limit_reached:
-        detail = f" Usage resets at {resets_at}." if resets_at is not None else ""
+    if probe.rate_limit_reached:
+        detail = (
+            f" Usage resets at {probe.resets_at}."
+            if probe.resets_at is not None
+            else ""
+        )
         return _health(
             "quota_limited",
             f"The Codex subscription has reached its usage limit.{detail}",

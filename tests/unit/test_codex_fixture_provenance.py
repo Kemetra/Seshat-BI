@@ -70,15 +70,20 @@ def _parses(line: str) -> bool:
     return True
 
 
+def _is_call_or_reply(frame: dict) -> bool:
+    return any(key in frame for key in ("method", "result", "error"))
+
+
 def _violates_envelope(frame: object) -> bool:
     """True when a frame parses as JSON but is not a usable JSON-RPC message."""
     if not isinstance(frame, dict):
         return True
-    if frame.get("jsonrpc") != "2.0":
-        return True
-    if not ("method" in frame or "result" in frame or "error" in frame):
-        return True
-    return isinstance(frame.get("id"), (dict, list))
+    checks = (
+        frame.get("jsonrpc") == "2.0",
+        _is_call_or_reply(frame),
+        not isinstance(frame.get("id"), (dict, list)),
+    )
+    return not all(checks)
 
 
 def test_malformed_fixture_is_actually_malformed() -> None:
