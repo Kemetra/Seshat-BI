@@ -30,6 +30,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
 from . import agent_routes, bridge, config, events, projection, redaction, session
+from .bridge_selection import select_bridge
 
 #: Every route lives under this prefix, matching the contract's server URL.
 API_PREFIX = "/api/v1"
@@ -324,7 +325,16 @@ def create_app(workspace: Path | str, *, port: int) -> tuple[FastAPI, str]:
     #: FR-013a: the default and the only path SC-010 certifies. An
     #: operator-configured alternate bridge sets this to
     #: `operator_configured_alternate`, and never by inference.
-    app.state.authentication_mode = "subscription"
+    #:
+    #: Resolved through `select_bridge` rather than assigned literally, so the
+    #: "never by degradation" guarantee lives in one tested function instead of in
+    #: whatever this call site happens to do. `select_bridge` accepts the health
+    #: state and deliberately ignores it -- see that module for why the parameter
+    #: exists at all.
+    app.state.bridge_selection = select_bridge(
+        health_state="healthy", operator_configured_mode=None
+    )
+    app.state.authentication_mode = app.state.bridge_selection.authentication_mode
     #: In-memory only (FR-035). The bridge is the deterministic fake until Phase 5
     #: introduces the Codex one; FR-014 keeps the swap to a single assignment.
     #:
