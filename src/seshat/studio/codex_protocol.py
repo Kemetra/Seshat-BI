@@ -108,16 +108,35 @@ def _decoded(line: str) -> dict[str, Any]:
     return frame
 
 
+def _declares_jsonrpc_2(frame: dict[str, Any]) -> bool:
+    return frame.get("jsonrpc") == _JSONRPC_VERSION
+
+
+def _is_call_or_reply(frame: dict[str, Any]) -> bool:
+    return any(key in frame for key in ("method", "result", "error"))
+
+
+def _has_usable_id(frame: dict[str, Any]) -> bool:
+    """An absent id is fine -- notifications have none. A non-scalar one is not."""
+    return "id" not in frame or _is_valid_request_id(frame["id"])
+
+
+#: Envelope rules as data, each paired with what to say when it fails. Expressed this
+#: way so adding a rule is appending a row rather than deepening a function -- the
+#: shape that let the previous version accumulate three guards and trip the
+#: complexity gate.
+_ENVELOPE_RULES: tuple[tuple[Callable[[dict[str, Any]], bool], str], ...] = (
+    (_declares_jsonrpc_2, "provider frame did not declare jsonrpc 2.0"),
+    (_is_call_or_reply, "provider frame is neither a call nor a reply"),
+    (_has_usable_id, "provider frame carried a non-scalar id"),
+)
+
+
 def _check_envelope(frame: dict[str, Any]) -> None:
-    """Every rule a well-formed JSON-RPC frame must satisfy, gathered in one place."""
-    if frame.get("jsonrpc") != _JSONRPC_VERSION:
-        raise CodexFrameError("provider frame did not declare jsonrpc 2.0")
-    if "method" not in frame and "result" not in frame and "error" not in frame:
-        raise CodexFrameError("provider frame is neither a call nor a reply")
-    if "id" in frame and not _is_valid_request_id(frame["id"]):
-        raise CodexFrameError(
-            f"provider frame carried a non-scalar id: {frame['id']!r}"
-        )
+    """Every rule a well-formed JSON-RPC frame must satisfy."""
+    for rule, message in _ENVELOPE_RULES:
+        if not rule(frame):
+            raise CodexFrameError(message)
 
 
 def _parse_frame(line: str) -> dict[str, Any]:
