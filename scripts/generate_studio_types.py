@@ -63,26 +63,58 @@ def _load_schemas() -> dict[str, Any]:
     return document["components"]["schemas"]
 
 
-def _scalar_type(node: dict[str, Any]) -> str:
-    """Render one non-object schema node as a TypeScript type expression."""
-    if "$ref" in node:
-        return node["$ref"].rsplit("/", 1)[-1]
+def _reference_type(node: dict[str, Any]) -> str | None:
+    """A `$ref` renders as the referenced interface name."""
+    ref = node.get("$ref")
+    return ref.rsplit("/", 1)[-1] if isinstance(ref, str) else None
+
+
+def _literal_type(node: dict[str, Any]) -> str | None:
+    """A `const` or `enum` renders as a literal union.
+
+    `const: false` becomes the literal `false` rather than `boolean`, so browser code
+    cannot branch on it as if the capability were merely disabled (FR-022).
+    """
     if "const" in node:
         value = node["const"]
         return "false" if value is False else f'"{value}"'
     if "enum" in node:
         return " | ".join(f'"{value}"' for value in node["enum"])
+    return None
+
+
+def _composite_type(node: dict[str, Any]) -> str | None:
+    """A `oneOf`, or a `type` list such as `["string", "null"]`."""
     if "oneOf" in node:
         return " | ".join(_scalar_type(option) for option in node["oneOf"])
-
     declared = node.get("type")
     if isinstance(declared, list):
         return " | ".join(_primitive(name) for name in declared)
+    return None
+
+
+def _structural_type(node: dict[str, Any]) -> str | None:
+    """An array, or an inline object with declared properties."""
+    declared = node.get("type")
     if declared == "array":
         return f"{_scalar_type(node.get('items', {}))}[]"
     if declared == "object" and "properties" in node:
         return _inline_object(node)
-    return _primitive(declared)
+    return None
+
+
+#: Tried in order; the first handler that recognises the node wins. A table rather than
+#: a branch chain, so adding a schema form cannot deepen the dispatcher.
+_TYPE_HANDLERS = (_reference_type, _literal_type, _composite_type, _structural_type)
+
+
+def _scalar_type(node: dict[str, Any]) -> str:
+    """Render one schema node as a TypeScript type expression."""
+    for handler in _TYPE_HANDLERS:
+        rendered = handler(node)
+        if rendered is not None:
+            return rendered
+    return _primitive(node.get("type"))
 
 
 def _primitive(name: str | None) -> str:

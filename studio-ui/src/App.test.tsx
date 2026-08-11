@@ -118,26 +118,74 @@ describe("the Studio shell", () => {
     expect(alert).toHaveTextContent("Reopen Studio from the agent.");
   });
 
+  /**
+   * The REAL strings `seshat.studio.projection._unreadable_defect` produces.
+   *
+   * Copied verbatim rather than invented: an earlier version of this test used a
+   * sanitised fixture ("fix the YAML syntax") that no code path emits, so it proved
+   * nothing about FR-032. These name `templates/readiness-status.yaml` and
+   * `` `seshat check` `` because a governance record legitimately does -- which is
+   * exactly why they must not appear in the primary journey.
+   */
+  const REAL_DEFECT = {
+    code: "unreadable_readiness_file",
+    message:
+      "the committed readiness file for broken_table could not be read as a YAML mapping",
+    source_ref: "mappings/broken_table/readiness-status.yaml",
+    recovery_action:
+      "make the file a readable YAML mapping matching templates/readiness-status.yaml; " +
+      "`seshat check` reports a malformed readiness spine under rule RS1",
+  };
+
   it("surfaces an input defect instead of quietly shortening the table list", async () => {
-    stubFetch(
-      snapshot({
-        input_defects: [
-          {
-            code: "unreadable_readiness_file",
-            message: "the committed readiness file for broken_table could not be read",
-            source_ref: "mappings/broken_table/readiness-status.yaml",
-            recovery_action: "fix the YAML syntax",
-          },
-        ],
-      }),
-    );
+    stubFetch(snapshot({ input_defects: [REAL_DEFECT] }));
     render(<App />);
 
     expect(
       await screen.findByRole("heading", { name: /input needs attention/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/could not be read/)).toBeInTheDocument();
-    expect(screen.getByText("fix the YAML syntax")).toBeInTheDocument();
+    expect(
+      screen.getByText(/readiness record could not be read/i),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the server's technical wording behind an explicit disclosure (FR-032)", async () => {
+    stubFetch(snapshot({ input_defects: [REAL_DEFECT] }));
+    render(<App />);
+    await screen.findByRole("heading", { name: /input needs attention/i });
+
+    // The disclosure exists, is closed, and is keyboard reachable as a real control.
+    const disclosure = screen.getByText("Technical detail");
+    expect(disclosure.closest("details")).not.toHaveAttribute("open");
+
+    // The technical strings ARE present in the DOM -- inside the closed disclosure,
+    // which is what "explicitly opened" means -- but not in the primary text.
+    const details = disclosure.closest("details");
+    expect(details?.textContent).toContain("templates/readiness-status.yaml");
+    expect(details?.textContent).toContain("seshat check");
+  });
+
+  it("shows no tool vocabulary outside the disclosure, using the REAL defect strings", async () => {
+    stubFetch(snapshot({ input_defects: [REAL_DEFECT] }));
+    const { container } = render(<App />);
+    await screen.findByRole("heading", { name: /input needs attention/i });
+
+    // Remove every disclosure, then assert on what remains: that residue is the
+    // primary journey, and FR-032 governs exactly it.
+    const clone = container.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll("details").forEach((node) => node.remove());
+    const primary = clone.textContent ?? "";
+
+    for (const forbidden of [
+      "seshat ",
+      "retail ",
+      "templates/",
+      ".yaml",
+      "RS1",
+      "mappings/",
+    ]) {
+      expect(primary).not.toContain(forbidden);
+    }
   });
 
   it("renders no numeric readiness signal anywhere (FR-009)", async () => {
@@ -149,11 +197,25 @@ describe("the Studio shell", () => {
     const { container } = render(<App />);
     await screen.findByRole("heading", { name: "retail_workspace" });
 
-    // No percentage, no "n of m", no bare score. The status word and its evidence are
-    // the whole signal.
-    expect(container.textContent).not.toMatch(/\d+\s*%/);
-    expect(container.textContent).not.toMatch(/\b\d+\s*(of|\/)\s*\d+\b/);
-    expect(container.textContent?.toLowerCase()).not.toContain("score");
+    // The status word and its evidence are the whole signal.
+    //
+    // An earlier version checked only `%`, "n of m", and the WORD "score". A review
+    // injected five real score forms -- "Readiness 71 percent complete", "Health index
+    // 0.71", "Maturity level 3", a bare "71%", "4 of 7 stages" -- and every test still
+    // passed. These patterns cover the FORMS a numeric readiness signal actually takes,
+    // which is what FR-009 forbids.
+    const text = container.textContent ?? "";
+    const forbidden: [RegExp, string][] = [
+      [/\d+\s*%/, "a percentage"],
+      [/\bpercent\b/i, "the word percent"],
+      [/\b\d+\s*(of|\/)\s*\d+\b/, "an n-of-m ratio"],
+      [/\b(score|confidence|completeness|maturity|index)\b/i, "a score-like noun"],
+      [/\b0?\.\d+\b/, "a fractional value"],
+      [/\blevel\s*\d+\b/i, "a numbered level"],
+    ];
+    for (const [pattern, what] of forbidden) {
+      expect(text, `FR-009: rendered ${what}`).not.toMatch(pattern);
+    }
   });
 
   it("shows no command names, skill names, or raw paths in the primary journey", async () => {

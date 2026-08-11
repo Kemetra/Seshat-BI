@@ -153,7 +153,13 @@ the same 2 failures / 24 skipped. After T009-T010: **5979 passed / the same 2 fa
   `studio-api.yaml` by `scripts/generate_studio_types.py` and drift-pinned, so the
   browser cannot hold a different payload shape than the server serves. One command,
   `python scripts/build_studio_frontend.py`, installs, tests, typechecks, bundles, and
-  stages `dist/` into `src/seshat/studio/static/`; `pip wheel` then ships it, verified.
+  stages `dist/` into `src/seshat/studio/static/`. The bundle is gitignored and
+  hatchling honours VCS ignore rules, so `artifacts` in `pyproject.toml` is what makes
+  the wheel actually carry it -- without that entry the wheel shipped ZERO frontend
+  files while every test stayed green, because they compared paths and read config
+  instead of opening a wheel. Now pinned by a test that builds a real wheel and looks
+  inside, and by CI's `Build the Studio frontend` step, without which all seven
+  FR-005/FR-033 tests skipped and enforced nothing.
   FR-033 is enforced against the BUILT output by asserting on loading mechanisms
   (`src`/`href`, CSS `@import`/`url()`), not by grepping for `https://` -- the bundle
   legitimately carries inert URL strings that are never fetched. Build artifacts are

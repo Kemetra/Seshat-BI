@@ -3,8 +3,11 @@
 FR-033: "Studio MUST load no remote fonts, scripts, images, analytics, or other browser
 assets." FR-005: the frontend ships PREBUILT in the wheel; end users need no Node.
 
-These tests read the BUILT output, so they only run where `studio-ui/dist` exists --
-CI builds it, and a developer who has not run `npm run build` gets a skip rather than a
+These tests read the BUILT output, so they only run where `studio-ui/dist` exists. CI's
+`check` job builds it (`Build the Studio frontend`), which is what makes these
+assertions actually execute -- an external review found that without that step all of
+them skipped on every pull request, enforcing nothing while still reporting as part of
+the suite. Locally, a developer who has not run the build gets a skip rather than a
 false failure.
 
 **Why not just grep for `https://`.** The bundle legitimately contains inert URL
@@ -39,6 +42,42 @@ def _built() -> Path:
 
 def _attribute_targets(html: str) -> list[str]:
     return re.findall(r'(?:src|href)="([^"]+)"', html)
+
+
+def _wheel_capable_interpreter() -> list[str]:
+    """An interpreter that satisfies this package's `requires-python`.
+
+    `sys.executable` is not always it: the suite frequently runs on 3.12 while the
+    package requires >=3.13, and `pip wheel` then fails with "requires a different
+    Python". Skipping on that would hide a genuinely broken wheel, so try the launcher
+    first and only skip when no capable interpreter exists at all.
+    """
+    import subprocess
+    import sys
+
+    candidates: list[list[str]] = []
+    if sys.version_info >= (3, 13):
+        candidates.append([sys.executable])
+    if sys.platform == "win32":
+        candidates.append(["py", "-3.13"])
+    candidates.append(["python3.13"])
+
+    for candidate in candidates:
+        try:
+            probe = subprocess.run(
+                [*candidate, "-c", "import sys; print(sys.version_info[:2])"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except OSError:
+            continue
+        if probe.returncode == 0 and "3, 13" in probe.stdout.replace("(", "").replace(
+            ")", ""
+        ):
+            return candidate
+
+    pytest.skip("no Python >=3.13 interpreter available to build a wheel")
 
 
 def test_the_entry_html_loads_only_relative_assets() -> None:
@@ -123,10 +162,76 @@ def test_the_packaged_static_directory_is_inside_the_wheel_package() -> None:
     A force-include pointing at a not-yet-built directory made metadata generation fail
     for EVERY install, so the asset path deliberately lives inside an already-declared
     package instead.
+
+    NOTE: this only checks the PATH. It cannot see whether hatchling actually ships the
+    directory -- `test_the_build_declares_the_gitignored_bundle_as_an_artifact` and
+    `test_a_built_wheel_actually_contains_the_frontend` cover that.
     """
     from seshat.studio import assets
 
     assert assets.packaged_static_directory() == _PACKAGED
+
+
+def test_the_build_declares_the_gitignored_bundle_as_an_artifact() -> None:
+    """Hatchling honours VCS ignore rules when collecting `packages`.
+
+    The frontend bundle is generated and therefore gitignored, so being inside
+    `packages = ["src/seshat"]` is NOT sufficient -- hatchling skips it. A wheel shipped
+    with zero frontend files while every other test stayed green, because they compared
+    paths and read config rather than opening a wheel. `artifacts` re-includes exactly
+    the generated paths that must ship.
+    """
+    import tomllib
+
+    config = tomllib.loads((_REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    artifacts = config["tool"]["hatch"]["build"]["targets"]["wheel"].get(
+        "artifacts", []
+    )
+
+    assert any("studio/static" in entry for entry in artifacts), (
+        "the gitignored Studio bundle is not declared as a wheel artifact, so "
+        "hatchling will exclude it and the wheel will ship no frontend"
+    )
+
+
+def test_a_built_wheel_actually_contains_the_frontend() -> None:
+    """Build a real wheel and look inside it (FR-005).
+
+    The check that closes the class: config-reading and path-comparing tests both
+    passed while the wheel was empty. Only opening the artifact proves the promise
+    that end users need no Node.
+    """
+    import subprocess
+    import tempfile
+    import zipfile
+
+    _built()  # skip unless the frontend has been staged
+    interpreter = _wheel_capable_interpreter()
+
+    with tempfile.TemporaryDirectory() as into:
+        completed = subprocess.run(
+            [*interpreter, "-m", "pip", "wheel", ".", "--no-deps", "-w", into, "-q"],
+            cwd=_REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            pytest.skip(f"wheel build unavailable here: {completed.stderr[-200:]}")
+
+        wheels = list(Path(into).glob("*.whl"))
+        assert wheels, "pip wheel produced no wheel"
+        shipped = [
+            name
+            for name in zipfile.ZipFile(wheels[0]).namelist()
+            if "seshat/studio/static/" in name
+        ]
+
+    assert shipped, (
+        "the built wheel contains no Studio frontend; FR-005 promises end users need "
+        "no Node, and they install this wheel"
+    )
+    assert any(name.endswith("index.html") for name in shipped)
 
 
 def test_the_documented_build_command_exists() -> None:

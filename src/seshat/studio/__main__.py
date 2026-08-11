@@ -203,9 +203,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     bound = launch.with_bound_port(listener.getsockname()[1])
 
     application, token = app_module.create_app(bound.workspace_root, port=bound.port)
+    # The DOCUMENT ROOT carries the token, not the exchange route. An earlier revision
+    # printed `/api/v1/bootstrap?token=...`, which is POST-only -- a browser navigating
+    # there got 405 and Studio was simply unopenable. The page served at `/` reads the
+    # token from its own URL, POSTs it, and strips it from history.
     print(
-        f"Studio is ready. Open http://{application.state.expected_host}"
-        f"{app_module.API_PREFIX}/bootstrap?token={token} once, then discard the link.",
+        f"Studio is ready. Open http://{application.state.expected_host}/?token={token}"
+        " once, then discard the link.",
         file=sys.stderr,
     )
     if args.no_serve:
