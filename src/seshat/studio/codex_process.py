@@ -120,7 +120,7 @@ class CodexLaunchPlan:
 #: in the shared redactor because these are provider-token shapes, and widening the
 #: shared rules risks the over-redaction that module's docstring warns about.
 _BARE_CREDENTIAL = re.compile(
-    r"(?:sk-[A-Za-z0-9_-]{8,}|ey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)"
+    r"(?:sk-[A-Za-z0-9_-]{8,}|ey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)"
 )
 
 
