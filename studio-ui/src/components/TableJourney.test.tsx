@@ -295,9 +295,47 @@ describe("the table journey", () => {
   it("shows the concrete blocker on the blocked stage", () => {
     render(<TableJourney journey={blockedAtMapping()} />);
 
-    expect(
-      screen.getByText("source-map.yaml is missing a grain declaration"),
-    ).toBeInTheDocument();
+    // The component must APPLY `blockerSummary`, not merely have it available: a mutant
+    // that replaced this with one generic sentence for every reason passed the unit tests
+    // for the function while making the Command Room unable to say why a stage is blocked.
+    expect(screen.getByText("is missing a grain declaration")).toBeInTheDocument();
+  });
+
+  it("renders each blocker distinctly rather than one generic sentence", () => {
+    const journey: Journey = {
+      ...blockedAtMapping(),
+      stages: [
+        stage("source_ready", "pass"),
+        stage("mapping_ready", "blocked", {
+          blocking_reasons: [
+            {
+              code: null,
+              message: "source-map.yaml is missing a grain declaration",
+              source_ref: "mappings/store_sales/readiness-status.yaml",
+            },
+            {
+              code: null,
+              message: "no named-human approval recorded",
+              source_ref: "mappings/store_sales/readiness-status.yaml",
+            },
+          ],
+        }),
+        ...STAGES.slice(2).map((name) => stage(name, "not_started")),
+      ],
+    };
+    render(<TableJourney journey={journey} />);
+
+    // Two blockers, two different sentences -- indistinguishable text would force the
+    // analyst to open every disclosure to tell them apart. Asserted on the PRIMARY text
+    // only: the verbatim messages also live in the disclosure, so an unscoped query
+    // matches twice.
+    const mapping = screen.getByRole("listitem", { name: /^Mapping$/ });
+    const clone = mapping.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll("details").forEach((node) => node.remove());
+    const primary = clone.textContent ?? "";
+
+    expect(primary).toContain("is missing a grain declaration");
+    expect(primary).toContain("no named-human approval recorded");
   });
 
   it("says evidence exists without printing the committed reference", () => {
@@ -483,15 +521,18 @@ describe("the table journey", () => {
     expect(screen.getByText(/named_human/)).toBeInTheDocument();
   });
 
-  it("renders the forbidden scope FR-008 names", () => {
-    render(<TableJourney journey={blockedAtMapping()} />);
+  it("makes no forbidden-scope claim until one can be computed", () => {
+    // `projection._journey_for` never sets `forbidden_scope`, so it is a dataclass
+    // default -- empty for all four committed tables. A component that rendered it showed
+    // nothing in production while passing on a hand-built fixture: the same
+    // "field with no source" trap as `pending_decision_count`.
+    //
+    // `readiness_projection._table_projection` DOES compute the real restrictions;
+    // wiring it is upstream work tracked in tasks.md. This pins the deferral so the claim
+    // cannot return unwired.
+    const { container } = render(<TableJourney journey={blockedAtMapping()} />);
 
-    // The projection sends `forbidden_scope`; dropping it silently loses one of the six
-    // fields FR-008 requires to be preserved. Asserted on the SENTENCE, because "silver"
-    // legitimately appears twice -- once as a stage label, once as forbidden scope.
-    expect(
-      screen.getByText(/not permitted yet for this table: silver, gold/i),
-    ).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/not permitted yet/i);
   });
 
   it("does not mark a stage before the current one as locked", () => {

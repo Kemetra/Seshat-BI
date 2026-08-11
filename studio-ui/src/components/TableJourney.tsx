@@ -148,13 +148,52 @@ function StageEvidence({ stage }: { stage: StageState }): React.JSX.Element | nu
   );
 }
 
+/**
+ * A concrete, path-free summary of one blocker.
+ *
+ * One generic sentence per reason made multiple blockers indistinguishable and left the
+ * initial Command Room unable to say WHY a stage is blocked -- the opposite of US1, which
+ * requires the blocker explained up front. So the safe words are kept and only the unsafe
+ * spans are dropped: file paths, `command subcommand` pairs, and source locations. What
+ * remains is the analyst-actionable phrase ("is missing a grain declaration"), with the
+ * verbatim text still in the disclosure.
+ *
+ * Removing spans is safe in a way CLASSIFYING text was not: the earlier heuristic tried to
+ * decide whether a whole string was technical and lost that arms race. Here anything
+ * path-shaped or command-shaped is excised regardless of what surrounds it, so an
+ * unrecognised identifier cannot ride along inside an otherwise readable sentence.
+ */
+export function blockerSummary(message: string): string {
+  const scrubbed = message
+    // Any token containing a path separator, either slash direction.
+    .replace(/\S*[/\\]\S*/g, " ")
+    // A filename with a known extension, plus any `:line-range` suffix.
+    .replace(/\S+\.(md|ya?ml|sql|py|json|tmdl)\b\S*/gi, " ")
+    // `seshat check`, `retail validate`, `retail-semantic-check`, and kin.
+    .replace(/\b(seshat|retail)[\s-][a-z-]+/gi, " ")
+    // Bare identifiers: snake_case / SCREAMING_CASE, and F-numbers.
+    .replace(/\b[a-z0-9]+_[a-z0-9_]+\b/gi, " ")
+    .replace(/\bF\d{3,}\b/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.;:])/g, "$1")
+    .trim()
+    .replace(/^[\s,;:.-]+/, "")
+    .trim();
+
+  // Under three words nothing readable survives, so fall back rather than show a
+  // mangled fragment.
+  return scrubbed.split(/\s+/).filter(Boolean).length >= 3
+    ? scrubbed
+    : "A recorded blocker needs attention; see technical detail.";
+}
+
 function StageBlockers({ stage }: { stage: StageState }): React.JSX.Element | null {
   if (stage.blocking_reasons.length === 0) return null;
   return (
     <ul className="journey__blockers">
       {stage.blocking_reasons.map((reason, index) => (
         <li key={`${reason.code ?? "reason"}:${index}`}>
-          A recorded blocker needs attention; see technical detail.
+          {blockerSummary(reason.message)}
         </li>
       ))}
     </ul>
@@ -194,22 +233,21 @@ function StageTechnicalDetail({ stage }: { stage: StageState }): React.JSX.Eleme
   );
 }
 
-/**
- * What this table may not advance into yet (FR-008's `forbidden_scope`).
+/*
+ * `forbidden_scope` is NOT rendered, deliberately.
  *
- * The projection sends it and the UI previously dropped it, losing one of the six fields
- * FR-008 requires to be preserved. Rendered as prose rather than as a locked-stage
- * marker: forbidden scope is the authority's own statement about permitted work, not a
- * position Studio derives.
+ * `projection._journey_for` builds `TableJourney` without setting it, so the field is a
+ * dataclass default -- empty for all four committed tables. A component that renders it
+ * therefore shows nothing in production while its test passes on a hand-built fixture,
+ * which is the same "field with no source" trap as `pending_decision_count` and
+ * `requires_named_human`.
+ *
+ * `readiness_projection._table_projection` DOES compute the concrete restrictions (no
+ * Silver before Mapping, no dashboard before contracts). Wiring it into the snapshot is
+ * upstream integration with its own contract questions, tracked against T013 in tasks.md.
+ * Until then the journey makes no claim about forbidden scope rather than silently
+ * claiming there is none.
  */
-function ForbiddenScope({ scope }: { scope: readonly string[] }): React.JSX.Element | null {
-  if (scope.length === 0) return null;
-  return (
-    <p className="journey__forbidden">
-      Not permitted yet for this table: {scope.join(", ")}.
-    </p>
-  );
-}
 
 function StageItem({
   stage,
@@ -296,7 +334,6 @@ export function TableJourney({ journey }: { journey: Journey }): React.JSX.Eleme
           />
         ))}
       </ol>
-      <ForbiddenScope scope={journey.forbidden_scope} />
       <NextAction journey={journey} />
     </div>
   );

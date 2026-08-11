@@ -190,6 +190,13 @@ the same 2 failures / 24 skipped. After T009-T010: **5979 passed / the same 2 fa
   nothing is honest; asserting none is not. Wiring it to `approval_inbox`'s open-request
   projection is upstream work deferred to a follow-on task, and a test pins the absence so
   the claim cannot return unwired.
+  **`forbidden_scope` is not rendered, for the same reason.**
+  `projection._journey_for` never sets it, so it is a dataclass default -- empty for all
+  four committed tables. A component that rendered it showed nothing in production while
+  its test passed on a hand-built fixture.
+  `readiness_projection._table_projection` DOES compute the real restrictions (no Silver
+  before Mapping, no dashboard before contracts); wiring it into the snapshot is upstream
+  work for a follow-on task, and a test pins the absence.
   **`ActionSummary.requires_named_human` is always False for the same reason.**
   `status_surface._project_table` -- the upstream this projection reads -- never emits
   `required_authority`, so an interim "read it from the source" fix looked correct and was
