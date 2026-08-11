@@ -385,6 +385,75 @@ describe("Conversation", () => {
     expect(onTurnSettled).not.toHaveBeenCalled();
   });
 
+  // --------------------------------------------------------------------- //
+  // The plan is actually shown                                            //
+  // --------------------------------------------------------------------- //
+
+  it("renders the plan steps rather than only announcing a plan exists", async () => {
+    // The bridge emits `steps`, and an earlier version returned the constant
+    // "Updated the plan." -- so a three-step plan and a one-step plan looked
+    // identical and the plan itself was never visible. T018 asks for public plan
+    // activity, so the steps have to reach the screen.
+    render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    registry.current?.emit(
+      "plan_updated",
+      event({
+        type: "plan_updated",
+        payload: {
+          steps: [
+            { label: "Read the committed readiness spine", state: "running" },
+            { label: "Summarise what the evidence supports", state: "pending" },
+          ],
+        },
+      }),
+      "1",
+    );
+
+    expect(
+      await screen.findByText(/Read the committed readiness spine/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Summarise what the evidence supports/),
+    ).toBeInTheDocument();
+  });
+
+  it("drops a plan step that carries no label", async () => {
+    // A blank row is a claim nobody made. Rendering `undefined` as a step would put
+    // an empty promise in a list whose whole purpose is stating intent.
+    render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    registry.current?.emit(
+      "plan_updated",
+      event({
+        type: "plan_updated",
+        payload: { steps: [{ state: "running" }, { label: "Real step" }] },
+      }),
+      "1",
+    );
+
+    await screen.findByText(/Real step/);
+    expect(screen.queryByText(/undefined/)).not.toBeInTheDocument();
+  });
+
+  it("survives a plan payload that is not a list", async () => {
+    // `payload` is an open object in the contract, so a provider can send anything.
+    // Throwing here would unmount the whole conversation -- the FR-025 failure this
+    // feature already shipped once with agent_health.
+    render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    registry.current?.emit(
+      "plan_updated",
+      event({ type: "plan_updated", payload: { steps: "not a list" } }),
+      "1",
+    );
+
+    expect(await screen.findByText(/Updated the plan/)).toBeInTheDocument();
+  });
+
   it("closes its stream on unmount", async () => {
     const { unmount } = render(
       <Conversation threadId="t1" startTurn={acceptingTurn()} />,

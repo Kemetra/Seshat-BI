@@ -129,3 +129,18 @@
   outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
+
+.conversation__plan {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+
+.conversation__plan-step {
+  margin-bottom: var(--space-1);
+}
+
+.conversation__plan-state {
+  color: var(--text-muted);
+}

@@ -82,6 +82,39 @@ function text(payload: Record<string, unknown>, key: string): string | undefined
   return typeof value === "string" && value.trim() !== "" ? value : undefined;
 }
 
+/** One plan step, as the UI needs it. */
+export interface PlanStep {
+  label: string;
+  state: string;
+}
+
+/**
+ * The plan steps in a `plan_updated` payload.
+ *
+ * `payload` is `Record<string, unknown>` (the contract declares it an open object), so
+ * every field is narrowed explicitly. A step missing its `label` is DROPPED rather than
+ * rendered as "undefined": a plan is a claim about what the agent will do, and a blank
+ * row is a claim nobody made. `state` falls back to a neutral word rather than inventing
+ * progress.
+ */
+export function planSteps(payload: Record<string, unknown>): PlanStep[] {
+  const raw = payload["steps"];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.flatMap((candidate) => {
+    if (typeof candidate !== "object" || candidate === null) {
+      return [];
+    }
+    const step = candidate as Record<string, unknown>;
+    const label = text(step, "label");
+    if (label === undefined) {
+      return [];
+    }
+    return [{ label, state: text(step, "state") ?? "planned" }];
+  });
+}
+
 /**
  * The public description of one activity event.
  *
@@ -96,7 +129,12 @@ export function activityLabel(event: StudioEvent): string {
     case "file_change_proposed":
       return text(payload, "summary") ?? "A file change was drafted.";
     case "plan_updated":
-      return "Updated the plan.";
+      // The step COUNT, not a constant: a bare "Updated the plan." made a
+      // three-step plan and a one-step plan indistinguishable, and T018 asks for
+      // the plan to be visible. The labels themselves render in `PlanSteps`.
+      return planSteps(payload).length > 0
+        ? `Updated the plan (${planSteps(payload).length} steps).`
+        : "Updated the plan.";
     case "connection_state":
       return text(payload, "public_label") ?? "Connection state changed.";
     default:
@@ -276,9 +314,20 @@ function EventRow({ event }: { event: StudioEvent }) {
   }
 
   if (ACTIVITY_TYPES.has(event.type)) {
+    const steps = event.type === "plan_updated" ? planSteps(event.payload) : [];
     return (
       <li className={className}>
         <p className="conversation__activity">{activityLabel(event)}</p>
+        {steps.length > 0 && (
+          <ol className="conversation__plan">
+            {steps.map((step) => (
+              <li key={step.label} className="conversation__plan-step">
+                {step.label}
+                <span className="conversation__plan-state"> — {step.state}</span>
+              </li>
+            ))}
+          </ol>
+        )}
         {late && <LateNote />}
       </li>
     );
