@@ -30,12 +30,10 @@ a redactor that mangles evidence defeats the feature. Hence the minimum-length
 refusal, the credential rules keyed on NAMES rather than key/value shape, and
 relative references passing through untouched.
 
-**Over-redaction is a defect.** ``seshat/dbt/redaction.py`` records the incident:
-treating every configured value as a secret rewrote innocent substrings, so the
-English word "require" corrupted the governed const "named-human approval required"
-and a bare port number matched unrelated digits. Studio exists to project truth, so
-a redactor that mangles evidence defeats the feature. Hence the minimum-length
-refusal below, and hence relative references pass through untouched.
+That minimum-length refusal is scoped to FREE-TEXT search, and deliberately does
+NOT gate the DSN span replacement in :func:`redact_credentials` -- a URI component's
+POSITION already proves it is a credential, whatever its length. Conflating the two
+leaked short passwords out of otherwise-matched DSNs; see that function's comment.
 """
 
 from __future__ import annotations
@@ -208,10 +206,25 @@ def redact_credentials(text: str) -> str:
     """
     scrubbed = text
 
-    # DSNs first: decompose with the shared authority, then remove every component
-    # form it reports. Doing this before the assignment pass means a conninfo
-    # `password=...` inside a DSN is already gone.
+    # DSNs first: replace the whole matched SPAN, then mop up any component that
+    # also appears elsewhere in the text. Doing this before the assignment pass means
+    # a conninfo `password=...` inside a DSN is already gone.
+    #
+    # **The span goes first, and that order is a security property.** An earlier
+    # revision replaced long components first and used the full-match replace as a
+    # fallback. That fallback silently no-opped: once a component had been swapped
+    # for the marker, the original span no longer occurred in `scrubbed`, so any
+    # component the length filter had skipped survived in the clear. Concretely,
+    # `postgresql://u:hunter2pass@db.example.invalid:5432/app` kept its password
+    # because the 18-character host was replaced first and `hunter2pass` is 11 --
+    # below `_MINIMUM_SECRET_LENGTH`. Every DSN with one long component and a short
+    # password leaked that password to any boundary this redactor guards.
+    #
+    # The length filter is right for FREE-TEXT search, where a short fragment would
+    # corrupt innocent prose. It is wrong for URI components, whose POSITION already
+    # proves they are credentials -- so the span replacement is not gated on it.
     for match in _DSN_SHAPED.findall(text):
+        scrubbed = scrubbed.replace(match, REDACTED)
         components = [
             component
             for component in uri_component_values(match)
@@ -219,7 +232,6 @@ def redact_credentials(text: str) -> str:
         ]
         if components:
             scrubbed = replace_fragments(scrubbed, components, REDACTED)
-        scrubbed = scrubbed.replace(match, REDACTED)
 
     # Auth headers BEFORE assignments, and the order is load-bearing.
     #
