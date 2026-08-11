@@ -12,12 +12,13 @@
  */
 
 import type * as React from "react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   StudioRequestError,
   createThread,
   fetchWorkspace,
+  interruptTurn,
   startTurn,
 } from "./api/client";
 import type { WorkspaceSnapshot } from "./api/types";
@@ -39,14 +40,19 @@ function describeFailure(error: unknown): { message: string; recovery: string | 
 }
 
 /**
- * Load the workspace projection once, ignoring a response that arrives after unmount.
+ * Load the workspace projection, ignoring a response that arrives after unmount.
  *
  * Extracted from the component so `App` only decides what to RENDER: the cancellation
  * bookkeeping is the kind of detail that makes a render function hard to read and hard
  * to reason about.
+ *
+ * Returns a `reload` alongside the state because a completed agent turn can change
+ * committed files (FR-023). Without it the deterministic views would keep showing a
+ * snapshot the agent has already invalidated.
  */
-function useWorkspaceSnapshot(): LoadState {
+function useWorkspaceSnapshot(): [LoadState, () => void] {
   const [state, setState] = useState<LoadState>({ kind: "loading" });
+  const [generation, setGeneration] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,13 +66,17 @@ function useWorkspaceSnapshot(): LoadState {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [generation]);
 
-  return state;
+  // A counter rather than calling the fetch directly: it reuses the effect's existing
+  // cancellation, so a reload racing an unmount cannot set state on a dead component.
+  const reload = useCallback(() => setGeneration((current) => current + 1), []);
+
+  return [state, reload];
 }
 
 export function App(): React.JSX.Element {
-  const state = useWorkspaceSnapshot();
+  const [state, reloadWorkspace] = useWorkspaceSnapshot();
 
   if (state.kind === "loading") {
     return (
@@ -108,7 +118,10 @@ export function App(): React.JSX.Element {
       {/* LAST, and never gating: FR-024/025 require the deterministic views above to be
           available in every agent state, so a thread that cannot be created must not
           take the workspace down with it. */}
-      <AgentPanel snapshotRevision={snapshot.identity.revision} />
+      <AgentPanel
+        snapshotRevision={snapshot.identity.revision}
+        onTurnSettled={reloadWorkspace}
+      />
     </main>
   );
 }
@@ -124,7 +137,13 @@ export function App(): React.JSX.Element {
  * A failure here renders as a notice and nothing more -- the deterministic views above
  * must survive any agent state (FR-025).
  */
-function AgentPanel({ snapshotRevision }: { snapshotRevision: string }) {
+function AgentPanel({
+  snapshotRevision,
+  onTurnSettled,
+}: {
+  snapshotRevision: string;
+  onTurnSettled: () => void;
+}) {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
 
@@ -152,9 +171,9 @@ function AgentPanel({ snapshotRevision }: { snapshotRevision: string }) {
   return (
     <Conversation
       threadId={threadId}
-      startTurn={(thread, prompt) =>
-        startTurn(thread, prompt, { snapshotRevision })
-      }
+      startTurn={(thread, prompt) => startTurn(thread, prompt, { snapshotRevision })}
+      interruptTurn={interruptTurn}
+      onTurnSettled={onTurnSettled}
     />
   );
 }

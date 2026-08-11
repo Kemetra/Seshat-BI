@@ -256,6 +256,125 @@ describe("Conversation", () => {
     ).not.toBeInTheDocument();
   });
 
+  // --------------------------------------------------------------------- //
+  // Interruption and the post-turn refresh                                //
+  // --------------------------------------------------------------------- //
+
+  it("offers a stop control only while a turn is live", async () => {
+    render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    // Nothing running: offering "Stop" would be a control that does nothing.
+    expect(screen.queryByRole("button", { name: /stop/i })).not.toBeInTheDocument();
+
+    registry.current?.emit(
+      "turn_started",
+      event({ type: "turn_started", sequence: 1 }),
+      "1",
+    );
+
+    expect(await screen.findByRole("button", { name: /stop/i })).toBeInTheDocument();
+  });
+
+  it("withdraws the stop control once the turn reaches a terminal event", async () => {
+    render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
+    await waitFor(() => expect(registry.current).toBeDefined());
+    registry.current?.emit("turn_started", event({ type: "turn_started" }), "1");
+    await screen.findByRole("button", { name: /stop/i });
+
+    registry.current?.emit(
+      "turn_completed",
+      event({ type: "turn_completed", sequence: 2 }),
+      "2",
+    );
+
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /stop/i })).not.toBeInTheDocument(),
+    );
+  });
+
+  it("interrupts the live turn when stop is pressed", async () => {
+    const interrupt = vi.fn().mockResolvedValue(undefined);
+    render(
+      <Conversation
+        threadId="t1"
+        startTurn={acceptingTurn()}
+        interruptTurn={interrupt}
+      />,
+    );
+    await waitFor(() => expect(registry.current).toBeDefined());
+    registry.current?.emit(
+      "turn_started",
+      event({ type: "turn_started", turn_id: "turn9" }),
+      "1",
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: /stop/i }));
+
+    await waitFor(() => expect(interrupt).toHaveBeenCalledWith("t1", "turn9"));
+  });
+
+  it("refreshes the workspace once a turn completes", async () => {
+    // FR-023's "final workspace refresh": a turn can change committed files, so the
+    // deterministic views are stale until re-read. Without this the analyst would act on
+    // a snapshot the agent has already invalidated.
+    const onTurnSettled = vi.fn();
+    render(
+      <Conversation
+        threadId="t1"
+        startTurn={acceptingTurn()}
+        onTurnSettled={onTurnSettled}
+      />,
+    );
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    registry.current?.emit("turn_completed", event({ type: "turn_completed" }), "1");
+
+    await waitFor(() => expect(onTurnSettled).toHaveBeenCalledTimes(1));
+  });
+
+  it("refreshes after a FAILED turn too", async () => {
+    // A failed turn can still have written files before failing, so refusing to refresh
+    // would leave the stale view in exactly the case it matters most.
+    const onTurnSettled = vi.fn();
+    render(
+      <Conversation
+        threadId="t1"
+        startTurn={acceptingTurn()}
+        onTurnSettled={onTurnSettled}
+      />,
+    );
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    registry.current?.emit("turn_failed", event({ type: "turn_failed" }), "1");
+
+    await waitFor(() => expect(onTurnSettled).toHaveBeenCalledTimes(1));
+  });
+
+  it("does not refresh for a late terminal event", async () => {
+    // An `ignored_for_state` terminal did not end anything, so treating it as a turn
+    // boundary would refresh the workspace on an event the server already discounted.
+    const onTurnSettled = vi.fn();
+    render(
+      <Conversation
+        threadId="t1"
+        startTurn={acceptingTurn()}
+        onTurnSettled={onTurnSettled}
+      />,
+    );
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    registry.current?.emit(
+      "turn_completed",
+      event({ type: "turn_completed", ignored_for_state: true }),
+      "1",
+    );
+
+    // Give any erroneous call a chance to land before asserting absence.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(onTurnSettled).not.toHaveBeenCalled();
+  });
+
   it("closes its stream on unmount", async () => {
     const { unmount } = render(
       <Conversation threadId="t1" startTurn={acceptingTurn()} />,

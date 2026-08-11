@@ -226,17 +226,50 @@ projection, endpoints, frontend, journey, and health.
 
 ## Phase 4 - Stable Events and Fake Agent (US2)
 
-- [ ] **T015** Write event-state tests for monotonic sequence, bounded retention,
+- [x] **T015** Write event-state tests for monotonic sequence, bounded retention,
   Last-Event-ID replay, expired replay, duplicate input, late-after-terminal events,
   and interruption. [FR-015, FR-016]
-- [ ] **T016** Implement immutable event contracts, state machine, redacted buffer,
+  All seven named cases plus two boundaries the named list does not cover: the
+  CONTIGUOUS resume (`last_event_id == lowest_retained - 1`, which must be served, not
+  refused — refusing it would break every ordinary reconnect) and a fresh connect to an
+  empty thread. The event-type enum is pinned against the contract in BOTH directions:
+  instance validation alone catches only this code emitting a bad type, never the
+  contract gaining one this module would refuse at record time.
+- [x] **T016** Implement immutable event contracts, state machine, redacted buffer,
   thread store, and same-origin SSE endpoint with no database. [FR-015, FR-016,
   FR-035]
-- [ ] **T017** Implement `FakeAgentBridge` from deterministic scenarios and contract
+  Redaction happens on the way INTO the buffer, since replay reads the buffer and a leak
+  stored is a leak eventually served. The stream authenticates on the existing
+  `HttpOnly` cookie — `EventSource` cannot set request headers, and the usual
+  query-string token workaround would write the credential into access logs and browser
+  history; the route takes no exemption from the three enforcement steps.
+  **The stream is a finite replay, deliberately** (`SSE_RETRY_MILLISECONDS`): it serves
+  what is retained and closes, and the browser reconnects with `Last-Event-ID`, so the
+  resume path is exercised on every poll instead of only after a failure. The cost is
+  stated rather than hidden — the retry interval IS the perceived reply latency. A
+  held-open stream is the alternative and would change `agent_routes` only.
+- [x] **T017** Implement `FakeAgentBridge` from deterministic scenarios and contract
   tests shared by every bridge implementation. [FR-014]
-- [ ] **T018** Write browser tests and implement chat composer, streamed response,
+  The shared suite is `BRIDGE_FACTORIES` in `test_studio_agent_bridge.py`: Phase 5's
+  Codex bridge appends itself and inherits every assertion rather than re-deriving them.
+  The `read_only` boundary is enforced AT THE BRIDGE, not by filtering downstream — a
+  filtered event means the agent already attempted the change and the refusal was
+  cosmetic.
+- [x] **T018** Write browser tests and implement chat composer, streamed response,
   public plan/tool activity, reconnect, interruption, draft preservation, and final
   workspace refresh. [FR-023]
+  A controllable `FakeEventSource` makes reconnect and `Last-Event-ID` assertable; jsdom
+  has no `EventSource`, so a looser stub would have left both untested. Events are keyed
+  by `sequence` rather than arrival order, because a reconnect may legitimately
+  redeliver the boundary event. A tool with no `public_label` falls back to a neutral
+  phrase and NEVER to `name` — the `?? payload.name` spelling looks defensive and is the
+  FR-032 leak.
+
+  **NOT included, deliberately:** no approval control. `approval_required` and
+  `file_change_proposed` render as inert activity with no actionable button, because
+  approval semantics are T024–T027; offering one now would let someone believe they had
+  approved something. A test pins the absence of any approve/apply/reject control so the
+  boundary cannot be crossed before the semantics exist.
 
 ## Phase 5 - Codex Subscription Bridge (US2, US4)
 

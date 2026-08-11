@@ -113,3 +113,19 @@
   cursor: progress;
   color: var(--text-muted);
 }
+
+.conversation__stop {
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius);
+  border: var(--border-width) solid var(--status-blocked-fg);
+  background: var(--status-blocked-bg);
+  color: var(--status-blocked-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.conversation__stop:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}

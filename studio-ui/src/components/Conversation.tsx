@@ -41,10 +41,23 @@ const ACTIVITY_TYPES = new Set([
   "connection_state",
 ]);
 
+/** Types that end a turn. Mirrors the server's `TERMINAL_TYPES`. */
+const TERMINAL_TYPES = new Set(["turn_completed", "turn_failed"]);
+
 export interface ConversationProps {
   threadId: string;
   /** Injected so a test can drive the failure path without a live server. */
   startTurn: (threadId: string, prompt: string) => Promise<{ turn_id: string }>;
+  /** Stop a live turn. Optional so the composer works before this is wired. */
+  interruptTurn?: (threadId: string, turnId: string) => Promise<void>;
+  /**
+   * Called when a turn settles, so the caller can re-read the workspace.
+   *
+   * FR-023's "final workspace refresh": a turn can change committed files, so the
+   * deterministic views are stale the moment one ends. Fires for FAILED turns too -- a
+   * turn that wrote files and then failed is exactly when a stale view misleads most.
+   */
+  onTurnSettled?: () => void;
 }
 
 /** A string field from an opaque payload, or `undefined`. */
@@ -75,13 +88,23 @@ export function activityLabel(event: StudioEvent): string {
   }
 }
 
-export function Conversation({ threadId, startTurn }: ConversationProps) {
+export function Conversation({
+  threadId,
+  startTurn,
+  interruptTurn,
+  onTurnSettled,
+}: ConversationProps) {
   const [events, setEvents] = useState<Map<number, StudioEvent>>(new Map());
   const [draft, setDraft] = useState("");
   const [sendError, setSendError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [liveTurnId, setLiveTurnId] = useState<string | null>(null);
   // A ref so reconnect does not re-run the effect and tear down the stream it just made.
   const generationRef = useRef(0);
+  // Refs so the stream effect never re-subscribes when a callback identity changes: a
+  // re-subscribe would close the stream and lose the resume point.
+  const settledRef = useRef(onTurnSettled);
+  settledRef.current = onTurnSettled;
 
   useEffect(() => {
     let cancelled = false;
@@ -98,6 +121,18 @@ export function Conversation({ threadId, startTurn }: ConversationProps) {
           next.set(parsed.sequence, parsed);
           return next;
         });
+        // An `ignored_for_state` event did not change anything, so it must not move the
+        // turn state either -- treating a late terminal as a boundary would refresh the
+        // workspace on an event the server already discounted.
+        if (parsed.ignored_for_state) {
+          return;
+        }
+        if (parsed.type === "turn_started") {
+          setLiveTurnId(parsed.turn_id);
+        } else if (TERMINAL_TYPES.has(parsed.type)) {
+          setLiveTurnId(null);
+          settledRef.current?.();
+        }
       } catch {
         // A malformed frame is the server's defect to report, not the page's to crash on.
       }
@@ -150,6 +185,18 @@ export function Conversation({ threadId, startTurn }: ConversationProps) {
     }
   }, [draft, sending, startTurn, threadId]);
 
+  const stop = useCallback(async () => {
+    if (liveTurnId === null || interruptTurn === undefined) {
+      return;
+    }
+    try {
+      await interruptTurn(threadId, liveTurnId);
+    } catch {
+      // A 409 means the turn had already ended, which is not a failure worth showing:
+      // the outcome the user wanted (nothing running) is the outcome they got.
+    }
+  }, [interruptTurn, liveTurnId, threadId]);
+
   return (
     <section className="conversation" aria-label="Conversation with the agent">
       <ol className="conversation__stream">
@@ -162,6 +209,14 @@ export function Conversation({ threadId, startTurn }: ConversationProps) {
         <p className="conversation__error" role="alert">
           {sendError}
         </p>
+      )}
+
+      {/* Offered ONLY while a turn is live: a stop button with nothing to stop is a
+          control that silently does nothing. */}
+      {liveTurnId !== null && (
+        <button type="button" className="conversation__stop" onClick={stop}>
+          Stop
+        </button>
       )}
 
       <div className="conversation__composer">
