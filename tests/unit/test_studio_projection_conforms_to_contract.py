@@ -202,17 +202,34 @@ def test_the_next_action_does_not_fabricate_an_approval_requirement(
     )
 
 
-def test_the_next_action_reports_authority_when_the_source_records_it() -> None:
-    """When the stage DOES record an authority, it must be carried, not dropped."""
+def test_the_next_action_never_claims_an_authority_it_cannot_source() -> None:
+    """The upstream projection has no `required_authority`, so Studio claims none.
+
+    An interim fix read `entry["required_authority"]`, which looked like consulting the
+    source and was INERT: `status_surface._project_table` emits `table`, `source_path`,
+    `current_stage`, `stages`, `blocking_reasons`, and `next_action` -- nothing else --
+    so
+    the read always evaluated False while appearing to work.
+
+    This pins the deferral. Wiring `agent_next.build_table_next_document` (which
+    exposes the authority as a STRING, not a list) is upstream integration for a
+    follow-on task; until then False is the honest value, and a future `True` must
+    arrive with a real source.
+    """
     from seshat.studio.projection import _next_action
 
+    # Even when a caller passes the field, it must not be trusted: the real upstream
+    # never
+    # sends it, so honouring it here would make the behaviour depend on a shape that
+    # only
+    # ever appears in a test.
     action = _next_action(
         {"next_action": "Obtain the ruling", "required_authority": ["named_human"]},
         "t",
     )
 
     assert action is not None
-    assert action.requires_named_human is True
+    assert action.requires_named_human is False
 
 
 def test_a_table_level_blocking_reason_is_preserved(tmp_path: Path) -> None:

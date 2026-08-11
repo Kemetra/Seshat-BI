@@ -249,7 +249,13 @@ function NextAction({ journey }: { journey: Journey }): React.JSX.Element | null
       <h4 id={`${journey.table_id}-next`}>Next</h4>
       {/* `_next_action` copies the committed instruction VERBATIM, and real ones name
           approval files and commands. Summarised here; the exact wording is disclosed. */}
-      <p>A recorded next step is waiting; see technical detail for the exact wording.</p>
+      {/* Not "a step is WAITING". `retail_store_sales` has all seven stages passing and a
+          committed `next_action` whose text says no further readiness action is required,
+          so announcing unfinished work would contradict the record. Classifying
+          terminal-vs-actionable would mean parsing the prose -- the same arms race the
+          technical-text heuristic lost -- so the wording states only what is certain:
+          a next action is recorded, and here it is. */}
+      <p>A next action is recorded for this table; see technical detail for its wording.</p>
       <details className="journey__detail">
         <summary>Technical detail</summary>
         <p>{action.label}</p>

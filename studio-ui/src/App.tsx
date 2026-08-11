@@ -93,7 +93,6 @@ export function App(): React.JSX.Element {
       {/* Strictly additive: FR-025 requires the deterministic views below to stay
           usable in EVERY agent state, so this notice never gates what follows. */}
       <AgentHealthNotice health={snapshot.agent_health} />
-      <PendingDecisions count={snapshot.pending_decision_count} />
       {snapshot.input_defects.length > 0 && <InputDefects snapshot={snapshot} />}
       {snapshot.tables.length === 0 ? (
         <FirstArrival />
@@ -104,34 +103,21 @@ export function App(): React.JSX.Element {
   );
 }
 
-/**
- * How many business decisions await a named human (US1).
+/*
+ * NO pending-decision count is rendered, deliberately.
  *
- * US1 requires the Command Room to explain the "pending decision count" alongside the
- * stage, blockers, evidence, and next action. A QUEUE LENGTH is not a readiness signal,
- * so FR-009 does not forbid the number -- but the wording has to make that unmistakable,
- * because a bare figure next to a readiness journey invites reading it as a score.
+ * US1 does name it ("...blockers, evidence, pending decision count, and one next allowed
+ * action"), and a previous revision rendered it -- but `WorkspaceSnapshot.
+ * pending_decision_count` is a dataclass DEFAULT of 0 that nothing computes, and
+ * `/decisions` returns an empty list. So the sentence "No decisions are waiting on a
+ * named human" was asserting workspace truth from a hardcoded zero, and it said exactly
+ * that while `mappings/finance_gl_actuals/approval-request-model-integrity.md` sat
+ * unresolved in the tree.
  *
- * Foundation cannot record these decisions (FR-022, and `BootstrapState` types the
- * capability as the literal `false`), so this states the count and stops there.
+ * Saying nothing is honest; saying "none are waiting" is not. Wiring this to
+ * `approval_inbox`'s open-request projection is real upstream work, tracked against T013
+ * in tasks.md rather than half-done here.
  */
-function PendingDecisions({ count }: { count: number }): React.JSX.Element {
-  if (count === 0) {
-    return (
-      <p className="pending-decisions">
-        No decisions are waiting on a named human.
-      </p>
-    );
-  }
-  // `1 decisions await` reads as carelessness, and an interface asking to be trusted
-  // about readiness cannot afford sloppiness in the sentence beside the number.
-  const noun = count === 1 ? "decision awaits" : "decisions await";
-  return (
-    <p className="pending-decisions">
-      {`${count} ${noun} a named human's approval.`}
-    </p>
-  );
-}
 
 /**
  * Plain-language wording per defect code, keyed off the server's `code`.

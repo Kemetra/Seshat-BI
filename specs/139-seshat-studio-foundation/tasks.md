@@ -182,9 +182,20 @@ the same 2 failures / 24 skipped. After T009-T010: **5979 passed / the same 2 fa
   vocabulary) and gains a separate signal derived purely from position, saying "Waiting
   for Mapping to clear". Nothing is locked once the current stage passes -- calling later
   work blocked then would be a fabricated obstacle.
-  The pending decision count US1 names is now stated too; it was projected by the server
-  and silently ignored by the shell. A queue length is not a readiness score, so FR-009
-  permits the number, but the wording says plainly what it counts.
+  **The pending decision count US1 names is NOT rendered, and that is deliberate.** An
+  interim revision did render it, then a review showed `pending_decision_count` is a
+  dataclass DEFAULT of 0 that nothing computes and `/decisions` returns an empty list -- so
+  "No decisions are waiting" asserted workspace truth from a hardcoded zero while
+  `mappings/finance_gl_actuals/approval-request-model-integrity.md` sat unresolved. Saying
+  nothing is honest; asserting none is not. Wiring it to `approval_inbox`'s open-request
+  projection is upstream work deferred to a follow-on task, and a test pins the absence so
+  the claim cannot return unwired.
+  **`ActionSummary.requires_named_human` is always False for the same reason.**
+  `status_surface._project_table` -- the upstream this projection reads -- never emits
+  `required_authority`, so an interim "read it from the source" fix looked correct and was
+  INERT. `agent_next.build_table_next_document` does expose an authority, as a STRING
+  rather than a list; adopting it is new upstream integration with its own contract
+  questions, so Studio claims no approval requirement it cannot substantiate.
   FR-032: stage identifiers render as human labels ("Mapping", never `mapping_ready`),
   and every raw source reference sits behind an explicit `<details>` disclosure.
 - [x] **T014** Add the seven distinct agent health presentations while retaining all

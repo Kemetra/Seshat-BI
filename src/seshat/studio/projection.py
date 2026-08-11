@@ -418,10 +418,6 @@ def _next_action(entry: dict, table_id: str) -> ActionSummary | None:
     label = entry.get("next_action")
     if not isinstance(label, str) or not label:
         return None
-    authority = entry.get("required_authority")
-    requires_human = isinstance(authority, list) and any(
-        isinstance(item, str) and item for item in authority
-    )
     return ActionSummary(
         id=f"{table_id}:next",
         label=label,
@@ -430,7 +426,23 @@ def _next_action(entry: dict, table_id: str) -> ActionSummary | None:
             "derive the next action."
         ),
         requires_agent=False,
-        requires_named_human=requires_human,
+        # Always False, and NOT because approval never applies -- because this
+        # projection
+        # has no source for it. `status_surface._project_table`, the upstream this
+        # reads,
+        # projects `table`, `source_path`, `current_stage`, `stages`,
+        # `blocking_reasons`,
+        # and `next_action`, and nothing else. A previous revision "read"
+        # `entry["required_authority"]`, which looked correct and was INERT: the key is
+        # never present, so it always evaluated False while appearing to consult the
+        # source.
+        #
+        # `agent_next.build_table_next_document` does expose an authority, as a
+        # STRING rather than a list. Adopting it is new upstream integration with its
+        # own contract questions, so it is deferred rather than half-wired here.
+        # Until then Studio claims no approval requirement it cannot substantiate --
+        # inventing one is the same class of error as inventing a pass.
+        requires_named_human=False,
     )
 
 
