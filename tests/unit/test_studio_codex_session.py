@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+from seshat.studio.codex_process import CodexLaunchPlan
+
 pytestmark = pytest.mark.unit
 
 _SCRIPT = Path(__file__).parent / "_codex_child_script.py"
@@ -78,3 +80,52 @@ def test_hang_produces_no_output_and_keeps_running_until_terminated() -> None:
     assert out == "", f"expected no output before termination, got {out!r}"
     assert proc.returncode is not None
     assert proc.returncode != 0
+
+
+def _plan(tmp_path: Path, fixture: str, *extra: str) -> CodexLaunchPlan:
+    return CodexLaunchPlan(
+        argv=(sys.executable, str(_SCRIPT), fixture, *extra), cwd=tmp_path
+    )
+
+
+def test_a_session_reads_every_frame_then_sees_eof(tmp_path: Path) -> None:
+    from seshat.studio.codex_bridge import CodexSession
+
+    session = CodexSession(_plan(tmp_path, "thread_turn"))
+    session.start()
+    try:
+        frames = list(session.frames())
+    finally:
+        session.close()
+
+    assert frames, "no frames were read from the child"
+    assert all(frame.get("jsonrpc") == "2.0" for frame in frames)
+
+
+def test_a_session_never_inherits_a_handle(tmp_path: Path) -> None:
+    """Issue #557: an inherited stdin under `seshat mcp` is the client's live pipe."""
+    from seshat.studio.codex_bridge import CodexSession
+
+    session = CodexSession(_plan(tmp_path, "handshake"))
+    assert session.plan.inherits_any_handle is False
+
+
+def test_closing_a_hung_child_does_not_block_forever(tmp_path: Path) -> None:
+    """The deadlock shape: a child that never writes must not wedge shutdown."""
+    from seshat.studio.codex_bridge import CodexSession
+
+    session = CodexSession(_plan(tmp_path, "handshake", "--hang"))
+    session.start()
+    returncode = session.close(timeout=5.0)
+
+    assert session.is_running is False
+    assert returncode is not None
+
+
+def test_stderr_is_redacted_before_retention(tmp_path: Path) -> None:
+    from seshat.studio.codex_bridge import CodexSession
+
+    session = CodexSession(_plan(tmp_path, "handshake"))
+    session.start()
+    session.close()
+    assert "sk-" not in session.stderr_text()
