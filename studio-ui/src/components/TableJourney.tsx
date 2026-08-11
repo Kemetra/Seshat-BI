@@ -55,13 +55,23 @@ function positionOf(stage: ReadinessStage, current: ReadinessStage | null): Posi
   return stageIndex < currentIndex ? "behind" : "ahead";
 }
 
-/** A status that lets the NEXT stage begin. */
+/** A status that lets the NEXT stage begin. ONLY `pass`. */
 function permitsSuccessor(status: StageState["status"]): boolean {
-  // "`blocked` stops the next stage, `warning` does not"
-  // (`docs/readiness/readiness-model.md`), and `run_next` routes `warning` down the
-  // proceed path. `not_started` does not permit a successor either: work cannot begin
-  // downstream of a stage nobody has started.
-  return status === "pass" || status === "warning";
+  // `docs/readiness/readiness-model.md` carries TWO rules, and reading only the second
+  // is what produced two wrong revisions of this function:
+  //
+  //   "A stage may be entered only when the **prior stage is `pass`**"
+  //   "`warning` does not block the next stage by itself; a `blocked` does."
+  //
+  // They do not conflict. Entry requires `pass`; `warning` is simply not the permanent
+  // barrier `blocked` is -- it can be cleared to `pass` by accepting the deviation. The
+  // engine settles which one governs entry: `run_next._stage_decision` walks the stages
+  // in order and STOPS at a `warning`, returning that stage as the next action, so the
+  // frontier has not moved past it.
+  //
+  // Treating `warning` as permitting a successor showed later work as available and
+  // would have sent the analyst past the recorded readiness stage.
+  return status === "pass";
 }
 
 /**
@@ -91,48 +101,47 @@ function blockingPrerequisite(
 }
 
 /**
- * True when committed text carries the tool's own vocabulary.
+ * ALL committed prose is technical. The default is inverted on purpose.
  *
- * The projection copies committed governance prose verbatim -- correct for a record, and
- * exactly what FR-032 keeps off the analyst's first screen. Real evidence labels ARE file
- * paths (`_evidence_ref` assigns the committed string to both `label` and `source_ref`),
- * and real blockers name commands like `retail validate` and files like
- * `src/seshat/validate.py:236-239`. So the primary journey summarises, and the verbatim
- * text lives in the disclosure.
+ * A previous revision asked "does this string LOOK technical?" with a regex over paths,
+ * file extensions, and command names. That is an arms race the projection wins: real
+ * committed text also carries skill names (`retail-semantic-check`), model paths
+ * (`powerbi/RetailStoreSales.SemanticModel`), stage identifiers (`publish_ready`), and
+ * feature ids (`F016`) -- none of which share a lexical form worth matching. Every
+ * widening of the pattern left another leak.
+ *
+ * So the rule is structural rather than lexical: text the SERVER supplied is technical and
+ * belongs behind the disclosure; only wording the frontend authored appears in the primary
+ * journey. That is a closed rule a reviewer can check by reading, and it satisfies FR-032
+ * for text nobody has thought of yet.
+ *
+ * The cost is that genuinely readable committed prose is also hidden. That is the right
+ * trade: FR-032 governs what the analyst is shown up front, and a summary plus a
+ * disclosure loses nothing, while a leak misrepresents the product's whole promise.
  */
-function isTechnical(text: string): boolean {
-  return /(^|[\s(])(mappings|warehouse|tests|src|specs|docs)\//.test(text)
-    || /\.(md|ya?ml|sql|py|json|tmdl)\b/.test(text)
-    || /\b(seshat|retail)\s+[a-z-]+/.test(text)
-    || /\.py:\d/.test(text);
-}
 
-/** Count-only summary for evidence whose text cannot be shown up front. */
+/** Count-only summary, so hidden evidence is still known to EXIST. */
 function evidenceSummary(count: number): string {
   return count === 1 ? "1 committed reference" : `${count} committed references`;
 }
 
 function StageEvidence({ stage }: { stage: StageState }): React.JSX.Element | null {
   if (stage.evidence.length === 0) return null;
-  const showable = stage.evidence.filter((item) => !isTechnical(item.label));
-  const hidden = stage.evidence.length - showable.length;
+  const pending = stage.evidence.filter(
+    (item) => item.live_state === "pending_live_profile",
+  ).length;
   return (
     <ul className="journey__evidence">
-      {showable.map((item) => (
-        <li key={item.source_ref}>
-          {item.label}
-          {/* The [PENDING LIVE PROFILE] distinction the contract's `live_state` carries:
-              evidence awaiting a live run must not read as verified. */}
-          {item.live_state === "pending_live_profile" && (
-            <span className="journey__pending"> (awaiting a live check)</span>
-          )}
-        </li>
-      ))}
-      {hidden > 0 && (
-        // Says that evidence EXISTS without printing the paths: silently showing fewer
-        // items would read as a stage with thinner evidence than it has.
-        <li className="journey__summary">
-          {evidenceSummary(hidden)} recorded; see technical detail.
+      <li className="journey__summary">
+        {evidenceSummary(stage.evidence.length)} recorded; see technical detail.
+      </li>
+      {pending > 0 && (
+        // The [PENDING LIVE PROFILE] distinction the contract's `live_state` carries:
+        // evidence awaiting a live run must never read as verified, so it is surfaced up
+        // front even though the reference itself is not.
+        <li className="journey__pending">
+          {pending === 1 ? "1 reference awaits" : `${pending} references await`} a live
+          check.
         </li>
       )}
     </ul>
@@ -145,9 +154,7 @@ function StageBlockers({ stage }: { stage: StageState }): React.JSX.Element | nu
     <ul className="journey__blockers">
       {stage.blocking_reasons.map((reason, index) => (
         <li key={`${reason.code ?? "reason"}:${index}`}>
-          {isTechnical(reason.message)
-            ? "A recorded blocker needs attention; see technical detail."
-            : reason.message}
+          A recorded blocker needs attention; see technical detail.
         </li>
       ))}
     </ul>
@@ -242,17 +249,11 @@ function NextAction({ journey }: { journey: Journey }): React.JSX.Element | null
       <h4 id={`${journey.table_id}-next`}>Next</h4>
       {/* `_next_action` copies the committed instruction VERBATIM, and real ones name
           approval files and commands. Summarised here; the exact wording is disclosed. */}
-      <p>
-        {isTechnical(action.label)
-          ? "A recorded next step is waiting; see technical detail for the exact instruction."
-          : action.label}
-      </p>
-      {isTechnical(action.label) && (
-        <details className="journey__detail">
-          <summary>Technical detail</summary>
-          <p>{action.label}</p>
-        </details>
-      )}
+      <p>A recorded next step is waiting; see technical detail for the exact wording.</p>
+      <details className="journey__detail">
+        <summary>Technical detail</summary>
+        <p>{action.label}</p>
+      </details>
       {action.requires_named_human && (
         <p className="journey__authority">
           A named human must approve this step; Studio cannot.

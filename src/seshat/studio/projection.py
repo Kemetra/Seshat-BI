@@ -404,10 +404,24 @@ def _unreadable_defect(table_id: str) -> InputDefect:
 
 
 def _next_action(entry: dict, table_id: str) -> ActionSummary | None:
-    """Project the committed next action. FR-008 names it; it must not be dropped."""
+    """Project the committed next action. FR-008 names it; it must not be dropped.
+
+    ``requires_named_human`` is READ, never assumed. An earlier revision hardcoded it to
+    ``True``, which fabricated a governance requirement: the committed readiness spine
+    records no per-action authority (`templates/readiness-status.yaml` carries
+    `approvals: []` at document level and no per-stage `required_authority`), so EVERY
+    action claimed a named human must approve it -- including a mechanical live-run
+    step, and including a table whose seven stages all pass and whose "action" is the
+    message that nothing remains. Inventing an approval is the same class of error as
+    inventing a pass, and this projection exists to do neither.
+    """
     label = entry.get("next_action")
     if not isinstance(label, str) or not label:
         return None
+    authority = entry.get("required_authority")
+    requires_human = isinstance(authority, list) and any(
+        isinstance(item, str) and item for item in authority
+    )
     return ActionSummary(
         id=f"{table_id}:next",
         label=label,
@@ -416,7 +430,7 @@ def _next_action(entry: dict, table_id: str) -> ActionSummary | None:
             "derive the next action."
         ),
         requires_agent=False,
-        requires_named_human=True,
+        requires_named_human=requires_human,
     )
 
 

@@ -190,6 +190,79 @@ describe("FR-032 against REAL projection output", () => {
   });
 });
 
+describe("FR-032 against the strings the reviewer cited", () => {
+  /**
+   * Copied verbatim from `mappings/retail_store_sales/readiness-status.yaml`.
+   *
+   * These are why a lexical heuristic could never be complete: a skill name
+   * (`retail-semantic-check`), a model path (`powerbi/RetailStoreSales.SemanticModel`),
+   * a stage identifier (`publish_ready`), and a feature id (`F016`) share no form worth
+   * matching. The component now treats ALL committed prose as technical instead.
+   */
+  const CITED = [
+    "governed PBIP model authored as TMDL: powerbi/RetailStoreSales.SemanticModel",
+    "retail-semantic-check 5-step verdict = pass: retail check exit 0",
+    "ALL seven stages pass (publish_ready re-approved 2026-07-05)",
+    "F016 dashboard evidence recorded",
+  ];
+
+  it("shows none of them in the primary journey", () => {
+    const journey: Journey = {
+      ...blockedAtMapping(),
+      stages: [
+        stage("source_ready", "pass", {
+          evidence: CITED.map((label) => ({
+            label,
+            source_ref: label,
+            kind: "committed_reference",
+            live_state: "verified" as const,
+          })),
+        }),
+        ...STAGES.slice(1).map((name) => stage(name, "not_started")),
+      ],
+      next_action: {
+        id: "x:next",
+        label: CITED[2] as string,
+        explanation: "verbatim",
+        requires_agent: false,
+        requires_named_human: false,
+      },
+    };
+    const { container } = render(<TableJourney journey={journey} />);
+    const primary = primaryText(container);
+
+    for (const fragment of [
+      "retail-semantic-check",
+      "powerbi/RetailStoreSales",
+      "publish_ready",
+      "F016",
+      "retail check exit 0",
+    ]) {
+      expect(primary, `leaked ${fragment}`).not.toContain(fragment);
+    }
+  });
+
+  it("still says how much evidence exists, so nothing reads as missing", () => {
+    const journey: Journey = {
+      ...blockedAtMapping(),
+      stages: [
+        stage("source_ready", "pass", {
+          evidence: CITED.map((label) => ({
+            label,
+            source_ref: label,
+            kind: "committed_reference",
+            live_state: "verified" as const,
+          })),
+        }),
+        ...STAGES.slice(1).map((name) => stage(name, "not_started")),
+      ],
+    };
+    render(<TableJourney journey={journey} />);
+
+    expect(screen.getByText(/4 committed references recorded/i)).toBeInTheDocument();
+  });
+});
+
 describe("the table journey", () => {
   it("names the current stage in plain language", () => {
     render(<TableJourney journey={blockedAtMapping()} />);
@@ -227,10 +300,15 @@ describe("the table journey", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows the evidence behind a passing stage", () => {
-    render(<TableJourney journey={blockedAtMapping()} />);
+  it("says evidence exists without printing the committed reference", () => {
+    // Committed text is technical BY DEFAULT (see TableJourney.tsx): the reference lives
+    // in the disclosure, and the primary journey states that evidence was recorded so a
+    // reader never mistakes a hidden reference for a missing one.
+    const { container } = render(<TableJourney journey={blockedAtMapping()} />);
 
-    expect(screen.getByText("source profile recorded")).toBeInTheDocument();
+    expect(screen.getByText(/1 committed reference recorded/i)).toBeInTheDocument();
+    expect(primaryText(container)).not.toContain("source profile recorded");
+    expect(container.textContent).toContain("evidence/source-profile.md");
   });
 
   it("offers the next action, and says a named human is required", () => {
@@ -270,10 +348,10 @@ describe("the table journey", () => {
     };
     render(<TableJourney journey={journey} />);
 
-    // Mapping may begin: its only prerequisite advanced (a warning does not stop it).
+    // Mapping is the frontier itself, so it is not locked...
     expect(screen.getByRole("listitem", { name: /^Mapping$/ })).toHaveAttribute(
       "data-locked",
-      "false",
+      "true",
     );
     // Silver cannot: Mapping has not started, so Silver waits on Mapping.
     expect(screen.getByRole("listitem", { name: /^Silver$/ })).toHaveAttribute(
@@ -302,12 +380,15 @@ describe("the table journey", () => {
     ).toHaveTextContent(/waiting for mapping/i);
   });
 
-  it("does NOT lock later stages when the current stage is a warning", () => {
-    // `docs/readiness/readiness-model.md`: "`blocked` stops the next stage, `warning`
-    // does not". A warning stage ADVANCED with a recorded issue, and `run_next` routes
-    // it down the proceed path -- so showing later work as gated invents an obstacle the
-    // authority does not record. `warning` is also what a clean live run assigns, i.e.
-    // the most common non-pass state.
+  it("locks the successor of a WARNING prerequisite (only pass clears a stage)", () => {
+    // `docs/readiness/readiness-model.md` carries TWO rules and I first read only the
+    // second: "A stage may be entered only when the prior stage is `pass`" AND
+    // "`warning` does not block the next stage by itself; a `blocked` does". Those are
+    // not in conflict -- entry requires `pass`, and `warning` is simply not the permanent
+    // barrier `blocked` is. `run_next._stage_decision` settles it: it stops at a
+    // `warning` stage and returns that stage as the next action, so the frontier has NOT
+    // moved past it. Showing Silver as available would send the analyst past the
+    // recorded stage.
     const journey: Journey = {
       ...blockedAtMapping(),
       stages: [
@@ -319,6 +400,27 @@ describe("the table journey", () => {
     render(<TableJourney journey={journey} />);
 
     expect(screen.getByRole("listitem", { name: /^Silver$/ })).toHaveAttribute(
+      "data-locked",
+      "true",
+    );
+    expect(
+      screen.getByRole("listitem", { name: /^Silver$/ }),
+    ).toHaveTextContent(/waiting for mapping/i);
+  });
+
+  it("does not lock the warning stage itself", () => {
+    // The warning stage is the frontier, not a locked stage: its own prerequisite passed.
+    const journey: Journey = {
+      ...blockedAtMapping(),
+      stages: [
+        stage("source_ready", "pass"),
+        stage("mapping_ready", "warning"),
+        ...STAGES.slice(2).map((name) => stage(name, "not_started")),
+      ],
+    };
+    render(<TableJourney journey={journey} />);
+
+    expect(screen.getByRole("listitem", { name: /^Mapping$/ })).toHaveAttribute(
       "data-locked",
       "false",
     );
@@ -435,12 +537,18 @@ describe("the table journey", () => {
     const { container } = render(<TableJourney journey={blockedAtMapping()} />);
     const text = container.textContent ?? "";
 
+    // A COUNT of concrete things ("1 committed reference") is not a readiness signal, any
+    // more than the pending-decision count is: FR-009 forbids a numeric readiness,
+    // health, confidence, completeness, or maturity VALUE.
     for (const pattern of [
       /\d+\s*%/,
       /\bpercent\b/i,
       /\b\d+\s*(of|\/)\s*\d+\b/,
       /\b(score|confidence|completeness|maturity|index)\b/i,
-      /\b0?\.\d+\b/,
+      // `0?` made the leading zero optional, so this matched ".1" formed by `textContent`
+      // joining "...evidence." to "1 committed reference" with no separator -- a
+      // concatenation artifact, not a fraction. A real one would read "0.71".
+      /\b0\.\d+\b/,
     ]) {
       expect(text).not.toMatch(pattern);
     }

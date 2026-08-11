@@ -164,6 +164,57 @@ def test_the_upstream_next_action_is_preserved(tmp_path: Path) -> None:
     assert upstream["next_action"] in journey.next_action.label
 
 
+def test_the_next_action_does_not_fabricate_an_approval_requirement(
+    tmp_path: Path,
+) -> None:
+    """`requires_named_human` was hardcoded True for EVERY next action.
+
+    The committed readiness spine records no per-action authority -- `templates/
+    readiness-status.yaml` has `approvals: []` at the document level and no
+    `required_authority` per stage -- so asserting True invents a governance fact. It
+    made `demo_sample_orders`' mechanical live-run action, and even
+    `retail_store_sales`' "all seven stages pass, nothing remains" message, both claim a
+    named human must approve them.
+    """
+    from seshat.studio import projection
+
+    (tmp_path / ".seshat").mkdir(parents=True)
+    table = tmp_path / "mappings" / "mech"
+    table.mkdir(parents=True)
+    (table / "readiness-status.yaml").write_text(
+        'table: "mech"\n'
+        'current_stage: "gold_ready"\n'
+        'next_action: "Run the optional live leg to advance Gold Ready"\n'
+        "stages:\n"
+        "  gold_ready:\n"
+        '    status: "warning"\n'
+        "    evidence: []\n"
+        "    blocking_reasons: []\n",
+        encoding="utf-8",
+    )
+
+    action = projection.build_workspace_snapshot(tmp_path).tables[0].next_action
+
+    assert action is not None
+    assert action.requires_named_human is False, (
+        "the committed source records no authority for this action, so claiming one "
+        "fabricates a governance requirement"
+    )
+
+
+def test_the_next_action_reports_authority_when_the_source_records_it() -> None:
+    """When the stage DOES record an authority, it must be carried, not dropped."""
+    from seshat.studio.projection import _next_action
+
+    action = _next_action(
+        {"next_action": "Obtain the ruling", "required_authority": ["named_human"]},
+        "t",
+    )
+
+    assert action is not None
+    assert action.requires_named_human is True
+
+
 def test_a_table_level_blocking_reason_is_preserved(tmp_path: Path) -> None:
     """Upstream also carries table-level blockers; they must not vanish."""
     from seshat.studio import projection
