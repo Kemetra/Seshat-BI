@@ -36,6 +36,16 @@ __all__ = ["CodexSession"]
 #: Sentinel pushed onto the frame queue when the reader thread sees EOF.
 _EOF = object()
 
+#: Upper bound `close()` gives a child to exit on its own before escalating to
+#: `terminate()`. Not a sleep -- `wait(timeout=...)` returns the instant the
+#: child exits, so a healthy child pays only its own runtime. It exists
+#: because Windows `terminate()` is `TerminateProcess`, a hard kill: closing
+#: right after `start()` would otherwise destroy a child that had not yet
+#: been scheduled, losing stderr it was about to write. Measured child
+#: startup-to-exit on this fixture is ~70ms worst case across 10 runs, so this
+#: leaves over an order of magnitude of headroom for the fast path.
+_EXIT_GRACE_SECONDS = 1.0
+
 
 class CodexSession:
     """Owns one Codex app-server child process and its two reader threads."""
@@ -133,16 +143,42 @@ class CodexSession:
         return "".join(self._stderr_parts)
 
     def close(self, timeout: float = 5.0) -> int | None:
-        """Terminate the child and join both readers. Safe to call twice."""
+        """Terminate the child and join both readers. Safe to call twice.
+
+        A caller may close() right after start() with no frames() call in
+        between -- an error path or a cancellation has no reason to drain
+        stdout first -- so whatever the child already wrote to stderr must
+        not depend on that drain having happened.
+
+        The grace wait below is why: on Windows, `terminate()` is
+        `TerminateProcess`, a hard kill with no equivalent of a graceful
+        SIGTERM. Calling it immediately after start() can kill a child before
+        the OS has even scheduled it, destroying stderr it was about to write
+        a moment later. `wait(timeout=_EXIT_GRACE_SECONDS)` costs nothing on a
+        child that exits quickly -- it returns the instant the child exits --
+        and only escalates to terminate/kill once that bound is spent, which
+        is what keeps a genuinely hung child's close() bounded.
+
+        The reader threads are joined AFTER that resolution but BEFORE the
+        streams are closed, so each thread drains whatever the child flushed
+        and exits via its own EOF rather than via a stream ripped out from
+        under an in-flight `readline()`.
+        """
         if self._process is None:
             return None
         if self._process.poll() is None:
-            self._process.terminate()
             try:
-                self._process.wait(timeout=timeout)
+                self._process.wait(timeout=_EXIT_GRACE_SECONDS)
             except subprocess.TimeoutExpired:
-                self._process.kill()
-                self._process.wait(timeout=timeout)
+                self._process.terminate()
+        for thread in self._threads:
+            thread.join(timeout=timeout)
+        if self._process.poll() is None:
+            self._process.kill()
+        try:
+            self._process.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            pass
         for stream in (
             self._process.stdin,
             self._process.stdout,
@@ -153,6 +189,4 @@ class CodexSession:
                     stream.close()
                 except OSError:
                     pass
-        for thread in self._threads:
-            thread.join(timeout=timeout)
         return self._process.returncode

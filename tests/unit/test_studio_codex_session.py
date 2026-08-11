@@ -129,21 +129,19 @@ _STDERR_SECRET_LINE = "Incorrect API key provided: sk-live-ABCDEFGH12345678"
 
 
 def test_stderr_is_redacted_before_retention(tmp_path: Path) -> None:
+    """No frames() drain in between: close() alone must not lose stderr.
+
+    A caller closing after an error or a cancellation has no reason to read
+    stdout first, so the session -- not the test -- must guarantee the
+    child's already-written stderr survives a bare start()-then-close().
+    """
     from seshat.studio.codex_bridge import CodexSession
 
     session = CodexSession(
         _plan(tmp_path, "handshake", "--stderr", _STDERR_SECRET_LINE)
     )
     session.start()
-    try:
-        # Draining to stdout EOF is the synchronization point: it guarantees the
-        # child has run to completion (and therefore flushed its one stderr line)
-        # before close() tears the pipes down. Without this, close() can race the
-        # child's own scheduling and observe no stderr at all -- a different
-        # vacuous-pass shape than finding A, not a property of the guard.
-        list(session.frames())
-    finally:
-        session.close()
+    session.close()
 
     stderr_text = session.stderr_text()
     assert "sk-live-ABCDEFGH12345678" not in stderr_text
@@ -167,9 +165,6 @@ def test_disabling_the_redaction_guard_lets_the_raw_secret_through(
         _plan(tmp_path, "handshake", "--stderr", _STDERR_SECRET_LINE)
     )
     session.start()
-    try:
-        list(session.frames())
-    finally:
-        session.close()
+    session.close()
 
     assert "sk-live-ABCDEFGH12345678" in session.stderr_text()
