@@ -16,6 +16,14 @@ bounded and a resume point can genuinely expire. Serving "everything still retai
 an evicted `Last-Event-ID` would silently skip events and leave the browser rendering a
 state that never existed, so the store raises and this module turns that into the
 contract's 409.
+
+**The stream is a finite replay, deliberately.** `/events` serves what is retained and
+closes; `EventSource` then reconnects on its own with `Last-Event-ID`. Reconnect is
+therefore the NORMAL path rather than a failure path, so the resume logic is exercised
+on every poll instead of only after an error. The trade-off is real and stated rather
+than hidden: a turn's events appear on the next reconnect, so `SSE_RETRY_MILLISECONDS`
+is the perceived latency. A held-open stream is the alternative and would change this
+module only.
 """
 
 from __future__ import annotations
@@ -76,6 +84,26 @@ def _sse_frame(event: Any) -> str:
     """
     payload = json.dumps(event.as_dict(), separators=(",", ":"), sort_keys=True)
     return f"id: {event.sequence}\nevent: {event.type}\ndata: {payload}\n\n"
+
+
+#: What the browser is TOLD to wait before reconnecting, in milliseconds.
+#:
+#: This endpoint is a FINITE replay: it serves what is retained and closes. The browser
+#: treats a closed connection as a dropped one and reconnects on its own, sending
+#: `Last-Event-ID` -- so reconnect is this design's NORMAL path, not its failure path,
+#: which is the property worth having (a resume path only exercised after a failure is a
+#: resume path that is never tested).
+#:
+#: The cost is that a turn's events surface on the next reconnect rather than instantly,
+#: so the interval IS the perceived latency. Declaring it explicitly rather than leaving
+#: the browser on its ~3s default makes that a stated choice instead of an accident, and
+#: keeps it tunable in one place when a held-open stream replaces this.
+SSE_RETRY_MILLISECONDS = 750
+
+
+def _stream_preamble() -> str:
+    """The `retry:` directive, sent once before any event."""
+    return f"retry: {SSE_RETRY_MILLISECONDS}\n\n"
 
 
 def _parse_last_event_id(raw: str | None) -> int | None:
@@ -201,6 +229,10 @@ def _stream_events(app: FastAPI, thread_id: str, request: Request) -> Response:
         )
 
     def frames() -> Iterator[str]:
+        # The preamble goes out even when `events` is empty: a reconnect that finds
+        # nothing new still needs the retry interval, and it is the empty responses that
+        # dominate an idle thread.
+        yield _stream_preamble()
         for event in events:
             yield _sse_frame(event)
 

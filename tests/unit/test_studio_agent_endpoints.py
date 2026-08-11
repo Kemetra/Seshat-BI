@@ -297,6 +297,42 @@ def test_an_expired_replay_is_409_not_a_short_stream(tmp_path: Path) -> None:
     assert expired.headers["content-type"].startswith("application/problem+json")
 
 
+def test_the_stream_declares_its_reconnect_interval(tmp_path: Path) -> None:
+    """This endpoint is a finite replay, so reconnect IS the normal path.
+
+    `EventSource` reconnects on its own after the response closes. Without an explicit
+    `retry:` the browser uses its own default (~3s), which silently becomes the
+    perceived latency of every agent reply. Declaring it makes the interval a choice.
+    """
+    client, _ = _client(tmp_path)
+    thread_id = _thread(client)
+
+    body = client.get(f"{API}/agent/threads/{thread_id}/events").text
+
+    assert "retry:" in body, "the stream must tell the browser its reconnect interval"
+
+
+def test_an_empty_reconnect_still_declares_the_interval(tmp_path: Path) -> None:
+    """The empty responses dominate an idle thread, so they need it most.
+
+    A preamble sent only alongside events would leave a caught-up client falling back to
+    the browser default for every subsequent poll.
+    """
+    client, _ = _client(tmp_path)
+    thread_id = _thread(client)
+    first = client.get(f"{API}/agent/threads/{thread_id}/events").text
+    latest = [line for line in first.splitlines() if line.startswith("id:")][-1]
+    last_id = latest.split(":", 1)[1].strip()
+
+    caught_up = client.get(
+        f"{API}/agent/threads/{thread_id}/events",
+        headers={"Last-Event-ID": last_id},
+    )
+
+    assert _sse_events(caught_up.text) == [], "nothing new is expected here"
+    assert "retry:" in caught_up.text
+
+
 def test_a_stream_for_an_unknown_thread_is_404(tmp_path: Path) -> None:
     client, _ = _client(tmp_path)
 
@@ -340,20 +376,59 @@ def test_hidden_reasoning_never_reaches_the_stream(tmp_path: Path) -> None:
     assert "reasoning" not in body
 
 
-def test_interrupting_a_live_turn_ends_it(tmp_path: Path) -> None:
+def test_interrupting_a_live_turn_returns_204_and_ends_it(tmp_path: Path) -> None:
+    """The SUCCESS path, asserted on its own.
+
+    An earlier version of this test accepted `in {204, 409}`. Because the fake bridge
+    completes synchronously, every turn is already terminal by the time a test can
+    interrupt it -- so that assertion only ever saw 409 and could not fail. The 204
+    branch was reachable and completely untested, which is precisely the state that puts
+    a working-looking button in the UI over an unexercised route.
+
+    Forcing a genuinely live turn is what makes the success path testable at all.
+    """
+    client, app = _client(tmp_path)
+    thread_id = _thread(client)
+    thread = app.state.threads.thread(thread_id)
+    thread.append("turn_started", {}, turn_id="live-turn")
+    assert thread.active_turn_id == "live-turn", "the fixture must leave a LIVE turn"
+
+    interrupted = client.post(
+        f"{API}/agent/threads/{thread_id}/turns/live-turn/interrupt"
+    )
+
+    assert interrupted.status_code == 204, interrupted.text
+    assert thread.active_turn_id is None, "the interrupt must end the turn"
+    assert thread.retained()[-1].type == "turn_failed", (
+        "the browser learns the turn ended from the stream, so it needs an event"
+    )
+
+
+def test_interrupting_an_already_finished_turn_is_409(tmp_path: Path) -> None:
+    """The refusal path, also asserted on its own.
+
+    Inventing a second ending for a completed turn would make the stream describe two
+    terminals for one turn.
+    """
     client, _ = _client(tmp_path)
     thread_id = _thread(client)
     turn = client.post(
         f"{API}/agent/threads/{thread_id}/turns",
         json={
-            "prompt": "a long running request",
+            "prompt": "a request the fake completes synchronously",
             "snapshot_revision": "r1",
             "requested_mode": "read_only",
         },
     ).json()["turn_id"]
 
-    # The fake bridge completes synchronously, so the turn is already terminal: an
-    # interrupt must then be refused rather than inventing a second ending.
-    interrupted = client.post(f"{API}/agent/threads/{thread_id}/turns/{turn}/interrupt")
+    refused = client.post(f"{API}/agent/threads/{thread_id}/turns/{turn}/interrupt")
 
-    assert interrupted.status_code in {204, 409}
+    assert refused.status_code == 409, refused.text
+
+
+def test_interrupting_a_turn_on_an_unknown_thread_is_404(tmp_path: Path) -> None:
+    client, _ = _client(tmp_path)
+
+    missing = client.post(f"{API}/agent/threads/nope/turns/whatever/interrupt")
+
+    assert missing.status_code == 404
