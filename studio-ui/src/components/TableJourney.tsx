@@ -99,6 +99,23 @@ function blockingPrerequisite(
   }
   return null;
 }
+
+/**
+ * The stages in CANONICAL order, whatever order they arrived in.
+ *
+ * Lock derivation already used `STAGE_ORDER`, but rendering mapped the received array
+ * directly -- so a reordered contract-valid payload announced "Publish to Source" inside
+ * an `<ol>` whose entire purpose is conveying the Source-to-Publish sequence. Locks were
+ * right and the list was wrong. Anything the canonical order does not name is appended
+ * rather than dropped: an unrecognised stage is server drift worth showing, not hiding.
+ */
+function orderedStages(stages: readonly StageState[]): StageState[] {
+  const known = STAGE_ORDER.map((name) =>
+    stages.find((candidate) => candidate.stage === name),
+  ).filter((candidate): candidate is StageState => candidate !== undefined);
+  const extra = stages.filter((candidate) => !STAGE_ORDER.includes(candidate.stage));
+  return [...known, ...extra];
+}
 
 /**
  * ALL committed prose is technical. The default is inverted on purpose.
@@ -180,18 +197,49 @@ export function blockerSummary(message: string): string {
     .replace(/^[\s,;:.-]+/, "")
     .trim();
 
-  // Under three words nothing readable survives, so fall back rather than show a
-  // mangled fragment.
-  return scrubbed.split(/\s+/).filter(Boolean).length >= 3
-    ? scrubbed
-    : "A recorded blocker needs attention; see technical detail.";
+  // Fall back when nothing readable survives, OR when what survives still carries code.
+  //
+  // Span removal handles paths, commands, and identifiers, but real committed blockers
+  // also contain SQL keywords, call syntax, and line references -- none of which are any
+  // of those shapes, so residue leaked. Rather than widen the pattern a fifth time, the
+  // DECISION is inverted: if the remainder still looks like code, say nothing specific.
+  // That costs some readability and cannot leak, which is the trade FR-032 asks for.
+  // Authored per-code summaries would restore the detail; that is design work, deferred.
+  const generic = "A recorded blocker needs attention; see technical detail.";
+  const stillCode =
+    /[(){};=]|::|\bIS NULL\b|\b[A-Z]{2,}(\s+[A-Z]{2,})+\b|\b[A-Z]\d+\b/.test(
+      scrubbed,
+    );
+  if (stillCode) return generic;
+
+  return scrubbed.split(/\s+/).filter(Boolean).length >= 3 ? scrubbed : generic;
+}
+
+/**
+ * Blockers with mirrored duplicates removed.
+ *
+ * `projection._with_table_blockers` appends the table-level blocker to the current stage,
+ * and the committed `demo_sample_orders` file deliberately mirrors its top-level blocker
+ * there -- so the identical reason arrived twice and rendered twice, making one problem
+ * look like two. Deduplicated on MESSAGE: two reasons carrying the same text are the same
+ * problem regardless of which source_ref each came from.
+ */
+function distinctReasons(
+  reasons: readonly StageState["blocking_reasons"][number][],
+): StageState["blocking_reasons"][number][] {
+  const seen = new Set<string>();
+  return reasons.filter((reason) => {
+    if (seen.has(reason.message)) return false;
+    seen.add(reason.message);
+    return true;
+  });
 }
 
 function StageBlockers({ stage }: { stage: StageState }): React.JSX.Element | null {
   if (stage.blocking_reasons.length === 0) return null;
   return (
     <ul className="journey__blockers">
-      {stage.blocking_reasons.map((reason, index) => (
+      {distinctReasons(stage.blocking_reasons).map((reason, index) => (
         <li key={`${reason.code ?? "reason"}:${index}`}>
           {blockerSummary(reason.message)}
         </li>
@@ -325,7 +373,7 @@ export function TableJourney({ journey }: { journey: Journey }): React.JSX.Eleme
       {/* Named so a test -- and a screen-reader user -- can address the STAGE list
           specifically, rather than whichever list happens to be first in the DOM. */}
       <ol className="journey__stages" aria-label="Readiness stages">
-        {journey.stages.map((stage) => (
+        {orderedStages(journey.stages).map((stage) => (
           <StageItem
             key={stage.stage}
             stage={stage}

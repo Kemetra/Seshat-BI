@@ -56,6 +56,23 @@ describe("blockerSummary", () => {
     expect(summary).not.toContain("F016");
   });
 
+  it("falls back when SQL or code vocabulary survives the scrub", () => {
+    // Real committed text from `mappings/finance_gl_actuals/readiness-status.yaml`. The
+    // span scrubber removes paths, commands, and identifiers, but SQL keywords, call
+    // syntax, and line references are none of those -- so the residue leaked. Rather than
+    // widen the regex a fifth time, anything still carrying code shapes falls back.
+    const summary = blockerSummary(
+      "L21: the -1 unknown member hides the defect matrix's required D1/D2 refusal. " +
+        "COALESCE(da.account_sk, -1) rewrites a FAILED natural-key lookup into a valid " +
+        "row; LEFT JOIN ... WHERE d.pk IS NULL is the only honest form",
+    );
+
+    for (const unsafe of ["COALESCE", "LEFT JOIN", "WHERE", "L21", "IS NULL"]) {
+      expect(summary, `leaked ${unsafe}`).not.toContain(unsafe);
+    }
+    expect(summary).toMatch(/see technical detail/i);
+  });
+
   it("falls back rather than showing a mangled fragment", () => {
     // Scrubbing a message that is ONLY a path leaves nothing worth reading, so the
     // generic sentence is better than two stray words.

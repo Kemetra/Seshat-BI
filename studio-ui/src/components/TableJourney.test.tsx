@@ -274,6 +274,63 @@ describe("the table journey", () => {
     expect(current).not.toHaveTextContent("mapping_ready");
   });
 
+  it("renders stages in CANONICAL order even when the payload is reordered", () => {
+    // Lock derivation already used `STAGE_ORDER`, but rendering mapped the received array
+    // directly -- so a reordered contract-valid response announced "Publish to Source" in
+    // an `<ol>` whose whole purpose is conveying the sequence. Locks were right and the
+    // list was wrong.
+    const forward = blockedAtMapping();
+    const reversed: Journey = { ...forward, stages: [...forward.stages].reverse() };
+    render(<TableJourney journey={reversed} />);
+
+    const list = screen.getByRole("list", { name: /readiness stages/i });
+    const labels = Array.from(list.children).map(
+      (item) => item.getAttribute("aria-label"),
+    );
+
+    expect(labels).toEqual([
+      "Source",
+      "Mapping",
+      "Silver",
+      "Gold",
+      "Semantic model",
+      "Dashboard",
+      "Publish",
+    ]);
+  });
+
+  it("renders a mirrored blocker once, not twice", () => {
+    // `_with_table_blockers` appends the table-level blocker to the current stage, and the
+    // committed `demo_sample_orders` file deliberately mirrors its top-level blocker there
+    // -- so the identical Gold reason arrived twice and rendered twice, making one problem
+    // look like two.
+    const repeated = {
+      code: null,
+      message: "no named-human approval recorded",
+      source_ref: "mappings/store_sales/readiness-status.yaml",
+    };
+    const journey: Journey = {
+      ...blockedAtMapping(),
+      stages: [
+        stage("source_ready", "pass"),
+        stage("mapping_ready", "blocked", {
+          blocking_reasons: [repeated, { ...repeated }],
+        }),
+        ...STAGES.slice(2).map((name) => stage(name, "not_started")),
+      ],
+    };
+    render(<TableJourney journey={journey} />);
+
+    const mapping = screen.getByRole("listitem", { name: /^Mapping$/ });
+    const clone = mapping.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll("details").forEach((node) => node.remove());
+    const matches = (clone.textContent ?? "").split(
+      "no named-human approval recorded",
+    ).length - 1;
+
+    expect(matches).toBe(1);
+  });
+
   it("renders all seven stages in the authority's order", () => {
     render(<TableJourney journey={blockedAtMapping()} />);
 
