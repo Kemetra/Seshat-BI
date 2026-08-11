@@ -293,8 +293,6 @@ def test_a_provider_file_change_becomes_write_intent_not_a_tool_event() -> None:
     `tool_completed` is not in that set, so it passes the binding guard and the
     browser never sees the proposal it is supposed to review.
     """
-    from seshat.studio.agent_routes import WRITE_INTENT_TYPES
-
     produced = [
         event_type
         for frame in (
@@ -309,6 +307,18 @@ def test_a_provider_file_change_becomes_write_intent_not_a_tool_event() -> None:
         "a provider file change must normalize to write intent so the read-only "
         "guard can refuse it"
     )
+    assert "tool_started" not in produced, (
+        "the file change was normalized to a tool event, which the read-only guard "
+        "does not inspect"
+    )
+
+    # Cross-checked against the REAL constant the guard reads, so this test cannot
+    # drift from `agent_routes` by hardcoding the literal. Guarded because importing
+    # that module pulls in fastapi, which the unit job does not install -- the
+    # assertions above still run there, and this one runs wherever the app deps are.
+    pytest.importorskip("fastapi")
+    from seshat.studio.agent_routes import WRITE_INTENT_TYPES
+
     assert set(produced) & WRITE_INTENT_TYPES
 
 
