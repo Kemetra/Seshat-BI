@@ -213,11 +213,21 @@ class ThreadEvents:
     def replay_after(self, last_event_id: int) -> tuple[StudioEvent, ...]:
         """Events strictly after `last_event_id`, or `ReplayExpired`.
 
+        Deciding WHETHER a resume point is servable is separated from slicing, because
+        the decision carries every subtle boundary while the slice is one line. Reading
+        them together made both harder to check.
+        """
+        self._refuse_unservable_resume(last_event_id)
+        return tuple(event for event in self._events if event.sequence > last_event_id)
+
+    def _refuse_unservable_resume(self, last_event_id: int) -> None:
+        """Raise unless the retained window can continue the client's stream exactly.
+
         The servable window is bounded at both ends. Below it, the resume point was
         evicted and continuing would leave a gap. Above it, the client cites a sequence
-        this thread never issued -- a restarted process or the wrong thread -- which is
-        worth refusing rather than answering emptily, because an empty answer looks
-        like "you are up to date".
+        this thread never issued -- a restarted process or the wrong thread -- worth
+        refusing rather than answering emptily, because an empty answer reads as "you
+        are up to date".
 
         `last_event_id == lowest_retained - 1` is the contiguous boundary and is VALID:
         the client saw everything up to the eviction line, so the retained window
@@ -234,9 +244,9 @@ class ThreadEvents:
         if not self._events:
             # Nothing retained: only "resume from the latest" is answerable, and it
             # answers empty. Anything earlier would be a gap.
-            if last_event_id == latest:
-                return ()
-            raise ReplayExpired("no events are retained to replay")
+            if last_event_id != latest:
+                raise ReplayExpired("no events are retained to replay")
+            return
 
         lowest_retained = self._events[0].sequence
         if last_event_id < lowest_retained - 1:
@@ -244,7 +254,6 @@ class ThreadEvents:
                 f"sequence {last_event_id} was evicted; the oldest retained event is "
                 f"{lowest_retained}, so replaying would skip events"
             )
-        return tuple(event for event in self._events if event.sequence > last_event_id)
 
     # -- turn state ------------------------------------------------------------ #
 

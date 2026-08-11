@@ -149,51 +149,37 @@ def test_starting_a_turn_returns_202_and_a_turn_id(tmp_path: Path) -> None:
     assert accepted.json()["turn_id"]
 
 
-def test_a_turn_on_an_unknown_thread_is_404(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("thread", "prompt", "mode", "expected"),
+    [
+        pytest.param("unknown", "hello", "read_only", 404, id="unknown_thread"),
+        pytest.param("real", "   ", "read_only", 422, id="empty_prompt"),
+        pytest.param("real", "do the thing", "root_shell", 422, id="unknown_mode"),
+        pytest.param("real", "", "read_only", 422, id="missing_prompt"),
+    ],
+)
+def test_a_turn_request_is_refused_with_the_contracted_status(
+    tmp_path: Path, thread: str, prompt: str, mode: str, expected: int
+) -> None:
+    """Every refusal path for `POST /turns`, in one table.
+
+    Written as a table because the three cases were byte-for-byte identical apart from
+    the payload and the expected code, and a fourth (missing prompt) was missing
+    entirely -- which is the usual cost of copy-paste tests: the gap is invisible.
+    """
     client, _ = _client(tmp_path)
+    thread_id = "nope" if thread == "unknown" else _thread(client)
 
-    missing = client.post(
-        f"{API}/agent/threads/nope/turns",
-        json={
-            "prompt": "hello",
-            "snapshot_revision": "r1",
-            "requested_mode": "read_only",
-        },
-    )
-
-    assert missing.status_code == 404
-
-
-def test_an_empty_prompt_is_422(tmp_path: Path) -> None:
-    client, _ = _client(tmp_path)
-    thread_id = _thread(client)
-
-    invalid = client.post(
+    refused = client.post(
         f"{API}/agent/threads/{thread_id}/turns",
         json={
-            "prompt": "   ",
+            "prompt": prompt,
             "snapshot_revision": "r1",
-            "requested_mode": "read_only",
+            "requested_mode": mode,
         },
     )
 
-    assert invalid.status_code == 422
-
-
-def test_an_unknown_mode_is_422(tmp_path: Path) -> None:
-    client, _ = _client(tmp_path)
-    thread_id = _thread(client)
-
-    invalid = client.post(
-        f"{API}/agent/threads/{thread_id}/turns",
-        json={
-            "prompt": "do the thing",
-            "snapshot_revision": "r1",
-            "requested_mode": "root_shell",
-        },
-    )
-
-    assert invalid.status_code == 422
+    assert refused.status_code == expected, refused.text
 
 
 # --------------------------------------------------------------------------- #

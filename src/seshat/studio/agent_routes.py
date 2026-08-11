@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import Iterator
+from dataclasses import dataclass
 from typing import Any
 
 from fastapi import FastAPI, Request, Response
@@ -89,156 +90,183 @@ def _parse_last_event_id(raw: str | None) -> int | None:
     return int(raw.strip())  # ValueError propagates to the route
 
 
-def register_agent_routes(app: FastAPI) -> None:
-    """Register the thread, turn, interrupt, and event-stream routes."""
-    from seshat.studio.app import API_PREFIX
+def _unknown_thread() -> JSONResponse:
+    """The one 404 three routes share, so its wording cannot drift between them."""
+    return _problem(
+        404,
+        "Unknown thread",
+        "No agent thread matches that identifier.",
+        "Start a new conversation from the Command Room.",
+    )
 
-    def _threads() -> Any:
-        return app.state.threads
 
-    def _bridge() -> Any:
-        return app.state.bridge
+def _create_thread(app: FastAPI, body: dict[str, Any] | None) -> dict[str, Any]:
+    """Create a thread and record its opening event."""
+    thread_id = f"thread-{uuid.uuid4().hex[:12]}"
+    selected = (body or {}).get("selected_table_id")
+    app.state.threads.thread(thread_id).append(
+        "thread_started", {"selected_table_id": selected}
+    )
+    return {"thread_id": thread_id, "state": "ready"}
 
-    @app.post(f"{API_PREFIX}/agent/threads", status_code=201)
-    async def create_thread(body: dict[str, Any] | None = None) -> Any:
-        """Create a thread and record its opening event."""
-        thread_id = f"thread-{uuid.uuid4().hex[:12]}"
-        selected = (body or {}).get("selected_table_id")
-        thread = _threads().thread(thread_id)
-        thread.append("thread_started", {"selected_table_id": selected})
-        return {"thread_id": thread_id, "state": "ready"}
 
-    @app.post(f"{API_PREFIX}/agent/threads/{{thread_id}}/turns", status_code=202)
-    async def start_turn(thread_id: str, body: dict[str, Any]) -> Any:
-        """Run one turn through the bridge, recording every event it yields.
+def _start_turn(app: FastAPI, thread_id: str, body: dict[str, Any]) -> Any:
+    """Run one turn through the bridge, recording every event it yields.
 
-        The fake bridge completes synchronously, so this drains the generator before
-        responding. A streaming provider will need the drain moved to a background task;
-        the event store is already the handoff point for that, which is why the route
-        records into it rather than returning events directly.
-        """
-        if not _threads().has_thread(thread_id):
-            return _problem(
-                404,
-                "Unknown thread",
-                "No agent thread matches that identifier.",
-                "Start a new conversation from the Command Room.",
-            )
+    The fake bridge completes synchronously, so this drains the generator before
+    responding. A streaming provider will need the drain moved to a background task; the
+    event store is already the handoff point for that, which is why this records into it
+    rather than returning events directly.
+    """
+    if not app.state.threads.has_thread(thread_id):
+        return _unknown_thread()
 
-        turn_id = f"turn-{uuid.uuid4().hex[:12]}"
-        thread = _threads().thread(thread_id)
-        try:
-            recorded = _record_turn(
-                thread,
-                _bridge(),
+    turn_id = f"turn-{uuid.uuid4().hex[:12]}"
+    try:
+        recorded = _record_turn(
+            app.state.threads.thread(thread_id),
+            app.state.bridge,
+            TurnRequest(
                 prompt=str(body.get("prompt", "")),
                 turn_id=turn_id,
                 requested_mode=str(body.get("requested_mode", "")),
-            )
-        except ValueError as invalid:
-            return _problem(
-                422,
-                "Invalid turn request",
-                str(invalid),
-                "Adjust the request and try again.",
-            )
-        if not recorded:
-            return _problem(
-                503,
-                "Agent unavailable",
-                "The agent produced no events for this turn.",
-                "Check the agent health panel and retry.",
-            )
-        return {"turn_id": turn_id}
+            ),
+        )
+    except ValueError as invalid:
+        return _problem(
+            422,
+            "Invalid turn request",
+            str(invalid),
+            "Adjust the request and try again.",
+        )
+    if not recorded:
+        return _problem(
+            503,
+            "Agent unavailable",
+            "The agent produced no events for this turn.",
+            "Check the agent health panel and retry.",
+        )
+    return {"turn_id": turn_id}
+
+
+def _interrupt_turn(app: FastAPI, thread_id: str, turn_id: str) -> Response:
+    if not app.state.threads.has_thread(thread_id):
+        return _unknown_thread()
+    try:
+        app.state.threads.thread(thread_id).interrupt(turn_id)
+    except ValueError as inactive:
+        return _problem(
+            409,
+            "No live turn to interrupt",
+            str(inactive),
+            "The turn has already ended; no action is needed.",
+        )
+    return Response(status_code=204)
+
+
+def _stream_events(app: FastAPI, thread_id: str, request: Request) -> Response:
+    """Replay what is retained, then end the response.
+
+    A finite replay rather than an open connection: the fake bridge records
+    synchronously, so everything a client needs is already in the buffer when it
+    connects, and `EventSource` reconnects on its own with `Last-Event-ID`. That makes
+    reconnect the SAME code path as first connect -- an endpoint whose resume path is
+    only exercised after a failure is an endpoint whose resume path is untested.
+    """
+    if not app.state.threads.has_thread(thread_id):
+        return _unknown_thread()
+    try:
+        last_seen = _parse_last_event_id(request.headers.get("Last-Event-ID"))
+    except ValueError:
+        return _problem(
+            400,
+            "Malformed Last-Event-ID",
+            "The resume point must be a non-negative integer.",
+            "Reload Studio to start a fresh stream.",
+        )
+
+    try:
+        # `is None` rather than `or 0`: absent and explicit-zero are distinct upstream
+        # (the parser keeps them apart on purpose), and collapsing them with a falsy
+        # test would erase that distinction the moment either side grows a meaning.
+        resume_from = 0 if last_seen is None else last_seen
+        events = app.state.threads.thread(thread_id).replay_after(resume_from)
+    except ReplayExpired:
+        return _problem(
+            409,
+            "Replay point expired",
+            "Those events are no longer retained, so the stream cannot resume "
+            "without a gap.",
+            "Reload Studio to start a fresh stream.",
+        )
+
+    def frames() -> Iterator[str]:
+        for event in events:
+            yield _sse_frame(event)
+
+    return StreamingResponse(
+        frames(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
+    )
+
+
+def register_agent_routes(app: FastAPI) -> None:
+    """Bind the thread, turn, interrupt, and event-stream routes.
+
+    Each handler is a thin adapter over a module-level function taking `app`. The logic
+    lives outside the closure so it is readable and testable on its own -- four route
+    bodies nested in one registration function made the whole thing one large method
+    whose branches could only be reached through HTTP.
+    """
+    from seshat.studio.app import API_PREFIX
+
+    @app.post(f"{API_PREFIX}/agent/threads", status_code=201)
+    async def create_thread(body: dict[str, Any] | None = None) -> Any:
+        return _create_thread(app, body)
+
+    @app.post(f"{API_PREFIX}/agent/threads/{{thread_id}}/turns", status_code=202)
+    async def start_turn(thread_id: str, body: dict[str, Any]) -> Any:
+        return _start_turn(app, thread_id, body)
 
     @app.post(
         f"{API_PREFIX}/agent/threads/{{thread_id}}/turns/{{turn_id}}/interrupt",
         status_code=204,
     )
     async def interrupt_turn(thread_id: str, turn_id: str) -> Response:
-        if not _threads().has_thread(thread_id):
-            return _problem(
-                404,
-                "Unknown thread",
-                "No agent thread matches that identifier.",
-                "Start a new conversation from the Command Room.",
-            )
-        try:
-            _threads().thread(thread_id).interrupt(turn_id)
-        except ValueError as inactive:
-            return _problem(
-                409,
-                "No live turn to interrupt",
-                str(inactive),
-                "The turn has already ended; no action is needed.",
-            )
-        return Response(status_code=204)
+        return _interrupt_turn(app, thread_id, turn_id)
 
     @app.get(f"{API_PREFIX}/agent/threads/{{thread_id}}/events")
     async def stream_events(thread_id: str, request: Request) -> Response:
-        """Replay what is retained, then end the response.
-
-        A finite replay rather than an open connection: the fake bridge records
-        synchronously, so everything a client needs is already in the buffer when it
-        connects, and `EventSource` reconnects on its own with `Last-Event-ID`. That
-        makes reconnect the SAME code path as first connect, which is the property worth
-        having -- an endpoint whose resume path is only exercised after a failure is an
-        endpoint whose resume path is untested.
-        """
-        if not _threads().has_thread(thread_id):
-            return _problem(
-                404,
-                "Unknown thread",
-                "No agent thread matches that identifier.",
-                "Start a new conversation from the Command Room.",
-            )
-        try:
-            last_seen = _parse_last_event_id(request.headers.get("Last-Event-ID"))
-        except ValueError:
-            return _problem(
-                400,
-                "Malformed Last-Event-ID",
-                "The resume point must be a non-negative integer.",
-                "Reload Studio to start a fresh stream.",
-            )
-
-        thread = _threads().thread(thread_id)
-        try:
-            events = thread.replay_after(0 if last_seen is None else last_seen)
-        except ReplayExpired:
-            return _problem(
-                409,
-                "Replay point expired",
-                "Those events are no longer retained, so the stream cannot resume "
-                "without a gap.",
-                "Reload Studio to start a fresh stream.",
-            )
-
-        def frames() -> Iterator[str]:
-            for event in events:
-                yield _sse_frame(event)
-
-        return StreamingResponse(
-            frames(),
-            media_type="text/event-stream",
-            headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
-        )
+        return _stream_events(app, thread_id, request)
 
 
-def _record_turn(
-    thread: Any, bridge: Any, *, prompt: str, turn_id: str, requested_mode: str
-) -> list[Any]:
+@dataclass(frozen=True, slots=True)
+class TurnRequest:
+    """One turn's validated-by-the-bridge inputs.
+
+    A value object rather than three parallel keyword arguments: the trio always travels
+    together, and passing them separately made every caller a five-argument call whose
+    order mattered at the wrong moments.
+    """
+
+    prompt: str
+    turn_id: str
+    requested_mode: str
+
+
+def _record_turn(thread: Any, bridge: Any, request: TurnRequest) -> list[Any]:
     """Drive the bridge and record each event into the thread.
 
     Validation happens inside the bridge, so an invalid request raises before any event
     is recorded -- a half-recorded turn would leave the stream describing something that
     never ran.
     """
-    recorded = []
-    for produced in bridge.run_turn(
-        prompt=prompt, turn_id=turn_id, requested_mode=requested_mode
-    ):
-        recorded.append(
-            thread.append(produced.type, produced.payload, turn_id=produced.turn_id)
+    return [
+        thread.append(produced.type, produced.payload, turn_id=produced.turn_id)
+        for produced in bridge.run_turn(
+            prompt=request.prompt,
+            turn_id=request.turn_id,
+            requested_mode=request.requested_mode,
         )
-    return recorded
+    ]
