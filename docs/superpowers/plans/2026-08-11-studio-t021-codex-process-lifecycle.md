@@ -697,39 +697,107 @@ git commit --no-gpg-sign -m "feat: implement CodexBridge and enrol it in the sha
 
 - [ ] **Step 1: Write the failing test**
 
+The test must DRIVE the guard, not assert around it. A test that only checked
+event-type membership would duplicate Task 4 while its name claimed to verify the
+refusal — coverage the code does not actually have.
+
 ```python
 # append to tests/unit/test_studio_codex_bridge.py
-def test_the_real_bridge_is_bound_by_the_read_only_guard(tmp_path: Path) -> None:
+def test_write_intent_from_the_real_bridge_is_refused_under_read_only(
+    tmp_path: Path,
+) -> None:
     """`bridge.py` is explicit that the BINDING refusal lives in `_record_turn`.
 
-    A bridge that never passed through it would inherit no protection at all, which
-    is the exact defect that docstring records for an earlier revision.
+    A bridge that never passed through it would inherit no protection at all -- the
+    exact defect that docstring records for an earlier revision. So this drives the
+    real route helper with a stream that DOES carry write intent and asserts the
+    refusal fires, rather than inspecting the bridge's output and inferring safety.
     """
     pytest.importorskip("fastapi")
-    from seshat.studio.agent_routes import WRITE_INTENT_TYPES
-
-    from seshat.studio.codex_bridge import CodexBridge
-
-    assert "file_change_proposed" in WRITE_INTENT_TYPES
-    assert hasattr(CodexBridge, "run_turn")
-
-    events = list(
-        _bridge(tmp_path, "approvals").run_turn(
-            prompt="Propose the silver model", turn_id="t", requested_mode="read_only"
-        )
+    from seshat.studio.agent_routes import (
+        ReadOnlyViolation,
+        TurnRequest,
+        _record_turn,
     )
-    # The bridge may EMIT write intent; the route is what must refuse it. Assert the
-    # types are recognisable to that guard rather than silently renamed.
-    emitted = {event.type for event in events}
-    assert emitted <= set(__import__(
-        "seshat.studio.events", fromlist=["EVENT_TYPES"]
-    ).EVENT_TYPES)
+    from seshat.studio.bridge import _event
+    from seshat.studio.events import ThreadEvents
+
+    class _WriteIntentBridge:
+        """Stands in for a provider that proposes a change during `read_only`."""
+
+        def describe(self) -> dict[str, object]:
+            return {"bridge": "codex", "provider": "codex", "deterministic": False}
+
+        def run_turn(self, *, prompt: str, turn_id: str, requested_mode: str):
+            yield _event("turn_started", {"prompt_echo": prompt[:200]}, turn_id, 1)
+            yield _event(
+                "file_change_proposed",
+                {"paths": ["silver/model.sql"], "summary": "1 file change proposed"},
+                turn_id,
+                2,
+            )
+
+    thread = ThreadEvents("thread-1")
+    request = TurnRequest(
+        prompt="Propose the silver model", turn_id="t1", requested_mode="read_only"
+    )
+
+    with pytest.raises(ReadOnlyViolation):
+        _record_turn(thread, _WriteIntentBridge(), request)
+
+
+def test_the_guard_is_what_refuses_not_the_bridge(tmp_path: Path) -> None:
+    """Prove the refusal comes from the route, by disabling only the guard.
+
+    If the assertion above passed because the bridge declined to emit write intent,
+    this would still pass -- so it monkeypatches `WRITE_INTENT_TYPES` to empty and
+    asserts the SAME stream is then recorded without complaint. That is the positive
+    evidence that `_record_turn` is the thing doing the refusing.
+    """
+    pytest.importorskip("fastapi")
+    import seshat.studio.agent_routes as routes
+    from seshat.studio.bridge import _event
+    from seshat.studio.events import ThreadEvents
+
+    class _WriteIntentBridge:
+        def describe(self) -> dict[str, object]:
+            return {"bridge": "codex", "provider": "codex", "deterministic": False}
+
+        def run_turn(self, *, prompt: str, turn_id: str, requested_mode: str):
+            yield _event("turn_started", {"prompt_echo": prompt[:200]}, turn_id, 1)
+            yield _event(
+                "file_change_proposed",
+                {"paths": ["silver/model.sql"], "summary": "1 file change proposed"},
+                turn_id,
+                2,
+            )
+
+    original = routes.WRITE_INTENT_TYPES
+    try:
+        routes.WRITE_INTENT_TYPES = frozenset()
+        thread = ThreadEvents("thread-2")
+        request = routes.TurnRequest(
+            prompt="Propose the silver model", turn_id="t2", requested_mode="read_only"
+        )
+        recorded = routes._record_turn(thread, _WriteIntentBridge(), request)
+    finally:
+        routes.WRITE_INTENT_TYPES = original
+
+    assert any(event.type == "file_change_proposed" for event in recorded), (
+        "with the guard disabled the write intent should have been recorded; if it "
+        "was not, the first test proved nothing about the guard"
+    )
 ```
 
-- [ ] **Step 2: Run test to verify it fails or passes**
+- [ ] **Step 2: Run the tests**
 
 Run: `PYTHONPATH=src python -m pytest tests/unit/test_studio_codex_bridge.py -q --no-cov`
-Expected: PASS if the mapping is correct. If it FAILS on an unknown event type, that is a real defect in Task 4's mapping — fix `CodexBridge`, not the assertion.
+Expected: PASS. If the first test FAILS, `_record_turn` is not enforcing the refusal —
+that is a real defect, fix the route, never the assertion. If the SECOND test fails,
+the first one is passing for the wrong reason and proves nothing.
+
+If `ThreadEvents("thread-1")` does not match the real constructor signature, read
+`src/seshat/studio/events.py` and use the real one — do not stub the class.
 
 - [ ] **Step 3: Verify the test is skipped, not failed, without fastapi**
 
