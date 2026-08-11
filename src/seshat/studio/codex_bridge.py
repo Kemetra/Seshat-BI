@@ -96,9 +96,17 @@ class CodexSession:
         stream = self._process.stderr if self._process else None
         if stream is None:
             return
-        for chunk in iter(stream.readline, ""):
+        try:
+            for chunk in iter(stream.readline, ""):
+                self._stderr_parts.append(
+                    redact_provider_stderr(chunk, workspace_root=self.plan.cwd)
+                )
+        except Exception as error:  # a close-during-read race must not vanish silently
             self._stderr_parts.append(
-                redact_provider_stderr(chunk, workspace_root=self.plan.cwd)
+                redact_provider_stderr(
+                    f"<stderr reader error: {error}>",
+                    workspace_root=self.plan.cwd,
+                )
             )
 
     def frames(self, timeout: float = 30.0) -> Iterator[dict[str, Any]]:
