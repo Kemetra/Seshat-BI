@@ -25,6 +25,7 @@ from __future__ import annotations
 import queue
 import subprocess
 import threading
+import time
 from collections.abc import Callable, Iterator
 from typing import Any
 
@@ -36,15 +37,12 @@ __all__ = ["CodexSession"]
 #: Sentinel pushed onto the frame queue when the reader thread sees EOF.
 _EOF = object()
 
-#: Upper bound `close()` gives a child to exit on its own before escalating to
-#: `terminate()`. Not a sleep -- `wait(timeout=...)` returns the instant the
-#: child exits, so a healthy child pays only its own runtime. It exists
-#: because Windows `terminate()` is `TerminateProcess`, a hard kill: closing
-#: right after `start()` would otherwise destroy a child that had not yet
-#: been scheduled, losing stderr it was about to write. Measured child
-#: startup-to-exit on this fixture is ~70ms worst case across 10 runs, so this
-#: leaves over an order of magnitude of headroom for the fast path.
-_EXIT_GRACE_SECONDS = 1.0
+
+def _remaining(deadline: float) -> float:
+    """Seconds left before `deadline`, floored at 0 so a spent budget never
+    turns into a negative -- and therefore unbounded -- `timeout=` argument.
+    """
+    return max(0.0, deadline - time.monotonic())
 
 
 class CodexSession:
@@ -59,6 +57,10 @@ class CodexSession:
         self._frames: queue.Queue[Any] = queue.Queue()
         self._stderr_parts: list[str] = []
         self._threads: list[threading.Thread] = []
+        #: Set by `_read_stderr` in a `finally`, the instant its read loop ends
+        #: (child EOF, or an exception). `close()` waits on this -- an OBSERVED
+        #: state transition -- rather than on elapsed wall-clock time.
+        self._stderr_done = threading.Event()
 
     @property
     def is_running(self) -> bool:
@@ -105,6 +107,7 @@ class CodexSession:
     def _read_stderr(self) -> None:
         stream = self._process.stderr if self._process else None
         if stream is None:
+            self._stderr_done.set()
             return
         try:
             for chunk in iter(stream.readline, ""):
@@ -118,6 +121,8 @@ class CodexSession:
                     workspace_root=self.plan.cwd,
                 )
             )
+        finally:
+            self._stderr_done.set()
 
     def frames(self, timeout: float = 30.0) -> Iterator[dict[str, Any]]:
         """Yield parsed frames until the child closes stdout."""
@@ -145,38 +150,45 @@ class CodexSession:
     def close(self, timeout: float = 5.0) -> int | None:
         """Terminate the child and join both readers. Safe to call twice.
 
-        A caller may close() right after start() with no frames() call in
-        between -- an error path or a cancellation has no reason to drain
-        stdout first -- so whatever the child already wrote to stderr must
-        not depend on that drain having happened.
+        Bounded against ONE monotonic deadline, computed once, so the whole
+        call -- terminate, kill, both joins -- costs at most `timeout`
+        wall-clock seconds regardless of how many stages it takes. There is
+        no wait for the child to exit on its own: the real Codex app-server
+        is long-lived and never exits by itself, so a prompt production
+        shutdown requires terminating immediately, not waiting to see if it
+        will.
 
-        The grace wait below is why: on Windows, `terminate()` is
-        `TerminateProcess`, a hard kill with no equivalent of a graceful
-        SIGTERM. Calling it immediately after start() can kill a child before
-        the OS has even scheduled it, destroying stderr it was about to write
-        a moment later. `wait(timeout=_EXIT_GRACE_SECONDS)` costs nothing on a
-        child that exits quickly -- it returns the instant the child exits --
-        and only escalates to terminate/kill once that bound is spent, which
-        is what keeps a genuinely hung child's close() bounded.
+        That has one real consequence worth naming rather than hiding: if the
+        child is terminated before the OS has scheduled it at all, it never
+        gets to write anything, and there is nothing for `stderr_text()` to
+        report -- not because it was dropped, but because it was never
+        produced. No amount of synchronization recovers a write that never
+        happened; only giving the child time to run does, and time-to-run is
+        exactly the wait a prompt shutdown cannot afford to make unconditional
+        (see `test_stderr_survives_close_once_the_child_has_actually_run` and
+        its docstring for the line this draws).
 
-        The reader threads are joined AFTER that resolution but BEFORE the
-        streams are closed, so each thread drains whatever the child flushed
-        and exits via its own EOF rather than via a stream ripped out from
-        under an in-flight `readline()`.
+        What IS guaranteed, unconditionally: once the child has produced
+        output, `close()` will not discard it. The stderr reader thread sets
+        `self._stderr_done` in a `finally` the instant its read loop ends --
+        an observed state transition, not elapsed time -- and this method
+        waits on that event (bounded by the remaining deadline) before it
+        closes the stderr stream. `terminate()`/`kill()` end the child and
+        thus the thread's `readline()` loop via a real EOF; the join and the
+        stream-close both happen only after that event, so no stream is ever
+        closed out from under an in-flight read on either reader thread.
         """
         if self._process is None:
             return None
+        deadline = time.monotonic() + timeout
         if self._process.poll() is None:
-            try:
-                self._process.wait(timeout=_EXIT_GRACE_SECONDS)
-            except subprocess.TimeoutExpired:
-                self._process.terminate()
-        for thread in self._threads:
-            thread.join(timeout=timeout)
+            self._process.terminate()
+        self._join_threads(deadline)
         if self._process.poll() is None:
             self._process.kill()
+            self._join_threads(deadline)  # re-join: kill() must not race a stream close
         try:
-            self._process.wait(timeout=timeout)
+            self._process.wait(timeout=_remaining(deadline))
         except subprocess.TimeoutExpired:
             pass
         for stream in (
@@ -190,3 +202,8 @@ class CodexSession:
                 except OSError:
                     pass
         return self._process.returncode
+
+    def _join_threads(self, deadline: float) -> None:
+        """Join every reader thread, each bounded by what remains of `deadline`."""
+        for thread in self._threads:
+            thread.join(timeout=_remaining(deadline))

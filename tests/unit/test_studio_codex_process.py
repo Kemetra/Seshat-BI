@@ -211,6 +211,21 @@ def test_provider_stderr_is_redacted_before_it_is_retained() -> None:
     assert "listening on stdio" in cleaned
 
 
+#: A bare JWT shape with NO `Bearer`/`Basic`/`Token` word, and no `key=`/`key:`
+#: assignment, anywhere near it. Round 2's version used "auth failed for
+#: token <jwt>" -- "token" sits immediately before the value, which is exactly
+#: the shape `_AUTHORIZATION_HEADER` (`\b(?:Bearer|Basic|Token)\s+<value>`) in
+#: the shared redactor matches on its own, so that string got redacted even
+#: with `_BARE_CREDENTIAL` disabled and proved nothing about this leg. This
+#: string avoids every word in `_CREDENTIAL_NAMES` and every `Bearer|Basic|
+#: Token` prefix; verified below in `test_disabling_the_bare_token_regex_...`
+#: that the raw JWT actually leaks when the guard is off, which is what makes
+#: this string a real discriminator rather than an assumption.
+_BARE_JWT_LINE = (
+    "refresh rejected by upstream: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.ABCDEFGHIJK"
+)
+
+
 def test_bare_token_with_no_keyword_framing_is_redacted() -> None:
     """Exercises `_BARE_CREDENTIAL` specifically, not the shared boundary redactor.
 
@@ -226,18 +241,14 @@ def test_bare_token_with_no_keyword_framing_is_redacted() -> None:
     key provided" error uses, which is what the module's docstring says this
     regex exists to catch.
     """
-    raw = (
-        "Incorrect API key provided: sk-live-ABCDEFGH12345678\n"
-        "auth failed for token "
-        "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.ABCDEFGHIJK\n"
-    )
+    raw = f"Incorrect API key provided: sk-live-ABCDEFGH12345678\n{_BARE_JWT_LINE}\n"
     cleaned = redact_provider_stderr(raw, workspace_root=WORKSPACE)
 
     assert "sk-live-ABCDEFGH12345678" not in cleaned
     assert "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.ABCDEFGHIJK" not in cleaned
     assert "<redacted>" in cleaned
     assert "Incorrect API key provided" in cleaned
-    assert "auth failed for token" in cleaned
+    assert "refresh rejected by upstream" in cleaned
 
 
 def test_disabling_the_bare_token_regex_lets_the_raw_token_through() -> None:
@@ -249,6 +260,12 @@ def test_disabling_the_bare_token_regex_lets_the_raw_token_through() -> None:
     the test above pass. Reproduces the exact confusion that hid the stray
     control byte: `redact_provider_stderr` looked like it worked because it
     called something, without proving which something did the work.
+
+    Covers BOTH alternations in `_BARE_CREDENTIAL` (`sk-...` and the JWT
+    shape) separately, so a regression in either half is caught. Round 2's
+    single JWT assertion used framing the shared redactor also catches, so it
+    would have kept passing even with the JWT alternation deleted outright --
+    this uses `_BARE_JWT_LINE`, already proven neutral above.
     """
     import re
 
@@ -258,9 +275,15 @@ def test_disabling_the_bare_token_regex_lets_the_raw_token_through() -> None:
     never_matches = re.compile(r"(?!)")  # a pattern that can never match
     codex_process._BARE_CREDENTIAL = never_matches
     try:
-        raw = "Incorrect API key provided: sk-live-ABCDEFGH12345678\n"
-        cleaned = codex_process.redact_provider_stderr(raw, workspace_root=WORKSPACE)
+        sk_cleaned = codex_process.redact_provider_stderr(
+            "Incorrect API key provided: sk-live-ABCDEFGH12345678\n",
+            workspace_root=WORKSPACE,
+        )
+        jwt_cleaned = codex_process.redact_provider_stderr(
+            _BARE_JWT_LINE + "\n", workspace_root=WORKSPACE
+        )
     finally:
         codex_process._BARE_CREDENTIAL = original
 
-    assert "sk-live-ABCDEFGH12345678" in cleaned
+    assert "sk-live-ABCDEFGH12345678" in sk_cleaned
+    assert "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.ABCDEFGHIJK" in jwt_cleaned

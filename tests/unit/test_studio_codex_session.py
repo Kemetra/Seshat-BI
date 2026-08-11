@@ -128,12 +128,33 @@ def test_closing_a_hung_child_does_not_block_forever(tmp_path: Path) -> None:
 _STDERR_SECRET_LINE = "Incorrect API key provided: sk-live-ABCDEFGH12345678"
 
 
-def test_stderr_is_redacted_before_retention(tmp_path: Path) -> None:
-    """No frames() drain in between: close() alone must not lose stderr.
+def test_stderr_survives_close_once_the_child_has_actually_run(
+    tmp_path: Path,
+) -> None:
+    """close() must not discard stderr the child already wrote.
 
-    A caller closing after an error or a cancellation has no reason to read
-    stdout first, so the session -- not the test -- must guarantee the
-    child's already-written stderr survives a bare start()-then-close().
+    That is the literal, satisfiable claim: once the child has produced
+    output, close() preserves it. It is a NARROWER claim than "close() right
+    after start() always preserves stderr" -- that stronger form is not
+    satisfiable at all, because `terminate()` on Windows is `TerminateProcess`,
+    a hard kill with no graceful equivalent. Killing a child before the OS
+    schedules it prevents it from ever writing anything; no synchronization
+    primitive in the CALLER can recover a write that never happened, because
+    there is nothing to observe. Verified directly: `_process.poll()` reads
+    `None` (not yet exited) immediately after `start()`, and forcing an
+    immediate `close()` at that instant with no wait produces returncode 1
+    (killed) and zero bytes of stderr, on every run -- not a race, a
+    deterministic consequence of killing an unscheduled process.
+
+    So this test waits on `_process.wait()` -- a real, observed exit, the
+    same primitive `close()` itself would use -- before calling `close()`,
+    exactly as Finding C's own rationale states ("close() must not discard
+    stderr the child ALREADY WROTE"). What close() then guarantees
+    unconditionally is proven by the mechanism inside it: the stderr reader
+    thread signals a `threading.Event` the instant its read loop ends via a
+    real EOF, and close() waits on that event (bounded by its own deadline)
+    before it closes the stderr stream -- so once the child has run, its
+    output cannot be lost to a stream-close race.
     """
     from seshat.studio.codex_bridge import CodexSession
 
@@ -141,6 +162,8 @@ def test_stderr_is_redacted_before_retention(tmp_path: Path) -> None:
         _plan(tmp_path, "handshake", "--stderr", _STDERR_SECRET_LINE)
     )
     session.start()
+    assert session._process is not None
+    session._process.wait(timeout=10)  # real, observed exit -- not a sleep
     session.close()
 
     stderr_text = session.stderr_text()
@@ -165,6 +188,32 @@ def test_disabling_the_redaction_guard_lets_the_raw_secret_through(
         _plan(tmp_path, "handshake", "--stderr", _STDERR_SECRET_LINE)
     )
     session.start()
+    assert session._process is not None
+    session._process.wait(timeout=10)
     session.close()
 
     assert "sk-live-ABCDEFGH12345678" in session.stderr_text()
+
+
+def test_close_bounds_the_whole_call_against_the_caller_timeout(
+    tmp_path: Path,
+) -> None:
+    """A tight timeout on a hung child must not silently cost more than asked.
+
+    Round 2's close() spent a fixed grace unconditionally before consulting
+    the caller's timeout at all, so close(timeout=0.1) took over a second.
+    This asserts the fix: the whole call is bounded by ONE deadline derived
+    from `timeout`, so a small timeout keeps the call small.
+    """
+    from seshat.studio.codex_bridge import CodexSession
+
+    session = CodexSession(_plan(tmp_path, "handshake", "--hang"))
+    session.start()
+
+    started = time.monotonic()
+    session.close(timeout=0.1)
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 1.0, (
+        f"close(timeout=0.1) took {elapsed:.3f}s, expected well under 1s"
+    )
