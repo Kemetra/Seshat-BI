@@ -160,6 +160,15 @@ git commit --no-gpg-sign -m "test: add a scripted Codex child that speaks over a
 - Create: `src/seshat/studio/codex_bridge.py`
 - Test: `tests/unit/test_studio_codex_session.py` (append)
 
+**Precondition — Windows line endings.** The Task 1 review flagged that Windows
+text-mode stdout emits `\r\n` where the framing contract says `\n`. Task 1's own
+test cannot see it (`text=True` on `Popen` translates on read), but this task's
+reader must. Open the child's streams in TEXT mode (`text=True`), which applies
+universal-newline translation — do NOT read the pipe in binary and hand raw bytes
+to `CodexProtocolReader`, or a trailing `\r` rides on every frame. If binary
+framing is ever needed, add `sys.stdout.reconfigure(newline="\n")` to
+`_codex_child_script.py` rather than stripping `\r` in the parser.
+
 **Interfaces:**
 - Consumes: `CodexLaunchPlan` (`argv: tuple[str, ...]`, `cwd: Path`, `inherits_any_handle: bool`) and `redact_provider_stderr(raw: str, *, workspace_root: Path | None = None) -> str` from `seshat.studio.codex_process`; `CodexProtocolReader` (`.feed(chunk: str) -> Iterator[dict]`) from `seshat.studio.codex_protocol`.
 - Produces:
