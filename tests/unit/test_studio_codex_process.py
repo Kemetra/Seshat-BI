@@ -209,3 +209,58 @@ def test_provider_stderr_is_redacted_before_it_is_retained() -> None:
 
     assert "starting app-server" in cleaned, "redaction destroyed the diagnostic"
     assert "listening on stdio" in cleaned
+
+
+def test_bare_token_with_no_keyword_framing_is_redacted() -> None:
+    """Exercises `_BARE_CREDENTIAL` specifically, not the shared boundary redactor.
+
+    `test_provider_stderr_is_redacted_before_it_is_retained` above drives
+    `stderr_secrets.txt`, but every secret there is `key=value` or
+    `Authorization: Bearer <value>` framed -- shapes the shared
+    `redact_for_boundary` path already strips on its own. None of them needs
+    `_BARE_CREDENTIAL` to be alive at all, so that test would pass unchanged
+    even if the bare-token regex never matched anything (this is exactly what
+    happened when a stray control byte made `_BARE_CREDENTIAL` unmatchable).
+    This test drives a standalone `sk-...` and a standalone JWT with no
+    keyword prefix in front of either -- the shape OpenAI's own "Incorrect API
+    key provided" error uses, which is what the module's docstring says this
+    regex exists to catch.
+    """
+    raw = (
+        "Incorrect API key provided: sk-live-ABCDEFGH12345678\n"
+        "auth failed for token "
+        "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.ABCDEFGHIJK\n"
+    )
+    cleaned = redact_provider_stderr(raw, workspace_root=WORKSPACE)
+
+    assert "sk-live-ABCDEFGH12345678" not in cleaned
+    assert "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.ABCDEFGHIJK" not in cleaned
+    assert "<redacted>" in cleaned
+    assert "Incorrect API key provided" in cleaned
+    assert "auth failed for token" in cleaned
+
+
+def test_disabling_the_bare_token_regex_lets_the_raw_token_through() -> None:
+    """Proves `_BARE_CREDENTIAL` itself does the redacting above, not luck.
+
+    Patches the regex object directly, in the `codex_process` namespace,
+    rather than `redact_provider_stderr` as a whole -- pinning that THIS leg,
+    not `redact_for_boundary` catching the shape incidentally, is what makes
+    the test above pass. Reproduces the exact confusion that hid the stray
+    control byte: `redact_provider_stderr` looked like it worked because it
+    called something, without proving which something did the work.
+    """
+    import re
+
+    import seshat.studio.codex_process as codex_process
+
+    original = codex_process._BARE_CREDENTIAL
+    never_matches = re.compile(r"(?!)")  # a pattern that can never match
+    codex_process._BARE_CREDENTIAL = never_matches
+    try:
+        raw = "Incorrect API key provided: sk-live-ABCDEFGH12345678\n"
+        cleaned = codex_process.redact_provider_stderr(raw, workspace_root=WORKSPACE)
+    finally:
+        codex_process._BARE_CREDENTIAL = original
+
+    assert "sk-live-ABCDEFGH12345678" in cleaned
