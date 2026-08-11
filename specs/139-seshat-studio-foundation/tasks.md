@@ -169,11 +169,60 @@ the same 2 failures / 24 skipped. After T009-T010: **5979 passed / the same 2 fa
   badge, which is the FRAME. T013 owns the table journey, evidence/blocker details, next
   action, and the full first-arrival and input-defect presentations, and T014 owns the
   seven agent-health states.
-- [ ] **T013** Write failing component tests, then implement Command Room, table
+- [x] **T013** Write failing component tests, then implement Command Room, table
   journey, evidence/blocker details, next action, first-arrival, and input-defect
   states without command names or scores. [US1, FR-009, FR-032]
-- [ ] **T014** Add the seven distinct agent health presentations while retaining all
+  — `studio-ui/src/components/TableJourney.tsx`, wired into the shell so it is reachable
+  rather than dead code. All seven stages in the authority's order as an ORDERED list, so
+  a screen-reader user perceives the sequence structurally; the current stage carries
+  `aria-current="step"`; evidence shows its `live_state` so a [PENDING LIVE PROFILE]
+  reference cannot read as verified; blockers show their concrete message.
+  US1 scenario 2's "leaves Silver and later work LOCKED" is expressed WITHOUT inventing
+  a fifth status: a gated stage keeps its `not_started` status (FR-008 pins the
+  vocabulary) and gains a separate signal derived purely from position, saying "Waiting
+  for Mapping to clear". Nothing is locked once the current stage passes -- calling later
+  work blocked then would be a fabricated obstacle.
+  **The pending decision count US1 names is NOT rendered, and that is deliberate.** An
+  interim revision did render it, then a review showed `pending_decision_count` is a
+  dataclass DEFAULT of 0 that nothing computes and `/decisions` returns an empty list -- so
+  "No decisions are waiting" asserted workspace truth from a hardcoded zero while
+  `mappings/finance_gl_actuals/approval-request-model-integrity.md` sat unresolved. Saying
+  nothing is honest; asserting none is not. Wiring it to `approval_inbox`'s open-request
+  projection is upstream work deferred to a follow-on task, and a test pins the absence so
+  the claim cannot return unwired.
+  **`forbidden_scope` is not rendered, for the same reason.**
+  `projection._journey_for` never sets it, so it is a dataclass default -- empty for all
+  four committed tables. A component that rendered it showed nothing in production while
+  its test passed on a hand-built fixture.
+  `readiness_projection._table_projection` DOES compute the real restrictions (no Silver
+  before Mapping, no dashboard before contracts); wiring it into the snapshot is upstream
+  work for a follow-on task, and a test pins the absence.
+  **`ActionSummary.requires_named_human` is always False for the same reason.**
+  `status_surface._project_table` -- the upstream this projection reads -- never emits
+  `required_authority`, so an interim "read it from the source" fix looked correct and was
+  INERT. `agent_next.build_table_next_document` does expose an authority, as a STRING
+  rather than a list; adopting it is new upstream integration with its own contract
+  questions, so Studio claims no approval requirement it cannot substantiate.
+  FR-032: stage identifiers render as human labels ("Mapping", never `mapping_ready`),
+  and every raw source reference sits behind an explicit `<details>` disclosure.
+- [x] **T014** Add the seven distinct agent health presentations while retaining all
   deterministic workspace interactions. [US4, FR-024, FR-025]
+  — `studio-ui/src/components/AgentHealth.tsx`. All seven contract states
+  (`healthy`, `missing`, `signed_out`, `incompatible`, `quota_limited`, `crashed`,
+  `disabled`) get a DIFFERENT headline, explanation, and recovery action, pinned by a
+  test asserting seven distinct headlines -- "distinct" means an analyst can tell
+  signed-out from quota-limited, not that a banner changes colour. The server's wording
+  is preferred when it sends any, with local text as the fallback so an empty server
+  string never renders as blank.
+  FR-025 is enforced by a parametrised shell test over all seven states asserting the
+  table journey and stage list are STILL present: the notice is strictly additive and
+  never gates, wraps, or replaces the deterministic views. A banner that blanked the page
+  on a crash would satisfy FR-024 and break FR-025.
+  `role="status"` (implicitly polite) rather than `alert` -- agent health is context, not
+  an emergency. The agent version sits behind the FR-032 disclosure.
+
+Phase 3 is COMPLETE. The deterministic Command Room reads one workspace truthfully:
+projection, endpoints, frontend, journey, and health.
 
 ## Phase 4 - Stable Events and Fake Agent (US2)
 

@@ -1,0 +1,388 @@
+/**
+ * One table's seven-stage readiness journey (T013, US1).
+ *
+ * US1 scenario 2 is the demanding one: "it names Mapping as current, shows the concrete
+ * blocker and evidence, offers the mapping action, and leaves Silver and later work
+ * LOCKED."
+ *
+ * **How "locked" is expressed without inventing a status.** FR-008 pins the vocabulary
+ * to four categorical values, so a gated stage is still `not_started` -- that is the
+ * truth the authority recorded. What the analyst additionally needs is WHY: not started
+ * because the gate ahead is closed, rather than because nobody got round to it. That is
+ * derived purely from POSITION relative to the current stage, added as a separate
+ * signal, and never written back into `status`.
+ *
+ * FR-032: stage identifiers are shown as human labels ("Mapping", not `mapping_ready`),
+ * and every raw source reference lives behind an explicit disclosure. FR-009: no
+ * percentage, ratio, or score -- the status word and its evidence are the whole signal.
+ */
+
+import type * as React from "react";
+
+import type { ReadinessStage, StageState, TableJourney as Journey } from "../api/types";
+import { StatusBadge, stageLabel } from "./StatusBadge";
+import "./TableJourney.css";
+
+/** Where a stage sits relative to the table's current position. */
+type Position = "behind" | "current" | "ahead";
+
+/**
+ * The canonical stage order, matching `seshat.status_surface._STAGE_ORDER`.
+ *
+ * Position is derived from THIS, not from the order the stages happened to arrive in.
+ * The contract pins the array's length at seven but says nothing about its ordering, so
+ * a server that reordered would otherwise invert the gating signal entirely -- a passed
+ * prerequisite reporting locked, and ungated later work reporting open.
+ */
+const STAGE_ORDER: readonly ReadinessStage[] = [
+  "source_ready",
+  "mapping_ready",
+  "silver_ready",
+  "gold_ready",
+  "semantic_model_ready",
+  "dashboard_ready",
+  "publish_ready",
+];
+
+function positionOf(stage: ReadinessStage, current: ReadinessStage | null): Position {
+  if (current === null) return "behind";
+  const stageIndex = STAGE_ORDER.indexOf(stage);
+  const currentIndex = STAGE_ORDER.indexOf(current);
+  // An unrecognised current stage is server drift, not a position: treat nothing as
+  // gated rather than inventing an ordering from an unknown value.
+  if (currentIndex === -1 || stageIndex === -1) return "behind";
+  if (stageIndex === currentIndex) return "current";
+  return stageIndex < currentIndex ? "behind" : "ahead";
+}
+
+/** A status that lets the NEXT stage begin. ONLY `pass`. */
+function permitsSuccessor(status: StageState["status"]): boolean {
+  // `docs/readiness/readiness-model.md` carries TWO rules, and reading only the second
+  // is what produced two wrong revisions of this function:
+  //
+  //   "A stage may be entered only when the **prior stage is `pass`**"
+  //   "`warning` does not block the next stage by itself; a `blocked` does."
+  //
+  // They do not conflict. Entry requires `pass`; `warning` is simply not the permanent
+  // barrier `blocked` is -- it can be cleared to `pass` by accepting the deviation. The
+  // engine settles which one governs entry: `run_next._stage_decision` walks the stages
+  // in order and STOPS at a `warning`, returning that stage as the next action, so the
+  // frontier has not moved past it.
+  //
+  // Treating `warning` as permitting a successor showed later work as available and
+  // would have sent the analyst past the recorded readiness stage.
+  return status === "pass";
+}
+
+/**
+ * The nearest earlier stage that has not cleared, or null when the way is open.
+ *
+ * Derived from EVERY prerequisite, not from the current stage alone. Two revisions got
+ * this wrong in opposite directions: locking on any non-`pass` current status fabricated
+ * obstacles on a `warning` stage, and then keying only on `blocked` reported Silver as
+ * open when Mapping had not started -- telling the analyst work was available when it was
+ * not. Both are misrepresentations of the same authority.
+ */
+function blockingPrerequisite(
+  stage: ReadinessStage,
+  byStage: ReadonlyMap<ReadinessStage, StageState>,
+): ReadinessStage | null {
+  const index = STAGE_ORDER.indexOf(stage);
+  if (index <= 0) return null;
+  // Nearest first: the analyst needs the gate immediately in front of this stage, not
+  // the earliest problem in the table's history.
+  for (let earlier = index - 1; earlier >= 0; earlier -= 1) {
+    const candidate = STAGE_ORDER[earlier];
+    if (candidate === undefined) continue;
+    const state = byStage.get(candidate);
+    if (state !== undefined && !permitsSuccessor(state.status)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * The stages in CANONICAL order, whatever order they arrived in.
+ *
+ * Lock derivation already used `STAGE_ORDER`, but rendering mapped the received array
+ * directly -- so a reordered contract-valid payload announced "Publish to Source" inside
+ * an `<ol>` whose entire purpose is conveying the Source-to-Publish sequence. Locks were
+ * right and the list was wrong. Anything the canonical order does not name is appended
+ * rather than dropped: an unrecognised stage is server drift worth showing, not hiding.
+ */
+function orderedStages(stages: readonly StageState[]): StageState[] {
+  const known = STAGE_ORDER.map((name) =>
+    stages.find((candidate) => candidate.stage === name),
+  ).filter((candidate): candidate is StageState => candidate !== undefined);
+  const extra = stages.filter((candidate) => !STAGE_ORDER.includes(candidate.stage));
+  return [...known, ...extra];
+}
+
+/**
+ * ALL committed prose is technical. The default is inverted on purpose.
+ *
+ * A previous revision asked "does this string LOOK technical?" with a regex over paths,
+ * file extensions, and command names. That is an arms race the projection wins: real
+ * committed text also carries skill names (`retail-semantic-check`), model paths
+ * (`powerbi/RetailStoreSales.SemanticModel`), stage identifiers (`publish_ready`), and
+ * feature ids (`F016`) -- none of which share a lexical form worth matching. Every
+ * widening of the pattern left another leak.
+ *
+ * So the rule is structural rather than lexical: text the SERVER supplied is technical and
+ * belongs behind the disclosure; only wording the frontend authored appears in the primary
+ * journey. That is a closed rule a reviewer can check by reading, and it satisfies FR-032
+ * for text nobody has thought of yet.
+ *
+ * The cost is that genuinely readable committed prose is also hidden. That is the right
+ * trade: FR-032 governs what the analyst is shown up front, and a summary plus a
+ * disclosure loses nothing, while a leak misrepresents the product's whole promise.
+ */
+
+/** Count-only summary, so hidden evidence is still known to EXIST. */
+function evidenceSummary(count: number): string {
+  return count === 1 ? "1 committed reference" : `${count} committed references`;
+}
+
+function StageEvidence({ stage }: { stage: StageState }): React.JSX.Element | null {
+  if (stage.evidence.length === 0) return null;
+  const pending = stage.evidence.filter(
+    (item) => item.live_state === "pending_live_profile",
+  ).length;
+  return (
+    <ul className="journey__evidence">
+      <li className="journey__summary">
+        {evidenceSummary(stage.evidence.length)} recorded; see technical detail.
+      </li>
+      {pending > 0 && (
+        // The [PENDING LIVE PROFILE] distinction the contract's `live_state` carries:
+        // evidence awaiting a live run must never read as verified, so it is surfaced up
+        // front even though the reference itself is not.
+        <li className="journey__pending">
+          {pending === 1 ? "1 reference awaits" : `${pending} references await`} a live
+          check.
+        </li>
+      )}
+    </ul>
+  );
+}
+
+/**
+ * A concrete, path-free summary of one blocker.
+ *
+ * One generic sentence per reason made multiple blockers indistinguishable and left the
+ * initial Command Room unable to say WHY a stage is blocked -- the opposite of US1, which
+ * requires the blocker explained up front. So the safe words are kept and only the unsafe
+ * spans are dropped: file paths, `command subcommand` pairs, and source locations. What
+ * remains is the analyst-actionable phrase ("is missing a grain declaration"), with the
+ * verbatim text still in the disclosure.
+ *
+ * Removing spans is safe in a way CLASSIFYING text was not: the earlier heuristic tried to
+ * decide whether a whole string was technical and lost that arms race. Here anything
+ * path-shaped or command-shaped is excised regardless of what surrounds it, so an
+ * unrecognised identifier cannot ride along inside an otherwise readable sentence.
+ */
+export function blockerSummary(message: string): string {
+  const scrubbed = message
+    // Any token containing a path separator, either slash direction.
+    .replace(/\S*[/\\]\S*/g, " ")
+    // A filename with a known extension, plus any `:line-range` suffix.
+    .replace(/\S+\.(md|ya?ml|sql|py|json|tmdl)\b\S*/gi, " ")
+    // `seshat check`, `retail validate`, `retail-semantic-check`, and kin.
+    .replace(/\b(seshat|retail)[\s-][a-z-]+/gi, " ")
+    // Bare identifiers: snake_case / SCREAMING_CASE, and F-numbers.
+    .replace(/\b[a-z0-9]+_[a-z0-9_]+\b/gi, " ")
+    .replace(/\bF\d{3,}\b/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.;:])/g, "$1")
+    .trim()
+    .replace(/^[\s,;:.-]+/, "")
+    .trim();
+
+  // Fall back when nothing readable survives, OR when what survives still carries code.
+  //
+  // Span removal handles paths, commands, and identifiers, but real committed blockers
+  // also contain SQL keywords, call syntax, and line references -- none of which are any
+  // of those shapes, so residue leaked. Rather than widen the pattern a fifth time, the
+  // DECISION is inverted: if the remainder still looks like code, say nothing specific.
+  // That costs some readability and cannot leak, which is the trade FR-032 asks for.
+  // Authored per-code summaries would restore the detail; that is design work, deferred.
+  const generic = "A recorded blocker needs attention; see technical detail.";
+  const stillCode =
+    /[(){};=]|::|\bIS NULL\b|\b[A-Z]{2,}(\s+[A-Z]{2,})+\b|\b[A-Z]\d+\b/.test(
+      scrubbed,
+    );
+  if (stillCode) return generic;
+
+  return scrubbed.split(/\s+/).filter(Boolean).length >= 3 ? scrubbed : generic;
+}
+
+/**
+ * Blockers with mirrored duplicates removed.
+ *
+ * `projection._with_table_blockers` appends the table-level blocker to the current stage,
+ * and the committed `demo_sample_orders` file deliberately mirrors its top-level blocker
+ * there -- so the identical reason arrived twice and rendered twice, making one problem
+ * look like two. Deduplicated on MESSAGE: two reasons carrying the same text are the same
+ * problem regardless of which source_ref each came from.
+ */
+function distinctReasons(
+  reasons: readonly StageState["blocking_reasons"][number][],
+): StageState["blocking_reasons"][number][] {
+  const seen = new Set<string>();
+  return reasons.filter((reason) => {
+    if (seen.has(reason.message)) return false;
+    seen.add(reason.message);
+    return true;
+  });
+}
+
+function StageBlockers({ stage }: { stage: StageState }): React.JSX.Element | null {
+  if (stage.blocking_reasons.length === 0) return null;
+  return (
+    <ul className="journey__blockers">
+      {distinctReasons(stage.blocking_reasons).map((reason, index) => (
+        <li key={`${reason.code ?? "reason"}:${index}`}>
+          {blockerSummary(reason.message)}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Every raw reference for one stage, behind the disclosure FR-032 requires. */
+function StageTechnicalDetail({ stage }: { stage: StageState }): React.JSX.Element | null {
+  const references = [
+    ...stage.evidence.map((item) => item.source_ref),
+    // The verbatim blocker PROSE, not just its source file: the primary journey shows a
+    // summary when the message is technical, so the real text has to live somewhere.
+    ...stage.blocking_reasons.map((reason) => reason.message),
+    ...stage.blocking_reasons
+      .map((reason) => reason.source_ref)
+      .filter((ref): ref is string => ref !== null),
+  ];
+  // The early return must consider the AUTHORITY too. Keyed on references alone, a stage
+  // carrying `required_authority` but nothing to cite dropped it silently -- and FR-008
+  // names required authority among the six fields that MUST be preserved.
+  if (references.length === 0 && stage.required_authority.length === 0) return null;
+
+  return (
+    <details className="journey__detail">
+      <summary>Technical detail</summary>
+      {references.length > 0 && (
+        <ul>
+          {references.map((reference) => (
+            <li key={reference}>{reference}</li>
+          ))}
+        </ul>
+      )}
+      {stage.required_authority.length > 0 && (
+        <p>Requires: {stage.required_authority.join(", ")}</p>
+      )}
+    </details>
+  );
+}
+
+/*
+ * `forbidden_scope` is NOT rendered, deliberately.
+ *
+ * `projection._journey_for` builds `TableJourney` without setting it, so the field is a
+ * dataclass default -- empty for all four committed tables. A component that renders it
+ * therefore shows nothing in production while its test passes on a hand-built fixture,
+ * which is the same "field with no source" trap as `pending_decision_count` and
+ * `requires_named_human`.
+ *
+ * `readiness_projection._table_projection` DOES compute the concrete restrictions (no
+ * Silver before Mapping, no dashboard before contracts). Wiring it into the snapshot is
+ * upstream integration with its own contract questions, tracked against T013 in tasks.md.
+ * Until then the journey makes no claim about forbidden scope rather than silently
+ * claiming there is none.
+ */
+
+function StageItem({
+  stage,
+  position,
+  waitingOn,
+}: {
+  stage: StageState;
+  position: Position;
+  waitingOn: ReadinessStage | null;
+}): React.JSX.Element {
+  const label = stageLabel(stage.stage);
+  return (
+    <li
+      // `aria-label` gives the item an accessible NAME, which is what lets a
+      // screen-reader user (and these tests) address one stage among seven.
+      aria-label={label}
+      aria-current={position === "current" ? "step" : undefined}
+      data-locked={String(waitingOn !== null)}
+      className="journey__stage"
+    >
+      <StatusBadge status={stage.status} stage={stage.stage} />
+      {waitingOn !== null && (
+        <p className="journey__locked">Waiting for {stageLabel(waitingOn)} to clear.</p>
+      )}
+      <StageEvidence stage={stage} />
+      <StageBlockers stage={stage} />
+      <StageTechnicalDetail stage={stage} />
+    </li>
+  );
+}
+
+function NextAction({ journey }: { journey: Journey }): React.JSX.Element | null {
+  const action = journey.next_action;
+  if (action == null) return null;
+  return (
+    <section className="journey__next" aria-labelledby={`${journey.table_id}-next`}>
+      <h4 id={`${journey.table_id}-next`}>Next</h4>
+      {/* `_next_action` copies the committed instruction VERBATIM, and real ones name
+          approval files and commands. Summarised here; the exact wording is disclosed. */}
+      {/* Not "a step is WAITING". `retail_store_sales` has all seven stages passing and a
+          committed `next_action` whose text says no further readiness action is required,
+          so announcing unfinished work would contradict the record. Classifying
+          terminal-vs-actionable would mean parsing the prose -- the same arms race the
+          technical-text heuristic lost -- so the wording states only what is certain:
+          a next action is recorded, and here it is. */}
+      <p>A next action is recorded for this table; see technical detail for its wording.</p>
+      <details className="journey__detail">
+        <summary>Technical detail</summary>
+        <p>{action.label}</p>
+      </details>
+      {action.requires_named_human && (
+        <p className="journey__authority">
+          A named human must approve this step; Studio cannot.
+        </p>
+      )}
+    </section>
+  );
+}
+
+export function TableJourney({ journey }: { journey: Journey }): React.JSX.Element {
+  const current =
+    journey.stages.find((stage) => stage.stage === journey.current_stage) ?? null;
+  const byStage = new Map(journey.stages.map((stage) => [stage.stage, stage]));
+
+  return (
+    <div className="journey">
+      {/* `current === null` covers BOTH an absent `current_stage` and one naming a stage
+          the payload does not contain. Testing the raw field instead left server drift
+          silent: no current marker AND no explanation, which reads as a table that
+          simply has not started. */}
+      {current === null && <p>This table has not reported a current stage.</p>}
+      {/* An ORDERED list: the sequence is part of the meaning, so it belongs in the
+          markup rather than in visual position, where a screen-reader user cannot
+          perceive it. */}
+      {/* Named so a test -- and a screen-reader user -- can address the STAGE list
+          specifically, rather than whichever list happens to be first in the DOM. */}
+      <ol className="journey__stages" aria-label="Readiness stages">
+        {orderedStages(journey.stages).map((stage) => (
+          <StageItem
+            key={stage.stage}
+            stage={stage}
+            position={positionOf(stage.stage, journey.current_stage)}
+            waitingOn={blockingPrerequisite(stage.stage, byStage)}
+          />
+        ))}
+      </ol>
+      <NextAction journey={journey} />
+    </div>
+  );
+}

@@ -1,14 +1,14 @@
 /**
- * The Studio shell (T012).
+ * The Studio shell and Command Room (T012 shell, T013 detail).
  *
  * Loads the deterministic workspace projection and renders one of four honest states:
  * loading, a request problem, a first-arrival workspace with no tables, or the table
- * list. The Command Room's detail views arrive with T013 -- this shell is the frame
- * they hang in, and it says what it is rather than pretending to more.
+ * list -- each table showing its full seven-stage journey via `TableJourney`.
  *
- * FR-032: no command names, skill names, protocol messages, or raw file paths appear
- * here. FR-009: no numeric score is rendered, ever -- the status word and its evidence
- * are the whole signal.
+ * FR-032: no command names, skill names, protocol messages, or raw file paths appear in
+ * the primary journey; the server's own governance wording, which legitimately names
+ * files and commands, lives behind an explicit disclosure. FR-009: no numeric score is
+ * rendered, ever -- the status word and its evidence are the whole signal.
  */
 
 import type * as React from "react";
@@ -16,7 +16,8 @@ import { useEffect, useState } from "react";
 
 import { StudioRequestError, fetchWorkspace } from "./api/client";
 import type { WorkspaceSnapshot } from "./api/types";
-import { StatusBadge } from "./components/StatusBadge";
+import { AgentHealthNotice } from "./components/AgentHealth";
+import { TableJourney } from "./components/TableJourney";
 
 type LoadState =
   | { kind: "loading" }
@@ -89,6 +90,9 @@ export function App(): React.JSX.Element {
   return (
     <main>
       <h1>{snapshot.identity.display_name}</h1>
+      {/* Strictly additive: FR-025 requires the deterministic views below to stay
+          usable in EVERY agent state, so this notice never gates what follows. */}
+      <AgentHealthNotice health={snapshot.agent_health} />
       {snapshot.input_defects.length > 0 && <InputDefects snapshot={snapshot} />}
       {snapshot.tables.length === 0 ? (
         <FirstArrival />
@@ -99,14 +103,28 @@ export function App(): React.JSX.Element {
   );
 }
 
-/**
- * FR-010's defects, surfaced rather than swallowed.
+/*
+ * NO pending-decision count is rendered, deliberately.
  *
- * A malformed committed input is the analyst's problem to fix, so it is shown with its
- * recovery action -- not logged and hidden behind a shorter table list.
+ * US1 does name it ("...blockers, evidence, pending decision count, and one next allowed
+ * action"), and a previous revision rendered it -- but `WorkspaceSnapshot.
+ * pending_decision_count` is a dataclass DEFAULT of 0 that nothing computes, and
+ * `/decisions` returns an empty list. So the sentence "No decisions are waiting on a
+ * named human" was asserting workspace truth from a hardcoded zero, and it said exactly
+ * that while `mappings/finance_gl_actuals/approval-request-model-integrity.md` sat
+ * unresolved in the tree.
+ *
+ * Saying nothing is honest; saying "none are waiting" is not. Wiring this to
+ * `approval_inbox`'s open-request projection is real upstream work, tracked against T013
+ * in tasks.md rather than half-done here.
  */
+
 /**
  * Plain-language wording per defect code, keyed off the server's `code`.
+ *
+ * FR-010's defects are surfaced rather than swallowed: a malformed committed input is
+ * the analyst's problem to fix, so it appears with a recovery action instead of being
+ * hidden behind a silently shorter table list.
  *
  * FR-032 requires command names, skill names, protocol messages, and raw file paths to
  * be ABSENT from the primary journey "unless technical detail is explicitly opened".
@@ -196,23 +214,16 @@ function TableList({ snapshot }: { snapshot: WorkspaceSnapshot }): React.JSX.Ele
   return (
     <section aria-labelledby="tables-heading">
       <h2 id="tables-heading">Tables</h2>
-      <ul>
-        {snapshot.tables.map((table) => {
-          const current = table.stages.find(
-            (stage) => stage.stage === table.current_stage,
-          );
-          return (
-            <li key={table.table_id}>
-              <h3>{table.display_name}</h3>
-              {current !== undefined ? (
-                <StatusBadge status={current.status} stage={current.stage} />
-              ) : (
-                <p>This table has not reported a current stage.</p>
-              )}
-              {table.next_action != null && <p>{table.next_action.label}</p>}
-            </li>
-          );
-        })}
+      <ul className="table-list">
+        {snapshot.tables.map((table) => (
+          <li key={table.table_id}>
+            <h3>{table.display_name}</h3>
+            {/* The full seven-stage journey, not just the current badge: US1 requires
+                the Command Room to explain the current stage, its blockers, its
+                evidence, and the next allowed action. */}
+            <TableJourney journey={table} />
+          </li>
+        ))}
       </ul>
     </section>
   );

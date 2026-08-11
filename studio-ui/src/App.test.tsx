@@ -80,6 +80,23 @@ describe("the Studio shell", () => {
     ).toBeInTheDocument();
   });
 
+  it("makes no claim about pending decisions until one can be computed", async () => {
+    // `pending_decision_count` is a dataclass DEFAULT of 0 that nothing populates, and
+    // `/decisions` returns an empty list -- so rendering it said "no decisions are
+    // waiting" while `finance_gl_actuals/approval-request-model-integrity.md` sat
+    // unresolved in the tree. Saying nothing is honest; asserting none is not.
+    //
+    // This test pins the DEFERRAL: re-adding the sentence without wiring
+    // `approval_inbox` fails here.
+    stubFetch(snapshot({ pending_decision_count: 0 }));
+    const { container } = render(<App />);
+    await screen.findByRole("heading", { name: "retail_workspace" });
+
+    const text = container.textContent ?? "";
+    expect(text).not.toMatch(/no decisions are waiting/i);
+    expect(text).not.toMatch(/\d+ decisions? awaits?/i);
+  });
+
   it("shows a first-arrival state for a workspace with no tables", async () => {
     stubFetch(snapshot());
     render(<App />);

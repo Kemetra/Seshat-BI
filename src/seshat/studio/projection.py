@@ -404,7 +404,17 @@ def _unreadable_defect(table_id: str) -> InputDefect:
 
 
 def _next_action(entry: dict, table_id: str) -> ActionSummary | None:
-    """Project the committed next action. FR-008 names it; it must not be dropped."""
+    """Project the committed next action. FR-008 names it; it must not be dropped.
+
+    ``requires_named_human`` is READ, never assumed. An earlier revision hardcoded it to
+    ``True``, which fabricated a governance requirement: the committed readiness spine
+    records no per-action authority (`templates/readiness-status.yaml` carries
+    `approvals: []` at document level and no per-stage `required_authority`), so EVERY
+    action claimed a named human must approve it -- including a mechanical live-run
+    step, and including a table whose seven stages all pass and whose "action" is the
+    message that nothing remains. Inventing an approval is the same class of error as
+    inventing a pass, and this projection exists to do neither.
+    """
     label = entry.get("next_action")
     if not isinstance(label, str) or not label:
         return None
@@ -416,7 +426,23 @@ def _next_action(entry: dict, table_id: str) -> ActionSummary | None:
             "derive the next action."
         ),
         requires_agent=False,
-        requires_named_human=True,
+        # Always False, and NOT because approval never applies -- because this
+        # projection
+        # has no source for it. `status_surface._project_table`, the upstream this
+        # reads,
+        # projects `table`, `source_path`, `current_stage`, `stages`,
+        # `blocking_reasons`,
+        # and `next_action`, and nothing else. A previous revision "read"
+        # `entry["required_authority"]`, which looked correct and was INERT: the key is
+        # never present, so it always evaluated False while appearing to consult the
+        # source.
+        #
+        # `agent_next.build_table_next_document` does expose an authority, as a
+        # STRING rather than a list. Adopting it is new upstream integration with its
+        # own contract questions, so it is deferred rather than half-wired here.
+        # Until then Studio claims no approval requirement it cannot substantiate --
+        # inventing one is the same class of error as inventing a pass.
+        requires_named_human=False,
     )
 
 
