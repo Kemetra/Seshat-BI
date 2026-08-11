@@ -280,14 +280,14 @@ projection, endpoints, frontend, journey, and health.
 
 ## Phase 5 - Codex Subscription Bridge (US2, US4)
 
-- [ ] **T019** Record the installed Codex version, generate its app-server JSON
+- [x] **T019** Record the installed Codex version, generate its app-server JSON
   schemas into a temporary directory, and derive minimal sanitized fixtures covering
   `initialize`/`initialized`, account and rate-limit reads, managed ChatGPT login,
   thread, turn, visible messages, tool events, JSON-RPC-correlated command/file
   approvals, quota, sign-out, incompatible or experimental required methods,
   malformed frames, stderr secrets, and EOF. Do not commit the full generated
   schema bundle. [FR-011 - FR-015, FR-024]
-- [ ] **T020** Write failing JSON-RPC correlation and normalization tests, then
+- [x] **T020** Write failing JSON-RPC correlation and normalization tests, then
   implement the version-tolerant stdio client without shell interpolation. [FR-011,
   FR-014, FR-015]
 - [ ] **T021** Implement Codex process lifecycle, protocol probe, health classifier,
@@ -295,7 +295,7 @@ projection, endpoints, frontend, journey, and health.
   Record and enforce the tested minimum/maximum Codex CLI range; a version outside
   it is incompatible until its generated schema and handshake fixtures pass.
   [FR-011, FR-012, FR-013, FR-024]
-- [ ] **T022** Implement context construction for read-only and propose-change modes;
+- [x] **T022** Implement context construction for read-only and propose-change modes;
   include current allowed/forbidden scope and never include credentials. [FR-017,
   FR-018, FR-026]
 - [ ] **T023** Run the bridge contract suite against fake and production adapters;
@@ -303,7 +303,7 @@ projection, endpoints, frontend, journey, and health.
   with FR-013 as amended 2026-08-04: the prohibition is on a silent or automatic
   switch to a billed path, not on the explicitly operator-configured alternate mode
   of T023a.) [SC-003, SC-004]
-- [ ] **T023a** Implement the alternate API-key/access-token `AgentBridge` as an
+- [x] **T023a** Implement the alternate API-key/access-token `AgentBridge` as an
   explicitly operator-configured mode at the existing provider-neutral seam. Assert
   it is never selected by inference, by degradation, or as a response to any bridge
   health state, and that the active authentication mode is named both in the
