@@ -1,0 +1,9 @@
+{"jsonrpc":"2.0","id":30,"result":{"ok":true}
+{"id":31,"result":{"ok":true}}
+{"jsonrpc":"2.0","id":9999,"result":{"ok":true}}
+{"jsonrpc":"2.0","id":{"nested":"object"},"result":{"ok":true}}
+{"jsonrpc":"2.0","method":"item/agentMessage/delta","params":null}
+{"jsonrpc":"2.0","method":"item/agentMessage/delta"}
+{"jsonrpc":"2.0"}
+not json at all
+{"jsonrpc":"2.0","method":"totally/unknown/notification","params":{"threadId":"thr_fixture"}}

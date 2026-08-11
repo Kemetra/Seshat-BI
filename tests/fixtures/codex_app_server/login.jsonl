@@ -1,0 +1,6 @@
+{"jsonrpc":"2.0","id":7,"method":"account/login/start","params":{"type":"chatgpt"}}
+{"jsonrpc":"2.0","id":7,"result":{"type":"chatgpt","loginId":"login_fixture","authUrl":"https://auth.example.invalid/activate?code=FIXTURE"}}
+{"jsonrpc":"2.0","method":"account/login/completed","params":{"loginId":"login_fixture","success":true}}
+{"jsonrpc":"2.0","method":"account/login/completed","params":{"loginId":"login_fixture","success":false,"error":"the login window was closed before completion"}}
+{"jsonrpc":"2.0","id":8,"method":"account/logout","params":{}}
+{"jsonrpc":"2.0","id":8,"result":{}}

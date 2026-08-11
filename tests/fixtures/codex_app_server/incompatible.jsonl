@@ -1,0 +1,5 @@
+{"jsonrpc":"2.0","id":40,"method":"item/tool/requestUserInput","params":{"threadId":"thr_fixture","turnId":"turn_fixture","itemId":"item_input"}}
+{"jsonrpc":"2.0","id":41,"method":"item/permissions/requestApproval","params":{"threadId":"thr_fixture","turnId":"turn_fixture","itemId":"item_perm","additionalPermissions":["network"]}}
+{"jsonrpc":"2.0","id":42,"method":"account/chatgptAuthTokens/refresh","params":{}}
+{"jsonrpc":"2.0","id":43,"method":"some/futureRequiredMethod","params":{"threadId":"thr_fixture"}}
+{"jsonrpc":"2.0","id":44,"error":{"code":-32601,"message":"Method not found: thread/start"}}

@@ -1,0 +1,7 @@
+{"jsonrpc":"2.0","id":2,"method":"account/read","params":{}}
+{"jsonrpc":"2.0","id":2,"result":{"requiresOpenaiAuth":true,"account":{"type":"chatgpt","email":"user@example.invalid","planType":"plus"}}}
+{"jsonrpc":"2.0","id":3,"method":"account/rateLimits/read","params":{}}
+{"jsonrpc":"2.0","id":3,"result":{"rateLimits":{"planType":"plus","primary":{"usedPercent":12,"windowDurationMins":300,"resetsAt":1786636800}}}}
+{"jsonrpc":"2.0","id":4,"method":"account/read","params":{}}
+{"jsonrpc":"2.0","id":4,"result":{"requiresOpenaiAuth":true,"account":null}}
+{"jsonrpc":"2.0","method":"account/updated","params":{"account":{"type":"chatgpt","email":"user@example.invalid","planType":"plus"}}}
