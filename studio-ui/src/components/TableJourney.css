@@ -1,0 +1,74 @@
+/**
+ * Table journey layout. Every colour comes from the tokens so a contrast audit has one
+ * place to check, and nothing here is the sole carrier of meaning -- a locked stage says
+ * "Waiting for ..." in text, so the dimming is reinforcement, never the signal.
+ */
+
+.journey__stages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.journey__stage {
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--border);
+  background: var(--surface-raised);
+  border-radius: var(--radius);
+}
+
+.journey__stage[aria-current="step"] {
+  border-left-color: var(--focus-ring);
+  background: var(--surface-sunken);
+}
+
+/* Dimming a locked stage is REINFORCEMENT only. The text "Waiting for X to clear"
+   carries the meaning, so a reader who cannot perceive opacity loses nothing -- and the
+   value stays above the 4.5:1 floor rather than fading the text out of compliance. */
+.journey__stage[data-locked="true"] {
+  opacity: 0.85;
+}
+
+.journey__locked,
+.journey__authority,
+.journey__pending {
+  color: var(--text-muted);
+  margin: var(--space-1) 0 0;
+}
+
+.journey__evidence,
+.journey__blockers {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}
+
+.journey__detail {
+  margin-top: var(--space-2);
+  color: var(--text-muted);
+}
+
+.journey__detail summary {
+  cursor: pointer;
+}
+
+.journey__next {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--border);
+  border-radius: var(--radius);
+}
+
+.journey__next h4 {
+  margin: 0 0 var(--space-2);
+}
+
+@media (forced-colors: active) {
+  /* The browser replaces the palette, so opacity and background stop distinguishing
+     anything -- the border becomes the only structural cue. */
+  .journey__stage {
+    border: 1px solid currentColor;
+  }
+}

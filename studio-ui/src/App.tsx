@@ -1,14 +1,14 @@
 /**
- * The Studio shell (T012).
+ * The Studio shell and Command Room (T012 shell, T013 detail).
  *
  * Loads the deterministic workspace projection and renders one of four honest states:
  * loading, a request problem, a first-arrival workspace with no tables, or the table
- * list. The Command Room's detail views arrive with T013 -- this shell is the frame
- * they hang in, and it says what it is rather than pretending to more.
+ * list -- each table showing its full seven-stage journey via `TableJourney`.
  *
- * FR-032: no command names, skill names, protocol messages, or raw file paths appear
- * here. FR-009: no numeric score is rendered, ever -- the status word and its evidence
- * are the whole signal.
+ * FR-032: no command names, skill names, protocol messages, or raw file paths appear in
+ * the primary journey; the server's own governance wording, which legitimately names
+ * files and commands, lives behind an explicit disclosure. FR-009: no numeric score is
+ * rendered, ever -- the status word and its evidence are the whole signal.
  */
 
 import type * as React from "react";
@@ -16,7 +16,7 @@ import { useEffect, useState } from "react";
 
 import { StudioRequestError, fetchWorkspace } from "./api/client";
 import type { WorkspaceSnapshot } from "./api/types";
-import { StatusBadge } from "./components/StatusBadge";
+import { TableJourney } from "./components/TableJourney";
 
 type LoadState =
   | { kind: "loading" }
@@ -89,6 +89,7 @@ export function App(): React.JSX.Element {
   return (
     <main>
       <h1>{snapshot.identity.display_name}</h1>
+      <PendingDecisions count={snapshot.pending_decision_count} />
       {snapshot.input_defects.length > 0 && <InputDefects snapshot={snapshot} />}
       {snapshot.tables.length === 0 ? (
         <FirstArrival />
@@ -100,13 +101,40 @@ export function App(): React.JSX.Element {
 }
 
 /**
- * FR-010's defects, surfaced rather than swallowed.
+ * How many business decisions await a named human (US1).
  *
- * A malformed committed input is the analyst's problem to fix, so it is shown with its
- * recovery action -- not logged and hidden behind a shorter table list.
+ * US1 requires the Command Room to explain the "pending decision count" alongside the
+ * stage, blockers, evidence, and next action. A QUEUE LENGTH is not a readiness signal,
+ * so FR-009 does not forbid the number -- but the wording has to make that unmistakable,
+ * because a bare figure next to a readiness journey invites reading it as a score.
+ *
+ * Foundation cannot record these decisions (FR-022, and `BootstrapState` types the
+ * capability as the literal `false`), so this states the count and stops there.
  */
+function PendingDecisions({ count }: { count: number }): React.JSX.Element {
+  if (count === 0) {
+    return (
+      <p className="pending-decisions">
+        No decisions are waiting on a named human.
+      </p>
+    );
+  }
+  // `1 decisions await` reads as carelessness, and an interface asking to be trusted
+  // about readiness cannot afford sloppiness in the sentence beside the number.
+  const noun = count === 1 ? "decision awaits" : "decisions await";
+  return (
+    <p className="pending-decisions">
+      {`${count} ${noun} a named human's approval.`}
+    </p>
+  );
+}
+
 /**
  * Plain-language wording per defect code, keyed off the server's `code`.
+ *
+ * FR-010's defects are surfaced rather than swallowed: a malformed committed input is
+ * the analyst's problem to fix, so it appears with a recovery action instead of being
+ * hidden behind a silently shorter table list.
  *
  * FR-032 requires command names, skill names, protocol messages, and raw file paths to
  * be ABSENT from the primary journey "unless technical detail is explicitly opened".
@@ -196,23 +224,16 @@ function TableList({ snapshot }: { snapshot: WorkspaceSnapshot }): React.JSX.Ele
   return (
     <section aria-labelledby="tables-heading">
       <h2 id="tables-heading">Tables</h2>
-      <ul>
-        {snapshot.tables.map((table) => {
-          const current = table.stages.find(
-            (stage) => stage.stage === table.current_stage,
-          );
-          return (
-            <li key={table.table_id}>
-              <h3>{table.display_name}</h3>
-              {current !== undefined ? (
-                <StatusBadge status={current.status} stage={current.stage} />
-              ) : (
-                <p>This table has not reported a current stage.</p>
-              )}
-              {table.next_action != null && <p>{table.next_action.label}</p>}
-            </li>
-          );
-        })}
+      <ul className="table-list">
+        {snapshot.tables.map((table) => (
+          <li key={table.table_id}>
+            <h3>{table.display_name}</h3>
+            {/* The full seven-stage journey, not just the current badge: US1 requires
+                the Command Room to explain the current stage, its blockers, its
+                evidence, and the next allowed action. */}
+            <TableJourney journey={table} />
+          </li>
+        ))}
       </ul>
     </section>
   );

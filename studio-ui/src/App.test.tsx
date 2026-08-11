@@ -80,6 +80,35 @@ describe("the Studio shell", () => {
     ).toBeInTheDocument();
   });
 
+  it("states the pending decision count, which US1 names explicitly", async () => {
+    stubFetch(snapshot({ pending_decision_count: 3 }));
+    render(<App />);
+    await screen.findByRole("heading", { name: "retail_workspace" });
+
+    // US1: the Command Room "immediately explains the current readiness stage,
+    // blockers, evidence, PENDING DECISION COUNT, and one next allowed action".
+    // A queue length is not a readiness score, so FR-009 does not forbid the number --
+    // but it must read unmistakably as a count of waiting decisions.
+    expect(screen.getByText(/3 decisions await/i)).toBeInTheDocument();
+  });
+
+  it("uses singular wording for exactly one pending decision", async () => {
+    stubFetch(snapshot({ pending_decision_count: 1 }));
+    render(<App />);
+    await screen.findByRole("heading", { name: "retail_workspace" });
+
+    expect(screen.getByText(/1 decision awaits/i)).toBeInTheDocument();
+    expect(screen.queryByText(/1 decisions/i)).not.toBeInTheDocument();
+  });
+
+  it("says so plainly when no decision is waiting", async () => {
+    stubFetch(snapshot({ pending_decision_count: 0 }));
+    render(<App />);
+    await screen.findByRole("heading", { name: "retail_workspace" });
+
+    expect(screen.getByText(/no decisions are waiting/i)).toBeInTheDocument();
+  });
+
   it("shows a first-arrival state for a workspace with no tables", async () => {
     stubFetch(snapshot());
     render(<App />);

@@ -169,9 +169,24 @@ the same 2 failures / 24 skipped. After T009-T010: **5979 passed / the same 2 fa
   badge, which is the FRAME. T013 owns the table journey, evidence/blocker details, next
   action, and the full first-arrival and input-defect presentations, and T014 owns the
   seven agent-health states.
-- [ ] **T013** Write failing component tests, then implement Command Room, table
+- [x] **T013** Write failing component tests, then implement Command Room, table
   journey, evidence/blocker details, next action, first-arrival, and input-defect
   states without command names or scores. [US1, FR-009, FR-032]
+  — `studio-ui/src/components/TableJourney.tsx`, wired into the shell so it is reachable
+  rather than dead code. All seven stages in the authority's order as an ORDERED list, so
+  a screen-reader user perceives the sequence structurally; the current stage carries
+  `aria-current="step"`; evidence shows its `live_state` so a [PENDING LIVE PROFILE]
+  reference cannot read as verified; blockers show their concrete message.
+  US1 scenario 2's "leaves Silver and later work LOCKED" is expressed WITHOUT inventing
+  a fifth status: a gated stage keeps its `not_started` status (FR-008 pins the
+  vocabulary) and gains a separate signal derived purely from position, saying "Waiting
+  for Mapping to clear". Nothing is locked once the current stage passes -- calling later
+  work blocked then would be a fabricated obstacle.
+  The pending decision count US1 names is now stated too; it was projected by the server
+  and silently ignored by the shell. A queue length is not a readiness score, so FR-009
+  permits the number, but the wording says plainly what it counts.
+  FR-032: stage identifiers render as human labels ("Mapping", never `mapping_ready`),
+  and every raw source reference sits behind an explicit `<details>` disclosure.
 - [ ] **T014** Add the seven distinct agent health presentations while retaining all
   deterministic workspace interactions. [US4, FR-024, FR-025]
 
