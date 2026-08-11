@@ -40,6 +40,8 @@ _SCHEMAS = (
     "WorkspaceSnapshot",
     "BootstrapState",
     "PreparedDecisionSummary",
+    "StudioEvent",
+    "AgentThreadRef",
     "Problem",
 )
 

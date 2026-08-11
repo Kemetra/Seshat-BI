@@ -29,7 +29,7 @@ from typing import Any
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
-from . import config, projection, redaction, session
+from . import agent_routes, bridge, config, events, projection, redaction, session
 
 #: Every route lives under this prefix, matching the contract's server URL.
 API_PREFIX = "/api/v1"
@@ -325,8 +325,20 @@ def create_app(workspace: Path | str, *, port: int) -> tuple[FastAPI, str]:
     #: operator-configured alternate bridge sets this to
     #: `operator_configured_alternate`, and never by inference.
     app.state.authentication_mode = "subscription"
+    #: In-memory only (FR-035). The bridge is the deterministic fake until Phase 5
+    #: introduces the Codex one; FR-014 keeps the swap to a single assignment.
+    #:
+    #: `workspace_root` is what enables FR-026 PATH redaction inside the event
+    #: buffer: `redact_for_boundary` gates `redact_paths` on it, so omitting it
+    #: silently disables half the redaction while credentials are still scrubbed and
+    #: everything LOOKS clean. An earlier revision omitted it and every event carried
+    #: absolute filesystem paths to the browser, including out-of-root paths that
+    #: expose the operator's home directory layout.
+    app.state.threads = events.ThreadStore(workspace_root=launch.workspace_root)
+    app.state.bridge = bridge.FakeAgentBridge()
 
     _register_routes(app)
+    agent_routes.register_agent_routes(app)
     # After the API routes: the frontend mount claims `/`, so registering it first would
     # shadow every `/api/v1/*` path.
     _register_frontend(app)

@@ -9,7 +9,7 @@
  * Component tests for the Command Room's detail views belong to T013.
  */
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { App } from "./App";
@@ -265,5 +265,61 @@ describe("the Studio shell", () => {
         expect.objectContaining({ credentials: "same-origin" }),
       );
     });
+  });
+
+  // ------------------------------------------------------------------- //
+  // T018 -- the agent panel is REACHED, not merely implemented          //
+  // ------------------------------------------------------------------- //
+
+  it("offers the conversation without opening one unasked", async () => {
+    // FR-032 keeps agent machinery out of the primary journey until it is wanted, and a
+    // thread created on page load would start a conversation on every refresh of a
+    // read-only view. This also pins that the panel is actually WIRED: a component that
+    // exists but is never rendered is the defect this repo has shipped before.
+    stubFetch(snapshot());
+    render(<App />);
+    await screen.findByRole("heading", { name: "retail_workspace" });
+
+    expect(
+      screen.getByRole("button", { name: /ask about this workspace/i }),
+    ).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalledWith(
+      "/api/v1/agent/threads",
+      expect.anything(),
+    );
+  });
+
+  it("keeps the deterministic views when a thread cannot be created", async () => {
+    // FR-025: the deterministic views must remain usable in EVERY agent state, so an
+    // unavailable bridge degrades to a notice rather than taking the page down.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation((url: string) =>
+        url === "/api/v1/workspace"
+          ? Promise.resolve({ ok: true, status: 200, json: async () => snapshot() })
+          : Promise.resolve({
+              ok: false,
+              status: 503,
+              json: async () => ({
+                type: "about:blank",
+                title: "Agent unavailable",
+                status: 503,
+                detail: "The agent bridge is unavailable.",
+                recovery_action: "Deterministic views remain usable.",
+              }),
+            }),
+      ),
+    );
+    render(<App />);
+    const heading = await screen.findByRole("heading", {
+      name: "retail_workspace",
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /ask about this workspace/i }),
+    );
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(heading).toBeInTheDocument();
   });
 });

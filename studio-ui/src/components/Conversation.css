@@ -1,0 +1,146 @@
+/**
+ * Conversation styling, using only the tokens `tokens.css` actually defines.
+ *
+ * The late-event treatment is load-bearing rather than decorative: a retained-but-ignored
+ * event must be visibly outside the live exchange, and reduced opacity alone would fail
+ * WCAG contrast (FR-031). The left border plus the explanatory note carry the meaning, so
+ * the information survives at any contrast setting and reaches a screen reader too --
+ * colour is never the only channel.
+ */
+
+.conversation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.conversation__stream {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.conversation__row {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  border-left: 3px solid var(--focus-ring);
+}
+
+.conversation__row--late {
+  border-left-color: var(--text-muted);
+  background: var(--surface-sunken);
+}
+
+.conversation__message {
+  margin: 0;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.conversation__activity {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+
+.conversation__late-note {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.conversation__error {
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  background: var(--status-blocked-bg);
+  border-left: 3px solid var(--status-blocked-fg);
+  color: var(--status-blocked-fg);
+}
+
+.conversation__composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.conversation__label {
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+
+.conversation__input {
+  width: 100%;
+  padding: var(--space-2);
+  border-radius: var(--radius);
+  border: var(--border-width) solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  resize: vertical;
+}
+
+.conversation__input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.conversation__send {
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-5);
+  border-radius: var(--radius);
+  border: var(--border-width) solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.conversation__send:hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+
+.conversation__send:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.conversation__send:disabled {
+  cursor: progress;
+  color: var(--text-muted);
+}
+
+.conversation__stop {
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-4);
+  border-radius: var(--radius);
+  border: var(--border-width) solid var(--status-blocked-fg);
+  background: var(--status-blocked-bg);
+  color: var(--status-blocked-fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.conversation__stop:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.conversation__plan {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+  color: var(--text-muted);
+  font-size: 0.9375rem;
+}
+
+.conversation__plan-step {
+  margin-bottom: var(--space-1);
+}
+
+.conversation__plan-state {
+  color: var(--text-muted);
+}

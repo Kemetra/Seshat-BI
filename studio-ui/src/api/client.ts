@@ -13,6 +13,7 @@
 
 import type {
   AgentHealth,
+  AgentThreadRef,
   BootstrapState,
   Problem,
   TableJourney,
@@ -79,6 +80,65 @@ export function fetchTable(tableId: string): Promise<TableJourney> {
 
 export function fetchAgentHealth(): Promise<AgentHealth> {
   return get<AgentHealth>("/agent/health");
+}
+
+async function post<T>(path: string, body?: unknown): Promise<T> {
+  // `exactOptionalPropertyTypes` forbids `body: undefined`, so the key is omitted
+  // entirely for a bodyless POST rather than set to undefined.
+  const init: RequestInit = {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+  };
+  if (body !== undefined) {
+    init.body = JSON.stringify(body);
+  }
+  const response = await fetch(`${API_PREFIX}${path}`, init);
+  if (!response.ok) {
+    throw new StudioRequestError(response.status, await readProblem(response));
+  }
+  // 204 carries no body; parsing one would throw on a successful interrupt.
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  return (await response.json()) as T;
+}
+
+/** Open a conversation. The browser attaches `Origin` itself, which step 2 requires. */
+export function createThread(selectedTableId: string | null): Promise<AgentThreadRef> {
+  return post<AgentThreadRef>("/agent/threads", {
+    selected_table_id: selectedTableId,
+  });
+}
+
+/**
+ * Start one turn.
+ *
+ * `snapshot_revision` is sent so the server can tell whether the analyst was looking at
+ * the current workspace when they asked. `read_only` is the default because proposing
+ * changes is a mode the analyst opts into, never one inferred for them.
+ */
+export function startTurn(
+  threadId: string,
+  prompt: string,
+  options: { snapshotRevision?: string; mode?: "read_only" | "propose_changes" } = {},
+): Promise<{ turn_id: string }> {
+  return post<{ turn_id: string }>(
+    `/agent/threads/${encodeURIComponent(threadId)}/turns`,
+    {
+      prompt,
+      snapshot_revision: options.snapshotRevision ?? "unknown",
+      requested_mode: options.mode ?? "read_only",
+    },
+  );
+}
+
+/** Stop a live turn. A 409 means it had already ended, which is not an error to show. */
+export function interruptTurn(threadId: string, turnId: string): Promise<void> {
+  return post<void>(
+    `/agent/threads/${encodeURIComponent(threadId)}/turns/` +
+      `${encodeURIComponent(turnId)}/interrupt`,
+  );
 }
 
 /**

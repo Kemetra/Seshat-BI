@@ -100,6 +100,21 @@ export interface PreparedDecisionSummary {
   status: "prepared";
 }
 
+export interface StudioEvent {
+  thread_id: string;
+  sequence: number;
+  type: "thread_started" | "turn_started" | "agent_message" | "plan_updated" | "tool_started" | "tool_completed" | "file_change_proposed" | "approval_required" | "turn_completed" | "turn_failed" | "connection_state";
+  occurred_at: string;
+  turn_id: string | null;
+  payload: Record<string, unknown>;
+  ignored_for_state: boolean;
+}
+
+export interface AgentThreadRef {
+  thread_id: string;
+  state: "starting" | "ready" | "running" | "awaiting_technical_approval" | "completed" | "failed" | "interrupted";
+}
+
 export interface Problem {
   type: string;
   title: string;
