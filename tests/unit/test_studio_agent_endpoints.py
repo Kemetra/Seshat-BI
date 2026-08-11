@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import pytest
 
@@ -149,37 +149,51 @@ def test_starting_a_turn_returns_202_and_a_turn_id(tmp_path: Path) -> None:
     assert accepted.json()["turn_id"]
 
 
+class Refusal(NamedTuple):
+    """One expected refusal of `POST /turns`.
+
+    A named tuple rather than four positional parameters: the case is one concept, and
+    `Refusal(known_thread=False, ...)` reads at the call site where a bare `False` in
+    position one does not.
+    """
+
+    known_thread: bool
+    prompt: str
+    mode: str
+    expected_status: int
+
+
 @pytest.mark.parametrize(
-    ("thread", "prompt", "mode", "expected"),
+    "case",
     [
-        pytest.param("unknown", "hello", "read_only", 404, id="unknown_thread"),
-        pytest.param("real", "   ", "read_only", 422, id="empty_prompt"),
-        pytest.param("real", "do the thing", "root_shell", 422, id="unknown_mode"),
-        pytest.param("real", "", "read_only", 422, id="missing_prompt"),
+        pytest.param(Refusal(False, "hello", "read_only", 404), id="unknown_thread"),
+        pytest.param(Refusal(True, "   ", "read_only", 422), id="whitespace_prompt"),
+        pytest.param(Refusal(True, "", "read_only", 422), id="missing_prompt"),
+        pytest.param(Refusal(True, "do the thing", "root_shell", 422), id="bad_mode"),
     ],
 )
 def test_a_turn_request_is_refused_with_the_contracted_status(
-    tmp_path: Path, thread: str, prompt: str, mode: str, expected: int
+    tmp_path: Path, case: Refusal
 ) -> None:
     """Every refusal path for `POST /turns`, in one table.
 
-    Written as a table because the three cases were byte-for-byte identical apart from
-    the payload and the expected code, and a fourth (missing prompt) was missing
-    entirely -- which is the usual cost of copy-paste tests: the gap is invisible.
+    Written as a table because three of these were byte-for-byte identical apart from
+    the payload and the expected code, and a fourth (absent prompt) was missing
+    entirely -- the usual cost of copy-paste tests is that the gap is invisible.
     """
     client, _ = _client(tmp_path)
-    thread_id = "nope" if thread == "unknown" else _thread(client)
+    thread_id = _thread(client) if case.known_thread else "nope"
 
     refused = client.post(
         f"{API}/agent/threads/{thread_id}/turns",
         json={
-            "prompt": prompt,
+            "prompt": case.prompt,
             "snapshot_revision": "r1",
-            "requested_mode": mode,
+            "requested_mode": case.mode,
         },
     )
 
-    assert refused.status_code == expected, refused.text
+    assert refused.status_code == case.expected_status, refused.text
 
 
 # --------------------------------------------------------------------------- #

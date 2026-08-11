@@ -223,28 +223,39 @@ class ThreadEvents:
     def _refuse_unservable_resume(self, last_event_id: int) -> None:
         """Raise unless the retained window can continue the client's stream exactly.
 
-        The servable window is bounded at both ends. Below it, the resume point was
-        evicted and continuing would leave a gap. Above it, the client cites a sequence
-        this thread never issued -- a restarted process or the wrong thread -- worth
-        refusing rather than answering emptily, because an empty answer reads as "you
-        are up to date".
-
-        `last_event_id == lowest_retained - 1` is the contiguous boundary and is VALID:
-        the client saw everything up to the eviction line, so the retained window
-        continues its stream exactly.
+        Two independent questions, asked in order: is the resume point inside the range
+        this thread has ever issued, and is it contiguous with what is still retained?
+        They fail for different reasons and are checked separately so neither hides the
+        other.
         """
         if last_event_id < 0:
             raise ValueError("last_event_id cannot be negative")
+        self._refuse_a_sequence_never_issued(last_event_id)
+        self._refuse_an_evicted_resume(last_event_id)
 
+    def _refuse_a_sequence_never_issued(self, last_event_id: int) -> None:
+        """A resume point ahead of the latest event means the client is out of sync.
+
+        A restarted process or the wrong thread. Worth refusing rather than answering
+        emptily, because an empty answer reads as "you are up to date".
+        """
         latest = self._next_sequence - 1
         if last_event_id > latest:
             raise ReplayExpired(
                 f"sequence {last_event_id} is ahead of this thread's latest ({latest})"
             )
+
+    def _refuse_an_evicted_resume(self, last_event_id: int) -> None:
+        """A resume point below the retained window would leave a gap.
+
+        `last_event_id == lowest_retained - 1` is the contiguous boundary and is VALID:
+        the client saw everything up to the eviction line, so the retained window
+        continues its stream exactly.
+        """
         if not self._events:
             # Nothing retained: only "resume from the latest" is answerable, and it
             # answers empty. Anything earlier would be a gap.
-            if last_event_id != latest:
+            if last_event_id != self._next_sequence - 1:
                 raise ReplayExpired("no events are retained to replay")
             return
 
