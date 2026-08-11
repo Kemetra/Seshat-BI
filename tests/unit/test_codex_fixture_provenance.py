@@ -62,6 +62,25 @@ def test_every_well_formed_fixture_parses_as_jsonrpc() -> None:
             assert has_method or has_outcome, f"{name}: neither a call nor a reply"
 
 
+def _parses(line: str) -> bool:
+    try:
+        json.loads(line)
+    except json.JSONDecodeError:
+        return False
+    return True
+
+
+def _violates_envelope(frame: object) -> bool:
+    """True when a frame parses as JSON but is not a usable JSON-RPC message."""
+    if not isinstance(frame, dict):
+        return True
+    if frame.get("jsonrpc") != "2.0":
+        return True
+    if not ("method" in frame or "result" in frame or "error" in frame):
+        return True
+    return isinstance(frame.get("id"), (dict, list))
+
+
 def test_malformed_fixture_is_actually_malformed() -> None:
     """A negative fixture that parses cleanly tests nothing.
 
@@ -71,20 +90,10 @@ def test_malformed_fixture_is_actually_malformed() -> None:
     """
     body = (FIXTURE_DIR / "malformed.jsonl").read_text(encoding="utf-8")
     raw = [line for line in body.splitlines() if line.strip()]
-    unparseable = 0
-    envelope_violations = 0
-    for line in raw:
-        try:
-            frame = json.loads(line)
-        except json.JSONDecodeError:
-            unparseable += 1
-            continue
-        if frame.get("jsonrpc") != "2.0" or not (
-            "method" in frame or "result" in frame or "error" in frame
-        ):
-            envelope_violations += 1
-        elif isinstance(frame.get("id"), (dict, list)):
-            envelope_violations += 1
+    unparseable = sum(1 for line in raw if not _parses(line))
+    envelope_violations = sum(
+        1 for line in raw if _parses(line) and _violates_envelope(json.loads(line))
+    )
 
     assert unparseable >= 2, "malformed.jsonl must contain unparseable lines"
     assert envelope_violations >= 2, "malformed.jsonl must contain envelope violations"

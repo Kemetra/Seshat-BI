@@ -94,13 +94,19 @@ class CodexProtocolReader:
         return len(self._buffer)
 
 
-def _parse_frame(line: str) -> dict[str, Any]:
+def _decoded(line: str) -> dict[str, Any]:
+    """JSON text to a frame object, or a typed error. No envelope rules here."""
     try:
         frame = json.loads(line)
     except json.JSONDecodeError as error:
         raise CodexFrameError(f"unparseable provider frame: {error}") from error
     if not isinstance(frame, dict):
         raise CodexFrameError("provider frame was not a JSON object")
+    return frame
+
+
+def _check_envelope(frame: dict[str, Any]) -> None:
+    """Every rule a well-formed JSON-RPC frame must satisfy, gathered in one place."""
     if frame.get("jsonrpc") != _JSONRPC_VERSION:
         raise CodexFrameError("provider frame did not declare jsonrpc 2.0")
     if "method" not in frame and "result" not in frame and "error" not in frame:
@@ -109,6 +115,11 @@ def _parse_frame(line: str) -> dict[str, Any]:
         raise CodexFrameError(
             f"provider frame carried a non-scalar id: {frame['id']!r}"
         )
+
+
+def _parse_frame(line: str) -> dict[str, Any]:
+    frame = _decoded(line)
+    _check_envelope(frame)
     return frame
 
 

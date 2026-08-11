@@ -31,6 +31,7 @@ from seshat.studio.projection import (
 )
 from seshat.studio.turn_context import (
     BUSINESS_APPROVAL_REMINDER,
+    RedactionScope,
     build_turn_context,
     render_turn_context,
 )
@@ -223,7 +224,7 @@ def test_an_absolute_path_in_evidence_is_relativized_not_leaked(tmp_path) -> Non
             _snapshot(table=leaky),
             table_id="sales_c086",
             requested_mode="read_only",
-            workspace_root=tmp_path,
+            redaction=RedactionScope(workspace_root=tmp_path),
         )
     )
     assert str(tmp_path) not in rendered
@@ -264,6 +265,6 @@ def test_the_session_token_is_never_embedded_in_a_context() -> None:
         _snapshot(table=_table()),
         table_id="sales_c086",
         requested_mode="read_only",
-        secrets=(token,),
+        redaction=RedactionScope(secrets=(token,)),
     )
     assert token not in render_turn_context(context)

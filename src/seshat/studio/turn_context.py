@@ -34,6 +34,7 @@ from seshat.studio.redaction import redact_for_boundary
 
 __all__ = [
     "BUSINESS_APPROVAL_REMINDER",
+    "RedactionScope",
     "TurnContext",
     "build_turn_context",
     "render_turn_context",
@@ -63,13 +64,33 @@ class TurnContext:
     forbidden_scope: tuple[str, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class RedactionScope:
+    """Everything the redactor needs, bundled as one seam.
+
+    `workspace_root` and `secrets` always travel together: both are inputs to the
+    same `redact_for_boundary` call, and supplying one without the other silently
+    disables half the redaction -- the FR-026 shape that already defeated this
+    codebase once. Bundling them keeps the argument count under the four-argument
+    rule without dropping a parameter that exists for a reason, and makes the
+    pairing explicit at every call site rather than conventional.
+    """
+
+    workspace_root: Path | None = None
+    secrets: tuple[str | None, ...] = ()
+
+    def clean(self, text: str) -> str:
+        return redact_for_boundary(
+            text, secrets=self.secrets, workspace_root=self.workspace_root
+        )
+
+
 def build_turn_context(
     snapshot: WorkspaceSnapshot,
     *,
     table_id: str | None,
     requested_mode: str,
-    workspace_root: Path | None = None,
-    secrets: Sequence[str | None] = (),
+    redaction: RedactionScope | None = None,
 ) -> TurnContext:
     """Assemble the context for one turn, redacting as each field is read.
 
@@ -77,9 +98,7 @@ def build_turn_context(
     empty context would ask the agent to reason about a workspace it cannot see, and
     a confident answer about a table that was never loaded is worse than a refusal.
     """
-
-    def clean(text: str) -> str:
-        return redact_for_boundary(text, secrets=secrets, workspace_root=workspace_root)
+    clean = (redaction or RedactionScope()).clean
 
     table = _selected_table(snapshot, table_id)
 

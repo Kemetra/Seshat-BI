@@ -123,6 +123,52 @@ def redact_provider_stderr(raw: str, *, workspace_root: Path | None = None) -> s
     return redact_for_boundary(raw, secrets=(), workspace_root=workspace_root)
 
 
+def _health(
+    state: str, summary: str, recovery_action: str, version: str | None
+) -> AgentHealth:
+    """Every branch below returns through here, which pins `provider` in ONE place.
+
+    FR-013 forbids any condition from switching Studio to a billed path. Constructing
+    `AgentHealth` inline seven times would make that a promise seven call sites keep
+    individually; funnelling them means the provider literal cannot drift.
+    """
+    return AgentHealth(
+        state=state,
+        summary=summary,
+        recovery_action=recovery_action,
+        provider="codex",
+        version=version,
+    )
+
+
+_DISABLED = AgentHealth(
+    state="disabled",
+    summary="The agent bridge is switched off for this workspace.",
+    recovery_action="Deterministic workspace views remain fully usable.",
+    provider="disabled",
+    version=None,
+)
+
+_MISSING_RECOVERY = (
+    "Install the Codex CLI, then reload. Deterministic workspace views stay enabled "
+    "meanwhile."
+)
+
+_INCOMPATIBLE_RECOVERY = (
+    "Turns are refused until this build's generated schema and handshake fixtures "
+    "are re-derived and pass. Version proximity is not evidence."
+)
+
+_SIGNED_OUT_RECOVERY = (
+    "Sign in through Codex itself; Studio never handles the credential."
+)
+
+_QUOTA_RECOVERY = (
+    "Wait for the reported reset. Any drafted prompt is preserved, and Studio will "
+    "not switch to a billed path on its own."
+)
+
+
 def classify_health(
     *,
     executable_found: bool,
@@ -137,83 +183,50 @@ def classify_health(
 
     Ordered most-fundamental first: a missing executable makes every later question
     meaningless, and an untested protocol makes sign-in state irrelevant. No branch
-    returns a provider other than `codex` or `disabled` -- FR-013 forbids any condition
-    here from switching Studio to a billed path on its own.
+    returns a provider other than `codex` or `disabled` -- FR-013 forbids any
+    condition here from switching Studio to a billed path on its own.
     """
     if disabled:
-        return AgentHealth(
-            state="disabled",
-            summary="The agent bridge is switched off for this workspace.",
-            recovery_action="Deterministic workspace views remain fully usable.",
-            provider="disabled",
-            version=None,
-        )
+        return _DISABLED
 
     if not executable_found:
-        return AgentHealth(
-            state="missing",
-            summary="The Codex CLI was not found on PATH.",
-            recovery_action=(
-                "Install the Codex CLI, then reload. Deterministic workspace views "
-                "stay enabled meanwhile."
-            ),
-            provider="codex",
-            version=None,
+        return _health(
+            "missing", "The Codex CLI was not found on PATH.", _MISSING_RECOVERY, None
         )
 
     if not is_tested_version(version):
         observed = version or "an unreadable version"
-        return AgentHealth(
-            state="incompatible",
-            summary=(
-                f"Codex reports {observed}; Studio has only exercised "
-                f"{MINIMUM_TESTED_CODEX} to {MAXIMUM_TESTED_CODEX}."
-            ),
-            recovery_action=(
-                "Turns are refused until this build's generated schema and handshake "
-                "fixtures are re-derived and pass. Version proximity is not evidence."
-            ),
-            provider="codex",
-            version=version,
+        return _health(
+            "incompatible",
+            f"Codex reports {observed}; Studio has only exercised "
+            f"{MINIMUM_TESTED_CODEX} to {MAXIMUM_TESTED_CODEX}.",
+            _INCOMPATIBLE_RECOVERY,
+            version,
         )
 
     if saw_eof:
-        return AgentHealth(
-            state="crashed",
-            summary="The Codex app-server exited unexpectedly.",
-            recovery_action="Restart the bridge; the interrupted turn was not applied.",
-            provider="codex",
-            version=version,
+        return _health(
+            "crashed",
+            "The Codex app-server exited unexpectedly.",
+            "Restart the bridge; the interrupted turn was not applied.",
+            version,
         )
 
     if not signed_in:
-        return AgentHealth(
-            state="signed_out",
-            summary="Codex is installed but no ChatGPT subscription is signed in.",
-            recovery_action=(
-                "Sign in through Codex itself; Studio never handles the credential."
-            ),
-            provider="codex",
-            version=version,
+        return _health(
+            "signed_out",
+            "Codex is installed but no ChatGPT subscription is signed in.",
+            _SIGNED_OUT_RECOVERY,
+            version,
         )
 
     if rate_limit_reached:
         detail = f" Usage resets at {resets_at}." if resets_at is not None else ""
-        return AgentHealth(
-            state="quota_limited",
-            summary=f"The Codex subscription has reached its usage limit.{detail}",
-            recovery_action=(
-                "Wait for the reported reset. Any drafted prompt is preserved, and "
-                "Studio will not switch to a billed path on its own."
-            ),
-            provider="codex",
-            version=version,
+        return _health(
+            "quota_limited",
+            f"The Codex subscription has reached its usage limit.{detail}",
+            _QUOTA_RECOVERY,
+            version,
         )
 
-    return AgentHealth(
-        state="healthy",
-        summary="Codex is signed in and responding.",
-        recovery_action="",
-        provider="codex",
-        version=version,
-    )
+    return _health("healthy", "Codex is signed in and responding.", "", version)
