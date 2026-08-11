@@ -29,7 +29,7 @@ from typing import Any
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
-from . import config, projection, redaction, session
+from . import agent_routes, bridge, config, events, projection, redaction, session
 
 #: Every route lives under this prefix, matching the contract's server URL.
 API_PREFIX = "/api/v1"
@@ -325,8 +325,13 @@ def create_app(workspace: Path | str, *, port: int) -> tuple[FastAPI, str]:
     #: operator-configured alternate bridge sets this to
     #: `operator_configured_alternate`, and never by inference.
     app.state.authentication_mode = "subscription"
+    #: In-memory only (FR-035). The bridge is the deterministic fake until Phase 5
+    #: introduces the Codex one; FR-014 keeps the swap to a single assignment.
+    app.state.threads = events.ThreadStore()
+    app.state.bridge = bridge.FakeAgentBridge()
 
     _register_routes(app)
+    agent_routes.register_agent_routes(app)
     # After the API routes: the frontend mount claims `/`, so registering it first would
     # shadow every `/api/v1/*` path.
     _register_frontend(app)
