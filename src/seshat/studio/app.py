@@ -332,7 +332,9 @@ def create_app(workspace: Path | str, *, port: int) -> tuple[FastAPI, str]:
     #: state and deliberately ignores it -- see that module for why the parameter
     #: exists at all.
     app.state.bridge_selection = select_bridge(
-        health_state="healthy", operator_configured_mode=None
+        health_state="healthy",
+        operator_configured_mode=launch.operator_configured_auth_mode,
+        alternate_credential_present=launch.alternate_credential_present,
     )
     app.state.authentication_mode = app.state.bridge_selection.authentication_mode
     #: In-memory only (FR-035). The bridge is the deterministic fake until Phase 5

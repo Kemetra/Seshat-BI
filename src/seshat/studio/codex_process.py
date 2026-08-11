@@ -114,14 +114,30 @@ class CodexLaunchPlan:
         )
 
 
+#: Credential shapes that appear STANDALONE in provider diagnostics, with no
+#: `key=value` or `Authorization:` framing for the shared redactor to key on --
+#: "Incorrect API key provided: sk-..." is the common one. Matched here rather than
+#: in the shared redactor because these are provider-token shapes, and widening the
+#: shared rules risks the over-redaction that module's docstring warns about.
+_BARE_CREDENTIAL = re.compile(
+    r"(?:sk-[A-Za-z0-9_-]{8,}|ey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)"
+)
+
+
 def redact_provider_stderr(raw: str, *, workspace_root: Path | None = None) -> str:
     """Strip credentials and absolute paths from provider stderr before retention.
 
     Reuses the shared boundary redactor rather than a local regex: a second
     implementation would drift from the one the event path uses, and stderr is exactly
     where a drifted redactor goes unnoticed.
+
+    It then sweeps bare token shapes the shared redactor cannot see. That redactor
+    keys on `key=value`, `Authorization:` schemes, and DSNs, so a provider diagnostic
+    that simply PRINTS a key -- which is how OpenAI's own "Incorrect API key
+    provided" error reads -- would otherwise be retained verbatim.
     """
-    return redact_for_boundary(raw, secrets=(), workspace_root=workspace_root)
+    cleaned = redact_for_boundary(raw, secrets=(), workspace_root=workspace_root)
+    return _BARE_CREDENTIAL.sub("<redacted>", cleaned)
 
 
 def _health(

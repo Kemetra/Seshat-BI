@@ -56,6 +56,17 @@ class LaunchConfiguration:
     bind_host: str = LOOPBACK_HOST
     port: int = OS_ASSIGNED_PORT
 
+    #: FR-013a. `None` means the subscription default. An operator sets this
+    #: EXPLICITLY to `"operator_configured_alternate"`; it is never inferred, and
+    #: never set in response to a health state. Carried on the pinned launch
+    #: configuration so the choice is fixed for the process's lifetime rather than
+    #: re-decided per request.
+    operator_configured_auth_mode: str | None = None
+    #: Whether the operator supplied the alternate credential. A present credential
+    #: alone does NOT activate the alternate mode -- `select_bridge` refuses to infer
+    #: from it -- but configuring the mode WITHOUT one fails closed.
+    alternate_credential_present: bool = False
+
     def with_bound_port(self, port: int) -> LaunchConfiguration:
         """A copy carrying the port the OS actually assigned.
 
