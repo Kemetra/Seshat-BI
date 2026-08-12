@@ -56,6 +56,11 @@ _INITIALIZE_ID = 1
 _THREAD_START_ID = 2
 _TURN_START_ID = 3
 
+#: How long `close()` waits for an already-returned child to be reaped before it
+#: decides whether the exit was ours. Short: this is a reaping window, not a
+#: shutdown grace period, and `close()` promises to be prompt.
+_REAP_GRACE = 0.2
+
 
 def _thread_id_from(frame: dict[str, Any]) -> str | None:
     """The thread id from the `thread/start` REPLY, or None for any other frame.
@@ -228,16 +233,7 @@ class CodexSession:
         if self._process is None:
             return None
         deadline = time.monotonic() + timeout
-        if self._process.poll() is None:
-            # Give a child that has just RETURNED a moment to be reaped: `poll()`
-            # reads None for a short window after exit, and terminating there would
-            # relabel a provider crash as our own shutdown.
-            try:
-                self._process.wait(timeout=0.2)
-            except subprocess.TimeoutExpired:
-                pass
-        if self._dead_before_close is None:
-            self._dead_before_close = self._process.poll() is not None
+        self._latch_prior_exit()
         if self._process.poll() is None:
             self._process.terminate()
         self._join_threads(deadline)
@@ -300,6 +296,27 @@ class CodexSession:
                 saw_eof=died,
             )
         )
+
+    def _latch_prior_exit(self) -> None:
+        """Record whether the child was already dead before we terminate it.
+
+        This is the ONLY moment the distinction is observable. Afterwards the return
+        code is the one `close()` caused -- SIGTERM on POSIX, TerminateProcess on
+        Windows, both non-zero -- so a later status cannot tell an intentional
+        shutdown from a provider crash, and `health()` would report every clean
+        shutdown as `crashed` (#617 review).
+
+        Waits briefly first because `poll()` reads `None` for a short window after a
+        child has RETURNED but not yet been reaped; terminating in that window would
+        relabel a provider crash as our own shutdown.
+        """
+        if self._process is None or self._dead_before_close is not None:
+            return
+        try:
+            self._process.wait(timeout=_REAP_GRACE)
+        except subprocess.TimeoutExpired:
+            pass
+        self._dead_before_close = self._process.poll() is not None
 
     def _join_threads(self, deadline: float) -> None:
         """Join every reader thread, each bounded by what remains of `deadline`."""
