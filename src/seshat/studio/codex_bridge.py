@@ -385,7 +385,11 @@ class CodexBridge:
                 "id": _THREAD_START_ID,
                 "method": "thread/start",
                 "params": {
-                    "cwd": str(self._plan.cwd),
+                    # The SESSION's plan, not `self._plan`: `_plan_for()` may have
+                    # selected the propose plan, and pinning the provider thread to a
+                    # different workspace than the child runs in would let it read and
+                    # propose in one tree while redaction is configured for another.
+                    "cwd": str(session.plan.cwd),
                     "approvalPolicy": "on-request",
                     # Studio never authorises provider-side writes: the approval
                     # surface is T024-T027 and `_record_turn` refuses write intent

@@ -370,3 +370,51 @@ def test_a_failed_process_start_still_ends_the_turn(tmp_path: Path) -> None:
     )
     assert terminals[0].type == "turn_failed"
     assert terminals[0].payload["category"] == "provider_error"
+
+
+def test_thread_start_uses_the_workspace_the_child_runs_in(tmp_path: Path) -> None:
+    """P2 (#617 review): the process, provider thread, and redaction must agree.
+
+    `_plan_for()` may select the propose plan, which can carry a different `cwd`.
+    `_open_thread` hardcoded `self._plan.cwd`, so the provider would read and
+    propose in the PRIMARY workspace while the child ran -- and normalization
+    redacted -- against the alternate one.
+    """
+    from seshat.studio.codex_bridge import CodexBridge, CodexSession
+    from seshat.studio.codex_process import CodexLaunchPlan
+
+    primary = tmp_path / "primary"
+    alternate = tmp_path / "alternate"
+    primary.mkdir()
+    alternate.mkdir()
+
+    sent: list[dict] = []
+
+    class _RecordingSession(CodexSession):
+        def send(self, frame: dict) -> None:  # type: ignore[override]
+            sent.append(frame)
+
+    bridge = CodexBridge(
+        CodexLaunchPlan(
+            argv=(sys.executable, str(_SCRIPT), "thread_turn"), cwd=primary
+        ),
+        propose_plan=CodexLaunchPlan(
+            argv=(sys.executable, str(_SCRIPT), "file_change_turn"), cwd=alternate
+        ),
+    )
+
+    with unittest.mock.patch(
+        "seshat.studio.codex_bridge.CodexSession", _RecordingSession
+    ):
+        list(
+            bridge.run_turn(
+                prompt="fix the silver model",
+                turn_id="turn-cwd",
+                requested_mode="propose_changes",
+            )
+        )
+
+    thread_start = next(f for f in sent if f.get("method") == "thread/start")
+    assert thread_start["params"]["cwd"] == str(alternate), (
+        "thread/start pinned the provider to a workspace the child does not run in"
+    )
