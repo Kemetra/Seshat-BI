@@ -179,7 +179,25 @@ def _decoded(line: str) -> dict[str, Any]:
 
 
 def _declares_jsonrpc_2(frame: dict[str, Any]) -> bool:
-    return frame.get("jsonrpc") == _JSONRPC_VERSION
+    """Absent is fine; present-and-wrong is not.
+
+    The Codex app-server does NOT send this field. Its generated schema does not
+    declare it either -- `JSONRPCResponse` requires only `id` and `result`, and
+    `JSONRPCNotification` only `method`. Requiring it rejected every frame a real
+    0.147.0 build emits, so Studio could not read one word from a live provider.
+
+    This rule was invented rather than derived, and the committed fixtures were
+    hand-written carrying `"jsonrpc":"2.0"` -- so fixtures and client agreed with
+    each other while both diverged from the provider, and the provenance test
+    (which checks METHOD names) could not see it. Found by the T021 task 6
+    integration test, the only test that asks the real CLI.
+
+    A wrong value still fails: that would signal a genuinely different protocol,
+    whereas absence is simply this provider's shape. The load-bearing guards are
+    `_is_call_or_reply`, `_has_usable_id`, and `MAX_FRAME_BYTES`; this one is a
+    redundant constant, not a bound.
+    """
+    return frame.get("jsonrpc", _JSONRPC_VERSION) == _JSONRPC_VERSION
 
 
 def _is_call_or_reply(frame: dict[str, Any]) -> bool:

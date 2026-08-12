@@ -55,9 +55,20 @@ def _frames(name: str) -> Iterator[dict]:
 
 
 def test_every_well_formed_fixture_parses_as_jsonrpc() -> None:
+    """Each frame is a usable call or reply.
+
+    `jsonrpc` is checked as "absent, or exactly 2.0" rather than "present and 2.0",
+    which is the rule `CodexProtocolReader` actually applies. The real app-server
+    does NOT send the field and its generated schema never declares it -- these
+    fixtures carry it only because they were hand-written from an assumption. This
+    assertion previously demanded it and so pinned a property of the FIXTURES that
+    is false of the PROVIDER (see the README's "Known divergence" section).
+    """
     for name in WELL_FORMED_FILES:
         for frame in _frames(name):
-            assert frame.get("jsonrpc") == "2.0", f"{name}: missing jsonrpc version"
+            assert frame.get("jsonrpc", "2.0") == "2.0", (
+                f"{name}: declared a jsonrpc version other than 2.0"
+            )
             has_method = "method" in frame
             has_outcome = "result" in frame or "error" in frame
             assert has_method or has_outcome, f"{name}: neither a call nor a reply"

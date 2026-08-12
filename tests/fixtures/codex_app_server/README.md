@@ -38,6 +38,26 @@ fixture that agrees with the client because both were written from the same
 misreading — so the shapes here are asserted against the generated schema in
 `test_codex_fixture_provenance.py` rather than trusted by eye.
 
+## Known divergence: these fixtures carry a `jsonrpc` field the provider does not
+
+Every frame here declares `"jsonrpc":"2.0"`. **The real app-server never sends
+it, and the generated schema never declares it** — `JSONRPCResponse` requires
+only `id` and `result`, `JSONRPCNotification` only `method`. The field was
+hand-written into these fixtures from an assumption about what JSON-RPC "should"
+look like, and the client was written from the same assumption, so the two
+agreed with each other while both diverged from the provider.
+
+That went unnoticed because `test_every_fixture_method_exists_in_the_generated_schema`
+checks METHOD NAMES, not payload fields. Only the T021 task 6 integration test —
+the one that asks the installed CLI — could see it.
+
+`CodexProtocolReader` now accepts a frame whose `jsonrpc` is **absent** and still
+rejects one whose value is **wrong**, so both the fixtures and real provider
+output parse. The fixtures are left as-is rather than rewritten: the provenance
+table above records a specific derivation run, and silently editing eight files
+would invalidate that record for a field that changes no behaviour. Treat the
+provider's shape, not this field, as authoritative.
+
 ## Sanitization rules applied
 
 - No real account identifiers, emails, or plan names — `user@example.invalid`.
