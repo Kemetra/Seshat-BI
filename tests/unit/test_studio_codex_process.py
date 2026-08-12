@@ -23,10 +23,12 @@ its generated schema and handshake fixtures pass.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
 
+from seshat.studio import codex_process
 from seshat.studio.codex_process import (
     MAXIMUM_TESTED_CODEX,
     MINIMUM_TESTED_CODEX,
@@ -251,7 +253,9 @@ def test_bare_token_with_no_keyword_framing_is_redacted() -> None:
     assert "refresh rejected by upstream" in cleaned
 
 
-def test_disabling_the_bare_token_regex_lets_the_raw_token_through() -> None:
+def test_disabling_the_bare_token_regex_lets_the_raw_token_through(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Proves `_BARE_CREDENTIAL` itself does the redacting above, not luck.
 
     Patches the regex object directly, in the `codex_process` namespace,
@@ -261,29 +265,32 @@ def test_disabling_the_bare_token_regex_lets_the_raw_token_through() -> None:
     control byte: `redact_provider_stderr` looked like it worked because it
     called something, without proving which something did the work.
 
+    This is also the check that would have caught the 0x08 byte directly: a
+    pattern anchored on a control character matches nothing, so the sweep had
+    silently become exactly the no-op this test installs on purpose.
+
     Covers BOTH alternations in `_BARE_CREDENTIAL` (`sk-...` and the JWT
     shape) separately, so a regression in either half is caught. Round 2's
     single JWT assertion used framing the shared redactor also catches, so it
     would have kept passing even with the JWT alternation deleted outright --
     this uses `_BARE_JWT_LINE`, already proven neutral above.
     """
-    import re
+    monkeypatch.setattr(codex_process, "_BARE_CREDENTIAL", re.compile(r"(?!)"))
 
-    import seshat.studio.codex_process as codex_process
+    sk_cleaned = redact_provider_stderr(
+        "Incorrect API key provided: sk-live-ABCDEFGH12345678\n",
+        workspace_root=WORKSPACE,
+    )
+    jwt_cleaned = redact_provider_stderr(
+        _BARE_JWT_LINE + "\n", workspace_root=WORKSPACE
+    )
 
-    original = codex_process._BARE_CREDENTIAL
-    never_matches = re.compile(r"(?!)")  # a pattern that can never match
-    codex_process._BARE_CREDENTIAL = never_matches
-    try:
-        sk_cleaned = codex_process.redact_provider_stderr(
-            "Incorrect API key provided: sk-live-ABCDEFGH12345678\n",
-            workspace_root=WORKSPACE,
-        )
-        jwt_cleaned = codex_process.redact_provider_stderr(
-            _BARE_JWT_LINE + "\n", workspace_root=WORKSPACE
-        )
-    finally:
-        codex_process._BARE_CREDENTIAL = original
-
-    assert "sk-live-ABCDEFGH12345678" in sk_cleaned
-    assert "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.ABCDEFGHIJK" in jwt_cleaned
+    assert "sk-live-ABCDEFGH12345678" in sk_cleaned, (
+        "the shared redactor already caught this token, so the positive test above "
+        "does not actually exercise the bare-token sweep -- pick an unframed shape "
+        "only _BARE_CREDENTIAL can match"
+    )
+    assert "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.ABCDEFGHIJK" in jwt_cleaned, (
+        "same, for the JWT alternation -- _BARE_JWT_LINE must avoid every "
+        "Bearer/Basic/Token prefix and every _CREDENTIAL_NAMES word"
+    )
