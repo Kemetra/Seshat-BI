@@ -16,7 +16,7 @@ from __future__ import annotations
 # dagster-dbt accepts dbt-core 1.12 and the dbt engine's execution path never
 # imports dagster-dbt (it routes through seshat.dbt), so the unused library is
 # removed rather than downgrading the spec-133 dbt pins.
-PINNED_DAGSTER = "1.13.16"
+PINNED_DAGSTER = "1.13.17"
 
 # The canonical asset vocabulary, in graph order (spec 024; the extra
 # live_validate row is the acceptance step recorded alongside the eleven).
