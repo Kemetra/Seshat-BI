@@ -328,6 +328,47 @@ class CodexBridge:
             }
         )
 
+    def _turn_events(
+        self,
+        session: CodexSession,
+        context: NormalizationContext,
+        prompt: str,
+    ) -> Iterator[tuple[str, dict[str, Any]]]:
+        """Drive the provider's frames to `(event_type, payload)` pairs, once.
+
+        Split from `run_turn` so that method stays a flat drive-and-emit loop: the
+        two concerns here -- requesting the turn as soon as the thread id lands, and
+        ending at the first terminal -- each need their own nesting, and inlining all
+        three made one deeply-nested body.
+
+        Stops at the first terminal. A real app-server is long-lived and keeps stdout
+        open after `turn/completed`, so reading on would block until `frames()` timed
+        out, turning a COMPLETED turn into a stalled request (the scripted child hides
+        this by reaching EOF on its own). Stopping also settles the turn: a frame
+        arriving after the terminal -- the committed `thread_turn` fixture ends with
+        exactly that, a trailing `error` -- can no longer produce a SECOND terminal,
+        which would leave a consumer holding both a completion and a failure for one
+        turn. The shared suite pins "exactly one terminal last".
+        """
+        turn_requested = False
+        for frame in session.frames():
+            # `thread/start` returns a thread id the PROVIDER mints, and `turn/start`
+            # requires it -- so the turn request cannot be written up front; it waits
+            # for this reply. The fixture hides that too: its recorded `turn/start`
+            # already carries `thr_fixture`, so the id appears in the stream whether
+            # or not the bridge learned it. Only a live server forces the correlation.
+            if not turn_requested:
+                thread_id = _thread_id_from(frame)
+                if thread_id is not None:
+                    self._start_turn(session, thread_id, prompt)
+                    turn_requested = True
+            for event_type, payload in normalize_notification(frame, context=context):
+                if event_type == "turn_started":
+                    continue  # the envelope in `run_turn` already opened the turn
+                yield event_type, payload
+                if event_type in {"turn_completed", "turn_failed"}:
+                    return
+
     def _start_turn(self, session: CodexSession, thread_id: str, prompt: str) -> None:
         """Ask for the turn itself, on the thread the provider just minted."""
         session.send(
@@ -363,43 +404,10 @@ class CodexBridge:
         session.start()
         try:
             self._open_thread(session)
-            turn_requested = False
-            for frame in session.frames():
-                # `thread/start` returns a thread id the PROVIDER mints, and
-                # `turn/start` requires it -- so the turn request cannot be written
-                # up front; it waits for this reply. The scripted child hides that
-                # too: its fixture already carries `thr_fixture` in the recorded
-                # `turn/start`, so the id appears in the stream whether or not the
-                # bridge ever learned it. Only a live server, which mints its own,
-                # forces this correlation.
-                if not turn_requested:
-                    thread_id = _thread_id_from(frame)
-                    if thread_id is not None:
-                        self._start_turn(session, thread_id, cleaned)
-                        turn_requested = True
-                for event_type, payload in normalize_notification(
-                    frame, context=context
-                ):
-                    if event_type == "turn_started":
-                        # The envelope above already opened the turn.
-                        continue
-                    if event_type in {"turn_completed", "turn_failed"}:
-                        saw_terminal = True
-                    yield emit(event_type, payload)
-                if saw_terminal:
-                    # STOP READING. A real app-server is long-lived and keeps
-                    # stdout open after `turn/completed`, so continuing to read
-                    # would block on the next frame until `frames()` timed out --
-                    # turning a completed turn into a stalled request. The
-                    # scripted child hides this by reaching EOF on its own.
-                    #
-                    # Breaking here also settles the turn: a provider frame
-                    # arriving after the terminal (the committed thread_turn
-                    # fixture ends with exactly that, a trailing `error`) can no
-                    # longer produce a SECOND terminal, which would leave a
-                    # consumer holding both a completion and a failure for one
-                    # turn. The shared suite pins "exactly one terminal last".
-                    break
+            for event_type, payload in self._turn_events(session, context, cleaned):
+                if event_type in {"turn_completed", "turn_failed"}:
+                    saw_terminal = True
+                yield emit(event_type, payload)
         finally:
             session.close()
 
