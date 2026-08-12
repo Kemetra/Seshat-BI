@@ -275,7 +275,20 @@ class CodexSession:
         # without a `close()` means it went away mid-session and no further turn is
         # possible -- reporting that as `ready` is the silent success this method
         # exists to prevent. After `close()` an exit is exactly what we requested.
-        status = self._process.poll() if self._process is not None else None
+        if self._process is None:
+            # Never started, or `Popen` failed. `is_running` is already False and no
+            # turn can be served, so reporting `healthy` here would be the same
+            # silent success this method exists to prevent -- and `None` status must
+            # NOT be read as "running fine" (#617 review).
+            return classify_health(
+                ProbeObservations(
+                    executable_found=True,
+                    version=version,
+                    signed_in=signed_in,
+                    saw_eof=True,
+                )
+            )
+        status = self._process.poll()
         if status is None:
             died = False  # still running
         elif self._dead_before_close is None:

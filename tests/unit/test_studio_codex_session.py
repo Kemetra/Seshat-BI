@@ -293,3 +293,19 @@ def test_a_clean_self_exit_before_shutdown_is_not_healthy(tmp_path: Path) -> Non
     assert health.state == "crashed"
 
     session.close()
+
+
+def test_an_unstarted_session_is_not_reported_as_healthy(tmp_path: Path) -> None:
+    """P2 (#617 review): `_process is None` is not the same as "running fine".
+
+    Before `start()` -- or after a `Popen` failure -- there is no process at all.
+    `poll()` and "never spawned" both look like `None`, and treating them alike
+    reported a session that cannot serve a single turn as `healthy`.
+    """
+    from seshat.studio.codex_bridge import CodexSession
+
+    session = CodexSession(_plan(tmp_path, "thread_turn"))  # never started
+
+    assert session.is_running is False
+    assert session.health("0.147.0", signed_in=True).state != "ready"
+    assert session.health("0.147.0", signed_in=True).state != "healthy"
