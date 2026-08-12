@@ -24,6 +24,12 @@ def main() -> int:
     parser.add_argument("--crash-after", type=int, default=None)
     parser.add_argument("--hang", action="store_true")
     parser.add_argument("--stderr", default=None)
+    #: Keep stdout OPEN after the fixture is exhausted, the way a real app-server
+    #: does. Without this the child reaches EOF on its own, which silently rescues
+    #: a bridge that never stops reading after a terminal event -- the fixture ends
+    #: the loop for it. A live server never would, so the turn would stall until
+    #: `frames()` timed out.
+    parser.add_argument("--stay-open", action="store_true")
     args = parser.parse_args()
 
     if args.stderr is not None:
@@ -44,6 +50,8 @@ def main() -> int:
         written += 1
         if args.crash_after is not None and written >= args.crash_after:
             return 1
+    if args.stay_open:
+        time.sleep(60)  # outlive any test; the bridge must not wait for our EOF
     return 0
 
 

@@ -171,3 +171,114 @@ def test_the_guard_is_what_refuses_not_the_bridge() -> None:
         "with the guard disabled the write intent should have been recorded; if it "
         "was not, the first test proved nothing about the guard"
     )
+
+
+def test_a_turn_completes_without_waiting_for_the_child_to_exit(
+    tmp_path: Path,
+) -> None:
+    """P1 (#617 review): a real app-server is LONG-LIVED and never closes stdout.
+
+    Every other test here drives a child that exits when its fixture runs out, so
+    the loop ended because of EOF rather than because the bridge stopped reading
+    at the terminal. A live server would keep the pipe open, and the bridge would
+    block on the next frame until `frames()` timed out -- turning a COMPLETED turn
+    into a stalled request.
+
+    `--stay-open` models that: the child sleeps instead of exiting. The turn must
+    still finish, and it must finish fast, so the assertion is on WALL CLOCK as
+    well as on the events. Without the `break`, this hangs for the full 30s
+    `frames()` timeout and then raises `queue.Empty`.
+    """
+    import sys
+    import time
+
+    from seshat.studio.codex_bridge import CodexBridge
+    from seshat.studio.codex_process import CodexLaunchPlan
+
+    bridge = CodexBridge(
+        CodexLaunchPlan(
+            argv=(sys.executable, str(_SCRIPT), "thread_turn", "--stay-open"),
+            cwd=tmp_path,
+        )
+    )
+
+    started = time.monotonic()
+    events = list(
+        bridge.run_turn(
+            prompt="Summarise the readiness spine",
+            turn_id="turn-open",
+            requested_mode="read_only",
+        )
+    )
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 20.0, (
+        f"the turn took {elapsed:.1f}s against a child that never closes stdout; "
+        "the bridge kept reading after the terminal event"
+    )
+    terminals = [e for e in events if e.type in {"turn_completed", "turn_failed"}]
+    assert len(terminals) == 1, f"expected one terminal, got {len(terminals)}"
+    assert terminals[0].type == "turn_completed"
+
+
+def test_the_bridge_asks_the_provider_for_a_turn(tmp_path: Path) -> None:
+    """P1 (#617 review): the app-server emits NOTHING until it is asked.
+
+    The scripted child replays its fixture unprompted and never reads stdin, so a
+    bridge that only LISTENED passed every fixture test while producing nothing
+    from a live server. This asserts the requests are actually written, by
+    capturing what the session sends.
+
+    Checked as an ordered method sequence rather than by exact payload: the shapes
+    come from the committed fixture, and pinning them twice would just restate the
+    fixture. What matters is that the handshake precedes the turn request.
+    """
+    from seshat.studio.codex_bridge import CodexBridge, CodexSession
+    from seshat.studio.codex_process import CodexLaunchPlan
+
+    sent: list[dict] = []
+
+    class _RecordingSession(CodexSession):
+        def send(self, frame: dict) -> None:  # type: ignore[override]
+            sent.append(frame)
+
+    bridge = CodexBridge(
+        CodexLaunchPlan(
+            argv=(sys.executable, str(_SCRIPT), "thread_turn"), cwd=tmp_path
+        )
+    )
+
+    # Drive the REAL `run_turn`, with the session class swapped -- not
+    # `_request_turn` directly. Calling the helper would assert only that it
+    # composes the right frames, and would keep passing if `run_turn` stopped
+    # CALLING it, which is precisely the defect under test.
+    monkeypatch_target = "seshat.studio.codex_bridge.CodexSession"
+    import unittest.mock
+
+    with unittest.mock.patch(monkeypatch_target, _RecordingSession):
+        list(
+            bridge.run_turn(
+                prompt="Summarise the readiness spine",
+                turn_id="turn-ask",
+                requested_mode="read_only",
+            )
+        )
+
+    assert [frame.get("method") for frame in sent] == [
+        "initialize",
+        "initialized",
+        "thread/start",
+        "turn/start",
+    ], "the provider was not asked for a turn in the order the protocol requires"
+
+    turn_start = sent[-1]
+    assert turn_start["params"]["input"] == [
+        {"type": "text", "text": "Summarise the readiness spine"}
+    ], "the validated prompt never reached the provider"
+    assert turn_start["params"]["sandboxPolicy"]["type"] == "readOnly"
+    # The id must be the one the PROVIDER minted in its `thread/start` reply, not a
+    # value we chose. A live server rejects any other, and the fixture's own
+    # `turn/start` carries `thr_fixture` whether or not the bridge read it back.
+    assert turn_start["params"]["threadId"] == "thr_fixture", (
+        "turn/start used a thread id the provider never issued"
+    )
