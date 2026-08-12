@@ -29,8 +29,14 @@ import time
 from collections.abc import Callable, Iterator
 from typing import Any
 
-from seshat.studio.codex_process import CodexLaunchPlan, redact_provider_stderr
+from seshat.studio.codex_process import (
+    CodexLaunchPlan,
+    ProbeObservations,
+    classify_health,
+    redact_provider_stderr,
+)
 from seshat.studio.codex_protocol import CodexProtocolReader
+from seshat.studio.projection import AgentHealth
 
 __all__ = ["CodexSession"]
 
@@ -202,6 +208,30 @@ class CodexSession:
                 except OSError:
                     pass
         return self._process.returncode
+
+    def health(self, version: str | None, *, signed_in: bool) -> AgentHealth:
+        """Classify this session, reporting a dead child as EOF.
+
+        Delegates to `classify_health` rather than inventing a second vocabulary:
+        that function owns the seven contract states and the FR-013 rule that no
+        health condition may switch Studio to a billed path.
+
+        The dangerous reading is silent success -- a child that died mid-turn has
+        delivered a TRUNCATED answer, and `ready` would let Studio present it as
+        complete. `poll()` is the evidence: `None` means still running and `0` a
+        clean exit, so only a non-zero or signalled status becomes `saw_eof`.
+        (On POSIX a signalled child reports a NEGATIVE returncode, which this
+        comparison catches for the same reason.)
+        """
+        died = self._process is not None and self._process.poll() not in (None, 0)
+        return classify_health(
+            ProbeObservations(
+                executable_found=True,
+                version=version,
+                signed_in=signed_in,
+                saw_eof=died,
+            )
+        )
 
     def _join_threads(self, deadline: float) -> None:
         """Join every reader thread, each bounded by what remains of `deadline`."""

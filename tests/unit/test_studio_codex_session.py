@@ -217,3 +217,44 @@ def test_close_bounds_the_whole_call_against_the_caller_timeout(
     assert elapsed < 1.0, (
         f"close(timeout=0.1) took {elapsed:.3f}s, expected well under 1s"
     )
+
+
+def test_a_crashed_child_reports_an_eof_health_state(tmp_path: Path) -> None:
+    """A crash must not read as a healthy session with a short answer.
+
+    The dangerous failure is silent success: a child that dies mid-turn has
+    delivered a TRUNCATED answer, and reporting `ready` would let Studio present
+    it as complete. Health is classified from the child's exit status, so a
+    non-zero (or signalled) exit becomes `saw_eof` and lands on `crashed`.
+    """
+    from seshat.studio.codex_bridge import CodexSession
+
+    session = CodexSession(_plan(tmp_path, "thread_turn", "--crash-after", "2"))
+    session.start()
+    list(session.frames())
+    session.close()
+
+    health = session.health("0.147.0", signed_in=True)
+
+    assert health.state != "ready", "a crashed child was reported as ready"
+    assert health.state == "crashed"
+    assert health.provider in {"codex", "disabled"}
+
+
+def test_a_clean_exit_is_not_reported_as_a_crash(tmp_path: Path) -> None:
+    """The discriminator: a child that finished normally must NOT read `crashed`.
+
+    Without this, `health()` could return `crashed` unconditionally and the test
+    above would still pass -- the same shape of vacuous pass that hid the dead
+    stderr regex. Exit code 0 must reach the non-EOF branch.
+    """
+    from seshat.studio.codex_bridge import CodexSession
+
+    session = CodexSession(_plan(tmp_path, "thread_turn"))
+    session.start()
+    list(session.frames())
+    session.close()
+
+    health = session.health("0.147.0", signed_in=True)
+
+    assert health.state != "crashed", "a clean exit was reported as a crash"
