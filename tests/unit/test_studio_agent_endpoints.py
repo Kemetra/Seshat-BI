@@ -409,17 +409,31 @@ def test_interrupting_an_already_finished_turn_is_409(tmp_path: Path) -> None:
 
     Inventing a second ending for a completed turn would make the stream describe two
     terminals for one turn.
+
+    The turn is driven to completion by polling first. Turns are ACCEPTED rather than
+    drained now (the contract's 202), so posting one no longer leaves it finished --
+    this test used to pass on a premise its own wording named, "a request the fake
+    completes synchronously", which is no longer how any turn behaves.
     """
     client, _ = _client(tmp_path)
     thread_id = _thread(client)
     turn = client.post(
         f"{API}/agent/threads/{thread_id}/turns",
         json={
-            "prompt": "a request the fake completes synchronously",
+            "prompt": "a request the fake answers quickly",
             "snapshot_revision": "r1",
             "requested_mode": "read_only",
         },
     ).json()["turn_id"]
+
+    for _ in range(40):
+        body = client.get(f"{API}/agent/threads/{thread_id}/events").text
+        if any(
+            e["type"] in {"turn_completed", "turn_failed"} for e in _sse_events(body)
+        ):
+            break
+    else:  # pragma: no cover -- only on a genuine failure
+        raise AssertionError("the turn never finished, so this asserts nothing")
 
     refused = client.post(f"{API}/agent/threads/{thread_id}/turns/{turn}/interrupt")
 
@@ -545,9 +559,45 @@ def test_a_read_only_turn_refuses_write_intent_from_a_rogue_bridge(
         },
     )
 
-    assert refused.status_code == 502, refused.text
+    # 202, not 502: the turn is accepted before the bridge misbehaves, so the refusal
+    # cannot be a status. It arrives as a terminal EVENT instead -- which is also what
+    # releases `_active_turn`; the old 502 left it set, wedging every later turn on
+    # the thread at 409.
+    assert refused.status_code == 202, refused.text
+
+    for _ in range(40):
+        body = client.get(f"{API}/agent/threads/{thread_id}/events").text
+        recorded = _sse_events(body)
+        if any(e["type"] == "turn_failed" for e in recorded):
+            break
+    else:  # pragma: no cover -- only on a genuine failure
+        raise AssertionError("the read_only refusal never ended the turn")
+
+    assert not any(e["type"] == "file_change_proposed" for e in recorded), (
+        "write intent from a rogue bridge reached the buffer during a read_only turn"
+    )
+    categories = [
+        e["payload"].get("category") for e in recorded if e["type"] == "turn_failed"
+    ]
+    assert "read_only_violation" in categories, categories
+
+    # The thread is usable again -- the refusal ENDED the turn rather than wedging it.
+    again = client.post(
+        f"{API}/agent/threads/{thread_id}/turns",
+        json={
+            "prompt": "another",
+            "snapshot_revision": "r1",
+            "requested_mode": "read_only",
+        },
+    )
+    assert again.status_code == 202, again.text
+    # Checked on the event TYPE, not as a substring of the body: the refusal's own
+    # detail names the type it refused, so a raw `not in body` reports a leak that is
+    # really the guard describing itself.
     body = client.get(f"{API}/agent/threads/{thread_id}/events").text
-    assert "file_change_proposed" not in body, "write intent reached the buffer"
+    assert not any(e["type"] == "file_change_proposed" for e in _sse_events(body)), (
+        "write intent reached the buffer"
+    )
 
 
 def test_a_concurrent_turn_is_409_not_422(tmp_path: Path) -> None:
@@ -602,3 +652,149 @@ def test_the_thread_store_is_bounded(tmp_path: Path) -> None:
     assert len(store.known_thread_ids()) == 3
     assert not store.has_thread("thread-0"), "the oldest thread must be evicted"
     assert store.has_thread("thread-9"), "the newest thread must be retained"
+
+
+# --------------------------------------------------------------------------- #
+# The turn drain must not own the event loop (#618)                            #
+# --------------------------------------------------------------------------- #
+
+
+class _SlowBridge:
+    """A bridge whose turn takes real wall-clock time, like a real provider.
+
+    The fake bridge completes instantly, so an inline drain LOOKS responsive: the
+    turn is over before anything else could have been served. Only a turn that
+    takes measurable time can show whether the loop was free while it ran.
+    """
+
+    def __init__(self, hold: float = 1.5) -> None:
+        self._hold = hold
+        self.started = __import__("threading").Event()
+
+    def describe(self) -> dict[str, Any]:
+        return {"bridge": "slow", "provider": "codex", "deterministic": False}
+
+    def run_turn(self, *, prompt: str, turn_id: str, requested_mode: str):
+        import time
+
+        from seshat.studio.bridge import _event
+
+        yield _event("turn_started", {"prompt_echo": prompt[:200]}, turn_id, 1)
+        self.started.set()
+        time.sleep(self._hold)  # the provider thinking
+        yield _event("agent_message", {"text": "done"}, turn_id, 2)
+        yield _event("turn_completed", {"status": "completed"}, turn_id, 3)
+
+
+def test_a_running_turn_does_not_block_the_request(tmp_path: Path) -> None:
+    """The property: a turn is ACCEPTED, not drained, before the response.
+
+    Asserted by wall clock against a bridge that takes real time -- not by inspecting
+    whether a task or a pending slot exists. "A pending turn is recorded" is
+    satisfiable by an implementation that then drains it inline, which is the exact
+    defect.
+
+    The turn then advances on the polls the browser already makes: `/events` is a
+    finite replay the client reconnects to, so the loop that renders a turn is the
+    loop that drives it.
+    """
+    import time
+
+    client, app = _client(tmp_path)
+    thread_id = _thread(client)
+    app.state.bridge = _SlowBridge(hold=1.5)
+
+    started_at = time.monotonic()
+    accepted = client.post(
+        f"{API}/agent/threads/{thread_id}/turns",
+        json={
+            "prompt": "summarise the readiness spine",
+            "snapshot_revision": "r1",
+            "requested_mode": "read_only",
+        },
+        headers=_BROWSER_ORIGIN,
+    )
+    accept_latency = time.monotonic() - started_at
+
+    assert accepted.status_code == 202, accepted.text
+    assert accept_latency < 1.0, (
+        f"POST /turns took {accept_latency:.2f}s against a 1.5s turn; it drained the "
+        "whole turn before responding instead of accepting it"
+    )
+
+    # First poll: the turn is open and NOT yet finished, so this proves the response
+    # was sent mid-turn rather than after it.
+    streamed = client.get(f"{API}/agent/threads/{thread_id}/events")
+    assert streamed.status_code == 200, streamed.text
+    mid_flight = [e["type"] for e in _sse_events(streamed.text)]
+    assert "turn_started" in mid_flight, mid_flight
+    assert "turn_completed" not in mid_flight, (
+        f"the turn had already finished when the first poll was served: {mid_flight}"
+    )
+
+    # Further polls drive it to completion.
+    types: list[str] = []
+    for _ in range(40):
+        body = client.get(f"{API}/agent/threads/{thread_id}/events").text
+        types = [e["type"] for e in _sse_events(body)]
+        if "turn_completed" in types:
+            break
+    else:  # pragma: no cover -- only on a genuine failure
+        raise AssertionError(f"the turn never completed across 40 polls: {types}")
+
+    assert types == [
+        "thread_started",
+        "turn_started",
+        "agent_message",
+        "turn_completed",
+    ], types
+
+
+def test_a_live_turn_can_still_be_interrupted(tmp_path: Path) -> None:
+    """Interrupt must be answerable WHILE a turn is in flight.
+
+    This is the endpoint an inline drain made unreachable: with the whole turn
+    running inside `POST /turns`, nothing could be served until it finished -- so the
+    control for stopping a long turn was precisely the one you could not use.
+    """
+    client, app = _client(tmp_path)
+    thread_id = _thread(client)
+    app.state.bridge = _SlowBridge(hold=1.5)
+
+    accepted = client.post(
+        f"{API}/agent/threads/{thread_id}/turns",
+        json={
+            "prompt": "summarise the readiness spine",
+            "snapshot_revision": "r1",
+            "requested_mode": "read_only",
+        },
+        headers=_BROWSER_ORIGIN,
+    )
+    assert accepted.status_code == 202, accepted.text
+    turn_id = accepted.json()["turn_id"]
+
+    stopped = client.post(
+        f"{API}/agent/threads/{thread_id}/turns/{turn_id}/interrupt",
+        headers=_BROWSER_ORIGIN,
+    )
+    assert stopped.status_code == 204, stopped.text
+
+    body = client.get(f"{API}/agent/threads/{thread_id}/events").text
+    reasons = [
+        e["payload"].get("reason")
+        for e in _sse_events(body)
+        if e["type"] == "turn_failed"
+    ]
+    assert "interrupted_by_user" in reasons, reasons
+
+    # And the thread is usable again: the interrupt released the active turn.
+    again = client.post(
+        f"{API}/agent/threads/{thread_id}/turns",
+        json={
+            "prompt": "another",
+            "snapshot_revision": "r1",
+            "requested_mode": "read_only",
+        },
+        headers=_BROWSER_ORIGIN,
+    )
+    assert again.status_code == 202, again.text

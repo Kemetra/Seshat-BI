@@ -6,9 +6,9 @@ deterministic fake for tests. Two decisions in here carry most of that weight:
 **This fake declines to propose under `read_only`, but that is cooperation, not
 enforcement.** A `Protocol` cannot constrain what a generator yields, so a bridge is
 free to ignore the mode -- a bug, a provider quirk, or a prompt injection. The BINDING
-refusal therefore lives in `agent_routes._record_turn`, which every bridge's output
-passes through: write intent during a `read_only` turn raises `ReadOnlyViolation` and
-never reaches the buffer.
+refusal therefore lives in `agent_routes._pump_turn`, which every bridge's output
+passes through: write intent during a `read_only` turn ends the turn as
+`read_only_violation` and never reaches the buffer.
 
 An earlier revision of this docstring claimed the boundary was "enforced at the bridge",
 which was false in the way that matters: a three-line rogue bridge got
