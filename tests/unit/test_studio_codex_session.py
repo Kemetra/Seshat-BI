@@ -309,3 +309,22 @@ def test_an_unstarted_session_is_not_reported_as_healthy(tmp_path: Path) -> None
     assert session.is_running is False
     assert session.health("0.147.0", signed_in=True).state != "ready"
     assert session.health("0.147.0", signed_in=True).state != "healthy"
+
+
+def test_a_missing_executable_reports_missing_not_incompatible(
+    tmp_path: Path,
+) -> None:
+    """P2 (#617 review): the recovery advice must match the actual failure.
+
+    The unstarted-session branch hardcoded `executable_found=True`, so a binary
+    that does not exist classified as `incompatible` (or `crashed` with a cached
+    version) and pointed the user at schema compatibility or a restart instead of
+    installing the CLI.
+    """
+    from seshat.studio.codex_bridge import CodexSession
+    from seshat.studio.codex_process import CodexLaunchPlan
+
+    missing = tmp_path / "definitely-not-a-real-codex-binary"
+    session = CodexSession(CodexLaunchPlan(argv=(str(missing),), cwd=tmp_path))
+
+    assert session.health(None, signed_in=False).state == "missing"

@@ -27,6 +27,7 @@ import subprocess
 import threading
 import time
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import Any
 
 from seshat.studio.bridge import _event, validate_turn_request
@@ -280,9 +281,13 @@ class CodexSession:
             # turn can be served, so reporting `healthy` here would be the same
             # silent success this method exists to prevent -- and `None` status must
             # NOT be read as "running fine" (#617 review).
+            # `executable_found` is ASKED, not assumed: the usual reason `_process`
+            # is None after a start attempt is that the binary is missing, and
+            # hardcoding True routed the user to schema-compatibility or restart
+            # advice instead of "install the CLI" (#617 review).
             return classify_health(
                 ProbeObservations(
-                    executable_found=True,
+                    executable_found=Path(self.plan.argv[0]).exists(),
                     version=version,
                     signed_in=signed_in,
                     saw_eof=True,
