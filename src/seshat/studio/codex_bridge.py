@@ -99,6 +99,10 @@ class CodexSession:
         #: (child EOF, or an exception). `close()` waits on this -- an OBSERVED
         #: state transition -- rather than on elapsed wall-clock time.
         self._stderr_done = threading.Event()
+        #: True once `close()` has been called. Distinguishes an exit WE asked for
+        #: from one the provider took on its own -- `poll()` alone cannot, since a
+        #: long-lived server that quits cleanly mid-session also reports 0.
+        self._shutdown_requested = False
 
     @property
     def is_running(self) -> bool:
@@ -216,6 +220,7 @@ class CodexSession:
         stream-close both happen only after that event, so no stream is ever
         closed out from under an in-flight read on either reader thread.
         """
+        self._shutdown_requested = True
         if self._process is None:
             return None
         deadline = time.monotonic() + timeout
@@ -255,7 +260,23 @@ class CodexSession:
         (On POSIX a signalled child reports a NEGATIVE returncode, which this
         comparison catches for the same reason.)
         """
-        died = self._process is not None and self._process.poll() not in (None, 0)
+        # Any exit BEFORE we asked for one is unexpected, whatever its status. The
+        # app-server is long-lived: it does not finish on its own, so `poll() == 0`
+        # without a `close()` means it went away mid-session and no further turn is
+        # possible -- reporting that as `ready` is the silent success this method
+        # exists to prevent. After `close()` an exit is exactly what we requested.
+        status = self._process.poll() if self._process is not None else None
+        # A clean 0 BEFORE we asked for shutdown is still a death: the app-server is
+        # long-lived and does not finish on its own, so a self-exit ends the session
+        # whatever its status (#617 review). After `close()` the status is the one we
+        # caused -- on Windows `terminate()` is TerminateProcess, whose code is not 0 --
+        # so only a non-zero status is evidence of a provider-side exit.
+        if status is None:
+            died = False
+        elif self._shutdown_requested:
+            died = status != 0
+        else:
+            died = True
         return classify_health(
             ProbeObservations(
                 executable_found=True,
@@ -421,6 +442,25 @@ class CodexBridge:
                 if event_type in {"turn_completed", "turn_failed"}:
                     saw_terminal = True
                 yield emit(event_type, payload)
+        except Exception as error:
+            # A read failure must still END the turn. `frames()` raises `queue.Empty`
+            # when the provider stalls and `CodexFrameError` on malformed output; if
+            # either escaped, the consumer would hold a `turn_started` with no
+            # terminal -- breaking the contract the shared suite pins as "exactly one
+            # terminal event last". `_record_turn` has no `except` around this drain,
+            # so the exception would surface as a 500 AND leave `_active_turn` set,
+            # wedging every later turn on that thread as already-active.
+            #
+            # The detail is the exception TYPE, never its text: provider messages can
+            # carry paths or tokens, and this payload is retained.
+            saw_terminal = True
+            yield emit(
+                "turn_failed",
+                {
+                    "category": "provider_error",
+                    "detail": (f"the provider session failed: {type(error).__name__}"),
+                },
+            )
         finally:
             session.close()
 

@@ -7,7 +7,9 @@ risk this layer actually carries.
 
 from __future__ import annotations
 
+import queue
 import sys
+import unittest.mock
 from pathlib import Path
 
 import pytest
@@ -282,3 +284,53 @@ def test_the_bridge_asks_the_provider_for_a_turn(tmp_path: Path) -> None:
     assert turn_start["params"]["threadId"] == "thr_fixture", (
         "turn/start used a thread id the provider never issued"
     )
+
+
+def test_a_session_read_failure_still_ends_the_turn(tmp_path: Path) -> None:
+    """P1 (#617 review): a read failure must still produce ONE terminal event.
+
+    `frames()` raises `queue.Empty` when the provider stalls and `CodexFrameError`
+    on malformed output. If either escaped `run_turn`, the consumer would hold a
+    `turn_started` with no terminal -- breaking the contract the shared suite pins
+    as "exactly one terminal event last". Worse, `_record_turn` has no `except`
+    around this drain, so it would surface as a 500 AND leave `_active_turn` set,
+    wedging every later turn on that thread as already-active.
+
+    Driven by making the session raise mid-stream, which is what both real failure
+    modes look like from here.
+    """
+    from seshat.studio.codex_bridge import CodexBridge, CodexSession
+    from seshat.studio.codex_process import CodexLaunchPlan
+
+    class _FailingSession(CodexSession):
+        def frames(self, timeout: float = 30.0):  # type: ignore[override]
+            raise queue.Empty  # the provider stalled
+            yield  # pragma: no cover -- keeps this a generator
+
+    bridge = CodexBridge(
+        CodexLaunchPlan(
+            argv=(sys.executable, str(_SCRIPT), "thread_turn"), cwd=tmp_path
+        )
+    )
+
+    with unittest.mock.patch(
+        "seshat.studio.codex_bridge.CodexSession", _FailingSession
+    ):
+        events = list(
+            bridge.run_turn(
+                prompt="Summarise the readiness spine",
+                turn_id="turn-fail",
+                requested_mode="read_only",
+            )
+        )
+
+    terminals = [e for e in events if e.type in {"turn_completed", "turn_failed"}]
+    assert len(terminals) == 1, (
+        f"a read failure produced {len(terminals)} terminals; the turn must end "
+        "exactly once even when the session raises"
+    )
+    assert terminals[0].type == "turn_failed"
+    assert terminals[0].payload["category"] == "provider_error"
+    # The exception TYPE, never its text: provider messages can carry paths or
+    # tokens, and this payload is retained.
+    assert "Empty" in terminals[0].payload["detail"]

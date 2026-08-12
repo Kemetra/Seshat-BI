@@ -258,3 +258,29 @@ def test_a_clean_exit_is_not_reported_as_a_crash(tmp_path: Path) -> None:
     health = session.health("0.147.0", signed_in=True)
 
     assert health.state != "crashed", "a clean exit was reported as a crash"
+
+
+def test_a_clean_self_exit_before_shutdown_is_not_healthy(tmp_path: Path) -> None:
+    """P2 (#617 review): the app-server is long-lived and never finishes on its own.
+
+    So a status of 0 observed BEFORE anyone asked for shutdown does not mean "all
+    fine" -- it means the provider went away mid-session and no further turn is
+    possible. Reporting `ready` there is exactly the silent success `health()`
+    exists to prevent, and `poll() not in (None, 0)` used to do just that.
+
+    The scripted child exits 0 once its fixture is exhausted, which models this
+    precisely: read every frame, then ask for health WITHOUT calling close().
+    """
+    from seshat.studio.codex_bridge import CodexSession
+
+    session = CodexSession(_plan(tmp_path, "thread_turn"))
+    session.start()
+    list(session.frames())
+    session._process.wait(timeout=10)  # observe the exit without requesting one
+
+    health = session.health("0.147.0", signed_in=True)
+
+    assert health.state != "ready", "a provider that quit mid-session read as ready"
+    assert health.state == "crashed"
+
+    session.close()
