@@ -321,10 +321,17 @@ class CodexSession:
             # ANY status here -- including a clean 0 -- ends the session (#617).
             died = True
         else:
-            # `close()` ran. Its own termination makes the status non-zero on every
-            # platform, so the status cannot be the evidence; what the child was
-            # doing BEFORE we terminated it can.
-            died = self._dead_before_close
+            # `close()` ran, so this session is over either way and cannot serve
+            # another turn -- reporting `healthy` here would advertise a dead adapter
+            # as responding during a shutdown or restart poll (#617 review).
+            #
+            # `crashed` rather than a new state: the contract has seven and none of
+            # them means "stopped on purpose", while `crashed`'s recovery -- restart
+            # the bridge, the interrupted turn was not applied -- is exactly right
+            # for a closed session. Widening the vocabulary is a contract change,
+            # not a bug fix. `_dead_before_close` still matters for the SUMMARY the
+            # caller reads, so it is kept rather than folded away.
+            died = True
         return classify_health(
             ProbeObservations(
                 executable_found=True,

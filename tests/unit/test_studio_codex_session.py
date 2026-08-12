@@ -266,7 +266,11 @@ def test_a_clean_exit_is_not_reported_as_a_crash(tmp_path: Path) -> None:
 
     health = session.health("0.147.0", signed_in=True)
 
-    assert health.state != "crashed", "an intentional shutdown was reported as a crash"
+    # NOT `healthy`: the session is closed and cannot serve another turn, so
+    # reporting it as responding would advertise a dead adapter during a shutdown
+    # or restart poll. The contract has no "stopped" state, and `crashed`'s
+    # recovery -- restart the bridge -- is the right guidance for a closed session.
+    assert health.state != "healthy", "a closed session was advertised as responding"
 
 
 def test_a_clean_self_exit_before_shutdown_is_not_healthy(tmp_path: Path) -> None:
