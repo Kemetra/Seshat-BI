@@ -114,3 +114,10 @@ def test_a_real_turn_reaches_a_terminal_event(tmp_path: Path) -> None:
         f"expected exactly one terminal from a real turn, got {len(terminals)}: "
         f"{[e.type for e in events]}"
     )
+    # Must be COMPLETED, not merely terminal. `run_turn` converts any provider
+    # failure into exactly one `turn_failed`, so accepting either would let a
+    # regression that never starts a real turn satisfy the oracle after its
+    # timeout -- the very vacuity this test exists to prevent (#617 review).
+    assert terminals[0].type == "turn_completed", (
+        f"the live turn did not complete: {terminals[0].payload}"
+    )

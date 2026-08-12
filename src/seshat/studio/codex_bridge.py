@@ -233,7 +233,7 @@ class CodexSession:
         if self._process is None:
             return None
         deadline = time.monotonic() + timeout
-        self._latch_prior_exit()
+        self._latch_prior_exit(deadline)
         if self._process.poll() is None:
             self._process.terminate()
         self._join_threads(deadline)
@@ -297,7 +297,7 @@ class CodexSession:
             )
         )
 
-    def _latch_prior_exit(self) -> None:
+    def _latch_prior_exit(self, deadline: float) -> None:
         """Record whether the child was already dead before we terminate it.
 
         This is the ONLY moment the distinction is observable. Afterwards the return
@@ -313,7 +313,9 @@ class CodexSession:
         if self._process is None or self._dead_before_close is not None:
             return
         try:
-            self._process.wait(timeout=_REAP_GRACE)
+            # Capped by what the CALLER allowed: `close(timeout=0.05)` must not spend
+            # 0.2s here and blow the whole-call bound this method promises.
+            self._process.wait(timeout=min(_REAP_GRACE, _remaining(deadline)))
         except subprocess.TimeoutExpired:
             pass
         self._dead_before_close = self._process.poll() is not None
