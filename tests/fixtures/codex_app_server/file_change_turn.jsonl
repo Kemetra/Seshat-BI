@@ -1,0 +1,6 @@
+{"jsonrpc":"2.0","method":"thread/started","params":{"thread":{"id":"thr_fixture","cliVersion":"0.147.0","createdAt":1786636800,"updatedAt":1786636800}}}
+{"jsonrpc":"2.0","method":"turn/started","params":{"threadId":"thr_fixture","turn":{"id":"turn_fixture","status":"inProgress","items":[]}}}
+{"jsonrpc":"2.0","method":"item/agentMessage/delta","params":{"threadId":"thr_fixture","turnId":"turn_fixture","itemId":"item_msg","delta":"I can update the silver model. "}}
+{"jsonrpc":"2.0","method":"item/started","params":{"threadId":"thr_fixture","turnId":"turn_fixture","startedAtMs":1786636800100,"item":{"type":"fileChange","id":"item_change","changes":[{"path":"models/silver/silver_sales.sql","kind":"modify"},{"path":"models/silver/schema.yml","kind":"modify"}]}}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"threadId":"thr_fixture","turnId":"turn_fixture","completedAtMs":1786636800300,"item":{"type":"agentMessage","id":"item_msg","text":"I can update the silver model. Two files would change."}}}
+{"jsonrpc":"2.0","method":"turn/completed","params":{"threadId":"thr_fixture","turn":{"id":"turn_fixture","status":"completed","items":[]}}}

@@ -29,16 +29,22 @@ import time
 from collections.abc import Callable, Iterator
 from typing import Any
 
+from seshat.studio.bridge import _event, validate_turn_request
 from seshat.studio.codex_process import (
     CodexLaunchPlan,
     ProbeObservations,
     classify_health,
     redact_provider_stderr,
 )
-from seshat.studio.codex_protocol import CodexProtocolReader
+from seshat.studio.codex_protocol import (
+    CodexProtocolReader,
+    NormalizationContext,
+    normalize_notification,
+)
+from seshat.studio.events import StudioEvent
 from seshat.studio.projection import AgentHealth
 
-__all__ = ["CodexSession"]
+__all__ = ["CodexBridge", "CodexSession"]
 
 #: Sentinel pushed onto the frame queue when the reader thread sees EOF.
 _EOF = object()
@@ -237,3 +243,88 @@ class CodexSession:
         """Join every reader thread, each bounded by what remains of `deadline`."""
         for thread in self._threads:
             thread.join(timeout=_remaining(deadline))
+
+
+class CodexBridge:
+    """`AgentBridge` over a live Codex app-server.
+
+    A sync generator on purpose -- see the module docstring. Frames are normalized by
+    `codex_protocol`, never mapped here: one normalization authority is what keeps the
+    allowlist (and its refusal to pass through reasoning) in a single place.
+    """
+
+    def __init__(
+        self, plan: CodexLaunchPlan, *, propose_plan: CodexLaunchPlan | None = None
+    ) -> None:
+        self._plan = plan
+        #: Optional second plan used only for `propose_changes`. A real Codex child
+        #: decides for itself whether a turn touches files, so production passes one
+        #: plan and leaves this None; the scripted child replays a FIXED script, so a
+        #: test that must see a proposal has to launch the fixture that contains one.
+        #: Selecting a script is NOT the mode boundary: per `bridge`'s docstring the
+        #: BINDING refusal is `agent_routes._record_turn`, which every bridge's output
+        #: passes through. This is the same cooperation `FakeAgentBridge` offers.
+        self._propose_plan = propose_plan
+
+    def describe(self) -> dict[str, Any]:
+        return {"bridge": "codex", "provider": "codex", "deterministic": False}
+
+    def _plan_for(self, requested_mode: str) -> CodexLaunchPlan:
+        if requested_mode == "propose_changes" and self._propose_plan is not None:
+            return self._propose_plan
+        return self._plan
+
+    def run_turn(
+        self, *, prompt: str, turn_id: str, requested_mode: str
+    ) -> Iterator[StudioEvent]:
+        cleaned = validate_turn_request(prompt, requested_mode)
+        sequence = 0
+
+        def emit(event_type: str, payload: dict[str, Any]) -> StudioEvent:
+            nonlocal sequence
+            sequence += 1
+            return _event(event_type, payload, turn_id, sequence)
+
+        yield emit("turn_started", {"prompt_echo": cleaned[:200]})
+
+        plan = self._plan_for(requested_mode)
+        session = CodexSession(plan)
+        context = NormalizationContext(workspace_root=plan.cwd)
+        saw_terminal = False
+        session.start()
+        try:
+            for frame in session.frames():
+                for event_type, payload in normalize_notification(
+                    frame, context=context
+                ):
+                    if event_type == "turn_started":
+                        # The envelope above already opened the turn.
+                        continue
+                    if saw_terminal:
+                        # A settled turn cannot be reopened. Providers do emit
+                        # frames after `turn/completed` -- the committed
+                        # thread_turn fixture ends with exactly that, a trailing
+                        # `error` -- and passing one through would yield a second
+                        # terminal for one turn. A consumer would then have both a
+                        # completion and a failure for the same turn, and whichever
+                        # it read last would decide whether the user sees an answer
+                        # or an error. The shared suite pins this as "exactly one
+                        # terminal event last".
+                        continue
+                    if event_type in {"turn_completed", "turn_failed"}:
+                        saw_terminal = True
+                    yield emit(event_type, payload)
+        finally:
+            session.close()
+
+        if not saw_terminal:
+            # EOF without a terminal frame is a failure, never a quiet success.
+            yield emit(
+                "turn_failed",
+                {
+                    "category": "provider_error",
+                    "detail": (
+                        "the provider ended the session without completing the turn"
+                    ),
+                },
+            )

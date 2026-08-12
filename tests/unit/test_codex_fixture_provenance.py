@@ -37,6 +37,7 @@ WELL_FORMED_FILES = (
     "account.jsonl",
     "login.jsonl",
     "thread_turn.jsonl",
+    "file_change_turn.jsonl",
     "approvals.jsonl",
     "incompatible.jsonl",
     "quota.jsonl",

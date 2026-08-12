@@ -31,8 +31,42 @@ def _fake_bridge() -> Any:
     return FakeAgentBridge()
 
 
+def _codex_bridge() -> Any:
+    """The production bridge, driven against the scripted child.
+
+    Appended here rather than given its own assertions so it inherits every property
+    the fake is held to -- the difference between a real protocol and two classes that
+    share method names.
+    """
+    import sys
+    from pathlib import Path
+
+    from seshat.studio.codex_bridge import CodexBridge
+    from seshat.studio.codex_process import CodexLaunchPlan
+
+    script = Path(__file__).parent / "_codex_child_script.py"
+    root = Path(__file__).resolve().parents[2]
+
+    def _plan(fixture: str) -> CodexLaunchPlan:
+        return CodexLaunchPlan(argv=(sys.executable, str(script), fixture), cwd=root)
+
+    # The scripted child replays a FIXED script, so `propose_changes` must launch the
+    # fixture that actually contains a file-change proposal -- otherwise
+    # `test_propose_changes_mode_can_propose_a_file_change` fails and its read_only
+    # twin proves nothing. A real child decides per turn and needs no second plan.
+    #
+    # `file_change_turn`, NOT `approvals`: the latter holds server->client approval
+    # REQUESTS (T024-T027's surface, normalized to nothing today), while the former
+    # holds the `fileChange` item notification that actually yields
+    # `file_change_proposed`.
+    return CodexBridge(_plan("thread_turn"), propose_plan=_plan("file_change_turn"))
+
+
 #: Every bridge implementation. Phase 5 appends its Codex bridge here.
-BRIDGE_FACTORIES: list[tuple[str, Callable[[], Any]]] = [("fake", _fake_bridge)]
+BRIDGE_FACTORIES: list[tuple[str, Callable[[], Any]]] = [
+    ("fake", _fake_bridge),
+    ("codex", _codex_bridge),
+]
 
 _IDS = [name for name, _ in BRIDGE_FACTORIES]
 _FACTORIES = [factory for _, factory in BRIDGE_FACTORIES]

@@ -57,6 +57,7 @@ misreading — so the shapes here are asserted against the generated schema in
 | `account.jsonl` | `account/read`, `account/rateLimits/read`, signed-out, quota-limited |
 | `login.jsonl` | managed ChatGPT `account/login/start`, completion notification, `account/logout` |
 | `thread_turn.jsonl` | `thread/start`, `turn/start`, visible message deltas, plan, tool items, `turn/completed` |
+| `file_change_turn.jsonl` | a `propose_changes` turn: a `fileChange` ITEM notification (write intent) through `turn/completed` |
 | `approvals.jsonl` | command + file-change approval requests and `serverRequest/resolved` |
 | `incompatible.jsonl` | unknown required request method, experimental-required method |
 | `malformed.jsonl` | invalid JSON, missing `jsonrpc`, unknown id, wrong-typed id, null params |
@@ -65,3 +66,23 @@ misreading — so the shapes here are asserted against the generated schema in
 
 `.jsonl` = one JSON-RPC frame per line, the same newline-delimited framing the
 app-server uses on stdio.
+
+### Why `file_change_turn.jsonl` is separate from `approvals.jsonl`
+
+They look similar and are not interchangeable. `approvals.jsonl` holds
+server→client **requests** (`item/fileChange/requestApproval`, each carrying an
+`id`); answering those is the approval surface T024–T027 owns, and
+`normalize_notification` deliberately maps none of them to events today.
+`file_change_turn.jsonl` holds a `fileChange` **item notification**
+(`item/started`), which is the only shape that reaches `_file_change_event` and
+so the only one that yields `file_change_proposed`.
+
+It also cannot be folded into `thread_turn.jsonl`: `read_only` drives that
+fixture, and `test_read_only_mode_never_proposes_a_file_change` would then fail.
+One fixture per mode is what lets that test and its `propose_changes` twin both
+mean something.
+
+Every method here already appears in `thread_turn.jsonl` and is therefore
+covered by `test_every_fixture_method_exists_in_the_generated_schema`; only the
+item payload `type` (`fileChange`) is new, and that type is already rendered by
+`codex_protocol`.
