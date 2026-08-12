@@ -23,6 +23,7 @@ parser and into any diagnostic that kept the stream.
 from __future__ import annotations
 
 import queue
+import shutil
 import subprocess
 import threading
 import time
@@ -80,6 +81,24 @@ def _thread_id_from(frame: dict[str, Any]) -> str | None:
         return None
     thread_id = thread.get("id")
     return thread_id if isinstance(thread_id, str) else None
+
+
+def _executable_exists(plan: CodexLaunchPlan) -> bool:
+    """Whether this plan's executable could actually be launched.
+
+    Resolved the way `Popen` resolves it, not by a bare `Path.exists()`: a plan may
+    name the CLI by BARE NAME (`"codex"`, found on PATH) or relative to the child's
+    `cwd`, and checking only the parent process's current directory reported a
+    perfectly usable CLI as `missing` -- sending the user to install something they
+    already have (#617 review).
+    """
+    name = plan.argv[0]
+    if shutil.which(name) is not None:
+        return True
+    candidate = Path(name)
+    if candidate.is_absolute():
+        return candidate.exists()
+    return (Path(plan.cwd) / candidate).exists()
 
 
 def _remaining(deadline: float) -> float:
@@ -287,7 +306,7 @@ class CodexSession:
             # advice instead of "install the CLI" (#617 review).
             return classify_health(
                 ProbeObservations(
-                    executable_found=Path(self.plan.argv[0]).exists(),
+                    executable_found=_executable_exists(self.plan),
                     version=version,
                     signed_in=signed_in,
                     saw_eof=True,

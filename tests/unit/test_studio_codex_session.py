@@ -328,3 +328,23 @@ def test_a_missing_executable_reports_missing_not_incompatible(
     session = CodexSession(CodexLaunchPlan(argv=(str(missing),), cwd=tmp_path))
 
     assert session.health(None, signed_in=False).state == "missing"
+
+
+def test_a_bare_name_executable_on_path_is_not_reported_missing(
+    tmp_path: Path,
+) -> None:
+    """P2 (#617 review): resolve the executable the way `Popen` does.
+
+    A plan may name the CLI by bare name and let PATH resolve it -- the process-plan
+    tests do exactly that. Checking `Path(argv[0]).exists()` from the PARENT's cwd
+    reported such a plan as `missing`, telling the user to install a CLI they
+    already have. `sys.executable`'s bare name stands in for `codex` here so the
+    test does not depend on Codex being installed.
+    """
+    from seshat.studio.codex_bridge import CodexSession
+    from seshat.studio.codex_process import CodexLaunchPlan
+
+    bare = Path(sys.executable).name  # resolvable on PATH, not in tmp_path
+    session = CodexSession(CodexLaunchPlan(argv=(bare,), cwd=tmp_path))
+
+    assert session.health(None, signed_in=False).state != "missing"
