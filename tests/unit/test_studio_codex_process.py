@@ -213,45 +213,84 @@ def test_provider_stderr_is_redacted_before_it_is_retained() -> None:
     assert "listening on stdio" in cleaned
 
 
-#: A credential with NO `key=value`, `Authorization:` or DSN framing -- verbatim the
-#: shape OpenAI's own "Incorrect API key provided" error prints. Every secret in
-#: stderr_secrets.txt carries framing the SHARED redactor already strips, so that
-#: fixture passes even with the bare-token sweep dead; this string is the only one
-#: that reaches `_BARE_CREDENTIAL` at all.
-_UNFRAMED_STDERR = "Incorrect API key provided: sk-live-ABCDEFGH12345678. Check it."
+#: A bare JWT shape with NO `Bearer`/`Basic`/`Token` word, and no `key=`/`key:`
+#: assignment, anywhere near it. Round 2's version used "auth failed for
+#: token <jwt>" -- "token" sits immediately before the value, which is exactly
+#: the shape `_AUTHORIZATION_HEADER` (`\b(?:Bearer|Basic|Token)\s+<value>`) in
+#: the shared redactor matches on its own, so that string got redacted even
+#: with `_BARE_CREDENTIAL` disabled and proved nothing about this leg. This
+#: string avoids every word in `_CREDENTIAL_NAMES` and every `Bearer|Basic|
+#: Token` prefix; verified below in `test_disabling_the_bare_token_regex_...`
+#: that the raw JWT actually leaks when the guard is off, which is what makes
+#: this string a real discriminator rather than an assumption.
+_BARE_JWT_LINE = (
+    "refresh rejected by upstream: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.ABCDEFGHIJK"
+)
 
 
-def test_unframed_credential_is_swept_by_the_bare_token_pass() -> None:
-    """Sits on the bare-token sweep, which the framed fixture cannot reach.
+def test_bare_token_with_no_keyword_framing_is_redacted() -> None:
+    """Exercises `_BARE_CREDENTIAL` specifically, not the shared boundary redactor.
 
-    Asserts the POSITIVE transformed form (`<redacted>` present) AND that the
-    surrounding diagnostic survives -- an absence-only check is satisfied by a
-    redactor that returns "", and by one that never runs on input lacking the secret.
+    `test_provider_stderr_is_redacted_before_it_is_retained` above drives
+    `stderr_secrets.txt`, but every secret there is `key=value` or
+    `Authorization: Bearer <value>` framed -- shapes the shared
+    `redact_for_boundary` path already strips on its own. None of them needs
+    `_BARE_CREDENTIAL` to be alive at all, so that test would pass unchanged
+    even if the bare-token regex never matched anything (this is exactly what
+    happened when a stray control byte made `_BARE_CREDENTIAL` unmatchable).
+    This test drives a standalone `sk-...` and a standalone JWT with no
+    keyword prefix in front of either -- the shape OpenAI's own "Incorrect API
+    key provided" error uses, which is what the module's docstring says this
+    regex exists to catch.
     """
-    cleaned = redact_provider_stderr(_UNFRAMED_STDERR, workspace_root=WORKSPACE)
+    raw = f"Incorrect API key provided: sk-live-ABCDEFGH12345678\n{_BARE_JWT_LINE}\n"
+    cleaned = redact_provider_stderr(raw, workspace_root=WORKSPACE)
 
     assert "sk-live-ABCDEFGH12345678" not in cleaned
-    assert "<redacted>" in cleaned, "the bare-token sweep did not fire"
-    assert cleaned.startswith("Incorrect API key provided: ")
-    assert cleaned.endswith(". Check it."), "redaction ate the diagnostic"
+    assert "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.ABCDEFGHIJK" not in cleaned
+    assert "<redacted>" in cleaned
+    assert "Incorrect API key provided" in cleaned
+    assert "refresh rejected by upstream" in cleaned
 
 
-def test_the_bare_token_sweep_is_load_bearing(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Guard-disabled negative: proves the assertion above fails without the sweep.
+def test_disabling_the_bare_token_regex_lets_the_raw_token_through(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Proves `_BARE_CREDENTIAL` itself does the redacting above, not luck.
 
-    Without this, `test_unframed_credential_is_swept_by_the_bare_token_pass` could
-    pass for the wrong reason -- e.g. if the shared redactor happened to catch the
-    token. Neutering ONLY `_BARE_CREDENTIAL` must make the raw secret reappear.
+    Patches the regex object directly, in the `codex_process` namespace,
+    rather than `redact_provider_stderr` as a whole -- pinning that THIS leg,
+    not `redact_for_boundary` catching the shape incidentally, is what makes
+    the test above pass. Reproduces the exact confusion that hid the stray
+    control byte: `redact_provider_stderr` looked like it worked because it
+    called something, without proving which something did the work.
 
-    This is the check that would have caught the stray 0x08 byte: a pattern anchored
-    on a control character matches nothing, so the sweep silently became this no-op.
+    This is also the check that would have caught the 0x08 byte directly: a
+    pattern anchored on a control character matches nothing, so the sweep had
+    silently become exactly the no-op this test installs on purpose.
+
+    Covers BOTH alternations in `_BARE_CREDENTIAL` (`sk-...` and the JWT
+    shape) separately, so a regression in either half is caught. Round 2's
+    single JWT assertion used framing the shared redactor also catches, so it
+    would have kept passing even with the JWT alternation deleted outright --
+    this uses `_BARE_JWT_LINE`, already proven neutral above.
     """
-    monkeypatch.setattr(codex_process, "_BARE_CREDENTIAL", re.compile(r"(?!x)x"))
+    monkeypatch.setattr(codex_process, "_BARE_CREDENTIAL", re.compile(r"(?!)"))
 
-    leaked = redact_provider_stderr(_UNFRAMED_STDERR, workspace_root=WORKSPACE)
+    sk_cleaned = redact_provider_stderr(
+        "Incorrect API key provided: sk-live-ABCDEFGH12345678\n",
+        workspace_root=WORKSPACE,
+    )
+    jwt_cleaned = redact_provider_stderr(
+        _BARE_JWT_LINE + "\n", workspace_root=WORKSPACE
+    )
 
-    assert "sk-live-ABCDEFGH12345678" in leaked, (
+    assert "sk-live-ABCDEFGH12345678" in sk_cleaned, (
         "the shared redactor already caught this token, so the positive test above "
         "does not actually exercise the bare-token sweep -- pick an unframed shape "
         "only _BARE_CREDENTIAL can match"
+    )
+    assert "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.ABCDEFGHIJK" in jwt_cleaned, (
+        "same, for the JWT alternation -- _BARE_JWT_LINE must avoid every "
+        "Bearer/Basic/Token prefix and every _CREDENTIAL_NAMES word"
     )
