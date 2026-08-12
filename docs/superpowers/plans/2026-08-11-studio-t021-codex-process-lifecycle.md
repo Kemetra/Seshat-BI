@@ -962,16 +962,22 @@ Expected: format/lint clean; `check` shows only the known non-blocking RS1 warni
 PYTHONPATH=src python -c "
 import sys
 class B:
-    def find_module(self, n, p=None):
-        if n == 'fastapi' or n.startswith('fastapi.'): return self
-    def load_module(self, n): raise ImportError('blocked')
+    def find_spec(self, name, path=None, target=None):
+        if name == 'fastapi' or name.startswith('fastapi.'):
+            raise ImportError('blocked: simulating the CI unit job')
+        return None
 sys.meta_path.insert(0, B())
+for m in [k for k in sys.modules if k.startswith(('fastapi','seshat.studio.agent_routes'))]:
+    del sys.modules[m]
 import pytest
-sys.exit(pytest.main(['tests/unit/test_studio_codex_bridge.py','tests/unit/test_studio_codex_session.py','tests/unit/test_studio_agent_bridge.py','-q','--no-cov','-p','no:cacheprovider']))
+sys.exit(pytest.main(['tests/unit/test_studio_codex_bridge.py','tests/unit/test_studio_codex_session.py','tests/unit/test_studio_agent_bridge.py','tests/unit/test_studio_codex_protocol.py','-q','--no-cov','-p','no:cacheprovider']))
 "
 ```
 
-Expected: PASS. This mirrors the CI `check` job, which installs `.[dev]` only.
+Expected: `60 passed, 3 skipped`. This mirrors the CI `check` job, which installs
+`.[dev]` only. **Confirm the SKIP COUNT** — see the note on Task 5 Step 3: the
+original `find_module` form of this command blocked nothing on Python 3.12+ and
+reported a false green.
 
 - [ ] **Step 4: Mark T021 complete**
 
