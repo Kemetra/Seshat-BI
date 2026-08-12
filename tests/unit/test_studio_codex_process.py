@@ -23,10 +23,12 @@ its generated schema and handshake fixtures pass.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
 
+from seshat.studio import codex_process
 from seshat.studio.codex_process import (
     MAXIMUM_TESTED_CODEX,
     MINIMUM_TESTED_CODEX,
@@ -209,3 +211,47 @@ def test_provider_stderr_is_redacted_before_it_is_retained() -> None:
 
     assert "starting app-server" in cleaned, "redaction destroyed the diagnostic"
     assert "listening on stdio" in cleaned
+
+
+#: A credential with NO `key=value`, `Authorization:` or DSN framing -- verbatim the
+#: shape OpenAI's own "Incorrect API key provided" error prints. Every secret in
+#: stderr_secrets.txt carries framing the SHARED redactor already strips, so that
+#: fixture passes even with the bare-token sweep dead; this string is the only one
+#: that reaches `_BARE_CREDENTIAL` at all.
+_UNFRAMED_STDERR = "Incorrect API key provided: sk-live-ABCDEFGH12345678. Check it."
+
+
+def test_unframed_credential_is_swept_by_the_bare_token_pass() -> None:
+    """Sits on the bare-token sweep, which the framed fixture cannot reach.
+
+    Asserts the POSITIVE transformed form (`<redacted>` present) AND that the
+    surrounding diagnostic survives -- an absence-only check is satisfied by a
+    redactor that returns "", and by one that never runs on input lacking the secret.
+    """
+    cleaned = redact_provider_stderr(_UNFRAMED_STDERR, workspace_root=WORKSPACE)
+
+    assert "sk-live-ABCDEFGH12345678" not in cleaned
+    assert "<redacted>" in cleaned, "the bare-token sweep did not fire"
+    assert cleaned.startswith("Incorrect API key provided: ")
+    assert cleaned.endswith(". Check it."), "redaction ate the diagnostic"
+
+
+def test_the_bare_token_sweep_is_load_bearing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Guard-disabled negative: proves the assertion above fails without the sweep.
+
+    Without this, `test_unframed_credential_is_swept_by_the_bare_token_pass` could
+    pass for the wrong reason -- e.g. if the shared redactor happened to catch the
+    token. Neutering ONLY `_BARE_CREDENTIAL` must make the raw secret reappear.
+
+    This is the check that would have caught the stray 0x08 byte: a pattern anchored
+    on a control character matches nothing, so the sweep silently became this no-op.
+    """
+    monkeypatch.setattr(codex_process, "_BARE_CREDENTIAL", re.compile(r"(?!x)x"))
+
+    leaked = redact_provider_stderr(_UNFRAMED_STDERR, workspace_root=WORKSPACE)
+
+    assert "sk-live-ABCDEFGH12345678" in leaked, (
+        "the shared redactor already caught this token, so the positive test above "
+        "does not actually exercise the bare-token sweep -- pick an unframed shape "
+        "only _BARE_CREDENTIAL can match"
+    )
