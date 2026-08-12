@@ -350,24 +350,37 @@ class CodexBridge:
         which would leave a consumer holding both a completion and a failure for one
         turn. The shared suite pins "exactly one terminal last".
         """
-        turn_requested = False
-        for frame in session.frames():
-            # `thread/start` returns a thread id the PROVIDER mints, and `turn/start`
-            # requires it -- so the turn request cannot be written up front; it waits
-            # for this reply. The fixture hides that too: its recorded `turn/start`
-            # already carries `thr_fixture`, so the id appears in the stream whether
-            # or not the bridge learned it. Only a live server forces the correlation.
-            if not turn_requested:
-                thread_id = _thread_id_from(frame)
-                if thread_id is not None:
-                    self._start_turn(session, thread_id, prompt)
-                    turn_requested = True
+        for frame in self._frames_once_requested(session, prompt):
             for event_type, payload in normalize_notification(frame, context=context):
                 if event_type == "turn_started":
                     continue  # the envelope in `run_turn` already opened the turn
                 yield event_type, payload
                 if event_type in {"turn_completed", "turn_failed"}:
                     return
+
+    def _frames_once_requested(
+        self, session: CodexSession, prompt: str
+    ) -> Iterator[dict[str, Any]]:
+        """Pass frames through, sending `turn/start` as soon as the thread id lands.
+
+        A separate pass because it is a separate job: this one WRITES to the session
+        while `_turn_events` only reads. Folding it into that loop put two unrelated
+        conditionals around the translation step.
+
+        `thread/start` returns a thread id the PROVIDER mints, and `turn/start`
+        requires it -- so the turn request cannot be written up front; it waits for
+        this reply. The fixture hides that: its recorded `turn/start` already carries
+        `thr_fixture`, so the id appears in the stream whether or not the bridge
+        learned it. Only a live server, minting its own, forces the correlation.
+        """
+        requested = False
+        for frame in session.frames():
+            if not requested:
+                thread_id = _thread_id_from(frame)
+                if thread_id is not None:
+                    self._start_turn(session, thread_id, prompt)
+                    requested = True
+            yield frame
 
     def _start_turn(self, session: CodexSession, thread_id: str, prompt: str) -> None:
         """Ask for the turn itself, on the thread the provider just minted."""
