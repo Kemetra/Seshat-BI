@@ -58,11 +58,6 @@ _INITIALIZE_ID = 1
 _THREAD_START_ID = 2
 _TURN_START_ID = 3
 
-#: How long `close()` waits for an already-returned child to be reaped before it
-#: decides whether the exit was ours. Short: this is a reaping window, not a
-#: shutdown grace period, and `close()` promises to be prompt.
-_REAP_GRACE = 0.2
-
 
 def _thread_id_from(frame: dict[str, Any]) -> str | None:
     """The thread id from the `thread/start` REPLY, or None for any other frame.
@@ -126,12 +121,6 @@ class CodexSession:
         self._stderr_done = threading.Event()
         #: True once `close()` has been called.
         self._shutdown_requested = False
-        #: Whether the child was ALREADY dead when `close()` looked. This is the only
-        #: moment the distinction is observable: afterwards the return code is the one
-        #: `close()` caused (SIGTERM on POSIX, TerminateProcess on Windows -- both
-        #: non-zero), so a later status cannot tell an intentional shutdown from a
-        #: provider crash. `None` means `close()` has not run yet.
-        self._dead_before_close: bool | None = None
 
     @property
     def is_running(self) -> bool:
@@ -253,7 +242,6 @@ class CodexSession:
         if self._process is None:
             return None
         deadline = time.monotonic() + timeout
-        self._latch_prior_exit(deadline)
         if self._process.poll() is None:
             self._process.terminate()
         self._join_threads(deadline)
@@ -312,26 +300,12 @@ class CodexSession:
                     saw_eof=True,
                 )
             )
-        status = self._process.poll()
-        if status is None:
-            died = False  # still running
-        elif self._dead_before_close is None:
-            # No `close()` yet, so nothing we did ended it: the provider exited on
-            # its own. The app-server is long-lived and never finishes by itself, so
-            # ANY status here -- including a clean 0 -- ends the session (#617).
-            died = True
-        else:
-            # `close()` ran, so this session is over either way and cannot serve
-            # another turn -- reporting `healthy` here would advertise a dead adapter
-            # as responding during a shutdown or restart poll (#617 review).
-            #
-            # `crashed` rather than a new state: the contract has seven and none of
-            # them means "stopped on purpose", while `crashed`'s recovery -- restart
-            # the bridge, the interrupted turn was not applied -- is exactly right
-            # for a closed session. Widening the vocabulary is a contract change,
-            # not a bug fix. `_dead_before_close` still matters for the SUMMARY the
-            # caller reads, so it is kept rather than folded away.
-            died = True
+        # Any exit ends the session, whatever its status and whoever caused it.
+        # A long-lived app-server does not finish on its own, so a self-exit is a
+        # failure; and after `close()` the session is over regardless, so reporting
+        # `healthy` would advertise a dead adapter as responding (#617 review). Both
+        # roads lead here, which is why no flag distinguishes them.
+        died = self._process.poll() is not None
         return classify_health(
             ProbeObservations(
                 executable_found=True,
@@ -340,29 +314,6 @@ class CodexSession:
                 saw_eof=died,
             )
         )
-
-    def _latch_prior_exit(self, deadline: float) -> None:
-        """Record whether the child was already dead before we terminate it.
-
-        This is the ONLY moment the distinction is observable. Afterwards the return
-        code is the one `close()` caused -- SIGTERM on POSIX, TerminateProcess on
-        Windows, both non-zero -- so a later status cannot tell an intentional
-        shutdown from a provider crash, and `health()` would report every clean
-        shutdown as `crashed` (#617 review).
-
-        Waits briefly first because `poll()` reads `None` for a short window after a
-        child has RETURNED but not yet been reaped; terminating in that window would
-        relabel a provider crash as our own shutdown.
-        """
-        if self._process is None or self._dead_before_close is not None:
-            return
-        try:
-            # Capped by what the CALLER allowed: `close(timeout=0.05)` must not spend
-            # 0.2s here and blow the whole-call bound this method promises.
-            self._process.wait(timeout=min(_REAP_GRACE, _remaining(deadline)))
-        except subprocess.TimeoutExpired:
-            pass
-        self._dead_before_close = self._process.poll() is not None
 
     def _join_threads(self, deadline: float) -> None:
         """Join every reader thread, each bounded by what remains of `deadline`."""
