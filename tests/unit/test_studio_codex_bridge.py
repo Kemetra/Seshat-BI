@@ -334,3 +334,39 @@ def test_a_session_read_failure_still_ends_the_turn(tmp_path: Path) -> None:
     # The exception TYPE, never its text: provider messages can carry paths or
     # tokens, and this payload is retained.
     assert "Empty" in terminals[0].payload["detail"]
+
+
+def test_a_failed_process_start_still_ends_the_turn(tmp_path: Path) -> None:
+    """P1 (#617 review): a missing or non-executable binary must not escape.
+
+    `start()` used to sit OUTSIDE the guard, so a `Popen` failure raised after
+    `turn_started` had already been yielded and recorded: a 500 with no terminal,
+    leaving `ThreadEvents._active_turn` set so every later turn on that Studio
+    thread is refused as already-active. This is the likeliest real failure of
+    the lot -- it happens whenever the configured executable is wrong.
+
+    `close()` must also tolerate a session that never started, which the `finally`
+    exercises here.
+    """
+    from seshat.studio.codex_bridge import CodexBridge
+    from seshat.studio.codex_process import CodexLaunchPlan
+
+    missing = tmp_path / "definitely-not-a-real-codex-binary"
+    bridge = CodexBridge(CodexLaunchPlan(argv=(str(missing),), cwd=tmp_path))
+
+    events = list(
+        bridge.run_turn(
+            prompt="Summarise the readiness spine",
+            turn_id="turn-nostart",
+            requested_mode="read_only",
+        )
+    )
+
+    assert events[0].type == "turn_started"
+    terminals = [e for e in events if e.type in {"turn_completed", "turn_failed"}]
+    assert len(terminals) == 1, (
+        f"a failed process start produced {len(terminals)} terminals; the turn must "
+        "still end exactly once"
+    )
+    assert terminals[0].type == "turn_failed"
+    assert terminals[0].payload["category"] == "provider_error"

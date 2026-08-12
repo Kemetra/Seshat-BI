@@ -99,10 +99,14 @@ class CodexSession:
         #: (child EOF, or an exception). `close()` waits on this -- an OBSERVED
         #: state transition -- rather than on elapsed wall-clock time.
         self._stderr_done = threading.Event()
-        #: True once `close()` has been called. Distinguishes an exit WE asked for
-        #: from one the provider took on its own -- `poll()` alone cannot, since a
-        #: long-lived server that quits cleanly mid-session also reports 0.
+        #: True once `close()` has been called.
         self._shutdown_requested = False
+        #: Whether the child was ALREADY dead when `close()` looked. This is the only
+        #: moment the distinction is observable: afterwards the return code is the one
+        #: `close()` caused (SIGTERM on POSIX, TerminateProcess on Windows -- both
+        #: non-zero), so a later status cannot tell an intentional shutdown from a
+        #: provider crash. `None` means `close()` has not run yet.
+        self._dead_before_close: bool | None = None
 
     @property
     def is_running(self) -> bool:
@@ -225,6 +229,16 @@ class CodexSession:
             return None
         deadline = time.monotonic() + timeout
         if self._process.poll() is None:
+            # Give a child that has just RETURNED a moment to be reaped: `poll()`
+            # reads None for a short window after exit, and terminating there would
+            # relabel a provider crash as our own shutdown.
+            try:
+                self._process.wait(timeout=0.2)
+            except subprocess.TimeoutExpired:
+                pass
+        if self._dead_before_close is None:
+            self._dead_before_close = self._process.poll() is not None
+        if self._process.poll() is None:
             self._process.terminate()
         self._join_threads(deadline)
         if self._process.poll() is None:
@@ -266,17 +280,18 @@ class CodexSession:
         # possible -- reporting that as `ready` is the silent success this method
         # exists to prevent. After `close()` an exit is exactly what we requested.
         status = self._process.poll() if self._process is not None else None
-        # A clean 0 BEFORE we asked for shutdown is still a death: the app-server is
-        # long-lived and does not finish on its own, so a self-exit ends the session
-        # whatever its status (#617 review). After `close()` the status is the one we
-        # caused -- on Windows `terminate()` is TerminateProcess, whose code is not 0 --
-        # so only a non-zero status is evidence of a provider-side exit.
         if status is None:
-            died = False
-        elif self._shutdown_requested:
-            died = status != 0
-        else:
+            died = False  # still running
+        elif self._dead_before_close is None:
+            # No `close()` yet, so nothing we did ended it: the provider exited on
+            # its own. The app-server is long-lived and never finishes by itself, so
+            # ANY status here -- including a clean 0 -- ends the session (#617).
             died = True
+        else:
+            # `close()` ran. Its own termination makes the status non-zero on every
+            # platform, so the status cannot be the evidence; what the child was
+            # doing BEFORE we terminated it can.
+            died = self._dead_before_close
         return classify_health(
             ProbeObservations(
                 executable_found=True,
@@ -435,8 +450,12 @@ class CodexBridge:
         session = CodexSession(plan)
         context = NormalizationContext(workspace_root=plan.cwd)
         saw_terminal = False
-        session.start()
         try:
+            # `start()` is INSIDE the guard: a missing or non-executable binary makes
+            # `Popen` raise, and outside it that escaped after `turn_started` had
+            # already been recorded -- a 500 with no terminal, leaving the thread's
+            # active turn set so every later turn is refused as already-active.
+            session.start()
             self._open_thread(session)
             for event_type, payload in self._turn_events(session, context, cleaned):
                 if event_type in {"turn_completed", "turn_failed"}:

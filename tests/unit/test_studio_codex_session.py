@@ -7,6 +7,7 @@ derived from Codex's real generated schema -- it does not invent a shape.
 
 from __future__ import annotations
 
+import itertools
 import subprocess
 import sys
 import time
@@ -242,22 +243,30 @@ def test_a_crashed_child_reports_an_eof_health_state(tmp_path: Path) -> None:
 
 
 def test_a_clean_exit_is_not_reported_as_a_crash(tmp_path: Path) -> None:
-    """The discriminator: a child that finished normally must NOT read `crashed`.
+    """The discriminator: an INTENTIONAL shutdown must NOT read `crashed`.
 
     Without this, `health()` could return `crashed` unconditionally and the test
     above would still pass -- the same shape of vacuous pass that hid the dead
-    stderr regex. Exit code 0 must reach the non-EOF branch.
+    stderr regex.
+
+    Uses `--stay-open`, i.e. a server that is still running when we stop it. The
+    first version drove the ordinary fixture child, which EXITS 0 once its script
+    runs out -- and the #617 review established that for a long-lived app-server a
+    self-exit mid-session is a failure, not a clean finish. So that child modelled
+    the fake's behaviour rather than the provider's, and the "clean exit" it
+    asserted on was really an unexpected one. The genuine non-crash case is a
+    server WE shut down.
     """
     from seshat.studio.codex_bridge import CodexSession
 
-    session = CodexSession(_plan(tmp_path, "thread_turn"))
+    session = CodexSession(_plan(tmp_path, "thread_turn", "--stay-open"))
     session.start()
-    list(session.frames())
+    list(itertools.islice(session.frames(), 5))
     session.close()
 
     health = session.health("0.147.0", signed_in=True)
 
-    assert health.state != "crashed", "a clean exit was reported as a crash"
+    assert health.state != "crashed", "an intentional shutdown was reported as a crash"
 
 
 def test_a_clean_self_exit_before_shutdown_is_not_healthy(tmp_path: Path) -> None:
