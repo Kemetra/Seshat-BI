@@ -290,11 +290,31 @@ projection, endpoints, frontend, journey, and health.
 - [x] **T020** Write failing JSON-RPC correlation and normalization tests, then
   implement the version-tolerant stdio client without shell interpolation. [FR-011,
   FR-014, FR-015]
-- [ ] **T021** Implement Codex process lifecycle, protocol probe, health classifier,
+- [x] **T021** Implement Codex process lifecycle, protocol probe, health classifier,
   official login delegation, cancellation, clean shutdown, and crash recovery.
   Record and enforce the tested minimum/maximum Codex CLI range; a version outside
   it is incompatible until its generated schema and handshake fixtures pass.
   [FR-011, FR-012, FR-013, FR-024]
+  Shipped as `CodexSession` (three explicit pipes, never inherited and never
+  `DEVNULL` per issue #557; stdout feeding `CodexProtocolReader` on its own thread;
+  a separately drained and redacted stderr; `close()` bounded by one monotonic
+  deadline) and `CodexBridge`, which joins `BRIDGE_FACTORIES` so every shared
+  contract assertion runs once per bridge. Crash and EOF classify through
+  `classify_health` to `crashed`, never a silent `ready`. Driven throughout by a
+  scripted child replaying committed fixtures over a REAL pipe, because a mock
+  cannot deadlock and deadlock is this layer's actual risk.
+  Two defects were found by tests rather than by reading, both now fixed and
+  pinned: a settled turn could be REOPENED by a provider frame arriving after
+  `turn/completed`, yielding two terminals for one turn; and
+  `CodexProtocolReader` rejected every frame a real Codex build emits, because it
+  required a `jsonrpc` field the app-server does not send and its generated schema
+  never declares — the committed fixtures carried that field only because they and
+  the client were written from the same assumption.
+  **Not included:** answering approval server-requests (`item/*/requestApproval`)
+  is T024–T027's surface and normalizes to nothing today. The shutdown-versus-
+  stderr limit recorded on `close()` is a physical constraint, not an open bug: a
+  child terminated before the OS schedules it never writes, so there is nothing to
+  capture.
 - [x] **T022** Implement context construction for read-only and propose-change modes;
   include current allowed/forbidden scope and never include credentials. [FR-017,
   FR-018, FR-026]

@@ -7,6 +7,7 @@ derived from Codex's real generated schema -- it does not invent a shape.
 
 from __future__ import annotations
 
+import itertools
 import subprocess
 import sys
 import time
@@ -217,3 +218,137 @@ def test_close_bounds_the_whole_call_against_the_caller_timeout(
     assert elapsed < 1.0, (
         f"close(timeout=0.1) took {elapsed:.3f}s, expected well under 1s"
     )
+
+
+def test_a_crashed_child_reports_an_eof_health_state(tmp_path: Path) -> None:
+    """A crash must not read as a healthy session with a short answer.
+
+    The dangerous failure is silent success: a child that dies mid-turn has
+    delivered a TRUNCATED answer, and reporting `ready` would let Studio present
+    it as complete. Health is classified from the child's exit status, so a
+    non-zero (or signalled) exit becomes `saw_eof` and lands on `crashed`.
+    """
+    from seshat.studio.codex_bridge import CodexSession
+
+    session = CodexSession(_plan(tmp_path, "thread_turn", "--crash-after", "2"))
+    session.start()
+    list(session.frames())
+    session.close()
+
+    health = session.health("0.147.0", signed_in=True)
+
+    assert health.state != "ready", "a crashed child was reported as ready"
+    assert health.state == "crashed"
+    assert health.provider in {"codex", "disabled"}
+
+
+def test_a_clean_exit_is_not_reported_as_a_crash(tmp_path: Path) -> None:
+    """The discriminator: an INTENTIONAL shutdown must NOT read `crashed`.
+
+    Without this, `health()` could return `crashed` unconditionally and the test
+    above would still pass -- the same shape of vacuous pass that hid the dead
+    stderr regex.
+
+    Uses `--stay-open`, i.e. a server that is still running when we stop it. The
+    first version drove the ordinary fixture child, which EXITS 0 once its script
+    runs out -- and the #617 review established that for a long-lived app-server a
+    self-exit mid-session is a failure, not a clean finish. So that child modelled
+    the fake's behaviour rather than the provider's, and the "clean exit" it
+    asserted on was really an unexpected one. The genuine non-crash case is a
+    server WE shut down.
+    """
+    from seshat.studio.codex_bridge import CodexSession
+
+    session = CodexSession(_plan(tmp_path, "thread_turn", "--stay-open"))
+    session.start()
+    list(itertools.islice(session.frames(), 5))
+    session.close()
+
+    health = session.health("0.147.0", signed_in=True)
+
+    # NOT `healthy`: the session is closed and cannot serve another turn, so
+    # reporting it as responding would advertise a dead adapter during a shutdown
+    # or restart poll. The contract has no "stopped" state, and `crashed`'s
+    # recovery -- restart the bridge -- is the right guidance for a closed session.
+    assert health.state != "healthy", "a closed session was advertised as responding"
+
+
+def test_a_clean_self_exit_before_shutdown_is_not_healthy(tmp_path: Path) -> None:
+    """P2 (#617 review): the app-server is long-lived and never finishes on its own.
+
+    So a status of 0 observed BEFORE anyone asked for shutdown does not mean "all
+    fine" -- it means the provider went away mid-session and no further turn is
+    possible. Reporting `ready` there is exactly the silent success `health()`
+    exists to prevent, and `poll() not in (None, 0)` used to do just that.
+
+    The scripted child exits 0 once its fixture is exhausted, which models this
+    precisely: read every frame, then ask for health WITHOUT calling close().
+    """
+    from seshat.studio.codex_bridge import CodexSession
+
+    session = CodexSession(_plan(tmp_path, "thread_turn"))
+    session.start()
+    list(session.frames())
+    session._process.wait(timeout=10)  # observe the exit without requesting one
+
+    health = session.health("0.147.0", signed_in=True)
+
+    assert health.state != "ready", "a provider that quit mid-session read as ready"
+    assert health.state == "crashed"
+
+    session.close()
+
+
+def test_an_unstarted_session_is_not_reported_as_healthy(tmp_path: Path) -> None:
+    """P2 (#617 review): `_process is None` is not the same as "running fine".
+
+    Before `start()` -- or after a `Popen` failure -- there is no process at all.
+    `poll()` and "never spawned" both look like `None`, and treating them alike
+    reported a session that cannot serve a single turn as `healthy`.
+    """
+    from seshat.studio.codex_bridge import CodexSession
+
+    session = CodexSession(_plan(tmp_path, "thread_turn"))  # never started
+
+    assert session.is_running is False
+    assert session.health("0.147.0", signed_in=True).state != "ready"
+    assert session.health("0.147.0", signed_in=True).state != "healthy"
+
+
+def test_a_missing_executable_reports_missing_not_incompatible(
+    tmp_path: Path,
+) -> None:
+    """P2 (#617 review): the recovery advice must match the actual failure.
+
+    The unstarted-session branch hardcoded `executable_found=True`, so a binary
+    that does not exist classified as `incompatible` (or `crashed` with a cached
+    version) and pointed the user at schema compatibility or a restart instead of
+    installing the CLI.
+    """
+    from seshat.studio.codex_bridge import CodexSession
+    from seshat.studio.codex_process import CodexLaunchPlan
+
+    missing = tmp_path / "definitely-not-a-real-codex-binary"
+    session = CodexSession(CodexLaunchPlan(argv=(str(missing),), cwd=tmp_path))
+
+    assert session.health(None, signed_in=False).state == "missing"
+
+
+def test_a_bare_name_executable_on_path_is_not_reported_missing(
+    tmp_path: Path,
+) -> None:
+    """P2 (#617 review): resolve the executable the way `Popen` does.
+
+    A plan may name the CLI by bare name and let PATH resolve it -- the process-plan
+    tests do exactly that. Checking `Path(argv[0]).exists()` from the PARENT's cwd
+    reported such a plan as `missing`, telling the user to install a CLI they
+    already have. `sys.executable`'s bare name stands in for `codex` here so the
+    test does not depend on Codex being installed.
+    """
+    from seshat.studio.codex_bridge import CodexSession
+    from seshat.studio.codex_process import CodexLaunchPlan
+
+    bare = Path(sys.executable).name  # resolvable on PATH, not in tmp_path
+    session = CodexSession(CodexLaunchPlan(argv=(bare,), cwd=tmp_path))
+
+    assert session.health(None, signed_in=False).state != "missing"

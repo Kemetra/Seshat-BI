@@ -407,3 +407,47 @@ def test_a_streamed_message_is_not_replayed_whole_on_completion() -> None:
         "the completed item replayed the whole message after its deltas; the browser "
         "renders each agent_message as a row, so the answer appears twice"
     )
+
+
+# --------------------------------------------------------------------------- #
+# The provider's real envelope shape                                          #
+# --------------------------------------------------------------------------- #
+
+
+def test_a_frame_without_a_jsonrpc_field_is_accepted() -> None:
+    """The real Codex app-server omits `jsonrpc`, and its schema never declares it.
+
+    `JSONRPCResponse` requires only `id` and `result`; `JSONRPCNotification` only
+    `method`. Neither lists `jsonrpc`. Requiring it rejected EVERY frame a live
+    0.147.0 build emits -- the bridge could not read one word from a real provider.
+
+    Every committed fixture carries `"jsonrpc":"2.0"` because they were written by
+    hand from the same assumption the client made, so fixtures and client agreed
+    with each other while both diverged from the provider. Only the integration
+    test against the installed CLI could see it. This unit test is what keeps the
+    fix verified on CI, where that integration test skips.
+    """
+    reader = CodexProtocolReader()
+
+    response = list(reader.feed('{"id":1,"result":{"userAgent":"codex/0.147.0"}}\n'))
+    notification = list(
+        reader.feed('{"method":"remoteControl/status/changed","params":{}}\n')
+    )
+
+    assert len(response) == 1, "a real response frame was rejected"
+    assert response[0]["id"] == 1
+    assert len(notification) == 1, "a real notification frame was rejected"
+    assert notification[0]["method"] == "remoteControl/status/changed"
+
+
+def test_a_frame_declaring_the_wrong_jsonrpc_version_is_still_refused() -> None:
+    """Absence is this provider's shape; a WRONG value is a different protocol.
+
+    Without this, the fix above could have been written as "drop the rule", which
+    would accept `"jsonrpc":"1.0"` -- a frame from something Studio has never been
+    tested against -- as readily as the real one.
+    """
+    reader = CodexProtocolReader()
+
+    with pytest.raises(CodexFrameError):
+        list(reader.feed('{"jsonrpc":"1.0","id":1,"result":{}}\n'))
