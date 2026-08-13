@@ -332,12 +332,12 @@ projection, endpoints, frontend, journey, and health.
 
 ## Phase 6 - Technical Approval Boundary (US3)
 
-- [ ] **T024** Write failing tests for paused approval, exact scope display,
+- [x] **T024** Write failing tests for paused approval, exact scope display,
   allow-once, deny, readiness-prohibited allow, stale/repeated decisions, and
   prepared business judgment. [FR-018, FR-019, FR-020, FR-021, FR-022, SC-005]
 - [x] **T025** Implement provider approval normalization and readiness
   forbidden-scope evaluation before an allow control is exposed. [FR-018, FR-021]
-- [ ] **T026** Implement the accessible technical approval panel and one-time relay;
+- [x] **T026** Implement the accessible technical approval panel and one-time relay;
   browser code performs no side effect. [FR-019, FR-020]
 - [x] **T027** Implement read-only prepared decision summaries with no mutation route
   and assert OpenAPI contains no business-approval endpoint. [FR-022]
@@ -506,20 +506,74 @@ projection, endpoints, frontend, journey, and health.
   `docs/superpowers/specs/2026-08-13-studio-approval-panel-design.md`.
   A human still closes T024 and T026.
 
+  **Superseded 2026-08-13 (later, on merged `main`): every blocker above is now
+  closed, and T024/T026 are checked.** The three reasons were written when the panel
+  did not exist; each was answered by work that has since merged, so leaving the boxes
+  open would now misreport the opposite direction — the same defect this record was
+  written to correct.
+
+  - **T026's contract gap closed (#632).** `allow_permitted` and `forbidden_reasons`
+    now cross the wire, and `provider_request_id` is stripped from the stream.
+    `test_studio_approval_wire_payload` (11) pins it, falsified by neutering the pump
+    caller.
+  - **T024's exact-scope display is proven against the REAL payload (#633).** The
+    panel renders `action`/`target`/`scope`/`risk` and no longer depends on the fake
+    bridge's `question`; one test drops `question` entirely and asserts the scope still
+    renders. `ApprovalPanel.test.tsx` (19) + 4 routing tests in
+    `Conversation.test.tsx`.
+  - **The boundary test was rewritten deliberately, not waited on (#633).** It
+    asserted no button matching `/approve|apply|reject/i` while the enum is
+    `allow_once`/`deny`, so a panel labelled "Allow once"/"Decline" would have passed
+    it untouched. Four routing tests replace it, each pinning which approvals become
+    decidable — live yes; late, id-less, and `file_change_proposed` no.
+
+  FR-021 is enforced as ABSENCE rather than a disabled control, falsified by weakening
+  `mayAllow` to the authority half alone (fails exactly the 2 tests that pin it, and
+  one `Conversation` test after an adversarial review found the allow path had no
+  integration coverage). Frontend suite **133 passed**; studio suite **565 passed** on
+  merged `main`.
+
 ## Phase 7 - Agent-First Launch and Distribution (US5)
 
-- [ ] **T028** Write failing capability and bundle contracts for the new
+- [x] **T028** Write failing capability and bundle contracts for the new
   `seshat-studio` consumer skill and its optional-dependency requirement. [FR-027]
-- [ ] **T029** Author the canonical Studio skill with natural-language launch,
+- [x] **T029** Author the canonical Studio skill with natural-language launch,
   workspace validation, single-instance reuse, two-lane missing-extra remedy, and
   technical troubleshooting detail. [FR-027, FR-028]
-- [ ] **T030** Register the capability in the canonical inventory
+- [x] **T030** Register the capability in the canonical inventory
   (`docs/capabilities/capabilities.yaml`) **and** in the public command surface
   authority (`distribution/public-command-surface.yaml`), then regenerate both
   bundles; verify clean byte-identical regeneration. A capability registered in only
   one of the two surfaces is a half-shipped verb. [FR-027]
-- [ ] **T031** Test Codex full launch and Claude deterministic launch/native handoff;
+- [x] **T031** Test Codex full launch and Claude deterministic launch/native handoff;
   assert no Claude credential bridge is present. [FR-029]
+
+  **Phase 7 closed 2026-08-13, merged as #634.** `.claude/skills/seshat-studio/SKILL.md`
+  ships in both generated bundles, classified `ships: true` +
+  `consumer-capability` — the first such combination in the inventory, and permitted by
+  design rather than by omission (`test_classification_invariants_hold` constrains
+  ships-direction only for `development-only`, `upstream-integration`, and
+  `compass-verb`).
+
+  Suites: `test_studio_consumer_skill` (9) + `test_studio_claude_handoff_boundary` (9)
+  + 3 added to `test_studio_package_contract` — **21 passed** re-verified on merged
+  `main`. FR-028 is ENFORCED rather than intended:
+  `test_natural_language_launch_is_stated_before_any_command` compares POSITIONS in the
+  body, so a skill that led with the console command would fail. FR-029 is proven
+  structurally — `AGENT_PROVIDERS` is a closed two-value enum read off the BUILT parser,
+  so a Claude provider would have to appear there first.
+
+  **The trap worth carrying forward: a capability lives in THREE files, and the export
+  validates only one of them.** `docs/capabilities/capabilities.yaml` and
+  `distribution/public-command-surface.yaml` are authored;
+  `distribution/public-knowledge-allowlist.yaml` is GENERATED and must never be
+  hand-edited — but `export_agent_bundles.py` checks only `canonical_roots` against a
+  fresh derivation and reads `entries` from the COMMITTED allowlist. A
+  `consumer-capability` never appears in `canonical_roots`, so with both authored files
+  correct the export printed "PASS: generated bundles match reviewed inputs" while the
+  skill was absent from BOTH bundles and eleven contract tests failed. The allowlist had
+  to be regenerated from `derive_allowlist` directly. That blind spot is described, not
+  fixed: widening a shared export gate deserves its own review.
 
 ## Phase 8 - Accessibility, Packaging, and Acceptance
 
