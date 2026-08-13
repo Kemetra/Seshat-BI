@@ -292,6 +292,13 @@ skills:
     bundle_destination: skills/first-hour-compass/SKILL.md
     documentation: docs/install/agent-install.md
     status: shipped
+  - name: seshat-studio
+    platforms: [claude, codex]
+    intent: Open the local analyst console for one pinned workspace.
+    wrapper_template: .claude/skills/seshat-studio/SKILL.md
+    bundle_destination: skills/seshat-studio/SKILL.md
+    documentation: docs/install/agent-install.md
+    status: shipped
   - name: retail-onboard-table
     platforms: [claude, codex]
     intent: Walk a new raw table from Source Ready to Mapping Ready.

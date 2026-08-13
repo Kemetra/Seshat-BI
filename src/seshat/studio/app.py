@@ -48,6 +48,7 @@ from . import (
     redaction,
     session,
 )
+from .approvals import prepared_summary
 from .bridge_selection import select_bridge
 
 #: Distinguishes "probe the installed CLI" from an explicit `None` meaning "there is
@@ -114,8 +115,18 @@ def _problem(
     )
 
 
-def _bootstrap_capabilities() -> dict[str, Any]:
+def _bootstrap_capabilities(app: FastAPI) -> dict[str, Any]:
     """What this build can do. `business_decision_recording` is const false (FR-022).
+
+    **`agent_turns` is DERIVED, not declared.** It was a hardcoded `False` while
+    `app.state.agent_turns_refused` -- computed from the real provider outcome -- was
+    what actually gated the turn route, so a build that answered turns advertised that
+    it did not. That is the mirror of the defect the `technical_approvals` note below
+    describes: there the flag over-reported a seam that did not close, here it
+    under-reported one that works, and an under-report is not the safe direction but a
+    different lie. Reading the SAME state the route gates on is what stops the two
+    drifting apart again; a second definition of "can this build answer turns" is the
+    whole defect, not the value it happened to hold.
 
     **`technical_approvals` is True once the round trip closes.** The relay records a
     decision AND writes it back to the provider: `approval_delivery.deliver_decision`
@@ -129,10 +140,12 @@ def _bootstrap_capabilities() -> dict[str, Any]:
     removing delivery fails a test rather than silently re-opening that gap.
 
     `business_decision_recording` stays const False: FR-022 places a named-human
-    governance ruling outside Studio permanently, not pending a future seam.
+    governance ruling outside Studio permanently, not pending a future seam. Its
+    constancy is a governance decision rather than an unfinished one, which is why it
+    is NOT derived alongside `agent_turns`.
     """
     return {
-        "agent_turns": False,
+        "agent_turns": not getattr(app.state, "agent_turns_refused", False),
         "technical_approvals": True,
         "business_decision_recording": False,
     }
@@ -295,7 +308,7 @@ def _register_routes(app: FastAPI) -> None:
                 #: reply.
                 "agent_provider": app.state.agent_provider,
                 "agent_provider_detail": app.state.agent_provider_detail,
-                "capabilities": _bootstrap_capabilities(),
+                "capabilities": _bootstrap_capabilities(app),
             }
         )
 
@@ -319,8 +332,23 @@ def _register_routes(app: FastAPI) -> None:
 
     @app.get(f"{API_PREFIX}/decisions")
     async def decisions() -> Any:
-        """Read-only by construction: there is no mutation route to omit."""
-        return {"items": []}
+        """The business decisions a NAMED HUMAN still owes (T027, FR-022).
+
+        Read-only by construction: there is no mutation route to omit, and
+        `business_decision_recording` is const `False`. Listing what a human owes is
+        not recording their ruling.
+
+        This returned a hardcoded `{"items": []}` from Phase 3 until T027 -- a
+        contract that promised a `PreparedDecisionSummary` beside code that could
+        never produce one. The data was already being collected: `register_approval`
+        registers `named_human` items expressly so they are visible here.
+        """
+        return {
+            "items": [
+                _redact(prepared_summary(envelope))
+                for envelope in app.state.pending_approvals.prepared_for_named_human()
+            ]
+        }
 
     @app.get(f"{API_PREFIX}/agent/health")
     async def agent_health() -> Any:

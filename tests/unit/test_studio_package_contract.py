@@ -357,3 +357,55 @@ def test_every_wheel_force_include_source_exists() -> None:
         f"force-include sources do not exist and would fail the wheel build for "
         f"every install: {missing}"
     )
+
+
+# --------------------------------------------------------------------------- #
+# T028 (FR-027) -- the shipped skill states the optional-dependency requirement #
+# --------------------------------------------------------------------------- #
+
+_STUDIO_SKILL = _REPO_ROOT / ".claude/skills/seshat-studio/SKILL.md"
+
+
+def test_the_shipped_skill_states_the_optional_extra_requirement() -> None:
+    """FR-027's half that lives in the package contract, not the bundle contract.
+
+    Studio is the only shipped skill whose capability is not present in a base
+    `seshat-bi` install: FR-006 keeps FastAPI and Uvicorn behind the `studio`
+    extra. A skill that omits that fact sends an agent to launch something the
+    reader cannot run, and the agent has no other way to learn the precondition --
+    the bundle carries the skill body, not this repository's pyproject.
+
+    Asserting the extra's NAME rather than any prose: the name is what the reader
+    must type, and it is the token that would go stale if the extra were renamed.
+    """
+    body = _STUDIO_SKILL.read_text(encoding="utf-8")
+
+    assert "`studio`" in body, (
+        "the shipped skill never names the `studio` extra, so a base-install "
+        "reader cannot learn why Studio will not start"
+    )
+
+
+def test_the_skill_names_both_install_lanes_for_the_missing_extra() -> None:
+    """T029's two-lane remedy, pinned so one lane cannot quietly disappear.
+
+    `pipx` and `pip` are two genuinely different installations, and the repo's
+    hint surface (`_extra_install_hint`) emits both for exactly that reason. A
+    skill naming only one strands every reader on the other.
+    """
+    body = _STUDIO_SKILL.read_text(encoding="utf-8").lower()
+
+    assert "pipx" in body, "the skill omits the pipx install lane"
+    assert "pip install" in body, "the skill omits the pip install lane"
+
+
+def test_the_skill_extra_name_matches_the_declared_extra() -> None:
+    """The skill and pyproject cannot drift on what the extra is called."""
+    extras = _pyproject()["project"]["optional-dependencies"]
+    body = _STUDIO_SKILL.read_text(encoding="utf-8")
+
+    named = [extra for extra in extras if f"`{extra}`" in body]
+
+    assert "studio" in named, (
+        f"the skill names no declared extra; pyproject declares {sorted(extras)}"
+    )
