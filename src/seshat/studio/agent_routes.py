@@ -44,6 +44,11 @@ import anyio.to_thread
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from seshat.studio.approval_routes import (
+    ApprovalRequest,
+    decide_approval,
+    register_approval,
+)
 from seshat.studio.bridge import validate_turn_request
 from seshat.studio.events import ReplayExpired, TurnAlreadyActive
 
@@ -371,6 +376,24 @@ def register_agent_routes(app: FastAPI) -> None:
     async def interrupt_turn(thread_id: str, turn_id: str) -> Response:
         return _interrupt_turn(app, thread_id, turn_id)
 
+    @app.post(
+        f"{API_PREFIX}/agent/threads/{{thread_id}}/approvals/{{approval_id}}",
+        status_code=204,
+    )
+    async def respond_to_tool_approval(
+        thread_id: str, approval_id: str, body: dict[str, Any]
+    ) -> Response:
+        return decide_approval(
+            ApprovalRequest(
+                app=app,
+                thread_id=thread_id,
+                approval_id=approval_id,
+                body=body,
+                problem=_problem,
+                unknown_thread=_unknown_thread,
+            )
+        )
+
     @app.get(f"{API_PREFIX}/agent/threads/{{thread_id}}/events")
     async def stream_events(thread_id: str, request: Request) -> Response:
         return await _stream_events(app, thread_id, request)
@@ -516,6 +539,8 @@ async def _pump_turn(app: FastAPI, thread_id: str, thread: Any) -> None:
                     )
                     _finish_turn(app, thread_id, pending)
                     return
+                if produced.type == "approval_required":
+                    register_approval(app, thread_id, thread, produced)
                 thread.append(produced.type, produced.payload, turn_id=produced.turn_id)
                 if produced.type in _TERMINAL_EVENTS:
                     _finish_turn(app, thread_id, pending)
@@ -627,6 +652,14 @@ def _finish_turn(
     """
     if app.state.pending_turns.get(thread_id) is pending:
         del app.state.pending_turns[thread_id]
+        # NOT abandoning this thread's approvals here, deliberately. It looks like the
+        # right place -- a finished turn cannot honour an allow -- but Phase 4 streams
+        # `approval_required` as INERT ACTIVITY beside a `turn_completed` in the same
+        # turn (`bridge.FakeAgentBridge.run_turn`), so "the turn ended" and "an
+        # approval is still pending" legitimately coexist. Dropping them here made a
+        # just-streamed approval undecidable the instant it appeared. The ledger is
+        # bounded by COUNT instead; `abandon_thread` stays available for a future
+        # paused-turn model, where a turn really does own its approvals.
     close = getattr(pending.events, "close", None)
     if close is None:
         return None

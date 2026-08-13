@@ -37,6 +37,7 @@ from fastapi.responses import JSONResponse
 
 from . import (
     agent_routes,
+    approvals,
     bridge,
     bridge_selection,
     codex_bridge,
@@ -114,7 +115,18 @@ def _problem(
 
 
 def _bootstrap_capabilities() -> dict[str, Any]:
-    """What this build can do. `business_decision_recording` is const false (FR-022)."""
+    """What this build can do. `business_decision_recording` is const false (FR-022).
+
+    **`technical_approvals` is still False at Phase 6, deliberately.** The relay
+    ACCEPTS a decision and burns its id, but nothing DELIVERS that decision to a
+    provider: `AgentBridge` exposes `run_turn` and `describe` and no respond seam.
+    Real Codex sends `item/*/requestApproval` as a server request carrying an `id`
+    and waits for a JSON-RPC response keyed to it (see
+    `tests/fixtures/codex_app_server/approvals.jsonl`), so a turn driven this way
+    would hang. Advertising the capability would tell the browser it can carry an
+    approval to completion when it cannot -- a false claim about the build, which is
+    the one thing a capability flag exists to prevent.
+    """
     return {
         "agent_turns": False,
         "technical_approvals": False,
@@ -510,6 +522,10 @@ def create_app(
     #: absolute filesystem paths to the browser, including out-of-root paths that
     #: expose the operator's home directory layout.
     app.state.threads = events.ThreadStore(workspace_root=launch.workspace_root)
+    #: Approvals awaiting an analyst decision, each decidable exactly once. Held on
+    #: app state rather than per-thread because the relay route is addressed by
+    #: approval id, and a decision must be refusable even after its turn has ended.
+    app.state.pending_approvals = approvals.PendingApprovals()
     app.state.bridge = (
         codex_bridge.CodexBridge(
             codex_process.CodexLaunchPlan.for_workspace(

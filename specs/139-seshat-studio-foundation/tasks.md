@@ -342,6 +342,70 @@ projection, endpoints, frontend, journey, and health.
 - [ ] **T027** Implement read-only prepared decision summaries with no mutation route
   and assert OpenAPI contains no business-approval endpoint. [FR-022]
 
+  **Phase 6 evidence 2026-08-13 (backend only — every box above left unchecked).**
+  Built on branch `studio-2` from `46243b5`; design at
+  `docs/superpowers/specs/2026-08-13-studio-technical-approval-boundary-design.md`,
+  plan at `docs/superpowers/plans/2026-08-13-studio-technical-approval-boundary.md`.
+
+  Shipped: `src/seshat/studio/approvals.py` (authority split, fail-closed readiness
+  lookup, decide-once ledger) and the contract's `respondToToolApproval` route in
+  `agent_routes.py`. **`technical_approvals` stays `False`** — see the delivery gap
+  below; `business_decision_recording` remains const `False`.
+
+  Suites: `tests/unit/test_studio_approvals.py` (19) and
+  `tests/unit/test_studio_approval_routes.py` (15) — **34 passed**. Full Studio
+  sweep **474 passed**; `pytest -m unit` **5686 passed**; `ruff format --check` and
+  `ruff check` clean; `seshat check` exits 0; `seshat semantic-check` 0 findings.
+
+  Invariants proven, each in its positive form: a `named_human` approval normalizes
+  to `allow_permitted is False` and the route answers **403**; an unknown or missing
+  `required_authority` degrades to `named_human`, never `technical`; a readiness
+  lookup that raises returns a refusal sentence rather than an empty tuple; any
+  decision burns the id, so a deny cannot be resubmitted as an allow; an
+  unrecognized `decision` value is refused **422** and leaves the approval live; an
+  approval is not decidable through another thread's URL; and no mutating verb
+  reaches any decision path, asserted by HTTP METHOD rather than path name
+  (`/decisions` legitimately exists as a contract-specified GET). The readiness
+  chain is proven end to end without monkeypatch in
+  `test_a_real_readiness_gate_blocks_an_allow_end_to_end`: the real
+  `build_table_next_document` forbids 9 scopes on a fresh workspace, and one of its
+  own sentences reaches the analyst in the 403 body.
+
+  **Why these tasks stay open.** Four gaps, none of them cosmetic:
+  - **The decision is ACCEPTED but never DELIVERED — this is the big one.** The
+    route validates a decision and burns its id, but nothing sends it to a provider:
+    `AgentBridge` exposes `run_turn` and `describe` and no respond seam. Real Codex
+    sends `item/*/requestApproval` as a JSON-RPC **server request carrying an `id`**
+    (`tests/fixtures/codex_app_server/approvals.jsonl`) and waits for a response
+    keyed to it, so a real turn driven this way would hang. The 204-then-409
+    sequence the tests assert is the ledger's own bookkeeping, not an observable
+    provider effect. `technical_approvals` is therefore still `False`, and
+    `test_the_bridge_protocol_has_no_respond_seam_yet` will fail the moment a seam
+    lands — forcing the flag to be reconsidered in the same change.
+  - **No UI.** T026 names an *accessible approval panel*; this is the backend route
+    only. The frontend belongs to Phases 7–8, and `studio-ui/` has no
+    `node_modules` here, so `Conversation.test.tsx:242` — the Phase 4 test pinning
+    the ABSENCE of an actionable control — could not be run. It is unaffected by
+    construction (no frontend file was touched), which is an argument, not a
+    measurement.
+  - **The pause is registration, not a state transition.** An emitted approval is
+    registered so the relay can decide it, and `awaiting_technical_approval` is
+    confirmed present in the contract's enum, but no code yet reports a thread as
+    being in that state.
+  - **Approval lifetime is bounded by COUNT, not by turn.** `_finish_turn`
+    deliberately does not drop a thread's approvals: Phase 4 streams
+    `approval_required` as inert activity beside a `turn_completed` in the SAME turn,
+    so an approval outliving its turn is normal, and evicting there made a
+    just-streamed approval undecidable the instant it appeared. `abandon_thread`
+    exists and is tested, unused until a real paused-turn model needs it.
+  - **Two pre-existing failures**, both proven red on clean `46243b5` before this
+    work and both untouched by it: `test_studio_generated_types` (regenerating
+    strips two unrelated comments from another session's `authentication_mode`
+    change, so it was deliberately not regenerated) and
+    `test_cli_identity_version` (installed `0.8.1` vs source `0.8.2`).
+
+  A human closes these boxes.
+
 ## Phase 7 - Agent-First Launch and Distribution (US5)
 
 - [ ] **T028** Write failing capability and bundle contracts for the new
