@@ -428,6 +428,25 @@ projection, endpoints, frontend, journey, and health.
   critical or serious finding. [FR-031, SC-007]
 - [ ] **T033** Build sdist/wheel and test clean base and Studio-extra installs with no
   Node runtime and no remote asset fetch. [SC-008]
+
+  **Partial 2026-08-13 — the RELEASE path is fixed; the box stays open.** Issue #623
+  found the published wheel shipping the `seshat-studio` console script with no UI:
+  `release.yml` went from installing validators straight to `python -m build`, with
+  no frontend build step, and `src/seshat/studio/static/` is gitignored generated
+  output. `pyproject.toml`'s `artifacts` re-include had nothing to collect.
+
+  Fixed by adding the build step AFTER "Verify source identity" (that step asserts a
+  clean tree). Proven at the artifact level rather than by reading YAML: a real
+  `python -m build --wheel` now yields a wheel containing
+  `seshat/studio/static/index.html` plus both hashed assets, confirmed by opening the
+  zip. `tests/unit/test_studio_frontend_build.py` — **10 passed**, where the same
+  tests SKIPPED before the assets existed, which is precisely why CI stayed green
+  over a broken release.
+
+  Still unverified, and why the box is open: SC-008's "clean base and Studio-extra
+  installs with no Node runtime" has not been exercised. That needs a fresh
+  interpreter installing the built wheel two ways and launching, which is a
+  packaging-acceptance run rather than a workflow edit.
 - [ ] **T034** Run security-boundary negative tests and verify response/log/event
   corpus contains no injected secret, token, absolute path, or workspace content.
   [SC-006]
