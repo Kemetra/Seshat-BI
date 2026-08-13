@@ -15,14 +15,25 @@ FIXTURES = ROOT / "tests" / "fixtures" / "public_distribution" / "release_audit"
 
 
 def test_product_candidate_audit_distinguishes_repo_pass_from_release_blocker() -> None:
-    report = audit_candidate(ROOT, allow_untracked_inputs=True)
-    candidate_version = report["candidate_version"]
+    # The release blocker is injected rather than read from ambient Git tag state.
+    # Asserting on "existing immutable tag vX" coupled this test to whether the
+    # checkout happened to carry tags: CI's default shallow, tag-less checkout
+    # emitted no such blocker, and the assertion would flip again on every
+    # version bump. Injection keeps the repo-pass/release-blocked distinction
+    # under test at any checkout depth.
+    baseline = audit_candidate(ROOT, allow_untracked_inputs=True)
+    candidate_version = baseline["candidate_version"]
+    report = audit_candidate(
+        ROOT,
+        allow_untracked_inputs=True,
+        known_immutable_package_versions={candidate_version},
+    )
 
     assert report["repository_status"] == "pass"
     assert report["repository_checks"]["registry"]["kpi_mc_15_count"] == 1
     assert report["status"] == "blocked"
     assert any(
-        f"existing immutable tag v{candidate_version}" in item
+        f"immutable package version {candidate_version}" in item
         for item in report["blocking_reasons"]
     )
     assert "score" not in json.dumps(report).casefold()

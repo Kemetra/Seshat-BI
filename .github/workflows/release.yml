@@ -26,6 +26,7 @@ jobs:
   build-validate:
     name: Build and validate without publication credentials
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     permissions:
       contents: read
     steps:
@@ -37,6 +38,9 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
       - name: Install build validators
         # The PACKAGE is a build validator here, not just a runtime artifact:
         # the "Verify synchronized version and generated bundles" step below
@@ -91,6 +95,11 @@ jobs:
           test "$(find release-staging/dist -maxdepth 1 -name '*.whl' | wc -l)" -eq 1
           test "$(find release-staging/dist -maxdepth 1 -name '*.tar.gz' | wc -l)" -eq 1
           test "$(find release-staging/dist -maxdepth 1 -type f | wc -l)" -eq 2
+      - name: Build and inspect exact npm tarballs
+        run: |
+          node npm/stage-release-packages.js --output release-staging/npm
+          cd release-staging
+          sha256sum -- npm/scoped/*.tgz npm/alias/*.tgz > NPM_SHA256SUMS
       - name: Upload immutable candidate handoff
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -105,6 +114,7 @@ jobs:
     if: ${{ inputs.publication_action == 'publish-pypi' }}
     needs: build-validate
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: pypi
     permissions:
       contents: read
@@ -147,7 +157,7 @@ jobs:
           attestations: true
           verbose: true
 
-  publish-npm:
+  publish-npm-scoped:
     name: Publish the agent skills bundle to npm
     # Runs only after PyPI succeeds. npm carries the SAME version number, so a
     # published npm package whose PyPI counterpart failed would be a lie about
@@ -155,6 +165,7 @@ jobs:
     if: ${{ inputs.publication_action == 'publish-pypi' }}
     needs: publish-pypi
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: npm
     permissions:
       contents: read
@@ -180,46 +191,73 @@ jobs:
             *) echo "Publication requires an immutable refs/tags/v* candidate"; exit 1 ;;
           esac
 
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          ref: ${{ inputs.candidate_ref }}
-          persist-credentials: false
-
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Verify the packaged tarball before publishing
-        # The packaging test asks `npm pack` what the tarball ACTUALLY contains
-        # and checks it against the bundle on disk. `files` in package.json is a
-        # whitelist: a bundle subdirectory added later but never listed simply
-        # does not ship, and nothing else would fail. It also pins npm/plugin/
-        # pyproject version parity, so a drifted version fails BEFORE publish.
-        run: npm test
+      - name: Download the validated candidate handoff
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: seshat-bi-candidate-${{ github.run_id }}
+          path: release-staging
 
-      - name: Publish @kemetra/seshat-bi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access public
-
-      - name: Publish the unscoped seshat-bi alias
-        # Holds the unscoped name and re-exports the scoped package. Its
-        # dependency pin is rewritten to this exact version so the alias can
-        # never resolve to a different release than the one being published.
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          VERSION: ${{ inputs.candidate_ref }}
+      - name: Revalidate exact npm tarball digests
+        shell: bash
         run: |
-          set -euo pipefail
-          version="${VERSION#refs/tags/v}"
-          cd npm/alias
-          node -e '
-            const fs = require("fs");
-            const version = process.argv[1];
-            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
-            pkg.version = version;
-            pkg.dependencies["@kemetra/seshat-bi"] = version;
-            fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
-          ' "$version"
-          npm publish --provenance --access public
+          cd release-staging
+          test "$(find npm/scoped -maxdepth 1 -name '*.tgz' | wc -l)" -eq 1
+          test "$(find npm/alias -maxdepth 1 -name '*.tgz' | wc -l)" -eq 1
+          sha256sum --check NPM_SHA256SUMS
+
+      - name: Publish the prebuilt @kemetra/seshat-bi tarball
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish release-staging/npm/scoped/*.tgz --provenance --access public
+
+  publish-npm-alias:
+    name: Publish the unscoped npm alias
+    if: ${{ inputs.publication_action == 'publish-pypi' }}
+    needs: publish-npm-scoped
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Reject forks and non-tag publication
+        shell: bash
+        env:
+          ACTUAL_REPOSITORY: ${{ github.repository }}
+          CANDIDATE_REF: ${{ inputs.candidate_ref }}
+          REF_PROTECTED: ${{ github.ref_protected }}
+          RUN_REF: ${{ github.ref }}
+        run: |
+          test "$ACTUAL_REPOSITORY" = "Kemetra/Seshat-BI"
+          test "$RUN_REF" = "$CANDIDATE_REF"
+          test "$REF_PROTECTED" = "true"
+          case "$CANDIDATE_REF" in
+            refs/tags/v*) ;;
+            *) echo "Publication requires an immutable refs/tags/v* candidate"; exit 1 ;;
+          esac
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - name: Download the validated candidate handoff
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: seshat-bi-candidate-${{ github.run_id }}
+          path: release-staging
+      - name: Revalidate exact npm tarball digests
+        shell: bash
+        run: |
+          cd release-staging
+          test "$(find npm/scoped -maxdepth 1 -name '*.tgz' | wc -l)" -eq 1
+          test "$(find npm/alias -maxdepth 1 -name '*.tgz' | wc -l)" -eq 1
+          sha256sum --check NPM_SHA256SUMS
+      - name: Publish the prebuilt unscoped seshat-bi alias tarball
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish release-staging/npm/alias/*.tgz --provenance --access public

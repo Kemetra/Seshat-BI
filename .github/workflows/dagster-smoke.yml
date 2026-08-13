@@ -17,18 +17,23 @@ on:
     paths:
       - "orchestration/dagster/**"
       - "src/seshat/dagster_adapter/**"
+      - "src/seshat/dbt/**"
+      - "pyproject.toml"
       - "schemas/dagster-run-evidence.schema.json"
       - ".github/workflows/dagster-smoke.yml"
   pull_request:
     paths:
       - "orchestration/dagster/**"
       - "src/seshat/dagster_adapter/**"
+      - "src/seshat/dbt/**"
+      - "pyproject.toml"
       - "schemas/dagster-run-evidence.schema.json"
       - ".github/workflows/dagster-smoke.yml"
 
 jobs:
   definitions-load-smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
