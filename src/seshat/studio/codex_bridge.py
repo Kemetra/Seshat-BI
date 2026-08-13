@@ -343,6 +343,15 @@ class CodexBridge:
         #: BINDING refusal is `agent_routes._pump_turn`, which every bridge's output
         #: passes through. This is the same cooperation `FakeAgentBridge` offers.
         self._propose_plan = propose_plan
+        #: Called with the live `CodexSession` when a turn opens one, and with `None`
+        #: when that turn ends. This is how a decided approval finds the child process
+        #: that is blocked on it: `run_turn` does not receive a `thread_id`, so the
+        #: bridge cannot key a registry itself, and this instance is SHARED across
+        #: threads -- storing the session on `self` would let one thread's turn
+        #: overwrite another's and answer the wrong provider. The route supplies a
+        #: closure that already knows its thread. Default is a no-op so every existing
+        #: caller, and `FakeAgentBridge`, are unaffected.
+        self.on_session: Callable[[Any], None] = lambda _session: None
 
     def describe(self) -> dict[str, Any]:
         return {"bridge": "codex", "provider": "codex", "deterministic": False}
@@ -523,6 +532,12 @@ class CodexBridge:
         plan = self._plan_for(requested_mode)
         session = CodexSession(plan)
         context = NormalizationContext(workspace_root=plan.cwd)
+        # Published BEFORE `start()`: a `requestApproval` can only arrive once frames
+        # are flowing, and the relay must already be able to find this session by then
+        # or the analyst's decision has nowhere to go. Retracted in the `finally`
+        # beside `session.close()` -- a closed child left in the registry would accept
+        # a decision and drop it, which is the silent failure this seam removes.
+        self.on_session(session)
         saw_terminal = False
         try:
             # `start()` is INSIDE the guard: a missing or non-executable binary makes
@@ -556,6 +571,7 @@ class CodexBridge:
                 },
             )
         finally:
+            self.on_session(None)
             session.close()
 
         if not saw_terminal:

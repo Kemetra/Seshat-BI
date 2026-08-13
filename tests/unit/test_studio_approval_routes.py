@@ -162,12 +162,21 @@ def test_the_advertised_capability_is_backed_by_a_reachable_delivery_seam():
     """
     import inspect
 
-    from seshat.studio import approval_routes
+    from seshat.studio import agent_routes, approval_routes
 
     source = inspect.getsource(approval_routes)
     assert "deliver_decision" in source, (
         "the relay must reach the delivery seam; a capability advertised without a "
         "caller is the fail-open this test exists to prevent"
+    )
+    # Source presence alone is NOT enough, and this test learned that the hard way:
+    # it passed for the entire period the seam was dead, because `_frame_sink` read
+    # `provider_sessions` -- a dict nothing ever wrote to. The lookup existed, the
+    # caller existed, and no decision ever reached a provider. So the registry's WRITE
+    # side is pinned too; `test_studio_approval_reachability` proves it end to end.
+    assert "_publish_provider_session" in inspect.getsource(agent_routes), (
+        "nothing registers a provider session, so every `_frame_sink` lookup misses "
+        "and `technical_approvals: True` advertises a round trip that cannot close"
     )
 
 

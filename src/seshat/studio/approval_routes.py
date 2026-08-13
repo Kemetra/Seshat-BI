@@ -160,10 +160,8 @@ def _deliver(request: ApprovalRequest, envelope: Any, allow: bool) -> Response:
     proves the second guard is load-bearing rather than decorative.
     """
     sink = _frame_sink(request.app, request.thread_id)
-    if sink is None or envelope is None:
-        # No provider is waiting -- the fake bridge's normal case. The decision stands
-        # recorded; there is simply no request to answer.
-        return Response(status_code=204)
+    if sink is None:
+        return _no_sink(request, envelope)
     try:
         deliver_decision(sink, envelope, allow=allow)
     except DeliveryRefused:
@@ -171,6 +169,37 @@ def _deliver(request: ApprovalRequest, envelope: Any, allow: bool) -> Response:
     except DeliveryFailed as failure:
         return request.problem(*_delivery_failed(failure))
     return Response(status_code=204)
+
+
+def _no_sink(request: ApprovalRequest, envelope: Any) -> Response:
+    """No provider session resolved. Whether that is normal turns on ONE fact.
+
+    An envelope carrying a `request_id` names a provider REQUEST that is blocked and
+    waiting; failing to answer it leaves the turn hung, so a 204 there would tell the
+    analyst a round trip closed that did not. That silent 204 is exactly how the dead
+    delivery seam shipped green -- the registry was never populated, every lookup
+    missed, and nothing said so.
+
+    Without a `request_id` there is genuinely nothing to answer: `FakeAgentBridge`
+    streams `approval_required` as inert activity with no server request beneath it.
+    The decision stands recorded and the route succeeds.
+    """
+    if envelope is not None and envelope.request_id is not None:
+        return request.problem(*_undeliverable(envelope))
+    return Response(status_code=204)
+
+
+def _undeliverable(envelope: Any) -> tuple[int, str, str, str]:
+    """502: the request was well-formed; the provider that owed a reply is gone."""
+    return (
+        502,
+        "The decision was recorded but not delivered",
+        f"approval {envelope.approval_id!r} names a waiting provider request "
+        f"({envelope.request_id!r}) but no live agent session was found for this "
+        "thread, so the provider was never answered",
+        "The agent session has ended. Re-open the thread; this decision cannot be "
+        "re-sent, because its approval id is already spent.",
+    )
 
 
 def _frame_sink(app: FastAPI, thread_id: str) -> Any:

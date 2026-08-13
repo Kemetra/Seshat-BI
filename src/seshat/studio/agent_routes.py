@@ -257,6 +257,7 @@ async def _start_turn(app: FastAPI, thread_id: str, body: dict[str, Any]) -> Any
     # a request dies with that request's event loop (verified under `TestClient`), so
     # the turn would silently stop after its first frame.
     _reap_abandoned_turns(app)
+    _publish_provider_session(app, thread_id)
     app.state.pending_turns[thread_id] = _PendingTurn(
         events=app.state.bridge.run_turn(
             prompt=request.prompt,
@@ -269,6 +270,36 @@ async def _start_turn(app: FastAPI, thread_id: str, body: dict[str, Any]) -> Any
         results=queue.Queue(),
     )
     return {"turn_id": turn_id}
+
+
+def _publish_provider_session(app: FastAPI, thread_id: str) -> None:
+    """Let this thread's turn register its live provider session for the relay.
+
+    The approval relay answers a blocked `requestApproval` by writing to the child
+    process that raised it, so it must be able to find that child by thread. Nothing
+    did this before: `app.state.provider_sessions` was initialized and read but never
+    assigned, so every lookup missed and every decision returned 204 while the
+    provider stayed blocked.
+
+    Registration is a CLOSURE handed to the bridge rather than a value the bridge
+    returns, for two reasons. `run_turn` never receives a `thread_id`, so the bridge
+    cannot key the registry itself; and `app.state.bridge` is ONE instance shared by
+    every thread, so a session stored on it would let a second thread's turn overwrite
+    the first and answer the wrong provider.
+
+    A bridge with no session to publish -- `FakeAgentBridge` -- simply has no
+    `on_session` attribute, and this is a no-op for it.
+    """
+    if not hasattr(app.state.bridge, "on_session"):
+        return
+
+    def publish(session: Any) -> None:
+        if session is None:
+            app.state.provider_sessions.pop(thread_id, None)
+        else:
+            app.state.provider_sessions[thread_id] = session
+
+    app.state.bridge.on_session = publish
 
 
 def _interrupt_turn(app: FastAPI, thread_id: str, turn_id: str) -> Response:
