@@ -199,6 +199,21 @@ async def _start_turn(app: FastAPI, thread_id: str, body: dict[str, Any]) -> Any
     if not app.state.threads.has_thread(thread_id):
         return _unknown_thread()
 
+    if getattr(app.state, "agent_turns_refused", False):
+        # Codex was CONFIGURED and is unusable -- missing CLI, or a build outside the
+        # tested range. The bridge contract requires an unsupported protocol to refuse
+        # turns rather than be handled opportunistically, so answering with the
+        # deterministic fake would hand the analyst canned text under the belief that
+        # their configured agent produced it. 503 with the reason, and every
+        # deterministic workspace view stays available.
+        return _problem(
+            503,
+            "Agent unavailable",
+            getattr(app.state, "agent_provider_detail", "The agent is unavailable."),
+            "Install or update the Codex CLI and restart Studio; workspace views "
+            "remain usable meanwhile.",
+        )
+
     thread = app.state.threads.thread(thread_id)
     turn_id = f"turn-{uuid.uuid4().hex[:12]}"
     request = TurnRequest(

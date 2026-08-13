@@ -219,7 +219,9 @@ def _register_routes(app: FastAPI) -> None:
     """The seven deterministic routes. Agent-thread routes belong to Phase 4."""
 
     def _snapshot() -> projection.WorkspaceSnapshot:
-        return projection.build_workspace_snapshot(app.state.launch.workspace_root)
+        return projection.build_workspace_snapshot(
+            app.state.launch.workspace_root, agent_health=app.state.agent_health
+        )
 
     def _redact(payload: Any) -> Any:
         """Scrub the payload at the REAL boundary, not just in tests.
@@ -421,6 +423,25 @@ def create_app(
     #: deterministic text comes back. `authentication_mode` cannot carry this -- it
     #: reads `subscription` either way.
     app.state.agent_provider_detail = provider.detail
+    #: The health the INTERFACE renders. Derived from the same probe the selection
+    #: used, so the two can never disagree: an operator seeing `ready` while the fake
+    #: answers is the misreport this whole seam exists to prevent.
+    app.state.agent_health = codex_process.classify_health(
+        codex_process.ProbeObservations(
+            executable_found=executable is not None,
+            version=codex_version,
+            signed_in=True,
+            disabled=launch.agent_provider == "fake",
+        )
+    )
+    #: Turns are REFUSED, not silently answered by the fake, when Codex was asked for
+    #: and is unusable. The bridge contract is explicit: an unsupported protocol
+    #: "refuses turns" rather than being handled opportunistically. Substituting a
+    #: demo implementation would hand the analyst canned text under the belief that
+    #: their configured agent produced it. Deterministic views stay fully usable.
+    app.state.agent_turns_refused = (
+        launch.agent_provider == "codex" and provider.provider != "codex"
+    )
     #: In-memory only (FR-035). The bridge is the deterministic fake until Phase 5
     #: introduces the Codex one; FR-014 keeps the swap to a single assignment.
     #:

@@ -132,3 +132,111 @@ def test_bootstrap_state_reports_which_bridge_is_live(tmp_path: Path) -> None:
 
     assert state["agent_provider"] == "fake"
     assert "0.1.0" in state["agent_provider_detail"]
+
+
+def _authenticated(app, token):
+    from fastapi.testclient import TestClient
+
+    client = TestClient(
+        app,
+        base_url="http://127.0.0.1:9999",
+        headers={"Origin": "http://127.0.0.1:9999"},
+    )
+    assert client.post("/api/v1/bootstrap", params={"token": token}).status_code == 204
+    return client
+
+
+def test_a_configured_but_unusable_codex_refuses_turns(tmp_path: Path) -> None:
+    """P1 (#621 review): an unsupported protocol must REFUSE, not be substituted.
+
+    The bridge contract's failure table is explicit -- "unsupported protocol ->
+    incompatible -> refuse turns" -- because answering with the deterministic fake
+    hands the analyst canned text under the belief that their configured agent
+    produced it. That is worse than an error: it is a plausible wrong answer.
+
+    Deterministic views must stay usable, which the second half asserts.
+    """
+    from seshat.studio.app import create_app
+
+    app, token = create_app(
+        _workspace(tmp_path), port=9999, agent_provider="codex", codex_version="0.1.0"
+    )
+    client = _authenticated(app, token)
+    thread_id = client.post(
+        "/api/v1/agent/threads", json={"selected_table_id": None}
+    ).json()["thread_id"]
+
+    refused = client.post(
+        f"/api/v1/agent/threads/{thread_id}/turns",
+        json={
+            "prompt": "what is blocking gold?",
+            "snapshot_revision": "r1",
+            "requested_mode": "read_only",
+        },
+    )
+
+    assert refused.status_code == 503, refused.text
+    assert "0.1.0" in refused.json()["detail"]
+    # The workspace itself never needed Codex and must stay fully usable.
+    assert client.get("/api/v1/workspace").status_code == 200
+
+
+def test_the_fake_default_still_answers_turns(tmp_path: Path) -> None:
+    """The discriminator: refusal must be scoped to a CONFIGURED-but-broken Codex.
+
+    Without this, refusing every turn would satisfy the test above while breaking
+    the deterministic bridge for every operator who configured nothing.
+    """
+    from seshat.studio.app import create_app
+
+    app, token = create_app(_workspace(tmp_path), port=9999)
+    client = _authenticated(app, token)
+    thread_id = client.post(
+        "/api/v1/agent/threads", json={"selected_table_id": None}
+    ).json()["thread_id"]
+
+    accepted = client.post(
+        f"/api/v1/agent/threads/{thread_id}/turns",
+        json={
+            "prompt": "what is blocking gold?",
+            "snapshot_revision": "r1",
+            "requested_mode": "read_only",
+        },
+    )
+
+    assert accepted.status_code == 202, accepted.text
+
+
+def test_the_workspace_projection_reports_the_real_agent_health(
+    tmp_path: Path,
+) -> None:
+    """P1 (#621 review): the INTERFACE reads `/workspace`, not `/bootstrap/state`.
+
+    `build_workspace_snapshot` hardcoded `disabled`, so a working Codex launch
+    displayed as disabled and a fallback displayed identically to a healthy bridge.
+    Adding fields to an endpoint the UI never reads is not reporting.
+    """
+    from seshat.studio.app import create_app
+
+    configured, token = create_app(
+        _workspace(tmp_path), port=9999, agent_provider="codex", codex_version="0.1.0"
+    )
+    health = (
+        _authenticated(configured, token)
+        .get("/api/v1/workspace")
+        .json()["agent_health"]
+    )
+
+    assert health["state"] == "incompatible", health
+    assert "0.1.0" in health["summary"], health
+
+
+def test_the_fake_default_still_projects_disabled(tmp_path: Path) -> None:
+    """The inverse: an operator who configured nothing sees `disabled`, as before."""
+    from seshat.studio.app import create_app
+
+    app, token = create_app(_workspace(tmp_path), port=9999)
+
+    health = _authenticated(app, token).get("/api/v1/workspace").json()["agent_health"]
+
+    assert health["state"] == "disabled", health

@@ -566,13 +566,22 @@ def _upstream_by_table(root: Path) -> dict[str, dict]:
 
 
 def build_workspace_snapshot(
-    root: Path | str, *, generated_at: str | None = None
+    root: Path | str,
+    *,
+    generated_at: str | None = None,
+    agent_health: AgentHealth | None = None,
 ) -> WorkspaceSnapshot:
     """Project one workspace, reporting whatever the upstream projection dropped.
 
     ``generated_at`` is injectable so a caller can pin it; the revision digest never
     includes it, which is what keeps the digest content-addressed rather than
     time-varying.
+
+    ``agent_health`` is injectable because this projection is what the INTERFACE
+    renders. Hardcoding `disabled` here meant a working Codex launch displayed as
+    disabled, and a fallback to the fake displayed identically to a healthy bridge --
+    so the operator could not tell which agent was answering. Defaults to `disabled`
+    for every caller that genuinely has no bridge.
     """
     workspace_root = Path(root)
     projected_by_table = _upstream_by_table(workspace_root)
@@ -607,7 +616,7 @@ def build_workspace_snapshot(
         identity=identity,
         generated_at=generated_at
         or datetime.now(tz=UTC).isoformat(timespec="seconds").replace("+00:00", "Z"),
-        agent_health=_disabled_agent_health(),
+        agent_health=agent_health or _disabled_agent_health(),
         tables=tuple(journeys),
         input_defects=tuple(defects),
     )
