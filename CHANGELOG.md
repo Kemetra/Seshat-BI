@@ -83,11 +83,11 @@ explicitly identifies a public release event.
   add `--repo <root> --table <table>` to every invocation of those four verbs.** A
   script that worked against 0.8.2 fails with an argparse error until it does.
   Under `docs/operations/versioning-policy.md` this is the **MAJOR** row ("a flag
-  is removed or renamed, an exit-code meaning changes"). Disclosed here rather
-  than buried; the version classification for this release is a named owner
-  decision recorded in `docs/releases/v0.9.md`. Found by external review on
-  PR #622, not by the automated gates -- every gate passed the earlier, incorrect
-  claim that no existing verb's flag contract had changed.
+  is removed or renamed, an exit-code meaning changes"), and it is why this
+  release is **1.0.0** rather than a minor bump -- a named owner decision recorded
+  in `docs/releases/v1.0.md`. Found by external review on PR #622, not by the
+  automated gates: every gate passed the earlier, incorrect claim that no
+  existing verb's flag contract had changed.
 - **The Spec Kit template fork removed and status governance externalized**
   (spec 151; #600) -- one less vendored fork to drift.
 - **The capability oracle split into three layered modules** (#598).
@@ -115,7 +115,7 @@ explicitly identifies a public release event.
 - **A CI double-fire that masked a green run as red** (#593).
 
 ### Docs
-- **The v0.9 release note** (`docs/releases/v0.9.md`), which states the Studio
+- **The v1.0 release note** (`docs/releases/v1.0.md`), which states the Studio
   preview boundary and the release mechanics.
 - **ADR-0020 proposed -- the non-Seshat consumer boundary** (G-d) (#591).
 - **A merge commit required for the release PR**, with the v0.8.2 gaps recorded
