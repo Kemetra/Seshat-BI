@@ -39,6 +39,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Workspace to serve. Exactly one workspace per process (FR-001).",
     )
     parser.add_argument(
+        "--agent",
+        choices=("fake", "codex"),
+        default="fake",
+        help=(
+            "Which agent answers turns. Defaults to the deterministic bridge. "
+            "`codex` is EXPLICIT: an installed Codex CLI is never selected on its "
+            "own, because presence is not consent to use a provider."
+        ),
+    )
+    parser.add_argument(
         "--no-serve",
         action="store_true",
         help=(
@@ -202,7 +212,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     listener = _bind_loopback(launch.bind_host)
     bound = launch.with_bound_port(listener.getsockname()[1])
 
-    application, token = app_module.create_app(bound.workspace_root, port=bound.port)
+    application, token = app_module.create_app(
+        bound.workspace_root, port=bound.port, agent_provider=args.agent
+    )
     # The DOCUMENT ROOT carries the token, not the exchange route. An earlier revision
     # printed `/api/v1/bootstrap?token=...`, which is POST-only -- a browser navigating
     # there got 405 and Studio was simply unopenable. The page served at `/` reads the

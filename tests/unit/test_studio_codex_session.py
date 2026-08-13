@@ -100,7 +100,12 @@ def test_a_session_reads_every_frame_then_sees_eof(tmp_path: Path) -> None:
         session.close()
 
     assert frames, "no frames were read from the child"
-    assert all(frame.get("jsonrpc") == "2.0" for frame in frames)
+    # "absent, or exactly 2.0" -- the rule `CodexProtocolReader` actually applies. The
+    # real app-server does NOT send `jsonrpc` and its schema never declares it (#617),
+    # so demanding the field would pin a property true of the FIXTURES and false of
+    # the provider. The fixture's `initialize` reply is written in the provider's
+    # shape precisely so this stays honest.
+    assert all(frame.get("jsonrpc", "2.0") == "2.0" for frame in frames)
 
 
 def test_a_session_never_inherits_a_handle(tmp_path: Path) -> None:

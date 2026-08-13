@@ -67,6 +67,16 @@ class LaunchConfiguration:
     #: from it -- but configuring the mode WITHOUT one fails closed.
     alternate_credential_present: bool = False
 
+    #: WHICH agent implementation answers turns: the deterministic fake, or a live
+    #: Codex app-server. A separate axis from `operator_configured_auth_mode`, which
+    #: chooses how a bridge AUTHENTICATES, not which bridge exists.
+    #:
+    #: Explicit and pinned for the same reason: an installed Codex CLI must not
+    #: select itself. Inferring from PATH would move an operator onto a provider --
+    #: and onto whatever that provider bills -- without their say, which is the
+    #: failure `bridge_selection` was written to prevent one axis over.
+    agent_provider: str = "fake"
+
     def with_bound_port(self, port: int) -> LaunchConfiguration:
         """A copy carrying the port the OS actually assigned.
 

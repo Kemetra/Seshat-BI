@@ -23,14 +23,41 @@ even looked at, so an attacker cannot learn whether a session exists.
 
 from __future__ import annotations
 
+import subprocess
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from dataclasses import replace
+from functools import partial
 from pathlib import Path
 from typing import Any
 
+import anyio.to_thread
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
-from . import agent_routes, bridge, config, events, projection, redaction, session
+from . import (
+    agent_routes,
+    bridge,
+    bridge_selection,
+    codex_bridge,
+    codex_process,
+    config,
+    events,
+    projection,
+    redaction,
+    session,
+)
 from .bridge_selection import select_bridge
+
+#: Distinguishes "probe the installed CLI" from an explicit `None` meaning "there is
+#: none". A default of `None` would make the missing-CLI branch untestable without
+#: uninstalling Codex from the machine running the tests.
+_PROBE_CODEX = object()
+
+#: How long shutdown waits for one turn's provider teardown. Bounded so a wedged
+#: child cannot hold the process open forever; the thread is a daemon, so anything
+#: still running past this dies with the interpreter rather than blocking exit.
+_SHUTDOWN_JOIN_SECONDS = 10.0
 
 #: Every route lives under this prefix, matching the contract's server URL.
 API_PREFIX = "/api/v1"
@@ -201,7 +228,9 @@ def _register_routes(app: FastAPI) -> None:
     """The seven deterministic routes. Agent-thread routes belong to Phase 4."""
 
     def _snapshot() -> projection.WorkspaceSnapshot:
-        return projection.build_workspace_snapshot(app.state.launch.workspace_root)
+        return projection.build_workspace_snapshot(
+            app.state.launch.workspace_root, agent_health=app.state.agent_health
+        )
 
     def _redact(payload: Any) -> Any:
         """Scrub the payload at the REAL boundary, not just in tests.
@@ -243,6 +272,13 @@ def _register_routes(app: FastAPI) -> None:
                 "workspace": _snapshot().as_dict(),
                 "navigation": ["command_room"],
                 "authentication_mode": app.state.authentication_mode,
+                #: WHICH implementation is answering, plus why. Separate from
+                #: `authentication_mode`, which reports `subscription` whether Codex
+                #: or the fake is driving -- so a fallback would be invisible without
+                #: this, and the operator would read deterministic text as a real
+                #: reply.
+                "agent_provider": app.state.agent_provider,
+                "agent_provider_detail": app.state.agent_provider_detail,
                 "capabilities": _bootstrap_capabilities(),
             }
         )
@@ -299,7 +335,46 @@ def _register_frontend(app: FastAPI) -> None:
     app.mount("/", StaticFiles(directory=static_directory, html=True), name="frontend")
 
 
-def create_app(workspace: Path | str, *, port: int) -> tuple[FastAPI, str]:
+def _probe_codex(configured_provider: str) -> tuple[str | None, str | None]:
+    """The installed CLI's path and reported version, or `(None, None)`.
+
+    Run ONCE at startup and only when Codex is actually configured: an operator on
+    the fake must not pay a subprocess spawn at boot, and must not have a CLI that
+    merely happens to be installed influence anything.
+
+    Every failure returns `None` rather than raising. A missing, hung, or
+    unintelligible CLI must degrade to the deterministic bridge -- a traceback here
+    would take down the whole workspace, including the views that never needed Codex.
+    """
+    if configured_provider != "codex":
+        return None, None
+    executable = codex_process.find_codex_executable()
+    if executable is None:
+        return None, None
+    try:
+        completed = subprocess.run(  # noqa: S603 -- fixed argv, never a shell string
+            [executable, "--version"], capture_output=True, text=True, timeout=30
+        )
+    except (OSError, subprocess.SubprocessError):
+        return executable, None
+    if completed.returncode != 0:
+        # A nonzero exit means the probe FAILED, whatever it printed. A broken shim or
+        # half-installed CLI can write a supported-looking version to stdout and then
+        # report an error; parsing it anyway would select the live bridge on the
+        # strength of output from a command that did not succeed, deferring the real
+        # failure to the analyst's first turn.
+        return executable, None
+    reported = completed.stdout.strip().split()
+    return executable, (reported[-1] if reported else None)
+
+
+def create_app(
+    workspace: Path | str,
+    *,
+    port: int,
+    agent_provider: str = "fake",
+    codex_version: str | None = _PROBE_CODEX,
+) -> tuple[FastAPI, str]:
     """Build the app for one pinned workspace, returning it with its bootstrap token.
 
     The token is RETURNED rather than logged or stored in plaintext: the caller hands
@@ -313,11 +388,53 @@ def create_app(workspace: Path | str, *, port: int) -> tuple[FastAPI, str]:
     disagreement impossible to reintroduce: there is no default to fall back to, and
     FR-003's OS-assigned port stays the caller's to resolve.
     """
-    launch = config.LaunchConfiguration.for_workspace(workspace).with_bound_port(port)
+    launch = replace(
+        config.LaunchConfiguration.for_workspace(workspace).with_bound_port(port),
+        agent_provider=agent_provider,
+    )
+    #: `codex_version` is an injection seam for tests, which must exercise the
+    #: untested-range and missing-CLI branches without depending on what happens to
+    #: be installed on the machine running them. The sentinel keeps "probe the real
+    #: CLI" distinguishable from an explicit `None` meaning "there is none".
+    if codex_version is _PROBE_CODEX:
+        executable, codex_version = _probe_codex(launch.agent_provider)
+    else:
+        executable = None if codex_version is None else "codex"
     token = session.generate_bootstrap_token()
 
+    @asynccontextmanager
+    async def _lifespan(running: FastAPI) -> AsyncIterator[None]:
+        """End every in-flight turn when Studio stops.
+
+        Without this, stopping Studio during a live turn left the provider's child
+        running: the pump only advances on a poll, so nothing would ever reach the
+        generator's `finally` -- the very thing that terminates `codex app-server`.
+        An orphaned process outliving the tool that spawned it is the bridge
+        lifecycle contract's failure, not merely untidy.
+
+        A lifespan handler rather than `on_event("shutdown")`, which FastAPI
+        deprecates. Iterated over a COPY because `_finish_turn` mutates the dict.
+        """
+        yield
+        # AWAITED, not merely started: `_finish_turn` hands its cleanup to a daemon
+        # thread, so a lifespan that only initiated the work could let the
+        # interpreter exit before `close()` ever reached `CodexSession.close()` --
+        # leaving the app-server alive, which is the exact leak this handler exists
+        # to prevent. Joined off the loop so a slow teardown cannot block shutdown.
+        cleanups = [
+            thread
+            for thread_id, pending in list(running.state.pending_turns.items())
+            if (thread := agent_routes._finish_turn(running, thread_id, pending))
+        ]
+        for thread in cleanups:
+            await anyio.to_thread.run_sync(partial(thread.join, _SHUTDOWN_JOIN_SECONDS))
+
     app = FastAPI(
-        title="Seshat Studio", docs_url=None, redoc_url=None, openapi_url=None
+        title="Seshat Studio",
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+        lifespan=_lifespan,
     )
     app.state.launch = launch
     app.state.sessions = session.SessionStore(token)
@@ -337,6 +454,52 @@ def create_app(workspace: Path | str, *, port: int) -> tuple[FastAPI, str]:
         alternate_credential_present=launch.alternate_credential_present,
     )
     app.state.authentication_mode = app.state.bridge_selection.authentication_mode
+
+    #: WHICH implementation answers turns, decided ONCE here. The probe is a
+    #: subprocess; running it per turn would put a spawn on the critical path of
+    #: every message, and could answer differently mid-session.
+    provider = bridge_selection.select_provider(
+        configured_provider=launch.agent_provider,
+        executable=executable,
+        version=codex_version,
+        version_is_tested=codex_process.is_tested_version(codex_version),
+    )
+    app.state.agent_provider = provider.provider
+    #: Reported to the browser because a SILENT fallback is the dangerous one: the
+    #: operator sees a working Studio and believes Codex is answering while
+    #: deterministic text comes back. `authentication_mode` cannot carry this -- it
+    #: reads `subscription` either way.
+    app.state.agent_provider_detail = provider.detail
+    #: The health the INTERFACE renders. Derived from the same probe the selection
+    #: used, so the two can never disagree: an operator seeing `ready` while the fake
+    #: answers is the misreport this whole seam exists to prevent.
+    #: `signed_in=False` because startup ran `codex --version` and NOTHING else: it
+    #: never started the app-server and never called `account/read`, so sign-in state
+    #: is genuinely unknown here. Reporting `True` claimed "Codex is signed in and
+    #: responding" on the strength of a version string -- a signed-out CLI would read
+    #: healthy, and the analyst would learn otherwise only when a turn failed
+    #: generically. The contract requires the probe to distinguish `signed_out`, and
+    #: an unproven claim is worse than a conservative one: `signed_out` names a real
+    #: recovery action, while a false `ready` names none.
+    #:
+    #: A live handshake probe at boot is the right answer and is #618's, not this
+    #: PR's -- it means spawning the app-server before the first turn.
+    app.state.agent_health = codex_process.classify_health(
+        codex_process.ProbeObservations(
+            executable_found=executable is not None,
+            version=codex_version,
+            signed_in=False,
+            disabled=launch.agent_provider == "fake",
+        )
+    )
+    #: Turns are REFUSED, not silently answered by the fake, when Codex was asked for
+    #: and is unusable. The bridge contract is explicit: an unsupported protocol
+    #: "refuses turns" rather than being handled opportunistically. Substituting a
+    #: demo implementation would hand the analyst canned text under the belief that
+    #: their configured agent produced it. Deterministic views stay fully usable.
+    app.state.agent_turns_refused = (
+        launch.agent_provider == "codex" and provider.provider != "codex"
+    )
     #: In-memory only (FR-035). The bridge is the deterministic fake until Phase 5
     #: introduces the Codex one; FR-014 keeps the swap to a single assignment.
     #:
@@ -347,7 +510,15 @@ def create_app(workspace: Path | str, *, port: int) -> tuple[FastAPI, str]:
     #: absolute filesystem paths to the browser, including out-of-root paths that
     #: expose the operator's home directory layout.
     app.state.threads = events.ThreadStore(workspace_root=launch.workspace_root)
-    app.state.bridge = bridge.FakeAgentBridge()
+    app.state.bridge = (
+        codex_bridge.CodexBridge(
+            codex_process.CodexLaunchPlan.for_workspace(
+                launch.workspace_root, executable=executable or "codex"
+            )
+        )
+        if provider.provider == "codex"
+        else bridge.FakeAgentBridge()
+    )
 
     _register_routes(app)
     agent_routes.register_agent_routes(app)
@@ -355,4 +526,5 @@ def create_app(workspace: Path | str, *, port: int) -> tuple[FastAPI, str]:
     # shadow every `/api/v1/*` path.
     _register_frontend(app)
     _install_security_middleware(app)
+
     return app, token

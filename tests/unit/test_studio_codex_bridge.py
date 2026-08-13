@@ -474,3 +474,92 @@ def test_thread_start_uses_the_workspace_the_child_runs_in(tmp_path: Path) -> No
     assert thread_start["params"]["cwd"] == str(alternate), (
         "thread/start pinned the provider to a workspace the child does not run in"
     )
+
+
+def test_no_thread_is_requested_until_initialize_is_answered(tmp_path: Path) -> None:
+    """P1 (#621 review): `initialize -> response -> initialized`, in that order.
+
+    The contract and the captured probe both require negotiation to COMPLETE before
+    any thread request. The old code wrote all three frames back to back without
+    reading the reply, which the scripted child cannot expose: it replays its fixture
+    regardless of what it is asked, so the write ORDER looks identical either way.
+
+    The observable difference is timing relative to the reply, so this drives a
+    fixture with NO initialize response. A bridge that waits sends only `initialize`;
+    one that races sends `initialized` and `thread/start` too.
+    """
+    import unittest.mock
+
+    from seshat.studio.codex_bridge import CodexBridge, CodexSession
+    from seshat.studio.codex_process import CodexLaunchPlan
+
+    sent: list[str | None] = []
+
+    class _RecordingSession(CodexSession):
+        def send(self, frame: dict) -> None:  # type: ignore[override]
+            sent.append(frame.get("method"))
+
+    # `quota` never answers our `initialize` (id 1): it carries only notifications
+    # and an unrelated reply, which is exactly the shape of a provider that has not
+    # finished negotiating.
+    bridge = CodexBridge(
+        CodexLaunchPlan(argv=(sys.executable, str(_SCRIPT), "quota"), cwd=tmp_path)
+    )
+    with unittest.mock.patch(
+        "seshat.studio.codex_bridge.CodexSession", _RecordingSession
+    ):
+        list(
+            bridge.run_turn(
+                prompt="Summarise the readiness spine",
+                turn_id="turn-handshake",
+                requested_mode="read_only",
+            )
+        )
+
+    assert sent == ["initialize"], (
+        "a thread was requested before initialization was answered; the protocol "
+        f"requires initialize -> response -> initialized, but sent {sent}"
+    )
+
+
+def test_a_refused_initialize_does_not_open_a_thread(tmp_path: Path) -> None:
+    """P2 (#621 review): waiting for id 1 is not enough -- it must have SUCCEEDED.
+
+    An `initialize` answered with a JSON-RPC error still carries our id, so the
+    previous check treated an explicit refusal as completed negotiation and opened a
+    thread on a session that had rejected it. The turn then failed later with a
+    generic error instead of the incompatibility the provider actually reported.
+    """
+    import unittest.mock
+
+    from seshat.studio.codex_bridge import CodexBridge, CodexSession
+    from seshat.studio.codex_process import CodexLaunchPlan
+
+    sent: list[str | None] = []
+
+    class _RefusingSession(CodexSession):
+        def send(self, frame: dict) -> None:  # type: ignore[override]
+            sent.append(frame.get("method"))
+
+        def frames(self, timeout: float = 30.0):  # type: ignore[override]
+            yield {"id": 1, "error": {"code": -32600, "message": "unsupported client"}}
+
+    bridge = CodexBridge(
+        CodexLaunchPlan(argv=(sys.executable, str(_SCRIPT), "handshake"), cwd=tmp_path)
+    )
+    with unittest.mock.patch(
+        "seshat.studio.codex_bridge.CodexSession", _RefusingSession
+    ):
+        events = list(
+            bridge.run_turn(
+                prompt="Summarise the readiness spine",
+                turn_id="turn-refused",
+                requested_mode="read_only",
+            )
+        )
+
+    assert sent == ["initialize"], (
+        f"a thread was opened on a session that refused to initialize: {sent}"
+    )
+    terminals = [e for e in events if e.type in {"turn_completed", "turn_failed"}]
+    assert len(terminals) == 1 and terminals[0].type == "turn_failed", events

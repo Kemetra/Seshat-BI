@@ -39,6 +39,7 @@ from seshat.studio.codex_process import (
     redact_provider_stderr,
 )
 from seshat.studio.codex_protocol import (
+    CodexFrameError,
     CodexProtocolReader,
     NormalizationContext,
     normalize_notification,
@@ -351,7 +352,18 @@ class CodexBridge:
         return self._plan
 
     def _open_thread(self, session: CodexSession) -> None:
-        """Handshake, then ask for a thread. Its id arrives asynchronously."""
+        """Ask to initialize. Nothing else may be sent until its REPLY arrives.
+
+        The contract and the captured probe both require
+        `initialize -> response -> initialized` before any thread request. Sending
+        `initialized` and `thread/start` immediately after the request raced protocol
+        negotiation: against the scripted child it looked fine (it replays regardless
+        of what it is asked), and only a live server can reject a thread request that
+        arrives before negotiation completes.
+
+        `_start_thread` is therefore driven by the reply, in the same pass that
+        already waits for `thread/start`'s reply before sending `turn/start`.
+        """
         session.send(
             {
                 "jsonrpc": "2.0",
@@ -360,6 +372,9 @@ class CodexBridge:
                 "params": {"clientInfo": {"name": "seshat-studio", "version": "1"}},
             }
         )
+
+    def _start_thread(self, session: CodexSession) -> None:
+        """Confirm negotiation, then ask for a thread."""
         session.send({"jsonrpc": "2.0", "method": "initialized"})
         session.send(
             {
@@ -427,14 +442,45 @@ class CodexBridge:
         `thr_fixture`, so the id appears in the stream whether or not the bridge
         learned it. Only a live server, minting its own, forces the correlation.
         """
+        initialized = False
         requested = False
         for frame in session.frames():
+            if not initialized:
+                initialized = self._negotiated(session, frame)
             if not requested:
-                thread_id = _thread_id_from(frame)
-                if thread_id is not None:
-                    self._start_turn(session, thread_id, prompt)
-                    requested = True
+                requested = self._requested(session, frame, prompt)
             yield frame
+
+    def _negotiated(self, session: CodexSession, frame: dict[str, Any]) -> bool:
+        """True once `initialize` has been ANSWERED and the thread requested.
+
+        The contract requires `initialize -> response -> initialized` before any
+        thread request, so this is what releases the rest of the handshake. A frame
+        that is not our reply leaves the state unchanged.
+        """
+        if frame.get("id") != _INITIALIZE_ID:
+            return False
+        if "error" in frame:
+            # The provider REFUSED to negotiate. Proceeding would open a thread on a
+            # session that explicitly rejected initialization, and the turn would
+            # fail later with a generic error instead of the incompatibility the
+            # provider actually reported.
+            raise CodexFrameError(
+                "the provider refused to initialize; the adapter is incompatible "
+                "with this build"
+            )
+        self._start_thread(session)
+        return True
+
+    def _requested(
+        self, session: CodexSession, frame: dict[str, Any], prompt: str
+    ) -> bool:
+        """True once the turn has been requested on the provider's own thread id."""
+        thread_id = _thread_id_from(frame)
+        if thread_id is None:
+            return False
+        self._start_turn(session, thread_id, prompt)
+        return True
 
     def _start_turn(self, session: CodexSession, thread_id: str, prompt: str) -> None:
         """Ask for the turn itself, on the thread the provider just minted."""
