@@ -44,7 +44,11 @@ import anyio.to_thread
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from seshat.studio.approvals import StaleApproval
+from seshat.studio.approvals import (
+    StaleApproval,
+    forbidden_scope_for,
+    normalize_approval,
+)
 from seshat.studio.bridge import validate_turn_request
 from seshat.studio.events import ReplayExpired, TurnAlreadyActive
 
@@ -513,6 +517,41 @@ class _PendingTurn:
 TURN_PUMP_SECONDS = 0.5
 
 
+def _selected_table(thread: Any) -> str | None:
+    """The table this thread was opened against, read back from its own opening event.
+
+    Recovered from the event log rather than threaded through `TurnRequest`: the value
+    is already recorded in `thread_started`, and adding a fourth field to the request
+    would put the same fact in two places that could disagree.
+    """
+    for event in thread.retained():
+        if event.type == "thread_started":
+            selected = event.payload.get("selected_table_id")
+            return str(selected) if selected else None
+    return None
+
+
+def _register_approval(app: FastAPI, thread: Any, produced: Any) -> None:
+    """Make one streamed approval decidable, and only as far as readiness allows.
+
+    Called BEFORE the event is appended, so the id the browser reads from the stream is
+    already known to the ledger -- otherwise the panel renders an approval that every
+    relay call refuses as unknown (FR-018: the scope check runs before exposure, not
+    after the click).
+
+    A `named_human` item is registered too, deliberately. It must be *visible* as a
+    prepared summary, and registering it is what lets the relay answer 403 with the real
+    reason instead of a bare "unknown approval". `normalize_approval` has already made
+    it unallowable, so registration grants nothing.
+    """
+    forbidden = forbidden_scope_for(
+        app.state.launch.workspace_root, _selected_table(thread)
+    )
+    app.state.pending_approvals.register(
+        normalize_approval(dict(produced.payload), forbidden)
+    )
+
+
 async def _pump_turn(app: FastAPI, thread_id: str, thread: Any) -> None:
     """Advance a live turn by up to `TURN_PUMP_SECONDS`, then return.
 
@@ -589,6 +628,8 @@ async def _pump_turn(app: FastAPI, thread_id: str, thread: Any) -> None:
                     )
                     _finish_turn(app, thread_id, pending)
                     return
+                if produced.type == "approval_required":
+                    _register_approval(app, thread, produced)
                 thread.append(produced.type, produced.payload, turn_id=produced.turn_id)
                 if produced.type in _TERMINAL_EVENTS:
                     _finish_turn(app, thread_id, pending)

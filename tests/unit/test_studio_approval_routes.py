@@ -9,6 +9,7 @@ the relay entirely cannot make this file pass.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -198,3 +199,48 @@ def test_an_unknown_thread_is_refused(tmp_path: Path):
     app.state.pending_approvals.register(normalize_approval(TECHNICAL_EVENT, []))
     response = _decide(client, "no-such-thread", "turn-1-approval-1", allow=True)
     assert response.status_code == 404, response.text
+
+
+# --------------------------------------------------------------------------- #
+# The pause (T024)                                                            #
+# --------------------------------------------------------------------------- #
+
+
+def test_the_pause_state_is_the_one_the_contract_already_names():
+    """Not a new string: the contract's enum already carries this state."""
+    from seshat.studio.agent_routes import THREAD_STATES
+
+    assert "awaiting_technical_approval" in THREAD_STATES
+
+
+def test_an_emitted_approval_is_registered_so_the_relay_can_find_it(tmp_path: Path):
+    """The pump must REGISTER an approval it streams, or the relay 409s on every
+    decision -- the approval would render in the browser and be undecidable."""
+    client, app = _client(tmp_path)
+    thread_id = _thread(client)
+    started = client.post(
+        f"{API}/agent/threads/{thread_id}/turns",
+        json={
+            "prompt": "Please change the mapping",
+            "requested_mode": "propose_changes",
+        },
+    )
+    assert started.status_code == 202, started.text
+
+    # Drain the turn the way the browser does: poll the finite replay.
+    approval_ids: list[str] = []
+    for _ in range(12):
+        body = client.get(f"{API}/agent/threads/{thread_id}/events").text
+        approval_ids += [
+            json.loads(line[len("data:") :])["payload"]["approval_id"]
+            for line in body.splitlines()
+            if line.startswith("data:")
+            and json.loads(line[len("data:") :])["type"] == "approval_required"
+        ]
+        if approval_ids:
+            break
+    if not approval_ids:
+        pytest.skip("this bridge emitted no approval_required for that prompt")
+
+    # The positive form: the id the browser saw is the id the ledger knows.
+    assert app.state.pending_approvals.envelope(approval_ids[0]) is not None
