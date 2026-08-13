@@ -150,7 +150,95 @@ new claim is made; this demonstrates the taxonomy decides real tools with no ove
 | `retail-validate`, `retail-govern`, `retail-semantic-check`, table onboarding wizard | 1-4 | **Official Workflow Skill** |
 | control room (F012), grain-confidence reviewer (F008), cross-table lineage (F036) | 3-6 | **Product Module / `read-only`** |
 | BI handoff pack (F013), dashboard design (F011), consumer data dictionary (F037) | 6 | **Product Module / `artifact-writing`** |
+| Seshat Studio (spec 139) -- the optional localhost visual control center | 1-6 | **Product Module / `execution-capable`** (see below) |
 | Power BI execution adapter (F016, official Power BI MCP / connection) | 6 | **Execution Adapter / `publish-capable`** |
+
+## Seshat Studio: why `execution-capable`, and the boundary that follows
+
+Studio spans every product layer visually, which makes it the surface most likely to be
+mistaken for a new core. It is not. It classifies as **Product Module /
+`execution-capable`**, and the classification is what keeps the boundary enforceable
+rather than aspirational.
+
+> **Core works without Studio. Studio projects and orchestrates Core; it never becomes
+> Core.**
+
+**Why a Module, not an Adapter.** Apply the seam: does it connect out or publish? Studio
+spawns a LOCAL child process (the analyst's own installed Codex CLI) in the workspace and
+speaks JSON-RPC over its pipes. It opens no database, calls no remote service, and
+publishes nothing. That is Tool A's shape in the worked examples, not Tool B's. An adapter
+crosses a boundary the repo does not own; Studio stays inside the local committed working
+set -- which is precisely the scope the `execution-capable` level names.
+
+**Why `execution-capable` and not `read-only`.** By the tie-break rule -- classify by the
+HIGHEST authority capability actually used -- Studio ORCHESTRATES approved local
+execution. The technical approval relay answers a provider's blocked `requestApproval`
+with a decision, and the provider then runs the approved step. That FR-020 keeps browser
+code from performing the side effect directly does not lower the ceiling: it constrains
+WHERE execution is initiated, not WHETHER Studio orchestrates it. Reading the relay as
+`read-only` would understate the authority actually exercised, and `read-only` also
+forbids writing derived evidence, which Studio's event store and projections already do.
+
+The level is exact: "runs an approved step against the LOCAL committed working set". Each
+word is load-bearing. **Approved** -- the step must already have passed the readiness
+forbidden-scope check (FR-021) and, where the authority is a named human's, Studio may
+refuse but never grant it (FR-022). **Local** -- the child process runs in the pinned
+workspace; a request to escalate outside it is an authority escalation, not a routine
+command. **Already** -- Studio executes definitions Core owns; it never invents one.
+
+Orchestrating execution is therefore the ceiling, not a foothold. Studio may carry an
+approved step to the provider that runs it; it still MUST NOT create Core truth, grant a
+named-human business approval, bypass a readiness gate, or become required for Core, CLI,
+or agent operation.
+
+**What Studio may own.** Visualizing the seven-stage journey; showing evidence, blockers,
+next allowed actions, health, and project state; hosting governed agent conversations;
+presenting technical approvals where its authority is explicitly defined; ORCHESTRATING an
+approved step against the local committed working set through the agent bridge; exposing
+existing Seshat capabilities through one coherent visual surface.
+
+**What Studio must never own.** Readiness truth; business-decision truth; metric
+semantics; transformation logic; Power BI model/report truth; dbt/Dagster execution truth;
+provider-specific agent truth. Each already has an owner in Core Authority, an Official
+Workflow Skill, or an Execution Adapter. A second copy inside Studio is a second source of
+truth, which the matrix forbids by construction.
+
+**Installing Studio is never mandatory.** Core, the CLI, Claude/Codex agent workflows,
+plugins and skills, readiness computation, validation and gates, and every governed
+artifact MUST continue to work with the base install and no `studio` extra. This is the
+one line of the boundary with runtime teeth: `pyproject`'s `studio` extra keeps the web
+stack out of a base install, and no module outside `src/seshat/studio/` may import from it
+(`test_no_core_module_imports_studio`).
+
+### The anti-scope-creep gate
+
+Studio must not grow into any of the following merely because a visual surface makes it
+convenient: a generic file editor; a general-purpose terminal emulator; a SQL IDE; a Power
+BI Desktop replacement; a dashboard designer; a generic Git client; a standalone dbt UI; a
+standalone Dagster UI; a general workflow builder; a generic AI coding IDE; a multi-user
+SaaS or control plane; or a duplicate configuration/state store.
+
+This is a gate, not a prohibition. A future feature touching one of these areas is allowed
+only if a SEPARATELY RATIFIED feature proves all five: (1) it directly serves a Seshat
+workflow; (2) it reuses the authoritative underlying capability rather than reimplementing
+it; (3) it preserves headless/agent/CLI operation; (4) it creates no second source of
+truth; (5) its maintenance cost and security boundary are justified. Absent that
+ratification, the answer is no -- and "the UI already renders it" is not one of the five.
+
+### The Studio Foundation completion gate
+
+Before major new Studio capability lands after spec 139, the roadmap should first reach a
+usable completion boundary around the EXISTING design. The completion assessment must
+establish that: the real supported agent bridge is reachable from the shipped application;
+agent turns do not block Studio request/event handling; the shipped package actually
+includes the built frontend; Command Room / readiness projection works from INSTALLED
+artifacts rather than only from a source checkout; technical approvals obey their defined
+authority boundary; Core/CLI/agent-only workflows still operate independently of Studio;
+and no duplicate readiness or business-state authority has appeared.
+
+Each is a checkable statement about the shipped artifact, not about the source tree -- the
+distinction that matters, because a gate that passes on a repo checkout while failing on a
+real install proves nothing about what a user receives.
 
 ## How F025-F033 declare against this contract
 
