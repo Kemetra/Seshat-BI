@@ -99,6 +99,36 @@ function journey(tableId: string, status: "pass" | "blocked") {
   };
 }
 
+/**
+ * Render one approval panel from a payload, and return its container.
+ *
+ * The two approval states differ ONLY in their payload, so the event envelope and the
+ * narrow-or-throw dance are shared. Each test still states its own payload in full --
+ * the fields ARE the state under audit, and hiding them behind overrides would make it
+ * hard to see what distinguishes a permitted approval from a refused one.
+ */
+function renderApproval(
+  sequence: number,
+  payload: Record<string, unknown>,
+): HTMLElement {
+  const event: StudioEvent = {
+    thread_id: "t1",
+    sequence,
+    type: "approval_required",
+    occurred_at: "2026-08-13T00:00:00Z",
+    turn_id: "turn1",
+    payload: { reason: "Verify the mapping change", ...payload },
+    ignored_for_state: false,
+  };
+  const approval = approvalFromEvent(event);
+  if (approval === undefined) {
+    throw new Error("fixture produced no approval");
+  }
+  return render(
+    <ApprovalPanel approval={approval} threadId="t1" domKey={sequence} />,
+  ).container;
+}
+
 /** Every critical or serious violation, as sentences a human can act on. */
 async function blockingViolations(container: HTMLElement): Promise<string[]> {
   const results = await axe(container);
@@ -144,32 +174,16 @@ describe("SC-007 -- no critical or serious WCAG violations", () => {
   it("approval state -- a decidable technical approval", async () => {
     // Rendered directly rather than through a streamed turn: `App` cannot reach an
     // approval without a live EventSource, and the state SC-007 names is the panel.
-    const event: StudioEvent = {
-      thread_id: "t1",
-      sequence: 1,
-      type: "approval_required",
-      occurred_at: "2026-08-13T00:00:00Z",
-      turn_id: "turn1",
-      payload: {
-        approval_id: "a1",
-        required_authority: "technical",
-        action: "run_command",
-        target: "pytest -q",
-        reason: "Verify the mapping change",
-        scope: "read_only",
-        risk: "high",
-        allow_permitted: true,
-        forbidden_reasons: [],
-      },
-      ignored_for_state: false,
-    };
-    const approval = approvalFromEvent(event);
-    if (approval === undefined) {
-      throw new Error("fixture produced no approval");
-    }
-    const { container } = render(
-      <ApprovalPanel approval={approval} threadId="t1" domKey={1} />,
-    );
+    const container = renderApproval(1, {
+      approval_id: "a1",
+      required_authority: "technical",
+      action: "run_command",
+      target: "pytest -q",
+      scope: "read_only",
+      risk: "high",
+      allow_permitted: true,
+      forbidden_reasons: [],
+    });
 
     expect(await blockingViolations(container)).toEqual([]);
   });
@@ -177,32 +191,16 @@ describe("SC-007 -- no critical or serious WCAG violations", () => {
   it("approval state -- an allow that readiness forbids", async () => {
     // The refusal branch renders prose and a list the permitted branch does not, so it
     // is a genuinely different DOM rather than the same tree with one button removed.
-    const event: StudioEvent = {
-      thread_id: "t1",
-      sequence: 2,
-      type: "approval_required",
-      occurred_at: "2026-08-13T00:00:00Z",
-      turn_id: "turn1",
-      payload: {
-        approval_id: "a2",
-        required_authority: "named_human",
-        action: "apply_change",
-        target: "mappings/store_sales/source-map.yaml",
-        reason: "Add the missing grain declaration",
-        scope: "propose_changes",
-        risk: "low",
-        allow_permitted: false,
-        forbidden_reasons: ["No silver work before Mapping Ready passes."],
-      },
-      ignored_for_state: false,
-    };
-    const approval = approvalFromEvent(event);
-    if (approval === undefined) {
-      throw new Error("fixture produced no approval");
-    }
-    const { container } = render(
-      <ApprovalPanel approval={approval} threadId="t1" domKey={2} />,
-    );
+    const container = renderApproval(2, {
+      approval_id: "a2",
+      required_authority: "named_human",
+      action: "apply_change",
+      target: "mappings/store_sales/source-map.yaml",
+      scope: "propose_changes",
+      risk: "low",
+      allow_permitted: false,
+      forbidden_reasons: ["No silver work before Mapping Ready passes."],
+    });
 
     expect(await blockingViolations(container)).toEqual([]);
   });
