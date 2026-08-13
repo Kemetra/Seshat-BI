@@ -565,16 +565,27 @@ def _start_reader(pending: _PendingTurn) -> threading.Thread:
 
 
 def _reap_abandoned_turns(app: FastAPI) -> None:
-    """Close turns nobody is polling any more.
+    """End turns nobody is polling any more.
 
     The pump only runs on a poll, so a browser that closes mid-reply leaves its
     generator parked with nothing to advance or close it -- holding a live
     `CodexSession` and its child process. Swept when a new turn is started, which is
     the only moment this dictionary can grow.
+
+    The turn is FAILED, not merely dropped. Closing the generator alone would leave
+    `_active_turn` set on a thread whose stream never reports an ending -- so that
+    conversation would refuse every later turn with 409 while no generator remained
+    to advance it. That is precisely the wedge this reaper exists to prevent.
     """
     cutoff = time.monotonic() - ABANDONED_TURN_SECONDS
     for thread_id, pending in list(app.state.pending_turns.items()):
         if pending.last_touched < cutoff and not pending.pumping.locked():
+            _fail_turn(
+                app.state.threads.thread(thread_id),
+                pending.request.turn_id,
+                "provider_error",
+                "the turn was abandoned before it finished",
+            )
             _finish_turn(app, thread_id, pending)
 
 
@@ -593,11 +604,25 @@ def _finish_turn(app: FastAPI, thread_id: str, pending: _PendingTurn) -> None:
     if app.state.pending_turns.get(thread_id) is pending:
         del app.state.pending_turns[thread_id]
     close = getattr(pending.events, "close", None)
-    if close is not None:
+    if close is None:
+        return
+
+    def shut_down() -> None:
         try:
             close()
         except Exception:  # pragma: no cover -- never mask the turn's own outcome
             pass
+
+    # Closed on a THREAD, never inline. `close()` runs the generator's `finally`,
+    # which for a real provider is `CodexSession.close(timeout=5.0)` -- terminating a
+    # child and joining two reader threads. Called directly it would hold the sole
+    # event loop for up to five seconds, freezing unrelated Studio requests and
+    # partially reintroducing the very unresponsiveness this change removes.
+    #
+    # A thread rather than `to_thread.run_sync`, because this runs from both the async
+    # pump and the SYNC interrupt route; the caller does not wait either way, since
+    # nothing downstream depends on the child being gone.
+    threading.Thread(target=shut_down, daemon=True).start()
 
 
 def _fail_turn(thread: Any, turn_id: str, category: str, detail: str) -> None:
