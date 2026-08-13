@@ -20,12 +20,16 @@ database, or a server.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Sequence
+
+from seshat.agent_next import build_table_next_document
 
 __all__ = [
     "NAMED_HUMAN",
     "TECHNICAL",
     "ApprovalEnvelope",
+    "forbidden_scope_for",
     "normalize_approval",
 ]
 
@@ -81,3 +85,27 @@ def normalize_approval(
         scope=str(event.get("scope", _UNKNOWN)),
         risk=str(event.get("risk", _UNKNOWN)),
     )
+
+
+def forbidden_scope_for(repo_root: Path | str, table: str | None) -> tuple[str, ...]:
+    """The readiness gate's forbidden-scope sentences for one table.
+
+    **Fails CLOSED.** A lookup that raises, or a turn with no table in scope, returns
+    a refusal sentence rather than an empty tuple -- because an empty tuple is how
+    this module says "readiness forbids nothing", which would hand out an allow
+    control on the strength of a crash. Reporting the error while continuing to refuse
+    is the required posture.
+    """
+    if table is None:
+        return (
+            "No table is in scope for this turn, so its readiness gate could not be "
+            "read; a technical allow is refused until one is named.",
+        )
+    try:
+        document = build_table_next_document(repo_root, table)
+    except Exception as failure:  # noqa: BLE001 -- any failure must refuse, not permit
+        return (
+            f"The readiness gate for {table!r} could not be read ({failure}); "
+            "a technical allow is refused until it can be.",
+        )
+    return tuple(document.get("forbidden_scope", ()))

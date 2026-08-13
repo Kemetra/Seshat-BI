@@ -97,3 +97,42 @@ def test_a_missing_display_field_becomes_an_explicit_unknown_not_a_crash():
     assert envelope.action == "unknown"
     assert envelope.risk == "unknown"
     assert isinstance(envelope, ApprovalEnvelope)
+
+
+# -- the readiness lookup (Task 2) ------------------------------------------- #
+
+
+def test_forbidden_scope_reads_the_readiness_document(tmp_path, monkeypatch):
+    from seshat.studio import approvals
+
+    def fake_document(repo_root, table):
+        return {"forbidden_scope": ["no silver before mapping is cleared"]}
+
+    monkeypatch.setattr(approvals, "build_table_next_document", fake_document)
+    assert approvals.forbidden_scope_for(tmp_path, "sales") == (
+        "no silver before mapping is cleared",
+    )
+
+
+def test_a_readiness_lookup_failure_refuses_rather_than_permitting(
+    tmp_path, monkeypatch
+):
+    from seshat.studio import approvals
+
+    def exploding_document(repo_root, table):
+        raise RuntimeError("no such table")
+
+    monkeypatch.setattr(approvals, "build_table_next_document", exploding_document)
+    reasons = approvals.forbidden_scope_for(tmp_path, "sales")
+    assert len(reasons) == 1
+    assert "could not be read" in reasons[0]
+    # The point: a failed lookup must BLOCK an allow, not silently clear the gate.
+    assert normalize_approval(TECHNICAL_EVENT, reasons).allow_permitted is False
+
+
+def test_no_table_refuses_rather_than_permitting(tmp_path):
+    from seshat.studio import approvals
+
+    reasons = approvals.forbidden_scope_for(tmp_path, None)
+    assert reasons != ()
+    assert normalize_approval(TECHNICAL_EVENT, reasons).allow_permitted is False
