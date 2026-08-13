@@ -19,6 +19,7 @@ jobs:
     name: Prepare synchronized Python, Claude, and Codex release PR
     if: ${{ github.repository == 'Kemetra/Seshat-BI' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: write
       pull-requests: write

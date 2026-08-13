@@ -68,7 +68,7 @@ def test_publish_job_uses_protected_environment_oidc_and_exact_handoff() -> None
     # checks out the tag to build a different artifact, and an open-ended slice
     # would read its steps as violations of a rule that was never about it.
     pypi_onward = rendered.split("  publish-pypi:", 1)[1]
-    publish_text = pypi_onward.split("\n  publish-npm:", 1)[0]
+    publish_text = pypi_onward.split("\n  publish-npm-scoped:", 1)[0]
     assert "actions/checkout" not in publish_text
     assert "github.run_id" in publish_text
     assert "grep -Eq '^[0-9a-f]{40}$' SOURCE_REVISION" in publish_text
@@ -108,3 +108,51 @@ def test_validation_is_default_and_publish_has_no_implicit_approval() -> None:
     rendered = WORKFLOW.read_text(encoding="utf-8")
     assert "environment: pypi" in rendered
     assert "environment: production" not in rendered
+
+
+def test_npm_packages_are_prebuilt_handed_off_and_published_in_resumable_jobs() -> None:
+    """An alias retry must not republish an immutable scoped npm version."""
+
+    workflow = _workflow()
+    jobs = workflow["jobs"]
+    build_steps = "\n".join(
+        str(step.get("run", "")) for step in jobs["build-validate"]["steps"]
+    )
+
+    assert (
+        "node npm/stage-release-packages.js --output release-staging/npm" in build_steps
+    )
+
+    scoped = jobs["publish-npm-scoped"]
+    alias = jobs["publish-npm-alias"]
+    assert scoped["needs"] == "publish-pypi"
+    assert alias["needs"] == "publish-npm-scoped"
+
+    scoped_steps = "\n".join(str(step.get("run", "")) for step in scoped["steps"])
+    alias_steps = "\n".join(str(step.get("run", "")) for step in alias["steps"])
+    assert "npm publish release-staging/npm/scoped/" in scoped_steps
+    assert "npm publish release-staging/npm/alias/" in alias_steps
+    assert "sha256sum --check NPM_SHA256SUMS" in scoped_steps
+    assert "sha256sum --check NPM_SHA256SUMS" in alias_steps
+    assert "actions/download-artifact" in "\n".join(
+        str(step.get("uses", "")) for step in scoped["steps"]
+    )
+    assert "actions/download-artifact" in "\n".join(
+        str(step.get("uses", "")) for step in alias["steps"]
+    )
+    assert all(
+        "actions/checkout" not in step.get("uses", "") for step in scoped["steps"]
+    )
+    assert all(
+        "actions/checkout" not in step.get("uses", "") for step in alias["steps"]
+    )
+    assert "cd npm/alias" not in alias_steps
+    assert "fs.writeFileSync" not in alias_steps
+
+
+def test_every_release_job_has_a_timeout() -> None:
+    workflow = _workflow()
+
+    for job_name, job in workflow["jobs"].items():
+        assert isinstance(job.get("timeout-minutes"), int), job_name
+        assert job["timeout-minutes"] > 0, job_name

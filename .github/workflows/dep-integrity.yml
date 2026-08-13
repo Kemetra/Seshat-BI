@@ -23,6 +23,54 @@ on:
     - cron: "17 6 * * 1"
 
 jobs:
+  changes:
+    name: Classify documentation-only changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      code_changed: ${{ steps.classify.outputs.code_changed }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Classify changed paths (fail closed)
+        id: classify
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "pull_request" ]; then
+            echo "code_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_file="$RUNNER_TEMP/changed-files.txt"
+          git diff --name-only "$PR_BASE_SHA...$PR_HEAD_SHA" > "$changed_file"
+          code_changed=false
+          if [ ! -s "$changed_file" ]; then
+            code_changed=true
+          else
+            while IFS= read -r path; do
+              case "$path" in
+                docs/*.md|docs/*.rst|docs/*.txt|docs/*.png|docs/*.jpg|docs/*.jpeg|docs/*.gif|docs/*.svg|\
+                .github/ISSUE_TEMPLATE/*.md|.github/PULL_REQUEST_TEMPLATE.md|\
+                CHANGELOG.md|CODE_OF_CONDUCT.md|CONTRIBUTING.md|ONBOARDING.md|README.md|RELEASE_NOTES.md|SECURITY.md)
+                  ;;
+                *)
+                  code_changed=true
+                  break
+                  ;;
+              esac
+            done < "$changed_file"
+          fi
+          echo "code_changed=$code_changed" >> "$GITHUB_OUTPUT"
+
   co-resolution:
     # The fail-closed co-resolution proof (US1). Resolves every declared
     # environment and cross-product in dependency-environments.yaml.
@@ -36,7 +84,10 @@ jobs:
     # since merged and dropped the dagster-dbt pin, so the cross-product now
     # resolves cleanly and this job is green; the gate is never weakened and
     # the cross-product is never dropped to force a local pass.
+    needs: changes
+    if: ${{ needs.changes.outputs.code_changed == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
@@ -62,6 +113,7 @@ jobs:
     # CI artifact (FR-011). It is NEVER merge-blocking -- the job always exits 0.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
