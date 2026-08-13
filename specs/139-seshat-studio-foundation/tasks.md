@@ -342,6 +342,49 @@ projection, endpoints, frontend, journey, and health.
 - [ ] **T027** Implement read-only prepared decision summaries with no mutation route
   and assert OpenAPI contains no business-approval endpoint. [FR-022]
 
+  **Phase 6 evidence 2026-08-13 (backend only — every box above left unchecked).**
+  Built on branch `studio-2` from `46243b5`; design at
+  `docs/superpowers/specs/2026-08-13-studio-technical-approval-boundary-design.md`,
+  plan at `docs/superpowers/plans/2026-08-13-studio-technical-approval-boundary.md`.
+
+  Shipped: `src/seshat/studio/approvals.py` (authority split, fail-closed readiness
+  lookup, decide-once ledger) and the contract's `respondToToolApproval` relay in
+  `agent_routes.py`. `technical_approvals` flipped to `True`;
+  `business_decision_recording` remains const `False`.
+
+  Suites: `tests/unit/test_studio_approvals.py` (16) and
+  `tests/unit/test_studio_approval_routes.py` (12) — **28 passed**. Full Studio
+  sweep **467 passed**; `pytest -m unit` **5686 passed**; `ruff format --check`
+  and `ruff check` clean; `seshat check` exits 0.
+
+  Invariants proven, each in its positive form: a `named_human` approval normalizes
+  to `allow_permitted is False` and the relay answers **403**; an unknown or missing
+  `required_authority` degrades to `named_human`, never `technical`; a readiness
+  lookup that raises returns a refusal sentence rather than an empty tuple; any
+  decision burns the id, so a deny cannot be resubmitted as an allow; an
+  unrecognized `decision` value is refused **422** and leaves the approval live; and
+  no mutating verb reaches any decision path, asserted by HTTP METHOD rather than
+  path name (`/decisions` legitimately exists as a contract-specified GET).
+
+  **Why these tasks stay open.** Three gaps, none of them cosmetic:
+  - **No UI.** T026 names an *accessible approval panel*; this is the backend relay
+    only. The frontend belongs to Phases 7–8, and `studio-ui/` has no
+    `node_modules` here, so `Conversation.test.tsx:242` — the Phase 4 test pinning
+    the ABSENCE of an actionable control — could not be run. It is unaffected by
+    construction (no frontend file was touched), which is an argument, not a
+    measurement.
+  - **The pause is registration, not a state transition.** An emitted approval is
+    registered so the relay can decide it, and `awaiting_technical_approval` is
+    confirmed present in the contract's enum, but no code yet reports a thread as
+    being in that state.
+  - **Two pre-existing failures**, both proven red on clean `46243b5` before this
+    work and both untouched by it: `test_studio_generated_types` (regenerating
+    strips two unrelated comments from another session's `authentication_mode`
+    change, so it was deliberately not regenerated) and
+    `test_cli_identity_version` (installed `0.8.1` vs source `0.8.2`).
+
+  A human closes these boxes.
+
 ## Phase 7 - Agent-First Launch and Distribution (US5)
 
 - [ ] **T028** Write failing capability and bundle contracts for the new
