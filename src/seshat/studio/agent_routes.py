@@ -579,14 +579,21 @@ def _reap_abandoned_turns(app: FastAPI) -> None:
     """
     cutoff = time.monotonic() - ABANDONED_TURN_SECONDS
     for thread_id, pending in list(app.state.pending_turns.items()):
-        if pending.last_touched < cutoff and not pending.pumping.locked():
+        if pending.last_touched >= cutoff or pending.pumping.locked():
+            continue
+        # `has_thread` FIRST: `ThreadStore.thread()` is create-on-access and evicts
+        # the oldest to make room, so calling it for a thread the store has already
+        # evicted would resurrect a dead conversation, push out a live one, and write
+        # the failure into a fresh log nobody is reading. An evicted thread needs no
+        # terminal -- its event log is gone -- but its generator must still be closed.
+        if app.state.threads.has_thread(thread_id):
             _fail_turn(
                 app.state.threads.thread(thread_id),
                 pending.request.turn_id,
                 "provider_error",
                 "the turn was abandoned before it finished",
             )
-            _finish_turn(app, thread_id, pending)
+        _finish_turn(app, thread_id, pending)
 
 
 def _finish_turn(app: FastAPI, thread_id: str, pending: _PendingTurn) -> None:
@@ -607,7 +614,23 @@ def _finish_turn(app: FastAPI, thread_id: str, pending: _PendingTurn) -> None:
     if close is None:
         return
 
+    reader = pending.reader
+
     def shut_down() -> None:
+        # WAIT for any outstanding advance to finish, however long it takes. A reader
+        # the pump gave up waiting for is still inside `next()`, and closing then
+        # raises "generator already executing" -- swallowed below, leaving the
+        # provider's child alive. Stop would appear to work while the process kept
+        # running.
+        #
+        # Unbounded on purpose. A bounded join looks safer and is not: on timeout it
+        # would fall through to a `close()` that raises, gets swallowed, and never
+        # retries -- exactly the leak this guards against, now with a deadline
+        # attached. The bridge protocol sets no maximum for one advance, so any bound
+        # is a guess. This is a daemon thread holding one generator reference, so
+        # waiting costs nothing and never delays a request or blocks shutdown.
+        if reader is not None:
+            reader.join()
         try:
             close()
         except Exception:  # pragma: no cover -- never mask the turn's own outcome
