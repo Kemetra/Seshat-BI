@@ -73,6 +73,19 @@ jobs:
         run: |
           python scripts/check_release_versions.py --check
           python scripts/export_agent_bundles.py --check
+      - name: Build the Studio frontend
+        # Without this the published wheel ships the `seshat-studio` console script
+        # and NO UI (issue #623). `src/seshat/studio/static/` is gitignored generated
+        # output, so a release checkout has none, and `pyproject.toml`'s
+        # `artifacts = ["src/seshat/studio/static/**"]` re-include collects nothing.
+        # FR-005 promises END USERS need no Node -- true only if the release builds
+        # the assets on their behalf, which is what this step is.
+        #
+        # Deliberately AFTER "Verify source identity": that step asserts a clean tree,
+        # and while this build writes only into a gitignored directory, ordering it
+        # after keeps the identity check reading a pristine checkout rather than
+        # depending on a `.gitignore` entry to stay true.
+        run: python scripts/build_studio_frontend.py
       - name: Build exactly one wheel and one sdist
         run: python -m build --wheel --sdist --outdir dist
       - name: Strict metadata, contents, and isolated sdist rebuild

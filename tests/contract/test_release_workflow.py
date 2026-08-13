@@ -156,3 +156,52 @@ def test_every_release_job_has_a_timeout() -> None:
     for job_name, job in workflow["jobs"].items():
         assert isinstance(job.get("timeout-minutes"), int), job_name
         assert job["timeout-minutes"] > 0, job_name
+
+
+def _build_step_names() -> list[str]:
+    """The `build-validate` step names, in order."""
+    steps = _workflow()["jobs"]["build-validate"]["steps"]
+    return [str(step.get("name", step.get("uses", ""))) for step in steps]
+
+
+def test_the_release_wheel_is_built_with_the_studio_frontend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Issue #623: the published wheel shipped the launcher and no UI.
+
+    `src/seshat/studio/static/` is gitignored generated output, so a fresh checkout
+    has none. `ci.yml` builds it; `release.yml` went straight from installing
+    validators to `python -m build`, and `pyproject.toml`'s
+    `artifacts = ["src/seshat/studio/static/**"]` re-include had nothing to collect.
+    FR-005 promises end users need no Node -- which is only true if the RELEASE builds
+    the assets for them.
+
+    CI being green was not evidence: the wheel-content tests SKIP when the build
+    output is absent, so seven of them enforced nothing on that path.
+    """
+    rendered = WORKFLOW.read_text(encoding="utf-8")
+
+    assert "scripts/build_studio_frontend.py" in rendered, (
+        "release.yml must build the Studio frontend, or the published wheel ships "
+        "the `seshat-studio` console script with no UI behind it (issue #623)"
+    )
+
+
+def test_the_frontend_is_built_after_source_identity_is_verified() -> None:
+    """Ordering, not just presence -- the two steps genuinely conflict.
+
+    "Verify source identity" asserts `test -z "$(git status --porcelain)"`. Building
+    the frontend writes into `src/seshat/studio/static/`, which is gitignored and so
+    leaves the tree clean -- but running the build BEFORE the check would make that
+    guarantee depend on a `.gitignore` entry rather than on ordering. Placing it after
+    keeps the identity check reading a pristine checkout.
+    """
+    names = _build_step_names()
+    identity = next(i for i, name in enumerate(names) if "source identity" in name)
+    frontend = next(i for i, name in enumerate(names) if "Studio frontend" in name)
+    built = next(i for i, name in enumerate(names) if "wheel and one sdist" in name)
+
+    assert identity < frontend < built, (
+        "the frontend build must sit between the source-identity check and "
+        f"`python -m build`; step order was {names}"
+    )
