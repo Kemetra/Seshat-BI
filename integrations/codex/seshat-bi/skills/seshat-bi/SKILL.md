@@ -47,6 +47,11 @@ at its own gate; none of them self-grants an approval:
 - run the static governance checker and read its findings: `retail-govern`
 - run the live data checks on materialized rows: `retail-validate`
 
+Not a readiness verb, but the surface a user asks for by name: to open the local
+analyst console for one workspace in a browser -- readiness, tables, and the
+approvals a human still owes -- load `seshat-studio`. It renders recorded state
+and stops at the same gates; it grants no approval and advances no stage.
+
 End with one next action or one blocked stop. Cite evidence and named blockers;
 never invent a pass or score.
 

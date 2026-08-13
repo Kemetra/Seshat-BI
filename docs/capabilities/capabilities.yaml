@@ -1190,6 +1190,25 @@ capabilities:
       verb: "first-hour-compass"
       status_claims: "first-hour-compass-worked-example-store-sales"
 
+  - id: seshat-studio
+    name: "seshat-studio"
+    summary: "Local loopback analyst console for ONE pinned workspace; renders recorded readiness, tables, and approval gates."
+    state: shipped
+    authority: advisory
+    surface: skill
+    ships: true
+    ship_classification: consumer-capability
+    requirements: [optional-dependency]
+    provenance: locally-verified
+    readiness_stage: not-stage-scoped
+    command: null
+    documentation: ".claude/skills/seshat-studio/SKILL.md"
+    ownership:
+      capability_owner: "seshat-orchestrator"
+      canonical_source: ".claude/skills/seshat-studio/SKILL.md"
+    references:
+      skill: "seshat-studio"
+
   - id: retail-onboard-table
     name: "retail-onboard-table"
     summary: "Source -> Mapping front door; owns the Stage-1 read-only DB-backed profile (grain candidates, column types)."

@@ -2398,6 +2398,17 @@ entries:
   generated_notice: manifest
   review_reason: Required Seshat kit skill content the agent loads on demand in a consumer workspace.
 - entry_id: kb-217
+  source: .claude/skills/seshat-studio/SKILL.md
+  classification: public_knowledge
+  media_type: text/markdown
+  targets:
+    claude: skills/seshat-studio/SKILL.md
+    codex: skills/seshat-studio/SKILL.md
+  transform: copy-normalized-v1
+  required: true
+  generated_notice: manifest
+  review_reason: Required Seshat kit skill content the agent loads on demand in a consumer workspace.
+- entry_id: kb-218
   source: .claude/skills/source-mapping/SKILL.md
   classification: public_knowledge
   media_type: text/markdown
@@ -2408,7 +2419,7 @@ entries:
   required: true
   generated_notice: manifest
   review_reason: Required Seshat kit skill content the agent loads on demand in a consumer workspace.
-- entry_id: kb-218
+- entry_id: kb-219
   source: LICENSE
   classification: public_license
   media_type: text/plain
@@ -2419,7 +2430,7 @@ entries:
   required: true
   generated_notice: manifest
   review_reason: Required Apache-2.0 license text for both public bundles.
-- entry_id: kb-219
+- entry_id: kb-220
   source: contracts/knowledge/knowledge-layer-handoff.yaml
   classification: public_knowledge
   media_type: application/yaml
@@ -2430,7 +2441,7 @@ entries:
   required: true
   generated_notice: manifest
   review_reason: Required canonical Seshat Knowledge Base content for public agent reasoning.
-- entry_id: kb-220
+- entry_id: kb-221
   source: design/grids/16x9-grid.yaml
   classification: public_knowledge
   media_type: application/yaml
@@ -2441,7 +2452,7 @@ entries:
   required: true
   generated_notice: manifest
   review_reason: Required Stage-6 design template materialized by `seshat scaffold-design` (issues
-- entry_id: kb-221
+- entry_id: kb-222
   source: templates/dashboard-page-blueprint.yaml
   classification: public_knowledge
   media_type: application/yaml
@@ -2452,7 +2463,7 @@ entries:
   required: true
   generated_notice: manifest
   review_reason: Required Stage-6 design template materialized by `seshat scaffold-design` (issues
-- entry_id: kb-222
+- entry_id: kb-223
   source: templates/handoff/bi-handoff-pack.md
   classification: public_knowledge
   media_type: text/markdown
@@ -2463,7 +2474,7 @@ entries:
   required: true
   generated_notice: manifest
   review_reason: Required Stage-7 handoff template materialized by `seshat scaffold-design` (issues
-- entry_id: kb-223
+- entry_id: kb-224
   source: templates/handoff/handoff-review-checklist.md
   classification: public_knowledge
   media_type: text/markdown
@@ -2474,7 +2485,7 @@ entries:
   required: true
   generated_notice: manifest
   review_reason: Required Stage-7 handoff template materialized by `seshat scaffold-design` (issues
-- entry_id: kb-224
+- entry_id: kb-225
   source: templates/kpi-sufficiency-card.md
   classification: public_knowledge
   media_type: text/markdown
@@ -2485,7 +2496,7 @@ entries:
   required: true
   generated_notice: manifest
   review_reason: Required by the public retail KPI Knowledge Base route.
-- entry_id: kb-225
+- entry_id: kb-226
   source: templates/metric-contract.yaml
   classification: public_knowledge
   media_type: application/yaml
@@ -2496,7 +2507,7 @@ entries:
   required: true
   generated_notice: manifest
   review_reason: Required by the public retail KPI Knowledge Base route.
-- entry_id: kb-226
+- entry_id: kb-227
   source: templates/report-composition.yaml
   classification: public_knowledge
   media_type: application/yaml
@@ -2507,7 +2518,7 @@ entries:
   required: true
   generated_notice: manifest
   review_reason: Required Stage-6 design template materialized by `seshat scaffold-design` (issues
-- entry_id: kb-227
+- entry_id: kb-228
   source: templates/visual-spec.yaml
   classification: public_knowledge
   media_type: application/yaml
