@@ -515,11 +515,54 @@ projection, endpoints, frontend, journey, and health.
 - [ ] **T032** Run keyboard, focus, contrast, reduced-motion, non-color status,
   responsive layout, and axe browser acceptance over all critical states; fix every
   critical or serious finding. [FR-031, SC-007]
+
+  **Partial 2026-08-13 — axe now RUNS; the box stays open.** `axe` was absent from
+  `studio-ui/package.json` entirely, so SC-007 could not have been satisfied by any
+  run of the suite. `studio-ui/src/accessibility.test.tsx` adds `vitest-axe` and
+  covers every state SC-007 names — Command Room, empty, blocked, approval — plus the
+  approval REFUSAL branch, which renders a different DOM rather than the same tree
+  minus a button. Only `critical` and `serious` fail, matching the criterion's own
+  wording. **5 passed.**
+
+  Falsified: an `<img>` with no alt in the approval panel fails exactly the two
+  approval tests with `critical image-alt`, so the checker is live rather than
+  decorative.
+
+  Why the box is open, in two parts:
+  - **jsdom does not paint**, so axe reports `color-contrast` as `incomplete`, never
+    as a pass. Contrast is unverified by automation here.
+  - **Keyboard, focus, reduced-motion, and responsive layout are untested.** T032
+    names browser acceptance over the RUNNING app; this is a component-level audit of
+    the structural rules jsdom can decide. It is a floor, not the measurement.
 - [ ] **T033** Build sdist/wheel and test clean base and Studio-extra installs with no
   Node runtime and no remote asset fetch. [SC-008]
-- [ ] **T034** Run security-boundary negative tests and verify response/log/event
+- [x] **T034** Run security-boundary negative tests and verify response/log/event
   corpus contains no injected secret, token, absolute path, or workspace content.
   [SC-006]
+
+  **T034 closed 2026-08-13.** `tests/unit/test_studio_boundary_corpus.py` (7) drives
+  a real app through every refusal SC-006 names — no session, foreign origin, wrong
+  host, traversal, unknown table, unknown thread — plus every successful read and a
+  real turn, then scans the ENTIRE response corpus for injected nonces. That is the
+  property a sweep has and the existing per-field suites structurally cannot: a new
+  endpoint that leaks is caught without anyone remembering to test it.
+
+  Falsified rather than assumed: interpolating `workspace_root` into the 404 problem
+  detail fails `test_no_absolute_workspace_path_appears_anywhere_in_the_corpus` and
+  nothing else. Absence-assertions that have never fired prove nothing.
+
+  Two over-redaction guards balance the four absences — `display_name` and the
+  analyst's prompt are pinned PRESENT, so a redactor that swallowed them would fail
+  here instead of reading as extra safety.
+
+  **One scoped decision recorded in the test, not silently encoded in a fixture:** a
+  credential the analyst types into their OWN prompt is echoed back on their own
+  authenticated loopback thread, and that is not an SC-006 disclosure. FR-026 governs
+  credentials Studio handles and paths it resolves, not analyst prose; scrubbing bare
+  token-shaped strings would hand-roll a match class beside `redaction_core`'s
+  hardened decomposition. Credential-shaped values in ROUTING positions (path segment,
+  `selected_table_id`, bootstrap `token`) are tested and must not echo. If that
+  reading is wrong it is an owner's call and belongs in an issue.
 - [ ] **T035** Run existing dashboard and full repository regression gates; reconcile
   generated bundles and run `seshat check` and `semantic-check`. [FR-030, SC-009]
 - [ ] **T036** Run external signed-in Codex acceptance and record versioned,
