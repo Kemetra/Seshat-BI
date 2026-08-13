@@ -141,6 +141,39 @@ export function interruptTurn(threadId: string, turnId: string): Promise<void> {
   );
 }
 
+/** The contract's decision enum. Not booleans: a deny is a decision, not an absent allow. */
+export type ApprovalDecision = "allow_once" | "deny";
+
+/**
+ * Relay one technical approval decision (FR-019, FR-020).
+ *
+ * **The browser performs no side effect.** This POSTs a decision and nothing else: the
+ * ledger burns the id, the server answers the JSON-RPC request the provider blocks on,
+ * and the turn continues. Nothing here writes a file, touches a provider, or decides
+ * anything locally.
+ *
+ * The one-time property is the SERVER'S, not a disabled button. A caller that fires
+ * twice gets a 409 on the second attempt, and that refusal -- not any client state -- is
+ * what makes a replay impossible.
+ *
+ * Every failure is thrown as a `StudioRequestError` carrying the server's redacted
+ * problem document, including two codes the OpenAPI does not yet document: **422** (a
+ * decision value the server does not recognise, which is a bug in this client) and
+ * **502** (recorded but NOT delivered -- the id is spent and the provider was never
+ * answered, so the decision cannot be re-sent). Callers must not treat 502 as retryable.
+ */
+export function respondToToolApproval(
+  threadId: string,
+  approvalId: string,
+  decision: ApprovalDecision,
+): Promise<void> {
+  return post<void>(
+    `/agent/threads/${encodeURIComponent(threadId)}/approvals/` +
+      `${encodeURIComponent(approvalId)}`,
+    { decision },
+  );
+}
+
 /**
  * Exchange the one-time bootstrap token for the session cookie.
  *

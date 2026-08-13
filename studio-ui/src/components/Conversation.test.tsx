@@ -19,10 +19,16 @@
  *   browser reconnects constantly; a consumer that ignores `Last-Event-ID` would
  *   re-render every event on every poll.
  *
- * Approval UI is deliberately NOT built here: `file_change_proposed` and
- * `approval_required` belong to Phase 6 (T024-T027). They render as inert activity, and
- * a test below pins that they carry no actionable control -- so the boundary cannot be
- * crossed accidentally before the approval semantics exist.
+ * Approval CONTROLS now exist (T026) and their behaviour is pinned in
+ * `ApprovalPanel.test.tsx`. What stays here is the routing decision: which approvals
+ * become a panel at all, and which stay inert activity.
+ *
+ * The test below replaces a Phase 6 boundary test that could not have caught its own
+ * boundary being crossed. It asserted no button matching `/approve|apply|reject/i`,
+ * but the contract's decision enum is `allow_once`/`deny` -- so a panel labelled
+ * "Allow once"/"Decline" would have passed it untouched. A guard whose vocabulary does
+ * not match the thing it guards is not a guard, so it was rewritten deliberately rather
+ * than waited on.
  */
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -236,12 +242,10 @@ describe("Conversation", () => {
   });
 
   // --------------------------------------------------------------------- //
-  // The Phase 6 boundary                                                  //
+  // Which approvals become decidable                                      //
   // --------------------------------------------------------------------- //
 
-  it("renders an approval as inert activity, with no actionable control", async () => {
-    // Approval semantics are T024-T027. Until they exist, offering a button that appears
-    // to grant approval would let a user believe they had approved something.
+  it("renders a live approval as a decidable panel", async () => {
     render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
     await waitFor(() => expect(registry.current).toBeDefined());
 
@@ -253,6 +257,75 @@ describe("Conversation", () => {
           approval_id: "a1",
           question: "Apply the proposed mapping change?",
           required_authority: "named_human",
+          allow_permitted: false,
+          forbidden_reasons: [],
+        },
+      }),
+      "1",
+    );
+
+    expect(
+      await screen.findByText(/Apply the proposed mapping change\?/),
+    ).toBeInTheDocument();
+    // Decline is offered for a named-human ruling; granting it is not. Answering the
+    // provider and granting the ruling are different acts.
+    expect(screen.getByRole("button", { name: /decline/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /allow once/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers the allow control for a PERMITTED technical approval, end to end", async () => {
+    // The allow path's only integration coverage. An adversarial review found that
+    // forcing `mayAllow` to `return false` left every Conversation test green, because
+    // the sole approval fixture here was `named_human` -- so deleting the Allow button
+    // from the app's reachable path would have been caught only in isolation.
+    render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    registry.current?.emit(
+      "approval_required",
+      event({
+        type: "approval_required",
+        payload: {
+          approval_id: "a2",
+          required_authority: "technical",
+          action: "run_command",
+          target: "pytest -q",
+          scope: "read_only",
+          risk: "low",
+          allow_permitted: true,
+          forbidden_reasons: [],
+        },
+      }),
+      "1",
+    );
+
+    expect(
+      await screen.findByRole("button", { name: /allow once/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("pytest -q")).toBeInTheDocument();
+  });
+
+  it("keeps a LATE approval inert, with no control at all", async () => {
+    // `ignored_for_state` means the turn already ended, so every decision would be
+    // refused as stale. Controls that cannot succeed are the same defect the original
+    // Phase 6 boundary test guarded against, wearing different labels.
+    render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    registry.current?.emit(
+      "approval_required",
+      event({
+        type: "approval_required",
+        ignored_for_state: true,
+        payload: {
+          approval_id: "a1",
+          question: "Apply the proposed mapping change?",
+          required_authority: "technical",
+          // Permitted by the server, and STILL not offered: staleness outranks it.
+          allow_permitted: true,
+          forbidden_reasons: [],
         },
       }),
       "1",
@@ -262,7 +335,53 @@ describe("Conversation", () => {
       await screen.findByText(/Apply the proposed mapping change\?/),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /approve|apply|reject/i }),
+      screen.queryByRole("button", { name: /allow once|decline/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps an approval with no id inert, since nothing could be decided", async () => {
+    render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    registry.current?.emit(
+      "approval_required",
+      event({
+        type: "approval_required",
+        payload: {
+          question: "Apply the proposed mapping change?",
+          required_authority: "technical",
+          allow_permitted: true,
+        },
+      }),
+      "1",
+    );
+
+    expect(
+      await screen.findByText(/Apply the proposed mapping change\?/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /allow once|decline/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("keeps a proposed file change inert -- FR-021 reserves it for a named human", async () => {
+    render(<Conversation threadId="t1" startTurn={acceptingTurn()} />);
+    await waitFor(() => expect(registry.current).toBeDefined());
+
+    registry.current?.emit(
+      "file_change_proposed",
+      event({
+        type: "file_change_proposed",
+        payload: { summary: "Add the missing grain declaration" },
+      }),
+      "1",
+    );
+
+    expect(
+      await screen.findByText(/Add the missing grain declaration/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /allow once|decline|approve/i }),
     ).not.toBeInTheDocument();
   });
 
