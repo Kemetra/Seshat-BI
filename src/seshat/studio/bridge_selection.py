@@ -167,9 +167,9 @@ def select_provider(
         return ProviderSelection(
             provider="fake",
             detail=(
-                "Codex is configured but the CLI was not found on PATH. Studio is "
-                "answering with the deterministic bridge; install the Codex CLI and "
-                "restart to use it."
+                "Codex is configured but the CLI was not found on PATH, so agent "
+                "turns are refused. Install the Codex CLI and restart; deterministic "
+                "workspace views remain fully usable meanwhile."
             ),
         )
 
@@ -179,8 +179,9 @@ def select_provider(
             provider="fake",
             detail=(
                 f"Codex reports {observed}, which is outside the range Studio has "
-                "exercised, so turns would run against an unverified protocol. The "
-                "deterministic bridge is answering instead."
+                "exercised, so agent turns are refused rather than run against an "
+                "unverified protocol. Deterministic workspace views remain fully "
+                "usable meanwhile."
             ),
         )
 

@@ -426,11 +426,22 @@ def create_app(
     #: The health the INTERFACE renders. Derived from the same probe the selection
     #: used, so the two can never disagree: an operator seeing `ready` while the fake
     #: answers is the misreport this whole seam exists to prevent.
+    #: `signed_in=False` because startup ran `codex --version` and NOTHING else: it
+    #: never started the app-server and never called `account/read`, so sign-in state
+    #: is genuinely unknown here. Reporting `True` claimed "Codex is signed in and
+    #: responding" on the strength of a version string -- a signed-out CLI would read
+    #: healthy, and the analyst would learn otherwise only when a turn failed
+    #: generically. The contract requires the probe to distinguish `signed_out`, and
+    #: an unproven claim is worse than a conservative one: `signed_out` names a real
+    #: recovery action, while a false `ready` names none.
+    #:
+    #: A live handshake probe at boot is the right answer and is #618's, not this
+    #: PR's -- it means spawning the app-server before the first turn.
     app.state.agent_health = codex_process.classify_health(
         codex_process.ProbeObservations(
             executable_found=executable is not None,
             version=codex_version,
-            signed_in=True,
+            signed_in=False,
             disabled=launch.agent_provider == "fake",
         )
     )

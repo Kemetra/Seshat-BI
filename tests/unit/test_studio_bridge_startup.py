@@ -21,7 +21,7 @@ fastapi = pytest.importorskip("fastapi")
 
 
 def _workspace(tmp_path: Path) -> Path:
-    (tmp_path / ".seshat").mkdir(parents=True)
+    (tmp_path / ".seshat").mkdir(parents=True, exist_ok=True)
     return tmp_path
 
 
@@ -240,3 +240,51 @@ def test_the_fake_default_still_projects_disabled(tmp_path: Path) -> None:
     health = _authenticated(app, token).get("/api/v1/workspace").json()["agent_health"]
 
     assert health["state"] == "disabled", health
+
+
+def test_a_supported_cli_is_not_claimed_to_be_signed_in(tmp_path: Path) -> None:
+    """P1 (#621 review): startup runs `--version` and nothing else.
+
+    It never starts the app-server and never calls `account/read`, so sign-in state
+    is genuinely unknown. Reporting `signed_in=True` claimed "Codex is signed in and
+    responding" on the strength of a version string -- a signed-out CLI would read
+    healthy and the analyst would discover otherwise only when a turn failed.
+
+    `signed_out` is the honest answer AND the more useful one: it names a recovery
+    action, where a false `ready` names none. A live handshake probe at boot is
+    #618's work.
+    """
+    from seshat.studio.app import create_app
+
+    app, token = create_app(
+        _workspace(tmp_path), port=9999, agent_provider="codex", codex_version="0.147.0"
+    )
+
+    health = _authenticated(app, token).get("/api/v1/workspace").json()["agent_health"]
+
+    assert health["state"] != "healthy", health
+    assert health["state"] == "signed_out", health
+    assert health["recovery_action"], "a non-ready state must name a recovery action"
+
+
+def test_the_fallback_detail_says_turns_are_refused(tmp_path: Path) -> None:
+    """P2 (#621 review): the operator-facing text must match what actually happens.
+
+    The refusal landed after these strings were written, so they still described the
+    old behaviour -- "answering with the deterministic bridge" -- while every turn
+    returned 503. The surface added to prevent confusion about which agent answered
+    was stating the opposite of the truth.
+    """
+    from seshat.studio.app import create_app
+
+    for version in ("0.1.0", None):
+        app, _ = create_app(
+            _workspace(tmp_path / f"ws{version}"),
+            port=9999,
+            agent_provider="codex",
+            codex_version=version,
+        )
+        detail = app.state.agent_provider_detail
+
+        assert "refused" in detail, detail
+        assert "deterministic bridge is answering" not in detail, detail
