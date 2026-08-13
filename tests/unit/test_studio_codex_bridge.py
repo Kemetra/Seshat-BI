@@ -359,7 +359,11 @@ def test_a_session_read_failure_still_ends_the_turn(tmp_path: Path) -> None:
     from seshat.studio.codex_process import CodexLaunchPlan
 
     class _FailingSession(CodexSession):
-        def frames(self, timeout: float = 30.0):  # type: ignore[override]
+        # Mirrors the real signature, `patience` included: the bridge now passes a
+        # budget callable, and a double that silently ignored it would drift from the
+        # API it stands in for. This stall happens with NO approval outstanding, so
+        # `provider_error` is still the right category.
+        def frames(self, timeout: float = 30.0, *, patience=None):  # type: ignore[override]
             raise queue.Empty  # the provider stalled
             yield  # pragma: no cover -- keeps this a generator
 
@@ -541,7 +545,7 @@ def test_a_refused_initialize_does_not_open_a_thread(tmp_path: Path) -> None:
         def send(self, frame: dict) -> None:  # type: ignore[override]
             sent.append(frame.get("method"))
 
-        def frames(self, timeout: float = 30.0):  # type: ignore[override]
+        def frames(self, timeout: float = 30.0, *, patience=None):  # type: ignore[override]
             yield {"id": 1, "error": {"code": -32600, "message": "unsupported client"}}
 
     bridge = CodexBridge(
