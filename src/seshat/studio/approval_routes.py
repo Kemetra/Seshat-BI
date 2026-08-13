@@ -103,39 +103,59 @@ def decide_approval(
     """
     if not app.state.threads.has_thread(thread_id):
         return unknown_thread()
+
     decision = body.get("decision")
     if decision not in {ALLOW_DECISION, DENY_DECISION}:
-        return problem(
-            422,
-            "Unrecognized approval decision",
-            f"decision must be {ALLOW_DECISION!r} or {DENY_DECISION!r}, "
-            f"not {decision!r}",
-            "Re-send the decision using one of the two documented values.",
-        )
+        return problem(*_unrecognized_decision(decision))
+
+    allow = decision == ALLOW_DECISION
     envelope = app.state.pending_approvals.envelope(approval_id)
-    if (
-        decision == ALLOW_DECISION
-        and envelope is not None
-        and not envelope.allow_permitted
-    ):
-        return problem(
-            403,
-            "That approval may not be allowed here",
-            "; ".join(envelope.forbidden_reasons)
-            or f"authority is {envelope.authority}",
-            "A named-human ruling or a closed readiness gate cannot be cleared from "
-            "Studio; resolve it at its own seam.",
-        )
+    if allow and _is_impermissible(envelope):
+        return problem(*_impermissible_allow(envelope))
+
     try:
         app.state.pending_approvals.decide(
-            approval_id, allow=decision == ALLOW_DECISION, thread_id=thread_id
+            approval_id, allow=allow, thread_id=thread_id
         )
     except StaleApproval as refused:
-        return problem(
-            409,
-            "That approval is not awaiting your decision",
-            str(refused),
-            "Re-read the current approval request; a decision already recorded "
-            "cannot be changed here.",
-        )
+        return problem(*_not_awaiting_decision(refused))
     return Response(status_code=204)
+
+
+def _is_impermissible(envelope: Any) -> bool:
+    """True when a KNOWN envelope forbids being allowed.
+
+    An unknown envelope is deliberately NOT impermissible here: it is not awaiting a
+    decision at all, which `decide` reports as 409. Answering 403 for it would claim
+    Studio had judged something it never saw.
+    """
+    return envelope is not None and not envelope.allow_permitted
+
+
+def _unrecognized_decision(decision: Any) -> tuple[int, str, str, str]:
+    return (
+        422,
+        "Unrecognized approval decision",
+        f"decision must be {ALLOW_DECISION!r} or {DENY_DECISION!r}, not {decision!r}",
+        "Re-send the decision using one of the two documented values.",
+    )
+
+
+def _impermissible_allow(envelope: Any) -> tuple[int, str, str, str]:
+    return (
+        403,
+        "That approval may not be allowed here",
+        "; ".join(envelope.forbidden_reasons) or f"authority is {envelope.authority}",
+        "A named-human ruling or a closed readiness gate cannot be cleared from "
+        "Studio; resolve it at its own seam.",
+    )
+
+
+def _not_awaiting_decision(refused: Exception) -> tuple[int, str, str, str]:
+    return (
+        409,
+        "That approval is not awaiting your decision",
+        str(refused),
+        "Re-read the current approval request; a decision already recorded "
+        "cannot be changed here.",
+    )

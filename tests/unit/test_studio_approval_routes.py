@@ -80,6 +80,21 @@ def _decide(client: TestClient, thread_id: str, approval_id: str, *, allow: bool
     )
 
 
+def _armed(tmp_path: Path, event: dict[str, Any], forbidden: list[str] | None = None):
+    """A booted client with one approval already registered on a real thread.
+
+    Every relay test needs the same three steps -- boot, open a thread, register an
+    envelope -- and repeating them inline made the assertion the least visible line in
+    each test. Returns the client and the thread the approval belongs to.
+    """
+    client, app = _client(tmp_path)
+    thread_id = _thread(client)
+    app.state.pending_approvals.register(
+        normalize_approval(event, forbidden or [], thread_id=thread_id)
+    )
+    return client, app, thread_id
+
+
 # --------------------------------------------------------------------------- #
 # The structural boundary (T027)                                              #
 # --------------------------------------------------------------------------- #
@@ -147,17 +162,15 @@ def test_the_bridge_protocol_has_no_respond_seam_yet():
 
 
 def test_an_unknown_approval_id_is_refused_with_a_problem(tmp_path: Path):
-    client, app = _client(tmp_path)
-    app.state.pending_approvals.register(normalize_approval(TECHNICAL_EVENT, []))
-    response = _decide(client, _thread(client), "never-registered", allow=True)
+    client, _, thread_id = _armed(tmp_path, TECHNICAL_EVENT)
+    response = _decide(client, thread_id, "never-registered", allow=True)
     assert response.status_code == 409, response.text
     assert "recovery_action" in response.json()
 
 
 def test_a_named_human_approval_is_refused_through_the_route(tmp_path: Path):
-    client, app = _client(tmp_path)
-    app.state.pending_approvals.register(normalize_approval(BUSINESS_EVENT, []))
-    response = _decide(client, _thread(client), "turn-1-approval-2", allow=True)
+    client, _, thread_id = _armed(tmp_path, BUSINESS_EVENT)
+    response = _decide(client, thread_id, "turn-1-approval-2", allow=True)
     # 204 here would mean Studio granted a governance ruling. 403 is the contract's
     # code for "the allow itself was impermissible", distinct from 409's "not
     # awaiting a decision".
@@ -166,19 +179,16 @@ def test_a_named_human_approval_is_refused_through_the_route(tmp_path: Path):
 
 
 def test_a_readiness_blocked_allow_is_refused_with_the_reason(tmp_path: Path):
-    client, app = _client(tmp_path)
-    app.state.pending_approvals.register(
-        normalize_approval(TECHNICAL_EVENT, ["no silver before mapping is cleared"])
+    client, _, thread_id = _armed(
+        tmp_path, TECHNICAL_EVENT, ["no silver before mapping is cleared"]
     )
-    response = _decide(client, _thread(client), "turn-1-approval-1", allow=True)
+    response = _decide(client, thread_id, "turn-1-approval-1", allow=True)
     assert response.status_code == 403, response.text
     assert "no silver before mapping is cleared" in response.text
 
 
 def test_an_unrecognized_decision_is_refused_rather_than_coerced(tmp_path: Path):
-    client, app = _client(tmp_path)
-    app.state.pending_approvals.register(normalize_approval(TECHNICAL_EVENT, []))
-    thread_id = _thread(client)
+    client, _, thread_id = _armed(tmp_path, TECHNICAL_EVENT)
     for body in ({}, {"decision": "yes"}, {"allow": True}):
         response = client.post(
             f"{API}/agent/threads/{thread_id}/approvals/turn-1-approval-1", json=body
@@ -191,9 +201,7 @@ def test_an_unrecognized_decision_is_refused_rather_than_coerced(tmp_path: Path)
 
 
 def test_a_technical_allow_succeeds_once_then_is_refused(tmp_path: Path):
-    client, app = _client(tmp_path)
-    app.state.pending_approvals.register(normalize_approval(TECHNICAL_EVENT, []))
-    thread_id = _thread(client)
+    client, _, thread_id = _armed(tmp_path, TECHNICAL_EVENT)
     first = _decide(client, thread_id, "turn-1-approval-1", allow=True)
     assert first.status_code == 204, first.text
     assert (
@@ -202,9 +210,7 @@ def test_a_technical_allow_succeeds_once_then_is_refused(tmp_path: Path):
 
 
 def test_a_deny_is_accepted_and_also_burns_the_id(tmp_path: Path):
-    client, app = _client(tmp_path)
-    app.state.pending_approvals.register(normalize_approval(TECHNICAL_EVENT, []))
-    thread_id = _thread(client)
+    client, _, thread_id = _armed(tmp_path, TECHNICAL_EVENT)
     assert (
         _decide(client, thread_id, "turn-1-approval-1", allow=False).status_code == 204
     )
@@ -262,8 +268,7 @@ def test_an_approval_is_not_decidable_through_another_threads_url(tmp_path: Path
 
 
 def test_an_unknown_thread_is_refused(tmp_path: Path):
-    client, app = _client(tmp_path)
-    app.state.pending_approvals.register(normalize_approval(TECHNICAL_EVENT, []))
+    client, _, _ = _armed(tmp_path, TECHNICAL_EVENT)
     response = _decide(client, "no-such-thread", "turn-1-approval-1", allow=True)
     assert response.status_code == 404, response.text
 

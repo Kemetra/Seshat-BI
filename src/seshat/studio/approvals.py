@@ -178,10 +178,24 @@ class PendingApprovals:
     ) -> str:
         """Record one decision, or raise `StaleApproval`.
 
-        `thread_id`, when given, must match the thread the approval was raised on. The
-        contract addresses this relay thread-scoped, so without the check an approval
-        registered on thread A would be decidable through thread B's URL -- the id is
-        the capability, and an unscoped capability is a wider one than intended.
+        Reads as its four refusals then its one effect. Each guard is its own method so
+        the reason for a refusal has a name, and so this one stays a list of questions
+        rather than a nest of conditions.
+        """
+        envelope = self._claim(approval_id, thread_id)
+        self._refuse_impermissible_allow(envelope, allow)
+        outcome = "allowed" if allow else "denied"
+        self._decided[approval_id] = outcome
+        del self._live[approval_id]
+        self._evict_if_needed()
+        return outcome
+
+    def _claim(self, approval_id: str, thread_id: str | None) -> ApprovalEnvelope:
+        """The live envelope for this id on this thread, or raise.
+
+        Three ways an id fails to name a decidable approval -- already decided, never
+        registered, or registered on a different thread -- and all three raise
+        `StaleApproval`, because to the caller they are one fact: not yours to decide.
         """
         if approval_id in self._decided:
             raise StaleApproval(
@@ -191,24 +205,37 @@ class PendingApprovals:
         envelope = self._live.get(approval_id)
         if envelope is None:
             raise StaleApproval(f"approval {approval_id!r} is not awaiting a decision")
-        if (
-            thread_id is not None
-            and envelope.thread_id is not None
-            and thread_id != envelope.thread_id
-        ):
+        if self._belongs_to_another_thread(envelope, thread_id):
             raise StaleApproval(
                 f"approval {approval_id!r} was not raised on thread {thread_id!r}"
             )
+        return envelope
+
+    @staticmethod
+    def _belongs_to_another_thread(
+        envelope: ApprovalEnvelope, thread_id: str | None
+    ) -> bool:
+        """True only when both sides name a thread and the two disagree.
+
+        Either side being `None` means nobody asserted a scope, which is not the same as
+        asserting a conflicting one -- so it is not a mismatch to refuse.
+        """
+        if thread_id is None or envelope.thread_id is None:
+            return False
+        return thread_id != envelope.thread_id
+
+    @staticmethod
+    def _refuse_impermissible_allow(envelope: ApprovalEnvelope, allow: bool) -> None:
+        """Raise if this allow was never Studio's to grant.
+
+        Raises rather than degrading to a deny: silently recording a deny would tell the
+        caller their allow was processed. The refusal has to be audible.
+        """
         if allow and not envelope.allow_permitted:
             raise StaleApproval(
-                f"approval {approval_id!r} may not be allowed here: "
+                f"approval {envelope.approval_id!r} may not be allowed here: "
                 + "; ".join(envelope.forbidden_reasons or (envelope.authority,))
             )
-        outcome = "allowed" if allow else "denied"
-        self._decided[approval_id] = outcome
-        del self._live[approval_id]
-        self._evict_if_needed()
-        return outcome
 
     def abandon_thread(self, thread_id: str) -> int:
         """Drop every live approval raised on a thread that is over.
