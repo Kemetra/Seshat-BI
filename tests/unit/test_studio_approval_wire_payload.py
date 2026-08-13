@@ -164,6 +164,32 @@ def test_the_provider_request_id_never_reaches_the_browser(tmp_path: Path):
     assert "provider_request_id" not in wire
 
 
+def test_the_502_detail_still_names_the_unanswered_request(tmp_path: Path):
+    """The stripping claim is scoped to the STREAM, and this pins where it ends.
+
+    An adversarial review of the first revision caught the docstring asserting the id
+    was removed "from the wire", full stop. It is not: `_undeliverable` interpolates it
+    into a 502 `detail`, and `_problem` applies no redaction pass. Rather than leave a
+    docstring that over-claims -- the exact defect class this spec's own Phase 6 record
+    documents -- the claim was narrowed AND the surviving path pinned here, so a future
+    reader learns the boundary from a test instead of rediscovering it.
+
+    Keeping the id in the 502 is deliberate: an integer correlation id is not a
+    credential, and the alternative is a failure whose whole meaning is "one specific
+    waiting request went unanswered" being unable to say which.
+    """
+    from seshat.studio.approval_routes import _undeliverable
+    from seshat.studio.approvals import normalize_approval
+
+    envelope = normalize_approval(TECHNICAL_APPROVAL, [], thread_id="t1", request_id=20)
+    status, _title, detail, _recovery = _undeliverable(envelope)
+
+    assert status == 502
+    assert "20" in detail, (
+        "a 502 that cannot name the unanswered request is not diagnosable"
+    )
+
+
 def test_the_displayable_scope_fields_survive(tmp_path: Path):
     """T024's exact-scope display needs these; dropping one silently blanks it."""
     wire = _registered(tmp_path, TECHNICAL_APPROVAL)
@@ -259,7 +285,9 @@ def test_the_enriched_payload_reaches_the_event_stream(tmp_path: Path):
     computation with no path to its consumer, which is the defect
     `test_studio_approval_reachability` exists to prevent for delivery.
 
-    So this one drives a real turn and reads the stream the browser reads.
+    So this one drives a real turn and reads the stream the browser reads. Re-running
+    the neutering fails this test and the FR-026 redaction test below -- both of which
+    read the stream -- and nothing else.
     """
     client, _ = _client(tmp_path)
     created = client.post(f"{API}/agent/threads", json={"selected_table_id": None})

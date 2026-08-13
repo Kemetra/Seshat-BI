@@ -51,8 +51,15 @@ ALLOW_DECISION = "allow_once"
 DENY_DECISION = "deny"
 
 #: The provider's JSON-RPC correlation id. Kept for the ledger, which must answer the
-#: request the provider blocks on, and STRIPPED from the wire: the analyst cannot act
-#: on it and it names a transport detail the browser has no business knowing.
+#: request the provider blocks on, and stripped from the STREAMED payload: the analyst
+#: cannot act on it and no panel should render it.
+#:
+#: Scoped to the event stream on purpose, because one other path still names it:
+#: `_undeliverable` interpolates the id into its 502 `detail`, where it is diagnostic
+#: for a failure whose entire meaning is "one specific waiting request was never
+#: answered". That predates this constant and is left alone rather than silently
+#: widened into a claim it does not keep -- an integer correlation id is not a
+#: credential, and the alternative is a 502 that cannot say what went unanswered.
 PROVIDER_REQUEST_ID = "provider_request_id"
 
 

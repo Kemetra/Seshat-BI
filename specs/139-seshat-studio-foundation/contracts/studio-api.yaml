@@ -675,8 +675,10 @@ components:
             because FR-021 requires a client to withhold an allow control before
             offering it -- a verdict discoverable only by clicking Allow and
             reading the 403 would be the inverse of that requirement. Studio
-            removes the provider's JSON-RPC correlation id, which names a
-            transport detail no analyst can act on.
+            also removes the provider's JSON-RPC correlation id from THIS
+            payload, which names a transport detail no analyst can act on. (A
+            502 problem document still names that id, where it is diagnostic
+            for a request that was never answered.)
         ignored_for_state:
           type: boolean
     PreparedDecisionSummary:
