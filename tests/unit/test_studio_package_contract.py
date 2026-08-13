@@ -95,6 +95,54 @@ def test_the_launcher_is_outside_the_seshat_cli_dispatch_chain() -> None:
     )
 
 
+def test_no_core_module_imports_studio() -> None:
+    """Core works without Studio -- the direction the other tests do not cover.
+
+    The rest of this file proves Studio is not in a BASE INSTALL (its own extra, its own
+    console script, no web dependency in core). This proves the converse: that no module
+    outside `src/seshat/studio/` reaches INTO Studio. Those are different failures. A
+    single `from seshat.studio import ...` in a CLI verb would make an optional visual
+    surface a hard dependency of the headless engine, and every packaging assertion here
+    would still pass while it happened.
+
+    Static, by AST, over every core source file -- not an import probe. Importing the
+    tree to find out would need the `studio` extra present, which is exactly the
+    condition this test exists to prove is unnecessary.
+
+    The architectural rule: `docs/architecture/product-modules.md`, "Seshat Studio: why
+    `execution-capable`, and the boundary that follows" -- Core works without Studio;
+    Studio projects and orchestrates Core, and never becomes Core. Studio orchestrating
+    approved local execution is exactly why this direction matters: a surface that can
+    drive execution is one Core must still never depend on.
+    """
+    import ast
+
+    core_root = _REPO_ROOT / "src" / "seshat"
+    studio_root = core_root / "studio"
+
+    offenders: list[str] = []
+    for path in sorted(core_root.rglob("*.py")):
+        if studio_root in path.parents or path == studio_root:
+            continue  # Studio importing itself is not a Core dependency on Studio.
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
+                "seshat.studio"
+            ):
+                offenders.append(f"{path.relative_to(_REPO_ROOT)}:{node.lineno}")
+            elif isinstance(node, ast.Import):
+                offenders.extend(
+                    f"{path.relative_to(_REPO_ROOT)}:{node.lineno}"
+                    for alias in node.names
+                    if alias.name.startswith("seshat.studio")
+                )
+
+    assert offenders == [], (
+        "these Core modules import Seshat Studio, making an OPTIONAL visual surface a "
+        f"dependency of the headless engine: {offenders}"
+    )
+
+
 def test_importing_the_launcher_module_pulls_in_no_web_stack() -> None:
     """The launcher module must be import-light: no module-scope fastapi/uvicorn.
 

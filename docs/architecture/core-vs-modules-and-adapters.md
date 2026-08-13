@@ -128,6 +128,23 @@ restrictive matching sub-axis:
   named human via Core Authority approves. The module surfaces the missing approval as a
   blocker.
 
+## The optional visual surface (Seshat Studio)
+
+Studio spans every product layer visually, which makes it the surface most likely to be
+mistaken for a new core. It is not: **Core works without Studio; Studio projects and
+orchestrates Core, and never becomes Core.** It classifies as **Product Module /
+`execution-capable`** -- it orchestrates an approved step against the local committed
+working set through the agent bridge, but spawns a local child process rather than
+crossing an external boundary, which is the Module/Adapter seam rather than the
+`read-only`/`execution-capable` one. Orchestrating execution is its ceiling: it still
+creates no Core truth, grants no named-human business approval, bypasses no readiness
+gate, and is never required for Core, CLI, or agent operation.
+
+The classification, the list of what Studio may and must never own, the anti-scope-creep
+gate, and the Foundation completion gate all live in ONE place -- `product-modules.md`,
+"Seshat Studio: why `execution-capable`, and the boundary that follows". Deliberately not
+restated here: a boundary copied into two documents is a boundary that drifts.
+
 ## What this contract deliberately does NOT do
 
 - It adds no `seshat check` rule, no CLI verb, no readiness stage, and no conformance
