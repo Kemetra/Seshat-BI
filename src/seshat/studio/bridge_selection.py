@@ -28,10 +28,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 __all__ = [
+    "AGENT_PROVIDERS",
     "AUTHENTICATION_MODES",
     "AlternateAuthUnavailable",
     "BridgeSelection",
+    "ProviderSelection",
     "select_bridge",
+    "select_provider",
 ]
 
 #: The two literals `studio-ui/src/api/types.ts` pins for `authentication_mode`.
@@ -106,4 +109,82 @@ def select_bridge(
         authentication_mode="operator_configured_alternate",
         uses_billed_path=True,
         disclosure=_ALTERNATE_DISCLOSURE,
+    )
+
+
+#: The agent implementations Studio can run. `fake` is the deterministic bridge that
+#: needs nothing installed; `codex` is the live app-server.
+AGENT_PROVIDERS: tuple[str, ...] = ("fake", "codex")
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderSelection:
+    """Which agent implementation runs, and why -- reported, never inferred."""
+
+    provider: str
+    detail: str
+
+
+def select_provider(
+    *,
+    configured_provider: str,
+    executable: str | None,
+    version: str | None,
+    version_is_tested: bool,
+) -> ProviderSelection:
+    """Choose the agent implementation for this process.
+
+    Every input is an ARGUMENT: this reads no environment and runs no subprocess, so
+    two calls in one process cannot disagree. The caller probes once at startup and
+    the answer is pinned for the process's lifetime.
+
+    Three ways a configured Codex bridge degrades to the fake, and each REPORTS a
+    reason rather than degrading silently. A silent fallback is the dangerous shape:
+    the operator sees a working Studio, believes Codex is answering, and gets
+    deterministic fake text instead -- indistinguishable from a real reply until it
+    matters.
+
+    An untested version is refused rather than attempted. The compatibility contract
+    is explicit that semver proximity is not compatibility evidence: a build outside
+    the recorded range is `incompatible` until its generated schema and handshake
+    fixtures pass.
+    """
+    if configured_provider not in AGENT_PROVIDERS:
+        raise ValueError(
+            f"unknown agent provider {configured_provider!r}; expected one of "
+            f"{list(AGENT_PROVIDERS)}"
+        )
+
+    if configured_provider == "fake":
+        # NOT a fallback: this is what an operator who configured nothing asked for.
+        # An installed CLI is deliberately not consulted -- presence is not consent.
+        return ProviderSelection(
+            provider="fake",
+            detail="The deterministic bridge is configured; no agent CLI is used.",
+        )
+
+    if executable is None:
+        return ProviderSelection(
+            provider="fake",
+            detail=(
+                "Codex is configured but the CLI was not found on PATH. Studio is "
+                "answering with the deterministic bridge; install the Codex CLI and "
+                "restart to use it."
+            ),
+        )
+
+    if not version_is_tested:
+        observed = version or "an unreadable version"
+        return ProviderSelection(
+            provider="fake",
+            detail=(
+                f"Codex reports {observed}, which is outside the range Studio has "
+                "exercised, so turns would run against an unverified protocol. The "
+                "deterministic bridge is answering instead."
+            ),
+        )
+
+    return ProviderSelection(
+        provider="codex",
+        detail=f"Codex {version} is driving turns.",
     )

@@ -23,14 +23,32 @@ even looked at, so an attacker cannot learn whether a session exists.
 
 from __future__ import annotations
 
+import subprocess
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
-from . import agent_routes, bridge, config, events, projection, redaction, session
+from . import (
+    agent_routes,
+    bridge,
+    bridge_selection,
+    codex_bridge,
+    codex_process,
+    config,
+    events,
+    projection,
+    redaction,
+    session,
+)
 from .bridge_selection import select_bridge
+
+#: Distinguishes "probe the installed CLI" from an explicit `None` meaning "there is
+#: none". A default of `None` would make the missing-CLI branch untestable without
+#: uninstalling Codex from the machine running the tests.
+_PROBE_CODEX = object()
 
 #: Every route lives under this prefix, matching the contract's server URL.
 API_PREFIX = "/api/v1"
@@ -243,6 +261,13 @@ def _register_routes(app: FastAPI) -> None:
                 "workspace": _snapshot().as_dict(),
                 "navigation": ["command_room"],
                 "authentication_mode": app.state.authentication_mode,
+                #: WHICH implementation is answering, plus why. Separate from
+                #: `authentication_mode`, which reports `subscription` whether Codex
+                #: or the fake is driving -- so a fallback would be invisible without
+                #: this, and the operator would read deterministic text as a real
+                #: reply.
+                "agent_provider": app.state.agent_provider,
+                "agent_provider_detail": app.state.agent_provider_detail,
                 "capabilities": _bootstrap_capabilities(),
             }
         )
@@ -299,7 +324,39 @@ def _register_frontend(app: FastAPI) -> None:
     app.mount("/", StaticFiles(directory=static_directory, html=True), name="frontend")
 
 
-def create_app(workspace: Path | str, *, port: int) -> tuple[FastAPI, str]:
+def _probe_codex(configured_provider: str) -> tuple[str | None, str | None]:
+    """The installed CLI's path and reported version, or `(None, None)`.
+
+    Run ONCE at startup and only when Codex is actually configured: an operator on
+    the fake must not pay a subprocess spawn at boot, and must not have a CLI that
+    merely happens to be installed influence anything.
+
+    Every failure returns `None` rather than raising. A missing, hung, or
+    unintelligible CLI must degrade to the deterministic bridge -- a traceback here
+    would take down the whole workspace, including the views that never needed Codex.
+    """
+    if configured_provider != "codex":
+        return None, None
+    executable = codex_process.find_codex_executable()
+    if executable is None:
+        return None, None
+    try:
+        completed = subprocess.run(  # noqa: S603 -- fixed argv, never a shell string
+            [executable, "--version"], capture_output=True, text=True, timeout=30
+        )
+    except (OSError, subprocess.SubprocessError):
+        return executable, None
+    reported = completed.stdout.strip().split()
+    return executable, (reported[-1] if reported else None)
+
+
+def create_app(
+    workspace: Path | str,
+    *,
+    port: int,
+    agent_provider: str = "fake",
+    codex_version: str | None = _PROBE_CODEX,
+) -> tuple[FastAPI, str]:
     """Build the app for one pinned workspace, returning it with its bootstrap token.
 
     The token is RETURNED rather than logged or stored in plaintext: the caller hands
@@ -313,7 +370,18 @@ def create_app(workspace: Path | str, *, port: int) -> tuple[FastAPI, str]:
     disagreement impossible to reintroduce: there is no default to fall back to, and
     FR-003's OS-assigned port stays the caller's to resolve.
     """
-    launch = config.LaunchConfiguration.for_workspace(workspace).with_bound_port(port)
+    launch = replace(
+        config.LaunchConfiguration.for_workspace(workspace).with_bound_port(port),
+        agent_provider=agent_provider,
+    )
+    #: `codex_version` is an injection seam for tests, which must exercise the
+    #: untested-range and missing-CLI branches without depending on what happens to
+    #: be installed on the machine running them. The sentinel keeps "probe the real
+    #: CLI" distinguishable from an explicit `None` meaning "there is none".
+    if codex_version is _PROBE_CODEX:
+        executable, codex_version = _probe_codex(launch.agent_provider)
+    else:
+        executable = None if codex_version is None else "codex"
     token = session.generate_bootstrap_token()
 
     app = FastAPI(
@@ -337,6 +405,22 @@ def create_app(workspace: Path | str, *, port: int) -> tuple[FastAPI, str]:
         alternate_credential_present=launch.alternate_credential_present,
     )
     app.state.authentication_mode = app.state.bridge_selection.authentication_mode
+
+    #: WHICH implementation answers turns, decided ONCE here. The probe is a
+    #: subprocess; running it per turn would put a spawn on the critical path of
+    #: every message, and could answer differently mid-session.
+    provider = bridge_selection.select_provider(
+        configured_provider=launch.agent_provider,
+        executable=executable,
+        version=codex_version,
+        version_is_tested=codex_process.is_tested_version(codex_version),
+    )
+    app.state.agent_provider = provider.provider
+    #: Reported to the browser because a SILENT fallback is the dangerous one: the
+    #: operator sees a working Studio and believes Codex is answering while
+    #: deterministic text comes back. `authentication_mode` cannot carry this -- it
+    #: reads `subscription` either way.
+    app.state.agent_provider_detail = provider.detail
     #: In-memory only (FR-035). The bridge is the deterministic fake until Phase 5
     #: introduces the Codex one; FR-014 keeps the swap to a single assignment.
     #:
@@ -347,7 +431,15 @@ def create_app(workspace: Path | str, *, port: int) -> tuple[FastAPI, str]:
     #: absolute filesystem paths to the browser, including out-of-root paths that
     #: expose the operator's home directory layout.
     app.state.threads = events.ThreadStore(workspace_root=launch.workspace_root)
-    app.state.bridge = bridge.FakeAgentBridge()
+    app.state.bridge = (
+        codex_bridge.CodexBridge(
+            codex_process.CodexLaunchPlan.for_workspace(
+                launch.workspace_root, executable=executable or "codex"
+            )
+        )
+        if provider.provider == "codex"
+        else bridge.FakeAgentBridge()
+    )
 
     _register_routes(app)
     agent_routes.register_agent_routes(app)
