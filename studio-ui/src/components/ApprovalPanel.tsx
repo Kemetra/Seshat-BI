@@ -115,33 +115,15 @@ export function ApprovalPanel({ approval, threadId, domKey }: ApprovalPanelProps
         <ForbiddenReasons reasons={approval.forbiddenReasons} />
       )}
 
-      {decided !== null ? (
-        <p className="approval__decided">
-          {decided === "allow_once" ? "Allowed once." : "Declined."}
-        </p>
-      ) : (
-        <div className="approval__controls">
-          {/* ABSENT, not disabled, when readiness forbids the scope. */}
-          {mayAllow(approval) && (
-            <button
-              type="button"
-              className="approval__allow"
-              disabled={inFlight}
-              onClick={() => void decide("allow_once")}
-            >
-              Allow once
-            </button>
-          )}
-          <button
-            type="button"
-            className="approval__deny"
-            disabled={inFlight}
-            onClick={() => void decide("deny")}
-          >
-            Decline
-          </button>
-        </div>
-      )}
+      <ApprovalControls
+        approval={approval}
+        decided={decided}
+        inFlight={inFlight}
+        // `void`, deliberately: the click handler must not return a Promise, and the
+        // rejection path is already handled inside `decide` -- an unhandled rejection
+        // here would be a second, silent error channel.
+        onDecide={(decision) => void decide(decision)}
+      />
 
       {failure !== null && (
         <p className="approval__failure" role="alert">
@@ -150,6 +132,58 @@ export function ApprovalPanel({ approval, threadId, domKey }: ApprovalPanelProps
         </p>
       )}
     </section>
+  );
+}
+
+/**
+ * The decision controls, or what was decided.
+ *
+ * Extracted so `ApprovalPanel` stays under the Code Health complexity gate, but the
+ * seam is a real one rather than a cut made to satisfy a threshold: this is the whole
+ * of FR-021's "is a control offered at all" question in one place, and it is the only
+ * part of the panel that changes when a decision lands.
+ */
+function ApprovalControls({
+  approval,
+  decided,
+  inFlight,
+  onDecide,
+}: {
+  approval: Approval;
+  decided: ApprovalDecision | null;
+  inFlight: boolean;
+  onDecide: (decision: ApprovalDecision) => void;
+}) {
+  if (decided !== null) {
+    return (
+      <p className="approval__decided">
+        {decided === "allow_once" ? "Allowed once." : "Declined."}
+      </p>
+    );
+  }
+
+  return (
+    <div className="approval__controls">
+      {/* ABSENT, not disabled, when readiness forbids the scope. */}
+      {mayAllow(approval) && (
+        <button
+          type="button"
+          className="approval__allow"
+          disabled={inFlight}
+          onClick={() => onDecide("allow_once")}
+        >
+          Allow once
+        </button>
+      )}
+      <button
+        type="button"
+        className="approval__deny"
+        disabled={inFlight}
+        onClick={() => onDecide("deny")}
+      >
+        Decline
+      </button>
+    </div>
   );
 }
 
