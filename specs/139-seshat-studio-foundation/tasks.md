@@ -593,12 +593,79 @@ projection, endpoints, frontend, journey, and health.
   hardened decomposition. Credential-shaped values in ROUTING positions (path segment,
   `selected_table_id`, bootstrap `token`) are tested and must not echo. If that
   reading is wrong it is an owner's call and belongs in an issue.
-- [ ] **T035** Run existing dashboard and full repository regression gates; reconcile
+- [x] **T035** Run existing dashboard and full repository regression gates; reconcile
   generated bundles and run `seshat check` and `semantic-check`. [FR-030, SC-009]
+
+  **T035 measured 2026-08-13/14.** SC-009 asks that the existing gates "remain green
+  after Studio is added", which is a COMPARISON, so the baseline was established first
+  — a full run on clean `main` before measuring any branch. Without that, seven
+  pre-existing environmental failures would have been attributed to this work.
+
+  | Run | Result |
+  |---|---|
+  | clean `main` | **6612 passed, 7 failed, 38 skipped** (8m47s) |
+  | Studio stack (`feat/studio-accessibility-axe`, deepest) | **6631 passed, 6 failed** |
+
+  **The stack is strictly better than the branch point**: +19 passing, one FEWER
+  failure. The one that disappears is `test_studio_generated_types`, red on `main`
+  since a hand-edit of generated `types.ts` and fixed by #632.
+
+  All 7 baseline failures are ENVIRONMENTAL, each diagnosed rather than assumed:
+  - `test_real_wheel_sdist_and_isolated_rebuild` — `twine` not installed here.
+  - `test_agent_verify_version_compatibility` and
+    `test_issue_regression_489_command_safety` — both spawn `python -I`, which
+    isolates away `PYTHONPATH=src`, so the child cannot import `seshat`. The
+    documented stale-global-install class.
+  - `test_studio_codex_real` (2) — `OSError [WinError 193]`, no valid Codex binary.
+  - `weekly_change_points` — the `stats-change` optional extra is not installed;
+    the code reports `STAT_DEPENDENCY_UNAVAILABLE` correctly.
+
+  The named gates, all clean on the Studio stack:
+  - **dashboard: 92 passed**, 8 skipped — exactly the T003 baseline (FR-030: existing
+    static dashboard behaviour unchanged).
+  - `export_agent_bundles.py --check` — PASS, both bundles byte-identical.
+  - `seshat check` — unchanged from baseline (the one pre-existing RS1 warning, which
+    names a human recomputation and is not a Studio finding).
+  - `seshat semantic-check` — **0 findings**.
+  - `seshat kit-lint` — no projection drift.
 - [ ] **T036** Run external signed-in Codex acceptance and record versioned,
   redacted subscription evidence with no API credential. [SC-001, SC-003, SC-010]
 - [ ] **T037** Map SC-001 through SC-010 to fresh evidence, review every FR and edge
   case, and request independent code review before claiming Foundation complete.
+
+  **Mapped 2026-08-13/14; the box stays OPEN because two criteria are unmet and one
+  is owner-gated.** T037 is the claim that Foundation is complete, so it cannot be
+  checked by the agent that built the work — and three rows below are honestly
+  incomplete regardless.
+
+  | SC | Status | Evidence |
+  |---|---|---|
+  | SC-001 first-time analyst, authenticated Codex | **OWNER-GATED** | needs T036 |
+  | SC-002 every stage/evidence/blocker projected | met | `test_studio_projection_*`, fixture parity |
+  | SC-003 ordered streamed turn | **OWNER-GATED** for the real provider | fake path green; `test_studio_codex_real` cannot run here (no Codex binary) |
+  | SC-004 seven agent health states | met | `AgentHealth` suite |
+  | SC-005 approval paused until allow/deny, decide-once | met | 50 approval tests + `test_studio_approval_pause` |
+  | SC-006 refused requests disclose nothing | met | `test_studio_boundary_corpus` (7), falsified by planting a `workspace_root` leak |
+  | SC-007 no critical/serious a11y violations | **PARTIAL** | axe over 5 states; jsdom cannot decide contrast, and keyboard/focus/reduced-motion/responsive need the running app (T032) |
+  | SC-008 wheel opens Studio with Python + browser only | **PARTIAL** | wheel now CONTAINS the built UI (#636, verified by opening the zip); clean-base and Studio-extra installs unexercised (T033) |
+  | SC-009 existing gates stay green | met | T035 above: stack is +19 passing / one fewer failure than `main` |
+  | SC-010 external subscription acceptance | **OWNER-GATED** | needs T036 |
+
+  **FR sweep — the ones this session touched or changed:** FR-005 (#636), FR-018/019/
+  020/021 (#632, #633), FR-022 (#635), FR-026 (#637 corpus + the redaction-scope
+  ruling), FR-027/028/029 (#634), FR-031 (#637 partial), FR-034 (#638). The rest are
+  unchanged from their own phase evidence.
+
+  **Independent review**: each PR in #631-#638 was gated by an adversarial external
+  reviewer before opening. Two findings were REFUTED and acted on — T027 was
+  wrongly checked and got unchecked; a `provider_request_id` stripping claim was
+  narrowed to the stream it actually covers. That is per-PR review, NOT the
+  end-of-Foundation review this task asks for, which belongs to a named human who did
+  not build the work.
+
+  **What a human must do to close T037**: run T036, decide the two PARTIAL rows
+  (accept as-is or require the browser/packaging passes), and review the scoped
+  redaction ruling recorded under T034.
 
 ## Dependencies
 
