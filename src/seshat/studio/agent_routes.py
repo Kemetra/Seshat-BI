@@ -44,7 +44,11 @@ import anyio.to_thread
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from seshat.studio.approval_routes import decide_approval, register_approval
+from seshat.studio.approval_routes import (
+    ApprovalRequest,
+    decide_approval,
+    register_approval,
+)
 from seshat.studio.bridge import validate_turn_request
 from seshat.studio.events import ReplayExpired, TurnAlreadyActive
 
@@ -380,12 +384,14 @@ def register_agent_routes(app: FastAPI) -> None:
         thread_id: str, approval_id: str, body: dict[str, Any]
     ) -> Response:
         return decide_approval(
-            app,
-            thread_id,
-            approval_id,
-            body,
-            problem=_problem,
-            unknown_thread=_unknown_thread,
+            ApprovalRequest(
+                app=app,
+                thread_id=thread_id,
+                approval_id=approval_id,
+                body=body,
+                problem=_problem,
+                unknown_thread=_unknown_thread,
+            )
         )
 
     @app.get(f"{API_PREFIX}/agent/threads/{{thread_id}}/events")

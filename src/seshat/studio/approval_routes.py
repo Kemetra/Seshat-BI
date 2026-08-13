@@ -16,6 +16,7 @@ round trip is the remaining work in Phase 6.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from fastapi import FastAPI, Response
@@ -27,6 +28,7 @@ from seshat.studio.approvals import (
 )
 
 __all__ = [
+    "ApprovalRequest",
     "decide_approval",
     "register_approval",
     "selected_table",
@@ -74,15 +76,27 @@ def register_approval(app: FastAPI, thread_id: str, thread: Any, produced: Any) 
     )
 
 
-def decide_approval(
-    app: FastAPI,
-    thread_id: str,
-    approval_id: str,
-    body: dict[str, Any],
-    *,
-    problem: Any,
-    unknown_thread: Any,
-) -> Response:
+@dataclass(frozen=True)
+class ApprovalRequest:
+    """One decision arriving from the browser, plus the responses it may need.
+
+    A PUBLIC dataclass rather than six parameters. `problem` and `unknown_thread` have
+    to be injected -- `agent_routes` owns those response shapes and imports THIS
+    module, so reaching back would be an import cycle -- but each injection is another
+    argument, and two of them pushed this past the argument-count bar. Bundling makes
+    the seam ONE named thing that a caller can construct in one place, which is also
+    the honest description of it: this is the request plus how to refuse it.
+    """
+
+    app: FastAPI
+    thread_id: str
+    approval_id: str
+    body: dict[str, Any]
+    problem: Any
+    unknown_thread: Any
+
+
+def decide_approval(request: ApprovalRequest) -> Response:
     """Record one analyst decision.
 
     The browser sends a decision and nothing else -- no tool runs here, no artifact is
@@ -96,29 +110,24 @@ def decide_approval(
     approval that is not awaiting a decision: unknown, already decided, or raised on a
     different thread. Collapsing them would tell an analyst "try again later" when the
     honest answer is "never".
-
-    `problem` and `unknown_thread` are injected rather than imported: `agent_routes`
-    owns those response shapes and imports THIS module, so reaching back would be a
-    cycle.
     """
-    if not app.state.threads.has_thread(thread_id):
-        return unknown_thread()
+    approvals = request.app.state.pending_approvals
+    if not request.app.state.threads.has_thread(request.thread_id):
+        return request.unknown_thread()
 
-    decision = body.get("decision")
+    decision = request.body.get("decision")
     if decision not in {ALLOW_DECISION, DENY_DECISION}:
-        return problem(*_unrecognized_decision(decision))
+        return request.problem(*_unrecognized_decision(decision))
 
     allow = decision == ALLOW_DECISION
-    envelope = app.state.pending_approvals.envelope(approval_id)
+    envelope = approvals.envelope(request.approval_id)
     if allow and _is_impermissible(envelope):
-        return problem(*_impermissible_allow(envelope))
+        return request.problem(*_impermissible_allow(envelope))
 
     try:
-        app.state.pending_approvals.decide(
-            approval_id, allow=allow, thread_id=thread_id
-        )
+        approvals.decide(request.approval_id, allow=allow, thread_id=request.thread_id)
     except StaleApproval as refused:
-        return problem(*_not_awaiting_decision(refused))
+        return request.problem(*_not_awaiting_decision(refused))
     return Response(status_code=204)
 
 
