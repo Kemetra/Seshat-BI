@@ -28,15 +28,23 @@ module only.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import queue
+import threading
+import time
 import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
+from functools import partial
 from typing import Any
 
+import anyio
+import anyio.to_thread
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from seshat.studio.bridge import validate_turn_request
 from seshat.studio.events import ReplayExpired, TurnAlreadyActive
 
 #: Contract's `AgentThreadRef.state` enum. Used to VALIDATE the state this module
@@ -60,15 +68,6 @@ THREAD_STATES: frozenset[str] = frozenset(
 WRITE_INTENT_TYPES: frozenset[str] = frozenset(
     {"file_change_proposed", "approval_required"}
 )
-
-
-class ReadOnlyViolation(Exception):
-    """A bridge emitted write intent during a `read_only` turn.
-
-    Its own type rather than a bare `ValueError`, because the two mean different
-    things to the route: a `ValueError` is a malformed REQUEST (422, the caller's to
-    fix), while this is a misbehaving PROVIDER (502 -- nothing the analyst can fix).
-    """
 
 
 def _problem(
@@ -177,27 +176,44 @@ def _create_thread(app: FastAPI, body: dict[str, Any] | None) -> dict[str, Any]:
     return {"thread_id": thread_id, "state": _NEW_THREAD_STATE}
 
 
-def _start_turn(app: FastAPI, thread_id: str, body: dict[str, Any]) -> Any:
-    """Run one turn through the bridge, recording every event it yields.
+async def _start_turn(app: FastAPI, thread_id: str, body: dict[str, Any]) -> Any:
+    """Accept one turn and stream its result, per the contract's 202.
 
-    The fake bridge completes synchronously, so this drains the generator before
-    responding. A streaming provider will need the drain moved to a background task; the
-    event store is already the handoff point for that, which is why this records into it
-    rather than returning events directly.
+    The turn is ACCEPTED here and drained in the background: the endpoint is
+    documented as "Turn accepted; updates stream from the events endpoint", and a
+    real provider takes seconds, so draining inline held the event loop for the whole
+    turn -- no SSE polling, no interrupt, until it finished. The fake bridge hid that
+    by completing instantly.
+
+    What still happens synchronously is everything the caller must learn from the
+    STATUS: an unknown thread (404), a malformed request (422), and a second live
+    turn (409). Each is decided by validating and recording `turn_started` before
+    returning, so the conflict a browser needs to see is still in the response rather
+    than only in the stream.
+
+    Failures discovered LATER cannot be a status -- the response has already gone --
+    so they arrive as a `turn_failed` event. That includes the `read_only` refusal,
+    which previously returned 502: a status the contract does not list, and one that
+    left `_active_turn` set because no terminal was recorded.
     """
     if not app.state.threads.has_thread(thread_id):
         return _unknown_thread()
 
+    thread = app.state.threads.thread(thread_id)
     turn_id = f"turn-{uuid.uuid4().hex[:12]}"
+    request = TurnRequest(
+        prompt=str(body.get("prompt", "")),
+        turn_id=turn_id,
+        requested_mode=str(body.get("requested_mode", "")),
+    )
     try:
-        recorded = _record_turn(
-            app.state.threads.thread(thread_id),
-            app.state.bridge,
-            TurnRequest(
-                prompt=str(body.get("prompt", "")),
-                turn_id=turn_id,
-                requested_mode=str(body.get("requested_mode", "")),
-            ),
+        # Validated by the same helper the bridge uses, BEFORE anything is recorded:
+        # a malformed prompt must be a 422, not a turn that opens and then fails.
+        validate_turn_request(request.prompt, request.requested_mode)
+        thread.append(
+            "turn_started",
+            {"prompt_echo": request.prompt[:200]},
+            turn_id=turn_id,
         )
     except TurnAlreadyActive as conflict:
         # BEFORE the ValueError clause: TurnAlreadyActive subclasses it, so the
@@ -209,15 +225,6 @@ def _start_turn(app: FastAPI, thread_id: str, body: dict[str, Any]) -> Any:
             str(conflict),
             "Wait for the current reply, or stop it first.",
         )
-    except ReadOnlyViolation as violation:
-        # 502, not 422: the request was valid and the PROVIDER misbehaved, so there
-        # is nothing for the analyst to correct.
-        return _problem(
-            502,
-            "The agent attempted a change in a read-only turn",
-            str(violation),
-            "Nothing was changed. Retry, or ask in propose-changes mode.",
-        )
     except ValueError as invalid:
         return _problem(
             422,
@@ -225,13 +232,22 @@ def _start_turn(app: FastAPI, thread_id: str, body: dict[str, Any]) -> Any:
             str(invalid),
             "Adjust the request and try again.",
         )
-    if not recorded:
-        return _problem(
-            503,
-            "Agent unavailable",
-            "The agent produced no events for this turn.",
-            "Check the agent health panel and retry.",
-        )
+
+    # Parked for the poll loop to advance. Not a background task: one created inside
+    # a request dies with that request's event loop (verified under `TestClient`), so
+    # the turn would silently stop after its first frame.
+    _reap_abandoned_turns(app)
+    app.state.pending_turns[thread_id] = _PendingTurn(
+        events=app.state.bridge.run_turn(
+            prompt=request.prompt,
+            turn_id=request.turn_id,
+            requested_mode=request.requested_mode,
+        ),
+        request=request,
+        pumping=asyncio.Lock(),
+        last_touched=time.monotonic(),
+        results=queue.Queue(),
+    )
     return {"turn_id": turn_id}
 
 
@@ -247,10 +263,15 @@ def _interrupt_turn(app: FastAPI, thread_id: str, turn_id: str) -> Response:
             str(inactive),
             "The turn has already ended; no action is needed.",
         )
+    # The turn is over as far as the store is concerned; drop and close its generator
+    # too, or a real provider's child process outlives the turn that spawned it.
+    pending = app.state.pending_turns.get(thread_id)
+    if pending is not None:
+        _finish_turn(app, thread_id, pending)
     return Response(status_code=204)
 
 
-def _stream_events(app: FastAPI, thread_id: str, request: Request) -> Response:
+async def _stream_events(app: FastAPI, thread_id: str, request: Request) -> Response:
     """Replay what is retained, then end the response.
 
     A finite replay rather than an open connection: the fake bridge records
@@ -261,6 +282,11 @@ def _stream_events(app: FastAPI, thread_id: str, request: Request) -> Response:
     """
     if not app.state.threads.has_thread(thread_id):
         return _unknown_thread()
+
+    # Advance any live turn BEFORE replaying, so this poll serves what it just
+    # produced rather than making the browser wait another interval for it.
+    await _pump_turn(app, thread_id, app.state.threads.thread(thread_id))
+
     try:
         last_seen = _parse_last_event_id(request.headers.get("Last-Event-ID"))
     except ValueError:
@@ -311,13 +337,17 @@ def register_agent_routes(app: FastAPI) -> None:
     """
     from seshat.studio.app import API_PREFIX
 
+    #: thread_id -> (live generator, its TurnRequest). One in-flight turn per thread,
+    #: which `TurnAlreadyActive` already guarantees.
+    app.state.pending_turns = {}
+
     @app.post(f"{API_PREFIX}/agent/threads", status_code=201)
     async def create_thread(body: dict[str, Any] | None = None) -> Any:
         return _create_thread(app, body)
 
     @app.post(f"{API_PREFIX}/agent/threads/{{thread_id}}/turns", status_code=202)
     async def start_turn(thread_id: str, body: dict[str, Any]) -> Any:
-        return _start_turn(app, thread_id, body)
+        return await _start_turn(app, thread_id, body)
 
     @app.post(
         f"{API_PREFIX}/agent/threads/{{thread_id}}/turns/{{turn_id}}/interrupt",
@@ -328,7 +358,27 @@ def register_agent_routes(app: FastAPI) -> None:
 
     @app.get(f"{API_PREFIX}/agent/threads/{{thread_id}}/events")
     async def stream_events(thread_id: str, request: Request) -> Response:
-        return _stream_events(app, thread_id, request)
+        return await _stream_events(app, thread_id, request)
+
+
+#: Returned by `next(...)` when the bridge's generator is exhausted. A sentinel
+#: rather than catching StopIteration: `to_thread.run_sync` would surface that as a
+#: RuntimeError from the worker, obscuring an ordinary end-of-turn.
+_DRAINED = object()
+
+#: Returned when the pump's slice expired before the provider produced anything. The
+#: generator keeps running on its worker; the next poll picks it up.
+_STILL_WAITING = object()
+
+#: Event types that END a turn. Local rather than imported from `events` to keep this
+#: module's pump readable; the store owns the authoritative transition.
+_TERMINAL_EVENTS: frozenset[str] = frozenset({"turn_completed", "turn_failed"})
+
+#: How long a parked turn may go unpolled before it is reaped. The pump only runs on a
+#: poll, so a browser that closes mid-reply would otherwise leave its generator parked
+#: forever -- holding a live `CodexSession` and its child process past the tab that
+#: started it.
+ABANDONED_TURN_SECONDS = 120.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -345,37 +395,248 @@ class TurnRequest:
     requested_mode: str
 
 
-def _record_turn(thread: Any, bridge: Any, request: TurnRequest) -> list[Any]:
-    """Drive the bridge and record each event into the thread.
+@dataclass(slots=True)
+class _PendingTurn:
+    """One in-flight turn: its generator, its request, and who is advancing it.
 
-    Prompt and mode validation happen inside the bridge, so a malformed request
-    raises before any event is recorded. Note the LIMIT of that: a refusal only
-    detectable mid-stream -- a second `turn_started` while one is live -- leaves the
-    events already recorded in place. They keep their sequence and the caller reports
-    the failure; rewriting history to hide them would be worse.
-
-    The `read_only` refusal below is the actual enforcement of that mode.
-    `FakeAgentBridge` also declines to propose under `read_only`, but a bridge is
-    third-party code by design: a `Protocol` cannot constrain what a generator
-    yields, so trusting the producer would make the mode advisory. Enforcing at the
-    recorder means a provider that ignores it -- bug, quirk, or prompt injection --
-    cannot get write intent into the buffer, and every bridge inherits the refusal
-    without opting in.
+    The lock is per TURN rather than global: two threads may legitimately pump at
+    once, but the same generator must never be advanced twice concurrently. Python
+    raises `ValueError: generator already executing`, which the pump's own handler
+    would then record as `provider_error` -- killing a healthy turn because a second
+    tab happened to poll.
     """
-    recorded = []
-    for produced in bridge.run_turn(
-        prompt=request.prompt,
-        turn_id=request.turn_id,
-        requested_mode=request.requested_mode,
-    ):
-        if (
-            request.requested_mode == "read_only"
-            and produced.type in WRITE_INTENT_TYPES
-        ):
-            raise ReadOnlyViolation(
-                f"the bridge emitted {produced.type!r} during a read_only turn"
+
+    events: Any
+    request: TurnRequest
+    pumping: asyncio.Lock
+    last_touched: float
+    #: The thread advancing the generator right now, if any. A read the pump gave up
+    #: waiting for is still running INSIDE the generator, so a second `next()` would
+    #: raise "generator already executing"; the next poll waits on the same reader.
+    reader: Any = None
+    #: Where that reader posts its one result. A queue rather than a future because
+    #: nothing tied to an event loop survives the request that created it.
+    results: Any = None
+
+
+#: How long one `/events` poll may spend advancing a live turn before it serves the
+#: buffer. Bounded so the browser always gets a timely response: the turn continues
+#: on the NEXT poll, which `SSE_RETRY_MILLISECONDS` already schedules.
+TURN_PUMP_SECONDS = 0.5
+
+
+async def _pump_turn(app: FastAPI, thread_id: str, thread: Any) -> None:
+    """Advance a live turn by up to `TURN_PUMP_SECONDS`, then return.
+
+    **Why the poll drives the turn rather than a background task.** The blocking work
+    is a sync generator, so it must be offloaded; but every `thread.append(...)` has
+    to stay on the event loop, because `ThreadEvents` is documented as deliberately
+    not thread-safe and `_active_turn` is mutated inside `append`. A worker draining
+    the whole turn would put a concurrent writer beside `_stream_events` and
+    `_interrupt_turn` on that object.
+
+    `asyncio.create_task` was the obvious alternative and does not survive: a task
+    created inside a request is cancelled when its loop ends, which under
+    `TestClient` is the end of that same request. Rather than depend on a loop
+    outliving the request, the pump runs where the browser already is -- `/events` is
+    a finite replay the client reconnects to on `SSE_RETRY_MILLISECONDS`, so the poll
+    loop that renders the turn is also the loop that advances it.
+
+    Errors become EVENTS, never exceptions: the 202 has already been sent, so a raise
+    here would surface as a 500 on a POLL, and leave `_active_turn` set so every
+    later turn on the thread is refused as already-active.
+    """
+    pending = app.state.pending_turns.get(thread_id)
+    if pending is None:
+        return
+    pending.last_touched = time.monotonic()
+    if pending.pumping.locked():
+        # Another poll is already inside `next()` on this generator -- a second tab,
+        # or a reconnect overlapping the previous poll. Advancing it concurrently
+        # raises "generator already executing", which the handler below would convert
+        # into `provider_error` and kill a healthy turn. This poll serves what is
+        # already buffered; the other one is making progress.
+        return
+
+    request = pending.request
+    async with pending.pumping:
+        deadline = time.monotonic() + TURN_PUMP_SECONDS
+        try:
+            while time.monotonic() < deadline:
+                produced = await _next_event(pending, deadline)
+                if produced is _STILL_WAITING:
+                    return  # provider is slow: serve the buffer, resume next poll
+                if produced is _DRAINED:
+                    # A stream that ends with NO terminal is a failure, not a quiet
+                    # success: `turn_started` is already recorded, so returning here
+                    # would leave `_active_turn` set with no generator left to advance
+                    # it, refusing every later turn with 409. This is the case the
+                    # synchronous route used to report as 503.
+                    _fail_turn(
+                        thread,
+                        request.turn_id,
+                        "provider_error",
+                        "the provider produced no events for this turn",
+                    )
+                    _finish_turn(app, thread_id, pending)
+                    return
+                if produced.type == "turn_started":
+                    # The route already opened this turn, synchronously, so the caller
+                    # could be told 409 in the RESPONSE rather than only in the stream.
+                    # Every bridge also yields its own opening envelope; recording it
+                    # again raises `TurnAlreadyActive` against our own event.
+                    continue
+                if (
+                    request.requested_mode == "read_only"
+                    and produced.type in WRITE_INTENT_TYPES
+                ):
+                    # The read_only refusal, recorded rather than raised: the response
+                    # has already gone, so a 502 has nowhere to land -- and ending the
+                    # turn is what releases `_active_turn`.
+                    _fail_turn(
+                        thread,
+                        request.turn_id,
+                        "read_only_violation",
+                        f"the bridge emitted {produced.type!r} during a read_only turn",
+                    )
+                    _finish_turn(app, thread_id, pending)
+                    return
+                thread.append(produced.type, produced.payload, turn_id=produced.turn_id)
+                if produced.type in _TERMINAL_EVENTS:
+                    _finish_turn(app, thread_id, pending)
+                    return
+        except Exception as error:  # a dead turn must still END
+            _fail_turn(
+                thread,
+                request.turn_id,
+                "provider_error",
+                f"the turn failed: {type(error).__name__}",
             )
-        recorded.append(
-            thread.append(produced.type, produced.payload, turn_id=produced.turn_id)
+            _finish_turn(app, thread_id, pending)
+
+
+async def _next_event(pending: _PendingTurn, deadline: float) -> Any:
+    """One generator advance, bounded by what remains of the pump's budget.
+
+    `CodexSession.frames()` blocks for up to 30 seconds waiting on a stalled provider.
+    Unbounded, the pump would hold the poll for that long -- withholding even the
+    `turn_started` already sitting in the buffer, so the browser could not render the
+    Stop control for the very turn the analyst wants to stop.
+
+    `_STILL_WAITING` means "nothing yet, serve the buffer": the generator keeps
+    running on its worker and the next poll collects the result. `abandon_on_cancel`
+    lets this coroutine move on while that thread finishes its read, rather than
+    blocking on it.
+    """
+    if pending.reader is None:
+        # A plain daemon thread with a queue, NOT a task or future. Anything bound to
+        # an event loop dies when that loop does, and under `TestClient` the loop ends
+        # with each request -- the same trap that ruled out `asyncio.create_task`.
+        # A thread survives across polls, so the generator is advanced exactly once
+        # and never re-entered while a read is outstanding.
+        pending.reader = _start_reader(pending)
+
+    remaining = max(0.0, deadline - time.monotonic())
+    try:
+        produced = await anyio.to_thread.run_sync(
+            partial(pending.results.get, True, remaining)
         )
-    return recorded
+    except queue.Empty:
+        return _STILL_WAITING  # still reading; this same reader continues
+
+    pending.reader = None
+    if isinstance(produced, BaseException):
+        raise produced
+    return produced
+
+
+def _start_reader(pending: _PendingTurn) -> threading.Thread:
+    """Advance the generator once, on a thread, and post the result to the queue."""
+
+    def read() -> None:
+        try:
+            pending.results.put(next(pending.events, _DRAINED))
+        except BaseException as error:  # surfaced to the pump, never swallowed
+            pending.results.put(error)
+
+    thread = threading.Thread(target=read, daemon=True)
+    thread.start()
+    return thread
+
+
+def _reap_abandoned_turns(app: FastAPI) -> None:
+    """End turns nobody is polling any more.
+
+    The pump only runs on a poll, so a browser that closes mid-reply leaves its
+    generator parked with nothing to advance or close it -- holding a live
+    `CodexSession` and its child process. Swept when a new turn is started, which is
+    the only moment this dictionary can grow.
+
+    The turn is FAILED, not merely dropped. Closing the generator alone would leave
+    `_active_turn` set on a thread whose stream never reports an ending -- so that
+    conversation would refuse every later turn with 409 while no generator remained
+    to advance it. That is precisely the wedge this reaper exists to prevent.
+    """
+    cutoff = time.monotonic() - ABANDONED_TURN_SECONDS
+    for thread_id, pending in list(app.state.pending_turns.items()):
+        if pending.last_touched < cutoff and not pending.pumping.locked():
+            _fail_turn(
+                app.state.threads.thread(thread_id),
+                pending.request.turn_id,
+                "provider_error",
+                "the turn was abandoned before it finished",
+            )
+            _finish_turn(app, thread_id, pending)
+
+
+def _finish_turn(app: FastAPI, thread_id: str, pending: _PendingTurn) -> None:
+    """Drop the pending turn and close its generator.
+
+    Closing runs the generator's own `finally`, which is what terminates a real
+    provider's child process -- so a turn that ends any way at all, including an
+    interrupt, must reach here or the process leaks.
+
+    The slot is cleared only if it STILL HOLDS the turn being finished. An interrupt
+    followed immediately by a new turn installs a replacement; a late terminal from
+    the old generator would otherwise pop the new one, leaving a turn that is active
+    in `ThreadEvents` but can never advance -- every later turn stuck at 409.
+    """
+    if app.state.pending_turns.get(thread_id) is pending:
+        del app.state.pending_turns[thread_id]
+    close = getattr(pending.events, "close", None)
+    if close is None:
+        return
+
+    def shut_down() -> None:
+        try:
+            close()
+        except Exception:  # pragma: no cover -- never mask the turn's own outcome
+            pass
+
+    # Closed on a THREAD, never inline. `close()` runs the generator's `finally`,
+    # which for a real provider is `CodexSession.close(timeout=5.0)` -- terminating a
+    # child and joining two reader threads. Called directly it would hold the sole
+    # event loop for up to five seconds, freezing unrelated Studio requests and
+    # partially reintroducing the very unresponsiveness this change removes.
+    #
+    # A thread rather than `to_thread.run_sync`, because this runs from both the async
+    # pump and the SYNC interrupt route; the caller does not wait either way, since
+    # nothing downstream depends on the child being gone.
+    threading.Thread(target=shut_down, daemon=True).start()
+
+
+def _fail_turn(thread: Any, turn_id: str, category: str, detail: str) -> None:
+    """Record one terminal failure, tolerating a thread that already ended.
+
+    `append` refuses nothing here, but a turn that ended between the failure and this
+    call would make the terminal `ignored_for_state` -- harmless, and preferable to
+    letting a bookkeeping error mask the original fault.
+    """
+    try:
+        thread.append(
+            "turn_failed",
+            {"category": category, "detail": detail},
+            turn_id=turn_id,
+        )
+    except Exception:  # pragma: no cover -- never mask the original failure
+        pass

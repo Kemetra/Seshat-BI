@@ -67,7 +67,7 @@ _RENDERED_ITEM_TYPES = frozenset(
 #: Item types that are TOOLS for rendering purposes -- they get tool_started/completed.
 #:
 #: `fileChange` is deliberately NOT here. It carries WRITE INTENT, and
-#: `agent_routes._record_turn` enforces the read-only refusal by checking
+#: `agent_routes._pump_turn` enforces the read-only refusal by checking
 #: `WRITE_INTENT_TYPES` (`file_change_proposed`, `approval_required`). Normalizing a
 #: provider file change to a tool event would sail straight past that guard during a
 #: `read_only` turn, and the browser would never receive the proposal it must review.

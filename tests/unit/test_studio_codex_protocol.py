@@ -287,7 +287,7 @@ def test_a_provider_file_change_becomes_write_intent_not_a_tool_event() -> None:
     """P1 (Codex review on #612): mapping `fileChange` to a tool event bypasses the
     read-only refusal.
 
-    `agent_routes._record_turn` refuses write intent during a `read_only` turn by
+    `agent_routes._pump_turn` refuses write intent during a `read_only` turn by
     checking `WRITE_INTENT_TYPES`, which holds `file_change_proposed` and
     `approval_required`. A `fileChange` item normalized to `tool_started`/
     `tool_completed` is not in that set, so it passes the binding guard and the

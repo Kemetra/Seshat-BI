@@ -409,17 +409,31 @@ def test_interrupting_an_already_finished_turn_is_409(tmp_path: Path) -> None:
 
     Inventing a second ending for a completed turn would make the stream describe two
     terminals for one turn.
+
+    The turn is driven to completion by polling first. Turns are ACCEPTED rather than
+    drained now (the contract's 202), so posting one no longer leaves it finished --
+    this test used to pass on a premise its own wording named, "a request the fake
+    completes synchronously", which is no longer how any turn behaves.
     """
     client, _ = _client(tmp_path)
     thread_id = _thread(client)
     turn = client.post(
         f"{API}/agent/threads/{thread_id}/turns",
         json={
-            "prompt": "a request the fake completes synchronously",
+            "prompt": "a request the fake answers quickly",
             "snapshot_revision": "r1",
             "requested_mode": "read_only",
         },
     ).json()["turn_id"]
+
+    for _ in range(40):
+        body = client.get(f"{API}/agent/threads/{thread_id}/events").text
+        if any(
+            e["type"] in {"turn_completed", "turn_failed"} for e in _sse_events(body)
+        ):
+            break
+    else:  # pragma: no cover -- only on a genuine failure
+        raise AssertionError("the turn never finished, so this asserts nothing")
 
     refused = client.post(f"{API}/agent/threads/{thread_id}/turns/{turn}/interrupt")
 
@@ -545,9 +559,45 @@ def test_a_read_only_turn_refuses_write_intent_from_a_rogue_bridge(
         },
     )
 
-    assert refused.status_code == 502, refused.text
+    # 202, not 502: the turn is accepted before the bridge misbehaves, so the refusal
+    # cannot be a status. It arrives as a terminal EVENT instead -- which is also what
+    # releases `_active_turn`; the old 502 left it set, wedging every later turn on
+    # the thread at 409.
+    assert refused.status_code == 202, refused.text
+
+    for _ in range(40):
+        body = client.get(f"{API}/agent/threads/{thread_id}/events").text
+        recorded = _sse_events(body)
+        if any(e["type"] == "turn_failed" for e in recorded):
+            break
+    else:  # pragma: no cover -- only on a genuine failure
+        raise AssertionError("the read_only refusal never ended the turn")
+
+    assert not any(e["type"] == "file_change_proposed" for e in recorded), (
+        "write intent from a rogue bridge reached the buffer during a read_only turn"
+    )
+    categories = [
+        e["payload"].get("category") for e in recorded if e["type"] == "turn_failed"
+    ]
+    assert "read_only_violation" in categories, categories
+
+    # The thread is usable again -- the refusal ENDED the turn rather than wedging it.
+    again = client.post(
+        f"{API}/agent/threads/{thread_id}/turns",
+        json={
+            "prompt": "another",
+            "snapshot_revision": "r1",
+            "requested_mode": "read_only",
+        },
+    )
+    assert again.status_code == 202, again.text
+    # Checked on the event TYPE, not as a substring of the body: the refusal's own
+    # detail names the type it refused, so a raw `not in body` reports a leak that is
+    # really the guard describing itself.
     body = client.get(f"{API}/agent/threads/{thread_id}/events").text
-    assert "file_change_proposed" not in body, "write intent reached the buffer"
+    assert not any(e["type"] == "file_change_proposed" for e in _sse_events(body)), (
+        "write intent reached the buffer"
+    )
 
 
 def test_a_concurrent_turn_is_409_not_422(tmp_path: Path) -> None:

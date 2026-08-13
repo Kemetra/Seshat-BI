@@ -125,34 +125,89 @@ class _WriteIntentBridge:
         )
 
 
+def _pump_to_end(app, thread_id: str, thread) -> list:
+    """Drive `_pump_turn` until the turn ends, returning the thread's events."""
+    import asyncio
+
+    from seshat.studio.agent_routes import _pump_turn
+
+    for _ in range(40):
+        asyncio.run(_pump_turn(app, thread_id, thread))
+        if thread_id not in app.state.pending_turns:
+            break
+    return list(thread.retained())
+
+
+class _FakeApp:
+    """Just the two `app.state` slots the pump reads."""
+
+    def __init__(self, bridge, thread_id: str, request) -> None:
+        self.state = type("S", (), {})()
+        self.state.bridge = bridge
+        import asyncio
+        import queue
+
+        from seshat.studio.agent_routes import _PendingTurn
+
+        self.state.pending_turns = {
+            thread_id: _PendingTurn(
+                events=bridge.run_turn(
+                    prompt=request.prompt,
+                    turn_id=request.turn_id,
+                    requested_mode=request.requested_mode,
+                ),
+                request=request,
+                pumping=asyncio.Lock(),
+                last_touched=0.0,
+                results=queue.Queue(),
+            )
+        }
+
+
 def test_write_intent_from_the_real_bridge_is_refused_under_read_only() -> None:
-    """`bridge.py` is explicit that the BINDING refusal lives in `_record_turn`.
+    """`bridge.py` is explicit that the refusal binds at the ROUTE, not the bridge.
 
     A bridge that never passed through it would inherit no protection at all -- the
     exact defect that docstring records for an earlier revision. So this drives the
-    real route helper with a stream that DOES carry write intent and asserts the
-    refusal fires, rather than inspecting the bridge's output and inferring safety.
+    real pump with a stream that DOES carry write intent and asserts the write intent
+    never reaches the buffer, rather than inspecting the bridge's output and
+    inferring safety.
+
+    Drives `_pump_turn` because that is where the refusal now lives: turns are
+    ACCEPTED and advanced on the poll loop, so `_record_turn` -- which used to raise
+    a 502 -- no longer exists. A test still pinning it would pin a function nothing
+    calls.
     """
     pytest.importorskip("fastapi")
-    from seshat.studio.agent_routes import ReadOnlyViolation, TurnRequest, _record_turn
+    from seshat.studio.agent_routes import TurnRequest
     from seshat.studio.events import ThreadEvents
 
     thread = ThreadEvents("thread-1")
     request = TurnRequest(
         prompt="Propose the silver model", turn_id="t1", requested_mode="read_only"
     )
+    app = _FakeApp(_WriteIntentBridge(), "thread-1", request)
 
-    with pytest.raises(ReadOnlyViolation):
-        _record_turn(thread, _WriteIntentBridge(), request)
+    recorded = _pump_to_end(app, "thread-1", thread)
+
+    types = [event.type for event in recorded]
+    assert "file_change_proposed" not in types, types
+    assert "turn_failed" in types, types
+    categories = [
+        event.payload.get("category")
+        for event in recorded
+        if event.type == "turn_failed"
+    ]
+    assert "read_only_violation" in categories, categories
 
 
 def test_the_guard_is_what_refuses_not_the_bridge() -> None:
     """Prove the refusal comes from the route, by disabling only the guard.
 
     If the assertion above passed because the bridge declined to emit write intent,
-    this would still pass -- so it monkeypatches `WRITE_INTENT_TYPES` to empty and
-    asserts the SAME stream is then recorded without complaint. That is the positive
-    evidence that `_record_turn` is the thing doing the refusing.
+    this would still pass -- so it empties `WRITE_INTENT_TYPES` and asserts the SAME
+    stream is then recorded without complaint. That is the positive evidence that the
+    route, not the bridge, is what refuses.
     """
     pytest.importorskip("fastapi")
     import seshat.studio.agent_routes as routes
@@ -165,7 +220,8 @@ def test_the_guard_is_what_refuses_not_the_bridge() -> None:
         request = routes.TurnRequest(
             prompt="Propose the silver model", turn_id="t2", requested_mode="read_only"
         )
-        recorded = routes._record_turn(thread, _WriteIntentBridge(), request)
+        app = _FakeApp(_WriteIntentBridge(), "thread-2", request)
+        recorded = _pump_to_end(app, "thread-2", thread)
     finally:
         routes.WRITE_INTENT_TYPES = original
 
@@ -292,7 +348,7 @@ def test_a_session_read_failure_still_ends_the_turn(tmp_path: Path) -> None:
     `frames()` raises `queue.Empty` when the provider stalls and `CodexFrameError`
     on malformed output. If either escaped `run_turn`, the consumer would hold a
     `turn_started` with no terminal -- breaking the contract the shared suite pins
-    as "exactly one terminal event last". Worse, `_record_turn` has no `except`
+    as "exactly one terminal event last". Worse, the route pump would have no
     around this drain, so it would surface as a 500 AND leave `_active_turn` set,
     wedging every later turn on that thread as already-active.
 

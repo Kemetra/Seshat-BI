@@ -4,9 +4,9 @@
 without a Codex CLI. This module is where that plan is actually spawned.
 
 **Why sync `Popen` and a reader thread.** `agent_routes` endpoints are `async def`,
-but `_record_turn` drives `AgentBridge.run_turn` with a plain `for` loop and FastAPI
-already offloads sync work to a threadpool. Making `run_turn` an `AsyncIterator`
-would change the Protocol, `FakeAgentBridge`, `_record_turn`, and every test in the
+but `_pump_turn` advances `AgentBridge.run_turn` one event at a time, offloading only
+the blocking `next()` so the event loop stays free. Making `run_turn` an `AsyncIterator`
+would change the Protocol, `FakeAgentBridge`, `_pump_turn`, and every test in the
 shared suite, for no behaviour this form cannot deliver. The cost is that
 thread-plus-pipe deadlock is a real risk -- which is why the tests drive an actual
 child over an actual pipe rather than a mock.
@@ -338,7 +338,7 @@ class CodexBridge:
         #: plan and leaves this None; the scripted child replays a FIXED script, so a
         #: test that must see a proposal has to launch the fixture that contains one.
         #: Selecting a script is NOT the mode boundary: per `bridge`'s docstring the
-        #: BINDING refusal is `agent_routes._record_turn`, which every bridge's output
+        #: BINDING refusal is `agent_routes._pump_turn`, which every bridge's output
         #: passes through. This is the same cooperation `FakeAgentBridge` offers.
         self._propose_plan = propose_plan
 
@@ -374,7 +374,7 @@ class CodexBridge:
                     "cwd": str(session.plan.cwd),
                     "approvalPolicy": "on-request",
                     # Studio never authorises provider-side writes: the approval
-                    # surface is T024-T027 and `_record_turn` refuses write intent
+                    # surface is T024-T027 and `_pump_turn` refuses write intent
                     # under `read_only`. A sandbox that could write would make the
                     # provider capable of edits nobody reviewed.
                     "sandbox": "read-only",
@@ -484,7 +484,8 @@ class CodexBridge:
             # when the provider stalls and `CodexFrameError` on malformed output; if
             # either escaped, the consumer would hold a `turn_started` with no
             # terminal -- breaking the contract the shared suite pins as "exactly one
-            # terminal event last". `_record_turn` has no `except` around this drain,
+            # terminal event last". The route pump records a terminal for a
+            # failed drain,
             # so the exception would surface as a 500 AND leave `_active_turn` set,
             # wedging every later turn on that thread as already-active.
             #
