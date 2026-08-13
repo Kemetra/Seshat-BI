@@ -27,6 +27,79 @@ explicitly identifies a public release event.
 
 ## [Unreleased]
 
+### Added
+- **Seshat Studio Phases 2-4 -- an INCOMPLETE PREVIEW behind the optional
+  `studio` extra** (spec 139; #606, #607, #608, #609, #610, #611). Lands the
+  package and security skeleton (#606), the workspace projection (#607), the
+  deterministic endpoints and Phase 2's deferred half (#608), the frontend
+  workspace and offline build pipeline (#609), the Command Room journey and agent
+  health (#610), and the event stream, agent bridge, and conversation (#611).
+  **Scope, stated plainly:** Studio ships **no approve, apply, or reject
+  surface** -- Phase 4 delivers the read/observe half by design, and approval
+  stays a human edit to `readiness-status.yaml`. A base `pip install seshat-bi`
+  installs no FastAPI/Uvicorn; `seshat-studio` without the extra prints a named
+  diagnostic naming both install lanes rather than an `ImportError` traceback
+  (FR-006). Studio grants no approval, moves no readiness stage, and emits no
+  confidence score. A further release follows when Studio completes.
+- **A new `seshat-studio` console script** (spec 139, FR-002), deliberately
+  outside the `seshat`/`retail` dispatch chain -- it adds no subcommand to an
+  existing verb and changes no existing verb's behavior.
+- **A Codex protocol, process, and session layer -- reachable from tests only**
+  (#612, #613, #617). The protocol layer, version gate, and explicit auth
+  selection (#612); the process layer and session lifecycle (#613); spawning and
+  managing the real Codex app-server process (#617). **`CodexBridge` and its
+  `health()` path have no production caller** -- no CLI verb or endpoint drives
+  them, tracked as issue #618 and **not** closed here. This is not a working
+  user-facing Codex integration.
+- **Official-first integration rationalization, phases 1-6** (#597), with
+  closed-world plugin capability declaration and native plugin surface
+  validation.
+- **dbt execution evidence read into governance** (spec 150, Phase 7; #599).
+- **Rule coverage declared for the five singly-scoped corpora** (#589), and the
+  rule-coverage migration finished -- 80 undeclared rules to 0 (#590).
+- **Capability ownership fields** (spec 142): an ownership vocabulary with
+  validation and a reader, four piloted wrappers proving FR-004 on real data, and
+  all 102 entries classified.
+- **Finance GL genericity proof completion** (spec 137): silver and gold finance
+  GL SQL authored (T022-T026), and seven metric contracts authored and stopped at
+  the gate (T035-T041). Evidence of genericity, not new `src/seshat/` runtime.
+
+### Changed
+- **The Spec Kit template fork removed and status governance externalized**
+  (spec 151; #600) -- one less vendored fork to drift.
+- **The capability oracle split into three layered modules** (#598).
+- `actions/setup-node` bumped 4.4.0 -> 7.0.0 (#614).
+- `dagster` bumped 1.13.16 -> 1.13.17 in `/orchestration/dagster` (#615).
+
+### Fixed
+- **A dead stderr credential regex, revived -- a fail-OPEN in a redaction path**
+  (#616). A `0x08` byte introduced from a heredoc had killed the pattern in
+  `src/seshat/studio/codex_process.py`, so it matched nothing and credentials
+  appearing in Codex stderr went un-redacted. The test covering it was vacuous
+  and stayed green throughout.
+- **Studio turn-lifecycle correctness** (#618, #619, #620). Turns are accepted
+  rather than drained inside the request (#618, #619); the turn pump is
+  serialized and turns nobody is polling are reaped; the thread ends when reaping
+  and generators close off the event loop; evicted threads are not resurrected,
+  and close happens only after the reader returns (#620). The governing
+  constraint is that nothing bound to an event loop survives its request, so
+  there is no background task to lean on.
+- **Power BI gate hardening**: bounded PBIR mutations gated on an approved
+  design, Power BI discovery and target gates unified, and Power BI facts scoped
+  to the exact table.
+- **A CI double-fire that masked a green run as red** (#593).
+
+### Docs
+- **The v0.9 release note** (`docs/releases/v0.9.md`), which states the Studio
+  preview boundary and the release mechanics.
+- **ADR-0020 proposed -- the non-Seshat consumer boundary** (G-d) (#591).
+- **A merge commit required for the release PR**, with the v0.8.2 gaps recorded
+  (#588).
+- **The capability ownership audit** for issue #592 (#593), and the Phase 9
+  ALREADY-SATISFIED ownership verdict (#601).
+- **Power BI execution ownership clarified** and official Power BI ownership and
+  gaps aligned.
+
 ## [0.8.2] -- 2026-08-06
 
 ### Fixed
