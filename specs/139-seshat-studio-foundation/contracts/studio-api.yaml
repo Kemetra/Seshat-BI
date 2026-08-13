@@ -666,6 +666,17 @@ components:
           type: [string, "null"]
         payload:
           type: object
+          description: >-
+            Event-specific fields, deliberately open: each `type` carries its own
+            shape and clients narrow explicitly. For `approval_required` the
+            payload is the provider's approval ENRICHED and FILTERED by Studio,
+            never the provider's own dict. Studio adds `allow_permitted`
+            (boolean) and `forbidden_reasons` (array of governance sentences),
+            because FR-021 requires a client to withhold an allow control before
+            offering it -- a verdict discoverable only by clicking Allow and
+            reading the 403 would be the inverse of that requirement. Studio
+            removes the provider's JSON-RPC correlation id, which names a
+            transport detail no analyst can act on.
         ignored_for_state:
           type: boolean
     PreparedDecisionSummary:
