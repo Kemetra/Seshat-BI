@@ -139,9 +139,15 @@ def test_no_capability_is_advertised_that_this_build_cannot_deliver():
     `business_decision_recording` stays const False -- FR-022 places that outside
     Studio permanently, and no seam will ever flip it.
     """
+    from types import SimpleNamespace
+
     from seshat.studio.app import _bootstrap_capabilities
 
-    capabilities = _bootstrap_capabilities()
+    # `agent_turns` is now DERIVED from `app.state.agent_turns_refused`, so the
+    # function takes the app. The two flags asserted here are unaffected by that state
+    # -- which is the point: a stand-in with no `agent_turns_refused` at all must still
+    # produce them, because neither depends on the provider outcome.
+    capabilities = _bootstrap_capabilities(SimpleNamespace(state=SimpleNamespace()))
     assert capabilities["technical_approvals"] is True
     assert capabilities["business_decision_recording"] is False
 
