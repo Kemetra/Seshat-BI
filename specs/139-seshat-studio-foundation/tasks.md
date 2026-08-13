@@ -335,12 +335,23 @@ projection, endpoints, frontend, journey, and health.
 - [ ] **T024** Write failing tests for paused approval, exact scope display,
   allow-once, deny, readiness-prohibited allow, stale/repeated decisions, and
   prepared business judgment. [FR-018, FR-019, FR-020, FR-021, FR-022, SC-005]
-- [ ] **T025** Implement provider approval normalization and readiness
+- [x] **T025** Implement provider approval normalization and readiness
   forbidden-scope evaluation before an allow control is exposed. [FR-018, FR-021]
 - [ ] **T026** Implement the accessible technical approval panel and one-time relay;
   browser code performs no side effect. [FR-019, FR-020]
-- [ ] **T027** Implement read-only prepared decision summaries with no mutation route
+- [x] **T027** Implement read-only prepared decision summaries with no mutation route
   and assert OpenAPI contains no business-approval endpoint. [FR-022]
+
+  **T027 closed 2026-08-13** (after being unchecked earlier the same day on an
+  adversarial review). The refuted half now ships: `PendingApprovals`
+  `.prepared_for_named_human()` reads the LIVE `named_human` envelopes the ledger
+  was already collecting, and `approvals.prepared_summary()` projects each into the
+  contract's five-field `PreparedDecisionSummary`. `/decisions` returns them
+  through the same `_redact` boundary pass every other projection uses, because
+  `affected_scope` carries readiness sentences whose fail-closed branch can name a
+  path. Suite: `tests/unit/test_studio_prepared_summaries.py` (7). Falsified:
+  removing the `named_human` filter fails
+  `test_a_technical_approval_is_not_a_business_decision` and nothing else.
 
   **Phase 6 evidence 2026-08-13 (backend only — every box above left unchecked).**
   Built on branch `studio-2` from `46243b5`; design at
@@ -406,6 +417,95 @@ projection, endpoints, frontend, journey, and health.
 
   A human closes these boxes.
 
+  **Phase 6 status re-verified 2026-08-13 (later the same day, on `e069e46d`).**
+  The record above was written before #626, #628, and #630 merged. Three of its
+  five gaps are now closed and one of its two "pre-existing failures" no longer
+  reproduces. Superseding facts, each measured rather than argued:
+
+  - **Delivery closed.** `approval_delivery.deliver_decision` answers the
+    `item/*/requestApproval` server request on the `id` Codex blocks on;
+    `approval_routes.py` burns the ledger id and *then* delivers, so a provider
+    write is attempted at most once per approval. `technical_approvals` is now
+    `True` (`app.py:136`), asserted together with the seam in
+    `test_the_advertised_capability_is_backed_by_a_reachable_delivery_seam`. The
+    tripwire `test_the_bridge_protocol_has_no_respond_seam_yet` is gone, as its
+    own design intended.
+  - **The paused turn survives.** #630 discriminated "provider wedged" from
+    "provider waiting on a human": `idle_timeout` (30s) and `approval_timeout`
+    (300s) are separate windows, and a paused timeout reports
+    `approval_not_decided`, not `provider_error`.
+  - **Approval suites green.** `test_studio_approvals` + `test_studio_approval_routes`
+    + `test_studio_approval_reachability` + `test_studio_approval_pause` —
+    **50 passed**.
+  - **`test_cli_identity_version` no longer fails, but is not fully verified
+    either.** It is a FILE of 6 tests: 5 pass and
+    `test_version_resolver_matches_pyproject_when_installed` **SKIPS** with
+    "seshat-bi is not installed in this environment". The version-resolution
+    assertion therefore never executed. Recorded as "not red" rather than
+    "passing": claiming a skipped assertion as a pass is the same
+    stale-global-install phantom that produced the original 0.8.1-vs-0.8.2
+    report.
+  - **`test_studio_generated_types` is still red, and the diagnosis above is
+    right but incomplete.** Regenerating does drop two comment blocks — because
+    `types.ts` was hand-edited after generation and
+    `scripts/generate_studio_types.py` emits no per-field comments at all. The
+    red is therefore permanent by construction, not a transient conflict. The
+    prose is not lost by regenerating: `studio-api.yaml:392,400` already carries
+    the same reasoning as `description:` on `agent_provider` and
+    `agent_provider_detail`. Regeneration is semantically lossless (field
+    reorder + comments; TS ignores field order).
+
+  **T025 is checked on this evidence.** Its normalization and fail-closed
+  readiness evaluation ship in `approvals.py:106-145`. "Before an allow control
+  is exposed" is an ORDERING constraint on when the evaluation runs, not a
+  dependency on a control existing, and `approval_routes.py:68-74` documents
+  that ordering.
+
+  **T027 was checked here in an earlier revision of this block and has been
+  UNCHECKED.** An adversarial review refuted it and the refutation holds. T027
+  has two clauses and only one ships:
+
+  - The no-mutation-route half is real, asserted by HTTP METHOD rather than
+    path name, and `business_decision_recording` is const `False` (FR-022).
+  - **"Read-only prepared decision summaries" do not exist.** The entire
+    implementation is `return {"items": []}` (`app.py:320-322`) — a hardcoded
+    empty list with zero producers anywhere in `src/`. Meanwhile
+    `studio-api.yaml:84-100` defines a full `PreparedDecisionSummary` schema.
+    The contract promises a shape the code never builds.
+
+  That is this repo's `tests-pass-code-unreachable` class: 50 green tests beside
+  an unimplemented clause. Checking it would have committed, in the very commit
+  that documents the defect class, the defect it documents.
+
+  **T024, T026, and T027 stay open, for reasons the earlier record could not
+  have seen:**
+
+  - **T024's "exact scope display" is unproven against the real payload.** Two
+    producers emit incompatible shapes. `FakeAgentBridge` sends
+    `{approval_id, question, required_authority}`; real Codex sends
+    `{approval_id, required_authority, action, target, reason, scope, risk,
+    provider_request_id}` and **no `question`**. The renderer narrows on
+    `question` only (`eventPayload.ts:74-75`), so every real Codex approval
+    renders the fallback "A decision is being prepared." A scope-display test
+    written against the fake proves nothing about the path that matters.
+  - **T026 is blocked on a contract gap, not just on missing UI.** FR-021
+    requires the allow control to be ABSENT when readiness forbids the scope,
+    but `ApprovalEnvelope.allow_permitted` and `.forbidden_reasons` never cross
+    the wire — the browser receives only `required_authority`. A panel on
+    today's payload could discover a forbidden scope only by offering Allow and
+    rendering the 403, which inverts the requirement. The payload must be
+    widened first.
+  - **The Phase 6 boundary test does not guard the boundary.** The assertion at
+    `Conversation.test.tsx:265` (inside the `it(...)` declared at `:242`)
+    queries for no button matching `/approve|apply|reject/i`, but the decision
+    enum is `allow_once`/`deny`. A panel labelled "Allow once"/"Deny" passes it
+    untouched. T026 must rewrite that test deliberately; it will not fail as a
+    natural signal.
+
+  Design for the remaining work:
+  `docs/superpowers/specs/2026-08-13-studio-approval-panel-design.md`.
+  A human still closes T024 and T026.
+
 ## Phase 7 - Agent-First Launch and Distribution (US5)
 
 - [ ] **T028** Write failing capability and bundle contracts for the new
@@ -426,6 +526,25 @@ projection, endpoints, frontend, journey, and health.
 - [ ] **T032** Run keyboard, focus, contrast, reduced-motion, non-color status,
   responsive layout, and axe browser acceptance over all critical states; fix every
   critical or serious finding. [FR-031, SC-007]
+
+  **Partial 2026-08-13 — axe now RUNS; the box stays open.** `axe` was absent from
+  `studio-ui/package.json` entirely, so SC-007 could not have been satisfied by any
+  run of the suite. `studio-ui/src/accessibility.test.tsx` adds `vitest-axe` and
+  covers every state SC-007 names — Command Room, empty, blocked, approval — plus the
+  approval REFUSAL branch, which renders a different DOM rather than the same tree
+  minus a button. Only `critical` and `serious` fail, matching the criterion's own
+  wording. **5 passed.**
+
+  Falsified: an `<img>` with no alt in the approval panel fails exactly the two
+  approval tests with `critical image-alt`, so the checker is live rather than
+  decorative.
+
+  Why the box is open, in two parts:
+  - **jsdom does not paint**, so axe reports `color-contrast` as `incomplete`, never
+    as a pass. Contrast is unverified by automation here.
+  - **Keyboard, focus, reduced-motion, and responsive layout are untested.** T032
+    names browser acceptance over the RUNNING app; this is a component-level audit of
+    the structural rules jsdom can decide. It is a floor, not the measurement.
 - [ ] **T033** Build sdist/wheel and test clean base and Studio-extra installs with no
   Node runtime and no remote asset fetch. [SC-008]
 
@@ -447,9 +566,33 @@ projection, endpoints, frontend, journey, and health.
   installs with no Node runtime" has not been exercised. That needs a fresh
   interpreter installing the built wheel two ways and launching, which is a
   packaging-acceptance run rather than a workflow edit.
-- [ ] **T034** Run security-boundary negative tests and verify response/log/event
+- [x] **T034** Run security-boundary negative tests and verify response/log/event
   corpus contains no injected secret, token, absolute path, or workspace content.
   [SC-006]
+
+  **T034 closed 2026-08-13.** `tests/unit/test_studio_boundary_corpus.py` (7) drives
+  a real app through every refusal SC-006 names — no session, foreign origin, wrong
+  host, traversal, unknown table, unknown thread — plus every successful read and a
+  real turn, then scans the ENTIRE response corpus for injected nonces. That is the
+  property a sweep has and the existing per-field suites structurally cannot: a new
+  endpoint that leaks is caught without anyone remembering to test it.
+
+  Falsified rather than assumed: interpolating `workspace_root` into the 404 problem
+  detail fails `test_no_absolute_workspace_path_appears_anywhere_in_the_corpus` and
+  nothing else. Absence-assertions that have never fired prove nothing.
+
+  Two over-redaction guards balance the four absences — `display_name` and the
+  analyst's prompt are pinned PRESENT, so a redactor that swallowed them would fail
+  here instead of reading as extra safety.
+
+  **One scoped decision recorded in the test, not silently encoded in a fixture:** a
+  credential the analyst types into their OWN prompt is echoed back on their own
+  authenticated loopback thread, and that is not an SC-006 disclosure. FR-026 governs
+  credentials Studio handles and paths it resolves, not analyst prose; scrubbing bare
+  token-shaped strings would hand-roll a match class beside `redaction_core`'s
+  hardened decomposition. Credential-shaped values in ROUTING positions (path segment,
+  `selected_table_id`, bootstrap `token`) are tested and must not echo. If that
+  reading is wrong it is an owner's call and belongs in an issue.
 - [ ] **T035** Run existing dashboard and full repository regression gates; reconcile
   generated bundles and run `seshat check` and `semantic-check`. [FR-030, SC-009]
 - [ ] **T036** Run external signed-in Codex acceptance and record versioned,

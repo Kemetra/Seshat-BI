@@ -15,15 +15,20 @@
  * **A failed send keeps the draft.** Clearing on submit is simpler and loses the user's
  * text at the exact moment they need it back.
  *
- * `approval_required` and `file_change_proposed` render as inert activity. Their
- * semantics are Phase 6 (T024-T027); offering a control now would let someone believe
- * they had approved something.
+ * **A live `approval_required` renders as a decidable panel** (T026); `ApprovalPanel`
+ * owns whether any control appears, and the server's ledger owns whether a decision
+ * counts. An approval whose turn already ended (`ignored_for_state`) stays inert: every
+ * decision against it would be refused as stale, so controls would be theatre.
+ * `file_change_proposed` remains inert -- FR-021 makes a file change a named-human
+ * ruling, which Studio may never grant.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { approvalFromEvent } from "../api/approvalPayload";
 import { activityLabel, planSteps, text } from "../api/eventPayload";
 import type { StudioEvent } from "../api/types";
+import { ApprovalPanel } from "./ApprovalPanel";
 import "./Conversation.css";
 
 /** Event types rendered as the agent's prose. */
@@ -190,7 +195,7 @@ export function Conversation({
     <section className="conversation" aria-label="Conversation with the agent">
       <ol className="conversation__stream">
         {ordered.map((event) => (
-          <EventRow key={event.sequence} event={event} />
+          <EventRow key={event.sequence} event={event} threadId={threadId} />
         ))}
       </ol>
 
@@ -232,11 +237,32 @@ export function Conversation({
   );
 }
 
-function EventRow({ event }: { event: StudioEvent }) {
+function EventRow({ event, threadId }: { event: StudioEvent; threadId: string }) {
   const late = event.ignored_for_state;
   const className = late
     ? "conversation__row conversation__row--late"
     : "conversation__row";
+
+  // An approval the analyst can still act on becomes a panel. A LATE one does not:
+  // `ignored_for_state` means its turn already ended, so every decision would be
+  // refused as stale -- and offering controls that cannot work is the defect the
+  // Phase 4 boundary test was written to prevent, in a new costume.
+  if (event.type === "approval_required" && !late) {
+    const approval = approvalFromEvent(event);
+    if (approval !== undefined) {
+      return (
+        <li className={className}>
+          <ApprovalPanel
+            approval={approval}
+            threadId={threadId}
+            domKey={event.sequence}
+          />
+        </li>
+      );
+    }
+    // No id: fall through to inert activity. There is nothing to decide against, so a
+    // panel would render controls that could never succeed.
+  }
 
   if (MESSAGE_TYPES.has(event.type)) {
     return (
