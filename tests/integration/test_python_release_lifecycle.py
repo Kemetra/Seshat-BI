@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -25,7 +26,10 @@ def test_project_digest_is_stable_and_detects_user_file_change(tmp_path: Path) -
 
 def test_uninstall_contract_fails_if_either_command_remains(tmp_path: Path) -> None:
     _assert_commands_removed(tmp_path)
-    command = tmp_path / "seshat.exe"
+    # The contract probes for "seshat.exe" on Windows and bare "seshat" elsewhere.
+    # Hardcoding the Windows name made this assertion vacuous on POSIX runners:
+    # the planted file was never the name the contract looks for, so it never raised.
+    command = tmp_path / ("seshat.exe" if sys.platform == "win32" else "seshat")
     command.write_text("shim", encoding="utf-8")
     with pytest.raises(SystemExit, match="remained after uninstall"):
         _assert_commands_removed(tmp_path)
