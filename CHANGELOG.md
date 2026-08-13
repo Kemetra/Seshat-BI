@@ -50,6 +50,10 @@ explicitly identifies a public release event.
 - **A new `seshat-studio` console script** (spec 139, FR-002), deliberately
   outside the `seshat`/`retail` dispatch chain -- it adds no subcommand to an
   existing verb and changes no existing verb's behavior.
+- **A new public subcommand, `seshat spec-status [--fix]`** (`64993f8`, spec 151),
+  registered in `src/seshat/cli/parser_core.py` with a production handler and a
+  capability entry. The verb inventory goes from **40 at v0.8.2 to 41**, with
+  this the only addition and nothing removed.
 - **A Codex protocol, process, and session layer -- reachable from tests only**
   (#612, #613, #617). The protocol layer, version gate, and explicit auth
   selection (#612); the process layer and session lifecycle (#613); spawning and
