@@ -71,6 +71,19 @@ explicitly identifies a public release event.
   the gate (T035-T041). Evidence of genericity, not new `src/seshat/` runtime.
 
 ### Changed
+- **BREAKING -- `--repo` and `--table` are now REQUIRED on four existing PBIR
+  verbs** (`1ac28b5`). `pbir-apply-theme`, `pbir-format-visual`,
+  `pbir-set-page-background`, and `pbir-set-geometry` all shipped in published
+  v0.8.2 without these flags; they are now mandatory, and each handler returns
+  exit code **2** when the new authoring gate refuses the mutation. **Migration:
+  add `--repo <root> --table <table>` to every invocation of those four verbs.** A
+  script that worked against 0.8.2 fails with an argparse error until it does.
+  Under `docs/operations/versioning-policy.md` this is the **MAJOR** row ("a flag
+  is removed or renamed, an exit-code meaning changes"). Disclosed here rather
+  than buried; the version classification for this release is a named owner
+  decision recorded in `docs/releases/v0.9.md`. Found by external review on
+  PR #622, not by the automated gates -- every gate passed the earlier, incorrect
+  claim that no existing verb's flag contract had changed.
 - **The Spec Kit template fork removed and status governance externalized**
   (spec 151; #600) -- one less vendored fork to drift.
 - **The capability oracle split into three layered modules** (#598).
