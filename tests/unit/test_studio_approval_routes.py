@@ -130,30 +130,45 @@ def test_the_only_approval_route_is_the_technical_relay(tmp_path: Path):
 
 
 def test_no_capability_is_advertised_that_this_build_cannot_deliver():
-    """`technical_approvals` stays False until a bridge seam DELIVERS the decision.
+    """`technical_approvals` is True only while a delivery seam actually exists.
 
-    The relay accepts a decision and burns its id, but no `AgentBridge` method sends
-    it to a provider, so a real Codex turn would wait forever on the JSON-RPC response
-    its `requestApproval` server request expects. Flipping this flag on the strength of
-    an accepted-and-recorded decision would advertise a round trip that does not close.
+    Now tied to the CAPABILITY rather than to a date or a phase number: the flag and
+    the seam are asserted together, so a refactor that removes delivery must fail here
+    instead of leaving the browser told it can carry an approval to completion.
+
+    `business_decision_recording` stays const False -- FR-022 places that outside
+    Studio permanently, and no seam will ever flip it.
     """
     from seshat.studio.app import _bootstrap_capabilities
 
     capabilities = _bootstrap_capabilities()
-    assert capabilities["technical_approvals"] is False
+    assert capabilities["technical_approvals"] is True
     assert capabilities["business_decision_recording"] is False
 
 
-def test_the_bridge_protocol_has_no_respond_seam_yet():
-    """Pins WHY the capability is False, so flipping it fails here first.
+def test_the_advertised_capability_is_backed_by_a_reachable_delivery_seam():
+    """Pins the capability to a seam that is CALLED, not merely importable.
 
-    When a respond seam lands, this test breaks -- and that break is the reminder to
-    re-examine the capability flag in the same change, rather than discovering months
-    later that the flag and the protocol disagree.
+    The predecessor of this test asserted `not hasattr(AgentBridge,
+    "respond_to_approval")` -- an implementation SHAPE. Delivery landed as a free
+    function over a `FrameSink` instead of a Protocol method, so that assertion stayed
+    green while the capability it guarded shipped: the guard read as reassurance while
+    guarding nothing.
+
+    This version asserts what actually matters -- that the relay module reaches the
+    delivery function -- so any refactor that strands delivery breaks the flag's test
+    rather than passing silently. Shipped-but-uncalled code is a defect this repo has
+    seen before (#618).
     """
-    from seshat.studio.bridge import AgentBridge
+    import inspect
 
-    assert not hasattr(AgentBridge, "respond_to_approval")
+    from seshat.studio import approval_routes
+
+    source = inspect.getsource(approval_routes)
+    assert "deliver_decision" in source, (
+        "the relay must reach the delivery seam; a capability advertised without a "
+        "caller is the fail-open this test exists to prevent"
+    )
 
 
 # --------------------------------------------------------------------------- #

@@ -5,13 +5,18 @@ thread, turn, and SSE lifecycle and had reached the ~800-line mark where this re
 Code Health gate starts objecting; the approval concern is cohesive enough to stand
 alone, so the seam falls here naturally rather than being cut to satisfy a threshold.
 
-**What this module does NOT do.** It does not deliver a decision to a provider.
-`AgentBridge` exposes `run_turn` and `describe` and no respond seam, while real Codex
-sends `item/*/requestApproval` as a JSON-RPC server request carrying an `id` and waits
-for a response keyed to it (`tests/fixtures/codex_app_server/approvals.jsonl`). So a
-decision here is *accepted and recorded*, not *relayed onward* -- which is exactly why
-`app._bootstrap_capabilities` still reports `technical_approvals: False`. Closing that
-round trip is the remaining work in Phase 6.
+**The round trip closes here.** A decision is recorded in the ledger AND written back
+to the provider: real Codex raises `item/*/requestApproval` as a JSON-RPC server request
+carrying an `id` and blocks until a response keyed to it arrives
+(`tests/fixtures/codex_app_server/approvals.jsonl`). `approval_delivery` owns that
+write; this module owns the order of operations around it.
+
+**The order is: burn the id, then send.** Recording first means a provider write that
+fails cannot be retried into a second `approved` frame for a request the provider may
+already have acted on. The cost is that a failed delivery leaves a burned id -- which is
+the right trade, because the alternative risks authorizing the same action twice. A
+delivery failure is reported as a 502 rather than swallowed: an approval that appears to
+succeed while the provider still waits is the exact fail-open this seam removes.
 """
 
 from __future__ import annotations
@@ -21,6 +26,11 @@ from typing import Any
 
 from fastapi import FastAPI, Response
 
+from seshat.studio.approval_delivery import (
+    DeliveryFailed,
+    DeliveryRefused,
+    deliver_decision,
+)
 from seshat.studio.approvals import (
     StaleApproval,
     forbidden_scope_for,
@@ -71,8 +81,17 @@ def register_approval(app: FastAPI, thread_id: str, thread: Any, produced: Any) 
     forbidden = forbidden_scope_for(
         app.state.launch.workspace_root, selected_table(thread)
     )
+    payload = dict(produced.payload)
     app.state.pending_approvals.register(
-        normalize_approval(dict(produced.payload), forbidden, thread_id=thread_id)
+        normalize_approval(
+            payload,
+            forbidden,
+            thread_id=thread_id,
+            # Present only when a provider request is actually blocked on this approval.
+            # The fake bridge omits it, and `deliver_decision` reads its absence as
+            # "nothing to answer" rather than as an error.
+            request_id=payload.get("provider_request_id"),
+        )
     )
 
 
@@ -128,7 +147,43 @@ def decide_approval(request: ApprovalRequest) -> Response:
         approvals.decide(request.approval_id, allow=allow, thread_id=request.thread_id)
     except StaleApproval as refused:
         return request.problem(*_not_awaiting_decision(refused))
+
+    return _deliver(request, envelope, allow)
+
+
+def _deliver(request: ApprovalRequest, envelope: Any, allow: bool) -> Response:
+    """Send the recorded decision onward, or report why the round trip did not close.
+
+    Runs AFTER the ledger burn, so a provider write is attempted at most once per
+    approval id. `DeliveryRefused` is re-checked rather than assumed unreachable: the
+    ledger and the wire guard the same rule independently, and this is the branch that
+    proves the second guard is load-bearing rather than decorative.
+    """
+    sink = _frame_sink(request.app, request.thread_id)
+    if sink is None or envelope is None:
+        # No provider is waiting -- the fake bridge's normal case. The decision stands
+        # recorded; there is simply no request to answer.
+        return Response(status_code=204)
+    try:
+        deliver_decision(sink, envelope, allow=allow)
+    except DeliveryRefused:
+        return request.problem(*_impermissible_allow(envelope))
+    except DeliveryFailed as failure:
+        return request.problem(*_delivery_failed(failure))
     return Response(status_code=204)
+
+
+def _frame_sink(app: FastAPI, thread_id: str) -> Any:
+    """The live provider session for this thread, or None when nothing is waiting.
+
+    Looked up rather than held on the envelope: a session is a live process handle whose
+    lifetime is the thread's, not the approval's, and freezing one into an immutable
+    envelope would keep a dead child reachable after the turn that owned it ended.
+    """
+    sessions = getattr(app.state, "provider_sessions", None)
+    if sessions is None:
+        return None
+    return sessions.get(thread_id)
 
 
 def _is_impermissible(envelope: Any) -> bool:
@@ -157,6 +212,22 @@ def _impermissible_allow(envelope: Any) -> tuple[int, str, str, str]:
         "; ".join(envelope.forbidden_reasons) or f"authority is {envelope.authority}",
         "A named-human ruling or a closed readiness gate cannot be cleared from "
         "Studio; resolve it at its own seam.",
+    )
+
+
+def _delivery_failed(failure: Exception) -> tuple[int, str, str, str]:
+    """502, because the failure is upstream and the analyst's request was well-formed.
+
+    Deliberately NOT a 204. The decision is recorded, but the provider never received
+    it, and reporting success would leave an analyst believing a turn was released while
+    Codex is still blocked on a request nobody answered.
+    """
+    return (
+        502,
+        "The decision was recorded but not delivered",
+        str(failure),
+        "The agent session may have ended. Re-open the thread; the decision itself "
+        "cannot be re-sent, because its approval id is already spent.",
     )
 
 

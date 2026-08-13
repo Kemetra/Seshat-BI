@@ -117,19 +117,23 @@ def _problem(
 def _bootstrap_capabilities() -> dict[str, Any]:
     """What this build can do. `business_decision_recording` is const false (FR-022).
 
-    **`technical_approvals` is still False at Phase 6, deliberately.** The relay
-    ACCEPTS a decision and burns its id, but nothing DELIVERS that decision to a
-    provider: `AgentBridge` exposes `run_turn` and `describe` and no respond seam.
-    Real Codex sends `item/*/requestApproval` as a server request carrying an `id`
-    and waits for a JSON-RPC response keyed to it (see
-    `tests/fixtures/codex_app_server/approvals.jsonl`), so a turn driven this way
-    would hang. Advertising the capability would tell the browser it can carry an
-    approval to completion when it cannot -- a false claim about the build, which is
-    the one thing a capability flag exists to prevent.
+    **`technical_approvals` is True once the round trip closes.** The relay records a
+    decision AND writes it back to the provider: `approval_delivery.deliver_decision`
+    answers the `item/*/requestApproval` server request on the `id` Codex blocks on
+    (see `tests/fixtures/codex_app_server/approvals.jsonl`). Before that seam existed
+    the flag was False on purpose, because a decision that is accepted but never
+    delivered leaves the turn hanging while the browser believes it completed.
+
+    The flag and the seam are asserted together in
+    `test_the_advertised_capability_is_backed_by_a_reachable_delivery_seam`, so
+    removing delivery fails a test rather than silently re-opening that gap.
+
+    `business_decision_recording` stays const False: FR-022 places a named-human
+    governance ruling outside Studio permanently, not pending a future seam.
     """
     return {
         "agent_turns": False,
-        "technical_approvals": False,
+        "technical_approvals": True,
         "business_decision_recording": False,
     }
 
@@ -526,6 +530,12 @@ def create_app(
     #: app state rather than per-thread because the relay route is addressed by
     #: approval id, and a decision must be refusable even after its turn has ended.
     app.state.pending_approvals = approvals.PendingApprovals()
+    #: Live provider sessions by thread id, so a decided approval can be written back to
+    #: the process that is blocked on it. Keyed by thread rather than by approval
+    #: because a session's lifetime is the thread's: holding one on the (frozen)
+    #: approval envelope would keep a dead child reachable after its turn ended.
+    #: Empty under `FakeAgentBridge`, which has no process to answer.
+    app.state.provider_sessions = {}
     app.state.bridge = (
         codex_bridge.CodexBridge(
             codex_process.CodexLaunchPlan.for_workspace(

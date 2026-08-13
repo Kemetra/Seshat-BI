@@ -42,6 +42,7 @@ from seshat.studio.codex_protocol import (
     CodexFrameError,
     CodexProtocolReader,
     NormalizationContext,
+    normalize_approval_request,
     normalize_notification,
 )
 from seshat.studio.events import StudioEvent
@@ -420,6 +421,15 @@ class CodexBridge:
         turn. The shared suite pins "exactly one terminal last".
         """
         for frame in self._frames_once_requested(session, prompt):
+            # A `requestApproval` is a REQUEST, not a notification: it carries an `id`
+            # the provider blocks on, so it is translated here rather than falling
+            # through `normalize_notification`, which only ever sees fire-and-forget
+            # frames. Yielding it makes the approval visible; ANSWERING it is the
+            # relay's job, driven by the analyst's decision on a later HTTP request.
+            approval = normalize_approval_request(frame, context=context)
+            if approval is not None:
+                yield approval
+                continue
             for event_type, payload in normalize_notification(frame, context=context):
                 if event_type == "turn_started":
                     continue  # the envelope in `run_turn` already opened the turn

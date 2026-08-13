@@ -397,6 +397,59 @@ def normalize_notification(
         yield event_type, _scrubbed(payload, context.workspace_root, context.secrets)
 
 
+#: How a `requestApproval` method maps to the action Studio shows the analyst.
+_APPROVAL_ACTIONS: dict[str, str] = {
+    "item/commandExecution/requestApproval": "run_command",
+    "item/fileChange/requestApproval": "apply_change",
+}
+
+
+def normalize_approval_request(
+    frame: dict[str, Any],
+    *,
+    context: NormalizationContext,
+) -> tuple[str, dict[str, Any]] | None:
+    """Translate one `requestApproval` SERVER REQUEST into an `approval_required` event.
+
+    Separate from `normalize_notification` because the two differ in the way that
+    matters: a notification is fire-and-forget, while this frame carries an `id` the
+    provider blocks on. The returned payload keeps that id so the relay can answer it --
+    dropping it would leave a decidable approval with nothing to decide against.
+
+    **Authority is inferred from the METHOD, conservatively.** A command execution is a
+    technical act Studio may permit; a file change is a write to the analyst's
+    repository, which FR-021 places behind a named human. An unrecognized
+    `requestApproval` method yields `named_human`, matching `normalize_approval`'s rule
+    that a request this build does not understand is one it may not grant.
+
+    **`grantRoot` forces named_human regardless of method.** A request to write outside
+    the pinned workspace is an escalation of scope, not a routine command, and the
+    captured fixture contains exactly such a frame (`id:22`, `grantRoot:/etc`).
+    """
+    method = str(frame.get("method", ""))
+    if method not in _APPROVAL_ACTIONS:
+        return None
+    params = frame.get("params")
+    if not isinstance(params, dict):
+        return None
+
+    escalates = "grantRoot" in params
+    technical = method == "item/commandExecution/requestApproval" and not escalates
+    payload = {
+        "approval_id": str(params.get("itemId") or f"request-{frame.get('id')}"),
+        "required_authority": "technical" if technical else "named_human",
+        "action": _APPROVAL_ACTIONS[method],
+        "target": str(params.get("command") or params.get("grantRoot") or "unknown"),
+        "reason": str(params.get("reason") or "unknown"),
+        "scope": "propose_changes" if not technical else "read_only",
+        "risk": "high" if escalates else "low",
+        "provider_request_id": frame.get("id"),
+    }
+    return "approval_required", _scrubbed(
+        payload, context.workspace_root, context.secrets
+    )
+
+
 def _text_scrubber(context: NormalizationContext) -> Callable[[str], str]:
     """Redact a bare string with the same rules the payload scrub applies."""
 
