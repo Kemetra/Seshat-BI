@@ -48,6 +48,7 @@ from . import (
     redaction,
     session,
 )
+from .approvals import prepared_summary
 from .bridge_selection import select_bridge
 
 #: Distinguishes "probe the installed CLI" from an explicit `None` meaning "there is
@@ -319,8 +320,23 @@ def _register_routes(app: FastAPI) -> None:
 
     @app.get(f"{API_PREFIX}/decisions")
     async def decisions() -> Any:
-        """Read-only by construction: there is no mutation route to omit."""
-        return {"items": []}
+        """The business decisions a NAMED HUMAN still owes (T027, FR-022).
+
+        Read-only by construction: there is no mutation route to omit, and
+        `business_decision_recording` is const `False`. Listing what a human owes is
+        not recording their ruling.
+
+        This returned a hardcoded `{"items": []}` from Phase 3 until T027 -- a
+        contract that promised a `PreparedDecisionSummary` beside code that could
+        never produce one. The data was already being collected: `register_approval`
+        registers `named_human` items expressly so they are visible here.
+        """
+        return {
+            "items": [
+                _redact(prepared_summary(envelope))
+                for envelope in app.state.pending_approvals.prepared_for_named_human()
+            ]
+        }
 
     @app.get(f"{API_PREFIX}/agent/health")
     async def agent_health() -> Any:

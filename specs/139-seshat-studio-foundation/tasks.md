@@ -339,8 +339,19 @@ projection, endpoints, frontend, journey, and health.
   forbidden-scope evaluation before an allow control is exposed. [FR-018, FR-021]
 - [ ] **T026** Implement the accessible technical approval panel and one-time relay;
   browser code performs no side effect. [FR-019, FR-020]
-- [ ] **T027** Implement read-only prepared decision summaries with no mutation route
+- [x] **T027** Implement read-only prepared decision summaries with no mutation route
   and assert OpenAPI contains no business-approval endpoint. [FR-022]
+
+  **T027 closed 2026-08-13** (after being unchecked earlier the same day on an
+  adversarial review). The refuted half now ships: `PendingApprovals`
+  `.prepared_for_named_human()` reads the LIVE `named_human` envelopes the ledger
+  was already collecting, and `approvals.prepared_summary()` projects each into the
+  contract's five-field `PreparedDecisionSummary`. `/decisions` returns them
+  through the same `_redact` boundary pass every other projection uses, because
+  `affected_scope` carries readiness sentences whose fail-closed branch can name a
+  path. Suite: `tests/unit/test_studio_prepared_summaries.py` (7). Falsified:
+  removing the `named_human` filter fails
+  `test_a_technical_approval_is_not_a_business_decision` and nothing else.
 
   **Phase 6 evidence 2026-08-13 (backend only — every box above left unchecked).**
   Built on branch `studio-2` from `46243b5`; design at
