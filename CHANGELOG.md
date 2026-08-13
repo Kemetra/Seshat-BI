@@ -77,13 +77,15 @@ explicitly identifies a public release event.
   `src/seshat/studio/codex_process.py`, so it matched nothing and credentials
   appearing in Codex stderr went un-redacted. The test covering it was vacuous
   and stayed green throughout.
-- **Studio turn-lifecycle correctness** (#618, #619, #620). Turns are accepted
-  rather than drained inside the request (#618, #619); the turn pump is
-  serialized and turns nobody is polling are reaped; the thread ends when reaping
-  and generators close off the event loop; evicted threads are not resurrected,
-  and close happens only after the reader returns (#620). The governing
-  constraint is that nothing bound to an event loop survives its request, so
-  there is no background task to lean on.
+- **Studio turn-lifecycle correctness** (#619, #620, and `3a87cca`, which
+  references open issue #618). Turns are accepted rather than drained inside the
+  request; the turn pump is serialized and turns nobody is polling are reaped;
+  the thread ends when reaping and generators close off the event loop; evicted
+  threads are not resurrected, and close happens only after the reader returns
+  (#620). The governing constraint is that nothing bound to an event loop
+  survives its request, so there is no background task to lean on. **#618 is an
+  open issue, not a merged PR** -- these commits address part of it; wiring
+  `CodexBridge` into startup remains open there.
 - **Power BI gate hardening**: bounded PBIR mutations gated on an approved
   design, Power BI discovery and target gates unified, and Power BI facts scoped
   to the exact table.
