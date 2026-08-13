@@ -1,0 +1,99 @@
+"""Unit tests for the Studio technical approval boundary (T024).
+
+These sit on the risk the whole phase exists to manage: Studio may grant a
+technical permission, and may NEVER grant a governance ruling. Every assertion
+here states the positive transformed form -- `authority == NAMED_HUMAN` and
+`allow_permitted is False` -- rather than merely noting that some control is
+absent, because an absence-only assertion also passes when the feature is
+deleted outright.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from seshat.studio.approvals import (
+    NAMED_HUMAN,
+    TECHNICAL,
+    ApprovalEnvelope,
+    normalize_approval,
+)
+
+TECHNICAL_EVENT = {
+    "approval_id": "turn-1-approval-1",
+    "required_authority": "technical",
+    "action": "run_command",
+    "target": "pytest -q",
+    "reason": "Verify the mapping change",
+    "scope": "read_only",
+    "risk": "low",
+}
+
+BUSINESS_EVENT = {
+    "approval_id": "turn-1-approval-2",
+    "required_authority": "named_human",
+    "action": "apply_change",
+    "target": "mappings/example/source-map.yaml",
+    "reason": "Add the missing grain declaration",
+    "scope": "propose_changes",
+    "risk": "high",
+}
+
+
+def test_a_technical_approval_with_clear_readiness_permits_allow():
+    envelope = normalize_approval(TECHNICAL_EVENT, [])
+    assert envelope.authority == TECHNICAL
+    assert envelope.allow_permitted is True
+    assert envelope.forbidden_reasons == ()
+
+
+def test_the_five_display_fields_survive_normalization_unaltered():
+    envelope = normalize_approval(TECHNICAL_EVENT, [])
+    assert envelope.action == "run_command"
+    assert envelope.target == "pytest -q"
+    assert envelope.reason == "Verify the mapping change"
+    assert envelope.scope == "read_only"
+    assert envelope.risk == "low"
+
+
+def test_a_named_human_approval_is_never_allowable():
+    envelope = normalize_approval(BUSINESS_EVENT, [])
+    assert envelope.authority == NAMED_HUMAN
+    assert envelope.allow_permitted is False
+
+
+def test_readiness_forbidden_scope_blocks_a_technical_allow():
+    envelope = normalize_approval(
+        TECHNICAL_EVENT, ["no silver before mapping is cleared"]
+    )
+    assert envelope.authority == TECHNICAL
+    assert envelope.allow_permitted is False
+    assert envelope.forbidden_reasons == ("no silver before mapping is cleared",)
+
+
+def test_an_unknown_authority_is_treated_as_named_human():
+    envelope = normalize_approval(
+        {**TECHNICAL_EVENT, "required_authority": "wharrgarbl"}, []
+    )
+    assert envelope.authority == NAMED_HUMAN
+    assert envelope.allow_permitted is False
+
+
+def test_a_missing_authority_is_treated_as_named_human():
+    event = {k: v for k, v in TECHNICAL_EVENT.items() if k != "required_authority"}
+    assert normalize_approval(event, []).allow_permitted is False
+
+
+def test_the_envelope_is_immutable():
+    envelope = normalize_approval(TECHNICAL_EVENT, [])
+    with pytest.raises(Exception):
+        envelope.allow_permitted = True  # type: ignore[misc]
+
+
+def test_a_missing_display_field_becomes_an_explicit_unknown_not_a_crash():
+    envelope = normalize_approval(
+        {"approval_id": "x", "required_authority": "technical"}, []
+    )
+    assert envelope.action == "unknown"
+    assert envelope.risk == "unknown"
+    assert isinstance(envelope, ApprovalEnvelope)
