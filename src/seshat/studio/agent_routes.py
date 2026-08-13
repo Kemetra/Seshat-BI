@@ -380,11 +380,6 @@ _TERMINAL_EVENTS: frozenset[str] = frozenset({"turn_completed", "turn_failed"})
 #: started it.
 ABANDONED_TURN_SECONDS = 120.0
 
-#: How long a shutdown waits for an outstanding generator advance before closing
-#: anyway. Bounded: a bridge that never returns must not keep a shutdown thread alive
-#: forever, and closing late is better than never closing.
-_READER_JOIN_SECONDS = 35.0
-
 
 @dataclass(frozen=True, slots=True)
 class TurnRequest:
@@ -622,13 +617,20 @@ def _finish_turn(app: FastAPI, thread_id: str, pending: _PendingTurn) -> None:
     reader = pending.reader
 
     def shut_down() -> None:
-        # WAIT for any outstanding advance first. A reader the pump gave up waiting
-        # for is still inside `next()`, and closing then raises "generator already
-        # executing" -- swallowed below, leaving the provider's child alive until its
-        # own blocking read returns (up to 30s for Codex, unbounded for another
-        # bridge). Stop would appear to work while the process kept running.
+        # WAIT for any outstanding advance to finish, however long it takes. A reader
+        # the pump gave up waiting for is still inside `next()`, and closing then
+        # raises "generator already executing" -- swallowed below, leaving the
+        # provider's child alive. Stop would appear to work while the process kept
+        # running.
+        #
+        # Unbounded on purpose. A bounded join looks safer and is not: on timeout it
+        # would fall through to a `close()` that raises, gets swallowed, and never
+        # retries -- exactly the leak this guards against, now with a deadline
+        # attached. The bridge protocol sets no maximum for one advance, so any bound
+        # is a guess. This is a daemon thread holding one generator reference, so
+        # waiting costs nothing and never delays a request or blocks shutdown.
         if reader is not None:
-            reader.join(timeout=_READER_JOIN_SECONDS)
+            reader.join()
         try:
             close()
         except Exception:  # pragma: no cover -- never mask the turn's own outcome
