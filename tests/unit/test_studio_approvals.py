@@ -136,3 +136,54 @@ def test_no_table_refuses_rather_than_permitting(tmp_path):
     reasons = approvals.forbidden_scope_for(tmp_path, None)
     assert reasons != ()
     assert normalize_approval(TECHNICAL_EVENT, reasons).allow_permitted is False
+
+
+# -- the decide-once ledger (Task 3) ----------------------------------------- #
+
+
+def test_an_allow_once_decision_is_recorded_once():
+    from seshat.studio.approvals import PendingApprovals
+
+    ledger = PendingApprovals()
+    ledger.register(normalize_approval(TECHNICAL_EVENT, []))
+    assert ledger.decide("turn-1-approval-1", allow=True) == "allowed"
+
+
+def test_a_repeated_decision_is_refused():
+    from seshat.studio.approvals import PendingApprovals, StaleApproval
+
+    ledger = PendingApprovals()
+    ledger.register(normalize_approval(TECHNICAL_EVENT, []))
+    ledger.decide("turn-1-approval-1", allow=True)
+    with pytest.raises(StaleApproval):
+        ledger.decide("turn-1-approval-1", allow=True)
+
+
+def test_an_unknown_approval_id_is_refused():
+    from seshat.studio.approvals import PendingApprovals, StaleApproval
+
+    ledger = PendingApprovals()
+    with pytest.raises(StaleApproval):
+        ledger.decide("never-registered", allow=True)
+
+
+def test_a_deny_is_recorded_and_also_burns_the_id():
+    from seshat.studio.approvals import PendingApprovals, StaleApproval
+
+    ledger = PendingApprovals()
+    ledger.register(normalize_approval(TECHNICAL_EVENT, []))
+    assert ledger.decide("turn-1-approval-1", allow=False) == "denied"
+    with pytest.raises(StaleApproval):
+        ledger.decide("turn-1-approval-1", allow=False)
+
+
+def test_a_never_allowable_envelope_cannot_be_allowed_through_the_ledger():
+    from seshat.studio.approvals import PendingApprovals, StaleApproval
+
+    ledger = PendingApprovals()
+    ledger.register(normalize_approval(BUSINESS_EVENT, []))
+    # The ledger is the second gate, not a bypass of the first.
+    with pytest.raises(StaleApproval):
+        ledger.decide("turn-1-approval-2", allow=True)
+    # ...but denying a business item is fine: it records no governance ruling.
+    assert ledger.decide("turn-1-approval-2", allow=False) == "denied"

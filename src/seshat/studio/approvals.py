@@ -29,6 +29,8 @@ __all__ = [
     "NAMED_HUMAN",
     "TECHNICAL",
     "ApprovalEnvelope",
+    "PendingApprovals",
+    "StaleApproval",
     "forbidden_scope_for",
     "normalize_approval",
 ]
@@ -109,3 +111,47 @@ def forbidden_scope_for(repo_root: Path | str, table: str | None) -> tuple[str, 
             "a technical allow is refused until it can be.",
         )
     return tuple(document.get("forbidden_scope", ()))
+
+
+class StaleApproval(Exception):
+    """The decision does not correspond to a live, allowable approval request."""
+
+
+class PendingApprovals:
+    """Approvals awaiting a decision, each decidable exactly once.
+
+    **Burning the id on ANY decision -- allow or deny -- is deliberate.** If only
+    allows consumed the id, a denied request could be re-submitted as an allow, which
+    turns "deny" into "ask again until it works". SC-005's allow-once is really
+    decide-once.
+
+    **`allow=True` on a non-allowable envelope raises rather than degrading to a
+    deny.** Silently recording a deny would tell the caller their allow was
+    processed. The refusal has to be audible.
+    """
+
+    def __init__(self) -> None:
+        self._live: dict[str, ApprovalEnvelope] = {}
+        self._decided: dict[str, str] = {}
+
+    def register(self, envelope: ApprovalEnvelope) -> None:
+        self._live[envelope.approval_id] = envelope
+
+    def decide(self, approval_id: str, allow: bool) -> str:
+        if approval_id in self._decided:
+            raise StaleApproval(
+                f"approval {approval_id!r} was already decided "
+                f"({self._decided[approval_id]})"
+            )
+        envelope = self._live.get(approval_id)
+        if envelope is None:
+            raise StaleApproval(f"approval {approval_id!r} is not awaiting a decision")
+        if allow and not envelope.allow_permitted:
+            raise StaleApproval(
+                f"approval {approval_id!r} may not be allowed here: "
+                + "; ".join(envelope.forbidden_reasons or (envelope.authority,))
+            )
+        outcome = "allowed" if allow else "denied"
+        self._decided[approval_id] = outcome
+        del self._live[approval_id]
+        return outcome
